@@ -437,13 +437,13 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 GOTO(out, rc);
-
+        
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL)
+                initial_conn = 1;
+        
         /* lctl gets a backstage, all-access pass. */
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
                 goto dont_check_exports;
-
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL)
-                initial_conn = 1;
 
         spin_lock(&target->obd_dev_lock);
         list_for_each(p, &target->obd_exports) {

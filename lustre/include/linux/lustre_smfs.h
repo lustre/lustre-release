@@ -153,6 +153,7 @@ struct fs_extent{
 #define SM_OVER_WRITE           0x8
 #define SM_DIRTY_WRITE          0x10
 #define SM_DO_COW         	0x20
+#define SM_DO_COWED         	0x40
 
 #define SMFS_DO_REC(smfs_info) (smfs_info->smsi_flags & SM_DO_REC)
 #define SMFS_SET_REC(smfs_info) (smfs_info->smsi_flags |= SM_DO_REC)
@@ -189,6 +190,11 @@ struct fs_extent{
 #define SMFS_SET_INODE_COW(inode) (I2SMI(inode)->smi_flags |= SM_DO_COW)
 #define SMFS_DO_INODE_COW(inode) (I2SMI(inode)->smi_flags & SM_DO_COW)
 #define SMFS_CLEAN_INODE_COW(inode) (I2SMI(inode)->smi_flags &= ~SM_DO_COW)
+
+#define SMFS_SET_INODE_COWED(inode) (I2SMI(inode)->smi_flags |= SM_DO_COWED)
+#define SMFS_DO_INODE_COWED(inode) (I2SMI(inode)->smi_flags & SM_DO_COWED)
+#define SMFS_CLEAN_INODE_COWED(inode) (I2SMI(inode)->smi_flags &= ~SM_DO_COWED)
+
 
 #define LVFS_SMFS_BACK_ATTR "lvfs_back_attr"
 
@@ -459,4 +465,6 @@ extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
 	
 int smfs_cow(struct inode *dir, struct dentry *dentry, int op);
 
+extern int smfs_post_setup(struct super_block *sb, struct vfsmount *mnt);
+extern int smfs_post_cleanup(struct super_block *sb);
 #endif /* _LUSTRE_SMFS_H */

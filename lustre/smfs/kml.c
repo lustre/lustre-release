@@ -155,6 +155,37 @@ err_exit:
 }
 EXPORT_SYMBOL(smfs_start_rec);
 
+int smfs_post_setup(struct super_block *sb, struct vfsmount *mnt)
+{
+        struct lvfs_run_ctxt *current_ctxt = NULL;
+        struct smfs_super_info *smb = S2SMI(sb);
+ 
+        OBD_ALLOC(current_ctxt, sizeof(*current_ctxt));
+        if (!current_ctxt)
+                RETURN(-ENOMEM);
+        OBD_SET_CTXT_MAGIC(current_ctxt);
+        
+        current_ctxt->pwdmnt = mnt;
+        current_ctxt->pwd = mnt->mnt_root;
+        current_ctxt->fs = get_ds();
+        smb->smsi_ctxt = current_ctxt;
+
+        RETURN(0);
+}
+EXPORT_SYMBOL(smfs_post_setup);
+
+int smfs_post_cleanup(struct super_block *sb)
+{
+        struct smfs_super_info *smb = S2SMI(sb);
+        
+        ENTRY;
+       
+        if (smb->smsi_ctxt)
+                OBD_FREE(S2SMI(sb)->smsi_ctxt, sizeof(struct lvfs_run_ctxt));
+        RETURN(0);
+}
+EXPORT_SYMBOL(smfs_post_cleanup);
+
 int smfs_stop_rec(struct super_block *sb)
 {
         int rc = 0;

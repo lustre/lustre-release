@@ -167,6 +167,9 @@ struct snap_info {
 	struct semaphore         sntbl_sema;
 	spinlock_t               sntbl_lock;
         struct snap_table        *sntbl;
+        struct dentry            *sn_cowed_dentry;
 };
 extern int smfs_add_snap_item(struct super_block *sb, char *name);
+extern int smfs_start_cow(struct super_block *sb);
+extern int smfs_stop_cow(struct super_block *sb);
 #endif /*_LUSTRE_SNAP_H*/

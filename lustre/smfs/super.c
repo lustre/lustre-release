@@ -80,26 +80,6 @@ static char *smfs_options(char *data, char **devstr, char **namestr,
         return pos;
 }
 
-struct vfsmount *get_vfsmount(struct super_block *sb)
-{
-        struct vfsmount *rootmnt, *mnt, *ret = NULL;
-        struct list_head *end, *list;
-
-        rootmnt = mntget(current->fs->rootmnt);
-        end = list = &rootmnt->mnt_list;
-        do {
-                mnt = list_entry(list, struct vfsmount, mnt_list);
-                if (mnt->mnt_sb == sb) {
-                        ret = mnt;
-                        break;
-                }
-                list = list->next;
-        } while (end != list);
-
-        mntput(current->fs->rootmnt);
-        return ret;
-}
-
 struct super_block *smfs_get_sb_by_path(char *path, int len)
 {
         struct super_block *sb;
@@ -163,7 +143,7 @@ void smfs_cleanup_fsfilt_ops(struct super_block *sb)
 static int sm_mount_cache(struct super_block *sb, char *devstr,
                           char *typestr, char *opts, int iopen_nopriv)
 {
-        struct smfs_super_info *smb;
+        struct smfs_super_info *smb = S2SMI(sb);
         int err = 0, typelen;
         struct vfsmount *mnt;
         unsigned long page;
@@ -194,7 +174,7 @@ static int sm_mount_cache(struct super_block *sb, char *devstr,
                 CERROR("do_kern_mount failed: rc = %ld\n", PTR_ERR(mnt));
                 GOTO(err_out, err = PTR_ERR(mnt));
         }
-        smb = S2SMI(sb);
+
         smb->smsi_sb = mnt->mnt_sb;
         smb->smsi_mnt = mnt;
 
@@ -208,6 +188,7 @@ static int sm_mount_cache(struct super_block *sb, char *devstr,
 
         duplicate_sb(sb, mnt->mnt_sb);
         sm_set_sb_ops(mnt->mnt_sb, sb);
+
         err = smfs_init_fsfilt_ops(sb);
 err_out:
         return err;
@@ -226,10 +207,9 @@ static int sm_umount_cache(struct super_block *sb)
         if (smb->smsi_cache_ftype)
                 OBD_FREE(smb->smsi_cache_ftype,
                          strlen(smb->smsi_cache_ftype) + 1);
-
         if (smb->smsi_ftype)
                 OBD_FREE(smb->smsi_ftype, strlen(smb->smsi_ftype) + 1);
-
+               
         return 0;
 }
 

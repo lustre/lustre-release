@@ -589,8 +589,13 @@ static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (mnt) {
                 sb = mnt->mnt_sb;
                 S2SMI(sb)->smsi_exp = obd->obd_self_export;
+                smfs_post_setup(sb, mnt);
                 if (SMFS_DO_REC(S2SMI(sb)))
                         rc = smfs_start_rec(sb, mnt);
+#ifdef CONFIG_SNAPFS
+                if (SMFS_DO_COW(S2SMI(sb)))
+                        rc = smfs_start_cow(sb);
+#endif
                 if (rc)
                         GOTO(exit, rc);
                 if (obd)
@@ -614,6 +619,11 @@ static int fsfilt_smfs_post_cleanup(struct obd_device *obd,
                 sb = mnt->mnt_sb;
                 if (SMFS_DO_REC(S2SMI(sb)))
                         rc = smfs_stop_rec(sb);
+#ifdef CONFIG_SNAPFS
+                if (SMFS_DO_COW(S2SMI(sb)))
+                        rc = smfs_stop_cow(sb);
+#endif
+                smfs_post_cleanup(sb);
         }
         RETURN(rc);
 }

@@ -87,31 +87,15 @@ int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
 {
         struct llog_ctxt **ctxt = &(S2SMI(sb)->smsi_rec_log);
         struct lvfs_run_ctxt saved;
-        struct lvfs_run_ctxt *current_ctxt = NULL;
-        struct vfsmount *get_mnt = mnt;
         struct dentry *dentry;
         int rc = 0, rc2;
 
         /* create OBJECTS and LOGS for writing logs */
+        ENTRY;
 
-        OBD_ALLOC(current_ctxt, sizeof(*current_ctxt));
-        if (!current_ctxt)
-                RETURN(-ENOMEM);
-        if (!get_mnt) {
-                get_mnt = get_vfsmount(sb);
-                if (!get_mnt) {
-                        OBD_FREE(current_ctxt, sizeof(*current_ctxt));
-                        RETURN(-EINVAL);
-                }
-        }
-        OBD_SET_CTXT_MAGIC(current_ctxt);
-        
-        current_ctxt->pwdmnt = get_mnt;
-        current_ctxt->pwd = get_mnt->mnt_root;
-        current_ctxt->fs = get_ds();
-        S2SMI(sb)->smsi_ctxt = current_ctxt;
+        LASSERT(mnt);
 
-        push_ctxt(&saved, current_ctxt, NULL);
+        push_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
         dentry = simple_mkdir(current->fs->pwd, "LOGS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -138,9 +122,8 @@ int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
         SMFS_CLEAN_INODE_CACHE_HOOK(S2SMI(sb)->smsi_logs_dir->d_inode);
 
         if (SMFS_DO_REC(S2SMI(sb))) {
-                                
                 rc = llog_catalog_setup(ctxt, KML_LOG_NAME, S2SMI(sb)->smsi_exp,
-                                        current_ctxt, S2SMI(sb)->sm_fsfilt,
+                                        S2SMI(sb)->smsi_ctxt, S2SMI(sb)->sm_fsfilt,
                                         S2SMI(sb)->smsi_logs_dir,
                                         S2SMI(sb)->smsi_objects_dir);
                 (*ctxt)->llog_proc_cb = smfs_llog_process_rec_cb;
@@ -152,9 +135,7 @@ int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
                         rc = rc2;
         }
 exit:
-        pop_ctxt(&saved, current_ctxt, NULL);
-        if (current_ctxt && rc)
-                OBD_FREE(current_ctxt, sizeof(*current_ctxt));
+        pop_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
         RETURN(rc);
 }
 
@@ -182,8 +163,6 @@ int smfs_llog_cleanup(struct super_block *sb)
                 l_dput(S2SMI(sb)->smsi_objects_dir);
                 S2SMI(sb)->smsi_objects_dir = NULL;
         }
-
-        OBD_FREE(S2SMI(sb)->smsi_ctxt, sizeof(struct lvfs_run_ctxt));
         RETURN(rc);
 }
 

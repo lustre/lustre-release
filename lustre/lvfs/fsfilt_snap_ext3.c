@@ -518,7 +518,27 @@ static handle_t * ext3_copy_data(handle_t *handle, struct inode *dst,
         dst->i_size = dst->u.ext3_i.i_disksize = src->i_size;
 	RETURN(handle);
 }
-
+/*Here delete the data of that pri inode 
+ *FIXME later, should throw the blocks of 
+ *primary inode directly
+ */
+static int ext3_throw_inode_data(handle_t *handle, struct inode *inode)	
+{	
+        struct inode *tmp = NULL;
+        ENTRY;
+        
+        tmp = ext3_new_inode(handle, inode, (int)inode->i_mode, 0);
+        if(tmp) { 
+                CERROR("ext3_new_inode error\n");
+                RETURN(-EIO);
+        }                
+	double_down(&inode->i_sem, &tmp->i_sem);
+        ext3_migrate_data(handle, tmp, inode);
+	double_up(&inode->i_sem, &tmp->i_sem);
+        tmp->i_nlink = 0;
+        iput(tmp);	
+        RETURN(0);
+}
 /**
  * fsfilt_ext3_create_indirect - copy data, attributes from primary to new indir inode
  * @pri: primary (source) inode
@@ -565,28 +585,15 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 	 * we just free the primary data blocks and mark this inode delete
 	 */
 	if((del) && ind && !IS_ERR(ind)) {
-		struct inode *tmp;
 		/* for directory, we don't free the data blocks, 
 		 * or ext3_rmdir will report errors "bad dir, no data blocks" 
 		 */
 		CDEBUG(D_INODE, "del==SNAP_DEL_PRI_WITH_IND && ind\n");
 		if(!S_ISDIR(pri->i_mode)) {	
-			/*Here delete the data of that pri inode.
-			 * FIXME later, should throw the blocks of 
-			 * primary inode directly
-			 */
-			tmp = ext3_new_inode(handle, pri, (int)pri->i_mode, 0);
-			if(tmp) {
-			        down(&tmp->i_sem);
-				ext3_migrate_data(handle, tmp, pri);
-				up(&tmp->i_sem);
-				tmp->i_nlink = 0;
-				iput(tmp);	
-			} else { 
-				CERROR("ext3_new_inode error\n");
-                                GOTO(exit, err=-EIO);
-                        }
-			pri->i_nlink = 1;
+                        err = ext3_throw_inode_data(handle, pri);
+			if (err)
+                                GOTO(exit, err);
+                        pri->i_nlink = 1;
 		}
 		pri->u.ext3_i.i_dtime = CURRENT_TIME;
 		ext3_mark_inode_dirty(handle, pri);
@@ -1257,7 +1264,6 @@ static int fsfilt_ext3_destroy_indirect(struct inode *pri, int index,
 static int fsfilt_ext3_restore_indirect(struct inode *pri, int index)
 {
 	struct inode *ind;
-	struct inode *tmp;
 	int err = 0;
 	handle_t *handle = NULL;
         ENTRY;
@@ -1282,18 +1288,12 @@ static int fsfilt_ext3_restore_indirect(struct inode *pri, int index)
 	if( !handle )
 		RETURN(-EINVAL);
 	/* first destroy all the data blocks in primary inode */
-	/* XXX: check this, ext3_new_inode, the first arg should be "dir" */ 
-	tmp = ext3_new_inode(handle, pri, (int)pri->i_mode, 0);
-	if(tmp){
-		double_down(&pri->i_sem, &tmp->i_sem);
-		ext3_migrate_data(handle, tmp, pri);
-		double_up(&pri->i_sem, &tmp->i_sem);
-
-		tmp->i_nlink = 0;
-		iput(tmp);	
-	} else 	
+	/* XXX: check this, ext3_new_inode, the first arg should be "dir" */
+        err = ext3_throw_inode_data(handle, pri);
+	if (err) {
 		CERROR("restore_indirect, new_inode err\n");
-	
+                RETURN(err);
+        }	
 	double_down(&pri->i_sem, &ind->i_sem);
 	ext3_migrate_data(handle, pri, ind);
 	pri->u.ext3_i.i_flags &= ~EXT3_COW_FL;

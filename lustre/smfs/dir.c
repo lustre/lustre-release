@@ -206,11 +206,14 @@ static int smfs_link(struct dentry * old_dentry,
                  RETURN(-ENOSPC);
 
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_LINK, handle, dir, rc);
-              
+        
+        lock_kernel();
+        
+        SMFS_PRE_COW(dir, old_dentry, REINT_LINK, "link", rc, exit);
+        
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
 
-        lock_kernel();
         if (!cache_parent || !cache_dentry)
                 GOTO(exit, rc = -ENOMEM);
 
@@ -267,6 +270,8 @@ static int smfs_unlink(struct inode * dir,
 
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_UNLINK, handle, dir, rc);
 
+        SMFS_PRE_COW(dir, dentry, REINT_UNLINK, "unlink", rc, exit);
+        
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, cache_inode, dentry);
 

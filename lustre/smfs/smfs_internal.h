@@ -131,7 +131,6 @@ extern int init_smfs(void);
 extern int cleanup_smfs(void);
 extern void smfs_put_super(struct super_block *sb);
 extern struct super_block *smfs_get_sb_by_path(char *path, int len);
-extern struct vfsmount* get_vfsmount(struct super_block *sb);
 /*sysctl.c*/
 extern int sm_debug_level;
 extern int sm_inodes;

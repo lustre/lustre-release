@@ -630,6 +630,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
 out:
         IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
         memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
+        memset(&imp->imp_conn_cnt, 0, sizeof(imp->imp_conn_cnt));
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         RETURN(rc);
