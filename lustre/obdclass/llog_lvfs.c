@@ -162,8 +162,26 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
 
         rc = llog_lvfs_read_blob(obd, handle->lgh_file, handle->lgh_hdr,
                                  LLOG_CHUNK_SIZE, 0);
-        if (rc)
+        if (rc) {
                 CERROR("error reading log header\n");
+        } else {
+                struct llog_rec_hdr *llh_hdr = &handle->lgh_hdr->llh_hdr;
+                /*
+                 * These need to be fixed for bug 1987
+                 */
+                if (llh_hdr->lrh_type != LLOG_HDR_MAGIC) {
+                        CERROR("bad log header magic: %#x (expecting %#x)\n",
+                               llh_hdr->lrh_type, LLOG_HDR_MAGIC);
+                        rc = -EIO;
+                } else if (llh_hdr->lrh_len != LLOG_CHUNK_SIZE) {
+                        CERROR("incorrectly sized log header: %#x "
+                               "(expecting %#x)\n",
+                               llh_hdr->lrh_len, LLOG_CHUNK_SIZE);
+                        CERROR("you may need to re-run lconf --write_conf.\n");
+                        rc = -EIO;
+                }
+        }
+        
 
         handle->lgh_last_idx = handle->lgh_hdr->llh_tail.lrt_index;
         handle->lgh_file->f_pos = handle->lgh_file->f_dentry->d_inode->i_size;

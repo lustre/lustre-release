@@ -169,6 +169,7 @@ static int llog_client_read_header(struct llog_handle *handle)
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         struct llog_log_hdr *hdr;
+        struct llog_rec_hdr *llh_hdr;
         int size = sizeof(*body);
         int repsize = sizeof (*hdr);
         int rc;
@@ -193,8 +194,23 @@ static int llog_client_read_header(struct llog_handle *handle)
                 CERROR ("Can't unpack llog_hdr\n");
                 GOTO(out, rc =-EFAULT);
 	}
+
         memcpy(handle->lgh_hdr, hdr, sizeof (*hdr));
         handle->lgh_last_idx = handle->lgh_hdr->llh_tail.lrt_index;
+
+        /* sanity checks */
+        llh_hdr = &handle->lgh_hdr->llh_hdr;
+        if (llh_hdr->lrh_type != LLOG_HDR_MAGIC) {
+                CERROR("bad log header magic: %#x (expecting %#x)\n",
+                       llh_hdr->lrh_type, LLOG_HDR_MAGIC);
+                rc = -EIO;
+        } else if (llh_hdr->lrh_len != LLOG_CHUNK_SIZE) {
+                CERROR("incorrectly sized log header: %#x "
+                       "(expecting %#x)\n",
+                       llh_hdr->lrh_len, LLOG_CHUNK_SIZE);
+                CERROR("you may need to re-run lconf --write_conf.\n");
+                rc = -EIO;
+        }
 
 out:
         if (req)
