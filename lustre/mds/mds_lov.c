@@ -108,184 +108,12 @@ int mds_lov_write_objids(struct obd_device *obd)
         int i, rc, size = mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id);
         ENTRY;
 
-        /* I'm pretty sure we don't need this mds_lov_connect here,
-         * but we definitely don't want to do it during recovery. */
-        if (!obd->obd_recovering && unlikely(mds->mds_osc_obd == NULL))
-                mds_lov_connect(obd);
-
         for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
                 CDEBUG(D_INFO, "writing last object "LPU64" for idx %d\n",
                        mds->mds_lov_objids[i], i);
 
         rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp,
                                  mds->mds_lov_objids, size, &off, 0);
-        RETURN(rc);
-}
-
-
-int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
-                    struct obd_uuid *uuidarray)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        struct obd_run_ctxt saved;
-        struct file *f;
-        int tgt_count;
-        int rc;
-        int i;
-        struct lov_desc *disk_desc;
-        ENTRY;
-
-        tgt_count = desc->ld_tgt_count;
-        if (desc->ld_default_stripe_count > desc->ld_tgt_count) {
-                CERROR("default stripe count %u > OST count %u\n",
-                       desc->ld_default_stripe_count, desc->ld_tgt_count);
-                RETURN(-EINVAL);
-        }
-        if (desc->ld_default_stripe_size & (PAGE_SIZE - 1)) {
-                CERROR("default stripe size "LPU64" not a multiple of %lu\n",
-                       desc->ld_default_stripe_size, PAGE_SIZE);
-                RETURN(-EINVAL);
-        }
-        if (desc->ld_default_stripe_offset > desc->ld_tgt_count) {
-                CERROR("default stripe offset "LPU64" > max OST index %u\n",
-                       desc->ld_default_stripe_offset, desc->ld_tgt_count);
-                RETURN(-EINVAL);
-        }
-        if (desc->ld_pattern != 0) {
-                CERROR("stripe pattern %u unknown\n",
-                       desc->ld_pattern);
-                RETURN(-EINVAL);
-        }
-
-        OBD_ALLOC (disk_desc, sizeof (*disk_desc));
-        if (disk_desc == NULL) {
-                CERROR ("Can't allocate disk_desc\n");
-                RETURN (-ENOMEM);
-        }
-
-        *disk_desc = *desc;
-        cpu_to_le_lov_desc (disk_desc);
-
-        rc = 0;
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
-
-        /* Bug 1186: FIXME: if there is an existing LOVDESC, verify new
-         * tgt_count > old */
-        f = filp_open("LOVDESC", O_CREAT|O_RDWR, 0644);
-        if (IS_ERR(f)) {
-                CERROR("Cannot open/create LOVDESC file\n");
-                GOTO(out, rc = PTR_ERR(f));
-        }
-
-        rc = lustre_fwrite(f, (char *)disk_desc, sizeof(*disk_desc), &f->f_pos);
-        if (filp_close(f, 0))
-                CERROR("Error closing LOVDESC file\n");
-        if (rc != sizeof(*desc)) {
-                CERROR("Cannot open/create LOVDESC file\n");
-                if (rc >= 0)
-                        rc = -EIO;
-                GOTO(out, rc);
-        }
-
-        /* Bug 1186: FIXME: if there is an existing LOVTGTS, verify
-         * existing UUIDs same */
-        f = filp_open("LOVTGTS", O_CREAT|O_RDWR, 0644);
-        if (IS_ERR(f)) {
-                CERROR("Cannot open/create LOVTGTS file\n");
-                GOTO(out, rc = PTR_ERR(f));
-        }
-
-        rc = 0;
-        for (i = 0; i < tgt_count ; i++) {
-                rc = lustre_fwrite(f, uuidarray[i].uuid,
-                                   sizeof(uuidarray[i]), &f->f_pos);
-                if (rc != sizeof(uuidarray[i])) {
-                        CERROR("cannot write LOV UUID %s (%d)\n",
-                               uuidarray[i].uuid, i);
-                        if (rc >= 0)
-                                rc = -EIO;
-                        break;
-                }
-                rc = 0;
-        }
-        if (filp_close(f, 0))
-                CERROR("Error closing LOVTGTS file\n");
-
-        memcpy(&mds->mds_lov_desc, desc, sizeof *desc);
-        mds->mds_has_lov_desc = 1;
-        /* XXX the MDS should not really know about this */
-        mds->mds_max_mdsize = lov_mds_md_size(desc->ld_tgt_count);
-        mds->mds_max_cookiesize = desc->ld_tgt_count*sizeof(struct llog_cookie);
-
-out:
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-        OBD_FREE (disk_desc, sizeof (*disk_desc));
-
-        RETURN(rc);
-}
-
-int mds_get_lovdesc(struct mds_obd *mds, struct lov_desc *desc)
-{
-        struct file *f;
-        int rc;
-        ENTRY;
-
-        f = filp_open("LOVDESC", O_RDONLY, 0644);
-        if (IS_ERR(f)) {
-                CERROR("Cannot open LOVDESC file\n");
-                GOTO(out, rc = PTR_ERR(f));
-        }
-
-        rc = lustre_fread(f, (char *)desc, sizeof(*desc), &f->f_pos);
-        if (filp_close(f, 0))
-                CERROR("Error closing LOVDESC file\n");
-
-        if (rc != sizeof(*desc)) {
-                CERROR("Cannot read LOVDESC file: rc = %d\n", rc);
-                GOTO(out, rc = -EIO);
-        } else
-                rc = 0;
-
-        le_lov_desc_to_cpu (desc);              /* convert to my byte order */
-
-        EXIT;
-out:
-
-        return rc;
-}
-
-int mds_get_lovtgts(struct obd_device *obd, int tgt_count,
-                    struct obd_uuid *uuidarray)
-{
-        struct obd_run_ctxt saved;
-        struct file *f;
-        int rc;
-        int rc2;
-
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        f = filp_open("LOVTGTS", O_RDONLY, 0644);
-        if (IS_ERR(f)) {
-                CERROR("Cannot open LOVTGTS file\n");
-                GOTO(out, rc = PTR_ERR(f));
-        }
-
-        rc = lustre_fread(f, (char *)uuidarray, tgt_count * sizeof(*uuidarray),
-                          &f->f_pos);
-        rc2 = filp_close(f, 0);
-        if (rc2)
-                CERROR("Error closing LOVTGTS file: rc = %d\n", rc2);
-
-        if (rc != tgt_count * sizeof(*uuidarray)) {
-                CERROR("Error reading LOVTGTS file: rc = %d\n", rc);
-                if (rc >= 0)
-                        rc = -EIO;
-                GOTO(out, rc);
-        } else
-                rc = 0;
-        EXIT;
-out:
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-
         RETURN(rc);
 }
 
@@ -323,13 +151,6 @@ int mds_lov_set_nextid(struct obd_device *obd)
 
         LASSERT(!obd->obd_recovering);
 
-        if (mds->mds_osc_obd == NULL)
-                mds_lov_connect(obd);
-
-        // XXX CONFIG remove me when configuration is better
-        if (mds->mds_lov_nextid_set)
-                RETURN(0);
-
         LASSERT(mds->mds_lov_objids != NULL);
 
         rc = obd_set_info(mds->mds_osc_exp, strlen("next_id"), "next_id",
@@ -341,8 +162,6 @@ int mds_lov_set_nextid(struct obd_device *obd)
         if (rc < 0)
                 GOTO(out, rc);
 
-        // XXX CONFIG warning remove me when configuration is better
-        mds->mds_lov_nextid_set = 1;
 out:
         if (rc && mds->mds_lov_objids) {
                 /* Might as well crash here, until we figure out what to do.
@@ -369,16 +188,13 @@ int mds_lov_set_growth(struct mds_obd *mds, int count)
         RETURN(rc);
 }
 
-/* Establish a connection to the OSC when we first need it.  We don't do
- * this during MDS setup because that would introduce setup ordering issues. */
-int mds_lov_connect(struct obd_device *obd)
+int mds_lov_connect(struct obd_device *obd, char * lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0,};
+        int valsize;
         int rc, i;
         ENTRY;
-
-        LASSERT(!obd->obd_recovering);
 
         if (IS_ERR(mds->mds_osc_obd))
                 RETURN(PTR_ERR(mds->mds_osc_obd));
@@ -386,9 +202,10 @@ int mds_lov_connect(struct obd_device *obd)
         if (mds->mds_osc_obd)
                 RETURN(0);
 
-        mds->mds_osc_obd = class_name2obd(mds->mds_lov_name);
+        mds->mds_osc_obd = class_name2obd(lov_name);
         if (!mds->mds_osc_obd) {
-                CERROR("MDS cannot locate LOV %s\n", mds->mds_lov_name);
+                CERROR("MDS cannot locate LOV %s\n",
+                       lov_name);
                 mds->mds_osc_obd = ERR_PTR(-ENOTCONN);
                 RETURN(-ENOTCONN);
         }
@@ -396,7 +213,7 @@ int mds_lov_connect(struct obd_device *obd)
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid);
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n",
-                       mds->mds_lov_name, rc);
+                       lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);
                 RETURN(rc);
         }
@@ -405,26 +222,39 @@ int mds_lov_connect(struct obd_device *obd)
         rc = obd_register_observer(mds->mds_osc_obd, obd);
         if (rc) {
                 CERROR("MDS cannot register as observer of LOV %s (%d)\n",
-                       mds->mds_lov_name, rc);
-                mds->mds_osc_obd = ERR_PTR(rc);
-                RETURN(rc);
+                       lov_name, rc);
+                GOTO(err_discon, rc);
         }
+
+        rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
+                          0, NULL);
+        if (rc) 
+                GOTO(err_reg, rc);
+        
+        valsize = sizeof(mds->mds_lov_desc);
+        rc = obd_get_info(mds->mds_osc_exp, strlen("lovdesc") + 1, "lovdesc", 
+                          &valsize, &mds->mds_lov_desc);
+        if (rc) 
+                GOTO(err_reg, rc);
+
+        mds->mds_max_mdsize = lov_mds_md_size(mds->mds_lov_desc.ld_tgt_count);
+        mds->mds_max_cookiesize = mds->mds_lov_desc.ld_tgt_count*
+                sizeof(struct llog_cookie);
+        mds->mds_has_lov_desc = 1;
+        rc = mds_lov_read_objids(obd);
+        if (rc) {
+                CERROR("cannot read %s: rc = %d\n", "lov_objids", rc);
+                GOTO(err_reg, rc);
+        } 
 
 #ifdef ENABLE_ORPHANS
         /* before this set info call is made, we must initialize the logging */
         rc = llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
         if (rc) {
                 CERROR("failed to initialize catalog %d\n", rc);
-                RETURN(rc);
+                GOTO(err_reg, rc);
         }
 #endif
-        rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
-                          0, NULL);
-        if (rc) {
-                obd_disconnect(mds->mds_osc_exp, 0);
-                mds->mds_osc_exp = NULL;
-                RETURN(rc);
-        }
 
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
@@ -444,18 +274,61 @@ int mds_lov_connect(struct obd_device *obd)
                 }
         }
 
-        // XXX CONFIG LOV-OSC may not be used before this call completes!!!
-        // XXX CONFIG this cannot be called here, because the osc is not set up
-        // rc = mds_lov_set_nextid(obd);
+        /* I want to see a callback happen when the OBD moves to a
+         * "For General Use" state, and that's when we'll call
+         * set_nextid().  The class driver can help us here, because
+         * it can use the obd_recovering flag to determine when the
+         * the OBD is full available. */
+        if (!obd->obd_recovering) {
+                rc = mds_lov_set_nextid(obd);
+                if (rc)
+                        GOTO(err_llog, rc);
+        }
+        RETURN(rc);
+
+err_llog:
+#ifdef ENABLE_ORPHANS
+                /* cleanup all llogging subsystems */
+                rc = obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
+                if (rc) 
+                        CERROR("failed to cleanup llogging subsystems\n");
+#endif
+err_reg:
+        obd_register_observer(mds->mds_osc_obd, NULL);
+err_discon:
+        obd_disconnect(mds->mds_osc_exp, 0);
+        mds->mds_osc_exp = NULL;
+        mds->mds_osc_obd = ERR_PTR(rc);
         RETURN(rc);
 }
 
-int mds_post_mds_lovconf(struct obd_device *obd)
+int mds_lov_disconnect(struct obd_device *obd, int flags)
 {
-        int rc = mds_lov_read_objids(obd);
-        if (rc)
-                CERROR("cannot read %s: rc = %d\n", "lov_objids", rc);
-        return rc;
+        struct mds_obd *mds = &obd->u.mds;
+        int rc = 0;
+        ENTRY;
+
+        if (!IS_ERR(mds->mds_osc_obd) && mds->mds_osc_exp != NULL) {
+#ifdef ENABLE_ORPHANS
+                /* cleanup all llogging subsystems */
+                rc = obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
+                if (rc) 
+                        CERROR("failed to cleanup llogging subsystems\n");
+#endif
+
+                obd_register_observer(mds->mds_osc_obd, NULL);
+
+                rc = obd_disconnect(mds->mds_osc_exp, flags);
+                /* if obd_disconnect fails (probably because the
+                 * export was disconnected by class_disconnect_exports)
+                 * then we just need to drop our ref. */
+                if (rc != 0)
+                        class_export_put(mds->mds_osc_exp);
+                mds->mds_osc_exp = NULL;
+                mds->mds_osc_obd = NULL;
+        }
+
+        RETURN(rc);
 }
 
 int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
@@ -465,10 +338,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_device *obd = exp->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
         struct obd_ioctl_data *data = karg;
-        struct lov_desc *desc;
-        struct obd_uuid *uuidarray;
         struct obd_run_ctxt saved;
-        int count;
         int rc = 0;
 
         switch (cmd) {
@@ -478,7 +348,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         RETURN(-EBUSY);
 
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                rc = llog_create(obd, &mds->mds_cfg_llh, NULL, name);
+                rc = llog_create(obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT], 
+                                 &mds->mds_cfg_llh, NULL, name);
                 if (rc == 0)
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN, 
                                          &cfg_uuid);
@@ -507,7 +378,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (!mds->mds_cfg_llh)
                         RETURN(-EBADF);
 
-                rec.lrh_len = data->ioc_plen1;
+                rec.lrh_len = llog_data_len(data->ioc_plen1);
 
                 if (data->ioc_type == LUSTRE_CFG_TYPE) {
                         rec.lrh_type = OBD_CFG_REC;
@@ -537,42 +408,29 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_PARSE: {
-                rc = class_config_parse_llog(exp, data->ioc_inlbuf1, NULL);
-
-                // XXX CONFIG this is here because the LOV is set up at an unexpected time
-                rc  = mds_post_mds_lovconf(obd);
+                struct llog_obd_ctxt *ctxt = 
+                        obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
                 if (rc)
                         RETURN(rc);
 
                 RETURN(rc);
         }
 
-
-        case OBD_IOC_LOV_GET_CONFIG: {
-                desc = (struct lov_desc *)data->ioc_inlbuf1;
-                if (sizeof(*desc) > data->ioc_inllen1) {
-                        CERROR("descriptor size wrong\n");
-                        RETURN(-EINVAL);
-                }
-
-                count = desc->ld_tgt_count;
-                uuidarray = (struct obd_uuid *)data->ioc_inlbuf2;
-                if (sizeof(*uuidarray) * count != data->ioc_inllen2) {
-                        CERROR("UUID array size wrong\n");
-                        RETURN(-EINVAL);
-                }
+        case OBD_IOC_DUMP_LOG: {
+                struct llog_obd_ctxt *ctxt = 
+                        obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                rc = mds_get_lovdesc(&obd->u.mds, desc);
+                rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-
-                if (desc->ld_tgt_count > count) {
-                        CERROR("UUID array size too small\n");
-                        RETURN(-ENOSPC);
-                }
-                rc = mds_get_lovtgts(obd, desc->ld_tgt_count, uuidarray);
+                if (rc)
+                        RETURN(rc);
 
                 RETURN(rc);
         }
+
         case OBD_IOC_SET_READONLY: {
                 void *handle;
                 struct inode *inode = obd->u.mds.mds_sb->s_root->d_inode;
