@@ -15,6 +15,7 @@ assert_env() {
 }
 
 init_test_env() {
+    export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
     export XMLCONFIG="${TESTSUITE}.xml"
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
@@ -31,20 +32,34 @@ init_test_env() {
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
 
+    # command line
+    set - - `getopt -o r -l config,reformat -- $*`
+    
+    for i in $*; do
+	case $i in
+		--config) CONFIG=$2; shift;;
+	    -r|--reformat) REFORMAT=--reformat;;
+	esac
+	shift
+    done
+    
+    # save the name of the config file for the upcall
+    echo "XMLCONFIG=$LUSTRE/tests/$XMLCONFIG"  > $LUSTRE/tests/XMLCONFIG
 }
 
+# Facet functions
 start() {
     facet=$1
     shift
     active=`facet_active $facet`
-    do_facet $facet $LCONF --select ${facet}1=${active}_facet --node ${active}_facet $@ $XMLCONFIG
+    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet --node ${active}_facet $@ $XMLCONFIG
 }
 
 stop() {
     facet=$1
     active=`facet_active $facet`
     shift
-    do_facet $facet $LCONF --select ${facet}1=${active}_facet --node ${active}_facet $@ --cleanup $XMLCONFIG
+    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet --node ${active}_facet $@ --cleanup $XMLCONFIG
 }
 
 zconf_mount() {
@@ -53,10 +68,10 @@ zconf_mount() {
     [ -d $mnt ] || mkdir $mnt
     
     if [ -x /sbin/mount.lustre ] ; then
-	mount -t lustre `facet_host mds`:/mds1/client_facet $mnt
+	mount -t lustre `facet_host mds`:/mds_svc/client_facet $mnt
     else
        insmod $LUSTRE/llite/llite.o || :
-       $LUSTRE/utils/llmount `facet_host mds`:/mds1/client_facet $mnt
+       $LUSTRE/utils/llmount `facet_host mds`:/mds_svc/client_facet $mnt
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -69,19 +84,35 @@ zconf_umount() {
     rmmod llite || :
 }
 
+shutdown_facet() {
+    facet=$1
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_DOWN `facet_active_host $facet`
+    else
+       stop $facet --force --failover --nomod
+    fi
+}
+
+reboot_facet() {
+    facet=$1
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_UP `facet_active_host $facet`
+    fi
+}
+
 replay_barrier() {
     local facet=$1
     do_facet $facet sync
     df $MOUNT
-    do_facet $facet $LCTL --device %${facet}1 readonly
-    do_facet $facet $LCTL --device %${facet}1 notransno
+    do_facet $facet $LCTL --device %${facet}_svc readonly
+    do_facet $facet $LCTL --device %${facet}_svc notransno
     do_facet $facet $LCTL mark "REPLAY BARRIER"
     $LCTL mark "REPLAY BARRIER"
 }
 
 mds_evict_client() {
     UUID=`cat /proc/fs/lustre/mdc/*_MNT_*/uuid`
-    do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds1/evict_client"
+    do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds_svc/evict_client"
 }
 
 fail() {
@@ -97,7 +128,7 @@ fail_abort() {
     stop $facet --force --failover --nomod
     change_active $facet
     start $facet
-    do_facet $facet lctl --device %${facet}1 abort_recovery
+    do_facet $facet lctl --device %${facet}_svc abort_recovery
     df $MOUNT || echo "first df failed: $?"
     df $MOUNT || error "post-failover df: $?"
 }
@@ -136,11 +167,6 @@ facet_nid() {
    echo `h2$NETTYPE $HOST`
 }
 
-no_dsh() {
-   shift
-   eval $@
-}
-
 facet_active() {
     local facet=$1
     local activevar=${facet}active
@@ -150,6 +176,12 @@ facet_active() {
     else
 	echo -n ${active}
     fi
+}
+
+facet_active_host() {
+    local facet=$1
+    local active=`facet_active $facet`
+    echo `facet_host $active`
 }
 
 change_active() {
@@ -171,8 +203,7 @@ change_active() {
 do_facet() {
     facet=$1
     shift
-    active=`facet_active $facet`
-    HOST=`facet_host $active`
+    HOST=`facet_active_host $facet`
     $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
 
@@ -185,6 +216,95 @@ add_facet() {
 	--nettype $NETTYPE
 }
 
+add_mds() {
+    facet=$1
+    shift
+    add_facet $facet --timeout=${TIMEOUT}
+    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
+}
+
+add_mdsfailover() {
+    facet=$1
+    shift
+    add_facet ${facet}failover --timeout=${TIMEOUT}
+    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc $*
+}
+
+add_ost() {
+    facet=$1
+    shift
+    add_facet $facet --timeout=${TIMEOUT}
+    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc $*
+}
+
+add_ostfailover() {
+    facet=$1
+    shift
+    add_facet ${facet}failover  --timeout=${TIMEOUT}
+    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc $*
+}
+
+add_lov() {
+    lov=$1
+    mds_facet=$2
+    shift; shift
+    do_lmc --add lov --mds ${mds_facet}_svc --lov $lov $*
+    
+}
+
+add_client() {
+    facet=$1
+    mds=$2
+    shift; shift
+    add_facet $facet --lustre_upcall $UPCALL --timeout=${TIMEOUT}
+    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $*
+
+}
+
+
+####### 
+# General functions
+
+check_network() {
+   local NETWORK=0
+   local WAIT=0
+   while [ $NETWORK -eq 0 ]; do
+      ping -c 1 -w 3 $1
+      if [ $? -eq 0 ]; then
+         NETWORK=1
+      else
+         sleep 5
+         WAIT=`expr $WAIT + 5`
+      fi
+      if [ $WAIT -gt $2 ]; then
+         echo "Network not available"
+         exit 1
+      fi
+   done
+}
+check_port() {
+   while( !($DSH2 $1 "netstat -tna | grep -q $2") ) ; do
+      sleep 9
+   done
+}
+
+no_dsh() {
+   shift
+   eval $@
+}
+
+comma_list() {
+    # the sed converts spaces to commas, but leaves the last space
+    # alone, so the line doesn't end with a comma.
+    echo "$*" | tr -s " " "\n" | sort -b -u | tr "\n" " " | sed 's/ \([^$]\)/,\1/g'
+}
+
+absolute_path() {
+   (cd `dirname $1`; echo $PWD/`basename $1`)
+}
+
+##################################
+# Test interface 
 error() {
     echo "${TESTSUITE}: **** FAIL:" $@
     exit 1

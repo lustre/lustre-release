@@ -5,45 +5,25 @@ set -e
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
-init_test_env
+init_test_env $@
 
-# XXX I wish all this stuff was in some default-config.sh somewhere
-mds_HOST=${mds_HOST:-`hostname`}
-ost_HOST=${ost_HOST:-`hostname`}
-ostfailover_HOST=${ostfailover_HOST}
-client_HOST=${client_HOST:-`hostname`}
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
-NETTYPE=${NETTYPE:-tcp}
+ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 
-PDSH=${PDSH:-no_dsh}
-MOUNT=${MOUNT:-/mnt/lustre}
-DIR=${DIR:-$MOUNT}
-MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
-MDSSIZE=${MDSSIZE:-100000}
-OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
-OSTFAILOVERDEV=${OSTFAILOVERDEV:-$OSTDEV}
-OSTSIZE=${OSTSIZE:-100000}
-UPCALL=${UPCALL:-$PWD/replay-ost-upcall.sh}
-FSTYPE=${FSTYPE:-ext3}
-TIMEOUT=${TIMEOUT:-5}
-
-STRIPE_BYTES=65536
-STRIPES_PER_OBJ=1
-
+# Skip these tests
+ALWAYS_EXCEPT="3"
 
 gen_config() {
     rm -f $XMLCONFIG
-    add_facet mds --timeout ${TIMEOUT}
-    add_facet ost --timeout ${TIMEOUT}
-    add_facet client --timeout ${TIMEOUT} --lustre_upcall $UPCALL
-    do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
-    do_lmc --add lov --mds mds1 --lov lov1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    do_lmc --add ost --lov lov1 --failover --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
+    add_mds mds --dev $MDSDEV --size $MDSSIZE
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     if [ ! -z "$ostfailover_HOST" ]; then
-	add_facet ostfailover
-        do_lmc --add ost --lov lov1 --node ostfailover_facet --ost ost1 --dev $OSTFAILOVERDEV --size $OSTSIZE
+	 add_ostfailover ost --dev $OSTDEV --size $OSTSIZE
     fi
-    do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost lov1
+    add_client client mds --lov lov1 --path $MOUNT
 }
 
 cleanup() {
@@ -112,6 +92,16 @@ test_2() {
     done 
 }
 run_test 2 "|x| 10 open(O_CREAT)s"
+
+test_3() {
+    # small blocksize, to slow things down
+    dd if=/dev/zero of=$DIR/$tfile bs=1 count=5m &
+    ddpid=$!
+    fail ost
+    wait $ddpid || return 1
+    $CHECKSTAT -s 5000000 $DIR/$tfile 
+}
+run_test 3 "Fail  OST during IO"
 
 equals_msg test complete, cleaning up
 cleanup
