@@ -252,9 +252,9 @@ static int ldlm_handle_callback(struct ptlrpc_request *req)
                 ldlm_grant_lock(lock);
                 /*  FIXME: we want any completion function, not just wake_up */
                 wake_up(&lock->l_waitq);
-                ldlm_lock_put(lock);
                 lock->l_resource->lr_tmp = NULL;
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                ldlm_lock_put(lock);
 
                 ldlm_run_ast_work(&rpc_list);
         }

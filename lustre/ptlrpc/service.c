@@ -54,7 +54,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
                 }
 
                 if (err != PTL_EQ_EMPTY) {
-                        CDEBUG(D_NET, "BUG: PtlEQGet returned %d\n", rc);
+                        CERROR("BUG: PtlEQGet returned %d\n", rc);
                         LBUG();
                 }
 

@@ -110,7 +110,7 @@ do {                                                                         \
 #include <linux/types.h>
 #include <linux/blkdev.h>
 
-#define fixme() CERROR("FIXME\n");
+#define fixme() CDEBUG(D_OTHER, "FIXME\n");
 
 static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
 {

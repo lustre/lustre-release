@@ -3,116 +3,110 @@
 OST=`../utils/obdctl name2dev OSCDEV`
 MDS=`../utils/obdctl name2dev MDCDEV`
 
-mkdir /mnt/lustre/foo
-mkdir /mnt/lustre/foo2
+remount() {
+    umount /mnt/lustre || exit -1
+    debugctl clear
+    mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre || exit -1
+}
 
-mkdir /mnt/lustre/foo
+# Test mkdir
+mkdir /mnt/lustre/dir
+mkdir /mnt/lustre/dir2
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+# Test mkdir on existing directory
+mkdir /mnt/lustre/dir
 
-mkdir /mnt/lustre/foo
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+# Test mkdir on existing directory with no locks already held
+mkdir /mnt/lustre/dir
 
-./mcreate /mnt/lustre/bar
-./mcreate /mnt/lustre/bar
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+# Use mknod to create a file
+./mcreate /mnt/lustre/file
+# ...on an existing file.
+./mcreate /mnt/lustre/file
 
-./mcreate /mnt/lustre/bar
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+# Use mknod to create a file with no locks already held
+./mcreate /mnt/lustre/file
 
-ls -l /mnt/lustre/bar
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+ls -l /mnt/lustre/file
 
-cat /mnt/lustre/bar
-./mcreate /mnt/lustre/bar2
-cat /mnt/lustre/bar2
-./mcreate /mnt/lustre/bar3
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+cat /mnt/lustre/file
+./mcreate /mnt/lustre/file2
+cat /mnt/lustre/file2
+./mcreate /mnt/lustre/file3
 
-./tchmod 777 /mnt/lustre/bar3
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+./tchmod 777 /mnt/lustre/file3
 
-./mcreate /mnt/lustre/bar4
-./tchmod 777 /mnt/lustre/bar4
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+./mcreate /mnt/lustre/file4
+./tchmod 777 /mnt/lustre/file4
 
-ls -l /mnt/lustre/bar4
-./tchmod 777 /mnt/lustre/bar4
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+ls -l /mnt/lustre/file4
+./tchmod 777 /mnt/lustre/file4
 
-cat /mnt/lustre/bar4
-./tchmod 777 /mnt/lustre/bar4
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+cat /mnt/lustre/file4
+./tchmod 777 /mnt/lustre/file4
 
-touch /mnt/lustre/bar5
-touch /mnt/lustre/bar6
-touch /mnt/lustre/bar5
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+touch /mnt/lustre/file5
+touch /mnt/lustre/file6
+touch /mnt/lustre/file5
 
-touch /mnt/lustre/bar5
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+touch /mnt/lustre/file5
 
-echo foo >> /mnt/lustre/bar
-cat /mnt/lustre/bar
+remount
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+echo foo >> /mnt/lustre/file
+cat /mnt/lustre/file
 
-cat /mnt/lustre/bar
+remount
+
+cat /mnt/lustre/file
 
 echo foo >> /mnt/lustre/iotest
 echo bar >> /mnt/lustre/iotest
 cat /mnt/lustre/iotest
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+remount
 
 cat /mnt/lustre/iotest
 echo baz >> /mnt/lustre/iotest
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+remount
 
 ls /mnt/lustre
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+remount
 
 mkdir /mnt/lustre/new
 ls /mnt/lustre
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+remount
 
 ls /mnt/lustre
 mkdir /mnt/lustre/newer
 ls /mnt/lustre
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+remount
 
 cat /mnt/lustre/iotest
 echo "Testing truncation..."
@@ -123,8 +117,7 @@ echo "trucating to 4 bytes now..."
 ./truncate /mnt/lustre/iotest 4
 cat  /mnt/lustre/iotest
 
-umount /mnt/lustre
-mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
+remount
 
 ls /mnt/lustre
 rmdir /mnt/lustre/foo

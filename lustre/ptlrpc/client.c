@@ -295,6 +295,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         }
 
  out:
+        CDEBUG(D_NET, "req = %p, rc = %d\n", req, rc);
         return rc;
 }
 

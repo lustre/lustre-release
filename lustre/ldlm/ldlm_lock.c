@@ -83,6 +83,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
         l_lock(nslock);
         lock->l_refc--;
+        LDLM_DEBUG(lock, "after refc--");
         if (lock->l_refc < 0)
                 LBUG();
 
@@ -107,14 +108,13 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
 
         if (!list_empty(&lock->l_children)) {
-                CERROR("lock %p still has children (%p)!\n", lock,
-                       lock->l_children.next);
+                LDLM_DEBUG(lock, "still has children (%p)!",
+                           lock->l_children.next);
                 ldlm_lock_dump(lock);
                 LBUG();
         }
         if (lock->l_readers || lock->l_writers) {
-                CDEBUG(D_INFO, "lock still has references (%d readers, %d "
-                       "writers)\n", lock->l_readers, lock->l_writers);
+                LDLM_DEBUG(lock, "lock still has references");
                 ldlm_lock_dump(lock);
                 LBUG();
         }
@@ -221,7 +221,6 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
         lockh->cookie = lock->l_random;
 }
 
-
 struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
 {
         struct ldlm_lock *lock = NULL;
@@ -245,7 +244,7 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         EXIT;
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-        return  lock;
+        return lock;
 }
 
 

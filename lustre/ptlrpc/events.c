@@ -72,6 +72,12 @@ static int reply_in_callback(ptl_event_t *ev)
         struct ptlrpc_request *req = ev->mem_desc.user_ptr;
         ENTRY;
 
+        if (req->rq_xid == 0x5a5a5a5a) {
+                CERROR("Reply received for freed request!  Probably a missing "
+                       "ptlrpc_abort()\n");
+                LBUG();
+        }
+
         if (req->rq_xid != ev->match_bits) {
                 CERROR("Reply packet for wrong request\n");
                 LBUG(); 
