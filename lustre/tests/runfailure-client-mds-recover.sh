@@ -13,25 +13,7 @@ EOF
 
 }
 
-echo 
-echo "Test 5 reopen a file:" `date` "creating and writing/mnt/lustre/foo"
-echo
-rm -rf /mnt/lustre/*
-./openme /mnt/lustre/foo3 & 
-./writeme /mnt/lustre/iogoeson & 
-sleep 1
-ls -l /mnt/lustre
-echo 0x80000107 > /proc/sys/lustre/fail_loc
-mknod /mnt/lustre/dev c 10 240 &
-echo "MDS dropped create request -- sleep 4 secs - watch for timeout"
-sleep 4
-reconnect
-sleep 1
-echo "did things recover? check for file foo, bar, check log for reopen."
-ls -l /mnt/lustre
-echo "Test 5 done"
 
-exit
 
 echo 
 echo "Test 1 drop request:" `date` "creating /mnt/lustre/foo"
@@ -41,11 +23,12 @@ echo 0x80000107 > /proc/sys/lustre/fail_loc
 touch /mnt/lustre/foo &
 ps axww | grep touch
 echo "MDS dropped create request -- sleep 4 secs - watch for timeout"
-sleep 4
-reconnect
+sleep 7
+# reconnect
 sleep 1
 echo "did things recover? check for file foo."
 ls -l /mnt/lustre
+echo "Test 1 done"
 
 
 echo
@@ -59,14 +42,15 @@ ps axww | grep touch
 echo "MDS dropped create request -- sleep 4 secs - watch for timeout"
 sleep 4
 touch /mnt/lustre/a/f &
-reconnect
-sleep 1
+#reconnect
+sleep 5
 echo "did things recover? check for file foo and a/f"
 ls -l /mnt/lustre
 ls -l /mnt/lustre/a
+echo "Test 2 done"
 
 echo
-echo "Test 4 dropped reply:" `date` "creating /mnt/lustre/foo2"
+echo "Test 3 dropped reply:" `date` "creating /mnt/lustre/foo2"
 echo
 rm -rf /mnt/lustre/*
 echo 0x80000119 > /proc/sys/lustre/fail_loc
@@ -74,18 +58,16 @@ touch /mnt/lustre/foo2 &
 ps axww | grep touch
 echo "MDS dropped create request -- sleep 4 secs - watch for timeout"
 sleep 4
-reconnect
+# reconnect
 echo failure cleared
-sleep 1
+sleep 4
 echo "did things recover? check for file foo2"
 ls -l /mnt/lustre
+echo "Test 3 done"
 
-
-
-exit
 
 echo
-echo "Test 3: Multiple failures"
+echo "Test 4: Multiple failures"
 echo
 echo 0x0000107 > /proc/sys/lustre/fail_loc
 touch /mnt/lustre/bar &
@@ -93,10 +75,29 @@ ps axww | grep touch
 echo "touch program will have repeated failures sleeping 10"
 sleep 10
 echo 0 > /proc/sys/lustre/fail_loc
-reconnect
-sleep 1
+# reconnect
+sleep 6
 echo "failure cleared"
 echo "did things recover? Check for file bar"
 ls -l /mnt/lustre/bar
 
+echo "Test 4 done"
 
+
+echo 
+echo "Test 5: Continue writing during recovery:" `date` "creating and writing/mnt/lustre/foo"
+echo
+rm -rf /mnt/lustre/*
+./openme /mnt/lustre/foo3 & 
+./writeme /mnt/lustre/iogoeson & 
+sleep 1
+ls -l /mnt/lustre
+echo 0x80000107 > /proc/sys/lustre/fail_loc
+mknod /mnt/lustre/dev c 10 240 &
+echo "MDS dropped create request -- sleep 4 secs - watch for timeout"
+sleep 6
+# reconnect
+sleep 1
+echo "did things recover? check for file foo, bar, check log for reopen."
+ls -l /mnt/lustre
+echo "Test 5 done"
