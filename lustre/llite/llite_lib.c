@@ -106,6 +106,19 @@ void ll_options(char *options, char **ost, char **mds, int *flags)
         EXIT;
 }
 
+void ll_lli_init(struct ll_inode_info *lli)
+{
+        sema_init(&lli->lli_open_sem, 1);
+        spin_lock_init(&lli->lli_read_extent_lock);
+        INIT_LIST_HEAD(&lli->lli_read_extents);
+        ll_lldo_init(&lli->lli_dirty);
+        lli->lli_flags = 0;
+        spin_lock_init(&lli->lli_wb_lock);
+        INIT_LIST_HEAD(&lli->lli_lc_item);
+        lli->lli_wb_slist = NULL;
+        lli->lli_wb_nr_pages = 0;
+        atomic_set(&lli->lli_in_writepages, 0);
+}
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
 {
@@ -204,6 +217,14 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_osc, err);
         }
 
+        /* initialize the pagecache writeback thread */
+        err = lliod_start(sbi);
+        if (err) {
+                CERROR("failed to start lliod: rc = %d\n",err);
+                ptlrpc_req_finished(request);
+                GOTO(out_osc, sb = NULL);
+        }
+
         /* initialize committed transaction callback daemon */
         spin_lock_init(&sbi->ll_commitcbd_lock);
         init_waitqueue_head(&sbi->ll_commitcbd_waitq);
@@ -213,7 +234,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         if (err) {
                 CERROR("failed to start commit callback daemon: rc = %d\n",err);
                 ptlrpc_req_finished (request);
-                GOTO(out_osc, err);
+                GOTO(out_lliod, err);
         }
 
         lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0,
@@ -253,6 +274,8 @@ out_dev:
 
 out_cbd:
         ll_commitcbd_cleanup(sbi);
+out_lliod:
+        lliod_stop(sbi);
 out_osc:
         obd_disconnect(&sbi->ll_osc_conn, 0);
 out_mdc:
@@ -581,11 +604,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
 
-        sema_init(&lli->lli_open_sem, 1);
-        spin_lock_init(&lli->lli_read_extent_lock);
-        INIT_LIST_HEAD(&lli->lli_read_extents);
-        ll_lldo_init(&lli->lli_dirty);
-        lli->lli_flags = 0;
+        ll_lli_init(lli);
 
         LASSERT(!lli->lli_smd);
 
