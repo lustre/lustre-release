@@ -286,7 +286,7 @@ if test "${with_gm+set}" = set; then
   if test "${with_gm}" = yes; then
     with_gm="-I/usr/local/gm/include"
   else
-    with_gm=-I"$with_gm/include"
+    with_gm="-I$with_gm/include -I$with_gm/drivers -I$with_gm/drivers/linux/gm"
   fi
   GMNAL="gmnal"
 else

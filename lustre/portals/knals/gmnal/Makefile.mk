@@ -5,6 +5,6 @@
 
 include ../../Kernelenv
 
-obj-y += lgmnal.o
-lgmnal-objs    := lgmnal_api.o lgmnal_cb.o lgmnal_utils.o lgmnal_comm.o lgmnal_module.o
+obj-y += gmnal.o
+gmnal-objs    := gmnal_api.o gmnal_cb.o gmnal_utils.o gmnal_comm.o gmnal_module.o
 

@@ -29,9 +29,16 @@ case "$1" in
 		/sbin/insmod ./$PING nal=4
 		echo kqswnal > /tmp/nal
 	;;
+
+	gm)
+		/sbin/insmod  portals
+		/sbin/insmod kgmnal
+		/sbin/insmod ./$PING nal=3
+		echo kgmnal > /tmp/nal
+	;;
 	
 	*)
-		echo "Usage : ${0} < tcp | toe | elan >"
+		echo "Usage : ${0} < tcp | toe | elan | gm>"
 		exit 1;
 esac
 ../utils/acceptor 9999&
