@@ -429,8 +429,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, long)
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, long)
 
-#define OBD_IOC_PING                   _IOWR('f', 135, long)
-
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
 #define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, long)
 #define OBD_IOC_SET_READONLY           _IOW ('f', 141, long)

@@ -581,46 +581,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 putname(filename);
                 return rc;
         }
-        case OBD_IOC_PING: {
-                struct ptlrpc_request *req = NULL;
-                char *buf = NULL;
-                int rc, len=0;
-                struct client_obd *cli;
-                struct obd_device *obd;
-
-                rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
-                if (rc)
-                        RETURN(rc);
-                data = (void *)buf;
-
-                obd = class_name2obd(data->ioc_inlbuf1);
-
-                if (!obd )
-                        GOTO(out_ping, rc = -ENODEV);
-
-                if (!obd->obd_attached) {
-                        CERROR("Device %d not attached\n", obd->obd_minor);
-                        GOTO(out_ping, rc = -ENODEV);
-                }
-                if (!obd->obd_set_up) {
-                        CERROR("Device %d still not setup\n", obd->obd_minor);
-                        GOTO(out_ping, rc = -ENODEV);
-                }
-                cli = &obd->u.cli;
-                req = ptlrpc_prep_req(cli->cl_import, OBD_PING, 0, NULL, NULL);
-                if (!req)
-                        GOTO(out_ping, rc = -ENOMEM);
-
-                req->rq_replen = lustre_msg_size(0, NULL);
-                req->rq_send_state = LUSTRE_IMP_FULL;
-
-                rc = ptlrpc_queue_wait(req);
-
-                ptlrpc_req_finished(req);
-        out_ping:
-                obd_ioctl_freedata(buf, len);
-                return rc;
-        }
         case OBD_IOC_LLOG_CATINFO: {
                 struct ptlrpc_request *req = NULL;
                 char *buf = NULL;

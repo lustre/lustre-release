@@ -232,6 +232,8 @@ extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                               int count, int *eof, void *data);
 extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
+extern int lprocfs_wr_ping(struct file *file, const char *buffer,
+                           unsigned long count, void *data);
 
 /* Statfs helpers */
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
@@ -330,7 +332,10 @@ static inline int lprocfs_rd_numrefs(char *page, char **start, off_t off,
 { return 0; }
 static inline int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                           unsigned long count, void *data)
-{ return 0; };
+{ return 0; }
+static inline int lprocfs_wr_ping(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{ return 0; }
 
 
 /* Statfs helpers */

@@ -21,6 +21,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- 2.6 changed lock ordering of 2 semaphores, caused deadlock (5654)
 	- don't start multiple acceptors for the same port (5277)
 	- fix incorrect LASSERT in mds_getattr_name (5635)
+	- fix "lfs check" to not block when the MDS is down, and export a proc
+	  file for general "ping" checking (5628)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)

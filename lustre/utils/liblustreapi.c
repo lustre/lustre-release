@@ -554,12 +554,34 @@ out:
 #define MAX_STRING_SIZE 128
 #define DEVICES_LIST "/proc/fs/lustre/devices"
 
+int llapi_ping(char *obd_type, char *obd_name)
+{
+        char path[MAX_STRING_SIZE];
+        char buf[1];
+        int rc, fd;
+
+        snprintf(path, MAX_STRING_SIZE, "/proc/fs/lustre/%s/%s/ping",
+                 obd_type, obd_name);
+
+        fd = open(path, O_WRONLY);
+        if (fd < 0) {
+                fprintf(stderr, "error opening %s: %s\n", path, strerror(errno));
+                return errno;
+        }
+
+        rc = write(fd, buf, 1);
+        close(fd);
+
+        if (rc == 1)
+                return 0;
+        return rc;
+}
+
 int llapi_target_check(int type_num, char **obd_type, char *dir)
 {
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
-        int rc = 0;
-        int i;
+        int i, rc = 0;
 
         if (fp == NULL) {
                 fprintf(stderr, "error: %s opening "DEVICES_LIST"\n",
@@ -590,28 +612,18 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                 datal.ioc_pbuf1 = (char *)&osfs_buffer;
                 datal.ioc_plen1 = sizeof(osfs_buffer);
 
-                for (i = 0; i < type_num; i++)
-                        if (strcmp(obd_type_name, obd_type[i]) == 0) {
-                                datal.ioc_inlbuf1 = obd_name;
-                                datal.ioc_inllen1 = strlen(obd_name) + 1;
+                for (i = 0; i < type_num; i++) {
+                        if (strcmp(obd_type_name, obd_type[i]) != 0)
+                                continue;
 
-                                rc = obd_ioctl_pack(&datal, &bufl, OBD_MAX_IOCTL_BUFFER);
-                                if (rc) {
-                                        fprintf(stderr, "internal buffer error packing\n");
-                                        break;
-                                }
-
-                                rc = ioctl(dirfd(opendir(dir)), OBD_IOC_PING,
-                                           bufl);
-
-                                if (rc) {
-                                        fprintf(stderr, "error: check %s: %s\n",
-                                                obd_name, strerror(rc = errno));
-                                } else {
-                                        printf("%s active.\n",obd_name);
-                                }
+                        rc = llapi_ping(obd_type_name, obd_name);
+                        if (rc) {
+                                fprintf(stderr, "error: check %s: %s\n",
+                                        obd_name, strerror(rc = errno));
+                        } else {
+                                printf("%s active.\n", obd_name);
                         }
-
+                }
         }
         fclose(fp);
         return rc;
@@ -630,7 +642,7 @@ int llapi_catinfo(char *dir, char *keyword, char *node_name)
         int rc;
 
         sprintf(key, "%s", keyword);
-        memset(raw, 0, sizeof(buf));
+        memset(raw, 0, sizeof(raw));
         memset(out, 0, sizeof(out));
         data.ioc_inlbuf1 = key;
         data.ioc_inllen1 = strlen(key) + 1;
