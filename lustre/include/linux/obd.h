@@ -240,7 +240,6 @@ struct obd_device {
                 struct snap_obd snap;
 #endif
         } u;
-          void* counters;
 };
 
 struct io_cb_data;
