@@ -168,7 +168,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
         cpu_to_le_lov_desc (disk_desc);
 
         rc = 0;
-        push_ctxt(&saved, &mds->mds_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_ctxt, NULL);
 
         /* Bug 1186: FIXME: if there is an existing LOVDESC, verify new
          * tgt_count > old */
@@ -219,7 +219,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
         mds->mds_max_cookiesize = desc->ld_tgt_count*sizeof(struct llog_cookie);
 
 out:
-        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
         OBD_FREE (disk_desc, sizeof (*disk_desc));
 
         RETURN(rc);
@@ -255,7 +255,7 @@ out:
         return rc;
 }
 
-int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,
+int mds_get_lovtgts(struct obd_device *obd, int tgt_count,
                     struct obd_uuid *uuidarray)
 {
         struct obd_run_ctxt saved;
@@ -263,7 +263,7 @@ int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,
         int rc;
         int rc2;
 
-        push_ctxt(&saved, &mds->mds_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_ctxt, NULL);
         f = filp_open("LOVTGTS", O_RDONLY, 0644);
         if (IS_ERR(f)) {
                 CERROR("Cannot open LOVTGTS file\n");
@@ -285,7 +285,7 @@ int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,
                 rc = 0;
         EXIT;
 out:
-        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
         RETURN(rc);
 }
@@ -484,16 +484,15 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         CERROR("UUID array size wrong\n");
                         RETURN(-EINVAL);
                 }
-                push_ctxt(&saved, &obd->u.mds.mds_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
                 rc = mds_get_lovdesc(&obd->u.mds, desc);
-                pop_ctxt(&saved, &obd->u.mds.mds_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
                 if (desc->ld_tgt_count > count) {
                         CERROR("UUID array size too small\n");
                         RETURN(-ENOSPC);
                 }
-                rc = mds_get_lovtgts(&obd->u.mds, desc->ld_tgt_count,
-                                     uuidarray);
+                rc = mds_get_lovtgts(obd, desc->ld_tgt_count, uuidarray);
 
                 RETURN(rc);
         }
