@@ -69,7 +69,7 @@
  	if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  		if (!dentry->d_op->d_revalidate(dentry, flags) && !d_invalidate(dentry)) {
  			dput(dentry);
-@@ -281,7 +301,8 @@ static struct dentry * cached_lookup(str
+@@ -281,11 +301,14 @@ static struct dentry * cached_lookup(str
   * make sure that nobody added the entry to the dcache in the meantime..
   * SMP-safe
   */
@@ -79,6 +79,12 @@
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
+ 
++again:
++
+ 	down(&dir->i_sem);
+ 	/*
+ 	 * First re-do the cached lookup just in case it was created
 @@ -300,6 +321,9 @@ static struct dentry * real_lookup(struc
  		result = ERR_PTR(-ENOMEM);
  		if (dentry) {
@@ -97,7 +103,7 @@
 +		if (!result->d_op->d_revalidate2(result, flags, it) &&
 +		    !d_invalidate(result)) {
 +			dput(result);
-+			result = ERR_PTR(-ENOENT);
++			goto again;
 +		}
  	}
  	return result;
