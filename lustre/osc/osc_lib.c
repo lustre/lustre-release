@@ -19,7 +19,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #define DEBUG_SUBSYSTEM S_OSC
 
 #ifdef __KERNEL__
@@ -28,6 +30,7 @@
 # include <linux/obd_ost.h>
 # include <linux/lustre_net.h>
 # include <linux/lustre_dlm.h>
+# include <linux/lustre_lib.h>
 
 /* convert a pathname into a kdev_t */
 static kdev_t path2dev(char *path)
@@ -36,11 +39,8 @@ static kdev_t path2dev(char *path)
         struct nameidata nd;
         kdev_t dev = KDEVT_INIT(0);
 
-        if (!path_init(path, LOOKUP_FOLLOW, &nd))
-                return 0;
-
-        if (path_walk(path, &nd))
-                return 0;
+        if (ll_path_lookup(path, LOOKUP_FOLLOW, &nd))
+                return val_to_kdev(0);
 
         dentry = nd.dentry;
         if (dentry->d_inode && !is_bad_inode(dentry->d_inode) &&
