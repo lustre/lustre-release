@@ -158,6 +158,8 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(out_req, rc);
 
+        if (rq_opc == MDS_CONNECT)
+                cli->cl_import.imp_flags |= IMP_REPLAYABLE;
         list_add(&cli->cl_import.imp_chain, &c->c_imports);
         c->c_level = LUSTRE_CONN_FULL;
         cli->cl_import.imp_handle.addr = request->rq_repmsg->addr;

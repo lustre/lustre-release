@@ -12,7 +12,8 @@
 
 #ifdef __KERNEL__
 
-#define IMP_INVALID 1
+#define IMP_INVALID       1
+#define IMP_REPLAYABLE    2
 
 #include <linux/lustre_idl.h>
 struct obd_import {
@@ -22,7 +23,7 @@ struct obd_import {
         struct list_head          imp_chain;
         struct obd_device        *imp_obd;
         int                       imp_flags;
-        /* XXX need a UUID here, I think */
+        /* XXX need a UUID here, I think, unless we just use the OBD's UUID */
 };
 
 extern struct obd_import *class_conn2cliimp(struct lustre_handle *);
