@@ -408,7 +408,7 @@ lgmnal_get_srxd(lgmnal_data_t *nal_data, int block)
 		LGMNAL_RXD_GETTOKEN(nal_data);
 	} else {
 		if (LGMNAL_RXD_TRYGETTOKEN(nal_data)) {
-			CDEBUG(D_ERROR, "lgmnal_get_srxd Can't get token\n");
+			CDEBUG(D_INFO, "lgmnal_get_srxd Can't get token\n");
 			return(NULL);
 		}
 	}
