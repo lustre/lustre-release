@@ -26,6 +26,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
 
 struct mdc_open_data {
         struct obd_client_handle *mod_och;
+        struct ptlrpc_request    *mod_open_req;
         struct ptlrpc_request    *mod_close_req;
 };
 
