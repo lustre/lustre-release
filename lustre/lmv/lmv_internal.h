@@ -10,7 +10,7 @@
         
 struct lmv_inode {
         struct ll_fid      fid;            /* fid of dirobj */
-        unsigned long      size;
+        unsigned long      size;           /* slave size value */
         int                flags;
 };
 
@@ -20,10 +20,10 @@ struct lmv_obj {
         struct list_head   list;
 	struct semaphore   guard;
 	int                state;          /* object state. */
-        atomic_t           count;
+        atomic_t           count;          /* ref counter. */
         struct ll_fid      fid;            /* master fid of dir */
         void               *update;        /* bitmap of status (uptodate) */
-        int                objcount;
+        int                objcount;       /* number of slaves */
         struct lmv_inode   *objs;          /* array of dirobjs */
         struct obd_device  *obd;           /* pointer to LMV itself */
 };

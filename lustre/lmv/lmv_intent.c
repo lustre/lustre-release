@@ -352,7 +352,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
          * attributes to be returned from the slaves it's important that lookup
          * is called in two cases:
          
-         *  - for first time (dcache has no such a resolving yet.
+         *  - for first time (dcache has no such a resolving yet).
          *  - ->d_revalidate() returned false.
          
          * last case possible only if all the objs (master and all slaves aren't
@@ -394,7 +394,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                                     NULL, 0, NULL, 0, &fid, &it, 0, &req,
                                     lmv_dirobj_blocking_ast);
                 
-                lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
+                lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
                 if (rc > 0) {
                         /* nice, this slave is valid */
                         LASSERT(req == NULL);
@@ -433,6 +433,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 LASSERT(body2);
 
                 obj->objs[i].size = body2->size;
+                
                 CDEBUG(D_OTHER, "fresh: %lu\n",
                        (unsigned long)obj->objs[i].size);
 
@@ -617,8 +618,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         struct ptlrpc_request *mreq = *reqp;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lustre_handle master_lockh;
-        unsigned long size = 0;
         struct ldlm_lock *lock;
+        unsigned long size = 0;
         struct mds_body *body;
         struct ll_uctxt uctxt;
         struct lmv_obj *obj;
@@ -664,7 +665,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                                         /* it even got the reply refresh attrs
                                          * from that reply */
                                         body = lustre_msg_buf(mreq->rq_repmsg,
-                                                              1,sizeof(*body));
+                                                              1, sizeof(*body));
                                         LASSERT(body != NULL);
                                         goto update; 
                                 }
@@ -737,6 +738,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 
 update:
                 obj->objs[i].size = body->size;
+                
                 CDEBUG(D_OTHER, "fresh: %lu\n",
                        (unsigned long)obj->objs[i].size);
 
@@ -744,6 +746,7 @@ update:
                         ptlrpc_req_finished(req);
 release_lock:
                 size += obj->objs[i].size;
+
                 if (it.d.lustre.it_lock_mode)
                         ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
         }
@@ -752,12 +755,14 @@ release_lock:
                 /* some attrs got refreshed, we have reply and it's time to put
                  * fresh attrs to it */
                 CDEBUG(D_OTHER, "return refreshed attrs: size = %lu\n",
-                       (unsigned long) size);
+                       (unsigned long)size);
+                
                 body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
                 LASSERT(body);
 
-                /* FIXME: what about another attributes? */
+                /* FIXME: what about other attributes? */
                 body->size = size;
+                
                 if (mreq == NULL) {
                         /* very important to maintain lli->mds the same because
                          * of revalidation. mreq == NULL means that caller has

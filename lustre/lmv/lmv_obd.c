@@ -545,7 +545,7 @@ static int lmv_getattr(struct obd_export *exp, struct ll_fid *fid,
                 RETURN(rc);
 
         LASSERT(i < lmv->desc.ld_tgt_count);
-        
+
         rc = md_getattr(lmv->tgts[i].ltd_exp, fid, valid,
                         ea_size, request);
         if (rc)
@@ -557,10 +557,35 @@ static int lmv_getattr(struct obd_export *exp, struct ll_fid *fid,
                (unsigned long)fid->mds, (unsigned long)fid->id,
                (unsigned long)fid->generation, obj ? "(splitted)" : "");
 
+        /* if object is splitted, then we loop over all the slaves and gather
+         * size attribute. In ideal world we would have to gather also mds field
+         * from all slaves, as object is spread over the cluster and this is
+         * definitely interesting information and it is not good to loss it,
+         * but...*/
         if (obj) {
-                /* we have to loop over dirobjs here and gather attrs for all
-                 * the slaves. */
-#warning "attrs gathering here"
+                struct mds_body *body;
+
+                if (*request == NULL) {
+                        lmv_put_obj(obj);
+                        RETURN(rc);
+                }
+                        
+                body = lustre_msg_buf((*request)->rq_repmsg, 0,
+                                      sizeof(*body));
+                LASSERT(body != NULL);
+
+                lmv_lock_obj(obj);
+        
+                for (i = 0; i < obj->objcount; i++) {
+
+                        /* skip master obj. */
+                        if (fid_equal(&obj->fid, &obj->objs[i].fid))
+                                continue;
+                        
+                        body->size += obj->objs[i].size;
+                }
+
+                lmv_unlock_obj(obj);
                 lmv_put_obj(obj);
         }
         
@@ -709,7 +734,7 @@ int lmv_create(struct obd_export *exp, struct mdc_op_data *op_data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mds_body *mds_body;
+        struct mds_body *body;
         struct lmv_obj *obj;
         int rc, mds;
         ENTRY;
@@ -729,30 +754,27 @@ repeat:
                 lmv_put_obj(obj);
         }
 
-        CDEBUG(D_OTHER, "CREATE '%*s' on %lu/%lu/%lu\n",
-               op_data->namelen, op_data->name,
-               (unsigned long)op_data->fid1.mds,
+        CDEBUG(D_OTHER, "CREATE '%*s' on %lu/%lu/%lu\n", op_data->namelen,
+               op_data->name, (unsigned long)op_data->fid1.mds,
                (unsigned long)op_data->fid1.id,
                (unsigned long)op_data->fid1.generation);
         
         rc = md_create(lmv->tgts[op_data->fid1.mds].ltd_exp, op_data, data,
                        datalen, mode, uid, gid, rdev, request);
         if (rc == 0) {
-                
                 if (*request == NULL)
                         RETURN(rc);
 
-                mds_body = lustre_msg_buf((*request)->rq_repmsg, 0,
-                                          sizeof(*mds_body));
-                LASSERT(mds_body != NULL);
+                body = lustre_msg_buf((*request)->rq_repmsg, 0,
+                                      sizeof(*body));
+                LASSERT(body != NULL);
                 
-                CDEBUG(D_OTHER, "created. id = %lu, generation = %lu, mds = %d\n",
-                       (unsigned long)mds_body->fid1.id,
-                       (unsigned long)mds_body->fid1.generation,
-                       op_data->fid1.mds);
+                CDEBUG(D_OTHER, "created. id = %lu, generation = %lu, "
+                       "mds = %d\n", (unsigned long)body->fid1.id,
+                       (unsigned long)body->fid1.generation, op_data->fid1.mds);
                 
-                LASSERT(mds_body->valid & OBD_MD_MDS ||
-                        mds_body->mds == op_data->fid1.mds);
+                LASSERT(body->valid & OBD_MD_MDS ||
+                        body->mds == op_data->fid1.mds);
         } else if (rc == -ERESTART) {
                 /* directory got splitted. time to update local object and
                  * repeat the request with proper MDS */
@@ -1078,7 +1100,7 @@ int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
         struct lmv_obd *lmv = &obd->u.lmv;
         int rc = 0, i = data->fid1.mds;
         struct ptlrpc_request *req;
-        struct mds_body *mds_body;
+        struct mds_body *body;
         struct lmv_obj *obj;
         ENTRY;
 
@@ -1099,11 +1121,6 @@ int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
                         
                         rc = md_setattr(lmv->tgts[i].ltd_exp, data, iattr,
                                         ea, ealen, ea2, ea2len, &req);
-                        if (rc) {
-                                lmv_put_obj(obj);
-                                ptlrpc_req_finished(req);
-                                RETURN(rc);
-                        }
 
                         if (fid_equal(&obj->fid, &obj->objs[i].fid)) {
                                 /* this is master object and this request should
@@ -1112,17 +1129,22 @@ int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
                         } else {
                                 ptlrpc_req_finished(req);
                         }
+
+                        if (rc) {
+                                lmv_put_obj(obj);
+                                RETURN(rc);
+                        }
                 }
                 lmv_put_obj(obj);
         } else {
                 LASSERT(i < lmv->desc.ld_tgt_count);
-                rc = md_setattr(lmv->tgts[i].ltd_exp, data, iattr, ea, ealen,
-                                ea2, ea2len, request); 
+                rc = md_setattr(lmv->tgts[i].ltd_exp, data, iattr, ea,
+                                ealen, ea2, ea2len, request); 
                 if (rc == 0) {
-                        mds_body = lustre_msg_buf((*request)->rq_repmsg, 0,
-                                                  sizeof(*mds_body));
-                        LASSERT(mds_body != NULL);
-                        LASSERT(mds_body->mds == i);
+                        body = lustre_msg_buf((*request)->rq_repmsg, 0,
+                                              sizeof(*body));
+                        LASSERT(body != NULL);
+                        LASSERT(body->mds == i);
                 }
         }
         RETURN(rc);
