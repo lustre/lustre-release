@@ -46,11 +46,11 @@ fi
 AC_SUBST(SYSIO)
 
 # snap compilation 
-AC_ARG_ENABLE(snapfs, [ --enable-snapfs build snapfs])
+AC_ARG_ENABLE(snapfs, [  --enable-snapfs build snapfs])
 AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
 
 # smfs compilation 
-AC_ARG_ENABLE(smfs, [ --enable-smfs build smfs])
+AC_ARG_ENABLE(smfs, [  --enable-smfs build smfs])
 AM_CONDITIONAL(SMFS, test x$enable_smfs = xyes)
 
 
