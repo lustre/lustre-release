@@ -61,7 +61,7 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
 
         mds_fs_set_last_rcvd(mds, handle);
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd), &off);
-        CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at #%d: rc = %d\n",
+        CDEBUG(D_INODE, "wrote trans #"LPD64" for client '%s' at #%d: rc = %d\n",
                last_rcvd, mcd->mcd_uuid, med->med_off, rc);
 
         if (rc == sizeof(*mcd))
@@ -610,7 +610,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &srclockh);
         if (rc == 0) {
-                LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
+                LDLM_DEBUG_NOLOCK("enqueue res "LPU64, res_id[0]);
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                       &flags, ldlm_completion_ast,
@@ -632,7 +632,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &tgtlockh);
         if (rc == 0) {
-                LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
+                LDLM_DEBUG_NOLOCK("enqueue res "LPU64, res_id[0]);
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                       &flags, ldlm_completion_ast,
@@ -714,13 +714,13 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 /* Take an exclusive lock on the resource that we're
                  * about to free, to force everyone to drop their
                  * locks. */
-                LDLM_DEBUG_NOLOCK("getting EX lock res %Lu", res_id[0]);
+                LDLM_DEBUG_NOLOCK("getting EX lock res "LPU64, res_id[0]);
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, LCK_EX,
                                       &flags, ldlm_completion_ast,
                                       mds_blocking_ast, NULL, 0, &oldhandle);
                 if (rc)
-                        CERROR("failed to get child inode lock (child ino %Ld, "
+                        CERROR("failed to get child inode lock (child ino "LPD64", "
                                "dir ino %ld)\n",
                                res_id[0], de_old->d_inode->i_ino);
         }
@@ -732,7 +732,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 rc = ldlm_cli_cancel(&oldhandle);
                 if (rc < 0)
                         CERROR("failed to cancel child inode lock ino "
-                               "%Ld: %d\n", res_id[0], rc);
+                               LPD64": %d\n", res_id[0], rc);
         }
 out_rename_tgtdir:
         double_up(&de_srcdir->d_inode->i_sem, &de_tgtdir->d_inode->i_sem);

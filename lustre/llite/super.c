@@ -283,7 +283,7 @@ static void ll_delete_inode(struct inode *inode)
 
                 err = obd_destroy(ll_i2obdconn(inode), oa, md);
                 obdo_free(oa);
-                CDEBUG(D_SUPER, "obd destroy of %Ld error %d\n",
+                CDEBUG(D_SUPER, "obd destroy of "LPD64" error %d\n",
                        md->lmd_object_id, err);
         }
 out:

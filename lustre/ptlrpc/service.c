@@ -162,7 +162,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         request.rq_reqlen = event->mem_desc.length;
 
         if (request.rq_reqlen < sizeof(struct lustre_msg)) {
-                CERROR("incomplete request (%d): ptl %d from %Lx xid %Ld\n",
+                CERROR("incomplete request (%d): ptl %d from "LPX64" xid "LPD64"\n",
                        request.rq_reqlen, svc->srv_req_portal,
                        event->initiator.nid, request.rq_xid);
                 spin_unlock(&svc->srv_lock);
@@ -178,7 +178,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         }
 
         if (request.rq_reqmsg->magic != PTLRPC_MSG_MAGIC) {
-                CERROR("wrong lustre_msg magic %d: ptl %d from %Lx xid %Ld\n",
+                CERROR("wrong lustre_msg magic %d: ptl %d from "LPX64" xid "LPD64"\n",
                        request.rq_reqmsg->magic, svc->srv_req_portal,
                        event->initiator.nid, request.rq_xid);
                 spin_unlock(&svc->srv_lock);
@@ -186,14 +186,14 @@ static int handle_incoming_request(struct obd_device *obddev,
         }
 
         if (request.rq_reqmsg->version != PTLRPC_MSG_VERSION) {
-                CERROR("wrong lustre_msg version %d: ptl %d from %Lx xid %Ld\n",
+                CERROR("wrong lustre_msg version %d: ptl %d from "LPX64" xid "LPD64"\n",
                        request.rq_reqmsg->version, svc->srv_req_portal,
                        event->initiator.nid, request.rq_xid);
                 spin_unlock(&svc->srv_lock);
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_NET, "got req %Ld\n", request.rq_xid);
+        CDEBUG(D_NET, "got req "LPD64"\n", request.rq_xid);
 
         request.rq_peer.peer_nid = event->initiator.nid;
         /* FIXME: this NI should be the incoming NI.

@@ -19,14 +19,14 @@
 
 int dump_ioo(struct obd_ioobj *ioo)
 {
-        CERROR("obd_ioobj: ioo_id=%Ld, ioo_gr=%Ld, ioo_type=%d, ioo_bufct=%d\n",
+        CERROR("obd_ioobj: ioo_id="LPD64", ioo_gr="LPD64", ioo_type=%d, ioo_bufct=%d\n",
                ioo->ioo_id, ioo->ioo_gr, ioo->ioo_type, ioo->ioo_bufcnt);
         return -EINVAL;
 }
 
 int dump_lniobuf(struct niobuf_local *nb)
 {
-        CERROR("niobuf_local: addr=%p, offset=%Ld, len=%d, xid=%d, page=%p\n",
+        CERROR("niobuf_local: addr=%p, offset="LPD64", len=%d, xid=%d, page=%p\n",
                nb->addr, nb->offset, nb->len, nb->xid, nb->page);
         CERROR("nb->page: index = %ld\n", nb->page ? nb->page->index : -1);
 
@@ -35,7 +35,7 @@ int dump_lniobuf(struct niobuf_local *nb)
 
 int dump_rniobuf(struct niobuf_remote *nb)
 {
-        CERROR("niobuf_remote: offset=%Ld, len=%d, flags=%x, xid=%d\n",
+        CERROR("niobuf_remote: offset="LPD64", len=%d, flags=%x, xid=%d\n",
                nb->offset, nb->len, nb->flags, nb->xid);
 
         return -EINVAL;
@@ -45,17 +45,17 @@ int dump_obdo(struct obdo *oa)
 {
         CERROR("obdo: o_valid = %08x\n", oa->o_valid);
         if (oa->o_valid & OBD_MD_FLID)
-                CERROR("obdo: o_id = %Ld\n", oa->o_id);
+                CERROR("obdo: o_id = "LPD64"\n", oa->o_id);
         if (oa->o_valid & OBD_MD_FLATIME)
-                CERROR("obdo: o_atime = %Ld\n", oa->o_atime);
+                CERROR("obdo: o_atime = "LPD64"\n", oa->o_atime);
         if (oa->o_valid & OBD_MD_FLMTIME)
-                CERROR("obdo: o_mtime = %Ld\n", oa->o_mtime);
+                CERROR("obdo: o_mtime = "LPD64"\n", oa->o_mtime);
         if (oa->o_valid & OBD_MD_FLCTIME)
-                CERROR("obdo: o_ctime = %Ld\n", oa->o_ctime);
+                CERROR("obdo: o_ctime = "LPD64"\n", oa->o_ctime);
         if (oa->o_valid & OBD_MD_FLSIZE)
-                CERROR("obdo: o_size = %Ld\n", oa->o_size);
+                CERROR("obdo: o_size = "LPD64"\n", oa->o_size);
         if (oa->o_valid & OBD_MD_FLBLOCKS)   /* allocation of space */
-                CERROR("obdo: o_blocks = %Ld\n", oa->o_blocks);
+                CERROR("obdo: o_blocks = "LPD64"\n", oa->o_blocks);
         if (oa->o_valid & OBD_MD_FLBLKSZ)
                 CERROR("obdo: o_blksize = %d\n", oa->o_blksize);
         if (oa->o_valid & OBD_MD_FLMODE)

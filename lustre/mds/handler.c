@@ -526,7 +526,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &lockh);
         if (rc == 0) {
-                LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
+                LDLM_DEBUG_NOLOCK("enqueue res "LPU64, res_id[0]);
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                       &flags, ldlm_completion_ast,
@@ -667,7 +667,7 @@ static int mds_open(struct ptlrpc_request *req)
                 fd = list_entry(tmp, struct mds_file_data, mfd_list);
                 if (body->extra == fd->mfd_clientfd &&
                     body->fid1.id == fd->mfd_file->f_dentry->d_inode->i_ino) {
-                        CERROR("Re opening %Ld\n", body->fid1.id);
+                        CERROR("Re opening "LPD64"\n", body->fid1.id);
                         RETURN(0);
                 }
         }

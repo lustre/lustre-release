@@ -487,7 +487,7 @@ static int filter_getattr(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
 
         if (!class_conn2export(conn)) {
-                CDEBUG(D_IOCTL, "fatal: invalid client %Lx\n", conn->addr);
+                CDEBUG(D_IOCTL, "fatal: invalid client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -558,7 +558,7 @@ static int filter_open(struct lustre_handle *conn, struct obdo *oa,
 
         export = class_conn2export(conn);
         if (!export) {
-                CDEBUG(D_IOCTL, "fatal: invalid client %Lx\n", conn->addr);
+                CDEBUG(D_IOCTL, "fatal: invalid client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -583,7 +583,7 @@ static int filter_close(struct lustre_handle *conn, struct obdo *oa,
 
         obd = class_conn2obd(conn);
         if (!obd) {
-                CDEBUG(D_IOCTL, "fatal: invalid client %Lx\n", conn->addr);
+                CDEBUG(D_IOCTL, "fatal: invalid client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -610,7 +610,7 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
         ENTRY;
 
         if (!obd) {
-                CERROR("invalid client %Lx\n", conn->addr);
+                CERROR("invalid client "LPX64"\n", conn->addr);
                 return -EINVAL;
         }
 
@@ -653,11 +653,11 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
 
         obd = class_conn2obd(conn);
         if (!obd) {
-                CERROR("invalid client %Lx\n", conn->addr);
+                CERROR("invalid client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_INODE, "destroying object %Ld\n", oa->o_id);
+        CDEBUG(D_INODE, "destroying object "LPD64"\n", oa->o_id);
 
         dir_dentry = filter_parent(obd, oa->o_mode);
         down(&dir_dentry->d_inode->i_sem);
@@ -669,7 +669,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
 
         inode = object_dentry->d_inode;
         if (inode == NULL) {
-                CERROR("trying to destroy negative inode %Ld!\n", oa->o_id);
+                CERROR("trying to destroy negative inode "LPD64"!\n", oa->o_id);
                 GOTO(out, rc = -ENOENT);
         }
 
@@ -704,8 +704,8 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
         if (end != 0xffffffffffffffff)
                 CERROR("PUNCH not supported, only truncate works\n");
 
-        CDEBUG(D_INODE, "calling truncate for object #%Ld, valid = %x, "
-               "o_size = %Ld\n", oa->o_id, oa->o_valid, start);
+        CDEBUG(D_INODE, "calling truncate for object #"LPD64", valid = %x, "
+               "o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
         oa->o_size = start;
         error = filter_setattr(conn, oa, NULL);
         RETURN(error);
@@ -727,7 +727,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
         ENTRY;
 
         if (!obd) {
-                CDEBUG(D_IOCTL, "invalid client %Lx\n", conn->addr);
+                CDEBUG(D_IOCTL, "invalid client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
         }
 

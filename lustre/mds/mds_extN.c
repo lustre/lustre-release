@@ -224,7 +224,7 @@ static void mds_extN_callback_status(void *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
 
-        CDEBUG(D_EXT2, "got callback for last_rcvd %Ld: rc = %d\n",
+        CDEBUG(D_EXT2, "got callback for last_rcvd "LPD64": rc = %d\n",
                mcb->cb_last_rcvd, error);
         if (!error && mcb->cb_last_rcvd > mcb->cb_mds->mds_last_committed)
                 mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;

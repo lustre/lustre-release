@@ -734,7 +734,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 err = obd_connect(&conn, obd, cluuid);
 
-                CDEBUG(D_IOCTL, "assigned export %Lx\n", conn.addr);
+                CDEBUG(D_IOCTL, "assigned export "LPX64"\n", conn.addr);
                 obd_conn2data(data, &conn);
                 if (err)
                         GOTO(out, err);

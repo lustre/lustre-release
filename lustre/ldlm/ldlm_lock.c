@@ -854,13 +854,13 @@ void ldlm_lock_dump(struct ldlm_lock *lock)
 
         CDEBUG(D_OTHER, "  -- Lock dump: %p (%s)\n", lock, ver);
         if (lock->l_export && lock->l_export->exp_connection)
-                CDEBUG(D_OTHER, "  Node: NID %x (rhandle: %Lx)\n",
+                CDEBUG(D_OTHER, "  Node: NID %x (rhandle: "LPX64")\n",
                        lock->l_export->exp_connection->c_peer.peer_nid,
                        lock->l_remote_handle.addr);
         else
                 CDEBUG(D_OTHER, "  Node: local\n");
         CDEBUG(D_OTHER, "  Parent: %p\n", lock->l_parent);
-        CDEBUG(D_OTHER, "  Resource: %p (%Ld)\n", lock->l_resource,
+        CDEBUG(D_OTHER, "  Resource: %p ("LPD64")\n", lock->l_resource,
                lock->l_resource->lr_name[0]);
         CDEBUG(D_OTHER, "  Requested mode: %d, granted mode: %d\n",
                (int)lock->l_req_mode, (int)lock->l_granted_mode);

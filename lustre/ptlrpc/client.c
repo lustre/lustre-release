@@ -315,7 +315,7 @@ restart:
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
-                        CDEBUG(D_INFO, "Keeping req %p xid %Ld for replay\n",
+                        CDEBUG(D_INFO, "Keeping req %p xid "LPD64" for replay\n",
                                req, req->rq_xid);
                         continue;
                 }
@@ -393,7 +393,7 @@ restart2:
 void ptlrpc_continue_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_INODE, "continue delayed request %Ld opc %d\n", 
+        CDEBUG(D_INODE, "continue delayed request "LPD64" opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc); 
         wake_up(&req->rq_wait_for_rep); 
         EXIT;
@@ -402,7 +402,7 @@ void ptlrpc_continue_req(struct ptlrpc_request *req)
 void ptlrpc_resend_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_INODE, "resend request %Ld, opc %d\n", 
+        CDEBUG(D_INODE, "resend request "LPD64", opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc);
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
@@ -417,7 +417,7 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
 void ptlrpc_restart_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_INODE, "restart completed request %Ld, opc %d\n", 
+        CDEBUG(D_INODE, "restart completed request "LPD64", opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc);
         req->rq_status = -ERESTARTSYS;
         req->rq_flags |= PTL_RPC_FL_RECOVERY;
@@ -464,7 +464,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
-        CDEBUG(D_NET, "subsys: %s req %Ld opc %d level %d, conn level %d\n",
+        CDEBUG(D_NET, "subsys: %s req "LPD64" opc %d level %d, conn level %d\n",
                cli->cli_name, req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
                req->rq_connection->c_level);
 
@@ -561,7 +561,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 #endif
-        CDEBUG(D_NET, "got rep %Ld\n", req->rq_xid);
+        CDEBUG(D_NET, "got rep "LPD64"\n", req->rq_xid);
         if (req->rq_repmsg->status == 0)
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
                        req->rq_replen, req->rq_repmsg->status);
@@ -585,7 +585,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
-        CDEBUG(D_NET, "req %Ld opc %d level %d, conn level %d\n",
+        CDEBUG(D_NET, "req "LPD64" opc %d level %d, conn level %d\n",
                req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
                req->rq_connection->c_level);
 
@@ -621,13 +621,13 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
-        CDEBUG(D_NET, "got rep %Ld\n", req->rq_xid);
+        CDEBUG(D_NET, "got rep "LPD64"\n", req->rq_xid);
         if (req->rq_repmsg->status == 0)
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
                        req->rq_replen, req->rq_repmsg->status);
         else {
                 CERROR("recovery failed: "); 
-                CERROR("req %Ld opc %d level %d, conn level %d\n", 
+                CERROR("req "LPD64" opc %d level %d, conn level %d\n", 
                        req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
                        req->rq_connection->c_level);
                 LBUG();

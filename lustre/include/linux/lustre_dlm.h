@@ -217,7 +217,7 @@ do {                                                                    \
         if (lock->l_resource == NULL)                                   \
                 CDEBUG(D_DLMTRACE, "### " format                        \
                        " (UNKNOWN: lock %p(rc=%d/%d,%d) mode %s/%s on " \
-                       "res \?\? (rc=\?\?) type \?\?\? remote %Lx)\n" , \
+                       "res \?\? (rc=\?\?) type \?\?\? remote "LPX64")\n" , \
                        ## a, lock, lock->l_refc, lock->l_readers,       \
                        lock->l_writers,                                 \
                        ldlm_lockname[lock->l_granted_mode],             \
@@ -226,7 +226,7 @@ do {                                                                    \
         else                                                            \
                 CDEBUG(D_DLMTRACE, "### " format                        \
                        " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "  \
-                       "%Lu (rc=%d) type %s remote %Lx)\n" , ## a,      \
+                       LPU64" (rc=%d) type %s remote "LPX64")\n" , ## a,      \
                        lock->l_resource->lr_namespace->ns_name, lock,   \
                        lock->l_refc, lock->l_readers, lock->l_writers,  \
                        ldlm_lockname[lock->l_granted_mode],             \

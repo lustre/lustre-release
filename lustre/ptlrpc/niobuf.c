@@ -25,6 +25,7 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_lib.h>
+#include <linux/obd.h>
 
 extern ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq,
         bulk_source_eq, bulk_sink_eq;
@@ -69,7 +70,7 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         remote_id.nid = conn->c_peer.peer_nid;
         remote_id.pid = 0;
 
-        CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %Ld\n",
+        CDEBUG(D_NET, "Sending %d bytes to portal %d, xid "LPD64"\n",
                request->rq_req_md.length, portal, request->rq_xid);
 
         if (!portal)
@@ -77,7 +78,7 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         rc = PtlPut(md_h, PTL_NOACK_REQ, remote_id, portal, 0, request->rq_xid,
                     0, 0);
         if (rc != PTL_OK) {
-                CERROR("PtlPut(%Lu, %d, %Ld) failed: %d\n", remote_id.nid,
+                CERROR("PtlPut("LPU64", %d, "LPD64") failed: %d\n", remote_id.nid,
                        portal, request->rq_xid, rc);
                 PtlMDUnlink(md_h);
         }
@@ -165,14 +166,14 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         remote_id.nid = desc->bd_connection->c_peer.peer_nid;
         remote_id.pid = 0;
 
-        CDEBUG(D_NET, "Sending %u pages %u bytes to portal %d nid %Lx pid %d xid %d\n",
+        CDEBUG(D_NET, "Sending %u pages %u bytes to portal %d nid "LPX64" pid %d xid %d\n",
                desc->bd_md.niov, desc->bd_md.length,
                desc->bd_portal, remote_id.nid, remote_id.pid, xid);
 
         rc = PtlPut(desc->bd_md_h, PTL_ACK_REQ, remote_id,
                     desc->bd_portal, 0, xid, 0, 0);
         if (rc != PTL_OK) {
-                CERROR("PtlPut(%Lu, %d, %d) failed: %d\n",
+                CERROR("PtlPut("LPU64", %d, %d) failed: %d\n",
                        remote_id.nid, desc->bd_portal, xid, rc);
                 PtlMDUnlink(desc->bd_md_h);
                 LBUG();
@@ -364,7 +365,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 GOTO(cleanup2, rc);
         }
 
-        CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %Lu, portal %u\n",
+        CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64", portal %u\n",
                request->rq_replen, request->rq_xid,
                request->rq_import->imp_client->cli_reply_portal);
 

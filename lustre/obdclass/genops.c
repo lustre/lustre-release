@@ -322,7 +322,7 @@ struct obd_export *class_conn2export(struct lustre_handle *conn)
                 RETURN(NULL);
         }
 
-        CDEBUG(D_IOCTL, "looking for export addr %Lx cookie %Lx\n",
+        CDEBUG(D_IOCTL, "looking for export addr "LPX64" cookie "LPX64"\n",
                conn->addr, conn->cookie);
         export = (struct obd_export *) (unsigned long)conn->addr;
         if (!kmem_cache_validate(export_cachep, (void *)export))
@@ -445,7 +445,7 @@ int class_disconnect(struct lustre_handle *conn)
         if (!(export = class_conn2export(conn))) {
                 fixme();
                 CDEBUG(D_IOCTL, "disconnect: attempting to free "
-                       "nonexistent client %Lx\n", conn->addr);
+                       "nonexistent client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
         }
 

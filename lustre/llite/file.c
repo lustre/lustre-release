@@ -361,7 +361,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
                 extent.start = *ppos;
                 extent.end = *ppos + count;
-                CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
+                CDEBUG(D_INFO, "Locking inode %ld, start "LPU64" end "LPU64"\n",
                        inode->i_ino, extent.start, extent.end);
 
                 err = obd_enqueue(&sbi->ll_osc_conn, md, NULL, LDLM_EXTENT,
@@ -436,7 +436,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                         GOTO(out_eof, retval = -ENOMEM);
                 extent.start = *ppos;
                 extent.end = *ppos + count;
-                CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
+                CDEBUG(D_INFO, "Locking inode %ld, start "LPU64" end "LPU64"\n",
                        inode->i_ino, extent.start, extent.end);
 
                 err = obd_enqueue(&sbi->ll_osc_conn, md, NULL, LDLM_EXTENT,

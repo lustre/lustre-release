@@ -372,7 +372,7 @@ static int ldlm_handle_bl_callback(struct ptlrpc_request *req)
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
         if (!lock) {
-                CERROR("blocking callback on lock %Lx - lock disappeared\n",
+                CERROR("blocking callback on lock "LPX64" - lock disappeared\n",
                        dlm_req->lock_handle1.addr);
                 RETURN(0);
         }
@@ -419,7 +419,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req)
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
         if (!lock) {
-                CERROR("completion callback on lock %Lx - lock disappeared\n",
+                CERROR("completion callback on lock "LPX64" - lock disappeared\n",
                        dlm_req->lock_handle1.addr);
                 RETURN(0);
         }

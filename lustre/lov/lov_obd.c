@@ -302,7 +302,7 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
                 tmp.o_id = md->lmd_oinfo[i].loi_id;
                 rc = obd_destroy(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc)
-                        CERROR("Error destroying object %Ld on %d\n",
+                        CERROR("Error destroying object "LPD64"on %d\n",
                                md->lmd_oinfo[i].loi_id, i);
         }
         RETURN(rc);
@@ -341,7 +341,7 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
 
                 err = obd_getattr(&lov->tgts[i].conn, &tmp, NULL);
                 if (err) {
-                        CERROR("Error getattr object %Ld on %d: err = %d\n",
+                        CERROR("Error getattr object "LPD64" on %d: err = %d\n",
                                md->lmd_oinfo[i].loi_id, i, err);
                         if (!rc)
                                 rc = err;
@@ -391,7 +391,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
 
                 rc = obd_setattr(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc)
-                        CERROR("Error setattr object %Ld on %d\n",
+                        CERROR("Error setattr object "LPD64" on %d\n",
                                tmp.o_id, i);
         }
         RETURN(rc);
@@ -423,7 +423,7 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
                 rc = obd_open(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc) {
                         rc2 = rc;
-                        CERROR("Error open object %Ld on %d\n",
+                        CERROR("Error open object "LPD64" on %d\n",
                                md->lmd_oinfo[i].loi_id, i);
                 }
         }
@@ -455,7 +455,7 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
 
                 rc = obd_close(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc)
-                        CERROR("Error close object %Ld on %d\n",
+                        CERROR("Error close object "LPD64" on %d\n",
                                md->lmd_oinfo[i].loi_id, i);
         }
         RETURN(rc);
@@ -545,7 +545,7 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                 rc = obd_punch(&lov->tgts[i].conn, &tmp, NULL,
                                starti, endi);
                 if (rc)
-                        CERROR("Error punch object %Ld on %d\n",
+                        CERROR("Error punch object "LPD64" on %d\n",
                                md->lmd_oinfo[i].loi_id, i);
         }
         RETURN(rc);
@@ -699,7 +699,8 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
                                  flags, cb, data, datalen, &(lockhs[i]));
                 // XXX add a lock debug statement here
                 if (rc)
-                        CERROR("Error obd_enqueue object %Ld subobj %Ld\n",
+                        CERROR("Error obd_enqueue object "LPD64
+                               " subobj "LPD64"\n",
                                md->lmd_object_id, md->lmd_oinfo[i].loi_id);
         }
         RETURN(rc);
@@ -732,7 +733,7 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md,
                 submd.lmd_easize = sizeof(struct lov_mds_md);
                 rc = obd_cancel(&lov->tgts[i].conn, &submd, mode, &lockhs[i]);
                 if (rc)
-                        CERROR("Error cancel object %Ld subobj %Ld\n",
+                        CERROR("Error cancel object "LPD64" subobj "LPD64"\n",
                                md->lmd_object_id, md->lmd_oinfo[i].loi_id);
         }
         RETURN(rc);
