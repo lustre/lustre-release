@@ -7,13 +7,14 @@ COMPILE = $(CC) -Wall -g -I$(srcdir)/../include
 LINK = $(CC) -o $@
 
 if LIBLUSTRE
-tmp=
-#libptlctl_a_CFLAGS = -fPIC
-else
-tmp=gmnalnid
-endif
 
-sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck $(tmp)
+lib_LIBRARIES = libuptlctl.a
+libuptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
+libuptlctl_a_CFLAGS = -fPIC
+
+else
+
+sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck gmnalnid
 lib_LIBRARIES = libptlctl.a
 
 acceptor_SOURCES = acceptor.c # -lefence
@@ -33,3 +34,4 @@ debugctl_LDADD = -L. -lptlctl -lncurses # -lefence
 debugctl_DEPENDENCIES = libptlctl.a
 
 routerstat_SOURCES = routerstat.c
+endif
