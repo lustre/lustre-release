@@ -113,10 +113,10 @@ void ll_lli_init(struct ll_inode_info *lli)
         INIT_LIST_HEAD(&lli->lli_read_extents);
         ll_lldo_init(&lli->lli_dirty);
         lli->lli_flags = 0;
-        spin_lock_init(&lli->lli_wb_lock);
+        spin_lock_init(&lli->lli_pg_lock);
         INIT_LIST_HEAD(&lli->lli_lc_item);
-        lli->lli_wb_slist = NULL;
-        lli->lli_wb_nr_pages = 0;
+        plist_init(&lli->lli_pl_read);
+        plist_init(&lli->lli_pl_write);
         atomic_set(&lli->lli_in_writepages, 0);
 }
 
