@@ -48,6 +48,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <errno.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -78,7 +79,7 @@ int
 main(int argc, char * const argv[])
 {
 	struct stat statbuf;
-	int	err, i, fd, written, read;
+	int	err, i, fd, written, readed;
 	char pgbuf[4096], readbuf[4096];
 	int npages;
 
@@ -111,26 +112,26 @@ main(int argc, char * const argv[])
 #if 1
 	portal_debug = 0;
 	portal_subsystem_debug = 0;
-	npages = 1024;
+	npages = 100;
 
-	fd = fixme_open("/newfile3", O_RDWR|O_CREAT|O_TRUNC, 00664);
+	fd = open("/newfile01", O_RDWR|O_CREAT|O_TRUNC, 00664);
 	printf("***************** open return %d ****************\n", fd);
 
 	printf("***************** begin write pages ****************\n");
 	for (i = 0; i < npages; i++ ) {
 		memset(pgbuf, ('A'+ i%10), 4096);
-		written = fixme_write(fd, pgbuf, 4096);
+		written = write(fd, pgbuf, 4096);
 		printf(">>> page %d: %d bytes written\n", i, written);
 	}
 
 	printf("***************** begin read pages ****************\n");
-	fixme_lseek(fd, 0, SEEK_SET);
+	lseek(fd, 0, SEEK_SET);
 
 	for (i = 0; i < npages; i++ ) {
 		memset(readbuf, '8', 4096);
-		read = fixme_read(fd, readbuf, 4096);
+		readed = read(fd, readbuf, 4096);
 		readbuf[10] = 0;
-		printf("<<< page %d: %d bytes (%s)", i, read, readbuf);
+		printf("<<< page %d: %d bytes (%s)\n", i, readed, readbuf);
 	}
 #endif
 	printf("sysio is about shutdown\n");
