@@ -6,9 +6,6 @@ set -e
 # This test needs to be run on the client
 #
 
-LCONF=${LCONF:-"../utils/lconf"}
-LMC=${LMC:-"../utils/lmc"}
-LCTL=${LCTL:-"../utils/lctl"}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
@@ -73,7 +70,7 @@ cleanup() {
         fail mds
     fi
 
-    lconf  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
+    $LCONF  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
        --local_nid $client_HOST --profile client_facet --mount $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost ${FORCE} --dump cleanup.log
@@ -87,13 +84,13 @@ fi
 
 gen_config
 
-start mds --write_conf --reformat $MDSLCONFARGS 
+#start mds --write_conf --reformat $MDSLCONFARGS 
 start ost --reformat $OSTLCONFARGS 
-[ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
-start mds $MDSLCONFARGS --gdb
+[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+start mds $MDSLCONFARGS --reformat
 
 # 0-conf client
-lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
+$LCONF --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
     --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT
 
 echo $TIMEOUT > /proc/sys/lustre/timeout
@@ -650,6 +647,17 @@ test_32() {
     return 0
 }
 run_test 32 "close() notices client eviction; close() after client eviction"
+
+# Abort recovery before client complete
+test_33() {
+    replay_barrier mds
+    touch $DIR/$tfile
+    fail_abort mds
+    # this file should be gone, because the replay was aborted
+    $CHECKSTAT -t file $DIR/$tfile && return 1
+    return 0
+}
+run_test 33 "abort recovery before client does replay"
 
 equals_msg test complete, cleaning up
 cleanup
