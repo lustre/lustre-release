@@ -27,7 +27,7 @@ int obd_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(obd, llog_setup);
+        OBD_CHECK_OP(obd, llog_setup, 0);
         OBD_COUNTER_INCREMENT(obd, llog_setup);
 
         rc = OBP(obd, llog_setup)(obd, disk_obd, index, count, logid);
@@ -40,7 +40,7 @@ int obd_llog_cleanup(struct obd_device *obd)
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(obd, llog_cleanup);
+        OBD_CHECK_OP(obd, llog_cleanup, 0);
         OBD_COUNTER_INCREMENT(obd, llog_cleanup);
 
         rc = OBP(obd, llog_cleanup)(obd);
@@ -71,7 +71,7 @@ int obd_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(obd, llog_repl_cancel);
+        OBD_CHECK_OP(obd, llog_repl_cancel, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, llog_repl_cancel);
 
         rc = OBP(obd, llog_repl_cancel)(obd, lsm, count, cookies, flags);
@@ -90,16 +90,21 @@ int llog_obd_setup(struct obd_device *obd, struct obd_device *disk_obd,
 
         LASSERT(count == 1);
         
+        if (disk_obd->obd_llog_ctxt &&
+            disk_obd->obd_llog_ctxt->loc_handles[index])
+                RETURN(0);
+
         if (index == 0) {
-                OBD_ALLOC(ctxt, sizeof(*ctxt));
-                if (!ctxt)
-                        RETURN(-ENOMEM);
-                
                 if (disk_obd->obd_llog_ctxt) {
                         CERROR("llog_ctxt already allocated\n");
                         LBUG();
                 }
+
+                OBD_ALLOC(ctxt, sizeof(*ctxt));
+                if (!ctxt)
+                        RETURN(-ENOMEM);
                 disk_obd->obd_llog_ctxt = ctxt;
+
                 sema_init(&disk_obd->obd_llog_ctxt->loc_sem, 1);
         } else 
                 ctxt = disk_obd->obd_llog_ctxt;

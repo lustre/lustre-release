@@ -43,7 +43,7 @@ int mds_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(obd->u.mds.mds_osc_obd, llog_setup);
+        OBD_CHECK_OP(obd->u.mds.mds_osc_obd, llog_setup, 0);
         rc = OBP(obd->u.mds.mds_osc_obd, llog_setup)(obd->u.mds.mds_osc_obd,
                                                      disk_obd, index, count,
                                                      logid);
@@ -55,7 +55,7 @@ int mds_llog_cleanup(struct obd_device *obd)
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(obd->u.mds.mds_osc_obd, llog_cleanup);
+        OBD_CHECK_OP(obd->u.mds.mds_osc_obd, llog_cleanup, 0);
         rc = OBP(obd->u.mds.mds_osc_obd, llog_cleanup)(obd->u.mds.mds_osc_obd);
         RETURN(rc);
 }
@@ -82,7 +82,7 @@ int mds_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         ENTRY;
 
-        OBD_CHECK_OP(obd, llog_repl_cancel);
+        OBD_CHECK_OP(obd, llog_repl_cancel, -EOPNOTSUPP);
 
         rc = OBP(lov_obd, llog_repl_cancel)(lov_obd, lsm, count, cookies,
                                             flags);
