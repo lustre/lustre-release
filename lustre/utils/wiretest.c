@@ -612,6 +612,13 @@ void lustre_assert_wire_constants(void)
         LASSERT((int)sizeof(((struct llog_logid *)0)->lgl_ogr) == 8);
         LASSERT(offsetof(struct llog_logid, lgl_ogen) == 16);
         LASSERT((int)sizeof(((struct llog_logid *)0)->lgl_ogen) == 4);
+        LASSERT(OST_SZ_REC == 274730752);
+        LASSERT(OST_RAID1_REC == 274731008);
+        LASSERT(MDS_UNLINK_REC == 274801668);
+        LASSERT(OBD_CFG_REC == 274857984);
+        LASSERT(PTL_CFG_REC == 274923520);
+        LASSERT(LLOG_HDR_MAGIC == 275010873);
+        LASSERT(LLOG_LOGID_MAGIC == 275010874);
 
         /* Checks for struct llog_rec_hdr */
         LASSERT((int)sizeof(struct llog_rec_hdr) == 16);
@@ -684,5 +691,14 @@ void lustre_assert_wire_constants(void)
         LASSERT(LLOG_ORIGIN_HANDLE_READ_HEADER == 503);
         LASSERT(LLOG_ORIGIN_HANDLE_WRITE_REC == 504);
         LASSERT(LLOG_ORIGIN_HANDLE_CLOSE == 505);
+
+        /* Checks for struct llogd_conn_body */
+        LASSERT((int)sizeof(struct llogd_conn_body) == 40);
+        LASSERT(offsetof(struct llogd_conn_body, lgdc_gen) == 0);
+        LASSERT((int)sizeof(((struct llogd_conn_body *)0)->lgdc_gen) == 16);
+        LASSERT(offsetof(struct llogd_conn_body, lgdc_logid) == 16);
+        LASSERT((int)sizeof(((struct llogd_conn_body *)0)->lgdc_logid) == 20);
+        LASSERT(offsetof(struct llogd_conn_body, lgdc_ctxt_idx) == 36);
+        LASSERT((int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx) == 4);
 }
 
