@@ -50,6 +50,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include <asm/page.h>   /* needed for PAGE_SIZE - rread*/ 
+
 #define __KERNEL__
 #include <linux/list.h>
 #undef __KERNEL__
