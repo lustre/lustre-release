@@ -14,7 +14,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-ALWAYS_EXCEPT="35"
+ALWAYS_EXCEPT=""
 
 
 gen_config() {
@@ -706,6 +706,42 @@ test_37() {
     return 0
 }
 run_test 37 "abort recovery before client does replay (test mds_cleanup_orphans for directories)"
+
+test_38() {
+    for i in `seq 1 800`; do
+	touch $DIR/$tfile-$i
+    done
+    for i in `seq 1 400`; do
+	rm $DIR/$tfile-$i
+    done
+
+    replay_barrier mds
+    fail mds
+    for i in `seq 401 800`; do
+	rm $DIR/$tfile-$i
+    done
+    sleep 2
+    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
+}
+run_test 38 "test recovery from unlink llog (test llog_gen_rec) "
+
+test_39() {
+    for i in `seq 1 800`; do
+	touch $DIR/$tfile-$i
+    done
+
+    replay_barrier mds
+    for i in `seq 1 400`; do
+	rm $DIR/$tfile-$i
+    done
+    fail mds
+    for i in `seq 401 800`; do
+	rm $DIR/$tfile-$i
+    done
+    sleep 2
+    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
+}
+run_test 39 "test recovery from unlink llog (test llog_gen_rec) "
 
 equals_msg test complete, cleaning up
 $CLEANUP
