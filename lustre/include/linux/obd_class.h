@@ -328,7 +328,7 @@ static inline int obd_punch(struct lustre_handle *conn, struct obdo *oa,
 static inline int obd_brw(int cmd, struct lustre_handle *conn,
                           struct lov_stripe_md *ea, obd_count oa_bufs,
                           struct brw_page *pg,
-                          brw_callback_t callback, void *data)
+                          brw_callback_t callback, struct io_cb_data *data)
 {
         struct obd_export *exp;
         int rc;
