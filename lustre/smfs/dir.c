@@ -162,6 +162,7 @@ static int smfs_link(struct dentry * old_dentry,
 	prepare_parent_dentry(&parent_old, cache_dir);
 	cache_old_dentry = d_alloc(&parent_old, &dentry->d_name);
 	d_add(cache_old_dentry, cache_old_inode); 
+	pre_smfs_inode(inode, cache_old_dentry->d_inode);
 	
 	if (cache_dir->i_op->link)
 		rc = cache_dir->i_op->link(cache_old_dentry, cache_dir, cache_dentry);		
@@ -201,6 +202,9 @@ static int smfs_unlink(struct inode * dir,
 	cache_dentry = d_alloc(&parent, &dentry->d_name);
 	d_add(cache_dentry, cache_inode);
 
+	pre_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
+	pre_smfs_inode(dir, cache_dir);
+	
 	if (cache_dir->i_op->unlink)
 		rc = cache_dir->i_op->unlink(cache_dir, cache_dentry);
 
@@ -272,6 +276,7 @@ static int smfs_mkdir(struct inode * dir,
 	prepare_parent_dentry(&parent, cache_dir);
 	cache_dentry = d_alloc(&parent, &dentry->d_name);
 
+	pre_smfs_inode(dir, cache_dir);
 	lock_kernel();	
 	if (cache_dir->i_op->mkdir)
 		rc = cache_dir->i_op->mkdir(cache_dir, cache_dentry, mode);
@@ -312,8 +317,11 @@ static int  smfs_rmdir(struct inode * dir,
 	prepare_parent_dentry(&parent, cache_dir);
 	cache_dentry = d_alloc(&parent, &dentry->d_name);
 	d_add(cache_dentry, cache_inode);
-	
 	igrab(cache_inode);
+	
+	pre_smfs_inode(dir, cache_dir);
+	pre_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
+	
 	
 	if (cache_dir->i_op->rmdir)
 		rc = cache_dir->i_op->rmdir(cache_dir, cache_dentry);
@@ -339,6 +347,9 @@ static int smfs_mknod(struct inode * dir, struct dentry *dentry,
 
 	prepare_parent_dentry(&parent, cache_dir);
 	cache_dentry = d_alloc(&parent, &dentry->d_name);
+	
+	pre_smfs_inode(dir, cache_dir);
+	pre_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
 	
 	if (cache_dir->i_op->mknod)
 		rc = cache_dir->i_op->mknod(cache_dir, cache_dentry, mode, rdev);
@@ -378,6 +389,9 @@ static int smfs_rename(struct inode * old_dir, struct dentry *old_dentry,
 
 	prepare_parent_dentry(&parent_new, cache_new_dir);
 	cache_new_dentry = d_alloc(&parent_new, &new_dentry->d_name);
+	
+	pre_smfs_inode(old_dir, cache_old_dir) ;
+	pre_smfs_inode(new_dir, cache_new_dir);
 	
 	if (cache_old_dir->i_op->rename)
 		rc = cache_old_dir->i_op->rename(cache_old_dir, cache_old_dentry,

@@ -87,6 +87,8 @@ static ssize_t smfs_write (struct file *filp, const char *buf,
 	
 	smfs_prepare_cachefile(inode, filp, cache_inode, 
 			       &open_file, &open_dentry);
+	pre_smfs_inode(inode, cache_inode);
+	
 	if (cache_inode->i_fop->write)
 		rc = cache_inode->i_fop->write(&open_file, buf, count, cache_ppos);
 	
@@ -153,6 +155,7 @@ static ssize_t smfs_read (struct file *filp, char *buf,
 			       &open_file, &open_dentry);
 
 	
+	pre_smfs_inode(inode, cache_inode);
 	if (cache_inode->i_fop->read)
 		rc = cache_inode->i_fop->read(&open_file, buf, count, cache_ppos);
     
@@ -181,6 +184,7 @@ static loff_t smfs_llseek(struct file *file,
 	smfs_prepare_cachefile(dentry->d_inode, file, cache_inode, 
 			       &open_file, &open_dentry);
 	
+	pre_smfs_inode(dentry->d_inode, cache_inode);
 	if (cache_inode->i_fop->llseek)
 		rc = cache_inode->i_fop->llseek(&open_file, offset, origin);
 
@@ -208,6 +212,7 @@ static int smfs_mmap(struct file * file, struct vm_area_struct * vma)
 	if (cache_inode->i_mapping == &cache_inode->i_data)
                 inode->i_mapping = cache_inode->i_mapping;
 
+	pre_smfs_inode(inode, cache_inode);
 	if (cache_inode->i_fop->mmap)
 		rc = cache_inode->i_fop->mmap(&open_file, vma);
       
@@ -231,6 +236,7 @@ static int smfs_open(struct inode * inode, struct file * filp)
 	smfs_prepare_cachefile(inode, filp, cache_inode, 
 			       &open_file, &open_dentry);
 	
+	pre_smfs_inode(inode, cache_inode);
 	if (cache_inode->i_fop->open)
 		rc = cache_inode->i_fop->open(cache_inode, &open_file);
         
@@ -254,6 +260,7 @@ static int smfs_release(struct inode * inode, struct file * filp)
 	smfs_prepare_cachefile(inode, filp, cache_inode, 
 			       &open_file, &open_dentry);
 
+	pre_smfs_inode(inode, cache_inode);
 	if (cache_inode->i_fop->release)
 		rc = cache_inode->i_fop->release(cache_inode, &open_file);
 
@@ -279,6 +286,7 @@ int smfs_fsync(struct file * file,
 	smfs_prepare_cachefile(inode, file, cache_inode, 
 			       &open_file, &open_dentry);
 
+	pre_smfs_inode(inode, cache_inode);
 	if (cache_inode->i_fop->fsync)
 		rc = cache_inode->i_fop->fsync(&open_file, &open_dentry, datasync);
 	

@@ -33,17 +33,21 @@ static void duplicate_inode(struct inode *dst_inode,
 void post_smfs_inode(struct inode *inode, 
 		     struct inode *cache_inode)
 {
-	duplicate_inode(inode, cache_inode);
-	/*Here we must release the cache_inode,
-	 *Otherwise we will have no chance to
-	 *do it
-	 */
-	cache_inode->i_state &=~I_LOCK;	
+	if (inode && cache_inode) {
+		duplicate_inode(inode, cache_inode);
+		/*Here we must release the cache_inode,
+		 *Otherwise we will have no chance to
+		 *do it
+		 */
+		cache_inode->i_state &=~I_LOCK;	
+	}
 }
 void pre_smfs_inode(struct inode *inode,
 		    struct inode *cache_inode)
 {
-	duplicate_inode(cache_inode, inode);
+	if (inode && cache_inode) {
+		duplicate_inode(cache_inode, inode);
+	}
 }
 
 static void smfs_read_inode(struct inode *inode)
