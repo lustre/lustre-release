@@ -135,6 +135,17 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
+        /* if the inode has been marked as staled, simply reap it */
+        if (llu_i2info(pb->pb_ino)->lli_stale_flag) {
+                struct inode *inode = pb->pb_ino;
+
+                pb->pb_ino = NULL;
+                I_RELE(inode);
+                _sysio_i_gone(inode);
+
+                RETURN(0);
+        }
+
         /* This is due to bad interaction with libsysio. remove this when we
          * switched to libbsdio
          */
@@ -189,11 +200,12 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                         }
                         RETURN(1);
                 }
-                /*
-                if (S_ISDIR(de->d_inode->i_mode))
-                        ll_invalidate_inode_pages(de->d_inode);
-                d_unhash_aliases(de->d_inode);
-                */
+
+                /* remove the staled inode right away */
+                pb->pb_ino = NULL;
+                I_RELE(inode);
+                _sysio_i_gone(inode);
+
                 RETURN(0);
         }
 
