@@ -197,8 +197,10 @@ int ptlrpc_reconnect_and_replay(struct ptlrpc_connection *conn)
                 /* service has not seen req, no reply: resend */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                      req->rq_xid > conn->c_last_xid) {
-                        CDEBUG(D_HA, "RESEND: xid "LPD64" transno "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_repmsg->transno, req->rq_reqmsg->opc,
+                        CDEBUG(D_HA, "RESEND: xid "LPD64" transno "LPD64
+                               " op %d @ %d\n", req->rq_xid,
+                               req->rq_repmsg ? req->rq_repmsg->transno : 0,
+                               req->rq_reqmsg->opc,
                                req->rq_import->imp_client->cli_request_portal);
                         ptlrpc_resend_req(req);
                 }

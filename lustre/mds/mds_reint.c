@@ -49,6 +49,10 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
         loff_t off;
         int rc;
 
+        /* we don't allocate new transnos for replayed requests */
+        if (req->rq_level == LUSTRE_CONN_RECOVD)
+                RETURN(0);
+
         off = MDS_LR_CLIENT + med->med_off * MDS_LR_SIZE;
 
         spin_lock(&mds->mds_last_lock);

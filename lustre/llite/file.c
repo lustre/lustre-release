@@ -319,7 +319,11 @@ out_mdc:
                         rc = -abs(rc2);
                 GOTO(out_fd, rc);
         }
-        /* XXX Mike, we have also done this in ll_file_open? */
+        CDEBUG(D_HA, "matched req %p xid "LPD64" transno "LPD64" op %d->%s:%d\n",
+               fd->fd_req, fd->fd_req->rq_xid, fd->fd_req->rq_repmsg->transno,
+               fd->fd_req->rq_reqmsg->opc,
+               fd->fd_req->rq_import->imp_connection->c_remote_uuid,
+               fd->fd_req->rq_import->imp_client->cli_request_portal);
         ptlrpc_req_finished(fd->fd_req);
 
         rc = obd_cancel_unused(ll_i2obdconn(inode), lsm, 0);

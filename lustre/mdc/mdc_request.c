@@ -367,15 +367,15 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         RETURN(0);
 }
 
-static void mdc_replay_open(struct ptlrpc_request *req,
-                            struct lustre_handle *data)
+static void mdc_replay_open(struct ptlrpc_request *req, void *data)
 {
+        struct lustre_handle *fh = data;
         struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 0);
 
         mds_unpack_body(body);
         CDEBUG(D_HA, "updating from "LPD64"/"LPD64" to "LPD64"/"LPD64"\n",
-               data->addr, data->cookie, body->handle.addr, body->handle.cookie);
-        memcpy(data, &body->handle, sizeof(*data));
+               fh->addr, fh->cookie, body->handle.addr, body->handle.cookie);
+        memcpy(fh, &body->handle, sizeof(*fh));
 }
 
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
@@ -420,7 +420,7 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
 
         /* If open is replayed, we need to fix up the fh. */
         req->rq_replay_cb = mdc_replay_open;
-        memcpy(&req->rq_replay_cb_handle, fh, sizeof(fh));
+        req->rq_replay_cb_data = fh;
 
         EXIT;
  out:
