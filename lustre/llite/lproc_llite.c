@@ -164,6 +164,39 @@ static int ll_rd_sb_uuid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
 }
 
+static int ll_rd_read_ahead(char *page, char **start, off_t off, int count,
+                            int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block*)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+        ENTRY;
+
+        *eof = 1;
+        val = (sbi->ll_flags & LL_SBI_READAHEAD) ? 1 : 0;
+        rc = snprintf(page, count, "%d\n", val);
+        RETURN(rc);
+}
+
+static int ll_wr_read_ahead(struct file *file, const char *buffer,
+                            unsigned long count, void *data)
+{
+        struct super_block *sb = (struct super_block*)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int readahead;
+        ENTRY;
+
+        if (1 != sscanf(buffer, "%d", &readahead))
+                RETURN(-EINVAL);        
+
+        if (readahead)
+                sbi->ll_flags |= LL_SBI_READAHEAD;
+        else
+                sbi->ll_flags &= ~LL_SBI_READAHEAD;
+
+        RETURN(count);
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -174,10 +207,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "filestotal",   ll_rd_filestotal,       0, 0 },
         { "filesfree",    ll_rd_filesfree,        0, 0 },
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        { "dirty_pages",  ll_rd_dirty_pages,      0, 0},
-        { "max_dirty_pages", ll_rd_max_dirty_pages, ll_wr_max_dirty_pages, 0},
-#endif
+        { "read_ahead",   ll_rd_read_ahead, ll_wr_read_ahead, 0 },
         { 0 }
 };
 

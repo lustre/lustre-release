@@ -81,6 +81,8 @@ void class_notify_import_observers(struct obd_import *imp, int event,
 #define IMP_EVENT_INACTIVE 2
 
 /* genops.c */
+struct obd_export;
+extern struct obd_import *class_exp2cliimp(struct obd_export *);
 extern struct obd_import *class_conn2cliimp(struct lustre_handle *);
 extern struct obd_import *class_conn2ldlmimp(struct lustre_handle *);
 

@@ -576,6 +576,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, attach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, detach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setup);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, postsetup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cleanup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, connect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, disconnect);
@@ -589,10 +590,12 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setattr);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr_async);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, open);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, close);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, brw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, brw_async);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_async_io);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, raise_io_priority);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, ocp_teardown);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, sync_io);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, punch);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, sync);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, migrate);
@@ -608,10 +611,8 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, log_add);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, log_cancel);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, san_preprw);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, mark_page_dirty);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, clear_dirty_pages);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, last_dirty_offset);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, lock_contains);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pin); 
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
 
@@ -648,6 +649,27 @@ void lprocfs_free_obd_stats(struct obd_device *obd)
         }
 }
 
+int lprocfs_write_helper(const char *buffer, unsigned long count,
+                         int *val)
+{
+        char kernbuf[20], *end;
+        
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+
+        kernbuf[count] = '\0';
+
+        *val = simple_strtol(kernbuf, &end, 0);
+        if (kernbuf == end)
+                return -EINVAL;
+
+        return 0;
+}
+
+
 #endif /* LPROCFS*/
 
 EXPORT_SYMBOL(lprocfs_register);
@@ -676,3 +698,5 @@ EXPORT_SYMBOL(lprocfs_rd_kbytesfree);
 EXPORT_SYMBOL(lprocfs_rd_filestotal);
 EXPORT_SYMBOL(lprocfs_rd_filesfree);
 EXPORT_SYMBOL(lprocfs_rd_filegroups);
+
+EXPORT_SYMBOL(lprocfs_write_helper);
