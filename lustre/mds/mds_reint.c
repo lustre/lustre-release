@@ -50,7 +50,6 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd), &off);
         CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at #%d: rc = %d\n",
                mds->mds_last_rcvd, mcd->mcd_uuid, med->med_off, rc);
-        // store new value and last committed value in req struct
 
         if (rc == sizeof(*mcd))
                 rc = 0;
@@ -430,7 +429,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (!inode) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %ld, name %s\n",
                        dir->i_ino, rec->ur_name);
-                GOTO(out_unlink_cancel, rc = -ENOENT);
+                /* going to out_unlink_cancel causes an LBUG, don't know why */
+                GOTO(out_unlink_dchild, rc = -ENOENT);
         } else if (offset) {
                 struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
                 mds_pack_inode2fid(&body->fid1, inode);
@@ -496,7 +496,7 @@ out_unlink_cancel:
                 if (!rc)
                         rc = -ENOLCK;   /*XXX translate LDLM lock error */
         }
-//out_unlink_dchild:
+out_unlink_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
 out_unlink:
