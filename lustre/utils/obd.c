@@ -1676,23 +1676,6 @@ out:
         return rc;
 }
 
-int jt_obd_test_ldlm(int argc, char **argv)
-{
-        struct obd_ioctl_data data;
-        int rc;
-
-        IOC_INIT(data);
-        if (argc != 1)
-                return CMD_HELP;
-
-        IOC_PACK(argv[0], data);
-        rc = l2_ioctl(OBD_DEV_ID, IOC_LDLM_TEST, buf);
-        if (rc)
-                fprintf(stderr, "error: %s: test failed: %s\n",
-                        jt_cmdname(argv[0]), strerror(rc = errno));
-        return rc;
-}
-
 int jt_obd_dump_ldlm(int argc, char **argv)
 {
         struct obd_ioctl_data data;

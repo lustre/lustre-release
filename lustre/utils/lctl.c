@@ -208,14 +208,6 @@ command_t cmdlist[] = {
         {"unset_stripe", jt_obd_unset_stripe, 0,
          "unset stripe info for an echo client object\n"
          "usage: unset_stripe objid\n"},
-        {"test_ldlm", jt_obd_test_ldlm, 0,
-         "perform lock manager test\n"
-         "usage: test_ldlm"},
-        {"ldlm_regress_start", jt_obd_ldlm_regress_start, 0,
-         "start lock manager stress test\n"
-         "usage: ldlm_regress_start [numthreads [refheld [numres [numext]]]]"},
-        {"ldlm_regress_stop", jt_obd_ldlm_regress_stop, 0,
-         "stop lock manager stress test (no args)\n"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
          "dump all lock manager state (no args)"},
         {"activate", jt_obd_activate, 0, "activate an import\n"},
