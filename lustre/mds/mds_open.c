@@ -116,8 +116,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 RETURN(rc);
         }
         dir = parent->d_inode;
-        if (dir == NULL)
-                GOTO(out_step_1, rc = -ENOENT);
+        LASSERT(dir);
 
         /* Step 2: Lookup the child */
         dchild = lookup_one_len(lustre_msg_buf(req->rq_reqmsg, 3),
