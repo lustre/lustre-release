@@ -96,6 +96,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         LASSERT(objcount == 1);
         LASSERT(current->journal_info == NULL);
 
+        inode = res->dentry->d_inode;
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 	LASSERT(blocks_per_page <= MAX_BLOCKS_PER_PAGE);
 
@@ -110,7 +111,6 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         cleanup_phase = 1;
         fso.fso_dentry = res->dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
-        inode = res->dentry->d_inode;
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         cleanup_phase = 2; 
