@@ -30,3 +30,4 @@ ext3-trusted_ea-2.4.20.patch
 kernel_text_address-2.4.22-vanilla.patch
 gfp_memalloc-2.4.22.patch
 ext3-xattr-ptr-arith-fix.patch
+3.5G-address-space-2.4.22-vanilla.patch 
