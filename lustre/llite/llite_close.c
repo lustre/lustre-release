@@ -123,12 +123,19 @@ static void ll_close_done_writing(struct inode *inode)
         struct ll_inode_info *lli = ll_i2info(inode);
         ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        struct obdo obdo;
-        obd_valid valid;
+        struct obdo *obdo = NULL;
         int rc, ast_flags = 0;
+        obd_valid valid;
         ENTRY;
 
-        memset(&obdo, 0, sizeof(obdo));
+        obdo = obdo_alloc();
+        if (obdo == NULL) {
+                CERROR("cannot allocate obdo, error %d\n",
+                       -ENOMEM);
+                EXIT;
+                return;
+        }
+        
         if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
                 goto rpc;
 
@@ -141,7 +148,7 @@ static void ll_close_done_writing(struct inode *inode)
                 GOTO(out, rc);
         }
 
-        rc = ll_lsm_getattr(ll_i2obdexp(inode), lli->lli_smd, &obdo);
+        rc = ll_lsm_getattr(ll_i2obdexp(inode), lli->lli_smd, obdo);
         if (rc) {
                 CERROR("inode_getattr failed (%d): unable to send DONE_WRITING "
                        "for inode %lu/%u\n", rc, inode->i_ino,
@@ -150,7 +157,7 @@ static void ll_close_done_writing(struct inode *inode)
                 GOTO(out, rc);
         }
 
-        obdo_refresh_inode(inode, &obdo, valid);
+        obdo_refresh_inode(inode, obdo, valid);
 
         CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %lu, blksize %lu\n",
                lli->lli_smd->lsm_object_id, inode->i_size, inode->i_blocks,
@@ -162,14 +169,15 @@ static void ll_close_done_writing(struct inode *inode)
         if (rc != ELDLM_OK)
                 CERROR("unlock failed (%d)?  proceeding anyways...\n", rc);
 
- rpc:
-        obdo.o_id = inode->i_ino;
-        obdo.o_size = inode->i_size;
-        obdo.o_blocks = inode->i_blocks;
-        obdo.o_valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+rpc:
+        obdo->o_id = inode->i_ino;
+        obdo->o_size = inode->i_size;
+        obdo->o_blocks = inode->i_blocks;
+        obdo->o_valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-        rc = md_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &obdo);
- out:
+        rc = md_done_writing(ll_i2sbi(inode)->ll_mdc_exp, obdo);
+out:
+        obdo_free(obdo);
 }
 #endif
 

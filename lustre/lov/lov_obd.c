@@ -1185,9 +1185,9 @@ static int lov_revalidate_policy(struct lov_obd *lov, struct lov_stripe_md *lsm)
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *lsm, struct obd_trans_info *oti)
 {
-        struct obdo tmp;
-        struct lov_obd *lov;
+        struct obdo *tmp = NULL;
         struct lov_oinfo *loi;
+        struct lov_obd *lov;
         int rc = 0, i;
         ENTRY;
 
@@ -1210,10 +1210,14 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                         continue;
                 }
 
-                memcpy(&tmp, oa, sizeof(tmp));
-                tmp.o_id = loi->loi_id;
-                err = obd_destroy(lov->tgts[loi->loi_ost_idx].ltd_exp, &tmp,
-                                  NULL, oti);
+                tmp = obdo_alloc();
+                if (tmp == NULL)
+                        RETURN(-ENOMEM);
+                memcpy(tmp, oa, sizeof(*tmp));
+                tmp->o_id = loi->loi_id;
+                err = obd_destroy(lov->tgts[loi->loi_ost_idx].ltd_exp,
+                                  tmp, NULL, oti);
+                obdo_free(tmp);
                 if (err && lov->tgts[loi->loi_ost_idx].active) {
                         CDEBUG(D_INODE, "error: destroying objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
@@ -1228,10 +1232,10 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
 static int lov_getattr(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *lsm)
 {
-        struct obdo tmp;
-        struct lov_obd *lov;
-        struct lov_oinfo *loi;
+        struct obdo *tmp = NULL;
         int i, rc = 0, set = 0;
+        struct lov_oinfo *loi;
+        struct lov_obd *lov;
         ENTRY;
 
         if (lsm_bad_magic(lsm))
@@ -1255,22 +1259,27 @@ static int lov_getattr(struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
                        "%u\n", oa->o_id, i, loi->loi_id, loi->loi_ost_idx);
                 /* create data objects with "parent" OA */
-                memcpy(&tmp, oa, sizeof(tmp));
-                tmp.o_id = loi->loi_id;
+                tmp = obdo_alloc();
+                if (tmp == NULL)
+                        RETURN(-ENOMEM);
+                memcpy(tmp, oa, sizeof(*tmp));
+                tmp->o_id = loi->loi_id;
 
-                err = obd_getattr(lov->tgts[loi->loi_ost_idx].ltd_exp, &tmp,
-                                  NULL);
+                err = obd_getattr(lov->tgts[loi->loi_ost_idx].ltd_exp,
+                                  tmp, NULL);
                 if (err) {
                         if (lov->tgts[loi->loi_ost_idx].active) {
                                 CERROR("error: getattr objid "LPX64" subobj "
                                        LPX64" on OST idx %d: rc = %d\n",
                                        oa->o_id, loi->loi_id, loi->loi_ost_idx,
                                        err);
+                                obdo_free(tmp);
                                 RETURN(err);
                         }
                 } else {
-                        lov_merge_attrs(oa, &tmp, tmp.o_valid, lsm, i, &set);
+                        lov_merge_attrs(oa, tmp, tmp->o_valid, lsm, i, &set);
                 }
+                obdo_free(tmp);
         }
         if (!set)
                 rc = -EIO;
@@ -1729,9 +1738,9 @@ static int lov_punch(struct obd_export *exp, struct obdo *oa,
                      struct lov_stripe_md *lsm,
                      obd_off start, obd_off end, struct obd_trans_info *oti)
 {
-        struct obdo tmp;
-        struct lov_obd *lov;
+        struct obdo *tmp = NULL;
         struct lov_oinfo *loi;
+        struct lov_obd *lov;
         int rc = 0, i;
         ENTRY;
 
@@ -1755,11 +1764,15 @@ static int lov_punch(struct obd_export *exp, struct obdo *oa,
                         continue;
 
                 /* create data objects with "parent" OA */
-                memcpy(&tmp, oa, sizeof(tmp));
-                tmp.o_id = loi->loi_id;
+                tmp = obdo_alloc();
+                if (tmp == NULL)
+                        RETURN(-ENOMEM);
+                memcpy(tmp, oa, sizeof(*tmp));
+                tmp->o_id = loi->loi_id;
 
-                err = obd_punch(lov->tgts[loi->loi_ost_idx].ltd_exp, &tmp, NULL,
-                                starti, endi, NULL);
+                err = obd_punch(lov->tgts[loi->loi_ost_idx].ltd_exp,
+                                tmp, NULL, starti, endi, NULL);
+                obdo_free(tmp);
                 if (err) {
                         if (lov->tgts[loi->loi_ost_idx].active) {
                                 CERROR("error: punch objid "LPX64" subobj "LPX64

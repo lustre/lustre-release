@@ -49,14 +49,13 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-static int ll_direct_IO_24(int rw,
 #ifdef HAVE_DIO_FILE
-                           struct file *file,
+static int ll_direct_IO_24(int rw, struct file *file, struct kiobuf *iobuf,
+                           unsigned long blocknr, int blocksize)
 #else
-                           struct inode *inode,
+static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
+                           unsigned long blocknr, int blocksize)
 #endif
-                           struct kiobuf *iobuf, unsigned long blocknr,
-                           int blocksize)
 {
 #ifdef HAVE_DIO_FILE
         struct inode *inode = file->f_dentry->d_inode;
@@ -65,7 +64,7 @@ static int ll_direct_IO_24(int rw,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct brw_page *pga;
         struct ptlrpc_request_set *set;
-        struct obdo oa;
+        struct obdo *oa = NULL;
         int length, i, flags, rc = 0;
         loff_t offset;
         ENTRY;
@@ -101,7 +100,13 @@ static int ll_direct_IO_24(int rw,
                         POISON_PAGE(iobuf->maplist[i], 0x0d);
         }
 
-        ll_inode_fill_obdo(inode, rw, &oa);
+
+        oa = obdo_alloc();
+        if (oa == NULL) {
+                ptlrpc_set_destroy(set);
+                GOTO(out_free_pga, -ENOMEM);
+        }
+        ll_inode_fill_obdo(inode, rw, oa);
 
         if (rw == WRITE)
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
@@ -110,7 +115,7 @@ static int ll_direct_IO_24(int rw,
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, iobuf->length);
         rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdexp(inode), &oa, lsm, iobuf->nr_pages, pga,
+                           ll_i2obdexp(inode), oa, lsm, iobuf->nr_pages, pga,
                            set, NULL);
         if (rc) {
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
@@ -131,11 +136,13 @@ static int ll_direct_IO_24(int rw,
         }
         if (rc == 0) {
                 rc = iobuf->length;
-                obdo_to_inode(inode, &oa, OBD_MD_FLBLOCKS);
+                obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
         }
-
+        obdo_free(oa);
+        EXIT;
+out_free_pga:
         OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);
-        RETURN(rc);
+        return rc;
 }
 
 struct address_space_operations ll_aops = {

@@ -39,7 +39,7 @@ int ll_mdc_close(struct obd_export *lmv_exp, struct inode *inode,
         struct ll_file_data *fd = file->private_data;
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
-        struct obdo obdo;
+        struct obdo *obdo = NULL;
         int rc;
         ENTRY;
 
@@ -51,18 +51,23 @@ int ll_mdc_close(struct obd_export *lmv_exp, struct inode *inode,
                                       &fd->fd_cwlockh);
         }
 
-        obdo.o_id = inode->i_ino;
-        obdo.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&obdo, inode, (OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                       OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                       OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                       OBD_MD_FLCTIME));
+        obdo = obdo_alloc();
+        if (obdo == NULL)
+                RETURN(-ENOMEM);
+
+        obdo->o_id = inode->i_ino;
+        obdo->o_valid = OBD_MD_FLID;
+        obdo_from_inode(obdo, inode, (OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                                      OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                      OBD_MD_FLCTIME));
         if (0 /* ll_is_inode_dirty(inode) */) {
-                obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                obdo.o_valid |= OBD_MD_FLFLAGS;
+                obdo->o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
+                obdo->o_valid |= OBD_MD_FLFLAGS;
         }
-        obdo.o_mds = id_group(&ll_i2info(inode)->lli_id);
-        rc = md_close(lmv_exp, &obdo, och, &req);
+        obdo->o_mds = id_group(&ll_i2info(inode)->lli_id);
+        rc = md_close(lmv_exp, obdo, och, &req);
+        obdo_free(obdo);
 
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
@@ -84,8 +89,7 @@ int ll_mdc_close(struct obd_export *lmv_exp, struct inode *inode,
         ptlrpc_req_finished(req);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         file->private_data = NULL;
-        OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof *fd);
-
+        OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof(*fd));
         RETURN(rc);
 }
 

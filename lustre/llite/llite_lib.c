@@ -1062,18 +1062,24 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                 rc = err;
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
-                struct obdo oa;
+                struct obdo *oa = NULL;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
-                oa.o_id = lsm->lsm_object_id;
-                oa.o_gr = lsm->lsm_object_gr;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-                rc = obd_setattr(sbi->ll_lov_exp, &oa, lsm, NULL);
+
+                oa = obdo_alloc();
+                if (oa == NULL)
+                        RETURN(-ENOMEM);
+
+                oa->o_id = lsm->lsm_object_id;
+                oa->o_gr = lsm->lsm_object_gr;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+                obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                rc = obd_setattr(sbi->ll_lov_exp, oa, lsm, NULL);
+                obdo_free(oa);
                 if (rc)
-                        CERROR("obd_setattr fails: rc=%d\n", rc);
+                        CERROR("obd_setattr fails: rc = %d\n", rc);
         }
         RETURN(rc);
 }

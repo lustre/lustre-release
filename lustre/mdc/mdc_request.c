@@ -1276,8 +1276,8 @@ out_req:
 }
 
 int mdc_brw(int rw, struct obd_export *exp, struct obdo *oa,
-                struct lov_stripe_md *ea, obd_count oa_bufs,
-                struct brw_page *pgarr, struct obd_trans_info *oti)
+            struct lov_stripe_md *ea, obd_count oa_bufs,
+            struct brw_page *pgarr, struct obd_trans_info *oti)
 {
         struct ptlrpc_bulk_desc *desc;
         struct niobuf_remote *niobuf;

@@ -104,7 +104,7 @@ static int cmobd_create_reint(struct obd_device *obd, void *rec)
         struct obd_export *exp = cmobd->master_exp;
         struct lov_stripe_md *lsm;
         struct obd_trans_info oti = { 0 };
-        struct obdo *oa=(struct obdo*)rec;
+        struct obdo *oa = (struct obdo *)rec;
         int rc;
         ENTRY;
          

@@ -110,9 +110,10 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
 void ll_truncate(struct inode *inode)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        struct obdo oa;
+        struct obdo *oa = NULL;
         int rc;
         ENTRY;
+
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
@@ -123,26 +124,34 @@ void ll_truncate(struct inode *inode)
                 return;
         }
 
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_gr = lsm->lsm_object_gr;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE|OBD_MD_FLMODE|OBD_MD_FLATIME|
-                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        oa = obdo_alloc();
+        if (oa == NULL) {
+                CERROR("cannot alloc oa, error %d\n",
+                        -ENOMEM);
+                EXIT;
+                return;
+        }
+
+        oa->o_id = lsm->lsm_object_id;
+        oa->o_gr = lsm->lsm_object_gr;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                        OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
-               oa.o_id, inode->i_size);
+               oa->o_id, inode->i_size);
 
         /* truncate == punch from new size to absolute end of file */
         /* NB: obd_punch must be called with i_sem held!  It updates the kms! */
-        rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
+        rc = obd_punch(ll_i2obdexp(inode), oa, lsm, inode->i_size,
                        OBD_OBJECT_EOF, NULL);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else
-                obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                          OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                          OBD_MD_FLCTIME);
+                obdo_to_inode(inode, oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                              OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
+        obdo_free(oa);
         EXIT;
         return;
 } /* ll_truncate */
@@ -155,8 +164,8 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
+        struct obdo *oa = NULL;
         struct brw_page pga;
-        struct obdo oa;
         __u64 kms;
         int rc = 0;
         ENTRY;
@@ -170,25 +179,29 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         pga.count = PAGE_SIZE;
         pga.flag = 0;
 
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_gr = lsm->lsm_object_gr;
-        oa.o_mode = inode->i_mode;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE
-                                | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+        oa = obdo_alloc();
+        if (oa == NULL)
+                RETURN(-ENOMEM);
 
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), &oa, lsm, 1, &pga,
-                     NULL);
+        oa->o_id = lsm->lsm_object_id;
+        oa->o_gr = lsm->lsm_object_gr;
+        oa->o_mode = inode->i_mode;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLMODE |
+                OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), oa, lsm,
+                     1, &pga, NULL);
         if (rc)
-                RETURN(rc);
+                GOTO(out_free_oa, rc);
 
         if (PageUptodate(page))
-                RETURN(0);
+                GOTO(out_free_oa, 0);
 
         /* We're completely overwriting an existing page, so _don't_ set it up
          * to date until commit_write */
         if (from == 0 && to == PAGE_SIZE) {
                 POISON_PAGE(page, 0x11);
-                RETURN(0);
+                GOTO(out_free_oa, 0);
         }
 
         /* If are writing to a new page, no need to read old data.  The extent
@@ -202,18 +215,19 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         }
 
         /* XXX could be an async ocp read.. read-ahead? */
-        rc = ll_brw(OBD_BRW_READ, inode, &oa, page, 0);
+        rc = ll_brw(OBD_BRW_READ, inode, oa, page, 0);
         if (rc == 0) {
                 /* bug 1598: don't clobber blksize */
-                oa.o_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLKSZ);
-                obdo_refresh_inode(inode, &oa, oa.o_valid);
+                oa->o_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLKSZ);
+                obdo_refresh_inode(inode, oa, oa->o_valid);
         }
 
         EXIT;
- prepare_done:
+prepare_done:
         if (rc == 0)
                 SetPageUptodate(page);
-
+out_free_oa:
+        obdo_free(oa);
         return rc;
 }
 

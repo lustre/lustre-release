@@ -121,26 +121,33 @@ int mds_lov_write_objids(struct obd_device *obd)
 int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {
         int rc;
-        struct obdo oa;
+        struct obdo *oa = NULL;
         struct obd_trans_info oti = {0};
         struct lov_stripe_md  *empty_ea = NULL;
         ENTRY;
 
         LASSERT(mds->mds_lov_objids != NULL);
 
-        /* This create will in fact either create or destroy:  If the OST is
+        /*
+         * this create will in fact either create or destroy: If the OST is
          * missing objects below this ID, they will be created.  If it finds
-         * objects above this ID, they will be removed. */
-        memset(&oa, 0, sizeof(oa));
-        oa.o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
-        oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
-        oa.o_flags = OBD_FL_DELORPHAN;
+         * objects above this ID, they will be removed.
+         */
+        OBD_ALLOC(oa, sizeof(*oa));
+        if (oa == NULL)
+                RETURN(-ENOMEM);
+        
+        memset(oa, 0, sizeof(*oa));
+        oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
+        oa->o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
+        oa->o_flags = OBD_FL_DELORPHAN;
+        
         if (ost_uuid != NULL) {
-                memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
-                oa.o_valid |= OBD_MD_FLINLINE;
+                memcpy(&oa->o_inline, ost_uuid, sizeof(*ost_uuid));
+                oa->o_valid |= OBD_MD_FLINLINE;
         }
-        rc = obd_create(mds->mds_lov_exp, &oa, &empty_ea, &oti);
-
+        rc = obd_create(mds->mds_lov_exp, oa, &empty_ea, &oti);
+        OBD_FREE(oa, sizeof(*oa));
         RETURN(rc);
 }
 

@@ -2161,44 +2161,55 @@ static int filter_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                                       struct filter_obd *filter)
 {
-        struct obdo doa = { 0, }; /* XXX obdo on stack */
+        struct obdo *doa = NULL;
         __u64 last, id;
         ENTRY;
+        
         LASSERT(oa);
-
-        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
         LASSERT(oa->o_gr != 0);
-        doa.o_mode = S_IFREG;
-        doa.o_gr = oa->o_gr;
-        doa.o_valid = oa->o_valid & (OBD_MD_FLGROUP | OBD_MD_FLID);
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
-        set_bit(doa.o_gr, &filter->fo_destroys_in_progress);
-        down(&filter->fo_create_locks[doa.o_gr]);
-        if (!test_bit(doa.o_gr, &filter->fo_destroys_in_progress)) {
-                CERROR("%s:["LPU64"] destroy_in_progress already cleared\n",
-                       exp->exp_obd->obd_name, doa.o_gr);
-                up(&filter->fo_create_locks[doa.o_gr]);
+        OBD_ALLOC(doa, sizeof(*doa));
+        if (doa == NULL) {
+                CERROR("cannot allocate doa, error %d\n",
+                       -ENOMEM);
                 EXIT;
                 return;
         }
 
-        last = filter_last_id(filter, doa.o_gr);
+        memset(doa, 0, sizeof(*doa));
+        doa->o_mode = S_IFREG;
+        doa->o_gr = oa->o_gr;
+        doa->o_valid = oa->o_valid & (OBD_MD_FLGROUP | OBD_MD_FLID);
+
+        set_bit(doa->o_gr, &filter->fo_destroys_in_progress);
+        down(&filter->fo_create_locks[doa->o_gr]);
+        if (!test_bit(doa->o_gr, &filter->fo_destroys_in_progress)) {
+                CERROR("%s:["LPU64"] destroy_in_progress already cleared\n",
+                       exp->exp_obd->obd_name, doa->o_gr);
+                up(&filter->fo_create_locks[doa->o_gr]);
+                GOTO(out_free_doa, 0);
+        }
+
+        last = filter_last_id(filter, doa->o_gr);
         CWARN("%s:["LPU64"] deleting orphan objects from "LPU64" to "LPU64"\n",
-              exp->exp_obd->obd_name, doa.o_gr, oa->o_id + 1, last);
+              exp->exp_obd->obd_name, doa->o_gr, oa->o_id + 1, last);
         for (id = oa->o_id + 1; id <= last; id++) {
-                doa.o_id = id;
-                filter_destroy(exp, &doa, NULL, NULL);
+                doa->o_id = id;
+                filter_destroy(exp, doa, NULL, NULL);
         }
 
         CDEBUG(D_HA, "%s:["LPU64"] after destroy: set last_objids = "LPU64"\n",
-               exp->exp_obd->obd_name, doa.o_gr, oa->o_id);
+               exp->exp_obd->obd_name, doa->o_gr, oa->o_id);
 
-        filter_set_last_id(filter, doa.o_gr, oa->o_id);
+        filter_set_last_id(filter, doa->o_gr, oa->o_id);
 
-        clear_bit(doa.o_gr, &filter->fo_destroys_in_progress);
-        up(&filter->fo_create_locks[doa.o_gr]);
+        clear_bit(doa->o_gr, &filter->fo_destroys_in_progress);
+        up(&filter->fo_create_locks[doa->o_gr]);
 
         EXIT;
+out_free_doa:
+        OBD_FREE(doa, sizeof(*doa));
 }
 
 /* returns a negative error or a nonnegative number of files to create */
