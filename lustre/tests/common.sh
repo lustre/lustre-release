@@ -51,6 +51,11 @@ new_fs () {
 		[ $# -lt 2 -o $# -gt 3 ] && \
 			echo "usage: $0 <fstype> <file> [size]" 1>&2 && exit -1
 
+		PM="/proc/mounts"
+		[ -f "$PM" ] || PM="/etc/mtab"
+
+		grep "$2 " $PM 1>&2 && echo "$0: $2 is in $PM!" 1>&2 && exit -1
+
 		$MKFS $MKFSOPT $2 $3 || exit -1
 		LOOPDEV=$2	# Not really a loop device
 	else
