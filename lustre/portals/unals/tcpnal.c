@@ -120,12 +120,25 @@ int tcpnal_recv(nal_cb_t *n,
 		ptl_size_t rlen)
 
 {
-    if (mlen) {
-        LASSERT (niov <= 1);
-        read_connection(private,iov[0].iov_base,mlen);
-        lib_finalize(n, private, cookie);
-    }
+    int i;
 
+    if (!niov)
+            goto check_len;
+
+    LASSERT(mlen);
+    LASSERT(rlen);
+    LASSERT(rlen >= mlen);
+
+    /* FIXME
+     * 1. Is this effecient enough? change to use readv() directly?
+     * 2. need check return from read_connection()
+     * - MeiJia
+     */
+    for (i = 0; i < niov; i++)
+        read_connection(private, iov[i].iov_base, iov[i].iov_len);
+    lib_finalize(n, private, cookie);
+
+check_len:
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
         
