@@ -14,7 +14,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-ALWAYS_EXCEPT="45"
+ALWAYS_EXCEPT=""
 
 
 gen_config() {
@@ -823,14 +823,15 @@ run_test 41 "read from a valid osc while other oscs are invalid"
 
 # test MDS recovery after ost failure
 test_42() {
+    blocks=`df $MOUNT | tail -1 | awk '{ print $1 }'`
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
     facet_failover ost
     
-    # osc is evicted after
-    df $MOUNT && return 1
-    df $MOUNT || return 2
+    # osc is evicted, fs is smaller
+    blocks_after=`df $MOUNT | tail -1 | awk '{ print $1 }'`
+    [ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
     unlinkmany $DIR/$tfile-%d 400 400
@@ -863,24 +864,6 @@ test_44() {
     return 0
 }
 run_test 44 "race in target handle connect"
-
-test_45() {
-    d=$MOUNT/$tdir
-
-    mkdir $d
-    ls -l $d
-    cp /etc/termcap $d
-    cat $d/termcap > /dev/null
-
-    zconf_umount client $MOUNT -f
-    zconf_mount `hostname` $MOUNT
-
-    rm -rf $d || return 1
-    $CHECKSTAT -t dir $d && return 1 || true
-
-    sleep 10
-}
-run_test 45 "test client eviction after client crash"
 
 equals_msg test complete, cleaning up
 $CLEANUP

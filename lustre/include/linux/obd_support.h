@@ -126,6 +126,8 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
 #define OBD_FAIL_PTLRPC_RQBD             0x502
+#define OBD_FAIL_PTLRPC_BULK_GET_NET     0x503
+#define OBD_FAIL_PTLRPC_BULK_PUT_NET     0x504
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -178,6 +180,7 @@ do {                                                                         \
        }                                                                     \
 } while(0)
 
+#ifdef __KERNEL__
 /* The idea here is to synchronise two threads to force a race. The
  * first thread that calls this with a matching fail_loc is put to
  * sleep. The next thread that calls with the same fail_loc wakes up
@@ -193,6 +196,10 @@ do {                                                            \
                 wake_up(&obd_race_waitq);                       \
         }                                                       \
 } while(0)
+#else
+/* sigh.  an expedient fix until OBD_RACE is fixed up */
+#define OBD_RACE(foo) LBUG()
+#endif
 
 #define fixme() CDEBUG(D_OTHER, "FIXME\n");
 

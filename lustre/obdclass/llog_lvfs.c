@@ -740,14 +740,14 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_logid *idarray)
+                      char *name, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;
 }
 
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_logid *idarray)
+                      char *name, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;

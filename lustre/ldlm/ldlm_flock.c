@@ -512,7 +512,7 @@ granted:
                 getlk->fl_end = lock->l_policy_data.l_flock.end;
         } else {
                 /* We need to reprocess the lock to do merges or splits
-                 * with existing locks owne by this process. */
+                 * with existing locks owned by this process. */
                 flags = LDLM_FL_WAIT_NOREPROC;
                 ldlm_process_flock_lock(lock, &flags, 1, &err);
         }

@@ -560,10 +560,8 @@ static int filter_cleanup_groups(struct obd_device *obd)
         if (filter->fo_last_objid_files != NULL)
                 OBD_FREE(filter->fo_last_objid_files,
                          FILTER_GROUPS * sizeof(struct file *));
-        if (filter->fo_dentry_O != NULL) {
+        if (filter->fo_dentry_O != NULL)
                 f_dput(filter->fo_dentry_O);
-                filter->fo_dentry_O = NULL;
-        }
         RETURN(0);
 }
 
@@ -1159,6 +1157,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         ENTRY;
 
         dev_clear_rdonly(2);
+
+        if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
+                RETURN(-EINVAL);
 
         obd->obd_fsops = fsfilt_get_ops(lcfg->lcfg_inlbuf2);
         if (IS_ERR(obd->obd_fsops))

@@ -7,7 +7,7 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 
+# bug number for skipped test:
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
@@ -1133,6 +1133,7 @@ test_34c() {
 run_test 34c "O_RDWR opening file-with-size works =============="
 
 test_34d() {
+	[ ! -f $DIR/f34 ] && test_34a 
 	dd if=/dev/zero of=$DIR/f34 conv=notrunc bs=4k count=1 || error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 	rm $DIR/f34
@@ -1878,6 +1879,7 @@ run_test 65d "directory setstripe $STRIPESIZE -1 $sc ======================"
 
 test_65e() {
 	mkdir -p $DIR/d65
+
 	$LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"

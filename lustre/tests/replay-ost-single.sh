@@ -132,7 +132,7 @@ test_5() {
 run_test 5 "Fail OST during iozone"
 
 kbytesfree() {
-   cat /proc/fs/lustre/osc/OSC_*MNT*/kbytesfree | awk '{total+=$1} END {print total}'
+   awk '{total+=$1} END {print total}' /proc/fs/lustre/osc/OSC_*MNT*/kbytesfree
 }
 
 test_6() {

@@ -52,7 +52,7 @@
 
 #define LTIME_S(time)                   (time.tv_sec)
 #define ll_path_lookup                  path_lookup
-#define ll_permission(a,b,c)            permission(a,b,c)
+#define ll_permission(inode,mask,nd)    permission(inode,mask,nd)
 
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
@@ -111,7 +111,7 @@ static inline int cleanup_group_info(void)
 #else /* 2.4.. */
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
-#define ll_permission(a,b,c)                permission(a,b)
+#define ll_permission(inode,mask,nd)        permission(inode,mask)
 #define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
 #define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
 #define ll_dev_t                            int
@@ -144,15 +144,15 @@ static inline void clear_page_dirty(struct page *page)
 #define cpu_online(cpu)                 (cpu_online_map & (1<<cpu))
 #endif
 
-static inline int ll_path_lookup(const char *path, unsigned flags, 
-                              struct nameidata *nd)
+static inline int ll_path_lookup(const char *path, unsigned flags,
+                                 struct nameidata *nd)
 {
         int error = 0;
         if (path_init(path, flags, nd))
                 error = path_walk(path, nd);
         return error;
 }
-#define ll_permission(a,b,c)  permission(a,b)
+#define ll_permission(inode,mask,nd)    permission(inode,mask)
 typedef long sector_t;
 
 #define ll_pgcache_lock(mapping)        spin_lock(&pagecache_lock)

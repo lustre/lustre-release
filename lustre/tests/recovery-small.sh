@@ -5,6 +5,7 @@ set -e
 #         bug 2732 2986 2762 2766
 ALWAYS_EXCEPT="17   20b  16   18"
 
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 UPCALL=${UPCALL:-$PWD/recovery-small-upcall.sh}
 . $LUSTRE/tests/test-framework.sh
@@ -69,6 +70,12 @@ if [ "$ONLY" == "cleanup" ]; then
     exit
 fi
 
+if [ "$ONLY" == "cleanup" ]; then
+    sysctl -w portals.debug=0 || true
+    cleanup
+    exit
+fi
+
 REFORMAT=--reformat $SETUP
 unset REFORMAT
 
@@ -115,7 +122,6 @@ test_7() {
     drop_reply "munlink $MOUNT/link2"     || return 2
 }
 run_test 7 "unlink: drop req, drop rep"
-
 
 #bug 1423
 test_8() {
@@ -220,19 +226,19 @@ test_16() {
     do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
 }
 run_test 16 "timeout bulk put, evict client (2732)"
-  
+
 test_17() {
-#define OBD_FAIL_PTLRPC_BULK_GET_NET 0x504 | OBD_FAIL_ONCE
+# OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # will get evicted here
     sysctl -w lustre.fail_loc=0x80000503
     do_facet client cp /etc/termcap $MOUNT && return 1
 
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 2
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 1
     sysctl -w lustre.fail_loc=0
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 3
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
 }
 run_test 17 "timeout bulk get, evict client (2732)"
-  
+
 test_18a() {
     do_facet client mkdir -p $MOUNT/$tdir
     f=$MOUNT/$tdir/$tfile
@@ -266,9 +272,16 @@ test_18b() {
 
     cancel_lru_locks OSC
     pgcache_empty || return 1
- 
+
     # shouldn't have to set stripe size of count==1
     lfs setstripe $f $((128 * 1024)) 0 1
+    lfs setstripe $f2 $((128 * 1024)) 0 1
+
+    do_facet client cp /etc/termcap $f
+    sync
+    # just use this write to trigger the client's eviction from the ost
+    sysctl -w lustre.fail_loc=0x80000503
+    do_facet client dd if=/dev/zero of=$f2 bs=4k count=1
     sync
     sysctl -w lustre.fail_loc=0
     # allow recovery to complete

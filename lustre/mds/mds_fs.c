@@ -647,7 +647,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         down(&parent_inode->i_sem);
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
         if (de == NULL || de->d_inode == NULL) {
-                CERROR("destroying non-existent object "LPU64"\n", oa->o_id);
+                CERROR("destroying non-existent object "LPU64" %s\n",
+                       oa->o_id, fidname);
                 GOTO(out_dput, rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT);
         }
 

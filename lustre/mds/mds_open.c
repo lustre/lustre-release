@@ -1081,8 +1081,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
                 if (req != NULL) {
-                        lmm = lustre_msg_buf(req->rq_repmsg,
-                                                                1, 0);
+                        lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
                         stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
                 }
 
