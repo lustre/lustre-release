@@ -330,6 +330,7 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
 
 struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle, int flags)
 {
+        struct ldlm_namespace *ns;
         struct ldlm_lock *lock = NULL, *retval = NULL;
         ENTRY;
 
@@ -340,9 +341,10 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle, int flags)
                 RETURN(NULL);
 
         LASSERT(lock->l_resource != NULL);
-        LASSERT(lock->l_resource->lr_namespace != NULL);
+        ns = lock->l_resource->lr_namespace;
+        LASSERT(ns != NULL);
 
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        l_lock(&ns->ns_lock);
 
         /* It's unlikely but possible that someone marked the lock as
          * destroyed after we did handle2object on it */
@@ -363,7 +365,7 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle, int flags)
         retval = lock;
         EXIT;
  out:
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        l_unlock(&ns->ns_lock);
         return retval;
 }
 
