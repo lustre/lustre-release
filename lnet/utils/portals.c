@@ -297,9 +297,13 @@ int g_nal_is_compatible (char *cmd, ...)
         
         if (g_nal == nal)
                 return (1);
-        
-        fprintf (stderr, "Command %s not compatible with nal %s\n",
-                 cmd, nal2name (g_nal));
+
+        if (cmd != NULL) {
+                /* Don't complain verbosely if we've not been passed a command
+                 * name to complain about! */
+                fprintf (stderr, "Command %s not compatible with nal %s\n",
+                         cmd, nal2name (g_nal));
+        }
         return (0);
 }
 
@@ -841,8 +845,8 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, TOENAL, 0))
-                return -1;
+        if (!g_nal_is_compatible (NULL, SOCKNAL, TOENAL, 0))
+                return 0;
 
         if (argc >= 2 &&
             ptl_parse_nid (&nid, argv[1]) != 0) {
