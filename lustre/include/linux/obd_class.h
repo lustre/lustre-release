@@ -17,26 +17,53 @@
 #define MAX_OBD_DEVICES 8
 #define MAX_MULTI 16
 
-typedef unsigned long   objid;
-typedef struct inode obdattr;
-#if 0
-struct obdattr {
-	objid                   oa_id;
-	umode_t			oa_mode;
-	nlink_t			oa_nlink;
-	uid_t			oa_uid;
-	gid_t			oa_gid;
-	off_t			oa_size;
-	time_t			oa_atime;
-	time_t			oa_mtime;
-	time_t			oa_ctime;
-	unsigned long		oa_blksize;
-	unsigned long		oa_blocks;
-	char                    oa_data[116];
-	struct obd_ops         *oa_op;
+typedef uint64   obd_id;
+typedef uint32   obd_mode;
+typedef uint64   obd_off;
+typedef uint64   obd_size;
+typedef uint32   obd_uid;
+typedef uint32   obd_gid;
+typedef uint32   obd_mode;
+typedef uint32   obd_mode;
+typedef uint32   obd_mode;
+
+#define OBD_INLINE_DATASZ 60
+#define OBD_MDSZ 60
+
+#define OBD_FL_INLINED         (1UL)  
+#define OBD_FL_OBDMDEXISTS     (1UL << 1)
+
+struct obdo {
+	uint32                  o_valid;  /* hot fields in this obdo */
+	objid                   o_id;
+	umode_t			o_mode;
+	nlink_t			o_nlink;
+	uid_t			o_uid;
+	gid_t			o_gid;
+	off_t			o_size;
+	time_t			o_atime;
+	time_t			o_mtime;
+	time_t			o_ctime;
+	__u32                   o_flags;
+	int                     o_obdflags;
+	unsigned long		o_blksize;
+	unsigned long		o_blocks;
+	char                    o_inline_data[OBD_INLINE_DATASZ];
+	char                    o_md[OBD_MDSZ];
+	struct obd_ops         *o_op;
 };
 
-#endif
+
+static inline int obdo_has_inlinedata(struct obdo *obdo)
+{
+	return obdo->o_obdflags & OBD_FL_INLINEDATA;
+};
+
+static inline int obdo_has_omd(struct obdo *obdo)
+{
+	return obdo->o_obdflags & OBD_FL_OBDMDEXISTS;
+};
+
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
@@ -73,30 +100,28 @@ struct obd_device {
 };
 
 struct obd_ops {
-	int (*o_attach)(struct obd_device *, int len, void *);
-	int (*o_detach)(struct obd_device *);
-	int (*o_format)(struct obd_device *, int len, void *);
-	int (*o_partition)(struct obd_device *, int len, void *);
-	int (*o_connect)(struct obd_conn *conn);
-	int (*o_disconnect)(struct obd_conn *);
-	int (*o_setup) (struct obd_device *dev, int len, void *data);
-	int (*o_cleanup)(struct obd_device *dev);
-	int (*o_setattr)(struct obd_conn *, obdattr *oa);
-	int (*o_getattr)(struct obd_conn *, obdattr *oa);
-	int (*o_statfs)(struct obd_conn *, struct statfs *statfs);
-	int (*o_create)(struct obd_conn *, int prealloc_obj, objid *id);
-	int (*o_destroy)(struct obd_conn *, obdattr *oa);
-	int (*o_read)(struct obd_conn *, obdattr *oa, char *buf, unsigned long *count, loff_t offset);
-	int (*o_read2)(struct obd_conn *, obdattr *oa, char *buf, unsigned long *count, loff_t offset);
-	int (*o_write)(struct obd_conn *, obdattr *oa, char *buf, unsigned long *count, loff_t offset);
-	int (*o_brw)(int rw, struct obd_conn * conn, obdattr *oa, struct page *page, int create);
-	int (*o_preallocate)(struct obd_conn *, unsigned long *req, long inodes[32]);
+	int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg, void *uarg);
 	int (*o_get_info)(struct obd_conn *, int keylen, void *key, int *vallen, void **val);
 	int (*o_set_info)(struct obd_conn *, int keylen, void *key, int vallen, void *val);
-	int (*o_migrate)(struct obd_conn *, obdattr *dst, obdattr *src);
-	int (*o_copy)(struct obd_conn *dev, obdattr *dst, obdattr *src);
-	int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg, void *uarg);
-	int (*o_iterate)(struct obd_conn *, int (*)(objid, void *), objid, void *);
+	int (*o_attach)(struct obd_device *, int len, void *);
+	int (*o_detach)(struct obd_device *);
+	int (*o_setup) (struct obd_device *dev, int len, void *data);
+	int (*o_cleanup)(struct obd_device *dev);
+	int (*o_connect)(struct obd_conn *conn);
+	int (*o_disconnect)(struct obd_conn *);
+	int (*o_statfs)(struct obd_conn *, struct statfs *statfs);
+	int (*o_preallocate)(struct obd_conn *, uint32 *req, objid ids[32]);
+	int (*o_create)(struct obd_conn *,  obdattr *new);
+	int (*o_destroy)(struct obd_conn *, obdattr *oa);
+	int (*o_setattr)(struct obd_conn *, obdattr *oa);
+	int (*o_getattr)(struct obd_conn *, obdattr *oa);
+	int (*o_read)(struct obd_conn *, obdattr *oa, char *buf, obd_size *count, obd_off offset);
+	int (*o_write)(struct obd_conn *, obdattr *oa, char *buf, obd_size *count, obd_off offset);
+	int (*o_brw)(int rw, struct obd_conn * conn, obdattr *oa, char *buf, obd_size *count, obd_off offset, uint32 flags);
+	int (*o_punch)(struct obd_conn *, obdattr *tgt, obd_size count, obd_off start);
+	int (*o_migrate)(struct obd_conn *, obdattr *dst, obdattr *src, obd_size count, obd_off start);
+	int (*o_copy)(struct obd_conn *dstconn, obdattr *dst, struct obd_conn *srconn, obdattr *src, obd_size count, obd_off start);
+	int (*o_iterate)(struct obd_conn *, int (*)(objid, void *), objid start, void *);
 
 };
 
@@ -268,38 +293,40 @@ static __inline__ obdattr *obd_oa_fromid(struct obd_conn *conn,  objid id)
 #define OBD_MD_FLFLAGS	(1UL<<8)
 #define OBD_MD_FLBLOCKS	(1UL<<9)
 #define OBD_MD_FLOBDMD	(1UL<<10)
+#define OBD_MD_INLINED	(1UL<<11)
 
 
-static __inline__ void obdo_cpy_md(obdattr *dst, obdattr *src, int mask)
+
+static __inline__ void obdo_cpy_md(obdattr *dst, obdattr *src)
 {
 	/* If the OBD_MD_NO flag is set, then we copy all EXCEPT those
 	 * fields given by the flags.  The default is to copy the field
 	 * given by the flags.
 	 */
-	if (mask & OBD_MD_NO)
-		mask = ~mask;
+	if (src->o_valid & OBD_MD_NO)
+		src->o_valid = ~src->o_valid;
 
-	CDEBUG(D_INODE, "flags %x\n", mask);
-	if ( mask & OBD_MD_FLMODE ) 
+	CDEBUG(D_INODE, "flags %x\n", src->o_valid);
+	if ( src->o_valid & OBD_MD_FLMODE ) 
 		dst->i_mode = src->i_mode;
-	if ( mask & OBD_MD_FLUID ) 
+	if ( src->o_valid & OBD_MD_FLUID ) 
 		dst->i_uid = src->i_uid;
-	if ( mask & OBD_MD_FLGID ) 
+	if ( src->o_valid & OBD_MD_FLGID ) 
 		dst->i_gid = src->i_gid;
-	if ( mask & OBD_MD_FLSIZE ) 
+	if ( src->o_valid & OBD_MD_FLSIZE ) 
 		dst->i_size = src->i_size;
-	if ( mask & OBD_MD_FLATIME ) 
+	if ( src->o_valid & OBD_MD_FLATIME ) 
 		dst->i_atime = src->i_atime;
-	if ( mask & OBD_MD_FLMTIME ) 
+	if ( src->o_valid & OBD_MD_FLMTIME ) 
 		dst->i_mtime = src->i_mtime;
-	if ( mask & OBD_MD_FLCTIME ) 
+	if ( src->o_valid & OBD_MD_FLCTIME ) 
 		dst->i_ctime = src->i_ctime;
-	if ( mask & OBD_MD_FLFLAGS ) 
+	if ( src->o_valid & OBD_MD_FLFLAGS ) 
 		dst->i_flags = src->i_flags;
 	/* allocation of space */
-	if ( mask & OBD_MD_FLBLOCKS ) 
+	if ( src->o_valid & OBD_MD_FLBLOCKS ) 
 		dst->i_blocks = src->i_blocks;
-	if ( mask & OBD_MD_FLOBDMD  &&  src->i_blocks == 0 ) {
+	if ( src->o_valid & OBD_MD_FLOBDMD  &&  src->i_blocks == 0 ) {
 		CDEBUG(D_IOCTL, "copying inline data: ino %ld\n", dst->i_ino);
 		memcpy(&dst->u.ext2_i.i_data, &src->u.ext2_i.i_data, 
 		       sizeof(src->u.ext2_i.i_data));
@@ -310,7 +337,7 @@ static __inline__ void obdo_cpy_md(obdattr *dst, obdattr *src, int mask)
 }
 
 
-static __inline__ int obdo_cmp_md(obdattr *dst, obdattr *src, int mask)
+static __inline__ int obdo_cmp_md(obdattr *dst, obdattr *src)
 {
 	int res = 1;
 
@@ -318,44 +345,30 @@ static __inline__ int obdo_cmp_md(obdattr *dst, obdattr *src, int mask)
 	 * fields given by the flags.  The default is to copy the field
 	 * given by the flags.
 	 */
-	if (mask & OBD_MD_NO)
-		mask = ~mask;
+	if (src->o_valid & OBD_MD_NO)
+		src->o_valid = ~src->o_valid;
 
-	if ( mask & OBD_MD_FLMODE )
+	if ( src->o_valid & OBD_MD_FLMODE )
 		res = (res && (dst->i_mode == src->i_mode));
-	if ( mask & OBD_MD_FLUID )
+	if ( src->o_valid & OBD_MD_FLUID )
 		res = (res && (dst->i_uid == src->i_uid));
-	if ( mask & OBD_MD_FLGID )
+	if ( src->o_valid & OBD_MD_FLGID )
 		res = (res && (dst->i_gid == src->i_gid));
-	if ( mask & OBD_MD_FLSIZE )
+	if ( src->o_valid & OBD_MD_FLSIZE )
 		res = (res && (dst->i_size == src->i_size));
-	if ( mask & OBD_MD_FLATIME )
+	if ( src->o_valid & OBD_MD_FLATIME )
 		res = (res && (dst->i_atime == src->i_atime));
-	if ( mask & OBD_MD_FLMTIME )
+	if ( src->o_valid & OBD_MD_FLMTIME )
 		res = (res && (dst->i_mtime == src->i_mtime));
-	if ( mask & OBD_MD_FLCTIME )
+	if ( src->o_valid & OBD_MD_FLCTIME )
 		res = (res && (dst->i_ctime == src->i_ctime));
-	if ( mask & OBD_MD_FLFLAGS )
+	if ( src->o_valid & OBD_MD_FLFLAGS )
 		res = (res && (dst->i_flags == src->i_flags));
 	/* allocation of space */
-	if ( mask & OBD_MD_FLBLOCKS )
+	if ( src->o_valid & OBD_MD_FLBLOCKS )
 		res = (res && (dst->i_blocks == src->i_blocks));
 	return res;
 }
 
-
-static __inline__ void obd_cpy_appmd(obdattr *dst, obdattr *src)
-{
-	dst->i_mode = src->i_mode;
-	dst->i_uid = src->i_uid;
-	dst->i_gid = src->i_gid;
-	dst->i_size = src->i_size;
-	dst->i_atime = src->i_atime;
-	dst->i_mtime = src->i_mtime;
-	dst->i_ctime = src->i_ctime;
-	dst->i_flags = src->i_flags;
-	/* allocation of space */
-	dst->i_blocks = src->i_blocks;
-}
 
 #endif /* __LINUX_CLASS_OBD_H */

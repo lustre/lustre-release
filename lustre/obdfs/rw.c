@@ -43,6 +43,28 @@ int obdfs_brw(struct inode *dir, int rw, struct page *page, int create)
 }
 #endif
 
+/* returns the page unlocked, but with a reference */
+int obdfs_readpage(struct dentry *dentry, struct page *page)
+{
+	struct inode *inode = dentry->d_inode;
+	struct obdfs_wreq *wreq;
+	int rc = 0;
+
+        ENTRY;
+	PDEBUG(page, "READ");
+	rc =  iops(inode)->o_brw(READ, iid(inode),inode, page, 0);
+	if (rc == PAGE_SIZE ) {
+		SetPageUptodate(page);
+		UnlockPage(page);
+	} 
+	PDEBUG(page, "READ");
+	if ( rc == PAGE_SIZE ) 
+		rc = 0;
+	} 
+	EXIT;
+	return rc;
+}
+
 static kmem_cache_t *obdfs_wreq_cachep;
 
 int obdfs_init_wreqcache(void)
@@ -92,30 +114,6 @@ obdfs_find_in_page_cache(struct inode *inode, struct page *page)
 	return NULL;
 }
 
-/* returns the page unlocked, but with a reference */
-int obdfs_readpage(struct dentry *dentry, struct page *page)
-{
-	struct inode *inode = dentry->d_inode;
-	struct obdfs_wreq *wreq;
-	int rc = 0;
-
-        ENTRY;
-	/* XXX flush stuff */
-	wreq = obdfs_find_in_page_cache(inode, page);
-	if (!wreq) {
-		PDEBUG(page, "READ");
-		rc =  iops(inode)->o_brw(READ, iid(inode),inode, page, 0);
-		if (rc == PAGE_SIZE ) {
-			SetPageUptodate(page);
-			UnlockPage(page);
-		} 
-		PDEBUG(page, "READ");
-		if ( rc == PAGE_SIZE ) 
-			rc = 0;
-	} 
-	EXIT;
-	return rc;
-}
 
 /*
  * Remove a writeback request from a list

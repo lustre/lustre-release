@@ -57,8 +57,9 @@ struct obdfs_sb_info {
 	struct obd_ops *osi_ops;     
 	ino_t           osi_rootino; /* which root inode */
 	int             osi_minor;   /* minor of /dev/obdX */
-	struct list_head osi_list;  /* linked list of pages to write */
+	struct list_head osi_list;  /* linked list of inodes to write */
 };
+
 
 #define WB_NEXT(req)	((struct obdfs_wreq *) ((req)->wb_list.next))
 /* XXX page list should go on each inode instead of supberblock */
@@ -68,7 +69,6 @@ struct obdfs_sb_info {
 void obdfs_sysctl_init(void);
 void obdfs_sysctl_clean(void);
 
-struct obdfs_inode_info;
 
 extern struct file_operations obdfs_file_operations;
 extern struct inode_operations obdfs_file_inode_operations;
