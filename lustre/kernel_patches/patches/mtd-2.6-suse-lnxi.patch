@@ -21386,15 +21386,6 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/mtd/mtd_blkdevs.c
   *
   * (C) 2003 David Woodhouse <dwmw2@infradead.org>
   *
-@@ -81,7 +81,7 @@
- 	struct request_queue *rq = tr->blkcore_priv->rq;
- 
- 	/* we might get involved when memory gets low, so use PF_MEMALLOC */
--	current->flags |= PF_MEMALLOC;
-+	current->flags |= PF_MEMALLOC | PF_NOFREEZE;
- 
- 	daemonize("%sd", tr->name);
- 
 @@ -220,7 +220,7 @@
  				return ret;
  
