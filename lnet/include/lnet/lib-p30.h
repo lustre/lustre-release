@@ -361,6 +361,8 @@ extern char *dispatch_name(int index);
  */
 extern int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private);
 extern int lib_finalize(nal_cb_t * nal, void *private, lib_msg_t * msg);
+extern lib_msg_t *lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, 
+                                      lib_md_t *getmd);
 extern void print_hdr(nal_cb_t * nal, ptl_hdr_t * hdr);
 
 extern ptl_size_t lib_iov_nob (int niov, struct iovec *iov);
