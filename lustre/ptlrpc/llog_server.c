@@ -265,23 +265,12 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                 RETURN(-ENOENT);
         }
 
-        down(&ctxt->loc_sem);
         disk_obd = ctxt->loc_exp->exp_obd;
-        up(&ctxt->loc_sem);
-
         push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
         for (i = 0; i < num_cookies; i++, logcookies++) {
-                ctxt = llog_get_context(obd, logcookies->lgc_subsys);
-                if (ctxt == NULL) {
-                        CWARN("llog subsys already cleanup\n");
-                        GOTO(pop_ctxt, rc = -ENOENT);
-                }
-
-                down(&ctxt->loc_sem);
                 cathandle = ctxt->loc_handle;
                 LASSERT(cathandle != NULL);
                 inode = cathandle->lgh_file->f_dentry->d_inode;
-                up(&ctxt->loc_sem);
 
                 handle = fsfilt_start(disk_obd, inode, 
                                       FSFILT_OP_CANCEL_UNLINK_LOG, NULL);
@@ -290,16 +279,7 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                         GOTO(pop_ctxt, rc = PTR_ERR(handle));
                 }
                                                                                                                              
-                ctxt = llog_get_context(obd, logcookies->lgc_subsys);
-                if (ctxt == NULL) {
-                        CWARN("llog subsys already cleanup\n");
-                        GOTO(pop_ctxt, rc = -ENOENT);
-                }
-                down(&ctxt->loc_sem);
-                cathandle = ctxt->loc_handle;
-                LASSERT(cathandle);
                 rc = llog_cat_cancel_records(cathandle, 1, logcookies);
-                up(&ctxt->loc_sem);
 
                 err = fsfilt_commit(disk_obd, inode, handle, 0);
                 if (err) {
