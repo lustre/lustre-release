@@ -145,13 +145,13 @@ config = Config()
 # debugging and error funcs
 
 def fixme(msg = "this feature"):
-    raise RuntimeError, msg + ' not implmemented yet.'
+    raise LconfError, msg + ' not implmemented yet.'
 
 def panic(*args):
     msg = string.join(map(str,args))
     print msg
     if not config.noexec():
-        raise RuntimeError, msg
+        raise LconfError(msg)
 
 def log(*args):
     msg = string.join(map(str,args))
@@ -190,6 +190,11 @@ class CommandError (exceptions.Exception):
                 print "> %s" %(string.strip(s))
         else:
             print self.cmd_err
+
+class LconfError (exceptions.Exception):
+    def __init__(self, args):
+        self.args
+
 
 # ============================================================
 # handle lctl interface
@@ -577,12 +582,14 @@ class Network(Module):
     def __init__(self,node):
         Module.__init__(self, 'NETWORK', node)
         self.net_type = node.getAttribute('type')
-        self.nid = getText(node, 'server', "")
+        self.nid = getText(node, 'server', '*')
         self.port = int(getText(node, 'port', 0))
         self.send_buf = int(getText(node, 'send_buf', 0))
         self.read_buf = int(getText(node, 'read_buf', 0))
-        if not self.nid or self.nid == '*':
+        if self.nid == '*':
             self.nid = get_local_address(self.net_type)
+            if not self.nid:
+                panic("unable to set nid for", self.net_type)
 
         self.add_module('portals')
         if self.net_type == 'tcp':
@@ -1139,8 +1146,8 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except RuntimeError:
-        pass
+    except LConfError, e:
+        print e
     except CommandError, e:
         e.dump()
         
