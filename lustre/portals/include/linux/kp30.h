@@ -265,28 +265,27 @@ do {                                                                          \
 
 #define PORTAL_ALLOC(ptr, size)                                           \
 do {                                                                      \
-        long s = size;                                                    \
         LASSERT (!in_interrupt());                                        \
-        if (s > PORTAL_VMALLOC_SIZE)                                      \
-                (ptr) = vmalloc(s);                                       \
+        if ((size) > PORTAL_VMALLOC_SIZE)                                 \
+                (ptr) = vmalloc(size);                                    \
         else                                                              \
-                (ptr) = kmalloc(s, GFP_NOFS);                             \
+                (ptr) = kmalloc((size), GFP_NOFS);                        \
         if ((ptr) == NULL)                                                \
-                CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
-                       " '" #ptr "' = %ld)\n", __FILE__, __LINE__, s);    \
+                CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
+                       #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
         else {                                                            \
-                portal_kmem_inc((ptr), s);                                \
-                memset((ptr), 0, s);                                      \
+                portal_kmem_inc((ptr), (size));                           \
+                memset((ptr), 0, (size));                                 \
         }                                                                 \
-        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %ld at %p (tot %d).\n",   \
-               s, (ptr), atomic_read (&portal_kmemory));                  \
+        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
+               (int)(size), (ptr), atomic_read (&portal_kmemory));        \
 } while (0)
 
 #define PORTAL_FREE(ptr, size)                                          \
 do {                                                                    \
-        long s = (size);                                                \
+        int s = (size);                                                 \
         if ((ptr) == NULL) {                                            \
-                CERROR("PORTALS: free NULL '" #ptr "' (%ld bytes) at "  \
+                CERROR("PORTALS: free NULL '" #ptr "' (%d bytes) at "   \
                        "%s:%d\n", s, __FILE__, __LINE__);               \
                 break;                                                  \
         }                                                               \
@@ -295,39 +294,38 @@ do {                                                                    \
         else                                                            \
                 kfree(ptr);                                             \
         portal_kmem_dec((ptr), s);                                      \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %ld at %p (tot %d).\n",    \
-               s, (ptr), atomic_read (&portal_kmemory));                \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
+               s, (ptr), atomic_read(&portal_kmemory));                 \
 } while (0)
 
 #define PORTAL_SLAB_ALLOC(ptr, slab, size)                                \
 do {                                                                      \
-        long s = (size);                                                  \
-        LASSERT (!in_interrupt());                                        \
+        LASSERT(!in_interrupt());                                         \
         (ptr) = kmem_cache_alloc((slab), SLAB_KERNEL);                    \
         if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \
                        __LINE__);                                         \
         } else {                                                          \
-                portal_kmem_inc((ptr), s);                                \
-                memset((ptr), 0, s);                                      \
+                portal_kmem_inc((ptr), (size));                           \
+                memset((ptr), 0, (size));                                 \
         }                                                                 \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %ld at %p (tot %d).\n",   \
-               s, (ptr), atomic_read (&portal_kmemory));                  \
+               (int)(size), (ptr), atomic_read(&portal_kmemory));         \
 } while (0)
 
 #define PORTAL_SLAB_FREE(ptr, slab, size)                               \
 do {                                                                    \
-        long s = (size);                                                \
+        int s = (size);                                                 \
         if ((ptr) == NULL) {                                            \
-                CERROR("PORTALS: free NULL '" #ptr "' (%ld bytes) at "  \
+                CERROR("PORTALS: free NULL '" #ptr "' (%d bytes) at "   \
                        "%s:%d\n", s, __FILE__, __LINE__);               \
                 break;                                                  \
         }                                                               \
         memset((ptr), 0x5a, s);                                         \
         kmem_cache_free((slab), ptr);                                   \
         portal_kmem_dec((ptr), s);                                      \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %ld at %p (tot %d).\n",    \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
                s, (ptr), atomic_read (&portal_kmemory));                \
 } while (0)
 
