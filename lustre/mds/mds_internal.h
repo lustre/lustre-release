@@ -13,10 +13,6 @@ struct llog_handle *mds_log_open(struct obd_device *obd,
 struct llog_handle *mds_get_catalog(struct obd_device *obd);
 void mds_put_catalog(struct llog_handle *cathandle);
 
-/* mds/handler.c */
-struct mds_file_data *mds_mfd_new(void);
-void mds_mfd_put(struct mds_file_data *mfd);
-void mds_mfd_destroy(struct mds_file_data *mfd);
 
 /* mds/mds_reint.c */
 void mds_commit_cb(struct obd_device *, __u64 last_rcvd, void *data, int error);
@@ -35,6 +31,10 @@ int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *);
 int mds_pin(struct ptlrpc_request *req);
+int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
+		  struct mds_file_data *mfd);
+int mds_close(struct ptlrpc_request *req);
+
 
 /* mds/mds_fs.c */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
