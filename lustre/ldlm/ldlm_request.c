@@ -76,6 +76,18 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         lock->l_connection = ptlrpc_connection_addref(conn);
         lock->l_client = cl;
 
+        /* I apologize in advance for what I am about to do.
+         *
+         * The MDS needs to send lock requests to itself, but it doesn't want to
+         * go through the whole hassle of setting up proper connections.  Soon,
+         * these will just be function calls, but until I have the time, just
+         * send these requests at level NEW, so that they go through.
+         *
+         * Since the MDS is the only user of PLAIN locks right now, we can use
+         * that to distinguish.  Sorry. */
+        if (type == LDLM_PLAIN)
+                req->rq_level = LUSTRE_CONN_NEW;
+
         rc = ptlrpc_queue_wait(req);
         /* FIXME: status check here? */
         rc = ptlrpc_check_status(req, rc);

@@ -265,8 +265,10 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                                   &extent, sizeof(extent), LCK_PR, &flags,
                                   ll_lock_callback, inode, sizeof(*inode),
                                   &lockh);
-                if (err != ELDLM_OK)
+                if (err != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", err);
+                        RETURN(err);
+                }
                 ldlm_lock_dump((void *)(unsigned long)lockh.addr);
         }
 
@@ -279,8 +281,10 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_osc_conn, LCK_PR, &lockh);
-                if (err != ELDLM_OK)
+                if (err != ELDLM_OK) {
                         CERROR("lock cancel: err: %d\n", err);
+                        RETURN(err);
+                }
         }
 
         RETURN(retval);
@@ -315,8 +319,10 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                                   &extent, sizeof(extent), LCK_PW, &flags,
                                   ll_lock_callback, inode, sizeof(*inode),
                                   &lockh);
-                if (err != ELDLM_OK)
+                if (err != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", err);
+                        RETURN(err);
+                }
                 ldlm_lock_dump((void *)(unsigned long)lockh.addr);
         }
 
@@ -327,8 +333,10 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_osc_conn, LCK_PW, &lockh);
-                if (err != ELDLM_OK)
+                if (err != ELDLM_OK) {
                         CERROR("lock cancel: err: %d\n", err);
+                        RETURN(err);
+                }
         }
 
         RETURN(retval);
