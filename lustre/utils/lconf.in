@@ -114,6 +114,8 @@ class Config:
 	self._maxlevel = 100
         self._timeout = 0
         self._recovery_upcall = ''
+        self._ldapurl = ''
+        self._config_name = ''
 
     def verbose(self, flag = None):
         if flag: self._verbose = flag
@@ -191,9 +193,9 @@ class Config:
         if val: self._recovery_upcall = val
         return self._recovery_upcall
 
-    def ldapserver(self, val = None):
-        if val: self._ldapserver = val
-        return self._ldapserver
+    def ldapurl(self, val = None):
+        if val: self._ldapurl = val
+        return self._ldapurl
 
     def config_name(self, val = None):
         if val: self._config_name = val
@@ -1881,7 +1883,7 @@ def parse_cmdline(argv):
                  "help", "node=", "nomod", "nosetup",
                  "dump=", "force", "minlevel=", "maxlevel=",
                  "timeout=", "recovery_upcall=",
-                 "ldapserver=", "config="]
+                 "ldapurl=", "config="]
     opts = []
     args = []
 
@@ -1927,8 +1929,8 @@ def parse_cmdline(argv):
                 config.timeout(a)
         if o in ("--recovery_upcall",):
                 config.recovery_upcall(a)
-        if o in ("--ldapserver",):
-                config.ldapserver(a)
+        if o in ("--ldapurl",):
+                config.ldapurl(a)
         if o in ("--config",):
                 config.config_name(a)
     return args
@@ -2062,9 +2064,11 @@ def main():
             sys.exit(1)
         dom = xml.dom.minidom.parse(args[0])
         db = LustreDB_XML(dom.documentElement, dom.documentElement)
-    elif config.ldapserver():
+    elif config.ldapurl():
+        if not config.config_name():
+            panic("--ldapurl requires --config name")
         dn = "config=%s,fs=lustre" % (config.config_name())
-        db = LustreDB_LDAP('', {}, base=dn, url = config.ldapserver())
+        db = LustreDB_LDAP('', {}, base=dn, url = config.ldapurl())
     else:
         usage()
 
@@ -2111,4 +2115,3 @@ if __name__ == "__main__":
     if first_cleanup_error:
         sys.exit(first_cleanup_error)
 
-#1919
