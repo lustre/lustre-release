@@ -5,6 +5,8 @@
 
 DEFS= 
 
+CFLAGS = -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
+
 if LIBLUSTRE
 lib_LIBRARIES = libobdecho.a
 libobdecho_a_SOURCES = echo_client.c 
