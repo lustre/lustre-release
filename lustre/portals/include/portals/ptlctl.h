@@ -54,8 +54,10 @@ int jt_ptl_txmem (int argc, char **argv);
 int jt_ptl_nagle (int argc, char **argv);
 int jt_ptl_add_route (int argc, char **argv);
 int jt_ptl_del_route (int argc, char **argv);
+int jt_ptl_notify_router (int argc, char **argv);
 int jt_ptl_print_routes (int argc, char **argv);
 int jt_ptl_fail_nid (int argc, char **argv);
+int jt_ptl_lwt(int argc, char **argv);
 
 int dbg_initialize(int argc, char **argv);
 int jt_dbg_filter(int argc, char **argv);

@@ -1,0 +1,5 @@
+KERNEL=linux-2.4.20-20.9.tar.gz
+SERIES=rh-2.4.20
+CONFIG=linux-2.4.20-rh-i686-smp.config
+VERSION=2.4.20
+EXTRA_VERSION=20.9

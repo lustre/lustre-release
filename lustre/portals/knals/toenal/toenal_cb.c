@@ -431,7 +431,8 @@ ktoenal_send(nal_cb_t *nal, void *private, lib_msg_t *cookie,
         if ((conn = ktoenal_get_conn (nid)) == NULL)
         {
                 /* It's not a peer; try to find a gateway */
-                rc = kpr_lookup (&ktoenal_data.ksnd_router, nid, &gatewaynid);
+                rc = kpr_lookup (&ktoenal_data.ksnd_router, nid, payload_niov,
+                                 &gatewaynid);
                 if (rc != 0)
                 {
                         CERROR ("Can't route to "LPX64": router error %d\n", nid, rc);

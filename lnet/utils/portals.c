@@ -60,7 +60,7 @@
 unsigned int portal_debug;
 unsigned int portal_printk;
 unsigned int portal_stack;
-
+unsigned int portal_cerror;
 
 static unsigned int g_nal = 0;
 
@@ -75,6 +75,7 @@ typedef struct
 } name2num_t;
 
 static name2num_t nalnames[] = {
+        {"any",         0},
         {"tcp",		SOCKNAL},
         {"toe",		TOENAL},
         {"elan",	QSWNAL},
@@ -110,7 +111,7 @@ ptl_name2nal (char *str)
 {
         name2num_t *e = name2num_lookup_name (nalnames, str);
 
-        return ((e == NULL) ? 0 : e->num);
+        return ((e == NULL) ? -1 : e->num);
 }
 
 static char *
@@ -140,6 +141,49 @@ ptl_gethostbyname(char * hname) {
                 return NULL;
         }
         return he;
+}
+
+int
+ptl_parse_port (int *port, char *str)
+{
+        char      *end;
+        
+        *port = strtol (str, &end, 0);
+
+        if (*end == 0 &&                        /* parsed whole string */
+            *port > 0 && *port < 65536)         /* minimal sanity check */
+                return (0);
+        
+        return (-1);
+}
+
+int
+ptl_parse_time (time_t *t, char *str) 
+{
+        char          *end;
+        int            n;
+        struct tm      tm;
+        
+        *t = strtol (str, &end, 0);
+        if (*end == 0) /* parsed whole string */
+                return (0);
+        
+        memset (&tm, 0, sizeof (tm));
+        n = sscanf (str, "%d-%d-%d %d:%d:%d",
+                    &tm.tm_year, &tm.tm_mon, &tm.tm_mday, 
+                    &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+        if (n != 6)
+                return (-1);
+        
+        tm.tm_mon--;                    /* convert to 0 == Jan */
+        tm.tm_year -= 1900;             /* y2k quirk */
+        tm.tm_isdst = -1;               /* dunno if it's daylight savings... */
+        
+        *t = mktime (&tm);
+        if (*t == (time_t)-1)
+                return (-1);
+                        
+        return (0);
 }
 
 int
@@ -198,8 +242,9 @@ ptl_ipaddr_2_str (__u32 ipaddr, char *str)
 int
 ptl_parse_nid (ptl_nid_t *nidp, char *str)
 {
-        __u32 ipaddr;
-        long  lval;
+        __u32               ipaddr;
+        char               *end;
+        unsigned long long  ullval;
         
         if (!strcmp (str, "_all_")) {
                 *nidp = PTL_NID_ANY;
@@ -211,15 +256,10 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
                 return (0);
         }
 
-        if (sscanf (str, "%li", &lval) == 1)
-        {
-                *nidp = (ptl_nid_t)lval;
-                return (0);
-        }
-
-        if (sscanf (str, "%lx", &lval) == 1)
-        {
-                *nidp = (ptl_nid_t)lval;
+        ullval = strtoull(str, &end, 0);
+        if (*end == 0) {
+                /* parsed whole string */
+                *nidp = (ptl_nid_t)ullval;
                 return (0);
         }
 
@@ -235,21 +275,29 @@ ptl_nid2str (char *buffer, ptl_nid_t nid)
         if (he != NULL)
                 strcpy (buffer, he->h_name);
         else
-                sprintf (buffer, "0x"LPX64, nid);
+                sprintf (buffer, LPX64, nid);
         
         return (buffer);
+}
+
+int g_nal_is_set () 
+{
+        if (g_nal == 0) {
+                fprintf (stderr, "Error: you must run the 'network' command first.\n");
+                return (0);
+        }
+
+        return (1);
 }
 
 int g_nal_is_compatible (char *cmd, ...)
 {
         va_list       ap;
         int           nal;
-        
-        if (g_nal == 0) {
-                fprintf (stderr, "Error: you must run the 'network' command first.\n");
+
+        if (!g_nal_is_set ())
                 return (0);
-        }
-        
+
         va_start (ap, cmd);
 
         do {
@@ -260,9 +308,13 @@ int g_nal_is_compatible (char *cmd, ...)
         
         if (g_nal == nal)
                 return (1);
-        
-        fprintf (stderr, "Command %s not compatible with nal %s\n",
-                 cmd, nal2name (g_nal));
+
+        if (cmd != NULL) {
+                /* Don't complain verbosely if we've not been passed a command
+                 * name to complain about! */
+                fprintf (stderr, "Command %s not compatible with nal %s\n",
+                         cmd, nal2name (g_nal));
+        }
         return (0);
 }
 
@@ -335,7 +387,7 @@ int jt_ptl_network(int argc, char **argv)
         int         nal;
         
         if (argc == 2 &&
-            (nal = ptl_name2nal (argv[1])) != 0) {
+            (nal = ptl_name2nal (argv[1])) >= 0) {
                 g_nal = nal;
                 return (0);
         }
@@ -368,12 +420,14 @@ jt_ptl_print_autoconnects (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                printf (LPX64"@%s:%d #%d buffer %d nonagle %s xchg %s affinity %s share %d\n",
+                printf (LPX64"@%s:%d #%d buffer %d nonagle %s xchg %s "
+                        "affinity %s eager %s share %d\n",
                         data.ioc_nid, ptl_ipaddr_2_str (data.ioc_id, buffer),
                         data.ioc_misc, data.ioc_count, data.ioc_size, 
                         (data.ioc_flags & 1) ? "on" : "off",
                         (data.ioc_flags & 2) ? "on" : "off",
                         (data.ioc_flags & 4) ? "on" : "off",
+                        (data.ioc_flags & 8) ? "on" : "off",
                         data.ioc_wait);
         }
 
@@ -392,10 +446,11 @@ jt_ptl_add_autoconnect (int argc, char **argv)
         int                      xchange_nids = 0;
         int                      irq_affinity = 0;
         int                      share = 0;
+        int                      eager = 0;
         int                      rc;
 
         if (argc < 4 || argc > 5) {
-                fprintf (stderr, "usage: %s nid ipaddr port [ixs]\n", argv[0]);
+                fprintf (stderr, "usage: %s nid ipaddr port [ixse]\n", argv[0]);
                 return 0;
         }
 
@@ -413,8 +468,11 @@ jt_ptl_add_autoconnect (int argc, char **argv)
                 return -1;
         }
 
-        port = atol (argv[3]);
-        
+        if (ptl_parse_port (&port, argv[3]) != 0) {
+                fprintf (stderr, "Can't parse port: %s\n", argv[3]);
+                return -1;
+        }
+
         if (argc > 4) {
                 char *opts = argv[4];
                 
@@ -428,6 +486,9 @@ jt_ptl_add_autoconnect (int argc, char **argv)
                                 break;
                         case 's':
                                 share = 1;
+                                break;
+                        case 'e':
+                                eager = 1;
                                 break;
                         default:
                                 fprintf (stderr, "Can't parse options: %s\n",
@@ -444,10 +505,11 @@ jt_ptl_add_autoconnect (int argc, char **argv)
         data.ioc_misc    = port;
         /* only passing one buffer size! */
         data.ioc_size    = MAX (g_socket_rxmem, g_socket_txmem);
-        data.ioc_flags   = (g_socket_nonagle ? 1 : 0) |
-                           (xchange_nids     ? 2 : 0) |
-                           (irq_affinity     ? 4 : 0) |
-                           (share            ? 8 : 0);
+        data.ioc_flags   = (g_socket_nonagle ? 0x01 : 0) |
+                           (xchange_nids     ? 0x02 : 0) |
+                           (irq_affinity     ? 0x04 : 0) |
+                           (share            ? 0x08 : 0) |
+                           (eager            ? 0x10 : 0);
 
         rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
         if (rc != 0) {
@@ -547,7 +609,7 @@ jt_ptl_print_connections (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                printf (LPD64"@%s:%d\n",
+                printf (LPX64"@%s:%d\n",
                         data.ioc_nid, 
                         ptl_ipaddr_2_str (data.ioc_id, buffer),
                         data.ioc_misc);
@@ -661,7 +723,11 @@ int jt_ptl_connect(int argc, char **argv)
                 return -1;
         }
 
-        port = atol(argv[2]);
+        if (ptl_parse_port (&port, argv[2]) != 0) {
+                fprintf (stderr, "Can't parse port: %s\n", argv[2]);
+                return -1;
+        }
+
         if (argc > 3)
                 for (flag = argv[3]; *flag != 0; flag++)
                         switch (*flag)
@@ -790,8 +856,8 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, TOENAL, 0))
-                return -1;
+        if (!g_nal_is_compatible (NULL, SOCKNAL, TOENAL, 0))
+                return 0;
 
         if (argc >= 2 &&
             ptl_parse_nid (&nid, argv[1]) != 0) {
@@ -917,11 +983,8 @@ int jt_ptl_ping(int argc, char **argv)
                 return 0;
         }
 
-        if (g_nal == 0) {
-                fprintf(stderr, "Error: you must run the 'network' command "
-                        "first.\n");
+        if (!g_nal_is_set())
                 return -1;
-        }
 
         if (ptl_parse_nid (&nid, argv[1]) != 0)
         {
@@ -972,11 +1035,9 @@ int jt_ptl_shownid(int argc, char **argv)
                 return 0;
         }
         
-        if (g_nal == 0) {
-                fprintf(stderr, "Error: you must run the 'network' command first\n");
+        if (!g_nal_is_set())
                 return -1;
-        }
-        
+
         PORTAL_IOC_INIT (data);
         data.ioc_nal = g_nal;
         rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NID, &data);
@@ -1002,11 +1063,8 @@ int jt_ptl_mynid(int argc, char **argv)
                 return 0;
         }
 
-        if (g_nal == 0) {
-                fprintf(stderr, "Error: you must run the 'network' command "
-                        "first.\n");
+        if (!g_nal_is_set())
                 return -1;
-        }
 
         if (argc >= 2)
                 nidstr = argv[1];
@@ -1052,11 +1110,8 @@ jt_ptl_fail_nid (int argc, char **argv)
                 return (0);
         }
         
-        if (g_nal == 0) {
-                fprintf(stderr, "Error: you must run the 'network' command "
-                        "first.\n");
+        if (!g_nal_is_set())
                 return (-1);
-        }
 
         if (!strcmp (argv[1], "_all_"))
                 nid = PTL_NID_ANY;
@@ -1135,7 +1190,7 @@ jt_ptl_nagle (int argc, char **argv)
                 if (Parser_bool (&enable, argv[1]) != 0)
                 {
                         fprintf (stderr, "Can't parse boolean %s\n", argv[1]);
-                        return (0);
+                        return (-1);
                 }
                 g_socket_nonagle = !enable;
         }
@@ -1158,11 +1213,8 @@ jt_ptl_add_route (int argc, char **argv)
                 return (0);
         }
 
-        if (g_nal == 0) {
-                fprintf(stderr, "Error: you must run the 'network' command "
-                        "first.\n");
+        if (!g_nal_is_set())
                 return (-1);
-        }
 
         if (ptl_parse_nid (&gateway_nid, argv[1]) != 0)
         {
@@ -1205,11 +1257,78 @@ jt_ptl_del_route (int argc, char **argv)
 {
         struct portal_ioctl_data data;
         ptl_nid_t                nid;
+        ptl_nid_t                nid1 = PTL_NID_ANY;
+        ptl_nid_t                nid2 = PTL_NID_ANY;
         int                      rc;
         
         if (argc < 2)
         {
                 fprintf (stderr, "usage: %s targetNID\n", argv[0]);
+                return (0);
+        }
+
+        if (!g_nal_is_set())
+                return (-1);
+
+        if (ptl_parse_nid (&nid, argv[1]) != 0)
+        {
+                fprintf (stderr, "Can't parse gateway NID \"%s\"\n", argv[1]);
+                return (-1);
+        }
+
+        if (argc >= 3 &&
+            ptl_parse_nid (&nid1, argv[2]) != 0)
+        {
+                fprintf (stderr, "Can't parse target NID \"%s\"\n", argv[2]);
+                return (-1);
+        }
+
+        if (argc < 4) {
+                nid2 = nid1;
+        } else {
+                if (ptl_parse_nid (&nid2, argv[3]) != 0) {
+                        fprintf (stderr, "Can't parse target NID \"%s\"\n", argv[3]);
+                        return (-1);
+                }
+
+                if (nid1 > nid2) {
+                        ptl_nid_t tmp = nid1;
+                        
+                        nid1 = nid2;
+                        nid2 = tmp;
+                }
+        }
+        
+        PORTAL_IOC_INIT(data);
+        data.ioc_nal = g_nal;
+        data.ioc_nid = nid;
+        data.ioc_nid2 = nid1;
+        data.ioc_nid3 = nid2;
+
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_DEL_ROUTE, &data);
+        if (rc != 0) 
+        {
+                fprintf (stderr, "IOC_PORTAL_DEL_ROUTE ("LPX64") failed: %s\n", nid, strerror (errno));
+                return (-1);
+        }
+        
+        return (0);
+}
+
+int
+jt_ptl_notify_router (int argc, char **argv)
+{
+        struct portal_ioctl_data data;
+        int                      enable;
+        ptl_nid_t                nid;
+        int                      rc;
+        struct timeval           now;
+        time_t                   when;
+
+        if (argc < 3)
+        {
+                fprintf (stderr, "usage: %s targetNID <up/down> [<time>]\n", 
+                         argv[0]);
                 return (0);
         }
 
@@ -1219,13 +1338,38 @@ jt_ptl_del_route (int argc, char **argv)
                 return (-1);
         }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_nid = nid;
+        if (Parser_bool (&enable, argv[2]) != 0) {
+                fprintf (stderr, "Can't parse boolean %s\n", argv[2]);
+                return (-1);
+        }
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_DEL_ROUTE, &data);
+        gettimeofday(&now, NULL);
+        
+        if (argc < 4) {
+                when = now.tv_sec;
+        } else if (ptl_parse_time (&when, argv[3]) != 0) {
+                fprintf(stderr, "Can't parse time %s\n"
+                        "Please specify either 'YYYY-MM-DD HH:MM:SS'\n"
+                        "or an absolute unix time in seconds\n", argv[3]);
+                return (-1);
+        } else if (when > now.tv_sec) {
+                fprintf (stderr, "%s specifies a time in the future\n",
+                         argv[3]);
+                return (-1);
+        }
+
+        PORTAL_IOC_INIT(data);
+        data.ioc_nal = g_nal;
+        data.ioc_nid = nid;
+        data.ioc_flags = enable;
+        /* Yeuch; 'cept I need a __u64 on 64 bit machines... */
+        data.ioc_nid3 = (__u64)when;
+        
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NOTIFY_ROUTER, &data);
         if (rc != 0) 
         {
-                fprintf (stderr, "IOC_PORTAL_DEL_ROUTE ("LPX64") failed: %s\n", nid, strerror (errno));
+                fprintf (stderr, "IOC_PORTAL_NOTIFY_ROUTER ("LPX64") failed: %s\n",
+                         nid, strerror (errno));
                 return (-1);
         }
         
@@ -1243,8 +1387,8 @@ jt_ptl_print_routes (int argc, char **argv)
         ptl_nid_t		  gateway_nid;
         ptl_nid_t		  nid1;
         ptl_nid_t		  nid2;
-        
-        
+        int                       alive;
+
         for (index = 0;;index++)
         {
                 PORTAL_IOC_INIT(data);
@@ -1258,13 +1402,332 @@ jt_ptl_print_routes (int argc, char **argv)
                 gateway_nid = data.ioc_nid;
                 nid1 = data.ioc_nid2;
                 nid2 = data.ioc_nid3;
-                
-                printf ("%8s %18s : %s - %s\n", 
+                alive = data.ioc_flags;
+
+                printf ("%8s %18s : %s - %s, %s\n", 
                         nal2name (gateway_nal), 
                         ptl_nid2str (buffer[0], gateway_nid),
                         ptl_nid2str (buffer[1], nid1),
-                        ptl_nid2str (buffer[2], nid2));
+                        ptl_nid2str (buffer[2], nid2),
+                        alive ? "up" : "down");
         }
         return (0);
 }
 
+static int
+lwt_control(int enable, int clear)
+{
+        struct portal_ioctl_data data;
+        int                      rc;
+
+        PORTAL_IOC_INIT(data);
+        data.ioc_flags = enable;
+        data.ioc_misc = clear;
+
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_LWT_CONTROL, &data);
+        if (rc == 0)
+                return (0);
+
+        fprintf(stderr, "IOC_PORTAL_LWT_CONTROL failed: %s\n",
+                strerror(errno));
+        return (-1);
+}
+
+static int
+lwt_snapshot(int *ncpu, int *totalsize, lwt_event_t *events, int size)
+{
+        struct portal_ioctl_data data;
+        int                      rc;
+
+        PORTAL_IOC_INIT(data);
+        data.ioc_pbuf1 = (char *)events;
+        data.ioc_plen1 = size;
+
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_LWT_SNAPSHOT, &data);
+        if (rc != 0) {
+                fprintf(stderr, "IOC_PORTAL_LWT_SNAPSHOT failed: %s\n",
+                        strerror(errno));
+                return (-1);
+        }
+
+        LASSERT (data.ioc_count != 0);
+        LASSERT (data.ioc_misc != 0);
+        
+        if (ncpu != NULL)
+                *ncpu = data.ioc_count;
+
+        if (totalsize != NULL)
+                *totalsize = data.ioc_misc;
+
+        return (0);
+}
+
+static char *
+lwt_get_string(char *kstr)
+{
+        char                     *ustr;
+        struct portal_ioctl_data  data;
+        int                       size;
+        int                       rc;
+
+        /* FIXME: this could maintain a symbol table since we expect to be
+         * looking up the same strings all the time... */
+
+        PORTAL_IOC_INIT(data);
+        data.ioc_pbuf1 = kstr;
+        data.ioc_plen1 = 1;        /* non-zero just to fool portal_ioctl_is_invalid() */
+        data.ioc_pbuf2 = NULL;
+        data.ioc_plen2 = 0;
+
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_LWT_LOOKUP_STRING, &data);
+        if (rc != 0) {
+                fprintf(stderr, "IOC_PORTAL_LWT_LOOKUP_STRING failed: %s\n",
+                        strerror(errno));
+                return (NULL);
+        }
+
+        size = data.ioc_count;
+        ustr = (char *)malloc(size);
+        if (ustr == NULL) {
+                fprintf(stderr, "Can't allocate string storage of size %d\n",
+                        size);
+                return (NULL);
+        }
+
+        PORTAL_IOC_INIT(data);
+        data.ioc_pbuf1 = kstr;
+        data.ioc_plen1 = 1;        /* non-zero just to fool portal_ioctl_is_invalid() */
+        data.ioc_pbuf2 = ustr;
+        data.ioc_plen2 = size;
+
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_LWT_LOOKUP_STRING, &data);
+        if (rc != 0) {
+                fprintf(stderr, "IOC_PORTAL_LWT_LOOKUP_STRING failed: %s\n",
+                        strerror(errno));
+                return (NULL);
+        }
+
+        LASSERT(strlen(ustr) == size - 1);
+        return (ustr);
+}
+
+static void
+lwt_put_string(char *ustr)
+{
+        free(ustr);
+}
+
+static int
+lwt_print(FILE *f, cycles_t t0, cycles_t tlast, double mhz, int cpu, lwt_event_t *e)
+{
+        char            whenstr[32];
+        char           *where = lwt_get_string(e->lwte_where);
+
+        if (where == NULL)
+                return (-1);
+
+        sprintf(whenstr, LPD64, e->lwte_when - t0);
+
+        fprintf(f, "%#010lx %#010lx %#010lx %#010lx: %#010lx %1d %10.6f %10.2f %s\n",
+                e->lwte_p1, e->lwte_p2, e->lwte_p3, e->lwte_p4,
+                (long)e->lwte_task, cpu, (e->lwte_when - t0) / (mhz * 1000000.0),
+                (t0 == e->lwte_when) ? 0.0 : (e->lwte_when - tlast) / mhz,
+                where);
+
+        lwt_put_string(where);
+
+        return (0);
+}
+
+double
+get_cycles_per_usec ()
+{
+        FILE      *f = fopen ("/proc/cpuinfo", "r");
+        double     mhz;
+        char      line[64];
+        
+        if (f != NULL) {
+                while (fgets (line, sizeof (line), f) != NULL)
+                        if (sscanf (line, "cpu MHz : %lf", &mhz) == 1) {
+                                fclose (f);
+                                return (mhz);
+                        }
+                fclose (f);
+        }
+
+        fprintf (stderr, "Can't read/parse /proc/cpuinfo\n");
+        return (1000.0);
+}
+
+int
+jt_ptl_lwt(int argc, char **argv)
+{
+#define MAX_CPUS 8
+        int             ncpus;
+        int             totalspace;
+        int             nevents_per_cpu;
+        lwt_event_t    *events;
+        lwt_event_t    *cpu_event[MAX_CPUS + 1];
+        lwt_event_t    *next_event[MAX_CPUS];
+        lwt_event_t    *first_event[MAX_CPUS];
+        int             cpu;
+        lwt_event_t    *e;
+        int             rc;
+        int             i;
+        double          mhz;
+        cycles_t        t0;
+        cycles_t        tlast;
+        FILE           *f = stdout;
+
+        if (argc < 2 ||
+            (strcmp(argv[1], "start") &&
+             strcmp(argv[1], "stop"))) {
+                fprintf(stderr, 
+                        "usage:  %s start\n"
+                        "        %s stop [fname]\n", argv[0], argv[0]);
+                return (-1);
+        }
+        
+        if (!strcmp(argv[1], "start")) {
+                /* disable */
+                if (lwt_control(0, 0) != 0)
+                        return (-1);
+
+                /* clear */
+                if (lwt_control(0, 1) != 0)
+                        return (-1);
+
+                /* enable */
+                if (lwt_control(1, 0) != 0)
+                        return (-1);
+
+                return (0);
+        }
+                
+        if (lwt_snapshot(&ncpus, &totalspace, NULL, 0) != 0)
+                return (-1);
+
+        if (ncpus > MAX_CPUS) {
+                fprintf(stderr, "Too many cpus: %d (%d)\n", ncpus, MAX_CPUS);
+                return (-1);
+        }
+
+        events = (lwt_event_t *)malloc(totalspace);
+        if (events == NULL) {
+                fprintf(stderr, "Can't allocate %d\n", totalspace);
+                return (-1);
+        }
+
+        if (lwt_control(0, 0) != 0) {           /* disable */
+                free(events);
+                return (-1);
+        }
+
+        if (lwt_snapshot(NULL, NULL, events, totalspace)) {
+                free(events);
+                return (-1);
+        }
+
+        if (argc > 2) {
+                f = fopen (argv[2], "w");
+                if (f == NULL) {
+                        fprintf(stderr, "Can't open %s for writing: %s\n", argv[2], strerror (errno));
+                        free(events);
+                        return (-1);
+                }
+        }
+
+        mhz = get_cycles_per_usec();
+        
+        /* carve events into per-cpu slices */
+        nevents_per_cpu = totalspace / (ncpus * sizeof(lwt_event_t));
+        for (cpu = 0; cpu <= ncpus; cpu++)
+                cpu_event[cpu] = &events[cpu * nevents_per_cpu];
+
+        /* find the earliest event on each cpu */
+        for (cpu = 0; cpu < ncpus; cpu++) {
+                first_event[cpu] = NULL;
+
+                for (e = cpu_event[cpu]; e < cpu_event[cpu + 1]; e++) {
+
+                        if (e->lwte_where == NULL) /* not an event */
+                                continue;
+
+                        if (first_event[cpu] == NULL ||
+                            first_event[cpu]->lwte_when > e->lwte_when)
+                                first_event[cpu] = e;
+                }
+
+                next_event[cpu] = first_event[cpu];
+        }
+
+        t0 = tlast = 0;
+        for (cpu = 0; cpu < ncpus; cpu++) {
+                e = first_event[cpu];
+                if (e == NULL)                  /* no events this cpu */
+                        continue;
+                
+                if (e == cpu_event[cpu])
+                        e = cpu_event[cpu + 1] - 1;
+                else 
+                        e = e - 1;
+                
+                /* If there's an event immediately before the first one, this
+                 * cpu wrapped its event buffer */
+                if (e->lwte_where == NULL)
+                        continue;
+         
+                /* We should only start outputting events from the most recent
+                 * first event in any wrapped cpu.  Events before this time on
+                 * other cpus won't have any events from this CPU to interleave
+                 * with. */
+                if (t0 < first_event[cpu]->lwte_when)
+                        t0 = first_event[cpu]->lwte_when;
+        }
+
+        for (;;) {
+                /* find which cpu has the next event */
+                cpu = -1;
+                for (i = 0; i < ncpus; i++) {
+
+                        if (next_event[i] == NULL) /* this cpu exhausted */
+                                continue;
+
+                        if (cpu < 0 ||
+                            next_event[i]->lwte_when < next_event[cpu]->lwte_when)
+                                cpu = i;
+                }
+
+                if (cpu < 0)                    /* all cpus exhausted */
+                        break;
+
+                if (t0 == 0) {
+                        /* no wrapped cpus and this is he first ever event */
+                        t0 = next_event[cpu]->lwte_when;
+                }
+                
+                if (t0 <= next_event[cpu]->lwte_when) {
+                        /* on or after the first event */
+                        rc = lwt_print(f, t0, tlast, mhz, cpu, next_event[cpu]);
+                        if (rc != 0)
+                                break;
+                }
+
+                tlast = next_event[cpu]->lwte_when;
+                
+                next_event[cpu]++;
+                if (next_event[cpu] == cpu_event[cpu + 1])
+                        next_event[cpu] = cpu_event[cpu];
+
+                if (next_event[cpu]->lwte_where == NULL ||
+                    next_event[cpu] == first_event[cpu])
+                        next_event[cpu] = NULL;
+        }
+
+        if (f != stdout)
+                fclose(f);
+
+        free(events);
+        return (0);
+#undef MAX_CPUS
+}

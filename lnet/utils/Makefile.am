@@ -10,7 +10,7 @@ LINK = $(CC) -o $@
 if LIBLUSTRE
 sbin_PROGRAMS = ptlctl debugctl routerstat wirecheck
 else
-sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck
+sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck gmnalnid
 endif
 lib_LIBRARIES = libptlctl.a
 
@@ -19,6 +19,8 @@ acceptor_SOURCES = acceptor.c # -lefence
 wirecheck_SOURCES = wirecheck.c
 
 libptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
+
+gmnalnid_SOURCES = gmnalnid.c
 
 ptlctl_SOURCES = ptlctl.c
 ptlctl_LDADD =  -L. -lptlctl -lncurses # -lefence

@@ -74,7 +74,7 @@ kscimacnal_printf(nal_cb_t *nal, const char *fmt, ...)
                 vsnprintf( msg, sizeof(msg), fmt, ap );
                 va_end( ap );
 
-                printk("CPUId: %d %s",smp_processor_id(), msg);
+                printk("Lustre: CPUId: %d %s",smp_processor_id(), msg);
         }
 }
 

@@ -1,0 +1,6 @@
+fs/ext3/ialloc.c
+fs/ext3/inode.c
+fs/ext3/ioctl.c
+fs/ext3/namei.c
+include/linux/dcache.h
+include/linux/ext3_fs.h

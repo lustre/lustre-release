@@ -6,4 +6,5 @@ ptlctl
 .deps
 routerstat
 wirecheck
+gmnalnid
 .*.cmd

@@ -16,6 +16,7 @@ obj-y += osc/
 obj-y += ost/
 obj-y += lov/
 obj-y += llite/
+obj-y += lvfs/
 
 # portals needs to be before utils/, which pulls in ptlctl objects
 obj-m += utils/

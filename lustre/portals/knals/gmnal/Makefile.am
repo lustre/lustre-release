@@ -9,5 +9,5 @@ MODULE = kgmnal
 modulenet_DATA = kgmnal.o
 EXTRA_PROGRAMS = kgmnal
 
-DEFS =
-kgmnal_SOURCES = gmnal.c gmnal_cb.c gmnal.h
+DEFS = -DGM_KERNEL
+kgmnal_SOURCES = gmnal.h gmnal_api.c gmnal_cb.c gmnal_comm.c gmnal_utils.c gmnal_module.c

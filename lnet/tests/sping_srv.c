@@ -175,7 +175,7 @@ static int pingsrv_callback(ptl_event_t *ev)
         }
         server->evnt = *ev;
         
-        printk ("received ping from nid "LPX64" "
+        printk ("Lustre: received ping from nid "LPX64" "
                "(off=%u rlen=%u mlen=%u head=%x)\n",
                ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
                *((int *)(ev->mem_desc.start + ev->offset)));
