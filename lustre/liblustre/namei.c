@@ -509,6 +509,7 @@ static struct lookup_intent*
 translate_lookup_intent(struct intent *intent, const char *path)
 {
         struct lookup_intent *it;
+        int fmode;
 
         /* libsysio trick */
         if (!intent || path) {
@@ -538,20 +539,20 @@ translate_lookup_intent(struct intent *intent, const char *path)
 
         it->it_flags = intent->int_arg2 ? *((int*)intent->int_arg2) : 0;
 
-        /* FIXME when use open(O_WRONLY) to create a file, MDS will
-         * delay the object creation on OST, thus no lsm will be returned.
-         * if call write() at the time, ll_extent_lock() will failed out
-         * because there will be no strip MD supplied. but O_RDWR will
-         * work fine. Here we forcely set the O_RDWR in this case, find
-         * a real fix later!  FIXME
-         */
-        if (it->it_flags & O_WRONLY) {
-                it->it_flags &= ~O_WRONLY;
-                it->it_flags |= O_RDWR;
+        if (intent->int_opmask & INT_OPEN) {
+                it->it_op |= IT_OPEN;
+
+                /* convert access mode from O_ to FMODE_ */
+                if (it->it_flags & O_WRONLY)
+                        fmode = FMODE_WRITE;
+                else if (it->it_flags & O_RDWR)
+                        fmode = FMODE_READ | FMODE_WRITE;
+                else
+                        fmode = FMODE_READ;
+                it->it_flags &= ~O_ACCMODE;
+                it->it_flags |= fmode;
         }
 
-        if (intent->int_opmask & INT_OPEN)
-                it->it_op |= IT_OPEN;
         /*
         else if (intent->int_opmask & INT_CREAT)
                 it->it_op |= IT_LOOKUP;
