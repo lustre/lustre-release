@@ -1,6 +1,8 @@
 #ifndef _NAL_H_
 #define _NAL_H_
 
+#include "build_check.h"
+
 /*
  * p30/nal.h
  *

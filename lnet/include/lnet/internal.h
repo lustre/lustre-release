@@ -1,6 +1,7 @@
 #ifndef _P30_INTERNAL_H_
 #define _P30_INTERNAL_H_
 
+#include "build_check.h"
 /*
  * p30/internal.h
  *
