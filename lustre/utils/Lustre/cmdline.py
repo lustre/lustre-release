@@ -40,7 +40,10 @@ class Options:
             if self.type(opt) in (Options.PARAM, Options.INTPARAM,
                                   Options.PARAMLIST):
                 if short: short = short + ':'
-                if long: long = long + '='
+                if long:
+                    long = long + '='
+            if string.find(long, '_') >= 0:
+                longs.append(string.replace(long, '_', '-'))
             shorts = shorts + short
             longs.append(long)
         self.short_opts = shorts
@@ -92,6 +95,7 @@ class Options:
         return self.lookup_option(key, self.short)
 
     def lookup_long(self, key):
+        key = string.replace(key, '-', '_')
         return self.lookup_option(key, self.long)
 
     def handle_opts(self, opts):
