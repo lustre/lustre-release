@@ -309,6 +309,7 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         lsm->lsm_stripe_count = stripe_count;
         lsm->lsm_stripe_offset = lmm.lmm_stripe_offset;
         lsm->lsm_stripe_size = lmm.lmm_stripe_size;
+        lsm->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
 
         *lsmp = lsm;
 
