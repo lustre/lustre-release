@@ -128,7 +128,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
 {
         struct lustre_cfg lcfg;
-        int dev;
         struct obd_device *obd;
         struct lustre_handle mdc_conn = {0, };
         struct obd_export *exp;
