@@ -8,3 +8,4 @@ autoMakefile
 .*.flags
 .tmp_versions
 .depend
+wirecheck
