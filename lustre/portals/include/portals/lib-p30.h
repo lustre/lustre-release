@@ -279,6 +279,11 @@ extern void lib_invalidate_handle (lib_nal_t *nal, lib_handle_t *lh);
 static inline void
 ptl_eq2handle (ptl_handle_eq_t *handle, lib_nal_t *nal, lib_eq_t *eq)
 {
+        if (eq == NULL) {
+                *handle = PTL_EQ_NONE;
+                return;
+        }
+
         handle->nal_idx = nal->libnal_ni.ni_api->nal_handle.nal_idx;
         handle->cookie = eq->eq_lh.lh_cookie;
 }
