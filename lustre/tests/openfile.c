@@ -53,7 +53,7 @@ int main(int argc, char** argv)
 {
         int    fd;
         int    flags=0;
-        mode_t mode=0;
+        mode_t mode=0644;
         char*  fname=NULL;
         int    mode_set=0;
         int    flag_set=0;
@@ -131,25 +131,27 @@ int main(int argc, char** argv)
         }
 
 
-        if (mode_set)
+        if (flags & O_CREAT)
                 fd = open(fname, flags, mode);
         else
                 fd = open(fname, flags);
 
         if (fd != -1) {
-                fprintf(stderr, "Succeed in opening file \"%s\"(flags=%s",
-                        fname, cloned_flags);
+                printf("Succeed in opening file \"%s\"(flags=%s",
+                       fname, cloned_flags);
 
                 if (mode_set)
-                        fprintf(stderr, ", mode=%o", mode);
-                fprintf(stderr, ")\n");
+                        printf(", mode=%o", mode);
+                printf(")\n");
                 close(fd);
-        } else {
-                fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
-                        fname, cloned_flags);
-                if (mode_set)
-                        fprintf(stderr, ", mode=%o", mode);
-                fprintf(stderr, ") %d: %s\n", errno, strerror(errno));
+                return 0;
         }
+
+        fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
+                fname, cloned_flags);
+        if (mode_set)
+                fprintf(stderr, ", mode=%o", mode);
+        fprintf(stderr, ") %d: %s\n", errno, strerror(errno));
+
         return errno;
 }

@@ -333,6 +333,7 @@ AC_SUBST(SCIMACNAL)
 CFLAGS="$KCFLAGS"
 CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS $enable_zerocopy $enable_affinity $with_quadrics $with_gm $with_scamac $with_ib"
 
+AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
