@@ -23,7 +23,9 @@
 #include <linux/lustre_dlm.h>
 #include <linux/obd_filter.h>
 #include <linux/ext3_jbd.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/extN_jbd.h>
+#endif
 #include <linux/quotaops.h>
 #include <linux/init.h>
 #include <linux/stringify.h>
@@ -906,8 +908,10 @@ static void *ext3_filter_journal_start(struct filter_obd *filter,
          */
         if (!strcmp(filter->fo_fstype, "ext3"))
                 journal = EXT3_SB(filter->fo_sb)->s_journal;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         else if (!strcmp(filter->fo_fstype, "extN"))
                 journal = EXTN_SB(filter->fo_sb)->s_journal;
+#endif
         needed = ext3_credits_needed(filter->fo_sb, objcount, obj);
 
         /* The number of blocks we could _possibly_ dirty can very large.
@@ -1080,7 +1084,7 @@ static int lustre_commit_write(struct page *page, unsigned from, unsigned to)
         if (!err && IS_SYNC(inode))
                 err = waitfor_one_page(page);
 #else
-#warn ADD 2.5 waiting code here?
+#warning ADD 2.5 waiting code here?
 #endif
         //SetPageUptodate(page); // the client commit_write will do this
 
@@ -1171,6 +1175,7 @@ err:
 static int filter_commit_write(struct page *page, unsigned from, unsigned to,
                                int err)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (err) {
                 unsigned block_start, block_end;
                 struct buffer_head *bh, *head = page->buffers;
@@ -1189,7 +1194,7 @@ static int filter_commit_write(struct page *page, unsigned from, unsigned to,
                                 memset(addr + block_start, 0, blocksize);
                 }
         }
-
+#endif
         return lustre_commit_write(page, from, to);
 }
 
@@ -1474,8 +1479,12 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
         if (page == NULL)
                 RETURN(-ENOMEM);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         while (TryLockPage(page))
                 ___wait_on_page(page);
+#else
+        wait_on_page_locked(page);
+#endif
 
         /* XXX with brw vector I/O, we could batch up reads and writes here,
          *     all we need to do is allocate multiple pages to handle the I/Os
