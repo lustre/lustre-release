@@ -36,6 +36,8 @@
 #include <inode.h>
 #include <file.h>
 
+#undef LIST_HEAD
+
 #include "llite_lib.h"
 
 void llu_prepare_mdc_op_data(struct mdc_op_data *data,
@@ -89,105 +91,6 @@ void obdo_refresh_inode(struct inode *dst,
                 lli->lli_st_blocks = src->o_blocks;
 }
 
-#if 0
-static int llu_create_obj(struct lustre_handle *conn, struct inode *inode,
-                          struct lov_stripe_md *lsm)
-{
-        struct ptlrpc_request *req = NULL;
-        struct llu_inode_info *lli = llu_i2info(inode);
-        struct lov_mds_md *lmm = NULL;
-        struct obdo *oa;
-        struct iattr iattr;
-        struct mdc_op_data op_data;
-        struct obd_trans_info oti = { 0 };
-        int rc, err, lmm_size = 0;;
-        ENTRY;
-
-        oa = obdo_alloc();
-        if (!oa)
-                RETURN(-ENOMEM);
-
-        LASSERT(S_ISREG(inode->i_mode));
-        oa->o_mode = S_IFREG | 0600;
-        oa->o_id = lli->lli_st_ino;
-        oa->o_generation = lli->lli_st_generation;
-        /* Keep these 0 for now, because chown/chgrp does not change the
-         * ownership on the OST, and we don't want to allow BA OST NFS
-         * users to access these objects by mistake.
-         */
-        oa->o_uid = 0;
-        oa->o_gid = 0;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLTYPE |
-                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
-
-        obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|OBD_MD_FLMTIME|
-                        OBD_MD_FLCTIME |
-                        (llu_i2info(inode)->lli_st_size ? OBD_MD_FLSIZE : 0));
-
-        rc = obd_create(conn, oa, &lsm, &oti);
-        if (rc) {
-                CERROR("error creating objects for inode %lu: rc = %d\n",
-                       lli->lli_st_ino, rc);
-                if (rc > 0) {
-                        CERROR("obd_create returned invalid rc %d\n", rc);
-                        rc = -EIO;
-                }
-                GOTO(out_oa, rc);
-        }
-        obdo_refresh_inode(inode, oa, OBD_MD_FLBLKSZ);
-
-        LASSERT(lsm && lsm->lsm_object_id);
-        rc = obd_packmd(conn, &lmm, lsm);
-        if (rc < 0)
-                GOTO(out_destroy, rc);
-
-        lmm_size = rc;
-
-        /* Save the stripe MD with this file on the MDS */
-        memset(&iattr, 0, sizeof(iattr));
-        iattr.ia_valid = ATTR_FROM_OPEN;
-
-        llu_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
-
-        rc = mdc_setattr(&llu_i2sbi(inode)->ll_mdc_conn, &op_data,
-                         &iattr, lmm, lmm_size, oti.oti_logcookies,
-                         oti.oti_numcookies * sizeof(oti.oti_onecookie), &req);
-        ptlrpc_req_finished(req);
-
-        obd_free_diskmd(conn, &lmm);
-
-        /* If we couldn't complete mdc_open() and store the stripe MD on the
-         * MDS, we need to destroy the objects now or they will be leaked.
-         */
-        if (rc) {
-                CERROR("error: storing stripe MD for %lu: rc %d\n",
-                       lli->lli_st_ino, rc);
-                GOTO(out_destroy, rc);
-        }
-        lli->lli_smd = lsm;
-        lli->lli_maxbytes = lsm->lsm_maxbytes;
-
-        EXIT;
-out_oa:
-        oti_free_cookies(&oti);
-        obdo_free(oa);
-        return rc;
-
-out_destroy:
-        oa->o_id = lsm->lsm_object_id;
-        oa->o_valid = OBD_MD_FLID;
-        obdo_from_inode(oa, inode, OBD_MD_FLTYPE);
-
-        err = obd_destroy(conn, oa, lsm, NULL);
-        obd_free_memmd(conn, &lsm);
-        if (err) {
-                CERROR("error uncreating inode %lu objects: rc %d\n",
-                       lli->lli_st_ino, err);
-        }
-        goto out_oa;
-}
-#endif
-
 static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
@@ -210,8 +113,6 @@ static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
          * ll_mdc_close, so don't even try right now. */
         LASSERT(fd != NULL);
 
-        memset(fd, 0, sizeof(*fd));
-
         memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
         lli->lli_file_data = fd;
@@ -220,38 +121,6 @@ static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 
         RETURN(0);
 }
-
-#if 0
-static int llu_osc_open(struct lustre_handle *conn, struct inode *inode,
-                        struct lov_stripe_md *lsm)
-{
-        struct ll_file_data *fd = llu_i2info(inode)->lli_file_data;
-        struct obdo *oa;
-        int rc;
-        ENTRY;
-
-        oa = obdo_alloc();
-        if (!oa)
-                RETURN(-ENOMEM);
-        oa->o_id = lsm->lsm_object_id;
-        oa->o_mode = S_IFREG;
-        oa->o_valid = (OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLBLOCKS |
-                       OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-        rc = obd_open(conn, oa, lsm, NULL, &fd->fd_ost_och);
-        if (rc)
-                GOTO(out, rc);
-
-        /* file->f_flags &= ~O_LOV_DELAY_CREATE; */
-        obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS | OBD_MD_FLMTIME |
-                      OBD_MD_FLCTIME);
-
-        EXIT;
-out:
-        obdo_free(oa);
-        return rc;
-}
-#endif
-
 
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
 {
@@ -264,19 +133,15 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         int rc = 0;
         ENTRY;
 
+        /* don't do anything for '/' */
+        if (llu_is_root_inode(inode))
+                RETURN(0);
+
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", lli->lli_st_ino);
         LL_GET_INTENT(inode, it);
 
         if (!it->d.lustre.it_disposition) {
-#if 0
-                struct lookup_intent oit = { .it_op = IT_OPEN,
-                                             .it_flags = file->f_flags };
-                it = &oit;
-                rc = ll_intent_file_open(file, NULL, 0, it);
-                if (rc)
-                        GOTO(out_release, rc);
-#endif
-                CERROR("fixme!!\n");
+                LBUG();
         }
 
         rc = it_open_error(DISP_OPEN_OPEN, it);
@@ -298,17 +163,6 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
                         CDEBUG(D_INODE, "object creation was delayed\n");
                         GOTO(out_release, rc);
                 }
-#if 0
-                if (!lli->lli_smd) {
-                        rc = llu_create_obj(conn, inode, NULL);
-                        if (rc)
-                                GOTO(out_close, rc);
-                } else {
-                        CERROR("warning: stripe already set on ino %lu\n",
-                               lli->lli_st_ino);
-                }
-                lsm = lli->lli_smd;
-#endif
         }
         fd->fd_flags &= ~O_LOV_DELAY_CREATE;
 
@@ -451,12 +305,8 @@ int llu_file_release(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%lu\n", lli->lli_st_ino,
                lli->lli_st_generation);
 
-        /* FIXME need add this check later. how to find the root pnode? */
-#if 0
-        /* don't do anything for / */
-        if (inode->i_sb->s_root == file->f_dentry)
-                RETURN(0);
-#endif
+        /* XXX don't do anything for '/'. but how to find the root pnode? */
+
         /* still opened by others? */
         if (--lli->lli_open_count)
                 RETURN(0);
