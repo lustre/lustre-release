@@ -138,8 +138,9 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
+        oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         oa->o_mode = inode->i_mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
         if (log_unlink && logcookies) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
