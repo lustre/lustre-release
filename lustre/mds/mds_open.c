@@ -755,7 +755,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct lustre_handle parent_lockh;
         int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
         int parent_mode = LCK_PR;
-        int parent_lockpart = MDS_INODELOCK_LOOKUP;
         void *handle = NULL;
         struct dentry_params dp;
         ENTRY;
@@ -800,11 +799,11 @@ int mds_open(struct mds_update_record *rec, int offset,
                    in addition to O_CREAT, the file does not exist.
                    But we do not know if it exists or not yet */
                 parent_mode = LCK_PW;
-                parent_lockpart = MDS_INODELOCK_UPDATE;
         }
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
                                         &parent_lockh, rec->ur_name,
-                                        rec->ur_namelen - 1, parent_lockpart);
+                                        rec->ur_namelen - 1,
+                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
                 CERROR("parent lookup error %d\n", rc);
