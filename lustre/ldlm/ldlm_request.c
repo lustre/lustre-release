@@ -339,5 +339,5 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         LDLM_LOCK_PUT(lock); 
         EXIT;
  out:
-        return 0;
+        return rc;
 }
