@@ -10,4 +10,13 @@
 #define OBD_ECHO_DEVICENAME "obdecho"
 #define OBD_ECHO_CLIENT_DEVICENAME "echo_client"
 
+struct ec_object
+{
+	struct list_head       eco_obj_chain;
+	int                    eco_refcount;
+	int                    eco_deleted;
+	obd_id                 eco_id;
+	struct lov_stripe_md  *eco_lsm;
+};
+
 #endif
