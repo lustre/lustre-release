@@ -47,3 +47,14 @@
  	return(0);
  }
  
+--- lum/include/asm-um/pgtable.h	2002-12-04 01:58:36.000000000 -0700
++++ lum/include/asm-um/pgtable.h	2002-12-04 01:58:54.000000000 -0700
+@@ -200,7 +200,7 @@ 
+  * called on a highmem page.
+  */
+ 
+-#define page_address(page) ({ if (!(page)->virtual) BUG(); (page)->virtual; })
++//#define page_address(page) ({ if (!(page)->virtual) BUG(); (page)->virtual; })
+ #define pages_to_mb(x) ((x) >> (20-PAGE_SHIFT))
+ 
+ extern struct page *pte_mem_map(pte_t pte);
