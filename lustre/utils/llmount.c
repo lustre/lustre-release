@@ -325,7 +325,7 @@ main(int argc, char * const argv[])
         char * target = argv[2];
         char * options = "";
         int opt;
-        int i;
+        int i = 3;
         struct lustre_mount_data lmd;
 
         int rc;
@@ -335,17 +335,27 @@ main(int argc, char * const argv[])
                 case 'v':
                         verbose = 1;
                         printf("verbose: %d\n", verbose);
+                        i++;
                         break;
                 case 'n':
                         nomtab = 1;
                         printf("nomtab: %d\n", nomtab);
+                        i++;
                         break;
                 case 'o':
                         options = optarg;
+                        i++;
                         break;
                 default:
+                        i++;
                         break;
                 }
+        }
+
+        if (argc < i) {
+                printf("Too few args!\n");
+                printf("Usage: %s <source> <target> [-v] [-n] [-o ...]\n");
+                exit(-1);
         }
 
         if (verbose)
