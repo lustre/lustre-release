@@ -19,3 +19,4 @@ obj-y += llite/
 
 # portals needs to be before utils/, which pulls in ptlctl objects
 obj-m += utils/
+obj-m += tests/ 
