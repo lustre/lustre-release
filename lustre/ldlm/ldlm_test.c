@@ -159,7 +159,7 @@ int ldlm_test_basics(struct obd_device *obddev)
 {
         struct ldlm_namespace *ns;
         struct ldlm_resource *res;
-        __u64 res_id[RES_NAME_SIZE] = {1, 2, 3};
+        struct ldlm_res_id res_id = { .name = {1, 2, 3} };
         ldlm_error_t err;
         struct ldlm_lock *lock1, *lock;
         int flags;
@@ -207,7 +207,7 @@ int ldlm_test_extents(struct obd_device *obddev)
         struct ldlm_namespace *ns;
         struct ldlm_resource *res;
         struct ldlm_lock *lock, *lock1, *lock2;
-        __u64 res_id[RES_NAME_SIZE] = {0, 0, 0};
+        struct ldlm_res_id res_id = { .name = {0} };
         struct ldlm_extent ext1 = {4, 6}, ext2 = {6, 9}, ext3 = {10, 11};
         ldlm_error_t err;
         int flags;
@@ -275,8 +275,7 @@ int ldlm_test_extents(struct obd_device *obddev)
 static int ldlm_test_network(struct obd_device *obddev,
                              struct lustre_handle *connh)
 {
-
-        __u64 res_id[RES_NAME_SIZE] = {1, 2, 3};
+        struct ldlm_res_id res_id = { .name = {1, 2, 3} };
         struct ldlm_extent ext = {4, 6};
         struct lustre_handle lockh1;
         struct ldlm_lock *lock;
@@ -341,7 +340,7 @@ static int ldlm_do_decrement(void)
 static int ldlm_do_enqueue(struct ldlm_test_thread *thread)
 {
         struct lustre_handle lockh;
-        __u64 res_id[3] = {0};
+        struct ldlm_res_id res_id = { .name = {0} };
         __u32 lock_mode;
         struct ldlm_extent ext;
         unsigned char random;
@@ -350,7 +349,7 @@ static int ldlm_do_enqueue(struct ldlm_test_thread *thread)
 
         /* Pick a random resource from 1 to num_resources */
         get_random_bytes(&random, sizeof(random));
-        res_id[0] = random % num_resources;
+        res_id.name[0] = random % num_resources;
 
         /* Pick a random lock mode */
         get_random_bytes(&random, sizeof(random));
@@ -364,7 +363,7 @@ static int ldlm_do_enqueue(struct ldlm_test_thread *thread)
                 (num_extents - (int)ext.start) + ext.start;
 
         LDLM_DEBUG_NOLOCK("about to enqueue with resource "LPX64", mode %d,"
-                          " extent "LPX64" -> "LPX64, res_id[0], lock_mode,
+                          " extent "LPX64" -> "LPX64, res_id.name[0], lock_mode,
                           ext.start, ext.end);
 
         rc = ldlm_match_or_enqueue(&regress_connh, NULL,
