@@ -114,6 +114,7 @@ static void __exit ptlrpc_exit(void)
 }
 
 /* connection.c */
+EXPORT_SYMBOL(ptlrpc_dump_connections);
 EXPORT_SYMBOL(ptlrpc_readdress_connection);
 EXPORT_SYMBOL(ptlrpc_get_connection);
 EXPORT_SYMBOL(ptlrpc_put_connection);
