@@ -120,6 +120,7 @@ extern unsigned int portal_cerror;
 #else /* __KERNEL__ */
 #define CHECK_STACK(stack) do { } while(0)
 #define CDEBUG_STACK (0L)
+#define portal_cerror 1
 #endif /* __KERNEL__ */
 
 #if 1
@@ -168,9 +169,9 @@ do {                                                                    \
 } while(0)
 #else
 #define CDEBUG(mask, format, a...)      do { } while (0)
-#define CWARN(format, a...)             do { } while (0)
-#define CERROR(format, a...)            printk("<3>" format, ## a)
-#define CEMERG(format, a...)            printk("<0>" format, ## a)
+#define CWARN(format, a...)             printk(KERN_WARNING format, ## a)
+#define CERROR(format, a...)            printk(KERN_ERR format, ## a)
+#define CEMERG(format, a...)            printk(KERN_EMERG format, ## a)
 #define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
 #define RETURN(rc)                      return (rc)
 #define ENTRY                           do { } while (0)
