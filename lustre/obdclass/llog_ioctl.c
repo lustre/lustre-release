@@ -341,7 +341,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         case OBD_IOC_LLOG_REMOVE: {
                 struct llog_logid plain;
 
-                if (handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_PLAIN)) {
+                if (handle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) {
                         err = llog_destroy(handle);
                         if (!err)
                                 llog_free_handle(handle);
