@@ -6,10 +6,10 @@ LMC=${LMC:-../utils/lmc}
 TMP=${TMP:-/tmp}
 
 MDSDEV=$TMP/mds1
-MDSSIZE=100000
+MDSSIZE=50000
 
 OSTDEV=$TMP/ost1
-OSTSIZE=400000
+OSTSIZE=200000
 
 kver=`uname -r | cut -d "." -f 1,2`
 
@@ -33,4 +33,4 @@ ${LMC} -m $config --add mds  --node localhost --mds mds1 --dev $MDSDEV --size $M
 ${LMC} -m $config --add ost --node localhost --obd obd1 --dev $OSTDEV --size  $OSTSIZE || exit 30
 
 # create client config
-${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre --mds mds1 --obd obd1 || exit 40
+${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre --mds mds1 --lov OSC_localhost || exit 40
