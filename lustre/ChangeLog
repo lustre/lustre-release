@@ -3,11 +3,12 @@ TBD
 	* bug fixes
 	  - fix removal of OSCs from LOV when they fail
 	  - fix NULL deref during bulk timeout (214)
-          - fix problems related to multiple filesystems on one MDS (241)
-          - fixed serious subtle metadata locking bugs
+	  - fix problems related to multiple filesystems on one MDS (241)
+	  - fixed serious subtle metadata locking bugs
 	  - free locks on clients when inodes are removed due to memory
-            pressure (201)
-          - fix inode pointer in lock data (285)
+	    pressure (201)
+	  - fix inode pointer in lock data (285)
+	  - partial support for multiple MDS on a single host (623279, 241)
 
 2002-10-28  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_16
@@ -18,12 +19,12 @@ TBD
 	  - move LDLM_ENQUEUE/CONVERT back to MDS portal (625069)
 	  - abstract ll_lookup2, fix ll_revalidate2 to use abstraction (256)
 	  - don't call obd_setattr in ll_file_release for destroyed objects
-        * protocol change to lustre_msg: move |version| and add |flags|
+	* protocol change to lustre_msg: move |version| and add |flags|
 	* protocol change to osc_punch: "start" in "o_size", "end" in "o_blocks"
 	* lock replay: for LDLM_FL_REPLAY trust client to do right thing
-        * added replay of create, unlink, link and rename operations during
-          MDS failover; recovery should be much more robust now
-        * remove failed OSCs from LOVs (only lov_create uses this so far)
+	* added replay of create, unlink, link and rename operations during
+	  MDS failover; recovery should be much more robust now
+	* remove failed OSCs from LOVs (only lov_create uses this so far)
 	* the lustre-HOWTO was brought (more) up to date (582544)
 
 2002-10-23  Phil Schwan  <phil@clusterfs.com>
@@ -47,7 +48,7 @@ TBD
 	* bug fixes:
 	  - recovery deadlock fix
 	  - rm -rf causes LBUG fix (617817)
-          - file open by multiple tasks fix (618962)
+	  - file open by multiple tasks fix (618962)
 	  - directory permissions bugs (602707 and 620007)
 	  - journal_stop fixed with locking (611313)
 	  - O_APPEND failures resolved (618273, perhaps 614459)
@@ -168,30 +169,30 @@ TBD
 	* small changes in wire protocol
 
 2002-07-18  Phil Schwan  <phil@clusterfs.com>
-        * version v0_4_5
-        * delivered as Lustre Light Alpha
-        * fixed a crash after handling invalid MDS requests
-        * fixed directory pages for architectures with non-4k pages sizes
+	* version v0_4_5
+	* delivered as Lustre Light Alpha
+	* fixed a crash after handling invalid MDS requests
+	* fixed directory pages for architectures with non-4k pages sizes
 
 2002-07-11  Andreas Dilger  <adilger@clusterfs.com>
-        * release version v0_4_4
-        * Moves TCP acceptor to be on port 2432 (unused Coda port) instead
-          of 1234.
-        * Fixes a number of interruption problems with OST operations.
-        * Update documentation for portals header changes
-        * Move all wire protocol structs/defines to lustre_idl.h
-        * Fixes symlink length bug.
-        * Add tcpdump to repository.
+	* release version v0_4_4
+	* Moves TCP acceptor to be on port 2432 (unused Coda port) instead
+	  of 1234.
+	* Fixes a number of interruption problems with OST operations.
+	* Update documentation for portals header changes
+	* Move all wire protocol structs/defines to lustre_idl.h
+	* Fixes symlink length bug.
+	* Add tcpdump to repository.
 
 2002-07-05  Andreas Dilger  <adilger@clusterfs.com>
-        * release version v0_4_3
-        * Fixes statfs for inodes on extN.
-        * Fixes bug in runtests which would delete /etc/hosts.
-        * Use 64-bit object IDs wherever possible (not into VFS though)
-          Remove ost_get_info, which is unused by lustre, and out of date.
+	* release version v0_4_3
+	* Fixes statfs for inodes on extN.
+	* Fixes bug in runtests which would delete /etc/hosts.
+	* Use 64-bit object IDs wherever possible (not into VFS though)
+	  Remove ost_get_info, which is unused by lustre, and out of date.
 
 2002-07-03  Peter Braam  <braam@clusterfs.com>
-        * release version v0_4_2   Fixes a lookup error (type not passed)
+	* release version v0_4_2   Fixes a lookup error (type not passed)
 	* move forward to head of Portals
 	* move forward to latest Lustre kernel
 
