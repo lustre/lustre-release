@@ -167,14 +167,15 @@ static void generate_random_uuid(unsigned char uuid_out[16])
 }
 
 static char *echo_server_nid = NULL;
-static char *echo_server_ostname="obd1";
+static char *echo_server_ostname = "obd1";
+static char *osc_dev_name = "OSC_DEV_NAME";
+static char *echo_dev_name = "ECHO_CLIENT_DEV_NAME";
 
-static int connect_echo_client() {
+static int connect_echo_client(void)
+{
 	struct lustre_cfg lcfg;
 	ptl_nid_t nid;
 	char *peer = "ECHO_PEER_NID";
-	char *osc_dev_name = "OSC_DEV_NAME";
-	char *echo_dev_name = "ECHO_CLIENT_DEV_NAME";
 	class_uuid_t osc_uuid, echo_uuid;
 	struct obd_uuid osc_uuid_str, echo_uuid_str;
 	struct obd_ioctl_data ioctl;
@@ -281,6 +282,55 @@ static int connect_echo_client() {
 	RETURN(0);
 }
 
+static int disconnect_echo_client(void)
+{
+	struct lustre_cfg lcfg;
+	struct obd_class_user_conn *conn;
+	struct list_head *lp;
+	int err;
+	ENTRY;
+
+	/* disconnect with echo_client */
+	list_for_each(lp, &ocus.ocus_conns) {
+		conn = list_entry(lp, struct obd_class_user_conn, ocuc_chain);
+		obd_disconnect(conn->ocuc_exp, 0);
+	}
+
+	/* cleanup echo_client */
+        LCFG_INIT(lcfg, LCFG_CLEANUP, echo_dev_name);
+        err = class_process_config(&lcfg);
+        if (err < 0) {
+		CERROR("failed cleanup echo_client\n");
+                RETURN(-EINVAL);
+	}
+
+	/* detach echo_client */
+        LCFG_INIT(lcfg, LCFG_DETACH, echo_dev_name);
+        err = class_process_config(&lcfg);
+        if (err < 0) {
+		CERROR("failed detach echo_client\n");
+                RETURN(-EINVAL);
+	}
+
+	/* cleanup osc */
+        LCFG_INIT(lcfg, LCFG_CLEANUP, osc_dev_name);
+        err = class_process_config(&lcfg);
+        if (err < 0) {
+		CERROR("failed cleanup osc device\n");
+                RETURN(-EINVAL);
+	}
+
+	/* detach osc */
+        LCFG_INIT(lcfg, LCFG_DETACH, osc_dev_name);
+        err = class_process_config(&lcfg);
+        if (err < 0) {
+		CERROR("failed detach osc device\n");
+                RETURN(-EINVAL);
+	}
+
+	RETURN(0);
+}
+
 static void usage(const char *s)
 {
 	printf("Usage: %s -s ost_host_name [-n ost_name]\n", s);
@@ -294,7 +344,7 @@ extern int time_ptlselect;
 
 int main(int argc, char **argv) 
 {
-	int c;
+	int c, rc;
 
 	while ((c = getopt(argc, argv, "s:n:")) != -1) {
 		switch (c) {
@@ -339,10 +389,15 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (connect_echo_client())
-		return 1;
+	rc = connect_echo_client();
+	if (rc)
+		return rc;
 
 	set_ioc_handler(liblustre_ioctl);
 
-	return lctl_main(1, &argv[0]);
+	rc = lctl_main(1, &argv[0]);
+
+	rc |= disconnect_echo_client();
+
+	return rc;
 }
