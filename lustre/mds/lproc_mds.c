@@ -37,8 +37,7 @@ struct lprocfs_vars lprocfs_mdt_module_vars[] = { {0} };
 
 #else
 
-static inline
-int lprocfs_mds_statfs(void *data, struct statfs *sfs)
+static inline int lprocfs_mds_statfs(void *data, struct statfs *sfs)
 {
         struct obd_device* dev = (struct obd_device*) data;
         struct mds_obd *mds;
@@ -67,27 +66,27 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
 }
 
 int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
-                    int *eof, void *data)
+                          int *eof, void *data)
 {
         struct obd_device* obd = (struct obd_device *)data;
 
         LASSERT(obd != NULL);
         LASSERT(obd->u.mds.mds_vfsmnt->mnt_devname);
         *eof = 1;
-        return snprintf(page, count, "%s\n", 
+        return snprintf(page, count, "%s\n",
                         obd->u.mds.mds_vfsmnt->mnt_devname);
 }
 
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",       lprocfs_rd_uuid, 0, 0 },
         { "blocksize",  rd_blksize,      0, 0 },
-        { "bytestotal", rd_kbytestotal,  0, 0 },
+        { "kbytestotal",rd_kbytestotal,  0, 0 },
         { "kbytesfree", rd_kbytesfree,   0, 0 },
         { "fstype",     rd_fstype,       0, 0 },
         { "filestotal", rd_filestotal,   0, 0 },
         { "filesfree",  rd_filesfree,    0, 0 },
         { "filegroups", rd_filegroups,   0, 0 },
-        { "mntdev",      lprocfs_mds_rd_mntdev,    0, 0 },
+        { "mntdev",     lprocfs_mds_rd_mntdev,    0, 0 },
         { 0 }
 };
 
@@ -113,5 +112,5 @@ struct lprocfs_static_vars lprocfs_array_vars[] = { {lprocfs_mds_module_vars,
                                                      lprocfs_mdt_obd_vars}};
 
 LPROCFS_INIT_MULTI_VARS(lprocfs_array_vars,
-                        (sizeof(lprocfs_array_vars)/
-                         sizeof(struct lprocfs_static_vars))) 
+                        (sizeof(lprocfs_array_vars) /
+                         sizeof(struct lprocfs_static_vars)))
