@@ -404,7 +404,7 @@ static int init_kportals_module(void)
         int rc;
         ENTRY;
 
-        rc = PtlInit();
+        rc = PtlInit(NULL);
         if (rc) {
                 CERROR("PtlInit: error %d\n", rc);
                 RETURN(rc);
