@@ -8,15 +8,19 @@ SRCDIR="`dirname $0`"
 
 export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
-. $SRCDIR/common.sh
-
+REFORMAT="--reformat"
 ERROR=
 SRC=/etc
 [ "$COUNT" ] || COUNT=1000
 
-setup_opts $@
+[ "$LCONF" ] || LCONF=$SRCDIR/../utils/lconf
 
-[ "`mount | grep $OSCMT`" ] || echo | sh llsetup.sh $@ || exit 1
+OSCMT="`mount | awk '/ lustre_lite / { print $3 }'`"
+if [ -z "$OSCMT" ]; then
+	$LCONF $REFORMAT $@ || exit 1
+	MTPT="`mount | awk '/ lustre_lite / { print $3 }'`"
+	[ -z "$OSCMT" ] && echo "no lustre filesystem mounted" 2>&1 && exit 1
+fi
 
 # let's start slowly here...
 echo "touching $OSCMT"
@@ -52,9 +56,9 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
 
-sh llcleanup.sh $@
+$LCONF --cleanup $@ || exit 19
+$LCONF $@ || exit 20
 
-echo | sh llrsetup.sh $@ || exit 20
 echo "comparing previously copied files"
 for f in $FILES; do
 	diff -q $f $DST/$f || ERROR=22
@@ -62,8 +66,8 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
-sh llcleanup.sh $@
-echo | sh llrsetup.sh $@ || exit 31
+$LCONF --cleanup $@ || exit 29
+$LCONF $@ || exit 30
 
 #echo "renaming $HOSTS.ren to $HOSTS"
 #mv $HOSTS.ren $HOSTS || fail "can't rename $HOSTS.ren to $HOSTS" 32
@@ -74,4 +78,4 @@ rm $HOSTS || fail "can't remove $HOSTS again" 36
 echo "removing $DST"
 rm -r $DST || fail "can't remove $DST" 37
 
-sh llcleanup.sh $@
+$LCONF --cleanup $@ || exit 29
