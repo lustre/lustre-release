@@ -293,8 +293,8 @@ int do_disconnect(char *func, int verbose)
 
         rc = ioctl(fd, OBD_IOC_DISCONNECT, &data);
         if (rc < 0) {
-                fprintf(stderr, "error: %s: %x %s\n", cmdname(func),
-                        OBD_IOC_DISCONNECT, strerror(errno));
+                fprintf(stderr, "error: %s: OPD_IOC_DISCONNECT %s\n", 
+                        cmdname(func),strerror(errno));
         } else {
                 if (verbose)
                         printf("%s: disconnected conn "LPX64"\n", cmdname(func),
@@ -452,8 +452,8 @@ int jt_obd_connect(int argc, char **argv)
 
         rc = ioctl(fd, OBD_IOC_CONNECT, &data);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
-                        OBD_IOC_CONNECT, strerror(rc = errno));
+                fprintf(stderr, "error: %s: OBD_IOC_CONNECT %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
         else {
                 conn_addr = data.ioc_addr;
                 conn_cookie = data.ioc_cookie;
@@ -741,8 +741,8 @@ int jt_obd_attach(int argc, char **argv)
         IOC_PACK(argv[0], data);
         rc = ioctl(fd, OBD_IOC_ATTACH, buf);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
-                        OBD_IOC_ATTACH, strerror(rc = errno));
+                fprintf(stderr, "error: %s: OBD_IOC_ATTACH %s\n", 
+                        cmdname(argv[0]), strerror(rc = errno));
         else if (argc == 3) {
                 char name[1024];
                 if (strlen(argv[2]) > 128) {
@@ -1088,8 +1088,8 @@ int jt_obd_test_getattr(int argc, char **argv)
                 rc = ioctl(fd, OBD_IOC_GETATTR, &data);
                 SHMEM_BUMP();
                 if (rc < 0) {
-                        fprintf(stderr, "error: %s: #"LPD64" - %s\n",
-                                cmdname(argv[0]), i, strerror(rc = errno));
+                        fprintf(stderr, "error: %s: #"LPD64" - %d:%s\n",
+                                cmdname(argv[0]), i, errno, strerror(rc = errno));
                         break;
                 } else {
                         if (be_verbose
@@ -1272,7 +1272,7 @@ int jt_obd_lov_setconfig(int argc, char **argv)
 
         if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
                 fprintf(stderr,
-                        "error: %s: LOV uuid '%s' longer than %d characters\n",
+                        "error: %s: LOV uuid '%s' longer than %zd characters\n",
                         cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
                 return -EINVAL;
         }
@@ -1383,7 +1383,7 @@ int jt_obd_lov_getconfig(int argc, char **argv)
 
         if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
                 fprintf(stderr,
-                        "error: %s: LOV uuid '%s' longer than %d characters\n",
+                        "error: %s: LOV uuid '%s' longer than %zd characters\n",
                         cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
                 return -EINVAL;
         }
