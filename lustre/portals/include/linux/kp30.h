@@ -83,7 +83,7 @@ extern unsigned int portal_printk;
 #ifndef __KERNEL__
 #define THREAD_SIZE 8192
 #endif
-#ifdef  __arch_ia64__
+#ifdef  __ia64__
 #define CDEBUG_STACK() ((unsigned long)__builtin_dwarf_cfa()&(THREAD_SIZE - 1))
 #else
 #define CDEBUG_STACK() (THREAD_SIZE -                                      \
