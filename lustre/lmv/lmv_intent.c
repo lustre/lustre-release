@@ -144,7 +144,6 @@ repeat:
                  * request to the right MDS */
                 mds = raw_name2idx(obj->objcount, (char *)name, len);
                 CDEBUG(D_OTHER, "forward to MDS #%u\n", mds);
-
                 rpfid = obj->objs[mds].fid;
                 lmv_put_obj(obj);
         }
@@ -501,10 +500,12 @@ repeat:
          * because returned values will be put in struct inode */
 
         obj = lmv_grab_obj(obd, pfid);
-        if (obj && len) {
-                /* directory is already splitted. calculate mds */
-                mds = raw_name2idx(obj->objcount, (char *)name, len);
-                rpfid = obj->objs[mds].fid;
+        if (obj) {
+                if (len) {
+                        /* directory is already splitted. calculate mds */
+                        mds = raw_name2idx(obj->objcount, (char *)name, len);
+                        rpfid = obj->objs[mds].fid;
+                }
                 lmv_put_obj(obj);
         }
 
@@ -517,7 +518,6 @@ repeat:
                 CWARN("lookup for %lu/%lu/%lu and data should be uptodate\n",
                       (unsigned long)rpfid.mds, (unsigned long)rpfid.id,
                       (unsigned long)rpfid.generation);
-                
                 LASSERT(*reqp == NULL);
                 RETURN(rc);
         }
@@ -540,7 +540,7 @@ repeat:
                 obj = lmv_create_obj(exp, &rpfid, NULL);
                 if (IS_ERR(obj))
                         RETURN(PTR_ERR(obj));
-                
+                lmv_put_obj(obj);
                 goto repeat;
         }
 
@@ -562,9 +562,8 @@ repeat:
                         obj = lmv_create_obj(exp, &body->fid1, mea);
                         if (IS_ERR(obj))
                                 RETURN(PTR_ERR(obj));
-                } else {
-                        lmv_put_obj(obj);
                 }
+                lmv_put_obj(obj);
         }
 
         RETURN(rc);

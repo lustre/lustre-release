@@ -336,7 +336,6 @@ static int remove_entries_from_orig_dir(struct dirsplit_control *dc, int mdsnum)
                                                 de->name, (int) PTR_ERR(dentry));
                                 goto next;
                         }
-                        LASSERT(dentry->d_inode != NULL);
                         rc = fsfilt_del_dir_entry(dc->obd, dentry);
                         l_dput(dentry);
 next:
@@ -533,8 +532,11 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
 	ENTRY;
 
         /* TODO: optimization possible - we already may have mea here */
-        if (mds_splitting_expected(obd, dentry) != MDS_EXPECT_SPLIT)
-                RETURN(0);
+        rc = mds_splitting_expected(obd, dentry);
+        if (rc == MDS_NO_SPLITTABLE)
+                return 0;
+        if (rc == MDS_NO_SPLIT_EXPECTED && nstripes == 0)
+                return 0;
         
         LASSERT(mea == NULL || *mea == NULL);
 
@@ -593,8 +595,7 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
         handle = fsfilt_start(obd, dir, FSFILT_OP_SETATTR, NULL);
         if (IS_ERR(handle)) {
                 up(&dir->i_sem);
-                CERROR("fsfilt_start() failed, error %d.\n",
-                       PTR_ERR(handle));
+                CERROR("fsfilt_start() failed: %d\n", (int) PTR_ERR(handle));
                 GOTO(err_oa, rc = PTR_ERR(handle));
         }
         
@@ -617,15 +618,13 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
 
 	/* 3) read through the dir and distribute it over objects */
         rc = scan_and_distribute(obd, dentry, *mea);
+	if (mea == &tmea)
+                obd_free_diskmd(mds->mds_lmv_exp, (struct lov_mds_md **)mea);
         if (rc) {
-                CERROR("scan_and_distribute() failed, error %d.\n",
-                       rc);
+                CERROR("scan_and_distribute() failed, error %d.\n", rc);
                 RETURN(rc);
         }
 
-	if (mea == &tmea)
-                obd_free_diskmd(mds->mds_lmv_exp,
-                                (struct lov_mds_md **)mea);
 	RETURN(1);
 
 err_oa:

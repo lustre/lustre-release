@@ -288,6 +288,16 @@ test_2b() {
 }
 run_test 2b " list splitted dir after remount ============================="
 
+test_3a() {
+	mkdir $DIR/3a0 || error
+	for i in `seq 100`; do
+		mkdir $DIR/3a0/d${i} || error
+	done
+	createmany -o $DIR/3a0/f 5000 || error
+	rm -rf $DIR/3a0 || error
+}
+run_test 3a " dir splitting with cross-ref ============================="
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

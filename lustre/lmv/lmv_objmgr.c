@@ -340,6 +340,12 @@ lmv_delete_obj(struct obd_export *exp, struct ll_fid *fid)
         if (obj) {
                 obj->state |= O_FREEING;
                 
+                if (atomic_read(&obj->count) > 1)
+                        CERROR("obj %lu/%lu/%lu has count > 2 (%d)\n",
+                               (unsigned long) obj->fid.mds,
+                               (unsigned long) obj->fid.id,
+                               (unsigned long) obj->fid.generation,
+                               atomic_read(&obj->count));
                 __put_obj(obj);
                 __put_obj(obj);
                 rc = 1;
@@ -352,8 +358,7 @@ lmv_delete_obj(struct obd_export *exp, struct ll_fid *fid)
 int
 lmv_setup_mgr(struct obd_device *obd)
 {
-        CWARN("LMV object manager setup (%s)\n",
-              obd->obd_uuid.uuid);
+        CDEBUG(D_INFO, "LMV object manager setup (%s)\n", obd->obd_uuid.uuid);
         return 0;
 }
 
@@ -363,8 +368,7 @@ lmv_cleanup_mgr(struct obd_device *obd)
         struct lmv_obj *obj;
         struct list_head *cur, *tmp;
 
-        CWARN("LMV object manager cleanup (%s)\n",
-              obd->obd_uuid.uuid);
+        CDEBUG(D_INFO, "LMV object manager cleanup (%s)\n", obd->obd_uuid.uuid);
         
         spin_lock(&lmv_obj_list_lock);
         list_for_each_safe(cur, tmp, &lmv_obj_list) {

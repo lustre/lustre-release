@@ -693,6 +693,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         oa = obdo_alloc();
                         LASSERT(oa != NULL);
                         oa->o_mds = i;
+                        oa->o_easize = 0;
+                        if (rec->ur_eadata) {
+                                /* user asks for creating splitted dir */
+                                oa->o_easize = *((u16 *) rec->ur_eadata);
+                        }
+
                         obdo_from_inode(oa, dir, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                         OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                         OBD_MD_FLUID | OBD_MD_FLGID);
