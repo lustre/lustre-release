@@ -46,12 +46,18 @@ static void llu_fsop_gone(struct filesys *fs)
 static struct inode_ops llu_inode_ops;
 
 void llu_update_inode(struct inode *inode, struct mds_body *body,
-                      struct lov_mds_md *lmm)
+                      struct lov_stripe_md *lsm)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
 
-        if (lmm != NULL)
-                obd_unpackmd(llu_i2obdconn(inode), &lli->lli_smd, lmm);
+        LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
+        if (lsm != NULL) {
+                if (lli->lli_smd == NULL)                        
+                        lli->lli_smd = lsm;
+                else
+                        LASSERT (!memcmp (lli->lli_smd, lsm,
+                                          sizeof (*lsm)));
+        }
 
         if (body->valid & OBD_MD_FLID)
                 lli->lli_st_ino = body->ino;
@@ -232,7 +238,7 @@ static int llu_iop_lookup(struct pnode *pnode,
         struct mds_body *body;
         unsigned long valid;
         int rc;
-        struct ll_read_inode2_cookie lic = {.lic_body = NULL, .lic_lmm = NULL};
+        struct ll_read_inode2_cookie lic = {.lic_body = NULL, .lic_lsm = NULL};
 
         /* the mount root inode have no name, so don't call
          * remote in this case. but probably we need revalidate
@@ -256,22 +262,44 @@ static int llu_iop_lookup(struct pnode *pnode,
                 rc = -ENOENT;
                 goto out;
         }
-        body = lustre_msg_buf(request->rq_repmsg, 0);
+        body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
 
         *inop = llu_new_inode(pnode->p_mount->mnt_fs, body->ino, body->mode);
         if (!inop)
                 goto out;
 
-        lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0);
+        lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*lic.lic_body));
+        LASSERT (lic.lic_body != NULL);
+        LASSERT_REPSWABBED (request, 0);
+
         if (S_ISREG(lic.lic_body->mode) &&
             lic.lic_body->valid & OBD_MD_FLEASIZE) {
-                LASSERT(request->rq_repmsg->bufcount > 0);
-                lic.lic_lmm = lustre_msg_buf(request->rq_repmsg, 1);
+                struct lov_mds_md    *lmm;
+                int                   lmm_size;
+                int                   rc;
+                
+                lmm_size = lic.lic_body->eadatasize;
+                if (lmm_size == 0) {
+                        CERROR ("OBD_MD_FLEASIZE set but eadatasize 0\n");
+                        RETURN (-EPROTO);
+                }
+                lmm = lustre_msg_buf(request->rq_repmsg, 0 + 1, lmm_size);
+                LASSERT(lmm != NULL);
+                LASSERT_REPSWABBED (request, 0 + 1);
+
+                rc = obd_unpackmd (&sbi->ll_osc_conn, 
+                                   &lic.lic_lsm, lmm, lmm_size);
+                if (rc < 0) {
+                        CERROR ("Error %d unpacking eadata\n", rc);
+                        RETURN (rc);
+                }
+                LASSERT (rc >= sizeof (*lic.lic_lsm));
+
         } else {
-                lic.lic_lmm = NULL;
+                lic.lic_lsm = NULL;
         }
 
-        llu_update_inode(*inop, body, lic.lic_lmm);
+        llu_update_inode(*inop, body, lic.lic_lsm);
                 
         rc = llu_inode_getattr(*inop, llu_i2info(*inop)->lli_smd, NULL);
         if (rc)
@@ -426,7 +454,7 @@ llu_fsswop_mount(const char *source,
                 goto out_request;
         }
 
-        root_body = lustre_msg_buf(request->rq_repmsg, 0);
+        root_body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*root_body));
         LASSERT(sbi->ll_rootino != 0);
 
         root = llu_new_inode(fs, root_body->ino, root_body->mode);

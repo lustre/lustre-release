@@ -31,6 +31,7 @@ struct llu_inode_info {
 	struct ll_fid		lli_fid;
         struct lov_stripe_md	*lli_smd;
         char                	*lli_symlink_name;
+        /*struct semaphore      lli_open_sem;*/
         unsigned long        	lli_flags;
         struct list_head     	lli_read_extents;
 
@@ -92,7 +93,7 @@ void generate_random_uuid(unsigned char uuid_out[16]);
 
 /* super.c */
 void llu_update_inode(struct inode *inode, struct mds_body *body,
-                      struct lov_mds_md *lmm);
+                      struct lov_stripe_md *lmm);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 struct inode* llu_new_inode(struct filesys *fs, ino_t ino, mode_t mode);

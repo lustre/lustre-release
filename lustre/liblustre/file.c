@@ -87,7 +87,7 @@ static struct inode *llu_create_node(struct inode *dir, const char *name,
                 ll_invalidate_inode_pages(dir);
 #endif
                 request = it->it_data;
-                body = lustre_msg_buf(request->rq_repmsg, 1);
+                body = lustre_msg_buf(request->rq_repmsg, 1, sizeof(*body));
         } else {
                 struct mdc_op_data op_data;
                 struct llu_inode_info *lli_dir = llu_i2info(dir);
@@ -108,7 +108,7 @@ static struct inode *llu_create_node(struct inode *dir, const char *name,
                         inode = (struct inode*)rc;
                         goto out;
                 }
-                body = lustre_msg_buf(request->rq_repmsg, 0);
+                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
         }
 
         inode = llu_new_inode(dir->i_fs, body->ino, body->mode);
@@ -218,7 +218,7 @@ static int llu_create_obj(struct lustre_handle *conn, struct inode *inode,
                          &iattr, lmm, lmm_size, &req);
         ptlrpc_req_finished(req);
 
-        obd_free_wiremd(conn, &lmm);
+        obd_free_diskmd(conn, &lmm);
 
         /* If we couldn't complete mdc_open() and store the stripe MD on the
          * MDS, we need to destroy the objects now or they will be leaked.
