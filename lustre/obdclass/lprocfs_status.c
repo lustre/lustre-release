@@ -24,44 +24,14 @@
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/version.h>
-#include <linux/proc_fs.h>
 #include <linux/slab.h>
 #include <linux/types.h>
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#include <linux/lustre_lite.h>
+#include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
 
-#ifdef LPROC_SNMP
-
-#define DEFAULT_MODE 0444
-/*
- * Tokenizer array. Change this array to include special
- * characters for string tokenizing
- */
-const char tok[] = {'/', '\0'};
-
-/*
- * Externs
- */
-extern struct proc_dir_entry proc_root; /* Defined in proc/root.c */
-
-/*
- * Globals
- */
-struct proc_dir_entry *proc_lustre_root;
-struct proc_dir_entry *proc_lustre_dev_root;
-struct proc_dir_entry *proc_lustre_fs_root;
-
-struct proc_dir_entry* lprocfs_mkdir(const char* dname,
-                                     struct proc_dir_entry *parent)
-{
-        struct proc_dir_entry *child_dir_entry;
-        child_dir_entry = proc_mkdir(dname, parent);
-        if (!child_dir_entry)
-                CERROR("lustre: failed to create /proc entry %s\n", dname);
-        return child_dir_entry;
-}
+#ifdef LPROCFS
 
 struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry* head,
                                     const char* name)
@@ -78,7 +48,62 @@ struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry* head,
         return NULL;
 }
 
-void lprocfs_remove_all(struct proc_dir_entry* root)
+/* lprocfs API calls */
+
+int lprocfs_add_vars(struct proc_dir_entry* root, 
+                     struct lprocfs_vars* list,
+                     void* data)
+{
+        if ((root == NULL) || (list == NULL))
+                return -EINVAL;
+
+        while (list->name) {
+                struct proc_dir_entry *cur_root, *proc;
+                char *pathcopy, *cur, *next;
+                int pathsize = strlen(list->name)+1;
+
+                proc = NULL;
+                cur_root = root;
+
+                /* need copy of path for strsep */
+                OBD_ALLOC(pathcopy, pathsize);
+                if (!pathcopy) 
+                        return -ENOMEM;
+                next = pathcopy;
+                strcpy(pathcopy, list->name);
+
+                while (cur_root && (cur = strsep(&next, "/"))) {
+                        if (*cur =='\0') /* skip double/trailing "/" */
+                                continue;
+                        proc = lprocfs_srch(cur_root, cur);
+                        CDEBUG(D_OTHER, 
+                               "cur_root=%s, cur=%s, next=%s, (%s)\n", 
+                               cur_root->name, cur, next,
+                               (proc ? "exists" : "new" ));
+                        if (next)
+                                cur_root = (proc ? proc : proc_mkdir(cur, cur_root));
+                        else
+                                if (!proc) 
+                                        proc = create_proc_entry(cur, 0444, cur_root);
+                }
+
+                OBD_FREE(pathcopy, pathsize);
+
+                if ((cur_root==NULL) || (proc==NULL)) {
+                        CERROR("LprocFS: No memory to create /proc entry %s",
+                               list->name);
+                        return -ENOMEM;
+                }
+
+                proc->read_proc = list->read_fptr;
+                proc->write_proc = list->write_fptr;
+                proc->data = (list->data ? list->data : data);
+                list++;
+        }
+        return 0;
+}
+
+void lprocfs_remove(struct proc_dir_entry* root)
 {
         struct proc_dir_entry *temp = root;
         struct proc_dir_entry *rm_entry;
@@ -95,237 +120,204 @@ void lprocfs_remove_all(struct proc_dir_entry* root)
         }
 }
 
-#define MAX_STRING_SIZE 100
-struct proc_dir_entry* lprocfs_new_dir(struct proc_dir_entry* root,
-                                       const char* string, const char* tok)
+struct proc_dir_entry * lprocfs_register(const char* name,
+                                         struct proc_dir_entry *parent, 
+                                         struct lprocfs_vars *list,
+                                         void *data)
 {
-        struct proc_dir_entry* new_root;
-        struct proc_dir_entry* temp_entry;
-        char temp_string[MAX_STRING_SIZE+1];
-        char* my_str;
-        char* mover_str;
+        struct proc_dir_entry *newchild;
 
-        strncpy(temp_string, string, MAX_STRING_SIZE);
-        temp_string[MAX_STRING_SIZE] = '\0';
+        newchild = lprocfs_srch(parent, name);
+        if (newchild) /* return what already exists */
+                return newchild;
 
-        new_root = root;
-        mover_str = temp_string;
-        while ((my_str = strsep(&mover_str, tok))) {
-                if(!*my_str)
-                        continue;
-                CDEBUG(D_OTHER, "SEARCH= %s\t, ROOT=%s\n", my_str,
-                       new_root->name);
-                temp_entry = lprocfs_srch(new_root, my_str);
-                if (temp_entry == NULL) {
-                        CDEBUG(D_OTHER, "Adding: %s\n", my_str);
-                        temp_entry = lprocfs_mkdir(my_str, new_root);
-                        if (temp_entry == NULL) {
-                                CDEBUG(D_OTHER, 
-                                       "! Did not create new dir %s !!\n",
-                                       my_str);
-                                return temp_entry;
-                        }
+        newchild = proc_mkdir(name, parent);
+        if (newchild && list) {
+                int rc = lprocfs_add_vars(newchild, list, data);
+                if (rc) {
+                        lprocfs_remove(newchild);
+                        return ERR_PTR(rc);
                 }
-                new_root = temp_entry;
-        }
-        return new_root;
+                }
+        return newchild; 
 }
 
-int lprocfs_new_vars(struct proc_dir_entry* root, 
-                     struct lprocfs_vars* list,
-                     const char* tok, void* data)
+/* Generic callbacks */
+
+int lprocfs_rd_u64(char *page, char **start, off_t off,
+                   int count, int *eof, void *data)
 {
-        struct proc_dir_entry *temp_root;
-        struct proc_dir_entry *new_leaf;
-        struct proc_dir_entry *new_parent;
-        char temp_string[MAX_STRING_SIZE+1];
-
-        if (list == NULL)
-                return 0;
-
-        while (list->name) {
-                temp_root = lprocfs_new_dir(root, list->name, tok);
-                if (temp_root == NULL) {
-                        CDEBUG(D_OTHER, "!LProcFS: Mods: No root!");
-                        return -ENOMEM;
-                }
-
-                /* Convert the last element into a leaf-node */
-                strncpy(temp_string, temp_root->name, MAX_STRING_SIZE);
-                temp_string[MAX_STRING_SIZE] = '\0';
-                new_parent = temp_root->parent;
-                remove_proc_entry(temp_root->name, new_parent);
-                new_leaf = create_proc_entry(temp_string, DEFAULT_MODE,
-                                             new_parent);
-                if (new_leaf == NULL) {
-                        CERROR("LprocFS: No memory to create /proc entry %s",
-                                temp_string);
-                        return -ENOMEM;
-                }
-                new_leaf->read_proc = list->read_fptr;
-                new_leaf->write_proc = list->write_fptr;
-                if (data)
-                        new_leaf->data=data;
-                else
-                        new_leaf->data=list->data;
-                list++;
-        }
-        return 0;
-
-}
-#undef MAX_STRING_SIZE
-/*
- *  API implementations
- */
-int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *var,
-                     void *data)
-{
-        return lprocfs_new_vars(root, var, tok, data);
+        int rc = snprintf(page, count, LPU64"\n", *(__u64 *)data);
+        *eof = 1;
+        return rc;
 }
 
-int lprocfs_reg_obd(struct obd_device *device, struct lprocfs_vars *list,
-                    void *data)
+int lprocfs_rd_uuid(char* page, char **start, off_t off, int count,
+                    int *eof, void *data)
 {
-        struct proc_dir_entry* this_dev_root;
-        int retval;
+        struct obd_device* dev = (struct obd_device*)data;
+        int rc = snprintf(page, count, "%s\n", dev->obd_uuid);
+        *eof = 1;
+        return rc;
+}
+
+int lprocfs_rd_name(char* page, char **start, off_t off, int count,
+                    int *eof, void *data)
+{
+        struct obd_device* dev = (struct obd_device*)data;
+        int rc = snprintf(page, count, "%s\n", dev->obd_name);
+        *eof = 1;
+        return rc;
+}
+
+int lprocfs_rd_blksize(char* page, char **start, off_t off, int count,
+                       int *eof, struct statfs *sfs)
+{
+        int rc = snprintf(page, count, "%lu\n", sfs->f_bsize);
+        *eof = 1;
+        return rc;
+}
         
-        if(lprocfs_srch(device->obd_type->typ_procroot, device->obd_name)){
-                CDEBUG(D_OTHER, "Device with name [%s] exists!", 
-                                device->obd_name);
-                return 0;
-        }
+int lprocfs_rd_kbytestotal(char* page, char **start, off_t off, int count,
+                           int *eof, struct statfs *sfs)
+{
+        int rc;
+        __u32 blk_size;
+        __u64 result;
 
-        /* Obtain this device root */
-        this_dev_root = lprocfs_mkdir(device->obd_name,
-                                      device->obd_type->typ_procroot);
+        blk_size = sfs->f_bsize;
+        blk_size >>= 10;
+        result = sfs->f_blocks;
+        while (blk_size >>= 1)
+                result <<= 1;
 
-        device->obd_proc_entry = this_dev_root;
-        retval = lprocfs_add_vars(this_dev_root, list, data);
+        rc = snprintf(page, count, LPU64"\n", result); 
 
-        return retval;
+        *eof = 1;
+        return rc;
 }
 
-int lprocfs_dereg_obd(struct obd_device* device)
+int lprocfs_rd_kbytesfree(char* page, char **start, off_t off, int count,
+                          int *eof, struct statfs *sfs)
 {
-        CDEBUG(D_OTHER, "LPROCFS removing device = %s\n", device->obd_name);
+        int rc;
+        __u32 blk_size;
+        __u64 result;
 
-        if (device == NULL) {
-                CDEBUG(D_OTHER, "! LProcfs:  Null pointer !\n");
-                return 0;
-        }
-        if (device->obd_proc_entry == NULL) {
-                CDEBUG(D_OTHER, "! Proc entry non-existent !");
-                return 0;
-        }
-        lprocfs_remove_all(device->obd_proc_entry);
-        device->obd_proc_entry = NULL;
-        if (device->counters)
-                OBD_FREE(device->counters, device->cntr_mem_size);
+        blk_size = sfs->f_bsize;
+        blk_size >>= 10;
+        result = sfs->f_bfree;
+        while (blk_size >>= 1)
+                result <<= 1;
 
-        return 0;
-}
-
-struct proc_dir_entry* lprocfs_reg_mnt(char* mnt_name)
-{
-        if(lprocfs_srch(proc_lustre_fs_root, mnt_name)){
-                CDEBUG(D_OTHER, "Mount with same name exists!");
-                return 0;
-        }
-        return lprocfs_mkdir(mnt_name, proc_lustre_fs_root);
-}
-
-int lprocfs_dereg_mnt(struct proc_dir_entry* root)
-{
-        if(root == NULL){
-                CDEBUG(D_OTHER, "Non-existent root!");
-                return 0;
-        }
-        lprocfs_remove_all(root);
-        return 0;
-}
-
-int lprocfs_reg_class(struct obd_type* type, struct lprocfs_vars* list,
-                      void* data)
-{
+        rc = snprintf(page, count, LPU64"\n", result); 
         
-        struct proc_dir_entry* root;
-        int retval;
-        root = lprocfs_mkdir(type->typ_name, proc_lustre_dev_root);
-        lprocfs_add_vars(root, list, data);
-        type->typ_procroot = root;
-        retval = lprocfs_add_vars(root, list, data);
-        return retval;
+        *eof = 1;
+        return rc;
 }
 
-int lprocfs_dereg_class(struct obd_type* class)
+int lprocfs_rd_filestotal(char* page, char **start, off_t off, int count,
+                          int *eof, struct statfs *sfs)
 {
-        if(class == NULL){
-                CDEBUG(D_OTHER, "Non-existent class",
-                       class->typ_name);
-                return 0;
+        int rc = snprintf(page, count, "%ld\n", sfs->f_files); 
+        *eof = 1;
+        return rc;
+}
+
+int lprocfs_rd_filesfree(char* page, char **start, off_t off, int count,
+                         int *eof, struct statfs *sfs)
+{
+        int rc= snprintf(page, count, "%ld\n", sfs->f_ffree);
+        *eof = 1;
+        return rc;
+}
+
+int lprocfs_rd_filegroups(char* page, char **start, off_t off, int count,
+                          int *eof, struct statfs *sfs)
+{
+        int rc = snprintf(page, count, "unimplemented\n");
+        *eof = 1;
+        return rc;
+}
+
+int lprocfs_rd_server_uuid(char* page, char **start, off_t off, int count,
+                           int *eof, void *data)
+{
+
+        struct obd_device* obd = (struct obd_device*)data;
+        struct client_obd* cli = &obd->u.cli;
+        return snprintf(page, count, "%s\n", cli->cl_target_uuid);   
+}
+
+int lprocfs_rd_conn_uuid(char* page, char **start, off_t off, int count,
+                         int *eof,  void *data)
+{
+        struct obd_device* obd = (struct obd_device*)data;
+        struct client_obd* cli = &obd->u.cli;
+        struct obd_import* imp = &cli->cl_import;
+        int rc;
+
+        rc = snprintf(page, count, "%s\n", 
+                      imp->imp_connection->c_remote_uuid);   
+        *eof = 1;
+        return rc;
+}
+
+int lprocfs_rd_numrefs(char* page, char **start, off_t off, int count,
+                       int *eof, void *data)
+{
+        struct obd_type* class = (struct obd_type*) data;
+        int rc;
+
+        rc = snprintf(page, count, "%d\n", class->typ_refcnt);
+        *eof = 1;
+        return rc;
+}
+
+int lprocfs_obd_attach(struct obd_device *dev, struct lprocfs_vars *list)
+{
+        int rc = 0;
+        dev->obd_proc_entry = lprocfs_register(dev->obd_name,
+                                               dev->obd_type->typ_procroot, 
+                                               list,
+                                               dev);
+        if (IS_ERR(dev->obd_proc_entry)) {
+               rc = PTR_ERR(dev->obd_proc_entry);
+               dev->obd_proc_entry = NULL;
         }
-        lprocfs_remove_all(class->typ_procroot);
-        class->typ_procroot = NULL;
-        CDEBUG(D_OTHER, "LPROCFS removed = %s\n", class->typ_name);
+        return rc;
+}
+
+int lprocfs_obd_detach(struct obd_device *dev)
+{
+        if (dev && dev->obd_proc_entry) {
+                lprocfs_remove(dev->obd_proc_entry);
+                dev->obd_proc_entry = NULL;
+        }
         return 0;
-
-}
-int lprocfs_reg_main()
-{
-        proc_lustre_root = lprocfs_mkdir("lustre", &proc_root);
-        if (proc_lustre_root == NULL) {
-                CERROR(" !! Cannot create /proc/lustre !! \n");
-                return -EINVAL;
-        }
-
-        proc_lustre_dev_root = lprocfs_mkdir("devices", proc_lustre_root);
-        if (proc_lustre_dev_root == NULL) {
-                CERROR(" !! Cannot create /proc/lustre/devices !! \n");
-                return -EINVAL;
-        }
-        proc_lustre_fs_root = lprocfs_mkdir("mnt_pnt", proc_lustre_root);
-
-        if (proc_lustre_fs_root == NULL) {
-                CERROR(" !! Cannot create /proc/lustre/mnt_pnt !! \n");
-                return -EINVAL;
-        }
-
-        return 0;
 }
 
-int lprocfs_dereg_main()
-{
-        lprocfs_remove_all(proc_lustre_root);
-        proc_lustre_root = NULL;
-        proc_lustre_dev_root = NULL;
-        proc_lustre_fs_root = NULL;
-        return 0;
-}
+#endif /* LPROCFS*/
 
-
-/*
- * Needs to go...
- */
-int lprocfs_ll_rd(char *page, char **start, off_t off,
-                  int count, int *eof, void *data)
-{
-        __u64 *temp = (__u64 *)data;
-        int len;
-        len = snprintf(page, count, LPU64"\n", *temp);
-        return len;
-}
-
-#endif /* LPROC_SNMP */
-
-EXPORT_SYMBOL(lprocfs_reg_obd);
-EXPORT_SYMBOL(lprocfs_dereg_obd);
-EXPORT_SYMBOL(lprocfs_reg_main);
-EXPORT_SYMBOL(lprocfs_dereg_main);
-EXPORT_SYMBOL(lprocfs_reg_mnt);
-EXPORT_SYMBOL(lprocfs_dereg_mnt);
+EXPORT_SYMBOL(lprocfs_register);
+EXPORT_SYMBOL(lprocfs_remove);
 EXPORT_SYMBOL(lprocfs_add_vars);
-EXPORT_SYMBOL(lprocfs_reg_class);
-EXPORT_SYMBOL(lprocfs_dereg_class);
-EXPORT_SYMBOL(lprocfs_ll_rd);
+EXPORT_SYMBOL(lprocfs_obd_attach);
+EXPORT_SYMBOL(lprocfs_obd_detach);
+
+EXPORT_SYMBOL(lprocfs_rd_u64);
+EXPORT_SYMBOL(lprocfs_rd_uuid);
+EXPORT_SYMBOL(lprocfs_rd_name);
+EXPORT_SYMBOL(lprocfs_rd_server_uuid);
+EXPORT_SYMBOL(lprocfs_rd_conn_uuid);
+EXPORT_SYMBOL(lprocfs_rd_numrefs);
+
+EXPORT_SYMBOL(lprocfs_rd_blksize);
+EXPORT_SYMBOL(lprocfs_rd_kbytestotal);
+EXPORT_SYMBOL(lprocfs_rd_kbytesfree);
+EXPORT_SYMBOL(lprocfs_rd_filestotal);
+EXPORT_SYMBOL(lprocfs_rd_filesfree);
+EXPORT_SYMBOL(lprocfs_rd_filegroups);
+
 
 
