@@ -1279,18 +1279,22 @@ err_unlock:
         return ERR_PTR(rc);
 }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+int waitfor_one_page(struct page *page)
+{
+        wait_on_page_locked(page);
+        return 0;
+}
+#endif
+
 static int lustre_commit_write(struct page *page, unsigned from, unsigned to)
 {
         struct inode *inode = page->mapping->host;
         int err;
 
         err = page->mapping->a_ops->commit_write(NULL, page, from, to);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (!err && IS_SYNC(inode))
                 err = waitfor_one_page(page);
-#else
-#warning ADD 2.5 waiting code here?
-#endif
         //SetPageUptodate(page); // the client commit_write will do this
 
         SetPageReferenced(page);
