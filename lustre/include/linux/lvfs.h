@@ -78,10 +78,26 @@ static inline struct dentry *ll_lookup_one_len(char *fid_name,
                                                int fid_namelen)
 {
         struct dentry *dchild;
+#ifdef S_PDIROPS	
+	unsigned long hash;
+	void *lock = NULL;
 
-        down(&dparent->d_inode->i_sem);
+	if (IS_PDIROPS(dparent->d_inode)) {
+		hash = full_name_hash(fid_name, fid_namelen);
+		lock = dynlock_lock(&dparent->d_inode->i_dcache_lock,
+					hash, 1, GFP_ATOMIC);
+	} else
+#endif
+	        down(&dparent->d_inode->i_sem);
+
         dchild = lookup_one_len(fid_name, dparent, fid_namelen);
-        up(&dparent->d_inode->i_sem);
+
+#ifdef S_PDIROPS
+	if (IS_PDIROPS(dparent->d_inode)) 
+		dynlock_unlock(&dparent->d_inode->i_dcache_lock, lock);
+	else
+#endif
+        	up(&dparent->d_inode->i_sem);
 
         return dchild;
 }

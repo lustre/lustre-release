@@ -41,6 +41,7 @@
 #endif
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_dlm.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
 #include <linux/module.h>
@@ -293,6 +294,10 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
 
         /* Don't allow setattr to change file type */
         iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
+
+        /* We set these flags on the client, but have already checked perms
+         * so don't confuse inode_change_ok. */
+        iattr->ia_valid &= ~(ATTR_MTIME_SET | ATTR_ATIME_SET);
 
         if (inode->i_op->setattr) {
                 rc = inode->i_op->setattr(dentry, iattr);
@@ -627,6 +632,20 @@ out:
         return err;
 }
 
+static int fsfilt_ext3_setup(struct super_block *sb)
+{
+#if 0
+        EXT3_SB(sb)->dx_lock = fsfilt_ext3_dx_lock;
+        EXT3_SB(sb)->dx_unlock = fsfilt_ext3_dx_unlock;
+#endif
+#ifdef S_PDIROPS
+        CERROR("Enabling PDIROPS\n");
+        set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
+        sb->s_flags |= S_PDIROPS;
+#endif
+        return 0;
+}
+
 static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_type:                "ext3",
         fs_owner:               THIS_MODULE,
@@ -644,11 +663,10 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_prep_san_write:      fsfilt_ext3_prep_san_write,
         fs_write_record:        fsfilt_ext3_write_record,
         fs_read_record:         fsfilt_ext3_read_record,
+        fs_setup:               fsfilt_ext3_setup,
 };
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
-#warning "fsfilt_ext3_init() and fsfilt_ext3_exit() aren't called on 2.6. MUST be fixed"
 
 static int __init fsfilt_ext3_init(void)
 {
@@ -686,12 +704,14 @@ static void __exit fsfilt_ext3_exit(void)
         //rc = ext3_xattr_unregister();
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre ext3 Filesystem Helper v0.1");
-MODULE_LICENSE("GPL");
-
 module_init(fsfilt_ext3_init);
 module_exit(fsfilt_ext3_exit);
 
+#else
+#warning "FIXME: fsfilt_ext3_init() and fsfilt_ext3_exit() aren't called on 2.6"
 #endif
+
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_DESCRIPTION("Lustre ext3 Filesystem Helper v0.1");
+MODULE_LICENSE("GPL");
 

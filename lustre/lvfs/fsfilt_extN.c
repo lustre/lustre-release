@@ -288,6 +288,10 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
         /* Don't allow setattr to change file type */
         iattr->ia_mode = (inode->i_mode & S_IFMT)|(iattr->ia_mode & ~S_IFMT);
 
+        /* We set these flags on the client, but have already checked perms
+         * so don't confuse inode_change_ok. */
+        iattr->ia_valid &= ~(ATTR_MTIME_SET | ATTR_ATIME_SET);
+
         if (inode->i_op->setattr) {
                 rc = inode->i_op->setattr(dentry, iattr);
         } else {
