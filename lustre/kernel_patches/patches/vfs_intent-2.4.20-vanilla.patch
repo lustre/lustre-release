@@ -1948,3 +1948,16 @@ Index: lum/net/unix/af_unix.c
  		err = PTR_ERR(dentry);
  		if (IS_ERR(dentry))
  			goto out_mknod_unlock;
+Index: lum/drivers/hotplug/pci_hotplug_core.c
+===================================================================
+--- lum.orig/drivers/hotplug/pci_hotplug_core.c	2003-11-28 13:26:20.000000000 -0500
++++ lum/drivers/hotplug/pci_hotplug_core.c	2004-06-08 01:59:32.000000000 -0400
+@@ -478,7 +478,7 @@
+ 
+ 	down(&parent->d_inode->i_sem);
+ 
+-	d = lookup_hash(&qstr,parent);
++	d = lookup_hash(&qstr,parent,NULL);
+ 
+ 	error = PTR_ERR(d);
+ 	if (!IS_ERR(d)) {
