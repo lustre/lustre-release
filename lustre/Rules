@@ -10,6 +10,17 @@
 #  name_SOURCES = my.c files.c
 #  include $(top_srcdir)/Rules
 
+if LINUX25
+
+# We still need to link each module with vermagic.o to get rid of "kernel taited" warnings.
+basename=$(shell echo $< | sed -e 's/\.c//g' | sed -e 's/-//g' | sed -e 's/\.o//g')
+AM_CPPFLAGS=-I$(top_builddir)/include -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -mpreferred-stack-boundary=2  -DKBUILD_MODNAME=$(MODULE) -DKBUILD_BASENAME=$(basename)
+
+else
+
+AM_CPPFLAGS=-I$(top_builddir)/include
+
+endif
 
 $(MODULE).o: $($(MODULE)_OBJECTS)
 	$(LD) -m "`$(LD) --help | awk '/supported emulations/ {print $$4}'`" -r -o $(MODULE).o $($(MODULE)_OBJECTS)
@@ -22,4 +33,3 @@ tags:
 	find $(top_srcdir)/../portals/ -name '*.[hc]' | xargs ctags -a
 	find $(top_srcdir) -name '*.[hc]' | grep -v ".orig" | xargs ctags -a
 
-AM_CPPFLAGS=-I$(top_builddir)/include
