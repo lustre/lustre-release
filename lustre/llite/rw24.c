@@ -269,16 +269,19 @@ static int ll_writepage_24(struct page *page)
         struct inode *inode = page->mapping->host;
         struct obd_export *exp;
         struct obd_client_page *ocp;
+        int cleanup_phase = 0;
         int rc;
         ENTRY;
 
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
-                RETURN(-EINVAL);
+                GOTO(cleanup, rc = -EINVAL);
+        cleanup_phase = 1;
 
         ocp = ocp_alloc(page);
         if (IS_ERR(ocp)) 
-                GOTO(out, rc = PTR_ERR(ocp));
+                GOTO(cleanup, rc = PTR_ERR(ocp));
+        cleanup_phase = 2;
 
         ocp->ocp_callback = ll_complete_writepage_24;
         ocp->ocp_off = (obd_off)page->index << PAGE_CACHE_SHIFT;
@@ -286,19 +289,30 @@ static int ll_writepage_24(struct page *page)
         ocp->ocp_flag = OBD_BRW_CREATE|OBD_BRW_FROM_GRANT;
 
         obd_brw_plug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
+
         page_cache_get(page);
         rc = ll_start_ocp_io(page);
         if (rc == 0) {
                 ll_page_acct(0, 1);
                 ll_start_io_from_dirty(inode, ll_complete_writepage_24);
+                cleanup_phase = 1;
         } else {
-                ocp_free(page);
                 page_cache_release(page);
         }
 
         obd_brw_unplug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
-out:
-        class_export_put(exp);
+
+cleanup:
+        switch(cleanup_phase) {
+                case 2:
+                        ocp_free(page);
+                case 1:
+                        class_export_put(exp);
+                case 0:
+                        break;
+        }
+        if (rc != 0)
+                unlock_page(page);
         RETURN(rc);
 }
 

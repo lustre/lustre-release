@@ -96,6 +96,8 @@ static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
         int rc;
         ENTRY;
 
+#error "update this to look like ll_writepage_24"  
+
         LASSERT(PageLocked(page));
         LASSERT(!PageWriteback(page));
 
