@@ -1,5 +1,6 @@
 #!/bin/sh
 vmstat 1 | while read LINE ; do
-	echo "`date +s`: $LINE"
-	[ "$1" ] && echo "`date +s`: $LINE" >> $1
+	LINE="`date +%s`: $LINE"
+	echo "$LINE"
+	[ "$1" ] && echo "$LINE" >> $1
 done
