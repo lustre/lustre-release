@@ -12,10 +12,10 @@
 
 config=${1:-ba-mount.xml}
 
+LMC_REAL="${LMC:-../utils/lmc} -m config"
 LMC="save_cmd"
-LMC_REAL="../../lustre/utils/lmc -m $config"
 
-PORT=2432
+PORT=988
 TCPBUF=1048576
 OST=ba-ost-1
 MDS=mds-hostname
