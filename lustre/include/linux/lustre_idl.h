@@ -97,6 +97,7 @@ struct lustre_handle {
         __u64 addr;
         __u64 cookie;
 };
+#define DEAD_HANDLE_MAGIC 0xdeadbeefcafebabe
 
 static inline void ptlrpc_invalidate_handle(struct lustre_handle *hdl)
 {
@@ -246,7 +247,7 @@ struct obd_statfs {
 #define OBD_BRW_RWMASK	(OBD_BRW_READ | OBD_BRW_WRITE)
 #define OBD_BRW_CREATE	0x4
 
-#define OBD_PUNCH_EOF 0xffffffffffffffffULL
+#define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
 struct obd_ioobj {
         obd_id               ioo_id;

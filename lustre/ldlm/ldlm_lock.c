@@ -165,7 +165,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 spin_unlock(&ns->ns_counter_lock);
 
                 lock->l_resource = NULL;
-                lock->l_random = 0xdeadbeefcafebabe;
+                lock->l_random = DEAD_HANDLE_MAGIC;
                 if (lock->l_export && lock->l_export->exp_connection)
                         ptlrpc_put_connection(lock->l_export->exp_connection);
                 kmem_cache_free(ldlm_lock_slab, lock);

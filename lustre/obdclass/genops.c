@@ -395,6 +395,7 @@ void class_destroy_export(struct obd_export *exp)
                 //ptlrpc_put_connection(exp->exp_connection);
         }
 
+        exp->exp_cookie = DEAD_HANDLE_MAGIC;
         kmem_cache_free(export_cachep, exp);
 
         EXIT;

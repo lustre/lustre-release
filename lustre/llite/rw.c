@@ -74,7 +74,7 @@ inline void set_page_clean(struct page *page)
 static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *md = lli->lli_smd;
+        struct lov_stripe_md *lsm = lli->lli_smd;
         struct io_cb_data *cbd = ll_init_cb();
         struct brw_page pg;
         int err;
@@ -90,7 +90,7 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
         pg.off = ((obd_off)page->index) << PAGE_SHIFT;
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
-        err = obd_brw(cmd, ll_i2obdconn(inode), md, 1, &pg, ll_sync_io_cb, cbd);
+        err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_io_cb, cbd);
 
         RETURN(err);
 } /* ll_brw */
@@ -260,10 +260,9 @@ void ll_truncate(struct inode *inode)
                 LBUG();
         }
 
-        /* truncate == punch to/from start from/to end:
-           set end to -1 for that. */
+        /* truncate == punch from new size to absolute end of file */
         err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
-                        OBD_PUNCH_EOF);
+                        OBD_OBJECT_EOF);
         if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
         else
