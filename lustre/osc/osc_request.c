@@ -1277,8 +1277,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                                  * in commit_write and that we should try
                                  * and put it in an rpc again later.  we 
                                  * break out of the loop so we don't create
-                                 * a whole in the sequence of pages in 
-                                 * the rpc stream.*/
+                                 * a hole in the sequence of pages in the rpc 
+                                 * stream.*/
                                 pos = NULL;
                                 break;
                         case -EINTR:

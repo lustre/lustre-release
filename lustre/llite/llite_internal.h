@@ -102,6 +102,10 @@ struct it_cb_data {
 	obd_id hash;
 };
 
+#define LL_PRIVBITS_READ        0
+#define LL_PRIVBITS__LAST       1
+#define LL_PRIVBITS_MASK ((1 << LL_PRIVBITS__LAST) - 1)
+
 #define LLAP_MAGIC 98764321
 
 struct ll_async_page {

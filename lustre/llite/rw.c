@@ -239,11 +239,11 @@ static int ll_ap_make_ready(void *data, int cmd)
         page = llap->llap_page;
 
         if (cmd == OBD_BRW_READ) {
-                /* paths that want to cancel a read-ahead clear page-private
-                 * before locking the page */ 
-		if (test_and_clear_bit(PG_private, &page->flags))
-                        RETURN(0);
-                RETURN(-EINTR);
+                /* _sync_page beat us to it and is about to call 
+                 * _set_async_flags which will fire off rpcs again */
+		if (!test_and_clear_bit(LL_PRIVBITS_READ, &page->private))
+                        RETURN(-EAGAIN);
+                RETURN(0);
         }
 
         /* we're trying to write, but the page is locked.. come back later */
@@ -322,6 +322,9 @@ static struct obd_async_page_ops ll_async_page_ops = {
         .ap_completion =        ll_ap_completion,
 };
 
+#define page_llap(page) \
+        ((struct ll_async_page *)((page)->private & ~LL_PRIVBITS_MASK))
+
 /* XXX have the exp be an argument? */
 struct ll_async_page *llap_from_page(struct page *page)
 {
@@ -332,8 +335,8 @@ struct ll_async_page *llap_from_page(struct page *page)
         int rc;
         ENTRY;
 
-        if (page->private != 0) {
-                llap = (struct ll_async_page *)page->private;
+        llap = page_llap(page);
+        if (llap != NULL) {
                 if (llap->llap_magic != LLAP_MAGIC)
                         RETURN(ERR_PTR(-EINVAL));
                 RETURN(llap);
@@ -344,6 +347,8 @@ struct ll_async_page *llap_from_page(struct page *page)
                 RETURN(ERR_PTR(-EINVAL));
 
         OBD_ALLOC(llap, sizeof(*llap));
+        if (llap == NULL)
+                RETURN(ERR_PTR(-ENOMEM));
         llap->llap_magic = LLAP_MAGIC;
         rc = obd_prep_async_page(exp, ll_i2info(inode)->lli_smd,
                                  NULL, page, 
@@ -356,6 +361,7 @@ struct ll_async_page *llap_from_page(struct page *page)
 
         CDEBUG(D_CACHE, "llap %p page %p cookie %p obj off "LPU64"\n", llap, 
                page, llap->llap_cookie, (obd_off)page->index << PAGE_SHIFT);
+        /* also zeroing the PRIVBITS low order bitflags */ 
         page->private = (unsigned long)llap;
         llap->llap_page = page;
 
@@ -552,13 +558,13 @@ static int ll_issue_page_read(struct obd_export *exp,
          * or lock_page() to get into ->sync_page() to trigger the IO */
         llap->llap_defer_uptodate = defer_uptodate;
         page_cache_get(page);
-        SetPagePrivate(page);
+        set_bit(LL_PRIVBITS_READ, &page->private); /* see ll_sync_page() */
         rc = obd_queue_async_io(exp, ll_i2info(page->mapping->host)->lli_smd, 
                                 NULL, llap->llap_cookie, OBD_BRW_READ, 0, 
                                 PAGE_SIZE, 0, ASYNC_COUNT_STABLE);
         if (rc) {
                 LL_CDEBUG_PAGE(page, "read queueing failed\n");
-                ClearPagePrivate(page);
+                clear_bit(LL_PRIVBITS_READ, &page->private);
                 page_cache_release(page);
         }
         RETURN(rc);
@@ -794,7 +800,7 @@ out:
 
 /* this is for read pages.  we issue them as ready but not urgent.  when
  * someone waits on them we fire them off, hopefully merged with adjacent
- * reads that were queued by the kernel's read-ahead.  */
+ * reads that were queued by read-ahead.  */
 int ll_sync_page(struct page *page)
 {
         struct obd_export *exp;
@@ -802,15 +808,13 @@ int ll_sync_page(struct page *page)
         int rc;
         ENTRY;
 
-        /* we're abusing PagePrivate to signify that a queued read should
-         * be issued once someone goes to lock it.  it is cleared by 
-         * canceling the read-ahead page before discarding and by issuing
-         * the read rpc */
-        if (!PagePrivate(page))
+        /* we're using a low bit flag to signify that a queued read should
+         * be issued once someone goes to lock it.  it is also cleared
+         * as the page is built into an RPC */
+        if (!test_and_clear_bit(LL_PRIVBITS_READ, &page->private))
                 RETURN(0);
-        ClearPagePrivate(page);
 
-        /* careful to only deref page->mapping after checking PagePrivate */
+        /* careful to only deref page->mapping after checking the bit */
         exp = ll_i2obdexp(page->mapping->host);
         if (exp == NULL)
                 RETURN(-EINVAL);

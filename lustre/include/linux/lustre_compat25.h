@@ -145,13 +145,6 @@ static inline void lustre_daemonize_helper(void)
 #define conditional_schedule() if (unlikely(need_resched())) schedule()
 #endif
 
-/* 2.6 has the lovely PagePrivate bit for indicating that a filesystem
- * has hung state off of page->private.  We use it. */
-#define PG_private 9 /* unused in 2.4, apparently. */
-#define SetPagePrivate(page)    set_bit(PG_private, &(page)->flags)
-#define ClearPagePrivate(page)  clear_bit(PG_private, &(page)->flags)
-#define PagePrivate(page)       test_bit(PG_private, &(page)->flags)
-
 #endif /* end of 2.4 compat macros */
 
 #endif /* __KERNEL__ */
