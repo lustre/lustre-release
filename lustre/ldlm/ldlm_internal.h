@@ -33,6 +33,9 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 int ldlm_process_flock_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
 
+/* l_lock.c */
+void l_check_no_ns_lock(struct ldlm_namespace *ns);
+
 extern struct proc_dir_entry *ldlm_svc_proc_dir;
 
 struct ldlm_state {
