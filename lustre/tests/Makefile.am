@@ -19,7 +19,7 @@ noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime cm
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify
-noinst_PROGRAMS += ll_sparseness_write mrename
+noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify
 # noinst_PROGRAMS += ldaptest
 bin_PROGRAMS = mcreate munlink mkdirmany iopentest1 iopentest2
 
@@ -74,5 +74,6 @@ sleeptest_SOURCES = sleeptest.c
 #sanity test 
 ll_sparseness_verify_SOURCES = ll_sparseness_verify.c
 ll_sparseness_write_SOURCES = ll_sparseness_write.c
+ll_dirstripe_verify_SOURCE = ll_dirstripe_verify.c
 
 include $(top_srcdir)/Rules

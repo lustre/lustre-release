@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 
 int main(int argc, char **argv)
 {

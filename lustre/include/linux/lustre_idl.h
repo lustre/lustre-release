@@ -68,7 +68,7 @@
 #endif
 
 /* Defn's shared with user-space. */
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 
 /*
  * this file contains all data structures used in Lustre interfaces:
@@ -379,6 +379,7 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLIFID   (0x02000000)    /* ->ost write inline fid */
 #define OBD_MD_FLEPOCH  (0x04000000)    /* ->ost write easize is epoch */
 #define OBD_MD_FLGRANT  (0x08000000)    /* ost preallocation space grant */
+#define OBD_MD_FLDIREA  (0x10000000)    /* dir's extended attribute data */
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM|\
                            OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE))

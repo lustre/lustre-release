@@ -97,6 +97,8 @@ int mds_lov_clean(struct obd_device *obd);
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 #ifdef __KERNEL__
+int mds_get_md(struct obd_device *, struct inode *, void *md, int *size, 
+               int lock);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);

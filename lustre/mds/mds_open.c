@@ -304,13 +304,15 @@ static void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
 static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
-                              struct inode *inode, void **handle, obd_id **ids)
+                              struct dentry *dchild, void **handle, 
+                              obd_id **ids)
 {
         struct obdo *oa;
         struct obd_trans_info oti = { 0 };
         struct mds_body *body;
         struct lov_stripe_md *lsm = NULL;
         struct lov_mds_md *lmm = NULL;
+        struct inode *inode = dchild->d_inode;
         void *lmm_buf;
         int rc, lmm_bufsize, lmm_size;
         ENTRY;
@@ -385,6 +387,21 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, 
                                            mds->mds_osc_exp,
                                            0, &lsm, rec->ur_eadata);
+                        if (rc)
+                                GOTO(out_oa, rc);
+                } else {
+                        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+                        if (lmm == NULL)
+                                GOTO(out_oa, rc = -ENOMEM);
+
+                        lmm_size = mds->mds_max_mdsize;
+                        rc = mds_get_md(obd, dchild->d_parent->d_inode,
+                                        lmm, &lmm_size, 1);
+                        if (rc > 0)
+                                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
+                                                   mds->mds_osc_exp, 
+                                                   0, &lsm, lmm);
+                        OBD_FREE(lmm, mds->mds_max_mdsize);
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
@@ -621,7 +638,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         if (rec != NULL) {
                 /* no EA: create objects */
                 rc = mds_create_objects(req, 2, rec, mds, obd,
-                                        dchild->d_inode, handle, &ids);
+                                        dchild, handle, &ids);
                 if (rc) {
                         CERROR("mds_create_objects: rc = %d\n", rc);
                         up(&dchild->d_inode->i_sem);

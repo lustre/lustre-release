@@ -1781,6 +1781,54 @@ test_64b () {
 }
 run_test 64b "check out-of-space detection on client ============"
 
+# bug 1414 - set/get directories' stripe info
+test_65() {
+	LFS=${LFS:-lfs}
+	LVERIFY=${LVERIFY:-ll_dirstripe_verify}
+
+        stripecount=`cat /proc/fs/lustre/lov/*/stripecount | head -1`
+        if [ $stripecount -eq 0 ]; then
+                stripecount=1
+        fi
+        stripesize=`cat /proc/fs/lustre/lov/*/stripesize | head -1`
+        ostcount=`cat /proc/fs/lustre/lov/*/numobd | head -1`
+
+        echo -n "case 1: dir has no stripe info..."
+        mkdir $DIR/d65
+        touch $DIR/d65/f1
+        $LVERIFY $DIR/d65 $DIR/d65/f1 || error
+	echo "pass"
+
+	echo -n "case 2: setstripe $(($stripesize * 2)) 0 1 ..."
+       	$LFS setstripe $DIR/d65 $(($stripesize * 2)) 0 1 || error
+        touch $DIR/d65/f2
+        $LVERIFY $DIR/d65 $DIR/d65/f2 || error
+        echo "pass"
+
+        if [ $ostcount -gt 1 ]; then
+		echo -n "case 3: setstripe $(($stripesize * 4)) 1 $(($ostcount - 1)) ..."
+    		$LFS setstripe $DIR/d65 $(($stripesize * 4)) 1 \
+			$(($ostcount - 1)) || error
+                touch $DIR/d65/f3
+                $LVERIFY $DIR/d65 $DIR/d65/f3 || error
+                echo "pass"
+        fi
+
+        echo -n "case 4: setstripe  $stripesize -1 $(($stripecount - 1)) ..."
+        $LFS setstripe $DIR/d65 $stripesize -1 $(($stripecount - 1)) || error
+        touch $DIR/d65/f4 $DIR/d65/f5
+        $LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error
+        echo "pass"
+
+	echo -n "case 5: setstripe 0 -1 0 (default) ..."
+        $LFS setstripe $DIR/d65 0 -1 0 || error
+        touch $DIR/d65/f6
+        $LVERIFY $DIR/d65 $DIR/d65/f6 || error
+        echo "pass"
+}
+run_test 65 "Verify that the files are created using parent dir's stripe info"
+
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.

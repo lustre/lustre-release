@@ -4,7 +4,7 @@
 # See the file COPYING in this distribution
 
 
-pkginclude_HEADERS = lustre_user.h
+#pkginclude_HEADERS = lustre_user.h
 
 EXTRA_DIST = lprocfs_status.h lustre_debug.h lustre_ha.h lustre_lib.h \
   lustre_mgmt.h obd_cache.h obd_lov.h lustre_dlm.h lustre_handles.h \

@@ -33,7 +33,7 @@
 #include <linux/obd_lov.h>
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 
 #include "lov_internal.h"
 

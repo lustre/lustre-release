@@ -142,6 +142,6 @@ enum {
 #include <linux/lustre_idl.h>
 #endif /* __KERNEL__ */
 
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 
 #endif

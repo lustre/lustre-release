@@ -423,9 +423,79 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 obd_ioctl_freedata(buf, len);
                 return rc;
         }
-        case LL_IOC_LOV_SETSTRIPE:
-        case LL_IOC_LOV_GETSTRIPE:
-                RETURN(-ENOTTY);
+        case LL_IOC_LOV_SETSTRIPE: {
+                struct ptlrpc_request *request = NULL;
+                struct mdc_op_data op_data;
+                struct iattr attr;
+                struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
+                int rc = 0;
+
+                ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+
+                memset(&attr, 0x0, sizeof(attr));
+
+                LASSERT(sizeof(lum) == sizeof(*lump));
+                LASSERT(sizeof(lum.lmm_objects[0])
+                        == sizeof(lump->lmm_objects[0]));
+                rc = copy_from_user(&lum, lump, sizeof(lum));
+                if (rc)
+                        return(-EFAULT);
+
+                if (lum.lmm_magic != LOV_USER_MAGIC)
+                        RETURN(-EINVAL);
+
+                rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
+                                 &attr, &lum, sizeof(lum), NULL, 0, &request);
+                if (rc) {
+                        ptlrpc_req_finished(request);
+                        if (rc != -EPERM && rc != -EACCES)
+                                CERROR("mdc_setattr fails: rc = %d\n", rc);
+                        return rc;
+                }
+                ptlrpc_req_finished(request);
+
+                return rc;
+        }        
+        case LL_IOC_LOV_GETSTRIPE: {
+                struct ptlrpc_request *request = NULL;
+                struct lov_user_md *lump = (struct lov_user_md *)arg;
+                struct lov_mds_md *lmm;
+                struct ll_fid fid;
+                struct mds_body *body;
+                unsigned long valid = 0;
+                int rc, lmmsize;
+
+                valid |= OBD_MD_FLDIREA;
+
+                ll_inode2fid(&fid, inode);
+                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid,
+                                 obd_size_diskmd(sbi->ll_osc_exp, NULL),
+                                 &request);
+                if (rc < 0) {
+                        CDEBUG(D_INFO, "mdc_getattr failed: rc = %d\n", rc);
+                        RETURN(rc);
+                }
+
+                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
+                LASSERT(body != NULL);         /* checked by mdc_getattr_name */
+                LASSERT_REPSWABBED(request, 0);/* swabbed by mdc_getattr_name */
+
+                lmmsize = body->eadatasize;
+                if (lmmsize == 0)
+                        GOTO(out_get, rc = -ENODATA);                        
+
+                lmm = lustre_msg_buf(request->rq_repmsg, 1, lmmsize);
+                LASSERT(lmm != NULL);
+                LASSERT_REPSWABBED(request, 1);
+                rc = copy_to_user(lump, lmm, lmmsize);
+                if (rc)
+                        GOTO(out_get, rc = -EFAULT);
+
+                EXIT;
+        out_get:
+                ptlrpc_req_finished(request);
+                RETURN(rc);
+        }
         case IOC_MDC_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct ll_fid fid;

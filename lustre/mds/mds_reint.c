@@ -404,7 +404,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         cleanup_phase = 1;
         inode = de->d_inode;
         LASSERT(inode);
-        if (S_ISREG(inode->i_mode) && rec->ur_eadata != NULL)
+        if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) && 
+            rec->ur_eadata != NULL)
                 down(&inode->i_sem);
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb);
@@ -427,9 +428,21 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         else                                            /* setattr */
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
 
-        if (rc == 0 && S_ISREG(inode->i_mode) && rec->ur_eadata != NULL) {
-                rc = fsfilt_set_md(obd, inode, handle,
-                                   rec->ur_eadata, rec->ur_eadatalen);
+        if (rc == 0 && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode))
+            && rec->ur_eadata != NULL) {
+                struct lov_stripe_md *lsm = NULL;
+
+                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
+                                   mds->mds_osc_exp, 0, &lsm, rec->ur_eadata);
+                if (rc)
+                        GOTO(cleanup, rc);
+                
+                obd_free_memmd(mds->mds_osc_exp, &lsm);
+
+                rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
+                                   rec->ur_eadatalen);
+                if (rc) 
+                        GOTO(cleanup, rc);
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
@@ -470,7 +483,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         err = mds_finish_transno(mds, inode, handle, req, rc, 0);
         switch (cleanup_phase) {
         case 1:
-                if (S_ISREG(inode->i_mode) && rec->ur_eadata != NULL)
+                if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) && 
+                    rec->ur_eadata != NULL)
                         up(&inode->i_sem);
                 l_dput(de);
                 if (locked) {
