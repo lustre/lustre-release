@@ -1,6 +1,6 @@
 diff -urN linux/fs/inode.c linux_n/fs/inode.c
---- linux/fs/inode.c	2003-06-18 21:39:14.000000000 +0530
-+++ linux_n/fs/inode.c	2003-06-18 21:39:53.000000000 +0530
+--- linux/fs/inode.c	Sat Jun 21 03:48:51 2003
++++ linux_n/fs/inode.c	Wed Jun 18 21:39:53 2003
 @@ -987,6 +987,24 @@
  }
  
@@ -27,8 +27,8 @@ diff -urN linux/fs/inode.c linux_n/fs/inode.c
  {
  	struct list_head * head = inode_hashtable + hash(sb,ino);
 diff -urN linux/fs/namei.c linux_n/fs/namei.c
---- linux/fs/namei.c	2003-06-18 21:39:13.000000000 +0530
-+++ linux_n/fs/namei.c	2003-06-18 21:39:41.000000000 +0530
+--- linux/fs/namei.c	Sat Jun 21 03:48:49 2003
++++ linux_n/fs/namei.c	Wed Jun 18 21:39:41 2003
 @@ -918,8 +918,7 @@
  }
  
@@ -59,8 +59,8 @@ diff -urN linux/fs/namei.c linux_n/fs/namei.c
   *	namei()
   *
 diff -urN linux/fs/nfsd/export.c linux_n/fs/nfsd/export.c
---- linux/fs/nfsd/export.c	2003-01-21 04:00:34.000000000 +0530
-+++ linux_n/fs/nfsd/export.c	2003-06-18 21:39:42.000000000 +0530
+--- linux/fs/nfsd/export.c	Tue Jan 21 04:00:34 2003
++++ linux_n/fs/nfsd/export.c	Wed Jun 18 21:39:42 2003
 @@ -289,6 +289,7 @@
  	 *       either using fh_to_dentry (prefered)
  	 *       or using read_inode (the hack).
@@ -79,8 +79,8 @@ diff -urN linux/fs/nfsd/export.c linux_n/fs/nfsd/export.c
  		dprintk("exp_export: export not valid (Rule 3).\n");
  		goto finish;
 diff -urN linux/fs/nfsd/nfsfh.c linux_n/fs/nfsd/nfsfh.c
---- linux/fs/nfsd/nfsfh.c	2003-01-21 04:00:34.000000000 +0530
-+++ linux_n/fs/nfsd/nfsfh.c	2003-06-18 21:39:42.000000000 +0530
+--- linux/fs/nfsd/nfsfh.c	Tue Jan 21 04:00:34 2003
++++ linux_n/fs/nfsd/nfsfh.c	Wed Jun 18 21:39:42 2003
 @@ -60,6 +60,11 @@
  	return result;
  }
@@ -128,8 +128,8 @@ diff -urN linux/fs/nfsd/nfsfh.c linux_n/fs/nfsd/nfsfh.c
  }
  
 diff -urN linux/fs/nfsd/nfsproc.c linux_n/fs/nfsd/nfsproc.c
---- linux/fs/nfsd/nfsproc.c	2003-01-21 04:00:34.000000000 +0530
-+++ linux_n/fs/nfsd/nfsproc.c	2003-06-18 21:39:30.000000000 +0530
+--- linux/fs/nfsd/nfsproc.c	Tue Jan 21 04:00:34 2003
++++ linux_n/fs/nfsd/nfsproc.c	Wed Jun 18 22:01:43 2003
 @@ -199,6 +199,7 @@
  	struct dentry	*dchild;
  	int		nfserr, type, mode;
@@ -148,8 +148,8 @@ diff -urN linux/fs/nfsd/nfsproc.c linux_n/fs/nfsd/nfsproc.c
  		nfserr = nfserrno(PTR_ERR(dchild));
  		goto out_unlock;
 diff -urN linux/fs/nfsd/vfs.c linux_n/fs/nfsd/vfs.c
---- linux/fs/nfsd/vfs.c	2003-06-18 21:39:13.000000000 +0530
-+++ linux_n/fs/nfsd/vfs.c	2003-06-18 21:41:40.000000000 +0530
+--- linux/fs/nfsd/vfs.c	Sat Jun 21 03:48:49 2003
++++ linux_n/fs/nfsd/vfs.c	Sat Jun 21 02:51:26 2003
 @@ -77,6 +77,75 @@
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
@@ -454,29 +454,37 @@ diff -urN linux/fs/nfsd/vfs.c linux_n/fs/nfsd/vfs.c
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
-@@ -1366,9 +1492,17 @@
+@@ -1366,9 +1492,25 @@
  			err = nfserr_perm;
  		} else
  #endif
 -		err = vfs_unlink(dirp, rdentry);
 +		{
-+        if (dirp->i_op->unlink2)
++        if (dirp->i_op->unlink2) {
 +	        err = unlink2(dirp, fname, flen);
++		if(!err)
++			d_delete(rdentry);
++	}
 +        if( err == -EOPNOTSUPP || !dirp->i_op->unlink2)
-+    	    err = vfs_unlink(dirp, rdentry);
++    		err = vfs_unlink(dirp, rdentry);
 +        }
  	} else { /* It's RMDIR */
 -		err = vfs_rmdir(dirp, rdentry);
-+		if (dirp->i_op->rmdir2)
-+    	    err = rmdir2(dirp, fname, flen);
++		if (dirp->i_op->rmdir2) {
++	    		err = rmdir2(dirp, fname, flen);
++			if(!err) {
++				rdentry->d_inode->i_flags |= S_DEAD;
++	                        d_delete(rdentry);
++			}
++		}
 +		if( err == -EOPNOTSUPP || !dirp->i_op->rmdir2)	
 +			err = vfs_rmdir(dirp, rdentry);
  	}
  
  	dput(rdentry);
 diff -urN linux/include/linux/fs.h linux_n/include/linux/fs.h
---- linux/include/linux/fs.h	2003-06-18 21:39:14.000000000 +0530
-+++ linux_n/include/linux/fs.h	2003-06-18 21:39:53.000000000 +0530
+--- linux/include/linux/fs.h	Sat Jun 21 03:48:50 2003
++++ linux_n/include/linux/fs.h	Wed Jun 18 21:39:53 2003
 @@ -1407,6 +1407,7 @@
  extern void path_release(struct nameidata *);
  extern int follow_down(struct vfsmount **, struct dentry **);
@@ -494,8 +502,8 @@ diff -urN linux/include/linux/fs.h linux_n/include/linux/fs.h
  static inline struct inode *iget(struct super_block *sb, unsigned long ino)
  {
 diff -urN linux/kernel/ksyms.c linux_n/kernel/ksyms.c
---- linux/kernel/ksyms.c	2003-06-18 21:39:13.000000000 +0530
-+++ linux_n/kernel/ksyms.c	2003-06-18 21:39:53.000000000 +0530
+--- linux/kernel/ksyms.c	Sat Jun 21 03:48:49 2003
++++ linux_n/kernel/ksyms.c	Wed Jun 18 21:39:53 2003
 @@ -154,6 +154,7 @@
  EXPORT_SYMBOL(fget);
  EXPORT_SYMBOL(igrab);
