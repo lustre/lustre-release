@@ -535,3 +535,69 @@ int jt_lcfg_set_lustre_upcall(int argc, char **argv)
         return rc;
 }
 
+int jt_lcfg_add_conn(int argc, char **argv)
+{
+        struct lustre_cfg lcfg;
+        int priority;
+        int rc;
+
+        if (argc == 2)
+                priority = 0;
+        else if (argc == 3)
+                priority = 1;
+        else
+                return CMD_HELP;
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
+
+        LCFG_INIT(lcfg, LCFG_ADD_CONN, lcfg_devname);
+
+        /* connection uuid */
+        lcfg.lcfg_inllen1 = strlen(argv[1]) + 1;
+        lcfg.lcfg_inlbuf1 = argv[1];
+        lcfg.lcfg_inllen2 = sizeof(int);
+        lcfg.lcfg_inlbuf2 = (char*) &priority;
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}
+
+int jt_lcfg_del_conn(int argc, char **argv)
+{
+        struct lustre_cfg lcfg;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
+
+        LCFG_INIT(lcfg, LCFG_DEL_CONN, lcfg_devname);
+
+        /* connection uuid */
+        lcfg.lcfg_inllen1 = strlen(argv[1]) + 1;
+        lcfg.lcfg_inlbuf1 = argv[1];
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}
