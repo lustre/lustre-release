@@ -83,6 +83,43 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         RETURN(rc);
 }
 
+static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
+                          struct lookup_intent *it)
+{
+        struct inode *inode = dentry->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct ptlrpc_request *request;
+        int op = 0, mode = 0, rc;
+        char *symname;
+        ENTRY;
+
+        if (it != NULL) {
+                op = it->it_op;
+                mode = it->it_mode;
+
+                ll_intent_release(dentry, it);
+        }
+
+        down(&lli->lli_open_sem);
+
+        rc = ll_readlink_internal(inode, &request, &symname);
+        if (rc)
+                GOTO(out, rc);
+
+        if (it != NULL) {
+                it->it_op = op;
+                it->it_mode = mode;
+        }
+
+        rc = vfs_follow_link_it(nd, symname, it);
+ out:
+        up(&lli->lli_open_sem);
+        ptlrpc_req_finished(request);
+
+        RETURN(rc);
+}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
@@ -113,6 +150,7 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 
         RETURN(rc);
 }
+#endif
 
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 struct inode_operations ll_fast_symlink_inode_operations = {
