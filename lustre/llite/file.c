@@ -135,6 +135,11 @@ int ll_size_lock(struct inode *inode, struct lov_stripe_md *md, __u64 start,
         struct lustre_handle *lockhs = NULL;
         int rc, flags = 0;
 
+        if (sbi->ll_flags & LL_SBI_NOLCK) {
+                *lockhs_p = NULL;
+                RETURN(0);
+        }
+
         OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
         if (lockhs == NULL)
                 RETURN(-ENOMEM);
@@ -158,6 +163,14 @@ int ll_size_unlock(struct inode *inode, struct lov_stripe_md *md, int mode,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc;
+
+        if (sbi->ll_flags & LL_SBI_NOLCK)
+                RETURN(0);
+
+        if (lockhs == NULL) {
+                LBUG();
+                RETURN(-EINVAL);
+        }
 
         rc = obd_cancel(&sbi->ll_osc_conn, md, mode, lockhs);
         if (rc != ELDLM_OK) {
@@ -354,7 +367,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         ENTRY;
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
+            sbi->ll_flags & LL_SBI_NOLCK) {
                 OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
                         RETURN(-ENOMEM);
@@ -382,7 +396,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (retval > 0)
                 ll_update_atime(inode);
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
+            sbi->ll_flags & LL_SBI_NOLCK) {
                 err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PR, lockhs);
                 if (err != ELDLM_OK) {
                         CERROR("lock cancel: err: %d\n", err);
@@ -430,7 +445,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 obdo_to_inode(inode, &oa, oa.o_valid);
         }
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
+            sbi->ll_flags & LL_SBI_NOLCK) {
                 OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
                         GOTO(out_eof, retval = -ENOMEM);
@@ -454,7 +470,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         retval = generic_file_write(file, buf, count, ppos);
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
+            sbi->ll_flags & LL_SBI_NOLCK) {
                 err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PW, lockhs);
                 if (err != ELDLM_OK) {
                         CERROR("lock cancel: err: %d\n", err);
