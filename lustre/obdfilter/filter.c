@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  *  linux/fs/ext2_obd/ext2_obd.c
  *
  * Copyright (C) 2001  Cluster File Systems, Inc.
@@ -43,53 +45,6 @@ static char * obd_type_by_mode[S_IFMT >> S_SHIFT] = {
         [S_IFLNK >> S_SHIFT]    "L"
 };
 
-
-
-/* push / pop to root of obd store */
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
-{ 
-        save->fs = get_fs();
-        save->pwd = dget(current->fs->pwd);
-        save->pwdmnt = mntget(current->fs->pwdmnt);
-
-        set_fs(new->fs);
-        set_fs_pwd(current->fs, new->pwdmnt, new->pwd);
-}
-
-void pop_ctxt(struct obd_run_ctxt *saved)
-{
-        set_fs(saved->fs);
-        set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
-
-        dput(saved->pwd);
-        mntput(saved->pwdmnt);
-}
-
-/* utility to make a directory */
-static int simple_mkdir(struct dentry *dir, char *name, int mode)
-{
-        struct dentry *dchild; 
-        int err;
-        ENTRY;
-        
-        dchild = lookup_one_len(name, dir, strlen(name));
-        if (IS_ERR(dchild)) { 
-                EXIT;
-                return PTR_ERR(dchild); 
-        }
-
-        if (dchild->d_inode) { 
-                dput(dchild);
-                EXIT;
-                return -EEXIST;
-        }
-
-        err = vfs_mkdir(dir->d_inode, dchild, mode);
-        dput(dchild);
-        
-        EXIT;
-        return err;
-}
 
 /* write the pathname into the string */
 static void filter_id(char *buf, obd_id id, obd_mode mode)
