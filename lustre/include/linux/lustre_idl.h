@@ -234,7 +234,7 @@ struct obd_statfs {
         __u64           os_bavail;
         __u64           os_files;
         __u64           os_ffree;
-        __u8            os_fsid[37];
+        __u8            os_fsid[40];
         __u32           os_bsize;
         __u32           os_namelen;
         __u32           os_spare[12];
@@ -444,7 +444,7 @@ struct ldlm_intent {
 struct ldlm_resource_desc {
         __u32 lr_type;
         __u64 lr_name[RES_NAME_SIZE];
-        __u64 lr_version[RES_VERSION_SIZE];
+        __u32 lr_version[RES_VERSION_SIZE];
 };
 
 struct ldlm_lock_desc {
@@ -464,7 +464,7 @@ struct ldlm_request {
 
 struct ldlm_reply {
         __u32 lock_flags;
-        __u64 lock_resource_name[3];
+        __u64 lock_resource_name[RES_NAME_SIZE];
         struct lustre_handle lock_handle;
         struct ldlm_extent lock_extent;   /* XXX make this policy 1 &2 */
         __u64  lock_policy_res1;
