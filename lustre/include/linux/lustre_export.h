@@ -34,6 +34,9 @@ struct obd_export {
         struct ptlrpc_connection *exp_connection;
         struct ldlm_export_data   exp_ldlm_data;
         struct ptlrpc_request    *exp_outstanding_reply;
+        time_t                    exp_last_request_time;
+        spinlock_t                exp_lock; /* protects flags int below */
+        int                       exp_failed:1;
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;

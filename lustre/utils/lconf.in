@@ -1844,7 +1844,7 @@ lconf_options = [
     ('dump',  "Dump the kernel debug log to file before portals is unloaded",
                Lustre.Options.PARAM),
     ('minlevel', "Specify the minimum level of services to configure/cleanup",
-                 Lustre.Options.PARAM, 0),
+                 Lustre.Options.INTPARAM, 0),
     ('maxlevel', """Specify the maximum level of services to configure/cleanup 
                     Levels are aproximatly like:
                             10 - network
@@ -1852,7 +1852,7 @@ lconf_options = [
                             30 - osd, mdd
                             40 - mds, ost
                             70 - mountpoint, echo_client, osc, mdc, lov""",
-               Lustre.Options.PARAM, 100),
+               Lustre.Options.INTPARAM, 100),
     ('lustre', """Base directory of lustre sources. This parameter will
                   cause lconf to load modules from a source tree.""",
                Lustre.Options.PARAM),
