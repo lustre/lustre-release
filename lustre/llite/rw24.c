@@ -84,7 +84,7 @@ static int ll_writepage_24(struct page *page)
         struct inode *inode = page->mapping->host;
         struct obd_export *exp;
         struct ll_async_page *llap;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(!PageDirty(page));
@@ -92,11 +92,11 @@ static int ll_writepage_24(struct page *page)
 
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
   
         llap = llap_from_page(page);
         if (IS_ERR(llap))
-                RETURN(PTR_ERR(llap));
+                GOTO(out, rc = PTR_ERR(llap));
 
         page_cache_get(page);
         if (llap->llap_queued) {
@@ -116,6 +116,9 @@ static int ll_writepage_24(struct page *page)
         }
         if (rc)
                 page_cache_release(page);
+out:
+        if (rc)
+                unlock_page(page);
         RETURN(rc);
 }
 
