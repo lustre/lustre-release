@@ -269,22 +269,3 @@ int gmnal_cb_dist(nal_cb_t *nal_cb, ptl_nid_t nid, unsigned long *dist)
 		*dist = 27;
 	return(PTL_OK);
 }
-
-
-
-
-EXPORT_SYMBOL(gmnal_cb_send);
-EXPORT_SYMBOL(gmnal_cb_send_pages);
-EXPORT_SYMBOL(gmnal_cb_recv);
-EXPORT_SYMBOL(gmnal_cb_recv_pages);
-EXPORT_SYMBOL(gmnal_cb_read);
-EXPORT_SYMBOL(gmnal_cb_write);
-EXPORT_SYMBOL(gmnal_cb_cli);
-EXPORT_SYMBOL(gmnal_cb_sti);
-EXPORT_SYMBOL(gmnal_cb_dist);
-EXPORT_SYMBOL(gmnal_cb_printf);
-EXPORT_SYMBOL(gmnal_cb_map);
-EXPORT_SYMBOL(gmnal_cb_unmap);
-EXPORT_SYMBOL(gmnal_cb_callback);
-EXPORT_SYMBOL(gmnal_cb_free);
-EXPORT_SYMBOL(gmnal_cb_malloc);

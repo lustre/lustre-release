@@ -1317,16 +1317,3 @@ gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 
 	return;
 }
-
-
-
-
-EXPORT_SYMBOL(gmnal_rx_thread);
-EXPORT_SYMBOL(gmnal_ct_thread);
-EXPORT_SYMBOL(gmnal_pre_receive);
-EXPORT_SYMBOL(gmnal_rx_requeue_buffer);
-EXPORT_SYMBOL(gmnal_rx_bad);
-EXPORT_SYMBOL(gmnal_small_rx);
-EXPORT_SYMBOL(gmnal_large_tx);
-EXPORT_SYMBOL(gmnal_large_tx_callback);
-EXPORT_SYMBOL(gmnal_small_tx_callback);

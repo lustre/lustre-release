@@ -1071,19 +1071,3 @@ gmnal_start_kernel_threads(gmnal_data_t *nal_data)
 
 	return(GMNAL_STATUS_OK);
 }
-
-EXPORT_SYMBOL(gmnal_yield);
-EXPORT_SYMBOL(gmnal_alloc_srxd);
-EXPORT_SYMBOL(gmnal_get_srxd);
-EXPORT_SYMBOL(gmnal_return_srxd);
-EXPORT_SYMBOL(gmnal_free_srxd);
-EXPORT_SYMBOL(gmnal_alloc_txd);
-EXPORT_SYMBOL(gmnal_get_stxd);
-EXPORT_SYMBOL(gmnal_return_stxd);
-EXPORT_SYMBOL(gmnal_free_txd);
-EXPORT_SYMBOL(gmnal_rxbuffer_to_srxd);
-EXPORT_SYMBOL(gmnal_rxevent);
-EXPORT_SYMBOL(gmnal_gm_error);
-EXPORT_SYMBOL(gmnal_stop_ctthread);
-EXPORT_SYMBOL(gmnal_add_rxtwe);
-EXPORT_SYMBOL(gmnal_get_rxtwe);

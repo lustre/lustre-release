@@ -463,12 +463,3 @@ void gmnal_fini()
 	PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
 	PORTAL_FREE(nal_cb, sizeof(nal_cb_t));
 }
-
-EXPORT_SYMBOL(gmnal_init);
-EXPORT_SYMBOL(gmnal_fini);
-EXPORT_SYMBOL(gmnal_api_forward);
-EXPORT_SYMBOL(gmnal_api_validate);
-EXPORT_SYMBOL(gmnal_api_yield);
-EXPORT_SYMBOL(gmnal_api_lock);
-EXPORT_SYMBOL(gmnal_api_unlock);
-EXPORT_SYMBOL(gmnal_api_shutdown);
