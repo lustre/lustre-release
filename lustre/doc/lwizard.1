@@ -14,17 +14,27 @@ XML configuration file generated using lwizard will still have to be made access
 So, once invoked, lwizard asks a series of questions about the various pieces of the cluster : 
 .TP
 .B MDS hostname 
+If `hostname' has more than one network interfaces (not including lo) and you dicide to use as many interfaces as possible, you need to specify the interfaces' IP addresses separated by blank space. See below example for how to enter interfaces.
 .TP
 .B MDS device information 
 .TP
+.B MDS failover information 
+Failover is optional. if failover is enabled, failover hostname and device name are needed. The failover device MUST be the shared device of MDS device.
+.TP
 .B OST hostname 
-This will be asked for every new OST added 
+This will be asked for every new OST added.  You can also specify multiple network interfaces as mentioned above for MDS hostname.
 .TP
 .B OST device information 
 This will be asked for every new OST added 
 .TP
+.B OST failover information 
+Failover is optional. if failover is enabled, failover hostname and device name are needed. The failover device MUST be the shared device of OST device.
+.TP
 .B Lustre mount-point 
-This is the Lustre mount-point on the client (default - /mnt/lustre) 
+This is the Lustre mount-point on the client (default - /mnt/lustre).
+.TP
+.B Lustre client 
+By default, Lustre can be mounted on any node. However, by default, Lustre will use only one network interface to communicate with servers.  If you want to mount Lustre filesystem on a multi-host node and use many netowork interfaces to communicate, you need to configure it specifically. This will tell Lustre client which interfaces it can use to communicate with servers. See example below for details.
 
 The wizard saves the XML file to the filename specified using the -o or --file option or the default file config.xml. It will also save the lmc commands used to create the XML file in a script config.sh or <specified-file-name>.sh. 
 
@@ -49,36 +59,55 @@ This script will help you create a Lustre configuration file.
 .br
 Creating mds "mds1"...
 .br 
-Please enter the hostname(s) for mds1: meghna 
+Please enter the HOSTNAME for mds1: meghna 
 .br
-Please enter the device name or loop file name for meghna: /tmp/mds1 
+If meghna has more than one network INTERFACE, enter here, separating them
+by blank space. See lwizard man page for help.
 .br
-Please enter the device size or 0 to use entire device:5000 
+(hit enter if only one): 192.168.1.29/24 10.0.0.29/24
+.br
+Please enter the device name or loop file name for meghna: /dev/sda1 
+.br
+Please enter the device SIZE or 0 to use entire device (in KB): 
+.br
+Do you want to configure FAILOVER mds1? y
+.br
+Please enter the HOSTNAME for failover mds1: lester2
+.br
+Please enter the device for failover mds1 on lester2: /dev/sdb2
 .br
 Creating ost "ost1"... 
 .br
-Please enter the hostname(s) for ost1: meghna 
+Please enter the HOSTNAME for ost1: meghna 
+.br
+If meghna has more than one network INTERFACE, enter here, separating them
+by blank space. See lwizard man page for help.
+.br
+(hit enter if only one):
 .br
 Please enter the device name or loop file name for meghna: /tmp/ost1 
 .br
-Please enter the device size or 0 to use entire device:10000 
+Please enter the device SIZE or 0 to use entire device (in KB): 10000 
+.br
+Do you want to configure FAILOVER ost1?
 .br
 Creating ost "ost2"... 
 .br
-Please enter the hostname(s) for ost2: 
+Please enter the HOSTNAME for ost2, or just hit enter to finish: 
 .br
 Please enter the clients' mountpoint (/mnt/lustre): 
 .br
-Creating mds "mds2"... 
+Do you want to configure another client with multiple network interfaces? y
 .br
-Please enter the hostname(s) for mds2: 
+Please enter the HOSTNAME: client2
 .br
- mds1 lov1 ost1 client 
+Please enter network interface address (separated by space): 192.168.1.30/24 10.0.0.30/24
 .br
-Saving configuration to config.xml: 
+Do you want to configure another client with multiple network interfaces?
 .br
-Your configuration has been saved to config.xml. 
+ mds1 lov1 ost1 client client 
 .br
-Your config command has been save to config.sh. 
+The Lustre configuration has been written to lwizard.xml.
+.br
 .SH BUGS
 None are known.
