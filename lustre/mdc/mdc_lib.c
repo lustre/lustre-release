@@ -154,6 +154,9 @@ void mdc_setattr_pack(struct ptlrpc_request *req,
                 else if ((iattr->ia_valid & ATTR_MODE) &&
                          in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = data->ctxt.gid1;
+                else if ((iattr->ia_valid & (ATTR_MTIME|ATTR_CTIME)) &&
+                         data->ctxt.gid1 != -1)
+                        rec->sa_suppgid = data->ctxt.gid1;
         }
 
         if (ealen == 0)

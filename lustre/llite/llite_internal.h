@@ -153,7 +153,14 @@ int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 void ll_read_inode2(struct inode *inode, void *opaque);
 void ll_umount_begin(struct super_block *sb);
-
+int ll_prep_inode(struct obd_export *exp, struct inode **inode,
+                  struct ptlrpc_request *req, int offset,
+                  struct super_block *sb);
+__u32 get_uuid2int(const char *name, int len);
+struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
+                               int fhtype, int parent);
+int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
+                    int need_parent);
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
 
