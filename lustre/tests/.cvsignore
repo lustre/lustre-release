@@ -47,3 +47,4 @@ o_directory
 mkdirdeep
 utime
 small_write
+multiop
