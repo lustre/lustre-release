@@ -322,54 +322,28 @@ int lprocfs_obd_detach(struct obd_device *dev)
 
 struct lprocfs_counters* lprocfs_alloc_counters(unsigned int num)
 {
-        struct lprocfs_counters* cntrs;
-        int csize;
-        if (num == 0)
-                return NULL;
-
-        csize = offsetof(struct lprocfs_counters, cntr[num]);
-        OBD_ALLOC(cntrs, csize);
-        if (cntrs != NULL) {
-                cntrs->num = num;
-        }
-        return cntrs;
+        LPROCFS_COUNTERS_ALLOC(num);
 }
 
 void lprocfs_free_counters(struct lprocfs_counters* cntrs)
 {
-        if (cntrs != NULL) {
-                int csize = offsetof(struct lprocfs_counters, cntr[cntrs->num]);                OBD_FREE(cntrs, csize);
-        }
+        LPROCFS_COUNTERS_FREE(cntrs);
 }
 
 /* Reset counter under lock */
 int lprocfs_counter_write(struct file *file, const char *buffer,
                           unsigned long count, void *data)
 {
-        struct lprocfs_counters *cntrs = (struct lprocfs_counters*) data;
-        unsigned int i;
-        LASSERT(cntrs != NULL);
-
-        for (i = 0; i < cntrs->num; i++) {
-                struct lprocfs_counter *cntr = &(cntrs->cntr[i]);
-                spinlock_t *lock = (cntr->config & LPROCFS_CNTR_EXTERNALLOCK) ?
-                        cntr->l.external : &cntr->l.internal;
-
-                spin_lock(lock);
-                cntr->count     = 0;
-                cntr->sum       = 0;
-                cntr->min       = (~(__u64)0);
-                cntr->max       = 0;
-                cntr->sumsquare = 0;
-                spin_unlock(lock);
-        }
+        /* not supported */
         return 0;
 }
 
 static void *lprocfs_counters_seq_start(struct seq_file *p, loff_t *pos)
 {
         struct lprocfs_counters *cntrs = p->private;
-        return (*pos >= cntrs->num) ? NULL : (void*) &cntrs->cntr[*pos];
+        /* return 1st cpu location */
+        return (*pos >= cntrs->num) ? 
+                NULL : (void*) &(cntrs->cpu[0]->cntr[*pos]);
 }
 
 static void lprocfs_counters_seq_stop(struct seq_file *p, void *v)
@@ -381,19 +355,19 @@ static void *lprocfs_counters_seq_next(struct seq_file *p, void *v,
 {
         struct lprocfs_counters *cntrs = p->private;
         ++*pos;
-        return (*pos >= cntrs->num) ? NULL : (void*) &(cntrs->cntr[*pos]);
+        return (*pos >= cntrs->num) ? 
+                NULL : (void*) &(cntrs->cpu[0]->cntr[*pos]);
 }
 
 /* seq file export of one lprocfs counter */
 static int lprocfs_counters_seq_show(struct seq_file *p, void *v)
 {
        struct lprocfs_counters *cntrs = p->private;
-       struct lprocfs_counter  *cntr = v;
-       spinlock_t              *lock;
-       struct lprocfs_counter  c;
-       int rc = 0;
+       struct lprocfs_counter  *tp, *cntr = v;
+       struct lprocfs_counter  t, c;
+       int i, rc = 0;
 
-       if (cntr == &(cntrs->cntr[0])) {
+       if (cntr == &(cntrs->cpu[0])->cntr[0]) {
                struct timeval now;
                do_gettimeofday(&now);
                rc = seq_printf(p, "%-25s %lu.%lu secs.usecs\n",
@@ -401,19 +375,27 @@ static int lprocfs_counters_seq_show(struct seq_file *p, void *v)
                if (rc < 0)
                        return rc;
        }
-
-       /* Take a snapshot of the counter under lock */
-       lock = (cntr->config & LPROCFS_CNTR_EXTERNALLOCK) ?
-               cntr->l.external : &cntr->l.internal;
-       spin_lock(lock);
-
-       c.count = cntr->count;
-       c.sum = cntr->sum;
-       c.min = cntr->min;
-       c.max = cntr->max;
-       c.sumsquare = cntr->sumsquare;
-
-       spin_unlock(lock);
+       tp = cntr;
+       memset (&c, 0, sizeof (struct lprocfs_counter));
+       for (i=0; i<smp_num_cpus; i++) {
+               int centry, cexit;
+               do {
+                        centry = atomic_read(&tp->cntl.entry);
+                        t.count = tp->count;
+                        t.sum = tp->sum;
+                        t.min = tp->min;
+                        t.max = tp->max;
+                        t.sumsquare = tp->sumsquare;
+               } while (centry != atomic_read(&tp->cntl.entry) &&
+                        centry != atomic_read(&tp->cntl.exit));
+               c.count += t.count;
+               c.sum += t.sum;
+               c.min += t.min;
+               c.max += t.max;
+               c.sumsquare += t.sumsquare;
+               tp = (struct lprocfs_counter *)
+                      ((void *) tp + cntrs->cntr_size);
+       }
 
        rc = seq_printf(p, "%-25s "LPU64" samples [%s]", cntr->name, c.count,
                        cntr->units);
@@ -481,7 +463,7 @@ int lprocfs_register_counters(struct proc_dir_entry *root, const char* name,
 do {                                                                       \
         unsigned int coffset = base + OBD_COUNTER_OFFSET(op);              \
         LASSERT(coffset < cntrs->num);                                     \
-        LPROCFS_COUNTER_INIT(&cntrs->cntr[coffset], 0, NULL, #op, "reqs"); \
+        LPROCFS_COUNTER_INIT(cntrs, coffset, 0, #op, "reqs");              \
 } while (0)
 
 
@@ -543,9 +525,9 @@ int lprocfs_alloc_obd_counters(struct obd_device *obddev,
                  * <linux/obd.h>, and that the corresponding line item
                  * LPROCFS_OBD_OP_INIT(.., .., opname)
                  * is missing from the list above. */
-                LASSERT(obdops_cntrs->cntr[i].name != NULL);
+                LASSERT(&(obdops_cntrs->cpu[0])->cntr[i].name != NULL);
         }
-        rc = lprocfs_register_counters(obddev->obd_proc_entry, "obd_stats",
+        rc = lprocfs_register_counters(obddev->obd_proc_entry, "stats",
                                        obdops_cntrs);
         if (rc < 0) {
                 lprocfs_free_counters(obdops_cntrs);
@@ -568,6 +550,7 @@ void lprocfs_free_obd_counters(struct obd_device *obddev)
 #endif /* LPROCFS*/
 
 EXPORT_SYMBOL(lprocfs_register);
+EXPORT_SYMBOL(lprocfs_srch);
 EXPORT_SYMBOL(lprocfs_remove);
 EXPORT_SYMBOL(lprocfs_add_vars);
 EXPORT_SYMBOL(lprocfs_obd_attach);
