@@ -4,7 +4,7 @@ export PATH=$PATH:/sbin:/usr/sbin
 [ -d /r ] && R=/r
 
 PORTALS=$SRCDIR../../portals
-LUSTRE=$SRCDIR../../lustre
+LUSTRE=$SRCDIR..
 
 PTLCTL=$PORTALS/linux/utils/ptlctl
 DBGCTL=$PORTALS/linux/utils/debugctl
@@ -28,7 +28,7 @@ do_insmod() {
 	[ "$MODULE" ] || fail "usage: $0 <module>"
 	[ -f $MODULE ] || echo "$0: module '$MODULE' not found" 1>&2
 	lsmod | grep -q "\<$BASE\>" && return 0
-	insmod $MODULE
+	insmod  $MODULE
 }
 
 # Return the next unused loop device on stdout and in the $LOOPDEV
