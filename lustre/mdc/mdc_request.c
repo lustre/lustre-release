@@ -1,5 +1,3 @@
-
-
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
@@ -211,9 +209,11 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         ll_invalidate_inode_pages(inode);
                 }
 
-                LASSERT(igrab(inode) == inode);
-                d_delete_aliases(inode);
-                iput(inode);
+                if ( inode != inode->i_sb->s_root->d_inode ) { 
+                        LASSERT(igrab(inode) == inode);
+                        d_delete_aliases(inode);
+                        iput(inode);
+                }
                 break;
         }
         default:
