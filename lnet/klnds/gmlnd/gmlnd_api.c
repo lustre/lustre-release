@@ -65,9 +65,11 @@ gmnal_api_shutdown(nal_t *nal)
 	gmnal_data_t	*nal_data;
 	lib_nal_t	*libnal;
 
-        if (nal->nal_refct != 0)
+        if (nal->nal_refct != 0) {
+                /* This module got the first ref */
+                PORTAL_MODULE_UNUSE;
                 return;
-        
+        }
 
         LASSERT(nal == global_nal_data->nal);
         libnal = (lib_nal_t *)nal->nal_data;
@@ -95,11 +97,10 @@ gmnal_api_shutdown(nal_t *nal)
         if (nal_data->sysctl)
                 unregister_sysctl_table (nal_data->sysctl);
         /* Don't free 'nal'; it's a static struct */
-	PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
+	PORTAL_FREE(nal_data, sizeof(gmnal_data_t));
 	PORTAL_FREE(libnal, sizeof(lib_nal_t));
 
         global_nal_data = NULL;
-        PORTAL_MODULE_UNUSE;
 }
 
 
@@ -121,6 +122,7 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
                         libnal = (lib_nal_t *)nal->nal_data;
                         *actual_limits = libnal->libnal_ni.ni_actual_limits;
                 }
+                PORTAL_MODULE_USE;
                 return (PTL_OK);
         }
 
@@ -163,7 +165,7 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 
 
 	/*
- 	 *	initialise the interface, 
+	 *	initialise the interface,
 	 */
 	CDEBUG(D_INFO, "Calling gm_init\n");
 	if (gm_init() != GM_SUCCESS) {
@@ -175,11 +177,11 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 
 
 	CDEBUG(D_NET, "Calling gm_open with port [%d], "
-       	       "name [%s], version [%d]\n", GMNAL_GM_PORT_ID, 
+	       "name [%s], version [%d]\n", GMNAL_GM_PORT_ID,
 	       "gmnal", GM_API_VERSION);
 
 	GMNAL_GM_LOCK(nal_data);
-	gm_status = gm_open(&nal_data->gm_port, 0, GMNAL_GM_PORT_ID, "gmnal", 
+	gm_status = gm_open(&nal_data->gm_port, 0, GMNAL_GM_PORT_ID, "gmnal",
 			    GM_API_VERSION);
 	GMNAL_GM_UNLOCK(nal_data);
 
@@ -218,9 +220,8 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		return(PTL_FAIL);
 	}
 
-	
 	nal_data->small_msg_size = gmnal_small_msg_size;
-	nal_data->small_msg_gmsize = 
+	nal_data->small_msg_gmsize =
 			gm_min_size_for_length(gmnal_small_msg_size);
 
 	if (gmnal_alloc_srxd(nal_data) != GMNAL_STATUS_OK) {
@@ -373,13 +374,10 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
         nal_data->sysctl = NULL;
         nal_data->sysctl = register_sysctl_table (gmnalnal_top_sysctl_table, 0);
 
-	
 	CDEBUG(D_INFO, "gmnal_init finished\n");
-	global_nal_data = nal->nal_data;
 
-        /* no unload now until shutdown */
-        PORTAL_MODULE_USE;
-        
+	global_nal_data = libnal->libnal_data;
+
 	return(PTL_OK);
 }
 
@@ -408,7 +406,6 @@ int gmnal_init(void)
         return (rc);
 }
 
-                
 
 /*
  *	Called when module removed
@@ -417,8 +414,8 @@ void gmnal_fini()
 {
 	CDEBUG(D_TRACE, "gmnal_fini\n");
 
-        LASSERT(global_nal_data == NULL);
         PtlNIFini(kgmnal_ni);
 
         ptl_unregister_nal(GMNAL);
+        LASSERT(global_nal_data == NULL);
 }

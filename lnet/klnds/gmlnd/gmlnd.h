@@ -203,7 +203,7 @@ typedef struct _gmnal_rxtwe {
 typedef struct _gmnal_data_t {
 	int		refcnt;
 	spinlock_t	cb_lock;
-	spinlock_t 	stxd_lock;
+	spinlock_t	stxd_lock;
 	struct semaphore stxd_token;
 	gmnal_stxd_t	*stxd;
 	spinlock_t 	rxt_stxd_lock;
@@ -429,11 +429,11 @@ void		gmnal_remove_rxtwe(gmnal_data_t *);
 /*
  *	Small messages
  */
-ptl_err_t 	gmnal_small_rx(lib_nal_t *, void *, lib_msg_t *);
-ptl_err_t 	gmnal_small_tx(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *, 
-				int, ptl_nid_t, ptl_pid_t, 
+ptl_err_t	gmnal_small_rx(lib_nal_t *, void *, lib_msg_t *);
+ptl_err_t	gmnal_small_tx(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *,
+				int, ptl_nid_t, ptl_pid_t,
 				gmnal_stxd_t*, int);
-void 		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
+void		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 
 
 

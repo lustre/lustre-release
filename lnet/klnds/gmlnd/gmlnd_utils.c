@@ -964,11 +964,12 @@ gmnal_get_rxtwe(gmnal_data_t *nal_data)
 	CDEBUG(D_NET, "Getting entry to list\n");
 
 	do  {
-		while(down_interruptible(&nal_data->rxtwe_wait) != 0);
+		while(down_interruptible(&nal_data->rxtwe_wait) != 0)
+                        /* do nothing */;
 		if (nal_data->rxthread_stop_flag == GMNAL_THREAD_STOP) {
 			/*
 			 *	time to stop
-			 * 	TO DO some one free the work entries	
+			 *	TO DO some one free the work entries
 			 */
 			return(NULL);
 		}

@@ -115,7 +115,7 @@ int gmnal_rx_thread(void *arg)
 	gmnal_data_t		*nal_data;
 	void			*buffer;
 	gmnal_rxtwe_t		*we = NULL;
-	int 			rank;
+	int			rank;
 
 	if (!arg) {
 		CDEBUG(D_TRACE, "NO nal_data. Exiting\n");
@@ -125,7 +125,7 @@ int gmnal_rx_thread(void *arg)
 	nal_data = (gmnal_data_t*)arg;
 	CDEBUG(D_TRACE, "nal_data is [%p]\n", arg);
 
-	for (rank=0; rank<num_rx_threads; rank++) 
+	for (rank=0; rank<num_rx_threads; rank++)
 		if (nal_data->rxthread_pid[rank] == current->pid)
 			break;
 
@@ -342,7 +342,7 @@ gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie)
 	srxd = (gmnal_srxd_t*)private;
 
 	/*
- 	 *	let portals library know receive is complete
+	 *	let portals library know receive is complete
 	 */
 	CDEBUG(D_PORTALS, "calling lib_finalize\n");
 	lib_finalize(libnal, private, cookie, PTL_OK);
@@ -351,8 +351,8 @@ gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie)
 	 */
 	CDEBUG(D_NET, "calling gm_provide_receive_buffer\n");
 	GMNAL_GM_LOCK(nal_data);
-	gm_provide_receive_buffer_with_tag(nal_data->gm_port, srxd->buffer, 
-					   srxd->gmsize, GM_LOW_PRIORITY, 0);	
+	gm_provide_receive_buffer_with_tag(nal_data->gm_port, srxd->buffer,
+					   srxd->gmsize, GM_LOW_PRIORITY, 0);
 	GMNAL_GM_UNLOCK(nal_data);
 
 	return(PTL_OK);
@@ -366,8 +366,8 @@ gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie)
  *	The callback function informs when the send is complete.
  */
 ptl_err_t
-gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
-		ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid, 
+gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
+		ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid,
 		gmnal_stxd_t *stxd, int size)
 {
 	gmnal_data_t	*nal_data = (gmnal_data_t*)libnal->libnal_data;
@@ -379,7 +379,7 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 
 	CDEBUG(D_TRACE, "gmnal_small_tx libnal [%p] private [%p] cookie [%p] "
 	       "hdr [%p] type [%d] global_nid ["LPU64"] pid [%d] stxd [%p] "
-	       "size [%d]\n", libnal, private, cookie, hdr, type, 
+	       "size [%d]\n", libnal, private, cookie, hdr, type,
 	       global_nid, pid, stxd, size);
 
 	CDEBUG(D_INFO, "portals_hdr:: dest_nid ["LPU64"], src_nid ["LPU64"]\n",
@@ -473,24 +473,24 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 	if (status != GM_SUCCESS) {
 		GMNAL_GM_LOCK(nal_data);
 		gm_status = gm_node_id_to_global_id(nal_data->gm_port,
-						    stxd->gm_target_node, &gnid);
+						    stxd->gm_target_node,&gnid);
 		GMNAL_GM_UNLOCK(nal_data);
 		if (gm_status != GM_SUCCESS) {
 			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n",
 			       gm_status);
 			gnid = 0;
 		}
-		CDEBUG(D_ERROR, "Result of send stxd [%p] is [%s] to [%u]\n", 
+		CDEBUG(D_ERROR, "Result of send stxd [%p] is [%s] to [%u]\n",
 		       stxd, gmnal_gm_error(status), gnid);
 	}
 
 	switch(status) {
-  		case(GM_SUCCESS):
+		case(GM_SUCCESS):
 		break;
 
 
 
-  		case(GM_SEND_DROPPED):
+		case(GM_SEND_DROPPED):
 		/*
 		 *	do a resend on the dropped ones
 		 */
@@ -1033,15 +1033,15 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 				 */
 				sbuf_long = (unsigned long) sbuf;
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
-				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
-				       rlen, GM_LOW_PRIORITY, source_node, 
-				       GMNAL_GM_PORT_ID, 
+				gm_get(nal_data->gm_port, remote_ptr, rbuf,
+				       rlen, GM_LOW_PRIORITY, source_node,
+				       GMNAL_GM_PORT_ID,
 				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}
 			/*
 			 *	at the end of 1 iov element
-		 	 */
+			 */
 			sbuf+=rlen;
 			slen-=rlen;
 			riov++;
@@ -1057,9 +1057,9 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 				GMNAL_GM_LOCK(nal_data);
 				sbuf_long = (unsigned long) sbuf;
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
-				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
-				       slen, GM_LOW_PRIORITY, source_node, 
-				       GMNAL_GM_PORT_ID, 
+				gm_get(nal_data->gm_port, remote_ptr, rbuf,
+				       slen, GM_LOW_PRIORITY, source_node,
+				       GMNAL_GM_PORT_ID,
 				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}
@@ -1080,9 +1080,9 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 				GMNAL_GM_LOCK(nal_data);
 				sbuf_long = (unsigned long) sbuf;
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
-				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
-				       rlen, GM_LOW_PRIORITY, source_node, 
-				       GMNAL_GM_PORT_ID, 
+				gm_get(nal_data->gm_port, remote_ptr, rbuf,
+				       rlen, GM_LOW_PRIORITY, source_node,
+				       GMNAL_GM_PORT_ID,
 				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}

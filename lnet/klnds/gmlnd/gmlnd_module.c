@@ -22,7 +22,7 @@
 #include "gmnal.h"
 
 
-int gmnal_small_msg_size = 525312;
+int gmnal_small_msg_size = sizeof(gmnal_msghdr_t) + sizeof(ptl_hdr_t) + PTL_MTU;
 /*
  *      -1 indicates default value.
  *      This is 1 thread per cpu
@@ -32,7 +32,7 @@ int num_rx_threads = -1;
 int num_stxds = 5;
 int gm_port_id = 4;
 
-int 
+int
 gmnal_cmd(struct portals_cfg *pcfg, void *private)
 {
 	gmnal_data_t	*nal_data = NULL;
