@@ -165,6 +165,8 @@ int class_register_type(struct obd_ops *ops, char *nm)
         if (!type)
                 RETURN(-ENOMEM);
         INIT_LIST_HEAD(&type->typ_chain);
+        CDEBUG(D_INFO, "MOD_INC_USE for register_type: count = %d\n",
+               atomic_read(&(THIS_MODULE)->uc.usecount));
         MOD_INC_USE_COUNT;
         list_add(&type->typ_chain, &obd_types);
         memcpy(type->typ_ops, ops, sizeof(*type->typ_ops));
@@ -196,6 +198,8 @@ int class_unregister_type(char *nm)
         if (type->typ_ops != NULL)
                 OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
         OBD_FREE(type, sizeof(*type));
+        CDEBUG(D_INFO, "MOD_DEC_USE for register_type: count = %d\n",
+               atomic_read(&(THIS_MODULE)->uc.usecount) - 1);
         MOD_DEC_USE_COUNT;
         RETURN(0);
 } /* class_unregister_type */

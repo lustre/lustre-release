@@ -1511,6 +1511,7 @@ static void __exit mds_exit(void)
 {
         ldlm_unregister_intent();
         class_unregister_type(LUSTRE_MDS_NAME);
+        class_unregister_type(LUSTRE_MDT_NAME);
         if (kmem_cache_destroy(mds_file_cache))
                 CERROR("couldn't free MDS file cache\n");
 }
