@@ -1,7 +1,8 @@
 #!/bin/bash
 PATH=`dirname $0`:`dirname $0`/../utils:$PATH
+TMP=${TMP:-/tmp}
 insmod ../obdclass/llog_test.o || exit 1
-lctl modules > /r/tmp/ogdb-`hostname`
+lctl modules > $TMP/ogdb-`hostname`
 echo "NOW reload debugging syms.."
 
 RC=0
