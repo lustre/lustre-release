@@ -331,7 +331,6 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                 mark_inode_dirty(inode);
                 return 0;
         } else {
-                down(&inode->i_sem);
                 lock_kernel();
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 rc = ext3_xattr_set(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
@@ -343,7 +342,6 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                                            lmm_size, 0);
 #endif
                 unlock_kernel();
-                up(&inode->i_sem);
         }
 
         if (rc)

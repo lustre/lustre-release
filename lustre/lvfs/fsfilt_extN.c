@@ -325,12 +325,10 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
                 mark_inode_dirty(inode);
                 return 0;
         } else {
-                down(&inode->i_sem);
                 lock_kernel();
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
                 unlock_kernel();
-                up(&inode->i_sem);
         }
 
         if (rc)
