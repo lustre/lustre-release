@@ -1,0 +1,11 @@
+#!/bin/sh
+
+LUSTRE_MOUNT_POINT=${LUSTRE_MOUNT_POINT:-"/mnt/lustre"}
+LUSTRE_CONFIG_FILE=${LUSTRE_CONFIG_FILE:-"/tmp/DUMP_FILE"}
+LD_PRELOAD=${LD_PRELOAD:-"/usr/lib/liblustre.so"}
+
+export LUSTRE_MOUNT_POINT
+export LUSTRE_CONFIG_FILE
+export LD_PRELOAD
+
+exec $@
