@@ -22,8 +22,8 @@
  *
  */
 
-#ifndef _LUSTRE_LIB_H
-#define _LUSTRE_LIB_H
+#ifndef _CFS_LIB_H
+#define _CFS_LIB_H
 
 #include <asm/types.h>
 

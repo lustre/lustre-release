@@ -53,14 +53,13 @@
 
 
 int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2, 
-		 struct ost_req_hdr **hdr, struct ost_req **req, 
+		 struct ptlreq_hdr **hdr, struct ost_req **req, 
 		 int *len, char **buf)
 {
 	char *ptr;
-        struct ost_req_packed *preq;
 
 	*len = sizeof(**hdr) + size_round(buflen1) + size_round(buflen2) + 
-		sizeof(*preq); 
+		sizeof(**req); 
 
 	*buf = kmalloc(*len, GFP_KERNEL);
 	if (!*buf) {
@@ -69,71 +68,68 @@ int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2,
 	}
 
 	memset(*buf, 0, *len); 
-	*hdr = (struct ost_req_hdr *)(*buf);
-
-	preq = (struct ost_req_packed *)(*buf + sizeof(**hdr));
-	ptr = *buf + sizeof(**hdr) + sizeof(*preq);
+	*hdr = (struct ptlreq_hdr *)(*buf);
 	*req = (struct ost_req *)(*buf + sizeof(**hdr));
+
+	ptr = *buf + sizeof(**hdr) + sizeof(**req);
 
 	(*hdr)->type =  OST_TYPE_REQ;
 
 	(*req)->buflen1 = NTOH__u32(buflen1);
 	if (buf1) { 
-                preq->bufoffset1 = (__u32)(ptr - (char *)preq);
 		LOGL(buf1, buflen1, ptr); 
 	} 
 
 	(*req)->buflen2 = NTOH__u32(buflen2);
 	if (buf2) { 
-                preq->bufoffset2 = (__u32)(ptr - (char *)preq);
 		LOGL(buf2, buflen2, ptr);
 	}
 	return 0;
 }
 
 int ost_unpack_req(char *buf, int len, 
-		   struct ost_req_hdr **hdr, struct ost_req **req)
+		   struct ptlreq_hdr **hdr, struct ost_req **req)
 {
-        struct ost_req_packed *reqp;
-        __u32 off1, off2;
 
-	if (len < sizeof(**hdr) + sizeof(*reqp)) { 
+	if (len < sizeof(**hdr) + sizeof(**req)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-	*hdr = (struct ost_req_hdr *) (buf);
-	reqp = (struct ost_req_packed *) (buf + sizeof(**hdr));
+	*hdr = (struct ptlreq_hdr *) (buf);
 	*req = (struct ost_req *) (buf + sizeof(**hdr));
 
-	(*req)->buflen1 = NTOH__u32(reqp->buflen1); 
-	(*req)->buflen2 = NTOH__u32(reqp->buflen2); 
-        off1 = NTOH__u32(reqp->bufoffset1); 
-        off2 = NTOH__u32(reqp->bufoffset2); 
+	(*req)->buflen1 = NTOH__u32((*req)->buflen1); 
+	(*req)->buflen2 = NTOH__u32((*req)->buflen2); 
 
-	if (len < sizeof(**hdr) + sizeof(*reqp) + size_round(reqp->buflen1) + 
-	    size_round(reqp->buflen2) ) { 
+	if (len < sizeof(**hdr) + sizeof(**req) + 
+            size_round((*req)->buflen1) + size_round((*req)->buflen2) ) { 
 		EXIT;
 		return -EINVAL;
-	}
-
-	if ((*req)->buflen1) { 
-                (*req)->buf1 = (buf + sizeof(**hdr) + off1);
-	} else { 
-		(*req)->buf1 = 0;
-	}
-	if ((*req)->buflen2) { 
-		(*req)->buf2 = (buf + sizeof(**hdr) + off2);
-	} else { 
-		(*req)->buf2 = 0;
 	}
 
 	EXIT;
 	return 0;
 }
 
+
+void *ost_req_buf1(struct ost_req *req)
+{
+        if (!req->buflen1) 
+                return NULL;
+        return (void *)((char *)req + sizeof(*req));
+}
+
+void *ost_req_buf2(struct ost_req *req)
+{
+        if (!req->buflen2) 
+                return NULL;
+        return (void *)((char *)req + sizeof(*req) + 
+                        size_round(req->buflen1)); 
+}
+
 int ost_pack_rep(void *buf1, __u32 buflen1, void *buf2, __u32 buflen2,
-		 struct ost_rep_hdr **hdr, struct ost_rep **rep, 
+		 struct ptlrep_hdr **hdr, struct ost_rep **rep, 
 		 int *len, char **buf)
 {
 	char *ptr;
@@ -148,7 +144,7 @@ int ost_pack_rep(void *buf1, __u32 buflen1, void *buf2, __u32 buflen2,
 	}
 
 	memset(*buf, 0, *len); 
-	*hdr = (struct ost_rep_hdr *)(*buf);
+	*hdr = (struct ptlrep_hdr *)(*buf);
 	*rep = (struct ost_rep *)(*buf + sizeof(**hdr));
 	ptr = *buf + sizeof(**hdr) + sizeof(**rep);
 
@@ -166,42 +162,93 @@ int ost_pack_rep(void *buf1, __u32 buflen1, void *buf2, __u32 buflen2,
 
 
 int ost_unpack_rep(char *buf, int len, 
-		   struct ost_rep_hdr **hdr, struct ost_rep **rep)
+		   struct ptlrep_hdr **hdr, struct ost_rep **rep)
 {
-        struct ost_rep_packed *prep;
-        __u32 off1, off2;
-
 	if (len < sizeof(**hdr) + sizeof(**rep)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-	*hdr = (struct ost_rep_hdr *) (buf);
+	*hdr = (struct ptlrep_hdr *) (buf);
 	*rep = (struct ost_rep *) (buf + sizeof(**hdr));
-	prep = (struct ost_rep_packed *) (buf + sizeof(**hdr));
-	(*rep)->buflen1 = NTOH__u32(prep->buflen1); 
-	(*rep)->buflen2 = NTOH__u32(prep->buflen2); 
-        off1 = prep->bufoffset1;
-        off2 = prep->bufoffset2;
 
-	if (len < sizeof(**hdr) + sizeof(*prep) + size_round((*rep)->buflen1) + 
-	    size_round((*rep)->buflen2) ) { 
+	(*rep)->buflen1 = NTOH__u32((*rep)->buflen1); 
+	(*rep)->buflen2 = NTOH__u32((*rep)->buflen2); 
+
+	if (len < sizeof(**hdr) + sizeof(**rep) + 
+            size_round((*rep)->buflen1) + size_round((*rep)->buflen2) ) { 
 		EXIT;
 		return -EINVAL;
-	}
-
-	if ((*rep)->buflen1) { 
-                (*rep)->buf1 = (buf + sizeof(**hdr) + off1);
-	} else { 
-		(*rep)->buf1 = 0;
-	}
-	if ((*rep)->buflen2) { 
-		(*rep)->buf2 = (buf + sizeof(**hdr) + off2);
-	} else { 
-		(*rep)->buf2 = 0;
 	}
 
 	EXIT;
 	return 0;
 }
 
+void *ost_rep_buf1(struct ost_rep *rep)
+{
+        if (!rep->buflen1) 
+                return NULL;
+        return (void *)((char *)rep + sizeof(*rep));
+}
+
+void *ost_rep_buf2(struct ost_rep *rep)
+{
+        if (!rep->buflen2) 
+                return NULL;
+        return (void *)((char *)rep + sizeof(*rep) + 
+                        size_round(rep->buflen1)); 
+}
+
+void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt)
+{
+        struct obd_ioobj *ioo = *tmp;
+        char *c = *tmp;
+        
+        ioo->ioo_id = NTOH__u64(oa->o_id); 
+        ioo->ioo_gr = NTOH__u64(oa->o_gr); 
+        ioo->ioo_type = NTOH__u64(oa->o_mode); 
+        ioo->ioo_bufcnt = NTOH__u32(bufcnt); 
+        *tmp = c + sizeof(*ioo); 
+}
+
+void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
+{
+        char *c = *tmp;
+        struct obd_ioobj *ioo = *tmp;
+        *ioop = *tmp;
+        
+        ioo->ioo_id = NTOH__u64(ioo->ioo_id); 
+        ioo->ioo_gr = NTOH__u64(ioo->ioo_gr); 
+        ioo->ioo_type = NTOH__u64(ioo->ioo_type); 
+        ioo->ioo_bufcnt = NTOH__u32(ioo->ioo_bufcnt); 
+        *tmp = c + sizeof(*ioo); 
+}
+
+void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len, 
+                   __u32 flags)
+{
+        struct niobuf *ioo = *tmp;
+        char *c = *tmp;
+
+        ioo->addr = NTOH__u64((__u64)(unsigned long)addr); 
+        ioo->offset = NTOH__u64(offset); 
+        ioo->len = NTOH__u32(len); 
+        ioo->flags = NTOH__u32(flags); 
+        *tmp = c + sizeof(*ioo); 
+}
+
+void ost_unpack_niobuf(void **tmp, struct niobuf **nbp)
+{
+        char *c = *tmp;
+        struct niobuf *nb = *tmp;
+
+        *nbp = *tmp;
+
+        nb->addr = NTOH__u64((__u64)(unsigned long)nb->addr); 
+        nb->offset = NTOH__u64(nb->offset); 
+        nb->len = NTOH__u32(nb->len); 
+        nb->flags = NTOH__u32(nb->flags); 
+
+        *tmp = c + sizeof(*nb); 
+}

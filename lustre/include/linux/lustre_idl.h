@@ -53,7 +53,7 @@
 #define OST_DISCONNECT 8
 #define OST_GETATTR  1
 #define OST_SETATTR  2
-#define OST_BRW      3
+#define OST_PREPW    3
 #define OST_CREATE   4
 #define OST_DESTROY  5
 
@@ -62,14 +62,14 @@
 #define OST_TYPE_REP 2
 #define OST_TYPE_ERR 3
 
-struct ost_req_hdr { 
+struct ptlreq_hdr { 
 	__u32 opc;
 	__u64 seqno;
 	__u32 status;
 	__u32 type;
 };
 
-struct ost_rep_hdr { 
+struct ptlrep_hdr { 
 	__u32 opc;
 	__u64 seqno;
 	__u32 status;
@@ -144,46 +144,28 @@ struct obdo {
 
 #define OST_REQ_HAS_OA1  0x1
 
-struct ost_req_packed { 
+struct ost_req { 
 	__u32   connid;
 	__u32   cmd; 
-	struct obdo oa;
+	struct  obdo oa;
 	__u32   buflen1;
 	__u32   buflen2;
-	__u32   bufoffset1;
-	__u32   bufoffset2;
 };
 
-struct ost_rep_packed {
+struct ost_rep {
 	__u32   result;
 	__u32   connid;
-	struct obdo oa;
+	struct  obdo oa;
 	__u32   buflen1;
 	__u32   buflen2;
-	__u32   bufoffset1;
-	__u32   bufoffset2;
 };
 
-struct obd_buf { 
-        __u64 addr;       // address 
-        __u64 handle;     // DMA handle
-        __u64 matchbits;  // portals match bits
-        __u32 offset;     // first bit after addr that is relevant
-        __u32 size;       // size from addr + offset that needs moving
+struct obd_ioobj { 
+        obd_id    ioo_id;
+        obd_gr    ioo_gr;
+        __u32     ioo_type;
+        __u32     ioo_bufcnt;
 };
-
-struct obd_bufref { 
-        obd_id    obj_id;
-        obd_gr    obj_gr;
-        __u64     offset;
-        __u32     size; 
-        __u32     flags;
-}; 
-
-/* reply structure for OST's */
-
-
-
 
 
 /* 
@@ -203,13 +185,6 @@ struct obd_bufref {
 #define REINT_CREATE  1
 #define REINT_MAX     1
 
-struct mds_req_hdr { 
-	__u32 opc;
-	__u64 seqno;
-	__u32 status;
-	__u32 type;
-};
-
 struct ll_fid { 
 	__u64 id;
 	__u32 generation;
@@ -218,20 +193,16 @@ struct ll_fid {
 
 struct niobuf { 
         __u64 addr;
+        __u64 offset; 
+        __u32 len;
+        __u32 flags;
 };
 
-struct mds_rep_hdr { 
-	__u32 opc;
-	__u64 seqno;
-	__u32 status;
-	__u32 type;
-};
-
-struct mds_req_packed {
+struct mds_req {
 	struct ll_fid        fid1;
 	struct ll_fid        fid2;
-        int                        namelen;
-        int                        tgtlen;
+        __u32                       namelen;
+        __u32                       tgtlen;
         __u32                       opcode;
         __u32                       valid;
         __u32 			    mode;
@@ -250,11 +221,11 @@ struct mds_req_packed {
         __u64                       objid;
 };
 
-struct mds_rep_packed {
-	struct ll_fid        fid1;
-	struct ll_fid        fid2;
-        int                        namelen;
-        int                        tgtlen;
+struct mds_rep {
+	struct ll_fid               fid1;
+	struct ll_fid               fid2;
+        __u32                       namelen;
+        __u32                       tgtlen;
         __u32                       valid;
         __u32 			    mode;
         __u32                       uid;
@@ -535,6 +506,17 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
 
+
+/* GENERAL THINGS */
+union ptl_rep { 
+        struct mds_rep *mds;
+        struct ost_rep *ost;
+};
+
+union ptl_req { 
+        struct mds_req *mds;
+        struct ost_req *ost;
+};
 
 
 #endif

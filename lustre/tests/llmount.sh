@@ -3,6 +3,9 @@
 R=/r
 
 insmod /lib/modules/2.4.17/kernel/drivers/block/loop.o
+insmod $R/usr/src/portals/linux/oslib/portals.o
+insmod $R/usr/src/portals/linux/socknal/ksocknal.o
+insmod $R/usr/src/obd/rpc/ptlrpc.o
 insmod $R/usr/src/obd/class/obdclass.o 
 insmod $R/usr/src/obd/ext2obd/obdext2.o
 insmod $R/usr/src/obd/ost/ost.o

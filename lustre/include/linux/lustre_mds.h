@@ -26,8 +26,10 @@
 #ifndef _LUSTRE_MDS_H
 #define _LUSTRE_MDS_H
 
-#include <linux/obd_support.h>
 
+#include <linux/obd_support.h>
+#include <linux/lustre_idl.h>
+#include <linux/lustre_net.h>
 
 struct mds_run_ctxt { 
 	struct vfsmount *pwdmnt;
@@ -41,6 +43,7 @@ struct mds_run_ctxt {
 struct mds_obd {
 	char *mds_fstype;
 	struct task_struct *mds_thread;
+        __u32 mds_remote_nid;
 	wait_queue_head_t mds_waitq;
 	wait_queue_head_t mds_done_waitq;
 	struct timer_list *mds_timer;
@@ -57,73 +60,6 @@ struct mds_obd {
 	struct address_space_operations *mds_aops;
 };
 
-
-struct mds_request { 
-	struct list_head rq_list;
-	struct mds_obd *rq_obd;
-	int rq_status;
-
-	char *rq_reqbuf;
-	int rq_reqlen;
-	struct mds_req_hdr *rq_reqhdr;
-	struct mds_req *rq_req;
-
-	char *rq_repbuf;
-	int rq_replen;
-	struct mds_rep_hdr *rq_rephdr;
-	struct mds_rep *rq_rep;
-
-        void * rq_reply_handle;
-	wait_queue_head_t rq_wait_for_rep;
-};
-
-
-/* more or less identical to the packed structure, except for the pointers */
-struct mds_req {
-	struct ll_fid        fid1;
-	struct ll_fid        fid2;
-        int                        namelen;
-        int                        tgtlen;
-        __u32                       opcode;
-        __u32                       valid;
-        __u32 			    mode;
-        __u32                       uid;
-        __u32                       gid;
-        __u64                       size;
-        __u32                       mtime;
-        __u32                       ctime;
-        __u32                       atime;
-        __u32                       flags;
-        __u32                       major;
-        __u32                       minor;
-        __u32                       ino;
-        __u32                       nlink;
-        __u32                       generation;
-        __u64                       objid;
-};
-
-/* more or less identical to the packed structure, except for the pointers */
-struct mds_rep {
-	struct ll_fid        fid1;
-	struct ll_fid        fid2;
-        int                        namelen;
-        int                        tgtlen;
-        __u32                       valid;
-        __u32 			    mode;
-        __u32                       uid;
-        __u32                       gid;
-        __u64                       size;
-        __u32                       mtime;
-        __u32                       ctime;
-        __u32                       atime;
-        __u32                       flags;
-        __u32                       major;
-        __u32                       minor;
-        __u32                       ino;
-        __u32                       nlink;
-        __u32                       generation;
-        __u64                       objid;
-};
 
 struct mds_update_record { 
         __u32 ur_reclen;
@@ -144,13 +80,13 @@ struct mds_update_record {
 
 /* mds/mds_pack.c */
 void *mds_req_tgt(struct mds_req *req);
-int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, struct mds_req_hdr **hdr, struct mds_req **req, int *len, char **buf);
-int mds_unpack_req(char *buf, int len, struct mds_req_hdr **hdr, struct mds_req **req);
-int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, struct mds_rep_hdr **hdr, struct mds_rep **rep, int *len, char **buf);
-int mds_unpack_rep(char *buf, int len, struct mds_rep_hdr **hdr, struct mds_rep **rep);
+int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, struct ptlreq_hdr **hdr, struct mds_req **req, int *len, char **buf);
+int mds_unpack_req(char *buf, int len, struct ptlreq_hdr **hdr, struct mds_req **req);
+int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, struct ptlrep_hdr **hdr, struct mds_rep **rep, int *len, char **buf);
+int mds_unpack_rep(char *buf, int len, struct ptlrep_hdr **hdr, struct mds_rep **rep);
 
 /* mds/mds_reint.c  */
-int mds_reint_rec(struct mds_update_record *r, struct mds_request *req); 
+int mds_reint_rec(struct mds_update_record *r, struct ptlrpc_request *req); 
 
 /* lib/mds_updates.c */
 int mds_update_unpack(char *buf, int len, struct mds_update_record *r); 
@@ -162,16 +98,17 @@ void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
 
 /* llight/request.c */
-int mdc_getattr(ino_t ino, int type, int valid, 
-		struct mds_rep  **mds_reply, struct mds_rep_hdr **hdr);
-int mdc_setattr(struct inode *inode, struct iattr *iattr, 
-		struct mds_rep  **mds_reply, struct mds_rep_hdr **hdr);
-int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr, 
-                 struct mds_rep  **rep, struct mds_rep_hdr **hdr);
-int mdc_create(struct inode *dir, const char *name, 
+int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid, 
+		struct mds_rep  **mds_reply, struct ptlrep_hdr **hdr);
+int mdc_setattr(struct lustre_peer *peer, struct inode *inode,
+                struct iattr *iattr, struct mds_rep  **mds_reply,
+                struct ptlrep_hdr **hdr);
+int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
+                 char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr);
+int mdc_create(struct lustre_peer *peer, struct inode *dir, const char *name, 
                int namelen, int mode, __u64 id, __u32 uid, 
                __u32 gid, __u64 time, 
-               struct mds_rep **rep, struct mds_rep_hdr **hdr);
+               struct mds_rep **rep, struct ptlrep_hdr **hdr);
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'

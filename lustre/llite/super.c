@@ -96,7 +96,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         int devno;
         int err;
 	struct mds_rep *rep; 
-	struct mds_rep_hdr *hdr = NULL; 
+	struct ptlrep_hdr *hdr = NULL; 
 
         ENTRY;
         MOD_INC_USE_COUNT; 
@@ -237,7 +237,7 @@ out:
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
         struct inode *inode = de->d_inode;
-	struct mds_rep_hdr *hdr = NULL;
+	struct ptlrep_hdr *hdr = NULL;
 	int err;
 
         ENTRY;

@@ -52,14 +52,13 @@
 
 
 int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, 
-		 struct mds_req_hdr **hdr, struct mds_req **req, 
+		 struct ptlreq_hdr **hdr, struct mds_req **req, 
 		 int *len, char **buf)
 {
 	char *ptr;
-        struct mds_req_packed *preq;
 
 	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
-		sizeof(*preq); 
+		sizeof(**req); 
 
 	*buf = kmalloc(*len, GFP_KERNEL);
 	if (!*buf) {
@@ -68,11 +67,9 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 	}
 
 	memset(*buf, 0, *len); 
-	*hdr = (struct mds_req_hdr *)(*buf);
+	*hdr = (struct ptlreq_hdr *)(*buf);
 	*req = (struct mds_req *)(*buf + sizeof(**hdr));
-
-	preq = (struct mds_req_packed *)(*buf + sizeof(**hdr));
-	ptr = *buf + sizeof(**hdr) + sizeof(*preq);
+	ptr = *buf + sizeof(**hdr) + sizeof(**req);
 
 	(*hdr)->type =  MDS_TYPE_REQ;
 
@@ -90,9 +87,8 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 
 
 int mds_unpack_req(char *buf, int len, 
-		   struct mds_req_hdr **hdr, struct mds_req **req)
+		   struct ptlreq_hdr **hdr, struct mds_req **req)
 {
-        struct mds_req_packed *preq;
         char *name, *tgt;
 
 	if (len < sizeof(**hdr) + sizeof(**req)) { 
@@ -100,27 +96,26 @@ int mds_unpack_req(char *buf, int len,
 		return -EINVAL;
 	}
 
-	*hdr = (struct mds_req_hdr *) (buf);
-	preq = (struct mds_req_packed *) (buf + sizeof(**hdr));
-
+	*hdr = (struct ptlreq_hdr *) (buf);
         *req = (struct mds_req *) (buf + sizeof(**hdr));
+
 	(*req)->namelen = NTOH__u32((*req)->namelen); 
 	(*req)->tgtlen = NTOH__u32((*req)->tgtlen); 
 
-	if (len < sizeof(**hdr) + sizeof(**req) + (*req)->namelen + 
-	    (*req)->tgtlen ) { 
+	if (len < sizeof(**hdr) + sizeof(**req) +
+            size_round((*req)->namelen) + size_round((*req)->tgtlen) ) { 
 		EXIT;
 		return -EINVAL;
 	}
 
 	if ((*req)->namelen) { 
-		name = buf + sizeof(**hdr) + sizeof(*preq);
+		name = buf + sizeof(**hdr) + sizeof(**req);
 	} else { 
 		name = NULL;
 	}
 
 	if ((*req)->tgtlen) { 
-		tgt = buf + sizeof(**hdr) + sizeof(*preq) + 
+		tgt = buf + sizeof(**hdr) + sizeof(**req) + 
                         size_round((*req)->namelen);
 	} else { 
 		tgt = NULL;
@@ -134,18 +129,25 @@ void *mds_req_tgt(struct mds_req *req)
 {
         if (!req->tgtlen) 
                 return NULL;
-        return (void *)((char *)req + sizeof(*req) + size_round(req->namelen)); 
+        return (void *)((char *)req + sizeof(*req) + 
+                        size_round(req->namelen)); 
+}
+
+void *mds_req_name(struct mds_req *req)
+{
+        if (!req->namelen) 
+                return NULL;
+        return (void *)((char *)req + sizeof(*req));
 }
 
 int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, 
-		 struct mds_rep_hdr **hdr, struct mds_rep **rep, 
+		 struct ptlrep_hdr **hdr, struct mds_rep **rep, 
 		 int *len, char **buf)
 {
 	char *ptr;
-        struct mds_rep_packed *prep;
 
 	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
-		sizeof(*prep); 
+		sizeof(**rep); 
 
 	*buf = kmalloc(*len, GFP_KERNEL);
 	if (!*buf) {
@@ -154,11 +156,10 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen,
 	}
 
 	memset(*buf, 0, *len); 
-	*hdr = (struct mds_rep_hdr *)(*buf);
+	*hdr = (struct ptlrep_hdr *)(*buf);
         *rep = (struct mds_rep *)(*buf + sizeof(**hdr));
 
-	prep = (struct mds_rep_packed *)(*buf + sizeof(**hdr));
-	ptr = *buf + sizeof(**hdr) + sizeof(*prep);
+	ptr = *buf + sizeof(**hdr) + sizeof(**rep);
 
 	(*hdr)->type =  MDS_TYPE_REP;
 
@@ -174,37 +175,40 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen,
 	return 0;
 }
 
-
 int mds_unpack_rep(char *buf, int len, 
-		   struct mds_rep_hdr **hdr, struct mds_rep **rep)
+		   struct ptlrep_hdr **hdr, struct mds_rep **rep)
 {
-        struct mds_rep_packed *prep;
 
 	if (len < sizeof(**hdr)) { 
 		EXIT;
 		return -EINVAL;
 	}
-	*hdr = (struct mds_rep_hdr *) (buf);
+	*hdr = (struct ptlrep_hdr *) (buf);
 
 	if (len < sizeof(**hdr) + sizeof(**rep)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-	prep = (struct mds_rep_packed *) (buf + sizeof(**hdr));
-
         *rep = (struct mds_rep *) (buf + sizeof(**hdr));
 	(*rep)->namelen = NTOH__u32((*rep)->namelen); 
 	(*rep)->tgtlen = NTOH__u32((*rep)->namelen); 
 
-	if (len < sizeof(**hdr) + sizeof(**rep) + (*rep)->namelen + 
-	    (*rep)->tgtlen ) { 
+	if (len < sizeof(**hdr) + sizeof(**rep) 
+            + size_round((*rep)->namelen) + size_round((*rep)->tgtlen) ) { 
 		EXIT;
 		return -EINVAL;
 	}
 
 	EXIT;
 	return 0;
+}
+
+void *mds_rep_name(struct mds_rep *rep)
+{
+        if (!rep->namelen) 
+                return NULL;
+        return (void *)((char *)rep + sizeof(*rep));
 }
 
 void *mds_rep_tgt(struct mds_rep *rep)
@@ -214,73 +218,3 @@ void *mds_rep_tgt(struct mds_rep *rep)
         return (void *)((char *)rep + sizeof(*rep) + size_round(rep->namelen)); 
 }
 
-#if 0
-int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, 
-		 struct mds_rep_hdr **hdr, struct mds_rep **rep, 
-		 int *len, char **buf)
-{
-	char *ptr;
-
-	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
-		sizeof(**rep); 
-
-	*buf = kmalloc(*len, GFP_KERNEL);
-	if (!*buf) {
-		EXIT;
-		return -ENOMEM;
-	}
-
-	memset(*buf, 0, *len); 
-	*hdr = (struct mds_rep_hdr *)(*buf);
-	*rep = (struct mds_rep *)(*buf + sizeof(**hdr));
-	ptr = *buf + sizeof(**hdr) + sizeof(**rep);
-
-	(*rep)->namelen = NTOH__u32(namelen);
-	if (name) { 
-		LOGL(name, namelen, ptr); 
-	} 
-
-	(*rep)->tgtlen = NTOH__u32(tgtlen);
-	if (tgt) { 
-		LOGL(tgt, tgtlen, ptr);
-	}
-	return 0;
-}
-
-
-int mds_unpack_rep(char *buf, int len, 
-		   struct mds_rep_hdr **hdr, struct mds_rep **rep)
-{
-	if (len < sizeof(**hdr) + sizeof(**rep)) { 
-		EXIT;
-		return -EINVAL;
-	}
-
-	*hdr = (struct mds_rep_hdr *) (buf);
-	*rep = (struct mds_rep *) (buf + sizeof(**hdr));
-	(*rep)->namelen = NTOH__u32((*rep)->namelen); 
-	(*rep)->tgtlen = NTOH__u32((*rep)->namelen); 
-
-	if (len < sizeof(**hdr) + sizeof(**rep) + (*rep)->namelen + 
-	    (*rep)->tgtlen ) { 
-		EXIT;
-		return -EINVAL;
-	}
-
-	if ((*rep)->namelen) { 
-		(*rep)->name = buf + sizeof(**hdr) + sizeof(**rep);
-	} else { 
-		(*rep)->name = NULL;
-	}
-
-	if ((*rep)->tgtlen) { 
-		(*rep)->tgt = buf + sizeof(**hdr) + sizeof(**rep) + 
-			size_round((*rep)->namelen);
-	} else { 
-		(*rep)->tgt = NULL;
-	}
-
-	EXIT;
-	return 0;
-}
-#endif

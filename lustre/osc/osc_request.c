@@ -30,22 +30,23 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 
-extern int ost_queue_req(struct obd_device *, struct ost_request *);
+extern int ost_queue_req(struct obd_device *, struct ptlrpc_request *);
 
-struct ost_request *osc_prep_req(int size, int opcode)
+struct ptlrpc_request *ost_prep_req(int opcode, int buflen1, char *buf1, 
+				 int buflen2, char *buf2)
 {
-	struct ost_request *request;
+	struct ptlrpc_request *request;
 	int rc;
 	ENTRY; 
 
-	request = (struct ost_request *)kmalloc(sizeof(*request), GFP_KERNEL); 
+	request = (struct ptlrpc_request *)kmalloc(sizeof(*request), GFP_KERNEL); 
 	if (!request) { 
 		printk("osc_prep_req: request allocation out of memory\n");
 		return NULL;
 	}
 
-	rc = ost_pack_req(NULL, 0, NULL, 0, 
-			  &request->rq_reqhdr, &request->rq_req, 
+	rc = ost_pack_req(buf1, buflen1,  buf2, buflen2,
+			  &request->rq_reqhdr, &request->rq_req.ost, 
 			  &request->rq_reqlen, &request->rq_reqbuf);
 	if (rc) { 
 		printk("llight request: cannot pack request %d\n", rc); 
@@ -57,7 +58,7 @@ struct ost_request *osc_prep_req(int size, int opcode)
 	return request;
 }
 
-extern int osc_queue_wait(struct obd_conn *conn, struct ost_request *req)
+extern int osc_queue_wait(struct obd_conn *conn, struct ptlrpc_request *req)
 {
 	struct obd_device *client = conn->oc_dev;
 	struct obd_device *target = client->u.osc.osc_tgt;
@@ -65,7 +66,7 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ost_request *req)
 
 	ENTRY;
 	/* set the connection id */
-	req->rq_req->connid = conn->oc_id;
+	req->rq_req.ost->connid = conn->oc_id;
 
 	CDEBUG(D_INODE, "tgt at %p, conn id %d, opcode %d request at: %p\n", 
 	       &conn->oc_dev->u.osc.osc_tgt->u.ost, 
@@ -85,7 +86,7 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ost_request *req)
 	interruptible_sleep_on(&req->rq_wait_for_rep);
 
 	ost_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
-		       &req->rq_rep); 
+		       &req->rq_rep.ost); 
 	printk("-->osc_queue_wait: buf %p len %d status %d\n", 
 	       req->rq_repbuf, req->rq_replen, req->rq_rephdr->status); 
 
@@ -93,7 +94,7 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ost_request *req)
 	return req->rq_rephdr->status;
 }
 
-void osc_free_req(struct ost_request *request)
+void osc_free_req(struct ptlrpc_request *request)
 {
 	if (request->rq_repbuf)
 		kfree(request->rq_repbuf);
@@ -103,11 +104,11 @@ void osc_free_req(struct ost_request *request)
 
 int osc_connect(struct obd_conn *conn)
 {
-	struct ost_request *request;
+	struct ptlrpc_request *request;
 	int rc; 
 	ENTRY;
 	
-	request = osc_prep_req(sizeof(*request), OST_CONNECT);
+	request = ost_prep_req(OST_CONNECT, 0, NULL, 0, NULL);
 	if (!request) { 
 		printk("osc_connect: cannot pack req!\n"); 
 		return -ENOMEM;
@@ -119,9 +120,9 @@ int osc_connect(struct obd_conn *conn)
 		goto out;
 	}
       
-	CDEBUG(D_INODE, "received connid %d\n", request->rq_rep->connid); 
+	CDEBUG(D_INODE, "received connid %d\n", request->rq_rep.ost->connid); 
 
-	conn->oc_id = request->rq_rep->connid;
+	conn->oc_id = request->rq_rep.ost->connid;
  out:
 	osc_free_req(request);
 	EXIT;
@@ -130,11 +131,11 @@ int osc_connect(struct obd_conn *conn)
 
 int osc_disconnect(struct obd_conn *conn)
 {
-	struct ost_request *request;
+	struct ptlrpc_request *request;
 	int rc; 
 	ENTRY;
 	
-	request = osc_prep_req(sizeof(*request), OST_DISCONNECT);
+	request = ost_prep_req(OST_DISCONNECT, 0, NULL, 0, NULL);
 	if (!request) { 
 		printk("osc_connect: cannot pack req!\n"); 
 		return -ENOMEM;
@@ -154,17 +155,17 @@ int osc_disconnect(struct obd_conn *conn)
 
 int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 {
-	struct ost_request *request;
+	struct ptlrpc_request *request;
 	int rc; 
 
-	request = osc_prep_req(sizeof(*request), OST_GETATTR);
+	request = ost_prep_req(OST_GETATTR, 0, NULL, 0, NULL);
 	if (!request) { 
 		printk("osc_connect: cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 	
-	memcpy(&request->rq_req->oa, oa, sizeof(*oa));
-	request->rq_req->oa.o_valid = ~0;
+	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+	request->rq_req.ost->oa.o_valid = ~0;
 	
 	rc = osc_queue_wait(conn, request);
 	if (rc) { 
@@ -172,9 +173,9 @@ int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 		goto out;
 	}
 
-	CDEBUG(D_INODE, "mode: %o\n", request->rq_rep->oa.o_mode); 
+	CDEBUG(D_INODE, "mode: %o\n", request->rq_rep.ost->oa.o_mode); 
 	if (oa) { 
-		memcpy(oa, &request->rq_rep->oa, sizeof(*oa));
+		memcpy(oa, &request->rq_rep.ost->oa, sizeof(*oa));
 	}
 
  out:
@@ -184,27 +185,27 @@ int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 
 int osc_create(struct obd_conn *conn, struct obdo *oa)
 {
-	struct ost_request *request;
+	struct ptlrpc_request *request;
 	int rc; 
 
 	if (!oa) { 
 		printk(__FUNCTION__ ": oa NULL\n"); 
 	}
-	request = osc_prep_req(sizeof(*request), OST_CREATE);
+	request = ost_prep_req(OST_CREATE, 0, NULL, 0, NULL);
 	if (!request) { 
 		printk("osc_connect: cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 	
-	memcpy(&request->rq_req->oa, oa, sizeof(*oa));
-	request->rq_req->oa.o_valid = ~0;
+	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+	request->rq_req.ost->oa.o_valid = ~0;
 	
 	rc = osc_queue_wait(conn, request);
 	if (rc) { 
 		EXIT;
 		goto out;
 	}
-	memcpy(oa, &request->rq_rep->oa, sizeof(*oa));
+	memcpy(oa, &request->rq_rep.ost->oa, sizeof(*oa));
 
  out:
 	osc_free_req(request);
@@ -240,6 +241,92 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
         EXIT; 
         return 0;
 } 
+
+void osc_sendpage(struct niobuf *dst, struct niobuf *src)
+{
+	memcpy((char *)(unsigned long)dst->addr,  
+	       (char *)(unsigned long)src->addr, 
+	       src->len);
+	return;
+}
+
+
+int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
+	      struct obdo **oa, obd_count *oa_bufs, struct page **buf,
+	      obd_size *count, obd_off *offset, obd_flag *flags)
+{
+	struct ptlrpc_request *request;
+	int rc; 
+	struct obd_ioobj ioo;
+	struct niobuf src;
+	int size1, size2 = 0; 
+	void *ptr1, *ptr2;
+	int i, j, n;
+
+	size1 = num_oa * sizeof(ioo); 
+	for (i = 0; i < num_oa; i++) { 
+		size2 += oa_bufs[i] * sizeof(src);
+	}
+
+	request = ost_prep_req(OST_PREPW, size1, NULL, size2, NULL);
+	if (!request) { 
+		printk("osc_connect: cannot pack req!\n"); 
+		return -ENOMEM;
+	}
+
+	n = 0;
+	ptr1 = ost_req_buf1(request->rq_req.ost);
+	ptr2 = ost_req_buf2(request->rq_req.ost);
+	for (i=0; i < num_oa; i++) { 
+		ost_pack_ioo(&ptr1, oa[i], oa_bufs[i]); 
+		for (j = 0 ; j < oa_bufs[i] ; j++) { 
+			ost_pack_niobuf(&ptr2, kmap(buf[n]), offset[n],
+					count[n], flags[n]); 
+			n++;
+		}
+	}
+
+	rc = osc_queue_wait(conn, request);
+	if (rc) { 
+		EXIT;
+		goto out;
+	}
+
+	ptr2 = ost_rep_buf2(request->rq_rep.ost); 
+	if (request->rq_rep.ost->buflen2 != n * sizeof(struct niobuf)) { 
+		printk(__FUNCTION__ ": buffer length wrong\n"); 
+		goto out;
+	}
+
+	for (i=0; i < num_oa; i++) { 
+		for (j = 0 ; j < oa_bufs[i] ; j++) { 
+			struct niobuf *dst;
+			src.addr = (__u64)(unsigned long)buf[n];
+			src.len = count[n];
+			ost_unpack_niobuf(&ptr2, &dst);
+			osc_sendpage(dst, &src);
+			n++;
+		}
+	}
+	//ost_complete_brw(rep); 
+
+ out:
+	if (request->rq_rephdr)
+		kfree(request->rq_rephdr);
+	n = 0;
+	for (i=0; i < num_oa; i++) { 
+		for (j = 0 ; j < oa_bufs[i] ; j++) { 
+			kunmap(buf[n]);
+			n++;
+		}
+	}
+
+	osc_free_req(request);
+	return 0;
+
+
+
+}
 
 
 static int osc_cleanup(struct obd_device * obddev)

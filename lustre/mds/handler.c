@@ -3,7 +3,7 @@
  *  
  *  Lustre Metadata Server (mds) request handler
  * 
- *  Copyright (C) 2001  Cluster File Systems, Inc.
+ *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
  *  This code is issued under the GNU General Public License.
  *  See the file COPYING in this distribution
@@ -31,15 +31,16 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_net.h>
 #include <linux/obd_class.h>
 
 // XXX for testing
 static struct mds_obd *MDS;
 
 // XXX make this networked!  
-static int mds_queue_req(struct mds_request *req)
+static int mds_queue_req(struct ptlrpc_request *req)
 {
-	struct mds_request *srv_req;
+	struct ptlrpc_request *srv_req;
 	
 	if (!MDS) { 
 		EXIT;
@@ -71,7 +72,7 @@ static int mds_queue_req(struct mds_request *req)
 }
 
 /* XXX do this over the net */
-int mds_sendpage(struct mds_request *req, struct file *file, 
+int mds_sendpage(struct ptlrpc_request *req, struct file *file, 
 		    __u64 offset, struct niobuf *dst)
 {
 	int rc; 
@@ -88,15 +89,11 @@ int mds_sendpage(struct mds_request *req, struct file *file,
 }
 
 /* XXX replace with networking code */
-int mds_reply(struct mds_request *req)
+int mds_reply(struct ptlrpc_request *req)
 {
-	struct mds_request *clnt_req = req->rq_reply_handle;
+	struct ptlrpc_request *clnt_req = req->rq_reply_handle;
 
 	ENTRY;
-
-	/* free the request buffer */
-	kfree(req->rq_reqbuf);
-	req->rq_reqbuf = NULL; 
 	
 	/* move the reply to the client */ 
 	clnt_req->rq_replen = req->rq_replen;
@@ -104,17 +101,22 @@ int mds_reply(struct mds_request *req)
 	req->rq_repbuf = NULL;
 	req->rq_replen = 0;
 
+	/* free the request buffer */
+	kfree(req->rq_reqbuf);
+	req->rq_reqbuf = NULL; 
+
 	/* wake up the client */ 
 	wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
 	EXIT;
 	return 0;
 }
 
-int mds_error(struct mds_request *req)
+int mds_error(struct ptlrpc_request *req)
 {
-	struct mds_rep_hdr *hdr;
+	struct ptlrep_hdr *hdr;
 
 	ENTRY;
+
 	hdr = kmalloc(sizeof(*hdr), GFP_KERNEL);
 	if (!hdr) { 
 		EXIT;
@@ -201,25 +203,25 @@ static inline void mds_get_objid(struct inode *inode, __u64 *id)
 	memcpy(id, &inode->u.ext2_i.i_data, sizeof(*id));
 }
 
-int mds_getattr(struct mds_request *req)
+int mds_getattr(struct ptlrpc_request *req)
 {
-	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req->fid1, 
+	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, 
 					   NULL);
 	struct inode *inode;
 	struct mds_rep *rep;
 	int rc;
 	
-	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.mds, 
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;
 		printk("mds: out of memory\n");
 		req->rq_status = -ENOMEM;
-		return -ENOMEM;
+		return 0;
 	}
 
 	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
-	rep = req->rq_rep;
+	rep = req->rq_rep.mds;
 
 	if (!de) { 
 		EXIT;
@@ -243,10 +245,10 @@ int mds_getattr(struct mds_request *req)
 	return 0;
 }
 
-int mds_readpage(struct mds_request *req)
+int mds_readpage(struct ptlrpc_request *req)
 {
 	struct vfsmount *mnt;
-	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req->fid1, 
+	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, 
 					   &mnt);
 	struct file *file; 
 	struct niobuf *niobuf; 
@@ -254,17 +256,17 @@ int mds_readpage(struct mds_request *req)
 	int rc;
 	
 	printk("mds_readpage: ino %ld\n", de->d_inode->i_ino);
-	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.mds, 
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;
 		printk("mds: out of memory\n");
 		req->rq_status = -ENOMEM;
-		return -ENOMEM;
+		return 0;
 	}
 
 	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
-	rep = req->rq_rep;
+	rep = req->rq_rep.mds;
 
 	if (IS_ERR(de)) { 
 		EXIT;
@@ -280,12 +282,12 @@ int mds_readpage(struct mds_request *req)
 		return 0;
 	}
 		
-	niobuf = mds_req_tgt(req->rq_req);
+	niobuf = mds_req_tgt(req->rq_req.mds);
 
 	/* to make this asynchronous make sure that the handling function 
 	   doesn't send a reply when this function completes. Instead a 
 	   callback function would send the reply */ 
-	rc = mds_sendpage(req, file, req->rq_req->size, niobuf); 
+	rc = mds_sendpage(req, file, req->rq_req.mds->size, niobuf); 
 
 	filp_close(file, 0);
 	req->rq_rephdr->status = rc;
@@ -293,32 +295,33 @@ int mds_readpage(struct mds_request *req)
 	return 0;
 }
 
-int mds_reint(struct mds_request *req)
+int mds_reint(struct ptlrpc_request *req)
 {
 	int rc;
-	char *buf = mds_req_tgt(req->rq_req);
-	int len = req->rq_req->tgtlen;
+	char *buf = mds_req_tgt(req->rq_req.mds);
+	int len = req->rq_req.mds->tgtlen;
 	struct mds_update_record rec;
 	
 	rc = mds_update_unpack(buf, len, &rec);
 	if (rc) { 
 		printk(__FUNCTION__ ": invalid record\n");
-		return -EINVAL;
+		req->rq_status = -EINVAL;
+		return 0;
 	}
-
+	/* rc will be used to interrupt a for loop over multiple records */
 	rc = mds_reint_rec(&rec, req); 
 	return 0; 
 }
 
 //int mds_handle(struct mds_conn *conn, int len, char *buf)
-int mds_handle(struct mds_request *req)
+int mds_handle(struct ptlrpc_request *req)
 {
 	int rc;
-	struct mds_req_hdr *hdr;
+	struct ptlreq_hdr *hdr;
 
 	ENTRY;
 
-	hdr = (struct mds_req_hdr *)req->rq_reqbuf;
+	hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
 
 	if (NTOH__u32(hdr->type) != MDS_TYPE_REQ) {
 		printk("lustre_mds: wrong packet type sent %d\n",
@@ -328,7 +331,7 @@ int mds_handle(struct mds_request *req)
 	}
 
 	rc = mds_unpack_req(req->rq_reqbuf, req->rq_reqlen, 
-			    &req->rq_reqhdr, &req->rq_req);
+			    &req->rq_reqhdr, &req->rq_req.mds);
 	if (rc) { 
 		printk("lustre_mds: Invalid request\n");
 		EXIT; 
@@ -358,7 +361,11 @@ int mds_handle(struct mds_request *req)
 
 out:
 	if (rc) { 
-		printk("mds: processing error %d\n", rc);
+		printk(__FUNCTION__ ": no header\n");
+		return 0;
+	}
+
+	if( req->rq_status) { 
 		mds_error(req);
 	} else { 
 		CDEBUG(D_INODE, "sending reply\n"); 
@@ -408,7 +415,7 @@ int mds_main(void *arg)
 
 	/* And now, wait forever for commit wakeup events. */
 	while (1) {
-		struct mds_request *request;
+		struct ptlrpc_request *request;
 		int rc; 
 
 		if (mds->mds_flags & MDS_UNMOUNT)
@@ -425,7 +432,7 @@ int mds_main(void *arg)
 			CDEBUG(D_INODE, "woke because of timer\n"); 
 		} else { 
 			request = list_entry(mds->mds_reqs.next, 
-					     struct mds_request, rq_list);
+					     struct ptlrpc_request, rq_list);
 			list_del(&request->rq_list);
 			rc = mds_handle(request); 
 		}
@@ -468,34 +475,55 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 {
 	struct obd_ioctl_data* data = buf;
 	struct mds_obd *mds = &obddev->u.mds;
-	struct vfsmount *mnt;
-	int err; 
         ENTRY;
-	
-	mnt = do_kern_mount(data->ioc_inlbuf2, 0, 
-			    data->ioc_inlbuf1, NULL); 
-	err = PTR_ERR(mnt);
-	if (IS_ERR(mnt)) { 
-		EXIT;
-		return err;
-	}
 
-	mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
-  	if (!obddev->u.mds.mds_sb) {
-  		EXIT;
-  		return -ENODEV;
-  	}
+        /* If the ioctl data contains two inline buffers, this is a request to
+         * mount a local filesystem for metadata storage.  If the ioctl data
+         * contains one buffer, however, it is the UUID of the remote node that
+         * we will contact for metadata. */
+        if (data->ioc_inllen2 == 0) {
+                __u32 nid;
+
+                nid = kportal_uuid_to_nid(data->ioc_inlbuf1);
+                if (nid == 0) {
+                        printk("Lustre: uuid_to_nid failed; use ptlctl to "
+                               "associate this uuid with a NID\n");
+                        EXIT;
+                        return -EINVAL;
+                }
+                printk("Lustre MDS: remote nid is %u\n", nid);
+                mds->mds_remote_nid = nid;
+        } else {
+                struct vfsmount *mnt;
+                int err; 
+
+                mnt = do_kern_mount(data->ioc_inlbuf2, 0, 
+                                    data->ioc_inlbuf1, NULL); 
+                err = PTR_ERR(mnt);
+                if (IS_ERR(mnt)) { 
+                        EXIT;
+                        return err;
+                }
+
+                mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
+                if (!obddev->u.mds.mds_sb) {
+                        EXIT;
+                        return -ENODEV;
+                }
+
+                mds->mds_vfsmnt = mnt;
+                obddev->u.mds.mds_fstype = strdup(data->ioc_inlbuf2);
+
+                mds->mds_ctxt.pwdmnt = mnt;
+                mds->mds_ctxt.pwd = mnt->mnt_root;
+                mds->mds_ctxt.fs = KERNEL_DS;
+                mds->mds_remote_nid = 0;
+        }
 
 	INIT_LIST_HEAD(&mds->mds_reqs);
 	mds->mds_thread = NULL;
 	mds->mds_flags = 0;
 	mds->mds_interval = 3 * HZ;
-	mds->mds_vfsmnt = mnt;
-	obddev->u.mds.mds_fstype = strdup(data->ioc_inlbuf2);
-
-	mds->mds_ctxt.pwdmnt = mnt;
-	mds->mds_ctxt.pwd = mnt->mnt_root;
-	mds->mds_ctxt.fs = KERNEL_DS;
 	MDS = mds;
 
 	spin_lock_init(&obddev->u.mds.mds_lock);

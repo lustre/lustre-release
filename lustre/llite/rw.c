@@ -32,6 +32,53 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_light.h>
 
+
+static void inline ll_oa_from_inode(struct obdo *oa, struct inode *inode)
+{
+        struct ll_inode_info *oinfo = ll_i2info(inode);
+
+        if ( oa->o_valid & OBD_MD_FLID )
+                oa->o_id = oinfo->lli_objid;
+        if ( oa->o_valid & OBD_MD_FLATIME )
+                oa->o_atime = inode->i_atime;
+        if ( oa->o_valid & OBD_MD_FLMTIME )
+                oa->o_mtime = inode->i_mtime;
+        if ( oa->o_valid & OBD_MD_FLCTIME )
+                oa->o_ctime = inode->i_ctime;
+        if ( oa->o_valid & OBD_MD_FLSIZE )
+                oa->o_size = inode->i_size;
+        if ( oa->o_valid & OBD_MD_FLBLOCKS )   /* allocation of space */
+                oa->o_blocks = inode->i_blocks;
+        if ( oa->o_valid & OBD_MD_FLBLKSZ )
+                oa->o_blksize = inode->i_blksize;
+        if ( oa->o_valid & OBD_MD_FLMODE )
+                oa->o_mode = inode->i_mode;
+        if ( oa->o_valid & OBD_MD_FLUID )
+                oa->o_uid = inode->i_uid;
+        if ( oa->o_valid & OBD_MD_FLGID )
+                oa->o_gid = inode->i_gid;
+        if ( oa->o_valid & OBD_MD_FLFLAGS )
+                oa->o_flags = inode->i_flags;
+        if ( oa->o_valid & OBD_MD_FLNLINK )
+                oa->o_nlink = inode->i_nlink;
+        if ( oa->o_valid & OBD_MD_FLGENER ) 
+                oa->o_generation = inode->i_generation;
+
+        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
+               inode->i_ino, (long)oa->o_id, oa->o_valid);
+        obdo_from_inode(oa, inode);
+	
+	/* this will transfer metadata for the logical object to 
+	   the oa: that metadata could contain the constituent objects
+	*/
+	if (ll_has_inline(inode)) {
+                CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
+                memcpy(oa->o_inline, oinfo->lli_inline, OBD_INLINESZ);
+                oa->o_obdflags |= OBD_FL_INLINEDATA;
+                oa->o_valid |= OBD_MD_FLINLINE;
+        }
+} /* ll_oa_from_inode */
+
 /*
  * Add a page to the dirty page list.
  */
@@ -103,7 +150,7 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
                 return -ENOMEM;
         }
 	oa->o_valid = OBD_MD_FLNOTOBD;
-        ll_from_inode(oa, inode);
+        ll_oa_from_inode(oa, inode);
 
         err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
@@ -136,7 +183,7 @@ static int ll_commit_page(struct page *page, int create, int from, int to)
                 return -ENOMEM;
         }
 	oa->o_valid = OBD_MD_FLNOTOBD;
-        ll_from_inode(oa, inode);
+        ll_oa_from_inode(oa, inode);
 
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
@@ -200,7 +247,7 @@ int ll_dir_readpage(struct file *file, struct page *page)
 	char *buf;
 	__u64 offset;
         int rc = 0;
-	struct mds_rep_hdr *hdr;
+	struct ptlrep_hdr *hdr;
 
         ENTRY;
 
@@ -463,12 +510,12 @@ void ll_truncate(struct inode *inode)
                 printk(__FUNCTION__ ": obdo_alloc failed - using stack!\n");
 
                 obdo.o_valid = OBD_MD_FLNOTOBD;
-                ll_from_inode(&obdo, inode);
+                ll_oa_from_inode(&obdo, inode);
 
                 err = obd_punch(IID(inode), &obdo, 0, obdo.o_size);
         } else {
                 oa->o_valid = OBD_MD_FLNOTOBD;
-                ll_from_inode(oa, inode);
+                ll_oa_from_inode(oa, inode);
 
                 CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
                        (long)oa->o_id, oa->o_size);

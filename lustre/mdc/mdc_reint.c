@@ -31,14 +31,15 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 
-extern int mdc_reint(struct mds_request *request);
-extern struct mds_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen, char *tgt);
+extern int mdc_reint(struct lustre_peer *peer, struct ptlrpc_request *request);
+extern struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen, char *tgt);
 
-int mdc_setattr(struct inode *inode, struct iattr *iattr,
-		struct mds_rep **rep, struct mds_rep_hdr **hdr)
+int mdc_setattr(struct lustre_peer *peer, 
+		struct inode *inode, struct iattr *iattr,
+		struct mds_rep **rep, struct ptlrep_hdr **hdr)
 {
 	int rc; 
-	struct mds_request *request;
+	struct ptlrpc_request *request;
 	struct mds_rec_setattr *rec;
 
 	request = mds_prep_req(MDS_REINT, 0, NULL, sizeof(*rec), NULL);
@@ -47,14 +48,14 @@ int mdc_setattr(struct inode *inode, struct iattr *iattr,
 		return -ENOMEM;
 	}
 
-	rec = mds_req_tgt(request->rq_req);
+	rec = mds_req_tgt(request->rq_req.mds);
 	mds_setattr_pack(rec, inode, iattr); 
-	request->rq_req->opcode = HTON__u32(REINT_SETATTR);
+	request->rq_req.mds->opcode = HTON__u32(REINT_SETATTR);
 
-	rc = mdc_reint(request);
+	rc = mdc_reint(peer, request);
 
 	if (rep) { 
-		*rep = request->rq_rep;
+		*rep = request->rq_rep.mds;
 	}
 	if (hdr) { 
 		*hdr = request->rq_rephdr;
@@ -64,12 +65,13 @@ int mdc_setattr(struct inode *inode, struct iattr *iattr,
 	return rc;
 }
 
-int mdc_create(struct inode *dir, const char *name, int namelen, 
+int mdc_create(struct lustre_peer *peer, 
+	       struct inode *dir, const char *name, int namelen, 
 	       int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
-		struct mds_rep **rep, struct mds_rep_hdr **hdr)
+		struct mds_rep **rep, struct ptlrep_hdr **hdr)
 {
 	int rc; 
-	struct mds_request *request;
+	struct ptlrpc_request *request;
 	struct mds_rec_create *rec;
 
 	request = mds_prep_req(MDS_REINT, 0, NULL, 
@@ -80,13 +82,13 @@ int mdc_create(struct inode *dir, const char *name, int namelen,
 		return -ENOMEM;
 	}
 
-	rec = mds_req_tgt(request->rq_req);
+	rec = mds_req_tgt(request->rq_req.mds);
 	mds_create_pack(rec, dir, name, namelen, mode, id, uid, gid, time); 
 
-	rc = mdc_reint(request);
+	rc = mdc_reint(peer, request);
 
 	if (rep) { 
-		*rep = request->rq_rep;
+		*rep = request->rq_rep.mds;
 	}
 	if (hdr) { 
 		*hdr = request->rq_rephdr;

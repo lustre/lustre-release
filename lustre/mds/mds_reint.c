@@ -31,9 +31,9 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
-extern struct mds_request *mds_prep_req(int size, int opcode, int namelen, char *name, int tgtlen, char *tgt);
+extern struct ptlrpc_request *mds_prep_req(int size, int opcode, int namelen, char *name, int tgtlen, char *tgt);
 
-static int mds_reint_setattr(struct mds_update_record *rec, struct mds_request *req)
+static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_request *req)
 {
 	struct vfsmount *mnt;
 	struct dentry *de;
@@ -63,12 +63,12 @@ static inline void mds_store_objid(struct inode *inode, __u64 *id)
 
 
 static int mds_reint_create(struct mds_update_record *rec, 
-			    struct mds_request *req)
+			    struct ptlrpc_request *req)
 {
 	struct vfsmount *mnt;
 	int type = rec->ur_mode & S_IFMT;
 	struct dentry *de;
-	struct mds_rep *rep = req->rq_rep;
+	struct mds_rep *rep = req->rq_rep.mds;
 	struct dentry *dchild; 
 	int rc;
 
@@ -132,34 +132,37 @@ static int mds_reint_create(struct mds_update_record *rec,
 	return 0;
 }
 
-typedef int (*mds_reinter)(struct mds_update_record *, struct mds_request*); 
+typedef int (*mds_reinter)(struct mds_update_record *, struct ptlrpc_request*); 
 
 static mds_reinter  reinters[REINT_MAX+1] = { 
 	[REINT_SETATTR]   mds_reint_setattr, 
 	[REINT_CREATE]   mds_reint_create
 };
 
-int mds_reint_rec(struct mds_update_record *rec, struct mds_request *req)
+int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
 {
 	int rc; 
 
 	if (rec->ur_opcode < 0 || rec->ur_opcode > REINT_MAX) { 
 		printk(__FUNCTION__ "opcode %d not valid\n", 
 		       rec->ur_opcode); 
-		return -EINVAL;
+		rc = req->rq_status = -EINVAL;
+		return rc;
 	}
 
-	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.mds, 
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;
 		printk("mds: out of memory\n");
-		req->rq_status = -ENOMEM;
-		return -ENOMEM;
+		rc = req->rq_status = -ENOMEM;
+		return rc;
 	}
 	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
 
 	rc = reinters[rec->ur_opcode](rec, req); 
+	req->rq_status = rc;
+
 	return rc;
 } 
 

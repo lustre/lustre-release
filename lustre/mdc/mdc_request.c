@@ -33,30 +33,30 @@
 
 #define REQUEST_MINOR 244
 
-extern int mds_queue_req(struct mds_request *);
+extern int mds_queue_req(struct ptlrpc_request *);
 
-struct mds_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen, char *tgt)
+struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen, char *tgt)
 {
-	struct mds_request *request;
+	struct ptlrpc_request *request;
 	int rc;
 	ENTRY; 
 
-	request = (struct mds_request *)kmalloc(sizeof(*request), GFP_KERNEL); 
+	request = (struct ptlrpc_request *)kmalloc(sizeof(*request), GFP_KERNEL); 
 	if (!request) { 
 		printk("mds_prep_req: request allocation out of memory\n");
 		return NULL;
 	}
 
 	rc = mds_pack_req(name, namelen, tgt, tgtlen,
-			  &request->rq_reqhdr, &request->rq_req, 
+			  &request->rq_reqhdr, &(request->rq_req.mds),
 			  &request->rq_reqlen, &request->rq_reqbuf);
 	if (rc) { 
 		printk("llight request: cannot pack request %d\n", rc); 
 		return NULL;
 	}
 	printk("--> mds_prep_req: len %d, req %p, tgtlen %d\n", 
-	       request->rq_reqlen, request->rq_req, 
-	       request->rq_req->tgtlen);
+	       request->rq_reqlen, request->rq_req.mds, 
+	       request->rq_req.mds->tgtlen);
 	request->rq_reqhdr->opc = opcode;
 
 	EXIT;
@@ -66,13 +66,13 @@ struct mds_request *mds_prep_req(int opcode, int namelen, char *name, int tgtlen
 
 
 
-static int mds_queue_wait(struct mds_request *req)
+static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 {
 	int rc;
 
 	/* XXX fix the race here (wait_for_event?)*/
 	/* hand the packet over to the server */
-	rc = mds_queue_req(req); 
+	rc = ptl_send_rpc(req, peer);
 	if (rc) { 
 		printk("mdc_queue_wait: error %d, opcode %d\n", rc, 
 		       req->rq_reqhdr->opc); 
@@ -85,7 +85,7 @@ static int mds_queue_wait(struct mds_request *req)
 	printk("-- done\n");
 
 	mds_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
-		       &req->rq_rep); 
+		       &req->rq_rep.mds); 
 	if ( req->rq_rephdr->status == 0 )
 		printk("-->mdc_queue_wait: buf %p len %d status %d\n", 
 		       req->rq_repbuf, req->rq_replen, 
@@ -95,15 +95,15 @@ static int mds_queue_wait(struct mds_request *req)
 	return req->rq_rephdr->status;
 }
 
-void mds_free_req(struct mds_request *request)
+void mds_free_req(struct ptlrpc_request *request)
 {
 	kfree(request);
 }
 
-int mdc_getattr(ino_t ino, int type, int valid, 
-		struct mds_rep  **rep, struct mds_rep_hdr **hdr)
+int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid, 
+		struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {
-	struct mds_request *request;
+	struct ptlrpc_request *request;
 	int rc; 
 
 	request = mds_prep_req(MDS_GETATTR, 0, NULL, 0, NULL); 
@@ -112,20 +112,22 @@ int mdc_getattr(ino_t ino, int type, int valid,
 		return -ENOMEM;
 	}
 
-	ll_ino2fid(&request->rq_req->fid1, ino, 0, type);
+	ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
 
-	request->rq_req->valid = valid;
+	request->rq_req.mds->valid = valid;
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 
-	rc = mds_queue_wait(request);
+	rc = mds_queue_wait(request, peer);
 	if (rc) { 
 		printk("llight request: error in handling %d\n", rc); 
 		goto out;
 	}
 
-	printk("mds_getattr: mode: %o\n", request->rq_rep->mode); 
+	printk("mds_getattr: mode: %o\n", request->rq_rep.mds->mode); 
 
 	if (rep) { 
-		*rep = request->rq_rep;
+		*rep = request->rq_rep.mds;
 	}
 	if (hdr) { 
 		*hdr = request->rq_rephdr;
@@ -136,10 +138,10 @@ int mdc_getattr(ino_t ino, int type, int valid,
 	return rc;
 }
 
-int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr, 
-		struct mds_rep  **rep, struct mds_rep_hdr **hdr)
+int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
+		 char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {
-	struct mds_request *request;
+	struct ptlrpc_request *request;
 	struct niobuf niobuf;
 	int rc; 
 
@@ -154,21 +156,21 @@ int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr,
 		return -ENOMEM;
 	}
 
-	request->rq_req->fid1.id = ino;
-	request->rq_req->fid1.f_type = type;
-	request->rq_req->size = offset;
-	request->rq_req->tgtlen = sizeof(niobuf); 
+	request->rq_req.mds->fid1.id = ino;
+	request->rq_req.mds->fid1.f_type = type;
+	request->rq_req.mds->size = offset;
+	request->rq_req.mds->tgtlen = sizeof(niobuf); 
 
-	rc = mds_queue_wait(request);
+	rc = mds_queue_wait(request, peer);
 	if (rc) { 
 		printk("mdc request: error in handling %d\n", rc); 
 		goto out;
 	}
 
-	printk("mdc_readpage: mode: %o\n", request->rq_rep->mode); 
+	printk("mdc_readpage: mode: %o\n", request->rq_rep.mds->mode); 
 
 	if (rep) { 
-		*rep = request->rq_rep;
+		*rep = request->rq_rep.mds;
 	}
 	if (hdr) { 
 		*hdr = request->rq_rephdr;
@@ -179,11 +181,11 @@ int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr,
 	return rc;
 }
 
-int mdc_reint(struct mds_request *request)
+int mdc_reint(struct lustre_peer *peer, struct ptlrpc_request *request)
 {
 	int rc; 
 
-	rc = mds_queue_wait(request);
+	rc = mds_queue_wait(request, peer);
 	if (rc) { 
 		printk("mdc request: error in handling %d\n", rc); 
 	}
@@ -196,6 +198,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		       unsigned int cmd, unsigned long arg)
 {
 	int err;
+	struct lustre_peer peer; 
 
 	ENTRY;
 
@@ -213,12 +216,13 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 return -EINVAL;
         }
 
+	//rc = ptl_peer("mds", peer); 
 	
 	switch (cmd) {
 	case IOC_REQUEST_GETATTR: { 
-		struct mds_rep_hdr *hdr = NULL;
+		struct ptlrep_hdr *hdr = NULL;
 		printk("-- getting attr for ino 2\n"); 
-		err = mdc_getattr(2, S_IFDIR, ~0, NULL, &hdr);
+		err = mdc_getattr(&peer, 2, S_IFDIR, ~0, NULL, &hdr);
 		if (hdr)
 			kfree(hdr);
 		printk("-- done err %d\n", err);
@@ -226,7 +230,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 	}
 
 	case IOC_REQUEST_READPAGE: { 
-		struct mds_rep_hdr *hdr = NULL;
+		struct ptlrep_hdr *hdr = NULL;
 		char *buf;
 		buf = kmalloc(PAGE_SIZE, GFP_KERNEL); 
 		if (!buf) { 
@@ -234,7 +238,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 			break;
 		}
 		printk("-- readpage 0 for ino 2\n"); 
-		err = mdc_readpage(2, S_IFDIR, 0, buf, NULL, &hdr);
+		err = mdc_readpage(&peer, 2, S_IFDIR, 0, buf, NULL, &hdr);
 		printk("-- done err %d\n", err);
 		if (!err) { 
 			printk("-- status: %d\n", hdr->status); 
@@ -248,7 +252,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 
 	case IOC_REQUEST_SETATTR: { 
 		struct inode inode;
-		struct mds_rep_hdr *hdr;
+		struct ptlrep_hdr *hdr;
 		struct iattr iattr; 
 
 		inode.i_ino = 2;
@@ -256,7 +260,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_setattr(&inode, &iattr, NULL, &hdr);
+		err = mdc_setattr(&peer, &inode, &iattr, NULL, &hdr);
 		printk("-- done err %d\n", err);
 		if (!err) { 
 			printk("-- status: %d\n", hdr->status); 
@@ -268,7 +272,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 
 	case IOC_REQUEST_CREATE: { 
 		struct inode inode;
-		struct mds_rep_hdr *hdr;
+		struct ptlrep_hdr *hdr;
 		struct iattr iattr; 
 
 		inode.i_ino = 2;
@@ -276,7 +280,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_create(&inode, "foofile", strlen("foofile"), 
+		err = mdc_create(&peer, &inode, "foofile", strlen("foofile"), 
 				 0100707, 47114711, 
 				 11, 47, 0, NULL, &hdr);
 		printk("-- done err %d\n", err);
@@ -310,14 +314,14 @@ static struct miscdevice request_dev = {
 };
 
 
-static int __init mds_request_init(void)
+static int __init ptlrpc_request_init(void)
 {
 	misc_register(&request_dev);
         return 0 ;
 }
 
 
-static void __exit mds_request_exit(void)
+static void __exit ptlrpc_request_exit(void)
 {
 	misc_deregister(&request_dev);
 }
@@ -331,5 +335,5 @@ EXPORT_SYMBOL(mdc_getattr);
 EXPORT_SYMBOL(mdc_readpage); 
 EXPORT_SYMBOL(mdc_setattr); 
 
-module_init(mds_request_init);
-module_exit(mds_request_exit);
+module_init(ptlrpc_request_init);
+module_exit(ptlrpc_request_exit);

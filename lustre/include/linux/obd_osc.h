@@ -66,27 +66,6 @@ struct ost_request {
 	wait_queue_head_t rq_wait_for_rep;
 };
 
-struct ost_req { 
-	__u32   connid;
-	__u32   cmd; 
-	struct obdo oa;
-	__u32   buflen1;
-	__u32   buflen2;
-	char *   buf1;
-	char *   buf2;
-};
-
-struct ost_rep {
-	__u32   result;
-	__u32   connid;
-	struct obdo oa;
-	__u32   buflen1;
-	__u32   buflen2;
-	char *   buf1;
-	char *   buf2;
-};
-
-
 /* ost/ost_pack.c */
 int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2, struct ost_req_hdr **hdr, struct ost_req **req, int *len, char **buf);
 int ost_unpack_req(char *buf, int len, struct ost_req_hdr **hdr, struct ost_req **req);

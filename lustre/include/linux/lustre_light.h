@@ -47,26 +47,6 @@ static inline int ll_has_inline(struct inode *inode)
         return (ll_i2info(inode)->lli_flags & OBD_FL_INLINEDATA);
 }
 
-static void inline ll_from_inode(struct obdo *oa, struct inode *inode)
-{
-        struct ll_inode_info *oinfo = ll_i2info(inode);
-
-        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
-               inode->i_ino, (long)oa->o_id, oa->o_valid);
-        obdo_from_inode(oa, inode);
-	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
-                CDEBUG(D_INODE, "copying device %x from inode to obdo\n",
-		       inode->i_rdev);
-		*((obd_rdev *)oa->o_inline) = kdev_t_to_nr(inode->i_rdev);
-                oa->o_obdflags |= OBD_FL_INLINEDATA;
-                oa->o_valid |= OBD_MD_FLINLINE;
-	} else if (ll_has_inline(inode)) {
-                CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
-                memcpy(oa->o_inline, oinfo->lli_inline, OBD_INLINESZ);
-                oa->o_obdflags |= OBD_FL_INLINEDATA;
-                oa->o_valid |= OBD_MD_FLINLINE;
-        }
-} /* ll_from_inode */
 
 
 

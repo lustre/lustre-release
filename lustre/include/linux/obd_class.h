@@ -131,12 +131,14 @@ struct obd_ops {
                       obd_size count, obd_off offset);
         int (*o_iterate)(struct obd_conn *conn, int (*)(obd_id, obd_gr, void *),
                          obd_id *startid, obd_gr group, void *data);
+#if 0
 	int (*o_dmaread)(struct obd_conn *conn, int count, struct obd_buf **dest, 
 			 struct obd_bufref **source); 
 	int (*o_pre_dmawrite)(struct obd_conn *conn, int count, struct obd_buf **dstbufs, 
 			 struct obd_bufref **dest); 
 	int (*o_dmawrite)(struct obd_conn *conn, int count, struct obd_buf **dstbufs, 
 			 struct obd_buf **dest); 
+#endif
 };
 
 struct obd_request {

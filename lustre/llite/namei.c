@@ -80,7 +80,7 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 {
 	struct mds_rep *rep; 
-	struct mds_rep_hdr *hdr = NULL; 
+	struct ptlrep_hdr *hdr = NULL; 
 	struct inode * inode = NULL;
 	int err;
 	int type;
@@ -135,7 +135,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 {
         struct inode *inode;
 	struct mds_rep *rep;
-	struct mds_rep_hdr *hdr;
+	struct ptlrep_hdr *hdr;
         int err;
 
         ENTRY;

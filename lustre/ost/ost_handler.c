@@ -38,9 +38,9 @@
 #include <linux/obd_class.h>
 
 // for testing
-static int ost_queue_req(struct obd_device *obddev, struct ost_request *req)
+static int ost_queue_req(struct obd_device *obddev, struct ptlrpc_request *req)
 {
-	struct ost_request *srv_req; 
+	struct ptlrpc_request *srv_req; 
 	struct ost_obd *ost = &obddev->u.ost;
 	
 	if (!ost) { 
@@ -62,7 +62,7 @@ static int ost_queue_req(struct obd_device *obddev, struct ost_request *req)
 	/* move the request buffer */
 	srv_req->rq_reqbuf = req->rq_reqbuf;
 	srv_req->rq_reqlen    = req->rq_reqlen;
-	srv_req->rq_obd = ost;
+	srv_req->rq_ost = ost;
 
 	/* remember where it came from */
 	srv_req->rq_reply_handle = req;
@@ -74,9 +74,9 @@ static int ost_queue_req(struct obd_device *obddev, struct ost_request *req)
 
 
 /* XXX replace with networking code */
-int ost_reply(struct obd_device *obddev, struct ost_request *req)
+int ost_reply(struct obd_device *obddev, struct ptlrpc_request *req)
 {
-	struct ost_request *clnt_req = req->rq_reply_handle;
+	struct ptlrpc_request *clnt_req = req->rq_reply_handle;
 
 	ENTRY;
 	printk("ost_reply: req %p clnt_req at %p\n", req, clnt_req); 
@@ -104,9 +104,9 @@ int ost_reply(struct obd_device *obddev, struct ost_request *req)
 	return 0;
 }
 
-int ost_error(struct obd_device *obddev, struct ost_request *req)
+int ost_error(struct obd_device *obddev, struct ptlrpc_request *req)
 {
-	struct ost_rep_hdr *hdr;
+	struct ptlrep_hdr *hdr;
 
 	ENTRY;
 	hdr = kmalloc(sizeof(*hdr), GFP_KERNEL);
@@ -128,31 +128,31 @@ int ost_error(struct obd_device *obddev, struct ost_request *req)
 	return ost_reply(obddev, req);
 }
 
-static int ost_destroy(struct ost_obd *ost, struct ost_request *req)
+static int ost_destroy(struct ost_obd *ost, struct ptlrpc_request *req)
 {
 	struct obd_conn conn; 
 	int rc;
 
 	ENTRY;
 	
-	conn.oc_id = req->rq_req->connid;
+	conn.oc_id = req->rq_req.ost->connid;
 	conn.oc_dev = ost->ost_tgt;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
 		printk("ost_destroy: cannot pack reply\n"); 
 		return rc;
 	}
 
-	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_destroy
-		(&conn, &req->rq_req->oa); 
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_destroy
+		(&conn, &req->rq_req.ost->oa); 
 
 	EXIT;
 	return 0;
 }
 
-static int ost_getattr(struct ost_obd *ost, struct ost_request *req)
+static int ost_getattr(struct ost_obd *ost, struct ptlrpc_request *req)
 {
 	struct obd_conn conn; 
 	int rc;
@@ -160,33 +160,244 @@ static int ost_getattr(struct ost_obd *ost, struct ost_request *req)
 	ENTRY;
 	printk("ost getattr entered\n"); 
 	
-	conn.oc_id = req->rq_req->connid;
+	conn.oc_id = req->rq_req.ost->connid;
 	conn.oc_dev = ost->ost_tgt;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
 		printk("ost_getattr: cannot pack reply\n"); 
 		return rc;
 	}
-	req->rq_rep->oa.o_id = req->rq_req->oa.o_id;
-	req->rq_rep->oa.o_valid = req->rq_req->oa.o_valid;
+	req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
+	req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
 
-	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_getattr
-		(&conn, &req->rq_rep->oa); 
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_getattr
+		(&conn, &req->rq_rep.ost->oa); 
 
 	EXIT;
 	return 0;
 }
 
-static int ost_create(struct ost_obd *ost, struct ost_request *req)
+static int ost_create(struct ost_obd *ost, struct ptlrpc_request *req)
 {
 	struct obd_conn conn; 
 	int rc;
 
 	ENTRY;
 	
-	conn.oc_id = req->rq_req->connid;
+	conn.oc_id = req->rq_req.ost->connid;
+	conn.oc_dev = ost->ost_tgt;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		printk("ost_create: cannot pack reply\n"); 
+		return rc;
+	}
+
+	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa, sizeof(req->rq_req.ost->oa));
+
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_create
+		(&conn, &req->rq_rep.ost->oa); 
+
+	EXIT;
+	return 0;
+}
+
+
+static int ost_setattr(struct ost_obd *ost, struct ptlrpc_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+
+	ENTRY;
+	
+	conn.oc_id = req->rq_req.ost->connid;
+	conn.oc_dev = ost->ost_tgt;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		printk("ost_setattr: cannot pack reply\n"); 
+		return rc;
+	}
+
+	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa, sizeof(req->rq_req.ost->oa));
+
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_setattr
+		(&conn, &req->rq_rep.ost->oa); 
+
+	EXIT;
+	return 0;
+}
+
+static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+
+	ENTRY;
+	
+	conn.oc_dev = ost->ost_tgt;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		printk("ost_setattr: cannot pack reply\n"); 
+		return rc;
+	}
+
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_connect(&conn);
+
+	printk("ost_connect: rep buffer %p, id %d\n", req->rq_repbuf, 
+	       conn.oc_id);
+	req->rq_rep.ost->connid = conn.oc_id;
+	EXIT;
+	return 0;
+}
+
+
+static int ost_disconnect(struct ost_obd *ost, struct ptlrpc_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+
+	ENTRY;
+	
+	conn.oc_dev = ost->ost_tgt;
+	conn.oc_id = req->rq_req.ost->connid;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		printk("ost_setattr: cannot pack reply\n"); 
+		return rc;
+	}
+
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_disconnect(&conn);
+
+	EXIT;
+	return 0;
+}
+
+static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+	int vallen;
+	void *val;
+	char *ptr; 
+
+	ENTRY;
+	
+	conn.oc_id = req->rq_req.ost->connid;
+	conn.oc_dev = ost->ost_tgt;
+
+	ptr = ost_req_buf1(req->rq_req.ost);
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_get_info
+		(&conn, req->rq_req.ost->buflen1, ptr, &vallen, &val); 
+
+	rc = ost_pack_rep(val, vallen, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		printk("ost_setattr: cannot pack reply\n"); 
+		return rc;
+	}
+
+	EXIT;
+	return 0;
+}
+
+
+static struct page * ext2_get_page(struct inode *dir, unsigned long n)
+{
+	struct address_space *mapping = dir->i_mapping;
+	struct page *page = read_cache_page(mapping, n,
+				(filler_t*)mapping->a_ops->readpage, NULL);
+	if (!IS_ERR(page)) {
+		wait_on_page(page);
+		kmap(page);
+		if (!Page_Uptodate(page))
+			goto fail;
+		if (!PageChecked(page))
+			ext2_check_page(page);
+		if (PageError(page))
+			goto fail;
+	}
+	return page;
+
+fail:
+	ext2_put_page(page);
+	return ERR_PTR(-EIO);
+}
+
+#if 0
+
+static inline void ext2_put_page(struct page *page)
+{
+	kunmap(page);
+	page_cache_release(page);
+}
+
+/* Releases the page */
+void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
+			struct page *page, struct inode *inode)
+{
+	unsigned from = (char *) de - (char *) page_address(page);
+	unsigned to = from + le16_to_cpu(de->rec_len);
+	int err;
+
+	lock_page(page);
+	err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
+	if (err)
+		BUG();
+	de->inode = cpu_to_le32(inode->i_ino);
+	ext2_set_de_type (de, inode);
+	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
+	err = ext2_commit_chunk(page, from, to);
+	UnlockPage(page);
+	ext2_put_page(page);
+}
+
+static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
+{
+	struct inode *dir = page->mapping->host;
+	int err = 0;
+	dir->i_version = ++event;
+	SetPageUptodate(page);
+	set_page_clean(page);
+
+	//page->mapping->a_ops->commit_write(NULL, page, from, to);
+	//if (IS_SYNC(dir))
+	//	err = waitfor_one_page(page);
+	return err;
+}
+
+#endif
+
+int ost_prepw(struct ost_obd *obddev, struct ptlrpc_request *req)
+{
+#if 0
+	struct obd_conn conn; 
+	int rc;
+	int i, j, n;
+	int objcount;
+	void *tmp;
+	struct niobuf **nb;
+	struct obd_ioo **ioo;
+
+	ENTRY;
+	
+	tmp1 = ost_req_buf1(req);
+	tmp2 = ost_req_buf2(req);
+	objcount = req->buflen1 / sizeof(**ioo); 
+
+	n = 0;
+	for (i=0 ; i<objcount ; i++) { 
+		obd_unpack_ioo
+
+	conn.oc_id = req->rq_req.ost->connid;
 	conn.oc_dev = ost->ost_tgt;
 
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
@@ -196,131 +407,29 @@ static int ost_create(struct ost_obd *ost, struct ost_request *req)
 		return rc;
 	}
 
-	memcpy(&req->rq_rep->oa, &req->rq_req->oa, sizeof(req->rq_req->oa));
+	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa, sizeof(req->rq_req.ost->oa));
 
-	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_create
-		(&conn, &req->rq_rep->oa); 
-
-	EXIT;
-	return 0;
-}
-
-
-static int ost_setattr(struct ost_obd *ost, struct ost_request *req)
-{
-	struct obd_conn conn; 
-	int rc;
-
-	ENTRY;
-	
-	conn.oc_id = req->rq_req->connid;
-	conn.oc_dev = ost->ost_tgt;
-
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		printk("ost_setattr: cannot pack reply\n"); 
-		return rc;
-	}
-
-	memcpy(&req->rq_rep->oa, &req->rq_req->oa, sizeof(req->rq_req->oa));
-
-	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_setattr
-		(&conn, &req->rq_rep->oa); 
+	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_create
+		(&conn, &req->rq_rep.ost->oa); 
 
 	EXIT;
 	return 0;
-}
+#endif
+	return -ENOTSUPP;
 
-static int ost_connect(struct ost_obd *ost, struct ost_request *req)
-{
-	struct obd_conn conn; 
-	int rc;
-
-	ENTRY;
-	
-	conn.oc_dev = ost->ost_tgt;
-
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		printk("ost_setattr: cannot pack reply\n"); 
-		return rc;
-	}
-
-	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_connect(&conn);
-
-	printk("ost_connect: rep buffer %p, id %d\n", req->rq_repbuf, 
-	       conn.oc_id);
-	req->rq_rep->connid = conn.oc_id;
-	EXIT;
-	return 0;
 }
 
 
-static int ost_disconnect(struct ost_obd *ost, struct ost_request *req)
-{
-	struct obd_conn conn; 
-	int rc;
-
-	ENTRY;
-	
-	conn.oc_dev = ost->ost_tgt;
-	conn.oc_id = req->rq_req->connid;
-
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		printk("ost_setattr: cannot pack reply\n"); 
-		return rc;
-	}
-
-	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_disconnect(&conn);
-
-	EXIT;
-	return 0;
-}
-
-static int ost_get_info(struct ost_obd *ost, struct ost_request *req)
-{
-	struct obd_conn conn; 
-	int rc;
-	int vallen;
-	void *val;
-
-	ENTRY;
-	
-	conn.oc_id = req->rq_req->connid;
-	conn.oc_dev = ost->ost_tgt;
-
-	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_get_info
-		(&conn, req->rq_req->buflen1, req->rq_req->buf1, &vallen, &val); 
-
-
-	rc = ost_pack_rep(val, vallen, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		printk("ost_setattr: cannot pack reply\n"); 
-		return rc;
-	}
-
-	EXIT;
-	return 0;
-}
-
-
-
-//int ost_handle(struct ost_conn *conn, int len, char *buf)
-int ost_handle(struct obd_device *obddev, struct ost_request *req)
+int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 {
 	int rc;
 	struct ost_obd *ost = &obddev->u.ost;
-	struct ost_req_hdr *hdr;
+	struct ptlreq_hdr *hdr;
 
 	ENTRY;
 	printk("ost_handle: req at %p\n", req); 
 
-	hdr = (struct ost_req_hdr *)req->rq_reqbuf;
+	hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
 	if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {
 		printk("lustre_ost: wrong packet type sent %d\n",
 		       NTOH__u32(hdr->type));
@@ -329,7 +438,7 @@ int ost_handle(struct obd_device *obddev, struct ost_request *req)
 	}
 
 	rc = ost_unpack_req(req->rq_reqbuf, req->rq_reqlen, 
-			    &req->rq_reqhdr, &req->rq_req);
+			    &req->rq_reqhdr, &req->rq_req.ost);
 	if (rc) { 
 		printk("lustre_ost: Invalid request\n");
 		EXIT; 
@@ -367,13 +476,17 @@ int ost_handle(struct obd_device *obddev, struct ost_request *req)
 		CDEBUG(D_INODE, "setattr\n");
 		rc = ost_setattr(ost, req);
 		break;
-
+	case OST_PREPW:
+		CDEBUG(D_INODE, "prepw\n");
+		rc = ost_prepw(ost, req);
+		break;
 	default:
+		req->rq_status = -ENOTSUPP;
 		return ost_error(obddev, req);
 	}
 
 out:
-	req->rq_rephdr->status = rc;
+	req->rq_status = rc;
 	if (rc) { 
 		printk("ost: processing error %d\n", rc);
 		ost_error(obddev, req);
@@ -420,7 +533,7 @@ int ost_main(void *arg)
 
 	/* And now, wait forever for commit wakeup events. */
 	while (1) {
-		struct ost_request *request;
+		struct ptlrpc_request *request;
 		int rc; 
 
 		if (ost->ost_flags & OST_EXIT)
@@ -438,7 +551,7 @@ int ost_main(void *arg)
 		} else { 
 			printk("---> %d\n", __LINE__);
 			request = list_entry(ost->ost_reqs.next, 
-					     struct ost_request, rq_list);
+					     struct ptlrpc_request, rq_list);
 			printk("---> %d\n", __LINE__);
 			list_del(&request->rq_list);
 			rc = ost_handle(obddev, request); 
