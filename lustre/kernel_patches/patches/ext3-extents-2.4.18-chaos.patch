@@ -1,15 +1,15 @@
  fs/ext3/Makefile           |    3 
  fs/ext3/extents.c          | 1572 +++++++++++++++++++++++++++++++++++++++++++++
  fs/ext3/ialloc.c           |    4 
- fs/ext3/inode.c            |   26 
+ fs/ext3/inode.c            |   30 
  fs/ext3/super.c            |    8 
  include/linux/ext3_fs.h    |   18 
  include/linux/ext3_fs_i.h  |    4 
  include/linux/ext3_fs_sb.h |   10 
- 8 files changed, 1639 insertions(+), 6 deletions(-)
+ 8 files changed, 1641 insertions(+), 8 deletions(-)
 
 --- /dev/null	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.18-chaos-uml-alexey/fs/ext3/extents.c	2003-09-14 00:42:28.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/ext3/extents.c	2003-09-15 10:57:24.000000000 +0400
 @@ -0,0 +1,1572 @@
 +/*
 + *
@@ -1583,8 +1583,8 @@
 +				sbi->s_ext_blocks / sbi->s_ext_extents);
 +}
 +
---- linux-2.4.18-chaos-uml/fs/ext3/ialloc.c~ext3-extents-2.4.18-chaos	2003-09-09 16:57:40.000000000 +0400
-+++ linux-2.4.18-chaos-uml-alexey/fs/ext3/ialloc.c	2003-09-14 00:23:18.000000000 +0400
+--- linux-2.4.18-chaos/fs/ext3/ialloc.c~ext3-extents-2.4.18-chaos	2003-09-14 17:32:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/ext3/ialloc.c	2003-09-15 10:57:24.000000000 +0400
 @@ -573,6 +573,10 @@ repeat:
  	ei->i_prealloc_count = 0;
  #endif
@@ -1596,8 +1596,8 @@
  
  	if (ei->i_flags & EXT3_SYNC_FL)
  		inode->i_flags |= S_SYNC;
---- linux-2.4.18-chaos-uml/fs/ext3/inode.c~ext3-extents-2.4.18-chaos	2003-09-09 16:57:41.000000000 +0400
-+++ linux-2.4.18-chaos-uml-alexey/fs/ext3/inode.c	2003-09-14 00:56:08.000000000 +0400
+--- linux-2.4.18-chaos/fs/ext3/inode.c~ext3-extents-2.4.18-chaos	2003-09-14 17:32:16.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/ext3/inode.c	2003-09-15 19:36:17.000000000 +0400
 @@ -842,6 +842,15 @@ changed:
  	goto reread;
  }
@@ -1687,8 +1687,26 @@
  	if (ext3_should_journal_data(inode))
  		ret = 3 * (bpp + indirects) + 2;
  	else
---- linux-2.4.18-chaos-uml/fs/ext3/Makefile~ext3-extents-2.4.18-chaos	2003-09-09 16:57:40.000000000 +0400
-+++ linux-2.4.18-chaos-uml-alexey/fs/ext3/Makefile	2003-09-09 16:57:41.000000000 +0400
+@@ -3082,7 +3100,7 @@ int ext3_prep_san_write(struct inode *in
+ 
+ 	/* alloc blocks one by one */
+ 	for (i = 0; i < nblocks; i++) {
+-		ret = ext3_get_block_handle(handle, inode, blocks[i],
++		ret = ext3_get_block_wrap(handle, inode, blocks[i],
+ 						&bh_tmp, 1, 1);
+ 		if (ret)
+ 			break;
+@@ -3143,7 +3161,7 @@ int ext3_map_inode_page(struct inode *in
+                 if (blocks[i] != 0)
+                         continue;
+ 
+-                rc = ext3_get_block_handle(handle, inode, iblock, &dummy, 1, 1);
++                rc = ext3_get_block_wrap(handle, inode, iblock, &dummy, 1, 1);
+                 if (rc) {
+                         printk(KERN_INFO "ext3_map_inode_page: error reading "
+                                "block %ld\n", iblock);
+--- linux-2.4.18-chaos/fs/ext3/Makefile~ext3-extents-2.4.18-chaos	2003-09-14 17:32:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/ext3/Makefile	2003-09-15 10:57:24.000000000 +0400
 @@ -12,7 +12,8 @@ O_TARGET := ext3.o
  export-objs :=	ext3-exports.o
  
@@ -1699,8 +1717,8 @@
  obj-m    := $(O_TARGET)
  
  include $(TOPDIR)/Rules.make
---- linux-2.4.18-chaos-uml/fs/ext3/super.c~ext3-extents-2.4.18-chaos	2003-09-09 16:57:41.000000000 +0400
-+++ linux-2.4.18-chaos-uml-alexey/fs/ext3/super.c	2003-09-13 23:52:17.000000000 +0400
+--- linux-2.4.18-chaos/fs/ext3/super.c~ext3-extents-2.4.18-chaos	2003-09-14 17:32:16.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/ext3/super.c	2003-09-15 10:57:24.000000000 +0400
 @@ -619,6 +619,7 @@ void ext3_put_super (struct super_block 
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
@@ -1730,8 +1748,8 @@
  
  	return sb;
  
---- linux-2.4.18-chaos-uml/include/linux/ext3_fs.h~ext3-extents-2.4.18-chaos	2003-09-09 16:57:40.000000000 +0400
-+++ linux-2.4.18-chaos-uml-alexey/include/linux/ext3_fs.h	2003-09-09 16:57:41.000000000 +0400
+--- linux-2.4.18-chaos/include/linux/ext3_fs.h~ext3-extents-2.4.18-chaos	2003-09-14 17:32:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/linux/ext3_fs.h	2003-09-15 10:57:24.000000000 +0400
 @@ -183,6 +183,7 @@ struct ext3_group_desc
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
@@ -1785,8 +1803,8 @@
  
  #endif	/* __KERNEL__ */
  
---- linux-2.4.18-chaos-uml/include/linux/ext3_fs_i.h~ext3-extents-2.4.18-chaos	2001-11-22 22:46:19.000000000 +0300
-+++ linux-2.4.18-chaos-uml-alexey/include/linux/ext3_fs_i.h	2003-09-09 16:57:41.000000000 +0400
+--- linux-2.4.18-chaos/include/linux/ext3_fs_i.h~ext3-extents-2.4.18-chaos	2001-11-22 22:46:19.000000000 +0300
++++ linux-2.4.18-chaos-alexey/include/linux/ext3_fs_i.h	2003-09-15 10:57:24.000000000 +0400
 @@ -73,6 +73,10 @@ struct ext3_inode_info {
  	 * by other means, so we have truncate_sem.
  	 */
@@ -1798,8 +1816,8 @@
  };
  
  #endif	/* _LINUX_EXT3_FS_I */
---- linux-2.4.18-chaos-uml/include/linux/ext3_fs_sb.h~ext3-extents-2.4.18-chaos	2003-09-09 16:57:40.000000000 +0400
-+++ linux-2.4.18-chaos-uml-alexey/include/linux/ext3_fs_sb.h	2003-09-09 16:57:41.000000000 +0400
+--- linux-2.4.18-chaos/include/linux/ext3_fs_sb.h~ext3-extents-2.4.18-chaos	2003-09-14 17:32:15.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/linux/ext3_fs_sb.h	2003-09-15 10:57:24.000000000 +0400
 @@ -84,6 +84,16 @@ struct ext3_sb_info {
  	wait_queue_head_t s_delete_thread_queue;
  	wait_queue_head_t s_delete_waiter_queue;
