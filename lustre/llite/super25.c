@@ -43,6 +43,13 @@ struct super_block * ll_get_sb(struct file_system_type *fs_type,
         return get_sb_nodev(fs_type, flags, data, ll_fill_super);
 }
 
+struct super_block * lustre_get_sb(struct file_system_type *fs_type,
+                               int flags, const char *devname, void * data)
+{
+        /* calls back in fill super */
+        return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
+}
+
 static kmem_cache_t *ll_inode_cachep;
 
 static struct inode *ll_alloc_inode(struct super_block *sb)
@@ -92,7 +99,7 @@ void ll_destroy_inodecache(void)
 }
 
 /* exported operations */
-struct super_operations ll_super_operations =
+struct super_operations lustre_super_operations =
 {
         alloc_inode: ll_alloc_inode,
         destroy_inode: ll_destroy_inode,
@@ -107,6 +114,13 @@ struct file_system_type lustre_lite_fs_type = {
         .owner  = THIS_MODULE,
         .name =   "lustre_lite",
         .get_sb = ll_get_sb,
+        .kill_sb = kill_anon_super,
+};
+
+struct file_system_type lustre_fs_type = {
+        .owner  = THIS_MODULE,
+        .name =   "lustre",
+        .get_sb = lustre_get_sb,
         .kill_sb = kill_anon_super,
 };
 
@@ -129,11 +143,18 @@ static int __init init_lustre_lite(void)
         proc_lustre_fs_root = proc_lustre_root ?
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
-        return register_filesystem(&lustre_lite_fs_type);
+        rc = register_filesystem(&lustre_lite_fs_type);
+        if (!rc) {
+                rc = register_filesystem(&lustre_fs_type);
+                if (rc)
+                        unregister_filesystem(&lustre_fs_type);
+        }
+        return rc;
 }
 
 static void __exit exit_lustre_lite(void)
 {
+        unregister_filesystem(&lustre_fs_type);
         unregister_filesystem(&lustre_lite_fs_type);
         ll_destroy_inodecache();
         kmem_cache_destroy(ll_file_data_slab);

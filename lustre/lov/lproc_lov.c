@@ -160,7 +160,7 @@ struct seq_operations lov_tgt_sops = {
 
 static int lov_target_seq_open(struct inode *inode, struct file *file)
 {
-        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc = seq_open(file, &lov_tgt_sops);
 

@@ -1,9 +1,9 @@
  0 files changed
 
-Index: linux-2.6.0-test6/fs/namei.c
+Index: linux-2.6.0/fs/namei.c
 ===================================================================
---- linux-2.6.0-test6.orig/fs/namei.c	2003-10-07 15:33:15.000000000 +0800
-+++ linux-2.6.0-test6/fs/namei.c	2003-10-07 15:39:16.000000000 +0800
+--- linux-2.6.0.orig/fs/namei.c	2004-01-04 15:22:42.000000000 +0300
++++ linux-2.6.0/fs/namei.c	2004-01-04 15:25:04.000000000 +0300
 @@ -1270,7 +1270,7 @@
  		if (!error) {
  			DQUOT_INIT(inode);
@@ -220,11 +220,11 @@ Index: linux-2.6.0-test6/fs/namei.c
  exit5:
  	dput(new_dentry);
  exit4:
-Index: linux-2.6.0-test6/fs/open.c
+Index: linux-2.6.0/fs/open.c
 ===================================================================
---- linux-2.6.0-test6.orig/fs/open.c	2003-10-07 15:33:15.000000000 +0800
-+++ linux-2.6.0-test6/fs/open.c	2003-10-07 15:40:41.000000000 +0800
-@@ -178,9 +178,10 @@
+--- linux-2.6.0.orig/fs/open.c	2004-01-04 15:21:49.000000000 +0300
++++ linux-2.6.0/fs/open.c	2004-01-04 15:25:04.000000000 +0300
+@@ -180,9 +180,10 @@
  	return error;
  }
  
@@ -236,7 +236,7 @@ Index: linux-2.6.0-test6/fs/open.c
  	struct iattr newattrs;
  
  	/* Not pretty: "inode->i_size" shouldn't really be signed. But it is. */
-@@ -191,7 +192,14 @@
+@@ -193,7 +194,14 @@
  	newattrs.ia_valid = ATTR_SIZE | ATTR_CTIME;
  	down(&dentry->d_inode->i_sem);
  	down_write(&dentry->d_inode->i_alloc_sem);
@@ -252,7 +252,7 @@ Index: linux-2.6.0-test6/fs/open.c
  	up_write(&dentry->d_inode->i_alloc_sem);
  	up(&dentry->d_inode->i_sem);
  	return err;
-@@ -247,7 +255,7 @@
+@@ -249,7 +257,7 @@
  	error = locks_verify_truncate(inode, NULL, length);
  	if (!error) {
  		DQUOT_INIT(inode);
@@ -261,7 +261,7 @@ Index: linux-2.6.0-test6/fs/open.c
  	}
  	put_write_access(inode);
  
-@@ -299,7 +307,7 @@
+@@ -301,7 +309,7 @@
  
  	error = locks_verify_truncate(inode, file, length);
  	if (!error)
@@ -270,7 +270,7 @@ Index: linux-2.6.0-test6/fs/open.c
  out_putf:
  	fput(file);
  out:
-@@ -378,9 +386,19 @@
+@@ -380,9 +388,19 @@
  		    (error = permission(inode,MAY_WRITE,&nd)) != 0)
  			goto dput_and_out;
  	}
@@ -293,7 +293,7 @@ Index: linux-2.6.0-test6/fs/open.c
  dput_and_out:
  	path_release(&nd);
  out:
-@@ -431,9 +449,19 @@
+@@ -433,9 +451,19 @@
  		    (error = permission(inode,MAY_WRITE,&nd)) != 0)
  			goto dput_and_out;
  	}
@@ -316,7 +316,7 @@ Index: linux-2.6.0-test6/fs/open.c
  dput_and_out:
  	path_release(&nd);
  out:
-@@ -634,6 +662,18 @@
+@@ -636,6 +664,18 @@
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
  	
@@ -335,7 +335,7 @@ Index: linux-2.6.0-test6/fs/open.c
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto dput_and_out;
-@@ -667,6 +707,18 @@
+@@ -669,6 +709,18 @@
  	if (IS_RDONLY(inode))
  		goto out;
  	error = -EPERM;
@@ -354,7 +354,7 @@ Index: linux-2.6.0-test6/fs/open.c
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
  	newattrs.ia_valid =  ATTR_CTIME;
-@@ -680,6 +732,7 @@
+@@ -682,6 +734,7 @@
  	}
  	if (!S_ISDIR(inode->i_mode))
  		newattrs.ia_valid |= ATTR_KILL_SUID|ATTR_KILL_SGID;
@@ -362,11 +362,24 @@ Index: linux-2.6.0-test6/fs/open.c
  	down(&inode->i_sem);
  	error = notify_change(dentry, &newattrs);
  	up(&inode->i_sem);
-Index: linux-2.6.0-test6/include/linux/fs.h
+Index: linux-2.6.0/fs/exec.c
 ===================================================================
---- linux-2.6.0-test6.orig/include/linux/fs.h	2003-10-07 15:34:10.000000000 +0800
-+++ linux-2.6.0-test6/include/linux/fs.h	2003-10-07 15:39:17.000000000 +0800
-@@ -831,13 +831,20 @@
+--- linux-2.6.0.orig/fs/exec.c	2004-01-04 15:21:49.000000000 +0300
++++ linux-2.6.0/fs/exec.c	2004-01-04 15:25:04.000000000 +0300
+@@ -1405,7 +1405,7 @@
+ 		goto close_fail;
+ 	if (!file->f_op->write)
+ 		goto close_fail;
+-	if (do_truncate(file->f_dentry, 0) != 0)
++	if (do_truncate(file->f_dentry, 0, 0) != 0)
+ 		goto close_fail;
+ 
+ 	retval = binfmt->core_dump(signr, regs, file);
+Index: linux-2.6.0/include/linux/fs.h
+===================================================================
+--- linux-2.6.0.orig/include/linux/fs.h	2004-01-04 15:21:49.000000000 +0300
++++ linux-2.6.0/include/linux/fs.h	2004-01-04 15:25:04.000000000 +0300
+@@ -836,13 +836,20 @@
  	int (*create) (struct inode *,struct dentry *,int, struct nameidata *);
  	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
@@ -387,7 +400,7 @@ Index: linux-2.6.0-test6/include/linux/fs.h
  	int (*readlink) (struct dentry *, char __user *,int);
  	int (*follow_link) (struct dentry *, struct nameidata *);
  	void (*truncate) (struct inode *);
-@@ -1122,7 +1129,7 @@
+@@ -1127,7 +1134,7 @@
  
  asmlinkage long sys_open(const char __user *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
@@ -396,16 +409,15 @@ Index: linux-2.6.0-test6/include/linux/fs.h
  
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
-Index: linux-2.6.0-test6/fs/exec.c
+Index: linux-2.6.0/net/unix/af_unix.c
 ===================================================================
---- linux-2.6.0-test6.orig/fs/exec.c	2003-10-07 15:33:15.000000000 +0800
-+++ linux-2.6.0-test6/fs/exec.c	2003-10-07 15:39:17.000000000 +0800
-@@ -1390,7 +1390,7 @@
- 		goto close_fail;
- 	if (!file->f_op->write)
- 		goto close_fail;
--	if (do_truncate(file->f_dentry, 0) != 0)
-+	if (do_truncate(file->f_dentry, 0, 0) != 0)
- 		goto close_fail;
- 
- 	retval = binfmt->core_dump(signr, regs, file);
+--- linux-2.6.0.orig/net/unix/af_unix.c	2004-01-04 15:21:21.000000000 +0300
++++ linux-2.6.0/net/unix/af_unix.c	2004-01-04 15:25:18.000000000 +0300
+@@ -592,6 +592,7 @@
+ 	int err = 0;
+ 	
+ 	if (sunname->sun_path[0]) {
++		intent_init(&nd.intent, IT_LOOKUP);
+ 		err = path_lookup(sunname->sun_path, LOOKUP_FOLLOW, &nd);
+ 		if (err)
+ 			goto fail;

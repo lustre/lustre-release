@@ -7,9 +7,11 @@
  include/linux/ext3_fs.h            |    2 
  7 files changed, 304 insertions(+), 1 deletion(-)
 
---- linux-2.6.0-test6/Documentation/filesystems/ext2.txt~iopen-2.6.0-test6	2002-11-11 06:28:06.000000000 +0300
-+++ linux-2.6.0-test6-alexey/Documentation/filesystems/ext2.txt	2003-10-14 17:03:48.000000000 +0400
-@@ -35,6 +35,22 @@ resgid=n			The group ID which may use th
+Index: linux-2.6.0/Documentation/filesystems/ext2.txt
+===================================================================
+--- linux-2.6.0.orig/Documentation/filesystems/ext2.txt	2002-11-11 06:28:06.000000000 +0300
++++ linux-2.6.0/Documentation/filesystems/ext2.txt	2004-01-07 17:12:07.000000000 +0300
+@@ -35,6 +35,22 @@
  
  sb=n				Use alternate superblock at this location.
  
@@ -32,8 +34,10 @@
  grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
  
  
---- linux-2.6.0-test6/fs/ext3/inode.c~iopen-2.6.0-test6	2003-10-14 17:03:47.000000000 +0400
-+++ linux-2.6.0-test6-alexey/fs/ext3/inode.c	2003-10-14 17:03:48.000000000 +0400
+Index: linux-2.6.0/fs/ext3/inode.c
+===================================================================
+--- linux-2.6.0.orig/fs/ext3/inode.c	2004-01-04 15:27:40.000000000 +0300
++++ linux-2.6.0/fs/ext3/inode.c	2004-01-07 17:12:07.000000000 +0300
 @@ -37,6 +37,7 @@
  #include <linux/mpage.h>
  #include <linux/uio.h>
@@ -42,7 +46,7 @@
  #include "acl.h"
  
  /*
-@@ -2479,6 +2480,8 @@ void ext3_read_inode(struct inode * inod
+@@ -2472,6 +2473,8 @@
  	ei->i_acl = EXT3_ACL_NOT_CACHED;
  	ei->i_default_acl = EXT3_ACL_NOT_CACHED;
  #endif
@@ -51,9 +55,11 @@
  	if (ext3_get_inode_loc(inode, &iloc, 0))
  		goto bad_inode;
  	bh = iloc.bh;
---- /dev/null	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.6.0-test6-alexey/fs/ext3/iopen.c	2003-10-14 17:03:48.000000000 +0400
-@@ -0,0 +1,239 @@
+Index: linux-2.6.0/fs/ext3/iopen.c
+===================================================================
+--- linux-2.6.0.orig/fs/ext3/iopen.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.6.0/fs/ext3/iopen.c	2004-01-07 17:14:22.000000000 +0300
+@@ -0,0 +1,223 @@
 +
 +
 +/*
@@ -186,31 +192,15 @@
 +                        break;
 +                }
 +        }
-+
-+        if (!goal) { 
-+                spin_unlock(&dcache_lock);
-+                return NULL; 
-+        }
-+
-+        /* Move the goal to the de hash queue */
-+        goal->d_flags &= ~DCACHE_DISCONNECTED;
-+	hlist_add_before(&goal->d_hash, &de->d_hash);
-+	hlist_del(&goal->d_hash);
-+
-+	list_del(&goal->d_child);
-+	list_del(&de->d_child);
-+
-+	/* Switch the parents and the names.. */
-+	switch_names(goal, de);
-+	do_switch(goal->d_parent, de->d_parent);
-+	do_switch(goal->d_name.len, de->d_name.len);
-+	do_switch(goal->d_name.hash, de->d_name.hash);
-+
-+	/* And add them back to the (new) parent lists */
-+	list_add(&goal->d_child, &goal->d_parent->d_subdirs);
-+	list_add(&de->d_child, &de->d_parent->d_subdirs);
-+
 +        spin_unlock(&dcache_lock);
++
++        if (!goal)
++                return NULL; 
++
++        goal->d_flags &= ~DCACHE_DISCONNECTED;
++	d_rehash(de);
++	d_move(goal, de);
++
 +        return goal;
 +}
 +
@@ -293,8 +283,10 @@
 +
 +	return 1;
 +}
---- /dev/null	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.6.0-test6-alexey/fs/ext3/iopen.h	2003-10-14 17:03:48.000000000 +0400
+Index: linux-2.6.0/fs/ext3/iopen.h
+===================================================================
+--- linux-2.6.0.orig/fs/ext3/iopen.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.6.0/fs/ext3/iopen.h	2004-01-07 17:12:07.000000000 +0300
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -311,8 +303,10 @@
 +extern int ext3_iopen_get_inode(struct inode * inode);
 +
 +
---- linux-2.6.0-test6/fs/ext3/namei.c~iopen-2.6.0-test6	2003-10-14 17:03:47.000000000 +0400
-+++ linux-2.6.0-test6-alexey/fs/ext3/namei.c	2003-10-14 17:03:48.000000000 +0400
+Index: linux-2.6.0/fs/ext3/namei.c
+===================================================================
+--- linux-2.6.0.orig/fs/ext3/namei.c	2004-01-04 15:27:40.000000000 +0300
++++ linux-2.6.0/fs/ext3/namei.c	2004-01-07 17:12:45.000000000 +0300
 @@ -37,6 +37,7 @@
  #include <linux/buffer_head.h>
  #include <linux/smp_lock.h>
@@ -321,7 +315,7 @@
  #include "acl.h"
  
  /*
-@@ -970,15 +971,21 @@ errout:
+@@ -970,15 +971,21 @@
  }
  #endif
  
@@ -343,22 +337,26 @@
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -991,6 +998,12 @@ static struct dentry *ext3_lookup(struct
+@@ -989,8 +996,14 @@
+ 		if (!inode)
+ 			return ERR_PTR(-EACCES);
  	}
- 	if (inode)
- 		return d_splice_alias(inode, dentry);
-+
 +	if (inode && (alternate = iopen_connect_dentry(dentry, inode))) {
 +		iput(inode);
 +		return alternate;
 +	}
 +
+ 	if (inode)
+ 		return d_splice_alias(inode, dentry);
++
  	d_add(dentry, inode);
  	return NULL;
  }
---- linux-2.6.0-test6/fs/ext3/super.c~iopen-2.6.0-test6	2003-10-14 17:03:47.000000000 +0400
-+++ linux-2.6.0-test6-alexey/fs/ext3/super.c	2003-10-14 17:03:48.000000000 +0400
-@@ -534,7 +534,7 @@ enum {
+Index: linux-2.6.0/fs/ext3/super.c
+===================================================================
+--- linux-2.6.0.orig/fs/ext3/super.c	2004-01-04 15:27:40.000000000 +0300
++++ linux-2.6.0/fs/ext3/super.c	2004-01-07 17:12:07.000000000 +0300
+@@ -535,7 +535,7 @@
  	Opt_user_xattr, Opt_nouser_xattr, Opt_acl, Opt_noacl, Opt_noload,
  	Opt_commit, Opt_journal_update, Opt_journal_inum,
  	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
@@ -367,7 +365,7 @@
  };
  
  static match_table_t tokens = {
-@@ -573,6 +573,9 @@ static match_table_t tokens = {
+@@ -574,6 +574,9 @@
  	{Opt_ignore, "noquota"},
  	{Opt_ignore, "quota"},
  	{Opt_ignore, "usrquota"},
@@ -377,7 +375,7 @@
  	{Opt_err, NULL}
  };
  
-@@ -760,6 +763,18 @@ static int parse_options (char * options
+@@ -761,6 +764,18 @@
  		case Opt_abort:
  			set_opt(sbi->s_mount_opt, ABORT);
  			break;
@@ -396,9 +394,24 @@
  		case Opt_ignore:
  			break;
  		default:
---- linux-2.6.0-test6/include/linux/ext3_fs.h~iopen-2.6.0-test6	2003-10-14 17:03:47.000000000 +0400
-+++ linux-2.6.0-test6-alexey/include/linux/ext3_fs.h	2003-10-14 17:03:48.000000000 +0400
-@@ -325,6 +325,8 @@ struct ext3_inode {
+Index: linux-2.6.0/fs/ext3/Makefile
+===================================================================
+--- linux-2.6.0.orig/fs/ext3/Makefile	2003-09-19 18:00:24.000000000 +0400
++++ linux-2.6.0/fs/ext3/Makefile	2004-01-07 17:12:07.000000000 +0300
+@@ -5,7 +5,7 @@
+ obj-$(CONFIG_EXT3_FS) += ext3.o
+ 
+ ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
+-	   ioctl.o namei.o super.o symlink.o hash.o
++	   ioctl.o namei.o super.o symlink.o hash.o iopen.o
+ 
+ ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
+ ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
+Index: linux-2.6.0/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.0.orig/include/linux/ext3_fs.h	2004-01-04 15:27:40.000000000 +0300
++++ linux-2.6.0/include/linux/ext3_fs.h	2004-01-07 17:12:07.000000000 +0300
+@@ -325,6 +325,8 @@
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
  #define EXT3_MOUNT_POSIX_ACL		0x8000	/* POSIX Access Control Lists */
@@ -407,5 +420,3 @@
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-
-_

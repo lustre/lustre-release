@@ -556,7 +556,7 @@ struct seq_operations obd_device_list_sops = {
 
 static int obd_device_list_open(struct inode *inode, struct file *file)
 {
-        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc = seq_open(file, &obd_device_list_sops);
 

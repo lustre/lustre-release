@@ -95,18 +95,18 @@ struct mds_update_record {
 /* i_attr_flags holds the open count in the inode in 2.4 */
 //XXX Alex implement on 2.4 with i_attr_flags and find soln for 2.5 please
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-# define mds_open_orphan_count(inode)   (0)
-# define mds_open_orphan_inc(inode)  do { } while (0);
-# define mds_open_orphan_dec_test(inode)  (0)
+# define mds_inode_oatomic(inode)    ((atomic_t *)&(inode)->i_cindex)
 #else
 # define mds_inode_oatomic(inode)    ((atomic_t *)&(inode)->i_attr_flags)
+#endif
+
 # define mds_open_orphan_count(inode)                          \
   atomic_read(mds_inode_oatomic(inode))
 # define mds_open_orphan_inc(inode)                            \
   atomic_inc(mds_inode_oatomic(inode))
 # define mds_open_orphan_dec_test(inode)                       \
   atomic_dec_and_test(mds_inode_oatomic(inode))
-#endif
+
 #define mds_inode_is_orphan(inode)  ((inode)->i_flags & 0x4000000)
 #define mds_inode_set_orphan(inode) (inode)->i_flags |= 0x4000000
 

@@ -25,4 +25,4 @@ fi
 
 [ "$NODE" ] && node_opt="--node $NODE"
 
-${LCONF} $portals_opt $lustre_opt $node_opt $@ $conf_opt || exit 2
+${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt $@ $conf_opt || exit 2

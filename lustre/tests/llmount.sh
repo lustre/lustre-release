@@ -26,5 +26,5 @@ fi
 
 [ "$NODE" ] && node_opt="--node $NODE"
 
-${LCONF}  $portals_opt $lustre_opt $node_opt ${REFORMAT:---reformat} $@ \
+${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt ${REFORMAT:---reformat} $@ \
 	$conf_opt  || exit 2

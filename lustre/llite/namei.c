@@ -376,7 +376,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
         struct dentry *de;
         ENTRY;
 
-        if (nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
+        if (nd && nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
                 de = ll_lookup_it(parent, dentry, &nd->intent, nd->flags);
         else
                 de = ll_lookup_it(parent, dentry, NULL, 0);

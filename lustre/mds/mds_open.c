@@ -30,6 +30,7 @@
 
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/version.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 # include <linux/buffer_head.h>
 # include <linux/workqueue.h>
@@ -721,7 +722,7 @@ int mds_pin(struct ptlrpc_request *req)
 int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
                        struct lustre_handle *child_lockh)
 {
-        struct ldlm_res_id child_res_id = { .name = { inode->i_ino } };
+        struct ldlm_res_id child_res_id = { .name = { inode->i_ino, 0, 1, 0 } };
         struct lustre_handle lockh;
         int lock_flags = 0;
         int rc;
