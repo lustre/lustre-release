@@ -14,7 +14,7 @@ if [ -f $SRCDIR/Makefile.am ]; then
 	DBGCTL=$PORTALS/linux/utils/debugctl
 	ACCEPTOR=$PORTALS/linux/utils/acceptor
 
-	OBDCTL=$LUSTRE/utils/obdctl
+	OBDCTL=$LUSTRE/utils/lctl
 else
 	USEDEV=no
 	# should have configure set the paths here
@@ -22,10 +22,10 @@ else
 	PORTALS=/lib/modules
 	LUSTRE=/lib/modules
 
-	PTLCTL=$BINDIR/ptlctl
-	DBGCTL=$BINDIR/debugctl
+	PTLCTL=$BINDIR/lctl
+	DBGCTL=$BINDIR/lctl
 	ACCEPTOR=$BINDIR/acceptor
-	OBDCTL=$BINDIR/obdctl
+	OBDCTL=$BINDIR/lctl
 fi
 
 LOOPNUM=0; export LOOPNUM

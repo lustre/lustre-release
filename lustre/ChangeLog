@@ -1,5 +1,11 @@
-2002-07-25  Peter J. Braam  <braam@clusterfs.com>
+2002-08-07  Phil Schwan  <phil@clusterfs.com>
+	* version 0_5_3, our first alpha
+	* we use the new Portals iovs
+	* documentation updates
+	* bug fixes and cleanups
+	* small changes in the DLM wire protocol
 
+2002-07-25  Peter J. Braam  <braam@clusterfs.com>
 	* version 0_5_1 with some initial stability, 
 	* locking on MD and file I/O. 
 	* documentation updates
@@ -35,6 +41,4 @@
 	* move forward to latest Lustre kernel
 
 2002-06-25  Peter Braam  <braam@clusterfs.com>
-
 	* release version v0_4_1.  Hopefully stable on single node use. 
-
