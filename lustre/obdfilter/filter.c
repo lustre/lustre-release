@@ -500,9 +500,9 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
 {
         struct obd_device * obddev;
         struct obd_client * cli;
-        struct inode * inode;
         struct file *dir;
         struct file *object;
+        struct dentry *dir_dentry, *object_dentry;
         int rc;
         struct obd_run_ctxt saved;
         ENTRY;
@@ -517,20 +517,18 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         if (!object || IS_ERR(object))
                 RETURN(-ENOENT);
 
-        inode = object->f_dentry->d_inode;
-        inode->i_nlink = 1;
-        inode->i_mode = 010000;
-
         push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
         dir = filter_parent(oa->o_id, oa->o_mode);
         if (IS_ERR(dir))
                 GOTO(out, rc = PTR_ERR(dir));
-        dget(dir->f_dentry);
-        dget(object->f_dentry);
-        rc = vfs_unlink(dir->f_dentry->d_inode, object->f_dentry);
-
+        dir_dentry = dget(dir->f_dentry);
+        object_dentry = dget(object->f_dentry);
         filp_close(dir, 0);
         filp_close(object, 0);
+        rc = vfs_unlink(dir_dentry->d_inode, object_dentry);
+
+        dput(dir_dentry);
+        dput(object_dentry);
         EXIT;
 out:
         pop_ctxt(&saved);
