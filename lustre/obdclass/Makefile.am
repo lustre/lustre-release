@@ -1,20 +1,25 @@
 DEFS=
 MODULE = obdclass
 
-class_obd.o: lustre_build_version
-
 if LIBLUSTRE
-lib_LIBRARIES = liblustreclass.a
+
+noinst_LIBRARIES = liblustreclass.a
 liblustreclass_a_SOURCES = class_obd.c debug.c genops.c statfs_pack.c uuid.c 
 liblustreclass_a_SOURCES += lustre_handles.c lustre_peer.c lprocfs_status.c
 liblustreclass_a_SOURCES += obdo.c obd_config.c llog.c llog_obd.c llog_cat.c
 liblustreclass_a_SOURCES += llog_lvfs.c #llog_ioctl.c rbtree.c
+liblustreclass_a_CFLAGS = -fPIC
+
+class_obd.c: lustre_build_version
 
 lustre_build_version:
-	echo '#define LUSTRE_VERSION 31' > $(top_builddir)/include/linux/lustre_build_version.h
+	echo '#define LUSTRE_VERSION 32' > $(top_builddir)/include/linux/lustre_build_version.h
 	echo '#define BUILD_VERSION "1"' >> $(top_builddir)/include/linux/lustre_build_version.h
 
 else
+
+class_obd.o: lustre_build_version
+
 modulefs_DATA = lustre_build_version obdclass.o llog_test.o
 EXTRA_PROGRAMS = obdclass llog_test
 
