@@ -28,7 +28,7 @@
 +#ifdef CONFIG_EXT3_INDEX
 +			set_opt (*mount_options, INDEX);
 +#else
-+			printk("EXT3 Index option not supported\n");
++			printk("EXT3 index option not supported\n");
 +#endif
  		else if (!strcmp (this_char, "debug"))
  			set_opt (*mount_options, DEBUG);
@@ -57,7 +57,7 @@
   */
  
  #include <linux/fs.h>
-@@ -38,6 +42,436 @@
+@@ -38,6 +42,435 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -166,7 +166,6 @@
 +};
 +
 +typedef struct ext3_dir_entry_2 ext3_dirent;
-+/* dx_static exists purely to suppress compiler warnings */
 +static inline unsigned dx_get_block (struct dx_entry *entry);
 +static void dx_set_block (struct dx_entry *entry, unsigned value);
 +static inline unsigned dx_get_hash (struct dx_entry *entry);
@@ -663,8 +662,8 @@
 +	de = (ext3_dirent *) ((char *) de - data3 + data1); // relocate de
 +	de->rec_len = cpu_to_le16(data1 + blocksize - (char *) de);
 +	de2->rec_len = cpu_to_le16(data2 + blocksize - (char *) de2);
-+	dxtrace_on(dx_show_leaf ((ext3_dirent *) data1, blocksize, 1));
-+	dxtrace_on(dx_show_leaf ((ext3_dirent *) data2, blocksize, 1));
++	dxtrace(dx_show_leaf ((ext3_dirent *) data1, blocksize, 1));
++	dxtrace(dx_show_leaf ((ext3_dirent *) data2, blocksize, 1));
 +
 +	/* Which block gets the new entry? */
 +	if (hash >= hash2)
@@ -676,7 +675,7 @@
 +	ext3_journal_dirty_metadata (handle, bh2);
 +	brelse (bh2);
 +	ext3_journal_dirty_metadata (handle, frame->bh);
-+	dxtrace_on(dx_show_index ("frame", frame->entries));
++	dxtrace(dx_show_index ("frame", frame->entries));
 +	return de;
 +}
 +#endif
@@ -762,7 +761,7 @@
 +			de = (ext3_dirent *) ((char *) de + rlen);
 +		}
 +		/* Block full, should compress but for now just split */
-+		dxtrace_on(printk("using %u of %u node entries\n",
++		dxtrace(printk("using %u of %u node entries\n",
 +			dx_get_count(entries), dx_get_limit(entries)));
 +		/* Need to split index? */
 +		if (dx_get_count(entries) == dx_get_limit(entries))
@@ -790,7 +789,7 @@
 +			{
 +				unsigned icount1 = icount/2, icount2 = icount - icount1;
 +				unsigned hash2 = dx_get_hash(entries + icount1);
-+				dxtrace_on(printk("Split index %i/%i\n", icount1, icount2));
++				dxtrace(printk("Split index %i/%i\n", icount1, icount2));
 +				
 +				BUFFER_TRACE(frame->bh, "get_write_access"); /* index root */
 +				ext3_journal_get_write_access(handle, frames[0].bh);
@@ -820,8 +819,8 @@
 -				dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
 -				ext3_mark_inode_dirty(handle, dir);
 +				dx_insert_block (frames + 0, hash2, newblock);
-+				dxtrace_on(dx_show_index ("node", frames[1].entries));
-+				dxtrace_on(dx_show_index ("node",
++				dxtrace(dx_show_index ("node", frames[1].entries));
++				dxtrace(dx_show_index ("node",
 +					((struct dx_node *) bh2->b_data)->entries));
 +				ext3_journal_dirty_metadata(handle, bh2);
 +				brelse (bh2);
@@ -830,7 +829,7 @@
 -				ext3_debug ("skipping to next block\n");
 -
 -				de = (struct ext3_dir_entry_2 *) bh->b_data;
-+				dxtrace_on(printk("Creating second level index...\n"));
++				dxtrace(printk("Creating second level index...\n"));
 +				memcpy((char *) entries2, (char *) entries,
 +					icount * sizeof(struct dx_entry));
 +				dx_set_limit(entries2, dx_node_limit(dir));
@@ -868,7 +867,7 @@
 +		goto add;
 +
 +dxfull:
-+		dxtrace_on(printk("Directory index full!\n"));
++		ext3_warning(sb, __FUNCTION__, "Directory index full!\n");
 +		retval = -ENOSPC;
 +dxfail2:
 +		brelse(bh);
@@ -987,7 +986,7 @@
 +	 * and/or different from the directory change time.
 +	 */
 +	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
-+	/* dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL; */
++	/* EXT3_I(dir)->i_flags &= ~EXT3_INDEX_FL; */
 +	ext3_mark_inode_dirty(handle, dir);
 +	dir->i_version = ++event;
 +	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
@@ -1006,12 +1005,12 @@
 +		unsigned len;
 +		u32 hash;
 +		
-+		dxtrace_on(printk("Creating index\n"));
++		dxtrace(printk("Creating index\n"));
 +		ext3_journal_get_write_access(handle, bh);
 +		root = (struct dx_root *) bh->b_data;
 +		
 +		ext3_add_compat_feature (sb, EXT3_FEATURE_COMPAT_DIR_INDEX);
-+		dir->u.ext3_i.i_flags |= EXT3_INDEX_FL;
++		EXT3_I(dir)->i_flags |= EXT3_INDEX_FL;
 +		bh2 = ext3_append (handle, dir, &block, &retval);
 +		if (!(bh2))
 +		{
@@ -1076,7 +1075,7 @@
  
 -	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS + 3);
 +	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS +
-+					EXT3_INDEX_EXTRA_TRANS_BLOCKS+3);
++					EXT3_INDEX_EXTRA_TRANS_BLOCKS + 3);
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
  
@@ -1105,7 +1104,7 @@
  	dir->i_nlink--;
  	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
 -	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	//	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
++	//	EXT3_I(dir)->i_flags &= ~EXT3_INDEX_FL;
  	ext3_mark_inode_dirty(handle, dir);
  
  end_rmdir:
@@ -1114,7 +1113,7 @@
  		goto end_unlink;
  	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
 -	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	//	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
++	//	EXT3_I(dir)->i_flags &= ~EXT3_INDEX_FL;
  	ext3_mark_inode_dirty(handle, dir);
  	inode->i_nlink--;
  	if (!inode->i_nlink)
@@ -1144,7 +1143,7 @@
  
 -	handle = ext3_journal_start(old_dir, 2 * EXT3_DATA_TRANS_BLOCKS + 2);
 +	handle = ext3_journal_start(old_dir, 2 * EXT3_DATA_TRANS_BLOCKS +
-+			 		EXT3_INDEX_EXTRA_TRANS_BLOCKS+ 2);
++			 		EXT3_INDEX_EXTRA_TRANS_BLOCKS + 2);
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
  
@@ -1153,7 +1152,7 @@
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME;
 -	old_dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	// old_dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
++	// EXT3_I(old_dir)->i_flags &= ~EXT3_INDEX_FL;
  	if (dir_bh) {
  		BUFFER_TRACE(dir_bh, "get_write_access");
  		ext3_journal_get_write_access(handle, dir_bh);
@@ -1162,7 +1161,7 @@
  		} else {
  			new_dir->i_nlink++;
 -			new_dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	//		new_dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
++	//		EXT3_I(new_dir)->i_flags &= ~EXT3_INDEX_FL;
  			ext3_mark_inode_dirty(handle, new_dir);
  		}
  	}
@@ -1176,7 +1175,7 @@
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -575,6 +576,26 @@
+@@ -575,6 +576,24 @@
  #define EXT3_DIR_ROUND			(EXT3_DIR_PAD - 1)
  #define EXT3_DIR_REC_LEN(name_len)	(((name_len) + 8 + EXT3_DIR_ROUND) & \
  					 ~EXT3_DIR_ROUND)
@@ -1189,13 +1188,11 @@
 +
 +#ifdef CONFIG_EXT3_INDEX
 +  enum {ext3_dx = 1};
-+  #define dx_static static
-+  #define is_dx(dir) ((dir)->u.ext3_i.i_flags & EXT3_INDEX_FL)
++  #define is_dx(dir) (EXT3_I(dir)->i_flags & EXT3_INDEX_FL)
 +#define EXT3_DIR_LINK_MAX(dir) (!is_dx(dir) && (dir)->i_nlink >= EXT3_LINK_MAX)
 +#define EXT3_DIR_LINK_EMPTY(dir) ((dir)->i_nlink == 2 || (dir)->i_nlink == 1)
 +#else
 +  enum {ext3_dx = 0};
-+  #define dx_static
 +  #define is_dx(dir) 0
 +#define EXT3_DIR_LINK_MAX(dir) ((dir)->i_nlink >= EXT3_LINK_MAX)
 +#define EXT3_DIR_LINK_EMPTY(dir) ((dir)->i_nlink == 2)
