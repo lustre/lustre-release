@@ -19,17 +19,17 @@ kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 spinlock_t ldlm_namespace_lock = SPIN_LOCK_UNLOCKED;
 struct list_head ldlm_namespace_list = LIST_HEAD_INIT(ldlm_namespace_list);
 static struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
+extern struct proc_dir_entry proc_root;
 
 int ldlm_proc_setup(struct obd_device *obd)
 {
         ENTRY;
 
-        if (obd->obd_proc_entry == NULL)
-                RETURN(-EINVAL);
+        LASSERT(ldlm_ns_proc_dir == NULL);
 
-        ldlm_ns_proc_dir = proc_mkdir("namespaces", obd->obd_proc_entry);
+        ldlm_ns_proc_dir = proc_mkdir("ldlm", &proc_root);
         if (ldlm_ns_proc_dir == NULL) {
-                CERROR("Couldn't create /proc/lustre/ldlm/namespaces\n");
+                CERROR("Couldn't create /proc/ldlm\n");
                 RETURN(-EPERM);
         }
         RETURN(0);
@@ -37,12 +37,11 @@ int ldlm_proc_setup(struct obd_device *obd)
 
 void ldlm_proc_cleanup(struct obd_device *obd)
 {
-        proc_lustre_remove_obd_entry("namespaces", obd);
+        remove_proc_entry("ldlm", &proc_root);
 }
 
-#if 0
 /* FIXME: This can go away when we start to really use lprocfs */
-static int lprocfs_ll_rd(char *page, char **start, off_t off,
+static int ldlm_proc_ll_rd(char *page, char **start, off_t off,
                          int count, int *eof, void *data)
 {
         int len;
@@ -52,7 +51,6 @@ static int lprocfs_ll_rd(char *page, char **start, off_t off,
 
         return len;
 }
-#endif
 
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
@@ -100,10 +98,10 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         if (ns->ns_proc_dir == NULL)
                 CERROR("Unable to create proc directory for namespace.\n");
         proc_entry = create_proc_entry("resource_count", 0444, ns->ns_proc_dir);
-        proc_entry->read_proc = lprocfs_ll_rd;
+        proc_entry->read_proc = ldlm_proc_ll_rd;
         proc_entry->data = &ns->ns_resources;
         proc_entry = create_proc_entry("lock_count", 0444, ns->ns_proc_dir);
-        proc_entry->read_proc = lprocfs_ll_rd;
+        proc_entry->read_proc = ldlm_proc_ll_rd;
         proc_entry->data = &ns->ns_locks;
 
         RETURN(ns);

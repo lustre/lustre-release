@@ -95,7 +95,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         dlmimp = &export->exp_ldlm_data.led_import;
         dlmimp->imp_connection = req->rq_connection;
-        dlmimp->imp_client = &export->exp_obd->obd_ldlm_cb_client;
+        dlmimp->imp_client = &export->exp_obd->obd_ldlm_client;
         dlmimp->imp_handle.addr = req->rq_reqmsg->addr;
         dlmimp->imp_handle.cookie = req->rq_reqmsg->cookie;
         dlmimp->imp_obd = /* LDLM! */ NULL;

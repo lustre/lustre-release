@@ -1,5 +1,3 @@
-
-
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
@@ -459,7 +457,8 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req)
         if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
                    lock->l_resource->lr_name,
                    sizeof(__u64) * RES_NAME_SIZE) != 0) {
-                ldlm_lock_change_resource(lock, dlm_req->lock_desc.l_resource.lr_name);
+                ldlm_lock_change_resource(lock,
+                                         dlm_req->lock_desc.l_resource.lr_name);
                 LDLM_DEBUG(lock, "completion AST, new resource");
         }
         lock->l_resource->lr_tmp = &ast_list;
@@ -532,7 +531,7 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
         }
 
         switch (req->rq_reqmsg->opc) {
- 
+
         /* XXX FIXME move this back to mds/handler.c, bug 625069 */
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
@@ -604,11 +603,11 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EALREADY);
 
         MOD_INC_USE_COUNT;
-        /*
+
         rc = ldlm_proc_setup(obddev);
         if (rc != 0)
                 GOTO(out_dec, rc);
-        */
+
         ldlm->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
                                 LDLM_MAXREQSIZE, LDLM_CB_REQUEST_PORTAL,
@@ -620,8 +619,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         ldlm->ldlm_cancel_service =
                 ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
-                                LDLM_MAXREQSIZE, 
-                                LDLM_CANCEL_REQUEST_PORTAL,
+                                LDLM_MAXREQSIZE, LDLM_CANCEL_REQUEST_PORTAL,
                                 LDLM_CANCEL_REPLY_PORTAL, "self",
                                 ldlm_cancel_handler, "ldlm_canceld");
 
@@ -631,7 +629,8 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 char name[32];
                 sprintf(name, "lustre_dlm_%02d", i);
-                rc = ptlrpc_start_thread(obddev, ldlm->ldlm_cancel_service, name);
+                rc = ptlrpc_start_thread(obddev, ldlm->ldlm_cancel_service,
+                                         name);
                 if (rc) {
                         CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);
                         LBUG();
@@ -665,11 +664,11 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         ptlrpc_unregister_service(ldlm->ldlm_cancel_service);
         ptlrpc_stop_all_threads(ldlm->ldlm_cb_service);
         ptlrpc_unregister_service(ldlm->ldlm_cb_service);
-        /*
+
  out_proc:
 
          ldlm_proc_cleanup(obddev);
-        */
+
  out_dec:
         MOD_DEC_USE_COUNT;
         return rc;
@@ -689,7 +688,7 @@ static int ldlm_cleanup(struct obd_device *obddev)
         ptlrpc_unregister_service(ldlm->ldlm_cb_service);
         ptlrpc_stop_all_threads(ldlm->ldlm_cancel_service);
         ptlrpc_unregister_service(ldlm->ldlm_cancel_service);
-        /* ldlm_proc_cleanup(obddev); */
+        ldlm_proc_cleanup(obddev);
 
         ldlm_already_setup = 0;
         MOD_DEC_USE_COUNT;

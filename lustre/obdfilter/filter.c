@@ -585,9 +585,7 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
                 LBUG();
 
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                           "filter_ldlm_cb_client", &obd->obd_ldlm_cb_client);
-        ptlrpc_init_client(LDLM_CANCEL_REQUEST_PORTAL, LDLM_CANCEL_REPLY_PORTAL,
-                           "filter_ldlm_cancel_client", &obd->obd_ldlm_cancel_client);
+                           "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
         RETURN(0);
 

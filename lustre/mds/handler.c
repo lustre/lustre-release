@@ -383,7 +383,7 @@ static int mds_disconnect(struct lustre_handle *conn)
          */
         spin_lock(&med->med_open_lock);
         list_for_each_safe(tmp, n, &med->med_open_head) {
-                struct mds_file_data *mfd = 
+                struct mds_file_data *mfd =
                         list_entry(tmp, struct mds_file_data, mfd_list);
                 rc = mds_close_mfd(mfd, med);
                 if (rc) {
@@ -1247,13 +1247,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc)
                 GOTO(err_fs, rc);
 
-        ptlrpc_init_client(LDLM_CANCEL_REQUEST_PORTAL, 
-                           LDLM_CANCEL_REPLY_PORTAL,
-                           "mds_ldlm_client", &obddev->obd_ldlm_cancel_client);
-
-        ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, 
-                           LDLM_CB_REPLY_PORTAL,
-                           "mds_ldlm_client", &obddev->obd_ldlm_cb_client);
+        ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
+                           "mds_ldlm_client", &obddev->obd_ldlm_client);
 
         RETURN(0);
 
@@ -1457,13 +1452,13 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
         RETURN(rc);
 }
 
-int mds_attach(struct obd_device *dev, 
+int mds_attach(struct obd_device *dev,
                obd_count len, void *data)
 {
         int rc;
-        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
+        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1,
                              (void*)dev);
-        return rc; 
+        return rc;
 }
 
 int mds_detach(struct obd_device *dev)
@@ -1549,34 +1544,34 @@ static struct obd_ops mdt_obd_ops = {
 
 static int __init mds_init(void)
 {
-     
+
         mds_file_cache = kmem_cache_create("ll_mds_file_data",
                                            sizeof(struct mds_file_data),
                                            0, 0, NULL, NULL);
         if (mds_file_cache == NULL)
                 return -ENOMEM;
 
-        class_register_type(&mds_obd_ops, 
-                            (struct lprocfs_vars*)status_class_var, 
+        class_register_type(&mds_obd_ops,
+                            (struct lprocfs_vars*)status_class_var,
                             LUSTRE_MDS_NAME);
         class_register_type(&mdt_obd_ops, 0, LUSTRE_MDT_NAME);
 
         ldlm_register_intent(ldlm_intent_policy);
-        
+
         return 0;
-        
+
 }
 
 static void __exit mds_exit(void)
 {
-        
-        
+
+
         ldlm_unregister_intent();
         class_unregister_type(LUSTRE_MDS_NAME);
         class_unregister_type(LUSTRE_MDT_NAME);
         if (kmem_cache_destroy(mds_file_cache))
                 CERROR("couldn't free MDS file cache\n");
-        
+
 }
 
 MODULE_AUTHOR("Cluster File Systems <info@clusterfs.com>");
