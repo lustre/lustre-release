@@ -1183,6 +1183,68 @@ int do_PtlPut(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         return ret->rc = PTL_OK;
 }
 
+lib_msg_t * lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, 
+                                lib_md_t *getmd)
+{
+        /* The NAL can DMA direct to the GET md (i.e. no REPLY msg).  This
+         * returns a msg the NAL can pass to lib_finalize() so that a REPLY
+         * event still occurs. 
+         *
+         * CAVEAT EMPTOR: 'getmd' is passed by pointer so it MUST be valid.
+         * This can only be guaranteed while a lib_msg_t holds a reference
+         * on it (ie. pending > 0), so best call this before the
+         * lib_finalize() of the original GET. */
+
+        lib_ni_t        *ni = &nal->ni;
+        lib_msg_t       *msg;
+        unsigned long    flags;
+
+        state_lock(nal, &flags);
+
+        LASSERT (getmd->pending > 0);
+
+        if (getmd->threshold == 0) {
+                CERROR ("Dropping REPLY from "LPU64" for inactive MD %p\n",
+                        peer_nid, getmd);
+                goto drop;
+        }
+
+        LASSERT (getmd->offset == 0);
+
+        CDEBUG(D_NET, "Reply from "LPU64" md %p\n", peer_nid, getmd);
+
+        msg = get_new_msg (nal, getmd);
+        if (msg == NULL) {
+                CERROR("Dropping REPLY from "LPU64" md %p: can't allocate msg\n", 
+                       peer_nid, getmd);
+                goto drop;
+        }
+
+        if (getmd->eq) {
+                msg->ev.type = PTL_EVENT_REPLY;
+                msg->ev.initiator.nid = peer_nid;
+                msg->ev.initiator.pid = 0;      /* XXX FIXME!!! */
+                msg->ev.rlength = msg->ev.mlength = getmd->length;
+                msg->ev.offset = 0;
+
+                lib_md_deconstruct(nal, getmd, &msg->ev.mem_desc);
+        }
+
+        ni->counters.recv_count++;
+        ni->counters.recv_length += getmd->length;
+
+        state_unlock(nal, &flags);
+
+        return msg;
+        
+ drop:
+        nal->ni.counters.drop_count++;
+        nal->ni.counters.drop_length += getmd->length;
+
+        state_unlock (nal, &flags);
+
+        return NULL;
+}
 
 int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 {

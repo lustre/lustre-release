@@ -383,12 +383,14 @@ kqswnal_initialise (void)
 	}
 
 	/**********************************************************************/
-	/* Reserve Elan address space for transmit buffers */
+	/* Reserve Elan address space for transmit descriptors NB we may
+	 * either send the contents of associated buffers immediately, or
+	 * map them for the peer to suck/blow... */
 
         dmareq.Waitfn   = DDI_DMA_SLEEP;
         dmareq.ElanAddr = (E3_Addr) 0;
         dmareq.Attr     = PTE_LOAD_LITTLE_ENDIAN;
-        dmareq.Perm     = ELAN_PERM_REMOTEREAD;
+        dmareq.Perm     = ELAN_PERM_REMOTEWRITE;
 
 	rc = elan3_dma_reserve(kqswnal_data.kqn_epdev->DmaState,
 			      KQSW_NTXMSGPAGES*(KQSW_NTXMSGS+KQSW_NNBLK_TXMSGS),
@@ -552,7 +554,7 @@ kqswnal_initialise (void)
 		rc = ep_queue_receive(krx->krx_eprx, kqswnal_rxhandler, krx,
 				      krx->krx_elanaddr,
 				      krx->krx_npages * PAGE_SIZE, 0);
-		if (rc != 0)
+		if (rc != ESUCCESS)
 		{
 			CERROR ("failed ep_queue_receive %d\n", rc);
 			kqswnal_finalise ();

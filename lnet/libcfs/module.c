@@ -559,6 +559,7 @@ EXPORT_SYMBOL(lib_copy_kiov2buf);
 EXPORT_SYMBOL(lib_copy_buf2kiov);
 EXPORT_SYMBOL(lib_finalize);
 EXPORT_SYMBOL(lib_parse);
+EXPORT_SYMBOL(lib_fake_reply_msg);
 EXPORT_SYMBOL(lib_init);
 EXPORT_SYMBOL(lib_fini);
 EXPORT_SYMBOL(portal_kmemory);
