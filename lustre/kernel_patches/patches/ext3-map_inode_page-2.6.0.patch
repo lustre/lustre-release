@@ -1,0 +1,76 @@
+ fs/ext3/inode.c |   52 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/super.c |    3 +++
+ 2 files changed, 55 insertions(+)
+
+--- linux-2.6.0-test3/fs/ext3/inode.c~ext3-map_inode_page-2.6.0	2003-09-02 14:48:43.000000000 +0400
++++ linux-2.6.0-test3-alexey/fs/ext3/inode.c	2003-09-08 17:50:16.000000000 +0400
+@@ -3129,3 +3129,55 @@ int ext3_prep_san_write(struct inode *in
+ 		ret = ret2;
+ 	return ret;
+ }
++
++int ext3_map_inode_page(struct inode *inode, struct page *page,
++                        unsigned long *blocks, int *created, int create)
++{
++        unsigned int blocksize, blocks_per_page;
++        unsigned long iblock;
++        struct buffer_head dummy;
++        void *handle;
++        int i, rc = 0, failed = 0, needed_blocks;
++
++        blocksize = inode->i_sb->s_blocksize;
++        blocks_per_page = PAGE_SIZE >> inode->i_sb->s_blocksize_bits;
++        iblock = page->index >> (PAGE_SHIFT - inode->i_sb->s_blocksize_bits);
++
++        for (i = 0; i < blocks_per_page; i++, iblock++) {
++                blocks[i] = ext3_bmap(inode->i_mapping, iblock);
++                if (blocks[i] == 0) {
++                        failed++;
++                        created[i] = -1;
++                } else {
++                        created[i] = 0;
++                }
++        }
++
++        if (failed == 0 || create == 0)
++                return 0;
++
++        needed_blocks = ext3_writepage_trans_blocks(inode) * failed;
++        handle = ext3_journal_start(inode, needed_blocks);
++        if (IS_ERR(handle))
++                return PTR_ERR(handle);
++
++        iblock = page->index >> (PAGE_SHIFT - inode->i_sb->s_blocksize_bits);
++        for (i = 0; i < blocks_per_page; i++, iblock++) {
++                if (blocks[i] != 0)
++                        continue;
++
++                rc = ext3_get_block_handle(handle, inode, iblock, &dummy, 1, 1);
++                if (rc) {
++                        printk(KERN_INFO "ext3_map_inode_page: error reading "
++                               "block %ld\n", iblock);
++                        goto out;
++                }
++                blocks[i] = dummy.b_blocknr;
++                created[i] = 1;
++        }
++
++ out:
++	ext3_journal_stop(handle);
++        return rc;
++}
++
+--- linux-2.6.0-test3/fs/ext3/super.c~ext3-map_inode_page-2.6.0	2003-09-02 14:48:43.000000000 +0400
++++ linux-2.6.0-test3-alexey/fs/ext3/super.c	2003-09-08 17:48:33.000000000 +0400
+@@ -2094,6 +2094,9 @@ static void __exit exit_ext3_fs(void)
+ int ext3_prep_san_write(struct inode *inode, long *blocks,
+                         int nblocks, loff_t newsize);
+ EXPORT_SYMBOL(ext3_prep_san_write);
++int ext3_map_inode_page(struct inode *inode, struct page *page,
++                        unsigned long *blocks, int *created, int create)
++EXPORT_SYMBOL(ext3_map_inode_page);
+ 
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+
+_
