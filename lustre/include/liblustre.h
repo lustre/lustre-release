@@ -52,7 +52,7 @@
 #define PAGE_SHIFT 12
 #define PAGE_SIZE (1UL << PAGE_SHIFT)
 #define PAGE_MASK (~(PAGE_SIZE-1))
-#define loff_t __u64
+#define loff_t long long
 #define ERESTART 2001
 typedef unsigned short umode_t;
 
