@@ -591,7 +591,7 @@
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
 -	dentry = lookup_hash(&nd->last, nd->dentry);
-+	dentry = lookup_hash_it(&nd->last, nd->dentry, NULL);
++	dentry = lookup_hash_it(&nd->last, nd->dentry, it);
  	putname(nd->last.name);
  	goto do_last;
  }
