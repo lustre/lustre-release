@@ -140,7 +140,7 @@ static int log_commit_thread(void *arg)
         CDEBUG(D_HA, "%s started\n", current->comm);
         do {
                 struct ptlrpc_request *request;
-                struct obd_import *import;
+                struct obd_import *import = NULL;
                 struct list_head *sending_list;
                 int rc = 0;
 
@@ -260,8 +260,9 @@ static int log_commit_thread(void *arg)
                         } else {
                                 spin_unlock(&lcm->lcm_llcd_lock);
                                 CERROR("commit %p dropped %d cookies: rc %d\n",
-                                       llcd, llcd->llcd_cookiebytes /
-                                       sizeof(*llcd->llcd_cookies), rc);
+                                       llcd, (int)(llcd->llcd_cookiebytes /
+                                                   sizeof(*llcd->llcd_cookies)),
+                                       rc);
                                 llcd_put(llcd);
                         }
                         break;
