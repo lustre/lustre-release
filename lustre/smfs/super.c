@@ -1,12 +1,6 @@
 /*
- *  snap_current
+ *  Copyright (c) 2003-2004 Cluster File Systems, Inc.
  *
- *  Copyright (C) 1998 Peter J. Braam
- *  Copyright (C) 2000 Stelias Computing, Inc.
- *  Copyright (C) 2000 Red Hat, Inc.
- *  Copyright (C) 2000 Mountain View Data, Inc.
- *
- *  Author: Peter J. Braam <braam@mountainviewdata.com>
  */
 #define DEBUG_SUBSYSTEM S_SM
 

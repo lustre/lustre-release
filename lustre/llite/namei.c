@@ -17,15 +17,6 @@
  *   You should have received a copy of the GNU General Public License
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- *  derived in small part from linux/fs/ext2/namei.c
- *
- *  Copyright (C) 1991, 1992  Linus Torvalds
- *
- *  Big-endian to little-endian byte-swapping/bitmaps by
- *        David S. Miller (davem@caip.rutgers.edu), 1995
- *  Directory entry file type support and forward compatibility hooks
- *      for B-tree directories by Theodore Ts'o (tytso@mit.edu), 1998
  */
 
 #include <linux/fs.h>

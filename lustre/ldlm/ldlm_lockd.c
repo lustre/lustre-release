@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ * Copyright (C) 2002-2004 Cluster File Systems, Inc.
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
@@ -138,6 +138,7 @@ static int expired_lock_main(void *arg)
                         if ((void *)lock < LP_POISON + PAGE_SIZE &&
                             (void *)lock >= LP_POISON) {
                                 CERROR("free lock on elt list %p\n", lock);
+                                spin_unlock_bh(&waiting_locks_spinlock);
                                 LBUG();
                         }
                         list_del_init(&lock->l_pending_chain);
@@ -1528,13 +1529,6 @@ EXPORT_SYMBOL(ldlm_handle_convert);
 EXPORT_SYMBOL(ldlm_del_waiting_lock);
 EXPORT_SYMBOL(ldlm_get_ref);
 EXPORT_SYMBOL(ldlm_put_ref);
-
-#if 0
-/* ldlm_test.c */
-EXPORT_SYMBOL(ldlm_test);
-EXPORT_SYMBOL(ldlm_regression_start);
-EXPORT_SYMBOL(ldlm_regression_stop);
-#endif
 
 /* ldlm_resource.c */
 EXPORT_SYMBOL(ldlm_namespace_new);

@@ -487,16 +487,6 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns);
 void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos);
 void ldlm_lock_dump_handle(int level, struct lustre_handle *);
 
-/* ldlm_test.c */
-int ldlm_test(struct obd_device *device, struct lustre_handle *connh);
-int ldlm_regression_start(struct obd_device *obddev,
-                          struct lustre_handle *connh,
-                          unsigned int threads, unsigned int max_locks_in,
-                          unsigned int num_resources_in,
-                          unsigned int num_extents_in);
-int ldlm_regression_stop(void);
-
-
 /* resource.c */
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 local);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);

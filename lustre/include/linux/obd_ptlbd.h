@@ -1,13 +1,11 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
+
 #ifndef _OBD_PTLBD_H
 #define _OBD_PTLBD_H
 
 #include <linux/obd.h>
-/*
- * Copyright (C) 2002  Cluster File Systems, Inc.
- *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
- */
 
 #define OBD_PTLBD_SV_DEVICENAME "ptlbd_server"
 #define OBD_PTLBD_CL_DEVICENAME "ptlbd_client"

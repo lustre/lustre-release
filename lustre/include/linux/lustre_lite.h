@@ -1,14 +1,5 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
- *
- * lustre lite cluster file system
- *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
- *
- * Copyright (C) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
- */
-
 
 
 #ifndef _LL_H

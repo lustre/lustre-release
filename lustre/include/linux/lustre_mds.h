@@ -1,26 +1,10 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc. <info@clusterfs.com>
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   This file is part of Lustre, http://www.lustre.org
  *
  * MDS data structures.
  * See also lustre_idl.h for wire formats of requests.
- *
  */
 
 #ifndef _LUSTRE_MDS_H
@@ -265,19 +249,5 @@ static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
 #define IOC_REQUEST_OPEN                _IOWR('f', 34, long)
 #define IOC_REQUEST_CLOSE               _IOWR('f', 35, long)
 #define IOC_REQUEST_MAX_NR               35
-
-#define MDS_CHECK_RESENT(req, reconstruct)                                     \
-{                                                                              \
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {               \
-                struct mds_client_data *mcd =                                  \
-                        req->rq_export->exp_mds_data.med_mcd;                  \
-                if (mcd->mcd_last_xid == req->rq_xid) {                        \
-                        reconstruct;                                           \
-                        RETURN(req->rq_repmsg->status);                        \
-                }                                                              \
-                DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")", \
-                          mcd->mcd_last_xid);                                  \
-        }                                                                      \
-}
 
 #endif

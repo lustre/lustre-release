@@ -2,6 +2,9 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  Copyright (c) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
+ *  Copyright (c) 2003 Hewlett-Packard Development Company, LP.
+ *   Developed under the sponsorship of the US Government under
+ *   Subcontract No. B514193
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
