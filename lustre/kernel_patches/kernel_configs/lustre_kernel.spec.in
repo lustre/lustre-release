@@ -30,7 +30,7 @@ BuildRoot: %{_tmppath}/%{kernel_version}-%{patch_version}-buildroot
 BuildConflicts: rhbuildsys(DiskFree) < 500Mb
 BuildRequires: gcc >= 2.96-98 modutils >= 2.4.10
 
-Source0: linux-%{kernel_version}-%{patch_version}.tar.gz
+Source0: linux-%{kernel_version}-%{patch_version}-lustre%{lustre_version}.tar.gz
 Source1: lustre-%{lustre_branch}.tar.gz 
 Patch0:  lustre-patch-%{lustre_version}
 
@@ -71,9 +71,9 @@ Configures openldap server for LDAP Lustre config database
 %setup -q -n linux-%{kernel_version}-%{patch_version}
 
 #patch the lustre kernel
-%patch0 -p1
-#mkdir -p configs
-#cp -fv $RPM_SOURCE_DIR/kernel-%{kernel_version}-%{arch}.config configs
+%patch0 -p0
+mkdir -p configs
+cp -fv $RPM_SOURCE_DIR/%{kernel_config} configs/
 sed -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{patch_version}_lustre%{lustre_version}/g" < Makefile > Makefile.new
 mv -f Makefile.new Makefile
 
@@ -120,11 +120,14 @@ BuildLustre() {
     sh autogen.sh
     ./configure --with-linux="$RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}"
     make
+    #build docs
+    cd doc
+    make docs
 }
 
 BuildDebugKernel() {
     cd 	$RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}-debug/linux-%{kernel_version}-%{patch_version}
-    patch -p1 < $RPM_SOURCE_DIR/lustre-patch-%{lustre_version}
+    patch -p0 < $RPM_SOURCE_DIR/lustre-patch-%{lustre_version}
     make distclean
     cp -fv $RPM_BUILD_DIR/lustre-%{lustre_branch}/kernel_patches/kernel_configs/%{kernel_config} .config
     sed -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{patch_version}_lustre%{lustre_version}-debug/g" < Makefile > Makefile.new
@@ -140,6 +143,10 @@ BuildDebugLustre() {
    sh autogen.sh
     ./configure --with-linux="$RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}-debug/linux-%{kernel_version}-%{patch_version}"
     make
+    #build docs
+    cd doc
+    make docs
+
 }
 rm -rf $RPM_BUILD_ROOT
 
@@ -234,8 +241,8 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/lconf
 %attr(-, root, root) /usr/sbin/lactive
 %attr(-, root, root) /usr/sbin/llanalyze
-%attr(755, root, root) /usr/sbin/lfind
-%attr(755, root, root) /usr/sbin/lstripe
+%attr(755, root, root) /usr/bin/lfind
+%attr(755, root, root) /usr/bin/lstripe
 %attr(-, root, root) /usr/sbin/mcreate
 %attr(-, root, root) /usr/sbin/mkdirmany
 %attr(-, root, root) /usr/sbin/munlink
