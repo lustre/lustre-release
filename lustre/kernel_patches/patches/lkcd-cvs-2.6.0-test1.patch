@@ -1,7 +1,7 @@
  0 files changed
 
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/Makefile	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/Makefile	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,14 @@
 +#
 +# Makefile for the dump device drivers.
@@ -18,7 +18,7 @@
 +obj-$(CONFIG_CRASH_DUMP_COMPRESS_RLE)	+= dump_rle.o
 +obj-$(CONFIG_CRASH_DUMP_COMPRESS_GZIP)	+= dump_gzip.o
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_blockdev.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_blockdev.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,461 @@
 +/*
 + * Implements the dump driver interface for saving a dump to 
@@ -482,7 +482,7 @@
 +module_init(dump_blockdev_init);
 +module_exit(dump_blockdev_cleanup);
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_execute.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_execute.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,126 @@
 +/*
 + * The file has the common/generic dump execution code 
@@ -611,7 +611,7 @@
 +	return ret;
 +}
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_filters.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_filters.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,143 @@
 +/*
 + * Default filters to select data to dump for various passes.
@@ -757,7 +757,7 @@
 +};
 +
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_fmt.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_fmt.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,395 @@
 +/*
 + * Implements the routines which handle the format specific
@@ -1155,7 +1155,7 @@
 +};
 +
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_gzip.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_gzip.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,118 @@
 +/*
 + * GZIP Compression functions for kernel crash dumps.
@@ -1276,7 +1276,7 @@
 +MODULE_AUTHOR("LKCD Development Team <lkcd-devel@lists.sourceforge.net>");
 +MODULE_DESCRIPTION("Gzip compression module for crash dump driver");
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_i386.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_i386.c	2003-07-23 11:42:15.000000000 +0800
 @@ -0,0 +1,329 @@
 +/*
 + * Architecture specific (i386) functions for Linux crash dumps.
@@ -1372,13 +1372,13 @@
 +
 +
 +#ifdef CONFIG_SMP
-+extern unsigned long irq_affinity[];
++extern cpumask_t irq_affinity[];
 +extern irq_desc_t irq_desc[];
 +extern void dump_send_ipi(void);
 +
 +static int dump_expect_ipi[NR_CPUS];
 +static atomic_t waiting_for_dump_ipi;
-+static unsigned long saved_affinity[NR_IRQS];
++static cpumask_t saved_affinity[NR_IRQS];
 +
 +extern void stop_this_cpu(void *); /* exported by i386 kernel */
 +
@@ -1460,11 +1460,11 @@
 +	int i;
 +	int cpu = smp_processor_id();
 +
-+	memcpy(saved_affinity, irq_affinity, NR_IRQS * sizeof(unsigned long));
++	memcpy(saved_affinity, irq_affinity, NR_IRQS * sizeof(cpumask_t));
 +	for (i = 0; i < NR_IRQS; i++) {
 +		if (irq_desc[i].handler == NULL)
 +			continue;
-+		irq_affinity[i] = 1UL << cpu;
++		irq_affinity[i] = cpumask_of_cpu(cpu);
 +		if (irq_desc[i].handler->set_affinity != NULL)
 +			irq_desc[i].handler->set_affinity(i, irq_affinity[i]);
 +	}
@@ -1608,7 +1608,7 @@
 +}
 +
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_memdev.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_memdev.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,640 @@
 +/*
 + * Implements the dump driver interface for saving a dump in available
@@ -2251,7 +2251,7 @@
 +struct dump_memdev *dump_memdev = &default_dump_memdev;
 +
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_netdev.c	2003-07-22 22:34:59.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_netdev.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,866 @@
 +/*
 + * Implements the dump driver interface for saving a dump via network
@@ -3120,7 +3120,7 @@
 +module_init(dump_netdev_init);
 +module_exit(dump_netdev_cleanup);
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_overlay.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_overlay.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,848 @@
 +/*
 + * Two-stage soft-boot based dump scheme methods (memory overlay
@@ -3971,7 +3971,7 @@
 +};		
 +
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_rle.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_rle.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,175 @@
 +/*
 + * RLE Compression functions for kernel crash dumps.
@@ -4149,7 +4149,7 @@
 +MODULE_AUTHOR("LKCD Development Team <lkcd-devel@lists.sourceforge.net>");
 +MODULE_DESCRIPTION("RLE compression module for crash dump driver");
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_scheme.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_scheme.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,357 @@
 +/* 
 + * Default single stage dump scheme methods
@@ -4509,7 +4509,7 @@
 +};		
 +
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_setup.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_setup.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,803 @@
 +/*
 + * Standard kernel function entry points for Linux crash dumps.
@@ -5315,7 +5315,7 @@
 +module_init(dump_init);
 +module_exit(dump_cleanup);
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/include/linux/dumpdev.h	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/include/linux/dumpdev.h	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,161 @@
 +/*
 + * Generic dump device interfaces for flexible system dump 
@@ -5479,7 +5479,7 @@
 +
 +#endif /*  _LINUX_DUMPDEV_H */
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/include/linux/dump.h	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/include/linux/dump.h	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,376 @@
 +/*
 + * Kernel header file for Linux crash dumps.
@@ -5858,7 +5858,7 @@
 +
 +#endif /* _DUMP_H */
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/include/linux/dump_netdev.h	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/include/linux/dump_netdev.h	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,80 @@
 +/*
 + *  linux/drivers/net/netconsole.h
@@ -5941,7 +5941,7 @@
 +
 +
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/include/asm-i386/dump.h	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/include/asm-i386/dump.h	2003-07-23 11:22:40.000000000 +0800
 @@ -0,0 +1,93 @@
 +/*
 + * Kernel header file for Linux crash dumps.
@@ -6008,7 +6008,7 @@
 +extern struct __dump_header_asm dump_header_asm;
 +
 +#ifdef CONFIG_SMP
-+extern unsigned long irq_affinity[];
++extern cpumask_t irq_affinity[];
 +extern int (*dump_ipi_function_ptr)(struct pt_regs *);
 +extern void dump_send_ipi(void);
 +#else
@@ -6037,7 +6037,7 @@
 +
 +#endif /* _ASM_DUMP_H */
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/init/kerntypes.c	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/init/kerntypes.c	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,31 @@
 +/*
 + * kerntypes.c
@@ -6071,7 +6071,7 @@
 +{
 +}
 --- /dev/null	2002-08-31 07:31:37.000000000 +0800
-+++ linux-2.6.0-test1-root/drivers/dump/dump_methods.h	2003-07-22 22:33:38.000000000 +0800
++++ linux-2.6.0-test1-root/drivers/dump/dump_methods.h	2003-07-23 11:22:22.000000000 +0800
 @@ -0,0 +1,348 @@
 +/*
 + * Generic interfaces for flexible system dump 
