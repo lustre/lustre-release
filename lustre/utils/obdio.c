@@ -21,258 +21,12 @@
  *
  */
 
-#include <stdlib.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
 #include <stdio.h>
-#include <stdarg.h>
-#include <signal.h>
-
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/obd_lov.h>      /* for IOC_LOV_SET_OSC_ACTIVE */
-#include <linux/obd.h>          /* for struct lov_stripe_md */
-#include <linux/obd_class.h>
-#include <linux/lustre_build_version.h>
-
-#include <unistd.h>
-#include <sys/un.h>
-#include <time.h>
-#include <sys/time.h>
-#include <netinet/in.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 
-#include <asm/page.h>           /* needed for PAGE_SIZE - rread */
-
-#define __KERNEL__
-#include <linux/list.h>
-#undef __KERNEL__
-
-#include "obdctl.h"
-
-struct obdio_conn {
-        int	               oc_fd;
-        uint64_t               oc_conn_addr;
-        uint64_t               oc_conn_cookie;
-        struct obd_ioctl_data  oc_data;
-        char                   oc_buffer[8192];
-};
-
-char *
-obdio_alloc_aligned_buffer (char **spacep, int size) 
-{
-        int   pagesize = getpagesize();
-        char *space = malloc (size + pagesize - 1);
-        
-        *spacep = space;
-        if (space == NULL)
-                return (NULL);
-        
-        return ((char *)(((unsigned long)space + pagesize - 1) & ~(pagesize - 1)));
-}
-
-void
-obdio_iocinit (struct obdio_conn *conn)
-{
-        memset (&conn->oc_data, 0, sizeof (conn->oc_data));
-        conn->oc_data.ioc_version = OBD_IOCTL_VERSION;
-        conn->oc_data.ioc_addr = conn->oc_conn_addr;
-        conn->oc_data.ioc_cookie = conn->oc_conn_cookie;
-        conn->oc_data.ioc_len = sizeof (conn->oc_data);
-}
-
-int
-obdio_ioctl (struct obdio_conn *conn, int cmd) 
-{
-        char *buf = conn->oc_buffer;
-        int   rc;
-        int   rc2;
-        
-        rc = obd_ioctl_pack (&conn->oc_data, &buf, sizeof (conn->oc_buffer));
-        if (rc != 0) {
-                fprintf (stderr, "obd_ioctl_pack: %d (%s)\n", 
-                         rc, strerror (errno));
-                abort ();
-        }
-        
-        rc = ioctl (conn->oc_fd, cmd, buf);
-        if (rc != 0)
-                return (rc);
-        
-        rc2 = obd_ioctl_unpack (&conn->oc_data, buf, sizeof (conn->oc_buffer));
-        if (rc2 != 0) {
-                fprintf (stderr, "obd_ioctl_unpack: %d (%s)\n",
-                         rc2, strerror (errno));
-                abort ();
-        }
-        
-        return (rc);
-}
-
-struct obdio_conn *
-obdio_connect (int device)
-{
-        struct obdio_conn  *conn;
-        int                 rc;
-
-        conn = malloc (sizeof (*conn));
-        if (conn == NULL) {
-                fprintf (stderr, "obdio_connect: no memory\n");
-                return (NULL);
-        }
-        memset (conn, 0, sizeof (*conn));
-        
-	conn->oc_fd = open ("/dev/obd", O_RDWR);
-	if (conn->oc_fd < 0) {
-                fprintf (stderr, "Can't open /dev/obd: %s\n",
-                         strerror (errno));
-                goto failed;
-        }
-
-        obdio_iocinit (conn);
-        conn->oc_data.ioc_dev = device;
-        rc = obdio_ioctl (conn, OBD_IOC_DEVICE);
-        if (rc != 0) {
-                fprintf (stderr, "Can't set device %d: %s\n",
-                         device, strerror (errno));
-                goto failed;
-        }
-        
-        obdio_iocinit (conn);
-        rc = obdio_ioctl (conn, OBD_IOC_CONNECT);
-        if (rc != 0) {
-                fprintf (stderr, "Can't connect to device %d: %s\n",
-                         device, strerror (errno));
-                goto failed;
-        }
-        
-        conn->oc_conn_addr = conn->oc_data.ioc_addr;
-        conn->oc_conn_cookie = conn->oc_data.ioc_cookie;
-        return (conn);
-        
- failed:
-        free (conn);
-        return (NULL);
-}
-
-void
-obdio_disconnect (struct obdio_conn *conn) 
-{
-        close (conn->oc_fd);
-        /* obdclass will automatically close on last ref */
-        free (conn);
-}
-
-int
-obdio_open (struct obdio_conn *conn, uint64_t oid, struct lustre_handle *fh) 
-{
-        int    rc;
-        
-        obdio_iocinit (conn);
-        
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
-        
-        rc = obdio_ioctl (conn, OBD_IOC_OPEN);
-        
-        if (rc == 0)
-                memcpy (fh, obdo_handle(&conn->oc_data.ioc_obdo1), sizeof (*fh));
-
-        return (rc);
-}
-
-int
-obdio_close (struct obdio_conn *conn, uint64_t oid, struct lustre_handle *fh) 
-{
-        obdio_iocinit (conn);
-        
-
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        memcpy (obdo_handle (&conn->oc_data.ioc_obdo1), fh, sizeof (*fh));
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | 
-                                          OBD_MD_FLMODE | OBD_MD_FLHANDLE;
-        
-        return (obdio_ioctl (conn, OBD_IOC_CLOSE));
-}
-
-int
-obdio_pread (struct obdio_conn *conn, uint64_t oid, 
-             char *buffer, uint32_t count, uint64_t offset) 
-{
-        obdio_iocinit (conn);
-        
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
-
-        conn->oc_data.ioc_pbuf2 = buffer;
-        conn->oc_data.ioc_plen2 = count;
-        conn->oc_data.ioc_count = count;
-        conn->oc_data.ioc_offset = offset;
-
-        return (obdio_ioctl (conn, OBD_IOC_BRW_READ));
-}
-
-int
-obdio_pwrite (struct obdio_conn *conn, uint64_t oid, 
-              char *buffer, uint32_t count, uint64_t offset) 
-{
-        obdio_iocinit (conn);
-        
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
-
-        conn->oc_data.ioc_pbuf2 = buffer;
-        conn->oc_data.ioc_plen2 = count;
-        conn->oc_data.ioc_count = count;
-        conn->oc_data.ioc_offset = offset;
-
-        return (obdio_ioctl (conn, OBD_IOC_BRW_WRITE));
-}
-
-int
-obdio_enqueue (struct obdio_conn *conn, uint64_t oid,
-               int mode, uint64_t offset, uint32_t count,
-               struct lustre_handle *lh)
-{
-        int   rc;
-        
-        obdio_iocinit (conn);
-        
-        conn->oc_data.ioc_obdo1.o_id = oid;
-        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
-
-        conn->oc_data.ioc_conn1 = mode;
-        conn->oc_data.ioc_count = count;
-        conn->oc_data.ioc_offset = offset;
-        
-        rc = obdio_ioctl (conn, ECHO_IOC_ENQUEUE);
-        
-        if (rc == 0)
-                memcpy (lh, obdo_handle (&conn->oc_data.ioc_obdo1), sizeof (*lh));
-        
-        return (rc);
-}
-
-int
-obdio_cancel (struct obdio_conn *conn, struct lustre_handle *lh)
-{
-        obdio_iocinit (conn);
-
-        memcpy (obdo_handle (&conn->oc_data.ioc_obdo1), lh, sizeof (*lh));
-        
-        return (obdio_ioctl (conn, ECHO_IOC_CANCEL));
-}
+#include "obdiolib.h"
 
 int
 obdio_test_fixed_extent (struct obdio_conn *conn, 
@@ -282,8 +36,8 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
 {
         struct lustre_handle fh;
         struct lustre_handle lh;
-        char                *space;
-        char                *buffer;
+        void                *space;
+        void                *buffer;
         uint32_t            *ibuf;
         int                  i;
         int                  j;
@@ -443,8 +197,7 @@ main (int argc, char **argv)
         uint64_t           base_offset = 0;
         uint32_t           size = 0;
         int                set_size = 0;
-        int                device = 0;
-        int                set_device = 0;
+        int                device = -1;
         int                reps = 1;
         int                locked = 0;
         char              *end;
@@ -498,12 +251,11 @@ main (int argc, char **argv)
 
                 case 'd':
                         device = strtol (optarg, &end, 0);
-                        if (end == optarg || *end != 0) {
+                        if (end == optarg || *end != 0 || device < 0) {
                                 fprintf (stderr, "Can't parse device %s\n",
                                          optarg);
                                 return (1);
                         }
-                        set_device++;
                         break;
                 case 'n':
                         if (parse_kmg (&val, optarg) != 0) {
@@ -522,11 +274,11 @@ main (int argc, char **argv)
         }
 
         if (!set_size ||
-            !set_device ||
+            device < 0 ||
             optind == argc) {
                 fprintf (stderr, "No %s specified\n",
                          !set_size ? "size" :
-                         !set_device ? "device" : "object id");
+                         device < 0 ? "device" : "object id");
                 return (1);
         }
         
