@@ -77,7 +77,7 @@ $(VERSIONED) : %.lyx: %.lin Makefile
 .ps.pdf:
 	$(PS2PDF) $< $@
 
-lustre.tex lustre.pdf recovery-manual.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES)
+lustre.tex recovery-manual.tex lustre.pdf recovery-manual.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES)
 .fig.eps:
 	-fig2dev -L eps $< > $@
 
