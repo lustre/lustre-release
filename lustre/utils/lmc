@@ -476,6 +476,8 @@ def add_route(gen, lustre, options, args):
 
 
 def add_mds(gen, lustre, options, args):
+    fstype = 'extN'
+
     if len(args) < 1:
         usage()
 
@@ -483,6 +485,9 @@ def add_mds(gen, lustre, options, args):
         node_name = options['node']
     else:
         error("--mds requires a --node argument")
+
+    if options.has_key('fstype'):
+        fstype = options['fstype']
 
     mds_name = new_name(options['mds'])
     if mds_name != options['mds']:
@@ -504,7 +509,7 @@ def add_mds(gen, lustre, options, args):
         error("NODE: ", node_name, "not found")
 
 
-    mds = gen.mds(mds_name, mds_uuid, "extN", devname, get_format_flag(options),
+    mds = gen.mds(mds_name, mds_uuid, fstype, devname, get_format_flag(options),
                   net_uuid, node_uuid, dev_size=size)
     lustre.appendChild(mds)
                    
@@ -526,6 +531,8 @@ def add_ost(gen, lustre, options, args):
 
     if options.has_key('obdtype'):
         obdtype = options['obdtype']
+    if options.has_key('fstype'):
+        fstype = options['fstype']
     if obdtype == 'obdecho':
         fstype = ''
     else:
@@ -660,7 +667,7 @@ def parse_cmdline(argv):
     short_opts = "ho:i:m:"
     long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net", "tcpbuf=",
                  "route", "router", "merge=", "format", "reformat", "output=",
-                 "obdtype=", "obduuid=", "in=", "help", "batch="]
+                 "obdtype=", "fstype=", "obduuid=", "in=", "help", "batch="]
     opts = []
     args = []
     options = {}
@@ -694,6 +701,8 @@ def parse_cmdline(argv):
         # Options for commands
         if o == "--obdtype":
             options['obdtype'] = a
+        if o == "--fstype":
+            options['fstype'] = a
         if o == "--obduuid":
             options['obduuid'] = a
         if o == "--tcpbuf":
