@@ -65,7 +65,7 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
         if (IS_ERR(handle))
                        RETURN(-ENOSPC);
 
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_CREATE, handle, dir);
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_CREATE, handle, dir, rc);
 
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
@@ -134,11 +134,10 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
         if (!(cache_dir = I2CI(dir)))
                 RETURN(ERR_PTR(-ENOENT));
 
-        handle = smfs_trans_start(dir, KML_CACHE_NOOP, NULL);
-        if (IS_ERR(handle))
-                RETURN(ERR_PTR(-ENOSPC));
-
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_LOOKUP, handle, dir);
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_LOOKUP, handle, dir, rc2);
+        
+        if (rc2)
+                RETURN(ERR_PTR(rc2));
 
         /* preparing artificial backing fs dentries. */
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry->d_parent);
@@ -204,10 +203,10 @@ static int smfs_link(struct dentry * old_dentry,
 
         handle = smfs_trans_start(dir, FSFILT_OP_LINK, NULL);
         if (IS_ERR(handle))
-                       RETURN(-ENOSPC);
+                 RETURN(-ENOSPC);
 
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_LINK, handle, dir);
-
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_LINK, handle, dir, rc);
+              
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
 
@@ -266,7 +265,7 @@ static int smfs_unlink(struct inode * dir,
         if (IS_ERR(handle))
                 RETURN(-ENOSPC);
 
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_UNLINK, handle, dir);
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_UNLINK, handle, dir, rc);
 
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, cache_inode, dentry);
@@ -317,7 +316,7 @@ static int smfs_symlink(struct inode *dir, struct dentry *dentry,
         if (IS_ERR(handle))
                 RETURN(-ENOSPC);
 
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_SYMLINK, handle, dir);
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_SYMLINK, handle, dir, rc);
 
         pre_smfs_inode(dir, cache_dir);
         lock_kernel();
@@ -363,7 +362,7 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry,
         if (IS_ERR(handle))
                 RETURN(-ENOSPC);
 
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_MKDIR, handle, dir);
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_MKDIR, handle, dir, rc);
 
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
@@ -419,7 +418,7 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
                 RETURN(-ENOSPC);
         }
 
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_RMDIR, handle, dir);
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_RMDIR, handle, dir, rc);
 
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, cache_inode, dentry);
@@ -472,7 +471,7 @@ static int smfs_mknod(struct inode *dir, struct dentry *dentry,
                 CERROR("smfs_do_mkdir: no space for transaction\n");
                 RETURN(-ENOSPC);
         }
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_MKNOD, handle, dir);
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_MKNOD, handle, dir, rc);
 
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry->d_parent);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
@@ -537,7 +536,7 @@ static int smfs_rename(struct inode * old_dir, struct dentry *old_dentry,
         }
         lock_kernel();
 
-        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_RENAME, handle, old_dir);
+        SMFS_CACHE_HOOK_PRE(CACHE_HOOK_RENAME, handle, old_dir, rc);
 
         cache_old_parent = pre_smfs_dentry(NULL, cache_old_dir, old_dentry);
         cache_old_dentry = pre_smfs_dentry(cache_old_parent, cache_old_inode,

@@ -45,69 +45,106 @@ static int cobd_detach(struct obd_device *obd)
         return lprocfs_obd_detach(obd);
 }
 
+static int connect_to_obd(char *name, struct lustre_handle *conn)
+{ 
+        struct obd_uuid   obd_uuid;
+        struct obd_device *obd;
+        int    rc = 0;
+        ENTRY;
+ 
+        obd = class_name2obd(name);
+        if (obd == NULL) {
+                CERROR("%s: unable to find a client for obd: %s\n",
+                       obd->obd_name, name);
+                RETURN(-EINVAL);
+        }
+        rc = obd_connect(conn, obd, &obd_uuid);
+        RETURN(rc);
+}
+
 static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = (struct lustre_cfg *)buf;
         struct cache_obd  *cobd = &obd->u.cobd;
+        struct lustre_handle real_conn = {0,}, cache_conn = {0,};
         struct obd_device *real;
         struct obd_device *cache;
-        struct obd_uuid real_uuid;
-        struct obd_uuid cache_uuid;
-        struct lustre_handle real_conn = {0,}, cache_conn = {0,};
         int rc;
+        ENTRY;
 
         if (lcfg->lcfg_inllen1 == 0 || lcfg->lcfg_inlbuf1 == NULL) {
                 CERROR("%s: setup requires real device name\n", 
                        obd->obd_name);
-                return (-EINVAL);
+                RETURN(-EINVAL);
         }
 
         real = class_name2obd(lcfg->lcfg_inlbuf1);
         if (real == NULL) {
                 CERROR("%s: unable to find a client for real: %s\n",
                        obd->obd_name, lcfg->lcfg_inlbuf1);
-                return (-EINVAL);
+                RETURN(-EINVAL);
         }
 
         if (lcfg->lcfg_inllen2 == 0 || lcfg->lcfg_inlbuf2 == NULL) {
                 CERROR("%s: setup requires cache device name\n", obd->obd_name);
-                return (-EINVAL);
+                RETURN(-EINVAL);
         }
 
         cache  = class_name2obd(lcfg->lcfg_inlbuf2);
         if (cache == NULL) {
                 CERROR("%s: unable to find a client for cache: %s\n",
                        obd->obd_name, lcfg->lcfg_inlbuf2);
-                return (-EINVAL);
+                RETURN(-EINVAL);
         }
+
+        OBD_ALLOC(cobd->cobd_real_name, strlen(lcfg->lcfg_inlbuf1) + 1);
+        if (!cobd->cobd_real_name) 
+                GOTO(exit, rc = -ENOMEM);
+        memcpy(cobd->cobd_real_name, lcfg->lcfg_inlbuf1, 
+               strlen(lcfg->lcfg_inlbuf1));
+        
+        OBD_ALLOC(cobd->cobd_cache_name, strlen(lcfg->lcfg_inlbuf2) + 1);
+        if (!cobd->cobd_cache_name) 
+                GOTO(exit, rc = -ENOMEM);
+        memcpy(cobd->cobd_cache_name, lcfg->lcfg_inlbuf2, 
+               strlen(lcfg->lcfg_inlbuf2));
 
         /* don't bother checking attached/setup;
          * obd_connect() should, and it can change underneath us */
-        rc = obd_connect(&real_conn, real, &real_uuid);
+        rc = connect_to_obd(cobd->cobd_real_name, &real_conn);
         if (rc != 0)
-                return (rc);
+                GOTO(exit, rc);
         cobd->cobd_real_exp = class_conn2export(&real_conn);
-
-        rc = obd_connect(&cache_conn, cache, &cache_uuid);
+        
+        rc = connect_to_obd(cobd->cobd_cache_name, &cache_conn);
         if (rc != 0) {
-                obd_disconnect(cobd->cobd_real_exp, 0);
-                return rc;
+                obd_disconnect(cobd->cobd_cache_exp, 0);
+                GOTO(exit, rc);
         }
         cobd->cobd_cache_exp = class_conn2export(&cache_conn);
-        /* set mds_num for lustre */
-
+        
         if (!strcmp(real->obd_type->typ_name, LUSTRE_MDC_NAME)) {
+                /* set mds_num for lustre */
                 int mds_num;
                 mds_num = REAL_MDS_NUMBER;
                 obd_set_info(cobd->cobd_real_exp, strlen("mds_num"),
-                               "mds_num", sizeof(mds_num), &mds_num);
+                             "mds_num", sizeof(mds_num), &mds_num);
                 mds_num = CACHE_MDS_NUMBER;
                 obd_set_info(cobd->cobd_cache_exp, strlen("mds_num"),
-                               "mds_num", sizeof(mds_num), &mds_num);
+                             "mds_num", sizeof(mds_num), &mds_num);
         }
         /*default write to real obd*/
+exit:
+        if (rc) {
+                if (cobd->cobd_cache_name)
+                        OBD_FREE(cobd->cobd_cache_name, 
+                                 strlen(cobd->cobd_cache_name) + 1);
+                if (cobd->cobd_real_name)
+                        OBD_FREE(cobd->cobd_real_name, 
+                                 strlen(cobd->cobd_real_name) + 1);
+        }
         cobd->cache_on = 1;
-        return 0;
+        RETURN(rc);
 }
 
 static int cobd_cleanup(struct obd_device *obd, int flags)
@@ -117,6 +154,10 @@ static int cobd_cleanup(struct obd_device *obd, int flags)
 
         if (!list_empty(&obd->obd_exports))
                 return (-EBUSY);
+        
+        OBD_FREE(cobd->cobd_cache_name, strlen(cobd->cobd_cache_name) + 1);
+        OBD_FREE(cobd->cobd_real_name, strlen(cobd->cobd_real_name) + 1);
+        
         if (cobd->cache_on) { 
                 rc = obd_disconnect(cobd->cobd_cache_exp, flags);
                 if (rc != 0)
@@ -640,15 +681,20 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_device *obd = class_exp2obd(exp);
         struct cache_obd  *cobd = &obd->u.cobd;
         struct obd_device *real_dev = class_exp2obd(cobd->cobd_real_exp);
-        struct obd_device *cache_dev = class_exp2obd(cobd->cobd_cache_exp);
+        struct obd_device *cache_dev = class_exp2obd(cobd->cobd_cache_exp); 
         struct obd_export *cobd_exp;
         int rc = 0;
  
         switch (cmd) {
         case OBD_IOC_COBD_CON:
                 if (!cobd->cache_on) {
+                        struct lustre_handle cache_conn = {0,};
+                        
+                        rc = connect_to_obd(cobd->cobd_cache_name, &cache_conn);
+                        if (rc != 0)
+                                RETURN(rc); 
+                        cobd->cobd_cache_exp = class_conn2export(&cache_conn);
                         cobd->cache_on = 1;
-                        /*FIXME should connect the cache obd again*/ 
                 }
                 break;
         case OBD_IOC_COBD_COFF: 
@@ -663,18 +709,18 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                         cobd->cache_on = 0;
                         /*FIXME, should read from real_dev*/
-                        real_dev->u.cli.cl_max_mds_easize = 
+                       real_dev->u.cli.cl_max_mds_easize =
                                               cache_dev->u.cli.cl_max_mds_easize;
-                        real_dev->u.cli.cl_max_mds_cookiesize = 
+                       real_dev->u.cli.cl_max_mds_cookiesize =
                                               cache_dev->u.cli.cl_max_mds_cookiesize;
-                        break;
                 }
+                break;
         case OBD_IOC_COBD_CFLUSH:
                 if (cobd->cache_on) {
                         cobd->cache_on = 0;
                         cobd_flush(obd);
-                        break;
                 }
+                break;
         default:
                 cobd_exp = cobd_get_exp(obd);
                 rc = obd_iocontrol(cmd, cobd_exp, len, karg, uarg);

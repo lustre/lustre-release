@@ -60,7 +60,7 @@ void *smfs_trans_start(struct inode *inode, int op, void *desc_private)
         CDEBUG(D_INFO, "trans start %p\n", fsfilt->fs_start);
 
         SMFS_TRANS_OP(inode, op);
-
+        
         /* There are some problem here. fs_start in fsfilt is used by lustre
          * the journal blocks of write rec are not counted in FIXME later */
         if (fsfilt->fs_start)
@@ -71,6 +71,9 @@ void *smfs_trans_start(struct inode *inode, int op, void *desc_private)
 void smfs_trans_commit(struct inode *inode, void *handle, int force_sync)
 {
         struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+
+        if (!handle)
+                return;
 
         CDEBUG(D_INFO, "trans commit %p\n", fsfilt->fs_commit);
 

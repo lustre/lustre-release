@@ -284,14 +284,21 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
 
 #define CACHE_HOOK_MAX          9
 
-#define SMFS_CACHE_HOOK_PRE(op, handle, dir)                            \
-{                                                                       \
-        if (smfs_cache_hook(dir)) {                                     \
-                LASSERT(handle != NULL);                                \
-                CDEBUG(D_INODE, "cache hook pre: op %d, dir %lu\n",     \
-                       op, dir->i_ino);                                 \
-                cache_space_pre(dir, op);                               \
-        }                                                               \
+#define SMFS_CACHE_HOOK_PRE(op, handle, dir, rc)                                \
+{                                                                               \
+        while (smfs_cache_hook(dir)) {                                          \
+                if (!handle) {                                                  \
+                        handle = smfs_trans_start(dir, KML_CACHE_NOOP, NULL);   \
+                        if (IS_ERR(handle)) {                                   \
+                               rc = -ENOSPC;                                    \
+                               break;                                           \
+                        }                                                       \
+                }                                                               \
+                CDEBUG(D_INODE, "cache hook pre: op %d, dir %lu\n",             \
+                       op, dir->i_ino);                                         \
+                cache_space_pre(dir, op);                                       \
+                break;                                                          \
+        }                                                                       \
 }
 
 #define SMFS_CACHE_HOOK_POST(op, handle, old_dir, old_dentry,           \

@@ -401,6 +401,8 @@ struct echo_client_obd {
 struct cache_obd {
         struct obd_export *cobd_real_exp;/* local connection to target obd */
         struct obd_export *cobd_cache_exp; /* local connection to cache obd */
+        char   *cobd_real_name;
+        char   *cobd_cache_name;
         int    refcount;
         int    cache_on;
 };
