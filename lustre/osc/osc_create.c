@@ -267,8 +267,12 @@ static int osccd_main(void *arg)
 void oscc_init(struct lustre_handle *exph)
 {
         struct obd_export *exp = class_conn2export(exph);
-        struct osc_export_data *oed = &exp->exp_osc_data;
+        struct osc_export_data *oed;
 
+        if (exp == NULL)
+                return;
+
+        oed = &exp->exp_osc_data;
         memset(oed, 0, sizeof(*oed));
         INIT_LIST_HEAD(&oed->oed_oscc.oscc_list);
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
