@@ -1396,7 +1396,7 @@
  	}
  	d_add(dentry, inode);
  	return NULL;
-@@ -238,6 +964,300 @@ static inline void ext3_set_de_type(stru
+@@ -238,6 +964,301 @@ static inline void ext3_set_de_type(stru
  		de->file_type = ext3_type_by_mode[(mode & S_IFMT)>>S_SHIFT];
  }
  
@@ -1657,7 +1657,8 @@
 +	data1 = bh2->b_data;
 +
 +	/* The 0th block becomes the root, move the dirents out */
-+	de = (struct ext3_dir_entry_2 *) &root->info;
++	de = &root->dotdot;
++	de = (struct ext3_dir_entry_2 *) ((char *)de + de->rec_len);
 +	len = ((char *) root) + blocksize - (char *) de;
 +	memcpy (data1, de, len);
 +	de = (struct ext3_dir_entry_2 *) data1;
