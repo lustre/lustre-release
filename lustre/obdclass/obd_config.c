@@ -556,11 +556,8 @@ int class_config_parse_llog(struct obd_export *exp, char *name,
         }
 
         rc = llog_create(obd, &llh, NULL, name);
-        if (rc) {
-                class_export_put(obd->obd_log_exp);
-                obd->obd_log_exp = NULL;
+        if (rc) 
                 RETURN(rc);
-        }
 
         rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
         if (rc) 

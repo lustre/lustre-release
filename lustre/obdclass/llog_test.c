@@ -348,26 +348,44 @@ static int llog_test_6(struct obd_device *obd, char * name)
         struct lustre_handle exph = {0, };
         struct obd_export * exp;
         struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
+        struct llog_handle *llh = NULL;
         int rc;
 
         CERROR("6a: re-open log %s using client API\n", name);
         mdc_obd = class_find_client_obd(mds_uuid, LUSTRE_MDC_NAME, NULL);
         if (mdc_obd == NULL) {
-                CERROR("No MDC devices connected to %s found.\n", 
+                CERROR("6: no MDC devices connected to %s found.\n", 
                        mds_uuid->uuid);
                 RETURN(-ENOENT);
         }
 
         rc = obd_connect(&exph, mdc_obd, &uuid);
         if (rc) {
-                CERROR("Failed to connect to MDC: %s\n", mdc_obd->obd_name);
+                CERROR("6: failed to connect to MDC: %s\n", mdc_obd->obd_name);
                 RETURN(rc);
         }
 
         exp = class_conn2export(&exph);
-        rc = mdc_llog_process(exp, name, llog_test6_process_rec, NULL);
+        rc = llog_create(obd, &llh, NULL, name);
         if (rc) {
-                CERROR("mdc_llog_process failed: rc = %d\n", rc);
+                CERROR("6: llog_create failed %d\n", rc);
+                RETURN(rc);
+        }
+
+        rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
+        if (rc) {
+                CERROR("6: llog_init_handle failed %d\n", rc);
+                GOTO(parse_out, rc);
+        }
+
+        rc = llog_process(llh, llog_test6_process_rec, NULL);
+parse_out:
+        if (rc) 
+                CERROR("6: llog_process failed %d\n", rc);
+
+        rc = llog_close(llh);
+        if (rc) {
+                CERROR("6: llog_close failed: rc = %d\n", rc);
         }
 
         rc = obd_disconnect(exp, 0);
