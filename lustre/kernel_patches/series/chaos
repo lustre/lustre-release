@@ -1,5 +1,0 @@
-dev_read_only.patch
-exports.patch
-kmem_cache_validate.patch
-lustre_version.patch
-vfs_intent.patch
