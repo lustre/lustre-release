@@ -39,6 +39,11 @@ static int jt_noop(int argc, char **argv) {
         return 0;
 }
 
+static int jt_opt_ignore_errors(int argc, char **argv) {
+        Parser_ignore_errors(1);
+        return 0;
+}
+
 command_t cmdlist[] = {
         /* Metacommands */
         {"--device", jt_opt_device, 0,
@@ -47,6 +52,12 @@ command_t cmdlist[] = {
         {"--threads", jt_opt_threads, 0,
          "run <threads> separate instances of <command> on device <devno>\n"
          "--threads <threads> <verbose> <devno> <command [args ...]>"},
+        {"--ignore_errors", jt_opt_ignore_errors, 0,
+         "ignore errors that occur during script processing\n"
+         "--ignore_errors"},
+        {"ignore_errors", jt_opt_ignore_errors, 0,
+         "ignore errors that occur during script processing\n"
+         "ignore_errors"},
 
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},

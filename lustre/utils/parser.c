@@ -44,6 +44,10 @@ static command_t * top_level;           /* Top level of commands, initialized by
                                     * InitParser                              */
 static char * parser_prompt = NULL;/* Parser prompt, set by InitParser      */
 static int done;                   /* Set to 1 if user types exit or quit   */
+static int ignore_errors;       /* Normally, the parser will quit when
+                                   an error occurs in non-interacive
+                                   mode. Setting this to non-zero will
+                                   force it to keep buggering on. */
 
 
 /* static functions */
@@ -102,6 +106,11 @@ static command_t *Parser_findargcmd(char *name, command_t cmds[])
                         return cmd;
         }
         return NULL;
+}
+
+void Parser_ignore_errors(int ignore) 
+{
+        ignore_errors = ignore;
 }
 
 int Parser_execarg(int argc, char **argv, command_t cmds[])
@@ -323,7 +332,7 @@ char * readline(char * prompt)
 int Parser_commands(void)
 {
         char *line, *s;
-        int rc = 0;
+        int rc = 0, save_error = 0;
         int interactive;
         
         interactive = init_input();
@@ -340,11 +349,17 @@ int Parser_commands(void)
                         rc = execute_line(s);
                 }
                 /* stop on error if not-interactive */
-                if (rc != 0 && !interactive)
-                        done = 1;
+                if (rc != 0 && !interactive) {
+                        if (save_error == 0)
+                                save_error = rc;
+                        if (!ignore_errors)
+                                done = 1;
+                }
 
                 free(line);
         }
+        if (save_error)
+                rc = save_error;
         return rc;
 }
 

@@ -34,6 +34,7 @@ void Parser_init(char *, command_t *);	/* Set prompt and load command list */
 int Parser_commands(void);			/* Start the command parser */
 void Parser_qhelp(int, char **);	/* Quick help routine */
 int Parser_help(int, char **);		/* Detailed help routine */
+void Parser_ignore_errors(int ignore);	/* Set the ignore errors flag */
 void Parser_printhelp(char *);		/* Detailed help routine */
 void Parser_exit(int, char **);		/* Shuts down command parser */
 int Parser_execarg(int argc, char **argv, command_t cmds[]);

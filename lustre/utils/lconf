@@ -227,7 +227,7 @@ class LCTLInterface:
                 self.lctl = 'lctl'
             else:
                 raise CommandError('lctl', "unable to find lctl binary.")
-            
+
     def run(self, cmds):
         """
         run lctl
@@ -245,9 +245,13 @@ class LCTLInterface:
         out = p.fromchild.readlines()
         err = p.childerr.readlines()
         ret = p.wait()
-        if ret or len(err):
-            raise CommandError(self.lctl, err, ret)
-        return ret, out
+        if os.WIFEXITED(ret):
+            rc = os.WEXITSTATUS(ret)
+        else:
+            rc = 0
+        if rc or len(err):
+            raise CommandError(self.lctl, err, rc)
+        return rc, out
 
             
     def network(self, net, nid):
@@ -299,6 +303,7 @@ class LCTLInterface:
     # add a route to a range
     def del_route(self, net, gw, lo, hi):
         cmds =  """
+  ignore_errors
   network %s
   del_route %s
   quit  """ % (net, lo)
@@ -316,6 +321,7 @@ class LCTLInterface:
     # add a route to a range
     def del_route_host(self, net, uuid, gw, tgt):
         cmds =  """
+  ignore_errors
   network %s
   del_uuid %s
   del_route %s
@@ -325,6 +331,7 @@ class LCTLInterface:
     # disconnect one connection
     def disconnect(self, net, nid, port, servuuid):
         cmds =  """
+  ignore_errors
   network %s
   disconnect %s 
   del_uuid %s
@@ -334,6 +341,7 @@ class LCTLInterface:
     # disconnect all
     def disconnectAll(self, net):
         cmds =  """
+  ignore_errors
   network %s
   del_uuid self
   disconnect
@@ -352,6 +360,7 @@ class LCTLInterface:
     # cleanup a device
     def cleanup(self, name, uuid):
         cmds = """
+  ignore_errors
   device $%s
   cleanup
   detach
@@ -367,7 +376,7 @@ class LCTLInterface:
   quit""" % (mdsuuid, uuid, stripe_cnt, stripe_sz, stripe_off, pattern, devlist)
         self.run(cmds)
 
-    # cleanup a device
+    # dump the log file
     def dump(self, dump_file):
         cmds = """
   debug_kernel %s 1
@@ -1588,4 +1597,4 @@ if __name__ == "__main__":
 
     if first_cleanup_error:
         sys.exit(first_cleanup_error)
-2        
+
