@@ -80,7 +80,10 @@ int ll_set_opt(const char *opt, char *data, int fl)
 
 void ll_options(char *options, char **ost, char **mds, int *flags)
 {
-        char *this_char, *opt_ptr = options;
+        char *this_char;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        char *opt_ptr = options;
+#endif
         ENTRY;
 
         if (!options) {
@@ -282,6 +285,7 @@ out_osc:
 out_mdc:
         obd_disconnect(&sbi->ll_mdc_conn, 0);
 out_free:
+        //        lprocfs_unregister_mountpoint(sbi);
         OBD_FREE(sbi, sizeof(*sbi));
 
         goto out_dev;
