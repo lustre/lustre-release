@@ -60,11 +60,9 @@ void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
         LASSERT(page->private == (unsigned long)ocp);
         LASSERT(PageLocked(page));
 
-        if (rc != 0) {
-                CERROR("writeback error on page %p index %ld: %d\n", page,
-                       page->index, rc);
+        if (rc != 0) 
                 SetPageError(page);
-        }
+
         ocp->ocp_flags &= ~OCP_IO_READY;
         unlock_page(page);
         page_cache_release(page);
