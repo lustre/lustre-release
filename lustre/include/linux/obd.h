@@ -3,18 +3,18 @@
 
 
 struct obd_conn_info {
-	unsigned int conn_id;     /* handle */
+        unsigned int conn_id;     /* handle */
 };
 
 struct obd_type {
-	struct list_head typ_chain;
-	struct obd_ops *typ_ops;
-	char *typ_name;
-	int  typ_refcnt;
+        struct list_head typ_chain;
+        struct obd_ops *typ_ops;
+        char *typ_name;
+        int  typ_refcnt;
 };
 
-#define OBD_MAGIC	0xffff0000
-#define OBD_MAGIC_MASK	0xffff0000
+#define OBD_MAGIC       0xffff0000
+#define OBD_MAGIC_MASK  0xffff0000
 
 
 

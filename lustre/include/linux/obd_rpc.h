@@ -1,6 +1,7 @@
 #ifndef __OBD_RPC_H
 #define __OBD_RPC_H
 
+#include <linux/sunrpc/svc.h>
 #define OBD_TGT_VERSION  001
 
 #define OBD_TGT_TCP  0x1
@@ -35,42 +36,42 @@ extern struct rpc_program obd_program;
 
 
 struct obd_target {
-	struct sockaddr_in tgt_addr;
-	int tgt_flags;
-	int tgt_timeo;
-	int tgt_retrans;
-	int tgt_hostnamelen;
-	char tgt_hostname[0];
-	
+        struct sockaddr_in tgt_addr;
+        int tgt_flags;
+        int tgt_timeo;
+        int tgt_retrans;
+        int tgt_hostnamelen;
+        char tgt_hostname[0];
+        
 };
 
 
 struct rpc_obd {
-	struct rpc_clnt *	handle;		/* RPC client handle */
-	struct sockaddr_in      addr;
-	int			flags;		/* various flags */
-	int                     timeo;
-	int                     retrans;
-	int			rsize;		/* read size */
-	int			wsize;		/* write size */
-	unsigned int	 	bsize;		/* server block size */
-	char *			hostname;	/* remote hostname */
+        struct rpc_clnt *       handle;         /* RPC client handle */
+        struct sockaddr_in      addr;
+        int                     flags;          /* various flags */
+        int                     timeo;
+        int                     retrans;
+        int                     rsize;          /* read size */
+        int                     wsize;          /* write size */
+        unsigned int            bsize;          /* server block size */
+        char *                  hostname;       /* remote hostname */
 };
 
 
-#define OBD_PROGRAM		300001
-#define OBD_VERSION		1
-#define OBDPROC_NULL		0
-#define OBDPROC_ECHOINT		1
+#define OBD_PROGRAM             300001
+#define OBD_VERSION             1
+#define OBDPROC_NULL            0
+#define OBDPROC_ECHOINT         1
 
 #ifdef  OBD_NEED_XDR_TYPES
 
 struct obd_echoint_in {
-	__u32			in;
+        __u32                   in;
 };
 
 struct obd_echoint_out {
-	__u32			out;
+        __u32                   out;
 };
 
 

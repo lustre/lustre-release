@@ -10,7 +10,7 @@
 #endif
 
 struct ext2_obd {
-	struct super_block * ext2_sb;
+        struct super_block * ext2_sb;
 };
 
 
@@ -29,8 +29,8 @@ void ext2_free_blocks (const struct inode * inode, unsigned long block,
 unsigned long ext2_count_free_blocks (struct super_block * sb);
 int ext2_group_sparse(int group);
 struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
-					     unsigned int block_group,
-					     struct buffer_head ** bh);
+                                             unsigned int block_group,
+                                             struct buffer_head ** bh);
 
 /* bitmap.c */
 unsigned long ext2_count_free(struct buffer_head * map, unsigned int numchars);
@@ -43,19 +43,19 @@ extern struct file_operations ext2_file_operations;
 extern struct inode_operations ext2_file_inode_operations;
 
 /* fsync.c */
-int ext2_sync_file(struct file * file, struct dentry *dentry);
+int ext2_sync_file(struct file * file, struct dentry *dentry, int);
 
 /* ialloc.c */
 void ext2_free_inode (struct inode * inode);
-struct inode * ext2_new_inode (const struct inode * dir, int mode,
-				     int * err);
+struct inode * ext2_new_inode (const struct inode * dir, int );
 unsigned long ext2_count_free_inodes (struct super_block * sb);
 void ext2_check_inodes_bitmap (struct super_block * sb);
 int load_inode_bitmap (struct super_block * sb,
-			      unsigned int block_group);
+                              unsigned int block_group);
 
 /* inode.c */
-inline long ext2_block_map (struct inode * inode, long block);
+int ext2_bmap(struct address_space *mapping, long block);
+int ext2_get_block(struct inode *inode, long iblock, struct buffer_head *bh_result, int create);
 
 
 /* super.c */
@@ -76,25 +76,10 @@ inline long ext2_block_map (struct inode * inode, long block);
 extern struct super_operations ext2_sops;
 int obd_remount (struct super_block * sb, int * flags, char * data);
 struct super_block * ext2_read_super (struct super_block * sb, void * data,
-				      int silent);
+                                      int silent);
 
 /* punch.c */
 void ext2_truncate (struct inode * inode);
 int ext2_punch (struct inode * inode, loff_t start, size_t count);
-
-static inline struct page *addr_to_page(char *buf)
-{
-	unsigned long addr = (unsigned long)buf;
-        unsigned long map_nr;
-
-#ifdef CONFIG_DISCONTIGMEM
-        if (addr == 0) return;
-#endif
-        map_nr = MAP_NR(addr);
-        if (map_nr < max_mapnr)
-		return mem_map + map_nr;
-	else 
-		return 0;
-}
 
 #endif
