@@ -304,6 +304,10 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 /* pack the intended request */
                 mds_getattr_pack(req, 2, dir, de->d_name.name, de->d_name.len);
 
+                /* we need to replay opens */
+                if (it->it_op == IT_OPEN)
+                        req->rq_flags |= PTL_RPC_FL_REPLAY;
+
                 /* get ready for the reply */
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_READDIR) {

@@ -62,9 +62,8 @@ struct ptlrpc_connection {
         struct list_head        c_dying_head;  /* protected by c_lock */
         struct recovd_data      c_recovd_data;
 
-        struct list_head        c_clients; /* XXXshaver will be c_imports */
+        struct list_head        c_imports;
         struct list_head        c_exports;
-
 };
 
 struct ptlrpc_client {

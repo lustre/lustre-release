@@ -73,7 +73,9 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
         struct obd_device *obd = class_conn2obd(hdl);
         struct recovd_obd *recovd = &obd->u.recovd;
         struct obd_ioctl_data *data = karg;
+#if 0 && PARALLEL_RECOVERY
         struct list_head *tmp;
+#endif
 
         ENTRY;
 

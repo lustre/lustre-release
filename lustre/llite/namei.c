@@ -269,7 +269,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
         EXIT;
  neg_req:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
  negative:
         dentry->d_op = &ll_d_ops;
         d_add(dentry, inode);

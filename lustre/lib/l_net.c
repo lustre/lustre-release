@@ -51,7 +51,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_ioctl_data* data = buf;
         int rq_portal, rp_portal;
         char *name;
-        struct client_obd *mdc = &obddev->u.cli;
+        struct client_obd *cli = &obddev->u.cli;
         char server_uuid[37];
         ENTRY;
 
@@ -85,21 +85,22 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        sema_init(&mdc->cl_sem, 1);
-        mdc->cl_conn_count = 0;
-        memcpy(mdc->cl_target_uuid, data->ioc_inlbuf1, data->ioc_inllen1);
+        sema_init(&cli->cl_sem, 1);
+        cli->cl_conn_count = 0;
+        memcpy(cli->cl_target_uuid, data->ioc_inlbuf1, data->ioc_inllen1);
         memcpy(server_uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
                                                    sizeof(server_uuid)));
 
-        mdc->cl_import.imp_connection = ptlrpc_uuid_to_connection(server_uuid);
-        if (!mdc->cl_import.imp_connection)
+        cli->cl_import.imp_connection = ptlrpc_uuid_to_connection(server_uuid);
+        if (!cli->cl_import.imp_connection)
                 RETURN(-ENOENT);
 
         ptlrpc_init_client(rq_portal, rp_portal, name,
                            &obddev->obd_ldlm_client);
-        mdc->cl_import.imp_client = &obddev->obd_ldlm_client;
+        cli->cl_import.imp_client = &obddev->obd_ldlm_client;
+        cli->cl_import.imp_obd = obddev;
 
-        mdc->cl_max_mdsize = sizeof(struct lov_mds_md);
+        cli->cl_max_mdsize = sizeof(struct lov_mds_md);
 
         MOD_INC_USE_COUNT;
         RETURN(0);
@@ -125,6 +126,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                           sizeof(obd->obd_uuid) };
         char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid};
         int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
+        struct ptlrpc_connection *c;
 
         ENTRY;
         down(&cli->cl_sem);
@@ -149,22 +151,21 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
-        //   This handle may be important if a callback needs
-        //   to find the mdc/osc
         request->rq_reqmsg->addr = conn->addr;
         request->rq_reqmsg->cookie = conn->cookie;
-        class_conn2export(conn)->exp_connection = request->rq_connection;
+        c = class_conn2export(conn)->exp_connection = request->rq_connection;
 
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out_req, rc);
 
-        request->rq_connection->c_level = LUSTRE_CONN_FULL;
-        cli->cl_import.imp_handle = *(struct lustre_handle *)request->rq_repmsg;
+        list_add(&cli->cl_import.imp_chain, &c->c_imports);
+        c->c_level = LUSTRE_CONN_FULL;
+        cli->cl_import.imp_handle.addr = request->rq_repmsg->addr;
+        cli->cl_import.imp_handle.cookie = request->rq_repmsg->cookie;
 
-        recovd_conn_manage(cli->cl_import.imp_connection,
-                           ptlrpc_recovd, ll_recover);
+        recovd_conn_manage(c, ptlrpc_recovd, ll_recover);
 
 
         EXIT;
@@ -223,6 +224,7 @@ int client_obd_disconnect(struct lustre_handle *conn)
         err = class_disconnect(conn);
         if (!rc && err)
                 rc = err;
+        list_del_init(&cli->cl_import.imp_chain);
         MOD_DEC_USE_COUNT;
  out_sem:
         up(&cli->cl_sem);
@@ -292,6 +294,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         dlmimp->imp_client = &export->exp_obd->obd_ldlm_client;
         dlmimp->imp_handle.addr = req->rq_reqmsg->addr;
         dlmimp->imp_handle.cookie = req->rq_reqmsg->cookie;
+        dlmimp->imp_obd = /* LDLM! */ NULL;
         
 #warning Peter: is this the right place to upgrade the server connection level?
         req->rq_connection->c_level = LUSTRE_CONN_FULL;

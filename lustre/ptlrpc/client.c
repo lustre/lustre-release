@@ -404,6 +404,8 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
         ENTRY;
         CDEBUG(D_INODE, "resend request %Ld, opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc);
+        req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
+        req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
         req->rq_status = -EAGAIN;
         req->rq_level = LUSTRE_CONN_RECOVD;
         req->rq_flags |= PTL_RPC_FL_RESEND;
@@ -502,6 +504,15 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 RETURN(-rc);
         }
 
+#if 0 && REPLAY_DEBUGGED
+        if (req->rq_flags & PTL_RPC_FL_REPLAY) {
+                /* keep a reference so it's around for replaying.
+                 * this is balanced in XXXXXX?
+                 */
+                atomic_inc(&req->rq_refcount);
+        }
+#endif
+
         spin_lock(&conn->c_lock);
         list_del(&req->rq_list);
         list_add_tail(&req->rq_list, &conn->c_sending_head);
@@ -580,6 +591,8 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 
         req->rq_time = CURRENT_TIME;
         req->rq_timeout = obd_timeout;
+        req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
+        req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);

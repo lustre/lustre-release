@@ -23,35 +23,58 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 
-#if 0
-/* FIXME: reference to mdc_getstatus causes dependency problems */
-static int ll_reconnect(struct ll_sb_info *sbi)
+int ll_reconnect(struct ptlrpc_connection *conn) 
 {
-        struct ll_fid rootfid;
-        __u64 last_committed;
-        __u64 last_xid;
-        int err;
         struct ptlrpc_request *request; 
-        struct ptlrpc_connection *conn = sbi2mdc(sbi)->cl_import.imp_connection;
+        struct list_head *tmp;
+        int rc = -EINVAL;
 
-        ptlrpc_readdress_connection(conn, "mds");
-
+        /* XXX c_lock semantics! */
         conn->c_level = LUSTRE_CONN_CON;
 
-        /* XXX: need to store the last_* values somewhere */
-        err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
-                            &last_xid, &request);
-        if (err) {
-                CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_disc, err = -ENOTCONN);
+        /* XXX this code MUST be shared with class_obd_connect! */
+        list_for_each(tmp, &conn->c_imports) {
+                struct obd_import *imp = list_entry(tmp, struct obd_import,
+                                                    imp_chain);
+                struct obd_device *obd = imp->imp_obd;
+                struct client_obd *cli = &obd->u.cli;
+                int rq_opc = (obd->obd_type->typ_ops->o_brw)
+                        ? OST_CONNECT : MDS_CONNECT;
+                int size[] = { sizeof(cli->cl_target_uuid),
+                               sizeof(obd->obd_uuid) };
+                char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid };
+                struct lustre_handle old_hdl;
+
+                LASSERT(imp->imp_connection == conn);
+                request = ptlrpc_prep_req(imp, rq_opc, 2, size, tmp);
+                request->rq_level = LUSTRE_CONN_NEW;
+                request->rq_replen = lustre_msg_size(0, NULL);
+                /* XXX are (addr, cookie) right? */
+                request->rq_reqmsg->addr = imp->imp_handle.addr;
+                request->rq_reqmsg->cookie = imp->imp_handle.cookie;
+                rc = ptlrpc_queue_wait(request);
+                rc = ptlrpc_check_status(request, rc);
+                if (rc) {
+                        CERROR("cannot connect to %s@%s: rc = %d\n",
+                               cli->cl_target_uuid, conn->c_remote_uuid, rc);
+                        ptlrpc_free_req(request);
+                        GOTO(out_disc, rc = -ENOTCONN);
+                }
+
+                old_hdl = imp->imp_handle;
+                imp->imp_handle.addr = request->rq_repmsg->addr;
+                imp->imp_handle.cookie = request->rq_repmsg->cookie;
+                CERROR("reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
+                       cli->cl_target_uuid, conn->c_remote_uuid,
+                       imp->imp_handle.addr, imp->imp_handle.cookie,
+                       old_hdl.addr, old_hdl.cookie);
+                ptlrpc_free_req(request);
         }
-        conn->c_last_xid = last_xid;
         conn->c_level = LUSTRE_CONN_RECOVD;
 
  out_disc:
-        return err;
+        return rc;
 }
-#endif
 
 static int ll_recover_upcall(struct ptlrpc_connection *conn)
 {
@@ -74,19 +97,15 @@ static int ll_recover_upcall(struct ptlrpc_connection *conn)
 
 static int ll_recover_reconnect(struct ptlrpc_connection *conn)
 {
-        RETURN(-ENOSYS);
-#if 0
-        /* XXXshaver this code needs to know about connection-driven recovery! */
-
-        struct ptlrpc_request *req;
-        struct list_head *tmp, *pos;
-        struct ll_sb_info *sbi = cli->cli_data;
-        struct ptlrpc_connection *conn = cli->cli_connection;
         int rc = 0;
+        struct list_head *tmp, *pos;
+        struct ptlrpc_request *req;
         ENTRY;
 
         /* 1. reconnect */
-        ll_reconnect(sbi);
+        rc = ll_reconnect(conn);
+        if (rc)
+                RETURN(rc);
         
         /* 2. walk the request list */
         spin_lock(&conn->c_lock);
@@ -97,12 +116,14 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
                         CDEBUG(D_INODE, "req %Ld needs replay [last rcvd %Ld]\n",
                                req->rq_xid, conn->c_last_xid);
+                        rc = ptlrpc_replay_req(req);
+#if 0
 #error We should not hold a spinlock over such a lengthy operation.
 #error If necessary, drop spinlock, do operation, re-get spinlock, restart loop.
 #error If we need to avoid re-processint items, then delete them from the list
 #error as they are replayed and re-add at the tail of this list, so the next
 #error item to process will always be at the head of the list.
-                        rc = ptlrpc_replay_req(req);
+#endif
                         if (rc) {
                                 CERROR("recovery replay error %d for req %Ld\n",
                                        rc, req->rq_xid);
@@ -152,7 +173,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
 
         }
 
-        sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_FULL;
+        conn->c_level = LUSTRE_CONN_FULL;
         recovd_conn_fixed(conn);
 
         /* Finally, continue what we delayed since recovery started */
@@ -165,7 +186,6 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
  out:
         spin_unlock(&conn->c_lock);
         return rc;
-#endif
 }
 
 int ll_recover(struct recovd_data *rd, int phase)

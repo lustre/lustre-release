@@ -270,7 +270,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
                         rc = -rc;
                 GOTO(out, rc);
         }
-        ptlrpc_free_req(fd->fd_req);
+        ptlrpc_req_finished(fd->fd_req);
 
         //ldlm_cli_cancel_unused();
 
