@@ -48,7 +48,7 @@
  include/asm-ppc64/unistd.h    |    2 
  include/asm-s390/unistd.h     |   15 
  include/asm-s390x/unistd.h    |   15 
- include/asm-sparc/unistd.h    |   26 
+ include/asm-sparc/unistd.h    |   22 
  include/asm-sparc64/unistd.h  |   24 
  include/linux/cache_def.h     |   15 
  include/linux/errno.h         |    4 
@@ -4784,12 +4784,6 @@
  
 --- linux-2.4.20/include/asm-sparc/unistd.h~linux-2.4.20-xattr-0.8.54	Sat Apr  5 03:57:18 2003
 +++ linux-2.4.20-braam/include/asm-sparc/unistd.h	Sat Apr  5 03:57:18 2003
-@@ -1,4 +1,4 @@
--/* $Id: linux-2.4.20-xattr-0.8.54.patch,v 1.1.2.1 2003/04/05 11:14:59 braam Exp $ */
-+/* $Id: linux-2.4.20-xattr-0.8.54.patch,v 1.1.2.1 2003/04/05 11:14:59 braam Exp $ */
- #ifndef _SPARC_UNISTD_H
- #define _SPARC_UNISTD_H
- 
 @@ -184,24 +184,24 @@
  /* #define __NR_exportfs        166    SunOS Specific                              */
  #define __NR_mount              167 /* Common                                      */
