@@ -42,7 +42,7 @@
 void usage(char *prog)
 {
         printf("usage: %s <filename> [nloops]\n", prog);
-        printf("%s must be run with 2 processes\n", prog);
+        printf("%s must be run with at least 2 processes\n", prog);
 
         MPI_Finalize();
         exit(1);
@@ -278,7 +278,8 @@ int main(int argc, char *argv[])
         if (rank == 0) {
                 error = unlink(fname);
                 if (error < 0)
-                        rprintf("unlink %s failed: %s\n",fname,strerror(errno));
+                        rprintf(0, n, "unlink %s failed: %s\n",
+                                fname, strerror(errno));
         }
 
         MPI_Finalize();

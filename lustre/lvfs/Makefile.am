@@ -25,7 +25,7 @@ else
 modulefs_DATA = lvfs.o $(FSMOD).o fsfilt_reiserfs.o
 
 EXTRA_PROGRAMS = lvfs $(FSMOD) fsfilt_reiserfs
-lvfs_SOURCES = lvfs_common.c lvfs_linux.c fsfilt.c
+lvfs_SOURCES = lvfs_common.c lvfs_linux.c fsfilt.c lvfs_internal.h
 endif
 
 

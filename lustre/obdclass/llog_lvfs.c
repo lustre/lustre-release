@@ -322,7 +322,7 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
 {
         char logname[24];
         struct llog_handle *handle;
-        struct l_dentry *dchild;
+        struct l_dentry *dchild = NULL;
         struct obdo *oa = NULL;
         int rc = 0, cleanup_phase = 1;
         int open_flags = O_RDWR | O_CREAT | O_LARGEFILE;
