@@ -182,6 +182,28 @@ out:
 }
 EXPORT_SYMBOL(llog_obd_repl_cancel);
 
+int llog_obd_repl_precleanup(struct llog_ctxt *ctxt,
+                             struct obd_export *exp)
+{
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(ctxt->loc_llcd);
+
+        if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
+                down(&ctxt->loc_sem);
+                CWARN("import will be destroyed, put llcd %p\n", 
+                      ctxt->loc_llcd);
+                llcd_put(ctxt->loc_llcd);
+                ctxt->loc_llcd = NULL;
+                up(&ctxt->loc_sem);
+        } else
+                rc = llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_obd_repl_precleanup);
+
 static int log_commit_thread(void *arg)
 {
         struct llog_commit_master *lcm = arg;
