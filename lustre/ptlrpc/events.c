@@ -112,17 +112,18 @@ int request_in_callback(ptl_event_t *ev)
         struct ptlrpc_request_buffer_desc *rqbd = ev->mem_desc.user_ptr;
         struct ptlrpc_service *service = rqbd->rqbd_service;
 
-        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* requests always contiguous */
-        LASSERT (ev->type == PTL_EVENT_PUT);    /* we only enable puts */
+        /* requests always contiguous */
+        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0);
+        /* we only enable puts */
+        LASSERT (ev->type == PTL_EVENT_PUT);
         LASSERT (atomic_read (&service->srv_nrqbds_receiving) > 0);
         LASSERT (atomic_read (&rqbd->rqbd_refcount) > 0);
-        
+
         if (ev->rlength != ev->mlength)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
 
-        if (ptl_is_valid_handle (&ev->unlinked_me))
-        {
+        if (ptl_is_valid_handle (&ev->unlinked_me)) {
                 /* This is the last request to be received into this
                  * request buffer.  We don't bump the refcount, since the
                  * thread servicing this event is effectively taking over
@@ -131,14 +132,15 @@ int request_in_callback(ptl_event_t *ev)
 #warning ev->unlinked_me.nal_idx is not set properly in a callback
                 LASSERT (ev->unlinked_me.handle_idx == rqbd->rqbd_me_h.handle_idx);
 
-                if (atomic_dec_and_test (&service->srv_nrqbds_receiving)) /* we're off-air */
-                {
+                /* we're off the air */
+                if (atomic_dec_and_test (&service->srv_nrqbds_receiving)) {
                         CERROR ("All request buffers busy\n");
                         /* we'll probably start dropping packets in portals soon */
                 }
+        } else {
+                /* +1 ref for service thread */
+                atomic_inc(&rqbd->rqbd_refcount);
         }
-        else
-                atomic_inc (&rqbd->rqbd_refcount); /* +1 ref for service thread */
 
         wake_up(&service->srv_waitq);
 
