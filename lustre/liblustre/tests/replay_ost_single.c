@@ -204,12 +204,16 @@ void t3()
         char *str = "xxxxjoiwlsdf98lsjdfsjfoajflsjfajfoaidfojaj08eorje;";
         ENTRY("touch");
 
-        replay_barrier();
+        printf("touch to create a file\n");
         t_echo_create(path, str);
+        replay_barrier();
         mds_failover();
 
+        printf("read & verify\n");
         t_grep(path, str);
         t_unlink(path);
+        /* XXX have problem without this, seems server side problem XXX */
+        sleep(5);
 }
 
 void t4()
@@ -220,14 +224,16 @@ void t4()
         int count = 10, i;
         ENTRY("|X| 10 open(CREAT)s (ping involved)");
 
-        replay_barrier();
+        printf("create %d files\n", count);
         for (i = 0; i < count; i++) {
                 sprintf(namebuf, "%s%02d", path, i);
                 sprintf(str, "%s-%08d-%08x-AAAAA", "content", i, i);
                 t_echo_create(namebuf, str);
         }
+        replay_barrier();
         mds_failover();
 
+        printf("read & verify\n");
         for (i = 0; i < count; i++) {
                 sprintf(namebuf, "%s%02d", path, i);
                 sprintf(str, "%s-%08d-%08x-AAAAA", "content", i, i);
@@ -321,10 +327,8 @@ int main(int argc, char * const argv[])
         t0();
         t1();
         t2();
-/* XXX still have problems
         t3();
         t4();
- */
 
 	printf("liblustre is about shutdown\n");
         __liblustre_cleanup_();
