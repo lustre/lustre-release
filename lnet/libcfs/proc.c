@@ -65,17 +65,20 @@ extern char portals_upcall[1024];
 #define PSDEV_DEBUG           1   /* control debugging */
 #define PSDEV_SUBSYSTEM_DEBUG 2   /* control debugging */
 #define PSDEV_PRINTK          3   /* force all errors to console */
-#define PSDEV_DEBUG_PATH      4   /* crashdump log location */
-#define PSDEV_DEBUG_DUMP_PATH 5   /* crashdump tracelog location */
-#define PSDEV_PORTALS_UPCALL  6   /* User mode upcall script  */
+#define PSDEV_CONSOLE         4   /* allow _any_ messages to console */
+#define PSDEV_DEBUG_PATH      5   /* crashdump log location */
+#define PSDEV_DEBUG_DUMP_PATH 6   /* crashdump tracelog location */
+#define PSDEV_PORTALS_UPCALL  7   /* User mode upcall script  */
 
-#define PORTALS_PRIMARY_CTLCNT 6
+#define PORTALS_PRIMARY_CTLCNT 7
 static struct ctl_table portals_table[PORTALS_PRIMARY_CTLCNT + 1] = {
         {PSDEV_DEBUG, "debug", &portal_debug, sizeof(int), 0644, NULL,
          &proc_dointvec},
         {PSDEV_SUBSYSTEM_DEBUG, "subsystem_debug", &portal_subsystem_debug,
          sizeof(int), 0644, NULL, &proc_dointvec},
         {PSDEV_PRINTK, "printk", &portal_printk, sizeof(int), 0644, NULL,
+         &proc_dointvec},
+        {PSDEV_CONSOLE, "console", &portal_cerror, sizeof(int), 0644, NULL,
          &proc_dointvec},
         {PSDEV_DEBUG_PATH, "debug_path", debug_file_path,
          sizeof(debug_file_path), 0644, NULL, &proc_dostring, &sysctl_string},

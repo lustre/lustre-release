@@ -45,7 +45,7 @@
 unsigned int portal_debug;
 unsigned int portal_printk;
 unsigned int portal_stack;
-
+unsigned int portal_cerror;
 
 static unsigned int g_nal = 0;
 

@@ -546,6 +546,7 @@ EXPORT_SYMBOL(portal_subsystem_debug);
 EXPORT_SYMBOL(portal_debug);
 EXPORT_SYMBOL(portal_stack);
 EXPORT_SYMBOL(portal_printk);
+EXPORT_SYMBOL(portal_cerror);
 EXPORT_SYMBOL(PtlEQWait);
 EXPORT_SYMBOL(PtlEQFree);
 EXPORT_SYMBOL(PtlEQGet);

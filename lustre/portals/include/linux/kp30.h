@@ -19,6 +19,7 @@ extern unsigned int portal_subsystem_debug;
 extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
+extern unsigned int portal_cerror;
 /* Debugging subsystems (32 bits, non-overlapping) */
 #define S_UNDEFINED    (1 << 0)
 #define S_MDC          (1 << 1)
@@ -106,6 +107,8 @@ extern unsigned int portal_printk;
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
+        if (portal_cerror == 0)                                               \
+                break;                                                        \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (!(mask) || ((mask) & (D_ERROR | D_EMERG)) ||                      \
             (portal_debug & (mask) &&                                         \
