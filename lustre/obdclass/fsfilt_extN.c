@@ -523,7 +523,7 @@ static int fsfilt_extN_read_record(struct file * file, char * buf,
                 return err;
         }
 
-        boffs = (unsigned)*offs / bh->b_size;
+        boffs = (unsigned)*offs % bh->b_size;
         if (boffs + size > bh->b_size) {
                 CERROR("request crosses block's border. offset %lu, size %lu\n",
                        (unsigned long)*offs, (unsigned long)size);
@@ -547,7 +547,7 @@ static int fsfilt_extN_write_record(struct file * file, char * buf,
         handle_t *handle;
         int err;
 
-        journal = EXT3_SB(inode->i_sb)->s_journal;
+        journal = EXTN_SB(inode->i_sb)->s_journal;
         handle = journal_start(journal, EXTN_DATA_TRANS_BLOCKS + 2);
         if (handle == NULL) {
                 CERROR("can't start transaction\n");
@@ -567,7 +567,7 @@ static int fsfilt_extN_write_record(struct file * file, char * buf,
                 goto out;
         }
 
-        boffs = (unsigned)*offs / bh->b_size;
+        boffs = (unsigned)*offs % bh->b_size;
         if (boffs + size > bh->b_size) {
                 CERROR("request crosses block's border. offset %lu, size %lu\n",
                        (unsigned long)*offs, (unsigned long)size);
