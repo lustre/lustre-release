@@ -283,7 +283,7 @@ struct dentry *mds_id2locked_dentry(struct obd_device *obd, struct lustre_id *id
                 retval = ERR_PTR(-EIO); /* XXX translate ldlm code */
 #ifdef S_PDIROPS
                 if (lockh[1].cookie)
-                        ldlm_lock_decref(lockh + 1, LCK_CW);
+                        ldlm_lock_decref(lockh + 1, *mode);
 #endif
         }
 
