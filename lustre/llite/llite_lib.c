@@ -514,10 +514,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
-#endif
 
         if (ia_valid & ATTR_SIZE) {
                 if (attr->ia_size > ll_file_maxbytes(inode)) {
