@@ -805,7 +805,7 @@ static void __exit cleanup_obdclass(void)
 #define LUSTRE_SOURCE_VERSION 10
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_SOURCE_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
-#elif (LUSTRE_KERNEL_VERSION > LUSTRE_SOURCE_VERSION)
+#elif (LUSTRE_KERNEL_VERSION > 11)
 # error Cannot continue: Your Lustre sources are older than the kernel patch
 #endif
 
