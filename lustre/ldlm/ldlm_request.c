@@ -14,8 +14,24 @@
 #include <linux/lustre_dlm.h>
 #include <linux/obd.h>
 
+static int interrupted_completion_wait(void *data)
+{
+        RETURN(1);
+}
+
+static int expired_completion_wait(void *data)
+{
+        struct ldlm_lock *lock = data;
+        class_signal_connection_failure(lock->l_export->exp_connection);
+        RETURN(0);
+}
+
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
 {
+        struct l_wait_info lwi = 
+                LWI_TIMEOUT_INTR(obd_timeout * HZ, expired_completion_wait,
+                                 interrupted_completion_wait, lock);
+        int rc = 0;
         ENTRY;
 
         if (flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
@@ -26,17 +42,26 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
                            " sleeping");
                 ldlm_lock_dump(lock);
                 ldlm_reprocess_all(lock->l_resource);
-                wait_event(lock->l_waitq, (lock->l_req_mode ==
-                                           lock->l_granted_mode));
-                LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
+                rc = l_wait_event(lock->l_waitq,
+                                  (lock->l_req_mode == lock->l_granted_mode),
+                                  &lwi);
+                if (rc) {
+                        LDLM_DEBUG(lock,
+                                   "client-side enqueue waking up: failed (%d)",
+                                   rc);
+                } else {
+                        LDLM_DEBUG(lock, 
+                                   "client-side enqueue waking up: granted");
+                }
         } else if (flags == LDLM_FL_WAIT_NOREPROC) {
-                wait_event(lock->l_waitq, (lock->l_req_mode ==
-                                           lock->l_granted_mode));
+                rc = l_wait_event(lock->l_waitq,
+                                  (lock->l_req_mode == lock->l_granted_mode),
+                                  &lwi);
         } else if (flags == 0) {
                 wake_up(&lock->l_waitq);
         }
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,

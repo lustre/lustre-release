@@ -801,8 +801,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                                       &flags, ldlm_completion_ast,
                                       mds_blocking_ast, NULL, 0, &oldhandle);
                 if (rc)
-                        CERROR("failed to get child inode lock (child ino "LPD64", "
-                               "dir ino %ld)\n",
+                        CERROR("failed to get child inode lock (child ino "
+                               LPD64" dir ino %ld)\n",
                                res_id[0], de_old->d_inode->i_ino);
         }
 
