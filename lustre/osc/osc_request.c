@@ -440,7 +440,7 @@ out_req:
         /* Clean up on error. */
 out_unmap:
         while (mapped-- > 0)
-                kunmap(pga[mapped]);
+                kunmap(pga[mapped].pg);
         OBD_FREE(cb_data, sizeof(*cb_data));
 out_desc:
         ptlrpc_bulk_decref(desc);
@@ -558,7 +558,7 @@ out_req:
         /* Clean up on error. */
 out_unmap:
         while (mapped-- > 0)
-                kunmap(pga[mapped]);
+                kunmap(pga[mapped].pg);
 
         OBD_FREE(local, page_count * sizeof(*local));
 out_cb:
