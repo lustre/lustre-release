@@ -194,7 +194,7 @@ static int llog_client_read_header(struct llog_handle *handle)
                 GOTO(out, rc =-EFAULT);
 	}
         memcpy(handle->lgh_hdr, hdr, sizeof (*hdr));
-        handle->lgh_last_idx = le32_to_cpu(handle->lgh_hdr->llh_tail.lrt_index);
+        handle->lgh_last_idx = handle->lgh_hdr->llh_tail.lrt_index;
 
 out:
         if (req)
