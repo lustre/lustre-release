@@ -45,7 +45,7 @@ struct mds_obd {
 #define MDS_RENAME  11
 
 struct mds_request { 
-	struct list_head *rq_list;
+	struct list_head rq_list;
 	struct mds_obd *rq_obd;
 	int rq_status;
 
@@ -69,6 +69,15 @@ int mds_unpack_req(char *buf, int len, struct mds_req_hdr **hdr, struct mds_req 
 int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, struct mds_rep_hdr **hdr, struct mds_rep **rep, int *len, char **buf);
 int mds_unpack_rep(char *buf, int len, struct mds_rep_hdr **hdr, struct mds_rep **rep);
 
+
+/* llight/request.c */
+
+/* ioctls for trying requests */
+#define IOC_REQUEST_TYPE                   'f'
+#define IOC_REQUEST_MIN_NR                 30
+
+#define IOC_REQUEST_GETATTR		_IOWR('f', 30, long)
+#define IOC_REQUEST_MAX_NR               30
 
 #endif
 
