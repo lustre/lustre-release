@@ -124,6 +124,8 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         char *version = NULL;
         int devno;
         int err;
+        unsigned long blocksize;
+        unsigned long blocksize_bits;
         unsigned long root_ino;
         int scratch;
 	struct obdo *oa;
@@ -197,6 +199,26 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         sbi->osi_super = sb;
 
         CDEBUG(D_INFO, "\n"); 
+        err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("blocksize"),
+                                       "blocksize", &scratch,
+                                       (void *)&blocksize);
+        if ( err ) {
+                printk("getinfo call to drive failed (blocksize)\n");
+                EXIT;
+                goto ERR;
+        }
+
+        CDEBUG(D_INFO, "\n"); 
+        err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("blocksize_bits"),
+                                       "blocksize_bits", &scratch,
+                                       (void *)&blocksize_bits);
+        if ( err ) {
+                printk("getinfo call to drive failed (blocksize_bits)\n");
+                EXIT;
+                goto ERR;
+        }
+
+        CDEBUG(D_INFO, "\n"); 
         err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("root_ino"), 
                                        "root_ino", &scratch, (void *)&root_ino);
         if ( err ) {
@@ -206,8 +228,8 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         }
         
         CDEBUG(D_INFO, "\n"); 
-        sb->s_blocksize = PAGE_SIZE;
-        sb->s_blocksize_bits = (unsigned char)PAGE_SHIFT;
+        sb->s_blocksize = blocksize;
+        sb->s_blocksize_bits = (unsigned char)blocksize_bits;
         sb->s_magic = OBDFS_SUPER_MAGIC;
         sb->s_op = &obdfs_super_operations;
 
@@ -237,9 +259,9 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         } 
         
         CDEBUG(D_INFO, "obdfs_read_super: sbdev %d, rootino: %ld, dev %s, "
-               "minor: %d, blocksize: %ld, blocksize bits %d\n", 
+               "minor: %d, blocksize: %ld, blocksize bits %ld\n", 
                sb->s_dev, root->i_ino, device, MINOR(devno), 
-               sb->s_blocksize, sb->s_blocksize_bits);
+               blocksize, blocksize_bits);
         sb->s_root = d_alloc_root(root);
         list_add(&sbi->osi_list, &obdfs_super_list);
         OBD_FREE(device, strlen(device) + 1);
@@ -303,7 +325,7 @@ void obdfs_do_change_inode(struct inode *inode, int mask)
                 return;
         }
 
-        oa->o_valid = OBD_MD_FLNOTOBD & ~(mask | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+        oa->o_valid = OBD_MD_FLNOTOBD & (~mask);
         obdfs_from_inode(oa, inode);
         err = IOPS(inode, setattr)(IID(inode), oa);
 
@@ -415,7 +437,7 @@ out:
 int obdfs_setattr(struct dentry *de, struct iattr *attr)
 {
         struct inode *inode = de->d_inode;
-        struct obdo *oa, ooa;
+        struct obdo *oa;
         int err;
 
         ENTRY;
@@ -433,21 +455,6 @@ int obdfs_setattr(struct dentry *de, struct iattr *attr)
 	inode_copy_attr(inode, attr);
         oa->o_id = inode->i_ino;
         obdo_from_iattr(oa, attr);
-
-	memcpy (&ooa, oa, sizeof (ooa));
-	err = IOPS(inode, getattr)(IID(inode), &ooa);
-	if (err) {
-		printk(__FUNCTION__ ": obd_getattr fails (%d)\n", err);
-	} else {
-#ifdef CHECK_SIZE
-		if (oa->o_size != ooa.o_size) {
-			printk(__FUNCTION__ ": oa->o_size %Ld != ooa.o_size %Ld\n",
-			       oa->o_size, ooa.o_size);
-		}
-#endif
-	}
-
-        oa->o_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
         err = IOPS(inode, setattr)(IID(inode), oa);
 
         if ( err )
@@ -484,7 +491,7 @@ static inline void obdfs_read_inode2(struct inode *inode, void *opaque)
 	struct obdo *oa = opaque; 
 	
 	ENTRY;
-	obdfs_to_inode(inode, oa);
+	obdfs_to_inode(inode, oa); 
 
         INIT_LIST_HEAD(obdfs_iplist(inode)); /* list of dirty pages on inode */
         INIT_LIST_HEAD(obdfs_islist(inode)); /* list of inodes in superblock */
