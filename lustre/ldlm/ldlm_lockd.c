@@ -347,6 +347,10 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                 RETURN(-ENOMEM);
         }
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+        if (!dlm_req) {
+                CERROR("bad request buffer for cancel\n");
+                RETURN(-EINVAL);
+        }
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
         if (!lock) {

@@ -316,6 +316,16 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock))
                 RETURN(NULL);
 
+        if (!lock->l_resource) {
+                CERROR("trying to lock bogus resource: lock %p\n", lock);
+                LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
+                RETURN(NULL);
+        }
+        if (!lock->l_resource->lr_namespace) {
+                CERROR("trying to lock bogus namespace: lock %p\n", lock);
+                LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
+                RETURN(NULL);
+        }
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (lock->l_random != handle->cookie)
                 GOTO(out, NULL);
@@ -325,7 +335,7 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
 
         retval = LDLM_LOCK_GET(lock);
         EXIT;
-      out:
+ out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return retval;
 }
