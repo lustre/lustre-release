@@ -266,8 +266,7 @@ case $BACKINGFS in
 		LC_CONFIG_EXT3([],[
 			AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel])
 		],[
-			AC_MSG_WARN([Lustre requires that extended attributes for ext3 are enabled in the kernel])
-			AC_MSG_WARN([This build may fail.])
+			AC_MSG_ERROR([Lustre requires that extended attributes for ext3 are enabled in the kernel])
 		])
 		;;
 	ldiskfs)
