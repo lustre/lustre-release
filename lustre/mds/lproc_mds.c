@@ -73,8 +73,8 @@ int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
         LASSERT(obd != NULL);
         LASSERT(obd->u.mds.mds_vfsmnt->mnt_devname);
         *eof = 1;
-        return snprintf(page, count, "%s\n",
-                        obd->u.mds.mds_vfsmnt->mnt_devname);
+
+        return snprintf(page, count, "%s\n",obd->u.mds.mds_vfsmnt->mnt_devname);
 }
 
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {

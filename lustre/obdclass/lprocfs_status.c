@@ -22,19 +22,19 @@
 
 #define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifdef __KERNEL__
-#include <linux/config.h>
-#include <linux/module.h>
-#include <linux/version.h>
-#include <linux/slab.h>
-#include <linux/types.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <asm/statfs.h>
-#endif
-#include <linux/seq_file.h>
 
-#else
-#include <liblustre.h>
+#ifdef __KERNEL__
+# include <linux/config.h>
+# include <linux/module.h>
+# include <linux/version.h>
+# include <linux/slab.h>
+# include <linux/types.h>
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#  include <asm/statfs.h>
+# endif
+# include <linux/seq_file.h>
+#else /* __KERNEL__ */
+# include <liblustre.h>
 #endif
 
 #include <linux/obd_class.h>
@@ -45,14 +45,14 @@
 struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
                                     const char *name)
 {
-        struct proc_dir_entry* temp;
+        struct proc_dir_entry *temp;
 
-        if (!head)
+        if (head == NULL)
                 return NULL;
 
         temp = head->subdir;
         while (temp != NULL) {
-                if (!strcmp(temp->name, name))
+                if (strcmp(temp->name, name) == 0)
                         return temp;
 
                 temp = temp->next;
@@ -65,26 +65,26 @@ struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
 int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                      void *data)
 {
-        if ((root == NULL) || (list == NULL))
+        if (root == NULL || list == NULL)
                 return -EINVAL;
 
-        while (list->name) {
+        while (list->name != NULL) {
                 struct proc_dir_entry *cur_root, *proc;
                 char *pathcopy, *cur, *next;
-                int pathsize = strlen(list->name)+1;
+                int pathsize = strlen(list->name) + 1;
 
                 proc = NULL;
                 cur_root = root;
 
                 /* need copy of path for strsep */
                 OBD_ALLOC(pathcopy, pathsize);
-                if (!pathcopy)
+                if (pathcopy == NULL)
                         return -ENOMEM;
 
                 next = pathcopy;
                 strcpy(pathcopy, list->name);
 
-                while (cur_root && (cur = strsep(&next, "/"))) {
+                while (cur_root != NULL && (cur = strsep(&next, "/"))) {
                         if (*cur =='\0') /* skip double/trailing "/" */
                                 continue;
 
@@ -92,10 +92,10 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                         CDEBUG(D_OTHER, "cur_root=%s, cur=%s, next=%s, (%s)\n",
                                cur_root->name, cur, next,
                                (proc ? "exists" : "new"));
-                        if (next)
+                        if (next != NULL) {
                                 cur_root = (proc ? proc :
-                                                   proc_mkdir(cur, cur_root));
-                        else if (!proc) {
+                                            proc_mkdir(cur, cur_root));
+                        } else if (proc == NULL) {
                                 mode_t mode = 0444;
                                 if (list->write_fptr)
                                         mode = 0644;
@@ -105,7 +105,7 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
 
                 OBD_FREE(pathcopy, pathsize);
 
-                if ((cur_root == NULL) || (proc == NULL)) {
+                if (cur_root == NULL || proc == NULL) {
                         CERROR("LprocFS: No memory to create /proc entry %s",
                                list->name);
                         return -ENOMEM;
@@ -119,7 +119,7 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
         return 0;
 }
 
-void lprocfs_remove(struct proc_dir_entry* root)
+void lprocfs_remove(struct proc_dir_entry *root)
 {
         struct proc_dir_entry *temp = root;
         struct proc_dir_entry *rm_entry;
@@ -130,7 +130,7 @@ void lprocfs_remove(struct proc_dir_entry* root)
         LASSERT(parent != NULL);
 
         while (1) {
-                while (temp->subdir)
+                while (temp->subdir != NULL)
                         temp = temp->subdir;
 
                 rm_entry = temp;
@@ -148,14 +148,14 @@ struct proc_dir_entry *lprocfs_register(const char *name,
         struct proc_dir_entry *newchild;
 
         newchild = lprocfs_srch(parent, name);
-        if (newchild) {
+        if (newchild != NULL) {
                 CERROR(" Lproc: Attempting to register %s more than once \n",
                        name);
                 return ERR_PTR(-EALREADY);
         }
 
         newchild = proc_mkdir(name, parent);
-        if (newchild && list) {
+        if (newchild != NULL && list != NULL) {
                 int rc = lprocfs_add_vars(newchild, list, data);
                 if (rc) {
                         lprocfs_remove(newchild);
@@ -175,10 +175,10 @@ int lprocfs_rd_u64(char *page, char **start, off_t off,
         return snprintf(page, count, LPU64"\n", *(__u64 *)data);
 }
 
-int lprocfs_rd_uuid(char* page, char **start, off_t off, int count,
+int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
                     int *eof, void *data)
 {
-        struct obd_device* dev = (struct obd_device*)data;
+        struct obd_device *dev = (struct obd_device*)data;
 
         LASSERT(dev != NULL);
         *eof = 1;
@@ -188,7 +188,7 @@ int lprocfs_rd_uuid(char* page, char **start, off_t off, int count,
 int lprocfs_rd_name(char *page, char **start, off_t off, int count,
                     int *eof, void *data)
 {
-        struct obd_device* dev = (struct obd_device *)data;
+        struct obd_device *dev = (struct obd_device *)data;
 
         LASSERT(dev != NULL);
         LASSERT(dev->obd_name != NULL);
@@ -196,7 +196,7 @@ int lprocfs_rd_name(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", dev->obd_name);
 }
 
-int lprocfs_rd_blksize(char* page, char **start, off_t off, int count,
+int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
                        int *eof, struct statfs *sfs)
 {
         LASSERT(sfs != NULL);
@@ -204,7 +204,7 @@ int lprocfs_rd_blksize(char* page, char **start, off_t off, int count,
         return snprintf(page, count, "%lu\n", sfs->f_bsize);
 }
 
-int lprocfs_rd_kbytestotal(char* page, char **start, off_t off, int count,
+int lprocfs_rd_kbytestotal(char *page, char **start, off_t off, int count,
                            int *eof, struct statfs *sfs)
 {
         __u32 blk_size;
@@ -221,7 +221,7 @@ int lprocfs_rd_kbytestotal(char* page, char **start, off_t off, int count,
         return snprintf(page, count, LPU64"\n", result);
 }
 
-int lprocfs_rd_kbytesfree(char* page, char **start, off_t off, int count,
+int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
                           int *eof, struct statfs *sfs)
 {
         __u32 blk_size;
@@ -238,7 +238,7 @@ int lprocfs_rd_kbytesfree(char* page, char **start, off_t off, int count,
         return snprintf(page, count, LPU64"\n", result);
 }
 
-int lprocfs_rd_filestotal(char* page, char **start, off_t off, int count,
+int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
                           int *eof, struct statfs *sfs)
 {
         LASSERT(sfs != NULL);
@@ -246,7 +246,7 @@ int lprocfs_rd_filestotal(char* page, char **start, off_t off, int count,
         return snprintf(page, count, "%ld\n", sfs->f_files);
 }
 
-int lprocfs_rd_filesfree(char* page, char **start, off_t off, int count,
+int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
                          int *eof, struct statfs *sfs)
 {
         LASSERT(sfs != NULL);
@@ -254,14 +254,14 @@ int lprocfs_rd_filesfree(char* page, char **start, off_t off, int count,
         return snprintf(page, count, "%ld\n", sfs->f_ffree);
 }
 
-int lprocfs_rd_filegroups(char* page, char **start, off_t off, int count,
+int lprocfs_rd_filegroups(char *page, char **start, off_t off, int count,
                           int *eof, struct statfs *sfs)
 {
         *eof = 1;
         return snprintf(page, count, "unimplemented\n");
 }
 
-int lprocfs_rd_server_uuid(char* page, char **start, off_t off, int count,
+int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
@@ -290,7 +290,7 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
 int lprocfs_rd_numrefs(char *page, char **start, off_t off, int count,
                        int *eof, void *data)
 {
-        struct obd_type* class = (struct obd_type*) data;
+        struct obd_type *class = (struct obd_type*) data;
 
         LASSERT(class != NULL);
         *eof = 1;
@@ -453,10 +453,10 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 }
 
 struct seq_operations lprocfs_stats_seq_sops = {
-        .start = lprocfs_stats_seq_start,
-        .stop = lprocfs_stats_seq_stop,
-        .next = lprocfs_stats_seq_next,
-        .show = lprocfs_stats_seq_show,
+        start: lprocfs_stats_seq_start,
+        stop:  lprocfs_stats_seq_stop,
+        next:  lprocfs_stats_seq_next,
+        show:  lprocfs_stats_seq_show,
 };
 
 static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
@@ -474,13 +474,13 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 }
 
 struct file_operations lprocfs_stats_seq_fops = {
-        .open    = lprocfs_stats_seq_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
+        open:    lprocfs_stats_seq_open,
+        read:    seq_read,
+        llseek:  seq_lseek,
+        release: seq_release,
 };
 
-int lprocfs_register_stats(struct proc_dir_entry *root, const char* name,
+int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
                            struct lprocfs_stats *stats)
 {
         struct proc_dir_entry *entry;
@@ -515,7 +515,7 @@ EXPORT_SYMBOL(lprocfs_counter_init);
 #define LPROCFS_OBD_OP_INIT(base, stats, op)                               \
 do {                                                                       \
         unsigned int coffset = base + OBD_COUNTER_OFFSET(op);              \
-        LASSERT(coffset < stats->ls_num);                                     \
+        LASSERT(coffset < stats->ls_num);                                  \
         lprocfs_counter_init(stats, coffset, 0, #op, "reqs");              \
 } while (0)
 
@@ -532,7 +532,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         num_stats = 1 + OBD_COUNTER_OFFSET(destroy_export) +
                 num_private_stats;
         stats = lprocfs_alloc_stats(num_stats);
-        if (!stats)
+        if (stats == NULL)
                 return -ENOMEM;
 
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, iocontrol);
@@ -569,6 +569,8 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, match);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel_unused);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, log_add);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, log_cancel);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, san_preprw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
 
