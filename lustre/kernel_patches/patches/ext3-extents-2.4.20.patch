@@ -1,8 +1,8 @@
 Index: linux-2.4.24/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/fs/ext3/extents.c	2004-01-30 19:26:55.000000000 +0300
-@@ -0,0 +1,2321 @@
++++ linux-2.4.24/fs/ext3/extents.c	2004-01-31 01:52:45.000000000 +0300
+@@ -0,0 +1,2335 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -97,8 +97,6 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		/* path points to leaf/index in inode body */
 +		err = ext3_ext_get_access_for_root(handle, tree);
 +	}
-+	if (err)
-+		printk("err=%d (%s:%d)\n", err, __FILE__, __LINE__);
 +	return err;
 +}
 +
@@ -119,8 +117,6 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		/* path points to leaf/index in inode body */
 +		err = ext3_ext_mark_root_dirty(handle, tree);
 +	}
-+	if (err)
-+		printk("err=%d (%s:%d)\n", err, __FILE__, __LINE__);
 +	return err;
 +}
 +
@@ -1057,9 +1053,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		if ((err = ext3_ext_get_access(handle, tree, path + depth)))
 +			return err;
 +		ex->e_num += newext->e_num;
-+		err = ext3_ext_dirty(handle, tree, path + depth);
-+		ext3_ext_tree_changed(tree);
-+		goto out;
++		eh = path[depth].p_hdr;
++		nearex = ex;
++		goto merge;
 +	}
 +
 +repeat:
@@ -1143,6 +1139,24 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	nearex->e_start = newext->e_start;
 +	nearex->e_num = newext->e_num;
 +
++merge:
++	/* try to merge extents to the right */
++	while (nearex < EXT_LAST_EXTENT(eh)) {
++		if (!ext3_can_extents_be_merged(tree, nearex, nearex + 1))
++			break;
++		/* merge with next extent! */
++		nearex->e_num += nearex[1].e_num;
++		if (nearex + 1 < EXT_LAST_EXTENT(eh)) {
++			len = (EXT_LAST_EXTENT(eh) - nearex - 1)
++					* sizeof(struct ext3_extent);
++			memmove(nearex + 1, nearex + 2, len);
++		}
++		eh->e_num--;
++		EXT_ASSERT(eh->e_num > 0);
++	}
++
++	/* try to merge extents to the left */
++
 +	/* time to correct all indexes above */
 +	err = ext3_ext_correct_indexes(handle, tree, path);
 +	if (err)
@@ -1155,7 +1169,6 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		ext3_ext_drop_refs(npath);
 +		kfree(npath);
 +	}
-+out:	
 +	ext3_ext_tree_changed(tree);
 +	return err;
 +}
@@ -1859,8 +1872,8 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	return 0;
 +}
 +
-+static int ext3_ext_find_goal(struct inode *inode,
-+				struct ext3_ext_path *path)
++static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
++				unsigned long block)
 +{
 +	struct ext3_inode_info *ei = EXT3_I(inode);
 +	unsigned long bg_start;
@@ -1868,12 +1881,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	int depth;
 +	
 +	if (path) {
++		struct ext3_extent *ex;
 +		depth = path->p_depth;
-+		/* try to find previous block */
-+		if (path[depth].p_ext)
-+			return path[depth].p_ext->e_start +
-+				path[depth].p_ext->e_num;
 +		
++		/* try to predict block placement */
++		if ((ex = path[depth].p_ext))
++			return ex->e_start + (block - ex->e_block);
++
 +		/* it looks index is empty
 +		 * try to find starting from index itself */
 +		if (path[depth].p_bh)
@@ -1885,7 +1899,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		le32_to_cpu(EXT3_SB(inode->i_sb)->s_es->s_first_data_block);
 +	colour = (current->pid % 16) *
 +			(EXT3_BLOCKS_PER_GROUP(inode->i_sb) / 16);
-+	return bg_start + colour;
++	return bg_start + colour + block;
 +}
 +
 +static int ext3_new_block_cb(handle_t *handle, struct ext3_extents_tree *tree,
@@ -1906,7 +1920,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	if (ex->e_num == 0) {
 +		ex->e_num = 1;
 +		/* allocate new block for the extent */
-+		goal = ext3_ext_find_goal(inode, path);
++		goal = ext3_ext_find_goal(inode, path, ex->e_block);
 +		ex->e_start = ext3_new_block(handle, inode, goal, 0, 0, err);
 +		if (ex->e_start == 0) {
 +			/* error occured: restore old extent */
@@ -1969,7 +1983,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	}
 +
 +	down_write(&EXT3_I(inode)->truncate_sem);
-+	goal = ext3_ext_find_goal(inode, path);
++	goal = ext3_ext_find_goal(inode, path, newex->e_block);
 +	count = newex->e_num;
 +	pblock = ext3_new_blocks(handle, inode, &count, goal, &err);
 +	if (!pblock)
@@ -2097,7 +2111,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	}
 +
 +	/* allocate new block */
-+	goal = ext3_ext_find_goal(inode, path);
++	goal = ext3_ext_find_goal(inode, path, iblock);
 +	newblock = ext3_new_block(handle, inode, goal, 0, 0, &err);
 +	if (!newblock)
 +		goto out2;
