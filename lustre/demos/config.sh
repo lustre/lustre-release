@@ -25,8 +25,7 @@ OBDMAJ=186
 
 # If LOOPDEV is empty, then it is assumed that BASEDEV is a real block device
 # that doesn't mind being overwritten - don't use a partition with data on it!!
-LOOPDEV=""
-BASEDEV="/dev/hda5"
+BASEDEV="$LOOPDEV"
 
 # The following are mount points for the filesystems during the test.
 MNTOBD="/mnt/obd"
