@@ -144,6 +144,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         /* FIXME: If we move to an event-driven model, we should put the request
          * on the stack of mds_handle instead. */
         start = event->mem_desc.start;
+
         memset(&request, 0, sizeof(request));
         request.rq_svc = svc;
         request.rq_obd = obddev;
@@ -151,12 +152,34 @@ static int handle_incoming_request(struct obd_device *obddev,
         request.rq_reqmsg = event->mem_desc.start + event->offset;
         request.rq_reqlen = event->mem_desc.length;
 
+        if (request.rq_reqlen < sizeof(struct lustre_msg)) {
+                CERROR("incomplete request: ptl %d from %Lx xid %Ld\n",
+                       svc->srv_req_portal, event->initiator.nid, 
+                       request.rq_xid); 
+                return -EINVAL;
+        }
+        
+        if (request.rq_reqmsg->magic != PTLRPC_MSG_MAGIC) { 
+                CERROR("wrong lustre_msg magic: ptl %d from %Lx xid %Ld\n",
+                       svc->srv_req_portal, event->initiator.nid, 
+                       request.rq_xid); 
+                return -EINVAL;
+        }
+
+        if (request.rq_reqmsg->version != PTLRPC_MSG_VERSION) { 
+                CERROR("wrong lustre_msg version: ptl %d from %Lx xid %Ld\n",
+                       svc->srv_req_portal, event->initiator.nid, 
+                       request.rq_xid); 
+                return -EINVAL;
+        }
+
         CDEBUG(D_NET, "got req %Ld\n", request.rq_xid);
 
         peer.peer_nid = event->initiator.nid;
         /* FIXME: this NI should be the incoming NI.
          * We don't know how to find that from here. */
         peer.peer_ni = svc->srv_self.peer_ni;
+
         request.rq_export = gen_client((struct obd_conn *) request.rq_reqmsg); 
 
         if (request.rq_export) {

@@ -46,6 +46,9 @@
 #define PTL_RPC_MSG_REQUEST 4711
 #define PTL_RPC_MSG_ERR 4712
 
+#define PTLRPC_MSG_MAGIC (cpu_to_le32(0x0BD00BD0))
+#define PTLRPC_MSG_VERSION (cpu_to_le32(0x00040001))
+
 struct lustre_handle {
         __u64 addr;
         __u64 cookie;
@@ -121,14 +124,12 @@ struct obdo {
         obd_uid                 o_uid;
         obd_gid                 o_gid;
         obd_flag                o_flags;
-        obd_flag                o_obdflags;
         obd_count               o_nlink;
         obd_count               o_generation;
+        obd_rdev                o_rdev;
         obd_flag                o_valid;        /* hot fields in this obdo */
+        obd_flag                o_obdflags;
         char                    o_inline[OBD_INLINESZ];
-        char                    o_obdmd[OBD_OBDMDSZ];
-        struct list_head        o_list;
-        struct obd_ops          *o_op;
 };
 
 #define OBD_MD_FLALL    (0xffffffff)

@@ -499,14 +499,6 @@ static inline void filter_from_inode(struct obdo *oa, struct inode *inode)
                 oa->o_valid |= OBD_MD_FLINLINE;
         }
 
-        if (filter_has_obdmd(inode)) {
-                /* XXX this will change when we don't store the obdmd in data */
-                CDEBUG(D_INFO, "copying obdmd from inode to obdo\n");
-                memcpy(oa->o_obdmd, inode->u.ext2_i.i_data,
-                       MIN(sizeof(inode->u.ext2_i.i_data),OBD_INLINESZ));
-                oa->o_obdflags |= OBD_FL_OBDMDEXISTS;
-                oa->o_valid |= OBD_MD_FLOBDMD;
-        }
 #endif
         EXIT;
 }

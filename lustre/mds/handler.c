@@ -701,7 +701,7 @@ int mds_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "disconnect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
-                break;
+                goto out;
 
         case MDS_GETSTATUS:
                 CDEBUG(D_INODE, "getstatus\n");
@@ -764,7 +764,18 @@ int mds_handle(struct ptlrpc_request *req)
         }
 
         EXIT;
-out:
+
+        if (!rc) { 
+                struct mds_obd *mds = mds_req2mds(req);
+                req->rq_repmsg->last_rcvd = HTON__u64(mds->mds_last_rcvd);
+                req->rq_repmsg->last_committed =
+                        HTON__u64(mds->mds_last_committed);
+                CDEBUG(D_INFO, "last_rcvd %Lu, last_committed %Lu, xid %d\n",
+                       (unsigned long long)mds->mds_last_rcvd,
+                       (unsigned long long)mds->mds_last_committed,
+                       cpu_to_le32(req->rq_xid));
+        }
+ out:
         /* Still not 100% sure whether we should reply with the server
          * last_rcvd or that of this client.  I'm not sure it even makes
          * a difference on a per-client basis, because last_rcvd is global
@@ -774,14 +785,6 @@ out:
                 CERROR("mds: processing error %d\n", rc);
                 ptlrpc_error(req->rq_svc, req);
         } else {
-                struct mds_obd *mds = mds_req2mds(req);
-                req->rq_repmsg->last_rcvd = HTON__u64(mds->mds_last_rcvd);
-                req->rq_repmsg->last_committed =
-                        HTON__u64(mds->mds_last_committed);
-                CDEBUG(D_INFO, "last_rcvd %Lu, last_committed %Lu, xid %d\n",
-                       (unsigned long long)mds->mds_last_rcvd,
-                       (unsigned long long)mds->mds_last_committed,
-                       cpu_to_le32(req->rq_xid));
                 CDEBUG(D_NET, "sending reply\n");
                 ptlrpc_reply(req->rq_svc, req);
         }

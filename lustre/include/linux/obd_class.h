@@ -674,11 +674,6 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
                 memcpy(dst->o_inline, src->o_inline, sizeof(src->o_inline));
                 dst->o_obdflags |= OBD_FL_INLINEDATA;
         }
-        if ( src->o_valid & OBD_MD_FLOBDMD &&
-             src->o_obdflags & OBD_FL_OBDMDEXISTS) {
-                memcpy(dst->o_obdmd, src->o_obdmd, sizeof(src->o_obdmd));
-                dst->o_obdflags |= OBD_FL_OBDMDEXISTS;
-        }
 
         dst->o_valid |= src->o_valid;
 }

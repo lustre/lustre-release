@@ -175,23 +175,22 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         }
 
         request->rq_type = PTL_RPC_TYPE_REQUEST;
+        request->rq_client = cl;
         request->rq_connection = ptlrpc_connection_addref(conn);
-
-        request->rq_reqmsg->opc = HTON__u32(opcode);
-        request->rq_reqmsg->type = HTON__u32(PTL_RPC_MSG_REQUEST);
 
         INIT_LIST_HEAD(&request->rq_list);
         INIT_LIST_HEAD(&request->rq_multi);
-
         /* this will be dec()d once in req_finished, once in free_committed */
         atomic_set(&request->rq_refcount, 2);
 
         spin_lock(&conn->c_lock);
         request->rq_xid = HTON__u32(++conn->c_xid_out);
-        request->rq_xid = conn->c_xid_out;
         spin_unlock(&conn->c_lock);
 
-        request->rq_client = cl;
+        request->rq_reqmsg->magic = PTLRPC_MSG_MAGIC; 
+        request->rq_reqmsg->version = PTLRPC_MSG_VERSION;
+        request->rq_reqmsg->opc = HTON__u32(opcode);
+        request->rq_reqmsg->type = HTON__u32(PTL_RPC_MSG_REQUEST);
 
         RETURN(request);
 }
