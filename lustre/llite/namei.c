@@ -86,9 +86,9 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 /* methods */
 static int ll_find_inode(struct inode *inode, unsigned long ino, void *opaque)
 {
-        struct mds_body *body = (struct mds_body *)opaque;
+        struct ll_inode_md *md = opaque;
 
-        if (inode->i_generation != body->generation)
+        if (inode->i_generation != md->body->generation)
                 return 0;
 
         return 1;
