@@ -688,6 +688,9 @@ typedef struct {
         long        lwte_p2;
         long        lwte_p3;
         long        lwte_p4;
+#if BITS_PER_LONG > 32
+        long        lwte_pad;
+#endif
 } lwt_event_t;
 
 #if LWT_SUPPORT
