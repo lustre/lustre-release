@@ -174,20 +174,12 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 
 /* mds/handler.c */
 #ifdef __KERNEL__
-struct dentry *mds_name2locked_dentry(struct obd_device *, struct dentry *dir,
-                                      struct vfsmount **mnt, char *name,
-                                      int namelen, int lock_mode,
-                                      struct lustre_handle *lockh,
-                                      int dir_lock_mode);
 struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
                                      char *name, int namelen);
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt);
-int mds_reint(struct ptlrpc_request *req, int offset, struct lustre_handle *);
-void mds_steal_ack_locks(struct obd_export *exp,
-                         struct ptlrpc_request *req);
 int mds_update_server_data(struct obd_device *, int force_sync);
 
 /* mds/mds_fs.c */

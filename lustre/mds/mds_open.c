@@ -720,6 +720,32 @@ int mds_pin(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+/*  Get a lock on the ino to sync with creation WRT inode reuse (bug 2029).
+ *  If child_lockh is NULL we just get the lock as a barrier to wait for
+ *  other holders of this lock, and drop it right away again. */
+int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
+                       struct lustre_handle *child_lockh)
+{
+        struct ldlm_res_id child_res_id = { .name = { inode->i_ino } };
+        struct lustre_handle lockh;
+        int lock_flags = 0;
+        int rc;
+
+        if (child_lockh == NULL)
+                child_lockh = &lockh;
+
+        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
+                              child_res_id, LDLM_PLAIN, NULL, 0,
+                              LCK_EX, &lock_flags, ldlm_completion_ast,
+                              mds_blocking_ast, NULL, child_lockh);
+        if (rc != ELDLM_OK)
+                CERROR("ldlm_cli_enqueue: %d\n", rc);
+        else if (child_lockh == &lockh)
+                ldlm_lock_decref(child_lockh, LCK_EX);
+
+        return rc;
+}
+
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *child_lockh)
 {
@@ -728,11 +754,11 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct ldlm_reply *rep = NULL;
         struct mds_body *body = NULL;
-        struct dentry *dchild = NULL, *parent = NULL;
+        struct dentry *dchild = NULL, *dparent = NULL;
         struct mds_export_data *med;
-        struct ldlm_res_id child_res_id = { .name = {0} };
         struct lustre_handle parent_lockh;
-        int rc = 0, parent_mode = 0, cleanup_phase = 0, acc_mode, created = 0;
+        int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
+        int parent_mode = LCK_PR;
         void *handle = NULL;
         struct dentry_params dp;
         ENTRY;
@@ -772,21 +798,22 @@ int mds_open(struct mds_update_record *rec, int offset,
         acc_mode = accmode(rec->ur_flags);
 
         /* Step 1: Find and lock the parent */
-        parent_mode = (rec->ur_flags & MDS_OPEN_CREAT) ? LCK_PW : LCK_PR;
-        parent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
-                                       &parent_lockh, rec->ur_name,
-                                       rec->ur_namelen - 1);
-        if (IS_ERR(parent)) {
-                rc = PTR_ERR(parent);
+        if (rec->ur_flags & O_CREAT)
+                parent_mode = LCK_PW;
+        dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
+                                        &parent_lockh, rec->ur_name,
+                                        rec->ur_namelen - 1);
+        if (IS_ERR(dparent)) {
+                rc = PTR_ERR(dparent);
                 CERROR("parent lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
-        LASSERT(parent->d_inode != NULL);
+        LASSERT(dparent->d_inode != NULL);
 
         cleanup_phase = 1; /* parent dentry and lock */
 
         /* Step 2: Lookup the child */
-        dchild = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
+        dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild))
                 GOTO(cleanup, rc = PTR_ERR(dchild));
 
@@ -810,7 +837,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 }
 
                 intent_set_disposition(rep, DISP_OPEN_CREATE);
-                handle = fsfilt_start(obd, parent->d_inode, FSFILT_OP_CREATE,
+                handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_CREATE,
                                       NULL);
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
@@ -821,7 +848,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 dp.p_ptr = req;
                 dp.p_inum = ino;
 
-                rc = ll_vfs_create(parent->d_inode, dchild, rec->ur_mode, NULL);
+                rc = ll_vfs_create(dparent->d_inode, dchild, rec->ur_mode,NULL);
                 if (dchild->d_fsdata == (void *)(unsigned long)ino)
                         dchild->d_fsdata = NULL;
 
@@ -844,8 +871,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
 
                 iattr.ia_uid = rec->ur_fsuid;
-                if (parent->d_inode->i_mode & S_ISGID)
-                        iattr.ia_gid = parent->d_inode->i_gid;
+                if (dparent->d_inode->i_mode & S_ISGID)
+                        iattr.ia_gid = dparent->d_inode->i_gid;
                 else
                         iattr.ia_gid = rec->ur_fsgid;
 
@@ -858,7 +885,7 @@ int mds_open(struct mds_update_record *rec, int offset,
 
                 iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
 
-                rc = fsfilt_setattr(obd, parent, handle, &iattr, 0);
+                rc = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
 
@@ -912,25 +939,13 @@ int mds_open(struct mds_update_record *rec, int offset,
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
-        if (created) {
-                /* Step 4: Lock new child to sync inode reuse (bug 2029) */
-                int lock_flags = 0, err;
-                child_res_id.name[0] = dchild->d_inode->i_ino;
-                child_res_id.name[1] = 0;
-                err = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
-                                       child_res_id, LDLM_PLAIN, NULL, 0,
-                                       LCK_EX, &lock_flags, ldlm_completion_ast,
-                                       mds_blocking_ast, NULL, child_lockh);
-                if (err == ELDLM_OK)
-                        ldlm_lock_decref(child_lockh, LCK_EX);
-                else
-                        CERROR("ldlm_cli_enqueue: %d\n", err);
-        }
+        if (created)
+                mds_lock_new_child(obd, dchild->d_inode, NULL);
 
         switch (cleanup_phase) {
         case 2:
                 if (rc && created) {
-                        int err = vfs_unlink(parent->d_inode, dchild);
+                        int err = vfs_unlink(dparent->d_inode, dchild);
                         if (err) {
                                 CERROR("unlink(%*s) in error path: %d\n",
                                        dchild->d_name.len, dchild->d_name.name,
@@ -939,10 +954,10 @@ int mds_open(struct mds_update_record *rec, int offset,
                 }
                 l_dput(dchild);
         case 1:
-                if (parent == NULL)
+                if (dparent == NULL)
                         break;
 
-                l_dput(parent);
+                l_dput(dparent);
                 if (rc)
                         ldlm_lock_decref(&parent_lockh, parent_mode);
                 else

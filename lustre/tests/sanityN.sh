@@ -231,6 +231,11 @@ test_11() {
 }
 run_test 11 "execution of file opened for write should return error ===="
 
+test_12() {
+       sh lockorder.sh
+}
+run_test 12 "test lock ordering (link, stat, unlink) ==========="
+
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
 echo '=========================== finished ==============================='

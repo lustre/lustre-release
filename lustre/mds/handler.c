@@ -199,7 +199,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 
         snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
 
-        CDEBUG(D_DENTRY, "--> mds_fid2dentry: ino %lu, gen %u, sb %p\n",
+        CDEBUG(D_DENTRY, "--> mds_fid2dentry: ino/gen %lu/%u, sb %p\n",
                ino, generation, mds->mds_sb);
 
         /* under ext3 this is neither supposed to return bad inodes
@@ -603,13 +603,11 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         struct ldlm_reply *rep = NULL;
         struct obd_run_ctxt saved;
         struct mds_body *body;
-        struct dentry *de = NULL, *dchild = NULL;
-        struct inode *dir;
+        struct dentry *dparent = NULL, *dchild = NULL;
         struct obd_ucred uc;
-        struct ldlm_res_id child_res_id = { .name = {0} };
         struct lustre_handle parent_lockh;
         int namesize;
-        int flags = 0, rc = 0, cleanup_phase = 0;
+        int rc = 0, cleanup_phase = 0;
         char *name;
         ENTRY;
 
@@ -645,20 +643,10 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         uc.ouc_suppgid1 = body->suppgid;
         uc.ouc_suppgid2 = -1;
         push_ctxt(&saved, &obd->obd_ctxt, &uc);
-        /* Step 1: Lookup/lock parent */
+        cleanup_phase = 1; /* kernel context */
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-        de = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_PR,
-                                   &parent_lockh, name, namesize - 1);
-        if (IS_ERR(de))
-                GOTO(cleanup, rc = PTR_ERR(de));
-        dir = de->d_inode;
-        LASSERT(dir);
 
-        cleanup_phase = 1; /* parent dentry and lock */
-
-        CDEBUG(D_INODE, "parent ino %lu, name %s\n", dir->i_ino, name);
-
-        /* Step 2: Lookup child */
+        /* FIXME: handle raw lookup */
 #if 0
         if (body->valid == OBD_MD_FLID) {
                 struct mds_body *mds_reply;
@@ -681,12 +669,14 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         }
 #endif
 
-        dchild = ll_lookup_one_len(name, de, namesize - 1);
-        if (IS_ERR(dchild)) {
-                CDEBUG(D_INODE, "child lookup error %ld\n", PTR_ERR(dchild));
-                GOTO(cleanup, rc = PTR_ERR(dchild));
-        }
-        cleanup_phase = 2; /* child dentry */
+        rc = mds_get_parent_child_locked(obd, &obd->u.mds, &body->fid1,
+                                         &parent_lockh, &dparent, LCK_PR,
+                                         name, namesize, child_lockh,
+                                         &dchild, LCK_PR);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        cleanup_phase = 2; /* dchild, dparent, locks */
 
         if (dchild->d_inode == NULL) {
                 intent_set_disposition(rep, DISP_LOOKUP_NEG);
@@ -696,25 +686,6 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         } else {
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
         }
-
-        /* Step 3: Lock child */
-        /* fixup_handle_for_resent_req might have set the child_lockh for us, if
-         * the lock was already granted for this request on the last
-         * transmission. */
-        if (child_lockh->cookie == 0) {
-                child_res_id.name[0] = dchild->d_inode->i_ino;
-                child_res_id.name[1] = dchild->d_inode->i_generation;
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
-                                      child_res_id, LDLM_PLAIN, NULL, 0, LCK_PR,
-                                      &flags, ldlm_completion_ast,
-                                      mds_blocking_ast, NULL, child_lockh);
-                if (rc != ELDLM_OK) {
-                        CERROR("ldlm_cli_enqueue: %d\n", rc);
-                        GOTO(cleanup, rc = -EIO);
-                }
-        }
-
-        cleanup_phase = 3; /* child lock */
 
         if (req->rq_repmsg == NULL) {
                 rc = mds_getattr_pack_msg(req, dchild->d_inode, offset);
@@ -729,22 +700,16 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
 
  cleanup:
         switch (cleanup_phase) {
-        case 3:
-                if (rc)
-                        ldlm_lock_decref(child_lockh, LCK_PR);
         case 2:
+                if (rc && dchild->d_inode)
+                        ldlm_lock_decref(child_lockh, LCK_PR);
+                ldlm_lock_decref(&parent_lockh, LCK_PR);
                 l_dput(dchild);
-
+                l_dput(dparent);
         case 1:
-                if (rc) {
-                        ldlm_lock_decref(&parent_lockh, LCK_PR);
-                } else {
-                        ldlm_put_lock_into_req(req, &parent_lockh, LCK_PR);
-                }
-                l_dput(de);
+                pop_ctxt(&saved, &obd->obd_ctxt, &uc);
         default: ;
         }
-        pop_ctxt(&saved, &obd->obd_ctxt, &uc);
         return rc;
 }
 
@@ -1002,24 +967,6 @@ static char *reint_names[] = {
         [REINT_RENAME]  "rename",
         [REINT_OPEN]    "open",
 };
-
-void mds_steal_ack_locks(struct obd_export *exp,
-                         struct ptlrpc_request *req)
-{
-        unsigned long  flags;
-        struct ptlrpc_request *oldrep = exp->exp_outstanding_reply;
-        
-        if (oldrep == NULL)
-                return;
-        memcpy(req->rq_ack_locks, oldrep->rq_ack_locks,
-               sizeof req->rq_ack_locks);
-        spin_lock_irqsave (&req->rq_lock, flags);
-        oldrep->rq_resent = 1;
-        wake_up(&oldrep->rq_reply_waitq);
-        spin_unlock_irqrestore (&req->rq_lock, flags);
-        DEBUG_REQ(D_HA, oldrep, "stole locks from");
-        DEBUG_REQ(D_HA, req, "stole locks for");
-}
 
 int mds_handle(struct ptlrpc_request *req)
 {

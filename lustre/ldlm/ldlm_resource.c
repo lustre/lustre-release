@@ -497,6 +497,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 
         LASSERT(ns != NULL);
         LASSERT(ns->ns_hash != NULL);
+        LASSERT(name.name[0] != 0);
 
         l_lock(&ns->ns_lock);
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);

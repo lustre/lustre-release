@@ -75,7 +75,7 @@ static inline void l_dput(struct dentry *de)
  * systems, and instantiating two inodes for the same entry.  We still
  * protect against concurrent addition/removal races with the DLM locking.
  */
-static inline struct dentry *ll_lookup_one_len(char *fid_name,
+static inline struct dentry *ll_lookup_one_len(const char *fid_name,
                                                struct dentry *dparent,
                                                int fid_namelen)
 {

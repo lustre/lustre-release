@@ -1,3 +1,7 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -10,30 +14,31 @@
 
 void usage(char *prog)
 {
-	printf("usage: %s {-o|-m} filenamefmt count\n", prog);
-	printf("       %s {-o|-m} filenamefmt -seconds\n", prog);
-	printf("       %s {-o|-m} filenamefmt start count\n", prog);
+        printf("usage: %s {-o|-m|-l<tgt>} filenamefmt count\n", prog);
+        printf("       %s {-o|-m|-l<tgt>} filenamefmt -seconds\n", prog);
+        printf("       %s {-o|-m|-l<tgt>} filenamefmt start count\n", prog);
 }
 
 int main(int argc, char ** argv)
 {
-        int i, rc = 0, do_open;
-        char format[4096], *fmt;
+        int i, rc = 0, do_open = 0, do_link = 0;
+        char format[4096], *fmt, *tgt;
         char filename[4096];
         long start, last, end;
-	long begin = 0, count;
+        long begin = 0, count;
 
         if (argc < 4 || argc > 5) {
-		usage(argv[0]);
+                usage(argv[0]);
                 return 1;
         }
 
         if (strcmp(argv[1], "-o") == 0) {
                 do_open = 1;
-        } else if (strcmp(argv[1], "-m") == 0) {
-                do_open = 0;
-        } else {
-		usage(argv[0]);
+        } else if (strncmp(argv[1], "-l", 2) == 0 && argv[1][2]) {
+                tgt = argv[1] + 2;
+                do_link = 1;
+        } else if (strcmp(argv[1], "-m") != 0) {
+                usage(argv[0]);
                 return 1;
         }
 
@@ -44,27 +49,27 @@ int main(int argc, char ** argv)
 
         start = last = time(0);
 
-	if (argc == 4) {
-		end = strtol(argv[3], NULL, 0);
-		if (end > 0) {
-			count = end;
-			end = -1UL >> 1;
-		} else {
-			end = start - end;
-			count = -1UL >> 1;
-		}
-	} else {
-		end = -1UL >> 1;
-		begin = strtol(argv[3], NULL, 0);
-		count = strtol(argv[4], NULL, 0);
-	}
+        if (argc == 4) {
+                end = strtol(argv[3], NULL, 0);
+        } else {
+                begin = strtol(argv[3], NULL, 0);
+                end = strtol(argv[4], NULL, 0);
+        }
 
-	if (strchr(argv[2], '%'))
-		fmt = argv[2];
-	else {
-		sprintf(format, "%s%%d", argv[2]);
-		fmt = format;
-	}
+        if (end > 0) {
+                count = end;
+                end = -1UL >> 1;
+        } else {
+                end = start - end;
+                count = -1UL >> 1;
+        }
+
+        if (strchr(argv[2], '%'))
+                fmt = argv[2];
+        else {
+                sprintf(format, "%s%%d", argv[2]);
+                fmt = format;
+        }
         for (i = 0; i < count && time(0) < end; i++, begin++) {
                 sprintf(filename, fmt, begin);
                 if (do_open) {
@@ -76,6 +81,14 @@ int main(int argc, char ** argv)
                                 break;
                         }
                         close(fd);
+               } else if (do_link) {
+                        rc = link(tgt, filename);
+                        if (rc) {
+                                printf("link(%s, %s) error: %s\n",
+                                      tgt, filename, strerror(errno));
+                                rc = errno;
+                                break;
+                        }
                 } else {
                         rc = mknod(filename, S_IFREG| 0444, 0);
                         if (rc) {
@@ -86,7 +99,7 @@ int main(int argc, char ** argv)
                         }
                 }
                 if ((i % 10000) == 0) {
-                        printf(" - created %d (time %ld ; total %ld ; last %ld)\n",
+                        printf(" - created %d (time %ld total %ld last %ld)\n",
                                i, time(0), time(0) - start, time(0) - last);
                         last = time(0);
                 }
