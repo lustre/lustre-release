@@ -21,47 +21,33 @@
  */
 #define DEBUG_SUBSYSTEM S_ECHO
 
-#include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
+#include <linux/obd_class.h>
 
-
-int rd_uuid(char* page, char **start, off_t off, int count, int *eof, 
-            void *data)
-{
-        int len = 0;
-        struct obd_device* dev = (struct obd_device*)data;
-        len += snprintf(page, count, "%s\n", dev->obd_uuid);
-        return len;
-
-}
+#ifndef LPROCFS
+struct lprocfs_vars status_var_nm_1[]  = { {0} };
+struct lprocfs_vars status_class_var[] = { {0} };
+#else 
 
 int rd_fstype(char* page, char **start, off_t off, int count, int *eof, 
               void *data)
 {
-        int len = 0;
         struct obd_device* dev = (struct obd_device*)data;
-        len += snprintf(page, count, "%s\n", dev->u.echo.eo_fstype);
-        return len;
-
+        int rc = snprintf(page, count, "%s\n", dev->u.echo.eo_fstype);
+        *eof = 1;
+        return rc;
 }
-
 
 struct lprocfs_vars status_var_nm_1[] = {
-        {"status/uuid", rd_uuid, 0, 0},
-        {"status/fstype", rd_fstype, 0, 0},
+        {"uuid", lprocfs_rd_uuid, 0, 0},
+        {"fstype", rd_fstype, 0, 0},
         {0}
 };
-
-int rd_numrefs(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
-{
-        struct obd_type* class = (struct obd_type*)data;
-        int len = 0;
-        len += snprintf(page, count, "%d\n", class->typ_refcnt);
-        return len;
-}
 
 struct lprocfs_vars status_class_var[] = {
-        {"status/num_refs", rd_numrefs, 0, 0},
+        {"num_refs", lprocfs_rd_numrefs, 0, 0},
         {0}
 };
+
+#endif /* LPROCFS */
+
