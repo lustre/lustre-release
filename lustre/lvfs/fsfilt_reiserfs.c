@@ -140,9 +140,9 @@ static ssize_t fsfilt_reiserfs_readpage(struct file *file, char *buf, size_t cou
         return file->f_op->read(file, buf, count, offset);
 }
 
-static int fsfilt_reiserfs_set_last_rcvd(struct obd_device *obd,
-                                         __u64 last_rcvd, void *handle,
-                                         fsfilt_cb_t cb_func, void *cb_data)
+static int fsfilt_reiserfs_add_journal_cb(struct obd_device *obd,
+                                          __u64 last_rcvd, void *handle,
+                                          fsfilt_cb_t cb_func, void *cb_data)
 {
         static long next = 0;
 
@@ -180,7 +180,7 @@ static struct fsfilt_operations fsfilt_reiserfs_ops = {
         fs_set_md:              fsfilt_reiserfs_set_md,
         fs_get_md:              fsfilt_reiserfs_get_md,
         fs_readpage:            fsfilt_reiserfs_readpage,
-        fs_set_last_rcvd:       fsfilt_reiserfs_set_last_rcvd,
+        fs_add_journal_cb:      fsfilt_reiserfs_add_journal_cb,
         fs_statfs:              fsfilt_reiserfs_statfs,
         fs_sync:                fsfilt_reiserfs_sync,
 };

@@ -594,9 +594,9 @@ static void fsfilt_extN_cb_func(struct journal_callback *jcb, int error)
         atomic_dec(&fcb_cache_count);
 }
 
-static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
-                                     void *handle, fsfilt_cb_t cb_func,
-                                     void *cb_data)
+static int fsfilt_extN_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
+                                      void *handle, fsfilt_cb_t cb_func,
+                                      void *cb_data)
 {
         struct fsfilt_cb_data *fcb;
 
@@ -786,7 +786,7 @@ static struct fsfilt_operations fsfilt_extN_ops = {
         fs_set_md:              fsfilt_extN_set_md,
         fs_get_md:              fsfilt_extN_get_md,
         fs_readpage:            fsfilt_extN_readpage,
-        fs_set_last_rcvd:       fsfilt_extN_set_last_rcvd,
+        fs_add_journal_cb:      fsfilt_extN_add_journal_cb,
         fs_statfs:              fsfilt_extN_statfs,
         fs_sync:                fsfilt_extN_sync,
         fs_prep_san_write:      fsfilt_extN_prep_san_write,
