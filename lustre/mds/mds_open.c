@@ -1035,14 +1035,13 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                         GOTO(cleanup, rc);
                 }
 
-#ifdef ENABLE_ORPHANS
                 if (req != NULL &&
                     (reply_body->valid & OBD_MD_FLEASIZE) &&
                     mds_log_op_unlink(obd, pending_child->d_inode,
                                       req->rq_repmsg, 1) > 0) {
                         reply_body->valid |= OBD_MD_FLCOOKIE;
                 }
-#endif
+
                 pending_child->d_fsdata = (void *) &dp;
                 dp.p_inum = 0;
                 dp.p_ptr = req;
