@@ -310,7 +310,12 @@ extern void kportal_blockallsigs (void);
 #  undef NDEBUG
 #  include <assert.h>
 #  define LASSERT(e)     assert(e)
-#  define LASSERTF(cond, args...)     assert(cond)
+#  define LASSERTF(cond, args...)                                              \
+do {                                                                           \
+          if (!(cond))                                                         \
+                CERROR(args);                                                  \
+          assert(cond);                                                        \
+} while (0)
 # else
 #  define LASSERT(e)
 #  define LASSERTF(cond, args...) do { } while (0)
