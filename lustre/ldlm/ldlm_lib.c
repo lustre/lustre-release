@@ -92,6 +92,7 @@ int client_import_connect(struct lustre_handle *dlm_handle,
                 imp->imp_replayable = 1;
                 CDEBUG(D_HA, "connected to replayable target: %s\n",
                        imp->imp_target_uuid.uuid);
+                ptlrpc_pinger_add_import(imp);
         }
         imp->imp_level = LUSTRE_CONN_FULL;
         imp->imp_remote_handle = request->rq_repmsg->handle;
@@ -166,6 +167,9 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
                 if (rc)
                         GOTO(out_req, rc);
         }
+        if (imp->imp_replayable)
+                ptlrpc_pinger_del_import(imp);
+
         EXIT;
  out_req:
         if (request)

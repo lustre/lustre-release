@@ -97,6 +97,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_obd = obddev;
         imp->imp_connect_op = connect_op;
         imp->imp_generation = 0;
+        INIT_LIST_HEAD(&imp->imp_pinger_chain);
         memcpy(imp->imp_target_uuid.uuid, data->ioc_inlbuf1, data->ioc_inllen1);
         class_import_put(imp);
 
