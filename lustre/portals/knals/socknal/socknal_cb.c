@@ -1182,6 +1182,7 @@ ksocknal_fmb_callback (void *arg, int error)
         ksock_sched_t     *sched;
         unsigned long      flags;
         char               ipbuf[PTL_NALFMT_SIZE];
+        char               ipbuf2[PTL_NALFMT_SIZE];
 
         if (error != 0)
                 CERROR("Failed to route packet from "
@@ -1189,7 +1190,7 @@ ksocknal_fmb_callback (void *arg, int error)
                        NTOH__u64(hdr->src_nid),
                        portals_nid2str(SOCKNAL, NTOH__u64(hdr->src_nid), ipbuf),
                        NTOH__u64(hdr->dest_nid),
-                       portals_nid2str(SOCKNAL, NTOH__u64(hdr->dest_nid), ipbuf),
+                       portals_nid2str(SOCKNAL, NTOH__u64(hdr->dest_nid), ipbuf2),
                        error);
         else
                 CDEBUG (D_NET, "routed packet from "LPX64" to "LPX64": OK\n",
@@ -1378,6 +1379,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
         ptl_nid_t     src_nid = NTOH__u64 (conn->ksnc_hdr.src_nid);
         int           body_len = NTOH__u32 (conn->ksnc_hdr.payload_length);
         char str[PTL_NALFMT_SIZE];
+        char str2[PTL_NALFMT_SIZE];
 
         CDEBUG (D_NET, "%p "LPX64"->"LPX64" %d parsing header\n", conn,
                 src_nid, dest_nid, conn->ksnc_rx_nob_left);
@@ -1389,7 +1391,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 CERROR("dropping packet from "LPX64" (%s) for "LPX64" (%s): "
                        "packet size %d illegal\n",
                        src_nid, portals_nid2str(TCPNAL, src_nid, str),
-                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str),
+                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str2),
                        body_len);
 
                 ksocknal_new_packet (conn, 0);  /* on to new packet */
@@ -1400,7 +1402,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 CERROR("dropping packet from "LPX64" (%s) for "LPX64
                        " (%s): not forwarding\n",
                        src_nid, portals_nid2str(TCPNAL, src_nid, str),
-                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str));
+                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str2));
                 /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
                 return;
@@ -1410,7 +1412,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 CERROR ("dropping packet from "LPX64" (%s) for "LPX64
                         "(%s): packet size %d too big\n",
                         src_nid, portals_nid2str(TCPNAL, src_nid, str),
-                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str),
+                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str2),
                         body_len);
                 /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
@@ -1423,7 +1425,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 CERROR ("dropping packet from "LPX64" (%s) for "LPX64
                         "(%s): target is a peer\n",
                         src_nid, portals_nid2str(TCPNAL, src_nid, str),
-                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str));
+                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str2));
                 ksocknal_put_peer (peer);  /* drop ref from get above */
 
                 /* on to next packet (skip this one's body) */
@@ -2022,25 +2024,27 @@ ksocknal_sock_read (struct socket *sock, void *buffer, int nob)
 }
 
 int
-ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnation)
+ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type,
+                __u64 *incarnation)
 {
         int                 rc;
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
         char                ipbuf[PTL_NALFMT_SIZE];
+        char                ipbuf2[PTL_NALFMT_SIZE];
 
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
         memset (&hdr, 0, sizeof (hdr));
         hmv->magic         = __cpu_to_le32 (PORTALS_PROTO_MAGIC);
-        hmv->version_major = __cpu_to_le32 (PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor = __cpu_to_le32 (PORTALS_PROTO_VERSION_MINOR);
-        
+        hmv->version_major = __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
+        hmv->version_minor = __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
+
         hdr.src_nid = __cpu_to_le64 (ksocknal_lib.ni.nid);
         hdr.type    = __cpu_to_le32 (PTL_MSG_HELLO);
 
         hdr.msg.hello.type = __cpu_to_le32 (*type);
-        hdr.msg.hello.incarnation = 
+        hdr.msg.hello.incarnation =
                 __cpu_to_le64 (ksocknal_data.ksnd_incarnation);
 
         /* Assume sufficient socket buffering for this message */
@@ -2114,7 +2118,7 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type, __u64 *incarnati
                         portals_nid2str(SOCKNAL,
                                         __le64_to_cpu(hdr.src_nid),
                                         ipbuf),
-                        *nid, portals_nid2str(SOCKNAL, *nid, ipbuf));
+                        *nid, portals_nid2str(SOCKNAL, *nid, ipbuf2));
                 return (-EPROTO);
         }
 
@@ -2424,6 +2428,7 @@ ksocknal_autoconnect (ksock_route_t *route)
 
         while (!list_empty (&zombies)) {
                 char ipbuf[PTL_NALFMT_SIZE];
+                char ipbuf2[PTL_NALFMT_SIZE];
                 tx = list_entry (zombies.next, ksock_tx_t, tx_list);
 
                 CERROR ("Deleting packet type %d len %d ("LPX64" %s->"LPX64" %s)\n",
@@ -2436,7 +2441,7 @@ ksocknal_autoconnect (ksock_route_t *route)
                         NTOH__u64 (tx->tx_hdr->dest_nid),
                         portals_nid2str(SOCKNAL,
                                         NTOH__u64(tx->tx_hdr->src_nid),
-                                        ipbuf));
+                                        ipbuf2));
 
                 list_del (&tx->tx_list);
                 /* complete now */
