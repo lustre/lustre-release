@@ -9,11 +9,13 @@ MODULE = mds
 modulefs_DATA = mds.o
 EXTRA_PROGRAMS = mds
 
-LINX=mds_pack.c mds_updates.c
+LINX=mds_pack.c mds_updates.c simple.c
 mds_pack.c: 
 	ln -s ../lib/mds_pack.c .
 mds_updates.c: 
 	ln -s ../lib/mds_updates.c .
+simple.c: 
+	ln -s ../lib/simple.c .
 
 mds_SOURCES = handler.c mds_reint.c mds_ext2.c mds_ext3.c $(LINX)
 

@@ -434,55 +434,20 @@ out:
         return 0;
 }
 
-
-/* mount the file system (secretly) */
-static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
+static int mds_prep(struct obd_device *obddev)
 {
-        struct obd_ioctl_data* data = buf;
+        struct obd_run_ctxt saved;
         struct mds_obd *mds = &obddev->u.mds;
         struct super_operations *s_ops;
-        struct super_block *sb;
-        struct vfsmount *mnt;
         int err;
-        ENTRY;
-
-        MOD_INC_USE_COUNT;
-#ifdef CONFIG_DEV_RDONLY
-        dev_clear_rdonly(2);
-#endif
-        mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL);
-        err = PTR_ERR(mnt);
-        if (IS_ERR(mnt)) {
-                CERROR("do_kern_mount failed: %d\n", err);
-                GOTO(err_dec, err);
-        }
-
-        sb = mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
-        if (!sb)
-                GOTO(err_put, (err = -ENODEV));
-
-        mds->mds_vfsmnt = mnt;
-        mds->mds_fstype = strdup(data->ioc_inlbuf2);
-
-        if (!strcmp(mds->mds_fstype, "ext3"))
-                mds->mds_fsops = &mds_ext3_fs_ops;
-        else if (!strcmp(mds->mds_fstype, "ext2"))
-                mds->mds_fsops = &mds_ext2_fs_ops;
-        else {
-                CERROR("unsupported MDS filesystem type %s\n", mds->mds_fstype);
-                GOTO(err_kfree, (err = -EPERM));
-        }
-
-        mds->mds_ctxt.pwdmnt = mnt;
-        mds->mds_ctxt.pwd = mnt->mnt_root;
-        mds->mds_ctxt.fs = KERNEL_DS;
 
         mds->mds_service = ptlrpc_init_svc(128 * 1024,
                                            MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                                            "self", mds_handle);
+
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
-                GOTO(err_kfree, (err = -EINVAL));
+                RETURN(-EINVAL);
         }
 
         err = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
@@ -491,6 +456,9 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_svc, err);
         }
 
+        push_ctxt(&saved, &mds->mds_ctxt);
+        err = simple_mkdir(current->fs->pwd, "ROOT", 0700);
+        err = simple_mkdir(current->fs->pwd, "FH", 0700);
         /*
          * Replace the client filesystem delete_inode method with our own,
          * so that we can clear the object ID before the inode is deleted.
@@ -503,25 +471,74 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
          * type, as we don't have access to the mds struct in * delete_inode.
          */
         OBD_ALLOC(s_ops, sizeof(*s_ops));
-        memcpy(s_ops, sb->s_op, sizeof(*s_ops));
+        memcpy(s_ops, mds->mds_sb->s_op, sizeof(*s_ops));
         mds->mds_fsops->cl_delete_inode = s_ops->delete_inode;
         s_ops->delete_inode = mds->mds_fsops->fs_delete_inode;
-        sb->s_op = s_ops;
+        mds->mds_sb->s_op = s_ops;
 
         RETURN(0);
 
 err_svc:
         rpc_unregister_service(mds->mds_service);
         OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
-err_kfree:
-        kfree(mds->mds_fstype);
+
+        return(err);
+}
+
+/* mount the file system (secretly) */
+static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
+{
+        struct obd_ioctl_data* data = buf;
+        struct mds_obd *mds = &obddev->u.mds;
+        struct vfsmount *mnt;
+        int err;
+        ENTRY;
+
+#ifdef CONFIG_DEV_RDONLY
+        dev_clear_rdonly(2);
+#endif
+        mds->mds_fstype = strdup(data->ioc_inlbuf2);
+
+        if (!strcmp(mds->mds_fstype, "ext3"))
+                mds->mds_fsops = &mds_ext3_fs_ops;
+        else if (!strcmp(mds->mds_fstype, "ext2"))
+                mds->mds_fsops = &mds_ext2_fs_ops;
+        else {
+                CERROR("unsupported MDS filesystem type %s\n", mds->mds_fstype);
+                GOTO(err_kfree, (err = -EPERM));
+        }
+
+        MOD_INC_USE_COUNT;
+        mnt = do_kern_mount(mds->mds_fstype, 0, data->ioc_inlbuf1, NULL);
+        if (IS_ERR(mnt)) {
+                CERROR("do_kern_mount failed: %d\n", err);
+                GOTO(err_dec, err = PTR_ERR(mnt));
+        }
+
+        mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
+        if (!mds->mds_sb)
+                GOTO(err_put, (err = -ENODEV));
+
+        mds->mds_vfsmnt = mnt;
+        mds->mds_ctxt.pwdmnt = mnt;
+        mds->mds_ctxt.pwd = mnt->mnt_root;
+        mds->mds_ctxt.fs = KERNEL_DS;
+
+        err = mds_prep(obddev);
+        if (err)
+                GOTO(err_put, err);
+
+        RETURN(0);
+
 err_put:
-        unlock_kernel(); // XXX do we want/need this?
+        unlock_kernel();
         mntput(mds->mds_vfsmnt);
         mds->mds_sb = 0;
-        lock_kernel();   // XXX do we want/need this?
+        lock_kernel();
 err_dec:
         MOD_DEC_USE_COUNT;
+err_kfree:
+        kfree(mds->mds_fstype);
         return err;
 }
 
