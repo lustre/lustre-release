@@ -57,11 +57,6 @@ struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid)
         return NULL;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)) || !defined(__KERNEL__)
-# define kdev_t_to_nr(foo) (foo)
-# define to_kdev_t(foo) (foo)
-#endif
-
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct ptlrpc_connection *conn;
