@@ -95,22 +95,10 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
                         }
                         echo_pages++;
 
-                        /*
-                        if (cmd == OBD_BRW_READ) {
-                                __u64 *data = address;
-
-                                data[0] = obj->ioo_id;
-                                data[1] = j;
-                                data[2] = nb->offset;
-                                data[3] = nb->len;
-                        }
-                        */
-
                         r->offset = nb->offset;
                         r->page = virt_to_page(address);
                         r->addr = kmap(r->page);
                         r->len = nb->len;
-                        // r->flags
                 }
         }
         CDEBUG(D_PAGE, "%ld pages allocated after prep\n", echo_pages);
@@ -126,7 +114,6 @@ preprw_cleanup:
         CERROR("cleaning up %ld pages (%d obdos)\n", (long)(r - res), objcount);
         while (r-- > res) {
                 kunmap(r->page);
-
                 __free_pages(r->page, 0);
                 echo_pages--;
         }
@@ -157,16 +144,20 @@ int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
                         struct page *page = r->page;
-                        unsigned long addr = (unsigned long)page_address(page);
+                        unsigned long addr;
 
-                        if (!addr || !kern_addr_valid(addr)) {
+                        if (!page ||
+                            !(addr = (unsigned long)page_address(page)) ||
+                            !kern_addr_valid(addr)) {
+
                                 CERROR("bad page %p, id %Ld (%d), buf %d/%d\n",
                                        page, (unsigned long long)obj->ioo_id, i,
                                        j, obj->ioo_bufcnt);
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
-                        free_pages(addr, 0);
+                        kunmap(page);
+                        __free_pages(page, 0);
                         echo_pages--;
                 }
         }
@@ -178,9 +169,9 @@ commitrw_cleanup:
                niocount - (long)(r - res) - 1, objcount);
         while (++r < res + niocount) {
                 struct page *page = r->page;
-                unsigned long addr = (unsigned long)page_address(page);
 
-                free_pages(addr, 0);
+                kunmap(page);
+                __free_pages(page, 0);
                 echo_pages--;
         }
         return rc;
