@@ -20,7 +20,7 @@
  obj-m    := $(O_TARGET)
 --- linux-2.4.20-hp4_pnnl1/fs/ext3/super.c~exports_hp	Tue Apr  1 20:36:07 2003
 +++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/super.c	Tue Apr  1 20:36:07 2003
-@@ -1769,7 +1769,7 @@ static void __exit exit_ext3_fs(void)
+@@ -1769,7 +1769,7 @@
  	unregister_filesystem(&ext3_fs_type);
  }
  
@@ -31,7 +31,7 @@
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
 --- linux-2.4.20-hp4_pnnl1/include/linux/fs.h~exports_hp	Tue Apr  1 20:36:07 2003
 +++ linux-2.4.20-hp4_pnnl1-braam/include/linux/fs.h	Tue Apr  1 20:36:52 2003
-@@ -1020,6 +1020,7 @@ extern int unregister_filesystem(struct 
+@@ -1020,6 +1020,7 @@
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount(struct vfsmount *);
  extern long do_mount(char *, char *, char *, unsigned long, void *);
@@ -41,12 +41,13 @@
  
 --- linux-2.4.20-hp4_pnnl1/kernel/ksyms.c~exports_hp	Tue Apr  1 20:36:07 2003
 +++ linux-2.4.20-hp4_pnnl1-braam/kernel/ksyms.c	Tue Apr  1 20:36:07 2003
-@@ -308,6 +308,10 @@ EXPORT_SYMBOL(dcache_dir_fsync);
+@@ -308,6 +308,11 @@
  EXPORT_SYMBOL(dcache_readdir);
  EXPORT_SYMBOL(dcache_dir_ops);
  
 +/* lustre */
 +EXPORT_SYMBOL(pagecache_lock_cacheline);
++EXPORT_SYMBOL(panic_notifier_list);
 +EXPORT_SYMBOL(do_kern_mount);
 +
  /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
