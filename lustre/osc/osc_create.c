@@ -213,6 +213,11 @@ void osccd_do_create(struct osc_created *osccd)
                 rc = osc_real_create(oscc->oscc_exp, &oscc->oscc_oa,
                                      &oscc->oscc_ea, NULL);
 
+                /* This is not used and leaked, so might as well free
+                 * it now.*/
+                if (rc == 0 && oscc->oscc_ea != NULL) 
+                        obd_free_memmd(oscc->oscc_exp, &oscc->oscc_ea);
+
                 spin_lock(&osccd->osccd_lock);
                 spin_lock(&oscc->oscc_lock);
                 list_del_init(&oscc->oscc_list);
