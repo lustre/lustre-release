@@ -251,14 +251,14 @@ int client_obd_disconnect(struct lustre_handle *conn)
 
         cli->cl_conn_count--;
         if (cli->cl_conn_count)
-                GOTO(out_disco, rc = 0);
+                GOTO(out_no_disconnect, rc = 0);
 
         ldlm_namespace_free(obd->obd_namespace);
         obd->obd_namespace = NULL;
         request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 0, NULL,
                                   NULL);
         if (!request)
-                GOTO(out_disco, rc = -ENOMEM);
+                GOTO(out_req, rc = -ENOMEM);
 
         request->rq_replen = lustre_msg_size(0, NULL);
 
@@ -273,12 +273,12 @@ int client_obd_disconnect(struct lustre_handle *conn)
  out_req:
         if (request)
                 ptlrpc_req_finished(request);
- out_disco:
+        list_del_init(&cli->cl_import.imp_chain);
+        MOD_DEC_USE_COUNT;
+ out_no_disconnect:
         err = class_disconnect(conn);
         if (!rc && err)
                 rc = err;
-        list_del_init(&cli->cl_import.imp_chain);
-        MOD_DEC_USE_COUNT;
  out_sem:
         up(&cli->cl_sem);
         RETURN(rc);
