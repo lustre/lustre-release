@@ -25,3 +25,6 @@ ext3-map_inode_page.patch
 ext3-error-export.patch
 iopen-2.4.20.patch
 tcp-zero-copy.patch
+jbd-ctx_switch.patch
+jbd-flushtime.patch
+jbd-get_write_access.patch
