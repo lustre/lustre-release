@@ -846,7 +846,7 @@ int init_obd(void)
 {
 	int i;
 
-	printk(KERN_INFO "OBD class driver  v0.002, braam@stelias.com\n");
+	printk(KERN_INFO "OBD class driver  v0.01, braam@stelias.com\n");
 	
 	INIT_LIST_HEAD(&obd_types);
 	
@@ -863,6 +863,7 @@ int init_obd(void)
 		INIT_LIST_HEAD(&obd_dev[i].obd_gen_clients);
 	}
 
+	obd_init_obdo_cache();
 	obd_sysctl_init();
 	obd_init_magic = 0x11223344;
 	return 0;

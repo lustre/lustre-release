@@ -229,7 +229,8 @@ void lck_page(struct page *page)
 
 /* XXX this should return errors correctly, so should migrate!!! */
 int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
-		  struct obd_conn *src_conn, struct obdo *src)
+		  struct obd_conn *src_conn, struct obdo *src,
+		  obd_size count, obd_off offset)
 {
 	struct page *page;
 	unsigned long index = 0;

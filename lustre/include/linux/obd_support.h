@@ -118,43 +118,19 @@ do {							\
 } while (0)
 
 
-
-static inline void inode_to_iattr(struct inode *inode, struct iattr *tmp)
+static inline struct page *addr_to_page(char *buf)
 {
-	tmp->ia_mode = inode->i_mode;
-	tmp->ia_uid = inode->i_uid;
-	tmp->ia_gid = inode->i_gid;
-	tmp->ia_size = inode->i_size;
-	tmp->ia_atime = inode->i_atime;
-	tmp->ia_mtime = inode->i_mtime;
-	tmp->ia_ctime = inode->i_ctime;
-	/*	tmp->ia_flags = inode->i_flags; */
+	unsigned long addr = (unsigned long)buf;
+        unsigned long map_nr;
 
-	tmp->ia_valid = ~0;
-}
-
-
-#define OBD_MAGIC_INL 0x77777770
-
-
-static inline void inode_cpy(struct inode *dest, struct inode *src)
-{
-	dest->i_mode = src->i_mode;
-	dest->i_uid = src->i_uid;
-	dest->i_gid = src->i_gid;
-	dest->i_size = src->i_size;
-	dest->i_atime = src->i_atime;
-	dest->i_mtime = src->i_mtime;
-	dest->i_ctime = src->i_ctime;
-	dest->i_flags = src->i_flags;
-	/* allocation of space */
-	dest->i_blocks = src->i_blocks;
-	if ( !src->i_blocks || 
-	     OBD_MAGIC_INL == (OBD_MAGIC_INL & src->u.ext2_i.i_data[0])) {
-		CDEBUG(D_IOCTL, "copying inline data: ino %ld\n", dest->i_ino);
-		memcpy(&dest->u.ext2_i.i_data, &src->u.ext2_i.i_data, 
-		       sizeof(src->u.ext2_i.i_data));
-	}
+#ifdef CONFIG_DISCONTIGMEM
+        if (addr == 0) return;
+#endif
+        map_nr = MAP_NR(addr);
+        if (map_nr < max_mapnr)
+		return mem_map + map_nr;
+	else 
+		return 0;
 }
 
 

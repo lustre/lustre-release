@@ -89,6 +89,133 @@ use Term::ReadLine;
 use IO::Handle;
 
 
+# NOTE long long are layed out in memory as follows:
+# u = 0xaaaabbbbccccdddd has ccccdddd at &u and aaaabbbb 4 bytes on
+# this may be different on other architectures
+
+# we use 32 bit integers for all 64 quantities in this program
+# #define OBD_INLINESZ	60
+# #define OBD_OBDMDSZ	64
+# /* Note: 64-bit types are 64-bit aligned in structure */
+# struct obdo {
+# 	obd_id			o_id;
+# 	obd_gr			o_gr;
+# 	obd_time		o_atime;
+# 	obd_time		o_mtime;
+# 	obd_time		o_ctime;
+# 	obd_size		o_size;
+# 	obd_blocks		o_blocks;
+# 	obd_blksize		o_blksize;
+# 	obd_mode		o_mode;
+# 	obd_uid			o_uid;
+# 	obd_gid			o_gid;
+# 	obd_flag		o_flags;
+# 	obd_flag		o_obdflags;
+# 	obd_count		o_nlink;
+# 	obd_flag		o_valid;	/* hot fields in this obdo */
+# 	char			o_inline[OBD_INLINESZ];
+# 	char			o_obdmd[OBD_OBDMDSZ];
+# 	struct list_head	o_list;
+# 	struct obd_ops		*o_op;
+# };
+
+sub obdo_pack {
+    my $obdo = shift;
+    pack "LL LL LL LL LL LL LL L L L L L L L L 60c 64c L L L", 
+    $obdo->{id}, 0, 
+    $obdo->{gr}, 0, 
+    $obdo->{atime}, 0, 
+    $obdo->{mtime}, 0 ,
+    $obdo->{ctime}, 0, 
+    $obdo->{size}, 0, 
+    $obdo->{blocks}, 0, 
+    $obdo->{blksize},
+    $obdo->{mode},
+    $obdo->{uid},
+    $obdo->{gid},
+    $obdo->{flag},
+    $obdo->{obdoflags},
+    $obdo->{nlink}, 	
+    $obdo->{valid},	
+    $obdo->{inline},
+    $obdo->{obdmd},
+    0, 0, # struct list_head 
+    0;  #  struct obd_ops 
+}
+
+sub obdo_unpack {
+    my $buf = shift;
+    my $offset = shift;
+    my $obdo;
+    ($obdo->{id},
+    $obdo->{gr},
+    $obdo->{atime},
+    $obdo->{mtime},
+    $obdo->{ctime},
+    $obdo->{size},
+    $obdo->{blocks},
+    $obdo->{blksize},
+    $obdo->{mode},
+    $obdo->{uid},
+    $obdo->{gid},
+    $obdo->{flag},
+    $obdo->{obdoflags},
+    $obdo->{nlink}, 	
+    $obdo->{valid},	
+    $obdo->{inline},
+    $obdo->{obdmd}) = unpack $offset . "xL4x L4x L4x L4x L4x L4x L4x L L L L L L L L 60c 64c", $buf;
+}
+
+sub obdo_print {
+
+    printf "id: %d\ngrp: %d\natime: %s\natime: %s\nmtime: %s\nctime: %s\nsize: %d\nblocks: %d\nblksize: %d\nmode: %x\nuid: %d\ngid: %d\nflag: %x\nobdflag: %x\nnlink: %d\nvalid: %x\ninline: %s\obdmd: %s\n", 
+   $obdo->{id},
+    $obdo->{gr},
+    $obdo->{atime},
+    $obdo->{mtime},
+    $obdo->{ctime},
+    $obdo->{size},
+    $obdo->{blocks},
+    $obdo->{blksize},
+    $obdo->{mode},
+    $obdo->{uid},
+    $obdo->{gid},
+    $obdo->{flag},
+    $obdo->{obdoflags},
+    $obdo->{nlink}, 	
+    $obdo->{valid},	
+    $obdo->{inline},
+    $obdo->{obdmd};
+}
+
+
+# XXXXXXXXXXXXXXXXXX
+# test here
+
+   $obdo->{id}= 1;
+    $obdo->{gr}= 2;
+    $obdo->{atime}= 3;
+    $obdo->{mtime}= 4;
+    $obdo->{ctime}= 5;
+    $obdo->{size}= 6;
+    $obdo->{blocks}= 7;
+    $obdo->{blksize}= 8;
+    $obdo->{mode}= 9;
+    $obdo->{uid}= 10;
+    $obdo->{gid}= 11;
+    $obdo->{flag}= 12;
+    $obdo->{obdoflags}= ;
+    $obdo->{nlink}= ; 	
+    $obdo->{valid}= ;	
+    $obdo->{inline}= ;
+    $obdo->{obdmd};
+
+# print, pack and unpack and print
+
+print "XXXXXXXX testing done\n";
+exit;
+
+
 my ($file);
 
 GetOptions("f!" => \$file, "device=s" => \$::device, ) || die "Getoptions";
@@ -917,24 +1044,17 @@ sub Getattr {
     }
 
     # see Setattr
-    my $packed = pack("ILsx2lLLLI", $::client_id, $inode, 0, 0, 0, 0, 0, 0, 0,
-		      0);
+    my $obdo;
+    $obdo->{id} = $inode;
+    my $packed = pack("L", $::client_id) . obdo_pack($obdo);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_GETATTR, $packed);
 
+    
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
     } elsif ($rc eq "0 but true") {
-	my ($valid, $mode, $uid, $gid, $size, $atime, $mtime, $ctime, $flags);
-	($valid, $mode, $uid, $gid, $size, $atime, $mtime, $ctime, $flags) =
-	  unpack("ISssx2lLLLI", $packed);
-
-	printf("Inode: %d  Mode:  %o\n", $inode, $mode);
-	printf("User: %6d   Group: %6d   Size: %d\n", $uid, $gid, $size);
-	printf("ctime: %08lx -- %s\n", $ctime, scalar(gmtime($ctime)));
-	printf("atime: %08lx -- %s\n", $atime, scalar(gmtime($atime)));
-	printf("mtime: %08lx -- %s\n", $mtime, scalar(gmtime($mtime)));
-	printf("flags: %08x\n", $flags);
-	print "Finished (success)\n";
+	$obdo = obdo_unpack($packed,  4); 
+	obdo_print($obdo);
     } else {
 	print "ioctl returned error code $rc.\n";
     }

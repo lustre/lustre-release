@@ -18,6 +18,7 @@
  */
 
 typedef uint64_t	obd_id;
+typedef uint64_t	obd_gr;
 typedef uint64_t	obd_time;
 typedef uint64_t	obd_size;
 typedef uint64_t	obd_off;
@@ -29,15 +30,15 @@ typedef uint32_t	obd_gid;
 typedef uint32_t	obd_flag;
 typedef uint32_t	obd_count;
 
-#define OBD_INLINESZ	60
-#define OBD_OBDMDSZ	64
-
 #define OBD_FL_INLINEDATA	(1UL)  
 #define OBD_FL_OBDMDEXISTS	(1UL << 1)
 
+#define OBD_INLINESZ	60
+#define OBD_OBDMDSZ	64
 /* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
 	obd_id			o_id;
+	obd_gr			o_gr;
 	obd_time		o_atime;
 	obd_time		o_mtime;
 	obd_time		o_ctime;
@@ -123,6 +124,7 @@ struct obd_ops {
 	int (*o_write)(struct obd_conn *, struct obdo *oa, char *buf, obd_size *count, obd_off offset);
 	int (*o_brw)(int rw, struct obd_conn * conn, struct obdo *oa, char *buf, obd_size count, obd_off offset, obd_flag flags);
 	int (*o_punch)(struct obd_conn *, struct obdo *tgt, obd_size count, obd_off offset);
+	int (*o_sync)(struct obd_conn *, struct obdo *tgt, obd_size count, obd_off offset);
 	int (*o_migrate)(struct obd_conn *, struct obdo *dst, struct obdo *src, obd_size count, obd_off offset);
 	int (*o_copy)(struct obd_conn *dstconn, struct obdo *dst, struct obd_conn *srconn, struct obdo *src, obd_size count, obd_off offset);
 	int (*o_iterate)(struct obd_conn *, int (*)(obd_id, void *), obd_id start, void *);
@@ -137,6 +139,7 @@ struct obd_ops {
  *  ======== OBD Metadata Support  ===========
  */
 
+extern int obd_init_obdo_cache(void);
 
 
 static inline int obdo_has_inline(struct obdo *obdo)
@@ -341,7 +344,8 @@ int gen_disconnect(struct obd_conn *conn);
 struct obd_client *gen_client(struct obd_conn *);
 int gen_cleanup(struct obd_device *obddev);
 int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
-		  struct obd_conn *src_conn, struct obdo *src);
+		  struct obd_conn *src_conn, struct obdo *src,
+		  obd_size count, obd_off offset);
 
 
 
