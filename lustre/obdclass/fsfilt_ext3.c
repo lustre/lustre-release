@@ -420,7 +420,7 @@ static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
 
         fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
 
-        kmem_cache_free(fcb_cache, fcb);
+        OBD_SLAB_FREE(fcb, fcb_cache, sizeof *fcb);
         atomic_dec(&fcb_cache_count);
 }
 
@@ -429,8 +429,8 @@ static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
 {
         struct fsfilt_cb_data *fcb;
 
-        fcb = kmem_cache_alloc(fcb_cache, GFP_NOFS);
-        if (!fcb)
+        OBD_SLAB_ALLOC(fcb, fcb_cache, GFP_NOFS, sizeof *fcb);
+        if (fcb == NULL)
                 RETURN(-ENOMEM);
 
         atomic_inc(&fcb_cache_count);
