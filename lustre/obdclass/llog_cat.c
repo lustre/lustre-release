@@ -69,7 +69,8 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                         /* XXX This should trigger log clean up or similar */
                         CERROR("catalog index %d is still in use\n", index);
                 } else {
-                        llh->llh_count = (index + 1) % bitmap_size;
+                        cathandle->lgh_last_idx = index;
+                        llh->llh_count++;
                         break;
                 }
         }
@@ -97,6 +98,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         }
 
         cathandle->u.chd.chd_current_log = loghandle;
+        LASSERT(list_empty(&loghandle->u.phd.phd_entry));
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
 
  out_destroy:
@@ -129,6 +131,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                                        logid->lgl_ogen);
                                 continue;
                         }
+                        loghandle->u.phd.phd_cat_handle = cathandle;
                         GOTO(out, rc = 0);
                 }
         }
@@ -138,9 +141,12 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                 CERROR("error opening log id "LPX64":%x: rc %d\n",
                        logid->lgl_oid, logid->lgl_ogen, rc);
         } else {
-                list_add(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
+                rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
+                if (!rc)
+                        list_add(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
         }
-        rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
+        if (!rc) 
+                loghandle->u.phd.phd_cat_handle = cathandle;
 
 out:
         *res = loghandle;
@@ -275,6 +281,44 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_cancel_records);
+
+int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec, void *data)
+{
+        struct llog_process_data *d = data;
+        struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+        struct llog_handle *llh;
+        int rc;
+
+        if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+                CERROR("invalid record in catalog\n");
+                RETURN(-EINVAL);
+        }
+        CERROR("processing log "LPX64" in catalog "LPX64"\n", 
+               lir->lid_id.lgl_oid, cat_llh->lgh_id.lgl_oid);
+
+        rc = llog_cat_id2handle(cat_llh, &llh, &lir->lid_id);
+        if (rc) {
+                CERROR("Cannot find handle for log "LPX64"\n", lir->lid_id.lgl_oid);
+                RETURN(rc);
+        }        
+
+        rc = llog_process(llh, d->lpd_cb, d->lpd_data);
+        RETURN(rc);
+}
+
+int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
+{
+        struct llog_process_data d;
+        int rc;
+        ENTRY;
+        d.lpd_data = data;
+        d.lpd_cb = cb;
+
+        rc = llog_process(cat_llh, llog_cat_process_cb, &d);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_cat_process);
+
 
 #if 0
 /* Assumes caller has already pushed us into the kernel context. */

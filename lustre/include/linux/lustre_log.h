@@ -44,6 +44,7 @@ struct lov_stripe_md;
 
 struct plain_handle_data {
         struct list_head   phd_entry;
+        struct llog_handle     *phd_cat_handle; 
         struct llog_cookie phd_cookie; /* cookie of this log in its cat */
         int                phd_last_idx;
 };
@@ -73,23 +74,26 @@ struct llog_handle {
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
 int llog_init_handle(struct llog_handle *handle, int flags, struct obd_uuid *uuid);
 extern void llog_free_handle(struct llog_handle *handle);
-int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data);
-
+int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data);
+extern int llog_close(struct llog_handle *cathandle);
 
 /* llog_cat.c   -  catalog api */
+struct llog_process_data {
+        void *lpd_data;
+        llog_cb_t lpd_cb;
+};
 int llog_cat_put(struct llog_handle *cathandle);
 int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                      struct llog_cookie *reccookie, void *buf);
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
+int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 
 extern struct llog_handle *llog_alloc_handle(void);
 extern int llog_init_catalog(struct llog_handle *cathandle,
                              struct obd_uuid *tgtuuid);
 extern int llog_delete_log(struct llog_handle *cathandle,
                            struct llog_handle *loghandle);
-extern int llog_close_log(struct llog_handle *cathandle,
-                          struct llog_handle *loghandle);
 extern struct llog_handle *llog_new_log(struct llog_handle *cathandle,
                                         struct obd_uuid *tgtuuid);
 struct llog_operations {
@@ -101,7 +105,7 @@ struct llog_operations {
                              int idx);
         int (*lop_destroy)(struct llog_handle *handle);
         int (*lop_next_block)(struct llog_handle *h, 
-                              int curr_idx,  
+                              int *curr_idx,  
                               int next_idx, 
                               __u64 *cur_offset, 
                               void *buf, 
@@ -140,20 +144,6 @@ static inline int llog_handle2ops(struct llog_handle *loghandle,
         return llog_obd2ops(loghandle->lgh_obd, lop);
 }
 
-static inline int llog_close(struct llog_handle *loghandle)
-{
-        struct llog_operations *lop;
-        int rc;
-        ENTRY;
-
-        rc = llog_handle2ops(loghandle, &lop);
-        if (rc)
-                RETURN(rc);
-        if (lop->lop_close == NULL)
-                RETURN(-EOPNOTSUPP);
-        rc = lop->lop_close(loghandle);
-        RETURN(rc);
-}
 
 static inline int llog_write_rec(struct llog_handle *handle,
                                  struct llog_rec_hdr *rec,
@@ -227,7 +217,7 @@ static inline int llog_cancel(struct obd_export *exp,
 }
 #endif 
 
-static inline int llog_next_block(struct llog_handle *loghandle, int cur_idx,
+static inline int llog_next_block(struct llog_handle *loghandle, int *cur_idx,
                                   int next_idx, __u64 *cur_offset, void *buf,
                                   int len)
 {

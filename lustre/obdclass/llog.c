@@ -160,12 +160,31 @@ int llog_init_handle(struct llog_handle *handle, int flags,
 }
 EXPORT_SYMBOL(llog_init_handle);
 
-int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
+int llog_close(struct llog_handle *loghandle)
+{
+        struct llog_operations *lop;
+        int rc;
+        ENTRY;
+
+        rc = llog_handle2ops(loghandle, &lop);
+        if (rc)
+                GOTO(out, rc);
+        if (lop->lop_close == NULL)
+                GOTO(out, -EOPNOTSUPP);
+        rc = lop->lop_close(loghandle);
+ out:
+        llog_free_handle(loghandle);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_close);
+
+int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 {
         struct llog_log_hdr *llh = loghandle->lgh_hdr;
         void *buf;
         __u64 cur_offset = LLOG_CHUNK_SIZE;
         int rc = 0, index = 1;
+        int saved_index = 0;
         ENTRY;
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
@@ -174,7 +193,7 @@ int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 
         while (rc == 0) {
                 struct llog_rec_hdr *rec;
-
+                
                 /* skip records not set in bitmap */
                 while (index < (LLOG_BITMAP_BYTES * 8) &&
                        !ext2_test_bit(index, llh->llh_bitmap))
@@ -184,12 +203,12 @@ int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
                 if (index == LLOG_BITMAP_BYTES * 8)
                         break;
 
-                /* get the buf with our target record */
-                rc = llog_next_block(loghandle, 0, index, 
+                /* get the buf with our target record; avoid old garbage */
+                memset(buf, 0, PAGE_SIZE);
+                rc = llog_next_block(loghandle, &saved_index, index, 
                                      &cur_offset, buf, PAGE_SIZE);
                 if (rc)
                         GOTO(out, rc);
-                LASSERT(ext2_test_bit(index, llh->llh_bitmap));
 
                 rec = buf;
                 index = rec->lrh_index;
@@ -208,6 +227,8 @@ int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 
                         /* next record, still in buffer? */
                         ++index;
+                        if (index > LLOG_BITMAP_BYTES * 8)
+                                GOTO(out, rc = 0);
                         rec = ((void *)rec + rec->lrh_len);
                 }
         }
@@ -217,7 +238,7 @@ int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
                 OBD_FREE(buf, LLOG_CHUNK_SIZE);
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_process_log);
+EXPORT_SYMBOL(llog_process);
 
 #if 0
 int filter_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,

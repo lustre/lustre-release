@@ -160,6 +160,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
                 CERROR("error reading log tail\n");
 
         handle->lgh_last_idx = tail.lrt_index;
+        handle->lgh_file->f_pos = handle->lgh_file->f_dentry->d_inode->i_size;
 
         RETURN(rc);
 }
@@ -173,6 +174,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 {
         struct llog_log_hdr *llh;
         int reclen = rec->lrh_len, index, rc;
+        struct llog_rec_tail *lrt;
         struct file *file;
         loff_t offset;
         size_t left;
@@ -227,6 +229,9 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         loghandle->lgh_last_idx++;
         index = loghandle->lgh_last_idx;
         rec->lrh_index = index;
+        lrt = (void *)rec + rec->lrh_len - sizeof(*lrt);
+        lrt->lrt_len = rec->lrh_len;
+        lrt->lrt_index = rec->lrh_index;
         if (ext2_set_bit(index, llh->llh_bitmap)) {
                 CERROR("argh, index %u already set in log bitmap?\n", index);
                 LBUG(); /* should never happen */
@@ -252,8 +257,27 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         RETURN(rc);
 }
 
-/* sets cur_offset to the furthest point red in the log file */
-static int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
+/* We can skip reading at least as many log blocks as the number of
+* minimum sized log records we are skipping.  If it turns out
+* that we are not far enough along the log (because the
+* actual records are larger than minimum size) we just skip
+* some more records. */
+
+static void llog_skip_over(__u64 *off, int curr, int goal)
+{
+        if (goal <= curr)
+                return;
+        *off = (*off + (goal-curr-1) * LLOG_MIN_REC_SIZE) & 
+                ~(LLOG_CHUNK_SIZE - 1);
+}
+
+
+/* sets:
+ *  - cur_offset to the furthest point red in the log file
+ *  - cur_idx to the log index preceeding cur_offset
+ * returns -EIO/-EINVAL on error
+ */
+static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                                 int next_idx, __u64 *cur_offset, void *buf,
                                 int len)
 {
@@ -264,59 +288,49 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
                 RETURN(-EINVAL);
 
         CDEBUG(D_OTHER, "looking for log index %u (cur idx %u off "LPU64"\n",
-               next_idx, cur_idx, *cur_offset);
+               next_idx, *cur_idx, *cur_offset);
 
-        /* We can skip reading at least as many log blocks as the number of
-         * minimum sized log records we are skipping.  If it turns out that we
-         * are not far enough along the log (because the actual records are
-         * larger than minimum size) we just skip some more records. */
-        while ((*cur_offset = (*cur_offset +
-                               (next_idx - cur_idx) * LLOG_MIN_REC_SIZE) &
-                ~(LLOG_CHUNK_SIZE - 1)) <
-               loghandle->lgh_file->f_dentry->d_inode->i_size) {
+        while (*cur_offset < loghandle->lgh_file->f_dentry->d_inode->i_size) {
                 struct llog_rec_hdr *rec;
                 struct llog_rec_tail *tail;
 
+                llog_skip_over(cur_offset, *cur_idx, next_idx);
+
                 rc = lustre_fread(loghandle->lgh_file, buf, LLOG_CHUNK_SIZE, 
                                   cur_offset);
-                if (rc < LLOG_MIN_REC_SIZE)
-                        RETURN(rc);
-                rc = 0;
-                rec = buf;
+
+                if (rc == 0) /* end of file, nothing to do */
+                        RETURN(0);
+
+                if (rc < sizeof(*tail)) {
+                        CERROR("Invalid llog block at log id "LPU64"/%u offset "LPU64"\n",
+                               loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen, 
+                               *cur_offset);
+                         RETURN(-EINVAL);
+                }
+
+                tail = buf + rc - sizeof(struct llog_rec_tail);
+                *cur_idx = tail->lrt_index;
+
+                /* this shouldn't happen */
+                if (tail->lrt_index == 0) {
+                        CERROR("Invalid llog tail at log id "LPU64"/%u offset "LPU64"\n",
+                               loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen, 
+                               *cur_offset);
+                        RETURN(-EINVAL);
+                }
+
                 /* sanity check that the start of the new buffer is no farther
                  * than the record that we wanted.  This shouldn't happen. */
+                rec = buf;
                 if (rec->lrh_index > next_idx) {
                         CERROR("missed desired record? %u > %u\n",
                                rec->lrh_index, next_idx);
                         RETURN(-ENOENT);
                 }
-
-                /* Check if last record in this buffer is higher than what we
-                 * are looking for, or is zero (implying that this is the last
-                 * buffer in the log).  In conjunction with the previous test,
-                 * this means that the record we are looking for is in the
-                 * current buffer, or the client asked for a record beyond the
-                 * end of the log, which is the client's problem. */
-                tail = buf + LLOG_CHUNK_SIZE - sizeof(struct llog_rec_tail);
-                if (tail->lrt_index == 0)
-                        RETURN(0);
-
-                if (tail->lrt_index >= next_idx) {
-                        /* fill up the rest of buf */
-                        while (rc > 0 && (len -= LLOG_CHUNK_SIZE) > 0) {
-                                buf += LLOG_CHUNK_SIZE;
-                                *cur_offset += LLOG_CHUNK_SIZE;
-
-                                rc = lustre_fread(loghandle->lgh_file,
-                                                  buf, LLOG_CHUNK_SIZE,
-                                                  cur_offset);
-                        }
-                        RETURN(0);
-                }
-                cur_idx = tail->lrt_index;
+                RETURN(0);
         }
-
-        RETURN(-ENOENT);
+        RETURN(-EIO);
 }
 
 /* This is a callback from the llog_* functions.
@@ -339,12 +353,11 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
 
         if (logid != NULL) {
                 dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
-                                             logid->lgl_ogr);
+                                             logid->lgl_ogen);
                 if (IS_ERR(dchild)) {
                         rc = PTR_ERR(dchild);
-                        CERROR("error looking up log file "LPX64":"LPX64
-                               ": rc %d\n",
-                               logid->lgl_oid, logid->lgl_ogr, rc);
+                        CERROR("error looking up log file "LPX64":0x%x: rc %d\n",
+                               logid->lgl_oid, logid->lgl_ogen, rc);
                         GOTO(cleanup, rc);
                 }
 
@@ -360,8 +373,8 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                                                     O_RDWR | O_LARGEFILE);
                 if (IS_ERR(handle->lgh_file)) {
                         rc = PTR_ERR(handle->lgh_file);
-                        CERROR("error opening logfile "LPX64":"LPX64": rc %d\n",
-                               logid->lgl_oid, logid->lgl_ogr, rc);
+                        CERROR("error opening logfile "LPX64"0x%x: rc %d\n",
+                               logid->lgl_oid, logid->lgl_ogen, rc);
                         GOTO(cleanup, rc);
                 }
         } else if (name) {
@@ -374,17 +387,13 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                         CERROR("logfile creation %s: %d\n", logname, rc);
                         GOTO(cleanup, rc);
                 }
-                handle->lgh_id.lgl_oid =
-                        handle->lgh_file->f_dentry->d_inode->i_ino;
-                handle->lgh_id.lgl_ogen =
-                        handle->lgh_file->f_dentry->d_inode->i_generation;
         } else {
                 oa = obdo_alloc();
                 if (oa == NULL) 
                         GOTO(cleanup, rc = -ENOMEM);
                 /* XXX */
                 oa->o_gr = 1;
-                oa->o_valid = OBD_MD_FLGROUP;
+                oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
                 rc = obd_create(obd->obd_log_exp, oa, NULL, NULL);
                 if (rc)
                         GOTO(cleanup, rc);
@@ -397,11 +406,14 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                                                  open_flags);
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
-                handle->lgh_id.lgl_oid = oa->o_id;
-                handle->lgh_id.lgl_ogr = oa->o_gr;
         }
 
         handle->lgh_obd = obd;
+        handle->lgh_id.lgl_ogr = 1;
+        handle->lgh_id.lgl_oid =
+                handle->lgh_file->f_dentry->d_inode->i_ino;
+        handle->lgh_id.lgl_ogen =
+                handle->lgh_file->f_dentry->d_inode->i_generation;
  finish:
         if (oa)
                 obdo_free(oa);
@@ -424,8 +436,6 @@ static int llog_lvfs_close(struct llog_handle *handle)
         rc = filp_close(handle->lgh_file, 0);
         if (rc)
                 CERROR("error closing log: rc %d\n", rc);
-
-        llog_free_handle(handle);
         RETURN(rc);
 }
 
