@@ -429,12 +429,33 @@ int mds_lov_connect(struct obd_device *obd)
         RETURN(rc);
 }
 
-static int mds_post_mds_lovconf(struct obd_device *obd)
+int mds_post_mds_lovconf(struct obd_device *obd)
 {
         int rc = mds_lov_read_objids(obd);
         if (rc)
                 CERROR("cannot read %s: rc = %d\n", "lov_objids", rc);
         return rc;
+}
+
+int 
+mds_process_log_rec(struct llog_handle * loghandle, 
+                            struct llog_rec_hdr *rec, void *data)
+{
+        int cfg_len = rec->lrh_len;
+        char *cfg_buf = (char*) (rec + 1);
+        int rc;
+
+        if (rec->lrh_type == OBD_CFG_REC) {
+                char *buf;
+                rc = lustre_cfg_getdata(&buf,cfg_len, cfg_buf, 1);
+                if (rc) 
+                        RETURN(rc);
+                rc = class_process_config((struct lustre_cfg* ) buf);
+                lustre_cfg_freedata(buf, cfg_len);
+        } else if (rec->lrh_type == PTL_CFG_REC) {
+                rc = kportal_nal_cmd((struct portals_cfg *)cfg_buf);
+        }
+        RETURN(rc);
 }
 
 int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len, 
@@ -486,65 +507,81 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_DORECORD: {
+                char *cfg_buf;
                 struct llog_rec_hdr rec;
-
                 if (!mds->mds_cfg_llh)
                         RETURN(-EBADF);
 
-//                rec.lrh_len = len;
-                rec.lrh_len = 16;
-                rec.lrh_type = OBD_CFG_REC;
+                rec.lrh_len = data->ioc_plen1;
+
+                if (data->ioc_type == LUSTRE_CFG_TYPE) {
+                        rec.lrh_type = OBD_CFG_REC;
+                }
+                else if (data->ioc_type == PORTALS_CFG_TYPE) {
+                        rec.lrh_type = PTL_CFG_REC;
+                } else {
+                        CERROR("unknown cfg record type:%d \n", data->ioc_type);
+                        RETURN(-EINVAL);
+                }
+                        
+                OBD_ALLOC(cfg_buf, data->ioc_plen1);
+                if (cfg_buf == NULL) 
+                        RETURN(-EINVAL);
+                rc = copy_from_user(cfg_buf, data->ioc_pbuf1, data->ioc_plen1);
+                if (rc) {
+                        OBD_FREE(cfg_buf, data->ioc_plen1);
+                        RETURN(rc);
+                }
 
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-//#warning repack karg here and pad to 16 bytes
-//                rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0, karg, -1);
                 rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0, 
-                                    "a 15bytestring  ", -1);
+                                    cfg_buf, -1);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
+                OBD_FREE(cfg_buf, data->ioc_plen1);
                 RETURN(rc);
         }
 
         case OBD_IOC_PARSE: {
-                struct llog_rec_hdr rec;
+                char *name = data->ioc_inlbuf1;
+                struct llog_handle *llh;
 
-                if (!mds->mds_cfg_llh)
-                        RETURN(-EBADF);
-
-                rec.lrh_len = len;
-                rec.lrh_type = OBD_CFG_REC;
+                obd->obd_log_exp = class_export_get(exp);
 
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0, karg, -1);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-
-                RETURN(rc);
-        }
-
-        case OBD_IOC_LOV_SET_CONFIG:
-                desc = (struct lov_desc *)data->ioc_inlbuf1;
-                if (sizeof(*desc) > data->ioc_inllen1) {
-                        CERROR("descriptor size wrong\n");
-                        RETURN(-EINVAL);
-                }
-
-                count = desc->ld_tgt_count;
-                uuidarray = (struct obd_uuid *)data->ioc_inlbuf2;
-                if (sizeof(*uuidarray) * count != data->ioc_inllen2) {
-                        CERROR("UUID array size wrong\n");
-                        RETURN(-EINVAL);
-                }
-                rc = mds_set_lovdesc(obd, desc, uuidarray);
-                if (rc)
+                rc = llog_create(obd, &llh, NULL, name);
+                if (rc) {
+                        class_export_put(obd->obd_log_exp);
+                        obd->obd_log_exp = NULL;
                         RETURN(rc);
+                }
+
+                rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, 
+                                      &cfg_uuid);
+                if (rc) {
+                        class_export_put(obd->obd_log_exp);
+                        obd->obd_log_exp = NULL;
+                        RETURN(rc);
+                }
+
+                rc = llog_process(llh, mds_process_log_rec, NULL);
+                if (rc) {
+                        class_export_put(obd->obd_log_exp);
+                        obd->obd_log_exp = NULL;
+                        RETURN(rc);
+                }
+
+                rc = llog_close(llh);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
                 // XXX CONFIG this is here because the LOV is set up at an unexpected time
                 rc  = mds_post_mds_lovconf(obd);
                 if (rc)
                         RETURN(rc);
 
-                //rc = mds_lov_connect(obd);
                 RETURN(rc);
+        }
+
 
         case OBD_IOC_LOV_GET_CONFIG: {
                 desc = (struct lov_desc *)data->ioc_inlbuf1;
