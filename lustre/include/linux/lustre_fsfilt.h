@@ -64,6 +64,7 @@ struct fsfilt_operations {
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
                                     int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
+        int     (* fs_setup)(struct super_block *sb);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -217,6 +218,13 @@ static inline int fsfilt_write_record(struct obd_device *obd, struct file *file,
                                       int force_sync)
 {
         return obd->obd_fsops->fs_write_record(file, buf, size,offs,force_sync);
+}
+
+static inline int fsfilt_setup(struct obd_device *obd, struct super_block *fs)
+{
+        if (obd->obd_fsops->fs_setup)
+                return obd->obd_fsops->fs_setup(fs);
+        return 0;
 }
 
 #endif /* __KERNEL__ */
