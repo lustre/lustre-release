@@ -262,21 +262,6 @@ if test -d $LINUX/drivers/net/qsnet ; then
 	with_quadrics="-I$LINUX/drivers/net/qsnet/include"
   fi
   :
-elif test -d $LINUX/drivers/qsnet1 ; then
-  AC_MSG_RESULT(yes)
-  QSWNAL="qswnal"
-  with_quadrics="-I$LINUX/drivers/qsnet1/include -DPROPRIETARY_ELAN"
-  :
-elif test -d $LINUX/drivers/quadrics ; then
-  AC_MSG_RESULT(yes)
-  QSWNAL="qswnal"
-  with_quadrics="-I$LINUX/drivers/quadrics/include -DPROPRIETARY_ELAN"
-  :
-#elif test -d /usr/include/elan3 ; then
-#  AC_MSG_RESULT(yes)
-#  QSWNAL="qswnal"
-#  with_quadrics=""
-#  :
 else
   AC_MSG_RESULT(no)
   QSWNAL=""
@@ -369,3 +354,23 @@ if test $RH_2_4_20 = 1; then
 else
 	AC_MSG_RESULT($LINUXRELEASE)
 fi 
+
+# ---------- Red Hat 2.4.21 backports some more 2.5 bits --------
+
+AC_MSG_CHECKING(if kernel defines PDE)
+HAVE_PDE="`grep -c 'proc_dir_entry..PDE' $LINUX/include/linux/proc_fs.h`"
+if test "$HAVE_PDE" != 0 ; then
+  CPPFLAGS="$CPPFLAGS -DHAVE_PDE"
+  AC_MSG_RESULT(yes)
+else
+  AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(if kernel passes struct file to direct_IO)
+HAVE_DIO_FILE="`grep -c 'direct_IO.*struct file' $LINUX/include/linux/fs.h`"
+if test "$HAVE_DIO_FILE" != 0 ; then
+  CPPFLAGS="$CPPFLAGS -DHAVE_DIO_FILE"
+  AC_MSG_RESULT(yes)
+else
+  AC_MSG_RESULT(no)
+fi
