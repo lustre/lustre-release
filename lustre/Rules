@@ -21,3 +21,4 @@ tags:
 	find $(top_srcdir)/../portals/ -name '*.[hc]' | xargs ctags -a
 	find $(top_srcdir) -name '*.[hc]' | xargs ctags -a
 
+AM_CPPFLAGS="-I$(top_builddir)/include"
