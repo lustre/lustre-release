@@ -82,12 +82,12 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
         spin_lock(&lock->l_lock);
         if (rc != ELDLM_OK) {
+                LDLM_DEBUG(lock, "client-side enqueue END (%s)",
+                           rc == ELDLM_LOCK_ABORTED ? "ABORTED" : "FAILED");
                 spin_lock(&lock->l_resource->lr_lock);
                 ldlm_resource_put(lock->l_resource);
                 spin_unlock(&lock->l_resource->lr_lock);
                 ldlm_lock_free(lock);
-                if (rc == ELDLM_LOCK_ABORTED)
-                        rc = 0;
                 GOTO(out, rc);
         }
 

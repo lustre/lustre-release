@@ -4,8 +4,8 @@
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  *
- *  Copyright (C) 2001, Cluster File Systems, Inc.
- * 
+ * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *
  */
 
 #include <linux/fs.h>
@@ -33,8 +33,8 @@ void ll_intent_release(struct dentry *de)
         if (de->d_it->it_lock_mode) {
                 handle = (struct lustre_handle *)de->d_it->it_lock_handle;
                 lock = lustre_handle2object(handle);
-                CDEBUG(D_INFO, "calling ldlm_lock_decref(%p, %d)\n", lock,
-                       de->d_it->it_lock_mode);
+                LDLM_DEBUG(lock, "calling ldlm_lock_decref(%d)",
+                           de->d_it->it_lock_mode);
                 ldlm_lock_decref(lock, de->d_it->it_lock_mode);
         }
         de->d_it = NULL;
@@ -44,12 +44,11 @@ void ll_intent_release(struct dentry *de)
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {
         ENTRY;
-        
+
         RETURN(0);
 }
 
-
-struct dentry_operations ll_d_ops = { 
+struct dentry_operations ll_d_ops = {
         d_revalidate2: ll_revalidate2,
         d_intent_release: ll_intent_release
 };

@@ -338,6 +338,9 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         if (rc == -ENOENT) {
                 lock_mode = 0;
                 memset(lockh, 0, sizeof(*lockh));
+                it->it_lock_mode = lock_mode;
+        } else if (rc == ELDLM_LOCK_ABORTED) {
+                it->it_lock_mode = 0;
         } else if (rc != 0) {
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
                 RETURN(rc);
@@ -346,7 +349,6 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         dlm_rep = lustre_msg_buf(req->rq_repmsg, 0); 
         it->it_disposition = (int) dlm_rep->lock_policy_res1;
         it->it_status = (int) dlm_rep->lock_policy_res2;
-        it->it_lock_mode = lock_mode;
         it->it_data = req;
 
         RETURN(0);
