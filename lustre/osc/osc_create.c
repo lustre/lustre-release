@@ -154,6 +154,7 @@ static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
 {
         int have_objs;
         int ost_full;
+        int osc_invalid;
 
         have_objs = oscc_has_objects(oscc, count);
 
@@ -161,7 +162,9 @@ static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
         ost_full = (oscc->oscc_flags & OSCC_FLAG_NOSPC);
         spin_unlock(&oscc->oscc_lock);
 
-        return have_objs || ost_full;
+        osc_invalid = class_exp2cliimp(oscc->oscc_exp)->imp_invalid;
+
+        return have_objs || ost_full || osc_invalid;
 }
 
 static int oscc_precreate(struct osc_creator *oscc, int wait)
@@ -181,6 +184,9 @@ static int oscc_precreate(struct osc_creator *oscc, int wait)
 
         if (!oscc_has_objects(oscc, 1) && (oscc->oscc_flags & OSCC_FLAG_NOSPC))
                 rc = -ENOSPC;
+
+        if (class_exp2cliimp(oscc->oscc_exp)->imp_invalid)
+                rc = -EIO;
 
         RETURN(rc);
 }
@@ -240,6 +246,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
                 spin_unlock(&oscc->oscc_lock);
                 rc = oscc_precreate(oscc, try_again);
+                if (rc == -EIO)
+                        break;
         }
 
         if (rc == 0)
