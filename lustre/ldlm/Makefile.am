@@ -16,9 +16,6 @@ LINX=l_lock.c
 ldlm_SOURCES = l_lock.c ldlm_lock.c ldlm_resource.c ldlm_test.c ldlm_lockd.c \
 ldlm_extent.c ldlm_request.c
 
-dist-hook:
-	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
-
 
 include $(top_srcdir)/Rules
 

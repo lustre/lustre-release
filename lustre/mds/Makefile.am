@@ -24,8 +24,6 @@ l_net.c:
 
 mds_SOURCES = handler.c mds_reint.c mds_fs.c $(LINX)
 
-dist-hook:
-	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
 
 include $(top_srcdir)/Rules
 

@@ -15,5 +15,10 @@ configure: scripts/lustre.spec.in
 
 dist-hook:
 	find $(distdir) -name .deps | xargs rm -rf
+	find $(distdir) -name CVS | xargs rm -rf
 
 include $(top_srcdir)/Rules
+
+rpms: dist Makefile
+	rpm -ta $(distdir).tar.gz
+

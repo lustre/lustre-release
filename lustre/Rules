@@ -21,4 +21,3 @@ tags:
 	find $(top_srcdir)/../portals -name '*.[hc]' | xargs ctags -a
 	find $(top_srcdir) -name '*.[hc]' | xargs ctags -a
 
-EXTRA_DIST += CVS

@@ -17,8 +17,5 @@ ll_pack.c:
 mds_updates.c: 
 	test -e mds_updates.c || ln -sf $(top_srcdir)/lib/mds_updates.c .
 
-dist-hook:
-	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
-
 
 include $(top_srcdir)/Rules
