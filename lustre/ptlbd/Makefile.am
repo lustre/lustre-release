@@ -12,5 +12,3 @@ EXTRA_PROGRAMS = ptlbd
 ptlbd_SOURCES = blk.c client.c main.c rpc.c server.c
 
 include $(top_srcdir)/Rules
-
-CFLAGS += -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@

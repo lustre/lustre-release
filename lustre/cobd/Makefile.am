@@ -13,5 +13,3 @@ LINX=
 cobd_SOURCES = cache_obd.c lproc_cache.c $(LINX)
 
 include $(top_srcdir)/Rules
-
-CFLAGS += -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
