@@ -53,7 +53,7 @@
 #include "lov_internal.h"
 
 #if 0
-static int lov_logop_cleanup(struct llog_obd_ctxt *ctxt)
+static int lov_logop_cleanup(struct llog_ctxt *ctxt)
 {
         struct lov_obd *lov = &ctxt->loc_obd->u.lov;
         int i, rc = 0;
@@ -61,7 +61,7 @@ static int lov_logop_cleanup(struct llog_obd_ctxt *ctxt)
         ENTRY;
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
-                struct llog_obd_ctxt *cctxt = child->obd_llog_ctxt[ctxt->loc_idx];
+                struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
                 rc = llog_cleanup(cctxt);
                 if (rc) {
                         CERROR("error lov_llog_open %d\n", i);
@@ -77,30 +77,64 @@ static int lov_logop_cleanup(struct llog_obd_ctxt *ctxt)
  * we need to keep cookies in stripe order, even if some are NULL, so that
  * the right cookies are passed back to the right OSTs at the client side.
  * Unset cookies should be all-zero (which will never occur naturally). */
-static int lov_llog_origin_add(struct llog_obd_ctxt *ctxt,
+static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
         struct lov_oinfo *loi;
+        struct llog_unlink_rec *lur;
         int i, rc = 0;
         ENTRY;
+
+        OBD_ALLOC(lur, sizeof(*lur));
+        if (!lur)
+                RETURN(-ENOMEM);
+        lur->lur_hdr.lrh_len = lur->lur_tail.lrt_len = sizeof(*lur);
+        lur->lur_hdr.lrh_type = MDS_UNLINK_REC;
 
         LASSERT(logcookies && numcookies >= lsm->lsm_stripe_count);
 
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
-                struct llog_obd_ctxt *cctxt = child->obd_llog_ctxt[ctxt->loc_idx];
-                rc += llog_add(cctxt, rec, NULL, logcookies + rc, numcookies - rc);
+                struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
 
+                lur->lur_oid = loi->loi_id;
+                lur->lur_ogen = loi->loi_gr;
+                rc += llog_add(cctxt, &lur->lur_hdr, NULL, logcookies + rc, numcookies - rc);
+
+        }
+        OBD_FREE(lur, sizeof(*lur));
+
+        RETURN(rc);
+}
+
+static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
+                                   struct llog_logid *logid,
+                                   struct llog_ctxt_gen *gen)
+{
+        struct obd_device *obd = ctxt->loc_obd;
+        struct lov_obd *lov = &obd->u.lov;
+        int i, rc = 0;
+        ENTRY;
+
+        LASSERT(lov->desc.ld_tgt_count  == count);
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
+                struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
+                rc = llog_connect(cctxt, 1, logid, gen);
+                if (rc) {
+                        CERROR("error osc_llog_connect %d\n", i);
+                        break;
+                }
         }
 
         RETURN(rc);
 }
 
 /* the replicators commit callback */
-static int lov_llog_repl_cancel(struct llog_obd_ctxt *ctxt, struct lov_stripe_md *lsm,
+static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags)
 {
         struct lov_obd *lov;
@@ -116,9 +150,8 @@ static int lov_llog_repl_cancel(struct llog_obd_ctxt *ctxt, struct lov_stripe_md
         lov = &obd->u.lov;
         for (i = 0; i < count; i++, cookies++, loi++) {
                 struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
-                struct llog_obd_ctxt *cctxt = child->obd_llog_ctxt[ctxt->loc_idx];
+                struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
                 int err;
-
 
                 err = llog_cancel(cctxt, NULL, 1, cookies, flags);
                 if (err && lov->tgts[loi->loi_ost_idx].active) {
@@ -133,12 +166,11 @@ static int lov_llog_repl_cancel(struct llog_obd_ctxt *ctxt, struct lov_stripe_md
 }
 
 static struct llog_operations lov_unlink_orig_logops = {
-//        lop_cleanup: lov_logop_cleanup,
         lop_add: lov_llog_origin_add,
+        lop_connect: lov_llog_origin_connect
 };
 
 static struct llog_operations lov_size_repl_logops = {
-//        lop_cleanup: lov_logop_cleanup,
         lop_cancel: lov_llog_repl_cancel
 };
 
@@ -150,7 +182,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int i, rc = 0;
         ENTRY;
         
-        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL, 
+        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
                         &lov_unlink_orig_logops);
         if (rc)
                 RETURN(rc);
@@ -178,11 +210,11 @@ int lov_llog_finish(struct obd_device *obd, int count)
         int i, rc = 0;
         ENTRY;
         
-        rc = llog_cleanup(obd->obd_llog_ctxt[LLOG_UNLINK_ORIG_CTXT]);
+        rc = llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
         if (rc)
                 RETURN(rc);
 
-        rc = llog_cleanup(obd->obd_llog_ctxt[LLOG_SIZE_REPL_CTXT]);
+        rc = llog_cleanup(llog_get_context(obd, LLOG_SIZE_REPL_CTXT));
         if (rc)
                 RETURN(rc);
 

@@ -68,9 +68,9 @@ int mds_open_unlink_rename(struct mds_update_record *rec,
         fidlen = ll_fid2str(fidname, dchild->d_inode->i_ino,
                             dchild->d_inode->i_generation);
 
-        CDEBUG(D_ERROR, "pending destroy of %dx open file %s = %s\n",
-               mds_open_orphan_count(dchild->d_inode),
-               rec->ur_name, fidname);
+        CWARN("pending destroy of %dx open file %s = %s\n",
+              mds_open_orphan_count(dchild->d_inode),
+              rec->ur_name, fidname);
 
         pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(pending_child))
@@ -239,8 +239,6 @@ int mds_cleanup_orphans(struct obd_device *obd)
         int rc = 0, rc2 = 0, item = 0;
         ENTRY;
 
-        RETURN(0);
-
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         dget(mds->mds_pending_dir);
         mntget(mds->mds_vfsmnt);
@@ -274,7 +272,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
                         GOTO(err_out, rc2 = PTR_ERR(dchild));
                 }
                 if (!dchild->d_inode) {
-                        CDEBUG(D_ERROR, "orphan %s has been deleted\n",
+                        CDEBUG(D_ERROR, "orphan %s has been removed\n",
                                ptr->d_name);
                         GOTO(next, rc2 = 0);
                 }
@@ -287,12 +285,10 @@ int mds_cleanup_orphans(struct obd_device *obd)
                         GOTO(next, rc2 = 0);
                 }
 
-                CDEBUG(D_ERROR, "start to remove %s from mds and ost!\n",
-                       ptr->d_name);
                 rc2 = mds_unlink(obd, dchild, child_inode, pending_dir);
                 if (rc2 == 0) {
                         item ++;
-                        CDEBUG(D_ERROR, "removed orphan %s object successfully!\n",
+                        CDEBUG(D_ERROR, "removed orphan %s from MDS and OST\n",
                                ptr->d_name);
                 } else {
                         l_dput(dchild); 

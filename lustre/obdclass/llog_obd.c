@@ -30,7 +30,7 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                int count, struct llog_logid *logid, struct llog_operations *op)
 {
         int rc = 0;
-        struct llog_obd_ctxt *ctxt;
+        struct llog_ctxt *ctxt;
         ENTRY;
 
         if (index < 0 || index >= LLOG_MAX_CTXTS)
@@ -56,11 +56,12 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
 }
 EXPORT_SYMBOL(llog_setup);
 
-int llog_cleanup(struct llog_obd_ctxt *ctxt)
+int llog_cleanup(struct llog_ctxt *ctxt)
 {
         int rc = 0;
         ENTRY;
 
+        down(&ctxt->loc_sem);
         LASSERT(ctxt);
 
         if (CTXTP(ctxt, cleanup))
@@ -69,13 +70,28 @@ int llog_cleanup(struct llog_obd_ctxt *ctxt)
         ctxt->loc_obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
         class_export_put(ctxt->loc_exp);
         ctxt->loc_exp = NULL;
+        up(&ctxt->loc_sem);
         OBD_FREE(ctxt, sizeof(*ctxt));
 
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cleanup);
 
-int llog_add(struct llog_obd_ctxt *ctxt,
+int llog_precleanup(struct llog_ctxt *ctxt)
+{
+        ENTRY;
+
+        if (!ctxt)
+                RETURN(0);
+
+        if (ctxt->loc_llcd)
+                llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);
+
+        RETURN(0);
+}
+EXPORT_SYMBOL(llog_precleanup);
+
+int llog_add(struct llog_ctxt *ctxt,
                  struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                  struct llog_cookie *logcookies, int numcookies)
 {
@@ -83,14 +99,16 @@ int llog_add(struct llog_obd_ctxt *ctxt,
         ENTRY;
 
         LASSERT(ctxt);
+        down(&ctxt->loc_sem);
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
 
         rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
+        up(&ctxt->loc_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_add);
 
-int llog_cancel(struct llog_obd_ctxt *ctxt, struct lov_stripe_md *lsm,
+int llog_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
                 int count, struct llog_cookie *cookies, int flags)
 {
         int rc;
@@ -109,7 +127,7 @@ EXPORT_SYMBOL(llog_cancel);
 int llog_obd_origin_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                           int count, struct llog_logid *logid)
 {
-        struct llog_obd_ctxt *ctxt;
+        struct llog_ctxt *ctxt;
         struct llog_handle *handle;
         struct obd_run_ctxt saved;
         int rc;
@@ -120,8 +138,9 @@ int llog_obd_origin_setup(struct obd_device *obd, int index, struct obd_device *
 
         LASSERT(count == 1);
         
-        LASSERT(obd->obd_llog_ctxt[index]);
-        ctxt = obd->obd_llog_ctxt[index];
+        ctxt = llog_get_context(obd, index);
+        LASSERT(ctxt);
+        log_gen_init(ctxt);
 
         if (logid->lgl_oid)
                 rc = llog_create(ctxt, &handle, logid, NULL);
@@ -146,7 +165,7 @@ int llog_obd_origin_setup(struct obd_device *obd, int index, struct obd_device *
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
 
-int llog_obd_origin_cleanup(struct llog_obd_ctxt *ctxt)
+int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
 {
         if (!ctxt)
                 return 0;
@@ -160,7 +179,7 @@ EXPORT_SYMBOL(llog_obd_origin_cleanup);
 
 
 /* add for obdfilter/sz and mds/unlink */
-int llog_obd_origin_add(struct llog_obd_ctxt *ctxt,
+int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies)
 {
