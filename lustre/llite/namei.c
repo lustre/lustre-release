@@ -323,6 +323,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                         lic.lic_lmm = NULL;
 
         } else {
+                invalidate_inode_pages(dir);
                 request = it->it_data;
                 body = lustre_msg_buf(request->rq_repmsg, 1);
                 lic.lic_lmm = NULL;
@@ -616,6 +617,7 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
 
         if (dentry->d_it && dentry->d_it->it_disposition) {
                 err = dentry->d_it->it_status;
+                invalidate_inode_pages(dir);
                 GOTO(out, err);
         }
 
@@ -652,7 +654,6 @@ static int ll_rmdir(struct inode *dir, struct dentry *dentry)
         if (!dentry->d_it || dentry->d_it->it_disposition == 0) {
                 if (!ext2_empty_dir(inode))
                         LBUG();
-
                 err = ll_common_unlink(dir, dentry, S_IFDIR);
         } else
                 err = dentry->d_it->it_status;
@@ -680,6 +681,8 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
 			new_inode->i_ctime = CURRENT_TIME;
 			new_inode->i_nlink--;
 		}
+                invalidate_inode_pages(old_dir);
+                invalidate_inode_pages(new_dir);
                 GOTO(out, err = new_dentry->d_it->it_status);
         }
 

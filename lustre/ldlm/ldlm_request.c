@@ -60,7 +60,7 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                 LBUG();
         }
 
-        lock = ldlm_lock_create(ns, parent_lockh, res_id, type, mode, NULL, 0);
+        lock = ldlm_lock_create(ns, parent_lockh, res_id, type, mode, data, data_len);
         if (!lock)
                 GOTO(out_nolock, err = -ENOMEM);
         LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");

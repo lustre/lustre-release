@@ -208,6 +208,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
                 }
         }
 
+        /* XXX notice that this lock has no callback data: of course the 
+           export would be exactly what we may want to use here... */
         lock = ldlm_lock_create(obddev->obd_namespace,
                                 &dlm_req->lock_handle2,
                                 dlm_req->lock_desc.l_resource.lr_name,
