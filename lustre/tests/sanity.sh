@@ -947,12 +947,15 @@ test_29() {
 	LOCKCOUNTCURRENT=`cat $MDCDIR/lock_count`
 	LOCKUNUSEDCOUNTCURRENT=`cat $MDCDIR/lock_unused_count`
 	if [ $LOCKCOUNTCURRENT -gt $LOCKCOUNTORIG ]; then
-		echo "CURRENT: $LOCKCOUNTCURRENT > $LOCKCOUNTORIG"
-		error
+		echo > /proc/fs/lustre/ldlm/dump_namespaces
+		error "CURRENT: $LOCKCOUNTCURRENT > $LOCKCOUNTORIG"
+		$LCTL dk | sort -k4 -t: > $TMP/test_29.dk
+		log "dumped log to $TMP/test_29.dk (bug 5793)"
 	fi
 	if [ $LOCKUNUSEDCOUNTCURRENT -gt $LOCKUNUSEDCOUNTORIG ]; then
-		echo "UNUSED: $LOCKUNUSEDCOUNTCURRENT > $LOCKUNUSEDCOUNTORIG"
-		error
+		error "UNUSED: $LOCKUNUSEDCOUNTCURRENT > $LOCKUNUSEDCOUNTORIG"
+		$LCTL dk | sort -k4 -t: > $TMP/test_29.dk
+		log "dumped log to $TMP/test_29.dk (bug 5793)"
 	fi
 }
 run_test 29 "IT_GETATTR regression  ============================"
