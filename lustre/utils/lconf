@@ -1025,6 +1025,8 @@ def setupModulePath(cmd):
 
 def setDebugPath():
     debug("debug path: ", config.debug_path())
+    if config.noexec():
+        return
     fp = open('/proc/sys/portals/debug_path', 'w')
     fp.write(config.debug_path())
     fp.close()
