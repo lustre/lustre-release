@@ -676,7 +676,7 @@ jt_ptl_print_peers (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -832,7 +832,7 @@ jt_ptl_print_connections (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -1023,7 +1023,7 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (NULL, SOCKNAL, OPENIBNAL, IIBNAL, 0))
+        if (!g_nal_is_compatible (NULL, SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
                 return 0;
 
         if (argc >= 2 &&

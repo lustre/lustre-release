@@ -545,7 +545,7 @@ if test x$enable_modules != xno ; then
 	                RAP_RETURN          rc;
 			RAP_PVOID           dev_handle;
 
-	                rc = RapkGetDeviceByIndex(0, NULL, NULL, &dev_handle);
+	                rc = RapkGetDeviceByIndex(0, NULL, &dev_handle);
 
 			return rc == RAP_SUCCESS ? 0 : 1;
 		],[
