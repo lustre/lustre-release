@@ -236,7 +236,7 @@ extern lgmnal_data_t	*global_nal_data;
 #define LGMNAL_GM_LOCK(a)			do { \
 							while (!spin_trylock(&a->gm_lock)) { \
 								CDEBUG(D_INFO, "waiting %s:%s:%d holder %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__, nal_data->_function, nal_data->_file, nal_data->_line); \
-								lgmnal_yield(128); \
+								lgmnal_yield(1); \
 							} \
 								CDEBUG(D_INFO, "GM Locked %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
 								sprintf(nal_data->_function, "%s", __FUNCTION__); \
