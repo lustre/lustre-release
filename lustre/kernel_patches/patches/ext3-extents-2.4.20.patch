@@ -1,8 +1,8 @@
 Index: linux-2.4.24/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/fs/ext3/extents.c	2004-01-29 16:18:31.000000000 +0300
-@@ -0,0 +1,2302 @@
++++ linux-2.4.24/fs/ext3/extents.c	2004-01-30 19:26:55.000000000 +0300
+@@ -0,0 +1,2321 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -1375,7 +1375,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	ext_debug(tree, "index is empty, remove it, free block %d\n",
 +			path->p_idx->e_leaf);
 +	bh = sb_get_hash_table(tree->inode->i_sb, path->p_idx->e_leaf);
-+	ext3_forget(handle, 0, tree->inode, bh, path->p_idx->e_leaf);
++	ext3_forget(handle, 1, tree->inode, bh, path->p_idx->e_leaf);
 +	ext3_free_blocks(handle, tree->inode, path->p_idx->e_leaf, 1);
 +	return err;
 +}
@@ -1831,6 +1831,8 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +{
 +	int needed = ext3_remove_blocks_credits(tree, ex, from, to);
 +	handle_t *handle = ext3_journal_start(tree->inode, needed);
++	struct buffer_head *bh;
++	int i;
 +
 +	if (IS_ERR(handle))
 +		return PTR_ERR(handle);
@@ -1841,6 +1843,10 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		start = ex->e_start + ex->e_num - num;
 +		ext_debug(tree, "free last %lu blocks starting %lu\n",
 +				num, start);
++		for (i = 0; i < num; i++) {
++			bh = sb_get_hash_table(tree->inode->i_sb, start + i);
++			ext3_forget(handle, 0, tree->inode, bh, start + i);
++		}
 +		ext3_free_blocks(handle, tree->inode, start, num);
 +	} else if (from == ex->e_block && to <= ex->e_block + ex->e_num - 1) {
 +		printk("strange request: removal %lu-%lu from %u:%u\n",
@@ -1934,11 +1940,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			struct ext3_extent *newex, int exist)
 +{
 +	struct inode *inode = tree->inode;
++	struct buffer_head *bh;
 +	int count, err, goal;
-+	loff_t new_i_size;
-+	handle_t *handle;
 +	unsigned long pblock;
 +	unsigned long tgen;
++	loff_t new_i_size;
++	handle_t *handle;
++	int i;
 +
 +	if (exist)
 +		return EXT_CONTINUE;
@@ -1975,6 +1983,17 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	if (err)
 +		goto out;
 +
++	/* block have been allocated for data, so time to drop dirty
++	 * in correspondend buffer_heads to prevent corruptions */
++	for (i = 0; i < newex->e_num; i++) {
++		bh = sb_get_hash_table(inode->i_sb, newex->e_start + i);
++		if (bh) {
++			mark_buffer_clean(bh);
++			wait_on_buffer(bh);
++			clear_bit(BH_Req, &bh->b_state);
++			__brelse(bh);
++		}
++	}
 +
 +	/* correct on-disk inode size */
 +	if (newex->e_num > 0) {
@@ -2473,7 +2492,7 @@ Index: linux-2.4.24/fs/ext3/ioctl.c
 Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-01-14 02:58:45.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_fs.h	2004-01-26 23:17:19.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-01-30 00:09:37.000000000 +0300
 @@ -184,6 +184,7 @@
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
@@ -2527,7 +2546,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
 Index: linux-2.4.24/include/linux/ext3_extents.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_extents.h	2004-01-29 01:13:10.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_extents.h	2004-01-30 18:03:53.000000000 +0300
 @@ -0,0 +1,216 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
