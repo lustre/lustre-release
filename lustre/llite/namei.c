@@ -273,11 +273,9 @@ int ll_intent_lock(struct inode *parent, struct dentry *dentry,
                         if (it->it_status && it->it_status != -EEXIST)
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
                 } else if (it->it_op & (IT_RENAME2 | IT_LINK2)) {
-                        struct mds_body *body =
-                                lustre_msg_buf(request->rq_repmsg, offset);
                         it->it_data = NULL;
                         /* This means the target lookup is negative */
-                        if (body->valid == 0)
+                        if (mds_body->valid == 0)
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
                         GOTO(out, flag = LL_LOOKUP_POSITIVE);
                 }
