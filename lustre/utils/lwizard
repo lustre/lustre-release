@@ -117,9 +117,9 @@ in_list()
 
     for node in $2 ; do
 	[ "$1" = "$node" ] && return 0
-	done
-	return 1
-    }
+    done
+    return 1
+}
 
 # read device size from user and check devive size and convert device
 # size to *K
@@ -162,12 +162,14 @@ add_device()
     local hostnames
     local device
     local device_size
+    local hostname
+    local interfaces
 
     echo "Creating $1 \"$1$2\"..."
     if [ "$2" -gt "1" ]; then 
-	echo -n "Please enter the hostname(s) for $1$2, or just hit enter to finish: "
+	echo -n "Please enter the HOSTNAME for $1$2, or just hit enter to finish: "
     else
-	echo -n "Please enter the hostname(s) for $1$2: "
+	echo -n "Please enter the HOSTNAME for $1$2: "
     fi
     read hostnames
 
@@ -175,9 +177,23 @@ add_device()
 	return 1
     fi
 
+    # Why do we need multiple hosts for a device? If we just want to support
+    # failover, we already have.
     for hostname in $hostnames ; do
-	device=
-	while [ -z "$device" ] ; do
+	break
+    done
+
+    # Multi-net
+    cat <<EOF
+If $hostname has more than one network INTERFACE, enter here, separating them
+by blank space. See lwizard man page for help.
+EOF
+    echo -n "(hit enter if only one): "
+    read interfaces
+    interfaces=`echo $interfaces | sed -e "s/ /,/g"`
+
+    device=
+    while [ -z "$device" ] ; do
 	    echo -n "Please enter the device or loop file name for $1$2 on ${hostname}: "
 	    read device
 	    echo -n "Please enter the device SIZE or 0 to use entire device (in KB): "
@@ -187,7 +203,7 @@ add_device()
 	    echo -n "Do you want to configure FAILOVER $1$2? "
 	    read answer
 	    if [ "${answer:0:1}" = "y" -o "${answer:0:1}" = "Y" ] ; then
-		echo -n "Please enter the HOSTNAME(s) for failover $1$2: "
+		echo -n "Please enter the HOSTNAME for failover $1$2: "
 		read failoverhostname
 		echo -n "Please enter the device for failover $1$2 on ${failoverhostname}: "
 		read failoverdevice
@@ -195,10 +211,9 @@ add_device()
 		failoverhostname=
 		failovedevice=
 	    fi
-	done
-	newdev="$hostname:$device:$2:$1$2:$CURRENT_MDS:$CURRENT_LOV:$device_size:$failoverhostname:$failoverdevice"
-	DEVICE_LIST="$DEVICE_LIST $newdev"
     done
+    newdev="$hostname:$device:$2:$1$2:$CURRENT_MDS:$CURRENT_LOV:$device_size:$failoverhostname:$failoverdevice:$interfaces"
+    DEVICE_LIST="$DEVICE_LIST $newdev"
 
     return 0 
 }
@@ -250,6 +265,33 @@ add_client()
     newdev="*:$mtpt:client:client:$CURRENT_MDS:$CURRENT_LOV"
     DEVICE_LIST="$DEVICE_LIST $newdev"
     (( cur_cli_id++ ))
+
+    # Multi-net
+    while true ; do
+	echo -n "Do you want to configure another client with multiple network interfaces? "
+	read answer
+	if [ "${answer:0:1}" = "y" -o "${answer:0:1}" = "Y" ] ; then
+	    echo -n "Please enter the HOSTNAME: "
+	    read hostname
+	    if [ -z "$hostname" ] ; then
+		echo "No extra client is configured"
+		return 0
+	    fi
+
+	    echo -n "Please enter network interface address (separated by space): "
+	    read interfaces
+	    interfaces=`echo $interfaces | sed -e "s/ /,/g"`
+	    if [ -z "$interfaces" ] ; then
+		echo "No extra client is configured"
+		return 0
+	    fi
+
+	    newdev="$hostname:$mtpt:client:client:$CURRENT_MDS:$CURRENT_LOV::::$interfaces"
+	    DEVICE_LIST="$DEVICE_LIST $newdev"
+	else
+	    break
+	fi
+    done
     return 0
 }
 
@@ -257,14 +299,24 @@ add_client()
 add_node()
 {
     local node=$1
+    local interfaces=$2
     local nettype=$DEFAULT_NETTYPE
 
     in_list "$node" "$NODE_LIST" && return 0 
     NODE_LIST="$NODE_LIST $node" 
 
     run_lmc --add node --node "$node"
+
+    interfaces=`echo $interfaces | sed -e "s/,/ /g"`
+    extraopt=""
+
+    if [ "$interfaces" ] ; then
+	for i in $interfaces ; do
+		extraopt=" $extraopt --hostaddr $i"
+	done
+    fi
     run_lmc --add net --node "$node" --nid "$node"  \
-	--nettype "$nettype"
+	--nettype "$nettype" $extraopt
 
     return 0 
 } 
@@ -297,6 +349,7 @@ get_name_in_list()
     DEVICE_SIZE=$(echo $1 | awk -F: '{ print $7 }')
     FAILOVER_HOST=$(echo $1 | awk -F: '{ print $8 }')
     FAILOVER_DEVICE=$(echo $1 | awk -F: '{ print $9 }')
+    INTERFACES=$(echo $1 | awk -F: '{ print $10 }')
 }
 
 # save command to file and do the command 
@@ -316,11 +369,12 @@ create_config()
 
 	case $DEVICE_NAME in
 	    mds*)
-		add_node "$HOST_NAME"
+		add_node "$HOST_NAME" "$INTERFACES"
 		extraopt=""
 		if [ "$FAILOVER_HOST" != "" ] ; then
 		    extraopt=" --failover --group $HOST_NAME"
 		fi
+
 		run_lmc --add mds \
 		    --node "$HOST_NAME" \
 		    --mds "$DEVICE_NAME" \
@@ -348,7 +402,7 @@ create_config()
 		    --stripe_pattern "$STRIPE_PATTERN"
 		;;
 	    ost*)
-		add_node "$HOST_NAME"
+		add_node "$HOST_NAME" "$INTERFACES"
 		extraopt=""
 		if [ "$FAILOVER_HOST" != "" ] ; then
                     extraopt=" --failover --group $HOST_NAME"
@@ -374,13 +428,24 @@ create_config()
                  fi
 		;;
 	    client*)
-		add_client_node "$DEVICE_NAME"
-		run_lmc --add mtpt \
-		    --node "$DEVICE_NAME" \
-		    --mds "$DEVICE_MDS" \
-		    --lov "$DEVICE_LOV" \
-		    --path "$DEVICE" \
-		    --clientoptions "async"
+		if [ "$INTERFACES" ] ; then
+		    add_node "$HOST_NAME" "$INTERFACES"
+		    run_lmc --add mtpt \
+			--node "$HOST_NAME" \
+			--mds "$DEVICE_MDS" \
+			--lov "$DEVICE_LOV" \
+			--path "$DEVICE" \
+		#	--clientoptions "async"
+
+		else
+		    add_client_node "$DEVICE_NAME"
+		    run_lmc --add mtpt \
+			--node "$DEVICE_NAME" \
+			--mds "$DEVICE_MDS" \
+			--lov "$DEVICE_LOV" \
+			--path "$DEVICE" \
+		#	--clientoptions "async"
+		fi
 		;;
 	esac
     done
