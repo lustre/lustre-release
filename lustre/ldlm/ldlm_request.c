@@ -34,12 +34,12 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         ENTRY;
 
         *flags = 0;
-        rc = ldlm_local_lock_create(ns, parent_lock_handle, res_id, type, mode,
-                                    data, data_len, lockh);
-        if (rc != ELDLM_OK)
-                GOTO(out, rc);
+        lock = ldlm_local_lock_create(ns, parent_lock_handle, res_id, type,
+                                      mode, data, data_len);
+        if (lock == NULL)
+                GOTO(out, rc = -ENOMEM);
 
-        lock = lustre_handle2object(lockh);
+        ldlm_lock2handle(lock, &lockh);
         LDLM_DEBUG(lock, "client-side enqueue START");
 
         if (req == NULL) {

@@ -594,18 +594,21 @@ int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
         ldlm_resource_put(res);
         l_unlock(&ns->ns_lock);
 
+        wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
+                                 lock->l_granted_mode);
+
         return rc;
 }
 
 /* Must be called without the resource lock held.  Returns a referenced,
  * unlocked ldlm_lock. */
-ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
-                                    struct lustre_handle *parent_lock_handle,
-                                    __u64 *res_id, __u32 type,
-                                     ldlm_mode_t mode,
-                                    void *data,
-                                    __u32 data_len,
-                                    struct lustre_handle *lockh)
+struct ldlm_lock *
+ldlm_local_lock_create(struct ldlm_namespace *ns,
+                       struct lustre_handle *parent_lock_handle,
+                       __u64 *res_id, __u32 type,
+                       ldlm_mode_t mode,
+                       void *data,
+                       __u32 data_len)
 {
         struct ldlm_resource *res, *parent_res = NULL;
         struct ldlm_lock *lock, *parent_lock;
@@ -616,12 +619,12 @@ ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
 
         res = ldlm_resource_get(ns, parent_res, res_id, type, 1);
         if (res == NULL)
-                RETURN(-ENOMEM);
+                RETURN(NULL);
 
         lock = ldlm_lock_new(parent_lock, res);
         if (lock == NULL) {
                 ldlm_resource_put(res);
-                RETURN(-ENOMEM);
+                RETURN(NULL);
         }
 
         lock->l_req_mode = mode;
@@ -629,8 +632,7 @@ ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
         lock->l_data_len = data_len;
         ldlm_lock_addref(lock, mode);
 
-        ldlm_object2handle(lock, lockh);
-        return ELDLM_OK;
+        return lock;
 }
 
 /* Must be called with lock->l_lock and lock->l_resource->lr_lock not held */
