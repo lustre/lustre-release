@@ -1,3 +1,0 @@
-fs/inode.c
-include/linux/fs.h
-kernel/ksyms.c
