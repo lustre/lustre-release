@@ -80,14 +80,10 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
-        spin_lock(&lock->l_lock);
         if (rc != ELDLM_OK) {
                 LDLM_DEBUG(lock, "client-side enqueue END (%s)",
                            rc == ELDLM_LOCK_ABORTED ? "ABORTED" : "FAILED");
-                spin_lock(&lock->l_resource->lr_lock);
-                if (!ldlm_resource_put(lock->l_resource))
-                        spin_unlock(&lock->l_resource->lr_lock);
-                ldlm_lock_free(lock);
+                ldlm_lock_put(lock);
                 GOTO(out, rc);
         }
 
@@ -112,13 +108,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 CDEBUG(D_INFO, "remote intent success, locking %ld instead of"
                        "%ld\n", (long)reply->lock_resource_name[0],
                        (long)lock->l_resource->lr_name[0]);
-                spin_lock(&lock->l_resource->lr_lock);
-                if (!ldlm_resource_put(lock->l_resource))
-                        spin_unlock(&lock->l_resource->lr_lock);
 
-                lock->l_resource =
-                        ldlm_resource_get(ns, NULL, reply->lock_resource_name,
-                                          type, 1);
+                ldlm_lock_change_resource(lock, reply->lock_resource_name);
                 if (lock->l_resource == NULL) {
                         LBUG();
                         RETURN(-ENOMEM);
@@ -129,7 +120,6 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         if (!req_passed_in)
                 ptlrpc_free_req(req);
 
-        spin_unlock(&lock->l_lock);
         rc = ldlm_local_lock_enqueue(lockh, cookie, cookielen, flags, callback,
                                      callback);
 
@@ -145,6 +135,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                                          lock->l_granted_mode);
                 CDEBUG(D_NET, "waking up, the lock must be granted.\n");
         }
+        ldlm_lock_put(lock);
         EXIT;
  out:
         return rc;
