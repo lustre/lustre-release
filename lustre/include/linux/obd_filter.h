@@ -79,9 +79,10 @@ struct filter_export_data {
 
 /* file data for open files on OST */
 struct filter_file_data {
-        struct list_head  ffd_export_list;  /* export open list - fed_lock */
-        struct file      *ffd_file;         /* file handle */
-        __u64             ffd_servercookie; /* cookie for lustre handle */
+        struct portals_handle ffd_handle;
+        atomic_t              ffd_refcount;
+        struct list_head      ffd_export_list; /* export open list - fed_lock */
+        struct file          *ffd_file;         /* file handle */
 };
 
 struct filter_dentry_data {
