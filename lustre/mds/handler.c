@@ -1533,7 +1533,9 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
 
-        if (body->oa.o_flags & OBD_FL_RECREATE_OBJS) {
+        /* in REPLAY case inum should be given (client or other MDS fills it) */
+        if (body->oa.o_id && ((body->oa.o_flags & OBD_FL_RECREATE_OBJS) ||
+            (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY))) {
                 /* this is re-create request from MDS holding directory name.
                  * we have to lookup given ino/generation first. if it exists
                  * (good case) then there is nothing to do. if it does not
@@ -1555,11 +1557,6 @@ static int mdt_obj_create(struct ptlrpc_request *req)
                         cr_inum = new->d_inode->i_ino;
                         GOTO(cleanup, rc = 0);
                 }
-                CWARN("hmm. for some reason dir %lu/%lu (or reply) got lost\n",
-                      (unsigned long) fid.id, (unsigned long) fid.generation);
-                LASSERT(new->d_inode == NULL ||
-                        new->d_inode->i_generation != fid.generation);
-                l_dput(new); 
         }
         
         down(&parent_inode->i_sem);
@@ -1588,12 +1585,15 @@ repeat:
         dp.p_inum = 0;
         dp.p_ptr = req;
 
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+        if (body->oa.o_id != 0) {
+                LASSERT((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) ||
+                                (body->oa.o_flags & OBD_FL_RECREATE_OBJS));
                 DEBUG_REQ(D_HA, req, "replay create obj %lu/%lu",
                           (unsigned long) body->oa.o_id,
                           (unsigned long) body->oa.o_generation);
                 dp.p_inum = body->oa.o_id;
         }
+
         rc = vfs_mkdir(parent_inode, new, body->oa.o_mode);
         if (rc == 0) {
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
