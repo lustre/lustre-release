@@ -411,7 +411,6 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         struct mds_body *mds_body;
         struct lustre_handle old_lock;
         struct ldlm_lock *lock;
-
         ENTRY;
         LASSERT(it);
 
@@ -420,13 +419,12 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
 
         if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
                 /* We could just return 1 immediately, but since we should only
-                 * be called in revalidate2 if we already have a lock, let's
+                 * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
                 struct ldlm_res_id res_id ={.name = {cfid->id, 
                                                      cfid->generation}};
                 struct lustre_handle lockh;
-                int mode;
-                int flags = LDLM_FL_BLOCK_GRANTED;
+                int mode, flags = LDLM_FL_BLOCK_GRANTED;
 
                 mode = LCK_PR;
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
@@ -520,8 +518,9 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 /* XXX this belongs in ll_create_iit */
         } else if (it->it_op == IT_OPEN) {
                 LASSERT(!it_disposition(it, DISP_OPEN_CREATE));
-        } else 
+        } else {
                 LASSERT(it->it_op & (IT_GETATTR | IT_LOOKUP));
+        }
 
         /* If we already have a matching lock, then cancel the new
          * one.  We have to set the data here instead of in
