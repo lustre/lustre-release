@@ -531,49 +531,19 @@ int jt_dbg_debug_daemon(int argc, char **argv)
         
         rc = -1;
         if (strcasecmp(argv[1], "start") == 0) {
-                if (argc < 3 || argc > 4 ||
-                    (argc == 4 && strlen(argv[3]) > 5)) {
-                        fprintf(stderr, debug_daemon_usage, argv[0]);
-                        goto out;
+                if (argc != 3) {
+                        fprintf(stderr, debug_daemon_usage);
+                        return 1;
                 }
 
-                if (argc == 4) {
-                        char       buf[12];
-                        const long min_size = 10;
-                        const long max_size = 20480;
-                        long       size;
-                        char      *end;
-
-                        size = strtoul(argv[3], &end, 0);
-                        if (size < min_size || 
-                            size > max_size ||
-                            *end != 0) {
-                                fprintf(stderr, "size %s invalid, must be in "
-                                        "the range %ld-%ld MB\n", argv[3],
-                                        min_size, max_size);
-                                goto out;
-                        }
-
-                        snprintf(buf, sizeof(buf), "size=%ld", size);
-                        rc = dbg_write_cmd(fd, buf);
-                        if (rc != 0) {
-                                fprintf(stderr, "set %s failed: %s\n",
-                                        buf, strerror(errno));
-                                goto out;
-                        }
+                rc = write(fd, argv[2], strlen(argv[2]));
+                if (rc != strlen(argv[2])) {
+                        fprintf(stderr, "write(%s) failed: %s\n", argv[2],
+                                strerror(errno));
+                        close(fd);
+                        return 1;
                 }
-
-                rc = dbg_write_cmd(fd, "start");
-                if (rc != 0) {
-                        fprintf(stderr, "start debug_daemon on %s failed: %s\n",
-                                argv[2], strerror(errno));
-                        goto out;
-                }
-
-                rc = 0;
-                goto out;
         }
-        
         if (strcasecmp(argv[1], "stop") == 0) {
                 rc = dbg_write_cmd(fd, "stop");
                 if (rc != 0) {
