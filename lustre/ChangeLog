@@ -11,6 +11,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- Infiniband NAL
 	- add extents/mballoc support (5025)
 	- direct I/O reads in the obdfilter (4048)
+	- kernel patches from LNXI for 2.6 (bluesmoke, perfctr, mtd, kexec)
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.9
