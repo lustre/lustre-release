@@ -16,5 +16,6 @@ obdio
 obdbarrier
 lload
 wirecheck
+lfs
 .*.cmd
 .*.d

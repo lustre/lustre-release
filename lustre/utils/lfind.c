@@ -323,7 +323,7 @@ void processFile(DIR *dir, char *dname, char *fname)
 			oid = lmm->lmm_object_id;
 			if (header)
 				printf("\tobdidx\t\t objid\t\tobjid\n");
-			printf("\t%6u\t%14llu\t%13llx\n", 0, oid, oid);
+			printf("\t%6u\t%14llu\t%#13llx\n", 0, oid, oid);
 		} else
 		for (i = 0; i < lmm->lmm_ost_count; i++, ost++) {
 			ost %= lmm->lmm_ost_count;
@@ -332,7 +332,7 @@ void processFile(DIR *dir, char *dname, char *fname)
 					printf("\tobdidx\t\t objid\t\tobjid\n");
 					header = 0;
 				}
-				printf("\t%6u\t%14llu\t%13llx%s\n", ost,
+				printf("\t%6u\t%14llu\t%#13llx%s\n", ost,
 				       oid, oid, obdindex == ost ? " *" : "");
 			}
 		}

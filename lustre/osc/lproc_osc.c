@@ -143,6 +143,19 @@ int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         return count;
 }
 
+int osc_rd_cur_dirty_bytes(char *page, char **start, off_t off, int count,
+                           int *eof, void *data)
+{
+        struct obd_device *dev = data;
+        struct client_obd *cli = &dev->u.cli;
+        int rc;
+
+        spin_lock(&cli->cl_loi_list_lock);
+        rc = snprintf(page, count, LPU64"\n", cli->cl_dirty);
+        spin_unlock(&cli->cl_loi_list_lock);
+        return rc;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
@@ -158,6 +171,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "max_rpcs_in_flight", osc_rd_max_rpcs_in_flight, 
                                 osc_wr_max_rpcs_in_flight, 0 },
         { "max_dirty_mb", osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
+        { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         { 0 }
 };
 
