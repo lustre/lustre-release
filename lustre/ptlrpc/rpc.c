@@ -105,7 +105,6 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
 
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 {
-        ptl_handle_md_t reply_md_h;
         ptl_handle_me_t me_h;
         ptl_process_id_t local_id;
         int rc;
@@ -123,7 +122,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         local_id.rid = PTL_ID_ANY;
 
         rc = PtlMEAttach(peer->peer_ni, request->rq_reply_portal, local_id,
-                         request->rq_xid, 0, PTL_RETAIN, &me_h);
+                         request->rq_xid, 0, PTL_UNLINK, &me_h);
         if (rc != PTL_OK) {
                 EXIT;
                 /* FIXME: tear down EQ, free reqbuf */
@@ -132,12 +131,13 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 
         request->rq_reply_md.start = request->rq_repbuf;
         request->rq_reply_md.length = request->rq_replen;
-        request->rq_reply_md.threshold = PTL_MD_THRESH_INF;
+        request->rq_reply_md.threshold = 1;
         request->rq_reply_md.options = PTL_MD_OP_PUT;
         request->rq_reply_md.user_ptr = request;
         request->rq_reply_md.eventq = req_eq;
 
-        rc = PtlMDAttach(me_h, request->rq_reply_md, PTL_RETAIN, &reply_md_h);
+        rc = PtlMDAttach(me_h, request->rq_reply_md, PTL_UNLINK,
+                         &request->rq_reply_md_h);
         if (rc != PTL_OK) {
                 EXIT;
                 return rc;

@@ -9,7 +9,7 @@ EOF
 rmmod mds
 rmmod osc
 rmmod ost
-rmmod obext2
+rmmod obdext2
 rmmod obdclass
 rmmod ptlrpc
 /usr/src/portals/linux/utils/ptlctl <<EOF

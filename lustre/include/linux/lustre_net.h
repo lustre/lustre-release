@@ -74,6 +74,7 @@ struct ptlrpc_request {
 	wait_queue_head_t rq_wait_for_rep;
 
         ptl_md_t rq_reply_md;
+        ptl_handle_md_t rq_reply_md_h;
         ptl_md_t rq_req_md;
         __u32 rq_reply_portal;
         __u32 rq_req_portal;

@@ -95,7 +95,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	if (!ino)
 		goto negative;
 
-        sbi = (struct ll_sb_info *)(&dentry->d_inode->i_sb->u.generic_sbp);
+        sbi = (struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
 
 	err = mdc_getattr(sbi->ll_peer_ptr, ino, type,
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &rep, &hdr);
