@@ -532,7 +532,7 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
                 /* The server returned a blocked lock, but it was granted before
                  * we got a chance to actually enqueue it.  We don't need to do
                  * anything else. */
-                GOTO(out, ELDLM_OK);
+                GOTO(out_noput, ELDLM_OK);
         }
 
         /* If this is a local resource, put it on the appropriate list. */
@@ -569,6 +569,11 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
         ldlm_grant_lock(res, lock);
         EXIT;
  out:
+        /* We're called with a lock that has a referenced resource and is not on
+         * any resource list.  When we added it to a list, we incurred an extra
+         * reference. */
+        ldlm_resource_put(lock->l_resource);
+ out_noput:
         /* Don't set 'completion_ast' until here so that if the lock is granted
          * immediately we don't do an unnecessary completion call. */
         lock->l_completion_ast = completion;
@@ -654,8 +659,7 @@ struct ldlm_resource *ldlm_local_lock_cancel(struct ldlm_lock *lock)
                 CDEBUG(D_INFO, "lock still has references (%d readers, %d "
                        "writers)\n", lock->l_readers, lock->l_writers);
 
-        ldlm_resource_del_lock(lock);
-        if (ldlm_resource_put(res))
+        if (ldlm_resource_del_lock(lock))
                 res = NULL; /* res was freed, nothing else to do. */
         else
                 spin_unlock(&res->lr_lock);

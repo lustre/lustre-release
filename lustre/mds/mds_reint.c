@@ -513,9 +513,10 @@ out_unlink_de:
         if (!rc) { 
                 lock = lustre_handle2object(&lockh);
                 ldlm_lock_decref(lock, LCK_EX);
-                if (ldlm_cli_cancel(lock->l_client, lock))
-                        CERROR("failed to get child inode lock ino %Ld\n", 
-                               res_id[0]);
+                rc = ldlm_cli_cancel(lock->l_client, lock);
+                if (rc < 0)
+                        CERROR("failed to cancel child inode lock ino "
+                               "%Ld: %d\n", res_id[0], rc);
         }
 
 out_unlink:

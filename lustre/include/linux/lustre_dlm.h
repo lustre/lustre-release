@@ -241,7 +241,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
 int ldlm_resource_put(struct ldlm_resource *res);
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
-void ldlm_resource_del_lock(struct ldlm_lock *lock);
+int ldlm_resource_del_lock(struct ldlm_lock *lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
 void ldlm_resource_dump(struct ldlm_resource *res);
 

@@ -317,12 +317,13 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 }
 
 /* Must be called with resource->lr_lock taken */
-void ldlm_resource_del_lock(struct ldlm_lock *lock)
+int ldlm_resource_del_lock(struct ldlm_lock *lock)
 {
         if (!list_empty(&lock->l_res_link)) {
                 list_del_init(&lock->l_res_link);
-                lock->l_resource->lr_refcount--;
+                return ldlm_resource_put(lock->l_resource);
         }
+        return 0;
 }
 
 int ldlm_get_resource_handle(struct ldlm_resource *res, struct lustre_handle *h)

@@ -41,8 +41,18 @@ static int common_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         if (!new) {
                 CDEBUG(D_INFO, "Got local completion AST for lock %p.\n", lock);
                 lock->l_req_mode = mode;
-                list_del_init(&lock->l_res_link); 
+
+                /* FIXME: the API is flawed if I have to do these refcount
+                 * acrobatics (along with the _put() below). */
+                lock->l_resource->lr_refcount++;
+
+                /* _del_lock is safe for half-created locks that are not yet on
+                 * a list. */
+                ldlm_resource_del_lock(lock);
                 ldlm_grant_lock(lock->l_resource, lock);
+
+                ldlm_resource_put(lock->l_resource);
+
                 wake_up(&lock->l_waitq);
                 spin_unlock(&lock->l_lock);
                 spin_unlock(&lock->l_resource->lr_lock);
@@ -237,8 +247,8 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
         common_callback(lock1, lock2, dlm_req->lock_desc.l_granted_mode, NULL,
                         0, NULL);
 
-        LDLM_DEBUG_NOLOCK("client %s callback handler END",
-                   lock2 == NULL ? "completion" : "blocked");
+        LDLM_DEBUG_NOLOCK("client %s callback handler END (lock: %p)",
+                   lock2 == NULL ? "completion" : "blocked", lock1);
 
         RETURN(0);
 }
