@@ -532,10 +532,6 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         struct mds_body *body;
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %s mode %o",
-                  rec->ur_fid1->id, rec->ur_fid1->generation,
-                  rec->ur_name, rec->ur_mode);
-
         mds_req_from_mcd(req, med->med_mcd);
 
         if (req->rq_status) {
@@ -547,7 +543,12 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         LASSERT(!IS_ERR(parent));
         child = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
         LASSERT(!IS_ERR(child));
-        LASSERT(child->d_inode != NULL);
+        if (child->d_inode == NULL) {
+                DEBUG_REQ(D_ERROR, req, "parent "LPU64"/%u name %s mode %o",
+                          rec->ur_fid1->id, rec->ur_fid1->generation,
+                          rec->ur_name, rec->ur_mode);
+                LASSERTF(child->d_inode != NULL, "BUG 3488");
+        }
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
         mds_pack_inode2fid(req2obd(req), &body->fid1, child->d_inode);
         mds_pack_inode2body(req2obd(req), body, child->d_inode);
