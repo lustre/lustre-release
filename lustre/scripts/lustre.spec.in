@@ -1,9 +1,9 @@
 # lustre.spec
-%define version 0.4.4
+%define version 0.4.5
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
-Release: 7
+Release: 1
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -20,10 +20,19 @@ servers and utilities.
 
 %package -n lustre-modules
 Summary: Kernel Lustre drivers for Linux %{kversion}
+Requires: portals-modules
 Group: Development/Kernel
 
 %description -n lustre-modules
 Lustre file System, server and network drivers for Linux %{kversion}.
+
+%package -n lustre-doc
+Summary: Documentation and sample configuration files
+Group: Documentation
+#BuildArch: noarch
+
+%description -n lustre-doc
+Documentation and sample configuration files for Lustre
 
 %package -n lustre-source
 Summary: Object-Based Disk storage driver source
@@ -33,7 +42,7 @@ Group: Development/Kernel
 Lustre Lite Source for further development
 
 %prep
-%setup -q -n lustre-%{version}
+%setup -qn lustre-%{version}
 
 %build
 rm -rf $RPM_BUILD_ROOT
@@ -44,15 +53,13 @@ make
 
 %install
 make install prefix=$RPM_BUILD_ROOT
-# Create the pristine source directory.
 
+# Create the pristine source directory.
 make distclean
 mkdir -p $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 
 %files
-%attr(-, root, root) %doc COPYING FDL
-%attr(-, root, root) %doc doc/master.pdf doc/lustre-HOWTO.txt
 %attr(-, root, root) /usr/sbin/obdctl
 %attr(-, root, root) /usr/sbin/llsetup.sh
 %attr(-, root, root) /usr/sbin/llrsetup.sh
@@ -60,6 +67,17 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 %attr(-, root, root) /lib/lustre/common.sh
 %attr(-, root, root) /etc/lustre/lustre.cfg
 %attr(-, root, root) /etc/init.d/lustre
+
+%files -n lustre-doc
+%attr(-, root, root) %doc COPYING FDL
+%attr(-, root, root) %doc doc/lustre.pdf doc/lustre-HOWTO.txt
+%attr(-, root, root) %doc tests/client-echo.cfg tests/client-mount.cfg
+%attr(-, root, root) %doc tests/client-mount2.cfg
+%attr(-, root, root) %doc tests/elan-client.cfg tests/elan-server.cfg
+%attr(-, root, root) %doc tests/ldlm.cfg tests/lustre.cfg
+%attr(-, root, root) %doc tests/mds.cfg tests/net-client.cfg
+%attr(-, root, root) %doc tests/net-local.cfg tests/net-server.cfg
+%attr(-, root, root) %doc tests/obdecho.cfg tests/obdfilter.cfg
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
