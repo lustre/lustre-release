@@ -93,8 +93,8 @@ int mdc_create(struct lustre_handle *conn,
                 bufcount = 3;
         }
 
-        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount, size,
-                              NULL);
+        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount,
+                              size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
