@@ -31,80 +31,44 @@
 #include <linux/lprocfs_status.h>
 #include <linux/obd_ptlbd.h>
 
-#if 0
-static int ptlbd_sv_callback(struct ptlrpc_request *req)
-{
-        int rc;
-        ENTRY;
-
-        rc = ptlbd_parse_request(req);
-
-        rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
-        if ( rc )
-                GOTO(out, rc);
-
-        printk("callback got a friggin opc %d\n", req->rq_reqmsg->opc);
-
-out:
-        RETURN(rc);
-}
-#endif
-
 static int ptlbd_sv_already_setup = 1;
 
 static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
-#if 0
-        struct obd_ioctl_data* data = buf;
-        struct obd_uuid server_uuid;
-#endif
         struct obd_uuid self_uuid = { "self" };
         struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
         int rc;
         ENTRY;
 
-#if 0
-        if (data->ioc_inllen1 < 1) {
-                CERROR("requires a PTLBD server UUID\n");
-                RETURN(rc = -EINVAL);
-        }
+        ptlbd->filp = filp_open("/tmp/ptlbd-backing-file-la-la-la", 
+                                        O_RDWR|O_CREAT, 0600);
+        if ( IS_ERR(ptlbd->filp) )
+                RETURN(PTR_ERR(ptlbd->filp));
 
-        if (data->ioc_inllen1 > 37) {
-                CERROR("PTLBD server UUID must be less than 38 characters\n");
-                RETURN(rc = -EINVAL);
-        }
-
-        memcpy(server_uuid, data->ioc_inlbuf1, MIN(data->ioc_inllen1,
-                                                   sizeof(server_uuid)));
-
-#endif
         ptlbd->ptlbd_service =
                 ptlrpc_init_svc(PTLBD_NEVENTS, PTLBD_NBUFS, PTLBD_BUFSIZE,
                                 PTLBD_MAXREQSIZE, PTLBD_REQUEST_PORTAL,
                                 PTLBD_REPLY_PORTAL, &self_uuid,
                                 ptlbd_parse_req, "ptlbd_sv");
 
-        if (!ptlbd->ptlbd_service) {
-                CERROR("failed to start service\n");
-                RETURN(rc = -ENOMEM);
-        }
+        if (ptlbd->ptlbd_service == NULL) 
+                GOTO(out_filp, rc = -ENOMEM);
 
         rc = ptlrpc_start_thread(obddev, ptlbd->ptlbd_service, "ptldb");
-        if (rc) {
-                CERROR("cannot start PTLBD thread: rc %d\n", rc);
-                LBUG();
+        if (rc != 0) 
                 GOTO(out_thread, rc);
-        }
 
         ptlbd_sv_already_setup = 1;
 
         RETURN(0);
 
- out_thread:
+out_thread:
         ptlrpc_stop_all_threads(ptlbd->ptlbd_service);
         ptlrpc_unregister_service(ptlbd->ptlbd_service);
+out_filp:
+        filp_close(ptlbd->filp, NULL);
 
-        return rc;
+        RETURN(rc);
 }
 
 static int ptlbd_sv_cleanup(struct obd_device *obddev)
@@ -116,29 +80,17 @@ static int ptlbd_sv_cleanup(struct obd_device *obddev)
 
         ptlrpc_stop_all_threads(ptlbd->ptlbd_service);
         ptlrpc_unregister_service(ptlbd->ptlbd_service);
+        if ( ! IS_ERR(ptlbd->filp) )
+                filp_close(ptlbd->filp, NULL);
 
         ptlbd_sv_already_setup = 0;
         RETURN(0);
 }
 
-#if 0
-static int ptlbd_sv_connect(struct lustre_handle *conn, struct obd_device *src,
-                        struct obd_uuid cluuid, struct recovd_obd *recovd,
-                        ptlrpc_recovery_cb_t recover)
-{
-        return class_connect(conn, src, cluuid);
-}
-#endif
-
 static struct obd_ops ptlbd_sv_obd_ops = {
         o_owner:        THIS_MODULE,
-/*        o_iocontrol:    ptlbd_iocontrol,*/
         o_setup:        ptlbd_sv_setup,
         o_cleanup:      ptlbd_sv_cleanup,
-#if 0
-        o_connect:      ptlbd_sv_connect,
-        o_disconnect:   class_disconnect
-#endif
 };
 
 int ptlbd_sv_init(void)

@@ -132,19 +132,34 @@ static int ptlbd_bulk_timeout(void *data)
         RETURN(1);
 }
 
-#define SILLY_MAX 2048
-static struct page *pages[SILLY_MAX] = {NULL,};
-
-static struct page * fake_page(int block_nr)
+void ptlbd_do_filp(struct file *filp, int op, struct ptlbd_niob *niobs, 
+                int page_count, struct list_head *page_list)
 {
-        if ( block_nr >= SILLY_MAX )
-                return NULL;
+        mm_segment_t old_fs;
+        struct list_head *pos;
+        ENTRY;
 
-        if (pages[block_nr] == NULL) {
-                void *vaddr = (void *)get_free_page(GFP_KERNEL);
-                pages[block_nr] = virt_to_page(vaddr);
-        } 
-        return pages[block_nr];
+        old_fs = get_fs();
+        set_fs(KERNEL_DS);
+
+        list_for_each(pos, page_list) {
+                ssize_t ret;
+                struct page *page = list_entry(pos, struct page, list);
+                loff_t offset = (niobs->n_block_nr << PAGE_SHIFT) + 
+                        niobs->n_offset;
+
+                if ( op == PTLBD_READ )
+                        ret = filp->f_op->read(filp, page_address(page), 
+                                        niobs->n_length, &offset);
+                else
+                        ret = filp->f_op->write(filp, page_address(page), 
+                                        niobs->n_length, &offset);
+
+                niobs++;
+        }
+
+        set_fs(old_fs);
+        EXIT;
 }
 
 int ptlbd_parse_req(struct ptlrpc_request *req)
@@ -153,8 +168,11 @@ int ptlbd_parse_req(struct ptlrpc_request *req)
         struct ptlbd_niob *niob, *niobs;
         struct ptlbd_rsp *rsp;
         struct ptlrpc_bulk_desc *desc;
+        struct file *filp = req->rq_obd->u.ptlbd.filp;
         struct l_wait_info lwi;
         int size[1], wait_flag, i, page_count, rc;
+        struct list_head *pos, *n;
+        LIST_HEAD(tmp_pages);
         ENTRY;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
@@ -178,16 +196,21 @@ int ptlbd_parse_req(struct ptlrpc_request *req)
                 if (bulk == NULL)
                         GOTO(out_bulk, rc = -ENOMEM);
 
+                bulk->bp_page = alloc_page(GFP_KERNEL);
+                if (bulk->bp_page == NULL)
+                        GOTO(out_bulk, rc = -ENOMEM);
+                list_add(&bulk->bp_page->list, &tmp_pages);
+
                 /* 
                  * XXX what about the block number? 
                  */
                 bulk->bp_xid = niob->n_xid;
-                bulk->bp_page = fake_page(niob->n_block_nr);
                 bulk->bp_buf = page_address(bulk->bp_page);
                 bulk->bp_buflen = niob->n_length;
         }
 
         if ( op->op_cmd == PTLBD_READ ) {
+                ptlbd_do_filp(filp, PTLBD_READ, niobs, page_count, &tmp_pages);
                 rc = ptlrpc_bulk_put(desc);
                 wait_flag = PTL_BULK_FL_SENT;
         } else {
@@ -210,6 +233,8 @@ int ptlbd_parse_req(struct ptlrpc_request *req)
         rsp = lustre_msg_buf(req->rq_repmsg, 0);
         if ( rsp == NULL )
                 GOTO(out, rc = -EINVAL);
+        
+        ptlbd_do_filp(filp, PTLBD_WRITE, niobs, page_count, &tmp_pages);
 
         rsp->r_error_cnt = 42;
         rsp->r_status = 69;
@@ -218,6 +243,11 @@ int ptlbd_parse_req(struct ptlrpc_request *req)
         ptlrpc_reply(req->rq_svc, req);
 
 out_bulk:
+        list_for_each_safe(pos, n, &tmp_pages) {
+                struct page *page = list_entry(pos, struct page, list);
+                list_del(&page->list);
+                __free_page(page);
+        }
         ptlrpc_bulk_decref(desc);
 out:
         RETURN(rc);
