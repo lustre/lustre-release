@@ -29,8 +29,6 @@
 /* liblustreapi.c */
 int op_create_file(char *name, long stripe_size, int stripe_offset,
          int stripe_count);
-int op_setstripe_dir(char *path, long stripe_size, int stripe_offset,
-         int stripe_count);
 int op_find(char *path, struct obd_uuid *obduuid, int recursive,
          int verbose, int quiet);
 int op_check(int type_num, char **obd_type_p, char *dir);
