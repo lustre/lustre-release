@@ -191,6 +191,7 @@ static void ptlbd_request(request_queue_t *q)
                 spin_unlock_irq(&io_request_lock);
 
                 /* XXX dunno if we're supposed to get this or not.. */
+                /* __make_request() changes READA to READ - Kris */
                 LASSERT(req->cmd != READA);
 
                 if ( req->cmd == READ )
@@ -198,7 +199,7 @@ static void ptlbd_request(request_queue_t *q)
                 else 
                         cmd = PTLBD_WRITE;
 
-                ptlbd_send_req(ptlbd, cmd, req->bh);
+                ptlbd_send_req(ptlbd, cmd, req);
 
                 spin_lock_irq(&io_request_lock);
 
@@ -234,7 +235,8 @@ int ptlbd_blk_init(void)
 
         for ( i = 0 ; i < PTLBD_MAX_MINOR ; i++) {
                 ptlbd_size_size[i] = 4096;
-                ptlbd_size[i] = (4096*2048) >> BLOCK_SIZE_BITS;
+                /* avoid integer overflow */
+                ptlbd_size[i] = (16*1024*((1024*1024) >> BLOCK_SIZE_BITS));
                 ptlbd_hardsect_size[i] = 4096;
                 ptlbd_max_sectors[i] = 2;
                 //RHism ptlbd_dev_varyio[i] = 0;
@@ -246,12 +248,9 @@ int ptlbd_blk_init(void)
 
 void ptlbd_blk_exit(void)
 {
-        int ret;
         ENTRY;
         blk_cleanup_queue(BLK_DEFAULT_QUEUE(PTLBD_MAJOR));
-        ret = unregister_blkdev(PTLBD_MAJOR, "ptlbd");
-        if ( ret )  /* XXX */
-                printk("unregister_blkdev() failed: %d\n", ret);
+        unregister_blkdev(PTLBD_MAJOR, "ptlbd");
 }
 
 #undef MAJOR_NR
