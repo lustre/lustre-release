@@ -648,7 +648,7 @@ int portals_debug_mark_buffer(char *text)
 __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
 {
         int rc;
-        unsigned long debug_off, i, off, copied;
+        unsigned long total, debug_off, i, off, copied;
         unsigned long flags;
         struct page *page;
         LIST_HEAD(my_pages);
@@ -676,16 +676,19 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
                 goto cleanup;
         }
 
-        if (debug_wrapped)
+        if (debug_wrapped) {
                 off = debug_off + 1;
-        else
+                total = debug_size;
+        } else {
                 off = 0;
+                total = debug_off;
+        }
         copied = 0;
         list_for_each(pos, &my_pages) {
                 unsigned long to_copy;
                 page = list_entry(pos, struct page, list);
 
-                to_copy = min(debug_size - off, PAGE_SIZE);
+                to_copy = min(total - off, PAGE_SIZE);
                 if (to_copy == 0) {
                         off = 0;
                         to_copy = min(debug_size - off, PAGE_SIZE);
@@ -694,7 +697,7 @@ finish_partial:
                 memcpy(kmap(page), debug_buf + off, to_copy);
                 kunmap(page);
                 copied += to_copy;
-                if (copied >= (debug_wrapped ? debug_size : debug_off))
+                if (copied >= total)
                         break;
 
                 off += to_copy;
