@@ -543,6 +543,16 @@ void class_import_put(struct obd_import *import)
 
         ptlrpc_put_connection_superhack(import->imp_connection);
 
+        while (!list_empty(&import->imp_conn_list)) {
+                struct obd_import_conn *imp_conn;
+
+                imp_conn = list_entry(import->imp_conn_list.next,
+                                      struct obd_import_conn, oic_item);
+                list_del(&imp_conn->oic_item);
+                ptlrpc_put_connection_superhack(imp_conn->oic_conn);
+                OBD_FREE(imp_conn, sizeof(*imp_conn));
+        }
+
         LASSERT(list_empty(&import->imp_handle.h_link));
         OBD_FREE(import, sizeof(*import));
         EXIT;
@@ -569,6 +579,7 @@ struct obd_import *class_new_import(void)
         atomic_set(&imp->imp_refcount, 2);
         atomic_set(&imp->imp_inflight, 0);
         atomic_set(&imp->imp_replay_inflight, 0);
+        INIT_LIST_HEAD(&imp->imp_conn_list);
         INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
 

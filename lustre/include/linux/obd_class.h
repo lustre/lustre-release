@@ -454,6 +454,35 @@ static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
         RETURN(rc);
 }
 
+static inline int obd_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
+                               int priority)
+{
+        struct obd_device *obd = imp->imp_obd;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DEV_ACTIVE(obd);
+        OBD_CHECK_OP(obd, add_conn, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, add_conn);
+
+        rc = OBP(obd, add_conn)(imp, uuid, priority);
+        RETURN(rc);
+}
+
+static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
+{
+        struct obd_device *obd = imp->imp_obd;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DEV_ACTIVE(obd);
+        OBD_CHECK_OP(obd, del_conn, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, del_conn);
+
+        rc = OBP(obd, del_conn)(imp, uuid);
+        RETURN(rc);
+}
+
 static inline int obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                               struct obd_uuid *cluuid,
                               struct obd_connect_data *data)

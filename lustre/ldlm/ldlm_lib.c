@@ -36,9 +36,147 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_net.h>
 
+/* @priority: if non-zero, move the selected to the list head
+ * @create: if zero, only search in existed connections
+ */
+static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
+                           int priority, int create)
+{
+        struct ptlrpc_connection *ptlrpc_conn;
+        struct obd_import_conn *imp_conn = NULL, *item;
+        int rc = 0;
+        ENTRY;
+
+        if (!create && !priority) {
+                CDEBUG(D_HA, "Nothing to do\n");
+                RETURN(-EINVAL);
+        }
+
+        ptlrpc_conn = ptlrpc_uuid_to_connection(uuid);
+        if (!ptlrpc_conn) {
+                CDEBUG(D_HA, "can't find connection %s\n", uuid->uuid);
+                RETURN (-ENOENT);
+        }
+
+        if (create) {
+                OBD_ALLOC(imp_conn, sizeof(*imp_conn));
+                if (!imp_conn) {
+                        GOTO(out_put, rc = -ENOMEM);
+                }
+        }
+
+        spin_lock(&imp->imp_lock);
+        list_for_each_entry(item, &imp->imp_conn_list, oic_item) {
+                if (obd_uuid_equals(uuid, &item->oic_uuid)) {
+                        if (priority) {
+                                list_del(&item->oic_item);
+                                list_add(&item->oic_item, &imp->imp_conn_list);
+                                item->oic_last_attempt = 0;
+                        }
+                        CDEBUG(D_HA, "imp %p@%s: found existing conn %s%s\n",
+                               imp, imp->imp_obd->obd_name, uuid->uuid,
+                               (priority ? ", moved to head" : ""));
+                        spin_unlock(&imp->imp_lock);
+                        GOTO(out_free, rc = 0);
+                }
+        }
+        /* not found */
+        if (create) {
+                imp_conn->oic_conn = ptlrpc_conn;
+                imp_conn->oic_uuid = *uuid;
+                imp_conn->oic_last_attempt = 0;
+                if (priority)
+                        list_add(&imp_conn->oic_item, &imp->imp_conn_list);
+                else
+                        list_add_tail(&imp_conn->oic_item, &imp->imp_conn_list);
+                CDEBUG(D_HA, "imp %p@%s: add connection %s at %s\n",
+                       imp, imp->imp_obd->obd_name, uuid->uuid,
+                       (priority ? "head" : "tail"));
+        } else {
+                spin_unlock(&imp->imp_lock);
+                GOTO(out_free, rc = -ENOENT);
+                
+        }
+
+        spin_unlock(&imp->imp_lock);
+        RETURN(0);
+out_free:
+        if (imp_conn)
+                OBD_FREE(imp_conn, sizeof(*imp_conn));
+out_put:
+        ptlrpc_put_connection(ptlrpc_conn);
+        RETURN(rc);
+}
+
+int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid)
+{
+        return import_set_conn(imp, uuid, 1, 0);
+}
+
+int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
+                           int priority)
+{
+        return import_set_conn(imp, uuid, priority, 1);
+}
+
+int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
+{
+        struct obd_import_conn *imp_conn;
+        struct obd_export *dlmexp;
+        int rc = -ENOENT;
+        ENTRY;
+
+        spin_lock(&imp->imp_lock);
+        if (list_empty(&imp->imp_conn_list)) {
+                LASSERT(!imp->imp_conn_current);
+                LASSERT(!imp->imp_connection);
+                GOTO(out, rc);
+        }
+
+        list_for_each_entry(imp_conn, &imp->imp_conn_list, oic_item) {
+                if (!obd_uuid_equals(uuid, &imp_conn->oic_uuid))
+                        continue;
+                LASSERT(imp_conn->oic_conn);
+
+                /* is current conn? */
+                if (imp_conn == imp->imp_conn_current) {
+                        LASSERT(imp_conn->oic_conn == imp->imp_connection);
+
+                        if (imp->imp_state != LUSTRE_IMP_CLOSED &&
+                            imp->imp_state != LUSTRE_IMP_DISCON) {
+                                CERROR("can't remove current connection\n");
+                                GOTO(out, rc = -EBUSY);
+                        }
+
+                        ptlrpc_put_connection(imp->imp_connection);
+                        imp->imp_connection = NULL;
+
+                        dlmexp = class_conn2export(&imp->imp_dlm_handle);
+                        if (dlmexp && dlmexp->exp_connection) {
+                                LASSERT(dlmexp->exp_connection ==
+                                        imp_conn->oic_conn);
+                                ptlrpc_put_connection(dlmexp->exp_connection);
+                                dlmexp->exp_connection = NULL;
+                        }
+                }
+
+                list_del(&imp_conn->oic_item);
+                ptlrpc_put_connection(imp_conn->oic_conn);
+                OBD_FREE(imp_conn, sizeof(*imp_conn));
+                CDEBUG(D_HA, "imp %p@%s: remove connection %s\n",
+                       imp, imp->imp_obd->obd_name, uuid->uuid);
+                rc = 0;
+                break;
+        }
+out:
+        spin_unlock(&imp->imp_lock);
+        if (rc == -ENOENT)
+                CERROR("connection %s not found\n", uuid->uuid);
+        RETURN(rc);
+}
+
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
-        struct ptlrpc_connection *conn;
         struct lustre_cfg* lcfg = buf;
         struct client_obd *cli = &obddev->u.cli;
         struct obd_import *imp;
@@ -133,19 +271,12 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err, rc);
         }
 
-        conn = ptlrpc_uuid_to_connection(&server_uuid);
-        if (conn == NULL)
-                GOTO(err_ldlm, rc = -ENOENT);
-
         ptlrpc_init_client(rq_portal, rp_portal, name,
                            &obddev->obd_ldlm_client);
 
         imp = class_new_import();
-        if (imp == NULL) {
-                ptlrpc_put_connection(conn);
+        if (imp == NULL)
                 GOTO(err_ldlm, rc = -ENOENT);
-        }
-        imp->imp_connection = conn;
         imp->imp_client = &obddev->obd_ldlm_client;
         imp->imp_obd = obddev;
         imp->imp_connect_op = connect_op;
@@ -155,6 +286,12 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         memcpy(imp->imp_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
                LUSTRE_CFG_BUFLEN(lcfg, 1));
         class_import_put(imp);
+
+        rc = client_import_add_conn(imp, &server_uuid, 1);
+        if (rc) {
+                CERROR("can't add initial connection\n");
+                GOTO(err_import, rc);
+        }
 
         cli->cl_import = imp;
         /* cli->cl_max_mds_{easize,cookiesize} updated by mdc_init_ea_size() */
@@ -265,7 +402,6 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         if (rc != 0) 
                 GOTO(out_ldlm, rc);
 
-        exp->exp_connection = ptlrpc_connection_addref(imp->imp_connection);
         if (data)
                 memcpy(&imp->imp_connect_data, data, sizeof(*data));
         rc = ptlrpc_connect_import(imp, NULL);
@@ -273,6 +409,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
                 GOTO(out_ldlm, rc);
         }
+        LASSERT(exp->exp_connection);
 
         ptlrpc_pinger_add_import(imp);
         EXIT;

@@ -40,6 +40,13 @@ enum obd_import_event {
         IMP_EVENT_ACTIVE     = 0x808004,
 };
 
+struct obd_import_conn {
+        struct list_head          oic_item;
+        struct ptlrpc_connection *oic_conn;
+        struct obd_uuid           oic_uuid;
+        unsigned long             oic_last_attempt; /* in jiffies */
+};
+
 struct obd_import {
         struct portals_handle     imp_handle;
         atomic_t                  imp_refcount;
@@ -69,6 +76,10 @@ struct obd_import {
         struct obd_uuid           imp_target_uuid; /* XXX -> lustre_name */
         struct lustre_handle      imp_remote_handle;
         unsigned long             imp_next_ping;   /* jiffies */
+
+        /* all available obd_import_conn linked here */
+        struct list_head          imp_conn_list;
+        struct obd_import_conn   *imp_conn_current;
 
         /* Protects flags, level, generation, conn_cnt, *_list */
         spinlock_t                imp_lock;

@@ -606,6 +606,12 @@ class LCTLInterface:
   quit""" % (name, setup)
         self.run(cmds)
 
+    def add_conn(self, name, conn_uuid):
+        cmds = """
+  cfg_device %s
+  add_conn %s
+  quit""" % (name, conn_uuid)
+        self.run(cmds)
 
     # create a new device with lctl
     def newdev(self, type, name, uuid, setup = ""):
@@ -1909,6 +1915,7 @@ class Client(Module):
         self.target_name = tgtdb.getName()
         self.target_uuid = tgtdb.getUUID()
         self.db = tgtdb
+	self.backup_targets = []
 
         self.tgt_dev_uuid = get_active_target(tgtdb)
         if not self.tgt_dev_uuid:
@@ -1927,6 +1934,7 @@ class Client(Module):
             self.name = self_name
         self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
+	self.lookup_backup_targets()
         mgmt_uuid = mgmt_uuid_for_fs(fs_name)
         if mgmt_uuid:
             self.mgmt_name = mgmtcli_name_for_uuid(mgmt_uuid)
@@ -1945,6 +1953,20 @@ class Client(Module):
 
     def get_servers(self):
         return self._server_nets
+
+    def lookup_backup_targets(self):
+        """ Lookup alternative network information """
+        prof_list = toplustreDB.get_refs('profile')
+        for prof_uuid in prof_list:
+            prof_db = toplustreDB.lookup(prof_uuid)
+            if not prof_db:
+                panic("profile:", prof_uuid, "not found.")
+            for ref_class, ref_uuid in prof_db.get_all_refs():
+                if ref_class in ('osd', 'mdsdev'):
+                    devdb = toplustreDB.lookup(ref_uuid)
+                    uuid = devdb.get_first_ref('target')
+                    if self.target_uuid == uuid and self.tgt_dev_uuid != ref_uuid:
+                        self.backup_targets.append(ref_uuid)
 
     def prepare(self, ignore_connect_failure = 0):
         self.info(self.target_uuid)
@@ -1980,14 +2002,29 @@ class Client(Module):
         else:
             panic("Unable to create OSC for ", self.target_uuid)
 
+        for tgt_dev_uuid in self.backup_targets:
+            this_nets = get_ost_net(toplustreDB, tgt_dev_uuid)
+            if len(this_nets) == 0:
+                panic ("Unable to find a backup server for:", tgt_dev_uuid)
+            srv_list = find_local_servers(this_nets)
+            if srv_list:
+                for srv in srv_list:
+                    lctl.connect(srv)
+                    break
+            else:
+                routes = find_route(this_nets);
+                if len(routes) == 0:
+                    panic("no route to", tgt_dev_uuid)
+                for (srv, r) in routes:
+                    lctl.add_route_host(r[0]. srv.nid_uuid, r[1], r[3])
+            if srv:
+                 lctl.add_conn(self.name, srv.nid_uuid);
+
+
     def cleanup(self):
         if is_prepared(self.name):
             Module.cleanup(self)
             try:
-                srv_list = find_local_servers(self.get_servers())
-                for srv in srv_list:
-                    lctl.disconnect(srv)
-
                 routes = find_route(self.get_servers())
                 for (srv, r) in routes:
                     lctl.del_route_host(r[0], srv.nid_uuid, r[1], r[3])
@@ -1996,6 +2033,16 @@ class Client(Module):
                 e.dump()
                 cleanup_error(e.rc)
 
+            for tgt_dev_uuid in self.backup_targets:
+                this_net = get_ost_net(toplustreDB, tgt_dev_uuid)
+                srv_list = find_local_servers(self.get_servers())
+                if srv_list:
+                    for srv in srv_list:
+                        lctl.disconnect(srv)
+                        break
+                else:
+                    for (srv, r) in find_route(this_net):
+                        lctl.del_route_host(r[0]. srv.nid_uuid, r[1], r[3])
 
 class MDC(Client):
     def __init__(self, db, uuid, fs_name):

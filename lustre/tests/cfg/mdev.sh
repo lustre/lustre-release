@@ -21,7 +21,7 @@ OSTDEV=${OSTDEV:-/tmp/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-20000}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-10}
-UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
+#UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
 
 STRIPE_BYTES=${STRIPE_BYTES:-65536}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}

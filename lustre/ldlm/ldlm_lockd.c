@@ -1635,6 +1635,8 @@ EXPORT_SYMBOL(l_lock);
 EXPORT_SYMBOL(l_unlock);
 
 /* ldlm_lib.c */
+EXPORT_SYMBOL(client_import_add_conn);
+EXPORT_SYMBOL(client_import_del_conn);
 EXPORT_SYMBOL(client_obd_setup);
 EXPORT_SYMBOL(client_obd_cleanup);
 EXPORT_SYMBOL(client_connect_import);

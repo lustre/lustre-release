@@ -16,7 +16,7 @@ TIMEOUT=${TIMEOUT:-30}
 PTLDEBUG=${PTLDEBUG:-0}
 SUBSYSTEM=${SUBSYSTEM:-0}
 MOUNT=${MOUNT:-"/mnt/lustre"}
-UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
+#UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
 
 MDSDEV=${MDSDEV:-/dev/sdc}
 MDSSIZE=${MDSSIZE:-50000}

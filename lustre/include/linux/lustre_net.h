@@ -742,6 +742,10 @@ int client_obd_cleanup(struct obd_device * obddev);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid, struct obd_connect_data *);
 int client_disconnect_export(struct obd_export *exp);
+int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
+                           int priority);
+int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid);
+int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);

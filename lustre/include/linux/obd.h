@@ -565,6 +565,9 @@ struct obd_ops {
         int (*o_precleanup)(struct obd_device *dev);
         int (*o_cleanup)(struct obd_device *dev);
         int (*o_postrecov)(struct obd_device *dev);
+        int (*o_add_conn)(struct obd_import *imp, struct obd_uuid *uuid,
+                          int priority);
+        int (*o_del_conn)(struct obd_import *imp, struct obd_uuid *uuid);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, struct obd_connect_data *);
         int (*o_disconnect)(struct obd_export *exp);

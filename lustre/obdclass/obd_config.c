@@ -379,6 +379,66 @@ void class_decref(struct obd_device *obd)
         }
 }               
 
+int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
+{
+        struct obd_import *imp;
+        struct obd_uuid uuid;
+        int rc;
+        ENTRY;
+
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1 ||
+            LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(struct obd_uuid)) {
+                CERROR("invalid conn_uuid\n");
+                RETURN(-EINVAL);
+        }
+        if (strcmp(obd->obd_type->typ_name, "mdc") &&
+            strcmp(obd->obd_type->typ_name, "osc")) {
+                CERROR("can't add connection on non-client dev\n");
+                RETURN(-EINVAL);
+        }
+
+        imp = obd->u.cli.cl_import;
+        if (!imp) {
+                CERROR("try to add conn on immature client dev\n");
+                RETURN(-EINVAL);
+        }
+
+        obd_str2uuid(&uuid, lustre_cfg_string(lcfg, 1));
+        rc = obd_add_conn(imp, &uuid, lcfg->lcfg_num);
+
+        RETURN(rc);
+}
+
+int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
+{
+        struct obd_import *imp;
+        struct obd_uuid uuid;
+        int rc;
+        ENTRY;
+
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1 ||
+            LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(struct obd_uuid)) {
+                CERROR("invalid conn_uuid\n");
+                RETURN(-EINVAL);
+        }
+        if (strcmp(obd->obd_type->typ_name, "mdc") &&
+            strcmp(obd->obd_type->typ_name, "osc")) {
+                CERROR("can't del connection on non-client dev\n");
+                RETURN(-EINVAL);
+        }
+
+        imp = obd->u.cli.cl_import;
+        if (!imp) {
+                CERROR("try to del conn on immature client dev\n");
+                RETURN(-EINVAL);
+        }
+
+        obd_str2uuid(&uuid, lustre_cfg_string(lcfg, 1));
+        rc = obd_del_conn(imp, &uuid);
+
+        RETURN(rc);
+}
+
 LIST_HEAD(lustre_profile_list);
 
 struct lustre_profile *class_get_profile(char * prof)
@@ -543,6 +603,14 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_CLEANUP: {
                 err = class_cleanup(obd, lcfg);
+                GOTO(out, err = 0);
+        }
+        case LCFG_ADD_CONN: {
+                err = class_add_conn(obd, lcfg);
+                GOTO(out, err = 0);
+        }
+        case LCFG_DEL_CONN: {
+                err = class_del_conn(obd, lcfg);
                 GOTO(out, err = 0);
         }
         default: {

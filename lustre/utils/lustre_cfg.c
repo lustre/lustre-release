@@ -541,3 +541,74 @@ int jt_lcfg_set_lustre_upcall(int argc, char **argv)
         }
         return rc;
 }
+
+int jt_lcfg_add_conn(int argc, char **argv)
+{
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+        int priority;
+        int rc;
+
+        if (argc == 2)
+                priority = 0;
+        else if (argc == 3)
+                priority = 1;
+        else
+                return CMD_HELP;
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
+
+        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+
+        lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
+
+        lcfg = lustre_cfg_new(LCFG_ADD_CONN, &bufs);
+        lcfg->lcfg_num = priority;
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        lustre_cfg_free (lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}
+
+int jt_lcfg_del_conn(int argc, char **argv)
+{
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
+
+        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+
+        /* connection uuid */
+        lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
+
+        lcfg = lustre_cfg_new(LCFG_DEL_MOUNTOPT, &bufs);
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        lustre_cfg_free(lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}

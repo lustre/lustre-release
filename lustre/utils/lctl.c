@@ -231,6 +231,10 @@ command_t cmdlist[] = {
          "usage: set_timeout <secs>\n"},
         {"set_lustre_upcall", jt_lcfg_set_lustre_upcall, 0,
          "usage: set_lustre_upcall </full/path/to/upcall> \n"},
+        {"add_conn ", jt_lcfg_add_conn, 0,
+         "usage: add_conn <conn_uuid> [priority]\n"},
+        {"del_conn ", jt_lcfg_del_conn, 0,
+         "usage: del_conn <conn_uuid> \n"},
        
         /* Llog operations */ 
         {"llog_catlist", jt_llog_catlist, 0, 
