@@ -49,7 +49,7 @@ inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 static int mds_bulk_timeout(void *data)
 {
         struct ptlrpc_bulk_desc *desc = data;
-        
+
         ENTRY;
         CERROR("(not yet) starting recovery of client %p\n", desc->bd_client);
         RETURN(1);
@@ -401,7 +401,7 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        mds->mds_max_mdsize = sizeof(struct lov_mds_md) + 
+        mds->mds_max_mdsize = sizeof(struct lov_mds_md) +
                 tgt_count * sizeof(struct lov_object_id);
         rc = mds_get_lovtgts(req->rq_obd, tgt_count,
                              lustre_msg_buf(req->rq_repmsg, 1));
@@ -581,7 +581,8 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
                 req->rq_status = -ENOENT;
-                GOTO(out_pop, rc = -ENOENT);
+                rc = 0;
+                GOTO(out_pop, PTR_ERR(de));
         }
 
         inode = de->d_inode;
@@ -593,12 +594,18 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 size[1] = inode->i_size + 1;
         }
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
+                CERROR("failed GETATTR_PACK test\n");
+                req->rq_status = -ENOMEM;
+                GOTO(out, rc = -ENOMEM);
+        }
+
         rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
                              &req->rq_repmsg);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
+        if (rc) {
                 CERROR("out of memory or FAIL_MDS_GETATTR_PACK\n");
                 req->rq_status = rc;
-                GOTO(out, rc = 0);
+                GOTO(out, rc);
         }
 
         req->rq_status = mds_getattr_internal(mds, de, req, body, 0);
@@ -813,7 +820,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         /* note: in case of an error, dentry_open puts dentry */
         if (IS_ERR(file))
                 GOTO(out_pop, rc = PTR_ERR(file));
-        
+
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         repbody->size = file->f_dentry->d_inode->i_size;
         repbody->valid = OBD_MD_FLSIZE;
@@ -1092,7 +1099,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         }
 
         mds->mds_service = ptlrpc_init_svc(1024, 640, MDS_REQUEST_PORTAL,
-                                           MDC_REPLY_PORTAL, "self",mds_handle, 
+                                           MDC_REPLY_PORTAL, "self",mds_handle,
                                            "mds");
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
@@ -1119,7 +1126,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         rc = mds_recover(obddev);
         if (rc)
                 GOTO(err_thread, rc);
-        
+
         mds_destroy_export = mds_client_free;
 
         ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
