@@ -246,6 +246,9 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 rc = llog_lvfs_pad(ctxt, file, left, loghandle->lgh_last_idx);
                 if (rc)
                         RETURN(rc);
+                /* if it's the last idx in log file, then return -ENOSPC */
+                if (loghandle->lgh_last_idx == LLOG_BITMAP_SIZE(llh) - 1)
+                        RETURN(-ENOSPC);
         }
 
         loghandle->lgh_last_idx++;
