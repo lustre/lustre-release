@@ -1577,7 +1577,7 @@ Index: linux-2.4.20/include/linux/dcache.h
 ===================================================================
 --- linux-2.4.20.orig/include/linux/dcache.h	Wed Mar 17 13:57:04 2004
 +++ linux-2.4.20/include/linux/dcache.h	Wed Mar 17 13:57:11 2004
-@@ -6,6 +6,51 @@
+@@ -6,6 +6,52 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
  #include <linux/kernel.h>
@@ -1592,6 +1592,7 @@ Index: linux-2.4.20/include/linux/dcache.h
 +#define IT_GETXATTR 0x0040
 +#define IT_EXEC     0x0080
 +#define IT_PIN      0x0100
++#define IT_CHDIR    0x0200
 +
 +#define IT_FL_LOCKED   0x0001
 +#define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */
