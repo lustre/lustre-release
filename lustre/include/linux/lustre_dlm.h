@@ -301,6 +301,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock, void *cookie,
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
+void ldlm_cancel_locks_for_export(struct obd_export *export);
 void ldlm_run_ast_work(struct list_head *rpc_list);
 void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_lock_dump(struct ldlm_lock *lock);

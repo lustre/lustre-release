@@ -813,6 +813,23 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         EXIT;
 }
 
+void ldlm_cancel_locks_for_export(struct obd_export *exp)
+{
+        struct list_head *iter, *n; /* MUST BE CALLED "n"! */
+
+        list_for_each_safe(iter, n, &exp->exp_ldlm_data.led_held_locks) {
+                struct ldlm_lock *lock;
+                struct ldlm_resource *res;
+                lock = list_entry(iter, struct ldlm_lock, l_export_chain);
+                res = ldlm_resource_getref(lock->l_resource);
+                CDEBUG(D_INFO, "Cancelling lock:");
+                ldlm_lock_dump(lock);
+                ldlm_lock_cancel(lock);
+                ldlm_reprocess_all(res);
+                ldlm_resource_put(res);
+        }
+}
+
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags)
 {

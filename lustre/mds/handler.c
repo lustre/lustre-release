@@ -333,6 +333,10 @@ out_dec:
 static int mds_disconnect(struct lustre_handle *conn)
 {
         int rc;
+        struct obd_export *export = class_conn2export(conn);
+
+        ldlm_cancel_locks_for_export(export);
+        mds_client_free(export);
 
         rc = class_disconnect(conn);
         if (!rc)
@@ -1132,8 +1136,6 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         rc = mds_recover(obddev);
         if (rc)
                 GOTO(err_thread, rc);
-
-        mds_destroy_export = mds_client_free;
 
         ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            "mds_ldlm_client", &obddev->obd_ldlm_client);

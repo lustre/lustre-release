@@ -716,11 +716,6 @@ int class_multi_cleanup(struct obd_device *obddev);
 
 extern void (*class_signal_connection_failure)(struct ptlrpc_connection *);
 
-/* == mds_client_free if MDS running here */
-extern int (*mds_destroy_export)(struct obd_export *exp);
-/* == ldlm_client_free if(?) DLM running here */
-extern int (*ldlm_destroy_export)(struct obd_export *exp);
-
 static inline struct ptlrpc_connection *class_rd2conn(struct recovd_data *rd)
 {
         /* reuse list_entry's member-pointer offset stuff */

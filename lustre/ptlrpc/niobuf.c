@@ -327,55 +327,53 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 LBUG();
                 RETURN(EINVAL);
         }
-        if (request->rq_replen == 0) {
-                CERROR("request->rq_replen is 0!\n");
-                RETURN(EINVAL);
-        }
-
-        /* request->rq_repmsg is set only when the reply comes in, in
-         * client_packet_callback() */
-        if (request->rq_reply_md.start)
-                OBD_FREE(request->rq_reply_md.start, request->rq_replen);
-
-        OBD_ALLOC(repbuf, request->rq_replen);
-        if (!repbuf) {
-                LBUG();
-                RETURN(ENOMEM);
-        }
-
-        // down(&request->rq_client->cli_rpc_sem);
 
         source_id.nid = request->rq_connection->c_peer.peer_nid;
         source_id.pid = PTL_PID_ANY;
 
-        rc = PtlMEAttach(request->rq_connection->c_peer.peer_ni,
-                         request->rq_import->imp_client->cli_reply_portal,
-                         source_id, request->rq_xid, 0, PTL_UNLINK,
-                         PTL_INS_AFTER, &request->rq_reply_me_h);
-        if (rc != PTL_OK) {
-                CERROR("PtlMEAttach failed: %d\n", rc);
-                LBUG();
-                GOTO(cleanup, rc);
+        if (request->rq_replen != 0) {
+
+                /* request->rq_repmsg is set only when the reply comes in, in
+                 * client_packet_callback() */
+                if (request->rq_reply_md.start)
+                        OBD_FREE(request->rq_reply_md.start, request->rq_replen);
+                
+                OBD_ALLOC(repbuf, request->rq_replen);
+                if (!repbuf) {
+                        LBUG();
+                        RETURN(ENOMEM);
+                }
+
+                rc = PtlMEAttach(request->rq_connection->c_peer.peer_ni,
+                               request->rq_import->imp_client->cli_reply_portal,
+                                 source_id, request->rq_xid, 0, PTL_UNLINK,
+                                 PTL_INS_AFTER, &request->rq_reply_me_h);
+                if (rc != PTL_OK) {
+                        CERROR("PtlMEAttach failed: %d\n", rc);
+                        LBUG();
+                        GOTO(cleanup, rc);
+                }
+
+                request->rq_reply_md.start = repbuf;
+                request->rq_reply_md.length = request->rq_replen;
+                request->rq_reply_md.threshold = 1;
+                request->rq_reply_md.options = PTL_MD_OP_PUT;
+                request->rq_reply_md.user_ptr = request;
+                request->rq_reply_md.eventq = reply_in_eq;
+                
+                rc = PtlMDAttach(request->rq_reply_me_h, request->rq_reply_md,
+                                 PTL_UNLINK, &request->rq_reply_md_h);
+                if (rc != PTL_OK) {
+                        CERROR("PtlMDAttach failed: %d\n", rc);
+                        LBUG();
+                        GOTO(cleanup2, rc);
+                }
+                
+                CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64
+                       ", portal %u\n",
+                       request->rq_replen, request->rq_xid,
+                       request->rq_import->imp_client->cli_reply_portal);
         }
-
-        request->rq_reply_md.start = repbuf;
-        request->rq_reply_md.length = request->rq_replen;
-        request->rq_reply_md.threshold = 1;
-        request->rq_reply_md.options = PTL_MD_OP_PUT;
-        request->rq_reply_md.user_ptr = request;
-        request->rq_reply_md.eventq = reply_in_eq;
-
-        rc = PtlMDAttach(request->rq_reply_me_h, request->rq_reply_md,
-                         PTL_UNLINK, &request->rq_reply_md_h);
-        if (rc != PTL_OK) {
-                CERROR("PtlMDAttach failed: %d\n", rc);
-                LBUG();
-                GOTO(cleanup2, rc);
-        }
-
-        CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64", portal %u\n",
-               request->rq_replen, request->rq_xid,
-               request->rq_import->imp_client->cli_reply_portal);
 
         rc = ptl_send_buf(request, request->rq_connection,
                           request->rq_import->imp_client->cli_request_portal);

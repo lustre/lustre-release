@@ -173,8 +173,16 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
 
         INIT_LIST_HEAD(&request->rq_list);
         INIT_LIST_HEAD(&request->rq_multi);
-        /* this will be dec()d once in req_finished, once in free_committed */
-        atomic_set(&request->rq_refcount, 2);
+        /*
+         * This will be reduced once when the sender is finished (waiting for
+         * reply, f.e.), once when the request has been committed and is
+         * removed from the to-be-committed list, and once when portals is
+         * finished with it and has called request_out_callback.
+         *
+         * (Except in the DLM server case, where it will be dropped twice
+         * by the sender, and then the last time by request_out_callback.)
+         */
+        atomic_set(&request->rq_refcount, 3);
 
         spin_lock(&conn->c_lock);
         request->rq_xid = HTON__u32(++conn->c_xid_out);

@@ -44,13 +44,24 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
 
         if (!recovd) {
                 CERROR("no recovd for connection %p\n", conn);
+                EXIT;
                 return;
         }
 
-        CERROR("connection %p to %s failed\n", conn, conn->c_remote_uuid);
+
         spin_lock(&recovd->recovd_lock);
+        if (rd->rd_phase != RECOVD_IDLE || rd->rd_next_phase != RECOVD_IDLE) {
+                CDEBUG(D_INFO, "connection %p to %s already in recovery\n",
+                       conn, conn->c_remote_uuid);
+                spin_unlock(&recovd->recovd_lock);
+                EXIT;
+                return;
+        }
+                
+        CERROR("connection %p to %s failed\n", conn, conn->c_remote_uuid);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
+        rd->rd_next_phase = RECOVD_PREPARING;
         spin_unlock(&recovd->recovd_lock);
 
         wake_up(&recovd->recovd_waitq);
@@ -89,6 +100,8 @@ static int recovd_check_event(struct recovd_obd *recovd)
                                                     rd_managed_chain);
 
                 if (rd->rd_phase == rd->rd_next_phase ||
+                    (rd->rd_phase == RECOVD_IDLE && 
+                     rd->rd_next_phase == RECOVD_PREPARING) ||
                     rd->rd_phase == RECOVD_FAILED)
                         GOTO(out, rc = 1);
         }
@@ -131,7 +144,10 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                 struct recovd_data *rd = list_entry(tmp, struct recovd_data,
                                                     rd_managed_chain);
 
+                /* XXXshaver This is very ugly -- add a RECOVD_TROUBLED state! */
                 if (rd->rd_phase != RECOVD_FAILED &&
+                    !(rd->rd_phase == RECOVD_IDLE &&
+                      rd->rd_next_phase == RECOVD_PREPARING) &&
                     rd->rd_phase != rd->rd_next_phase)
                         continue;
 
@@ -236,8 +252,6 @@ static int recovd_main(void *arg)
 int recovd_setup(struct recovd_obd *recovd)
 {
         int rc;
-        extern void (*class_signal_connection_failure)
-                (struct ptlrpc_connection *);
 
         ENTRY;
 
@@ -258,8 +272,6 @@ int recovd_setup(struct recovd_obd *recovd)
         wait_event(recovd->recovd_ctl_waitq,
                    recovd->recovd_state == RECOVD_READY);
 
-        /* exported and called by obdclass timeout handlers */
-        class_signal_connection_failure = recovd_conn_fail;
         ptlrpc_recovd = recovd;
 
         RETURN(0);

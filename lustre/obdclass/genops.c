@@ -35,11 +35,6 @@ static int sync_io_timeout(void *data)
         desc->bd_connection->c_level = LUSTRE_CONN_RECOVD;
         desc->bd_flags |= PTL_RPC_FL_TIMEOUT;
         if (desc->bd_connection && class_signal_connection_failure) {
-
-                /* XXXshaver Do we need a resend strategy, or do we just
-                 * XXXshaver return -ERESTARTSYS and punt it?
-                 */
-                CERROR("signalling failure of conn %p\n", desc->bd_connection);
                 class_signal_connection_failure(desc->bd_connection);
 
                 /* We go back to sleep, until we're resumed or interrupted. */
@@ -389,19 +384,6 @@ void class_destroy_export(struct obd_export *exp)
         list_del(&exp->exp_conn_chain);
         if (exp->exp_connection) spin_unlock(&exp->exp_connection->c_lock);
 
-        /* XXXshaver these bits want to be hung off the export, instead of
-         * XXXshaver hard-coded here.
-         */
-        if (mds_destroy_export) {
-                rc = mds_destroy_export(exp);
-                if (rc)
-                        CERROR("error freeing mds client data: rc = %d\n", rc);
-        }
-        if (ldlm_destroy_export) {
-                rc = ldlm_destroy_export(exp);
-                if (rc)
-                        CERROR("error freeing dlm client data: rc = %d\n", rc);
-        }
         kmem_cache_free(export_cachep, exp);
 
         EXIT;

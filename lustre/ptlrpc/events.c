@@ -35,6 +35,7 @@ static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL, *gmnal_nip
  */
 static int request_out_callback(ptl_event_t *ev)
 {
+        struct ptlrpc_request *req = ev->mem_desc.user_ptr;
         ENTRY;
 
         LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* requests always contiguous */
@@ -45,6 +46,7 @@ static int request_out_callback(ptl_event_t *ev)
                 LBUG();
         }
 
+        ptlrpc_req_finished(req);
         RETURN(1);
 }
 

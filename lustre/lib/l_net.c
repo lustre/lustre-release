@@ -315,19 +315,27 @@ int target_handle_disconnect(struct ptlrpc_request *req)
                 RETURN(rc);
 
         req->rq_status = obd_disconnect(conn);
+
         RETURN(0);
 }
 
-static int target_revoke_client_resources(struct ptlrpc_connection *conn)
+static int target_disconnect_client(struct ptlrpc_connection *conn)
 {
-        struct list_head *tmp, *pos;
-
+        struct list_head *expiter, *n;
+        struct lustre_handle hdl;
+        struct obd_export *exp;
+        int rc;
         ENTRY;
 
-        /* Cancel outstanding locks. */
-        list_for_each_safe(tmp, pos, &conn->c_exports) {
-        }
+        list_for_each_safe(expiter, n, &conn->c_exports) {
+                exp = list_entry(expiter, struct obd_export, exp_conn_chain);
 
+                hdl.addr = (__u64)(unsigned long)exp;
+                hdl.cookie = exp->exp_cookie;
+                rc = obd_disconnect(&hdl);
+                if (rc)
+                        CERROR("disconnecting export %p failed: %d\n", exp, rc);
+        }
         RETURN(0);
 }
 
@@ -336,6 +344,7 @@ static int target_fence_failed_connection(struct ptlrpc_connection *conn)
         ENTRY;
 
         conn->c_level = LUSTRE_CONN_RECOVD;
+        conn->c_recovd_data.rd_phase = RECOVD_PREPARED;
 
         RETURN(0);
 }
@@ -351,7 +360,7 @@ int target_revoke_connection(struct recovd_data *rd, int phase)
             case PTLRPC_RECOVD_PHASE_PREPARE:
                 RETURN(target_fence_failed_connection(conn));
             case PTLRPC_RECOVD_PHASE_RECOVER:
-                RETURN(target_revoke_client_resources(conn));
+                RETURN(target_disconnect_client(conn));
             case PTLRPC_RECOVD_PHASE_FAILURE:
                 LBUG();
                 RETURN(0);

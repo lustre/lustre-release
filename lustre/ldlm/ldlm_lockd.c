@@ -41,19 +41,32 @@ inline unsigned long round_timeout(unsigned long timeout)
         return ((timeout / HZ) + 1) * HZ;
 }
 
-static void waiting_locks_callback(unsigned long unused)
-{
-        CERROR("lock(s) expired! need to start recovery!\n");
-}
-
 static struct list_head waiting_locks_list;
 static spinlock_t waiting_locks_spinlock;
 static struct timer_list waiting_locks_timer;
+
+static void waiting_locks_callback(unsigned long unused)
+{
+        struct list_head *liter, *n;
+        
+        spin_lock_bh(&waiting_locks_spinlock);
+        list_for_each_safe(liter, n, &waiting_locks_list) {
+                struct ldlm_lock *l = list_entry(liter, struct ldlm_lock,
+                                                 l_pending_chain);
+                if (l->l_callback_timeout > jiffies)
+                        break;
+                LDLM_DEBUG(l, "timer expired, recovering conn %p\n",
+                           l->l_export->exp_connection);
+                recovd_conn_fail(l->l_export->exp_connection);
+        }
+        spin_unlock_bh(&waiting_locks_spinlock);
+}
+
 /*
  * Indicate that we're waiting for a client to call us back cancelling a given
  * lock.  We add it to the pending-callback chain, and schedule the lock-timeout
  * timer to fire appropriately.  (We round up to the next second, to avoid
- * floods of timer firings during periods of high lock contention and traffic.
+ * floods of timer firings during periods of high lock contention and traffic).
  */
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
@@ -138,12 +151,14 @@ static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         memcpy(&body->lock_desc, desc, sizeof(*desc));
 
         LDLM_DEBUG(lock, "server preparing blocking AST");
-        req->rq_replen = lustre_msg_size(0, NULL);
+        req->rq_replen = 0; /* no reply needed */
 
         ldlm_add_waiting_lock(lock);
-        rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
-        ptlrpc_free_req(req);
+        (void)ptl_send_rpc(req);
+
+        /* no commit, and no waiting for reply, so 2x decref now */
+        ptlrpc_req_finished(req);
+        ptlrpc_req_finished(req);
 
         RETURN(rc);
 }
@@ -172,11 +187,13 @@ static int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
         ldlm_lock2desc(lock, &body->lock_desc);
 
         LDLM_DEBUG(lock, "server preparing completion AST");
-        req->rq_replen = lustre_msg_size(0, NULL);
+        req->rq_replen = 0; /* no reply needed */
 
-        rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
-        ptlrpc_free_req(req);
+        (void)ptl_send_rpc(req);
+        /* no commit, and no waiting for reply, so 2x decref now */
+        ptlrpc_req_finished(req);
+        ptlrpc_req_finished(req);
+
         RETURN(rc);
 }
 
@@ -689,6 +706,7 @@ EXPORT_SYMBOL(ldlm_regression_stop);
 EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_namespace_new);
 EXPORT_SYMBOL(ldlm_namespace_free);
+EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
 EXPORT_SYMBOL(l_lock);
 EXPORT_SYMBOL(l_unlock);
 

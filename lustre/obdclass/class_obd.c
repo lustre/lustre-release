@@ -935,8 +935,6 @@ static struct miscdevice obd_psdev = {
 };
 
 void (*class_signal_connection_failure)(struct ptlrpc_connection *);
-int (*mds_destroy_export)(struct obd_export *exp);
-int (*ldlm_destroy_export)(struct obd_export *exp);
 
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
@@ -965,8 +963,6 @@ EXPORT_SYMBOL(class_uuid_unparse);
 //EXPORT_SYMBOL(class_multi_cleanup);
 
 EXPORT_SYMBOL(class_signal_connection_failure);
-EXPORT_SYMBOL(mds_destroy_export);
-EXPORT_SYMBOL(ldlm_destroy_export);
 EXPORT_SYMBOL(ll_sync_io_cb);
 EXPORT_SYMBOL(ll_init_cb);
 
