@@ -446,7 +446,7 @@ static int mds_reint_link(struct mds_update_record *rec,
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE,
-                       dchild->d_inode->i_sb->s_dev);
+                       de_src->d_inode->i_sb->s_dev);
 
         handle = mds_fs_start(mds, de_tgt_dir->d_inode, MDS_FSOP_LINK);
         if (!handle)
