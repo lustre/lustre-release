@@ -17,7 +17,7 @@ all: master.pdf
 	$(LYX2PDF) $< 2>/dev/null || printf "\n*** Warning: not creating PDF docs; install lyx to rectify this\n"
 
 .fig.eps:
-	fig2dev -L eps $< > $@
+	-fig2dev -L eps $< > $@
 
 master.pdf: master.lyx bigpicture.eps intermezzo.eps mds.eps portals-lib.eps client.eps layering.eps metadata.eps sb.eps cow.eps lockacq.eps obdfs.eps snapsetup.eps dirbodyapi.eps loraid.eps ost.eps updates.eps hotmigrate.eps lustreclusters.eps osthw.eps
 

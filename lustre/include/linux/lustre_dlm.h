@@ -23,10 +23,10 @@ typedef enum {
         ELDLM_BLOCK_CONV,
         ELDLM_BLOCK_WAIT,
         ELDLM_BAD_NAMESPACE,
-        ELDLM_RES_CHANGED
+        ELDLM_LOCK_CHANGED
 } ldlm_error_t;
 
-#define LDLM_FL_RES_CHANGED    (1 << 0)
+#define LDLM_FL_LOCK_CHANGED   (1 << 0)
 #define LDLM_FL_COMPLETION_AST (1 << 1)
 #define LDLM_FL_BLOCKING_AST   (1 << 2)
 
@@ -111,15 +111,17 @@ struct ldlm_lock {
         struct lustre_peer   *l_peer;
         void                 *l_data;
         __u32                 l_data_len;
+        struct ldlm_extent    l_extent;
         //void                 *l_event;
         //XXX cluster_host    l_holder;
         __u32                 l_version[RES_VERSION_SIZE];
 };
 
-typedef int (*ldlm_res_compat)(struct ldlm_resource *child,
-                               struct ldlm_resource *new);
-typedef int (*ldlm_res_policy)(struct ldlm_resource *parent, __u64 *res_id_in,
-                               __u64 *res_id_out, ldlm_mode_t mode, void *data);
+typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
+typedef int (*ldlm_res_policy)(struct ldlm_resource *parent,
+                               struct ldlm_extent *req_ex,
+                               struct ldlm_extent *new_ex,
+                               ldlm_mode_t mode, void *data);
 
 #define LDLM_PLAIN       0x0
 #define LDLM_EXTENT      0x1
@@ -142,17 +144,12 @@ struct ldlm_resource {
         struct list_head       lr_waiting;
         ldlm_mode_t            lr_most_restr;
         atomic_t               lr_refcount;
+        __u32                  lr_type; /* PLAIN, EXTENT, or MDSINTENT */
         struct ldlm_resource  *lr_root;
         //XXX cluster_host          lr_master;
         __u64                  lr_name[RES_NAME_SIZE];
         __u32                  lr_version[RES_VERSION_SIZE];
-        __u32                  lr_type; /* PLAIN, EXTENT, or MDSINTENT */
         spinlock_t             lr_lock;
-};
-
-struct ldlm_extent {
-        __u64 start;
-        __u64 end;
 };
 
 static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
@@ -185,16 +182,18 @@ static inline void ldlm_unlock(struct obd_device *obddev)
 extern struct obd_ops ldlm_obd_ops;
 
 /* ldlm_extent.c */
-int ldlm_extent_compat(struct ldlm_resource *, struct ldlm_resource *);
-int ldlm_extent_policy(struct ldlm_resource *, __u64 *, __u64 *,
-                       ldlm_mode_t, void *);
+int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);
+int ldlm_extent_policy(struct ldlm_resource *, struct ldlm_extent *,
+                       struct ldlm_extent *, ldlm_mode_t, void *);
 
 /* ldlm_lock.c */
+void ldlm_lock_free(struct ldlm_lock *lock);
 ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
                                      __u32 ns_id,
                                      struct ldlm_handle *parent_lock_handle,
                                      __u64 *res_id,
                                      __u32 type,
+                                     struct ldlm_extent *req_ex,
                                      ldlm_mode_t mode,
                                      int *flags,
                                      ldlm_lock_callback completion,

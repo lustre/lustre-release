@@ -397,9 +397,9 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
 
         if (service->srv_ref_count[index] < 0)
                 LBUG();
-        
+
         if (service->srv_ref_count[index] == 0 &&
-            service->srv_me_h[index] == 0)  {
+            !ptl_is_valid_handle(&(service->srv_me_h[index]))) {
                 CDEBUG(D_NET, "relinking %d\n", index); 
                 ptlrpc_link_svc_me(service, index); 
         }

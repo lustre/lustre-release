@@ -53,7 +53,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
         if (svc->srv_flags & SVC_EVENT)
                 LBUG();
 
-        if (svc->srv_eq_h) { 
+        if (ptl_is_valid_handle(&svc->srv_eq_h)) {
                 int err;
                 err = PtlEQGet(svc->srv_eq_h, &svc->srv_ev);
 
@@ -289,11 +289,11 @@ int rpc_unregister_service(struct ptlrpc_service *service)
         int rc, i;
 
         for (i = 0; i < service->srv_ring_length; i++) {
-                if (service->srv_me_h[i]) { 
+                if (ptl_is_valid_handle(&(service->srv_me_h[i]))) {
                         rc = PtlMEUnlink(service->srv_me_h[i]);
                         if (rc)
                                 CERROR("PtlMEUnlink failed: %d\n", rc);
-                        service->srv_me_h[i] = 0;
+                        ptl_set_inv_handle(&(service->srv_me_h[i]));
                 }
 
                 if (service->srv_buf[i] != NULL)

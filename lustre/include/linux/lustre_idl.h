@@ -367,11 +367,17 @@ struct ldlm_handle {
         __u64 cookie;
 };
 
+struct ldlm_extent {
+        __u64 start;
+        __u64 end;
+};
+
 struct ldlm_request {
         __u32 ns_id;
         __u64 res_id[RES_NAME_SIZE];
         __u32 res_type;
         __u32 flags;
+        struct ldlm_extent lock_extent;
         struct ldlm_handle parent_res_handle;
         struct ldlm_handle parent_lock_handle;
         ldlm_mode_t mode;

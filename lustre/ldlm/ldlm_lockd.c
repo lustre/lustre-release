@@ -60,6 +60,7 @@ static int ldlm_enqueue(struct ptlrpc_request *req)
                                       &dlm_req->parent_lock_handle,
                                       dlm_req->res_id,
                                       dlm_req->res_type,
+                                      &dlm_req->lock_extent,
                                       dlm_req->mode,
                                       &dlm_req->flags,
                                       ldlm_client_callback,
@@ -204,6 +205,29 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
         RETURN(0);
 }
 
+static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
+{
+        struct list_head *tmp, *pos;
+        int rc = 0;
+
+        list_for_each_safe(tmp, pos, q) {
+                struct ldlm_lock *lock;
+
+                if (rc) {
+                        /* Res was already cleaned up. */
+                        LBUG();
+                }
+
+                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+
+                ldlm_resource_del_lock(lock);
+                ldlm_lock_free(lock);
+                rc = ldlm_resource_put(res);
+        }
+
+        return rc;
+}
+
 static int do_free_namespace(struct ldlm_namespace *ns)
 {
         struct list_head *tmp, *pos;
@@ -215,7 +239,12 @@ static int do_free_namespace(struct ldlm_namespace *ns)
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         list_del_init(&res->lr_hash);
 
-                        rc = 0;
+                        rc = cleanup_resource(res, &res->lr_granted);
+                        if (!rc)
+                                rc = cleanup_resource(res, &res->lr_converting);
+                        if (!rc)
+                                rc = cleanup_resource(res, &res->lr_waiting);
+
                         while (rc == 0)
                                 rc = ldlm_resource_put(res);
                 }

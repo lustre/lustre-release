@@ -93,17 +93,18 @@ int server_request_callback(ptl_event_t *ev, void *data)
 
         service->srv_ref_count[index]++;
 
-        if (ev->unlinked_me != -1) {
+        if (ptl_is_valid_handle(&ev->unlinked_me)) {
                 int idx;
 
                 for (idx = 0; idx < service->srv_ring_length; idx++)
-                        if (service->srv_me_h[idx] == ev->unlinked_me)
+                        if (service->srv_me_h[idx].handle_idx ==
+                            ev->unlinked_me.handle_idx)
                                 break;
                 if (idx == service->srv_ring_length)
                         LBUG();
 
-                CDEBUG(D_NET, "unlinked %d\n", idx); 
-                service->srv_me_h[idx] = 0; 
+                CDEBUG(D_NET, "unlinked %d\n", idx);
+                ptl_set_inv_handle(&(service->srv_me_h[idx]));
 
                 if (service->srv_ref_count[idx] == 0)
                         ptlrpc_link_svc_me(service, idx); 
