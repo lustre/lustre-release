@@ -125,28 +125,24 @@ AC_ARG_ENABLE([modules],
 	AC_HELP_STRING([--disable-modules],
 			[disable building of Lustre kernel modules]),
 	[],[
-		case $target_os in
-			linux* | darwin*)
-				enable_modules='yes'
-				;;
-			*)
-				enable_modules='no'
-				;;
-		esac
+		LC_TARGET_SUPPORTED([
+			enable_modules='yes'
+		],[
+			enable_modules='no'
+		])
 	])
 AC_MSG_RESULT([$enable_modules ($target_os)])
 
 if test x$enable_modules = xyes ; then
 	case $target_os in
 		linux*)
-			LC_LINUX_SUPPORTED([LB_PROG_LINUX],
-				[AC_MSG_ERROR([Modules are not supported on $target_os])])
+			LB_PROG_LINUX
 			;;
 		darwin*)
-			LC_DARWIN_SUPPORTED([LB_PROG_DARWIN],
-				[AC_MSG_ERROR([Modules are not supported on $target_os])])
+			LB_PROG_DARWIN
 			;;
 		*)
+			# This is strange - Lustre supports a target we don't
 			AC_MSG_ERROR([Modules are not supported on $target_os])
 			;;
 	esac

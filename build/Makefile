@@ -4,8 +4,8 @@
 # 
 # 1.  As a subdirectory from the toplevel, for automake
 #
-# 2. A wrapper around the kernel's makefile when building modules, to
-#    possibly override the .config file
+# 2.  A wrapper around the kernel's makefile when building modules, to
+#     possibly override the .config file
 #
 # 3.  At configure time, as the toplevel module dir for building
 #     kernel tests
@@ -21,6 +21,8 @@ include autoMakefile
 else
 
 # case #2
+# Note that this comes from make -C $LINUX -f $LUSTRE/build/Makefile
+# So the include Makefile includes $LINUX/Makefile, not this file
 include $(LUSTRE_LINUX_CONFIG)
 include Makefile
 

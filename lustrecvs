@@ -51,18 +51,23 @@ cvs_cmd ()
     local dir="$1"
     local module="$2"
     local tag="$3"
-    local cvstag=""
+    local cotag=""
+    local update=""
 
-    if [ "$tag" != "HEAD" ] ; then
-	cvstag="-r $tag"
+    if [ "$tag" = "HEAD" ] ; then
+	cotag=""
+	uptag="-A"
+    else
+	cotag="-r $tag"
+	uptag="-r $tag"
     fi
 
     if [ -d "$dir" ] ; then
 	echo "$progname: Updating $dir to $tag"
-	( cd "$dir" && cvs up $cvstag )
+	( cd "$dir" && cvs up $uptag )
     else
 	echo "$progname: Checking out $dir from $tag"
-	cvs co $cvstag -d "$dir" "$module"
+	cvs co $cotag -d "$dir" "$module"
     fi
 }
 

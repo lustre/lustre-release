@@ -496,7 +496,7 @@ LB_LINUX_TRY_COMPILE([
 #
 # LB_LINUX_FUNC_ZAP_PAGE_RANGE
 #
-# if zap_page_range() taks a vma arg
+# if zap_page_range() takes a vma arg
 #
 AC_DEFUN([LB_LINUX_FUNC_ZAP_PAGE_RANGE],
 [AC_MSG_CHECKING([if zap_pag_range with vma parameter])
