@@ -8,7 +8,7 @@
  *
  * by Cluster File Systems, Inc.
  * authors, Peter Braam <braam@clusterfs.com> & 
- * Phil Schwan <phil@clusterfs.com>
+ *          Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -30,6 +30,14 @@ int ldlm_extent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
         RETURN(1);
 }
 
+/* The purpose of this function is to return:
+ * - the maximum extent
+ * - containing the requested extent
+ * - and not overlapping existing extents outside the requested one
+ *
+ * An alternative policy is to not shrink the new extent when conflicts exist.
+ *
+ * To reconstruct our formulas, take a deep breath. */
 static void policy_internal(struct list_head *queue, struct ldlm_extent *req_ex,
                             struct ldlm_extent *new_ex, ldlm_mode_t mode)
 {
@@ -58,28 +66,27 @@ static void policy_internal(struct list_head *queue, struct ldlm_extent *req_ex,
         }
 }
 
-/* The purpose of this function is to return:
- * - the maximum extent
- * - containing the requested extent
- * - and not overlapping existing extents outside the requested one
- *
- * An alternative policy is to not shrink the new extent when conflicts exist.
- *
- * To reconstruct our formulas, take a deep breath. */
-int ldlm_extent_policy(struct ldlm_resource *res, struct ldlm_extent *req_ex,
-                       struct ldlm_extent *new_ex, ldlm_mode_t mode, void *data)
+/* apply the internal policy by walking all the lists */
+int ldlm_extent_policy(struct ldlm_lock *lock, void *req_cookie,
+                       ldlm_mode_t mode, void *data)
 {
-        new_ex->start = 0;
-        new_ex->end = ~0;
+        struct ldlm_resource *res = lock->l_resource;
+        struct ldlm_extent *req_ex = req_cookie;
+        struct ldlm_extent new_ex;
+        new_ex.start = 0;
+        new_ex.end = ~0;
 
         if (!res)
                 LBUG();
 
-        policy_internal(&res->lr_granted, req_ex, new_ex, mode);
-        policy_internal(&res->lr_converting, req_ex, new_ex, mode);
-        policy_internal(&res->lr_waiting, req_ex, new_ex, mode);
+        policy_internal(&res->lr_granted, req_ex, &new_ex, mode);
+        policy_internal(&res->lr_converting, req_ex, &new_ex, mode);
+        policy_internal(&res->lr_waiting, req_ex, &new_ex, mode);
 
-        if (new_ex->end != req_ex->end || new_ex->start != req_ex->start)
+        memcpy(&lock->l_extent, &new_ex, sizeof(new_ex));
+
+        if (new_ex.end != req_ex->end || new_ex.start != req_ex->start)
                 return ELDLM_LOCK_CHANGED;
-        return 0;
+        else 
+                return 0;
 }
