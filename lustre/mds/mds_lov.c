@@ -323,11 +323,8 @@ int mds_lov_set_nextid(struct obd_device *obd)
                 mds_lov_connect(obd);
 
         // XXX CONFIG remove me when configuration is better
-        down(&mds->mds_orphan_recovery_sem);
-        if (mds->mds_lov_nextid_set) {
-                up(&mds->mds_orphan_recovery_sem);
+        if (mds->mds_lov_nextid_set)
                 RETURN(0);
-        }
 
         LASSERT(mds->mds_lov_objids != NULL);
 
@@ -353,7 +350,6 @@ out:
                 mds->mds_lov_objids = NULL;
         }
 
-        up(&mds->mds_orphan_recovery_sem);
         RETURN(rc);
 }
 
