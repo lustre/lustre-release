@@ -120,13 +120,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
 
-        
         /* Lprocfs variables */
         char mnt_name[100];
         char uuid_name[100];
         struct lprocfs_vars d_vars[3];
-        
-
 
         ENTRY;
         MOD_INC_USE_COUNT;
@@ -238,68 +235,68 @@ static struct super_block * ll_read_super(struct super_block *sb,
         ptlrpc_req_finished(request);
         request = NULL;
 
-        
+
         /* Register this mount instance with LProcFS */
-        
+
         snprintf(mnt_name, 100, "mount_%s", sbi->ll_sb_uuid);
         sbi->ll_mnt_root=lprocfs_reg_mnt(mnt_name);
         if(!sbi->ll_mnt_root)
                 goto out_dev;
 
         /* Add the static configuration info */
-        lprocfs_add_vars(sbi->ll_mnt_root, 
+        lprocfs_add_vars(sbi->ll_mnt_root,
                          (struct lprocfs_vars*)status_var_nm_1,
                          (void*)sb);
 
          /* Add the dynamic configuration stuff */
-        
+
         /* MDC */
         obd = class_uuid2obd(mdc);
-        
+
         /* Reuse mnt_name */
-        
+
         sprintf(mnt_name, "status/%s/common_name", obd->obd_type->typ_name);
 
         memset(d_vars, 0, sizeof(d_vars));
         d_vars[0].read_fptr=rd_dev_name;
         d_vars[0].write_fptr=0;
         d_vars[0].name=(char*)mnt_name;
-         
-        
-        snprintf(uuid_name, strlen(uuid_name), "status/%s/uuid", 
+
+
+        snprintf(uuid_name, strlen(uuid_name), "status/%s/uuid",
                  obd->obd_type->typ_name);
         d_vars[1].read_fptr=rd_dev_uuid;
         d_vars[1].write_fptr=0;
         d_vars[1].name=(char*)uuid_name;
-        
-        err=lprocfs_add_vars(sbi->ll_mnt_root, (struct lprocfs_vars* )d_vars, 
+
+        err=lprocfs_add_vars(sbi->ll_mnt_root, (struct lprocfs_vars* )d_vars,
                              (void*)obd);
         if (err) {
                 CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables");
         }
 
-        
+
         /* OSC or LOV*/
         obd = class_uuid2obd(osc);
         /* Reuse mnt_name */
-      
-        snprintf(mnt_name, strlen(mnt_name), "status/%s/common_name", 
+
+        snprintf(mnt_name, strlen(mnt_name), "status/%s/common_name",
                  obd->obd_type->typ_name);
 
         memset(d_vars, 0, sizeof(d_vars));
         d_vars[0].read_fptr=rd_dev_name;
         d_vars[0].write_fptr=0;
         d_vars[0].name=(char*)mnt_name;
-         
-        
-        snprintf(uuid_name, strlen(uuid_name), "status/%s/uuid", 
+
+
+        snprintf(uuid_name, strlen(uuid_name), "status/%s/uuid",
                  obd->obd_type->typ_name);
         d_vars[1].read_fptr=rd_dev_uuid;
         d_vars[1].write_fptr=0;
         d_vars[1].name=(char*)uuid_name;
-        
-        err=lprocfs_add_vars(sbi->ll_mnt_root, (struct lprocfs_vars* )d_vars, 
-                             (void*)obd);        
+
+        err=lprocfs_add_vars(sbi->ll_mnt_root, (struct lprocfs_vars* )d_vars,
+                             (void*)obd);
         if (err) {
                 CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables");
         }
@@ -368,7 +365,7 @@ static void ll_clear_inode(struct inode *inode)
 
         rc = mdc_cancel_unused(&sbi->ll_mdc_conn, inode, LDLM_FL_NO_CALLBACK);
         if (rc < 0) {
-                CERROR("obd_cancel_unused: %d\n", rc);
+                CERROR("mdc_cancel_unused: %d\n", rc);
                 /* XXX FIXME do something dramatic */
         }
 
@@ -574,6 +571,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         ENTRY;
 
         sema_init(&lli->lli_open_sem, 1);
+        atomic_set(&lli->lli_open_count, 0);
 
         /* core attributes first */
         ll_update_inode(inode, body);

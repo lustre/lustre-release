@@ -132,6 +132,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
         if (rc)
                 GOTO(out_mdc, rc = -abs(rc));
 
+        atomic_inc(&lli->lli_open_count);
+
         file->private_data = fd;
 
         RETURN(0);
@@ -325,16 +327,21 @@ out_mdc:
                         rc = -abs(rc2);
                 GOTO(out_fd, rc);
         }
-        CDEBUG(D_HA, "matched req %p xid "LPD64" transno "LPD64" op %d->%s:%d\n",
-               fd->fd_req, fd->fd_req->rq_xid, fd->fd_req->rq_repmsg->transno,
-               fd->fd_req->rq_reqmsg->opc,
+        CDEBUG(D_HA, "matched req %p xid "LPD64" transno "LPD64" op "
+               "%d->%s:%d\n", fd->fd_req, fd->fd_req->rq_xid,
+               fd->fd_req->rq_repmsg->transno, fd->fd_req->rq_reqmsg->opc,
                fd->fd_req->rq_import->imp_connection->c_remote_uuid,
                fd->fd_req->rq_import->imp_client->cli_request_portal);
         ptlrpc_req_finished(fd->fd_req);
 
-        rc = obd_cancel_unused(ll_i2obdconn(inode), lsm, 0);
-        if (rc)
-                CERROR("obd_cancel_unused: %d\n", rc);
+        if (atomic_dec_and_test(&lli->lli_open_count)) {
+                CDEBUG(D_INFO, "last close, cancelling unused locks\n");
+                rc = obd_cancel_unused(ll_i2obdconn(inode), lsm, 0);
+                if (rc)
+                        CERROR("obd_cancel_unused: %d\n", rc);
+        } else {
+                CDEBUG(D_INFO, "not last close, not cancelling unused locks\n");
+        }
 
         EXIT;
 
@@ -345,7 +352,6 @@ out_fd:
 out:
         return rc;
 }
-
 
 static inline void ll_remove_suid(struct inode *inode)
 {
