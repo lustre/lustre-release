@@ -156,13 +156,12 @@ do {                                                                         \
 #define OBD_FAIL_TIMEOUT(id, secs)                                           \
 do {                                                                         \
         if  (OBD_FAIL_CHECK_ONCE(id)) {                                      \
-                CERROR("obd_fail_timeout id %x sleeping for %ld secs\n",     \
+                CERROR("obd_fail_timeout id %x sleeping for %d secs\n",     \
                        (id), (secs));                                        \
                 set_current_state(TASK_UNINTERRUPTIBLE);                     \
                 schedule_timeout((secs) * HZ);                               \
                 set_current_state(TASK_RUNNING);                             \
-                CERROR("obd_fail_timeout id %x awake\n",                     \
-                       (id));                                                \
+                CERROR("obd_fail_timeout id %x awake\n", (id));              \
        }                                                                     \
 } while(0)
 
@@ -183,6 +182,8 @@ do {                                                                         \
 #define ll_lock_kernel
 #endif
 
+void dev_set_rdonly(kdev_t dev, int no_write);
+void dev_clear_rdonly(int);
 
 static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
 {
