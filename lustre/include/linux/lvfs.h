@@ -1,9 +1,18 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Copyright (C) 2004  Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ */
+
 #ifndef __LVFS_H__
 #define __LVFS_H__
 
 #include <linux/kp30.h>
 
-#define LL_FID_NAMELEN	(16 + 1 + 8 + 1)
+#define LL_FID_NAMELEN  (16 + 1 + 8 + 1)
 
 #if defined __KERNEL__
 #include <linux/lvfs_linux.h>
@@ -41,6 +50,13 @@ struct lvfs_run_ctxt {
 #endif
 };
 
+struct lvfs_obd_ctxt {
+        struct vfsmount *loc_mnt;
+        atomic_t         loc_refcount;
+        char            *loc_name;
+        struct list_head loc_list; 
+};
+
 #ifdef OBD_CTXT_DEBUG
 #define OBD_SET_CTXT_MAGIC(ctxt) (ctxt)->magic = OBD_RUN_CTXT_MAGIC
 #else
@@ -64,7 +80,9 @@ int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
 long l_readdir(struct file * file, struct list_head *dentry_list);
-
+int lvfs_mount_fs(char *name, char *fstype, char *options, int flags, 
+                  struct lvfs_obd_ctxt **lvfs_ctxt);
+void lvfs_umount_fs(struct lvfs_obd_ctxt *lvfs_ctxt);
 static inline void l_dput(struct dentry *de)
 {
         if (!de || IS_ERR(de))
