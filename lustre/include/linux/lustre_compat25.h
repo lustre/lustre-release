@@ -38,7 +38,7 @@
 #define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
 #define Page_Uptodate(page)              PageUptodate(page)
 
-#define KDEVT_INIT(val)                 { .value = val }
+#define KDEVT_INIT(val)                 (val)
 
 #define LTIME_S(time)                   (time.tv_sec)
 #define ll_path_lookup                  path_lookup
@@ -50,6 +50,10 @@
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
 
 #define ll_dev_t                        dev_t
+#define kdev_t                          dev_t
+#define to_kdev_t(dev)                  (dev)
+#define kdev_t_to_nr(dev)               (dev)
+#define val_to_kdev(dev)                (dev)
 
 #include <linux/writeback.h>
 
