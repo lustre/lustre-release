@@ -66,7 +66,7 @@ int write_file(char *name, struct lov_user_md *striping)
 	int fd, result;
 
 	printf("opening %s\n", name);
-	fd = open(name, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE);
+	fd = open(name, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
 	if (fd < 0) {
 		fprintf(stderr, "\nUnable to open '%s': %s\n",
 			 name, strerror(errno));
