@@ -417,6 +417,8 @@ int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt)
 
         mds->mds_fsops = fs_ops;
         mds->mds_vfsmnt = mnt;
+
+        OBD_SET_CTXT_MAGIC(&mds->mds_ctxt);
         mds->mds_ctxt.pwdmnt = mnt;
         mds->mds_ctxt.pwd = mnt->mnt_root;
         mds->mds_ctxt.fs = KERNEL_DS;
