@@ -154,9 +154,9 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
                 if (lock->l_export && lock->l_export->exp_connection)
                         ptlrpc_put_connection(lock->l_export->exp_connection);
-                CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 1).\n",
-                       sizeof(*lock), lock);
                 kmem_cache_free(ldlm_lock_slab, lock);
+                CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 0).\n",
+                       sizeof(*lock), lock);
         }
         l_unlock(nslock);
         EXIT;
