@@ -18,7 +18,7 @@
 #endif
 // XXX BUG 1511 -- remove this stanza and all callers when bug 1511 is resolved
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) || defined(CONFIG_RH_2_4_20)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 
 # define SIGNAL_MASK_LOCK(task, flags)                                  \
   spin_lock_irqsave(&task->sighand->siglock, flags)
@@ -28,6 +28,17 @@
   call_usermodehelper(path, argv, envp, 1)
 # define RECALC_SIGPENDING         recalc_sigpending()
 # define CURRENT_SECONDS           get_seconds()
+
+#elif defined(CONFIG_RH_2_4_20) /* RH 2.4.x */
+
+# define SIGNAL_MASK_LOCK(task, flags)                                  \
+  spin_lock_irqsave(&task->sighand->siglock, flags)
+# define SIGNAL_MASK_UNLOCK(task, flags)                                \
+  spin_unlock_irqrestore(&task->sighand->siglock, flags)
+# define USERMODEHELPER(path, argv, envp)                               \
+  call_usermodehelper(path, argv, envp)
+# define RECALC_SIGPENDING         recalc_sigpending()
+# define CURRENT_SECONDS           CURRENT_TIME
 
 #else /* 2.4.x */
 
