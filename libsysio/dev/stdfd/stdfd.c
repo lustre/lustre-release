@@ -46,13 +46,17 @@
 #endif
 
 #include <errno.h>
+#include <stdarg.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/queue.h>
 
 #include "xtio.h"
 #include "sysio.h"
+#include "native.h"
 #include "inode.h"
 #include "dev.h"
 
@@ -64,8 +68,8 @@
 #define dowrite(f, b, n) write_yod(f, b, n)
 #define doread(f, b, n) read_yod(f, b, n)
 #else
-#define dowrite(f, b, n) syscall(SYS_write, f, b, n)
-#define doread(f, b, n) syscall(SYS_read, f, b, n)
+#define dowrite(f, b, n) syscall(SYSIO_SYS_write, f, b, n)
+#define doread(f, b, n) syscall(SYSIO_SYS_read, f, b, n)
 #endif
 
 /*
@@ -78,6 +82,7 @@ static int stdfd_read(struct inode *ino, struct ioctx *ioctx);
 static int stdfd_write(struct inode *ino, struct ioctx *ioctx);
 static int stdfd_iodone(struct ioctx *ioctx);
 static int stdfd_datasync(struct inode *ino);
+static int stdfd_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn);
 static int stdfd_ioctl(struct inode *ino,
 		       unsigned long int request,
 		       va_list ap);
@@ -93,6 +98,7 @@ _sysio_stdfd_init()
 	stdfd_operations.inop_read = stdfd_read;
 	stdfd_operations.inop_write = stdfd_write;
 	stdfd_operations.inop_iodone = stdfd_iodone;
+	stdfd_operations.inop_fcntl = stdfd_fcntl;
 	stdfd_operations.inop_datasync = stdfd_datasync;
 	stdfd_operations.inop_ioctl = stdfd_ioctl;
 
@@ -148,10 +154,13 @@ stdfd_read_simple(void *buf,
 		  _SYSIO_OFF_T off __IS_UNUSED,
 		  struct inode *ino)
 {
+	int	fd = SYSIO_MINOR_DEV(ino->i_stbuf.st_rdev);
+	int	cc;
 
-	int	fd = SYSIO_MINOR_DEV(ino->i_rdev);
-
-	return doread(fd, buf, nbytes);
+	cc = doread(fd, buf, nbytes);
+	if (cc < 0)
+		cc = -errno;
+	return cc;
 }
 
 static int
@@ -167,9 +176,13 @@ stdfd_write_simple(const void *buf,
 		   _SYSIO_OFF_T off __IS_UNUSED,
 		   struct inode *ino)
 {
-	int	fd = SYSIO_MINOR_DEV(ino->i_rdev);
+	int	fd = SYSIO_MINOR_DEV(ino->i_stbuf.st_rdev);
+	int	cc;
 
-	return dowrite(fd, buf, nbytes);
+	cc = dowrite(fd, buf, nbytes);
+	if (cc < 0)
+		cc = -errno;
+	return cc;
 }
 
 static int
@@ -192,6 +205,37 @@ stdfd_iodone(struct ioctx *iocp __IS_UNUSED)
 	 * It's always done in this driver. It completed when posted.
 	 */
 	return 1;
+}
+
+static int
+stdfd_fcntl(struct inode *ino,
+	    int cmd,
+	    va_list ap,
+	    int *rtn)
+{
+	int	err;
+	int	fd = SYSIO_MINOR_DEV(ino->i_stbuf.st_rdev);
+	long	arg;
+
+	err = 0;
+	switch (cmd) {
+	case F_GETFL:
+		*rtn = syscall(SYS_fcntl, fd, cmd);
+		if (*rtn == -1)
+			err = -errno;
+		break;
+	case F_SETFL:
+		arg = va_arg(ap, long);
+		*rtn = syscall(SYS_fcntl, fd, cmd, arg);
+		if (*rtn == -1)
+			err = -errno;
+		va_end(ap);
+		break;
+	default:
+		*rtn = -1;
+		err = -EINVAL;
+	}
+	return err;
 }
 
 static int

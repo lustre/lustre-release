@@ -34,7 +34,6 @@ export SYSIO_NAMESPACE="\
 	{open,	nm=\"/dev/fd/1\",fd=1,m=1} \
 	{creat,	ft=chr,nm=\"/dev/fd/2\",pm=0200,mm=0+2} \
 	{open,	nm=\"/dev/fd/2\",fd=2,m=1} \
-	{cd,	dir=\"$HOME\"} \
 	${_extras} \
 "
 unset _root_flags

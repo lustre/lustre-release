@@ -44,53 +44,35 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
+#include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/queue.h>
 
 #include "sysio.h"
+#include "inode.h"
 #include "sysio-symbols.h"
 
-int
-SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
+/*
+ * Check given access type on given inode.
+ */
+static int
+_sysio_check_permission(struct inode *ino,
+			uid_t uid, gid_t gid,
+			gid_t gids[], size_t ngids,
+			int amode)
 {
-	gid_t	*list, *entry;
-	size_t	n;
-	int	err = 0;
-	unsigned mask, mode;
-	struct stat stbuf;
-	SYSIO_INTERFACE_DISPLAY_BLOCK;
-
-	SYSIO_INTERFACE_ENTER;
-	err = 0;
+	mode_t	mask;
+	struct intnl_stat *stat;
 
 	/*
 	 * Check amode.
 	 */
 	if ((amode & (R_OK|W_OK|X_OK)) != amode)
-		SYSIO_INTERFACE_RETURN(-1, -EINVAL);
+		return -EINVAL;
 
-	n = getgroups(0, NULL);
-	list = NULL;
-	if (n) {
-		list = malloc(n * sizeof(gid_t));
-		if (!list) {
-			err = -ENOMEM;
-			goto out;
-		}
-	}
-	err = getgroups(n, list);
-	if (err != (int ) n)
-		goto out;
-
-	err = SYSIO_INTERFACE_NAME(stat)(path, &stbuf);
-	if (err) {
-		err = -errno;
-		goto out;
-	}
 	if (!amode)
-		SYSIO_INTERFACE_RETURN(0, 0);
-
+		return 0;
 
 	mask = 0;
 	if (amode & R_OK)
@@ -100,29 +82,91 @@ SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
 	if (amode & X_OK)
 		mask |= S_IXUSR;
 
-	mode = stbuf.st_mode;
-	if (stbuf.st_uid == getuid() && (mode & mask) == mask) 
-		goto out;
+	stat = &ino->i_stbuf;
+	if (stat->st_uid == uid && (stat->st_mode & mask) == mask) 
+		return 0;
 
 	mask >>= 3;
-	if (stbuf.st_gid == getgid() && (mode & mask) == mask)
-		goto out;
+	if (stat->st_gid == gid && (stat->st_mode & mask) == mask)
+		return 0;
 
-	entry = list;
-	while (n--)
-		if (stbuf.st_gid == *entry++ && (mode & mask) == mask)
-			goto out;
+	while (ngids) {
+		ngids--;
+		if (stat->st_gid == *gids++ && (stat->st_mode & mask) == mask)
+			return 0;
+	}
 
 	mask >>= 3;
-	if ((mode & mask) == mask)
-		goto out;
+	if ((stat->st_mode & mask) == mask)
+		return 0;
 
-	err = -EACCES;
+	return -EACCES;
+}
 
-out:
-	if (list)
-		free(list);
+/*
+ * Determine if a given access is permitted to a give file.
+ */
+int
+_sysio_permitted(struct inode *ino, int amode)
+{
+	int	err;
+	gid_t	*gids;
+	int	n;
+	void	*p;
 
+	err = 0;
+	gids = NULL;
+	for (;;) {
+		n = getgroups(0, NULL);
+		if (!n)
+			break;
+		p = realloc(gids, n * sizeof(gid_t));
+		if (!p && gids) {
+			err = -ENOMEM;
+			break;
+		}
+		gids = p;
+		err = getgroups(n, gids);
+		if (err < 0) {
+			if (errno == EINVAL)
+				continue;
+			err = -errno;
+			break;
+		}
+		err =
+		    _sysio_check_permission(ino,
+					    geteuid(), getegid(),
+					    gids, (size_t )n,
+					    amode);
+		break;
+	}
+	if (!gids)
+		return err;
+	free(gids);
+	return err;
+}
+
+int
+SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
+{
+	struct intent intent;
+	int	err;
+	struct pnode *pno;
+
+	SYSIO_INTERFACE_DISPLAY_BLOCK;
+
+	SYSIO_INTERFACE_ENTER;
+
+	INTENT_INIT(&intent, INT_GETATTR, NULL, NULL);
+	err = _sysio_namei(_sysio_cwd, path, 0, &intent, &pno);
+	if (err)
+		SYSIO_INTERFACE_RETURN(-1, err);
+	err =
+	    _sysio_check_permission(pno->p_base->pb_ino,
+				    getuid(), getgid(),
+				    NULL, 0,
+				    amode);
+	P_RELE(pno);
 	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
 }
 

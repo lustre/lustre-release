@@ -68,16 +68,6 @@
 #endif
 
 /*
- * The namespace assembly buffer passes args with a `name'=`value'
- * syntax. We use the following to record that in various
- * routines below.
- */
-struct named_argument {
-	const char *name;				/* arg name */
-	char	*value;					/* arg value */
-};
-
-/*
  * White space characters.
  */
 #define IGNORE_WHITE		" \t\r\n"
@@ -91,7 +81,7 @@ _sysio_init()
 {
 	int	err;
 #ifdef WITH_SOCKETS
-	int	_sysio_sockets_init(void);
+        int     _sysio_sockets_init(void);
 #endif
 
 	err = _sysio_ioctx_init();
@@ -113,9 +103,9 @@ _sysio_init()
 		goto error;
 #endif
 #ifdef WITH_SOCKETS
-	err = _sysio_sockets_init();
-	if (err)
-		goto error;
+        err = _sysio_sockets_init();
+        if (err)
+                goto error;
 #endif
 
 	goto out;
@@ -160,8 +150,8 @@ _sysio_shutdown()
  * or NUL character is success.
  *
  */
-static const char *
-get_token(const char *buf,
+const char *
+_sysio_get_token(const char *buf,
 	  int accepts,
 	  const char *delim,
 	  const char *ignore,
@@ -210,15 +200,20 @@ get_token(const char *buf,
  *
  * NB: Alters the passed buffer.
  */
-static char *
-get_args(char *buf, struct named_argument *vec)
+char *
+_sysio_get_args(char *buf, struct option_value_info *vec)
 {
 	char	*nxt;
 	char	*name, *value;
-	struct named_argument *v;
+	struct option_value_info *v;
 
 	for (;;) {
-		nxt = (char *)get_token(buf, 1, "=,", IGNORE_WHITE, name = buf);
+		nxt =
+		    (char *)_sysio_get_token(buf,
+					     1,
+					     "=,",
+					     IGNORE_WHITE,
+					     name = buf);
 		if (!nxt ||
 		    (nxt != buf && *name == '\0' && buf + strlen(buf) == nxt)) {
 			buf = NULL;
@@ -226,15 +221,20 @@ get_args(char *buf, struct named_argument *vec)
 		}
 		if (*name == '\0')
 			break;
-		buf = (char *)get_token(nxt, 1, ",", IGNORE_WHITE, value = nxt);
+		buf =
+		    (char *)_sysio_get_token(nxt,
+					     1,
+					     ",",
+					     IGNORE_WHITE,
+					     value = nxt);
 		if (*value == '\0')
 			value = NULL;
-		for (v = vec; v->name; v++)
-			if (strcmp(v->name, name) == 0)
+		for (v = vec; v->ovi_name; v++)
+			if (strcmp(v->ovi_name, name) == 0)
 				break;
-		if (!v->name)
+		if (!v->ovi_name)
 			return NULL;
-		v->value = value;
+		v->ovi_value = value;
 	}
 
 	return buf;
@@ -269,7 +269,7 @@ static int
 do_creat(char *args) 
 {
 	size_t	len;
-	struct named_argument v[] = {
+	struct option_value_info v[] = {
 		{ "ft",		NULL },			/* file type */
 		{ "nm",		NULL },			/* name */
 		{ "pm",		NULL },			/* permissions */
@@ -289,27 +289,27 @@ do_creat(char *args)
 	int	err;
   
 	len = strlen(args);
-	if (get_args(args, v) - args != (ssize_t )len ||
-	    !(v[0].value &&
-	      v[1].value &&
-	      v[2].value))
+	if (_sysio_get_args(args, v) - args != (ssize_t )len ||
+	    !(v[0].ovi_value &&
+	      v[1].ovi_value &&
+	      v[2].ovi_value))
 		return -EINVAL;
-	perms = strtol(v[2].value, (char **)&cp, 0);
+	perms = strtol(v[2].ovi_value, (char **)&cp, 0);
 	if (*cp ||
 	    perms < 0 ||
 	    (perms == LONG_MAX && errno == ERANGE) ||
 	    ((unsigned)perms & ~07777))
 		return -EINVAL;
-	if (v[3].value) {
-		owner = strtol(v[3].value, (char **)&cp, 0);
+	if (v[3].ovi_value) {
+		owner = strtol(v[3].ovi_value, (char **)&cp, 0);
 		if (*cp ||
 		    ((owner == LONG_MIN || owner == LONG_MAX)
 		     && errno == ERANGE))
 			return -EINVAL;
 	} else
 		owner = getuid();
-	if (v[4].value) {
-		group = strtol(v[4].value, (char **)&cp, 0);
+	if (v[4].ovi_value) {
+		group = strtol(v[4].ovi_value, (char **)&cp, 0);
 		if (*cp ||
 		    ((group == LONG_MIN || group == LONG_MAX) &&
 		     errno == ERANGE))
@@ -321,9 +321,10 @@ do_creat(char *args)
 		return -ENOENT;
 	err = 0;
 	mode = perms;
-	if (strcmp(v[0].value, "dir") == 0) {
+	if (strcmp(v[0].ovi_value, "dir") == 0) {
 		INTENT_INIT(&intent, INT_CREAT, &mode, 0);
-		err = _sysio_namei(dir, v[1].value, ND_NEGOK, &intent, &pno);
+		err =
+		    _sysio_namei(dir, v[1].ovi_value, ND_NEGOK, &intent, &pno);
 		if (err)
 			return err;
 		if (pno->p_base->pb_ino)
@@ -338,12 +339,13 @@ do_creat(char *args)
 			err = (*ino->i_ops.inop_mkdir)(pno, mode);
 		}
 		P_RELE(pno);
-	} else if (strcmp(v[0].value, "chr") == 0) {
-		if (!(v[5].value && parse_mm(v[5].value, &dev) == 0))
+	} else if (strcmp(v[0].ovi_value, "chr") == 0) {
+		if (!(v[5].ovi_value && parse_mm(v[5].ovi_value, &dev) == 0))
 			return -EINVAL;
 		mode |= S_IFCHR;
 		INTENT_INIT(&intent, INT_CREAT, &mode, 0);
-		err = _sysio_namei(dir, v[1].value, ND_NEGOK, &intent, &pno);
+		err =
+		    _sysio_namei(dir, v[1].ovi_value, ND_NEGOK, &intent, &pno);
 		if (err)
 			return err;
 		if (pno->p_base->pb_ino)
@@ -358,18 +360,19 @@ do_creat(char *args)
 			err = (*ino->i_ops.inop_mknod)(pno, mode, dev);
 		}
 		P_RELE(pno);
-	} else if (strcmp(v[0].value, "blk") == 0) {
+	} else if (strcmp(v[0].ovi_value, "blk") == 0) {
 		/*
 		 * We don't support block special files yet.
 		 */
 		return -EINVAL;
-	} else if (strcmp(v[0].value, "file") == 0) {
+	} else if (strcmp(v[0].ovi_value, "file") == 0) {
 		int	i;
 		struct inode *ino;
 
 		i = O_CREAT|O_EXCL;
 		INTENT_INIT(&intent, INT_CREAT, &mode, &i);
-		err = _sysio_namei(dir, v[1].value, ND_NEGOK, &intent, &pno);
+		err =
+		    _sysio_namei(dir, v[1].ovi_value, ND_NEGOK, &intent, &pno);
 		if (err)
 			return err;
 		err = _sysio_open(pno, O_CREAT|O_EXCL, mode);
@@ -378,7 +381,7 @@ do_creat(char *args)
 			return err;
 		}
 		ino = pno->p_base->pb_ino;
-		if (!err && v[6].value) {
+		if (!err && v[6].ovi_value) {
 			struct iovec iovec;
 			struct intnl_xtvec xtvec;
 			struct ioctx io_context;
@@ -386,8 +389,8 @@ do_creat(char *args)
 			/*
 			 * Deposit optional file content.
 			 */
-			iovec.iov_base = v[6].value;
-			iovec.iov_len = strlen(v[6].value);
+			iovec.iov_base = v[6].ovi_value;
+			iovec.iov_len = strlen(v[6].ovi_value);
 			xtvec.xtv_off = 0;
 			xtvec.xtv_len = iovec.iov_len;
 			IOCTX_INIT(&io_context,
@@ -430,7 +433,7 @@ static int
 do_mnt(char *args) 
 {
 	size_t	len;
-	struct named_argument v[] = {
+	struct option_value_info v[] = {
 		{ "dev",	NULL },			/* source (type:dev) */
 		{ "dir",	NULL },			/* target dir */
 		{ "fl",		NULL },			/* flags */
@@ -442,35 +445,46 @@ do_mnt(char *args)
 	struct pnode *dir;
   
 	len = strlen(args);
-	if (get_args(args, v) - args != (ssize_t )len ||
-	    !(v[0].value && v[1].value))
+	if (_sysio_get_args(args, v) - args != (ssize_t )len ||
+	    !(v[0].ovi_value && v[1].ovi_value))
 		return -EINVAL;
-	ty = (char *)get_token(v[0].value, 1, ":", "", name = v[0].value);
+	ty =
+	    (char *)_sysio_get_token(v[0].ovi_value,
+				     1,
+				     ":",
+				     "",
+				     name = v[0].ovi_value);
 	flags = 0;
-	if (v[2].value) {
+	if (v[2].ovi_value) {
 		char	*cp;
 
 		/*
 		 * Optional flags.
 		 */
-		flags = strtoul(v[2].value, &cp, 0);
+		flags = strtoul(v[2].ovi_value, &cp, 0);
 		if (*cp || (flags == ULONG_MAX && errno == ERANGE))
 			return -EINVAL;
 	}
 
-	if (strlen(v[1].value) == 1 && v[1].value[0] == PATH_SEPARATOR) {
+	if (strlen(v[1].ovi_value) == 1 && v[1].ovi_value[0] == PATH_SEPARATOR) {
 		/*
 		 * Aha! It's root they want. Have to do that special.
 		 */
-		return _sysio_mount_root(ty, name, flags, v[3].value);
+		return _sysio_mount_root(ty, name, flags, v[3].ovi_value);
 	}
 
 	if (!(dir = _sysio_cwd) && !(dir = _sysio_root))
 		return -ENOENT;
-	return _sysio_mount(dir, ty, v[1].value, name, flags, v[3].value);
+	return _sysio_mount(dir,
+			    ty,
+			    v[1].ovi_value,
+			    name,
+			    flags,
+			    v[3].ovi_value);
 }
 
 
+#if 0
 /*
  * Chdir
  *
@@ -480,7 +494,7 @@ static int
 do_cd(char *args) 
 {
 	size_t	len;
-	struct named_argument v[] = {
+	struct option_value_info v[] = {
 		{ "dir",	NULL },			/* directory */
 		{ NULL,		NULL }
 	};
@@ -488,12 +502,12 @@ do_cd(char *args)
 	struct pnode *dir, *pno;
 
 	len = strlen(args);
-	if (get_args(args, v) - args != (ssize_t )len || !v[0].value)
+	if (_sysio_get_args(args, v) - args != (ssize_t )len || !v[0].ovi_value)
 		return -EINVAL;
 
 	if (!(dir = _sysio_cwd) && !(dir = _sysio_root))
 		return -ENOENT;
-	err = _sysio_namei(dir, v[0].value, 0, NULL, &pno);
+	err = _sysio_namei(dir, v[0].ovi_value, 0, NULL, &pno);
 	if (err)
 		return err;
 	err = _sysio_p_chdir(pno);
@@ -501,6 +515,7 @@ do_cd(char *args)
 		P_RELE(pno);
 	return err;
 }
+#endif
 
 /*
  * Does a chmod
@@ -511,7 +526,7 @@ static int
 do_chmd(char *args)
 {
 	size_t	len;
-	struct named_argument v[] = {
+	struct option_value_info v[] = {
 		{ "src",	NULL },			/* path */
 		{ "pm",		NULL },			/* perms */
 		{ NULL,		NULL }
@@ -523,10 +538,10 @@ do_chmd(char *args)
 	struct pnode *dir, *pno;
   
 	len = strlen(args);
-	if (get_args(args, v) - args != (ssize_t )len ||
-	    !(v[0].value && v[1].value))
+	if (_sysio_get_args(args, v) - args != (ssize_t )len ||
+	    !(v[0].ovi_value && v[1].ovi_value))
 		return -EINVAL;
-	perms = strtol(v[1].value, &cp, 0);
+	perms = strtol(v[1].ovi_value, &cp, 0);
 	if (*cp ||
 	    perms < 0 ||
 	    (perms == LONG_MAX && errno == ERANGE) ||
@@ -537,7 +552,7 @@ do_chmd(char *args)
 
 	if (!(dir = _sysio_cwd) && !(dir = _sysio_root))
 		return -ENOENT;
-	err = _sysio_namei(dir, v[0].value, 0, NULL, &pno);
+	err = _sysio_namei(dir, v[0].ovi_value, 0, NULL, &pno);
 	if (err)
 		return err;
 	err = _sysio_setattr(pno, pno->p_base->pb_ino, SETATTR_MODE, &stbuf);
@@ -550,40 +565,52 @@ static int
 do_open(char *args)
 {
 	size_t	len;
-	struct named_argument v[] = {
-		{ "nm",	NULL },			/* path */
+	struct option_value_info v[] = {
+		{ "nm",		NULL },			/* path */
 		{ "fd",		NULL },			/* fildes */
 		{ "m",		NULL },			/* mode */
 		{ NULL,		NULL }
 	};
 	char	*cp;
+	long	l;
 	int	fd;
+	unsigned long ul;
 	mode_t	m;
 	struct pnode *dir, *pno;
 	struct intent intent;
 	int	err;
 	struct file *fil;
 
+/*
+ * Check if long overflows integer range.
+ */
+#if LONG_MAX <= INT_MAX
+#define _irecheck(_l, _e) \
+	((_l) == LONG_MAX && (_e) == ERANGE)
+#else
+#define _irecheck(_l, _e) \
+	((_l) > INT_MAX)
+#endif
+
 	len = strlen(args);
-	if (get_args(args, v) - args != (ssize_t )len ||
-	    !(v[0].value && v[1].value && v[2].value))
+	if (_sysio_get_args(args, v) - args != (ssize_t )len ||
+	    !(v[0].ovi_value && v[1].ovi_value && v[2].ovi_value))
 		return -EINVAL;
-	fd = strtol(v[1].value, (char **)&cp, 0);
+	l = strtol(v[1].ovi_value, (char **)&cp, 0);
+	if (*cp || l < 0 || _irecheck(l, errno))
+		return -EINVAL;
+	fd = (int )l;
+	ul = strtoul(v[1].ovi_value, (char **)&cp, 0);
 	if (*cp ||
-	    (((fd == LONG_MIN || fd == LONG_MAX) && errno == ERANGE)) ||
-	     fd < 0)
+	    (ul == ULONG_MAX && errno == ERANGE))
 		return -EINVAL;
-	m = strtoul(v[1].value, (char **)&cp, 0);
-	if (*cp ||
-	    (m == LONG_MAX && errno == ERANGE))
-		return -EINVAL;
-	m &= O_RDONLY|O_WRONLY|O_RDWR;
+	m = (mode_t )ul & (O_RDONLY|O_WRONLY|O_RDWR);
 
 	if (!(dir = _sysio_cwd) && !(dir = _sysio_root))
 		return -ENOENT;
 	INTENT_INIT(&intent, INT_OPEN, &m, NULL);
 	pno = NULL;
-	err = _sysio_namei(dir, v[0].value, 0, &intent, &pno);
+	err = _sysio_namei(dir, v[0].ovi_value, 0, &intent, &pno);
 	if (err)
 		return err;
 	fil = NULL;
@@ -607,6 +634,8 @@ do_open(char *args)
 	if (pno)
 		P_RELE(pno);
 	return err;
+
+#undef _irecheck
 }
 
 /*
@@ -621,14 +650,16 @@ do_command(char *buf)
 	char	*args, *cmd;
 
 	len = strlen(buf);
-	args = (char *)get_token(buf, 1, ",", IGNORE_WHITE, cmd = buf);
+	args = (char *)_sysio_get_token(buf, 1, ",", IGNORE_WHITE, cmd = buf);
 	if (args) {
 		if (strcmp("creat", cmd) == 0)
 			return do_creat(args);
 		if (strcmp("mnt", cmd) == 0)
 			return do_mnt(args);
+#if 0
 		if (strcmp("cd", cmd) == 0)
 			return do_cd(args);
+#endif
 		if (strcmp("chmd", cmd) == 0)
 			return do_chmd(args);
 		if (strcmp("open", cmd) == 0)
@@ -642,15 +673,23 @@ do_command(char *buf)
  * commands 
  */
 int 
-_sysio_boot(const char *buf) 
+_sysio_boot(const char *buf
+#if DEFER_INIT_CWD
+	    , const char *path
+#endif
+	   )
 {
 	char	c, *tok;
+	ssize_t	len;
 	int	err;
 
+	if (!buf)
+		buf = "";
 	/*
 	 * Allocate token buffer.
 	 */
-	tok = malloc(strlen(buf));
+	len = strlen(buf);
+	tok = malloc(len ? len : 1);
 	if (!tok)
 		return -ENOMEM;
 	err = 0;
@@ -670,7 +709,12 @@ _sysio_boot(const char *buf)
 		/*
 		 * Get the command.
 		 */
-		buf = (char *)get_token(buf + 1, 0, "}", IGNORE_WHITE, tok);
+		buf =
+		    (char *)_sysio_get_token(buf + 1,
+					     0,
+					     "}",
+					     IGNORE_WHITE,
+					     tok);
 		if (!buf) {
 			err = -EINVAL;
 			break;
@@ -683,5 +727,10 @@ _sysio_boot(const char *buf)
 			break;
 	}
 	free(tok);
+#if DEFER_INIT_CWD
+	if (err)
+		return err;
+	_sysio_init_cwd = path;
+#endif
 	return err;
 }

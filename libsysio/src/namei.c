@@ -49,6 +49,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include <unistd.h>
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -89,11 +90,15 @@ lookup(struct pnode *parent,
        struct intent *intnt,
        const char *path)
 {
-	struct pnode *pno;
 	int	err;
+	struct pnode *pno;
 
 	if (!parent->p_base->pb_ino)
 		return -ENOTDIR;
+
+	err = _sysio_permitted(parent->p_base->pb_ino, X_OK);
+	if (err)
+		return err;
 
 	/*
 	 * Short-circuit `.' and `..'; We don't cache those.
@@ -177,6 +182,27 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 		parent = nd->nd_root;
 	}
 
+#if DEFER_INIT_CWD
+	if (!parent) {
+		const char *icwd;
+
+		if (!_sysio_init_cwd)
+			abort();
+
+		/*
+		 * Finally have to set the curretn working directory. We can
+		 * not tolerate errors here or else risk leaving the process
+		 * in a very unexpected location. We abort then unless all goes
+		 * well.
+		 */
+		icwd = _sysio_init_cwd;
+		_sysio_init_cwd = NULL;
+		if (_sysio_namei(NULL, icwd, 0, NULL, &parent) != 0 ||
+		    _sysio_p_chdir(parent) != 0)
+			abort();
+	}
+#endif
+
 	/*
 	 * (Re)Validate the parent.
 	 */
@@ -200,7 +226,7 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 	 */
 	for (;;) {
 		ino = nd->nd_pno->p_base->pb_ino;
-		if (S_ISLNK(ino->i_mode) &&
+		if (S_ISLNK(ino->i_stbuf.st_mode) &&
 		    (next.len || !(nd->nd_flags & ND_NOFOLLOW))) {
 			char	*lpath;
 			ssize_t	cc;
@@ -249,10 +275,10 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 		}
 #ifdef AUTOMOUNT_FILE_NAME
 		else if (ino &&
-			 S_ISDIR(ino->i_mode) &&
+			 S_ISDIR(ino->i_stbuf.st_mode) &&
 			 (nd->nd_pno->p_mount->mnt_flags & MOUNT_F_AUTO) &&
 			 nd->nd_amcnt < MAX_MOUNT_DEPTH &&
-			 ino->i_mode & S_ISUID) {
+			 ino->i_stbuf.st_mode & S_ISUID) {
 			struct pnode *pno;
 
 			/*
@@ -336,7 +362,7 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 		/*
 		 * Parent must be a directory.
 		 */
-		if (ino && !S_ISDIR(ino->i_mode)) {
+		if (ino && !S_ISDIR(ino->i_stbuf.st_mode)) {
 			err = -ENOTDIR;
 			break;
 		}
@@ -415,7 +441,8 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 		 * Make sure the last processed component was a directory. The
 		 * trailing slashes are illegal behind anything else.
 		 */
-		if (!(err || S_ISDIR(nd->nd_pno->p_base->pb_ino->i_mode)))
+		if (!(err ||
+		      S_ISDIR(nd->nd_pno->p_base->pb_ino->i_stbuf.st_mode)))
 			err = -ENOTDIR;
 	}
 

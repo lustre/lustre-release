@@ -40,7 +40,7 @@ my $home = $ENV{"HOME"};
 my $auto_mount = $ENV{"SYSIO_AUTOMOUNT"};
 my $root_flags = "0";
 my $extras = "";
-if ((defined($auto_mount)) && ($auto_mount == "xyes")) {
+if ((defined($auto_mount)) && ($auto_mount eq "xyes")) {
 	$root_flags = "2";
 
 	#
@@ -73,6 +73,15 @@ $ENV{$namespace_env} = "\
 my $res;
 
 if ($use_system == 1) {
+	# Test for tmp_dir.  If it exists, fail 
+	# The tmp_dir should be removed after a successful
+	# test run, but is kept if anything fails
+	if (-e "$cwd/tmp_dir") {
+		print STDERR "ERROR! tmp_dir already exists.\n";
+		print STDERR "Need to remove tmp_dir for test to run properly\n";
+		exit 1;
+	} 
+
   # Will use this directory...
   system("mkdir -p $cwd/tmp_dir");
 

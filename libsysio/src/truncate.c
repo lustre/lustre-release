@@ -71,9 +71,9 @@ do_truncate(struct pnode *pno, struct inode *ino, _SYSIO_OFF_T length)
 		ino = pno->p_base->pb_ino;
 	if (!ino)
 		return -EBADF;
-	if (S_ISDIR(ino->i_mode))			/* for others too? */
+	if (S_ISDIR(ino->i_stbuf.st_mode))		/* for others too? */
 		return -EISDIR;
-	if (!S_ISREG(ino->i_mode))
+	if (!S_ISREG(ino->i_stbuf.st_mode))
 		return -EINVAL;
 
 	(void )memset(&stbuf, 0, sizeof(stbuf));

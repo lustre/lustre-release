@@ -135,9 +135,8 @@ struct inode {
 	i_immune			: 1,		/* immune from GC */
     	i_zombie			: 1;		/* stale inode */
     unsigned i_ref;                                     /* soft ref counter */
-    mode_t  i_mode;                                     /* mode (see stat.h) */
-    dev_t   i_rdev;					/* dev (if device) */
     struct inode_ops i_ops;                             /* operations */
+    struct intnl_stat i_stbuf;				/* attrs */
     struct filesys *i_fs;                               /* file system ptr */
     struct file_identifier *i_fid;                      /* file ident */
     void    *i_private;                                 /* driver data */
@@ -147,14 +146,13 @@ struct inode {
 /*
  * Init an i-node record.
  */
-#define I_INIT(ino, fs, mode, rdev, ops, fid, immunity, private) \
+#define I_INIT(ino, fs, stat, ops, fid, immunity, private) \
     do { \
         (ino)->i_immune = (immunity) ? 1 : 0; \
         (ino)->i_zombie = 0; \
         (ino)->i_ref = 0; \
-        (ino)->i_mode = (mode); \
-        (ino)->i_rdev = (rdev); \
         (ino)->i_ops = *(ops); \
+        (ino)->i_stbuf = *(stat); \
         (ino)->i_fs = (fs); \
         (ino)->i_fid = (fid); \
         (ino)->i_private = (private); \
@@ -423,8 +421,7 @@ extern void _sysio_i_shutdown(void);
 #endif
 extern struct inode *_sysio_i_new(struct filesys *fs,
                                   struct file_identifier *fid,
-                                  mode_t type,
-                                  dev_t rdev,
+				  struct intnl_stat *stat,
 				  unsigned immunity,
                                   struct inode_ops *ops,
                                   void *private);
@@ -466,6 +463,7 @@ extern int _sysio_path_walk(struct pnode *parent, struct nameidata *nd);
 #ifdef AUTOMOUNT_FILE_NAME
 extern void _sysio_next_component(const char *path, struct qstr *name);
 #endif
+extern int _sysio_permitted(struct inode *ino, int amode);
 extern int _sysio_namei(struct pnode *pno,
                         const char *path,
                         unsigned flags,
@@ -487,30 +485,4 @@ extern void _sysio_ioctx_cb_free(struct ioctx_callback *cb);
 extern struct ioctx *_sysio_ioctx_find(void *id);
 extern ssize_t _sysio_ioctx_wait(struct ioctx *ioctx);
 extern void _sysio_ioctx_complete(struct ioctx *ioctx);
-extern ssize_t _sysio_validx(const struct intnl_xtvec *xtv, size_t xtvlen,
-			     const struct iovec *iov, size_t iovlen,
-			     _SYSIO_OFF_T limit);
-extern ssize_t _sysio_enumerate_extents(const struct intnl_xtvec *xtv,
-					size_t xtvlen,
-					const struct iovec *iov,
-					size_t iovlen,
-					ssize_t (*f)(const struct iovec *,
-						     int,
-						     _SYSIO_OFF_T,
-						     ssize_t,
-						     void *),
-					void *arg);
-extern ssize_t _sysio_enumerate_iovec(const struct iovec *iov,
-				      size_t count,
-				      _SYSIO_OFF_T off,
-				      ssize_t limit,
-				      ssize_t (*f)(void *,
-						   size_t,
-						   _SYSIO_OFF_T,
-						   void *),
-				      void *arg);
-extern ssize_t _sysio_doio(const struct intnl_xtvec *xtv, size_t xtvlen,
-			   const struct iovec *iov, size_t iovlen,
-			   ssize_t (*f)(void *, size_t, _SYSIO_OFF_T, void *),
-			   void *arg);
 extern int _sysio_open(struct pnode *pno, int flags, mode_t mode);

@@ -85,7 +85,6 @@
  */
 struct incore_inode {
 	LIST_ENTRY(incore_inode) ici_link;		/* i-nodes list link */
-	unsigned ici_revalidate			: 1;	/* synch sys inode? */
 	struct intnl_stat ici_st;			/* attrs */
 	struct file_identifier ici_fileid;		/* file ID */
 	void	*ici_data;				/* file data */
@@ -165,7 +164,7 @@ static void _sysio_incore_inop_gone(struct inode *ino);
 #define _sysio_incore_dirop_symlink \
 	(int (*)(struct pnode *, const char *))_sysio_do_enosys
 #define _sysio_incore_dirop_readlink \
-	(int (*)(struct pnode *, char *, size_t))_sysio_do_einval
+	(int (*)(struct pnode *, char *, size_t))_sysio_do_enosys
 #define _sysio_incore_dirop_read \
 	(int (*)(struct inode *, \
 		 struct ioctx *))_sysio_do_eisdir
@@ -419,7 +418,6 @@ incore_i_alloc(struct incore_filesys *icfs, struct intnl_stat *st)
 	icino = malloc(sizeof(struct incore_inode));
 	if (!icino)
 		return NULL;
-	icino->ici_revalidate = 0;
 	icino->ici_st = *st;
 	icino->ici_fileid.fid_data = &icino->ici_st.st_ino;
 	icino->ici_fileid.fid_len = sizeof(icino->ici_st.st_ino);
@@ -634,8 +632,7 @@ _sysio_incore_fsswop_mount(const char *source,
 	rooti =
 	    _sysio_i_new(fs,
 			 &icino->ici_fileid,
-			 icino->ici_st.st_mode,
-			 0,
+			 &icino->ici_st,
 			 1,
 			 &_sysio_incore_dir_ops,
 			 icino);
@@ -809,10 +806,7 @@ _sysio_incore_dirop_lookup(struct pnode *pno,
 	if (*inop) {
 		icino = I2IC(*inop);
 		assert(icino);
-		if (icino->ici_revalidate) {
-			(*inop)->i_mode = icino->ici_st.st_mode;
-			icino->ici_revalidate = 0;
-		}
+		(*inop)->i_stbuf = icino->ici_st;
 		return 0;
 	}
 
@@ -856,8 +850,7 @@ _sysio_incore_dirop_lookup(struct pnode *pno,
 	ino =
 	    _sysio_i_new(ino->i_fs,
 			 &icino->ici_fileid,
-			 icino->ici_st.st_mode,
-			 0,
+			 &icino->ici_st
 			 1,
 			 ops,
 			 icino);
@@ -911,7 +904,6 @@ _sysio_incore_inop_setattr(struct pnode *pno,
 	if (mask & SETATTR_MODE) {
 		icino->ici_st.st_mode =
 		    (icino->ici_st.st_mode & S_IFMT) | (stbuf->st_mode & 07777);
-		icino->ici_revalidate = 1;
 	}
 	if (mask & SETATTR_MTIME)
 		icino->ici_st.st_mtime = stbuf->st_mtime;
@@ -923,6 +915,7 @@ _sysio_incore_inop_setattr(struct pnode *pno,
 		icino->ici_st.st_gid = stbuf->st_gid;
 	icino->ici_st.st_ctime = time(NULL);
 
+	ino->i_stbuf = icino->ici_st;
 out:
 	return err;
 }
@@ -1167,8 +1160,7 @@ _sysio_incore_dirop_mkdir(struct pnode *pno, mode_t mode)
 	ino =
 	    _sysio_i_new(pno->p_parent->p_base->pb_ino->i_fs,
 			 &icino->ici_fileid,
-			 stat.st_mode,
-			 0,
+			 &stat,
 			 1,
 			 &_sysio_incore_dir_ops,
 			 icino);
@@ -1274,7 +1266,7 @@ _sysio_incore_dirop_rmdir(struct pnode *pno)
 }
 
 static int
-incore_create(struct pnode *pno, struct intnl_stat *st)
+incore_create(struct pnode *pno, struct intnl_stat *stat)
 {
 	struct inode *dino, *ino;
 	struct incore_inode *icino;
@@ -1283,7 +1275,7 @@ incore_create(struct pnode *pno, struct intnl_stat *st)
 	dino = pno->p_parent->p_base->pb_ino;
 	assert(dino);
 
-	icino = incore_i_alloc(FS2ICFS(dino->i_fs), st);
+	icino = incore_i_alloc(FS2ICFS(dino->i_fs), stat);
 	if (!icino)
 		return -ENOSPC;
 
@@ -1293,10 +1285,9 @@ incore_create(struct pnode *pno, struct intnl_stat *st)
 	ino =
 	    _sysio_i_new(dino->i_fs,
 			 &icino->ici_fileid,
-			 st->st_mode,
-			 st->st_rdev,
+			 stat,
 			 1,
-			 S_ISREG(st->st_mode)
+			 S_ISREG(stat->st_mode)
 			   ? &_sysio_incore_file_ops
 			   : &_sysio_incore_dev_ops,
 			 icino);
@@ -1311,7 +1302,7 @@ incore_create(struct pnode *pno, struct intnl_stat *st)
 	err =
 	    incore_directory_insert(I2IC(dino),
 				    &pno->p_base->pb_name,
-				    st->st_ino,
+				    stat->st_ino,
 				    INCORE_D_TYPEOF(icino->ici_st.st_mode));
 	if (err) {
 		I_RELE(ino);
@@ -1372,7 +1363,7 @@ _sysio_incore_dirop_link(struct pnode *old, struct pnode *new)
 	int	err;
 
 	assert(!new->p_base->pb_ino);
-	assert(!S_ISDIR(old->p_base->pb_ino->i_mode));
+	assert(!S_ISDIR(old->p_base->pb_ino->i_stbuf.st_mode));
 
 	/*
 	 * Can bump the link count?

@@ -682,8 +682,12 @@ PREPEND(_, SYSIO_INTERFACE_NAME(ireadx))(int fd,
 
 	SYSIO_INTERFACE_ENTER;
 	fil = _sysio_fd_find(fd);
-	if (!(fil && xtv_count))
+	if (!fil)
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, -EBADF);
+
+	/* Perform a check on the iov_count and xtv_count */
+	if ((iov_count == 0) || (xtv_count == 0))
+		SYSIO_INTERFACE_RETURN(IOID_FAIL, -EINVAL);
 
 	err =
 	    _sysio_iiox(IIOXOP_READ(fil->f_ino),
@@ -717,8 +721,13 @@ SYSIO_INTERFACE_NAME(ireadx)(int fd,
 
 	SYSIO_INTERFACE_ENTER;
 	fil = _sysio_fd_find(fd);
-	if (!(fil && xtv_count))
+	if (!fil)
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, -EBADF);
+
+
+	/* Perform a check on the iov_count and xtv_count */
+	if ((iov_count == 0) || (xtv_count == 0))
+		SYSIO_INTERFACE_RETURN(IOID_FAIL, -EINVAL);
 
 	ixtv = ixtvent = malloc(xtv_count * sizeof(struct intnl_xtvec));
 	if (!ixtv)
@@ -1236,8 +1245,12 @@ SYSIO_INTERFACE_NAME(iwritex)(int fd,
 
 	SYSIO_INTERFACE_ENTER;
 	fil = _sysio_fd_find(fd);
-	if (!(fil && xtv_count))
+	if (!fil)
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, -EBADF);
+
+	/* Perform a check on the iov_count and xtv_count */
+	if ((iov_count == 0) || (xtv_count == 0))
+		SYSIO_INTERFACE_RETURN(IOID_FAIL, -EINVAL);
 
 	ixtv = ixtvent = malloc(xtv_count * sizeof(struct intnl_xtvec));
 	if (!ixtv)

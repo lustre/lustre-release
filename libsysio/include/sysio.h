@@ -48,11 +48,7 @@
 #include <limits.h>
 #include <stdarg.h>
 
-#if !defined(__IS_UNUSED) && defined(__GNUC__)
-#define __IS_UNUSED	__attribute__ ((unused))
-#else
-#define __IS_UNUSED
-#endif
+#include "sysio-cmn.h"
 
 #ifndef PATH_SEPARATOR
 /*
@@ -66,31 +62,6 @@
  * Max recursion depth allowed when resoving symbolic links.
  */
 #define MAX_SYMLINK			250
-#endif
-
-#ifndef _LARGEFILE64_SOURCE
-/*
- * Not glibc I guess. Define this ourselves.
- */
-#define _LARGEFILE64_SOURCE		0
-#endif
-
-/*
- * Define internal file-offset type and it's maximum value.
- */
-#if _LARGEFILE64_SOURCE
-#define _SYSIO_OFF_T			off64_t
-#ifdef LLONG_MAX
-#define _SYSIO_OFF_T_MAX		(LLONG_MAX)
-#else
-/*
- * Don't have LLONG_MAX before C99. We'll need to define it ourselves.
- */
-#define _SYSIO_OFF_T_MAX		(9223372036854775807LL)
-#endif
-#else
-#define _SYSIO_OFF_T			off_t
-#define _SYSIO_OFF_T_MAX		LONG_MAX
 #endif
 
 /*
@@ -126,24 +97,15 @@ struct statvfs;
 struct intnl_statvfs;
 #endif
 
-/*
- * Internally, all file status is carried in the 64-bit capable
- * structure.
- */
-#if _LARGEFILE64_SOURCE
-#define intnl_xtvec xtvec64
-#else
-#define intnl_xtvec xtvec
-#endif
-struct intnl_xtvec;
-
-struct iovec;
-
 struct utimbuf;
 
 struct intnl_stat;
 
 struct pnode;
+
+#if DEFER_INIT_CWD
+extern const char *_sysio_init_cwd;
+#endif
 
 extern struct pnode *_sysio_cwd;
 
@@ -151,19 +113,30 @@ extern mode_t _sysio_umask;
 
 extern int _sysio_init(void);
 extern void _sysio_shutdown(void);
+#if DEFER_INIT_CWD
+extern int _sysio_boot(const char *buf, const char *path);
+#else
 extern int _sysio_boot(const char *buf);
+#endif
 
 /*
- * SYSIO name label macros
+ * Option-value pair information.
  */
-#define XPREPEND(p,x) p ## x
-#define PREPEND(p,x) XPREPEND(p,x)
-#define SYSIO_LABEL_NAMES 0
-#if SYSIO_LABEL_NAMES
-#define SYSIO_INTERFACE_NAME(x) PREPEND(sysio__, x)
-#else
-#define SYSIO_INTERFACE_NAME(x) x
-#endif
+struct option_value_info {
+	const char *ovi_name;					/* name */
+	char *ovi_value;					/* value */
+};
+
+extern const char * _sysio_get_token(const char *buf,
+				     int accepts,
+				     const char *delim,
+				     const char *ignore,
+				     char *tbuf);
+extern char * _sysio_get_args(char *buf, struct option_value_info *vec);
+
+#define _SYSIO_LOCAL_TIME()	_sysio_local_time()
+
+extern time_t _sysio_local_time(void);
 
 /*
  * The following should be defined by the system includes, and probably are,
@@ -256,83 +229,3 @@ extern int SYSIO_INTERFACE_NAME(mount)(const char *source, const char *target,
 				       unsigned long mountflags,
 				       const void *data);
 extern int SYSIO_INTERFACE_NAME(umount)(const char *target);
-
-/* for debugging */
-#if 0
-#define ASSERT(cond)							\
-	if (!(cond)) {							\
-		printf("ASSERTION(" #cond ") failed: " __FILE__ ":"	\
-			__FUNCTION__ ":%d\n", __LINE__);		\
-		abort();						\
-	}
-
-#define ERROR(fmt, a...)						\
-	do {								\
-		printf("ERROR(" __FILE__ ":%d):" fmt, __LINE__, ##a);	\
-	while(0)
-
-#else
-#define ERROR(fmt) 	do{}while(0)
-#define ASSERT		do{}while(0)
-#endif
-
-/*
- * SYSIO interface frame macros
- *
- * + DISPLAY_BLOCK; Allocates storage on the stack for use by the set of
- *	macros.
- * + ENTER; Performs entry point work
- * + RETURN; Returns a value and performs exit point work
- *
- * NB: For RETURN, the arguments are the return value and value for errno.
- * If the value for errno is non-zero then that value, *negated*, is set
- * into errno.
- */
-#define SYSIO_INTERFACE_DISPLAY_BLOCK \
-	int _saved_errno;
-#define SYSIO_INTERFACE_ENTER \
-	do { \
-		_saved_errno = errno; \
-		SYSIO_ENTER; \
-	} while (0)
-#define SYSIO_INTERFACE_RETURN(rtn, err) \
-	do { \
-		SYSIO_LEAVE; \
-		errno = (err) ? -(err) : _saved_errno; \
-		return (rtn); \
-	} while(0) 
-
-/* syscall enter/leave hook functions  */
-#if 0
-extern void _sysio_sysenter();
-extern void _sysio_sysleave();
-
-#define SYSIO_ENTER							\
-	do {								\
-		_sysio_sysenter();					\
-	} while(0)
-
-#define SYSIO_LEAVE							\
-	do {								\
-		_sysio_sysleave();					\
-	} while(0)
-#else
-#define SYSIO_ENTER
-#define SYSIO_LEAVE
-
-#endif
-
-/* accounting for IO stats read and write char count */
-#if defined(REDSTORM)
-#define _SYSIO_UPDACCT(w, cc) \
-	do { \
-		if ((cc) < 0) \
-			break; \
-		if (!w) \
-			_add_iostats(0, (size_t )(cc)); \
-		else \
-			_add_iostats((size_t )(cc), 0); \
-	} while(0)
-#else
-#define _SYSIO_UPDACCT(w, cc)
-#endif

@@ -59,12 +59,15 @@
 #include <sys/fcntl.h>
 #include <sys/syscall.h>
 #include <sys/socket.h>
+#ifdef __linux__
 #include <linux/net.h>
+#endif
 #include <sys/uio.h>
 #include <sys/queue.h>
 
 #include "xtio.h"
 #include "sysio.h"
+#include "native.h"
 #include "fs.h"
 #include "inode.h"
 #include "file.h"
@@ -116,7 +119,7 @@ struct filesys_ops sockets_filesys_ops = {
 	(void (*)(struct filesys *))sockets_illop
 };
 
-static struct filesys *sockets_fs;
+static struct filesys *sockets_fs = NULL;
 
 static struct inode_ops sockets_i_ops;
 
@@ -126,6 +129,8 @@ static struct inode_ops sockets_i_ops;
 int
 _sysio_sockets_init()
 {
+
+	assert(!sockets_fs);
 
 	sockets_i_ops = _sysio_nodev_ops;
 	sockets_i_ops.inop_close = sockets_inop_close;
@@ -155,7 +160,7 @@ sockets_inop_close(struct inode *ino)
 	if (ski->ski_fd < 0)
 		return -EBADF;
 
-	err = syscall(SYS_close, ski->ski_fd);
+	err = syscall(SYSIO_SYS_close, ski->ski_fd);
 	if (err)
 		return -errno;
 	ski->ski_fd = -1;
@@ -206,7 +211,7 @@ static ssize_t
 _readv(int fd, const struct iovec *vector, int count)
 {
 
-	return syscall(SYS_readv, fd, vector, count);
+	return syscall(SYSIO_SYS_readv, fd, vector, count);
 }
 
 static int
@@ -224,7 +229,7 @@ static ssize_t
 _writev(int fd, const struct iovec *vector, int count)
 {
 
-	return syscall(SYS_writev, fd, vector, count);
+	return syscall(SYSIO_SYS_writev, fd, vector, count);
 }
 
 static int
@@ -265,7 +270,7 @@ sockets_inop_fcntl(struct inode *ino __IS_UNUSED,
 	case F_GETFD:
 	case F_GETFL:
 	case F_GETOWN:
-		*rtn = syscall(SYS_fcntl, I2SKI(ino)->ski_fd, cmd);
+		*rtn = syscall(SYSIO_SYS_fcntl, I2SKI(ino)->ski_fd, cmd);
 		break;
 	case F_DUPFD:
 	case F_SETFD:
@@ -275,7 +280,7 @@ sockets_inop_fcntl(struct inode *ino __IS_UNUSED,
 	case F_SETLKW:
 	case F_SETOWN:
 		arg = va_arg(ap, long);
-		*rtn = syscall(SYS_fcntl, I2SKI(ino)->ski_fd, cmd, arg);
+		*rtn = syscall(SYSIO_SYS_fcntl, I2SKI(ino)->ski_fd, cmd, arg);
 		break;
 	default:
 		*rtn = -1;
@@ -290,7 +295,7 @@ sockets_inop_sync(struct inode *ino)
 
 	assert(I2SKI(ino)->ski_fd >= 0);
 
-	return syscall(SYS_fsync, I2SKI(ino)->ski_fd);
+	return syscall(SYSIO_SYS_fsync, I2SKI(ino)->ski_fd);
 }
 
 static int
@@ -299,7 +304,7 @@ sockets_inop_datasync(struct inode *ino)
 
 	assert(I2SKI(ino)->ski_fd >= 0);
 
-	return syscall(SYS_fdatasync, I2SKI(ino)->ski_fd);
+	return syscall(SYSIO_SYS_fdatasync, I2SKI(ino)->ski_fd);
 }
 
 #ifdef HAVE_LUSTRE_HACK
@@ -321,7 +326,7 @@ sockets_inop_ioctl(struct inode *ino,
 	arg3 = va_arg(ap, long);
 	arg4 = va_arg(ap, long);
 
-	return syscall(SYS_ioctl, I2SKI(ino)->ski_fd, request,
+	return syscall(SYSIO_SYS_ioctl, I2SKI(ino)->ski_fd, request,
 		       arg1, arg2, arg3, arg4);
 }
 #else
@@ -358,6 +363,7 @@ _sysio_sockets_inew()
 	static ino_t inum = 1;
 	struct socket_info *ski;
 	struct inode *ino;
+	static struct intnl_stat zero_stat;
 
 	ski = malloc(sizeof(struct socket_info));
 	if (!ski)
@@ -370,8 +376,7 @@ _sysio_sockets_inew()
 	ino =
 	    _sysio_i_new(sockets_fs,
 			 &ski->ski_fileid,
-			 0,
-			 0,
+			 &zero_stat,
 			 0,
 			 &sockets_i_ops,
 			 ski);
@@ -399,12 +404,13 @@ socket(int domain, int type, int protocol)
 	}
 
 	ski = I2SKI(ino);
-#ifndef SYS_socketcall
-	ski->ski_fd = syscall(SYS_socket, domain, type, protocol);
+#ifndef SYSIO_SYS_socketcall
+	ski->ski_fd = syscall(SYSIO_SYS_socket, domain, type, protocol);
 #else
 	{
 		unsigned long avec[3] = {domain, type, protocol};
-		ski->ski_fd = syscall(SYS_socketcall, SYS_SOCKET, avec);
+		ski->ski_fd =
+		    syscall(SYSIO_SYS_socketcall, SYS_SOCKET, avec);
 	}
 #endif
 	if (ski->ski_fd < 0) {
@@ -469,16 +475,20 @@ accept(int s, struct sockaddr *addr, socklen_t *addrlen)
 	}
 
 	ski = I2SKI(ino);
-#ifndef SYS_socketcall
-	ski->ski_fd = syscall(SYS_accept, I2SKI(ofil->f_ino)->ski_fd,
-				addr, addrlen);
+#ifndef SYSIO_SYS_socketcall
+	ski->ski_fd =
+	    syscall(SYSIO_SYS_accept,
+		    I2SKI(ofil->f_ino)->ski_fd,
+		    addr,
+		    addrlen);
 #else
 	{
 		unsigned long avec[3] = {
 			(unsigned long) I2SKI(ofil->f_ino)->ski_fd,
 			(unsigned long) addr,
 			(unsigned long) addrlen};
-		ski->ski_fd = syscall(SYS_socketcall, SYS_ACCEPT, avec);
+		ski->ski_fd =
+		    syscall(SYSIO_SYS_socketcall, SYS_ACCEPT, avec);
 	}
 #endif
 	if (ski->ski_fd < 0) {
@@ -521,13 +531,16 @@ bind(int sockfd, const struct sockaddr *my_addr, socklen_t addrlen)
 		goto out;
 	}
 
-#ifndef SYS_socketcall
-	if (syscall(SYS_bind, I2SKI(fil->f_ino)->ski_fd, my_addr, addrlen)) {
+#ifndef SYSIO_SYS_socketcall
+	if (syscall(SYSIO_SYS_bind,
+		    I2SKI(fil->f_ino)->ski_fd,
+		    my_addr,
+		    addrlen)) {
 #else
 	avec[0] = I2SKI(fil->f_ino)->ski_fd;
 	avec[1] = (unsigned long )my_addr;
 	avec[2] = addrlen;
-	if (syscall(SYS_socketcall, SYS_BIND, avec) != 0) {
+	if (syscall(SYSIO_SYS_socketcall, SYS_BIND, avec) != 0) {
 #endif
 		err = -errno;
 		goto out;
@@ -554,12 +567,14 @@ listen(int s, int backlog)
 		goto out;
 	}
 
-#ifndef SYS_socketcall
-	if (syscall(SYS_listen, I2SKI(fil->f_ino)->ski_fd, backlog) != 0) {
+#ifndef SYSIO_SYS_socketcall
+	if (syscall(SYSIO_SYS_listen,
+		    I2SKI(fil->f_ino)->ski_fd,
+		    backlog) != 0) {
 #else
 	avec[0] = I2SKI(fil->f_ino)->ski_fd;
 	avec[1] = backlog;
-	if (syscall(SYS_socketcall, SYS_LISTEN, avec) != 0) {
+	if (syscall(SYSIO_SYS_socketcall, SYS_LISTEN, avec) != 0) {
 #endif
 		err = -errno;
 		goto out;
@@ -586,14 +601,16 @@ connect(int sockfd, const struct sockaddr *serv_addr, socklen_t addrlen)
 		goto out;
 	}
 
-#ifndef SYS_socketcall
-	if (syscall(SYS_connect, I2SKI(fil->f_ino)->ski_fd,
-		    serv_addr, addrlen) != 0) {
+#ifndef SYSIO_SYS_socketcall
+	if (syscall(SYSIO_SYS_connect,
+		    I2SKI(fil->f_ino)->ski_fd,
+		    serv_addr,
+		    addrlen) != 0) {
 #else
 	avec[0] = I2SKI(fil->f_ino)->ski_fd;
 	avec[1] = (unsigned long )serv_addr;
 	avec[2] = addrlen;
-	if (syscall(SYS_socketcall, SYS_CONNECT, avec) != 0) {
+	if (syscall(SYSIO_SYS_socketcall, SYS_CONNECT, avec) != 0) {
 #endif
 		err = -errno;
 		goto out;

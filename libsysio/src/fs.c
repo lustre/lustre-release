@@ -46,6 +46,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/queue.h>
 
 #include "sysio.h"

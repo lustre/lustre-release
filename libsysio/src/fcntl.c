@@ -55,13 +55,14 @@
 
 #ifdef HAVE_LUSTRE_HACK
 #include <syscall.h>
+#include <native.h>
 
 static int
 _sysio_fcntl(int fd, int cmd, va_list ap, int *rtn)
 {
 	long arg = va_arg(ap, long);
 
-	*rtn = syscall(SYS_fcntl, fd, cmd, arg);
+	*rtn = syscall(SYSIO_SYS_fcntl, fd, cmd, arg);
 	return *rtn == -1 ? -errno : 0;
 }
 #endif

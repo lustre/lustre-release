@@ -1,6 +1,6 @@
 noinst_PROGRAMS = test_copy test_stats test_path test_list \
 	test_getcwd test_link test_unlink test_rename \
-	test_regions test_driver
+	test_regions test_driver test_stddir
 
 CLEANFILES=drv_data.c
 
@@ -28,16 +28,8 @@ YOD_DRIVER_NAME=
 YOD_DRIVER_CFLAGS=
 endif
 
-if WITH_SOCKETS_DRIVER
-SOCKETS_DRIVER_NAME=sockets
-SOCKETS_DRIVER_CFLAGS= -I$(top_srcdir)/drivers/sockets
-else
-SOCKETS_DRIVER_NAME=
-SOCKETS_DRIVER_CFLAGS=
-endif
-
 DRIVERS=$(NATIVE_DRIVER_NAME) $(INCORE_DRIVER_NAME) $(YOD_DRIVER_NAME) \
-	$(STFD_DEV_NAME) $(SOCKETS_DRIVER_NAME)
+	$(STFD_DEV_NAME)
 
 CMNSRC=startup.c drv_init_all.c drv_data.c
 
@@ -106,9 +98,18 @@ test_driver_CFLAGS=$(CFL)
 test_driver_LDADD=$(LIBS)
 test_driver_DEPENDENCIES=$(LIBS)
 
+test_stddir_SOURCES=test_stddir.c $(CMNSRC)
+test_stddir_CFLAGS=$(CFL)
+test_stddir_LDADD=$(LIBS)
+test_stddir_DEPENDENCIES=$(LIBS)
+
 drv_data.c: $(CONFIG_DEPENDENCIES) $(top_srcdir)/tests/gendrvdata.sh
 	test -z "drv_data.c" && rm -f drv_data.c; \
 	$(SHELL) $(top_srcdir)/tests/gendrvdata.sh $(DRIVERS) > drv_data.c
+
+lib_LIBRARIES=libruntime.a
+
+libruntime_a_SOURCES=sysio-run-start.c startup.c drv_init_all.c drv_data.c
 
 AM_CFLAGS = -L$(LIBBUILD_DIR)
 include $(top_srcdir)/Rules.make
