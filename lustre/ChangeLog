@@ -4,7 +4,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- flock/lockf fixes
 	- don't use EXT3 constants in llite code (5094)
 	- return async write errors to application if possible (2248)
-	- don't complete EKC RPC on peer death (4012)
        * miscellania
 	- reorganization of lov code
 	- single portals codebase
