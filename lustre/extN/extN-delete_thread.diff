@@ -1,0 +1,274 @@
+--- linux/include/linux/extN_fs.h.orig	Fri Mar 14 18:09:02 2003
++++ linux/include/linux/extN_fs.h	Fri Mar 14 18:10:20 2003
+@@ -190,6 +192,7 @@
+  */
+ #define EXTN_STATE_JDATA		0x00000001 /* journaled data exists */
+ #define EXTN_STATE_NEW			0x00000002 /* inode is newly created */
++#define EXTN_STATE_DELETE		0x00000010 /* deferred delete inode */
+ 
+ /*
+  * ioctl commands
+--- linux/include/linux/extN_fs_sb.h.orig	Tue Feb 11 16:34:33 2003
++++ linux/include/linux/extN_fs_sb.h	Mon Mar 10 14:42:07 2003
+@@ -29,6 +29,8 @@
+ 
+ #define EXTN_MAX_GROUP_LOADED	32
+ 
++#define EXTN_DELETE_THREAD
++
+ /*
+  * third extended-fs super-block data in memory
+  */
+@@ -73,6 +75,14 @@
+ 	struct timer_list turn_ro_timer;	/* For turning read-only (crash simulation) */
+ 	wait_queue_head_t ro_wait_queue;	/* For people waiting for the fs to go read-only */
+ #endif
++#ifdef EXTN_DELETE_THREAD
++	spinlock_t s_delete_lock;
++	struct list_head s_delete_list;
++	unsigned long s_delete_blocks;
++	unsigned long s_delete_inodes;
++	wait_queue_head_t s_delete_thread_queue;
++	wait_queue_head_t s_delete_waiter_queue;
++#endif
+ };
+ 
+ #endif	/* _LINUX_EXTN_FS_SB */
+--- linux/fs/extN/super.c.orig	Wed Mar 12 14:05:30 2003
++++ linux/fs/extN/super.c	Thu Mar 13 19:05:26 2003
+@@ -396,6 +396,207 @@
+ 	}
+ }
+ 
++#ifdef EXTN_DELETE_THREAD
++/*
++ * Delete inodes in a loop until there are no more to be deleted.
++ * Normally, we run in the background doing the deletes and sleeping again,
++ * and clients just add new inodes to be deleted onto the end of the list.
++ * If someone is concerned about free space (e.g. block allocation or similar)
++ * then they can sleep on s_delete_waiter_queue and be woken up when space
++ * has been freed.
++ */
++int extN_delete_thread(void *data)
++{
++	struct super_block *sb = data;
++	struct extN_sb_info *sbi = EXTN_SB(sb);
++	struct task_struct *tsk = current;
++
++	/* Almost like daemonize, but not quite */
++	exit_mm(current);
++	tsk->session = 1;
++	tsk->pgrp = 1;
++	tsk->tty = NULL;
++	exit_files(current);
++	reparent_to_init();
++
++	sprintf(tsk->comm, "kdelextN-%s", kdevname(sb->s_dev));
++	sigfillset(&tsk->blocked);
++
++	tsk->flags |= PF_KERNTHREAD;
++
++	INIT_LIST_HEAD(&sbi->s_delete_list);
++	wake_up(&sbi->s_delete_waiter_queue);
++	printk(KERN_INFO "EXTN-fs: delete thread on %s started\n",
++	       kdevname(sb->s_dev));
++
++	/* main loop */
++	for (;;) {
++		sleep_on(&sbi->s_delete_thread_queue);
++		printk(KERN_DEBUG "%s woken up: %lu inodes, %lu blocks\n",
++		       tsk->comm, sbi->s_delete_inodes, sbi->s_delete_blocks);
++
++		spin_lock(&sbi->s_delete_lock);
++		if (list_empty(&sbi->s_delete_list)) {
++			memset(&sbi->s_delete_list, 0,
++			       sizeof(sbi->s_delete_list));
++			spin_unlock(&sbi->s_delete_lock);
++			printk(KERN_DEBUG "extN delete thread on %s exiting\n",
++			       kdevname(sb->s_dev));
++			wake_up(&sbi->s_delete_waiter_queue);
++			break;
++		}
++
++		while (!list_empty(&sbi->s_delete_list)) {
++			struct inode *inode=list_entry(sbi->s_delete_list.next,
++						       struct inode, i_dentry);
++			unsigned long blocks = inode->i_blocks >>
++							(inode->i_blkbits - 9);
++
++			list_del_init(&inode->i_dentry);
++			spin_unlock(&sbi->s_delete_lock);
++			printk(KERN_DEBUG "%s delete ino %lu blk %lu\n",
++				   tsk->comm, inode->i_ino, blocks);
++
++			iput(inode);
++
++			spin_lock(&sbi->s_delete_lock);
++			sbi->s_delete_blocks -= blocks;
++			sbi->s_delete_inodes--;
++		}
++		if (sbi->s_delete_blocks != 0 || sbi->s_delete_inodes != 0)
++			printk(KERN_WARNING
++			       "%lu blocks and %lu left on list?\n",
++			       sbi->s_delete_blocks, sbi->s_delete_inodes);
++		sbi->s_delete_blocks = 0;
++		sbi->s_delete_inodes = 0;
++		spin_unlock(&sbi->s_delete_lock);
++		wake_up(&sbi->s_delete_waiter_queue);
++	}
++
++	return 0;
++}
++
++static void extN_start_delete_thread(struct super_block *sb)
++{
++	struct extN_sb_info *sbi = EXTN_SB(sb);
++	int rc;
++
++	spin_lock_init(&sbi->s_delete_lock);
++	memset(&sbi->s_delete_list, 0, sizeof(sbi->s_delete_list));
++	init_waitqueue_head(&sbi->s_delete_thread_queue);
++	init_waitqueue_head(&sbi->s_delete_waiter_queue);
++	sbi->s_delete_blocks = 0;
++	sbi->s_delete_inodes = 0;
++	rc = kernel_thread(extN_delete_thread, sb, CLONE_VM | CLONE_FILES);
++	if (rc < 0)
++		printk(KERN_ERR "EXTN-fs: cannot start delete thread: rc %d\n",
++		       rc);
++	else
++		wait_event(sbi->s_delete_waiter_queue, sbi->s_delete_list.next);
++}
++
++static void extN_stop_delete_thread(struct extN_sb_info *sbi)
++{
++	wake_up(&sbi->s_delete_thread_queue);
++	wait_event(sbi->s_delete_waiter_queue, list_empty(&sbi->s_delete_list));
++}
++
++/* Instead of playing games with the inode flags, destruction, etc we just
++ * duplicate the inode data locally and put it on a list for the truncate
++ * thread.  We need large parts of the inode struct in order to complete
++ * the truncate and unlink, so we may as well just copy the whole thing.
++ *
++ * If we have any problem deferring the delete, just delete it right away.
++ * If we defer it, we also mark how many blocks it would free, so that we
++ * can keep the statfs data correct, and we know if we should sleep on the
++ * truncate thread when we run out of space.
++ *
++ * One shouldn't consider this duplicate an "inode", as it isn't really
++ * visible to the VFS, but rather a data struct that holds truncate data.
++ *
++ * In 2.5 this can be done much more cleanly by just registering a "drop"
++ * method in the super_operations struct.
++ */
++static void extN_delete_inode_thread(struct inode *old_inode)
++{
++	struct extN_sb_info *sbi = EXTN_SB(old_inode->i_sb);
++	struct inode *new_inode;
++	unsigned long blocks = old_inode->i_blocks >> (old_inode->i_blkbits-9);
++
++	if (is_bad_inode(old_inode)) {
++		clear_inode(old_inode);
++		return;
++	}
++
++	/* We may want to delete the inode immediately and not defer it */
++	if (IS_SYNC(old_inode) || blocks <= EXTN_NDIR_BLOCKS ||
++	    !sbi->s_delete_list.next) {
++		extN_delete_inode(old_inode);
++		return;
++	}
++
++	if (EXTN_I(old_inode)->i_state & EXTN_STATE_DELETE) {
++		extN_debug("doing deferred inode %lu delete (%lu blocks)\n",
++			   old_inode->i_ino, blocks);
++		extN_delete_inode(old_inode);
++		return;
++	}
++
++	/* We can iget this inode again here, because our caller has unhashed
++	 * old_inode, so new_inode will be in a different inode struct.
++	 *
++	 * We need to ensure that the i_orphan pointers in the other inodes
++	 * point at the new inode copy instead of the old one so the orphan
++	 * list doesn't get corrupted when the old orphan inode is freed.
++	 */
++	down(&sbi->s_orphan_lock);
++
++	EXTN_SB(old_inode->i_sb)->s_mount_state |= EXTN_ORPHAN_FS;
++	new_inode = iget(old_inode->i_sb, old_inode->i_ino);
++	EXTN_SB(old_inode->i_sb)->s_mount_state &= ~EXTN_ORPHAN_FS;
++	if (is_bad_inode(new_inode)) {
++		printk(KERN_WARNING "read bad inode %lu\n", old_inode->i_ino);
++		iput(new_inode);
++		new_inode = NULL;
++	}
++	if (!new_inode) {
++		up(&sbi->s_orphan_lock);
++		extN_debug(KERN_DEBUG "delete inode %lu directly (bad read)\n",
++			   old_inode->i_ino);
++		extN_delete_inode(old_inode);
++		return;
++	}
++	J_ASSERT(new_inode != old_inode);
++
++	J_ASSERT(!list_empty(&EXTN_I(old_inode)->i_orphan));
++	/* Ugh.  We need to insert new_inode into the same spot on the list
++	 * as old_inode was, to ensure the in-memory orphan list is still
++	 * the same as the on-disk orphan list.
++	 */
++	EXTN_I(new_inode)->i_orphan = EXTN_I(old_inode)->i_orphan;
++	EXTN_I(new_inode)->i_orphan.next->prev = &EXTN_I(new_inode)->i_orphan;
++	EXTN_I(new_inode)->i_orphan.prev->next = &EXTN_I(new_inode)->i_orphan;
++	EXTN_I(new_inode)->i_state |= EXTN_STATE_DELETE;
++	up(&sbi->s_orphan_lock);
++
++	clear_inode(old_inode);
++
++	printk(KERN_DEBUG "delete inode %lu (%lu blocks) by thread\n",
++	       new_inode->i_ino, blocks);
++	spin_lock(&sbi->s_delete_lock);
++	J_ASSERT(list_empty(&new_inode->i_dentry));
++	list_add_tail(&new_inode->i_dentry, &sbi->s_delete_list);
++	sbi->s_delete_blocks += blocks;
++	sbi->s_delete_inodes++;
++	spin_unlock(&sbi->s_delete_lock);
++
++	wake_up(&sbi->s_delete_thread_queue);
++}
++#else
++#define extN_start_delete_thread(sbi) do {} while(0)
++#define extN_stop_delete_thread(sbi) do {} while(0)
++#endif /* EXTN_DELETE_THREAD */
++
+ void extN_put_super (struct super_block * sb)
+ {
+ 	struct extN_sb_info *sbi = EXTN_SB(sb);
+@@ -403,6 +578,7 @@
+ 	kdev_t j_dev = sbi->s_journal->j_dev;
+ 	int i;
+ 
++	extN_stop_delete_thread(sbi);
+ 	extN_xattr_put_super(sb);
+ 	journal_destroy(sbi->s_journal);
+ 	if (!(sb->s_flags & MS_RDONLY)) {
+@@ -451,7 +627,11 @@
+ 	write_inode:	extN_write_inode,	/* BKL not held.  Don't need */
+ 	dirty_inode:	extN_dirty_inode,	/* BKL not held.  We take it */
+ 	put_inode:	extN_put_inode,		/* BKL not held.  Don't need */
++#ifdef EXTN_DELETE_THREAD
++	delete_inode:	extN_delete_inode_thread,/* BKL not held. We take it */
++#else
+ 	delete_inode:	extN_delete_inode,	/* BKL not held.  We take it */
++#endif
+ 	put_super:	extN_put_super,		/* BKL held */
+ 	write_super:	extN_write_super,	/* BKL held */
+ 	write_super_lockfs: extN_write_super_lockfs, /* BKL not held. Take it */
+@@ -1205,6 +1385,7 @@
+ 	}
+ 
+ 	extN_setup_super (sb, es, sb->s_flags & MS_RDONLY);
++	extN_start_delete_thread(sb);
+ 	/*
+ 	 * akpm: core read_super() calls in here with the superblock locked.
+ 	 * That deadlocks, because orphan cleanup needs to lock the superblock
