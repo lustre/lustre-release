@@ -27,11 +27,12 @@ tags:
 	find $(top_srcdir) -name '*.[hc]' | xargs ctags $$CTAGSF -a
 
 if MODULES
-all-am: modules
-
 all-sources:
 	$(MAKE) sources -C portals
 	$(MAKE) sources -C lustre
+
+if LINUX
+all-am: modules
 
 if !LINUX25
 DEP = dep
@@ -44,13 +45,14 @@ dep: .depend
 	_FASTDEP_ALL_SUB_DIRS="$(PWD)"
 
 CLEANFILES = .depend
-endif
+endif # !LINUX25
 
 modules: $(DEP) all-sources
 	$(MAKE) $(ARCH_UM) CC="$(CC)" -C $(LINUX_OBJ)		     \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
 	$(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o \
 	include/config/MARKER $@
+endif # LINUX
 
 endif # MODULES
 

@@ -10,6 +10,23 @@ fi
 ])
 
 #
+# LB_CANONICAL_SYSTEM
+#
+# fixup $target_os for use in other places
+#
+AC_DEFUN([LB_CANONICAL_SYSTEM],
+[case $target_os in
+	linux*)
+		lb_target_os="linux"
+		;;
+	darwin*)
+		lb_target_os="darwin"
+		;;
+esac
+AC_SUBST(lb_target_os)
+])
+
+#
 # LB_PATH_LIBSYSIO
 #
 # Handle internal/external libsysio
@@ -18,7 +35,16 @@ AC_DEFUN([LB_PATH_LIBSYSIO],
 [AC_ARG_WITH([sysio],
 	AC_HELP_STRING([--with-sysio=path],
 			[set path to libsysio source (default is included libsysio)]),
-	[],[with_sysio='yes'])
+	[],[
+		case $lb_target_os in
+			linux)
+				with_sysio='yes'
+				;;
+			*)
+				with_sysio='no'
+				;;
+		esac
+	])
 AC_MSG_CHECKING([location of libsysio])
 enable_sysio="$with_sysio"
 case x$with_sysio in
@@ -329,7 +355,7 @@ AC_TRY_COMPILE([],[],[
 	CFLAGS="$CFLAGS_save"
 ])
 
-CPPFLAGS="-I\$(top_srcdir)/lustre/include -I\$(top_srcdir)/portals/include $CPPFLAGS"
+CPPFLAGS="-I\$(top_builddir)/portals/include -I\$(top_srcdir)/portals/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
@@ -354,6 +380,8 @@ AM_CONDITIONAL(TESTS, test x$enable_tests = xyes)
 AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
 AM_CONDITIONAL(CRAY_PORTALS, test x$with_cray_portals != xno)
 AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
+AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
+AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 
 # this lets lustre cancel libsysio, per-branch or if liblustre is
 # disabled
@@ -379,7 +407,9 @@ LC_CONDITIONALS
 # main configure steps
 #
 AC_DEFUN([LB_CONFIGURE],
-[LB_INCLUDE_RULES
+[LB_CANONICAL_SYSTEM
+
+LB_INCLUDE_RULES
 
 LB_PATH_DEFAULTS
 
