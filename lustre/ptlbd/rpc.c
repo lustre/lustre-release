@@ -174,7 +174,7 @@ int ptlbd_write_put_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd,
         }
 
         obd_brw_set_add(set, desc);
-        rc = ptlrpc_bulk_put(desc);
+        rc = ptlrpc_send_bulk(desc);
 
         /* if there's an error, no brw_finish called, just like
          * osc_brw_read */
@@ -258,7 +258,7 @@ int ptlbd_read_put_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd,
         }
 
         /* XXX put in OBD_FAIL_CHECK for ptlbd? */
-        rc = ptlrpc_register_bulk_put(desc);
+        rc = ptlrpc_register_bulk(desc);
         if (rc)
                 GOTO(out_set, rc);
 
@@ -391,7 +391,7 @@ static int ptlbd_put_write(struct ptlrpc_request *req)
                 bulk->bp_buflen = request_niob[i].n_length;
         }
 
-        rc = ptlrpc_register_bulk_put(desc);
+        rc = ptlrpc_register_bulk(desc);
         if ( rc )
                 GOTO(out_desc, rc);
 
