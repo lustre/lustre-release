@@ -14,7 +14,7 @@
 	- init scripts are now turned off by default; run chkconfig --on
 	  lustre and chkconfig --on lustrefs to use them
 
-2005-03-18  Cluster File Systems, Inc. <info@clusterfs.com>
+2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
        * bug fixes
 	- don't LASSERT in ll_release on NULL lld with NFS export (4655, 5760)
@@ -35,13 +35,14 @@
 	- shutdown --force/--failover stability (3607,3651,4797,5203,4834)
 	- Do not leak request if server was not able to process it (5154)
 	- If mds_open unable to find parent dir, make that negative lookup(5154)
+	- don't create new directories with extent-mapping (5909, 5936)
        * miscellania
 	- fix lustre/lustrefs init scripts for SuSE (patch from Scali, 5702)
 	- don't hold the pinger_sem in ptlrpc_pinger_sending_on_import
 	- change obd_increase_kms to obd_adjust_kms (up or down) (5654)
 	- lconf, lmc search both /usr/lib and /usr/lib64 for Python libs (5800)
 	- support for RHEL4 kernel on i686 (5773)
-	- provide error messages when incompatible logs are encountered (5898)
+        - provide error messages when incompatible logs are encountered (5898)
 
 2005-02-18  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0.10 (1.4.1 release candidate 1)
@@ -80,6 +81,7 @@
 	- align r/w RPCs to PTLRPC_MAX_BRW_SIZE boundaries for performance
 	- allow readahead allocations to fail when low on memory (5383)
 	- mmap locking landed again, after considerable improvement (2828)
+	- add get_hostaddr() to lustreDB.py for LDAP support (5459)
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0

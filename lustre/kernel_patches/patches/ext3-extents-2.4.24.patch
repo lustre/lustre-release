@@ -2309,6 +2309,16 @@ Index: linux-2.4.24/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-11-02 20:28:32.000000000 +0300
 +++ linux-2.4.24/fs/ext3/ialloc.c	2004-11-02 20:32:17.000000000 +0300
+@@ -553,7 +553,8 @@ repeat:
+ 	inode->i_blksize = PAGE_SIZE;
+ 	inode->i_blocks = 0;
+ 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
+-	inode->u.ext3_i.i_flags = dir->u.ext3_i.i_flags & ~EXT3_INDEX_FL;
++	inode->u.ext3_i.i_flags = dir->u.ext3_i.i_flags &
++		~(EXT3_INDEX_FL | EXT3_EXTENTS_FL);
+ 	if (S_ISLNK(mode))
+ 		inode->u.ext3_i.i_flags &= ~(EXT3_IMMUTABLE_FL|EXT3_APPEND_FL);
+ #ifdef EXT3_FRAGMENTS
 @@ -592,6 +592,19 @@
  		iloc.bh = NULL;
  		goto fail;

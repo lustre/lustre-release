@@ -2319,6 +2319,15 @@ Index: linux-2.4.21-rhel/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.21-rhel.orig/fs/ext3/ialloc.c	2005-03-04 00:44:34.000000000 +0300
 +++ linux-2.4.21-rhel/fs/ext3/ialloc.c	2005-03-04 00:44:35.000000000 +0300
+@@ -553,7 +553,7 @@ repeat:
+ 	inode->i_blksize = PAGE_SIZE;
+ 	inode->i_blocks = 0;
+ 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
+-	ei->i_flags = EXT3_I(dir)->i_flags & ~EXT3_INDEX_FL;
++	ei->i_flags = EXT3_I(dir)->i_flags & ~(EXT3_INDEX_FL|EXT3_EXTENTS_FL);
+ 	if (S_ISLNK(mode))
+ 		ei->i_flags &= ~(EXT3_IMMUTABLE_FL|EXT3_APPEND_FL);
+ #ifdef EXT3_FRAGMENTS
 @@ -596,6 +596,19 @@
  		iloc.bh = NULL;
  		goto fail;

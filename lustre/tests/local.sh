@@ -40,11 +40,8 @@ ${LMC} --add mds --node localhost --mds mds1 --fstype $FSTYPE \
 # configure ost
 ${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 $LOVOPT || exit 20
-# only specify "--mkfsoptions='-i 8192'" here because test fs is so small,
-# on a real fs this is not needed unless all files tiny with many stripes
 ${LMC} --add ost --nspath /mnt/ost_ns --node localhost --lov lov1 \
-	--fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE \
-	--mkfsoptions="-i 8192" $JARG $OSTOPT || exit 30
+	--fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE $JARG $OSTOPT || exit 30
 
 # create client config
 ${LMC} --add mtpt --node localhost --path $MOUNT --mds mds1 --lov lov1 \

@@ -2357,6 +2357,15 @@ Index: linux-2.6.5-sles9/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.6.5-sles9.orig/fs/ext3/ialloc.c	2005-02-23 01:01:52.366281264 +0300
 +++ linux-2.6.5-sles9/fs/ext3/ialloc.c	2005-02-23 01:02:37.398435336 +0300
+@@ -566,7 +566,7 @@ repeat:
+ 	ei->i_dir_start_lookup = 0;
+ 	ei->i_disksize = 0;
+ 
+-	ei->i_flags = EXT3_I(dir)->i_flags & ~EXT3_INDEX_FL;
++	ei->i_flags = EXT3_I(dir)->i_flags & ~(EXT3_INDEX_FL|EXT3_EXTENTS_FL);
+ 	if (S_ISLNK(mode))
+ 		ei->i_flags &= ~(EXT3_IMMUTABLE_FL|EXT3_APPEND_FL);
+ 	/* dirsync only applies to directories */
 @@ -647,6 +647,18 @@
  		DQUOT_FREE_INODE(inode);
  		goto fail2;

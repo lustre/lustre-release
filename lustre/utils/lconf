@@ -972,8 +972,11 @@ def def_mount_options(fstype, target):
     """returns deafult mount options for passed fstype and target (mds, ost)"""
     if fstype == 'ext3' or fstype == 'ldiskfs':
         mountfsoptions = "errors=remount-ro"
-        if target == 'ost' and sys_get_branch() == '2.4':
-            mountfsoptions = "%s,asyncdel" % (mountfsoptions)
+        if target == 'ost':
+            if sys_get_branch() == '2.4':
+                mountfsoptions = "%s,asyncdel" % (mountfsoptions)
+            #else:
+            #    mountfsoptions = "%s,extents,mballoc" % (mountfsoptions)
         return mountfsoptions
     return ""
 

@@ -2354,6 +2354,15 @@ Index: linux-stage/fs/ext3/ialloc.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/ialloc.c	2005-02-25 14:50:50.304202816 +0200
 +++ linux-stage/fs/ext3/ialloc.c	2005-02-25 15:33:48.920193600 +0200
+@@ -566,7 +566,7 @@ repeat:
+ 	ei->i_dir_start_lookup = 0;
+ 	ei->i_disksize = 0;
+ 
+-	ei->i_flags = EXT3_I(dir)->i_flags & ~EXT3_INDEX_FL;
++	ei->i_flags = EXT3_I(dir)->i_flags & ~(EXT3_INDEX_FL|EXT3_EXTENTS_FL);
+ 	if (S_ISLNK(mode))
+ 		ei->i_flags &= ~(EXT3_IMMUTABLE_FL|EXT3_APPEND_FL);
+ 	/* dirsync only applies to directories */
 @@ -646,6 +646,18 @@
  		DQUOT_FREE_INODE(inode);
  		goto fail2;
