@@ -2876,7 +2876,7 @@ lconf_options = [
                  INTPARAM, 0),
     ('maxlevel', """Maximum level of services to configure/cleanup
                     Levels are aproximatly like:
-                            10 - netwrk
+                            10 - network
                             20 - device, ldlm
                             30 - osd, mdd
                             40 - mds, ost
