@@ -19,13 +19,16 @@ EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
 EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
-EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c fs/extN/hash.c include/linux/extN_fs.h
+EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c
 extN_SOURCES = $(EXTNC) xattr.c # punch.c
 extN_DEPENDENCIES = patch-stamp
 EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff \
 	$(wildcard extN.patch-*)
-DISTCLEANFILES = $(extN_SOURCES) sed-stamp patch-stamp *.orig *.rej
+DISTCLEANFILES = -r $(extN_SOURCES) sed-stamp patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
+
+distclean:
+	cd .. && rm -f $(EXTN_EXTRA)
 
 include $(top_srcdir)/Rules
 
@@ -39,10 +42,28 @@ include $(top_srcdir)/Rules
 # set works for nearly everybody.  This is mainly for damage control.
 diff:
 	$(RM) extN.patchT
-	-for f in $(EXTNC); do (cd $(top_srcdir) && diff -u extN/extN.orig/$$f extN/$$f) >> extN.patchT; done
-	-for f in $(EXTNI); do (cd $(top_srcdir) && diff -u extN/extN.orig-include/$$f include/linux/$$f) >> extN.patchT; done
+	l='$(EXTNC)'; for f in $$l; do \
+	  echo "$$f"; \
+	  (cd $(top_srcdir) && \
+	    diff -u extN/extN.orig/$$f extN/$$f) >> extN.patchT; \
+	  test $$? -le 1 || exit 1; \
+	done
+	l='$(EXTNI)'; for f in $$l; do \
+	  echo "$$f"; \
+	  (cd $(top_srcdir) && \
+	    diff -u extN/extN-include.orig/$$f include/linux/$$f) >> extN.patchT; \
+	  test $$? -le 1 || exit 1; \
+	done
+	l='$(EXTN_EXTRA)'; for f in $$l; do \
+	  f=`echo "$$f" | sed 's%^fs/%%'`; \
+	  echo "$$f"; \
+	  (cd $(top_srcdir) && \
+	    diff -u /dev/null $$f) >> extN.patchT; \
+	  test $$? -le 1 || exit 1; \
+	done
 	mv -f extN.patchT $(srcdir)/extN.patch-$(RELEASE)
-	f=extN.patch-$(RELEASE); if cvs update $$f 2>&1 | grep 'cvs add' >/dev/null; then \
+	f=extN.patch-$(RELEASE); \
+	if cvs update $$f 2>&1 | grep 'cvs add' >/dev/null; then \
 	  cvs add $$f; \
 	fi
 .PHONY: diff
@@ -50,8 +71,8 @@ diff:
 # Just do the SUB transformation on all our source files.
 sed-stamp:
 	$(RM) $@
-	rm -rf extN.orig extN.orig-include
-	mkdir extN.orig extN.orig-include
+	rm -rf extN.orig extN-include.orig
+	mkdir extN.orig extN-include.orig
 	set -vx;                                                              \
 	list='$(EXTNC)'; for f in $$list; do                                  \
 	sed $(SUB) $(LINUX)/fs/ext3/$$f > extN.orig/$$f;	          \
@@ -60,7 +81,7 @@ sed-stamp:
 	list='$(EXTNI)'; for i in $$list; do                                  \
 	s=`echo $$i | sed "s/extN/ext3/"`;                                    \
 	sed $(SUB) $(LINUX)/include/linux/$$s >                               \
-		extN.orig-include/$$i;                              \
+		extN-include.orig/$$i;                              \
 	done
 	echo timestamp > $@
 
@@ -72,7 +93,7 @@ sed-stamp:
 # We also want to preserve the pristine transformed files for the diff target.
 patch-stamp: sed-stamp $(EXTNP)
 	cp -a extN.orig/* $(srcdir)
-	cp -a extN.orig-include/* $(top_srcdir)/include/linux
+	cp -a extN-include.orig/* $(top_srcdir)/include/linux
 	test -e $(top_srcdir)/fs || ln -s . $(top_srcdir)/fs
 	set -vx;                                                              \
 	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then                       \
