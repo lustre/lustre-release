@@ -244,7 +244,8 @@ test_17() {
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # client will get evicted here
     sysctl -w lustre.fail_loc=0x80000503
-    do_facet client cp /etc/termcap $DIR/$tfile
+    # need to write enough to ensure we send an RPC
+    do_facet client dd if=/dev/zero of=$DIR/$tfile bs=1024k count=2
 
     sleep $TIMEOUT
     sysctl -w lustre.fail_loc=0
