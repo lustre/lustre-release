@@ -34,18 +34,10 @@
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
+#include <lustre/liblustreapi.h>
 
 #include "parser.h"
 #include "obdctl.h"
-
-extern int op_create_file(char *name, long stripe_size, int stripe_offset,
-                int stripe_count);
-extern int op_setstripe_dir(char *path, long stripe_size, int stripe_offset,
-                int stripe_count);
-extern int op_find(char *path, struct obd_uuid *obduuid, int recursive,
-                int verbose, int quiet);
-extern int op_check(int type_num, char **obd_type_p, char *dir);
-extern int op_catinfo(char *dir, char *keyword, char *node_name);
 
 /* all functions */
 static int lfs_dsetstripe(int argc, char **argv);
