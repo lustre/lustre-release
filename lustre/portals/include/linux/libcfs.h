@@ -3,7 +3,6 @@
  */
 #ifndef _LIBCFS_H
 
-#include <linux/lustre_list.h>
 
 #define PORTAL_DEBUG
 
@@ -197,6 +196,10 @@ struct portal_ioctl_data {
         char ioc_bulk[0];
 };
 
+#ifdef __KERNEL__
+
+#include <linux/list.h>
+
 struct libcfs_ioctl_handler {
         struct list_head item;
         int (*handle_ioctl)(struct portal_ioctl_data *data,
@@ -211,6 +214,8 @@ struct libcfs_ioctl_handler {
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
+
+#endif
 
 #define _LIBCFS_H
 
