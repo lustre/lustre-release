@@ -75,15 +75,10 @@ static int ptlrpc_pinger_main(void *arg)
         lock_kernel();
         ptlrpc_daemonize();
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+        SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
-        recalc_sigpending();
-#else
-        spin_lock_irqsave(&current->sigmask_lock, flags);
-        sigfillset(&current->blocked);
-        recalc_sigpending(current);
-        spin_unlock_irqrestore(&current->sigmask_lock, flags);
-#endif
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
         sprintf(current->comm, "%s|%d", data->name,current->thread.extern_pid);
