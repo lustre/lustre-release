@@ -1191,7 +1191,7 @@ diff -Nur linux-2.4.18/fs/ext3/xattr.c linux-2.4.18ea/fs/ext3/xattr.c
 +		} else if (old_bh && header == HDR(old_bh)) {
 +			/* Keep this block. */
 +			new_bh = old_bh;
-+			ext3_xattr_cache_insert(new_bh);
++			(void)ext3_xattr_cache_insert(new_bh);
 +		} else {
 +			/* We need to allocate a new block */
 +			int force = EXT3_I(inode)->i_file_acl != 0;
@@ -1216,7 +1216,7 @@ diff -Nur linux-2.4.18/fs/ext3/xattr.c linux-2.4.18ea/fs/ext3/xattr.c
 +			memcpy(new_bh->b_data, header, new_bh->b_size);
 +			mark_buffer_uptodate(new_bh, 1);
 +			unlock_buffer(new_bh);
-+			ext3_xattr_cache_insert(new_bh);
++			(void)ext3_xattr_cache_insert(new_bh);
 +			ext3_xattr_update_super_block(handle, sb);
 +		}
 +		error = ext3_journal_dirty_metadata(handle, new_bh);
