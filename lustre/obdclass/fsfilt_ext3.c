@@ -501,8 +501,8 @@ static int fsfilt_ext3_prep_san_write(struct inode *inode, long *blocks,
         return ext3_prep_san_write(inode, blocks, nblocks, newsize);
 }
 
-static int fsfilt_ext3_read_record(struct file * file, char * buf,
-                loff_t size, loff_t *offs)
+static int fsfilt_ext3_read_record(struct file * file, char *buf,
+                                   int size, loff_t *offs)
 {
         struct buffer_head *bh;
         unsigned long block, boffs;
@@ -510,9 +510,10 @@ static int fsfilt_ext3_read_record(struct file * file, char * buf,
         int err;
 
         if (inode->i_size < *offs + size) {
-                CERROR("file is too short for this request\n");
+                CERROR("file size %llu is too short for read %u@%llu\n",
+                       inode->i_size, size, *offs);
                 return -EIO;
-        } 
+        }
 
         block = *offs >> inode->i_blkbits;
         bh = ext3_bread(NULL, inode, block, 0, &err);
@@ -535,12 +536,13 @@ static int fsfilt_ext3_read_record(struct file * file, char * buf,
         return size;
 }
 
-static int fsfilt_ext3_write_record(struct file * file, char * buf,
-                loff_t size, loff_t *offs)
+static int fsfilt_ext3_write_record(struct file * file, char *buf,
+                                    int size, loff_t *offs)
 {
         struct buffer_head *bh;
         unsigned long block, boffs;
         struct inode *inode = file->f_dentry->d_inode;
+        loff_t old_size = inode->i_size;
         journal_t *journal;
         handle_t *handle;
         int err;
@@ -553,17 +555,26 @@ static int fsfilt_ext3_write_record(struct file * file, char * buf,
         }
 
         block = *offs >> inode->i_blkbits;
-        if (block > inode->i_size >> inode->i_blkbits) {
+        if (*offs + size > inode->i_size) {
                 down(&inode->i_sem);
-                if (block > inode->i_size >> inode->i_blkbits) 
-                        inode->i_size = block << inode->i_blkbits;
+                if (*offs + size > inode->i_size)
+                        inode->i_size = ((loff_t)block + 1) << inode->i_blkbits;
                 up(&inode->i_sem);
         }
+
         bh = ext3_bread(handle, inode, block, 1, &err);
         if (!bh) {
                 CERROR("can't read/create block: %d\n", err);
                 goto out;
         }
+
+        /* This is a hack only needed because ext3_get_block_handle() updates
+         * i_disksize after marking the inode dirty in ext3_splice_branch().
+         * We will fix that when we get a chance, as ext3_mark_inode_dirty()
+         * is not without cost, nor is it even exported.
+         */
+        if (inode->i_size > old_size)
+                mark_inode_dirty(inode);
 
         boffs = (unsigned)*offs % bh->b_size;
         if (boffs + size > bh->b_size) {
@@ -582,7 +593,7 @@ static int fsfilt_ext3_write_record(struct file * file, char * buf,
         err = ext3_journal_dirty_metadata(handle, bh);
         if (err) {
                 CERROR("journal_dirty_metadata() returned error %d\n", err);
-                goto out; 
+                goto out;
         }
         err = size;
 out:
