@@ -31,7 +31,8 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
 
-int client_import_connect(struct lustre_handle *conn, struct obd_device *obd,
+int client_import_connect(struct lustre_handle *dlm_handle, 
+                          struct obd_device *obd,
                           struct obd_uuid *cluuid)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -41,16 +42,16 @@ int client_import_connect(struct lustre_handle *conn, struct obd_device *obd,
         /* XXX maybe this is a good time to create a connect struct? */
         int rc, size[] = {sizeof(imp->imp_target_uuid),
                           sizeof(obd->obd_uuid),
-                          sizeof(*conn)};
+                          sizeof(*dlm_handle)};
         char *tmp[] = {imp->imp_target_uuid.uuid,
                        obd->obd_uuid.uuid,
-                       (char *)conn};
+                       (char *)dlm_handle};
         int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
         int msg_flags;
 
         ENTRY;
         down(&cli->cl_sem);
-        rc = class_connect(conn, obd, cluuid);
+        rc = class_connect(dlm_handle, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
 
@@ -72,16 +73,16 @@ int client_import_connect(struct lustre_handle *conn, struct obd_device *obd,
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
 
-        imp->imp_dlm_handle = *conn;
+        imp->imp_dlm_handle = *dlm_handle;
 
         imp->imp_level = LUSTRE_CONN_CON;
         rc = ptlrpc_queue_wait(request);
         if (rc) {
-                class_disconnect(conn, 0);
+                class_disconnect(dlm_handle, 0);
                 GOTO(out_req, rc);
         }
 
-        exp = class_conn2export(conn);
+        exp = class_conn2export(dlm_handle);
         exp->exp_connection = ptlrpc_connection_addref(request->rq_connection);
         class_export_put(exp);
 
@@ -105,16 +106,16 @@ out_ldlm:
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
-                class_disconnect(conn, 0);
+                class_disconnect(dlm_handle, 0);
         }
 out_sem:
         up(&cli->cl_sem);
         return rc;
 }
 
-int client_import_disconnect(struct lustre_handle *conn, int failover)
+int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = class_conn2obd(dlm_handle);
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
         struct ptlrpc_request *request = NULL;
@@ -123,7 +124,7 @@ int client_import_disconnect(struct lustre_handle *conn, int failover)
 
         if (!obd) {
                 CERROR("invalid connection for disconnect: cookie "LPX64"\n",
-                       conn ? conn->cookie : -1UL);
+                       dlm_handle ? dlm_handle->cookie : -1UL);
                 RETURN(-EINVAL);
         }
 
@@ -164,13 +165,12 @@ int client_import_disconnect(struct lustre_handle *conn, int failover)
                 if (rc)
                         GOTO(out_req, rc);
         }
-        class_disconnect(&imp->imp_dlm_handle, 0);
         EXIT;
  out_req:
         if (request)
                 ptlrpc_req_finished(request);
  out_no_disconnect:
-        err = class_disconnect(conn, 0);
+        err = class_disconnect(dlm_handle, 0);
         if (!rc && err)
                 rc = err;
  out_sem:
