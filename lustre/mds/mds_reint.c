@@ -83,9 +83,9 @@ static void mds_cancel_cookies_cb(struct obd_device *obd,
                         CERROR("error cancelling %d log cookies: rc %d\n",
                                (int)(mlcd->mlcd_cookielen /
                                      sizeof(*mlcd->mlcd_cookies)), rc);
+		obd_free_memmd(obd->u.mds.mds_dt_exp, &lsm);
         }
 
-	obd_free_memmd(obd->u.mds.mds_dt_exp, &lsm);
         OBD_FREE(mlcd, mlcd->mlcd_size);
 }
 
