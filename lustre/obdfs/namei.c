@@ -151,8 +151,9 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
         /* Send a hint to the create method on the type of file to create */
         oa->o_mode = mode;
         oa->o_valid |= OBD_MD_FLMODE;
-
+	CDEBUG(D_INODE, "\n");
         err = IOPS(dir, create)(IID(dir), oa);
+	CDEBUG(D_INODE, "\n");
 
         if ( err ) {
                 printk("new_inode - fatal: err %d\n", err);
@@ -160,8 +161,10 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
                 EXIT;
                 return ERR_PTR(err);
         }
+	CDEBUG(D_INODE, "\n");
 
         inode = iget4(dir->i_sb, (ino_t)oa->o_id, NULL, oa);
+	CDEBUG(D_INODE, "\n");
         obdo_free(oa);
 
         if (!inode) {

@@ -13,7 +13,7 @@ plog umount $MNTOBD
 plog umount $MNTSNAP
 
 plog log "CLEANUP /dev/obd2 /dev/obd1"
-$OBDDIR/class/obdcontrol -f << EOF
+$OBDDIR/utils/obdcontrol -f << EOF
 device /dev/obd2
 cleanup
 detach

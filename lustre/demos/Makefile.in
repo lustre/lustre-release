@@ -77,9 +77,7 @@ docdir = @docdir@
 moduledir = @moduledir@
 modulefsdir = @modulefsdir@
 
-demo_SCRIPTS = baseclean.sh basesetup.sh obdfsclean.sh obdfssetup.sh \
-	obdtest.sh snap3clean.sh snap3set.sh snapclean.sh snapdel.sh \
-	snaprest.sh snaprestclean.sh snapsetup.sh snaptest.sh
+demo_SCRIPTS = baseclean.sh basesetup.sh obdfsclean.sh obdfssetup.sh 	obdtest.sh snap3clean.sh snap3set.sh snapclean.sh snapdel.sh 	snaprest.sh snaprestclean.sh snapsetup.sh snaptest.sh
 
 demo_DATA = config.sh
 EXTRA_DIST = $(demo_SCRIPTS) $(demo_DATA)

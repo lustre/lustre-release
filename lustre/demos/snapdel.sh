@@ -19,7 +19,7 @@ plog umount $MNTOBD
 sync
 sleep 1
 plog log "STARTING snapdelete"
-$OBDDIR/class/obdcontrol -f << EOF
+$OBDDIR/utils/obdcontrol -f << EOF
 device /dev/obd2
 connect
 snapdelete

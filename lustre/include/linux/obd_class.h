@@ -267,9 +267,9 @@ struct obd_ops {
                           obd_count *vallen, void **val);
         int (*o_set_info)(struct obd_conn *, obd_count keylen, void *key,
                           obd_count vallen, void *val);
-        int (*o_attach)(struct obd_device *dev, struct obd_ioctl_data *data);
+        int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
         int (*o_detach)(struct obd_device *dev);
-        int (*o_setup) (struct obd_device *dev, struct obd_ioctl_data *data);
+        int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
         int (*o_cleanup)(struct obd_device *dev);
         int (*o_connect)(struct obd_conn *conn);
         int (*o_disconnect)(struct obd_conn *conn);

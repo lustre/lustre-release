@@ -14,13 +14,14 @@ plog umount $MNTOBD
 plog rmmod obdfs
 
 plog log "CLEANUP/DETACH"
-$OBDDIR/class/obdcontrol -f << EOF
-device /dev/obd0
+$OBDDIR/utils/obdctl << EOF
+device 0
 cleanup
 detach
 quit
 EOF
 
+plog rmmod obdfilter
 plog rmmod obdext2
 plog rmmod obdclass
 

@@ -17,7 +17,7 @@ sync
 sleep 5 # let syslog logs get written 
 
 plog log "CREATING /dev/obd3 snapshot"
-$OBDDIR/class/obdcontrol -f << EOF
+$OBDDIR/utils/obdcontrol -f << EOF
 snaptable
 $SNAPTABLE
 a

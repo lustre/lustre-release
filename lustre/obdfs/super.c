@@ -120,6 +120,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         struct obd_device *obddev;
         char *device = NULL;
         char *version = NULL;
+	int connected = 0;
         int devno;
         int err;
         unsigned long blocksize;
@@ -187,7 +188,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
                 EXIT;
                 goto ERR;
         }
-
+	connected = 1;
         CDEBUG(D_INFO, "\n"); 
         /* list of dirty inodes, and a mutex to hold while modifying it */
         INIT_LIST_HEAD(&sbi->osi_inodes);
@@ -276,6 +277,9 @@ ERR:
                 OBD_FREE(device, strlen(device) + 1);
         if (version)
                 OBD_FREE(version, strlen(version) + 1);
+	if (connected) 
+		sbi->osi_ops->o_disconnect(&sbi->osi_conn);
+
         if (sbi) {
                 sbi->osi_super = NULL;
         }

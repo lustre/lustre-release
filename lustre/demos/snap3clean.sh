@@ -12,7 +12,7 @@ OBDDIR="`dirname $0`/.."
 plog umount $MNTSNAP2
 
 plog log "CLEANUP /dev/obd3"
-$OBDDIR/class/obdcontrol -f << EOF
+$OBDDIR/utils/obdcontrol -f << EOF
 device /dev/obd3
 cleanup
 detach

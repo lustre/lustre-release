@@ -31,7 +31,6 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 
 #define PageChecked(page)        test_bit(PG_checked, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
-#define PG_checked               13      /* kill me in 2.5.<early>. */
 
 int waitfor_one_page(struct page *page)
 {

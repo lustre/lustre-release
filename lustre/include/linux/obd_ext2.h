@@ -16,8 +16,8 @@
 #endif
 
 struct ext2_obd {
-        struct super_block * ext2_sb;
-	struct vfsmount *vfsmnt;
+        struct super_block * e2_sb;
+	struct vfsmount *e2_vfsmnt;
 };
 
 

@@ -216,8 +216,6 @@ static void inline obdfs_set_size (struct inode *inode, obd_size size)
        inode->i_size = size;
        inode->i_blocks = (inode->i_size + inode->i_sb->s_blocksize - 1) >>
                inode->i_sb->s_blocksize_bits;
-       inode->i_bytes = inode->i_size &
-               ((1 << inode->i_sb->s_blocksize_bits) - 1);
 } /* obdfs_set_size */
 
 

@@ -43,56 +43,48 @@ static int cache_writes = 0;
 
 /* page cache support stuff */ 
 
+
 /*
  * Add a page to the dirty page list.
  */
-void __set_page_dirty(struct page *page)
+void set_page_dirty(struct page *page)
 {
-	struct address_space *mapping;
-	spinlock_t *pg_lock;
+	if (!test_and_set_bit(PG_dirty, &page->flags)) {
+		struct address_space *mapping = page->mapping;
 
-	pg_lock = PAGECACHE_LOCK(page);
-	spin_lock(pg_lock);
+		if (mapping) {
+			spin_lock(&pagecache_lock);
+			list_del(&page->list);
+			list_add(&page->list, &mapping->dirty_pages);
+			spin_unlock(&pagecache_lock);
 
-	mapping = page->mapping;
-	spin_lock(&mapping->page_lock);
-
-	list_del(&page->list);
-	list_add(&page->list, &mapping->dirty_pages);
-
-	spin_unlock(&mapping->page_lock);
-	spin_unlock(pg_lock);
-
-	if (mapping->host)
-		mark_inode_dirty_pages(mapping->host);
+			if (mapping->host)
+				mark_inode_dirty_pages(mapping->host);
+		}
+	}
 }
 
 /*
- * Add a page to the dirty page list.
+ * Remove page from dirty list
  */
 void __set_page_clean(struct page *page)
 {
+	struct address_space *mapping = page->mapping;
 	struct inode *inode;
-	struct address_space *mapping;
-	spinlock_t *pg_lock;
+	
+	if (!mapping)
+		return;
 
-	pg_lock = PAGECACHE_LOCK(page);
-	spin_lock(pg_lock);
-
-	mapping = page->mapping;
-	spin_lock(&mapping->page_lock);
-
+	spin_lock(&pagecache_lock);
 	list_del(&page->list);
 	list_add(&page->list, &mapping->clean_pages);
-
-	spin_unlock(&mapping->page_lock);
-	spin_unlock(pg_lock);
 
 	inode = mapping->host;
 	if (list_empty(&mapping->dirty_pages)) { 
 		CDEBUG(D_INODE, "inode clean\n");
 		inode->i_state &= ~I_DIRTY_PAGES;
 	}
+	spin_unlock(&pagecache_lock);
 	EXIT;
 }
 

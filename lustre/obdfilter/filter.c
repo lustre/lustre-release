@@ -1,17 +1,12 @@
 /*
  *  linux/fs/ext2_obd/ext2_obd.c
  *
- * Copyright (C) 1999  Stelias Computing, Inc.
- * Copyright (C) 1999  Seagate Technology, Inc.
  * Copyright (C) 2001  Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  *
- * This is the object based disk driver based on ext2 
- * written by Peter Braam <braam@clusterfs.com>, Phil Schwan <phil@off.net>
- * Andreas Dilger <adilger@turbolinux.com>
- *
+ * by Peter Braam <braam@clusterfs.com>
  */
 
 #define EXPORT_SYMTAB
@@ -27,8 +22,6 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_ext2.h>
-
-
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 long filter_memory;
@@ -55,15 +48,18 @@ void pop_ctxt(struct run_ctxt *saved)
 static void filter_prep(struct obd_device *obddev)
 {
 	struct run_ctxt saved;
+	struct file *file;
+	struct inode *inode;
 	long rc;
 	int fd;
 	struct stat64 buf;
-	__u64 lastino = 0;
+	__u64 lastino = 2;
 
 	push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
 	rc = sys_mkdir("O", 0700);
 	rc = sys_mkdir("P", 0700);
 	rc = sys_mkdir("D", 0700);
+	rc = sys_mkdir("O/2", 0755);
 	if ( (fd = sys_open("D/status", O_RDWR | O_CREAT, 0700)) == -1 ) {
 		printk("OBD filter: cannot create status file\n");
 		goto out;
@@ -81,11 +77,23 @@ static void filter_prep(struct obd_device *obddev)
 	} else { 
 		rc = sys_read(fd, (char *)&lastino, sizeof(lastino));
 		if (rc != sizeof(lastino)) { 
-			printk("OBD filter: error writing lastino\n");
+			printk("OBD filter: error reading lastino\n");
 			goto out_close;
 		}
 	}
 	obddev->u.filter.fo_lastino = lastino;
+
+	/* this is also the moment to steal operations */
+	file = filp_open("D/status", O_RDONLY, 0);
+	if (!file || IS_ERR(file)) { 
+		EXIT;
+		goto out_close;
+	}
+	inode = file->f_dentry->d_inode;
+	obddev->u.filter.fo_fop = file->f_op;
+	obddev->u.filter.fo_iop = inode->i_op;
+	obddev->u.filter.fo_aops = inode->i_mapping->a_ops;
+	filp_close(file, 0);
 	
  out_close:
 	rc = sys_close(fd);
@@ -129,15 +137,12 @@ static int filter_disconnect(struct obd_conn *conn)
 	return gen_disconnect(conn);
 } /* ext2obd_disconnect */
 
-
-
-
-/* 
- *   to initialize a particular /dev/obdNNN to simulated OBD type
- *   *data holds the device of the ext2 disk partition we will use. 
- */ 
-static int filter_setup(struct obd_device *obddev, struct obd_ioctl_data* data)
+/* mount the file system (secretly) */
+static int filter_setup(struct obd_device *obddev, obd_count len,
+			void *buf)
+			
 {
+	struct obd_ioctl_data* data = buf;
 	struct vfsmount *mnt;
 	int err; 
         ENTRY;
@@ -202,20 +207,20 @@ static int filter_cleanup(struct obd_device * obddev)
 
 	lock_kernel();
 
-
         MOD_DEC_USE_COUNT;
         EXIT;
         return 0;
 }
 
-static struct inode *inode_from_obdo(struct obd_device *obddev, 
+
+static struct file *filter_obj_open(struct obd_device *obddev, 
 				     struct obdo *oa)
 {
+	struct file *file;
+	int error = 0;
 	char id[16];
-	struct super_block *sb;
-	struct inode *inode; 
 	struct run_ctxt saved;
-	struct stat64 st;
+	struct super_block *sb;
 
 	sb = obddev->u.filter.fo_sb;
         if (!sb || !sb->s_dev) {
@@ -231,24 +236,40 @@ static struct inode *inode_from_obdo(struct obd_device *obddev,
         }
 
 	sprintf(id, "O/%Ld", oa->o_id);
-
 	push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
-	if (sys_stat64(id, &st, 0)) { 
-		EXIT;
-		return NULL;
-	}
+	file = filp_open(id , O_RDONLY, 0);
 	pop_ctxt(&saved);
 
-        inode = iget(sb, st.st_ino);
-        if (!inode || inode->i_nlink == 0 || is_bad_inode(inode)) {
-                printk("from obdo - fatal: invalid inode %ld (%s).\n",
-                       (long)oa->o_id, inode ? inode->i_nlink ? "bad inode" :
-                       "no links" : "NULL");
-                if (inode)
-                        iput(inode);
-                EXIT;
-                return NULL;
-        }
+	if (IS_ERR(file)) { 
+		error = PTR_ERR(file);
+		file = NULL;
+	}
+	CDEBUG(D_INODE, "opening obdo %s\n", id);
+		
+	if ( file ) {
+		file->f_op = obddev->u.filter.fo_fop;
+		file->f_dentry->d_inode->i_op = obddev->u.filter.fo_iop;
+		file->f_dentry->d_inode->i_mapping->a_ops = obddev->u.filter.fo_aops;
+	} else { 
+		printk("Error opening object %s,  error %d\n", id, error);
+	}
+	return file;
+}
+
+static struct inode *inode_from_obdo(struct obd_device *obddev, 
+				     struct obdo *oa)
+{
+	struct file *file;
+	struct inode *inode; 
+
+	file = filter_obj_open(obddev, oa);
+	if ( !file ) { 
+		printk("inode_from_obdo failed\n"); 
+		return NULL;
+	}
+
+        inode = iget(file->f_dentry->d_inode->i_sb, file->f_dentry->d_inode->i_ino); 
+	filp_close(file, 0);
 	return inode;
 }
 
@@ -306,7 +327,9 @@ static int filter_getattr(struct obd_conn *conn, struct obdo *oa)
 		return -ENOENT;
 	}
 
+	oa->o_valid &= ~OBD_MD_FLID;
         filter_from_inode(oa, inode);
+	
         iput(inode);
         EXIT;
         return 0;
@@ -350,27 +373,32 @@ static int filter_create (struct obd_conn* conn, struct obdo *oa)
 	struct obd_device *obddev = conn->oc_dev;
 	struct iattr;
 	int rc;
+	ENTRY;
 
         if (!gen_client(conn)) {
                 CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
                 return -EINVAL;
         }
+	CDEBUG(D_IOCTL, "\n");
 
 	conn->oc_dev->u.filter.fo_lastino++;
 	oa->o_id = conn->oc_dev->u.filter.fo_lastino;
 	sprintf(name, "O/%Ld", oa->o_id);
 	push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
-	if (sys_mknod(name, 010644, 0)) { 
-		printk("Error mknod %s\n", name);
+	CDEBUG(D_IOCTL, "\n");
+	if (sys_mknod(name, 0100644, 0)) { 
+		printk("Error mknod obj %s\n", name);
 		return -ENOENT;
 	}
 	pop_ctxt(&saved);
 
+	CDEBUG(D_IOCTL, "\n");
 	rc = filter_setattr(conn, oa); 
 	if ( rc ) { 
 		EXIT;
 		return -EINVAL;
 	}
+	CDEBUG(D_IOCTL, "\n");
 	
         /* Set flags for fields we have set in ext2_new_inode */
         oa->o_valid |= OBD_MD_FLID | OBD_MD_FLBLKSZ | OBD_MD_FLBLOCKS |
@@ -417,17 +445,13 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         return 0;
 }
 
+/* buffer must lie in user memory here */
 static int filter_read(struct obd_conn *conn, struct obdo *oa, char *buf,
                         obd_size *count, obd_off offset)
 {
-        struct super_block *sb;
-        struct inode * inode;
-        struct file * f;
-        struct file fake_file;
-        struct dentry fake_dentry;
+        struct file * file;
         unsigned long retval;
         int err;
-
 
         if (!gen_client(conn)) {
                 CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
@@ -435,33 +459,16 @@ static int filter_read(struct obd_conn *conn, struct obdo *oa, char *buf,
                 return -EINVAL;
         }
 
-        sb = conn->oc_dev->u.ext2.ext2_sb;
-	if ( !(inode = inode_from_obdo(conn->oc_dev, oa)) ) { 
+	file = filter_obj_open(conn->oc_dev, oa); 
+	if (!file || IS_ERR(file)) { 
 		EXIT;
-		return -ENOENT;
+		return -PTR_ERR(file);
 	}
 
-        if (!S_ISREG(inode->i_mode)) {
-                iput(inode);
-                CDEBUG(D_INODE, "fatal: not regular file %ld (mode=%o).\n",
-                       inode->i_ino, inode->i_mode);
-                EXIT;
-                return -EINVAL;
-        }
-
-        memset(&fake_file, 0, sizeof(fake_file));
-        memset(&fake_dentry, 0, sizeof(fake_dentry));
-
-        f = &fake_file;
-        f->f_dentry = &fake_dentry;
-        f->f_dentry->d_inode = inode;
-	f->f_flags = O_LARGEFILE;
-        f->f_op = &ext2_file_operations;
-	inode->i_mapping->a_ops = &ext2_aops;
-
         /* count doubles as retval */
-        retval = f->f_op->read(f, buf, *count, &offset);
-        iput(inode);
+        retval = file->f_op->read(file, buf, *count, &offset);
+	filp_close(file, 0);
+
         if ( retval >= 0 ) {
                 err = 0;
                 *count = retval;
@@ -474,58 +481,30 @@ static int filter_read(struct obd_conn *conn, struct obdo *oa, char *buf,
 } /* ext2obd_read */
 
 
+/* buffer must lie in user memory here */
 static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf, 
                          obd_size *count, obd_off offset)
 {
         int err;
-        struct super_block *sb;
-        struct inode * inode;
-        struct file fake_file;
-        struct dentry fake_dentry;
-        struct file * f;
+        struct file * file;
         unsigned long retval;
 
         ENTRY;
-
         if (!gen_client(conn)) {
                 CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
                 EXIT;
                 return -EINVAL;
         }
 
-        sb = conn->oc_dev->u.ext2.ext2_sb;
-	if ( !(inode = inode_from_obdo(conn->oc_dev, oa)) ) { 
+	file = filter_obj_open(conn->oc_dev, oa); 
+	if (!file || IS_ERR(file)) { 
 		EXIT;
-		return -ENOENT;
+		return -PTR_ERR(file);
 	}
 
-        if (!S_ISREG(inode->i_mode)) {
-                CDEBUG(D_INODE, "fatal: not regular file.\n");
-                iput(inode);
-                EXIT;
-                return -EINVAL;
-        }
-
-        memset(&fake_file, 0, sizeof(fake_file));
-        memset(&fake_dentry, 0, sizeof(fake_dentry));
-
-        f = &fake_file;
-        f->f_dentry = &fake_dentry;
-        f->f_dentry->d_inode = inode;
-        f->f_op = &ext2_file_operations;
-	f->f_flags = O_LARGEFILE;
-	inode->i_mapping->a_ops = &ext2_aops;
-
         /* count doubles as retval */
-	if (f->f_op->write)
-		retval = f->f_op->write(f, buf, *count, &(offset));
-	else 
-		retval = -EINVAL;
-        CDEBUG(D_INFO, "Result %ld\n", retval);
-
-        oa->o_valid = OBD_MD_FLBLOCKS | OBD_MD_FLCTIME | OBD_MD_FLMTIME;
-        obdo_from_inode(oa, inode);
-        iput(inode);
+        retval = file->f_op->write(file, buf, *count, &offset);
+	filp_close(file, 0);
 
         if ( retval >= 0 ) {
                 err = 0;
@@ -540,56 +519,6 @@ static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
         return err;
 } /* ext2obd_write */
 
-void ___wait_on_page(struct page *page)
-{
-        struct task_struct *tsk = current;
-        DECLARE_WAITQUEUE(wait, tsk);
-
-        add_wait_queue(&page->wait, &wait);
-        do {
-                run_task_queue(&tq_disk);
-                set_task_state(tsk, TASK_UNINTERRUPTIBLE);
-                if (!PageLocked(page))
-                        break;
-                schedule();
-        } while (PageLocked(page));
-        tsk->state = TASK_RUNNING;
-        remove_wait_queue(&page->wait, &wait);
-}
-
-static inline int actor_from_kernel(char *dst, char *src, size_t len)
-{
-	ENTRY;
-	memcpy(dst, src, len);
-	EXIT;
-	return 0;
-}
-
-int kernel_read_actor(read_descriptor_t * desc, struct page *page, unsigned long offset, unsigned long size)
-{
-	char *kaddr;
-	unsigned long count = desc->count;
-	ENTRY;
-	if (desc->buf == NULL) {
-		printk("ALERT: desc->buf == NULL\n");
-		desc->error = -EIO;
-		return -EIO;
-	}
-	
-	if (size > count)
-		size = count;
-
-	kaddr = kmap(page);
-	memcpy(desc->buf, kaddr + offset, size);
-	kunmap(page);
-	
-	desc->count = count - size;
-	desc->written += size;
-	desc->buf += size;
-	EXIT;
-	return size;
-}
-
 static int filter_pgcache_brw(int rw, struct obd_conn *conn, 
 			       obd_count num_oa,
 			       struct obdo **oa, 
@@ -600,13 +529,12 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn,
 			       obd_flag *flags)
 {
         struct super_block      *sb;
+	mm_segment_t oldfs;
         int                      onum;          /* index to oas */
         int                      pnum;          /* index to pages (bufs) */
         unsigned long            retval;
-        int                      err;
-	struct file fake_file;
-	struct dentry fake_dentry; 
-	struct file *f;
+        int                      error;
+	struct file *file;
 
         ENTRY;
 
@@ -616,37 +544,25 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn,
                 return -EINVAL;
         }
 
-        sb = conn->oc_dev->u.ext2.ext2_sb;
+        sb = conn->oc_dev->u.filter.fo_sb;
+	oldfs = get_fs();
+	set_fs(KERNEL_DS); 
 
         pnum = 0; /* pnum indexes buf 0..num_pages */
         for (onum = 0; onum < num_oa; onum++) {
-                struct inode    *inode;
                 int              pg;
 
-                if ( rw == READ ) 
-                        *flags &= ~OBD_BRW_CREATE;
-
-                if (! (inode = inode_from_obdo(conn->oc_dev, oa[onum])) ) {
-                        EXIT;
-                        return -ENOENT;
-                }
-
-		CDEBUG(D_INODE, "ino %ld, i_count %d\n", 
-		       inode->i_ino, atomic_read(&inode->i_count)); 
-		memset(&fake_file, 0, sizeof(fake_file));
-		memset(&fake_dentry, 0, sizeof(fake_dentry));
-		
-		f = &fake_file;
-		f->f_dentry = &fake_dentry;
-		f->f_dentry->d_inode = inode;
-		f->f_op = &ext2_file_operations;
-		f->f_flags = O_LARGEFILE;
-		inode->i_mapping->a_ops = &ext2_aops;
+		file = filter_obj_open(conn->oc_dev, oa[onum]); 
+		if (!file || IS_ERR(file)) { 
+			EXIT;
+			error = -ENOENT;
+			goto ERROR;
+		}
 
 		/* count doubles as retval */
                 for (pg = 0; pg < oa_bufs[onum]; pg++) {
 			CDEBUG(D_INODE, "OP %d obdo no/pno: (%d,%d) (%ld,%ld) off count (%Ld,%Ld)\n", 
-			       rw, onum, pnum, inode->i_ino,
+			       rw, onum, pnum, file->f_dentry->d_inode->i_ino,
 			       (unsigned long)offset[pnum] >> PAGE_CACHE_SHIFT,
 			       offset[pnum], count[pnum]);
 			if (rw == WRITE) { 
@@ -654,35 +570,24 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn,
 				char *buffer;
 				off = offset[pnum]; 
 				buffer = kmap(pages[pnum]); 
-				retval = do_generic_file_write
-					(f, buffer, count[pnum], &off, 
-					 actor_from_kernel);
+				retval = file->f_op->write(file, buffer, count[pnum], &off);
 				kunmap(pages[pnum]);
 				CDEBUG(D_INODE, "retval %ld\n", retval); 
 			} else { 
-				loff_t off; 
-				read_descriptor_t desc;
+				loff_t off = offset[pnum]; 
 				char *buffer = kmap(pages[pnum]);
 
-				desc.written = 0;
-				desc.count = count[pnum];
-				desc.buf = buffer;
-				desc.error = 0;
-				off = offset[pnum]; 
-
-				off = offset[pnum]; 
-				if (off >= inode->i_size) {
-					memset(buffer, 0, PAGE_SIZE);
+				if (off >= file->f_dentry->d_inode->i_size) {
+					memset(buffer, 0, count[pnum]);
+					retval = count[pnum];
 				} else {
-					do_generic_file_read
-						(f, &off, &desc, 
-						 kernel_read_actor);
+					retval = file->f_op->read(file, buffer, count[pnum], &off);
 				} 
 				kunmap(pages[pnum]);
-				retval = desc.written;
-				if ( !retval ) {
-					iput(inode);
-					retval = desc.error; 
+
+				if ( retval != count[pnum] ) {
+					filp_close(file, 0);
+					retval = -EIO;
 					EXIT;
 					goto ERROR;
 				}
@@ -692,20 +597,14 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn,
 		}
 		/* sizes and blocks are set by generic_file_write */
 		/* ctimes/mtimes will follow with a setattr call */ 
-
-                //oa[onum]->o_blocks = inode->i_blocks;
-                //oa[onum]->o_valid = OBD_MD_FLBLOCKS;
-		/* perform the setattr on the inode */
-		//ext2obd_to_inode(inode, oa[onum]);
-		//inode->i_size = oa[onum]->o_size;
-		//mark_inode_dirty(inode); 
-                iput(inode);
+		filp_close(file, 0);
 	}
 	
 	EXIT;
  ERROR:
-	err = (retval >= 0) ? 0 : retval;
-	return err;
+	set_fs(oldfs);
+	error = (retval >= 0) ? 0 : retval;
+	return error;
 }
 
 static int filter_statfs (struct obd_conn *conn, struct statfs * statfs)

@@ -42,7 +42,7 @@ plog log "NEW SNAP SETUP"
 # second will be a snapshot of the filesystem taken "now" (in obd device 2)
 # that will remain static (historical read-only) filesystem as changes
 # are made to the current snapshot.
-$OBDDIR/class/obdcontrol -f << EOF
+$OBDDIR/utils/obdcontrol -f << EOF
 snaptable
 $SNAPTABLE
 a

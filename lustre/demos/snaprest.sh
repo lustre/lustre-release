@@ -31,7 +31,7 @@ sync
 plog log "STARTING snaprestore"
 
 
-$OBDDIR/class/obdcontrol -f << EOF
+$OBDDIR/utils/obdcontrol -f << EOF
 device /dev/obd1
 cleanup
 detach

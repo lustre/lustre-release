@@ -18,7 +18,7 @@ fi
 
 rmmod obdfs
 
-$OBDDIR/class/obdcontrol -f << EOF
+$OBDDIR/utils/obdcontrol -f << EOF
 device /dev/obd2
 cleanup
 detach

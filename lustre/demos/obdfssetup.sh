@@ -20,9 +20,11 @@ fi
 #insmod $OBDDIR/ext2obd/obdext2.o
 #insmod $OBDDIR/obdfs/obdfs.o
 
-plog log "ATTACHING /dev/obd0, SETUP $BASEDEV"
-$OBDDIR/class/obdcontrol -f << EOF
-device /dev/obd0
+plog log "ATTACHING device 0 SETUP $BASEDEV"
+$OBDDIR/utils/obdctl << EOF
+device 0
+# attach obdfilter
+# setup $BASEDEV reiserfs
 attach obdext2
 setup $BASEDEV
 quit

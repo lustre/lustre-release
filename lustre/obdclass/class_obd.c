@@ -194,7 +194,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 /* do the attach */
                 if ( OBT(obd) && OBP(obd, attach) ) {
-			err = OBP(obd, attach)(obd, data);
+			err = OBP(obd, attach)(obd, sizeof(*data), data);
 		}
 
                 if ( err ) {
@@ -257,7 +257,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 if ( OBT(obd) && OBP(obd, setup) )
-			err = OBP(obd, setup)(obd, data);
+			err = OBP(obd, setup)(obd, sizeof(*data), data);
 
 		if (!err) { 
 			obd->obd_type->typ_refcnt++;

@@ -24,6 +24,9 @@ struct filter_obd {
 	struct vfsmount *fo_vfsmnt;
 	struct run_ctxt  fo_ctxt;
 	__u64 fo_lastino;
+	struct file_operations *fo_fop; 
+	struct inode_operations *fo_iop;
+	struct address_space_operations *fo_aops;
 };
 
 

@@ -1,0 +1,161 @@
+--- /usr/src/linux-2.4.16/fs/reiserfs/file.c.obd-orig	Thu Dec 13 14:35:00 2001
++++ /usr/src/linux-2.4.16/fs/reiserfs/file.c	Thu Dec 13 14:35:08 2001
+@@ -28,8 +28,8 @@
+     struct reiserfs_transaction_handle th ;
+     int windex ;
+ 
+-    if (!S_ISREG (inode->i_mode))
+-	BUG ();
++    //if (!S_ISREG (inode->i_mode))
++    //BUG ();
+ 
+     /* fast out for when nothing needs to be done */
+     if ((atomic_read(&inode->i_count) > 1 ||
+--- /usr/src/linux-2.4.16/fs/namespace.c.obd-orig	Tue Dec 11 20:44:15 2001
++++ /usr/src/linux-2.4.16/fs/namespace.c	Tue Dec 11 20:44:35 2001
+@@ -332,7 +332,7 @@
+ 	}
+ }
+ 
+-static int do_umount(struct vfsmount *mnt, int flags)
++int do_umount(struct vfsmount *mnt, int flags)
+ {
+ 	struct super_block * sb = mnt->mnt_sb;
+ 	int retval = 0;
+--- /usr/src/linux-2.4.16/kernel/ksyms.c.obd-orig	Tue Dec 11 14:22:09 2001
++++ /usr/src/linux-2.4.16/kernel/ksyms.c	Tue Dec 11 18:05:30 2001
+@@ -268,6 +268,7 @@
+ EXPORT_SYMBOL(__pollwait);
+ EXPORT_SYMBOL(poll_freewait);
+ EXPORT_SYMBOL(ROOT_DEV);
++EXPORT_SYMBOL(pagecache_lock);
+ EXPORT_SYMBOL(__find_get_page);
+ EXPORT_SYMBOL(__find_lock_page);
+ EXPORT_SYMBOL(grab_cache_page);
+--- /usr/src/linux-2.4.16/mm/filemap.c.obd-orig	Mon Nov 26 06:29:17 2001
++++ /usr/src/linux-2.4.16/mm/filemap.c	Tue Dec 11 14:29:50 2001
+@@ -2846,8 +2846,7 @@
+  * file system has to do this all by itself, unfortunately.
+  *							okir@monad.swb.de
+  */
+-ssize_t
+-generic_file_write(struct file *file,const char *buf,size_t count, loff_t *ppos)
++ssize_t do_generic_file_write(struct file *file,const char *buf,size_t count,loff_t *ppos, int (*actor)(char *, char *, size_t ))
+ {
+ 	struct address_space *mapping = file->f_dentry->d_inode->i_mapping;
+ 	struct inode	*inode = mapping->host;
+@@ -2862,8 +2861,10 @@
+ 	if ((ssize_t) count < 0)
+ 		return -EINVAL;
+ 
++#if 0
+ 	if (!access_ok(VERIFY_READ, buf, count))
+ 		return -EFAULT;
++#endif
+ 
+ 	cached_page = NULL;
+ 
+@@ -2987,10 +2988,12 @@
+ 		 * same page as we're writing to, without it being marked
+ 		 * up-to-date.
+ 		 */
++#if 0
+ 		{ volatile unsigned char dummy;
+ 			__get_user(dummy, buf);
+ 			__get_user(dummy, buf+bytes-1);
+ 		}
++#endif
+ 
+ 		status = -ENOMEM;	/* we'll assign it later anyway */
+ 		page = __grab_cache_page(mapping, index, &cached_page);
+@@ -3006,7 +3009,7 @@
+ 		status = mapping->a_ops->prepare_write(file, page, offset, offset+bytes);
+ 		if (status)
+ 			goto unlock;
+-		page_fault = __copy_from_user(kaddr+offset, buf, bytes);
++		page_fault = actor(kaddr+offset, buf, bytes);
+ 		flush_dcache_page(page);
+ 		status = mapping->a_ops->commit_write(file, page, offset, offset+bytes);
+ 		if (page_fault)
+@@ -3072,6 +3075,23 @@
+ 	goto out_status;
+ }
+ 
++
++static inline int actor_from_user(char *dst, char *src, size_t len)
++{
++	if (!access_ok(VERIFY_READ, src, len))
++		return -EFAULT;
++		
++	return __copy_from_user(dst, src, len);
++}
++
++ssize_t
++generic_file_write(struct file *file,const char *buf,size_t count,loff_t *ppos)
++{
++	return do_generic_file_write(file, buf, count, ppos, &actor_from_user);
++}
++
++
++
+ void __init page_cache_init(unsigned long mempages)
+ {
+ 	unsigned long htable_size, order;
+--- /usr/src/linux-2.4.16/include/linux/fs.h.obd-orig	Tue Dec 11 14:23:29 2001
++++ /usr/src/linux-2.4.16/include/linux/fs.h	Tue Dec 11 20:45:00 2001
+@@ -978,8 +978,10 @@
+ extern int register_filesystem(struct file_system_type *);
+ extern int unregister_filesystem(struct file_system_type *);
+ extern struct vfsmount *kern_mount(struct file_system_type *);
++struct vfsmount *do_kern_mount(char *type, int flags, char *name, void *data);
+ extern int may_umount(struct vfsmount *);
+ extern long do_mount(char *, char *, char *, unsigned long, void *);
++int do_umount(struct vfsmount *mnt, int flags);
+ 
+ #define kern_umount mntput
+ 
+@@ -1044,6 +1046,35 @@
+ 
+ asmlinkage long sys_open(const char *, int, int);
+ asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
++asmlinkage ssize_t sys_read(unsigned int fd, char * buf, size_t count);
++asmlinkage ssize_t sys_write(unsigned int fd, const char * buf, size_t count);
++asmlinkage long sys_truncate64(const char * path, loff_t length);
++asmlinkage long sys_ftruncate64(unsigned int fd, loff_t length);
++asmlinkage long sys_mount(char * dev_name, char * dir_name, char * type,
++			  unsigned long flags, void * data);
++asmlinkage long sys_umount(char * name, int flags);
++asmlinkage long sys_stat(char * filename, struct __old_kernel_stat * statbuf);
++asmlinkage long sys_mknod(const char * filename, int mode, dev_t dev);
++asmlinkage long sys_mkdir(const char * pathname, int mode);
++asmlinkage long sys_rmdir(const char * pathname);
++asmlinkage long sys_unlink(const char * pathname);
++asmlinkage long sys_symlink(const char * oldname, const char * newname);
++asmlinkage long sys_link(const char * oldname, const char * newname);
++asmlinkage long sys_rename(const char * oldname, const char * newname);
++asmlinkage long sys_lstat64(char * filename, struct stat64 * statbuf, long flags);
++asmlinkage long sys_stat64(char * filename, struct stat64 * statbuf, long flags);
++asmlinkage long sys_fstat64(unsigned long fd, struct stat64 * statbuf, long flags);
++
++
++
++
++
++
++
++
++
++
++
+ extern int do_truncate(struct dentry *, loff_t start);
+ 
+ extern struct file *filp_open(const char *, int, int);
+@@ -1395,6 +1426,8 @@
+ extern ssize_t generic_file_read(struct file *, char *, size_t, loff_t *);
+ extern ssize_t generic_file_write(struct file *, const char *, size_t, loff_t *);
+ extern void do_generic_file_read(struct file *, loff_t *, read_descriptor_t *, read_actor_t);
++ssize_t do_generic_file_write(struct file *file,const char *buf,size_t count,loff_t *ppos, int (*actor)(char *, char *, size_t ));
++
+ extern loff_t no_llseek(struct file *file, loff_t offset, int origin);
+ extern loff_t generic_file_llseek(struct file *file, loff_t offset, int origin);
+ extern ssize_t generic_read_dir(struct file *, char *, size_t, loff_t *);
