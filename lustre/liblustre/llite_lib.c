@@ -48,9 +48,15 @@
 #undef LIST_HEAD
 
 #include <portals/ptlctl.h>	/* needed for parse_dump */
+#ifndef CRAY_PORTALS
 #include <procbridge.h>
+#endif
 
 #include "llite_lib.h"
+
+#ifdef CRAY_PORTALS
+void portals_debug_dumplog(void){};
+#endif
 
 unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
                                             S_GMNAL | S_IBNAL);
@@ -82,6 +88,7 @@ void *inter_module_get(char *arg)
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
         switch(nal){
+#ifndef CRAY_PORTALS
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
@@ -94,6 +101,7 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
                 snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
                 break;
+#endif
         default:
                 snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
                          nal, (long long)nid);
@@ -247,7 +255,7 @@ void generate_random_uuid(unsigned char uuid_out[16])
 
 ptl_nid_t tcpnal_mynid;
 
-int init_lib_portals()
+static int init_lib_portals()
 {
         int max_interfaces;
         int rc;
@@ -259,6 +267,12 @@ int init_lib_portals()
                 RETURN (-ENXIO);
         }
         RETURN(0);
+}
+
+extern void ptlrpc_exit_portals(void);
+static void cleanup_lib_portals()
+{
+        ptlrpc_exit_portals();
 }
 
 int
@@ -493,6 +507,8 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
         return -1;
 }
 
+static char *lustre_path = NULL;
+
 /* env variables */
 #define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
 #define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
@@ -512,7 +528,6 @@ char   *g_zconf_profile = NULL; /* profile, for zeroconf */
 
 void __liblustre_setup_(void)
 {
-        char *lustre_path = NULL;
         char *target = NULL;
         char *timeout = NULL;
         char *dumpfile = NULL;
@@ -600,6 +615,22 @@ void __liblustre_setup_(void)
 
 void __liblustre_cleanup_(void)
 {
-	_sysio_shutdown();
+        /* user app might chdir to a lustre directory, and leave busy pnode
+         * during finaly libsysio cleanup. here we chdir back to "/".
+         * but it can't fix the situation that liblustre is mounted
+         * at "/".
+         */
+        chdir("/");
+#if 0
+        umount(lustre_path);
+#endif
+        /* we can't call umount here, because libsysio will not cleanup
+         * opening files for us. _sysio_shutdown() will cleanup fds at
+         * first but which will also close the sockets we need for umount
+         * liblutre. this delima lead to another hack in
+         * libsysio/src/file_hack.c FIXME
+         */
+        _sysio_shutdown();
+        cleanup_lib_portals();
         PtlFini();
 }

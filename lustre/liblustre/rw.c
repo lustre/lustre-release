@@ -30,16 +30,50 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 #include <fcntl.h>
+#include <sys/uio.h>
 
 #include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
 #include <file.h>
+#include <xtio.h>
 
 #undef LIST_HEAD
 
 #include "llite_lib.h"
+
+struct llu_io_group
+{
+        struct obd_io_group    *lig_oig;
+        struct inode           *lig_inode;
+        int                     lig_maxpages;
+        int                     lig_npages;
+        __u64                   lig_rwcount;
+        struct ll_async_page   *lig_llap;
+        struct page            *lig_pages;
+};
+
+#define LLU_IO_GROUP_SIZE(x) \
+        (sizeof(struct llu_io_group) + \
+         sizeof(struct ll_async_page) * (x) + \
+         sizeof(struct page) * (x))
+
+struct llu_io_session
+{
+        struct inode           *lis_inode;
+        int                     lis_cmd;
+        int                     lis_max_groups;
+        int                     lis_ngroups;
+        struct llu_io_group    *lis_groups[0];
+};
+#define LLU_IO_SESSION_SIZE(x)  \
+        (sizeof(struct llu_io_session) + (x) * 2 * sizeof(void *))
+
+
+typedef ssize_t llu_file_piov_t(const struct iovec *iovec, int iovlen,
+                                _SYSIO_OFF_T pos, ssize_t len,
+                                void *private);
 
 static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
 {
@@ -242,89 +276,6 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
         RETURN(rc);
 }
 
-#if 0
-int llu_extent_lock_no_validate(struct ll_file_data *fd,
-                                struct inode *inode,
-                                struct lov_stripe_md *lsm,
-                                int mode,
-                                struct ldlm_extent *extent,
-                                struct lustre_handle *lockh,
-                                int ast_flags)
-{
-        struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct llu_inode_info *lli = llu_i2info(inode);
-        int rc;
-        ENTRY;
-
-        LASSERT(lockh->cookie == 0);
-
-        /* XXX phil: can we do this?  won't it screw the file size up? */
-        if ((fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK)) ||
-            (sbi->ll_flags & LL_SBI_NOLCK))
-                RETURN(0);
-
-        CDEBUG(D_DLMTRACE, "Locking inode %lu, start "LPU64" end "LPU64"\n",
-               lli->lli_st_ino, extent->start, extent->end);
-
-        rc = obd_enqueue(sbi->ll_osc_exp, lsm, NULL, LDLM_EXTENT, extent,
-                         sizeof(extent), mode, &ast_flags,
-                         llu_extent_lock_callback, inode, lockh);
-
-        RETURN(rc);
-}
-
-/*
- * this grabs a lock and manually implements behaviour that makes it look like
- * the OST is returning the file size with each lock acquisition.
- */
-int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
-                    struct lov_stripe_md *lsm, int mode,
-                    struct ldlm_extent *extent, struct lustre_handle *lockh,
-                    int nonblock)
-{
-        struct llu_inode_info *lli = llu_i2info(inode);
-        struct obd_export *exp = llu_i2obdexp(inode);
-        struct ldlm_extent size_lock;
-        struct lustre_handle match_lockh = {0};
-        int flags, rc, matched;
-        int astflags = nonblock ? LDLM_FL_BLOCK_NOWAIT : 0;
-        ENTRY;
-
-        rc = llu_extent_lock_no_validate(fd, inode, lsm, mode, extent,
-                                         lockh, astflags);
-        if (rc != ELDLM_OK)
-                RETURN(rc);
-
-        if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
-                RETURN(0);
-
-        rc = llu_inode_getattr(inode, lsm);
-        if (rc) {
-                llu_extent_unlock(fd, inode, lsm, mode, lockh);
-                RETURN(rc);
-        }
-
-        size_lock.start = lli->lli_st_size;
-        size_lock.end = OBD_OBJECT_EOF;
-
-        /* XXX I bet we should be checking the lock ignore flags.. */
-        /* FIXME use LDLM_FL_TEST_LOCK instead */
-        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
-        matched = obd_match(exp, lsm, LDLM_EXTENT, &size_lock,
-                            sizeof(size_lock), LCK_PR, &flags, inode,
-                            &match_lockh);
-
-        /* hey, alright, we hold a size lock that covers the size we
-         * just found, its not going to change for a while.. */
-        if (matched == 1) {
-                set_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags);
-                obd_cancel(exp, lsm, LCK_PR, &match_lockh);
-        }
-
-        RETURN(0);
-}
-#endif
-
 int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
                 struct lov_stripe_md *lsm, int mode,
                 struct lustre_handle *lockh)
@@ -418,62 +369,15 @@ static struct obd_async_page_ops llu_async_page_ops = {
         .ap_completion =        llu_ap_completion,
 };
 
-static
-struct llu_sysio_cookie* get_sysio_cookie(struct inode *inode, int maxpages)
+static int llu_queue_pio(int cmd, struct llu_io_group *group,
+                         char *buf, size_t count, loff_t pos)
 {
-        struct llu_sysio_cookie *cookie;
-        int rc;
-
-        OBD_ALLOC(cookie, LLU_SYSIO_COOKIE_SIZE(maxpages));
-        if (cookie == NULL)
-                goto out;
-
-        I_REF(inode);
-        cookie->lsc_inode = inode;
-        cookie->lsc_maxpages = maxpages;
-        cookie->lsc_llap = (struct ll_async_page *)(cookie + 1);
-        cookie->lsc_pages = (struct page *) (cookie->lsc_llap + maxpages);
-
-        rc = oig_init(&cookie->lsc_oig);
-        if (rc) {
-                OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(maxpages));
-                cookie = NULL;
-        }
-
-out:
-        return cookie;
-}
-
-static
-void put_sysio_cookie(struct llu_sysio_cookie *cookie)
-{
-        struct lov_stripe_md *lsm = llu_i2info(cookie->lsc_inode)->lli_smd;
-        struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
-        struct ll_async_page *llap = cookie->lsc_llap;
-        int i;
-
-        for (i = 0; i< cookie->lsc_maxpages; i++) {
-                if (llap[i].llap_cookie)
-                        obd_teardown_async_page(exp, lsm, NULL,
-                                                llap[i].llap_cookie);
-        }
-
-        I_RELE(cookie->lsc_inode);
-
-        oig_release(cookie->lsc_oig);
-        OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(cookie->lsc_maxpages));
-}
-
-static
-int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
-                      char *buf, loff_t pos, size_t count)
-{
-        struct llu_inode_info *lli = llu_i2info(cookie->lsc_inode);
+        struct llu_inode_info *lli = llu_i2info(group->lig_inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
-        struct page *pages = cookie->lsc_pages;
-        struct ll_async_page *llap = cookie->lsc_llap;
-        int i, rc, npages = 0;
+        struct obd_export *exp = llu_i2obdexp(group->lig_inode);
+        struct page *pages = &group->lig_pages[group->lig_npages];
+        struct ll_async_page *llap = &group->lig_llap[group->lig_npages];
+        int i, rc, npages = 0, ret_bytes = 0;
         ENTRY;
 
         if (!exp)
@@ -509,10 +413,11 @@ int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
                 pos += bytes;
                 buf += bytes;
 
-                cookie->lsc_rwcount += bytes;
+                group->lig_rwcount += bytes;
+                ret_bytes += bytes;
         } while (count);
 
-        cookie->lsc_npages = npages;
+        group->lig_npages += npages;
 
         for (i = 0; i < npages; i++) {
                 llap[i].llap_magic = LLAP_MAGIC;
@@ -521,321 +426,327 @@ int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
                                          &llu_async_page_ops,
                                          &llap[i], &llap[i].llap_cookie);
                 if (rc) {
+                        LASSERT(rc < 0);
                         llap[i].llap_cookie = NULL;
                         RETURN(rc);
                 }
-                CDEBUG(D_CACHE, "llap %p page %p cookie %p obj off "LPU64"\n",
+                CDEBUG(D_CACHE, "llap %p page %p group %p obj off "LPU64"\n",
                        &llap[i], &pages[i], llap[i].llap_cookie,
                        (obd_off)pages[i].index << PAGE_SHIFT);
                 pages[i].private = (unsigned long)&llap[i];
                 llap[i].llap_page = &pages[i];
-                llap[i].llap_inode = cookie->lsc_inode;
+                llap[i].llap_inode = group->lig_inode;
 
-                rc = obd_queue_group_io(exp, lsm, NULL, cookie->lsc_oig,
+                rc = obd_queue_group_io(exp, lsm, NULL, group->lig_oig,
                                         llap[i].llap_cookie, cmd,
                                         pages[i]._offset, pages[i]._count, 0,
                                         ASYNC_READY | ASYNC_URGENT |
                                         ASYNC_COUNT_STABLE | ASYNC_GROUP_SYNC);
-                if (rc)
+                if (rc) {
+                        LASSERT(rc < 0);
                         RETURN(rc);
+                }
 
                 llap[i].llap_queued = 1;
         }
 
-        RETURN(0);
+        RETURN(ret_bytes);
 }
 
 static
-int llu_start_async_io(struct llu_sysio_cookie *cookie)
+struct llu_io_group * get_io_group(struct inode *inode, int maxpages)
 {
-        struct lov_stripe_md *lsm = llu_i2info(cookie->lsc_inode)->lli_smd;
-        struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
+        struct llu_io_group *group;
+        int rc;
 
-        return obd_trigger_group_io(exp, lsm, NULL, cookie->lsc_oig);
+        OBD_ALLOC(group, LLU_IO_GROUP_SIZE(maxpages));
+        if (!group)
+                return ERR_PTR(-ENOMEM);
+
+        I_REF(inode);
+        group->lig_inode = inode;
+        group->lig_maxpages = maxpages;
+        group->lig_llap = (struct ll_async_page *)(group + 1);
+        group->lig_pages = (struct page *) (group->lig_llap + maxpages);
+
+        rc = oig_init(&group->lig_oig);
+        if (rc) {
+                OBD_FREE(group, LLU_IO_GROUP_SIZE(maxpages));
+                return ERR_PTR(rc);
+        }
+
+        return group;
 }
 
-/*
- * read/write a continuous buffer for an inode (zero-copy)
- */
-struct llu_sysio_cookie*
-llu_rw(int cmd, struct inode *inode, char *buf, size_t count, loff_t pos)
+static int max_io_pages(ssize_t len, int iovlen)
 {
-        struct llu_sysio_cookie *cookie;
-        int max_pages, rc;
-        ENTRY;
+        return (((len + PAGE_SIZE -1) / PAGE_SIZE) + 2 + iovlen - 1);
+}
 
-        max_pages = (count >> PAGE_SHIFT) + 2;
+static
+void put_io_group(struct llu_io_group *group)
+{
+        struct lov_stripe_md *lsm = llu_i2info(group->lig_inode)->lli_smd;
+        struct obd_export *exp = llu_i2obdexp(group->lig_inode);
+        struct ll_async_page *llap = group->lig_llap;
+        int i;
 
-        cookie = get_sysio_cookie(inode, max_pages);
-        if (!cookie)
-                RETURN(ERR_PTR(-ENOMEM));
-
-        rc = llu_prep_async_io(cookie, cmd, buf, pos, count);
-        if (rc)
-                GOTO(out_cleanup, rc);
-
-        rc = llu_start_async_io(cookie);
-        if (rc)
-                GOTO(out_cleanup, rc);
-
-/*
-        rc = oig_wait(&oig);
-        if (rc) {
-                CERROR("file i/o error!\n");
-                rw_count = rc;
+        for (i = 0; i< group->lig_npages; i++) {
+                if (llap[i].llap_cookie)
+                        obd_teardown_async_page(exp, lsm, NULL,
+                                                llap[i].llap_cookie);
         }
-*/
-        RETURN(cookie);
 
-out_cleanup:
-        put_sysio_cookie(cookie);
-        RETURN(ERR_PTR(rc));
+        I_RELE(group->lig_inode);
+
+        oig_release(group->lig_oig);
+        OBD_FREE(group, LLU_IO_GROUP_SIZE(group->lig_maxpages));
 }
 
 void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                       obd_off size);
 
-struct llu_sysio_callback_args*
-llu_file_write(struct inode *inode, const struct iovec *iovec,
-               size_t iovlen, loff_t pos)
+static
+ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
+                        _SYSIO_OFF_T pos, ssize_t len,
+                        void *private)
 {
+        struct llu_io_session *session = (struct llu_io_session *) private;
+        struct inode *inode = session->lis_inode;
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
         struct lustre_handle lockh = {0};
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct obd_export *exp = NULL;
         ldlm_policy_data_t policy;
-        struct llu_sysio_callback_args *lsca;
-        struct llu_sysio_cookie *cookie;
-        int astflag = (lli->lli_open_flags & O_NONBLOCK) ?
-                       LDLM_FL_BLOCK_NOWAIT : 0;
-        ldlm_error_t err;
-        int iovidx;
-        ENTRY;
-
-        /* XXX consider other types later */
-        if (!S_ISREG(lli->lli_st_mode))
-                LBUG();
-
-        LASSERT(iovlen <= MAX_IOVEC);
-
-        exp = llu_i2obdexp(inode);
-        if (exp == NULL)
-                RETURN(ERR_PTR(-EINVAL));
-
-        OBD_ALLOC(lsca, sizeof(*lsca));
-        if (!lsca)
-                RETURN(ERR_PTR(-ENOMEM));
-
-        /* FIXME optimize the following extent locking */
-        for (iovidx = 0; iovidx < iovlen; iovidx++) {
-                char *buf = (char*)iovec[iovidx].iov_base;
-                size_t count = iovec[iovidx].iov_len;
-
-                if (count == 0)
-                        continue;
-
-                if (pos + count > lli->lli_maxbytes)
-                        GOTO(err_out, err = -ERANGE);
-
-                /* FIXME libsysio haven't handle O_APPEND?? */
-                policy.l_extent.start = pos;
-                policy.l_extent.end = pos + count - 1;
-
-                err = llu_extent_lock(fd, inode, lsm, LCK_PW, &policy,
-                                      &lockh, astflag);
-                if (err != ELDLM_OK)
-                        GOTO(err_out, err = -ENOLCK);
-
-                CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %llu\n",
-                       lli->lli_st_ino, count, pos);
-
-                cookie = llu_rw(OBD_BRW_WRITE, inode, buf, count, pos);
-                if (!IS_ERR(cookie)) {
-                        /* save cookie */
-                        lsca->cookies[lsca->ncookies++] = cookie;
-                        pos += count;
-                        lov_increase_kms(exp, lsm, pos);
-                        /* file size grow */
-                        if (pos > lli->lli_st_size)
-                                lli->lli_st_size = pos;
-                } else {
-                        llu_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
-                        GOTO(err_out, err = PTR_ERR(cookie));
-                }
-
-                /* XXX errors? */
-                err = llu_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
-                if (err)
-                        CERROR("extent unlock error %d\n", err);
-        }
-
-        RETURN(lsca);
-
-err_out:
-        /* teardown all async stuff */
-        while (lsca->ncookies--) {
-                put_sysio_cookie(lsca->cookies[lsca->ncookies]);
-        }
-        OBD_FREE(lsca, sizeof(*lsca));
-
-        RETURN(ERR_PTR(err));
-}
-
-#if 0
-static void llu_update_atime(struct inode *inode)
-{
-        struct llu_inode_info *lli = llu_i2info(inode);
-
-#ifdef USE_ATIME
-        struct iattr attr;
-
-        attr.ia_atime = LTIME_S(CURRENT_TIME);
-        attr.ia_valid = ATTR_ATIME;
-
-        if (lli->lli_st_atime == attr.ia_atime) return;
-        if (IS_RDONLY(inode)) return;
-        if (IS_NOATIME(inode)) return;
-
-        /* ll_inode_setattr() sets inode->i_atime from attr.ia_atime */
-        llu_inode_setattr(inode, &attr, 0);
-#else
-        /* update atime, but don't explicitly write it out just this change */
-        inode->i_atime = CURRENT_TIME;
-#endif
-}
-#endif
-
-struct llu_sysio_callback_args*
-llu_file_read(struct inode *inode, const struct iovec *iovec,
-              size_t iovlen, loff_t pos)
-{
-        struct llu_inode_info *lli = llu_i2info(inode);
-        struct ll_file_data *fd = lli->lli_file_data;
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct lustre_handle lockh = { 0 };
-        ldlm_policy_data_t policy;
-        struct llu_sysio_callback_args *lsca;
-        struct llu_sysio_cookie *cookie;
+        struct llu_io_group *iogroup;
         int astflag = (lli->lli_open_flags & O_NONBLOCK) ?
                        LDLM_FL_BLOCK_NOWAIT : 0;
         __u64 kms;
-        int iovidx;
-
         ldlm_error_t err;
+        int is_read, lock_mode, iovidx, ret;
         ENTRY;
 
-        OBD_ALLOC(lsca, sizeof(*lsca));
-        if (!lsca)
-                RETURN(ERR_PTR(-ENOMEM));
+        exp = llu_i2obdexp(inode);
+        if (exp == NULL)
+                RETURN(-EINVAL);
 
-        for (iovidx = 0; iovidx < iovlen; iovidx++) {
-                char *buf = iovec[iovidx].iov_base;
-                size_t count = iovec[iovidx].iov_len;
+        if (len == 0 || iovlen == 0)
+                RETURN(0);
 
-                /* "If nbyte is 0, read() will return 0 and have no other results."
-                 *                      -- Single Unix Spec */
-                if (count == 0)
-                        continue;
+        if (pos + len > lli->lli_maxbytes)
+                RETURN(-ERANGE);
 
-                policy.l_extent.start = pos;
-                policy.l_extent.end = pos + count - 1;
+        iogroup = get_io_group(inode, max_io_pages(len, iovlen));
+        if (IS_ERR(iogroup))
+                RETURN(PTR_ERR(iogroup));
 
-                err = llu_extent_lock(fd, inode, lsm, LCK_PR, &policy,
-                                      &lockh, astflag);
-                if (err != ELDLM_OK)
-                        GOTO(err_out, err = -ENOLCK);
+        is_read = session->lis_cmd == OBD_BRW_READ;
+        lock_mode = is_read ? LCK_PR : LCK_PW;
+        policy.l_extent.start = pos;
+        policy.l_extent.end = pos + len - 1;
 
+        err = llu_extent_lock(fd, inode, lsm, lock_mode, &policy,
+                              &lockh, astflag);
+        if (err != ELDLM_OK)
+                GOTO(err_put, err);
+
+        if (is_read) {
                 kms = lov_merge_size(lsm, 1);
                 if (policy.l_extent.end > kms) {
                         /* A glimpse is necessary to determine whether we
                          * return a short read or some zeroes at the end of
                          * the buffer */
                         struct ost_lvb lvb;
-                        if (llu_glimpse_size(inode, &lvb)) {
-                                llu_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
-                                GOTO(err_out, err = -ENOLCK);
+                        if ((err = llu_glimpse_size(inode, &lvb))) {
+                                llu_extent_unlock(fd, inode, lsm,
+                                                  lock_mode, &lockh);
+                                GOTO(err_put, err);
                         }
                         lli->lli_st_size = lvb.lvb_size;
                 } else {
                         lli->lli_st_size = kms;
                 }
+        }
 
-                CDEBUG(D_INFO, "Reading inode %lu, "LPSZ" bytes, offset %Ld, "
-                       "i_size "LPU64"\n", lli->lli_st_ino, count, pos,
-                       lli->lli_st_size);
+        for (iovidx = 0; iovidx < iovlen; iovidx++) {
+                char *buf = (char *) iovec[iovidx].iov_base;
+                size_t count = iovec[iovidx].iov_len;
 
-                if (pos >= lli->lli_st_size) {
-                        llu_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
+                if (!count)
+                        continue;
+                if (len < count)
+                        count = len;
+
+                if (is_read && pos >= lli->lli_st_size)
                         break;
-                }
 
-                cookie = llu_rw(OBD_BRW_READ, inode, buf, count, pos);
-                if (!IS_ERR(cookie)) {
-                        /* save cookie */
-                        lsca->cookies[lsca->ncookies++] = cookie;
-                        pos += count;
+                ret = llu_queue_pio(session->lis_cmd, iogroup, buf, count, pos);
+                if (ret < 0) {
+                        llu_extent_unlock(fd, inode, lsm, lock_mode, &lockh);
+                        GOTO(err_put, err = ret);
                 } else {
-                        llu_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
-                        GOTO(err_out, err = PTR_ERR(cookie));
+                        pos += ret;
+                        if (!is_read) {
+                                LASSERT(ret == count);
+                                lov_increase_kms(exp, lsm, pos);
+                                /* file size grow immediately */
+                                if (pos > lli->lli_st_size)
+                                        lli->lli_st_size = pos;
+                        }
+                        len -= ret;
+                        if (!len)
+                                break;
                 }
-
-                /* XXX errors? */
-                err = llu_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
-                if (err)
-                        CERROR("extent_unlock fail: %d\n", err);
         }
-#if 0
-        if (readed > 0)
-                llu_update_atime(inode);
-#endif
-        RETURN(lsca);
+        LASSERT(len == 0 || is_read); /* libsysio should guarantee this */
 
-err_out:
-        /* teardown all async stuff */
-        while (lsca->ncookies--) {
-                put_sysio_cookie(lsca->cookies[lsca->ncookies]);
-        }
-        OBD_FREE(lsca, sizeof(*lsca));
+        err = llu_extent_unlock(fd, inode, lsm, lock_mode, &lockh);
+        if (err)
+                CERROR("extent unlock error %d\n", err);
 
-        RETURN(ERR_PTR(err));
+        err = obd_trigger_group_io(exp, lsm, NULL, iogroup->lig_oig);
+        if (err)
+                GOTO(err_put, err);
+
+        session->lis_groups[session->lis_ngroups++] = iogroup;
+        RETURN(0);
+err_put:
+        put_io_group(iogroup);
+        RETURN((ssize_t)err);
 }
 
-int llu_iop_iodone(struct ioctx *ioctxp)
+static
+struct llu_io_session *get_io_session(struct inode *ino, int ngroups, int cmd)
 {
-        struct llu_sysio_callback_args *lsca = ioctxp->ioctx_private;
-        struct llu_sysio_cookie *cookie;
+        struct llu_io_session *session;
+
+        OBD_ALLOC(session, LLU_IO_SESSION_SIZE(ngroups));
+        if (!session)
+                return NULL;
+
+        I_REF(ino);
+        session->lis_inode = ino;
+        session->lis_max_groups = ngroups;
+        session->lis_cmd = cmd;
+        return session;
+}
+
+static void put_io_session(struct llu_io_session *session)
+{
+        int i;
+
+        for (i = 0; i < session->lis_ngroups; i++) {
+                if (session->lis_groups[i]) {
+                        put_io_group(session->lis_groups[i]);
+                        session->lis_groups[i] = NULL;
+                }
+        }
+
+        I_RELE(session->lis_inode);
+        OBD_FREE(session, LLU_IO_SESSION_SIZE(session->lis_max_groups));
+}
+
+static int llu_file_rwx(struct inode *ino,
+                        struct ioctx *ioctx,
+                        int read)
+{
+        struct llu_io_session *session;
+        ssize_t cc;
+        int cmd = read ? OBD_BRW_READ : OBD_BRW_WRITE;
+        ENTRY;
+
+        LASSERT(ioctx->ioctx_xtvlen >= 0);
+        LASSERT(ioctx->ioctx_iovlen >= 0);
+
+        liblustre_wait_event(0);
+
+        if (!ioctx->ioctx_xtvlen)
+                RETURN(0);
+
+        /* XXX consider other types later */
+        LASSERT(S_ISREG(llu_i2info(ino)->lli_st_mode));
+
+        session = get_io_session(ino, ioctx->ioctx_xtvlen * 2, cmd);
+        if (!session)
+                RETURN(-ENOMEM);
+
+        cc = _sysio_enumerate_extents(ioctx->ioctx_xtv, ioctx->ioctx_xtvlen,
+                                      ioctx->ioctx_iov, ioctx->ioctx_iovlen,
+                                      llu_file_prwv, session);
+
+        if (cc >= 0) {
+                LASSERT(!ioctx->ioctx_cc);
+                ioctx->ioctx_private = session;
+                RETURN(0);
+        } else {
+                put_io_session(session);
+                RETURN(cc);
+        }
+}
+
+int llu_iop_read(struct inode *ino,
+                 struct ioctx *ioctx)
+{
+        return llu_file_rwx(ino, ioctx, 1);
+}
+
+int llu_iop_write(struct inode *ino,
+                  struct ioctx *ioctx)
+{
+        struct iattr iattr;
+        int rc;
+
+        memset(&iattr, 0, sizeof(iattr));
+        iattr.ia_mtime = iattr.ia_atime = CURRENT_TIME;
+        iattr.ia_valid = ATTR_MTIME | ATTR_ATIME | ATTR_RAW;
+
+        liblustre_wait_event(0);
+        rc = llu_setattr_raw(ino, &iattr);
+        if (rc) {
+                CERROR("failed to set mtime/atime during write: %d", rc);
+                /* XXX should continue or return error? */
+        }
+
+        return llu_file_rwx(ino, ioctx, 0);
+}
+
+int llu_iop_iodone(struct ioctx *ioctx)
+{
+        struct llu_io_session *session;
+        struct llu_io_group *group;
         int i, err = 0, rc = 0;
         ENTRY;
 
-        /* write/read(fd, buf, 0) */
-        if (!lsca) {
-                ioctxp->ioctx_cc = 0;
-                RETURN(1);
-        }
+        liblustre_wait_event(0);
 
-        LASSERT(!IS_ERR(lsca));
+        session = (struct llu_io_session *) ioctx->ioctx_private;
+        LASSERT(session);
+        LASSERT(!IS_ERR(session));
 
-        for (i = 0; i < lsca->ncookies; i++) {
-                cookie = lsca->cookies[i];
-                if (cookie) {
-                        err = oig_wait(cookie->lsc_oig);
-                        if (err && !rc)
-                                rc = err;
+        for (i = 0; i < session->lis_ngroups; i++) {
+                group = session->lis_groups[i];
+                if (group) {
+                        if (!rc) {
+                                err = oig_wait(group->lig_oig);
+                                if (err)
+                                        rc = err;
+                        }
                         if (!rc)
-                                ioctxp->ioctx_cc += cookie->lsc_rwcount;
-                        put_sysio_cookie(cookie);
+                                ioctx->ioctx_cc += group->lig_rwcount;
+                        put_io_group(group);
+                        session->lis_groups[i] = NULL;
                 }
         }
 
         if (rc) {
                 LASSERT(rc < 0);
-                ioctxp->ioctx_cc = -1;
-                ioctxp->ioctx_errno = -rc;
+                ioctx->ioctx_cc = -1;
+                ioctx->ioctx_errno = -rc;
         }
 
-        OBD_FREE(lsca, sizeof(*lsca));
-        ioctxp->ioctx_private = NULL;
+        put_io_session(session);
+        ioctx->ioctx_private = NULL;
 
         RETURN(1);
 }
