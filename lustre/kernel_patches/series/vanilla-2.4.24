@@ -13,7 +13,7 @@ ext3-htree-2.4.22-rh.patch
 linux-2.4.24-xattr-0.8.54.patch 
 ext3-orphan_lock-2.4.22-rh.patch
 ext3-noread-2.4.20.patch
-ext3-delete_thread-suse.patch
+ext3-delete_thread-2.4.24.patch 
 extN-wantedi.patch
 ext3-san-2.4.20.patch
 ext3-map_inode_page.patch
@@ -32,4 +32,5 @@ ext3-trusted_ea-2.4.20.patch
 kernel_text_address-2.4.22-vanilla.patch
 gfp_memalloc-2.4.24.patch
 ext3-xattr-ptr-arith-fix.patch
-3.5G-address-space-2.4.22-vanilla.patch 
+3.5G-address-space-2.4.22-vanilla.patch
+procfs-ndynamic-2.4.patch

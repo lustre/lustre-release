@@ -34,3 +34,4 @@ ext3-trusted_ea-2.4.18.patch
 gfp_memalloc-2.4.18-chaos.patch
 ext3-xattr-ptr-arith-fix.patch
 kernel_text_address-2.4.18-chaos.patch
+procfs-ndynamic-2.4.patch 
