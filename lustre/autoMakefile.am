@@ -56,6 +56,10 @@ lvfs-sources:
 modules: lustre_build_version $(DEP) $(LDISKFS) lvfs-sources
 	$(MAKE) $(ARCH_UM) -C $(LINUX) -f $(PWD)/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) SUBDIRS=$(PWD) -o tmp_include_depends -o scripts -o include/config/MARKER $@
 
+endif # MODULES
+
+all-recursive: lustre_build_version
+
 lustre_build_version:
 	perl $(top_builddir)/scripts/version_tag.pl $(top_srcdir) $(top_builddir) > tmpver
 	echo "#define LUSTRE_RELEASE @RELEASE@" >> tmpver
@@ -63,8 +67,6 @@ lustre_build_version:
                 2> /dev/null &&                                            \
                 $(RM) tmpver ||                                            \
                 mv tmpver $(top_builddir)/include/linux/lustre_build_version.h
-
-endif # MODULES
 
 dist-hook:
 	find $(distdir) -name .deps | xargs rm -rf
