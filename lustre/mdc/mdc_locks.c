@@ -320,7 +320,12 @@ int mdc_enqueue(struct obd_export *exp,
         } else { /* rc = 0 */
                 struct ldlm_lock *lock = ldlm_handle2lock(lockh);
                 LASSERT(lock);
-                LASSERT(lock->l_resource->lr_name.name[3]);
+                if (!lock->l_resource->lr_name.name[3]) {
+                        CERROR("Lock with zero inode part. ino "LPU64" gen "
+                                LPU64"\n", lock->l_resource->lr_name.name[0],
+                                lock->l_resource->lr_name.name[1]);
+                        LBUG();
+                }
 
                 /* If the server gave us back a different lock mode, we should
                  * fix up our variables. */
