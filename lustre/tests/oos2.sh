@@ -19,6 +19,8 @@ SUCCESS=1
 
 rm -f $OOS $OOS2 $LOG $LOG2
 
+sleep 1	# to ensure we get up-to-date statfs info
+
 STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -1`
 ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
 MAXFREE=${MAXFREE:-$((200000 * $STRIPECOUNT))}
