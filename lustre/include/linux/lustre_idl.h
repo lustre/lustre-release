@@ -459,6 +459,9 @@ extern void lustre_swab_ost_last_id(obd_id *id);
 struct ost_lvb {
         __u64 lvb_size;
         __u64 lvb_time;
+        __u64 lvb_atime;
+        __u64 lvb_ctime;
+        __u64 lvb_blocks;
 };
 
 extern void lustre_swab_ost_lvb(struct ost_lvb *);
