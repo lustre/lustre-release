@@ -384,7 +384,7 @@ static inline int portal_ioctl_pack(struct portal_ioctl_data *data, char **pbuf,
 
 #else
 
-extern inline int portal_ioctl_getdata(char *buf, char *end, void *arg);
+extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 
 #endif
 
