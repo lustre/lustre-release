@@ -16,7 +16,7 @@ LCONF=${LCONF:-../utils/lconf}
 NAME=${NAME:-local}
 
 config=$NAME.xml
-mkconfig=./$NAME.sh
+mkconfig=$NAME.sh
 
 if [ ! -f $config -o $mkconfig -nt $config ]; then
    sh $mkconfig $config || exit 1
