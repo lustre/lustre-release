@@ -657,6 +657,8 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                                 LBUG();
                         }
                 }
+                if (lli->lli_smd != lsm)
+                        obd_free_memmd(ll_i2obdexp(inode), &lsm);
         }
 
         if (body->valid & OBD_MD_FLID)
@@ -692,6 +694,9 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                 inode->i_size = body->size;
         if (body->valid & OBD_MD_FLBLOCKS)
                 inode->i_blocks = body->blocks;
+
+        if (body->valid & OBD_MD_FLSIZE)
+                set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 }
 
 void ll_read_inode2(struct inode *inode, void *opaque)
