@@ -62,10 +62,9 @@ void ll_set_dd(struct dentry *de)
         EXIT;
 }
 
-void ll_intent_release(struct lookup_intent *it)
+void ll_intent_drop_lock(struct lookup_intent *it)
 {
         struct lustre_handle *handle;
-        ENTRY;
 
         if (it->it_op && it->d.lustre.it_lock_mode) {
                 handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
@@ -73,11 +72,17 @@ void ll_intent_release(struct lookup_intent *it)
                        " from it %p\n", handle->cookie, it);
                 ldlm_lock_decref(handle, it->d.lustre.it_lock_mode);
 
-                /* intent_release may be called multiple times, from
-                   this thread and we don't want to double-decref this
-                   lock (see bug 494) */
+                /* bug 494: intent_release may be called multiple times, from
+                 * this thread and we don't want to double-decref this lock */
                 it->d.lustre.it_lock_mode = 0;
         }
+}
+
+void ll_intent_release(struct lookup_intent *it)
+{
+        ENTRY;
+
+        ll_intent_drop_lock(it);
         it->it_magic = 0;
         it->it_op_release = 0;
         it->d.lustre.it_disposition = 0;

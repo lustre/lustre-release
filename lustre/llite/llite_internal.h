@@ -178,6 +178,7 @@ extern struct file_operations ll_special_fifo_file_fops;
 extern struct file_operations ll_special_sock_inode_fops;
 
 /* llite/dcache.c */
+void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
 extern void ll_set_dd(struct dentry *de);
 void ll_unhash_aliases(struct inode *);

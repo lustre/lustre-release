@@ -348,6 +348,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
+        /* bug 2334: drop MDS lock before acquiring OST lock */
+        ll_intent_drop_lock(it);
+
         rc = lookup_it_finish(req, 1, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);
