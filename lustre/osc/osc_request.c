@@ -825,13 +825,15 @@ static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
+        struct osc_obd *osc = &class_conn2obd(conn)->u.osc;
         struct ptlrpc_connection *connection;
         struct obd_statfs *osfs;
         int rc, size = sizeof(*osfs);
         ENTRY;
 
         osc_con2cl(conn, &cl, &connection);
-        request = ptlrpc_prep_req(cl, connection, OST_STATFS, 0, NULL, NULL);
+        request = ptlrpc_prep_req2(cl, connection, &osc->osc_connh,
+                                   OST_STATFS, 0, NULL, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
