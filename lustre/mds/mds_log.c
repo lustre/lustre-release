@@ -39,8 +39,7 @@
 
 static int mds_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                                void *buf, struct llog_cookie *logcookies,
-                               int numcookies, void *data,
-                               struct rw_semaphore **lock, int *lock_count)
+                               int numcookies, void *data)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -49,8 +48,7 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_add(lctxt, rec, buf, logcookies, numcookies, data,
-                      lock, lock_count);
+        rc = llog_add(lctxt, rec, buf, logcookies, numcookies, data);
         RETURN(rc);
 }
 
@@ -86,15 +84,12 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, int count,
 
 int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
-                      struct llog_cookie *logcookies, int cookies_size,
-                      struct llog_create_locks **res)
+                      struct llog_cookie *logcookies, int cookies_size)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
         struct llog_ctxt *ctxt;
-        struct llog_create_locks *lcl; 
-        int rc, size, offset = offsetof(struct llog_create_locks, lcl_locks);
-        int lock_count = 0;
+        int rc;
         ENTRY;
 
         if (IS_ERR(mds->mds_osc_obd))
@@ -105,28 +100,11 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
         if (rc < 0)
                 RETURN(rc);
 
-        if (res != NULL) {
-                size = offset + 
-                       sizeof(struct rw_semaphore *) * lsm->lsm_stripe_count;
-                OBD_ALLOC(lcl, size);
-                if (lcl == NULL)
-                        RETURN(-ENOMEM);
-
-                lcl->lcl_count = lsm->lsm_stripe_count;
-                *res = lcl;
-        }
-
         ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
         rc = llog_add(ctxt, NULL, NULL, logcookies,
-                      cookies_size / sizeof(struct llog_cookie), lsm,
-                      res ? &lcl->lcl_locks[0] : NULL, &lock_count);
+                      cookies_size / sizeof(struct llog_cookie), lsm);
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
-
-        if (res && (rc <= 0 || lock_count == 0)) {
-                OBD_FREE(lcl, size);
-                *res = NULL;
-        }
 
         RETURN(rc);
 }
