@@ -101,7 +101,7 @@ int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
 	/* networked */
 	err = kportal_uuid_to_peer(uuid, &cl->cli_server);
 	if (err != 0) { 
-		CERROR("cannot find peer!"); 
+		CERROR("cannot find peer %s!", uuid); 
 	}
 
         return err;
@@ -166,6 +166,8 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
                              
 {
 	int rc;
+        ENTRY;
+
 	init_waitqueue_head(&req->rq_wait_for_rep);
 
 	if (cl->cli_obd) {

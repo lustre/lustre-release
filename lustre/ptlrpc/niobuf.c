@@ -35,6 +35,8 @@
 
 extern ptl_handle_eq_t bulk_source_eq, sent_pkt_eq, rcvd_rep_eq, bulk_sink_eq;
 
+
+
 int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
                  int portal, int is_request)
 {
@@ -87,6 +89,68 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
 
         return rc;
 }
+
+int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_request *req)
+{
+	struct ptlrpc_request *clnt_req = req->rq_reply_handle;
+	ENTRY;
+
+	if (req->rq_reply_handle == NULL) {
+		/* This is a request that came from the network via portals. */
+
+		/* FIXME: we need to increment the count of handled events */
+		ptl_send_buf(req, &req->rq_peer, OST_REPLY_PORTAL, 0);
+	} else {
+		/* This is a local request that came from another thread. */
+
+		/* move the reply to the client */ 
+		clnt_req->rq_replen = req->rq_replen;
+		clnt_req->rq_repbuf = req->rq_repbuf;
+		req->rq_repbuf = NULL;
+		req->rq_replen = 0;
+
+		/* free the request buffer */
+		OBD_FREE(req->rq_reqbuf, req->rq_reqlen);
+		req->rq_reqbuf = NULL;
+
+		/* wake up the client */ 
+		wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
+	}
+
+	EXIT;
+	return 0;
+}
+
+int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_request *req)
+{
+	struct ptlrep_hdr *hdr;
+
+	ENTRY;
+
+	OBD_ALLOC(hdr, sizeof(*hdr));
+	if (!hdr) { 
+		EXIT;
+		return -ENOMEM;
+	}
+
+	memset(hdr, 0, sizeof(*hdr));
+	
+	hdr->seqno = req->rq_reqhdr->seqno;
+	hdr->status = req->rq_status; 
+	hdr->type = OST_TYPE_ERR;
+
+        if (req->rq_repbuf) { 
+                CERROR("req has repbuf\n");
+                BUG();
+        }
+
+	req->rq_repbuf = (char *)hdr;
+	req->rq_replen = sizeof(*hdr); 
+
+	EXIT;
+	return ptlrpc_reply(obddev, req);
+}
+
 
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 {
