@@ -104,22 +104,25 @@ kpr_do_upcall (void *arg)
         kpr_upcall_t *u = (kpr_upcall_t *)arg;
         char          nalstr[10];
         char          nidstr[36];
+        char          whenstr[36];
         char         *argv[] = {
                 NULL,
                 "ROUTER_NOTIFY",
                 nalstr,
                 nidstr,
                 u->kpru_alive ? "up" : "down",
+                whenstr,
                 NULL};
         
         snprintf (nalstr, sizeof(nalstr), "%d", u->kpru_nal_id);
         snprintf (nidstr, sizeof(nidstr), LPX64, u->kpru_nid);
-        
+        snprintf (whenstr, sizeof(whenstr), "%ld", u->kpru_when);
+
         portals_run_upcall (argv);
 }
 
 void
-kpr_upcall (int gw_nalid, ptl_nid_t gw_nid, int alive) 
+kpr_upcall (int gw_nalid, ptl_nid_t gw_nid, int alive, time_t when)
 {
         /* May be in arbitrary context */
         kpr_upcall_t  *u = kmalloc (sizeof (kpr_upcall_t), GFP_ATOMIC);
@@ -135,18 +138,20 @@ kpr_upcall (int gw_nalid, ptl_nid_t gw_nid, int alive)
         u->kpru_nal_id     = gw_nalid;
         u->kpru_nid        = gw_nid;
         u->kpru_alive      = alive;
+        u->kpru_when       = when;
         
         schedule_task (&u->kpru_tq);
 }
 
 int
 kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
-               int alive, struct timeval when)
+               int alive, time_t when)
 {
 	unsigned long	     flags;
         int                  rc = -ENOENT;
         kpr_nal_entry_t     *ne = NULL;
         kpr_gateway_entry_t *ge = NULL;
+        struct timeval       now;
 	struct list_head    *e;
 	struct list_head    *n;
 
@@ -154,13 +159,27 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
                 byNal ? "NAL" : "userspace", 
                 gateway_nalid, gateway_nid, alive ? "up" : "down");
 
+        /* can't do predictions... */
+        do_gettimeofday (&now);
+        if (when > now.tv_sec) {
+                CERROR ("Ignoring prediction from %s of [%d] "LPX64" %s "
+                        "%ld seconds in the future\n", 
+                byNal ? "NAL" : "userspace", 
+                gateway_nalid, gateway_nid, alive ? "up" : "down",
+                        when - now.tv_sec);
+                return (EINVAL);
+        }
+
+        LASSERT (when <= now.tv_sec);
+
         /* Serialise with lookups (i.e. write lock) */
 	write_lock_irqsave(&kpr_rwlock, flags);
 
         list_for_each_safe (e, n, &kpr_gateways) {
 
                 ge = list_entry(e, kpr_gateway_entry_t, kpge_list);
-                if (ge->kpge_nalid != gateway_nalid ||
+                if ((gateway_nalid != 0 &&
+                     ge->kpge_nalid != gateway_nalid) ||
                     ge->kpge_nid != gateway_nid)
                         continue;
 
@@ -171,20 +190,28 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         if (rc != 0) {
                 /* gateway not found */
                 write_unlock_irqrestore(&kpr_rwlock, flags);
+                CERROR ("Gateway not found\n");
                 return (rc);
         }
         
-        if (when.tv_sec < ge->kpge_timestamp.tv_sec ||
-            (when.tv_sec == ge->kpge_timestamp.tv_sec &&
-             when.tv_usec < ge->kpge_timestamp.tv_usec) ||
-            (!ge->kpge_alive) == (!alive)) {
-                /* out-of-date or nothing new */
+        if (when < ge->kpge_timestamp) {
+                /* out of date information */
                 write_unlock_irqrestore (&kpr_rwlock, flags);
+                CERROR ("Out of date\n");
+                return (0);
+        }
+
+        /* update timestamp */
+        ge->kpge_timestamp = when;
+
+        if ((!ge->kpge_alive) == (!alive)) {
+                /* new date for old news */
+                write_unlock_irqrestore (&kpr_rwlock, flags);
+                CERROR ("Old news\n");
                 return (0);
         }
 
         ge->kpge_alive = alive;
-        ge->kpge_timestamp = when;
         CDEBUG(D_NET, "set "LPX64" [%p] %d\n", gateway_nid, ge, alive);
 
         if (alive) {
@@ -224,14 +251,17 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         
         if (byNal) {
                 /* It wasn't userland that notified me... */
-                kpr_upcall (gateway_nalid, gateway_nid, alive);
+                CERROR ("Doing upcall\n");
+                kpr_upcall (gateway_nalid, gateway_nid, alive, when);
+        } else {
+                CERROR (" NOT Doing upcall\n");
         }
         
         return (0);
 }
 
 void
-kpr_nal_notify (void *arg, ptl_nid_t peer, int alive, struct timeval when)
+kpr_nal_notify (void *arg, ptl_nid_t peer, int alive, time_t when)
 {
         kpr_nal_entry_t *ne = (kpr_nal_entry_t *)arg;
         
@@ -537,11 +567,11 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
         PORTAL_ALLOC (ge, sizeof (*ge));
         if (ge == NULL)
                 return (-ENOMEM);
-        
+
         ge->kpge_nalid = gateway_nalid;
         ge->kpge_nid   = gateway_nid;
         ge->kpge_alive = 1;
-        do_gettimeofday (&ge->kpge_timestamp);
+        ge->kpge_timestamp = 0;
         ge->kpge_refcount = 0;
         atomic_set (&ge->kpge_weight, 0);
 
@@ -594,7 +624,7 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
 
 int
 kpr_sys_notify (int gateway_nalid, ptl_nid_t gateway_nid,
-            int alive, struct timeval when)
+            int alive, time_t when)
 {
         return (kpr_do_notify (0, gateway_nalid, gateway_nid, alive, when));
 }
