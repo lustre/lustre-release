@@ -64,20 +64,22 @@ static struct file_system_type smfs_type = {
         .read_super  = smfs_read_super,
 };
 #else
-struct super_block *smfs_get_sb(struct file_system_type *fs_type, int flags, 
-                                const char *dev_name, void *data)
+struct super_block *smfs_get_super(struct file_system_type *fs_type,
+                                   int flags, const char *dev_name,
+                                   void *data)
 {
         return get_sb_nodev(fs_type, flags, data, smfs_fill_super);
 }
+
 void smfs_kill_super(struct super_block *sb)
 {
-        smfs_cleanup_hooks(S2SMI(sb));
         kill_anon_super(sb);
 }
+
 static struct file_system_type smfs_type = {
         .owner       = THIS_MODULE,
         .name        = "smfs",
-        .get_sb      = smfs_get_sb,
+        .get_sb      = smfs_get_super,
         .kill_sb     = smfs_kill_super,
 };
 #endif
@@ -91,6 +93,7 @@ static int cleanup_smfs(void)
                 CERROR("unregister_filesystem() failed, rc = %d\n", err);
         return 0;
 }
+
 static int init_smfs(void)
 {
         int err;
@@ -100,6 +103,7 @@ static int init_smfs(void)
                 CERROR("register_filesystem() failed, rc = %d\n", err);
         return err;
 }
+
 static int __init smfs_init(void)
 {
         int err;

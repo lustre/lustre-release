@@ -319,9 +319,10 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         init_option(data);
         cache_data = smfs_options(data, &devstr, &typestr, opts, 
                                   &smb->smsi_flags); 
-        if (*cache_data)
+        if (*cache_data) {
                 CWARN("smfs_fill_super(): options parsing stoped at "
                       "option %s\n", cache_data);
+        }
 
         if (!typestr || !devstr) {
                 CERROR("mount options name and dev are mandatory\n");

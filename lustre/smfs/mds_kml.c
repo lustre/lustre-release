@@ -44,11 +44,15 @@ static int mds_rec_link_pack(char *buffer, struct dentry *dentry,
         struct dentry *tgt = (struct dentry *)data2;
         struct mds_kml_pack_info *mkpi;
         struct lustre_msg *msg = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         void *tmp = NULL;
         int rc = 0;
 
-        mdc_prepare_mdc_data(&op_data, src->d_inode, dir,
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                return -ENOMEM;
+        
+        mdc_prepare_mdc_data(op_data, src->d_inode, dir,
                              tgt->d_name.name, tgt->d_name.len, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
@@ -56,13 +60,14 @@ static int mds_rec_link_pack(char *buffer, struct dentry *dentry,
 
         mkpi->mpi_bufcount = 2;
         mkpi->mpi_size[0] = sizeof(struct mds_rec_link);
-        mkpi->mpi_size[1] = op_data.namelen + 1;
+        mkpi->mpi_size[1] = op_data->namelen + 1;
 
         /* the mds reint log format is: opcode + mkpi + request  */
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
-        tmp = mdc_link_pack(msg, 0, &op_data);
+        tmp = mdc_link_pack(msg, 0, op_data);
+        OBD_FREE(op_data, sizeof(*op_data));
         mkpi->mpi_total_size = tmp - (void *)msg;
         rc = mkpi->mpi_total_size + sizeof(*mkpi) + sizeof(int);
         return rc;
@@ -76,12 +81,15 @@ static int mds_rec_setattr_pack(char *buffer, struct dentry *dentry,
         struct mds_rec_setattr *rec = NULL;
         struct mds_kml_pack_info *mkpi;
         struct lustre_msg *msg = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int rc = 0, ealen = 0;
         char *ea = NULL;
         void *tmp = NULL;
 
-        mdc_prepare_mdc_data(&op_data, dir, NULL, NULL, 0, 0);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                return -ENOMEM;
+        mdc_prepare_mdc_data(op_data, dir, NULL, NULL, 0, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
         mkpi = (struct mds_kml_pack_info*)buffer;
@@ -98,7 +106,8 @@ static int mds_rec_setattr_pack(char *buffer, struct dentry *dentry,
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
-        tmp = mdc_setattr_pack(msg, 0, &op_data, iattr, ea, ealen, NULL, 0);
+        tmp = mdc_setattr_pack(msg, 0, op_data, iattr, ea, ealen, NULL, 0);
+        OBD_FREE(op_data, sizeof(*op_data));
 
         /* FIXME-WANGDI: there are maybe some better ways to set the time
          * attr. */
@@ -122,12 +131,15 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
 {
         struct mds_kml_pack_info *mkpi;
         struct lustre_msg *msg = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct mds_rec_create *rec;
         int rc = 0, tgt_len = 0;
         void *tmp = NULL;
 
-        mdc_prepare_mdc_data(&op_data, dir, dentry->d_inode,
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                return -ENOMEM;
+        mdc_prepare_mdc_data(op_data, dir, dentry->d_inode,
                              dentry->d_name.name, dentry->d_name.len, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
@@ -135,7 +147,7 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
 
         mkpi->mpi_bufcount = 2;
         mkpi->mpi_size[0] = sizeof(struct mds_rec_create);
-        mkpi->mpi_size[1] = op_data.namelen + 1;
+        mkpi->mpi_size[1] = op_data->namelen + 1;
 
         if (data1 && data2) {
                 mkpi->mpi_size[2] = *(int *)data2;
@@ -149,15 +161,16 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
-        tmp = mdc_create_pack(msg, 0, &op_data, dentry->d_inode->i_mode,
+        tmp = mdc_create_pack(msg, 0, op_data, dentry->d_inode->i_mode,
                               dentry->d_inode->i_mode, data1, tgt_len);
 
         rec = (struct mds_rec_create *)lustre_msg_buf(msg, 0, 0);
-        rec->cr_replayid = op_data.id2;
+        rec->cr_replayid = op_data->id2;
         rec->cr_flags |= REC_REINT_CREATE; 
         mkpi->mpi_total_size = tmp - (void *)msg;
         rc = mkpi->mpi_total_size + sizeof(*mkpi) + sizeof(int);
-
+        OBD_FREE(op_data, sizeof(*op_data));
+        
         return rc;
 }
 
@@ -167,12 +180,15 @@ static int mds_rec_unlink_pack(char *buffer, struct dentry *dentry,
 {
         struct lustre_msg *msg = NULL;
         struct mds_kml_pack_info *mkpi;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         int mode = *(int*)data1;
         void *tmp = NULL;
         int rc = 0;
 
-        mdc_prepare_mdc_data(&op_data, dir, NULL,
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                return -ENOMEM;
+        mdc_prepare_mdc_data(op_data, dir, NULL,
                              dentry->d_name.name,
                              dentry->d_name.len, mode);
 
@@ -181,15 +197,16 @@ static int mds_rec_unlink_pack(char *buffer, struct dentry *dentry,
 
         mkpi->mpi_bufcount = 2;
         mkpi->mpi_size[0] = sizeof(struct mds_rec_unlink);
-        mkpi->mpi_size[1] = op_data.namelen + 1;
+        mkpi->mpi_size[1] = op_data->namelen + 1;
 
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
-        tmp = mdc_unlink_pack(msg, 0, &op_data);
+        tmp = mdc_unlink_pack(msg, 0, op_data);
 
         mkpi->mpi_total_size = tmp - (void*)msg;
         rc = mkpi->mpi_total_size + sizeof(*mkpi) + sizeof(int);
+        OBD_FREE(op_data, sizeof(*op_data));
 
         return rc;
 }
@@ -201,12 +218,15 @@ static int mds_rec_rename_pack(char *buffer, struct dentry *dentry,
         struct inode *new_dir = (struct inode *)data1;
         struct mds_kml_pack_info *mkpi;
         struct lustre_msg *msg = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct mds_rec_rename *rec;
         void *tmp = NULL;
         int rc = 0;
 
-        mdc_prepare_mdc_data(&op_data, dir, new_dir, NULL, 0, 0);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                return -ENOMEM;
+        mdc_prepare_mdc_data(op_data, dir, new_dir, NULL, 0, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
         mkpi = (struct mds_kml_pack_info*)buffer;
@@ -222,12 +242,13 @@ static int mds_rec_rename_pack(char *buffer, struct dentry *dentry,
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
-        tmp = mdc_rename_pack(msg, 0, &op_data, dentry->d_name.name,
+        tmp = mdc_rename_pack(msg, 0, op_data, dentry->d_name.name,
                               dentry->d_name.len, new_dentry->d_name.name,
                               new_dentry->d_name.len);
 
         mkpi->mpi_total_size = tmp - (void*)msg;
         rc = mkpi->mpi_total_size + sizeof(*mkpi) + sizeof(int);
+        OBD_FREE(op_data, sizeof(*op_data));
         return rc;
 }
 

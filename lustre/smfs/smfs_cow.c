@@ -642,12 +642,11 @@ static struct dentry *smfs_find_snap_root(struct super_block *sb,
 {
         struct dentry *dentry = NULL;
         struct nameidata nd;
-        int error;
         ENTRY;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (path_init(path_name, LOOKUP_FOLLOW, &nd)) {
-                error = path_walk(path_name, &nd);
+                int error = path_walk(path_name, &nd);
                 if (error) {
                         path_release(&nd);
                         RETURN(NULL);
@@ -658,12 +657,12 @@ static struct dentry *smfs_find_snap_root(struct super_block *sb,
 #else
         if (path_lookup(path_name, LOOKUP_FOLLOW, &nd))
                 RETURN(NULL);
-                                                                                                                                                                                                     
 #endif
         dentry = dget(nd.dentry); 
         path_release(&nd);
         RETURN(dentry); 
 }
+
 static int snap_add_item(struct smfs_super_info *smb, 
                          struct snap_info *snap_info,
                          char *name)
