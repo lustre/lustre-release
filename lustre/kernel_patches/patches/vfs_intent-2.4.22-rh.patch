@@ -878,6 +878,15 @@
  	list_add(&mnt->mnt_hash, mount_hashtable+hash(nd->mnt, nd->dentry));
  	list_add(&mnt->mnt_child, &nd->mnt->mnt_mounts);
  	nd->dentry->d_mounted++;
+@@ -286,7 +293,7 @@
+ 	}
+ }
+ 
+-static int do_umount(struct vfsmount *mnt, int flags)
++int do_umount(struct vfsmount *mnt, int flags)
+ {
+ 	struct super_block * sb = mnt->mnt_sb;
+ 	int retval = 0;
 @@ -488,14 +490,17 @@ static int do_loopback(struct nameidata 
  {
  	struct nameidata old_nd;
@@ -1820,13 +1829,34 @@
  		} else {
 --- linux-2.4.22-ac1/kernel/ksyms.c~vfs_intent-2.4.22-rh	2003-09-25 14:39:02.000000000 +0400
 +++ linux-2.4.22-ac1-alexey/kernel/ksyms.c	2003-09-25 14:42:46.000000000 +0400
-@@ -295,6 +295,7 @@ EXPORT_SYMBOL(read_cache_page);
+@@ -295,6 +295,8 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);
 +EXPORT_SYMBOL(vfs_follow_link_it);
++EXPORT_SYMBOL(do_umount);
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
 
-_
+Index: linux-2.4.24/include/linux/mount.h
+===================================================================
+--- linux-2.4.22-ac1/include/linux/mount.h	2004-05-03 19:56:48.182871712 +0300
++++ linux-2.4.22-ac1-alexey/include/linux/mount.h	2004-05-03 20:00:02.831280656 +0300
+@@ -29,6 +29,8 @@
+ 	int mnt_flags;
+ 	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
+ 	struct list_head mnt_list;
++	struct list_head mnt_lustre_list; /* GNS mount list */
++	unsigned long mnt_last_used;      /* for GNS auto-umount (jiffies) */
+ };
+ 
+ static inline struct vfsmount *mntget(struct vfsmount *mnt)
+@@ -39,6 +41,7 @@
+ }
+ 
+ extern void __mntput(struct vfsmount *mnt);
++extern int do_umount(struct vfsmount *mnt, int flags);
+ 
+ static inline void mntput(struct vfsmount *mnt)
+ {
