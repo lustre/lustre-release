@@ -2035,7 +2035,10 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc < 0)
                 GOTO(err_fs, rc);
 
-        if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3) {
+        /* this check for @dumb string is needed to handle mounting MDS with
+         * smfs. Read lconf:MDSDEV.write_conf() for more details. */
+        if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3 &&
+            strcmp(lcfg->lcfg_inlbuf3, "dumb")) {
                 class_uuid_t uuid;
 
                 generate_random_uuid(uuid);
@@ -2086,10 +2089,8 @@ static int mds_postsetup(struct obd_device *obd)
         if (rc)
                 RETURN(rc);
 
-        /* This check for @dumb string is needed to handle mounting MDS 
-           with smfs. Read lconf:MDSDEV.write_conf() for more detail 
-           explanation. */
-        if (mds->mds_profile && strcmp(mds->mds_profile, "dumb")) {
+        if (mds->mds_profile) {
+                struct llog_ctxt *lgctxt;
                 struct lvfs_run_ctxt saved;
                 struct lustre_profile *lprof;
                 struct config_llog_instance cfg;
@@ -2097,9 +2098,16 @@ static int mds_postsetup(struct obd_device *obd)
                 cfg.cfg_instance = NULL;
                 cfg.cfg_uuid = mds->mds_lov_uuid;
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = class_config_process_llog(llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT),
-                                             mds->mds_profile, &cfg);
+
+                lgctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
+                if (!lgctxt) {
+                        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                        GOTO(err_llog, rc = -EINVAL);
+                }
+                
+                rc = class_config_process_llog(lgctxt, mds->mds_profile, &cfg);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
                 if (rc)
                         GOTO(err_llog, rc);
 

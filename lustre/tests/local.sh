@@ -36,7 +36,7 @@ rm -f $config
 
 # create nodes
 ${LMC} --add node --node localhost || exit 10
-${LMC} --add net --node  localhost --nid `hostname` --nettype $NETWORKTYPE || exit 11
+${LMC} --add net --node localhost --nid `hostname` --nettype $NETWORKTYPE || exit 11
 ${LMC} --add net --node client --nid '*' --nettype $NETWORKTYPE || exit 12
 
 
