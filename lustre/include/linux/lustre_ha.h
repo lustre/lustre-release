@@ -52,9 +52,11 @@ int recovd_setup(struct recovd_obd *mgr);
 int recovd_cleanup(struct recovd_obd *mgr);
 
 extern struct recovd_obd *ptlrpc_recovd;
+struct ptlrpc_request;
 
 int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn);
-int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc);
+int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc,
+                            struct ptlrpc_request **reqptr);
 int ptlrpc_replay(struct obd_import *imp);
 int ptlrpc_resend(struct obd_import *imp);
 void ptlrpc_free_committed(struct obd_import *imp);
