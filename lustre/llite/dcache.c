@@ -98,17 +98,18 @@ static int revalidate2_finish(int flag, struct ptlrpc_request *request,
 
 static int ll_have_lock(struct dentry *de)
 {
-       struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
+        struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
         struct lustre_handle lockh;
         __u64 res_id[RES_NAME_SIZE] = {0};
         struct obd_device *obddev;
         ENTRY;
 
-       if (!de->d_inode)
+        if (!de->d_inode)
                RETURN(0);
 
         obddev = class_conn2obd(&sbi->ll_mdc_conn);
         res_id[0] = de->d_inode->i_ino;
+        res_id[1] = de->d_inode->i_generation;
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id[0]);
 
@@ -139,7 +140,7 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
-        if (ll_have_lock(de))
+        if (it == NULL && ll_have_lock(de))
                 GOTO(out, rc = 0);
 
         rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
