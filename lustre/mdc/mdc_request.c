@@ -216,22 +216,21 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         LDLM_DEBUG_NOLOCK("mdsintent %s dir %ld", ldlm_it2str(it->it_op),
                           dir->i_ino);
 
-        switch (it->it_op) {
-        case IT_MKDIR:
-                it->it_mode = (it->it_mode | S_IFDIR) & ~current->fs->umask;
-                break;
-        case (IT_CREAT|IT_OPEN):
-        case IT_CREAT:
-                it->it_mode |= S_IFREG; /* no break */
-        case IT_MKNOD:
-                it->it_mode &= ~current->fs->umask;
-                break;
-        case IT_SYMLINK:
-                it->it_mode = (it->it_mode | S_IFLNK) & ~current->fs->umask;
-                break;
-        }
-
         if (it->it_op & (IT_MKDIR | IT_CREAT | IT_SYMLINK | IT_MKNOD)) {
+                switch (it->it_op) {
+                case IT_MKDIR:
+                        it->it_mode |= S_IFDIR;
+                        break;
+                case (IT_CREAT|IT_OPEN):
+                case IT_CREAT:
+                        it->it_mode |= S_IFREG;
+                        break;
+                case IT_SYMLINK:
+                        it->it_mode |= S_IFLNK;
+                        break;
+                }
+                it->it_mode &= ~current->fs->umask;
+
                 size[2] = sizeof(struct mds_rec_create);
                 size[3] = de->d_name.len + 1;
                 size[4] = tgtlen + 1;
