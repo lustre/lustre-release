@@ -137,13 +137,13 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                 }
                 if (new->lvb_size > lvb->lvb_size) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "
-                               LPU64" -> "LPU64, res->lr_name.name[0],
+                               LPU64" -> "LPU64"\n", res->lr_name.name[0],
                                lvb->lvb_size, new->lvb_size);
                         lvb->lvb_size = new->lvb_size;
                 }
                 if (new->lvb_time > lvb->lvb_time) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb time: "
-                               LPU64" -> "LPU64, res->lr_name.name[0],
+                               LPU64" -> "LPU64"\n", res->lr_name.name[0],
                                lvb->lvb_time, new->lvb_time);
                         lvb->lvb_time = new->lvb_time;
                 }
@@ -168,13 +168,10 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         oa->o_valid = OBD_MD_FLID;
         obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
 
-        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "LPU64" -> "LPU64,
-               res->lr_name.name[0], lvb->lvb_size, dentry->d_inode->i_size);
         lvb->lvb_size = dentry->d_inode->i_size;
-        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb time: "LPU64" -> "LPU64,
-               res->lr_name.name[0], lvb->lvb_time,
-               (__u64)LTIME_S(dentry->d_inode->i_mtime));
         lvb->lvb_time = LTIME_S(dentry->d_inode->i_mtime);
+        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", time: "
+               LPU64"\n", res->lr_name.name[0], lvb->lvb_size, lvb->lvb_time);
         f_dput(dentry);
 
  out:
