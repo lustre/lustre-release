@@ -64,6 +64,7 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
         if (!request)
                 GOTO(out_disco, rc = -ENOMEM);
 
+        request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(request);
