@@ -989,6 +989,7 @@ char *portals_debug_dumpstack(void)
         char *buf = stack_backtrace;
         char *pbuf = buf;
         static char buffer[512];
+        int rc = 0;
 
         /* User space on another CPU? */
         if ((esp ^ (unsigned long)current) & (PAGE_MASK<<1)){
@@ -1001,13 +1002,19 @@ char *portals_debug_dumpstack(void)
         while (((long) stack & (THREAD_SIZE-1)) != 0) {
                 addr = *stack++;
                 if (is_kernel_text_address(addr)) {
-                        lookup_symbol(addr, buffer, 512);
-                        if (buf + LUSTRE_TRACE_SIZE
+                        rc = lookup_symbol(addr, buffer, 512);
+                        if (rc == -ENOSYS) {
+                                if (buf + LUSTRE_TRACE_SIZE <= pbuf + 12)
+                                        break;
+                                size = sprintf(pbuf, "[<%08lx>] ", addr);
+                        } else {
+                                if (buf + LUSTRE_TRACE_SIZE
                                             /* fix length + sizeof('\0') */
-                            <= pbuf + strlen(buffer) + 28 + 1)
-                                break;
-                        size = sprintf(pbuf, "([<%08lx>] %s (0x%x)) ",
-                                       addr, buffer, stack-1);
+                                    <= pbuf + strlen(buffer) + 28 + 1)
+                                        break;
+                                size = sprintf(pbuf, "([<%08lx>] %s (0x%x)) ",
+                                               addr, buffer, stack-1);
+                        }
                         pbuf += size;
                 }
         }
