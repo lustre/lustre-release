@@ -1556,7 +1556,7 @@ Index: linux-2.4.19.SuSE/include/linux/dcache.h
 ===================================================================
 --- linux-2.4.19.SuSE.orig/include/linux/dcache.h	Mon Jan 27 05:13:15 2003
 +++ linux-2.4.19.SuSE/include/linux/dcache.h	Sat Nov 15 17:35:46 2003
-@@ -5,6 +5,51 @@
+@@ -5,6 +5,52 @@
  
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1571,6 +1571,7 @@ Index: linux-2.4.19.SuSE/include/linux/dcache.h
 +#define IT_GETXATTR 0x0040
 +#define IT_EXEC     0x0080
 +#define IT_PIN      0x0100
++#define IT_CHDIR    0x0200
 +
 +#define IT_FL_LOCKED   0x0001
 +#define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */

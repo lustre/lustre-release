@@ -1567,7 +1567,7 @@ Index: linux-2.4.21-x86_64/include/linux/dcache.h
 ===================================================================
 --- linux-2.4.21-x86_64.orig/include/linux/dcache.h	2003-11-10 16:44:28.000000000 -0800
 +++ linux-2.4.21-x86_64/include/linux/dcache.h	2004-04-12 19:57:36.000000000 -0700
-@@ -7,6 +7,51 @@
+@@ -7,6 +7,52 @@
  #include <linux/gdb.h>
  #include <linux/mount.h>
  #include <linux/kernel.h>
@@ -1582,6 +1582,7 @@ Index: linux-2.4.21-x86_64/include/linux/dcache.h
 +#define IT_GETXATTR 0x0040
 +#define IT_EXEC     0x0080
 +#define IT_PIN      0x0100
++#define IT_CHDIR    0x0200
 +
 +#define IT_FL_LOCKED   0x0001
 +#define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */
