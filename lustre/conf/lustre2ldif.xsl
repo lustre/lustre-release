@@ -33,6 +33,12 @@ lustreUpcall: <value-of select="lustreUpcall"/>
 <if test="portalsUpcall">
 portalsUpcall: <value-of select="portalsUpcall"/>
 </if>
+<if test="ptldebug">
+ptldebug: <value-of select="ptldebug"/>
+</if>
+<if test="subsystem">
+subsystem: <value-of select="subsystem"/>
+</if>
 <text>
 </text>
 <for-each select="network">

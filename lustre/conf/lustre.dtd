@@ -15,7 +15,7 @@
 <!ATTLIST lustre version CDATA #REQUIRED>
 
 <!ELEMENT node (network | routetbl | profile_ref | timeout | 
-                lustreUpcall | portalsUpcall)*>
+                lustreUpcall | portalsUpcall | ptldebug | subsystem)*>
 <!ATTLIST node %object.attr;
                router CDATA #IMPLIED>
                
@@ -87,6 +87,8 @@
 <!-- basic elements -->
 <!ELEMENT recoveryUpcall %object.content;>
 <!ELEMENT timeout       %object.content;>
+<!ELEMENT ptldebug      %object.content;>
+<!ELEMENT subsystem     %object.content;>
 <!ELEMENT journalsize   %object.content;>
 <!ELEMENT fstype        %object.content;>
 <!ELEMENT nid           %object.content;>
