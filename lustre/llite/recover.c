@@ -16,8 +16,8 @@
 
 static int ll_retry_recovery(struct ptlrpc_connection *conn)
 {
-    ENTRY;
-    RETURN(0);
+        ENTRY;
+        RETURN(0);
 }
 
 /* XXX looks a lot like super.c:invalidate_request_list, don't it? */
@@ -82,12 +82,15 @@ static void prepare_ost(struct obd_import *imp)
 
         abort_inflight_for_import(imp);
 
+        if (notify_obd == NULL)
+                return;
+
         /* How gross is _this_? */
         if (!list_empty(&notify_obd->obd_exports)) {
                 struct lustre_handle fakeconn;
                 struct obd_ioctl_data ioc_data;
-                struct obd_export *exp = 
-                        list_entry(&notify_obd->obd_exports.next, 
+                struct obd_export *exp =
+                        list_entry(&notify_obd->obd_exports.next,
                                    struct obd_export, exp_obd_chain);
                 fakeconn.addr = (__u64)(unsigned long)exp;
                 fakeconn.cookie = exp->exp_cookie;
@@ -95,13 +98,14 @@ static void prepare_ost(struct obd_import *imp)
                 ioc_data.ioc_offset = 0; /* inactive */
                 rc = obd_iocontrol(IOC_LOV_SET_OSC_ACTIVE, &fakeconn,
                                    sizeof ioc_data, &ioc_data, NULL);
-                if (rc) 
-                        CERROR("disabling %s on LOV %p/%s: %d\n", 
+                if (rc)
+                        CERROR("disabling %s on LOV %p/%s: %d\n",
                                imp->imp_obd->obd_uuid, notify_obd,
                                notify_obd->obd_uuid, rc);
         } else {
-                CDEBUG(D_HA, "No exports for obd %p/%s, can't notify about %p\n",
-                       notify_obd, notify_obd->obd_uuid, imp->imp_obd->obd_uuid);
+                CDEBUG(D_HA, "No exports for obd %p/%s, can't notify about "
+                       "%p\n", notify_obd, notify_obd->obd_uuid,
+                       imp->imp_obd->obd_uuid);
         }
 }
 
@@ -153,7 +157,7 @@ static int ll_reconnect(struct ptlrpc_connection *conn)
                          * else imp->imp_connection = NULL;
                          *
                          */
-                        
+
                 }
         }
 
@@ -162,10 +166,10 @@ static int ll_reconnect(struct ptlrpc_connection *conn)
                 conn->c_level = LUSTRE_CONN_FULL;
                 RETURN(0);
         }
-        
+
         conn->c_level = LUSTRE_CONN_RECOVD;
-        /* this will replay, up the c_level, recovd_conn_fixed and continue reqs.
-         * also, makes a mean cup of coffee.
+        /* this will replay, up the c_level, recovd_conn_fixed and continue
+         * reqs. also, makes a mean cup of coffee.
          */
         RETURN(ptlrpc_replay(conn));
 }
