@@ -79,7 +79,8 @@ int ll_set_opt(const char *opt, char *data, int fl)
                 RETURN(fl);
 }
 
-void ll_options(char *options, char **ost, char **mds, int *flags)
+void ll_options(char *options, char **ost, char **mdc, char **profile, 
+                char **mds_uuid, int *flags)
 {
         char *this_char;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -102,7 +103,11 @@ void ll_options(char *options, char **ost, char **mds, int *flags)
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
                 if (!*ost && (*ost = ll_read_opt("osc", this_char)))
                         continue;
-                if (!*mds && (*mds = ll_read_opt("mdc", this_char)))
+                if (!*mdc && (*mdc = ll_read_opt("mdc", this_char)))
+                        continue;
+                if (!*profile && (*profile = ll_read_opt("profile", this_char)))
+                        continue;
+                if (!*mds_uuid && (*mds_uuid = ll_read_opt("mds_uuid", this_char)))
                         continue;
                 if (!(*flags & LL_SBI_NOLCK) &&
                     ((*flags) = (*flags) |
@@ -120,6 +125,145 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
 }
 
+int ll_process_log_rec(struct llog_rec_hdr *rec, void *data)
+{
+        struct ll_sb_info * sbi = data;
+        int cfg_len = rec->lrh_len;
+        char *cfg_buf = (char*) (rec + 1);
+        int rc = 0;
+
+        if (rec->lrh_type == OBD_CFG_REC) {
+                char *buf;
+                struct lustre_cfg *lcfg;
+                char *old_name = NULL;
+                int old_len = 0;
+                char *old_uuid = NULL;
+                int old_uuid_len = 0;
+                char *inst_name = NULL;
+                int inst_len = 0;
+
+                rc = lustre_cfg_getdata(&buf, cfg_len, cfg_buf, 1);
+                if (rc) 
+                        GOTO(out, rc);
+                lcfg = (struct lustre_cfg* ) buf;
+
+                if (sbi && lcfg->lcfg_dev_name) {
+                        inst_len = strlen(lcfg->lcfg_dev_name) + 
+                                strlen(sbi->ll_instance) + 2;
+                        OBD_ALLOC(inst_name, inst_len);
+                        sprintf(inst_name, "%s-%s", lcfg->lcfg_dev_name, 
+                                sbi->ll_instance);
+                        old_name = lcfg->lcfg_dev_name;
+                        old_len = lcfg->lcfg_dev_namelen;
+                        lcfg->lcfg_dev_name = inst_name;
+                        lcfg->lcfg_dev_namelen = strlen(inst_name) + 1;
+                }
+                
+                if (sbi && lcfg->lcfg_command == LCFG_ATTACH) {
+                        old_uuid = lcfg->lcfg_inlbuf2;
+                        old_uuid_len = lcfg->lcfg_inllen2;
+
+                        lcfg->lcfg_inlbuf2 = (char*)&sbi->ll_sb_uuid.uuid;
+                        lcfg->lcfg_inllen2 = sizeof(sbi->ll_sb_uuid);
+                }
+
+                rc = class_process_config(lcfg);
+
+                if (old_name) {
+                        lcfg->lcfg_dev_name = old_name;
+                        lcfg->lcfg_dev_namelen = old_len;
+                        OBD_FREE(inst_name, inst_len);
+                }
+              
+                if (old_uuid) {
+                        lcfg->lcfg_inlbuf2 = old_uuid;
+                        lcfg->lcfg_inllen2 = old_uuid_len;
+                }
+                
+                lustre_cfg_freedata(buf, cfg_len);
+        } else if (rec->lrh_type == PTL_CFG_REC) {
+                rc = kportal_nal_cmd((struct portals_cfg *)cfg_buf);
+        }
+out:
+        RETURN(rc);
+}
+
+
+int ll_process_log(char *mds, char *config, void  * instance)
+{
+        struct lustre_cfg lcfg;
+        int dev;
+        struct obd_device *obd;
+        struct lustre_handle mdc_conn = {0, };
+        struct obd_export *exp;
+        struct obd_uuid uuid = { "MDC_mount_UUID" };
+        int rc = 0;
+        int err;
+
+        lcfg.lcfg_command = LCFG_ATTACH;
+        lcfg.lcfg_dev_name = "mdc_dev";
+        lcfg.lcfg_dev_namelen = strlen(lcfg.lcfg_dev_name) + 1;
+        lcfg.lcfg_inlbuf1 = "mdc";
+        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
+        lcfg.lcfg_inlbuf2 = "mdc_dev_UUID";
+        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
+        dev = class_attach(&lcfg);
+        if (dev < 0)
+                GOTO(out, err = dev);
+
+        obd = class_name2obd("mdc_dev");
+        if (obd == NULL)
+                GOTO(out, err = -EINVAL);
+        
+        memset(&lcfg, 0, sizeof(lcfg));
+
+        lcfg.lcfg_command = LCFG_SETUP;
+        lcfg.lcfg_dev_name = "mdc_dev";
+        lcfg.lcfg_dev_namelen = strlen(lcfg.lcfg_dev_name) + 1;
+        lcfg.lcfg_inlbuf1 = mds;
+        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
+        lcfg.lcfg_inlbuf2 = "NET_mds_facet_tcp_UUID";
+        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
+        err = class_setup(obd, &lcfg);
+        if (err < 0)
+                GOTO(out, err);
+        
+        err = obd_connect(&mdc_conn, obd, &uuid);
+        if (err) {
+                CERROR("cannot connect to %s: rc = %d\n", mds, err);
+                GOTO(out, err);
+        }
+        
+        exp = class_conn2export(&mdc_conn);
+        rc = mdc_llog_process(exp, config, instance, ll_process_log_rec);
+        if (rc) {
+                CERROR("mdc_llog_process failed: rc = %d\n", err);
+        }
+
+        err = obd_disconnect(exp, 0);
+
+        memset(&lcfg, 0, sizeof(lcfg));
+        lcfg.lcfg_command = LCFG_CLEANUP;
+        lcfg.lcfg_dev_name = "mdc_dev";
+        err = class_cleanup(obd, &lcfg);
+        if (err < 0)
+                GOTO(out, err);
+
+        memset(&lcfg, 0, sizeof(lcfg));
+        lcfg.lcfg_command = LCFG_DETACH;
+        lcfg.lcfg_dev_name = "mdc_dev";
+        err = class_detach(obd, &lcfg);
+        if (err < 0)
+                GOTO(out, err);
+        
+
+out:
+        if (rc == 0)
+                rc = err;
+        
+        RETURN(rc);
+}
+
 int ll_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct inode *root = 0;
@@ -127,6 +271,8 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct ll_sb_info *sbi;
         char *osc = NULL;
         char *mdc = NULL;
+        char *mds_uuid = NULL;
+        char *profile = NULL;
         int err;
         struct ll_fid rootfid;
         struct obd_statfs osfs;
@@ -152,7 +298,58 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
         sbi->ll_flags |= LL_SBI_READAHEAD;
-        ll_options(data, &osc, &mdc, &sbi->ll_flags);
+        ll_options(data, &osc, &mdc, &profile, &mds_uuid, &sbi->ll_flags);
+
+        if (profile) {
+                struct lustre_profile *lprof;
+                int len;
+
+                if (!mds_uuid) {
+                        CERROR("no mds_uuid\n");
+                        GOTO(out_free, err = -EINVAL);
+                }
+                
+                /* save these so we can cleanup later */
+                obd_str2uuid(&sbi->ll_mds_uuid, mds_uuid);
+
+                len = strlen(profile) + 1;
+                OBD_ALLOC(sbi->ll_profile, len);
+                if (sbi->ll_profile == NULL) 
+                        GOTO(out_free, err = -ENOMEM);
+                memcpy(sbi->ll_profile, profile, len);
+
+                /* generate a string unique to this super, let's try
+                 the address of the super itself.*/
+                len = (sizeof(sb) * 2) + 1; 
+                OBD_ALLOC(sbi->ll_instance, len);
+                if (sbi->ll_instance == NULL) 
+                        GOTO(out_free, err = -ENOMEM);
+                sprintf(sbi->ll_instance, "%p", sb);
+
+                err = ll_process_log(mds_uuid, profile, sbi);
+                if (err < 0) {
+                        CERROR("Unable to process log: %s\n", profile);
+
+                        GOTO(out_free, err);
+                }
+
+                lprof = class_get_profile(profile);
+                if (lprof == NULL) {
+                        CERROR("No profile found: %s\n", profile);
+                        GOTO(out_free, err = -EINVAL);
+                }
+                if (osc)
+                        OBD_FREE(osc, strlen(osc) + 1);
+                OBD_ALLOC(osc, strlen(lprof->lp_osc) + 
+                          strlen(sbi->ll_instance) + 2);
+                sprintf(osc, "%s-%s", lprof->lp_osc, sbi->ll_instance);
+
+                if (mdc)
+                        OBD_FREE(mdc, strlen(mdc) + 1);
+                OBD_ALLOC(mdc, strlen(lprof->lp_mdc) + 
+                          strlen(sbi->ll_instance) + 2);
+                sprintf(mdc, "%s-%s", lprof->lp_mdc, sbi->ll_instance);
+        }
 
         if (!osc) {
                 CERROR("no osc\n");
@@ -163,6 +360,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 CERROR("no mdc\n");
                 GOTO(out_free, err = -EINVAL);
         }
+        
 
         obd = class_name2obd(mdc);
         if (!obd) {
@@ -258,6 +456,10 @@ out_dev:
                 OBD_FREE(mdc, strlen(mdc) + 1);
         if (osc)
                 OBD_FREE(osc, strlen(osc) + 1);
+        if (profile)
+                OBD_FREE(profile, strlen(profile) + 1);
+        if (mds_uuid)
+                OBD_FREE(mds_uuid, strlen(mds_uuid) + 1);
 
         RETURN(err);
 
@@ -266,7 +468,26 @@ out_osc:
         obd_disconnect(sbi->ll_osc_exp, 0);
 out_mdc:
         obd_disconnect(sbi->ll_mdc_exp, 0);
+
 out_free:
+        if (sbi->ll_profile != NULL) {
+                int len = sizeof(sbi->ll_profile) + sizeof("-clean") + 1;
+                int err;
+
+                if (sbi->ll_instance != NULL) {
+                        char * cln_prof;
+                        OBD_ALLOC(cln_prof, len);
+                        sprintf(cln_prof, "%s-clean", sbi->ll_profile);
+
+                        err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, 
+                                             sbi);
+                        if (err < 0) 
+                                CERROR("Unable to process log: %s\n", cln_prof);
+                        OBD_FREE(cln_prof, len);
+                        OBD_FREE(sbi->ll_instance, strlen(sbi->ll_instance)+ 1);
+                }
+                OBD_FREE(sbi->ll_profile, strlen(sbi->ll_profile) + 1);
+        }
         lprocfs_unregister_mountpoint(sbi);
         OBD_FREE(sbi, sizeof(*sbi));
 
@@ -313,6 +534,24 @@ void ll_put_super(struct super_block *sb)
                 shrink_dcache_parent(dentry);
         }
         spin_unlock(&dcache_lock);
+
+        if (sbi->ll_profile != NULL) {
+                char * cln_prof;
+                int len = sizeof(sbi->ll_profile) + sizeof("-clean") + 1;
+                int err;
+
+                OBD_ALLOC(cln_prof, len);
+                sprintf(cln_prof, "%s-clean", sbi->ll_profile);
+
+                err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, 
+                                     sbi);
+                if (err < 0) 
+                        CERROR("Unable to process log: %s\n", cln_prof);
+
+                OBD_FREE(cln_prof, len);
+                OBD_FREE(sbi->ll_profile, strlen(sbi->ll_profile) + 1);
+                OBD_FREE(sbi->ll_instance, strlen(sbi->ll_instance) + 1);
+        }
 
         OBD_FREE(sbi, sizeof(*sbi));
 
