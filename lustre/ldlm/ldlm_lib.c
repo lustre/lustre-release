@@ -631,12 +631,7 @@ void target_abort_recovery(void *data)
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        obd_precleanup(obd, OBD_OPT_FORCE);
         class_disconnect_exports(obd, 0);
-
-        /* XXX can't call this with spin_lock_bh, but it probably
-           should be protected, somehow. */
-        obd_postsetup(obd);
 
         /* when recovery was abort, cleanup orphans for mds */
         if (OBT(obd) && OBP(obd, postrecov)) {
