@@ -66,7 +66,7 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
                   
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd);
-        if (rc) 
+        if (rc)
                 RETURN(rc); 
 
         osc_obd2cl(obd, &cl, &connection);
@@ -89,6 +89,7 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
         osc->osc_connh.cookie = request->rq_repmsg->cookie;
 
         EXIT;
+        return 0;
  out:
         ptlrpc_free_req(request);
  out_disco:
