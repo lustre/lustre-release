@@ -27,7 +27,6 @@
 # define USERMODEHELPER(path, argv, envp)                               \
   call_usermodehelper(path, argv, envp, 1)
 # define RECALC_SIGPENDING         recalc_sigpending()
-# define CURRENT_SECONDS           get_seconds()
 
 #else /* 2.4.x */
 
@@ -38,8 +37,12 @@
 # define USERMODEHELPER(path, argv, envp)                               \
   call_usermodehelper(path, argv, envp)
 # define RECALC_SIGPENDING         recalc_sigpending(current)
-# define CURRENT_SECONDS           CURRENT_TIME
 
+#endif
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) 
+# define CURRENT_SECONDS           get_seconds()
+#else
+# define CURRENT_SECONDS           CURRENT_TIME
 #endif
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
