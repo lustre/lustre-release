@@ -28,7 +28,6 @@ ptl_handle_ni_t         kranal_ni;
 kra_data_t              kranal_data;
 kra_tunables_t          kranal_tunables;
 
-#ifdef CONFIG_SYSCTL
 #define RANAL_SYSCTL_TIMEOUT           1
 #define RANAL_SYSCTL_LISTENER_TIMEOUT  2
 #define RANAL_SYSCTL_BACKLOG           3
@@ -60,7 +59,6 @@ static ctl_table kranal_top_ctl_table[] = {
         {RANAL_SYSCTL, "ranal", NULL, 0, 0555, kranal_ctl_table},
         { 0 }
 };
-#endif
 
 int
 kranal_sock_write (struct socket *sock, void *buffer, int nob)
@@ -88,6 +86,12 @@ kranal_sock_write (struct socket *sock, void *buffer, int nob)
         set_fs(KERNEL_DS);
         rc = sock_sendmsg(sock, &msg, iov.iov_len);
         set_fs(oldmm);
+
+        if (rc == nob)
+                return 0;
+        
+        if (rc >= 0)
+                return -EAGAIN;
 
         return rc;
 }
@@ -957,8 +961,15 @@ kranal_connect (kra_peer_t *peer)
         } while (!list_empty(&zombies));
 }
 
+void
+kranal_free_acceptsock (kra_acceptsock_t *ras)
+{
+        sock_release(ras->ras_sock);
+        PORTAL_FREE(ras, sizeof(*ras));
+}
+
 int
-kranal_listener(void *arg)
+kranal_listener (void *arg)
 {
         struct sockaddr_in addr;
         wait_queue_t       wait;
@@ -1031,6 +1042,10 @@ kranal_listener(void *arg)
                                 kranal_pause(HZ);
                                 continue;
                         }
+                        /* XXX this should add a ref to sock->ops->owner, if
+                         * TCP could be a module */
+                        ras->ras_sock->type = sock->type;
+                        ras->ras_sock->ops = sock->ops;
                 }
                 
                 set_current_state(TASK_INTERRUPTIBLE);
@@ -1112,8 +1127,12 @@ kranal_start_listener (void)
 }
 
 void
-kranal_stop_listener(void)
+kranal_stop_listener(int clear_acceptq)
 {
+        struct list_head  zombie_accepts;
+        unsigned long     flags;
+        kra_acceptsock_t *ras;
+
         CDEBUG(D_WARNING, "Stopping listener\n");
 
         /* Called holding kra_nid_mutex: listener running */
@@ -1127,6 +1146,24 @@ kranal_stop_listener(void)
 
         LASSERT (kranal_data.kra_listener_sock == NULL);
         CDEBUG(D_WARNING, "Listener stopped\n");
+
+        if (!clear_acceptq)
+                return;
+        
+        /* Close any unhandled accepts */
+        spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+
+        list_add(&zombie_accepts, &kranal_data.kra_connd_acceptq);
+        list_del_init(&kranal_data.kra_connd_acceptq);
+
+        spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+        
+        while (!list_empty(&zombie_accepts)) {
+                ras = list_entry(zombie_accepts.next, 
+                                 kra_acceptsock_t, ras_list);
+                list_del(&ras->ras_list);
+                kranal_free_acceptsock(ras);
+        }
 }
 
 int 
@@ -1154,7 +1191,7 @@ kranal_listener_procint(ctl_table *table, int write, struct file *filp,
              kranal_data.kra_listener_sock == NULL)) {
 
                 if (kranal_data.kra_listener_sock != NULL)
-                        kranal_stop_listener();
+                        kranal_stop_listener(0);
 
                 rc = kranal_start_listener();
 
@@ -1175,9 +1212,9 @@ kranal_listener_procint(ctl_table *table, int write, struct file *filp,
 int
 kranal_set_mynid(ptl_nid_t nid)
 {
-        unsigned long  flags;
-        lib_ni_t      *ni = &kranal_lib.libnal_ni;
-        int            rc = 0;
+        unsigned long    flags;
+        lib_ni_t        *ni = &kranal_lib.libnal_ni;
+        int              rc = 0;
 
         CDEBUG(D_NET, "setting mynid to "LPX64" (old nid="LPX64")\n",
                nid, ni->ni_pid.nid);
@@ -1191,14 +1228,13 @@ kranal_set_mynid(ptl_nid_t nid)
         }
 
         if (kranal_data.kra_listener_sock != NULL)
-                kranal_stop_listener();
+                kranal_stop_listener(1);
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
         kranal_data.kra_peerstamp++;
-        write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
-
         ni->ni_pid.nid = nid;
-
+        write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+        
         /* Delete all existing peers and their connections after new
          * NID/connstamp set to ensure no old connections in our brave
          * new world. */
@@ -2013,10 +2049,9 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 void __exit
 kranal_module_fini (void)
 {
-#ifdef CONFIG_SYSCTL
         if (kranal_tunables.kra_sysctl != NULL)
                 unregister_sysctl_table(kranal_tunables.kra_sysctl);
-#endif
+
         PtlNIFini(kranal_ni);
 
         ptl_unregister_nal(RANAL);
@@ -2040,6 +2075,10 @@ kranal_module_init (void)
 
         /* Initialise dynamic tunables to defaults once only */
         kranal_tunables.kra_timeout = RANAL_TIMEOUT;
+        kranal_tunables.kra_listener_timeout = RANAL_LISTENER_TIMEOUT;
+        kranal_tunables.kra_backlog = RANAL_BACKLOG;
+        kranal_tunables.kra_port = RANAL_PORT;
+        kranal_tunables.kra_max_immediate = RANAL_MAX_IMMEDIATE;
 
         rc = ptl_register_nal(RANAL, &kranal_api);
         if (rc != PTL_OK) {
@@ -2054,11 +2093,15 @@ kranal_module_init (void)
                 return -ENODEV;
         }
 
-#ifdef CONFIG_SYSCTL
-        /* Press on regardless even if registering sysctl doesn't work */
         kranal_tunables.kra_sysctl = 
                 register_sysctl_table(kranal_top_ctl_table, 0);
-#endif
+        if (kranal_tunables.kra_sysctl == NULL) {
+                CERROR("Can't register sysctl table\n");
+                PtlNIFini(kranal_ni);
+                ptl_unregister_nal(RANAL);
+                return -ENOMEM;
+        }
+
         return 0;
 }
 

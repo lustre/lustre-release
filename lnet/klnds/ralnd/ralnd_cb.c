@@ -1050,8 +1050,7 @@ kranal_connd (void *arg)
                         spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
                         kranal_conn_handshake(ras->ras_sock, NULL);
-                        sock_release(ras->ras_sock);
-                        PORTAL_FREE(ras, sizeof(*ras));
+                        kranal_free_acceptsock(ras);
 
                         spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
                         did_something = 1;

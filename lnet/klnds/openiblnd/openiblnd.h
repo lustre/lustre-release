@@ -48,6 +48,9 @@
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
 
+#include <net/sock.h>
+#include <linux/in.h>
+
 #define DEBUG_SUBSYSTEM S_NAL
 
 #include <linux/kp30.h>
@@ -59,39 +62,40 @@
 #include <ts_ib_cm.h>
 #include <ts_ib_sa_client.h>
 
-#define IBNAL_SERVICE_NAME   "openibnal"
-#define IBNAL_CHECK_ADVERT   1
-
 #if CONFIG_SMP
 # define IBNAL_N_SCHED      num_online_cpus()   /* # schedulers */
 #else
 # define IBNAL_N_SCHED      1                   /* # schedulers */
 #endif
+#define IBNAL_N_CONND       4                   /* # connection daemons */
 
 #define IBNAL_MIN_RECONNECT_INTERVAL HZ         /* first failed connection retry... */
 #define IBNAL_MAX_RECONNECT_INTERVAL (60*HZ)    /* ...exponentially increasing to this */
 
-#define IBNAL_MSG_SIZE       (4<<10)            /* max size of queued messages (inc hdr) */
+#define IBNAL_MSG_SIZE           (4<<10)        /* max size of queued messages (inc hdr) */
 
-#define IBNAL_MSG_QUEUE_SIZE   8                /* # messages/RDMAs in-flight */
-#define IBNAL_CREDIT_HIGHWATER 6                /* when to eagerly return credits */
-#define IBNAL_RETRY            7                /* # times to retry */
-#define IBNAL_RNR_RETRY        7                /*  */
-#define IBNAL_CM_RETRY         7                /* # times to retry connection */
-#define IBNAL_FLOW_CONTROL     1
+#define IBNAL_MSG_QUEUE_SIZE      8             /* # messages/RDMAs in-flight */
+#define IBNAL_CREDIT_HIGHWATER    6             /* when to eagerly return credits */
+#define IBNAL_RETRY               7             /* # times to retry */
+#define IBNAL_RNR_RETRY           7             /*  */
+#define IBNAL_CM_RETRY            7             /* # times to retry connection */
+#define IBNAL_FLOW_CONTROL        1
 #define IBNAL_RESPONDER_RESOURCES 8
 
-#define IBNAL_NTX             64                /* # tx descs */
-#define IBNAL_NTX_NBLK        256               /* # reserved tx descs */
+#define IBNAL_NTX                 64            /* # tx descs */
+#define IBNAL_NTX_NBLK            256           /* # reserved tx descs */
 
-#define IBNAL_PEER_HASH_SIZE  101               /* # peer lists */
+#define IBNAL_PEER_HASH_SIZE      101           /* # peer lists */
 
-#define IBNAL_RESCHED         100               /* # scheduler loops before reschedule */
+#define IBNAL_RESCHED             100           /* # scheduler loops before reschedule */
 
-#define IBNAL_CONCURRENT_PEERS 1000             /* # nodes all talking at once to me */
+#define IBNAL_CONCURRENT_PEERS    1000          /* # nodes all talking at once to me */
 
 /* default vals for runtime tunables */
-#define IBNAL_IO_TIMEOUT      50                /* default comms timeout (seconds) */
+#define IBNAL_IO_TIMEOUT          50            /* default comms timeout (seconds) */
+#define IBNAL_LISTENER_TIMEOUT    5             /* default listener timeout (seconds) */
+#define IBNAL_BACKLOG             127           /* default listener backlog */
+#define IBNAL_PORT                988           /* default listener port */
 
 /************************/
 /* derived constants... */
@@ -113,13 +117,16 @@
 
 #define IBNAL_RDMA_BASE  0x0eeb0000
 #define IBNAL_FMR        1
-#define IBNAL_CKSUM      0
+#define IBNAL_CKSUM      1
 //#define IBNAL_CALLBACK_CTXT  IB_CQ_CALLBACK_PROCESS
 #define IBNAL_CALLBACK_CTXT  IB_CQ_CALLBACK_INTERRUPT
 
 typedef struct 
 {
         int               kib_io_timeout;       /* comms timeout (seconds) */
+        int               kib_listener_timeout; /* listener's timeout */
+        int               kib_backlog;          /* listenter's accept backlog */
+        int               kib_port;             /* where the listener listens */
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
 } kib_tunables_t;
 
@@ -141,11 +148,17 @@ typedef struct
         int               kib_shutdown;         /* shut down? */
         atomic_t          kib_nthreads;         /* # live threads */
 
-        __u64             kib_service_id;       /* service number I listen on */
+        __u64             kib_svc_id;           /* service number I listen on */
+        tTS_IB_GID        kib_svc_gid;          /* device/port GID */
+        __u16             kib_svc_pkey;         /* device/port pkey */
+        
         ptl_nid_t         kib_nid;              /* my NID */
         struct semaphore  kib_nid_mutex;        /* serialise NID ops */
-        struct semaphore  kib_nid_signal;       /* signal completion */
-
+        struct semaphore  kib_listener_signal;  /* signal IP listener completion */
+        struct socket    *kib_listener_sock;    /* IP listener's socket */
+        int               kib_listener_shutdown; /* ask IP listener to close */
+        void             *kib_listen_handle;    /* IB listen handle */
+        
         rwlock_t          kib_global_lock;      /* stabilize peer/conn ops */
 
         struct list_head *kib_peers;            /* hash table of all my known peers */
@@ -153,10 +166,14 @@ typedef struct
         atomic_t          kib_npeers;           /* # peers extant */
         atomic_t          kib_nconns;           /* # connections extant */
 
-        struct list_head  kib_connd_conns;      /* connections to progress */
+        struct list_head  kib_reaper_conns;     /* connections to reap */
+        wait_queue_head_t kib_reaper_waitq;     /* reaper sleeps here */
+        unsigned long     kib_reaper_waketime;  /* when reaper will wake */
+        spinlock_t        kib_reaper_lock;      /* serialise */
+
         struct list_head  kib_connd_peers;      /* peers waiting for a connection */
+        struct list_head  kib_connd_acceptq;    /* accepted sockets to handle */
         wait_queue_head_t kib_connd_waitq;      /* connection daemons sleep here */
-        unsigned long     kib_connd_waketime;   /* when connd will wake */
         spinlock_t        kib_connd_lock;       /* serialise */
 
         wait_queue_head_t kib_sched_waitq;      /* schedulers sleep here */
@@ -182,7 +199,6 @@ typedef struct
         struct ib_fmr_pool *kib_fmr_pool;       /* fast memory region pool */
 #endif
         struct ib_cq     *kib_cq;               /* completion queue */
-        void             *kib_listen_handle;    /* where I listen for connections */
         
 } kib_data_t;
 
@@ -195,12 +211,30 @@ typedef struct
 #define IBNAL_INIT_CQ              6
 #define IBNAL_INIT_ALL             7
 
+typedef struct kib_acceptsock                   /* accepted socket queued for connd */
+{
+        struct list_head     ibas_list;         /* queue for attention */
+        struct socket       *ibas_sock;         /* the accepted socket */
+} kib_acceptsock_t;
+
 /************************************************************************
- * Wire message structs.
+ * IB Wire message format.
  * These are sent in sender's byte order (i.e. receiver flips).
- * CAVEAT EMPTOR: other structs communicated between nodes (e.g. MAD
- * private data and SM service info), is LE on the wire.
+ * They may be sent via TCP/IP (service ID,GID,PKEY query/response),
+ * as private data in the connection request/response, or "normally".
  */
+
+typedef struct kib_svcrsp                       /* service response */
+{
+        __u64             ibsr_svc_id;          /* service's id */
+        __u8              ibsr_svc_gid[16];     /* service's gid */
+        __u16             ibsr_svc_pkey;        /* service's pkey */
+} kib_svcrsp_t;
+
+typedef struct kib_connparams
+{
+        __u32             ibcp_queue_depth;
+} kib_connparams_t;
 
 typedef struct
 {
@@ -215,11 +249,10 @@ typedef struct
 
 typedef struct
 {
-        __u32                 rd_key;           /* remote key */
-        __u32                 rd_nob;           /* # of bytes */
-        __u64                 rd_addr;          /* remote io vaddr */
+        __u32             rd_key;               /* remote key */
+        __u32             rd_nob;               /* # of bytes */
+        __u64             rd_addr;              /* remote io vaddr */
 } kib_rdma_desc_t;
-
 
 typedef struct
 {
@@ -242,15 +275,21 @@ typedef struct
 
 typedef struct
 {
-        __u32              ibm_magic;           /* I'm an openibnal message */
-        __u16              ibm_version;         /* this is my version number */
-        __u8               ibm_type;            /* msg type */
-        __u8               ibm_credits;         /* returned credits */
-#if IBNAL_CKSUM
-        __u32              ibm_nob;
-        __u32              ibm_cksum;
-#endif
+        /* First 2 fields fixed FOR ALL TIME */
+        __u32             ibm_magic;            /* I'm an openibnal message */
+        __u16             ibm_version;          /* this is my version number */
+
+        __u8              ibm_type;             /* msg type */
+        __u8              ibm_credits;          /* returned credits */
+        __u32             ibm_nob;              /* # bytes in whole message */
+        __u32             ibm_cksum;            /* checksum (0 == no checksum) */
+        __u64             ibm_srcnid;           /* sender's NID */
+        __u64             ibm_srcstamp;         /* sender's incarnation */
+        __u64             ibm_dstnid;           /* destination's NID */
+        __u64             ibm_dststamp;         /* destination's incarnation */
         union {
+                kib_svcrsp_t          svcrsp;
+                kib_connparams_t      connparams;
                 kib_immediate_msg_t   immediate;
                 kib_rdma_msg_t        rdma;
                 kib_completion_msg_t  completion;
@@ -258,8 +297,12 @@ typedef struct
 } kib_msg_t;
 
 #define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
-#define IBNAL_MSG_VERSION              1        /* current protocol version */
+#define IBNAL_MSG_VERSION              2        /* current protocol version */
 
+#define IBNAL_MSG_SVCQRY            0xb0        /* service query */
+#define IBNAL_MSG_SVCRSP            0xb1        /* service response */
+#define IBNAL_MSG_CONNREQ           0xc0        /* connection request */
+#define IBNAL_MSG_CONNACK           0xc1        /* connection acknowledge */
 #define IBNAL_MSG_NOOP              0xd0        /* nothing (just credits) */
 #define IBNAL_MSG_IMMEDIATE         0xd1        /* portals hdr + payload */
 #define IBNAL_MSG_PUT_RDMA          0xd2        /* portals PUT hdr + source rdma desc */
@@ -306,25 +349,16 @@ typedef struct kib_tx                           /* transmit message */
 #define KIB_TX_MAPPED         1
 #define KIB_TX_MAPPED_FMR     2
 
-typedef struct kib_wire_connreq
-{
-        __u32        wcr_magic;                 /* I'm an openibnal connreq */
-        __u16        wcr_version;               /* this is my version number */
-        __u16        wcr_queue_depth;           /* this is my receive queue size */
-        __u64        wcr_nid;                   /* peer's NID */
-        __u64        wcr_incarnation;           /* peer's incarnation */
-} kib_wire_connreq_t;
-
 typedef struct kib_connreq
 {
-        /* connection-in-progress */
-        struct kib_conn                    *cr_conn;
-        kib_wire_connreq_t                  cr_wcr;
-        __u64                               cr_tid;
-        struct ib_common_attrib_service     cr_service;
-        tTS_IB_GID                          cr_gid;
-        struct ib_path_record               cr_path;
-        struct ib_cm_active_param           cr_connparam;
+        /* active connection-in-progress state */
+        struct kib_conn           *cr_conn;
+        kib_msg_t                  cr_msg;
+        __u64                      cr_tid;
+        tTS_IB_GID                 cr_gid;
+        kib_svcrsp_t               cr_svcrsp;
+        struct ib_path_record      cr_path;
+        struct ib_cm_active_param  cr_connparam;
 } kib_connreq_t;
 
 typedef struct kib_conn
@@ -361,6 +395,9 @@ typedef struct kib_peer
         struct list_head    ibp_list;           /* stash on global peer list */
         struct list_head    ibp_connd_list;     /* schedule on kib_connd_peers */
         ptl_nid_t           ibp_nid;            /* who's on the other end(s) */
+        __u32               ibp_ip;             /* IP to query for peer conn params */
+        int                 ibp_port;           /* port to qery for peer conn params */
+        __u64               ibp_incarnation;    /* peer's incarnation */
         atomic_t            ibp_refcount;       /* # users */
         int                 ibp_persistence;    /* "known" peer refs */
         struct list_head    ibp_conns;          /* all active connections */
@@ -369,7 +406,6 @@ typedef struct kib_peer
         unsigned long       ibp_reconnect_time; /* when reconnect may be attempted */
         unsigned long       ibp_reconnect_interval; /* exponential backoff */
 } kib_peer_t;
-
 
 extern lib_nal_t       kibnal_lib;
 extern kib_data_t      kibnal_data;
@@ -401,34 +437,6 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
         tx->tx_conn = conn;
         tx->tx_deadline = jiffies + kibnal_tunables.kib_io_timeout * HZ;
         list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
-}
-
-#define KIBNAL_SERVICE_KEY_MASK  (IB_SA_SERVICE_COMP_MASK_NAME |        \
-                                  IB_SA_SERVICE_COMP_MASK_DATA8_1 |     \
-                                  IB_SA_SERVICE_COMP_MASK_DATA8_2 |     \
-                                  IB_SA_SERVICE_COMP_MASK_DATA8_3 |     \
-                                  IB_SA_SERVICE_COMP_MASK_DATA8_4 |     \
-                                  IB_SA_SERVICE_COMP_MASK_DATA8_5 |     \
-                                  IB_SA_SERVICE_COMP_MASK_DATA8_6 |     \
-                                  IB_SA_SERVICE_COMP_MASK_DATA8_7 |     \
-                                  IB_SA_SERVICE_COMP_MASK_DATA8_8)
-
-static inline __u64*
-kibnal_service_nid_field(struct ib_common_attrib_service *srv)
-{
-        /* must be consistent with KIBNAL_SERVICE_KEY_MASK */
-        return (__u64 *)srv->service_data8;
-}
-
-
-static inline void
-kibnal_set_service_keys(struct ib_common_attrib_service *srv, ptl_nid_t nid)
-{
-        LASSERT (strlen (IBNAL_SERVICE_NAME) < sizeof(srv->service_name));
-        memset (srv->service_name, 0, sizeof(srv->service_name));
-        strcpy (srv->service_name, IBNAL_SERVICE_NAME);
-
-        *kibnal_service_nid_field(srv) = cpu_to_le64(nid);
 }
 
 #if 0
@@ -486,6 +494,29 @@ kibnal_wreqid_is_rx (__u64 wreqid)
         return (wreqid & 1) != 0;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
+# define sk_allocation  allocation
+# define sk_data_ready  data_ready
+# define sk_write_space write_space
+# define sk_user_data   user_data
+# define sk_prot        prot
+# define sk_sndbuf      sndbuf
+# define sk_socket      socket
+# define sk_wmem_queued wmem_queued
+# define sk_err         err
+# define sk_sleep       sleep
+#endif
+
+extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
+extern void kibnal_pack_msg(kib_msg_t *msg, int credits, 
+                            ptl_nid_t dstnid, __u64 dststamp);
+extern int kibnal_unpack_msg(kib_msg_t *msg, int nob);
+extern void kibnal_handle_svcqry (struct socket *sock);
+extern int kibnal_make_svcqry (kib_conn_t *conn);
+extern void kibnal_free_acceptsock (kib_acceptsock_t *as);
+extern int kibnal_listener_procint(ctl_table *table, int write, 
+                                   struct file *filp, void *buffer, 
+                                   size_t *lenp);
 extern kib_peer_t *kibnal_create_peer (ptl_nid_t nid);
 extern void kibnal_put_peer (kib_peer_t *peer);
 extern int kibnal_del_peer (ptl_nid_t nid, int single_share);
@@ -513,6 +544,7 @@ extern void kibnal_destroy_conn (kib_conn_t *conn);
 extern int  kibnal_thread_start (int (*fn)(void *arg), void *arg);
 extern int  kibnal_scheduler(void *arg);
 extern int  kibnal_connd (void *arg);
+extern int  kibnal_reaper (void *arg);
 extern void kibnal_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg);
 extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
 extern int  kibnal_close_conn (kib_conn_t *conn, int why);

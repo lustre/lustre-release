@@ -86,6 +86,8 @@
 /* default vals for runtime tunables */
 #define RANAL_TIMEOUT           30              /* comms timeout (seconds) */
 #define RANAL_LISTENER_TIMEOUT   5              /* listener timeout (seconds) */
+#define RANAL_BACKLOG          127              /* listener's backlog */
+#define RANAL_PORT             988              /* listener's port */
 #define RANAL_MAX_IMMEDIATE    (2<<10)          /* immediate payload breakpoint */
 
 typedef struct 
@@ -465,18 +467,19 @@ kranal_page2phys (struct page *p)
 # error "no page->phys"
 #endif
 
-extern int kranal_listener_procint(ctl_table *table, 
-                                   int write, struct file *filp, 
-                                   void *buffer, size_t *lenp);
-extern void kranal_update_reaper_timeout(long timeout);
+extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
+extern int kranal_listener_procint (ctl_table *table, 
+                                    int write, struct file *filp, 
+                                    void *buffer, size_t *lenp);
+extern void kranal_update_reaper_timeout (long timeout);
 extern void kranal_tx_done (kra_tx_t *tx, int completion);
 extern void kranal_unlink_peer_locked (kra_peer_t *peer);
-extern void kranal_schedule_conn(kra_conn_t *conn);
+extern void kranal_schedule_conn (kra_conn_t *conn);
 extern kra_peer_t *kranal_create_peer (ptl_nid_t nid);
 extern kra_peer_t *kranal_find_peer_locked (ptl_nid_t nid);
 extern void kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx);
 extern int kranal_del_peer (ptl_nid_t nid, int single_share);
-extern void kranal_device_callback(RAP_INT32 devid);
+extern void kranal_device_callback (RAP_INT32 devid);
 extern int kranal_thread_start (int(*fn)(void *arg), void *arg);
 extern int kranal_connd (void *arg);
 extern int kranal_reaper (void *arg);

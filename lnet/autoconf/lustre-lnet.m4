@@ -151,7 +151,8 @@ AC_ARG_WITH([openib],
 if test $ENABLEOPENIB -eq 0; then
 	AC_MSG_RESULT([disabled])
 elif test ! \( -f ${OPENIBPATH}/include/ts_ib_core.h -a \
-               -f ${OPENIBPATH}/include/ts_ib_sa_client.h \); then
+               -f ${OPENIBPATH}/include/ts_ib_cm.h -a\
+	       -f ${OPENIBPATH}/include/ts_ib_sa_client.h \); then
 	AC_MSG_RESULT([no])
 	case $ENABLEOPENIB in
 	1) ;;
@@ -170,10 +171,12 @@ else
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $OPENIBCPPFLAGS"
 	LB_LINUX_TRY_COMPILE([
 		#include <ts_ib_core.h>
-		#include <ts_ib_sa_client.h>
+		#include <ts_ib_cm.h>
+	        #include <ts_ib_sa_client.h>
 	],[
-       	        struct ib_device_properties props;
-	        struct ib_common_attrib_services svc;
+       	        struct ib_device_properties dev_props;
+	        struct ib_cm_active_param   cm_active_params;
+	        tTS_IB_CLIENT_QUERY_TID     tid;
 		return 0;
 	],[
 		AC_MSG_RESULT([yes])

@@ -693,7 +693,7 @@ jt_ptl_print_peers (int argc, char **argv)
                                 ptl_ipaddr_2_str (pcfg.pcfg_size, buffer[0], 1),
                                 ptl_ipaddr_2_str (pcfg.pcfg_id, buffer[1], 1),
                                 pcfg.pcfg_misc, pcfg.pcfg_count);
-                else if (g_nal_is_compatible(NULL, RANAL, 0))
+                else if (g_nal_is_compatible(NULL, RANAL, OPENIBNAL, 0))
                         printf (LPX64"[%d]@%s:%d\n",
                                 pcfg.pcfg_nid, pcfg.pcfg_wait,
                                 ptl_ipaddr_2_str (pcfg.pcfg_id, buffer[1], 1),
@@ -721,14 +721,14 @@ jt_ptl_add_peer (int argc, char **argv)
                                   OPENIBNAL, IIBNAL, VIBNAL, 0))
                 return -1;
 
-        if (g_nal_is_compatible(NULL, SOCKNAL, RANAL, 0)) {
+        if (g_nal_is_compatible(NULL, SOCKNAL, OPENIBNAL, RANAL, 0)) {
                 if (argc != 4) {
-                        fprintf (stderr, "usage(tcp,ra): %s nid ipaddr port\n", 
+                        fprintf (stderr, "usage(tcp,openib,ra): %s nid ipaddr port\n", 
                                  argv[0]);
                         return 0;
                 }
         } else if (argc != 2) {
-                fprintf (stderr, "usage(openib,iib,vib): %s nid\n", argv[0]);
+                fprintf (stderr, "usage(iib,vib): %s nid\n", argv[0]);
                 return 0;
         }
 
@@ -738,7 +738,7 @@ jt_ptl_add_peer (int argc, char **argv)
                 return -1;
         }
 
-        if (g_nal_is_compatible (NULL, SOCKNAL, RANAL, 0)) {
+        if (g_nal_is_compatible (NULL, SOCKNAL, OPENIBNAL, RANAL, 0)) {
                 if (ptl_parse_ipaddr (&ip, argv[2]) != 0) {
                         fprintf (stderr, "Can't parse ip addr: %s\n", argv[2]);
                         return -1;
