@@ -431,7 +431,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 GOTO(out, rc);
 
         /* lctl gets a backstage, all-access pass. */
-        if (obd_uuid_equals(&cluuid, &lctl_fake_uuid))
+        if (obd_uuid_equals(&cluuid, &target->obd_uuid))
                 goto dont_check_exports;
 
         spin_lock(&target->obd_dev_lock);
