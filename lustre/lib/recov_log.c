@@ -74,15 +74,17 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
 
         LASSERT(sizeof(*loh) == LLOG_CHUNK_SIZE);
 
-        loghandle = cathandle->lgh_log_create(cathandle, oti);
+        loghandle = cathandle->lgh_log_create(cathandle->lgh_obd, oti);
         if (IS_ERR(loghandle))
                 RETURN(loghandle);
 
         OBD_ALLOC(loh, sizeof(*loh));
         if (!loh)
                 GOTO(out_handle, rc = -ENOMEM);
-        loh->loh_magic = LLOG_OBJECT_MAGIC;
-        loh->loh_hdr_size = loh->loh_hdr_size_end = sizeof(*loh);
+        loh->loh_hdr.lth_op = LLOG_OBJECT_MAGIC;
+        loh->loh_hdr.lth_len = loh->loh_hdr_end_len = sizeof(*loh);
+        loh->loh_timestamp = CURRENT_TIME;
+        loh->loh_bitmap_offset = offsetof(struct llog_object_hdr, loh_bitmap);
         loghandle->lgh_hdr = loh;
 
         lch = cathandle->lgh_hdr;
@@ -103,7 +105,7 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
 
         CDEBUG(D_HA, "new recovery log "LPX64":%x catalog index %u\n",
                loghandle->lgh_cookie.lgc_lgl.lgl_oid,
-               loghandle->lgh_cookie.lgc_lgl.lgl_ogener, index);
+               loghandle->lgh_cookie.lgc_lgl.lgl_ogen, index);
         loghandle->lgh_cookie.lgc_index = index;
 
         offset = sizeof(*lch) + index * sizeof(loghandle->lgh_cookie);
@@ -131,10 +133,6 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
                         rc = rc < 0 ? : -ENOSPC;
                 }
         }
-        loghandle->lgh_log_create = cathandle->lgh_log_create;
-        loghandle->lgh_log_open = cathandle->lgh_log_open;
-        loghandle->lgh_log_close = cathandle->lgh_log_close;
-        loghandle->lgh_obd = cathandle->lgh_obd;
         list_add_tail(&loghandle->lgh_list, &cathandle->lgh_list);
 
         RETURN(loghandle);
@@ -163,8 +161,11 @@ int llog_init_catalog(struct llog_handle *cathandle)
         cathandle->lgh_hdr = lch;
 
         if (file->f_dentry->d_inode->i_size == 0) {
-write_hdr:      lch->lch_magic = LLOG_CATALOG_MAGIC;
-                lch->lch_hdr_size = lch->lch_hdr_size_end = LLOG_CHUNK_SIZE;
+write_hdr:      lch->lch_hdr.lth_op = LLOG_CATALOG_MAGIC;
+                lch->lch_hdr.lth_len = lch->lch_hdr_end_len = LLOG_CHUNK_SIZE;
+                lch->lch_timestamp = CURRENT_TIME;
+                lch->lch_bitmap_offset = offsetof(struct llog_catalog_hdr,
+                                                  lch_bitmap);
                 rc = lustre_fwrite(file, lch, sizeof(*lch), &offset);
                 if (rc != sizeof(*lch)) {
                         CERROR("error writing catalog header: rc %d\n", rc);
@@ -206,7 +207,7 @@ struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
                 loghandle = list_entry(loglist->prev, struct llog_handle,
                                        lgh_list);
                 loh = loghandle->lgh_hdr;
-                if (loh->loh_numrec < sizeof(loh->loh_bitmap) * sizeof(__u32))
+                if (loh->loh_numrec < sizeof(loh->loh_bitmap) * 8)
                         RETURN(loghandle);
         }
 
@@ -227,11 +228,12 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
         int reclen = rec->lth_len;
         struct file *file;
         loff_t offset;
-        int left;
+        size_t left;
         int index;
         int rc;
         ENTRY;
 
+        LASSERT(rec->lth_len <= LLOG_CHUNK_SIZE);
         loghandle = llog_current_log(cathandle, reclen, oti);
         if (IS_ERR(loghandle))
                 RETURN(PTR_ERR(loghandle));
@@ -250,16 +252,33 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
         if (left != 0 && left != reclen && left < reclen + LLOG_MIN_REC_SIZE) {
                 struct llog_null_trans {
                         struct llog_trans_hdr hdr;
-                        __u32 padding;
-                        __u32 end_len;
-                } pad = { .hdr = { .lth_len = sizeof(pad) },
-                          .end_len = sizeof(pad) };
+                        __u32 padding[6];
+                } pad = { .hdr = { .lth_len = left } };
 
-                rc = lustre_fwrite(loghandle->lgh_file, &pad, sizeof(pad),
+                LASSERT(left >= LLOG_MIN_REC_SIZE);
+                if (left <= sizeof(pad))
+                        *(__u32 *)((char *)&pad + left - sizeof(__u32)) = left;
+
+                rc = lustre_fwrite(loghandle->lgh_file, &pad,
+                                   min(sizeof(pad), left),
                                    &loghandle->lgh_file->f_pos);
-                if (rc != sizeof(pad)) {
+                if (rc != min(sizeof(pad), left)) {
                         CERROR("error writing padding record: rc %d\n", rc);
                         RETURN(rc < 0 ? rc : -EIO);
+                }
+
+                left -= rc;
+                if (left) {
+                        LASSERT(left >= sizeof(__u32));
+                        loghandle->lgh_file->f_pos += left - sizeof(__u32);
+                        rc = lustre_fwrite(loghandle->lgh_file, &pad,
+                                           sizeof(__u32),
+                                           &loghandle->lgh_file->f_pos);
+                        if (rc != sizeof(__u32)) {
+                                CERROR("error writing padding end: rc %d\n",
+                                       rc);
+                                RETURN(rc < 0 ? rc : -EIO);
+                        }
                 }
 
                 loghandle->lgh_index++;
@@ -306,27 +325,22 @@ struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
         list_for_each_entry(loghandle, &cathandle->lgh_list, lgh_list) {
                 struct llog_logid *cgl = &loghandle->lgh_cookie.lgc_lgl;
                 if (cgl->lgl_oid == lgl->lgl_oid) {
-                        if (cgl->lgl_ogener != lgl->lgl_ogener) {
+                        if (cgl->lgl_ogen != lgl->lgl_ogen) {
                                 CERROR("log "LPX64" generation %x != %x\n",
-                                       lgl->lgl_oid,
-                                       cgl->lgl_ogener, lgl->lgl_ogener);
+                                       lgl->lgl_oid, cgl->lgl_ogen,
+                                       lgl->lgl_ogen);
                                 continue;
                         }
                         RETURN(loghandle);
                 }
         }
 
-        loghandle = cathandle->lgh_log_open(cathandle, logcookie);
-        if (IS_ERR(loghandle)) {
+        loghandle = cathandle->lgh_log_open(cathandle->lgh_obd, logcookie);
+        if (IS_ERR(loghandle))
                 CERROR("error opening log id "LPX64":%x: rc %d\n",
-                       lgl->lgl_oid, lgl->lgl_ogener, (int)PTR_ERR(loghandle));
-        } else {
-                loghandle->lgh_log_create = cathandle->lgh_log_create;
-                loghandle->lgh_log_open = cathandle->lgh_log_open;
-                loghandle->lgh_log_close = cathandle->lgh_log_close;
-                loghandle->lgh_obd = cathandle->lgh_obd;
+                       lgl->lgl_oid, lgl->lgl_ogen, (int)PTR_ERR(loghandle));
+        else
                 list_add(&loghandle->lgh_list, &cathandle->lgh_list);
-        }
 
         RETURN(loghandle);
 }
@@ -366,15 +380,14 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
                         ext2_test_bit(cookies->lgc_index, loh->loh_bitmap));
                 if (!ext2_clear_bit(cookies->lgc_index, loh->loh_bitmap)) {
                         CERROR("log index %u in "LPX64":%x already clear?\n",
-                               cookies->lgc_index, lgl->lgl_oid,
-                               lgl->lgl_ogener);
+                               cookies->lgc_index, lgl->lgl_oid, lgl->lgl_ogen);
                 } else if (--loh->loh_numrec == 0 &&
                            loghandle != llog_current_log(cathandle, 0, NULL)) {
                         int catindex = loghandle->lgh_cookie.lgc_index;
                         loff_t offset = 0;
 
                         CDEBUG(D_HA, "log "LPX64":%x empty, closing\n",
-                               lgl->lgl_oid, lgl->lgl_ogener);
+                               lgl->lgl_oid, lgl->lgl_ogen);
                         if (ext2_clear_bit(catindex, lch->lch_bitmap)) {
                                 CERROR("catalog index %u already clear?\n",
                                         catindex);
@@ -390,7 +403,7 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
                                                 rc = ret;
                                 }
                         }
-                        loghandle->lgh_log_close(cathandle, loghandle);
+                        loghandle->lgh_log_close(loghandle);
                 } else {
                         loff_t offset = 0;
                         int ret = lustre_fwrite(loghandle->lgh_file, loh,

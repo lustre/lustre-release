@@ -46,12 +46,11 @@ struct llog_handle {
         struct obd_device      *lgh_obd;
         void                   *lgh_hdr;
         struct file            *lgh_file;
-        struct llog_handle     *(*lgh_log_create)(struct llog_handle *loghandle,
+        struct llog_handle     *(*lgh_log_create)(struct obd_device *obd,
                                                   struct obd_trans_info *oti);
-        struct llog_handle     *(*lgh_log_open)(struct llog_handle *cathandle,
+        struct llog_handle     *(*lgh_log_open)(struct obd_device *obd,
                                                 struct llog_cookie *logcookie);
-        int                     (*lgh_log_close)(struct llog_handle *cathandle,
-                                                 struct llog_handle *loghandle);
+        int                     (*lgh_log_close)(struct llog_handle *loghandle);
         int                     lgh_index;
 };
 
