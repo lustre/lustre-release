@@ -263,6 +263,12 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define ll_vfs_symlink(dir, dentry, path, mode) vfs_symlink(dir, dentry, path, mode)
 #endif
 
+#ifndef container_of
+#define container_of(ptr, type, member) ({                      \
+                const typeof( ((type *)0)->member ) *__mptr = (ptr); \
+                (type *)( (char *)__mptr - offsetof(type,member) );})
+#endif
+
 #ifdef HAVE_I_ALLOC_SEM
 #define UP_WRITE_I_ALLOC_SEM(i) do { up_write(&(i)->i_alloc_sem); } while (0)
 #define DOWN_WRITE_I_ALLOC_SEM(i) do { down_write(&(i)->i_alloc_sem); } while(0)

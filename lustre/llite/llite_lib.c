@@ -236,14 +236,12 @@ void lustre_common_put_super(struct super_block *sb)
         obd_disconnect(sbi->ll_mdc_exp, 0);
 
         // We do this to get rid of orphaned dentries. That is not really trw.
-        spin_lock(&dcache_lock);
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
-                CWARN("orphan dentry %*s (%p) at unmount\n",
-                      dentry->d_name.len, dentry->d_name.name, dentry);
+                CWARN("orphan dentry %*s (%p->%p) at unmount\n",
+                      dentry->d_name.len, dentry->d_name.name, dentry, next);
                 shrink_dcache_parent(dentry);
         }
-        spin_unlock(&dcache_lock);
         EXIT;
 }
 
@@ -324,6 +322,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
+        lli->lli_inode_magic = LLI_INODE_MAGIC;
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
@@ -713,23 +712,31 @@ void lustre_put_super(struct super_block *sb)
 
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
-        struct inode *inode;
+        struct inode *inode = NULL;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_ast_data)
-                inode = igrab(lock->l_ast_data);
-        else
-                inode = NULL;
+        if (lock->l_ast_data) {
+                struct ll_inode_info *lli = ll_i2info(lock->l_ast_data);
+                if (lli->lli_inode_magic == LLI_INODE_MAGIC) {
+                        inode = igrab(lock->l_ast_data);
+                } else {
+                        inode = lock->l_ast_data;
+                        CDEBUG(inode->i_state & I_FREEING ? D_INFO : D_WARNING,
+                               "l_ast_data %p is bogus: magic %0x8\n",
+                               lock->l_ast_data, lli->lli_inode_magic);
+                        inode = NULL;
+                }
+        }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return inode;
 }
 
 static int null_if_equal(struct ldlm_lock *lock, void *data)
 {
-        if (data == lock->l_ast_data)
+        if (data == lock->l_ast_data) {
                 lock->l_ast_data = NULL;
 
-        if (lock->l_req_mode != lock->l_granted_mode)
-                return LDLM_ITER_STOP;
+                if (lock->l_req_mode != lock->l_granted_mode)
+                        LDLM_ERROR(lock,"clearing inode with ungranted lock\n");        }
 
         return LDLM_ITER_CONTINUE;
 }
@@ -762,6 +769,7 @@ void ll_clear_inode(struct inode *inode)
                          strlen(lli->lli_symlink_name) + 1);
                 lli->lli_symlink_name = NULL;
         }
+        lli->lli_inode_magic = LLI_INODE_DEAD;
 
         EXIT;
 }

@@ -56,7 +56,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         ENTRY;
 
         llh = cathandle->lgh_hdr;
-        bitmap_size = sizeof(llh->llh_bitmap) * 8;
+        bitmap_size = LLOG_BITMAP_SIZE(llh);
 
         index = (cathandle->lgh_last_idx + 1) % bitmap_size;
 
@@ -209,10 +209,12 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap)*8) - 1) {
-                        down_write(&loghandle->lgh_lock);
+                down_write(&loghandle->lgh_lock);
+                if (loghandle->lgh_last_idx < LLOG_BITMAP_SIZE(llh) - 1) {
                         up_read(&cathandle->lgh_lock);
                         RETURN(loghandle);
+                } else {
+                        up_write(&loghandle->lgh_lock);
                 }
         }
         if (!create) {
@@ -230,10 +232,12 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap)*8) - 1) {
-                        down_write(&loghandle->lgh_lock);
+                down_write(&loghandle->lgh_lock);
+                if (loghandle->lgh_last_idx < LLOG_BITMAP_SIZE(llh) - 1) {
                         up_write(&cathandle->lgh_lock);
                         RETURN(loghandle);
+                } else {
+                        up_write(&loghandle->lgh_lock);
                 }
         }
 
@@ -394,7 +398,7 @@ int llog_cat_set_first_idx(struct llog_handle *cathandle, int index)
         int i, bitmap_size, idx;
         ENTRY;
 
-        bitmap_size = sizeof(llh->llh_bitmap) * 8;
+        bitmap_size = LLOG_BITMAP_SIZE(llh);
         if (llh->llh_cat_idx == (index - 1)) {
                 idx = llh->llh_cat_idx + 1;
                 llh->llh_cat_idx = idx;

@@ -46,6 +46,7 @@
 /* OBD Device Declarations */
 #define MAX_OBD_DEVICES 256
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
+extern spinlock_t obd_dev_lock;
 
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
@@ -56,7 +57,8 @@ struct obd_export *class_conn2export(struct lustre_handle *);
 int class_register_type(struct obd_ops *ops, struct lprocfs_vars *, char *nm);
 int class_unregister_type(char *nm);
 
-struct obd_device *class_newdev(int *dev);
+struct obd_device *class_newdev(struct obd_type *type);
+void class_release_dev(struct obd_device *obd);
 
 int class_name2dev(char *name);
 struct obd_device *class_name2obd(char *name);

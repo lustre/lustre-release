@@ -1048,14 +1048,8 @@ target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
 
         if (rc) {
                 DEBUG_REQ(D_ERROR, req, "processing error (%d)", rc);
-                if (req->rq_reply_state == NULL) {
-                        rc = lustre_pack_reply (req, 0, NULL, NULL);
-                        if (rc != 0) {
-                                CERROR ("can't allocate reply\n");
-                                return (rc);
-                        }
-                }
-                req->rq_type = PTL_RPC_MSG_ERR;
+                req->rq_status = rc;
+                return (ptlrpc_error(req));
         } else {
                 DEBUG_REQ(D_NET, req, "sending reply");
         }

@@ -222,6 +222,32 @@ void ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
         data->mod_time = LTIME_S(CURRENT_TIME);
 }
 
+static void ll_d_add(struct dentry *de, struct inode *inode)
+{
+        CDEBUG(D_DENTRY, "adding inode %p to dentry %p\n", inode, de);
+        /* d_instantiate */
+        if (!list_empty(&de->d_alias)) {
+                spin_unlock(&dcache_lock);
+                CERROR("dentry %*s %p alias next %p, prev %p\n",
+                       de->d_name.len, de->d_name.name, de,
+                       de->d_alias.next, de->d_alias.prev);
+                LBUG();
+        }
+        if (inode)
+                list_add(&de->d_alias, &inode->i_dentry);
+        de->d_inode = inode;
+
+        /* d_rehash */
+        if (!list_empty(&de->d_hash)) {
+                spin_unlock(&dcache_lock);
+                CERROR("dentry %*s %p hash next %p, prev %p\n",
+                       de->d_name.len, de->d_name.name, de,
+                       de->d_hash.next, de->d_hash.prev);
+                LBUG();
+        }
+        __d_rehash(de, 0);
+}
+
 /* Search "inode"'s alias list for a dentry that has the same name and parent as
  * de.  If found, return it.  If not found, return de. */
 struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
@@ -253,15 +279,17 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 
                 hlist_del_init(&dentry->d_hash);
                 __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
-                spin_unlock(&dcache_lock);
-                atomic_inc(&dentry->d_count);
-                iput(inode);
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                atomic_inc(&dentry->d_count);
+                spin_unlock(&dcache_lock);
+                iput(inode);
                 CDEBUG(D_DENTRY, "alias dentry %*s (%p) parent %p inode %p "
                        "refc %d\n", de->d_name.len, de->d_name.name, de,
                        de->d_parent, de->d_inode, atomic_read(&de->d_count));
                 return dentry;
         }
+
+        ll_d_add(de, inode);
 
         spin_unlock(&dcache_lock);
 
@@ -275,7 +303,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         struct dentry **de = icbd->icbd_childp;
         struct inode *parent = icbd->icbd_parent;
         struct ll_sb_info *sbi = ll_i2sbi(parent);
-        struct dentry *dentry = *de, *saved = *de;
+        struct dentry *dentry = *de;
         struct inode *inode = NULL;
         int rc;
 
@@ -314,13 +342,13 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 dentry = *de = ll_find_alias(inode, dentry);
         } else {
                 ENTRY;
+                spin_lock(&dcache_lock);
+                ll_d_add(dentry, inode);
+                spin_unlock(&dcache_lock);
         }
 
-        dentry->d_op = &ll_d_ops;
         ll_set_dd(dentry);
-
-        if (dentry == saved)
-                d_add(dentry, inode);
+        dentry->d_op = &ll_d_ops;
 
         RETURN(0);
 }

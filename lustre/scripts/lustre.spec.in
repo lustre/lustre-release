@@ -145,24 +145,15 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/bin/mcreate
 %attr(-, root, root) /usr/bin/munlink
 %attr(-, root, root) /usr/bin/mkdirmany
-%attr(-, root, root) /usr/bin/iopentest1
-%attr(-, root, root) /usr/bin/iopentest2
-%attr(-, root, root) /usr/lib/lustre/python/*
-%attr(-, root, root) /usr/lib/lustre/examples/llmount.sh
-%attr(-, root, root) /usr/lib/lustre/examples/llmountcleanup.sh
-%attr(-, root, root) /usr/lib/lustre/examples/llecho.sh
-%attr(-, root, root) /usr/lib/lustre/examples/local.sh
-%attr(-, root, root) /usr/lib/lustre/examples/uml.sh
-%attr(-, root, root) /usr/lib/lustre/examples/lov.sh
-%attr(-, root, root) /usr/lib/lustre/examples/echo.sh
-%attr(-, root, root) /usr/lib/lustre/examples/llechocleanup.sh
+%attr(-, root, root) /usr/lib/lustre/python
+%attr(-, root, root) /usr/lib/lustre/examples
 
 %attr(-, root, root) /etc/init.d/lustre
 %attr(-, root, root) /etc/init.d/lustrefs
 %attr(-, root, root) /usr/lib/libptlctl.a
 %attr(-, root, root) /usr/lib/liblustreapi.a
-%attr(-, root, root) /usr/include/lustre/*.h
-%attr(-, root, root) /usr/include/portals/*.h
+%attr(-, root, root) /usr/include/lustre
+%attr(-, root, root) /usr/include/portals
 %attr(-, root, root) /usr/include/linux/lustre_idl.h
 
 %attr(-, root, root) /usr/share/man/man?/*
@@ -186,9 +177,9 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/*.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre
 #portals modules
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/*.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre
 
 %files -n lustre-source
 %attr(-, root, root) /usr/src/lustre-%{version}
@@ -196,12 +187,6 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 #%ifarch i386
 #%files -n liblustre
 #%attr(-, root, root) /lib/lustre
-#%attr(-, root, root) /lib/lustre/liblov.a
-#%attr(-, root, root) /lib/lustre/liblustreclass.a
-#%attr(-, root, root) /lib/lustre/libptlrpc.a
-#%attr(-, root, root) /lib/lustre/libobdecho.a
-#%attr(-, root, root) /lib/lustre/libldlm.a
-#%attr(-, root, root) /lib/lustre/libosc.a
 #%attr(-, root, root) /usr/sbin/lctl
 #%attr(-, root, root) /usr/sbin/lfind
 #%attr(-, root, root) /usr/sbin/lstripe
@@ -223,6 +208,16 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 #%dir /var/lib/ldap/lustre
 %attr(700, ldap, ldap) /var/lib/ldap/lustre
 
+%post
+/sbin/chkconfig --add lustre
+/sbin/chkconfig --add lustrefs
+
+%preun
+if [ $1 = 0 ]; then
+  /sbin/chkconfig --del lustre
+  /sbin/chkconfig --del lustrefs
+fi
+
 %post -n lustre-modules
 if [ ! -e /dev/obd ]; then
    mknod /dev/obd c 10 241
@@ -230,15 +225,7 @@ fi
 if [ ! -e /dev/portals ]; then
    mknod /dev/portals c 10 240
 fi
-/sbin/chkconfig --add lustre
-/sbin/chkconfig --add lustrefs
 depmod -ae || exit 0
-
-%preun
-if [ $1 = 0 ]; then
-  /sbin/chkconfig --del lustre
-  /sbin/chkconfig --del lustrefs
-fi
 
 %postun -n lustre-modules
 depmod -ae || exit 0

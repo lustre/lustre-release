@@ -229,7 +229,7 @@ static void lock_handle_addref(void *lock)
  * usage: pass in a resource on which you have done ldlm_resource_get
  *        pass in a parent lock on which you have done a ldlm_lock_get
  *        after return, ldlm_*_put the resource and parent
- * returns: lock with refcount 1
+ * returns: lock with refcount 2 - one for current caller and one for remote
  */
 static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                                        struct ldlm_resource *resource)
@@ -851,7 +851,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
 
         policy = ldlm_processing_policy_table[res->lr_type];
         policy(lock, flags, 1, &rc);
-        EXIT;
+        GOTO(out, rc);
 out:
         l_unlock(&ns->ns_lock);
         return rc;

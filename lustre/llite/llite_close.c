@@ -85,7 +85,7 @@ void ll_try_done_writing(struct inode *inode)
                 if (list_empty(&lli->lli_close_item)) {
                         CDEBUG(D_INODE, "adding inode %lu/%u to close list\n",
                                inode->i_ino, inode->i_generation);
-                        LASSERT(igrab(inode) == inode);
+                        igrab(inode);
                         list_add_tail(&lli->lli_close_item, &lcq->lcq_list);
                         wake_up(&lcq->lcq_waitq);
                 }

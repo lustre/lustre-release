@@ -985,7 +985,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                  * EINTR.
                  * I don't really care if we go once more round the loop in
                  * the error cases -eeb. */
-        } while (rc != 0);
+        } while (rc != 0 || set->set_remaining != 0);
 
         LASSERT(set->set_remaining == 0);
 

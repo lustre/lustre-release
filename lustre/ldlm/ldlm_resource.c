@@ -455,10 +455,8 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         struct ldlm_resource *res;
         ENTRY;
 
-        if (type < LDLM_MIN_TYPE || type > LDLM_MAX_TYPE) {
-                LBUG();
-                RETURN(NULL);
-        }
+        LASSERTF(type >= LDLM_MIN_TYPE && type <= LDLM_MAX_TYPE,
+                 "type: %d", type);
 
         res = ldlm_resource_new();
         if (!res) {

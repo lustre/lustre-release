@@ -191,7 +191,7 @@ struct llog_ctxt {
         struct llog_operations  *loc_logops;
         struct llog_handle      *loc_handle;
         struct llog_canceld_ctxt *loc_llcd;
-        struct semaphore         loc_sem; /* protects loc_llcd */
+        struct semaphore         loc_sem; /* protects loc_llcd and loc_imp */
         void                    *llog_proc_cb;
 };
 

@@ -264,18 +264,18 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         /* NOTE: padding is a record, but no bit is set */
         if (left != 0 && left != reclen &&
             left < (reclen + LLOG_MIN_REC_SIZE)) {
-                int bitmap_size = sizeof(llh->llh_bitmap) * 8;
                 loghandle->lgh_last_idx++;
                 rc = llog_lvfs_pad(obd, file, left, loghandle->lgh_last_idx);
                 if (rc)
                         RETURN(rc);
                 /* if it's the last idx in log file, then return -ENOSPC */
-                if (loghandle->lgh_last_idx == bitmap_size - 1)
+                if (loghandle->lgh_last_idx == LLOG_BITMAP_SIZE(llh) - 1)
                         RETURN(-ENOSPC);
         }
 
         loghandle->lgh_last_idx++;
         index = loghandle->lgh_last_idx;
+        LASSERT(index < LLOG_BITMAP_SIZE(llh));
         rec->lrh_index = index;
         if (buf == NULL) {
                 lrt = (struct llog_rec_tail *)

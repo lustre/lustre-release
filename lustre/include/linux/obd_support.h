@@ -120,6 +120,8 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 #define OBD_FAIL_LDLM_ENQUEUE_INTENT_ERR 0x309
 #define OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
+#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
+#define OBD_FAIL_LDLM_REPLY              0x30c
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
@@ -140,6 +142,8 @@ extern wait_queue_head_t obd_race_waitq;
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701
+
+#define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

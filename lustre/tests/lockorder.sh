@@ -7,7 +7,7 @@ STATMANY=${STATMANY:-statmany}
 UNLINKMANY=${UNLINKMANY:-unlinkmany}
 LCTL=${LCTL:-lctl}
 
-MOUNT1=${MOUNT1:-/mnt/lustre1}
+MOUNT1=${MOUNT1:-/mnt/lustre}
 MOUNT2=${MOUNT2:-/mnt/lustre2}
 DIR=${DIR:-$MOUNT1}
 DIR2=${DIR2:-$MOUNT2}
@@ -46,7 +46,7 @@ while [ $MINRES -gt $MAXRES ]; do
 		MINFILE=$FILETMP
 		MINRES=$FILERES
 	else
-		rm $TMPFILE
+		rm $FILETMP
 	fi
 	NUM=$(($NUM + 1))
 done
@@ -60,7 +60,9 @@ $LCTL mark "start dir: $LOCKDIR=$MAXRES file: $LOCKFILE=$MINRES"
 $CREATEMANY -l$LOCKFILE $LOCKFILE -$COUNT &
 CR_PID=$!
 
-sleep 1
+while ! test -f ${LOCKFILE}1 ; do
+	sleep 1
+done
 
 # this will lock $DIR and ${LOCKFILE}0
 $STATMANY -s $DIR2/lockdir/lockfile 1 -$COUNT &

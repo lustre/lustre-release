@@ -96,3 +96,21 @@ else
 	LIBEFENCE=""
 fi
 AC_SUBST(LIBEFENCE)
+
+# -------- enable acceptor libwrap (TCP wrappers) support? -------
+AC_MSG_CHECKING([if libwrap support is requested])
+AC_ARG_ENABLE([libwrap],
+	AC_HELP_STRING([--enable-libwrap], [use TCP wrappers]),
+	[case "${enableval}" in
+		yes) enable_libwrap=yes ;;
+		no) enable_libwrap=no ;;
+		*) AC_MSG_ERROR(bad value ${enableval} for --enable-libwrap) ;;
+	esac],[enable_libwrap=no])
+AC_MSG_RESULT([$enable_libwrap])
+if test x$enable_libwrap = xyes ; then
+	LIBWRAP="-lwrap"
+	AC_DEFINE(HAVE_LIBWRAP, 1, [libwrap support is requested])
+else
+	LIBWRAP=""
+fi
+AC_SUBST(LIBWRAP)

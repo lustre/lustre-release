@@ -77,7 +77,8 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         }
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
-        LASSERT(ctxt != NULL);
+        if (ctxt == NULL)
+                GOTO(out, rc = -EINVAL);
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
 
@@ -131,7 +132,8 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
-        LASSERT(ctxt != NULL);
+        if (ctxt == NULL)
+                GOTO(out, rc = -EINVAL);
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
 
@@ -197,7 +199,8 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         }
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
-        LASSERT(ctxt != NULL);
+        if (ctxt == NULL)
+                GOTO(out, rc = -EINVAL);
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
 

@@ -1137,7 +1137,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
 
         fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
 
-        CDEBUG(D_ERROR, "pending destroy of %dx open %d linked %s %s = %s\n",
+        CDEBUG(D_INODE, "pending destroy of %dx open %d linked %s %s = %s\n",
                mds_orphan_open_count(inode), inode->i_nlink,
                S_ISDIR(inode->i_mode) ? "dir" :
                 S_ISREG(inode->i_mode) ? "file" : "other",rec->ur_name,fidname);
@@ -1717,6 +1717,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct lustre_handle dlm_handles[4];
         struct mds_body *body = NULL;
+        struct lov_mds_md *lmm = NULL;
         int rc = 0, lock_count = 3, cleanup_phase = 0;
         void *handle = NULL;
         ENTRY;
@@ -1791,12 +1792,17 @@ no_unlink:
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
         /* Check if we are moving old entry into its child. 2.6 does not
            check for this in vfs_rename() anymore */
         if (is_subdir(de_new, de_old))
                 GOTO(cleanup, rc = -EINVAL);
+#endif
 
-        handle = fsfilt_start(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME, NULL);
+        lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
+        handle = fsfilt_start_log(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME,
+                                  NULL, le32_to_cpu(lmm->lmm_stripe_count));
+
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 

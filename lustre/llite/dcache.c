@@ -49,6 +49,35 @@ static void ll_release(struct dentry *de)
         EXIT;
 }
 
+/* Compare if two dentries are the same.  Don't match if the existing dentry
+ * is marked DCACHE_LUSTRE_INVALID.  Returns 1 if different, 0 if the same.
+ *
+ * This avoids a race where ll_lookup_it() instantiates a dentry, but we get
+ * an AST before calling d_revalidate_it().  The dentry still exists (marked
+ * INVALID) so d_lookup() matches it, but we have no lock on it (so
+ * lock_match() fails) and we spin around real_lookup(). */
+static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
+                       struct qstr *name)
+{
+        struct dentry *dchild;
+        ENTRY;
+
+        if (d_name->len != name->len)
+                RETURN(1);
+
+        if (memcmp(d_name->name, name->name, name->len))
+                RETURN(1);
+
+        dchild = container_of(d_name, struct dentry, d_name); /* ugh */
+        if (dchild->d_flags & DCACHE_LUSTRE_INVALID) {
+                CDEBUG(D_DENTRY,"INVALID dentry %p not matched, was bug 3784\n",
+                       dchild);
+                RETURN(1);
+        }
+
+        RETURN(0);
+}
+
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static int ll_ddelete(struct dentry *de)
 {
@@ -153,8 +182,6 @@ restart:
         EXIT;
 }
 
-extern struct dentry *ll_find_alias(struct inode *, struct dentry *);
-
 static int revalidate_it_finish(struct ptlrpc_request *request, int offset,
                                 struct lookup_intent *it,
                                 struct dentry *de)
@@ -245,6 +272,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
         if (d_mountpoint(de))
                 RETURN(1);
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
 
@@ -405,6 +433,7 @@ struct dentry_operations ll_d_ops = {
 #endif
         .d_release = ll_release,
         .d_delete = ll_ddelete,
+        .d_compare = ll_dcompare,
 #if 0
         .d_pin = ll_pin,
         .d_unpin = ll_unpin,

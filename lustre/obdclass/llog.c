@@ -103,17 +103,23 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
             (llh->llh_count == 1) &&
             (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
                 rc = llog_destroy(loghandle);
-                if (rc)
+                if (rc) {
                         CERROR("failure destroying log after last cancel: %d\n",
                                rc);
-                LASSERT(rc == 0);
-                RETURN(1);
+                        ext2_set_bit(index, llh->llh_bitmap);
+                        llh->llh_count++;
+                } else {
+                        rc = 1;
+                }
+                RETURN(rc);
         }
 
         rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
-        if (rc)
+        if (rc) {
                 CERROR("failure re-writing header %d\n", rc);
-        LASSERT(rc == 0);
+                ext2_set_bit(index, llh->llh_bitmap);
+                llh->llh_count++;
+        }
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cancel_rec);

@@ -962,5 +962,20 @@ test_49() {
 }
 run_test 49 "Double OSC recovery, don't LASSERT"
 
+# b3764 timed out lock replay
+test_52() {
+    touch $DIR/$tfile
+    cancel_lru_locks MDC
+
+    multiop $DIR/$tfile s
+    replay_barrier mds
+    do_facet mds "sysctl -w lustre.fail_loc=0x8000030c"
+    fail mds
+    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
+}
+run_test 52 "time out lock replay (3764)"
+
 equals_msg test complete, cleaning up
 $CLEANUP

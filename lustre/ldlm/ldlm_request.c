@@ -896,6 +896,10 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);
  out:
+        if (rc != ELDLM_OK)
+                ptlrpc_connect_import(req->rq_import, NULL);
+
+
         RETURN(rc);
 }
 

@@ -138,11 +138,13 @@ Index: linux-2.4.24/fs/ext3/super.c
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -407,6 +529,7 @@
+@@ -407,6 +529,9 @@
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
++#ifdef EXT3_DELETE_THREAD
 +	J_ASSERT(sbi->s_delete_inodes == 0);
++#endif
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
@@ -335,10 +337,11 @@ Index: linux-2.4.24/fs/ext3/namei.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/namei.c	2004-01-12 20:36:31.000000000 +0300
 +++ linux-2.4.24/fs/ext3/namei.c	2004-01-12 20:36:32.000000000 +0300
-@@ -1936,6 +1936,36 @@
+@@ -1936,6 +1936,40 @@
  	return retval;
  }
  
++#ifdef EXT3_DELETE_THREAD
 +static int ext3_try_to_delay_deletion(struct inode *inode)
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(inode->i_sb);
@@ -368,6 +371,9 @@ Index: linux-2.4.24/fs/ext3/namei.c
 +
 +	return 0;
 +}
++#else
++#define ext3_try_to_delay_deletion(inode) do {} while (0)
++#endif
 +
  static int ext3_unlink(struct inode * dir, struct dentry *dentry)
  {

@@ -10,7 +10,7 @@ LMC="${LMC:-lmc} -m $config"
 TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
-MDSSIZE=${MDSSIZE:-100000}
+MDSSIZE=${MDSSIZE:-400000}
 FSTYPE=${FSTYPE:-ext3}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}

@@ -2913,7 +2913,7 @@ static int osc_import_event(struct obd_device *obd,
                 /* Only do this on the MDS OSC's */
                 if (imp->imp_server_timeout) {
                         struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-                        
+
                         spin_lock(&oscc->oscc_lock);
                         oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                         spin_unlock(&oscc->oscc_lock);
@@ -2936,7 +2936,7 @@ static int osc_import_event(struct obd_device *obd,
                 /* all pages go to failing rpcs due to the invalid import */
                 osc_check_rpcs(cli);
                 spin_unlock(&cli->cl_loi_list_lock);
-                
+
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
                 break;

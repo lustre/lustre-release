@@ -176,21 +176,34 @@ int class_unregister_type(char *name)
         RETURN(0);
 } /* class_unregister_type */
 
-struct obd_device *class_newdev(int *dev)
+struct obd_device *class_newdev(struct obd_type *type)
 {
         struct obd_device *result = NULL;
         int i;
 
-        for (i = 0 ; i < MAX_OBD_DEVICES ; i++) {
+        spin_lock(&obd_dev_lock);
+        for (i = 0 ; i < MAX_OBD_DEVICES && result == NULL; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (!obd->obd_type) {
+                        LASSERT(obd->obd_minor == i);
+                        memset(obd, 0, sizeof(*obd));
+                        obd->obd_minor = i;
+                        obd->obd_type = type;
                         result = obd;
-                        if (dev)
-                                *dev = i;
-                        break;
                 }
         }
+        spin_unlock(&obd_dev_lock);
         return result;
+}
+
+void class_release_dev(struct obd_device *obd)
+{
+        int minor = obd->obd_minor;
+
+        spin_lock(&obd_dev_lock);
+        memset(obd, 0, sizeof(*obd));
+        obd->obd_minor = minor;
+        spin_unlock(&obd_dev_lock);
 }
 
 int class_name2dev(char *name)
@@ -200,11 +213,15 @@ int class_name2dev(char *name)
         if (!name)
                 return -1;
 
+        spin_lock(&obd_dev_lock);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_name && strcmp(name, obd->obd_name) == 0)
+                if (obd->obd_name && strcmp(name, obd->obd_name) == 0) {
+                        spin_unlock(&obd_dev_lock);
                         return i;
+                }
         }
+        spin_unlock(&obd_dev_lock);
 
         return -1;
 }
@@ -221,11 +238,15 @@ int class_uuid2dev(struct obd_uuid *uuid)
 {
         int i;
 
+        spin_lock(&obd_dev_lock);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (obd_uuid_equals(uuid, &obd->obd_uuid))
+                if (obd_uuid_equals(uuid, &obd->obd_uuid)) {
+                        spin_unlock(&obd_dev_lock);
                         return i;
+                }
         }
+        spin_unlock(&obd_dev_lock);
 
         return -1;
 }
@@ -247,6 +268,7 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 {
         int i;
 
+        spin_lock(&obd_dev_lock);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_type == NULL)
@@ -258,10 +280,12 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                         if (obd_uuid_equals(tgt_uuid, &imp->imp_target_uuid) &&
                             ((grp_uuid)? obd_uuid_equals(grp_uuid,
                                                          &obd->obd_uuid) : 1)) {
+                                spin_unlock(&obd_dev_lock);
                                 return obd;
                         }
                 }
         }
+        spin_unlock(&obd_dev_lock);
 
         return NULL;
 }
@@ -273,6 +297,7 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 {
         int i;
+
         if (next == NULL)
                 i = 0;
         else if (*next >= 0 && *next < MAX_OBD_DEVICES)
@@ -280,6 +305,7 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
         else
                 return NULL;
 
+        spin_lock(&obd_dev_lock);
         for (; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_type == NULL)
@@ -287,9 +313,11 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
                 if (obd_uuid_equals(grp_uuid, &obd->obd_uuid)) {
                         if (next != NULL)
                                 *next = i+1;
+                        spin_unlock(&obd_dev_lock);
                         return obd;
                 }
         }
+        spin_unlock(&obd_dev_lock);
 
         return NULL;
 }

@@ -98,6 +98,7 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
         save->ngroups = current_ngroups;
+        save->ouc.ouc_umask = current->fs->umask;
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -110,19 +111,18 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                 save->ouc.ouc_cap = current->cap_effective;
                 save->ouc.ouc_suppgid1 = current_groups[0];
                 save->ouc.ouc_suppgid2 = current_groups[1];
-                save->ouc.ouc_umask = current->fs->umask;
 
                 current->fsuid = uc->ouc_fsuid;
                 current->fsgid = uc->ouc_fsgid;
                 current->cap_effective = uc->ouc_cap;
                 current_ngroups = 0;
-                current->fs->umask = 0; /* umask already applied on client */
 
                 if (uc->ouc_suppgid1 != -1)
                         current_groups[current_ngroups++] = uc->ouc_suppgid1;
                 if (uc->ouc_suppgid2 != -1)
                         current_groups[current_ngroups++] = uc->ouc_suppgid2;
         }
+        current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);
         set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
 
@@ -166,6 +166,7 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
 
         dput(saved->pwd);
         mntput(saved->pwdmnt);
+        current->fs->umask = saved->ouc.ouc_umask;
         if (uc) {
                 current->fsuid = saved->ouc.ouc_fsuid;
                 current->fsgid = saved->ouc.ouc_fsgid;
@@ -173,7 +174,6 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
                 current_ngroups = saved->ngroups;
                 current_groups[0] = saved->ouc.ouc_suppgid1;
                 current_groups[1] = saved->ouc.ouc_suppgid2;
-                current->fs->umask = saved->ouc.ouc_umask;
         }
 
         /*
@@ -249,8 +249,12 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
 
         if (dchild->d_inode) {
                 int old_mode = dchild->d_inode->i_mode;
-                if (!S_ISDIR(old_mode))
+                if (!S_ISDIR(old_mode)) {
+                        CERROR("found %s (%lu/%u) is mode %o\n", name,
+                               dchild->d_inode->i_ino,
+                               dchild->d_inode->i_generation, old_mode);
                         GOTO(out_err, err = -ENOTDIR);
+                }
 
                 /* Fixup directory permissions if necessary */
                 if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {

@@ -582,8 +582,15 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
         LASSERT(req->rq_export);
-        lock->l_export = class_export_get(req->rq_export);
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        if (req->rq_export->exp_failed) {
+                LDLM_ERROR(lock,"lock on destroyed export %p\n",req->rq_export);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                GOTO(out, rc = -ENOTCONN);
+        }
+        lock->l_export = class_export_get(req->rq_export);
         list_add(&lock->l_export_chain,
                  &lock->l_export->exp_ldlm_data.led_held_locks);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -666,6 +673,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                                        size[1]);
                         }
                         up(&lock->l_resource->lr_lvb_sem);
+                } else {
+                        ldlm_lock_destroy(lock);
                 }
 
                 if (!err && dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
@@ -1116,7 +1125,8 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                                              lustre_swab_ldlm_request);
                 if (dlm_req != NULL)
                         ldlm_lock_dump_handle(D_ERROR, &dlm_req->lock_handle1);
-                RETURN(-ENOTCONN);
+                ldlm_callback_reply(req, -ENOTCONN);
+                RETURN(0);
         }
 
         switch (req->rq_reqmsg->opc) {
@@ -1132,7 +1142,7 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
 
         default:
                 CERROR("invalid opcode %d\n", req->rq_reqmsg->opc);
-                RETURN(-EINVAL);
+                ldlm_callback_reply(req, -EINVAL);
         }
 
         RETURN(0);

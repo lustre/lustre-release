@@ -97,7 +97,7 @@ if test x$enable_modules != xno ; then
 			BACKINGFS="ldiskfs"
 		],[
 			KMODEXT=".o"
-        		linux25="no"
+			linux25="no"
 		])
 	AC_MSG_CHECKING([if you are using Linux 2.6])
 	AC_MSG_RESULT([$linux25])
@@ -257,13 +257,13 @@ if test x$enable_modules != xno ; then
 	AC_MSG_RESULT([$LINUXRELEASE])
 	AC_SUBST(LINUXRELEASE)
 
-	moduledir='$(libdir)/modules/'$LINUXRELEASE/kernel
+	moduledir='/lib/modules/'$LINUXRELEASE/kernel
 	modulefsdir='$(moduledir)/fs/$(PACKAGE)'
-        modulenetdir='$(moduledir)/net/$(PACKAGE)'
+	modulenetdir='$(moduledir)/net/$(PACKAGE)'
 
 	AC_SUBST(moduledir)
 	AC_SUBST(modulefsdir)
-        AC_SUBST(modulenetdir)
+	AC_SUBST(modulenetdir)
 
 	# ------------ RELEASE --------------------------------
 	AC_MSG_CHECKING([for Lustre release])

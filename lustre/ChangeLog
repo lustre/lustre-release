@@ -1,4 +1,4 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2004-08-24  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.5
        * bug fixes
 	- don't close LustreDB during write_conf until it is done (3860)
@@ -7,7 +7,23 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't allow multiple threads in OSC recovery(3812)
 	- fix debug_size parameters (3864)
 	- fix mds_postrecov to initialize import for llog ctxt (3121)
+	- replace config semaphore with spinlock (3306)
+	- be sure to send a reply for a CANCEL rpc with bad export (3863)
+	- don't allow enqueue to complete on a destroyed export (3822)
+	- down write_lock before checking llog header bitmap (3825)
+	- recover from lock replay timeout (3764)
+	- up llog sem before sending rpc (3652)
 	- reduce ns lock hold times when setting kms (3267)
+	- change a dlm LBUG to LASSERTF, to maybe learn something (4228)
+	- fix NULL deref and obd_dev leak on setup error (3312)
+	- replace some LBUG about llog ops with error handling (3841)
+	- don't match INVALID dentries from d_lookup and spin (3784)
+	- hold dcache_lock while marking dentries INVALID and hashing (4255)
+       * miscellania
+	- add libwrap support for the TCP acceptor (3996)
+	- add /proc/sys/portals/routes for non-root route listing (3994)
+	- allow setting MDS UUID in .xml (2580)
+	- print the stack of a process that LBUGs (4228)
 
 2004-07-14  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.4
@@ -26,6 +42,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- return -ENOENT instead of asserting if ost getattr+unlink race (3558)
 	- avoid deadlock after precreation failure (3758)
 	- fix race and lock order deadlock in orphan handling (3450, 3750)
+	- add validity checks when grabbing inodes from l_ast_data (3599)
        * miscellania
 	- add /proc/.../recovery_status to obdfilter (3428)
 	- lightweight CDEBUG infrastructure, debug daemon (3668)

@@ -371,7 +371,9 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                 fprintf(stderr, "usage: %s [file] [raw]\n", argv[0]);
                 return 0;
         }
-        sprintf(filename, "%s-%ld.tmp", argv[1], random);
+        sprintf(filename, "%s.%lu.%u", argc > 1 ? argv[1] : "/tmp/lustre-log",
+                time(NULL), getpid());
+
         if (argc > 2)
                 raw = atoi(argv[2]);
         unlink(filename);

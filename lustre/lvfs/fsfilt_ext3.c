@@ -96,6 +96,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         case FSFILT_OP_RENAME:
                 /* modify additional directory */
                 nblocks += EXT3_SINGLEDATA_TRANS_BLOCKS;
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 /* no break */
         case FSFILT_OP_SYMLINK:
                 /* additional block + block bitmap + GDT for long symlink */

@@ -102,9 +102,12 @@ extern int kpr_get_route (int idx, int *gateway_nal, ptl_nid_t *gateway_nid,
 extern int kpr_sys_notify (int gw_nalid, ptl_nid_t gw_nid,
                            int alive, time_t when);
 
+extern unsigned int       kpr_routes_generation;
 extern unsigned long long kpr_fwd_bytes;
 extern unsigned long      kpr_fwd_packets;
 extern unsigned long      kpr_fwd_errors;
 extern atomic_t           kpr_queue_depth;
+extern struct list_head   kpr_routes;
+extern rwlock_t           kpr_rwlock;
 
 #endif /* _KPLROUTER_H */

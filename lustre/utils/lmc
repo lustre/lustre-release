@@ -90,6 +90,7 @@ Object creation command summary:
   --nspath
   --journal_size size
   --inode_size size
+  --mdsuuid uuid
 
 --add lov
   --lov lov_name
@@ -183,7 +184,8 @@ lmc_options = [
     ('inode_size', "Specify new inode size for underlying ext3 file system.", PARAM,"0"),
     ('fstype', "Optional argument to specify the filesystem type.", PARAM, "ext3"),
     ('mkfsoptions', "Optional argument to mkfs.", PARAM, ""),
-    ('ostuuid', "", PARAM,""),
+    ('ostuuid', "Optional argument to specify OST UUID", PARAM,""),
+    ('mdsuuid', "Optional argument to specify MDS UUID", PARAM,""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
 
@@ -697,7 +699,13 @@ def add_mds(gen, lustre, options):
 
     mds_uuid = name2uuid(lustre, mds_name, 'mds', fatal=0)
     if not mds_uuid:
-        mds_uuid = new_uuid(mds_name)
+        mds_uuid = get_option(options, 'mdsuuid')
+        if mds_uuid:
+            if lookup(lustre, mds_uuid):
+                error("Duplicate MDS UUID:", mds_uuid)
+        else:
+            mds_uuid = new_uuid(mds_name)
+
         mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group)
         lustre.appendChild(mds)
     else:

@@ -956,6 +956,10 @@ struct llog_log_hdr {
         struct llog_rec_tail    llh_tail;
 } __attribute__((packed));
 
+#define LLOG_BITMAP_SIZE(llh)  ((llh->llh_hdr.lrh_len -         \
+                                 llh->llh_bitmap_offset -       \
+                                 sizeof(llh->llh_tail)) * 8)
+
 /* log cookies are used to reference a specific log file and a record therein */
 struct llog_cookie {
         struct llog_logid       lgc_lgl;
