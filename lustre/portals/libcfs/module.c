@@ -19,7 +19,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/config.h>
@@ -45,6 +47,7 @@
 #include <portals/lib-p30.h>
 #include <portals/p30.h>
 #include <linux/kp30.h>
+#include <linux/portals_compat25.h>
 
 #define PORTAL_MINOR 240
 
@@ -84,10 +87,10 @@ kportal_blockallsigs ()
 {
         unsigned long  flags;
 
-        spin_lock_irqsave (&current->sigmask_lock, flags);
-        siginitsetinv (&current->blocked, 0);
-        recalc_sigpending (current);
-        spin_unlock_irqrestore (&current->sigmask_lock, flags);
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
 }
 
 /* called when opening /dev/device */
