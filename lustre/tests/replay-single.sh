@@ -379,6 +379,7 @@ test_18() {
     sleep 1 
     rm -f $DIR/$tfile
     touch $DIR/$tfile-2 || return 1
+    echo "pid: $pid will close"
     kill -USR1 $pid
     wait $pid || return 2
 
@@ -836,7 +837,7 @@ test_42() {
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
     unlinkmany $DIR/$tfile-%d 400 400
-    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
+    $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
 }
 run_test 42 "recovery after ost failure"
 
@@ -865,6 +866,30 @@ test_44() {
     return 0
 }
 run_test 44 "race in target handle connect"
+
+# Handle failed close
+test_45() {
+    mdcdev=`awk '/mds_svc_MNT/ {print $1}' < /proc/fs/lustre/devices`
+    $LCTL --device $mdcdev recover
+
+    multiop $DIR/$tfile O_c &
+    pid=$!
+    sleep 1
+
+    # This will cause the CLOSE to fail before even 
+    # allocating a reply buffer
+    $LCTL --device $mdcdev deactivate
+
+    # try the close
+    kill -USR1 $pid
+    wait $pid || return 1
+
+    $LCTL --device $mdcdev activate
+
+    $CHECKSTAT -t file $DIR/$tfile || return 2
+    return 0
+}
+run_test 45 "Handle failed close"
 
 equals_msg test complete, cleaning up
 $CLEANUP
