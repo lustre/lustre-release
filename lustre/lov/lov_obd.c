@@ -28,7 +28,8 @@
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 /* obd methods */
-static int lov_connect(struct lustre_handle *conn, struct obd_device *obd)
+static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
+                       char *cluuid)
 {
         struct ptlrpc_request *req;
         struct lov_obd *lov = &obd->u.lov;
@@ -38,14 +39,14 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd)
         int i;
 
         MOD_INC_USE_COUNT;
-        rc = class_connect(conn, obd);
+        rc = class_connect(conn, obd, cluuid);
         if (rc) {
                 MOD_DEC_USE_COUNT;
                 RETURN(rc);
         }
 
         /* retrieve LOV metadata from MDS */
-        rc = obd_connect(&mdc_conn, lov->mdcobd);
+        rc = obd_connect(&mdc_conn, lov->mdcobd, NULL);
         if (rc) {
                 CERROR("cannot connect to mdc: rc = %d\n", rc);
                 GOTO(out, rc = -EINVAL);
@@ -96,7 +97,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd)
                         CERROR("Target %s not set up\n", uuidarray[i]);
                         GOTO(out_mem, rc = -EINVAL);
                 }            
-                rc = obd_connect(&lov->tgts[i].conn, tgt);
+                rc = obd_connect(&lov->tgts[i].conn, tgt, NULL);
                 if (rc) {
                         CERROR("Target %s connect error %d\n",
                                uuidarray[i], rc);

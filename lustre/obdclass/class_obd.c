@@ -401,7 +401,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_CONNECT: {
                 obd_data2conn(&conn, data);
 
-                err = obd_connect(&conn, obd);
+                err = obd_connect(&conn, obd, NULL);
 
                 CDEBUG(D_IOCTL, "assigned export %Lx\n", conn.addr);
                 obd_conn2data(data, &conn);

@@ -222,7 +222,8 @@ struct obd_ops {
         int (*o_detach)(struct obd_device *dev);
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
         int (*o_cleanup)(struct obd_device *dev);
-        int (*o_connect)(struct lustre_handle *conn, struct obd_device *src);
+        int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
+                         char *cluuid);
         int (*o_disconnect)(struct lustre_handle *conn);
 
 

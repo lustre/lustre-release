@@ -129,7 +129,8 @@ int client_obd_cleanup(struct obd_device * obddev)
         return 0;
 }
 
-int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd)
+int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
+                       char *cluuid)
 {
         struct client_obd *cli = &obd->u.cli;
         struct ptlrpc_request *request;
@@ -141,7 +142,8 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd)
         ENTRY;
         down(&cli->cl_sem);
         MOD_INC_USE_COUNT;
-        rc = class_connect(conn, obd);
+#warning shaver: we might need a real cluuid here
+        rc = class_connect(conn, obd, NULL);
         if (!rc)
                 cli->cl_conn_count++;
         else {
@@ -277,7 +279,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        req->rq_status = obd_connect(&conn, target);
+        req->rq_status = obd_connect(&conn, target, cluuid);
         req->rq_repmsg->addr = conn.addr;
         req->rq_repmsg->cookie = conn.cookie;
 

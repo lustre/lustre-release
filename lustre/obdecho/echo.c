@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.19 2002/07/31 20:49:37 braam Exp $";
-#define OBDECHO_VERSION "$Revision: 1.19 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.20 2002/08/07 21:46:32 shaver Exp $";
+#define OBDECHO_VERSION "$Revision: 1.20 $"
 
 #define EXPORT_SYMTAB
 
@@ -92,12 +92,13 @@ echo_proc_fini(void)
         remove_proc_entry(ECHO_PROC_STAT, 0);
 }
 
-static int echo_connect(struct lustre_handle *conn, struct obd_device *obd)
+static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
+                        char *cluuid)
 {
         int rc;
 
         MOD_INC_USE_COUNT;
-        rc = class_connect(conn, obd);
+        rc = class_connect(conn, obd, NULL);
 
         if (rc)
                 MOD_DEC_USE_COUNT;

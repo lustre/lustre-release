@@ -281,7 +281,8 @@ struct obd_export *class_new_export(struct obd_device *obddev)
 
 /* a connection defines an export context in which preallocation can
    be managed. */
-int class_connect (struct lustre_handle *conn, struct obd_device *obd)
+int class_connect (struct lustre_handle *conn, struct obd_device *obd,
+                   char *cluuid)
 {
         struct obd_export * export;
         if (conn == NULL) {

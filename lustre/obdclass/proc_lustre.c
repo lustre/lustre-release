@@ -19,6 +19,7 @@
  *   You should have received a copy of the GNU General Public License
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
 
 /* OBD devices materialize in /proc as a directory:
  *              /proc/lustre/obd/<number>

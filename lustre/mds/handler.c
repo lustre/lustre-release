@@ -221,13 +221,39 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         return result;
 }
 
-static int mds_connect(struct lustre_handle *conn, struct obd_device *obd)
+static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
+                       char *cluuid)
 {
         int rc;
+        struct list_head *p, *n;
 
-#warning shaver: find existing export if there is one.
         MOD_INC_USE_COUNT;
-        rc = class_connect(conn, obd);
+        if (cluuid) {
+                list_for_each_safe(p, n, &obd->obd_exports) {
+                        struct obd_export *exp;
+                        struct mds_client_data *mcd;
+                        
+                        exp = list_entry(p, struct obd_export, exp_chain);
+                        mcd = exp->exp_mds_data.med_mcd;
+                        if (mcd && !memcmp(cluuid, mcd->mcd_uuid,
+                                           sizeof(mcd->mcd_uuid))) {
+                                CDEBUG(D_INFO, 
+                                       "existing export for UUID '%s' at %p\n",
+                                       cluuid, exp);
+                                if (exp->exp_obd != obd) 
+                                        LBUG();
+                                exp->exp_rconnh.addr = conn->addr;
+                                exp->exp_rconnh.cookie = conn->cookie;
+                                conn->addr = (__u64) (unsigned long)exp;
+                                conn->cookie = exp->exp_cookie;
+                                CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
+                                       (long long)conn->addr,
+                                       (long long)conn->cookie);
+                                return 0;
+                        }
+                }
+        }
+        rc = class_connect(conn, obd, NULL);
 
         if (rc)
                 MOD_DEC_USE_COUNT;

@@ -128,7 +128,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 #endif 
 
-        err = obd_connect(&sbi->ll_mdc_conn, obd);
+#warning shaver: might need a cluuid here
+        err = obd_connect(&sbi->ll_mdc_conn, obd, NULL);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, sb = NULL);
@@ -140,7 +141,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, sb = NULL);
         }
-        err = obd_connect(&sbi->ll_osc_conn, obd);
+#warning shaver: might need a cluuid here
+        err = obd_connect(&sbi->ll_osc_conn, obd, NULL);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, sb = NULL);
