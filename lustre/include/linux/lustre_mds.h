@@ -180,8 +180,8 @@ int mdc_rename(struct lustre_handle *conn,
                struct ptlrpc_request **);
 int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
-extern int mds_client_add(struct mds_obd *mds, struct mds_export_data *med,
-                          int cl_off);
+extern int mds_client_add(struct mds_export_data *med, int cl_off);
+extern int mds_client_free(struct mds_export_data *med);
 
 /* mds/mds_fs.c */
 struct mds_fs_operations {
