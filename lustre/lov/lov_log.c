@@ -52,22 +52,17 @@
 
 #include "lov_internal.h"
 
-/* For LOV catalogs, we "nest" catalogs from the parent catalog.  What this
- * means is that the parent catalog has a bunch of log cookies that are
- * pointing at one catalog for each OSC.  The OSC catalogs in turn hold
- * cookies for actual log files. */
-int lov_llog_open(struct obd_device *obd, struct obd_device *disk_obd,
-                  int index, int named, int flags, struct obd_uuid *log_uuid)
-
+int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count ,struct llog_logid *logids)
 {
         struct lov_obd *lov = &obd->u.lov;
         int i, rc = 0;
-
         ENTRY;
+
+        LASSERT(lov->desc.ld_tgt_count  == count);
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
-                rc = obd_llog_open(child, disk_obd, 
-                                   index, named, flags, log_uuid);
+                rc = obd_llog_setup(child, disk_obd, index, 1, logids + i);
                 CERROR("error lov_llog_open %d\n", i);
                 if (rc) 
                         break;
@@ -75,33 +70,18 @@ int lov_llog_open(struct obd_device *obd, struct obd_device *disk_obd,
         RETURN(rc);
 }
 
-int lov_get_catalogs(struct lov_obd *lov, struct llog_handle *cathandle)
+int lov_llog_cleanup(struct obd_device *obd)
 {
-        struct obd_device *obd = cathandle->lgh_obd;
-        struct lustre_handle conn;
-        struct obd_export *exp;
-        struct obd_uuid cluuid = { "MDS_OSC_UUID" }; 
-        int rc = 0, i;
+        struct lov_obd *lov = &obd->u.lov;
+        int i, rc;
+
         ENTRY;
-
-        for (i = 0; i < lov->desc.ld_active_tgt_count; i ++) {
-                rc = class_connect(&conn, obd, &cluuid);
-                if (rc) {
-                        CERROR("failed %d: \n", rc);
-                        GOTO(out, rc);
-                }
-                exp = class_conn2export(&conn);
-                lov->tgts[i].ltd_exp->exp_obd->obd_log_exp = exp;
-                lov->tgts[i].ltd_cathandle = cathandle;
-        }
-                
-        lov->lo_catalog_loaded = 1;
-        RETURN(rc);
-
-out:
-        while (--i > 0) {
-                class_disconnect(lov->tgts[i].ltd_exp->exp_obd->obd_log_exp, 0);
-                lov->tgts[i].ltd_cathandle = cathandle;
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
+                rc = obd_llog_cleanup(child);
+                CERROR("error lov_llog_open %d\n", i);
+                if (rc) 
+                        break;
         }
         RETURN(rc);
 }
@@ -111,10 +91,10 @@ out:
  * we need to keep cookies in stripe order, even if some are NULL, so that
  * the right cookies are passed back to the right OSTs at the client side.
  * Unset cookies should be all-zero (which will never occur naturally). */
-int lov_log_add(struct obd_export *exp,
-                       struct llog_handle *cathandle,
-                       struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                       struct llog_cookie *logcookies, int numcookies)
+int lov_llog_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
@@ -124,19 +104,16 @@ int lov_log_add(struct obd_export *exp,
 
         LASSERT(logcookies && numcookies >= lsm->lsm_stripe_count);
 
-        if (unlikely(!lov->lo_catalog_loaded))
-                lov_get_catalogs(lov, cathandle);
-
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
-                rc += obd_log_add(lov->tgts[loi->loi_ost_idx].ltd_exp,
-                                  lov->tgts[loi->loi_ost_idx].ltd_cathandle,
-                                  rec, NULL, logcookies + rc, numcookies - rc);
+                rc += obd_llog_origin_add(lov->tgts[loi->loi_ost_idx].ltd_exp, index,
+                                          rec, NULL, logcookies + rc, numcookies - rc);
         }
 
         RETURN(rc);
 }
 
-int lov_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
+/* the replicators commit callback */
+int lov_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags)
 {
         struct lov_obd *lov;
@@ -145,19 +122,16 @@ int lov_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
         ENTRY;
 
         LASSERT(lsm != NULL);
-        if (exp == NULL || exp->exp_obd == NULL)
-                RETURN(-ENODEV);
-
         LASSERT(count == lsm->lsm_stripe_count);
 
         loi = lsm->lsm_oinfo;
-        lov = &exp->exp_obd->u.lov;
+        lov = &obd->u.lov;
         for (i = 0; i < count; i++, cookies++, loi++) {
                 int err;
 
-                err = obd_log_cancel(lov->tgts[loi->loi_ost_idx].ltd_exp,
-                                     lov->tgts[loi->loi_ost_idx].ltd_cathandle,
-                                     NULL, 1, cookies, flags);
+
+                err = obd_llog_repl_cancel(lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd,
+                                          NULL, 1, cookies, flags);
 
                 if (err && lov->tgts[loi->loi_ost_idx].active) {
                         CERROR("error: objid "LPX64" subobj "LPX64
@@ -169,4 +143,3 @@ int lov_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
         }
         RETURN(rc);
 }
-

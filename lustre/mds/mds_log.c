@@ -37,62 +37,57 @@
 
 #include "mds_internal.h"
 
+int mds_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count, struct llog_logid *logid)
 
-struct llog_handle *mds_get_catalog(struct obd_device *obd)
 {
-        struct mds_obd *mds = &obd->u.mds;
-        struct mds_server_data *msd = mds->mds_server_data;
-        struct obd_run_ctxt saved;
-        struct llog_handle *cathandle = NULL;
-        struct llog_logid logid;
         int rc;
         ENTRY;
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        if (msd->msd_catalog_oid) {
-                logid.lgl_oid = le64_to_cpu(msd->msd_catalog_oid);
-                logid.lgl_ogen = le32_to_cpu(msd->msd_catalog_ogen);
-                rc = llog_create(obd, &cathandle, &logid, NULL);
-                if (rc) {
-                        CERROR("error opening catalog "LPX64":%x: rc %d\n",
-                               logid.lgl_oid, logid.lgl_ogen,
-                               (int)PTR_ERR(cathandle));
-                        msd->msd_catalog_oid = 0;
-                        msd->msd_catalog_ogen = 0;
-                }
-        }
-
-        if (!msd->msd_catalog_oid) {
-                rc = llog_create(obd, &cathandle, NULL, NULL);
-                if (rc) {
-                        CERROR("error creating new catalog: rc %d\n", rc);
-                        cathandle = ERR_PTR(rc);
-                        GOTO(out, cathandle);
-                }
-                logid = cathandle->lgh_id;
-                msd->msd_catalog_oid = cpu_to_le64(logid.lgl_oid);
-                msd->msd_catalog_ogen = cpu_to_le32(logid.lgl_ogen);
-                rc = mds_update_server_data(obd, 0);
-                if (rc) {
-                        CERROR("error writing new catalog to disk: rc %d\n",rc);
-                        GOTO(out_handle, rc);
-                }
-        }
-
-        //rc = llog_init_handle(cathandle, LLOG_F_IS_CAT, &obd->u.filter.fo_mdc_uuid);
-        rc = llog_init_handle(cathandle, LLOG_F_IS_CAT, &obd->obd_uuid);
-        if (rc)
-                GOTO(out_handle, rc);
-out:
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-        RETURN(cathandle);
-
-out_handle:
-        llog_close(cathandle);
-        cathandle = ERR_PTR(rc);
-        goto out;
+        OBD_CHECK_OP(obd->u.mds.mds_osc_obd, llog_setup);
+        rc = OBP(obd->u.mds.mds_osc_obd, llog_setup)(obd->u.mds.mds_osc_obd, 
+                                                     disk_obd, index, count, logid);
+        RETURN(rc);
 }
 
+int mds_llog_cleanup(struct obd_device *obd)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(obd->u.mds.mds_osc_obd, llog_cleanup);
+        rc = OBP(obd->u.mds.mds_osc_obd, llog_cleanup)(obd->u.mds.mds_osc_obd);
+        RETURN(rc);
+}
+
+int mds_llog_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies)
+{
+        int rc;
+        ENTRY;
+        struct obd_export *lov_exp = exp->exp_obd->u.mds.mds_osc_exp;
+
+        EXP_CHECK_OP(lov_exp, llog_origin_add);
+
+        rc = OBP(lov_exp->exp_obd, llog_origin_add)(lov_exp, index, rec, lsm, 
+                                           logcookies, numcookies);
+        RETURN(rc);
+}
+
+int mds_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
+                          int count, struct llog_cookie *cookies, int flags)
+{
+        int rc;
+        ENTRY;
+        struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
+
+        OBD_CHECK_OP(obd, llog_repl_cancel);
+
+        rc = OBP(lov_obd, llog_repl_cancel)(lov_obd, lsm, count, cookies, flags);
+        RETURN(rc);
+}
 
 int mds_log_op_unlink(struct obd_device *obd, 
                       struct inode *inode, struct lustre_msg *repmsg,
@@ -122,15 +117,9 @@ int mds_log_op_unlink(struct obd_device *obd,
         lur->lur_ogen = inode->i_generation;
 
 #ifdef ENABLE_ORPHANS
-#if 0
-        rc = obd_log_add(mds->mds_osc_exp, mds->mds_catalog, &lur->lur_hdr,
-                         lsm, lustre_msg_buf(repmsg, offset + 1, 0),
-                         repmsg->buflens[offset+1]/sizeof(struct llog_cookie),
-                         NULL);
-#endif
-        rc = lov_log_add(mds->mds_osc_exp, mds->mds_catalog, &lur->lur_hdr,
-                         lsm, lustre_msg_buf(repmsg, offset + 1, 0),
-                         repmsg->buflens[offset+1]/sizeof(struct llog_cookie));
+        rc = obd_llog_origin_add(mds->mds_osc_exp, 0, &lur->lur_hdr,
+                                 lsm, lustre_msg_buf(repmsg, offset + 1, 0),
+                                 repmsg->buflens[offset+1]/sizeof(struct llog_cookie));
 #endif
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
@@ -138,3 +127,5 @@ int mds_log_op_unlink(struct obd_device *obd,
 
         RETURN(rc);
 }
+
+

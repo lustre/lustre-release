@@ -13,14 +13,23 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count);
 void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 /* lov_log.c */
-int lov_get_catalogs(struct lov_obd *lov, struct llog_handle *cathandle);
+int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count ,struct llog_logid *logids);
+int lov_llog_cleanup(struct obd_device *obd);
+int lov_llog_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies);
+int lov_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
+                         int count, struct llog_cookie *cookies, int flags);
+
+
 #if 0
+int lov_get_catalogs(struct lov_obd *lov, struct llog_handle *cathandle);
 int lov_log_add(struct obd_export *exp,
                 struct llog_handle *cathandle,
                 struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                 struct llog_cookie *logcookies, int numcookies);
-int lov_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
-                   int count, struct llog_cookie *cookies, int flags);
 #endif
 
 /* lov_pack.c */

@@ -164,7 +164,7 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
 {
         if (exp->exp_connection) {
                 struct lustre_handle *hdl;
-                hdl = &exp->exp_ldlm_data.led_import->imp_remote_handle;
+                hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 /* Might be a re-connect after a partition. */
                 if (!memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
                         CERROR("%s reconnecting\n", cluuid->uuid);
@@ -197,7 +197,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 {
         struct obd_device *target;
         struct obd_export *export = NULL;
-        struct obd_import *dlmimp;
+        struct obd_import *revimp;
         struct lustre_handle conn;
         struct obd_uuid tgtuuid;
         struct obd_uuid cluuid;
@@ -339,16 +339,16 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         memcpy(&conn, lustre_msg_buf(req->rq_reqmsg, 2, sizeof conn),
                sizeof conn);
 
-        if (export->exp_ldlm_data.led_import != NULL)
-                class_destroy_import(export->exp_ldlm_data.led_import);
-        dlmimp = export->exp_ldlm_data.led_import = class_new_import();
-        dlmimp->imp_connection = ptlrpc_connection_addref(req->rq_connection);
-        dlmimp->imp_client = &export->exp_obd->obd_ldlm_client;
-        dlmimp->imp_remote_handle = conn;
-        dlmimp->imp_obd = target;
-        dlmimp->imp_dlm_fake = 1;
-        dlmimp->imp_state = LUSTRE_IMP_FULL;
-        class_import_put(dlmimp);
+        if (export->exp_imp_reverse != NULL)
+                class_destroy_import(export->exp_imp_reverse);
+        revimp = export->exp_imp_reverse = class_new_import();
+        revimp->imp_connection = ptlrpc_connection_addref(req->rq_connection);
+        revimp->imp_client = &export->exp_obd->obd_ldlm_client;
+        revimp->imp_remote_handle = conn;
+        revimp->imp_obd = target;
+        revimp->imp_dlm_fake = 1;
+        revimp->imp_state = LUSTRE_IMP_FULL;
+        class_import_put(revimp);
 out:
         if (rc)
                 req->rq_status = rc;
@@ -373,8 +373,8 @@ void target_destroy_export(struct obd_export *exp)
 {
         /* exports created from last_rcvd data, and "fake"
            exports created by lctl don't have an import */
-        if (exp->exp_ldlm_data.led_import != NULL)
-                class_destroy_import(exp->exp_ldlm_data.led_import);
+        if (exp->exp_imp_reverse != NULL)
+                class_destroy_import(exp->exp_imp_reverse);
 }
 
 /*

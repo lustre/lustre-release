@@ -40,7 +40,15 @@ int mds_cleanup_orphans(struct obd_device *obd);
 
 
 /* mds/mds_log.c */
-struct llog_handle *mds_get_catalog(struct obd_device *obd);
+int mds_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count, struct llog_logid *logid);
+int mds_llog_cleanup(struct obd_device *obd);
+int mds_llog_origin_add(struct obd_export *exp,
+                        int index,
+                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                        struct llog_cookie *logcookies, int numcookies);
+int mds_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
+                         int count, struct llog_cookie *cookies, int flags);
 int mds_log_op_unlink(struct obd_device *obd, struct inode *inode, struct lustre_msg *repmsg,
                       int offset);
 

@@ -69,6 +69,75 @@ static int llog_net_create(struct obd_device *obd, struct llog_handle **res,
         RETURN(0);
 }
 
+#ifdef ENABLE_ORPHANS
+int llog_origin_handle_cancel(struct obd_device *obd, 
+                              struct ptlrpc_request *req)
+{
+        struct llog_cookie *logcookies;
+        int num_cookies, rc = 0;
+        struct obd_device *log_obd;
+        struct obd_run_ctxt saved;
+        struct llog_handle *cathandle;
+        int i;
+        ENTRY;
+
+        LASSERT(obd->obd_llog_ctxt);
+        log_obd = obd->obd_llog_ctxt->loc_obd;
+        LASSERT(log_obd);
+
+        logcookies = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*logcookies));
+        num_cookies = req->rq_reqmsg->buflens[0]/sizeof(*logcookies);
+        if (logcookies == NULL || num_cookies == 0) {
+                DEBUG_REQ(D_HA, req, "no cookies sent");
+                RETURN(-EFAULT);
+        }
+
+        /* workaround until we don't need to send replies */
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
+        req->rq_repmsg->status = rc;
+        if (rc)
+                RETURN(rc);
+        /* end workaround */
+
+        push_ctxt(&saved, &obd->obd_ctxt, NULL); 
+        i = logcookies->lgc_subsys;
+        if (i < 0 || i > LLOG_OBD_MAX_HANDLES) {
+                LBUG();
+                RETURN(-EINVAL);
+        }
+        cathandle = obd->obd_llog_ctxt->loc_handles[i];
+        LASSERT(cathandle);
+
+        rc = llog_cat_cancel_records(cathandle, num_cookies, logcookies);
+        if (rc)
+                CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
+        pop_ctxt(&saved, &log_obd->obd_ctxt, NULL);
+
+        RETURN(rc);
+        req->rq_repmsg->status = rc;
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_origin_handle_cancel);
+#endif
+
+int llog_receptor_accept(struct obd_device *obd, struct obd_import *imp)
+{
+        ENTRY;
+        LASSERT(obd->obd_llog_ctxt);
+        obd->obd_llog_ctxt->loc_imp = imp;
+        RETURN(0);
+}
+EXPORT_SYMBOL(llog_receptor_accept);
+
+int llog_initiator_connect(struct obd_device *obd)
+{
+        ENTRY;
+        LASSERT(obd->obd_llog_ctxt);
+        obd->obd_llog_ctxt->loc_imp = obd->u.cli.cl_import;
+        RETURN(0);
+}
+EXPORT_SYMBOL(llog_initiator_connect);
+
 struct llog_operations llog_net_ops = {
         //lop_next_block:  llog_lvfs_next_block,
         //lop_read_header: llog_lvfs_read_header,
