@@ -20,5 +20,3 @@ ldlm_SOURCES = $(LDLMSOURCES)
 endif
 
 include $(top_srcdir)/Rules
-
-CFLAGS += -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
