@@ -289,7 +289,7 @@ out:
         RETURN(rc);
 }
 
-static int mds_lov_clearorphans(struct mds_obd *mds)
+static int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {
         int rc;
         struct obdo oa;
@@ -305,6 +305,10 @@ static int mds_lov_clearorphans(struct mds_obd *mds)
         memset(&oa, 0, sizeof(oa));
         oa.o_valid = OBD_MD_FLFLAGS;
         oa.o_flags = OBD_FL_DELORPHAN;
+        if (ost_uuid != NULL) {
+                memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
+                oa.o_valid |= OBD_MD_FLINLINE;
+        }
         rc = obd_create(mds->mds_osc_exp, &oa, &empty_ea, &oti);
 
         RETURN(rc);
@@ -333,7 +337,7 @@ int mds_lov_set_nextid(struct obd_device *obd)
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = mds_lov_clearorphans(mds);
+        rc = mds_lov_clearorphans(mds, NULL /* all OSTs */);
         if (rc < 0)
                 GOTO(out, rc);
 
@@ -384,20 +388,27 @@ int mds_lov_connect(struct obd_device *obd)
 
         mds->mds_osc_obd = class_name2obd(mds->mds_lov_name);
         if (!mds->mds_osc_obd) {
-                CERROR("MDS cannot locate LOV %s - no logging!\n",
-                       mds->mds_lov_name);
+                CERROR("MDS cannot locate LOV %s\n", mds->mds_lov_name);
                 mds->mds_osc_obd = ERR_PTR(-ENOTCONN);
                 RETURN(-ENOTCONN);
         }
 
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid);
         if (rc) {
-                CERROR("MDS cannot connect to LOV %s (%d) - no logging!\n",
+                CERROR("MDS cannot connect to LOV %s (%d)\n",
                        mds->mds_lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);
                 RETURN(rc);
         }
         mds->mds_osc_exp = class_conn2export(&conn);
+
+        rc = obd_register_observer(mds->mds_osc_obd, obd);
+        if (rc) {
+                CERROR("MDS cannot register as observer of LOV %s (%d)\n",
+                       mds->mds_lov_name, rc);
+                mds->mds_osc_obd = ERR_PTR(rc);
+                RETURN(rc);
+        }
 
 #ifdef ENABLE_ORPHANS
         /* before this set info call is made, we must initialize the logging */
@@ -588,6 +599,27 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         RETURN(0);
 }
 
+int mds_notify(struct obd_device *obd, struct obd_device *watched,
+               int active)
+{
+        struct obd_uuid *uuid; 
+
+        if (!active)
+                RETURN(0);
+
+        if (strcmp(watched->obd_type->typ_name, "osc")) {
+                CERROR("unexpected notification of %s %s!\n",
+                       watched->obd_type->typ_name,
+                       watched->obd_name);
+                RETURN(-EINVAL);
+        }
+
+        uuid = &watched->u.cli.cl_import->imp_target_uuid;
+        CERROR("MDS %s: %s now active, resetting orphans\n",
+               obd->obd_name, uuid->uuid);
+        RETURN(mds_lov_clearorphans(&obd->u.mds, uuid));
+}
+
 /* Convert the on-disk LOV EA structre.
  * We always try to convert from an old LOV EA format to the common in-memory
  * (lsm) format (obd_unpackmd() understands the old on-disk (lmm) format) and
@@ -639,4 +671,3 @@ conv_free:
 conv_end:
         return rc;
 }
-
