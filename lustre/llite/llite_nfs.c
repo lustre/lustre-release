@@ -37,6 +37,37 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
+int get_inode_with_mdc_data(struct ptlrpc_request *req,
+                            struct super_block *sb, int offset,
+                            struct lustre_md *md, struct inode **inodep,
+                            unsigned long valid)
+{
+        int rc;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct inode *inode;
+
+        rc = mdc_req2lustre_md(req, offset, sbi->ll_osc_exp, md);
+        if (rc)
+                RETURN(rc);
+        if (valid && (md->body->valid ^ valid) & OBD_MD_FLEASIZE)
+            CERROR("Asked for %s eadata but got %s\n",
+            (valid & OBD_MD_FLEASIZE) ? "some" : "no",
+            (md->body->valid & OBD_MD_FLEASIZE) ? "some":"none");
+ 
+        inode = ll_iget(sb, md->body->ino, md);
+        if (!inode) {
+                /* free the lsm if we allocated one above */
+                if (md->lsm != NULL)
+                        obd_free_memmd(sbi->ll_osc_exp, &md->lsm);
+                RETURN(-ENOMEM);
+        } else if (md->lsm != NULL &&
+                   ll_i2info(inode)->lli_smd != md->lsm) {
+                obd_free_memmd(sbi->ll_osc_exp, &md->lsm);
+        }
+        *inodep = inode;
+        return rc;
+}
+
 static struct inode * search_inode_for_lustre(struct super_block *sb,
                                               unsigned long ino,
                                               unsigned long generation,
