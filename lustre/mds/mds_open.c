@@ -619,8 +619,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         /* atomically create objects if necessary */
         down(&dchild->d_inode->i_sem);
         mode = dchild->d_inode->i_mode;
-        if ((S_ISREG(mode) && (body->valid & OBD_MD_FLEASIZE)) || 
-            (S_ISDIR(mode) && (body->valid & OBD_MD_FLDIREA))) {
+        if ((S_ISREG(mode) && !(body->valid & OBD_MD_FLEASIZE)) || 
+            (S_ISDIR(mode) && !(body->valid & OBD_MD_FLDIREA))) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                  dchild->d_inode, 0);
                 if (rc) {
