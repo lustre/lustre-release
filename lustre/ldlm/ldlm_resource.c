@@ -149,14 +149,17 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
 {
         struct list_head *bucket;
         struct ldlm_resource *res;
+        ENTRY;
 
-        if (type < 0 || type > LDLM_MAX_TYPE) 
+        if (type < 0 || type > LDLM_MAX_TYPE) {
                 LBUG();
+                RETURN(NULL);
+        }
 
         res = ldlm_resource_new();
         if (!res) {
                 LBUG();
-                return NULL;
+                RETURN(NULL);
         }
 
         memcpy(res->lr_name, name, sizeof(res->lr_name));
@@ -177,7 +180,7 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
                 list_add(&res->lr_childof, &parent->lr_children);
         }
 
-        return res;
+        RETURN(res);
 }
 
 /* Args: unlocked namespace
@@ -208,6 +211,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                         spin_lock(&res->lr_lock);
                         res->lr_refcount++;
                         spin_unlock(&res->lr_lock);
+                        EXIT;
                         break;
                 }
         }
