@@ -109,7 +109,8 @@ int mdc_create(struct lustre_handle *conn,
                struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        int rc, size[3] = {sizeof(struct mds_rec_create), op_data->namelen + 1, 0};
+        int rc, size[3] = {sizeof(struct mds_rec_create),
+                           op_data->namelen + 1, 0};
         int level, bufcount = 2;
 //        ENTRY;
 
