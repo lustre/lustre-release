@@ -1,20 +1,31 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ *  Copyright (C) 2002 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
  * Helper routines for dumping data structs for debugging.
- *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
- *
- * Copryright (C) 2002 Cluster File Systems, Inc.
- *
  */
 
 #define DEBUG_SUBSYSTEM D_OTHER
 
 #define EXPORT_SYMTAB
 #ifndef __KERNEL__
-#include <liblustre.h>
+# include <liblustre.h>
 #endif
 
 #include <linux/obd_ost.h>
@@ -24,15 +35,16 @@
 
 int dump_ioo(struct obd_ioobj *ioo)
 {
-        CERROR("obd_ioobj: ioo_id="LPD64", ioo_gr="LPD64", ioo_type=%d, ioo_bufct=%d\n",
+        CERROR("obd_ioobj: ioo_id="LPD64", ioo_gr="LPD64", ioo_type=%d, "
+               "ioo_bufct=%d\n",
                ioo->ioo_id, ioo->ioo_gr, ioo->ioo_type, ioo->ioo_bufcnt);
         return -EINVAL;
 }
 
 int dump_lniobuf(struct niobuf_local *nb)
 {
-        CERROR("niobuf_local: addr=%p, offset="LPD64", len=%d, xid=%d, page=%p\n",
-               nb->addr, nb->offset, nb->len, nb->xid, nb->page);
+        CERROR("niobuf_local: addr=%p, offset="LPD64", len=%d, xid="LPU64", "
+               "page=%p\n", nb->addr, nb->offset, nb->len, nb->xid, nb->page);
         CERROR("nb->page: index = %ld\n", nb->page ? nb->page->index : -1);
 
         return -EINVAL;
@@ -40,7 +52,7 @@ int dump_lniobuf(struct niobuf_local *nb)
 
 int dump_rniobuf(struct niobuf_remote *nb)
 {
-        CERROR("niobuf_remote: offset="LPD64", len=%d, flags=%x, xid=%d\n",
+        CERROR("niobuf_remote: offset="LPD64", len=%d, flags=%x, xid="LPU64"\n",
                nb->offset, nb->len, nb->flags, nb->xid);
 
         return -EINVAL;
@@ -126,8 +138,8 @@ int page_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
         ne_off = le64_to_cpu (off);
         id = le64_to_cpu (id);
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-                CERROR("%s: id "LPU64" offset "LPU64" off: "LPX64" != "LPX64"\n",
-                       who, id, off, *(__u64 *)addr, ne_off);
+                CERROR("%s: id "LPU64" offset "LPU64" off: "LPX64" != "
+                       LPX64"\n", who, id, off, *(__u64 *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
@@ -138,13 +150,13 @@ int page_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
 
         addr += end - LPDS - LPDS;
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-                CERROR("%s: id "LPU64" offset "LPU64" end off: "LPX64" != "LPX64"\n",
-                       who, id, off, *(__u64 *)addr, ne_off);
+                CERROR("%s: id "LPU64" offset "LPU64" end off: "LPX64" != "
+                       LPX64"\n", who, id, off, *(__u64 *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-                CERROR("%s: id "LPU64" offset "LPU64" end id: "LPX64" != "LPX64"\n",
-                       who, id, off, *(__u64 *)(addr + LPDS), id);
+                CERROR("%s: id "LPU64" offset "LPU64" end id: "LPX64" != "
+                       LPX64"\n", who, id, off, *(__u64 *)(addr + LPDS), id);
                 err = -EINVAL;
         }
 
