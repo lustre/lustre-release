@@ -14,7 +14,7 @@ my $max = 0;
 while ($line = <>) {
     $debug_line++;
     my ($file, $func, $lno, $name, $size, $addr, $type);
-    if ($line =~ m/^.* :(k|v|slab-)(.*) '(.*)': (\d+) at (.*) \(tot (.*)\)(|\.):\((.*):(\d+):(.*)\(\) (\d+) \| \d+\+\d+\).*$/){
+    if ($line =~ m/^.* :(k|v|slab-)(.*) '(.*)': (\d+) at (.*) \(tot (.*)\)(|\.):\((.*):(\d+):(.*)\(\) (\d+ \| )?\d+\+\d+\).*$/){
 	$type = $2;
 	$name = $3;
 	$size = $4;

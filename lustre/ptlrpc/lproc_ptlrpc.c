@@ -99,8 +99,9 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc) { return; }
 #else
 
-void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
-                                     struct ptlrpc_service *svc)
+void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
+                             char *name, struct proc_dir_entry **procroot_ret,
+                             struct lprocfs_stats **stats_ret)
 {
         struct proc_dir_entry *svc_procroot;
         struct lprocfs_stats *svc_stats;
@@ -108,19 +109,21 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
         unsigned int svc_counter_config = LPROCFS_CNTR_AVGMINMAX | 
                                           LPROCFS_CNTR_STDDEV;
 
-        LASSERT(svc->srv_procroot == NULL);
-        LASSERT(svc->srv_stats == NULL);
-
-        svc_procroot = lprocfs_register(svc->srv_name, obddev->obd_proc_entry,
-                                        NULL, NULL);
-        if (svc_procroot == NULL)
-                return;
+        LASSERT(*procroot_ret == NULL);
+        LASSERT(*stats_ret == NULL);
 
         svc_stats = lprocfs_alloc_stats(PTLRPC_LAST_CNTR + LUSTRE_MAX_OPCODES);
-        if (svc_stats == NULL) {
-                lprocfs_remove(svc_procroot);
+        if (svc_stats == NULL)
                 return;
-        }
+
+        if (dir) {
+                svc_procroot = lprocfs_register(dir, root, NULL, NULL);
+                if (IS_ERR(svc_procroot)) {
+                        lprocfs_free_stats(svc_stats);
+                        return;
+                }
+        } else 
+                svc_procroot = root;
 
         lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
                              svc_counter_config, "req_waittime", "usec");
@@ -133,14 +136,43 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                                      "usec");
         }
 
-        rc = lprocfs_register_stats(svc_procroot, "stats", svc_stats);
+        rc = lprocfs_register_stats(svc_procroot, name, svc_stats);
         if (rc < 0) {
-                lprocfs_remove(svc_procroot);
+                if (dir)
+                        lprocfs_remove(svc_procroot);
                 lprocfs_free_stats(svc_stats);
         } else {
-                svc->srv_procroot = svc_procroot;
-                svc->srv_stats = svc_stats;
+                if (dir)
+                        *procroot_ret = svc_procroot;
+                *stats_ret = svc_stats;
         }
+}
+
+void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
+                                     struct ptlrpc_service *svc)
+{
+        ptlrpc_lprocfs_register(obddev->obd_proc_entry, svc->srv_name,
+                                "stats", &svc->srv_procroot, 
+                                &svc->srv_stats);
+}
+
+void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
+{
+        ptlrpc_lprocfs_register(obddev->obd_proc_entry, NULL, "stats", 
+                                &obddev->obd_svc_procroot, 
+                                &obddev->obd_svc_stats);
+}
+
+void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
+{
+        struct lprocfs_stats *svc_stats;
+        int opc =  opcode_offset(req->rq_reqmsg->opc);
+
+        svc_stats = req->rq_import->imp_obd->obd_svc_stats;
+        if (svc_stats == NULL || opc <= 0)
+                return;
+        LASSERT(opc < LUSTRE_MAX_OPCODES);
+        lprocfs_counter_add(svc_stats, opc + PTLRPC_LAST_CNTR, 0);
 }
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
@@ -154,36 +186,15 @@ void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
                 svc->srv_stats = NULL;
         }
 }
-
-void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
-                                     long q_usec, long work_usec)
+void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 {
-        int                    opc_offset;
-        struct ptlrpc_service *svc = req->rq_srv_ni->sni_service;
-
-        LASSERT (svc != NULL);
-        LASSERT (svc->srv_stats != NULL);
-        
-        /* req_waittime */
-        lprocfs_counter_add(svc->srv_stats, PTLRPC_REQWAIT_CNTR, 
-                            q_usec);
-
-        /* svc_eqdepth */
-        lprocfs_counter_add(svc->srv_stats, PTLRPC_REQQDEPTH_CNTR,
-                            svc->srv_n_queued_reqs);
-
-        /* stats on opc only if it's meaningful... */
-        if (req->rq_nob_received <= sizeof (struct lustre_msg) ||
-            req->rq_reqmsg->type != PTL_RPC_MSG_REQUEST)
-                return;
-        
-        opc_offset = opcode_offset(req->rq_reqmsg->opc);
-        if (opc_offset < 0)
-                return;
-        
-        LASSERT(opc_offset < LUSTRE_MAX_OPCODES);
-        lprocfs_counter_add(svc->srv_stats, 
-                            PTLRPC_LAST_CNTR+opc_offset,
-                            work_usec);
+        if (obd->obd_svc_procroot) {
+                lprocfs_remove(obd->obd_svc_procroot);
+                obd->obd_svc_procroot = NULL;
+        }
+        if (obd->obd_svc_stats) {
+                lprocfs_free_stats(obd->obd_svc_stats);
+                obd->obd_svc_stats = NULL;
+        }
 }
 #endif /* LPROCFS */
