@@ -50,6 +50,7 @@ int client_import_connect(struct lustre_handle *dlm_handle,
                        obd->obd_uuid.uuid,
                        (char *)dlm_handle};
         int msg_flags;
+        unsigned int flags;
 
         ENTRY;
         down(&cli->cl_sem);
@@ -79,6 +80,7 @@ int client_import_connect(struct lustre_handle *dlm_handle,
 
         imp->imp_dlm_handle = *dlm_handle;
 
+        imp->imp_conn_cnt++; 
         imp->imp_level = LUSTRE_CONN_CON;
         rc = ptlrpc_queue_wait(request);
         if (rc) {
@@ -167,22 +169,17 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
                 ptlrpc_set_import_active(imp, 0);
         } else {
                 request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
-                if (!request)
-                        GOTO(out_req, rc = -ENOMEM);
-
-                request->rq_replen = lustre_msg_size(0, NULL);
-
-                rc = ptlrpc_queue_wait(request);
-                if (rc)
-                        GOTO(out_req, rc);
+                if (request) {
+                        request->rq_replen = lustre_msg_size(0, NULL);
+                        rc = ptlrpc_queue_wait(request);
+                        ptlrpc_req_finished(request);
+                }
         }
         if (imp->imp_replayable)
                 ptlrpc_pinger_del_import(imp);
 
         EXIT;
- out_req:
-        if (request)
-                ptlrpc_req_finished(request);
+
  out_no_disconnect:
         err = class_disconnect(dlm_handle, 0);
         if (!rc && err)
@@ -358,6 +355,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export->exp_connection = ptlrpc_get_connection(&req->rq_peer,
                                                        &remote_uuid);
         req->rq_connection = ptlrpc_connection_addref(export->exp_connection);
+
+        LASSERT(export->exp_conn_cnt < req->rq_reqmsg->conn_cnt);
+        export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
 
         if (rc == EALREADY) {
                 /* We indicate the reconnection in a flag, not an error code. */
