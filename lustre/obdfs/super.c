@@ -100,7 +100,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 
 	printk("obdfs_read_super: rootinode is %ld dev %d\n", 
 	       root->i_ino, root->i_dev);
-	sb->s_root = d_alloc_root(root, NULL);
+	sb->s_root = d_alloc_root(root);
 	unlock_super(sb);
 	EXIT;  
         return sb;
