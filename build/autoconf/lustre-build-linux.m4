@@ -174,7 +174,6 @@ LB_LINUX_TRY_COMPILE([],[],[
 	AC_MSG_RESULT([no])
 	AC_MSG_WARN([Consult config.log for details.])
 	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult build/README.kernel-source])
-	AC_MSG_ERROR([Kernel modules could not be built.])
 ])
 
 LB_LINUX_RELEASE
