@@ -83,9 +83,9 @@ int llog_handle_connect(struct ptlrpc_request *req)
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
-                                                                                                                             
+
         req_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_body));
-                                                                                                                             
+
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid, 
                           &req_body->lgdc_gen);

@@ -7,7 +7,6 @@
 COMPILE = $(CC) -Wall -g -I$(srcdir)/../include
 LINK = $(CC) -o $@
 
-
 if LIBLUSTRE
 tmp=
 else
