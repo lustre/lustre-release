@@ -43,6 +43,9 @@ if not development_mode():
 import Lustre
 
 DEFAULT_PORT = 988 
+DEFAULT_STRIPE_SZ = 65536
+DEFAULT_STRIPE_CNT = 1
+DEFAULT_STRIPE_PATTERN = 0
 
 def reference():
     print """usage: lmc --add object [object parameters]
@@ -847,6 +850,30 @@ def add_lov(gen, lustre, options):
     lovconfig = gen.lovconfig(lovconfig_name, lovconfig_uuid, uuid)
     lustre.appendChild(lovconfig)
 
+def add_default_lov(gen, lustre, mds_name, lov_name):
+    """ create a default lov """
+                                                                                                                                               
+    stripe_sz = DEFAULT_STRIPE_SZ
+    stripe_cnt = DEFAULT_STRIPE_CNT
+    pattern = DEFAULT_STRIPE_PATTERN
+    uuid = new_uuid(lov_name)
+                                                                                                                                               
+    ret = findByName(lustre, lov_name, "lov")
+    if ret:
+        error("LOV: ", lov_name, " already exists.")
+                                                                                                                                               
+    mds_uuid = name2uuid(lustre, mds_name, 'mds')
+    lov = gen.lov(lov_name, uuid, mds_uuid, stripe_sz, stripe_cnt, pattern)
+    lustre.appendChild(lov)
+                                                                                                                                               
+    # add an lovconfig entry to the active mdsdev profile
+    lovconfig_name = new_name('LVCFG_' + lov_name)
+    lovconfig_uuid = new_uuid(lovconfig_name)
+    mds = findByName(lustre, mds_name)
+    mds.appendChild(gen.ref("lovconfig", lovconfig_uuid))
+    lovconfig = gen.lovconfig(lovconfig_name, lovconfig_uuid, uuid)
+    lustre.appendChild(lovconfig)
+
 def new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid):
     fs_name = new_name("FS_fsname")
     fs_uuid = new_uuid(fs_name)
@@ -859,8 +886,6 @@ def new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid):
 def get_fs_uuid(gen, lustre, mds_name, obd_name, mgmt_name):
     mds_uuid = name2uuid(lustre, mds_name, tag='mds')
     obd_uuid = name2uuid(lustre, obd_name, tag='lov', fatal=0)
-    if not obd_uuid:
-        obd_uuid = name2uuid(lustre, obd_name, tag='ost', fatal=1)
     if mgmt_name:
         mgmt_uuid = name2uuid(lustre, mgmt_name, tag='mgmt', fatal=1)
     else:
@@ -876,13 +901,24 @@ def add_mtpt(gen, lustre, options):
 
     path = get_option(options, 'path')
     fs_name = get_option(options, 'filesystem')
+
+    lov_name = get_option(options, 'lov')
+    ost_name = get_option(options, 'ost')
+    mds_name = get_option(options, 'mds')
+    if lov_name == '':
+        if ost_name == '':
+            error("--add mtpt requires --lov lov_name or --ost ost_name")
+        else:
+            warning("use default value for lov, due no --lov lov_name provided")
+            lov_name = new_name("lov_default")
+            add_default_lov(gen, lustre, mds_name, lov_name)
+            ost_uuid = name2uuid(lustre, ost_name, 'ost', fatal=0)
+            if not ost_uuid:
+                error('add_mtpt:', '"'+ost_name+'"', "ost element not found.")
+            lov = findByName(lustre, lov_name, "lov")
+            lov_add_obd(gen, lov, ost_uuid)
+
     if fs_name == '':
-        mds_name = get_option(options, 'mds')
-        lov_name = get_option(options, 'lov')
-        if lov_name == '':
-            lov_name = get_option(options, 'ost')
-            if lov_name == '':
-                error("--add mtpt requires either --filesystem or --mds with an  --lov lov_name or --ost ost_name")
         mgmt_name = get_option(options, 'mgmt')
         fs_uuid = get_fs_uuid(gen, lustre, mds_name, lov_name, mgmt_name)
     else:
