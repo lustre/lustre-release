@@ -142,6 +142,16 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 #define KML_CACHE_LINK          0x39
 #define KML_CACHE_NOOP          0x3f
 
+#define fsfilt_check_slow(start, timeout, msg)                          \
+do {                                                                    \
+        if (time_before(jiffies, start + 15 * HZ))                      \
+                break;                                                  \
+        else if (time_before(jiffies, start + timeout / 2 * HZ))        \
+                CWARN("slow %s %lus\n", msg, (jiffies - start) / HZ);   \
+        else                                                            \
+                CERROR("slow %s %lus\n", msg, (jiffies - start) / HZ);  \
+} while (0)
+
 static inline void *
 fsfilt_start_ops(struct fsfilt_operations *ops, struct inode *inode,
                  int op, struct obd_trans_info *oti, int logs)
@@ -160,8 +170,7 @@ fsfilt_start_ops(struct fsfilt_operations *ops, struct inode *inode,
                         LBUG();
                 }
         }
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, 60, "journal start");
         return handle;
 }
 
@@ -194,8 +203,7 @@ fsfilt_commit_ops(struct fsfilt_operations *ops, struct inode *inode,
         int rc = ops->fs_commit(inode, handle, force_sync);
         CDEBUG(D_INFO, "committing handle %p\n", handle);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, 60, "journal start");
 
         return rc;
 }
@@ -235,8 +243,7 @@ fsfilt_brw_start_log(struct obd_device *obd, int objcount,
                         LBUG();
                 }
         }
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "journal start");
 
         return handle;
 }
@@ -257,8 +264,7 @@ fsfilt_commit_async(struct obd_device *obd, struct inode *inode,
         int rc = obd->obd_fsops->fs_commit_async(inode, handle, wait_handle);
 
         CDEBUG(D_INFO, "committing handle %p (async)\n", *wait_handle);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "journal start");
 
         return rc;
 }
@@ -269,8 +275,7 @@ fsfilt_commit_wait(struct obd_device *obd, struct inode *inode, void *handle)
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
         CDEBUG(D_INFO, "waiting for completion %p\n", handle);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "journal start");
         return rc;
 }
 
@@ -281,8 +286,7 @@ fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         unsigned long now = jiffies;
         int rc;
         rc = obd->obd_fsops->fs_setattr(dentry, handle, iattr, do_trunc);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long setattr time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "setattr");
         return rc;
 }
 
@@ -349,8 +353,7 @@ fsfilt_putpage(struct obd_device *obd, struct inode *inode,
 
         rc = obd->obd_fsops->fs_putpage(inode, page);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long putpage time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "putpage");
 
         return rc;
 }
@@ -372,8 +375,7 @@ fsfilt_getpage(struct obd_device *obd, struct inode *inode,
 
         page = obd->obd_fsops->fs_getpage(inode, index);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("long getpage time %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "getpage");
 
         return page;
 }
