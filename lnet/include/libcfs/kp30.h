@@ -7,7 +7,13 @@
 #define PORTAL_DEBUG
 #include <libcfs/libcfs.h>
 
-#include <libcfs/arch/kp30.h>
+#if defined(__linux__)
+#include <libcfs/linux/kp30.h>
+#elif defined(__APPLE__)
+#include <libcfs/darwin/kp30.h>
+#else
+#error Unsupported operating system
+#endif
 
 #ifdef __KERNEL__
 

@@ -6,20 +6,5 @@
 SUBDIRS = libcfs portals knals unals router tests doc utils include	\
 	autoconf
 
-sources: include/libcfs/arch
+sources:
 	$(MAKE) sources -C libcfs
-
-all-recursive: include/libcfs/arch
-
-include/libcfs/arch:
-	case `uname` in						  \
-		Linux)						  \
-			ln -s linux include/libcfs/arch		  \
-			;;					  \
-		Darwin)						  \
-			ln -s darwin include/libcfs/arch	  \
-			;;					  \
-		*)						  \
-			echo "Platform `uname` is not supported"  \
-			;;					  \
-	esac
