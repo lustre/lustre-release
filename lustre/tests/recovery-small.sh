@@ -9,8 +9,6 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
-. $LUSTRE/tests/test-framework.sh
-
 build_test_filter
 
 
@@ -135,6 +133,22 @@ test_10() {
     do_facet client checkstat -v -p 0777 $MOUNT/f10  || return 3
     do_facet client "munlink $MOUNT/f10"
 }
-run_test 10 "finish request after client eviction (bug 1521)"
+run_test 10 "finish request on server after client eviction (bug 1521)"
 
+#bug 2460
+# wake up a thead waiting for completion after eviction
+test_11(){
+    do_facet client multiop $MOUNT/$tfile Ow  || return 1
+    do_facet client multiop $MOUNT/$tfile or  || return 2
+
+    cancel_lru_locks OSC
+
+    do_facet client multiop $MOUNT/$tfile or  || return 3
+    drop_bl_callback multiop $MOUNT/$tfile Ow  || 
+        echo "client evicted, as expected"
+
+    do_facet client unlink $MOUNT/$tfile  || return 4
+}
+run_test 11 "wake up a thead waiting for completion after eviction (b=2460)"
 $CLEANUP
+    

@@ -2,6 +2,9 @@
 
 set -e
 
+export REFORMAT=""
+export VERBOSE=false
+
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
 assert_env() {
     local failed=""
@@ -247,7 +250,7 @@ do_node() {
     shift
 
     if $VERBOSE; then
-	echo "CMD $HOST $@"
+	echo "CMD: $HOST $@"
     fi
     $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
@@ -389,6 +392,15 @@ pause_bulk() {
     return $RC
 }
 
+drop_ldlm_cancel() {
+#define OBD_FAIL_LDLM_CANCEL             0x304
+    RC=0
+    do_facet client "echo 0x304 > /proc/sys/lustre/fail_loc"
+    do_facet client "$@" || RC=$?
+    do_facet client "echo 0 > /proc/sys/lustre/fail_loc"
+    return $RC
+}
+
 drop_bl_callback() {
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
     RC=0
@@ -396,6 +408,15 @@ drop_bl_callback() {
     do_facet client "$@" || RC=$?
     do_facet client "echo 0 > /proc/sys/lustre/fail_loc"
     return $RC
+}
+
+cancel_lru_locks() {
+	for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
+	    if [ -f $d/lru_size ]; then
+		echo clear > $d/lru_size
+		grep [0-9] $d/lock_unused_count
+	    fi
+	done
 }
 
 ##################################
