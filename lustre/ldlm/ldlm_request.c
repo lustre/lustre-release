@@ -120,6 +120,7 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 {
         struct ldlm_lock *lock;
         int err;
+        ENTRY;
 
         if (ns->ns_client) {
                 CERROR("Trying to enqueue local lock in a shadow namespace\n");

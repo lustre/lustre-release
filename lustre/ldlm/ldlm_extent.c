@@ -87,6 +87,9 @@ int ldlm_extent_policy(struct ldlm_lock *lock, void *req_cookie,
 
         memcpy(&lock->l_extent, &new_ex, sizeof(new_ex));
 
+        LDLM_DEBUG(lock, "new extent "LPU64" -> "LPU64, new_ex.start,
+                   new_ex.end);
+
         if (new_ex.end != req_ex->end || new_ex.start != req_ex->start)
                 return ELDLM_LOCK_CHANGED;
         else 

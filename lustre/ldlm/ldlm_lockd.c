@@ -439,11 +439,14 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req)
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
 
         /* If we receive the completion AST before the actual enqueue returned,
-         * then we might need to switch resources or lock modes. */
+         * then we might need to switch lock modes, resources, or extents. */
         if (dlm_req->lock_desc.l_granted_mode != lock->l_req_mode) {
                 lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
                 LDLM_DEBUG(lock, "completion AST, new lock mode");
         }
+        if (lock->l_resource->lr_type == LDLM_EXTENT)
+                memcpy(&lock->l_extent, &dlm_req->lock_desc.l_extent,
+                       sizeof(lock->l_extent));
         ldlm_resource_unlink_lock(lock);
         if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
                    lock->l_resource->lr_name,

@@ -72,19 +72,19 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
        return (lck_compat_array[exist] & L2B(new));
 }
 
-/* 
- * 
- * cluster name spaces 
+/*
+ *
+ * cluster name spaces
  *
  */
 
 #define DLM_OST_NAMESPACE 1
 #define DLM_MDS_NAMESPACE 2
 
-/* XXX 
-   - do we just separate this by security domains and use a prefix for 
-     multiple namespaces in the same domain? 
-   - 
+/* XXX
+   - do we just separate this by security domains and use a prefix for
+     multiple namespaces in the same domain?
+   -
 */
 
 struct ldlm_namespace {
@@ -102,9 +102,9 @@ struct ldlm_namespace {
         __u64                  ns_resources;
 };
 
-/* 
- * 
- * Resource hash table 
+/*
+ *
+ * Resource hash table
  *
  */
 
@@ -118,7 +118,7 @@ typedef int (*ldlm_blocking_callback)(struct ldlm_lock *lock,
                                       struct ldlm_lock_desc *new, void *data,
                                       __u32 data_len, int flag);
 
-typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags); 
+typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags);
 
 struct ldlm_lock {
         __u64                 l_random;
@@ -169,8 +169,8 @@ typedef int (*ldlm_res_policy)(struct ldlm_lock *lock, void *req_cookie,
 #define LDLM_MIN_TYPE 10
 #define LDLM_MAX_TYPE 12
 
-extern ldlm_res_compat ldlm_res_compat_table []; 
-extern ldlm_res_policy ldlm_res_policy_table []; 
+extern ldlm_res_compat ldlm_res_compat_table [];
+extern ldlm_res_policy ldlm_res_policy_table [];
 
 struct ldlm_resource {
         struct ldlm_namespace *lr_namespace;
@@ -192,7 +192,7 @@ struct ldlm_resource {
         void                  *lr_tmp;
 };
 
-struct ldlm_ast_work { 
+struct ldlm_ast_work {
         struct ldlm_lock *w_lock;
         int               w_blocking;
         struct ldlm_lock_desc w_desc;
@@ -207,7 +207,7 @@ struct ldlm_export_data {
         struct list_head        led_held_locks;
         struct obd_import       led_import;
 };
-        
+
 static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
 {
         return (struct ldlm_extent *)(res->lr_name);
@@ -219,29 +219,48 @@ extern char *ldlm_lockname[];
 extern char *ldlm_typename[];
 extern char *ldlm_it2str(int it);
 
-#define LDLM_DEBUG(lock, format, a...)                                  \
-do {                                                                    \
-        if (lock->l_resource == NULL)                                   \
-                CDEBUG(D_DLMTRACE, "### " format                        \
-                       " (UNKNOWN: lock %p(rc=%d/%d,%d) mode %s/%s on " \
-                       "res \?\? (rc=\?\?) type \?\?\? remote "LPX64")\n" , \
-                       ## a, lock, lock->l_refc, lock->l_readers,       \
-                       lock->l_writers,                                 \
-                       ldlm_lockname[lock->l_granted_mode],             \
-                       ldlm_lockname[lock->l_req_mode],                 \
-                       lock->l_remote_handle.addr);                     \
-        else                                                            \
-                CDEBUG(D_DLMTRACE, "### " format                        \
-                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "  \
-                       LPU64" (rc=%d) type %s remote "LPX64")\n" , ## a,      \
-                       lock->l_resource->lr_namespace->ns_name, lock,   \
-                       lock->l_refc, lock->l_readers, lock->l_writers,  \
-                       ldlm_lockname[lock->l_granted_mode],             \
-                       ldlm_lockname[lock->l_req_mode],                 \
-                       lock->l_resource->lr_name[0],                    \
-                       atomic_read(&lock->l_resource->lr_refcount),     \
-                       ldlm_typename[lock->l_resource->lr_type],        \
-                       lock->l_remote_handle.addr);                     \
+#define LDLM_DEBUG(lock, format, a...)                                        \
+do {                                                                          \
+        if (lock->l_resource == NULL) {                                       \
+                CDEBUG(D_DLMTRACE, "### " format                              \
+                       " (UNKNOWN: lock %p(rc=%d/%d,%d) mode %s/%s on "       \
+                       "res \?\? (rc=\?\?) type \?\?\? remote "LPX64")\n",    \
+                       ## a, lock, lock->l_refc, lock->l_readers,             \
+                       lock->l_writers,                                       \
+                       ldlm_lockname[lock->l_granted_mode],                   \
+                       ldlm_lockname[lock->l_req_mode],                       \
+                       lock->l_remote_handle.addr);                           \
+                break;                                                        \
+        }                                                                     \
+        if (lock->l_resource->lr_type == LDLM_EXTENT) {                       \
+                CDEBUG(D_DLMTRACE, "### " format                              \
+                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "        \
+                       LPU64" (rc=%d) type %s ["LPU64"->"LPU64"] remote "     \
+                       LPX64")\n", ## a,                                      \
+                       lock->l_resource->lr_namespace->ns_name, lock,         \
+                       lock->l_refc, lock->l_readers, lock->l_writers,        \
+                       ldlm_lockname[lock->l_granted_mode],                   \
+                       ldlm_lockname[lock->l_req_mode],                       \
+                       lock->l_resource->lr_name[0],                          \
+                       atomic_read(&lock->l_resource->lr_refcount),           \
+                       ldlm_typename[lock->l_resource->lr_type],              \
+                       lock->l_extent.start, lock->l_extent.end,              \
+                       lock->l_remote_handle.addr);                           \
+                break;                                                        \
+        }                                                                     \
+        {                                                                     \
+                CDEBUG(D_DLMTRACE, "### " format                              \
+                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "        \
+                       LPU64" (rc=%d) type %s remote "LPX64")\n", ## a,       \
+                       lock->l_resource->lr_namespace->ns_name, lock,         \
+                       lock->l_refc, lock->l_readers, lock->l_writers,        \
+                       ldlm_lockname[lock->l_granted_mode],                   \
+                       ldlm_lockname[lock->l_req_mode],                       \
+                       lock->l_resource->lr_name[0],                          \
+                       atomic_read(&lock->l_resource->lr_refcount),           \
+                       ldlm_typename[lock->l_resource->lr_type],              \
+                       lock->l_remote_handle.addr);                           \
+        }                                                                     \
 } while (0)
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
@@ -309,10 +328,10 @@ void ldlm_lock_dump(struct ldlm_lock *lock);
 
 /* ldlm_test.c */
 int ldlm_test(struct obd_device *device, struct lustre_handle *connh);
-int ldlm_regression_start(struct obd_device *obddev, 
-                          struct lustre_handle *connh, 
-                          unsigned int threads, unsigned int max_locks_in, 
-                          unsigned int num_resources_in, 
+int ldlm_regression_start(struct obd_device *obddev,
+                          struct lustre_handle *connh,
+                          unsigned int threads, unsigned int max_locks_in,
+                          unsigned int num_resources_in,
                           unsigned int num_extents_in);
 int ldlm_regression_stop(void);
 
@@ -354,7 +373,7 @@ int ldlm_cli_enqueue(struct lustre_handle *conn,
                      void *data,
                      __u32 data_len,
                      struct lustre_handle *lockh);
-int ldlm_match_or_enqueue(struct lustre_handle *connh, 
+int ldlm_match_or_enqueue(struct lustre_handle *connh,
                           struct ptlrpc_request *req,
                           struct ldlm_namespace *ns,
                           struct lustre_handle *parent_lock_handle,
