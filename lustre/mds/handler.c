@@ -488,10 +488,6 @@ static int mds_statfs(struct ptlrpc_request *req)
         }
         osfs = lustre_msg_buf(req->rq_repmsg, 0);
         memset(osfs, 0, size);
-        /* FIXME: hack until the MDS gets the OST data, next month */
-        sfs.f_blocks = -1;
-        sfs.f_bfree = -1;
-        sfs.f_bavail = -1;
         obd_statfs_pack(osfs, &sfs);
 
 out:

@@ -153,7 +153,7 @@ static int osc_getattr(struct lustre_handle *conn, struct obdo *oa)
         EXIT;
  out:
         ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
 
 static int osc_open(struct lustre_handle *conn, struct obdo *oa)
@@ -228,7 +228,7 @@ static int osc_close(struct lustre_handle *conn, struct obdo *oa)
         EXIT;
  out:
         ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
 
 static int osc_setattr(struct lustre_handle *conn, struct obdo *oa)
@@ -258,7 +258,7 @@ static int osc_setattr(struct lustre_handle *conn, struct obdo *oa)
 
  out:
         ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
 
 static int osc_create(struct lustre_handle *conn, struct obdo *oa)
@@ -307,7 +307,7 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa)
         EXIT;
  out:
         ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
 
 static int osc_punch(struct lustre_handle *conn, struct obdo *oa, obd_size count,
@@ -349,7 +349,7 @@ static int osc_punch(struct lustre_handle *conn, struct obdo *oa, obd_size count
         EXIT;
  out:
         ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
 
 static int osc_destroy(struct lustre_handle *conn, struct obdo *oa)
@@ -389,7 +389,7 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa)
         EXIT;
  out:
         ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
 
 struct osc_brw_cb_data {
@@ -821,8 +821,7 @@ static int osc_cleanup(struct obd_device * obddev)
         return 0;
 }
 
-#if 0
-static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs);
+static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs)
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
@@ -840,34 +839,36 @@ static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs);
 
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
-        if (rc)
+        if (rc) {
+                CERROR("%s failed: rc = %d\n", __FUNCTION__, rc);
                 GOTO(out, rc);
+        }
 
         osfs = lustre_msg_buf(request->rq_repmsg, 0);
-        obd_statfs_unpack(sfs, osfs);
+        obd_statfs_unpack(osfs, sfs);
 
         EXIT;
  out:
         ptlrpc_free_req(request);
-        return 0;
+        return rc;
 }
-#endif
 
 struct obd_ops osc_obd_ops = {
-        o_setup:   osc_setup,
-        o_cleanup: osc_cleanup,
-        o_create: osc_create,
-        o_destroy: osc_destroy,
-        o_getattr: osc_getattr,
-        o_setattr: osc_setattr,
-        o_open: osc_open,
-        o_close: osc_close,
-        o_connect: osc_connect,
-        o_disconnect: osc_disconnect,
-        o_brw: osc_brw,
-        o_punch: osc_punch,
-        o_enqueue: osc_enqueue,
-        o_cancel: osc_cancel
+        o_setup:        osc_setup,
+        o_cleanup:      osc_cleanup,
+        o_statfs:       osc_statfs,
+        o_create:       osc_create,
+        o_destroy:      osc_destroy,
+        o_getattr:      osc_getattr,
+        o_setattr:      osc_setattr,
+        o_open:         osc_open,
+        o_close:        osc_close,
+        o_connect:      osc_connect,
+        o_disconnect:   osc_disconnect,
+        o_brw:          osc_brw,
+        o_punch:        osc_punch,
+        o_enqueue:      osc_enqueue,
+        o_cancel:       osc_cancel
 };
 
 static int __init osc_init(void)

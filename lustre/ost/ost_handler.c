@@ -74,6 +74,31 @@ static int ost_getattr(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static int ost_statfs(struct ptlrpc_request *req)
+{
+        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
+        struct obd_statfs *osfs;
+        struct statfs sfs;
+        int rc, size = sizeof(*osfs);
+        ENTRY;
+
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
+        if (rc)
+                RETURN(rc);
+
+        rc = obd_statfs(conn, &sfs);
+        if (rc) {
+                CERROR("ost: statfs failed: rc %d\n", rc);
+                GOTO(out, rc);
+        }
+        osfs = lustre_msg_buf(req->rq_repmsg, 0);
+        memset(osfs, 0, size);
+        obd_statfs_pack(osfs, &sfs);
+out:
+        req->rq_status = rc;
+        RETURN(0);
+}
+
 static int ost_open(struct ptlrpc_request *req)
 {
         struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
@@ -168,30 +193,6 @@ static int ost_setattr(struct ptlrpc_request *req)
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_setattr(conn, &repbody->oa);
         RETURN(0);
-}
-
-static int ost_get_info(struct ptlrpc_request *req)
-{
-        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
-        struct ost_body *body;
-        int rc, size[2] = {sizeof(*body)};
-        char *bufs[2] = {NULL, NULL}, *ptr;
-        ENTRY;
-
-        body = lustre_msg_buf(req->rq_reqmsg, 0);
-
-        ptr = lustre_msg_buf(req->rq_reqmsg, 1);
-        if (!ptr)
-                RETURN(-EINVAL);
-
-        req->rq_status = obd_get_info(conn, req->rq_reqmsg->buflens[1], ptr,
-                                      &(size[1]), (void **)&(bufs[1]));
-
-        rc = lustre_pack_msg(2, size, bufs, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                CERROR("cannot pack reply\n");
-
-        RETURN(rc);
 }
 
 static int ost_brw_read(struct ptlrpc_request *req)
@@ -488,13 +489,11 @@ static int ost_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OST_PUNCH_NET, 0);
                 rc = ost_punch(req);
                 break;
-#if 0
         case OST_STATFS:
                 CDEBUG(D_INODE, "statfs\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_STATFS_NET, 0);
                 rc = ost_statfs(req);
                 break;
-#endif
         default:
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req->rq_svc, req);

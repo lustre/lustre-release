@@ -537,15 +537,14 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa)
         int rc;
         ENTRY;
 
-        dentry = filter_fid2dentry(obd, filter_parent(obd, oa->o_mode),
-                                   oa->o_id, oa->o_mode);
+        iattr_from_obdo(&iattr, oa);
+        iattr.ia_mode = (iattr.ia_mode & ~S_IFMT) | S_IFREG;
+        dentry = filter_fid2dentry(obd, filter_parent(obd, iattr.ia_mode),
+                                   oa->o_id, iattr.ia_mode);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
         inode = dentry->d_inode;
-        iattr_from_obdo(&iattr, oa);
-        iattr.ia_mode &= ~S_IFMT;
-        iattr.ia_mode |= S_IFREG;
         lock_kernel();
         if (iattr.ia_mode & ATTR_SIZE)
                 down(&inode->i_sem);
@@ -657,8 +656,9 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa)
 
 static int filter_destroy(struct lustre_handle *conn, struct obdo *oa)
 {
-        struct obd_run_ctxt saved;
         struct obd_device *obd;
+        struct filter_obd *filter;
+        struct obd_run_ctxt saved;
         struct obd_export *export;
         struct inode *inode;
         struct dentry *dir_dentry, *object_dentry;
@@ -670,7 +670,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa)
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_INODE, "destroying object %Ld\n",oa->o_id);
+        CDEBUG(D_INODE, "destroying object %Ld\n", oa->o_id);
         obd = class_conn2obd(conn);
 
         dir_dentry = filter_parent(obd, oa->o_mode);
@@ -684,11 +684,13 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa)
         inode = object_dentry->d_inode;
         if (inode->i_nlink != 1) {
                 CERROR("destroying inode with nlink = %d\n", inode->i_nlink);
+                LBUG();
                 inode->i_nlink = 1;
         }
         inode->i_mode = S_IFREG;
 
-        push_ctxt(&saved, &obd->u.filter.fo_ctxt);
+        filter = &obd->u.filter;
+        push_ctxt(&saved, &filter->fo_ctxt);
 
         rc = vfs_unlink(dir_dentry->d_inode, object_dentry);
         pop_ctxt(&saved);
@@ -1284,23 +1286,13 @@ out_ctxt:
         RETURN(0);
 }
 
-static int filter_statfs(struct lustre_handle *conn, struct statfs * statfs)
+static int filter_statfs(struct lustre_handle *conn, struct statfs *statfs)
 {
-        struct super_block *sb;
-        int err;
+        struct obd_device *obd = class_conn2obd(conn);
+
         ENTRY;
-
-        if (!class_conn2export(conn)) {
-                CDEBUG(D_IOCTL, "invalid client %Lx\n", conn->addr);
-                RETURN(-EINVAL);
-        }
-
-        sb = class_conn2obd(conn)->u.filter.fo_sb;
-
-        err = sb->s_op->statfs(sb, statfs);
-        RETURN(err);
-} /* filter_statfs */
-
+        RETURN(vfs_statfs(obd->u.filter.fo_sb, statfs));
+}
 
 static int filter_get_info(struct lustre_handle *conn, obd_count keylen,
                            void *key, obd_count *vallen, void **val)
@@ -1332,8 +1324,8 @@ static int filter_get_info(struct lustre_handle *conn, obd_count keylen,
 
         if ( keylen == strlen("root_ino") &&
              memcmp(key, "root_ino", keylen) == 0 ){
-                *vallen = sizeof(long);
-                *val = (void *)(long)FILTER_ROOTINO;
+                *vallen = sizeof(obd_id);
+                *val = (void *)(obd_id)FILTER_ROOTINO;
                 RETURN(0);
         }
 
