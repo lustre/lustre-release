@@ -23,7 +23,7 @@
  *
  */
 
-#define DEBUG_SUBSYSTEM S_LLITE
+#define DEBUG_SUBSYSTEM S_LOV
 #ifndef __KERNEL__
 #include <liblustre.h>
 #endif
