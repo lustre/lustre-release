@@ -160,6 +160,7 @@ static int rcvd_reply_callback(ptl_event_t *ev, void *data)
 
         if (ev->type == PTL_EVENT_PUT) {
                 rpc->rq_repbuf = ev->mem_desc.start + ev->offset;
+                barrier();
                 wake_up_interruptible(&rpc->rq_wait_for_rep);
         } else { 
                 // XXX make sure we understand all events, including ACK's
