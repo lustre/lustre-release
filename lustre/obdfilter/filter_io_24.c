@@ -87,13 +87,13 @@ static int filter_cleanup_mappings(int rw, struct kiobuf *iobuf,
         ENTRY;
 
         for (i = 0 ; i < iobuf->nr_pages << blocks_per_page_bits; i++) {
-                if (iobuf->blocks[i] > 0)
+                if (KIOBUF_GET_BLOCKS(iobuf)[i] > 0)
                         continue;
 
                 if (rw == OBD_BRW_WRITE)
                         RETURN(-EINVAL);
 
-                iobuf->blocks[i] = -1UL;
+                KIOBUF_GET_BLOCKS(iobuf)[i] = -1UL;
         }
         RETURN(0);
 }
@@ -164,7 +164,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
                 sem = &obd->u.filter.fo_alloc_lock;
         }
         rc = fsfilt_map_inode_pages(obd, inode, iobuf->maplist,
-                                    iobuf->nr_pages, iobuf->blocks, 
+                                    iobuf->nr_pages, KIOBUF_GET_BLOCKS(iobuf),
                                     obdfilter_created_scratchpad, create, sem);
         if (rc)
                 GOTO(cleanup, rc);
@@ -175,7 +175,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
 
         if (rw == OBD_BRW_WRITE) {
                 filter_tally_write(&obd->u.filter, iobuf->maplist,
-                                   iobuf->nr_pages, iobuf->blocks,
+                                   iobuf->nr_pages, KIOBUF_GET_BLOCKS(iobuf),
                                    blocks_per_page);
 
                 if (attr->ia_size > inode->i_size)
@@ -204,8 +204,8 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
          * Someday very soon we'll be performing our brw_kiovec() IO to and
          * from the page cache. */
 
-        check_pending_bhs(iobuf->blocks, iobuf->nr_pages, inode->i_dev,
-                          1 << inode->i_blkbits);
+        check_pending_bhs(KIOBUF_GET_BLOCKS(iobuf), iobuf->nr_pages,
+                          inode->i_dev, 1 << inode->i_blkbits);
 
         rc = filemap_fdatasync(inode->i_mapping);
         if (rc == 0)

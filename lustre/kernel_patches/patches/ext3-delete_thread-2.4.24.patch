@@ -9,7 +9,7 @@ Index: linux-2.4.24/fs/ext3/super.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/super.c	2004-01-12 20:36:31.000000000 +0300
 +++ linux-2.4.24/fs/ext3/super.c	2004-01-13 16:27:43.000000000 +0300
-@@ -400,6 +400,128 @@
+@@ -400,6 +400,127 @@
  	}
  }
  
@@ -27,8 +27,6 @@ Index: linux-2.4.24/fs/ext3/super.c
 +	struct super_block *sb = data;
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	struct task_struct *tsk = current;
-+	struct inode *inode;
-+	unsigned long blocks;
 +
 +	/* Almost like daemonize, but not quite */
 +	exit_mm(current);
@@ -68,9 +66,10 @@ Index: linux-2.4.24/fs/ext3/super.c
 +		}
 +
 +		while (!list_empty(&sbi->s_delete_list)) {
-+			inode = list_entry(sbi->s_delete_list.next,
-+					       struct inode, i_devices);
-+			blocks = inode->i_blocks >> (inode->i_blkbits - 9);
++			struct inode *inode=list_entry(sbi->s_delete_list.next,
++						       struct inode, i_devices);
++			unsigned long blocks = inode->i_blocks >>
++							(inode->i_blkbits - 9);
 +
 +			list_del_init(&inode->i_devices);
 +			spin_unlock(&sbi->s_delete_lock);
@@ -347,7 +346,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
 +	struct ext3_sb_info *sbi = EXT3_SB(inode->i_sb);
 +	struct ext3_inode_info *ei = EXT3_I(inode);
 +	unsigned long blocks;
-+	
++
 +	if (!test_opt(inode->i_sb, ASYNCDEL))
 +		return 0;
 +
@@ -366,7 +365,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
 +	sbi->s_delete_blocks += blocks;
 +	sbi->s_delete_inodes++;
 +	spin_unlock(&sbi->s_delete_lock);
-+	
++
 +	wake_up(&sbi->s_delete_thread_queue);
 +
 +	return 0;

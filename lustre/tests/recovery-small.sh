@@ -2,7 +2,7 @@
 
 set -e
 
-#         bug  2986 
+#         bug  2986
 ALWAYS_EXCEPT="20b"
 
 
@@ -181,13 +181,13 @@ run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 
 # Bug 113, check that readdir lost recv timeout works.
 test_13() {
-    mkdir /mnt/lustre/readdir
-    touch /mnt/lustre/readdir/newentry
+    mkdir /mnt/lustre/readdir || return 1
+    touch /mnt/lustre/readdir/newentry || return
 # OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
     do_facet mds "sysctl -w lustre.fail_loc=0x80000104"
-    ls /mnt/lustre/readdir || return 1
+    ls /mnt/lustre/readdir || return 3
     do_facet mds "sysctl -w lustre.fail_loc=0"
-    rm -rf /mnt/lustre/readdir
+    rm -rf /mnt/lustre/readdir || return 4
 }
 run_test 13 "mdc_readpage restart test (bug 1138)"
 
@@ -364,7 +364,18 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 }
 run_test 20b "ldlm_handle_enqueue error (should return error)"
 
-test_21() {	# bug 3267 - eviction fails writeback but app doesn't see it
+#b_cray run_test 21a "drop close request while close and open are both in flight"
+#b_cray run_test 21b "drop open request while close and open are both in flight"
+#b_cray run_test 21c "drop both request while close and open are both in flight"
+#b_cray run_test 21d "drop close reply while close and open are both in flight"
+#b_cray run_test 21e "drop open reply while close and open are both in flight"
+#b_cray run_test 21f "drop both reply while close and open are both in flight"
+#b_cray run_test 21g "drop open reply and close request while close and open are both in flight"
+#b_cray run_test 21h "drop open request and close reply while close and open are both in flight"
+#b_cray run_test 22 "drop close request and do mknod"
+#b_cray run_test 23 "client hang when close a file after mds crash"
+
+test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	mkdir -p $DIR/$tdir
 	cancel_lru_locks OSC
 	multiop $DIR/$tdir/$tfile Owyw_yc &
@@ -377,6 +388,6 @@ test_21() {	# bug 3267 - eviction fails writeback but app doesn't see it
 	rc=$?
 	[ $rc -eq 0 ] && error "multiop didn't fail fsync: rc $rc" || true
 }
-run_test 21 "fsync error (should return error)" 
+run_test 24 "fsync error (should return error)" 
 
 $CLEANUP

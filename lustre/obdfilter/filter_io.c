@@ -313,7 +313,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         inode = dentry->d_inode;
 
-        obdo_to_inode(inode, oa, OBD_MD_FLATIME);
+        if (oa)
+                obdo_to_inode(inode, oa, OBD_MD_FLATIME);
 
         fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 

@@ -10,7 +10,7 @@ Index: linux/fs/ext3/namei.c
 +		/* limit is 16-bit i_links_count */
 +		if (inode->i_nlink >= EXT3_LINK_MAX || inode->i_nlink == 2)
 +			inode->i_nlink = 1;
-+        }
++	}
  }
  
  static inline void ext3_dec_count(handle_t *handle, struct inode *inode)
@@ -143,15 +143,6 @@ Index: linux/include/linux/ext3_fs.h
 ===================================================================
 --- linux.orig/include/linux/ext3_fs.h	Wed Aug 25 11:34:27 2004
 +++ linux/include/linux/ext3_fs.h	Wed Aug 25 13:14:48 2004
-@@ -42,7 +42,7 @@
- /*
-  * Always enable hashed directories
-  */
--#define CONFIG_EXT3_INDEX
-+#define CONFIG_EXT3_INDEX 1
- 
- /*
-  * Debug code
 @@ -79,7 +81,7 @@
  /*
   * Maximal count of links to a file

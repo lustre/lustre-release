@@ -23,7 +23,8 @@ if (($#ARGV < 0) || ($#ARGV > 1)) {
 
 
 
-my %namehash;
+my %cumulhash;
+my %sumhash;
 my $anysum = 0;
 my $anysumsquare = 0;
 my $mhz = 0;
@@ -55,7 +56,7 @@ sub readstat()
 	($name, $cumulcount, $samples, $unit, $min, $max, $sum, $sumsquare) 
 	    = split(/\s+/, $_);
 
-	$prevcount = %namehash->{$name};
+	$prevcount = %cumulhash->{$name};
 	if (defined($prevcount)) {
 	    $diff = $cumulcount - $prevcount;
 	    if ($name eq "snapshot_time") {
@@ -64,7 +65,7 @@ sub readstat()
 		printf "$statspath @ $cumulcount\n";
 		printf "%-25s %-10s %-10s %-10s", "Name", "Cur.Count", "Cur.Rate", "#Events";
 		if ($anysum) {
-		    printf "%-8s %10s %12s %10s", "Unit", "min", "avg", "max";
+		    printf "%-8s %10s %10s %12s %10s", "Unit", "last", "min", "avg", "max";
 		}
 		if ($anysumsquare) {
 		    printf "%10s", "stddev";
@@ -78,13 +79,20 @@ sub readstat()
 		
 		if (defined($sum)) {
 		    my $sum_orig = $sum;
+		    my $sum_diff = $sum - %sumhash->{$name};
+
+	    #printf "\n%-25s diff=$diff, sum=$sum sumhash=%10s sum_diff=$sum_diff\n", $name, %sumhash->{$name};
+		    if ($diff == 0) {
+			$diff = 1; # avoid division by zero
+		    }
 		    if (($unit eq "[cycles]") && ($mhz != 1)) {
 			$unit = "[usecs]";
 			$min = $min/$mhz;
 			$sum = $sum/$mhz;
+			$sum_diff = $sum_diff/$mhz;
 			$max = $max/$mhz;
 		    }
-		    printf "%-8s %10lu %12.2f %10lu", $unit, $min, ($sum/$cumulcount), $max;
+		    printf "%-8s %10.2f %10lu %12.2f %10lu", $unit, ($sum_diff/$diff), $min,($sum/$cumulcount),$max;
 		    if (defined($sumsquare)) {
 			my $s = $sumsquare - (($sum_orig*$sum_orig)/$cumulcount);
 			if ($s >= 0) {
@@ -112,7 +120,8 @@ sub readstat()
 		$anysumsquare = 1;
 	    }
 	}
-	%namehash->{$name} = $cumulcount;
+	%cumulhash->{$name} = $cumulcount;
+	%sumhash->{$name} = $sum;
     }
 }
 

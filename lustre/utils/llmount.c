@@ -480,7 +480,7 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
         if (lmd_bad_magic(lmd))
                 return -EINVAL;
 
-        if (strlen(source) > sizeof(buf) + 1) {
+        if (strlen(source) >= sizeof(buf)) {
                 fprintf(stderr, "%s: host:/mds/profile argument too long\n",
                         progname);
                 return -EINVAL;

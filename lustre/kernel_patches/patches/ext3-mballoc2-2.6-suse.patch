@@ -1313,23 +1313,24 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	for (i = 0; i < buddy_offset; i++) {
 +		handle = ext3_journal_start(sbi->s_buddy, MB_CREDITS);
 +		if (IS_ERR(handle)) {
-+			printk(KERN_ERR "EXT3-fs: cant start transaction\n");
++			printk(KERN_ERR "EXT3-fs: can't start transaction\n");
 +			err = PTR_ERR(handle);
 +			goto err_out;
 +		}
 +		
 +		bh = ext3_bread(handle, sbi->s_buddy, i, 1, &err);
 +		if (bh == NULL) {
-+			printk(KERN_ERR "EXT3-fs: cant getblk grp: %d\n", err);
++			printk(KERN_ERR "EXT3-fs: can't getblk grp: %d\n", err);
 +			goto err_out;
 +		}
-+		hdr = (struct ext3_mb_group_hdr *) bh->b_data;
++		hdr = (struct ext3_mb_grp_header *) bh->b_data;
 +		if (hdr->mh_magic != EXT3_MB_MAGIC_V1) {
 +			err = ext3_journal_get_write_access(handle, bh);
 +			if (err)
 +				goto err_out;
 +			*created = 1;
-+			printk("EXT3-fs: invalid header 0x%x in %d, regenerate\n", hdr->mh_magic, i);
++			printk("EXT3-fs: invalid header %#x in %d regenerate\n",
++			       hdr->mh_magic, i);
 +			hdr->mh_magic = EXT3_MB_MAGIC_V1;
 +			err = ext3_journal_dirty_metadata(handle, bh);
 +			if (err)
@@ -1342,10 +1343,9 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	len = sizeof(struct ext3_buddy_group_blocks);
 +	len += sizeof(unsigned) * (sb->s_blocksize_bits + 2);
 +	for (i = 0; i < sbi->s_groups_count; i++) {
-+
 +		sbi->s_buddy_blocks[i] = kmalloc(len, GFP_KERNEL);
 +		if (sbi->s_buddy_blocks[i] == NULL) {
-+			printk(KERN_ERR "EXT3-fs: cant allocate mem for buddy\n");
++			printk(KERN_ERR "EXT3-fs: can't allocate buddy mem\n");
 +			err = -ENOMEM;
 +			goto out2;
 +		}
@@ -1353,7 +1353,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +
 +		handle = ext3_journal_start(sbi->s_buddy, MB_CREDITS);
 +		if (IS_ERR(handle)) {
-+			printk(KERN_ERR "EXT3-fs: cant start transaction\n");
++			printk(KERN_ERR "EXT3-fs: can't start transaction\n");
 +			err = PTR_ERR(handle);
 +			goto out2;
 +		}
@@ -1362,7 +1362,8 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		block = buddy_offset + i * 2;
 +		bh = ext3_getblk(handle, sbi->s_buddy, block, 1, &err);
 +		if (bh == NULL) {
-+			printk(KERN_ERR "EXT3-fs: cant getblk bitmap: %d\n", err);
++			printk(KERN_ERR "EXT3-fs: can't getblk bitmap: %d\n",
++			       err);
 +			goto out2;
 +		}
 +		sbi->s_buddy_blocks[i]->bb_bitmap = bh->b_blocknr;
@@ -1372,7 +1373,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		block = buddy_offset + i * 2 + 1;
 +		bh = ext3_getblk(handle, sbi->s_buddy, block, 1, &err);
 +		if (bh == NULL) {
-+			printk(KERN_ERR "EXT3-fs: cant getblk for buddy: %d\n", err);
++			printk(KERN_ERR "EXT3-fs: can't getblk for buddy: %d\n",+			       err);
 +			goto out2;
 +		}
 +		sbi->s_buddy_blocks[i]->bb_buddy = bh->b_blocknr;
@@ -1819,7 +1820,6 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +out:
 +	return ret;
 +}
-+
 +
 +extern void ext3_free_blocks_old(handle_t *, struct inode *,
 +				unsigned long, unsigned long);

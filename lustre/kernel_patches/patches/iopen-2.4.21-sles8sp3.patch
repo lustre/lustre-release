@@ -407,7 +407,7 @@ Index: kernel-2.4.212l35/fs/ext3/namei.c
 -	d_add(dentry, inode);
 -	return NULL;
 +
-+ 	return iopen_connect_dentry(dentry, inode, 1);
++	return iopen_connect_dentry(dentry, inode, 1);
  }
  
  #define S_SHIFT 12

@@ -500,7 +500,7 @@ static int fsfilt_ext3_send_bio(int rw, struct inode *inode, struct kiobuf *bio)
         int rc, blocks_per_page;
 
         rc = brw_kiovec(rw, 1, &bio, inode->i_dev,
-                        bio->blocks, 1 << inode->i_blkbits);
+                        KIOBUF_GET_BLOCKS(bio), 1 << inode->i_blkbits);
 
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 

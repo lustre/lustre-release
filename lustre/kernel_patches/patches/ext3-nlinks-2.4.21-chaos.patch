@@ -10,7 +10,7 @@ Index: 69chaos/fs/ext3/namei.c
 +		/* limit is 16-bit i_links_count */
 +		if (inode->i_nlink >= EXT3_LINK_MAX || inode->i_nlink == 2)
 +			inode->i_nlink = 1;
-+        }
++	}
  }
  
  static inline void ext3_dec_count(handle_t *handle, struct inode *inode)
@@ -90,9 +90,9 @@ Index: 69chaos/fs/ext3/namei.c
  	ext3_mark_inode_dirty(handle, dir);
 -	inode->i_nlink--;
 +	ext3_dec_count(handle, inode);
- 	if (!inode->i_nlink)
+ 	if (!inode->i_nlink) {
+ 		ext3_try_to_delay_deletion(inode);
  		ext3_orphan_add(handle, inode);
- 	inode->i_ctime = dir->i_ctime;
 @@ -2111,9 +2117,8 @@
  	if (S_ISDIR(inode->i_mode))
  		return -EPERM;
@@ -143,15 +143,6 @@ Index: 69chaos/include/linux/ext3_fs.h
 ===================================================================
 --- 69chaos.orig/include/linux/ext3_fs.h	2004-08-24 23:55:45.000000000 -0700
 +++ 69chaos/include/linux/ext3_fs.h	2004-08-24 23:56:47.000000000 -0700
-@@ -44,7 +44,7 @@
- /*
-  * Always enable hashed directories
-  */
--#define CONFIG_EXT3_INDEX
-+#define CONFIG_EXT3_INDEX 1
- 
- /*
-  * Debug code
 @@ -79,7 +81,7 @@
  /*
   * Maximal count of links to a file

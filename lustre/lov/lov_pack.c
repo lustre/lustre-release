@@ -392,7 +392,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 }
 
 int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
-                  struct lov_user_md *lump)
+              struct lov_user_md *lump)
 {
         int i;
         int rc;

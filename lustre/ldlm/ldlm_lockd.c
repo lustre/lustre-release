@@ -188,8 +188,10 @@ static void waiting_locks_callback(unsigned long unused)
 
                 if (lock == last) {
                         LDLM_ERROR(lock, "waiting on lock multiple times");
-                        CERROR("wll %p .prev %p, l_pending.next %p .prev %p\n",
+                        CERROR("wll %p n/p %p/%p, l_pending %p n/p %p/%p\n",
+                               &waiting_locks_list,
                                waiting_locks_list.next, waiting_locks_list.prev,
+                               &lock->l_pending_chain,
                                lock->l_pending_chain.next,
                                lock->l_pending_chain.prev);
                         spin_unlock_bh(&waiting_locks_spinlock);

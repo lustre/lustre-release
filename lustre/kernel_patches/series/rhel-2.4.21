@@ -38,7 +38,7 @@ ext3-extents-2.4.21-chaos.patch
 ext3-extents-asyncdel-2.4.21-chaos.patch
 ext3-mballoc-2.4.21-chaos.patch
 blkdev_tunables-2.4.21-chaos.patch
-small_scatterlist-2.4.21-rhel.patch
+small_scatterlist-2.4.21-rhel.patch 
 ext3-nlinks-2.4.21-chaos.patch
 sd_iostats-2.4.21-chaos.patch
 llnl-frame-pointer-walk-2.4.21-rhel.patch

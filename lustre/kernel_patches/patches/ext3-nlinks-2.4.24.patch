@@ -8,7 +8,7 @@
 +		/* limit is 16-bit i_links_count */
 +		if (inode->i_nlink >= EXT3_LINK_MAX || inode->i_nlink == 2)
 +			inode->i_nlink = 1;
-+        }
++	}
  }
  
  static inline void ext3_dec_count(handle_t *handle, struct inode *inode)
@@ -139,15 +139,6 @@
  		}
 --- ./include/linux/ext3_fs.h.orig	2004-08-19 12:53:52.000000000 +0800
 +++ ./include/linux/ext3_fs.h	2004-08-19 11:06:33.000000000 +0800
-@@ -42,7 +42,7 @@
- /*
-  * Always enable hashed directories
-  */
--#define CONFIG_EXT3_INDEX
-+#define CONFIG_EXT3_INDEX 1
- 
- /*
-  * Debug code
 @@ -79,7 +81,7 @@
  /*
   * Maximal count of links to a file

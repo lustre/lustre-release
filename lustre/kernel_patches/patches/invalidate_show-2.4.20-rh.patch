@@ -32,7 +32,7 @@
  /**
   *	invalidate_inodes	- discard the inodes on a device
   *	@sb: superblock
-+ *      @show: whether we should display any busy inodes found
++ *	@show: whether we should display any busy inodes found
   *
   *	Discard all of the inodes for a given superblock. If the discard
   *	fails because there are busy inodes then a non zero value is returned.

@@ -429,9 +429,9 @@ static int mdc_close_interpret(struct ptlrpc_request *req, void *data, int rc)
         if (rpc_lock == NULL) {
                 CERROR("called with NULL rpc_lock\n");
         } else {
-                mdc_put_rpc_lock(rpc_lock, NULL);
                 LASSERTF(rpc_lock == obd->u.cli.cl_rpc_lock, "%p != %p\n",
                          rpc_lock, obd->u.cli.cl_rpc_lock);
+                mdc_put_rpc_lock(rpc_lock, NULL);
         }
         wake_up(&req->rq_reply_waitq);
         RETURN(rc);

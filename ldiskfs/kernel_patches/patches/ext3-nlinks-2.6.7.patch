@@ -129,15 +129,6 @@ Index: linux-2.6.7/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.7.orig/include/linux/ext3_fs.h	2004-06-15 23:19:36.000000000 -0600
 +++ linux-2.6.7/include/linux/ext3_fs.h	2004-08-20 17:41:27.000000000 -0600
-@@ -41,7 +41,7 @@ struct statfs;
- /*
-  * Always enable hashed directories
-  */
--#define CONFIG_EXT3_INDEX
-+#define CONFIG_EXT3_INDEX 1
- 
- /*
-  * Debug code
 @@ -79,7 +81,7 @@
  /*
   * Maximal count of links to a file

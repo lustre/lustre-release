@@ -264,7 +264,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
         } else if (ia_valid & ATTR_MODE) {
                 int mode = attr->ia_mode;
                 /* chmod */
-                if (attr->ia_mode == (mode_t) -1)
+                if (attr->ia_mode == (umode_t)-1)
                         mode = inode->i_mode;
                 attr->ia_mode =
                         (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
