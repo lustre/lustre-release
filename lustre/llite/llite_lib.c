@@ -109,11 +109,6 @@ void ll_options(char *options, char **ost, char **mds, int *flags)
                                 ll_set_opt("nolock", this_char,
                                            LL_SBI_NOLCK)))
                         continue;
-                if (!(*flags & LL_SBI_READAHEAD) &&
-                    ((*flags) = (*flags) |
-                                ll_set_opt("readahead", this_char,
-                                           LL_SBI_READAHEAD)))
-                        continue;
         }
         EXIT;
 }
@@ -155,6 +150,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
+        sbi->ll_flags |= LL_SBI_READAHEAD;
         ll_options(data, &osc, &mdc, &sbi->ll_flags);
 
         if (!osc) {
@@ -380,8 +376,6 @@ void ll_clear_inode(struct inode *inode)
  * I don't believe it is possible to get e.g. ATTR_MTIME_SET and ATTR_SIZE
  * at the same time.
  */
-#define OST_ATTR (ATTR_MTIME | ATTR_MTIME_SET | ATTR_CTIME | \
-                  ATTR_ATIME | ATTR_ATIME_SET | ATTR_SIZE)
 int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
@@ -403,6 +397,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
 
                 attr->ia_valid |= ATTR_MTIME | ATTR_CTIME;
+        }
+
+        /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
+        if (ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET)) {
+                if (current->fsuid != inode->i_uid && !capable(CAP_FOWNER))
+                        RETURN(-EPERM);
         }
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
@@ -429,7 +429,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         /* If only OST attributes being set on objects, don't do MDS RPC.
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
-        if (ia_valid & (lsm ? ~(OST_ATTR | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
+        if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
@@ -448,10 +448,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         ptlrpc_req_finished(request);
                         RETURN(rc);
                 }
+
+                /* Won't invoke vmtruncate as we already cleared ATTR_SIZE,
+                 * but needed to set timestamps backwards on utime. */
+                inode_setattr(inode, attr);
                 ll_update_inode(inode, md.body, md.lsm);
                 ptlrpc_req_finished(request);
 
-                if (!md.lsm || !S_ISREG(inode->i_mode)) {
+                if (!lsm || !S_ISREG(inode->i_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                         RETURN(0);
                 }
@@ -657,14 +661,20 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                                 LBUG();
                         }
                 }
+                if (lli->lli_smd != lsm)
+                        obd_free_memmd(ll_i2obdexp(inode), &lsm);
         }
 
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)
                 LTIME_S(inode->i_atime) = body->atime;
-        if (body->valid & OBD_MD_FLMTIME)
+        if (body->valid & OBD_MD_FLMTIME &&
+            body->mtime > LTIME_S(inode->i_mtime)) {
+                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to %u\n",
+                       inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
                 LTIME_S(inode->i_mtime) = body->mtime;
+        }
         if (body->valid & OBD_MD_FLCTIME &&
             body->ctime > LTIME_S(inode->i_ctime))
                 LTIME_S(inode->i_ctime) = body->ctime;
@@ -686,12 +696,15 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 inode->i_rdev = body->rdev;
 #else
-                inode->i_rdev = to_kdev_t(body->rdev);
+                inode->i_rdev = old_encode_dev(body->rdev);
 #endif
         if (body->valid & OBD_MD_FLSIZE)
                 inode->i_size = body->size;
         if (body->valid & OBD_MD_FLBLOCKS)
                 inode->i_blocks = body->blocks;
+
+        if (body->valid & OBD_MD_FLSIZE)
+                set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 }
 
 void ll_read_inode2(struct inode *inode, void *opaque)
@@ -743,6 +756,99 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         }
 }
 
+int ll_iocontrol(struct inode *inode, struct file *file,
+                        unsigned int cmd, unsigned long arg)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ptlrpc_request *req = NULL;
+        int rc, flags = 0;
+        ENTRY;
+        
+        switch(cmd) {
+        case EXT3_IOC_GETFLAGS: {
+                struct ll_fid fid;
+                unsigned long valid = OBD_MD_FLFLAGS;
+                struct mds_body *body;
+
+                ll_inode2fid(&fid, inode);
+                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, 0, &req);
+                if (rc) {
+                        CERROR("failure %d inode %lu\n", rc, inode->i_ino);
+                        RETURN(-abs(rc));
+                }
+                
+                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+                
+                if (body->flags & S_APPEND)
+                        flags |= EXT3_APPEND_FL;
+                if (body->flags & S_IMMUTABLE)
+                        flags |= EXT3_IMMUTABLE_FL;
+                if (body->flags & S_NOATIME)
+                        flags |= EXT3_NOATIME_FL;
+                
+                ptlrpc_req_finished (req);
+                
+                RETURN( put_user(flags, (int *)arg) );
+        }
+        case EXT3_IOC_SETFLAGS: {
+                struct mdc_op_data op_data;
+                struct iattr attr;
+                struct obdo oa;
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        
+                if ( get_user( flags, (int *)arg ) )
+                        RETURN( -EFAULT );
+                
+                ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+                
+                memset(&attr, 0x0, sizeof(attr));
+                attr.ia_attr_flags = flags;
+                attr.ia_valid |= ATTR_ATTR_FLAG;
+                
+                rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
+                                 &attr, NULL, 0, NULL, 0, &req);
+                if (rc) {
+                        ptlrpc_req_finished(req);
+                        if (rc != -EPERM && rc != -EACCES)
+                                CERROR("mdc_setattr fails: rc = %d\n", rc);
+                        RETURN(rc);
+                }
+                ptlrpc_req_finished(req);
+                
+                memset(&oa, 0x0, sizeof(oa));
+                oa.o_id = lsm->lsm_object_id;
+                oa.o_flags = flags;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+                
+                rc = obd_setattr(sbi->ll_osc_exp, &oa, lsm, NULL);
+                if (rc) {
+                        if (rc != -EPERM && rc != -EACCES)
+                                CERROR("mdc_setattr fails: rc = %d\n", rc);
+                        RETURN(rc);
+                }
+                
+                if (flags & EXT3_APPEND_FL)
+                        inode->i_flags |= S_APPEND;
+                else
+                        inode->i_flags &= ~S_APPEND;
+                if (flags & EXT3_IMMUTABLE_FL)
+                        inode->i_flags |= S_IMMUTABLE;
+                else
+                        inode->i_flags &= ~S_IMMUTABLE;
+                if (flags & EXT3_NOATIME_FL)
+                        inode->i_flags |= S_NOATIME;
+                else
+                        inode->i_flags &= ~S_NOATIME;
+                
+                RETURN(0);
+        }
+        default:
+                RETURN(-ENOSYS);
+        }
+        
+        RETURN(0);
+}
+
 void ll_umount_begin(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -781,4 +887,31 @@ void ll_umount_begin(struct super_block *sb)
         schedule();
 
         EXIT;
+}
+
+int ll_prep_inode(struct obd_export *exp, struct inode **inode,
+                  struct ptlrpc_request *req, int offset,struct super_block *sb)
+{
+        struct lustre_md md;
+        int rc = 0;
+
+        rc = mdc_req2lustre_md(req, offset, exp, &md);
+        if (rc)
+                RETURN(rc);
+
+        if (*inode) {
+                ll_update_inode(*inode, md.body, md.lsm);
+        } else {
+                LASSERT(sb);
+                *inode = ll_iget(sb, md.body->ino, &md);
+                if (!*inode) {
+                        /* free the lsm if we allocated one above */
+                        if (md.lsm != NULL)
+                                obd_free_memmd(exp, &md.lsm);
+                        rc = -ENOMEM;
+                        CERROR("new_inode -fatal: rc %d\n", rc);
+                }
+        }
+
+        RETURN(rc);
 }

@@ -374,7 +374,6 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
 {
         struct page *old_page;
         int rc;
-        ENTRY;
 
         do {
                 /* the dlm is protecting us from read/write concurrency, so we
@@ -412,8 +411,6 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
                 rc = 0;
 #endif
         } while (rc != 0);
-
-        EXIT;
 }
 
 /* XXX needs to trickle its oa down */

@@ -1,35 +1,31 @@
  fs/dcache.c            |   19 ++
- fs/exec.c              |   15 +-
- fs/namei.c             |  355 +++++++++++++++++++++++++++++++++++++++++--------
- fs/namespace.c         |   30 +++-
- fs/open.c              |  122 ++++++++++++++--
- fs/proc/base.c         |    3 
- fs/stat.c              |   27 ++-
- include/linux/dcache.h |   54 +++++++
- include/linux/fs.h     |   31 ++++
+ fs/exec.c              |   18 +-
+ fs/namei.c             |  328 +++++++++++++++++++++++++++++++++++++++++--------
+ fs/namespace.c         |   28 +++-
+ fs/open.c              |  167 ++++++++++++++++++------
+ fs/stat.c              |   29 ++--
+ include/linux/dcache.h |   60 ++++++++
+ include/linux/fs.h     |   34 ++++-
  kernel/exit.c          |    3 
  kernel/fork.c          |    3 
  kernel/ksyms.c         |    1 
- 12 files changed, 564 insertions(+), 99 deletions(-)
+ 11 files changed, 564 insertions(+), 126 deletions(-)
 
-Index: linux-2.4.18-chaos52/fs/exec.c
-===================================================================
---- linux-2.4.18-chaos52.orig/fs/exec.c	2003-08-11 10:10:12.000000000 +0800
-+++ linux-2.4.18-chaos52/fs/exec.c	2003-08-11 10:17:04.000000000 +0800
-@@ -117,8 +117,10 @@
+--- linux-2.4.18-chaos/fs/exec.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:03.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/exec.c	2003-09-14 17:25:41.000000000 +0400
+@@ -117,8 +117,10 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
  	int error;
--
--	error = user_path_walk(library, &nd);
 +	struct lookup_intent it = { .it_op = IT_OPEN,
 +	                                     .it_flags = FMODE_READ|FMODE_EXEC };
-+					     
+ 
+-	error = user_path_walk(library, &nd);
 +	error = user_path_walk_it(library, &nd, &it);
  	if (error)
  		goto out;
  
-@@ -130,7 +132,8 @@
+@@ -130,7 +132,8 @@ asmlinkage long sys_uselib(const char * 
  	if (error)
  		goto exit;
  
@@ -39,7 +35,7 @@ Index: linux-2.4.18-chaos52/fs/exec.c
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -359,8 +362,9 @@
+@@ -359,8 +362,9 @@ struct file *open_exec(const char *name)
  	struct inode *inode;
  	struct file *file;
  	int err = 0;
@@ -51,7 +47,7 @@ Index: linux-2.4.18-chaos52/fs/exec.c
  	file = ERR_PTR(err);
  	if (!err) {
  		inode = nd.dentry->d_inode;
-@@ -372,7 +376,8 @@
+@@ -372,7 +376,8 @@ struct file *open_exec(const char *name)
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -61,7 +57,7 @@ Index: linux-2.4.18-chaos52/fs/exec.c
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
-@@ -384,6 +389,7 @@
+@@ -384,6 +389,7 @@ out:
  				return file;
  			}
  		}
@@ -69,7 +65,7 @@ Index: linux-2.4.18-chaos52/fs/exec.c
  		path_release(&nd);
  	}
  	goto out;
-@@ -1104,7 +1110,7 @@
+@@ -1104,7 +1110,7 @@ int do_coredump(long signr, struct pt_re
  		goto close_fail;
  	if (!file->f_op->write)
  		goto close_fail;
@@ -78,11 +74,9 @@ Index: linux-2.4.18-chaos52/fs/exec.c
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
-Index: linux-2.4.18-chaos52/fs/dcache.c
-===================================================================
---- linux-2.4.18-chaos52.orig/fs/dcache.c	2003-08-11 10:10:12.000000000 +0800
-+++ linux-2.4.18-chaos52/fs/dcache.c	2003-08-11 10:11:27.000000000 +0800
-@@ -186,6 +186,13 @@
+--- linux-2.4.18-chaos/fs/dcache.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:03.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/dcache.c	2003-09-14 17:25:41.000000000 +0400
+@@ -186,6 +186,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
  	}
@@ -96,7 +90,7 @@ Index: linux-2.4.18-chaos52/fs/dcache.c
  	/*
  	 * Check whether to do a partial shrink_dcache
  	 * to get rid of unused child entries.
-@@ -859,13 +866,19 @@
+@@ -859,13 +866,19 @@ void d_delete(struct dentry * dentry)
   * Adds a dentry to the hash according to its name.
   */
   
@@ -119,11 +113,9 @@ Index: linux-2.4.18-chaos52/fs/dcache.c
  }
  
  #define do_switch(x,y) do { \
-Index: linux-2.4.18-chaos52/fs/namespace.c
-===================================================================
---- linux-2.4.18-chaos52.orig/fs/namespace.c	2003-08-11 10:10:12.000000000 +0800
-+++ linux-2.4.18-chaos52/fs/namespace.c	2003-08-11 10:11:27.000000000 +0800
-@@ -99,6 +99,7 @@
+--- linux-2.4.18-chaos/fs/namespace.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:05.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/namespace.c	2003-09-14 17:25:41.000000000 +0400
+@@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
@@ -131,7 +123,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	mnt->mnt_parent = mnt;
  	mnt->mnt_mountpoint = mnt->mnt_root;
  	list_del_init(&mnt->mnt_child);
-@@ -110,6 +111,7 @@
+@@ -110,6 +111,7 @@ static void attach_mnt(struct vfsmount *
  {
  	mnt->mnt_parent = mntget(nd->mnt);
  	mnt->mnt_mountpoint = dget(nd->dentry);
@@ -139,7 +131,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	list_add(&mnt->mnt_hash, mount_hashtable+hash(nd->mnt, nd->dentry));
  	list_add(&mnt->mnt_child, &nd->mnt->mnt_mounts);
  	nd->dentry->d_mounted++;
-@@ -485,14 +487,17 @@
+@@ -485,14 +487,17 @@ static int do_loopback(struct nameidata 
  {
  	struct nameidata old_nd;
  	struct vfsmount *mnt = NULL;
@@ -159,7 +151,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  
  	down_write(&current->namespace->sem);
  	err = -EINVAL;
-@@ -515,6 +520,7 @@
+@@ -515,6 +520,7 @@ static int do_loopback(struct nameidata 
  	}
  
  	up_write(&current->namespace->sem);
@@ -167,7 +159,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	path_release(&old_nd);
  	return err;
  }
-@@ -698,6 +704,7 @@
+@@ -698,6 +704,7 @@ long do_mount(char * dev_name, char * di
  		  unsigned long flags, void *data_page)
  {
  	struct nameidata nd;
@@ -175,7 +167,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	int retval = 0;
  	int mnt_flags = 0;
  
-@@ -722,10 +729,11 @@
+@@ -722,10 +729,11 @@ long do_mount(char * dev_name, char * di
  	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
  
  	/* ... and get the mountpoint */
@@ -190,7 +182,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	if (flags & MS_REMOUNT)
  		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
  				    data_page);
-@@ -736,6 +744,8 @@
+@@ -736,6 +744,8 @@ long do_mount(char * dev_name, char * di
  	else
  		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
  				      dev_name, data_page);
@@ -199,7 +191,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	path_release(&nd);
  	return retval;
  }
-@@ -901,6 +911,8 @@
+@@ -901,6 +911,8 @@ asmlinkage long sys_pivot_root(const cha
  {
  	struct vfsmount *tmp;
  	struct nameidata new_nd, old_nd, parent_nd, root_parent, user_nd;
@@ -208,7 +200,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	int error;
  
  	if (!capable(CAP_SYS_ADMIN))
-@@ -908,14 +920,14 @@
+@@ -908,14 +920,14 @@ asmlinkage long sys_pivot_root(const cha
  
  	lock_kernel();
  
@@ -225,7 +217,7 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	if (error)
  		goto out1;
  
-@@ -970,8 +982,10 @@
+@@ -970,8 +982,10 @@ out2:
  	up(&old_nd.dentry->d_inode->i_zombie);
  	up_write(&current->namespace->sem);
  	path_release(&user_nd);
@@ -236,10 +228,8 @@ Index: linux-2.4.18-chaos52/fs/namespace.c
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
-Index: linux-2.4.18-chaos52/fs/namei.c
-===================================================================
---- linux-2.4.18-chaos52.orig/fs/namei.c	2003-08-11 10:10:12.000000000 +0800
-+++ linux-2.4.18-chaos52/fs/namei.c	2003-08-11 10:11:27.000000000 +0800
+--- linux-2.4.18-chaos/fs/namei.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:05.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/namei.c	2003-09-14 17:25:41.000000000 +0400
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -254,7 +244,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
   * kernel data space before using them..
-@@ -260,10 +267,19 @@
+@@ -260,10 +267,19 @@ void path_release(struct nameidata *nd)
   * Internal lookup() using the new generic dcache.
   * SMP-safe
   */
@@ -275,7 +265,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  		if (!dentry->d_op->d_revalidate(dentry, flags) && !d_invalidate(dentry)) {
  			dput(dentry);
-@@ -281,11 +297,14 @@
+@@ -281,11 +297,15 @@ static struct dentry * cached_lookup(str
   * make sure that nobody added the entry to the dcache in the meantime..
   * SMP-safe
   */
@@ -285,13 +275,14 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
++        int counter = 0;
  
 +again:
-+
++        counter++;
  	down(&dir->i_sem);
  	/*
  	 * First re-do the cached lookup just in case it was created
-@@ -300,6 +319,9 @@
+@@ -300,6 +320,9 @@ static struct dentry * real_lookup(struc
  		result = ERR_PTR(-ENOMEM);
  		if (dentry) {
  			lock_kernel();
@@ -301,7 +292,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  			result = dir->i_op->lookup(dir, dentry);
  			unlock_kernel();
  			if (result)
-@@ -321,6 +343,12 @@
+@@ -321,6 +344,15 @@ static struct dentry * real_lookup(struc
  			dput(result);
  			result = ERR_PTR(-ENOENT);
  		}
@@ -309,12 +300,15 @@ Index: linux-2.4.18-chaos52/fs/namei.c
 +		if (!result->d_op->d_revalidate_it(result, flags, it) &&
 +		    !d_invalidate(result)) {
 +			dput(result);
-+			goto again;
++                        if (counter > 10)
++                                result = ERR_PTR(-ESTALE);
++                        if (!IS_ERR(result))
++                                goto again;
 +		}
  	}
  	return result;
  }
-@@ -334,7 +362,8 @@
+@@ -334,7 +366,8 @@ int max_recursive_link = 5;
   * Without that kind of total limit, nasty chains of consecutive
   * symlinks can cause almost arbitrarily long lookups. 
   */
@@ -324,13 +318,12 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  {
  	int err;
  	if (current->link_count >= max_recursive_link)
-@@ -348,10 +377,12 @@
+@@ -348,10 +381,12 @@ static inline int do_follow_link(struct 
  	current->link_count++;
  	current->total_link_count++;
  	UPDATE_ATIME(dentry->d_inode);
--	err = dentry->d_inode->i_op->follow_link(dentry, nd);
 +	nd->intent = it;
-+        err = dentry->d_inode->i_op->follow_link(dentry, nd);
+ 	err = dentry->d_inode->i_op->follow_link(dentry, nd);
  	current->link_count--;
  	return err;
  loop:
@@ -338,7 +331,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	path_release(nd);
  	return -ELOOP;
  }
-@@ -381,7 +412,8 @@
+@@ -381,7 +416,8 @@ int follow_up(struct vfsmount **mnt, str
  	return __follow_up(mnt, dentry);
  }
  
@@ -348,7 +341,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  {
  	struct vfsmount *mounted;
  
-@@ -401,7 +433,7 @@
+@@ -401,7 +437,7 @@ static inline int __follow_down(struct v
  
  int follow_down(struct vfsmount **mnt, struct dentry **dentry)
  {
@@ -357,7 +350,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  }
   
  static inline void follow_dotdot(struct nameidata *nd)
-@@ -437,7 +469,7 @@
+@@ -437,7 +473,7 @@ static inline void follow_dotdot(struct 
  		mntput(nd->mnt);
  		nd->mnt = parent;
  	}
@@ -366,7 +359,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		;
  }
  
-@@ -449,7 +481,8 @@
+@@ -449,7 +485,8 @@ static inline void follow_dotdot(struct 
   *
   * We expect 'base' to be positive and a directory.
   */
@@ -376,7 +369,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  {
  	struct dentry *dentry;
  	struct inode *inode;
-@@ -526,18 +559,18 @@
+@@ -526,18 +563,18 @@ int link_path_walk(const char * name, st
  				break;
  		}
  		/* This does the actual lookups.. */
@@ -398,7 +391,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  			;
  
  		err = -ENOENT;
-@@ -548,8 +581,8 @@
+@@ -548,8 +585,8 @@ int link_path_walk(const char * name, st
  		if (!inode->i_op)
  			goto out_dput;
  
@@ -409,7 +402,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  			dput(dentry);
  			if (err)
  				goto return_err;
-@@ -565,7 +598,7 @@
+@@ -565,7 +602,7 @@ int link_path_walk(const char * name, st
  			nd->dentry = dentry;
  		}
  		err = -ENOTDIR; 
@@ -418,7 +411,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  			break;
  		continue;
  		/* here ends the main loop */
-@@ -592,22 +625,23 @@
+@@ -592,22 +629,23 @@ last_component:
  			if (err < 0)
  				break;
  		}
@@ -447,7 +440,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  			dput(dentry);
  			if (err)
  				goto return_err;
-@@ -621,7 +655,8 @@
+@@ -621,7 +659,8 @@ last_component:
  			goto no_inode;
  		if (lookup_flags & LOOKUP_DIRECTORY) {
  			err = -ENOTDIR; 
@@ -457,12 +450,11 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  				break;
  		}
  		goto return_base;
-@@ -645,7 +680,24 @@
+@@ -645,7 +684,26 @@ return_reval:
  		 * Check the cached dentry for staleness.
  		 */
  		dentry = nd->dentry;
 -		if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
-+	revalidate_again:
 +		if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
 +			err = -ESTALE;
 +			if (!dentry->d_op->d_revalidate_it(dentry, 0, it)) {
@@ -475,15 +467,18 @@ Index: linux-2.4.18-chaos52/fs/namei.c
 +						  &dentry->d_name, 0, NULL);
 +				d_invalidate(dentry);
 +				dput(dentry);
-+				dentry = new;
-+				goto revalidate_again;
++                                if (IS_ERR(new)) { 
++                                        err = PTR_ERR(new);
++                                        break;
++                                }
++                                nd->dentry = new;
 +			}
 +		}
 +		else if (dentry && dentry->d_op && dentry->d_op->d_revalidate){
  			err = -ESTALE;
  			if (!dentry->d_op->d_revalidate(dentry, 0)) {
  				d_invalidate(dentry);
-@@ -658,15 +710,28 @@
+@@ -658,15 +716,28 @@ out_dput:
  		dput(dentry);
  		break;
  	}
@@ -513,7 +508,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  }
  
  /* SMP-safe */
-@@ -751,6 +816,17 @@
+@@ -751,6 +822,17 @@ walk_init_root(const char *name, struct 
  }
  
  /* SMP-safe */
@@ -531,7 +526,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  int path_lookup(const char *path, unsigned flags, struct nameidata *nd)
  {
  	int error = 0;
-@@ -765,6 +841,7 @@
+@@ -765,6 +847,7 @@ int path_init(const char *name, unsigned
  {
  	nd->last_type = LAST_ROOT; /* if there are only slashes... */
  	nd->flags = flags;
@@ -539,7 +534,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	if (*name=='/')
  		return walk_init_root(name,nd);
  	read_lock(&current->fs->lock);
-@@ -779,7 +856,8 @@
+@@ -779,7 +862,8 @@ int path_init(const char *name, unsigned
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
   */
@@ -549,7 +544,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  {
  	struct dentry * dentry;
  	struct inode *inode;
-@@ -802,13 +880,16 @@
+@@ -802,13 +886,16 @@ struct dentry * lookup_hash(struct qstr 
  			goto out;
  	}
  
@@ -567,7 +562,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		dentry = inode->i_op->lookup(inode, new);
  		unlock_kernel();
  		if (!dentry)
-@@ -820,6 +901,12 @@
+@@ -820,6 +907,12 @@ out:
  	return dentry;
  }
  
@@ -580,7 +575,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  /* SMP-safe */
  struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
  {
-@@ -841,7 +928,7 @@
+@@ -841,7 +934,7 @@ struct dentry * lookup_one_len(const cha
  	}
  	this.hash = end_name_hash(hash);
  
@@ -589,7 +584,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  access:
  	return ERR_PTR(-EACCES);
  }
-@@ -872,6 +959,23 @@
+@@ -872,6 +965,23 @@ int __user_walk(const char *name, unsign
  	return err;
  }
  
@@ -613,7 +608,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -969,6 +1073,37 @@
+@@ -969,6 +1079,37 @@ static inline int lookup_flags(unsigned 
  	return retval;
  }
  
@@ -651,7 +646,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  int vfs_create(struct inode *dir, struct dentry *dentry, int mode)
  {
  	int error;
-@@ -1045,14 +1180,17 @@
+@@ -1045,14 +1186,17 @@ int may_open(struct nameidata *nd, int a
          return get_lease(inode, flag);
  }
  
@@ -670,7 +665,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	int count = 0;
  	
  	if (!capable(CAP_SYS_ADMIN))
-@@ -1063,13 +1201,14 @@
+@@ -1063,13 +1207,14 @@ struct file *filp_open(const char * path
  	if (flag & O_TRUNC)
  		flag |= 2;
  
@@ -686,7 +681,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		if (error)
  			return ERR_PTR(error);
  		dentry = nd.dentry;
-@@ -1079,6 +1218,8 @@
+@@ -1079,6 +1224,8 @@ struct file *filp_open(const char * path
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -695,7 +690,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	error = path_lookup(pathname, LOOKUP_PARENT, &nd);
  	if (error)
  		return ERR_PTR(error);
-@@ -1094,7 +1235,7 @@
+@@ -1094,7 +1241,7 @@ struct file *filp_open(const char * path
  
  	dir = nd.dentry;
  	down(&dir->d_inode->i_sem);
@@ -704,7 +699,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1103,10 +1244,11 @@
+@@ -1103,10 +1250,11 @@ do_last:
  		goto exit;
  	}
  
@@ -718,7 +713,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		up(&dir->d_inode->i_sem);
  		dput(nd.dentry);
  		nd.dentry = dentry;
-@@ -1132,12 +1274,12 @@
+@@ -1132,12 +1280,12 @@ do_last:
  		error = -ELOOP;
  		if (flag & O_NOFOLLOW)
  			goto exit_dput;
@@ -733,7 +728,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		goto do_link;
  
  	dput(nd.dentry);
-@@ -1152,11 +1294,13 @@
+@@ -1152,11 +1300,13 @@ ok:
  	if (!S_ISREG(nd.dentry->d_inode->i_mode))
  		open_flags &= ~O_TRUNC;
  
@@ -748,7 +743,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	path_release(&nd);
  	return ERR_PTR(error);
  
-@@ -1175,10 +1319,14 @@
+@@ -1175,10 +1325,14 @@ do_link:
  	 * are done. Procfs-like symlinks just set LAST_BIND.
  	 */
  	UPDATE_ATIME(dentry->d_inode);
@@ -764,7 +759,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	if (nd.last_type == LAST_BIND) {
  		dentry = nd.dentry;
  		goto ok;
-@@ -1197,13 +1345,15 @@
+@@ -1197,13 +1351,15 @@ do_link:
  	}
  	dir = nd.dentry;
  	down(&dir->d_inode->i_sem);
@@ -782,7 +777,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  {
  	struct dentry *dentry;
  
-@@ -1211,7 +1361,7 @@
+@@ -1211,7 +1367,7 @@ static struct dentry *lookup_create(stru
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -791,7 +786,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1267,7 +1417,16 @@
+@@ -1267,7 +1423,16 @@ asmlinkage long sys_mknod(const char * f
  	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  	if (error)
  		goto out;
@@ -809,7 +804,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	error = PTR_ERR(dentry);
  
  	mode &= ~current->fs->umask;
-@@ -1288,6 +1447,7 @@
+@@ -1288,6 +1453,7 @@ asmlinkage long sys_mknod(const char * f
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
@@ -817,23 +812,23 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	path_release(&nd);
  out:
  	putname(tmp);
-@@ -1335,7 +1495,14 @@
+@@ -1335,7 +1501,14 @@ asmlinkage long sys_mkdir(const char * p
  		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 1);
-+ 		if (nd.dentry->d_inode->i_op->mkdir_raw) {
-+ 			struct inode_operations *op = nd.dentry->d_inode->i_op;
-+ 			error = op->mkdir_raw(&nd, mode);
-+ 			/* the file system wants to use normal vfs path now */
-+ 			if (error != -EOPNOTSUPP)
-+ 				goto out2;
-+ 		}
++		if (nd.dentry->d_inode->i_op->mkdir_raw) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->mkdir_raw(&nd, mode);
++			/* the file system wants to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
 +		dentry = lookup_create(&nd, 1, NULL);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
  			error = vfs_mkdir(nd.dentry->d_inode, dentry,
-@@ -1343,6 +1510,7 @@
+@@ -1343,6 +1516,7 @@ asmlinkage long sys_mkdir(const char * p
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -841,42 +836,42 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		path_release(&nd);
  out:
  		putname(tmp);
-@@ -1443,8 +1611,16 @@
+@@ -1443,8 +1617,16 @@ asmlinkage long sys_rmdir(const char * p
  			error = -EBUSY;
  			goto exit1;
  	}
-+ 	if (nd.dentry->d_inode->i_op->rmdir_raw) {
-+ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
++	if (nd.dentry->d_inode->i_op->rmdir_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
 +
-+ 		error = op->rmdir_raw(&nd);
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit1;
-+ 	}
++		error = op->rmdir_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
  	down(&nd.dentry->d_inode->i_sem);
 -	dentry = lookup_hash(&nd.last, nd.dentry);
 +	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-@@ -1502,8 +1678,15 @@
+@@ -1502,8 +1684,15 @@ asmlinkage long sys_unlink(const char * 
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
-+ 	if (nd.dentry->d_inode->i_op->unlink_raw) {
-+ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+ 		error = op->unlink_raw(&nd);
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit1;
-+ 	}
++	if (nd.dentry->d_inode->i_op->unlink_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->unlink_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
  	down(&nd.dentry->d_inode->i_sem);
 -	dentry = lookup_hash(&nd.last, nd.dentry);
 +	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1570,15 +1753,23 @@
+@@ -1570,15 +1759,23 @@ asmlinkage long sys_symlink(const char *
  		error = path_lookup(to, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
@@ -902,7 +897,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		putname(to);
  	}
  	putname(from);
-@@ -1654,7 +1845,14 @@
+@@ -1654,7 +1851,14 @@ asmlinkage long sys_link(const char * ol
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -918,7 +913,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  		error = PTR_ERR(new_dentry);
  		if (!IS_ERR(new_dentry)) {
  			error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
-@@ -1698,7 +1896,7 @@
+@@ -1698,7 +1902,7 @@ exit:
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -927,7 +922,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  {
  	int error;
  	struct inode *target;
-@@ -1777,7 +1975,7 @@
+@@ -1777,7 +1981,7 @@ out_unlock:
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -936,18 +931,18 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  {
  	int error;
  
-@@ -1865,9 +2063,18 @@
+@@ -1865,9 +2069,18 @@ static inline int do_rename(const char *
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
-+ 	if (old_dir->d_inode->i_op->rename_raw) {
++	if (old_dir->d_inode->i_op->rename_raw) {
 +		lock_kernel();
-+ 		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
++		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
 +		unlock_kernel();
-+ 		/* the file system wants to use normal vfs path now */
-+ 		if (error != -EOPNOTSUPP)
-+ 			goto exit2;
-+ 	}
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit2;
++	}
 +
  	double_lock(new_dir, old_dir);
  
@@ -956,7 +951,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -1883,16 +2090,16 @@
+@@ -1883,16 +2096,16 @@ static inline int do_rename(const char *
  		if (newnd.last.name[newnd.last.len])
  			goto exit4;
  	}
@@ -975,7 +970,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	dput(new_dentry);
  exit4:
  	dput(old_dentry);
-@@ -1943,12 +2150,17 @@
+@@ -1943,12 +2156,17 @@ out:
  }
  
  static inline int
@@ -994,7 +989,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  
  	if (*link == '/') {
  		path_release(nd);
-@@ -1956,7 +2168,7 @@
+@@ -1956,7 +2174,7 @@ __vfs_follow_link(struct nameidata *nd, 
  			/* weird __emul_prefix() stuff did it */
  			goto out;
  	}
@@ -1003,7 +998,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  out:
  	if (current->link_count || res || nd->last_type!=LAST_NORM)
  		return res;
-@@ -1978,7 +2190,13 @@
+@@ -1978,7 +2196,13 @@ fail:
  
  int vfs_follow_link(struct nameidata *nd, const char *link)
  {
@@ -1018,7 +1013,7 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  }
  
  /* get the link contents into pagecache */
-@@ -2020,7 +2238,7 @@
+@@ -2020,7 +2244,7 @@ int page_follow_link(struct dentry *dent
  {
  	struct page *page = NULL;
  	char *s = page_getlink(dentry, &page);
@@ -1027,10 +1022,8 @@ Index: linux-2.4.18-chaos52/fs/namei.c
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
-Index: linux-2.4.18-chaos52/fs/open.c
-===================================================================
---- linux-2.4.18-chaos52.orig/fs/open.c	2003-08-11 10:10:12.000000000 +0800
-+++ linux-2.4.18-chaos52/fs/open.c	2003-08-11 10:19:28.000000000 +0800
+--- linux-2.4.18-chaos/fs/open.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:06.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/open.c	2003-09-14 17:25:41.000000000 +0400
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1040,7 +1033,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  
  int vfs_statfs(struct super_block *sb, struct statfs *buf)
  {
-@@ -95,9 +97,10 @@
+@@ -95,9 +97,10 @@ void fd_install(unsigned int fd, struct 
  	write_unlock(&files->file_lock);
  }
  
@@ -1052,7 +1045,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	int error;
  	struct iattr newattrs;
  
-@@ -108,7 +111,13 @@
+@@ -108,7 +111,13 @@ int do_truncate(struct dentry *dentry, l
  	down(&inode->i_sem);
  	newattrs.ia_size = length;
  	newattrs.ia_valid = ATTR_SIZE | ATTR_CTIME;
@@ -1067,7 +1060,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	up(&inode->i_sem);
  	return error;
  }
-@@ -118,12 +127,13 @@
+@@ -118,12 +127,13 @@ static inline long do_sys_truncate(const
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
@@ -1082,7 +1075,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	if (error)
  		goto out;
  	inode = nd.dentry->d_inode;
-@@ -163,11 +173,13 @@
+@@ -163,11 +173,13 @@ static inline long do_sys_truncate(const
  	error = locks_verify_truncate(inode, NULL, length);
  	if (!error) {
  		DQUOT_INIT(inode);
@@ -1097,7 +1090,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -215,7 +227,7 @@
+@@ -215,7 +227,7 @@ static inline long do_sys_ftruncate(unsi
  
  	error = locks_verify_truncate(inode, file, length);
  	if (!error)
@@ -1106,7 +1099,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  out_putf:
  	fput(file);
  out:
-@@ -260,11 +272,13 @@
+@@ -260,11 +272,13 @@ asmlinkage long sys_utime(char * filenam
  	struct inode * inode;
  	struct iattr newattrs;
  
@@ -1121,7 +1114,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
-@@ -279,11 +293,25 @@
+@@ -279,11 +293,25 @@ asmlinkage long sys_utime(char * filenam
  			goto dput_and_out;
  
  		newattrs.ia_valid |= ATTR_ATIME_SET | ATTR_MTIME_SET;
@@ -1148,7 +1141,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	error = notify_change(nd.dentry, &newattrs);
  dput_and_out:
  	path_release(&nd);
-@@ -304,12 +332,14 @@
+@@ -304,12 +332,14 @@ asmlinkage long sys_utimes(char * filena
  	struct inode * inode;
  	struct iattr newattrs;
  
@@ -1164,7 +1157,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
-@@ -324,7 +354,20 @@
+@@ -324,7 +354,20 @@ asmlinkage long sys_utimes(char * filena
  		newattrs.ia_atime = times[0].tv_sec;
  		newattrs.ia_mtime = times[1].tv_sec;
  		newattrs.ia_valid |= ATTR_ATIME_SET | ATTR_MTIME_SET;
@@ -1186,7 +1179,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  		if (current->fsuid != inode->i_uid &&
  		    (error = permission(inode,MAY_WRITE)) != 0)
  			goto dput_and_out;
-@@ -347,6 +390,7 @@
+@@ -347,6 +390,7 @@ asmlinkage long sys_access(const char * 
  	int old_fsuid, old_fsgid;
  	kernel_cap_t old_cap;
  	int res;
@@ -1194,7 +1187,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -364,13 +408,14 @@
+@@ -364,13 +408,14 @@ asmlinkage long sys_access(const char * 
  	else
  		current->cap_effective = current->cap_permitted;
  
@@ -1210,7 +1203,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  		path_release(&nd);
  	}
  
-@@ -385,8 +430,11 @@
+@@ -385,8 +430,11 @@ asmlinkage long sys_chdir(const char * f
  {
  	int error;
  	struct nameidata nd;
@@ -1223,7 +1216,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	if (error)
  		goto out;
  
-@@ -397,6 +445,7 @@
+@@ -397,6 +445,7 @@ asmlinkage long sys_chdir(const char * f
  	set_fs_pwd(current->fs, nd.mnt, nd.dentry);
  
  dput_and_out:
@@ -1231,7 +1224,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -436,9 +485,10 @@
+@@ -436,9 +485,10 @@ asmlinkage long sys_chroot(const char * 
  {
  	int error;
  	struct nameidata nd;
@@ -1244,7 +1237,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	if (error)
  		goto out;
  
-@@ -454,39 +504,56 @@
+@@ -454,39 +504,56 @@ asmlinkage long sys_chroot(const char * 
  	set_fs_altroot();
  	error = 0;
  dput_and_out:
@@ -1315,7 +1308,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	fput(file);
  out:
  	return err;
-@@ -495,30 +562,14 @@
+@@ -495,30 +562,14 @@ out:
  asmlinkage long sys_chmod(const char * filename, mode_t mode)
  {
  	struct nameidata nd;
@@ -1347,7 +1340,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -538,6 +589,20 @@
+@@ -538,6 +589,20 @@ static int chown_common(struct dentry * 
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto out;
@@ -1368,7 +1361,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
-@@ -628,7 +693,8 @@
+@@ -628,7 +693,8 @@ extern ssize_t do_readahead(struct file 
  /* for files over a certains size it doesn't pay to do readahead on open */
  #define READAHEAD_CUTOFF 48000
  
@@ -1378,7 +1371,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  {
  	struct file * f;
  	struct inode *inode;
-@@ -649,7 +715,7 @@
+@@ -649,7 +715,7 @@ struct file *dentry_open(struct dentry *
  		error = locks_verify_locked(inode);
  		if (!error) {
  			DQUOT_INIT(inode);
@@ -1387,7 +1380,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  		}
  		if (error || !(f->f_mode & FMODE_WRITE))
  			put_write_access(inode);
-@@ -679,7 +745,9 @@
+@@ -679,7 +745,9 @@ struct file *dentry_open(struct dentry *
  	}
  
  	if (f->f_op && f->f_op->open) {
@@ -1397,7 +1390,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  		if (error)
  			goto cleanup_all;
  	}
-@@ -693,6 +761,7 @@
+@@ -693,6 +761,7 @@ struct file *dentry_open(struct dentry *
  		do_readahead(f, 0, (48 * 1024) >> PAGE_SHIFT);
  	
  
@@ -1405,7 +1398,7 @@ Index: linux-2.4.18-chaos52/fs/open.c
  	return f;
  
  cleanup_all:
-@@ -707,11 +776,17 @@
+@@ -707,11 +776,17 @@ cleanup_all:
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -1423,11 +1416,9 @@ Index: linux-2.4.18-chaos52/fs/open.c
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
-Index: linux-2.4.18-chaos52/fs/stat.c
-===================================================================
---- linux-2.4.18-chaos52.orig/fs/stat.c	2003-08-11 10:10:12.000000000 +0800
-+++ linux-2.4.18-chaos52/fs/stat.c	2003-08-11 10:11:27.000000000 +0800
-@@ -17,21 +17,24 @@
+--- linux-2.4.18-chaos/fs/stat.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:06.000000000 +0400
++++ linux-2.4.18-chaos-alexey/fs/stat.c	2003-09-14 17:30:21.000000000 +0400
+@@ -17,21 +17,26 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
  static __inline__ int
@@ -1436,6 +1427,8 @@ Index: linux-2.4.18-chaos52/fs/stat.c
  {
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
++        if (!inode)
++                return -ENOENT;
 +	if (inode->i_op && inode->i_op->revalidate_it)
 +		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
@@ -1456,7 +1449,7 @@ Index: linux-2.4.18-chaos52/fs/stat.c
  	if (res)
  		return res;
  
-@@ -104,10 +107,12 @@
+@@ -104,10 +109,12 @@ int vfs_stat(char *name, struct kstat *s
  {
  	struct nameidata nd;
  	int error;
@@ -1471,7 +1464,7 @@ Index: linux-2.4.18-chaos52/fs/stat.c
  		path_release(&nd);
  	}
  	return error;
-@@ -117,10 +122,12 @@
+@@ -117,10 +124,12 @@ int vfs_lstat(char *name, struct kstat *
  {
  	struct nameidata nd;
  	int error;
@@ -1486,7 +1479,7 @@ Index: linux-2.4.18-chaos52/fs/stat.c
  		path_release(&nd);
  	}
  	return error;
-@@ -132,7 +139,7 @@
+@@ -132,7 +141,7 @@ int vfs_fstat(unsigned int fd, struct ks
  	int error = -EBADF;
  
  	if (f) {
@@ -1495,7 +1488,7 @@ Index: linux-2.4.18-chaos52/fs/stat.c
  		fput(f);
  	}
  	return error;
-@@ -279,7 +286,7 @@
+@@ -279,7 +288,7 @@ asmlinkage long sys_readlink(const char 
  
  		error = -EINVAL;
  		if (inode->i_op && inode->i_op->readlink &&
@@ -1504,10 +1497,8 @@ Index: linux-2.4.18-chaos52/fs/stat.c
  			UPDATE_ATIME(inode);
  			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
  		}
-Index: linux-2.4.18-chaos52/include/linux/dcache.h
-===================================================================
---- linux-2.4.18-chaos52.orig/include/linux/dcache.h	2003-08-11 10:10:12.000000000 +0800
-+++ linux-2.4.18-chaos52/include/linux/dcache.h	2003-08-11 10:11:28.000000000 +0800
+--- linux-2.4.18-chaos/include/linux/dcache.h~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:16.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/linux/dcache.h	2003-09-14 17:25:41.000000000 +0400
 @@ -5,6 +5,51 @@
  
  #include <asm/atomic.h>
@@ -1531,22 +1522,22 @@ Index: linux-2.4.18-chaos52/include/linux/dcache.h
 +
 +
 +struct lustre_intent_data {
-+        int       it_disposition;
-+        int       it_status;
-+        __u64     it_lock_handle;
-+        void     *it_data;
-+        int       it_lock_mode;
++	int       it_disposition;
++	int       it_status;
++	__u64     it_lock_handle;
++	void     *it_data;
++	int       it_lock_mode;
 +	int it_int_flags;
 +};
 +struct lookup_intent {
-+        int     it_magic;
-+        void    (*it_op_release)(struct lookup_intent *);
-+        int     it_op;
++	int     it_magic;
++	void    (*it_op_release)(struct lookup_intent *);
++	int     it_op;
 +	int     it_flags;
 +	int     it_create_mode;
-+        union {
-+                struct lustre_intent_data lustre;
-+        } d;
++	union {
++		struct lustre_intent_data lustre;
++	} d;
 +};
 +
 +static inline void intent_init(struct lookup_intent *it, int op, int flags)
@@ -1560,7 +1551,7 @@ Index: linux-2.4.18-chaos52/include/linux/dcache.h
  
  /*
   * linux/include/linux/dcache.h
-@@ -91,8 +136,22 @@
+@@ -91,8 +136,22 @@ struct dentry_operations {
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
@@ -1583,7 +1574,7 @@ Index: linux-2.4.18-chaos52/include/linux/dcache.h
  /* the dentry parameter passed to d_hash and d_compare is the parent
   * directory of the entries to be compared. It is used in case these
   * functions need any directory specific information for determining
-@@ -124,6 +183,7 @@
+@@ -124,6 +183,7 @@ d_iput:		no		no		yes
  					 * s_nfsd_free_path semaphore will be down
  					 */
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
@@ -1591,11 +1582,9 @@ Index: linux-2.4.18-chaos52/include/linux/dcache.h
  
  extern spinlock_t dcache_lock;
  
-Index: linux-2.4.18-chaos52/include/linux/fs.h
-===================================================================
---- linux-2.4.18-chaos52.orig/include/linux/fs.h	2003-08-11 10:11:24.000000000 +0800
-+++ linux-2.4.18-chaos52/include/linux/fs.h	2003-08-11 10:41:55.000000000 +0800
-@@ -73,6 +73,7 @@
+--- linux-2.4.18-chaos/include/linux/fs.h~vfs_intent-2.4.18-18-chaos65	2003-09-14 17:24:21.000000000 +0400
++++ linux-2.4.18-chaos-alexey/include/linux/fs.h	2003-09-14 17:25:41.000000000 +0400
+@@ -73,6 +73,7 @@ extern int leases_enable, dir_notify_ena
  
  #define FMODE_READ 1
  #define FMODE_WRITE 2
@@ -1603,7 +1592,7 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  
  #define READ 0
  #define WRITE 1
-@@ -338,6 +339,9 @@
+@@ -339,6 +340,9 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
  #define ATTR_ATTR_FLAG	1024
@@ -1613,7 +1602,15 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -576,6 +580,7 @@
+@@ -474,6 +478,7 @@ struct inode {
+ 	struct pipe_inode_info	*i_pipe;
+ 	struct block_device	*i_bdev;
+ 	struct char_device	*i_cdev;
++	void			*i_filterdata;
+ 
+ 	unsigned long		i_dnotify_mask; /* Directory notify events */
+ 	struct dnotify_struct	*i_dnotify; /* for directory notifications */
+@@ -578,6 +583,7 @@ struct file {
  
  	/* needed for tty driver, and maybe others */
  	void			*private_data;
@@ -1621,7 +1618,7 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  
  	/* preallocated helper kiobuf to speedup O_DIRECT */
  	struct kiobuf		*f_iobuf;
-@@ -705,6 +710,7 @@
+@@ -707,6 +713,7 @@ struct nameidata {
  	struct qstr last;
  	unsigned int flags;
  	int last_type;
@@ -1629,7 +1626,7 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  };
  
  #define DQUOT_USR_ENABLED	0x01		/* User diskquotas enabled */
-@@ -836,7 +842,8 @@
+@@ -840,7 +847,8 @@ extern int vfs_symlink(struct inode *, s
  extern int vfs_link(struct dentry *, struct inode *, struct dentry *);
  extern int vfs_rmdir(struct inode *, struct dentry *);
  extern int vfs_unlink(struct inode *, struct dentry *);
@@ -1639,7 +1636,7 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  
  /*
   * File types
-@@ -896,21 +903,34 @@
+@@ -900,21 +908,34 @@ struct file_operations {
  
  struct inode_operations {
  	int (*create) (struct inode *,struct dentry *,int);
@@ -1670,11 +1667,11 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  	int (*revalidate) (struct dentry *);
 +	int (*revalidate_it) (struct dentry *, struct lookup_intent *);
  	int (*setattr) (struct dentry *, struct iattr *);
-+ 	int (*setattr_raw) (struct inode *, struct iattr *);
++	int (*setattr_raw) (struct inode *, struct iattr *);
  	int (*getattr) (struct dentry *, struct iattr *);
  };
  
-@@ -1115,10 +1135,12 @@
+@@ -1119,10 +1140,12 @@ static inline int get_lease(struct inode
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
@@ -1688,7 +1685,7 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
-@@ -1384,9 +1406,12 @@
+@@ -1388,9 +1411,12 @@ typedef int (*read_actor_t)(read_descrip
  extern loff_t default_llseek(struct file *file, loff_t offset, int origin);
  
  extern int FASTCALL(__user_walk(const char *, unsigned, struct nameidata *));
@@ -1701,7 +1698,7 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  extern int FASTCALL(link_path_walk(const char *, struct nameidata *));
  extern void path_release(struct nameidata *);
  extern int follow_down(struct vfsmount **, struct dentry **);
-@@ -1395,6 +1420,8 @@
+@@ -1399,6 +1425,8 @@ extern struct dentry * lookup_one_len(co
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
@@ -1710,7 +1707,7 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  
  extern void inode_init_once(struct inode *);
  extern void iput(struct inode *);
-@@ -1495,6 +1522,8 @@
+@@ -1499,6 +1527,8 @@ extern struct file_operations generic_ro
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
@@ -1719,11 +1716,9 @@ Index: linux-2.4.18-chaos52/include/linux/fs.h
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
-Index: linux-2.4.18-chaos52/kernel/fork.c
-===================================================================
---- linux-2.4.18-chaos52.orig/kernel/fork.c	2003-08-11 10:10:13.000000000 +0800
-+++ linux-2.4.18-chaos52/kernel/fork.c	2003-08-11 10:11:28.000000000 +0800
-@@ -399,10 +399,13 @@
+--- linux-2.4.18-chaos/kernel/fork.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:20.000000000 +0400
++++ linux-2.4.18-chaos-alexey/kernel/fork.c	2003-09-14 17:25:41.000000000 +0400
+@@ -399,10 +399,13 @@ static inline struct fs_struct *__copy_f
  		fs->umask = old->umask;
  		read_lock(&old->lock);
  		fs->rootmnt = mntget(old->rootmnt);
@@ -1737,11 +1732,9 @@ Index: linux-2.4.18-chaos52/kernel/fork.c
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
-Index: linux-2.4.18-chaos52/kernel/exit.c
-===================================================================
---- linux-2.4.18-chaos52.orig/kernel/exit.c	2003-08-11 10:10:13.000000000 +0800
-+++ linux-2.4.18-chaos52/kernel/exit.c	2003-08-11 10:11:28.000000000 +0800
-@@ -303,11 +303,14 @@
+--- linux-2.4.18-chaos/kernel/exit.c~vfs_intent-2.4.18-18-chaos65	2003-07-28 17:52:20.000000000 +0400
++++ linux-2.4.18-chaos-alexey/kernel/exit.c	2003-09-14 17:25:41.000000000 +0400
+@@ -303,11 +303,14 @@ static inline void __put_fs_struct(struc
  {
  	/* No need to hold fs->lock if we are killing it */
  	if (atomic_dec_and_test(&fs->count)) {
@@ -1756,11 +1749,9 @@ Index: linux-2.4.18-chaos52/kernel/exit.c
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
-Index: linux-2.4.18-chaos52/kernel/ksyms.c
-===================================================================
---- linux-2.4.18-chaos52.orig/kernel/ksyms.c	2003-08-11 10:11:25.000000000 +0800
-+++ linux-2.4.18-chaos52/kernel/ksyms.c	2003-08-11 10:11:28.000000000 +0800
-@@ -294,6 +294,7 @@
+--- linux-2.4.18-chaos/kernel/ksyms.c~vfs_intent-2.4.18-18-chaos65	2003-09-14 17:24:22.000000000 +0400
++++ linux-2.4.18-chaos-alexey/kernel/ksyms.c	2003-09-14 17:25:41.000000000 +0400
+@@ -294,6 +294,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);
@@ -1768,3 +1759,5 @@ Index: linux-2.4.18-chaos52/kernel/ksyms.c
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
+
+_
