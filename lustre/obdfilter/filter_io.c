@@ -151,7 +151,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         EXIT;
 }
 
-#define GRANT_FOR_LLOG(obd) (obd->obd_reserve_space)
+#define GRANT_FOR_LLOG(obd) 16
 
 /* Figure out how much space is available between what we've granted
  * and what remains in the filesystem.  Compensate for ext3 indirect
