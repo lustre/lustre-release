@@ -83,20 +83,28 @@ fi
 # check if quadrics support is in this kernel
 #
 AC_DEFUN([LP_CONFIG_QUADRICS],
-[AC_MSG_CHECKING([if quadrics kernel headers are present])
-if test -d $LINUX/drivers/net/qsnet ; then
+[AC_MSG_CHECKING([for QsNet sources])
+AC_ARG_WITH([qsnet],
+	AC_HELP_STRING([--with-qsnet=path],
+		       [set path to qsnet source (default=$LINUX)]),
+	[QSNET=$with_qsnet],
+	[QSNET=$LINUX])
+AC_MSG_RESULT([$QSNET])
+
+AC_MSG_CHECKING([if quadrics kernel headers are present])
+if test -d $QSNET/drivers/net/qsnet ; then
 	AC_MSG_RESULT([yes])
 	QSWNAL="qswnal"
 	AC_MSG_CHECKING([for multirail EKC])
-	if test -f $LINUX/include/elan/epcomms.h; then
+	if test -f $QSNET/include/elan/epcomms.h; then
 		AC_MSG_RESULT([supported])
-		QSWCPPFLAGS="-DMULTIRAIL_EKC=1"
+		QSWCPPFLAGS="-I$QSNET/include -DMULTIRAIL_EKC=1"
 	else
 		AC_MSG_RESULT([not supported])
-		if test -d $LINUX/drivers/net/qsnet/include; then
-			QSWCPPFLAGS="-I$LINUX/drivers/net/qsnet/include"
+		if test -d $QSNET/drivers/net/qsnet/include; then
+			QSWCPPFLAGS="-I$QSNET/drivers/net/qsnet/include"
 		else
-			QSWCPPFLAGS="-I$LINUX/include/linux"
+			QSWCPPFLAGS="-I$QSNET/include/linux"
 		fi
 	fi
 else
