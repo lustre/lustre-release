@@ -362,9 +362,11 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                 break;
         }
 
+        /* At this point we're granting the lock request. */
+        req->l_granted_mode = req->l_req_mode;
+
         /* Add req to the granted queue before calling ldlm_reprocess_all(). */
         if (!added) {
-                req->l_granted_mode = req->l_req_mode;
                 list_del_init(&req->l_res_link);
                 /* insert new lock before ownlocks in list. */
                 ldlm_resource_add_lock(res, ownlocks, req);
@@ -484,7 +486,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 spin_unlock_irqrestore(&imp->imp_lock, irqflags);
         }
 
-        lwi = LWI_TIMEOUT_INTR(0,NULL,ldlm_flock_interrupted_wait,&fwd);
+        lwi = LWI_TIMEOUT_INTR(0, NULL, ldlm_flock_interrupted_wait, &fwd);
 
         /* Go to sleep until the lock is granted. */
         rc = l_wait_event(lock->l_waitq,
