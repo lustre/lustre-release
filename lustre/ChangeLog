@@ -7,6 +7,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't allow multiple threads in OSC recovery(3812)
 	- fix debug_size parameters (3864)
 	- fix mds_postrecov to initialize import for llog ctxt (3121)
+	- reduce ns lock hold times when setting kms (3267)
 
 2004-07-14  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.4

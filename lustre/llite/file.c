@@ -472,8 +472,12 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 stripe = ll_lock_to_stripe_offset(inode, lock);
                 ll_pgcache_remove_extent(inode, lsm, lock, stripe);
 
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                /* grabbing the i_sem will wait for write() to complete.  ns
+                 * lock hold times should be very short as ast processing
+                 * requires them and has a short timeout.  so, i_sem before ns
+                 * lock.*/
                 down(&inode->i_sem);
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
 
@@ -481,8 +485,8 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
-                up(&inode->i_sem);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                up(&inode->i_sem);
                 //ll_try_done_writing(inode);
         iput:
                 iput(inode);
