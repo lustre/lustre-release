@@ -137,6 +137,7 @@ list_mods() {
 	$DBGCTL modules > $R/tmp/ogdb
 	echo "The GDB module script is in $R/tmp/ogdb"
 	[ "$DEBUG_WAIT" = "yes" ] && echo -n "Press ENTER to continue" && read
+	return 0
 }
 
 # start acceptor for a given network and port.
