@@ -8,10 +8,10 @@ invalidate_show.patch
 export-truncate.patch
 iod-stock-24-exports_hp.patch
 ext3-htree-2.4.21-chaos.patch
-linux-2.4.21-xattr-0.8.54-suse2.patch
+linux-2.4.21-xattr-0.8.54-suse-171.patch 
 ext3-orphan_lock-2.4.22-rh.patch 
 ext3-noread-2.4.21-suse2.patch
-ext3-delete_thread-2.4.21-chaos.patch 
+ext3-delete_thread-2.4.21-suse-171.patch 
 extN-wantedi-2.4.21-suse2.patch
 ext3-san-2.4.20.patch
 ext3-map_inode_page-2.4.21-suse2.patch 
@@ -27,3 +27,4 @@ ext3-raw-lookup.patch
 ext3-ea-in-inode-2.4.21-suse2.patch
 listman-2.4.20.patch
 ext3-truncate-buffer-head.patch
+lookup-stack-symbols-2.4.21-suse-171.patch

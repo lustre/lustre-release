@@ -21,6 +21,7 @@ CONFIG=
 VERSION=
 
 RHBUILD=0
+SUSEBUILD=0
 LINUX26=0
 SUSEBUILD=0
 
@@ -29,6 +30,7 @@ BIGMEM_ARCHS=
 BOOT_ARCHS=
 JENSEN_ARCHS=
 SMP_ARCHS=
+BIGSMP_ARCHS=
 UP_ARCHS=
 
 DATE=$(date)
@@ -197,7 +199,7 @@ load_target()
     fi
     # EXTRA_VERSION=${EXTRA_VERSION//-/_}
 
-    ALL_ARCHS="$BASE_ARCHS $BIGMEM_ARCHS $BOOT_ARCHS $JENSEN_ARCHS $SMP_ARCHS $UP_ARCHS"
+    ALL_ARCHS="$BASE_ARCHS $BIGMEM_ARCHS $BOOT_ARCHS $JENSEN_ARCHS $SMP_ARCHS $BIGSMP_ARCHS $UP_ARCHS"
 
     BUILD_ARCHS=
     for arch in $(uniqify "$ALL_ARCHS") ; do
@@ -322,8 +324,10 @@ prep_build()
 	-e "s/@BOOT_ARCHS@/$BOOT_ARCHS/g" \
 	-e "s/@JENSEN_ARCHS@/$BOOT_ARCHS/g" \
 	-e "s/@SMP_ARCHS@/$SMP_ARCHS/g" \
+	-e "s/@BIGSMP_ARCHS@/$BIGSMP_ARCHS/g" \
 	-e "s/@UP_ARCHS@/$UP_ARCHS/g" \
 	-e "s/@RHBUILD@/$RHBUILD/g" \
+	-e "s/@SUSEBUILD@/$SUSEBUILD/g" \
 	-e "s/@LINUX26@/$LINUX26/g" \
 	-e "s/@SUSEBUILD@/$SUSEBUILD/g" \
 	-e "s/@ENABLE_INIT_SCRIPTS@/$ENABLE_INIT_SCRIPTS/g" \
@@ -333,9 +337,10 @@ prep_build()
     [ -d RPMS ] || mkdir RPMS
     [ -d BUILD ] || mkdir BUILD
     [ -d SOURCES ] || mkdir SOURCES
-    cp $TOPDIR/lustre/scripts/linux-rhconfig.h SOURCES
-    cp $TOPDIR/lustre/scripts/linux-merge-config.awk SOURCES
-    cp $TOPDIR/lustre/scripts/linux-merge-modules.awk SOURCES
+    for script in linux-{rhconfig.h,merge-config.awk,merge-modules.awk} \
+	suse-{functions.sh,post.sh,postun.sh,trigger-script.sh.in} ; do
+	cp $TOPDIR/lustre/scripts/$script SOURCES
+    done
     cp "$LUSTRE" "$KERNEL_FILE" SOURCES
 }
 

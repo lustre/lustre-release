@@ -6,7 +6,8 @@
 EXTRA_DIST = license-status maketags.sh lustre.spec version_tag.pl.in	\
 	lustre lustrefs lustre.spec.in lustre-kernel-2.4.spec.in	\
 	lmake linux-merge-config.awk linux-merge-modules.awk		\
-	linux-rhconfig.h
+	linux-rhconfig.h suse-functions.sh suse-postun.sh suse-post.sh  \
+	suse-trigger-script.sh.in
 
 initddir = $(sysconfdir)/init.d
 if UTILS

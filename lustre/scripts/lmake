@@ -32,7 +32,11 @@ BIGMEM_ARCHS=
 BOOT_ARCHS=
 JENSEN_ARCHS=
 SMP_ARCHS=
+BIGSMP_ARCHS=
 UP_ARCHS=
+
+RHBUILD=0
+SUSEBUILD=0
 
 # flat-out globals
 TOPDIR=
@@ -129,9 +133,9 @@ Options:
     file.  Default is i386.
 
   --target-config=CONFIG
-    Specifies a special option (such as smp, bigmem, or BOOT) to use
-    when choosing a kernel config file.  This also modifies the kernel
-    version and modules directory.
+    Specifies a special option (such as smp, bigsmp, bigmem, or BOOT)
+    to use when choosing a kernel config file.  This also modifies the
+    kernel version and modules directory.
 
   --unpack-kernel
     Untars and patches the kernel source.
@@ -310,18 +314,19 @@ depend_kernel()
     echo "Making depend in $PWD..."
     $MAKE mrproper || fatal 1 "Error running make mrproper"
     cp "$CONFIG_FILE" .config
-    if grep -q oldconfig_nonint Makefile ; then
-	OLDCONFIG='oldconfig_nonint'
-    else
-	OLDCONFIG='oldconfig'
-    fi
+    for oc in oldconfig_nonint silentoldconfig oldconfig ; do
+	if grep -q "$oc" Makefile ; then
+	    OLDCONFIG="$oc"
+	    break
+	fi
+    done
     $MAKE $OLDCONFIG || fatal 1 "Error running make oldconfig"
     case "$VERSION" in
 	2.6*)
             SYMLINKS="include/asm"
             ;;
         2.4*)
-	    SYMLINKS="symlinnks"
+	    SYMLINKS="symlinks"
 	    ;;
     esac
     $MAKE $SYMLINKS
@@ -420,6 +425,9 @@ install_kernel()
 
 	    ;;
     esac
+    if [ -e init/kerntypes.o ] ; then
+	cp init/kerntypes.o "$DESTDIR/boot/Kerntypes-${FULL_VERSION}"
+    fi
 
     popd >/dev/null
 }
@@ -427,10 +435,62 @@ install_kernel()
 install_lustre()
 {
     (( $INSTALL_LUSTRE )) || return 0
+    set_make
     FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null
-    make -s install "DESTDIR=$DESTDIR" KERNELRELEASE="$FULL_VERSION" || fatal 1 "Error installing Lustre."
+    $MAKE -s install "DESTDIR=$DESTDIR" KERNELRELEASE="$FULL_VERSION" || fatal 1 "Error installing Lustre."
     popd >/dev/null
+}
+
+build_kms()
+{
+    (( $BUILD_KERNEL )) || return 0
+    (( $SUSEBUILD )) || return 0
+    set_make
+    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
+    mkdir -p "${TOPDIR}/modules-${FULL_VERSION}"
+    for dir in /usr/src/kernel-modules/* ; do
+	# we are replacing lustre-lite, so don't include it
+	if [ ${dir##*/} != "lustre-lite" -a -e $dir/Makefile ]; then
+	    build_dir="${TOPDIR}/modules-${FULL_VERSION}/${dir##*/}"
+	    cp -a $dir $build_dir
+	    # these modules are terrible, and don't all build
+	    $MAKE_J -C $build_dir modules KERNEL_SOURCE="${TOPDIR}/linux"
+	fi
+    done
+}
+
+symver()
+{
+    local file=$1 name=${1%.ko}
+    nm $file \
+    | sed -ne 's,^0*\([0-9a-f]\{8\}\) A __crc_\(.*\),0x\1\t\2\t'"$name"',p'
+}
+
+install_kms()
+{
+    (( $INSTALL_KERNEL )) || return 0
+    (( $SUSEBUILD )) || return 0
+    set_make
+    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
+    for build_dir in "${TOPDIR}/modules-${FULL_VERSION}/*" ; do
+	[ -d $build_dir ] || continue
+        # these modules are terrible, and don't all build
+	$MAKE -C $build_dir KERNEL_SOURCE="${TOPDIR}/linux" INSTALL_MOD_PATH="$DESTDIR" 
+    done
+    (   symver vmlinux
+	moddir="${DESTDIR}/lib/modules/${FULL_VERSION}"
+	cd $moddir/kernel
+	for module in $(find * -name '*.ko'); do
+	    symver $module
+	done
+	cd $moddir
+	for module in $(find * -path 'kernel/*' -prune -o \
+			   -name '*.ko' -print); do
+	    symver $module
+	done
+    ) | sort -u -k2 \
+	| gzip -c9 > "${DESTDIR}/boot/symvers-${VERSION}-${EXTRA_VERSION}-${TARGET_ARCH}${TARGET_CONFIG}.gz"
 }
 
 save_headers()
@@ -470,6 +530,9 @@ save_all_headers()
 	save_headers smp $arch
     done
 
+    for arch in $BIGSMP_ARCHS ; do
+	save_headers bigsmp $arch
+    done
     for arch in $UP_ARCHS ; do
 	save_headers up $arch
     done
@@ -583,8 +646,12 @@ build_kernel
 configure_lustre
 build_lustre
 
+build_kms
+
 install_kernel
 install_lustre
+
+install_kms
 
 save_all_headers
 

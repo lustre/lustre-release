@@ -21,9 +21,10 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * miscellania
 	- add pid to ldlm debugging output (4922)
 
-2004-11-17  Cluster File Systems, Inc. <info@clusterfs.com>
+2004-11-16  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.8
        * bug fixes
+	- fix TCP_NODELAY bug, which caused extreme perf regression (5134)
 	- allocate qswnal tx descriptors singly to avoid fragmentation (4504)
 	- don't LBUG on obdo_alloc() failure, use OBD_SLAB_ALLOC() (4800)
 	- fix NULL dereference in /proc/sys/portals/routes (4827)
@@ -47,6 +48,10 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- return async write errors to application if possible (2248)
 	- add /proc/sys/portal/memused (bytes allocated by PORTALS_ALLOC)
 	- print NAL number in %x format (4645)
+	- update barely-supported suse-2.4.21-171 series (4842)
+	- support for sles 9 %post scripts
+	- support for building 2.6 kernel-source packages
+	- support for sles km_* packages
 
 2004-10-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.7

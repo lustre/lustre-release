@@ -1,19 +1,21 @@
 lnxmaj="2.6.5"
-lnxrel="SLES9_SP1_BRANCH_2004110217390391"
+lnxrel="SLES9_SP1_BRANCH_2004111114454891"
 
 KERNEL=linux-$lnxmaj-$lnxrel.tar.gz
 # they include our patches
 SERIES=
 VERSION=$lnxmaj
-EXTRA_VERSION=$lnxrel_lustre.@VERSION@
+EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
 RHBUILD=0
 LINUX26=1
+SUSEBUILD=1
 
 BASE_ARCHS="i686 ppc"
 BIGMEM_ARCHS=""
 BOOT_ARCHS=""
 JENSEN_ARCHS=""
-SMP_ARCHS="i686 ppc"
+SMP_ARCHS=""
+BIGSMP_ARCHS="i686 ppc"
 UP_ARCHS=""
 SRC_ARCHS=""
 
