@@ -231,6 +231,10 @@ static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo, stru
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->exp_obd,create);
 
+#define OBD_MD_FLNEEDED (OBD_MD_FLID | OBD_MD_FLMODE)
+        //if (obdo->o_valid & OBD_MD_FLNEEDED != OBD_MD_FLNEEDED)
+        //        RETURN(-EINVAL);
+#undef OBD_MD_FLNEEDED
         rc = OBP(export->exp_obd, create)(conn, obdo, ea);
         RETURN(rc);
 }
@@ -551,8 +555,8 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
 static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
                                    obd_flag valid)
 {
-        if (valid & OBD_MD_FLID)
-                dst->o_id = src->i_ino;
+//        if (valid & OBD_MD_FLID)
+//                dst->o_id = src->i_ino;
         if (valid & OBD_MD_FLATIME)
                 dst->o_atime = src->i_atime;
         if (valid & OBD_MD_FLMTIME)
@@ -580,15 +584,14 @@ static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
         if (valid & OBD_MD_FLRDEV)
                 dst->o_rdev = src->i_rdev;
 
-        dst->o_valid |= valid;
+        dst->o_valid |= (valid & ~OBD_MD_FLID);
 }
 
 static inline void obdo_to_inode(struct inode *dst, struct obdo *src,
                                  obd_flag valid)
 {
-
-        if (valid & OBD_MD_FLID)
-                dst->i_ino = src->o_id;
+//        if (valid & OBD_MD_FLID)
+//                dst->i_ino = src->o_id;
         if (valid & OBD_MD_FLATIME)
                 dst->i_atime = src->o_atime;
         if (valid & OBD_MD_FLMTIME)
