@@ -97,9 +97,9 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
             || (generation && inode->i_generation != generation)
             ){
                 /* we didn't find the right inode.. */
-              CERROR(" Inode %lu, Bad count: %d %d or version  %u %u\n",
+              CERROR(" Inode %lu, Bad count: %lu %d or version  %u %u\n",
                         inode->i_ino, 
-                        inode->i_nlink, 
+                        (unsigned long)inode->i_nlink, 
                         atomic_read(&inode->i_count), 
                         inode->i_generation, 
                         generation);

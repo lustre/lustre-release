@@ -26,7 +26,6 @@
  *
  */
 
-#define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_OSC
 
 #ifdef __KERNEL__
