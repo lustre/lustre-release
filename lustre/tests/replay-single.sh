@@ -79,9 +79,9 @@ run_test() {
     message=$2
     
     # Pretty tests run faster.
-    echo '=====' $testnum: $message
+    echo -n '=====' $testnum: $message
     local suffixlen=$((65 - `echo -n $2 | wc -c | awk '{print $1}'`))
-    printf '%.*s\n' $suffixlen $EQUALS
+    printf ' %.*s\n' $suffixlen $EQUALS
 
     test_${testnum} || error "test_$testnum failed with $?"
 }
@@ -95,6 +95,7 @@ test_1() {
     replay_barrier mds
     mcreate $MOUNTPT/f1
     fail
+    ls $MOUNTPT/f1
     rm $MOUNTPT/f1
 }
 run_test 1 "simple create"
@@ -104,6 +105,7 @@ test_2() {
     mkdir $MOUNTPT/d2
     mcreate $MOUNTPT/d2/f2
     fail
+    ls $MOUNTPT/d2/fs
     rm -fr $MOUNTPT/d2
 }
 run_test 2 "mkdir + contained create"
@@ -113,10 +115,23 @@ test_3() {
     replay_barrier mds
     mcreate $MOUNTPT/d3/f3
     fail
+    ls $MOUNTPT/d3/f3
     rm -fr $MOUNTPT/d3
 }
 run_test 3 "mkdir |X| contained create"
 
+test_4() {
+    multiop $MOUNTPT/f4 mo_c &
+    MULTIPID=$!
+    sleep 1
+    fail
+    ls $MOUNTPT/f4
+    kill -USR1 $MULTIPID
+    wait
+    rm $MOUNTPT/f4
+}
+run_test 4 "open |X| close"
+
 stop client $CLIENTLCONFARGS
 stop ost
-stop mds
+stop mds $MDSLCONFARGS
