@@ -184,6 +184,7 @@ EXPORT_SYMBOL(ptlrpc_reconnect_import);
 EXPORT_SYMBOL(ptlrpc_replay);
 EXPORT_SYMBOL(ptlrpc_resend);
 EXPORT_SYMBOL(ptlrpc_wake_delayed);
+EXPORT_SYMBOL(ptlrpc_set_import_active);
 EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_fail_export);
 EXPORT_SYMBOL(ptlrpc_recover_import);
