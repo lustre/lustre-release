@@ -838,6 +838,22 @@ test_42() {
 }
 run_test 42 "recoery after ost failure"
 
+# b=2530
+# directory orphans can't be unlinked from PENDING directory
+test_43() {
+    replay_barrier mds
+
+    # OBD_FAIL_OST_CREATE_NET 0x204
+    do_facet ost "sysctl -w lustre.fail_loc=0x80000204"
+    facet_failover mds
+    df $MOUNT || return 1
+    sleep 10
+    do_facet ost "sysctl -w lustre.fail_loc=0"
+
+    return 0
+}
+run_test 43 "mds osc import failure during recovery; don't LBUG"
+
 equals_msg test complete, cleaning up
 $CLEANUP
 
