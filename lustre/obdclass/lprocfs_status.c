@@ -145,6 +145,13 @@ void lprocfs_remove(struct proc_dir_entry *root)
 
                 rm_entry = temp;
                 temp = temp->parent;
+
+                /* Memory corruption once caused this to fail, and
+                   without this LASSERT we would loop here forever. */
+                LASSERTF(strlen(rm_entry->name) == rm_entry->namelen,
+                         "0x%p  %s/%s len %d\n", rm_entry, temp->name,
+                         rm_entry->name, (int)strlen(rm_entry->name));
+
                 remove_proc_entry(rm_entry->name, rm_entry->parent);
                 if (temp == parent)
                         break;
@@ -265,6 +272,24 @@ int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
         return rc;
 }
 
+int lprocfs_rd_kbytesavail(char *page, char **start, off_t off, int count,
+                           int *eof, void *data)
+{
+        struct obd_statfs osfs;
+        int rc = obd_statfs(data, &osfs, jiffies - HZ);
+        if (!rc) {
+                __u32 blk_size = osfs.os_bsize >> 10;
+                __u64 result = osfs.os_bavail;
+
+                while (blk_size >>= 1)
+                        result <<= 1;
+
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", result);
+        }
+        return rc;
+}
+
 int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
@@ -302,16 +327,11 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
 {
         struct obd_device *obd = (struct obd_device *)data;
         struct obd_import *imp;
-        static char* import_state_names[] = {
-                "<UNKNOWN 0>", "INVALID", "NEW", "DISCONN", "CONNECTING",
-                "REPLAY", "RECOVER", "FULL", "EVICTED",
-        };
         char *imp_state_name = NULL;
         
         LASSERT(obd != NULL);
         imp = obd->u.cli.cl_import;
-        LASSERT(imp->imp_state <= LUSTRE_IMP_EVICTED);
-        imp_state_name = import_state_names[imp->imp_state];
+        imp_state_name = ptlrpc_import_state_name(imp->imp_state);
         *eof = 1;
         return snprintf(page, count, "%s\t%s\n",
                         imp->imp_target_uuid.uuid, imp_state_name);
@@ -585,7 +605,6 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, attach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, detach);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setup);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, postsetup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, precleanup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cleanup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, postrecov);
@@ -605,8 +624,8 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, prep_async_page);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_async_io);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_async_flags);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_sync_io);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, trigger_sync_io);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_group_io);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, trigger_group_io);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, teardown_async_page);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, punch);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, sync);
@@ -623,7 +642,6 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, san_preprw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, init_export);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, lock_contains);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_init); 
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_finish); 
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pin); 
@@ -668,7 +686,7 @@ int lprocfs_write_helper(const char *buffer, unsigned long count,
                          int *val)
 {
         char kernbuf[20], *end;
-        
+
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
@@ -789,6 +807,7 @@ EXPORT_SYMBOL(lprocfs_rd_numrefs);
 EXPORT_SYMBOL(lprocfs_rd_blksize);
 EXPORT_SYMBOL(lprocfs_rd_kbytestotal);
 EXPORT_SYMBOL(lprocfs_rd_kbytesfree);
+EXPORT_SYMBOL(lprocfs_rd_kbytesavail);
 EXPORT_SYMBOL(lprocfs_rd_filestotal);
 EXPORT_SYMBOL(lprocfs_rd_filesfree);
 EXPORT_SYMBOL(lprocfs_rd_filegroups);
