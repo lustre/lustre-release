@@ -63,7 +63,7 @@ config.xml          Lustre configuration in xml format.
 --nomod             Skip load/unload module step.
 --nosetup           Skip device setup/cleanup step.
 --reformat          Reformat all devices (without question)
---dump              Dump the kernel debug log before portals is unloaded
+--dump <file>       Dump the kernel debug log before portals is unloaded
 """
     TODO = """
 --ldap server       LDAP server with lustre config database
@@ -1480,9 +1480,9 @@ def parse_cmdline(argv):
             config.noexec(1)
             config.verbose(1)
         if o == "--portals":
-            config.portals =  a
+            config.portals = a
         if o == "--lustre":
-            config.lustre  = a
+            config.lustre = a
         if o == "--reformat":
             config.reformat(1)
         if o == "--node":
