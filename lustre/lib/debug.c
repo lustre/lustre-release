@@ -1,7 +1,19 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Helper routines for dumping data structs for debugging.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ *
+ * Copryright (C) 2002 Cluster File Systems, Inc.
+ *
+ */
+
 #define DEBUG_SUBSYSTEM D_OTHER
 
 #include <linux/obd_ost.h>
-#include <linux/lustre_net.h>
+#include <linux/lustre_debug.h>
 
 int dump_ioo(struct obd_ioobj *ioo)
 {
@@ -10,11 +22,19 @@ int dump_ioo(struct obd_ioobj *ioo)
         return -EINVAL;
 }
 
-int dump_niobuf(struct niobuf *nb)
+int dump_lniobuf(struct niobuf_local *nb)
 {
-        CERROR("niobuf: addr=%Ld, offset=%Ld, len=%d, flags=%x, xid=%d\n",
-               nb->addr, nb->offset, nb->len, nb->flags, nb->xid);
+        CERROR("niobuf_local: addr=%Ld, offset=%Ld, len=%d, xid=%d\n",
+               nb->addr, nb->offset, nb->len, nb->xid);
         CERROR("nb->page: index = %ld\n", ((struct page *)nb->page)->index);
+
+        return -EINVAL;
+}
+
+int dump_rniobuf(struct niobuf_remote *nb)
+{
+        CERROR("niobuf_remote: offset=%Ld, len=%d, flags=%x, xid=%d\n",
+               nb->offset, nb->len, nb->flags, nb->xid);
 
         return -EINVAL;
 }
@@ -57,11 +77,11 @@ int dump_req(struct ptlrpc_request *req)
 {
         struct ost_body *body = lustre_msg_buf(req->rq_reqmsg, 0);
         struct obd_ioobj *ioo = lustre_msg_buf(req->rq_reqmsg, 1);
-        struct niobuf *nb = lustre_msg_buf(req->rq_reqmsg, 2);
+        //struct niobuf *nb = lustre_msg_buf(req->rq_reqmsg, 2);
 
         CERROR("ost_body: connid = %d, data = %d\n", body->connid, body->data);
         dump_obdo(&body->oa);
-        dump_niobuf(nb);
+        //dump_niobuf(nb);
         dump_ioo(ioo);
 
         return -EINVAL;
