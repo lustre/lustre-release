@@ -413,6 +413,9 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
 
         ENTRY;
 
+        if (current->fsuid != 0)
+                RETURN(err = -EACCES);
+
         if ( _IOC_TYPE(cmd) != IOC_PORTAL_TYPE ||
              _IOC_NR(cmd) < IOC_PORTAL_MIN_NR  ||
              _IOC_NR(cmd) > IOC_PORTAL_MAX_NR ) {
