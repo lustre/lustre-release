@@ -326,7 +326,7 @@ AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 # This needs to run after we've defined the KCPPFLAGS
 
 AC_MSG_CHECKING(for kernel version)
-AC_TRY_LINK([#define __KERNEL__
+AC_TRY_COMPILE([#define __KERNEL__
              #include <linux/sched.h>],
             [struct task_struct p;
              p.sighand = NULL;],
