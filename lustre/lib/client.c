@@ -182,11 +182,19 @@ int client_obd_disconnect(struct lustre_handle *conn)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct client_obd *cli = &obd->u.cli;
-        int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_DISCONNECT : MDS_DISCONNECT;
+        int rq_opc;
         struct ptlrpc_request *request = NULL;
         int rc, err;
         ENTRY;
 
+        if (!obd) {
+                CERROR("invalid connection for disconnect: addr "LPX64
+                       ", cookie "LPX64"\n", conn ? conn->addr : -1UL,
+                       conn ? conn->cookie : -1UL);
+                RETURN(-EINVAL);
+        }
+
+        rq_opc = obd->obd_type->typ_ops->o_brw ? OST_DISCONNECT:MDS_DISCONNECT;
         down(&cli->cl_sem);
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
