@@ -417,8 +417,8 @@ static int osc_rpc_stats_seq_open(struct inode *inode, struct file *file)
         return 0;
 }
 
-static int osc_rpc_stats_seq_write(struct file *file, const char *buf,
-                                   size_t len, loff_t *off)
+static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
+                                       size_t len, loff_t *off)
 {
         struct seq_file *seq = file->private_data;
         struct obd_device *dev = seq->private;
@@ -433,7 +433,7 @@ static int osc_rpc_stats_seq_write(struct file *file, const char *buf,
 struct file_operations osc_rpc_stats_fops = {
         .open    = osc_rpc_stats_seq_open,
         .read    = seq_read,
-        .write    = osc_rpc_stats_seq_write,
+        .write   = osc_rpc_stats_seq_write,
         .llseek  = seq_lseek,
         .release = seq_release,
 };
