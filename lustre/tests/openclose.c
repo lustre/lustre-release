@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
         unsigned long count, i;
         int thread = 0;
         int threads = 0;
-        int rc;
+        int rc = 0;
         int fd, ioctl_flags = 0;
 
         if (argc < 3 || argc > 4) {
