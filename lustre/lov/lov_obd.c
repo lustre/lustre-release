@@ -1332,7 +1332,7 @@ static int lov_brw_check(struct lov_obd *lov, struct lov_stripe_md *lsm,
                 int ost = lsm->lsm_oinfo[stripe].loi_ost_idx;
                 struct ldlm_extent ext, subext;
                 ext.start = pga[i].off;
-                ext.start = pga[i].off + pga[i].count;
+                ext.end = pga[i].off + pga[i].count;
 
                 if (!lov_stripe_intersects(lsm, i, ext.start, ext.end,
                                            &subext.start, &subext.end))
