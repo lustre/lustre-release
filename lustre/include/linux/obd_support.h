@@ -165,36 +165,24 @@ static inline void obd_iput(struct inode *inode)
 
 #define OBD_ALLOC(ptr, cast, size)                                      \
 do {                                                                    \
-        if (size <= 4096) {                                             \
-                ptr = (cast)kmalloc((unsigned long) size, GFP_KERNEL);  \
-                CDEBUG(D_MALLOC, "kmalloced: %d at %x.\n",              \
-                       (int) size, (int) ptr);                          \
-        } else {                                                        \
-                ptr = (cast)vmalloc((unsigned long) size);              \
-                CDEBUG(D_MALLOC, "vmalloced: %d at %x.\n",              \
-                       (int) size, (int) ptr);                          \
-        }                                                               \
+        ptr = (cast)kmalloc((unsigned long) size, GFP_KERNEL);        \
+        obd_memory += size;                                             \
+        CDEBUG(D_MALLOC, "kmalloced: %d at %x (tot %ld).\n",            \
+                       (int) size, (int) ptr, obd_memory);             \
         if (ptr == 0) {                                                 \
                 printk("kernel malloc returns 0 at %s:%d\n",            \
                        __FILE__, __LINE__);                             \
         } else {                                                        \
                 memset(ptr, 0, size);                                   \
-                obd_memory += size;                                     \
         }                                                               \
 } while (0)
 
-#define OBD_FREE(ptr,size)                              \
-do {                                                    \
-        if (size <= 4096) {                             \
-                kfree((ptr));                   \
-                CDEBUG(D_MALLOC, "kfreed: %d at %x.\n", \
-                       (int) size, (int) ptr);          \
-        } else {                                        \
-                vfree((ptr));                           \
-                CDEBUG(D_MALLOC, "vfreed: %d at %x.\n", \
-                       (int) size, (int) ptr);          \
-        }                                               \
-        obd_memory -= size;                             \
+#define OBD_FREE(ptr,size)                                   \
+do {                                                         \
+        kfree((ptr));                                        \
+        obd_memory -= size;                                  \
+        CDEBUG(D_MALLOC, "kfreed: %d at %x (tot %ld).\n",    \
+               (int) size, (int) ptr, obd_memory);           \
 } while (0)
 
 

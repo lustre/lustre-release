@@ -430,7 +430,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         obddev->obd_flags |= OBD_SET_UP;
                         EXIT;
                 }
-
+		OBD_FREE(setup->setup_data, setup->setup_datalen);
                 return err;
         }
         case OBD_IOC_CLEANUP: {

@@ -444,18 +444,23 @@ int obdfs_flushd_cleanup(void)
                          pupdated->state == TASK_INTERRUPTIBLE )) {
                 unsigned long timeout = HZ/20;
                 unsigned long count = 0;
+                CDEBUG(D_CACHE, "\n");
                 send_sig_info(SIGTERM, (struct siginfo *)1, pupdated);
+                CDEBUG(D_CACHE, "\n");
                 while (pupdated) {
+			CDEBUG(D_CACHE, "\n");
                         if ((count % 2*HZ) == timeout)
                                 printk(KERN_INFO "wait for pupdated to stop\n");
-                        count += timeout;
+			CDEBUG(D_CACHE, "\n");
+			count += timeout;
                         set_current_state(TASK_INTERRUPTIBLE);
+			CDEBUG(D_CACHE, "\n");
                         schedule_timeout(timeout);
+			CDEBUG(D_CACHE, "\n");
                 }
+                CDEBUG(D_CACHE, "\n");
         }
 
         EXIT;
-        /* not reached */
         return 0;
-
 }
