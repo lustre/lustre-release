@@ -40,9 +40,11 @@ static int obdfs_fast_follow_link(struct dentry *dentry, struct nameidata *nd)
         return vfs_follow_link(nd, s); 
 }
 
+extern int obdfs_setattr(struct dentry *de, struct iattr *attr);
 struct inode_operations obdfs_fast_symlink_inode_operations = {
         readlink:       obdfs_fast_readlink,
         follow_link:    obdfs_fast_follow_link,
+	setattr:        obdfs_setattr
 };
 
 static int obdfs_readlink(struct dentry *dentry, char *buffer, int buflen)
@@ -88,4 +90,5 @@ static int obdfs_follow_link(struct dentry * dentry,
 struct inode_operations obdfs_symlink_inode_operations = {
         readlink:       obdfs_readlink,
         follow_link:    obdfs_follow_link,
+	setattr:        obdfs_setattr
 };

@@ -37,6 +37,8 @@
 #include <linux/obd_support.h>
 #include <linux/obdfs.h>
 
+void obdfs_change_inode(struct inode *inode);
+
 static inline void obdfs_remove_suid(struct inode *inode)
 {
         unsigned int mode;
@@ -48,7 +50,7 @@ static inline void obdfs_remove_suid(struct inode *inode)
         mode &= inode->i_mode;
         if (mode && !capable(CAP_FSETID)) {
                 inode->i_mode &= ~mode;
-                mark_inode_dirty(inode);
+                obdfs_change_inode(inode);
         }
 }
 
@@ -68,7 +70,7 @@ obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 struct inode *inode = file->f_dentry->d_inode;
                 obdfs_remove_suid(inode);
                 inode->i_ctime = inode->i_mtime = CURRENT_TIME;
-                mark_inode_dirty(inode);
+                obdfs_change_inode(inode);
         }
         EXIT;
         return retval;
@@ -80,9 +82,9 @@ struct file_operations obdfs_file_operations = {
         mmap: generic_file_mmap,      /* mmap */
 };
 
-extern int obdfs_notify_change(struct dentry *de, struct iattr *attr);
+extern int obdfs_setattr(struct dentry *de, struct iattr *attr);
 struct inode_operations obdfs_file_inode_operations = {
         truncate: obdfs_truncate,
-        setattr: obdfs_notify_change
+	setattr: obdfs_setattr
 };
 

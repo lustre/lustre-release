@@ -36,6 +36,7 @@
 #include <linux/obd_ext2.h>
 #include <linux/obdfs.h>
 
+void obdfs_change_inode(struct inode *inode);
 
 /* SYNCHRONOUS I/O for an inode */
 static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
@@ -389,7 +390,7 @@ int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsi
         kunmap(page);
         if (pos > inode->i_size) {
                 inode->i_size = pos;
-                mark_inode_dirty(inode);
+                obdfs_change_inode(inode);
         }
         return 0;
 }

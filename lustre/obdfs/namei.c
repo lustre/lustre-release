@@ -34,6 +34,10 @@
 #include <linux/obdfs.h>
 extern struct address_space_operations obdfs_aops;
 
+/* from super.c */
+extern void obdfs_change_inode(struct inode *inode);
+extern int obdfs_setattr(struct dentry *de, struct iattr *attr);
+
 /* from dir.c */
 extern int ext2_add_link (struct dentry *dentry, struct inode *inode);
 extern ino_t ext2_inode_by_name(struct inode * dir, struct dentry *dentry);
@@ -52,13 +56,13 @@ void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
 static inline void ext2_inc_count(struct inode *inode)
 {
 	inode->i_nlink++;
-	mark_inode_dirty(inode);
+	obdfs_change_inode(inode);
 }
 
 static inline void ext2_dec_count(struct inode *inode)
 {
 	inode->i_nlink--;
-	mark_inode_dirty(inode);
+	obdfs_change_inode(inode);
 }
 
 static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
@@ -135,7 +139,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
         err = IOPS(dir, create)(IID(dir), oa);
 
         if ( err ) {
-                CDEBUG(D_INODE, "fatal: creating new inode (err %d)\n", err);
+                printk("new_inode - fatal: err %d\n", err);
                 obdo_free(oa);
                 EXIT;
                 return ERR_PTR(err);
@@ -144,7 +148,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
         inode = iget(dir->i_sb, (ino_t)oa->o_id);
 
         if (!inode) {
-                CDEBUG(D_INODE, "fatal: get new inode %ld\n", (long)oa->o_id);
+                printk("new_inode -fatal:  %ld\n", (long)oa->o_id);
                 IOPS(dir, destroy)(IID(dir), oa);
                 obdo_free(oa);
                 EXIT;
@@ -152,7 +156,8 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
         }
 
         if (!list_empty(&inode->i_dentry)) {
-                CDEBUG(D_INODE, "New inode (%ld) has aliases!\n", inode->i_ino);
+                printk("new_inode -fatal: aliases %ld, ct %d lnk %d\n", (long)oa->o_id,
+ atomic_read(&inode->i_count), inode->i_nlink);
                 IOPS(dir, destroy)(IID(dir), oa);
                 obdo_free(oa);
                 iput(inode);
@@ -182,7 +187,7 @@ static int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 		inode->i_op = &obdfs_file_inode_operations;
 		inode->i_fop = &obdfs_file_operations;
 		inode->i_mapping->a_ops = &obdfs_aops;
-		mark_inode_dirty(inode);
+		obdfs_change_inode(inode);
 		err = ext2_add_nondir(dentry, inode);
 	}
 	return err;
@@ -195,7 +200,7 @@ static int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int
 	int err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		init_special_inode(inode, mode, rdev);
-		mark_inode_dirty(inode);
+		obdfs_change_inode(inode);
 		err = ext2_add_nondir(dentry, inode);
 	}
 	return err;
@@ -232,7 +237,7 @@ static int obdfs_symlink (struct inode * dir, struct dentry * dentry,
 		memcpy(oinfo->oi_inline, symname, l);
 		inode->i_size = l-1;
 	}
-	mark_inode_dirty(inode);
+	obdfs_change_inode(inode);
 
 	err = ext2_add_nondir(dentry, inode);
 out:
@@ -434,4 +439,5 @@ struct inode_operations obdfs_dir_inode_operations = {
 	rmdir:		obdfs_rmdir,
 	mknod:		obdfs_mknod,
 	rename:		obdfs_rename,
+	setattr:        obdfs_setattr
 };

@@ -341,7 +341,7 @@ static void obdfs_read_inode(struct inode *inode)
         return;
 }
 
-static void obdfs_write_inode(struct inode *inode, int wait) 
+void obdfs_change_inode(struct inode *inode)
 {
         struct obdo *oa;
         int err;
@@ -410,6 +410,8 @@ static void obdfs_delete_inode(struct inode *inode)
         oa->o_valid = OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
+	/* XXX how do we know that this inode is now clean? */
+	printk("delete_inode ------> link %d\n", inode->i_nlink);
         ODEBUG(oa);
         err = IOPS(inode, destroy)(IID(inode), oa);
         obdo_free(oa);
@@ -424,7 +426,38 @@ static void obdfs_delete_inode(struct inode *inode)
 } /* obdfs_delete_inode */
 
 
-int obdfs_notify_change(struct dentry *de, struct iattr *attr)
+
+int inode_copy_attr(struct inode * inode, struct iattr * attr)
+{
+	unsigned int ia_valid = attr->ia_valid;
+	int error = 0;
+
+	if (ia_valid & ATTR_SIZE) {
+		error = vmtruncate(inode, attr->ia_size);
+		if (error)
+			goto out;
+	}
+
+	if (ia_valid & ATTR_UID)
+		inode->i_uid = attr->ia_uid;
+	if (ia_valid & ATTR_GID)
+		inode->i_gid = attr->ia_gid;
+	if (ia_valid & ATTR_ATIME)
+		inode->i_atime = attr->ia_atime;
+	if (ia_valid & ATTR_MTIME)
+		inode->i_mtime = attr->ia_mtime;
+	if (ia_valid & ATTR_CTIME)
+		inode->i_ctime = attr->ia_ctime;
+	if (ia_valid & ATTR_MODE) {
+		inode->i_mode = attr->ia_mode;
+		if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
+			inode->i_mode &= ~S_ISGID;
+	}
+out:
+	return error;
+}
+
+int obdfs_setattr(struct dentry *de, struct iattr *attr)
 {
         struct inode *inode = de->d_inode;
         struct obdo *oa;
@@ -442,7 +475,7 @@ int obdfs_notify_change(struct dentry *de, struct iattr *attr)
                 return -ENOMEM;
         }
 
-	inode_setattr(inode, attr);
+	inode_copy_attr(inode, attr);
         oa->o_id = inode->i_ino;
         obdo_from_iattr(oa, attr);
         err = IOPS(inode, setattr)(IID(inode), oa);
@@ -453,7 +486,7 @@ int obdfs_notify_change(struct dentry *de, struct iattr *attr)
         EXIT;
         obdo_free(oa);
         return err;
-} /* obdfs_notify_change */
+} /* obdfs_setattr */
 
 
 static int obdfs_statfs(struct super_block *sb, struct statfs *buf)
@@ -479,7 +512,6 @@ static int obdfs_statfs(struct super_block *sb, struct statfs *buf)
 struct super_operations obdfs_super_operations =
 {
         read_inode: obdfs_read_inode,
-        write_inode: obdfs_write_inode,
         put_inode: obdfs_put_inode,
         delete_inode: obdfs_delete_inode,
         put_super: obdfs_put_super,

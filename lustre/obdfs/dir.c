@@ -410,7 +410,7 @@ void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
 	UnlockPage(page);
 	ext2_put_page(page);
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
-	mark_inode_dirty(dir);
+	obdfs_change_inode(dir);
 }
 
 /*
@@ -476,7 +476,7 @@ got_it:
 	ext2_set_de_type (de, inode);
 	err = ext2_commit_chunk(page, from, to);
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
-	mark_inode_dirty(dir);
+	obdfs_change_inode(dir);
 	/* OFFSET_CACHE */
 out_unlock:
 	UnlockPage(page);
@@ -518,7 +518,7 @@ int ext2_delete_entry (struct ext2_dir_entry_2 * dir, struct page * page )
 	UnlockPage(page);
 	ext2_put_page(page);
 	inode->i_ctime = inode->i_mtime = CURRENT_TIME;
-	mark_inode_dirty(inode);
+	obdfs_change_inode(inode);
 	return err;
 }
 
