@@ -1,7 +1,7 @@
-Index: linux-p4smp/arch/i386/kernel/entry.S
+Index: linux-2.4.21/arch/i386/kernel/entry.S
 ===================================================================
---- linux-p4smp.orig/arch/i386/kernel/entry.S	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/arch/i386/kernel/entry.S	2004-06-14 13:14:19.000000000 -0700
+--- linux-2.4.21.orig/arch/i386/kernel/entry.S	2004-07-09 19:15:11.000000000 -0400
++++ linux-2.4.21/arch/i386/kernel/entry.S	2004-07-16 18:00:14.000000000 -0400
 @@ -46,6 +46,7 @@
  #include <asm/segment.h>
  #include <asm/page.h>
@@ -10,7 +10,7 @@ Index: linux-p4smp/arch/i386/kernel/entry.S
  #include <asm/unistd.h>
  	
  EBX		= 0x00
-@@ -94,10 +95,6 @@ pt_sys_exit	= 8
+@@ -94,10 +95,6 @@
  
  ENOSYS = 38
  
@@ -21,7 +21,7 @@ Index: linux-p4smp/arch/i386/kernel/entry.S
  #if CONFIG_X86_HIGH_ENTRY
  
  #define call_SYMBOL_NAME_ABS(X) movl $X, %ebp; call *%ebp
-@@ -193,7 +190,7 @@ ENOSYS = 38
+@@ -193,7 +190,7 @@
  	GET_CURRENT(%ebx);				\
  	movl real_stack(%ebx), %edx;			\
  	movl %esp, %ebx;				\
@@ -30,7 +30,7 @@ Index: linux-p4smp/arch/i386/kernel/entry.S
  	orl %ebx, %edx;					\
  	movl %edx, %esp;
  
-@@ -228,7 +225,7 @@ ENOSYS = 38
+@@ -228,7 +225,7 @@
  return_path_start_marker:				\
  	nop;						\
  	movl %esp, %ebx;				\
@@ -39,11 +39,11 @@ Index: linux-p4smp/arch/i386/kernel/entry.S
  	orl %ebx, %edx;					\
  	movl %esp, %eax;				\
  	movl %edx, %esp; 				\
-Index: linux-p4smp/arch/i386/kernel/smpboot.c
+Index: linux-2.4.21/arch/i386/kernel/smpboot.c
 ===================================================================
---- linux-p4smp.orig/arch/i386/kernel/smpboot.c	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/arch/i386/kernel/smpboot.c	2004-06-14 13:14:19.000000000 -0700
-@@ -814,7 +814,7 @@ static void __init do_boot_cpu (int apic
+--- linux-2.4.21.orig/arch/i386/kernel/smpboot.c	2004-07-09 19:14:40.000000000 -0400
++++ linux-2.4.21/arch/i386/kernel/smpboot.c	2004-07-16 18:00:14.000000000 -0400
+@@ -814,7 +814,7 @@
  
  	/* So we see what's up   */
  	printk("Booting processor %d/%d eip %lx\n", cpu, apicid, start_eip);
@@ -52,7 +52,7 @@ Index: linux-p4smp/arch/i386/kernel/smpboot.c
  
  	/*
  	 * This grunge runs the startup process for
-@@ -887,7 +887,7 @@ static void __init do_boot_cpu (int apic
+@@ -887,7 +887,7 @@
  			Dprintk("CPU has booted.\n");
  		} else {
  			boot_error= 1;
@@ -61,7 +61,7 @@ Index: linux-p4smp/arch/i386/kernel/smpboot.c
  					== 0xA5)
  				/* trampoline started but...? */
  				printk("Stuck ??\n");
-@@ -910,7 +910,7 @@ static void __init do_boot_cpu (int apic
+@@ -910,7 +910,7 @@
  	}
  
  	/* mark "stuck" area as not stuck */
@@ -70,11 +70,11 @@ Index: linux-p4smp/arch/i386/kernel/smpboot.c
  
  	if(clustered_apic_mode == CLUSTERED_APIC_NUMAQ) {
  		printk("Restoring NMI vector\n");
-Index: linux-p4smp/arch/i386/kernel/traps.c
+Index: linux-2.4.21/arch/i386/kernel/traps.c
 ===================================================================
---- linux-p4smp.orig/arch/i386/kernel/traps.c	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/arch/i386/kernel/traps.c	2004-06-14 13:14:19.000000000 -0700
-@@ -273,7 +273,7 @@ void show_trace_task(struct task_struct 
+--- linux-2.4.21.orig/arch/i386/kernel/traps.c	2004-07-09 19:14:54.000000000 -0400
++++ linux-2.4.21/arch/i386/kernel/traps.c	2004-07-16 18:00:14.000000000 -0400
+@@ -180,7 +180,7 @@
  	unsigned long esp = tsk->thread.esp;
  
  	/* User space on another CPU? */
@@ -83,10 +83,10 @@ Index: linux-p4smp/arch/i386/kernel/traps.c
  		return;
  	show_trace((unsigned long *)esp);
  }
-Index: linux-p4smp/arch/i386/kernel/head.S
+Index: linux-2.4.21/arch/i386/kernel/head.S
 ===================================================================
---- linux-p4smp.orig/arch/i386/kernel/head.S	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/arch/i386/kernel/head.S	2004-06-14 13:14:19.000000000 -0700
+--- linux-2.4.21.orig/arch/i386/kernel/head.S	2004-07-09 19:14:45.000000000 -0400
++++ linux-2.4.21/arch/i386/kernel/head.S	2004-07-16 18:00:14.000000000 -0400
 @@ -15,6 +15,7 @@
  #include <asm/page.h>
  #include <asm/pgtable.h>
@@ -95,7 +95,7 @@ Index: linux-p4smp/arch/i386/kernel/head.S
  
  #define OLD_CL_MAGIC_ADDR	0x90020
  #define OLD_CL_MAGIC		0xA33F
-@@ -328,7 +329,7 @@ rp_sidt:
+@@ -315,7 +316,7 @@
  	ret
  
  ENTRY(stack_start)
@@ -104,10 +104,10 @@ Index: linux-p4smp/arch/i386/kernel/head.S
  	.long __KERNEL_DS
  
  /* This is the default interrupt "handler" :-) */
-Index: linux-p4smp/arch/i386/kernel/irq.c
+Index: linux-2.4.21/arch/i386/kernel/irq.c
 ===================================================================
---- linux-p4smp.orig/arch/i386/kernel/irq.c	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/arch/i386/kernel/irq.c	2004-06-14 13:14:19.000000000 -0700
+--- linux-2.4.21.orig/arch/i386/kernel/irq.c	2004-07-09 19:14:59.000000000 -0400
++++ linux-2.4.21/arch/i386/kernel/irq.c	2004-07-16 18:00:14.000000000 -0400
 @@ -45,6 +45,7 @@
  #include <asm/delay.h>
  #include <asm/desc.h>
@@ -116,7 +116,7 @@ Index: linux-p4smp/arch/i386/kernel/irq.c
  
  
  
-@@ -585,7 +586,7 @@ asmlinkage unsigned int do_IRQ(struct pt
+@@ -585,7 +586,7 @@
  	long esp;
  
  	/* Debugging check for stack overflow: is there less than 1KB free? */
@@ -125,10 +125,10 @@ Index: linux-p4smp/arch/i386/kernel/irq.c
  	if (unlikely(esp < (sizeof(struct task_struct) + 1024))) {
  		extern void show_stack(unsigned long *);
  
-Index: linux-p4smp/arch/i386/lib/getuser.S
+Index: linux-2.4.21/arch/i386/lib/getuser.S
 ===================================================================
---- linux-p4smp.orig/arch/i386/lib/getuser.S	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/arch/i386/lib/getuser.S	2004-06-14 13:14:19.000000000 -0700
+--- linux-2.4.21.orig/arch/i386/lib/getuser.S	1998-01-12 16:42:52.000000000 -0500
++++ linux-2.4.21/arch/i386/lib/getuser.S	2004-07-16 18:00:14.000000000 -0400
 @@ -21,6 +21,10 @@
   * as they get called from within inline assembly.
   */
@@ -140,7 +140,7 @@ Index: linux-p4smp/arch/i386/lib/getuser.S
  addr_limit = 12
  
  .text
-@@ -28,7 +32,7 @@ addr_limit = 12
+@@ -28,7 +32,7 @@
  .globl __get_user_1
  __get_user_1:
  	movl %esp,%edx
@@ -149,7 +149,7 @@ Index: linux-p4smp/arch/i386/lib/getuser.S
  	cmpl addr_limit(%edx),%eax
  	jae bad_get_user
  1:	movzbl (%eax),%edx
-@@ -41,7 +45,7 @@ __get_user_2:
+@@ -41,7 +45,7 @@
  	addl $1,%eax
  	movl %esp,%edx
  	jc bad_get_user
@@ -158,7 +158,7 @@ Index: linux-p4smp/arch/i386/lib/getuser.S
  	cmpl addr_limit(%edx),%eax
  	jae bad_get_user
  2:	movzwl -1(%eax),%edx
-@@ -54,7 +58,7 @@ __get_user_4:
+@@ -54,7 +58,7 @@
  	addl $3,%eax
  	movl %esp,%edx
  	jc bad_get_user
@@ -167,12 +167,12 @@ Index: linux-p4smp/arch/i386/lib/getuser.S
  	cmpl addr_limit(%edx),%eax
  	jae bad_get_user
  3:	movl -3(%eax),%edx
-Index: linux-p4smp/arch/i386/config.in
+Index: linux-2.4.21/arch/i386/config.in
 ===================================================================
---- linux-p4smp.orig/arch/i386/config.in	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/arch/i386/config.in	2004-06-14 13:14:05.000000000 -0700
-@@ -310,6 +310,28 @@ if [ "$CONFIG_SMP" = "y" -a "$CONFIG_X86
-    define_bool CONFIG_HAVE_DEC_LOCK y
+--- linux-2.4.21.orig/arch/i386/config.in	2004-07-09 19:15:12.000000000 -0400
++++ linux-2.4.21/arch/i386/config.in	2004-07-16 18:00:14.000000000 -0400
+@@ -306,6 +306,28 @@
+    fi
  fi
  
 +choice 'Bigger Stack Size Support' \
@@ -222,8 +222,8 @@ Index: linux-p4smp/arch/i386/vmlinux.lds.in
  
    entry_tramp_start = .;
 ===================================================================
---- linux-p4smp.orig/include/asm-i386/current.h	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/include/asm-i386/current.h	2004-06-14 13:41:19.000000000 -0700
+--- linux-2.4.21.orig/include/asm-i386/current.h	1998-08-14 19:35:22.000000000 -0400
++++ linux-2.4.21/include/asm-i386/current.h	2004-07-16 18:00:14.000000000 -0400
 @@ -1,15 +1,64 @@
  #ifndef _I386_CURRENT_H
  #define _I386_CURRENT_H
@@ -290,11 +290,11 @@ Index: linux-p4smp/arch/i386/vmlinux.lds.in
 +#endif /* __ASSEMBLY__ */
 +
  #endif /* !(_I386_CURRENT_H) */
-Index: linux-p4smp/include/asm-i386/hw_irq.h
+Index: linux-2.4.21/include/asm-i386/hw_irq.h
 ===================================================================
---- linux-p4smp.orig/include/asm-i386/hw_irq.h	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/include/asm-i386/hw_irq.h	2004-06-14 13:14:19.000000000 -0700
-@@ -136,21 +136,17 @@ extern char _stext, _etext;
+--- linux-2.4.21.orig/include/asm-i386/hw_irq.h	2004-07-09 19:14:45.000000000 -0400
++++ linux-2.4.21/include/asm-i386/hw_irq.h	2004-07-16 18:00:14.000000000 -0400
+@@ -135,21 +135,17 @@
  	"								\
  	/* load the real stack - keep the offset */			\
  									\
@@ -318,10 +318,10 @@ Index: linux-p4smp/include/asm-i386/hw_irq.h
  /*
   *	SMP has a few special interrupts for IPI messages
   */
-Index: linux-p4smp/include/asm-i386/processor.h
+Index: linux-2.4.21/include/asm-i386/processor.h
 ===================================================================
---- linux-p4smp.orig/include/asm-i386/processor.h	2004-06-14 13:13:07.000000000 -0700
-+++ linux-p4smp/include/asm-i386/processor.h	2004-06-14 13:14:19.000000000 -0700
+--- linux-2.4.21.orig/include/asm-i386/processor.h	2004-07-09 19:15:12.000000000 -0400
++++ linux-2.4.21/include/asm-i386/processor.h	2004-07-16 18:00:14.000000000 -0400
 @@ -14,6 +14,7 @@
  #include <asm/types.h>
  #include <asm/sigcontext.h>
@@ -330,7 +330,7 @@ Index: linux-p4smp/include/asm-i386/processor.h
  #include <linux/cache.h>
  #include <linux/config.h>
  #include <linux/threads.h>
-@@ -498,10 +499,6 @@ unsigned long get_wchan(struct task_stru
+@@ -494,10 +495,6 @@
  #define KSTK_EIP(tsk)	(((unsigned long *)(4096+(unsigned long)(tsk)))[1019])
  #define KSTK_ESP(tsk)	(((unsigned long *)(4096+(unsigned long)(tsk)))[1022])
  
