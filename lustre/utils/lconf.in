@@ -25,7 +25,7 @@
 # Based in part on the XML obdctl modifications done by Brian Behlendorf 
 
 import sys, getopt, types
-import string, os, stat, popen2, socket, time, random, fcntl, select
+import string, os, stat, popen2, socket, time, random, FCNTL, select
 import re, exceptions
 import xml.dom.minidom
 
@@ -171,7 +171,6 @@ class Config:
     def dump_file(self, val = None):
         if val: self._dump_file = val
         return self._dump_file
-
     def minlevel(self, val = None):
         if val: self._minlevel = int(val)
         return self._minlevel
@@ -295,8 +294,8 @@ class LCTLInterface:
                 raise CommandError('lctl', "unable to find lctl binary.")
 
     def set_nonblock(self, fd):
-        fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-        fcntl.fcntl(fd, fcntl.F_SETFL, fl | os.O_NDELAY)
+        fl = FCNTL.fcntl(fd, FCNTL.F_GETFL)
+        FCNTL.fcntl(fd, FCNTL.F_SETFL, fl | os.O_NDELAY)
 
     def run(self, cmds):
         """
