@@ -633,7 +633,6 @@ struct obd_device {
         time_t                           obd_recovery_start;
         time_t                           obd_recovery_end;
 
-
         union {
                 struct filter_obd        filter;
                 struct mds_obd           mds;
@@ -653,6 +652,9 @@ struct obd_device {
         /* fields used by LProcFS */
         unsigned int           obd_cntr_base;
         struct lprocfs_stats  *obd_stats;
+        unsigned int           md_cntr_base;
+        struct lprocfs_stats  *md_stats;
+
         struct proc_dir_entry *obd_svc_procroot;
         struct lprocfs_stats  *obd_svc_stats;
 };
@@ -891,8 +893,9 @@ struct md_ops {
 
         int (*m_delete_inode)(struct obd_export *, struct lustre_id *);
 
-        /* NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line to
-         * lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c. Also, add a
+        /*
+         * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to
+         * lprocfs_alloc_md_stats() in obdclass/lprocfs_status.c. Also, add a
          * wrapper function in include/linux/obd_class.h.
          */
 };

@@ -3252,13 +3252,20 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 int mds_attach(struct obd_device *dev, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
+        int rc = 0;
 
         lprocfs_init_multi_vars(0, &lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
+
+        rc = lprocfs_obd_attach(dev, lvars.obd_vars);
+        if (rc)
+                return rc;
+
+        return lprocfs_alloc_md_stats(dev, 0);
 }
 
 int mds_detach(struct obd_device *dev)
 {
+        lprocfs_free_md_stats(dev);
         return lprocfs_obd_detach(dev);
 }
 

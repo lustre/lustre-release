@@ -547,7 +547,8 @@ struct file_operations lprocfs_stats_seq_fops = {
         .release = seq_release,
 };
 
-int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
+int lprocfs_register_stats(struct proc_dir_entry *root,
+                           const char *name,
                            struct lprocfs_stats *stats)
 {
         struct proc_dir_entry *entry;
@@ -563,7 +564,8 @@ int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
 }
 
 void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
-                          unsigned conf, const char *name, const char *units)
+                          unsigned conf, const char *name,
+                          const char *units)
 {
         struct lprocfs_counter *c;
         int i;
@@ -586,7 +588,8 @@ do {                                                                       \
         lprocfs_counter_init(stats, coffset, 0, #op, "reqs");              \
 } while (0)
 
-int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
+int lprocfs_alloc_obd_stats(struct obd_device *obd,
+                            unsigned num_private_stats)
 {
         struct lprocfs_stats *stats;
         unsigned int num_stats;
@@ -690,6 +693,83 @@ void lprocfs_free_obd_stats(struct obd_device *obd)
 
         if (stats != NULL) {
                 obd->obd_stats = NULL;
+                lprocfs_free_stats(stats);
+        }
+}
+
+#define LPROCFS_MD_OP_INIT(base, stats, op)                             \
+do {                                                                    \
+        unsigned int coffset = base + MD_COUNTER_OFFSET(op);            \
+        LASSERT(coffset < stats->ls_num);                               \
+        lprocfs_counter_init(stats, coffset, 0, #op, "reqs");           \
+} while (0)
+
+int lprocfs_alloc_md_stats(struct obd_device *obd,
+                           unsigned num_private_stats)
+{
+        struct lprocfs_stats *stats;
+        unsigned int num_stats;
+        int rc, i;
+
+        LASSERT(obd->md_stats == NULL);
+        LASSERT(obd->obd_proc_entry != NULL);
+        LASSERT(obd->md_cntr_base == 0);
+
+        num_stats = 1 + MD_COUNTER_OFFSET(delete_inode) +
+                num_private_stats;
+        stats = lprocfs_alloc_stats(num_stats);
+        if (stats == NULL)
+                return -ENOMEM;
+
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, getstatus);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, change_cbdata);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, change_cbdata_name);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, close);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, create);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, done_writing);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, enqueue);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr_lock);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_lock);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, link);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, rename);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, setattr);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, sync);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, readpage);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, unlink);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, valid_attrs);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, get_real_obd);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, req2lustre_md);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, set_open_replay_data);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, clear_open_replay_data);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, store_inode_generation);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, set_lock_data);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, delete_inode);
+
+        for (i = num_private_stats; i < num_stats; i++) {
+                if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {
+                        CERROR("Missing md_stat initializer md_op "
+                               "operation at offset %d. Aborting.\n",
+                               i - num_private_stats);
+                        LBUG();
+                }
+        }
+        rc = lprocfs_register_stats(obd->obd_proc_entry, "stats", stats);
+        if (rc < 0) {
+                lprocfs_free_stats(stats);
+        } else {
+                obd->md_stats  = stats;
+                obd->md_cntr_base = num_private_stats;
+        }
+        return rc;
+}
+
+void lprocfs_free_md_stats(struct obd_device *obd)
+{
+        struct lprocfs_stats *stats = obd->md_stats;
+
+        if (stats != NULL) {
+                obd->md_stats = NULL;
                 lprocfs_free_stats(stats);
         }
 }
@@ -800,6 +880,7 @@ static long timeval_sub(struct timeval *large, struct timeval *small)
         return ((large->tv_sec - small->tv_sec) * 1000000) +
                 (large->tv_usec - small->tv_usec);
 }
+
 void lprocfs_stime_record(struct obd_service_time *stime, struct timeval *large,
                           struct timeval *small)
 {
@@ -920,6 +1001,8 @@ EXPORT_SYMBOL(lprocfs_free_stats);
 EXPORT_SYMBOL(lprocfs_register_stats);
 EXPORT_SYMBOL(lprocfs_alloc_obd_stats);
 EXPORT_SYMBOL(lprocfs_free_obd_stats);
+EXPORT_SYMBOL(lprocfs_alloc_md_stats);
+EXPORT_SYMBOL(lprocfs_free_md_stats);
 
 EXPORT_SYMBOL(lprocfs_rd_u64);
 EXPORT_SYMBOL(lprocfs_rd_uuid);

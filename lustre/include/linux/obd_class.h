@@ -312,11 +312,24 @@ do {                                                            \
                 unsigned int coffset;                           \
                 coffset = (unsigned int)(obd)->obd_cntr_base +  \
                         OBD_COUNTER_OFFSET(op);                 \
-                LASSERT(coffset < obd->obd_stats->ls_num);      \
-                lprocfs_counter_incr(obd->obd_stats, coffset);  \
+                LASSERT(coffset < (obd)->obd_stats->ls_num);    \
+                lprocfs_counter_incr((obd)->obd_stats, coffset); \
         }
-/* FIXME: real accounting here */
-#define MD_COUNTER_INCREMENT(obd, op)
+
+#define MD_COUNTER_OFFSET(op)                                  \
+        ((offsetof(struct md_ops, m_ ## op) -                  \
+          offsetof(struct md_ops, m_getstatus))                \
+         / sizeof(((struct md_ops *)(0))->m_getstatus))
+
+#define MD_COUNTER_INCREMENT(obd, op)                           \
+        if ((obd)->md_stats != NULL) {                          \
+                unsigned int coffset;                           \
+                coffset = (unsigned int)(obd)->md_cntr_base +   \
+                        MD_COUNTER_OFFSET(op);                  \
+                LASSERT(coffset < (obd)->md_stats->ls_num);     \
+                lprocfs_counter_incr((obd)->md_stats, coffset); \
+        }
+
 #else
 #define OBD_COUNTER_OFFSET(op)
 #define OBD_COUNTER_INCREMENT(obd, op)
@@ -379,12 +392,12 @@ do {                                                            \
         }                                                       \
 } while (0)
 
-#define CTXT_CHECK_OP(ctxt, op, err)                                         \
+#define CTXT_CHECK_OP(ctxt, op, err)                            \
 do {                                                            \
-        if (!OBT(ctxt->loc_obd) || !CTXTP((ctxt), op)) {                     \
+        if (!OBT(ctxt->loc_obd) || !CTXTP((ctxt), op)) {        \
                 if (err)                                        \
                         CERROR("lop_" #op ": dev %d no operation\n",    \
-                               ctxt->loc_obd->obd_minor);                         \
+                               ctxt->loc_obd->obd_minor);               \
                 RETURN(err);                                    \
         }                                                       \
 } while (0)

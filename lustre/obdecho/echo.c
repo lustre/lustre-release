@@ -55,7 +55,7 @@ static struct page *echo_persistent_pages[ECHO_PERSISTENT_PAGES];
 enum {
         LPROC_ECHO_READ_BYTES = 1,
         LPROC_ECHO_WRITE_BYTES = 2,
-        LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
+        LPROC_ECHO_LAST
 };
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
