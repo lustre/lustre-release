@@ -20,7 +20,7 @@ noinst_SCRIPTS = fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 	llrmount.sh llsimple.sh  mdcreq.sh mdcreqcleanup.sh \
 	ostreq.sh runfailure-client-mds-recover.sh runfailure-mds \
 	runfailure-net runfailure-ost runiozone runregression-net.sh \
-	runtests runvmstat snaprun.sh
+	runtests runvmstat snaprun.sh tbox.sh
 pkglib_SCRIPTS = common.sh
 pkgcfg_DATA = lustre.cfg
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme mcreate
