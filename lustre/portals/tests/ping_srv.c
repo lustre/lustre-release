@@ -51,7 +51,7 @@
 
 static unsigned ping_head_magic;
 static unsigned ping_bulk_magic;
-static int nal  = 0;                            // Your NAL,
+static int nal  = 1;                            // Your NAL,
 static unsigned long packets_valid = 0;         // Valid packets 
 static int running = 1;
 atomic_t pkt;

@@ -7,3 +7,4 @@ obj-y += libcfs/
 obj-y += portals/
 obj-y += router/
 obj-y += knals/
+obj-y += tests/
