@@ -130,7 +130,7 @@ static int quotactl_test_3(struct obd_device *obd, struct super_block *sb)
             oqctl.qc_dqblk.dqb_ihardlimit != 616 ||
             oqctl.qc_dqblk.dqb_isoftlimit != 515) {
                 CERROR("3c: quotactl Q_GETQUOTA get wrong result:"
-                       "%llu, %llu, %llu, %llu\n",
+                       LPU64", "LPU64", "LPU64", "LPU64"\n",
                        oqctl.qc_dqblk.dqb_bhardlimit,
                        oqctl.qc_dqblk.dqb_bsoftlimit,
                        oqctl.qc_dqblk.dqb_ihardlimit,
@@ -160,8 +160,8 @@ static int quotactl_test_3(struct obd_device *obd, struct super_block *sb)
         }
         if (oqctl.qc_dqblk.dqb_curspace != 717 ||
             oqctl.qc_dqblk.dqb_curinodes != 414) {
-                CERROR("3f: quotactl Q_GETQUOTA get wrong result: %llu, %llu\n",
-                       oqctl.qc_dqblk.dqb_curspace,
+                CERROR("3f: quotactl Q_GETQUOTA get wrong result: "
+                       LPU64", "LPU64"\n", oqctl.qc_dqblk.dqb_curspace,
                        oqctl.qc_dqblk.dqb_curinodes);
                 RETURN(-EINVAL);
         }
@@ -188,8 +188,8 @@ static int quotactl_test_3(struct obd_device *obd, struct super_block *sb)
         }
         if (oqctl.qc_dqblk.dqb_btime != 313 ||
             oqctl.qc_dqblk.dqb_itime != 212) {
-                CERROR("3i: quotactl Q_GETQUOTA get wrong result: %llu, %llu\n",
-                       oqctl.qc_dqblk.dqb_btime,
+                CERROR("3i: quotactl Q_GETQUOTA get wrong result: "
+                       LPU64", "LPU64"\n", oqctl.qc_dqblk.dqb_btime,
                        oqctl.qc_dqblk.dqb_itime);
                 RETURN(-EINVAL);
         }
@@ -229,8 +229,8 @@ static int quotactl_test_3(struct obd_device *obd, struct super_block *sb)
             oqctl.qc_dqblk.dqb_btime != 0 ||
             oqctl.qc_dqblk.dqb_itime != 0) {
                 CERROR("3l: quotactl Q_GETQUOTA get wrong result:"
-                       "%llu, %llu, %llu, %llu, %llu, %llu, %llu, %llu\n",
-                       oqctl.qc_dqblk.dqb_bhardlimit,
+                       LPU64", "LPU64", "LPU64", "LPU64", "LPU64", "LPU64", "
+                       LPU64", "LPU64"\n", oqctl.qc_dqblk.dqb_bhardlimit,
                        oqctl.qc_dqblk.dqb_bsoftlimit,
                        oqctl.qc_dqblk.dqb_ihardlimit,
                        oqctl.qc_dqblk.dqb_isoftlimit,
