@@ -11,9 +11,9 @@ MOUNT2=${MOUNT2:-$2}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 OOS=$MOUNT/oosfile
 OOS2=$MOUNT2/oosfile2
+TMP=${TMP:-/tmp}
 LOG=$TMP/oosfile
 LOG2=${LOG}2
-TMP=${TMP:-/tmp}
 
 SUCCESS=1
 
