@@ -962,7 +962,7 @@ def sys_get_elan_position_file():
 def sys_get_local_nid(net_type, wildcard, cluster_id):
     """Return the local nid."""
     local = ""
-    if sys_get_elan_position_file():
+    if sys_get_elan_position_file() and net_type == 'elan':
         local = sys_get_local_address('elan', '*', cluster_id)
     else:
         local = sys_get_local_address(net_type, wildcard, cluster_id)
