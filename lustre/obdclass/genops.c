@@ -135,14 +135,14 @@ int class_name2dev(char *name)
         return res;
 }
 
-int class_uuid2dev(char *name)
+int class_uuid2dev(char *uuid)
 {
         int res = -1;
         int i;
 
         for (i=0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_name && strncmp(name, obd->obd_uuid, 37) == 0) {
+                if (strncmp(uuid, obd->obd_uuid, sizeof(obd->obd_uuid)) == 0) {
                         res = i;
                         return res;
                 }
@@ -152,15 +152,14 @@ int class_uuid2dev(char *name)
 }
 
 
-struct obd_device *class_uuid2obd(char *name)
+struct obd_device *class_uuid2obd(char *uuid)
 {
         int i;
 
         for (i=0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_name && strncmp(name, obd->obd_uuid, 37) == 0) {
+                if (strncmp(uuid, obd->obd_uuid, sizeof(obd->obd_uuid)) == 0)
                         return obd;
-                }
         }
 
         return NULL;
