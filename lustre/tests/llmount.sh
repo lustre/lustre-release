@@ -5,7 +5,7 @@ SRCDIR="`dirname $0`"
 
 setup
 
-$R/usr/src/portals/linux/utils/ptlctl <<EOF
+$PTLCTL <<EOF
 mynid localhost
 setup tcp
 connect localhost 1234
@@ -15,24 +15,22 @@ add_uuid ost
 quit
 EOF
 
-dd if=/dev/zero of=/tmp/ost bs=1024 count=10000
-mke2fs -b 4096 -F /tmp/ost
-losetup ${LOOP}0 /tmp/ost || exit -1
+new_fs ext2 /tmp/ost 10000
+OST=$LOOPDEV
 
-dd if=/dev/zero of=/tmp/mds bs=1024 count=10000
-mke2fs -b 4096 -N 150000 -F /tmp/mds
-losetup ${LOOP}1 /tmp/mds || exit -1
+MDSFS=ext2
+new_fs ${MDSFS} /tmp/mds 10000
+MDS=$LOOPDEV
 
-mknod /dev/obd c 10 241
-echo 8191 > /proc/sys/portals/debug
+echo 8291 > /proc/sys/obd/debug
 
 $R/usr/src/obd/utils/obdctl <<EOF
 device 0
 attach mds
-setup ${LOOP}1 ext2
+setup ${MDS} ${MDSFS}
 device 1
 attach obdext2
-setup ${LOOP}0
+setup ${OST}
 device 2
 attach ost
 setup 1
@@ -42,5 +40,4 @@ setup -1
 quit
 EOF
 
-mkdir /mnt/obd
 mount -t lustre_light -o device=3 none /mnt/obd
