@@ -108,7 +108,7 @@ int rd_target(char *page, char **start, off_t off, int count, int *eof,
         for (i = 0; i < lov->desc.ld_tgt_count; i++, tgts++) {
                 int cur;
                 cur = snprintf(&page[len], count, "%d: %s %sACTIVE\n",
-                                i, tgts->uuid, tgts->active ? "" : "IN");
+                                i, tgts->uuid.uuid, tgts->active ? "" : "IN");
                 len += cur;
                 count -= cur;
         }
@@ -123,7 +123,7 @@ int rd_mdc(char *page, char **start, off_t off, int count, int *eof, void *data)
         struct lov_obd *lov = &dev->u.lov;
 
         *eof = 1;
-        return snprintf(page, count, "%s\n", lov->mdcobd->obd_uuid);
+        return snprintf(page, count, "%s\n", lov->mdcobd->obd_uuid.uuid);
 }
 
 struct lprocfs_vars lprocfs_obd_vars[] = {
