@@ -100,6 +100,9 @@ Commands:
 Options:
 --merge="xml file"  Add the new objects to an existing file
 --format            Format the partitions if unformated
+                    NB: The autoformat option has been disabled until a safe
+                    method is implemented to determine if a block device has a
+                    filesystem.
 --reformat          Reformat partitions (this should be an lconf arg,
                     I think)
 --obdtype="obdtype" Specifiy obdtype: valid ones are obdecho and obdfilter.
