@@ -797,6 +797,47 @@ test_40(){
 }
 run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 
+
+#b=2814
+# make sure that a read to one osc doesn't try to double-unlock its page just
+# because another osc is invalid.  trigger_group_io used to mistakenly return
+# an error if any oscs were invalid even after having successfully put rpcs
+# on valid oscs.  This was fatal if the caller was ll_readpage who unlocked
+# the page, guarnateeing that the unlock from the RPC completion would
+# assert on trying to unlock the unlocked page.
+test_41() {
+    local f=$MOUNT/$tfile
+    # make sure the start of the file is ost1
+    lfs setstripe $f $((128 * 1024)) 0 0 
+    do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
+    cancel_lru_locks OSC
+    # fail ost2 and read from ost1
+    local osc2_dev=`$LCTL device_list | \
+		awk '(/ost2.*client_facet/){print $4}' `
+    $LCTL --device %$osc2_dev deactivate
+    do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
+    $LCTL --device %$osc2_dev activate
+    return 0
+}
+run_test 41 "read from a valid osc while other oscs are invalid"
+
+# test MDS recovery after ost failure
+test_42() {
+    createmany -o $DIR/$tfile-%d 800
+    replay_barrier ost
+    unlinkmany $DIR/$tfile-%d 0 400
+    facet_failover ost
+    
+    # osc is evicted after
+    df $MOUNT && return 1
+    df $MOUNT || return 2
+    echo wait for MDS to timeout and recover
+    sleep $((TIMEOUT * 2))
+    unlinkmany $DIR/$tfile-%d 400 400
+    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
+}
+run_test 42 "recoery after ost failure"
+
 equals_msg test complete, cleaning up
 $CLEANUP
 
