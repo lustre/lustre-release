@@ -1352,7 +1352,6 @@ EXPORT_SYMBOL(ldlm_regression_stop);
 EXPORT_SYMBOL(ldlm_namespace_new);
 EXPORT_SYMBOL(ldlm_namespace_cleanup);
 EXPORT_SYMBOL(ldlm_namespace_free);
-EXPORT_SYMBOL(ldlm_namespace_dump);
 
 /* l_lock.c */
 EXPORT_SYMBOL(l_lock);

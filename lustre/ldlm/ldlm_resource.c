@@ -674,29 +674,32 @@ void ldlm_resource_dump(struct ldlm_resource *res)
                ") (rc: %d)\n", res, res->lr_name.name[0], res->lr_name.name[1],
                res->lr_name.name[2], res->lr_name.name[3],
                atomic_read(&res->lr_refcount));
-        CDEBUG(D_OTHER, "Namespace: %p (%s)\n", res->lr_namespace,
-               res->lr_namespace->ns_name);
-        CDEBUG(D_OTHER, "Parent: %p, root: %p\n", res->lr_parent, res->lr_root);
 
-        CDEBUG(D_OTHER, "Granted locks:\n");
-        pos = 0;
-        list_for_each(tmp, &res->lr_granted) {
-                struct ldlm_lock *lock;
-                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(D_OTHER, lock, ++pos);
+        if (!list_empty(&res->lr_granted)) {
+                pos = 0;
+                CDEBUG(D_OTHER, "Granted locks:\n");
+                list_for_each(tmp, &res->lr_granted) {
+                        struct ldlm_lock *lock;
+                        lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+                        ldlm_lock_dump(D_OTHER, lock, ++pos);
+                }
         }
-        pos = 0;
-        CDEBUG(D_OTHER, "Converting locks:\n");
-        list_for_each(tmp, &res->lr_converting) {
-                struct ldlm_lock *lock;
-                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(D_OTHER, lock, ++pos);
+        if (!list_empty(&res->lr_converting)) {
+                pos = 0;
+                CDEBUG(D_OTHER, "Converting locks:\n");
+                list_for_each(tmp, &res->lr_converting) {
+                        struct ldlm_lock *lock;
+                        lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+                        ldlm_lock_dump(D_OTHER, lock, ++pos);
+                }
         }
-        pos = 0;
-        CDEBUG(D_OTHER, "Waiting locks:\n");
-        list_for_each(tmp, &res->lr_waiting) {
-                struct ldlm_lock *lock;
-                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(D_OTHER, lock, ++pos);
+        if (!list_empty(&res->lr_waiting)) {
+                pos = 0;
+                CDEBUG(D_OTHER, "Waiting locks:\n");
+                list_for_each(tmp, &res->lr_waiting) {
+                        struct ldlm_lock *lock;
+                        lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+                        ldlm_lock_dump(D_OTHER, lock, ++pos);
+                }
         }
 }

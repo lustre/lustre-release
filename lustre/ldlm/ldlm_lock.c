@@ -1078,8 +1078,9 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                  lock->l_version[0], lock->l_version[1],
                  lock->l_version[2], lock->l_version[3]);
 
-        CDEBUG(level, "  -- Lock dump: %p (%s) (rc: %d) (pos: %d)\n", lock, ver,
-               atomic_read(&lock->l_refc), pos);
+        CDEBUG(level, "  -- Lock dump: %p/"LPX64" (%s) (rc: %d) (pos: %d)\n",
+               lock, lock->l_handle.h_cookie, ver, atomic_read(&lock->l_refc),
+               pos);
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {
