@@ -606,7 +606,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 struct ldlm_extent extent = { .start = attr->ia_size,
                                               .end = OBD_OBJECT_EOF };
                 struct lustre_handle lockh = { 0 };
-                int err;
+                int err, ast_flags = 0;
+                /* XXX when we fix the AST intents to pass the discard-range
+                 * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
+                 * XXX here. */
 
                 /* Writeback uses inode->i_size to determine how far out
                  * its cached pages go.  ll_truncate gets a PW lock, canceling
@@ -619,8 +622,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * nodes through dirtying and writeback of final cached
                  * pages.  This last one is especially bad for racing
                  * o_append users on other nodes. */
+                if (extent.start == 0)
+                        ast_flags = LDLM_AST_DISCARD_DATA;
                 rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
-                                                 &extent, &lockh);
+                                                &extent, &lockh, ast_flags);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
                                 RETURN(-ENOLCK);
