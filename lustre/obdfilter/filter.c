@@ -1662,6 +1662,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 case 1:
                         filter_parent_unlock(dparent, &parent_lockh, LCK_PW);
                 case 0:
+                        break;
                 }
                 
                 if (rc)
