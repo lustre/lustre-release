@@ -140,9 +140,6 @@ static int ptlrpcd(void *arg)
 
         complete(&pc->pc_starting);
 
-        /* like kswapd */
-        current->flags |= PF_MEMALLOC;
-
         /* this mainloop strongly resembles ptlrpc_set_wait except
          * that our set never completes.  ptlrpcd_check calls ptlrpc_check_set
          * when there are requests in the set.  new requests come in
@@ -165,7 +162,9 @@ static int ptlrpcd(void *arg)
                 if (test_bit(LIOD_STOP, &pc->pc_flags))
                         break;
         }
-        /* XXX should be making sure we don't have anything in flight */
+        /* wait for inflight requests to drain */
+        if (!list_empty(&pc->pc_set->set_requests))
+                ptlrpc_set_wait(pc->pc_set);
         complete(&pc->pc_finishing);
         return 0;
 }
