@@ -449,6 +449,26 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(0);
         }
 
+        case OBD_IOC_CATLOGLIST: {
+                int count = mds->mds_lov_desc.ld_tgt_count;
+                rc = llog_catlog_list(obd, count, data);
+                RETURN(rc);
+
+        }
+        case OBD_IOC_LLOG_CANCEL:
+        case OBD_IOC_LLOG_REMOVE: 
+        case OBD_IOC_LLOG_INFO:
+        case OBD_IOC_LLOG_PRINT: {
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                
+                push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                rc = llog_ioctl(ctxt, cmd, data);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                
+                RETURN(rc);
+        }
+
         case OBD_IOC_ABORT_RECOVERY:
                 CERROR("aborting recovery for device %s\n", obd->obd_name);
                 target_abort_recovery(obd);
