@@ -164,7 +164,7 @@ int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf)
 }
 #endif
 
-int ptlrpc_import_connect(struct lustre_handle *conn, struct obd_device *obd,
+int client_import_connect(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -205,16 +205,18 @@ int ptlrpc_import_connect(struct lustre_handle *conn, struct obd_device *obd,
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
 
-        imp->imp_export = exp = class_conn2export(conn);
-        exp->exp_connection = ptlrpc_connection_addref(request->rq_connection);
+        imp->imp_dlm_handle = *conn;
 
         imp->imp_level = LUSTRE_CONN_CON;
         rc = ptlrpc_queue_wait(request);
         if (rc) {
-                class_export_put(imp->imp_export);
-                imp->imp_export = exp = NULL;
+                class_disconnect(conn, 0);
                 GOTO(out_req, rc);
         }
+
+        exp = class_conn2export(conn);
+        exp->exp_connection = ptlrpc_connection_addref(request->rq_connection);
+        class_export_put(exp);
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
         if (rq_opc == MDS_CONNECT || msg_flags & MSG_CONNECT_REPLAYABLE) {
@@ -243,7 +245,7 @@ out_sem:
         return rc;
 }
 
-int ptlrpc_import_disconnect(struct lustre_handle *conn, int failover)
+int client_import_disconnect(struct lustre_handle *conn, int failover)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct client_obd *cli = &obd->u.cli;
@@ -295,10 +297,7 @@ int ptlrpc_import_disconnect(struct lustre_handle *conn, int failover)
                 if (rc)
                         GOTO(out_req, rc);
         }
-        if (imp->imp_export) {
-                class_export_put(imp->imp_export);
-                imp->imp_export = NULL;
-        }
+        class_disconnect(&imp->imp_dlm_handle, 0);
         EXIT;
  out_req:
         if (request)
@@ -734,7 +733,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         dlmimp->imp_client = &export->exp_obd->obd_ldlm_client;
         dlmimp->imp_remote_handle = conn;
         dlmimp->imp_obd = target;
-        dlmimp->imp_export = class_export_get(export);
         dlmimp->imp_dlm_fake = 1;
         dlmimp->imp_level = LUSTRE_CONN_FULL;
         class_import_put(dlmimp);
