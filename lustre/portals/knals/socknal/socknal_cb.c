@@ -376,25 +376,26 @@ ksocknal_sendmsg (ksock_conn_t *conn, ksock_tx_t *tx)
 {
         /* Return 0 on success, < 0 on error.
          * caller checks tx_resid to determine progress/completion */
-        int    rc;
+        int      rc;
         ENTRY;
         
         if (ksocknal_data.ksnd_stall_tx != 0) {
                 set_current_state (TASK_UNINTERRUPTIBLE);
                 schedule_timeout (ksocknal_data.ksnd_stall_tx * HZ);
         }
-        
-        /* conn's socket mustn't change while I do I/O */
-        read_lock (&ksocknal_data.ksnd_global_lock);
+
+        rc = ksocknal_getconnsock (conn);
+        if (rc != 0)
+                return (rc);
 
         for (;;) {
                 LASSERT (tx->tx_resid != 0);
-                
+
                 if (conn->ksnc_closing) {
                         rc = -ESHUTDOWN;
                         break;
                 }
-                
+
                 if (tx->tx_niov != 0)
                         rc = ksocknal_send_iov (conn, tx);
                 else
@@ -415,7 +416,7 @@ ksocknal_sendmsg (ksock_conn_t *conn, ksock_tx_t *tx)
                 }
         }
 
-        read_unlock (&ksocknal_data.ksnd_global_lock);
+        ksocknal_putconnsock (conn);
         RETURN (rc);
 }
 
@@ -523,28 +524,29 @@ ksocknal_recvmsg (ksock_conn_t *conn)
         /* Return 1 on success, 0 on EOF, < 0 on error.
          * Caller checks ksnc_rx_nob_wanted to determine
          * progress/completion. */
-        int    rc;
+        int     rc;
         ENTRY;
         
         if (ksocknal_data.ksnd_stall_rx != 0) {
                 set_current_state (TASK_UNINTERRUPTIBLE);
                 schedule_timeout (ksocknal_data.ksnd_stall_rx * HZ);
         }
-        
-        /* conn's socket mustn't change while I do I/O */
-        read_lock (&ksocknal_data.ksnd_global_lock);
+
+        rc = ksocknal_getconnsock (conn);
+        if (rc != 0)
+                return (rc);
 
         for (;;) {
                 if (conn->ksnc_closing) {
-                        rc = 0;
+                        rc = -ESHUTDOWN;
                         break;
                 }
-
+                
                 if (conn->ksnc_rx_niov != 0)
                         rc = ksocknal_recv_iov (conn);
                 else
                         rc = ksocknal_recv_kiov (conn);
-
+                
                 if (rc <= 0) {
                         /* error/EOF or partial receive */
                         if (rc == -EAGAIN)
@@ -557,8 +559,8 @@ ksocknal_recvmsg (ksock_conn_t *conn)
                         break;
                 }
         }
-        
-        read_unlock (&ksocknal_data.ksnd_global_lock);
+
+        ksocknal_putconnsock (conn);
         RETURN (rc);
 }
 
