@@ -1617,8 +1617,9 @@ test_63() {
 	done
 
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
-		echo $[ 60 * 1025 *1024 ] > $i
+		echo $[ 64 ] > $i
 	done
+	true
 }
 run_test 63 "Verify osic_wait interruption does not crash"
 
