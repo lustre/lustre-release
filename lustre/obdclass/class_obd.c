@@ -777,8 +777,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         CERROR("OBD device %d not attached\n", obd->obd_minor);
                         GOTO(out, err=-ENODEV);
                 }
-                if (!list_empty(&obd->obd_exports) ) {
-                        if (data->ioc_inlbuf1[0] != 'F') {
+                if (!list_empty(&obd->obd_exports)) {
+                        if (!data->ioc_inlbuf1 || data->ioc_inlbuf1[0] != 'F') {
                                 CERROR("OBD device %d (%p) has exports\n",
                                        obd->obd_minor, obd);
                                 GOTO(out, err=-EBUSY);
