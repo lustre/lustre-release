@@ -428,15 +428,12 @@ struct osc_brw_cb_data {
         size_t obd_size;
 };
 
-static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
+/* Our bulk-unmapping bottom half. */
+static void unmap_and_decref_bulk_desc(void *data)
 {
+        struct ptlrpc_bulk_desc *desc = data;
         struct list_head *tmp, *next;
-        struct osc_brw_cb_data *cb_data = data;
         ENTRY;
-
-        if (desc->b_flags & PTL_RPC_FL_INTR)
-                CERROR("got signal\n");
-
         /* This feels wrong to me. */
         list_for_each_safe(tmp, next, &desc->b_page_list) {
                 struct ptlrpc_bulk_page *bulk;
@@ -445,13 +442,31 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
                 kunmap(bulk->b_page);
         }
 
+        ptlrpc_bulk_decref(desc);
+        EXIT;
+}
+
+static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
+{
+        struct osc_brw_cb_data *cb_data = data;
+        ENTRY;
+
+        if (desc->b_flags & PTL_RPC_FL_INTR)
+                CERROR("got signal\n");
+
         if (cb_data->callback)
                 (cb_data->callback)(desc, cb_data->cb_data);
 
-        ptlrpc_bulk_decref(desc);
         if (cb_data->obd_data)
                 OBD_FREE(cb_data->obd_data, cb_data->obd_size);
         OBD_FREE(cb_data, sizeof(*cb_data));
+
+        /* We can't kunmap the desc from interrupt context, so we do it from
+         * the bottom half above. */
+        INIT_TQUEUE(&desc->b_queue, 0, 0);
+        PREPARE_TQUEUE(&desc->b_queue, unmap_and_decref_bulk_desc, desc);
+        schedule_task(&desc->b_queue);
+
         EXIT;
 }
 

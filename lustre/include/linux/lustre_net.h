@@ -23,6 +23,7 @@
 #ifndef _LUSTRE_NET_H
 #define _LUSTRE_NET_H
 
+#include <linux/tqueue.h>
 #include <linux/kp30.h>
 #include <linux/obd.h>
 #include <portals/p30.h>
@@ -164,6 +165,7 @@ struct ptlrpc_bulk_desc {
         atomic_t b_pages_remaining;
         atomic_t b_refcount;
         void *b_desc_private;
+        struct tq_struct b_queue;
 };
 
 struct ptlrpc_thread {
