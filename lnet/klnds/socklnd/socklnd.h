@@ -170,9 +170,9 @@ typedef struct
 
         atomic_t          ksnd_nactive_ltxs;    /* #active ltxs */
 
-        struct list_head  ksnd_deathrow_conns;  /* conns to be closed */
-        struct list_head  ksnd_zombie_conns;    /* conns to be freed */
-        struct list_head  ksnd_enomem_conns;    /* conns to be retried */
+        struct list_head  ksnd_deathrow_conns;  /* conns to close: reaper_lock*/
+        struct list_head  ksnd_zombie_conns;    /* conns to free: reaper_lock */
+        struct list_head  ksnd_enomem_conns;    /* conns to retry: reaper_lock*/
         cfs_waitq_t       ksnd_reaper_waitq;    /* reaper sleeps here */
         cfs_time_t        ksnd_reaper_waketime; /* when reaper will wake */
         spinlock_t        ksnd_reaper_lock;     /* serialise */

@@ -600,6 +600,7 @@ ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
 
                 switch (c->ksnc_type) {
                 default:
+                        CERROR("ksnc_type bad: %u\n", c->ksnc_type);
                         LBUG();
                 case SOCKNAL_CONN_ANY:
                         break;

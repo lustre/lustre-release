@@ -539,7 +539,7 @@ static inline long PTR_ERR(const void *ptr)
 #define IS_ERR(p)	(0)
 
 /*
- * Error nubmer
+ * Error number
  */
 #define EBADR		EBADRPC
 #define ERESTARTSYS	ERESTART
