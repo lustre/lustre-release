@@ -92,6 +92,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
         spin_unlock(&med->med_open_lock);
 #endif
+        rep->lock_policy_res1 |= IT_OPEN_LOOKUP;
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
                 CERROR("test case OBD_FAIL_MDS_OPEN_PACK\n");
                 req->rq_status = -ENOMEM;
@@ -108,7 +109,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                 RETURN(rc);
         }
         dir = parent->d_inode;
-        rep->lock_policy_res1 |= IT_OPEN_LOOKUP;
 
         down(&dir->i_sem);
         dchild = lookup_one_len(lustre_msg_buf(req->rq_reqmsg, 3),
