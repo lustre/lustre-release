@@ -80,6 +80,11 @@ main(int argc, char**argv)
 
         // assemble the command
         my_argv = (char**)malloc(sizeof(char*)*(argc+1-optind));
+		if(my_argv == NULL) {
+		        fprintf(stderr, "Error in allocating memory. (%s)\n", strerror(errno));
+				exit(-1);
+		}
+		
         for(i=optind; i< argc; i++) {
                 my_argv[i-optind] = argv[i];
 //                printf("%s\n",my_argv[i-optind]);
