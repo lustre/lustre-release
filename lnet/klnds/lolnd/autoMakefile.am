@@ -4,7 +4,9 @@
 # See the file COPYING in this distribution
 
 if MODULES
+if !CRAY_PORTALS
 modulenet_DATA = klonal$(KMODEXT)
+endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
