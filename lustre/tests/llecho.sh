@@ -6,9 +6,13 @@ NAME=${NAME:-echo}
 config=$NAME.xml
 mkconfig=$NAME.sh
 
-sh $mkconfig $config || exit 1
+if [ "$LUSTRE" ]; then
+  lustre_opt="--lustre=$LUSTRE"
+fi
 
-$LCONF --reformat --gdb $OPTS $config || exit 4
+sh -x $mkconfig $config || exit 1
+
+$LCONF $lustre_opt --reformat --gdb $OPTS $config || exit 4
 
 cat <<EOF
 
