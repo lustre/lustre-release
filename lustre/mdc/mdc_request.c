@@ -124,7 +124,7 @@ int mdc_getattr(struct obd_conn *conn,
         return rc;
 }
 
-static int mdc_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+static int mdc_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                              void *data, int data_len,
                              struct ptlrpc_request **req)
 {
@@ -132,7 +132,7 @@ static int mdc_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         struct inode *inode = data;
         ENTRY;
 
-        if (new == NULL) {
+        if (desc == NULL) {
                 /* Completion AST.  Do nothing. */
                 RETURN(0);
         }
@@ -151,7 +151,7 @@ static int mdc_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                 invalidate_inode_pages(inode);
         }
 
-        rc = ldlm_cli_cancel(lock->l_client, lock);
+        rc = ldlm_cli_cancel(lockh);
         if (rc < 0) {
                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 LBUG();
