@@ -158,7 +158,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
         memset(buf, 0, sizeof(buf));
 
-        if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS) {
+        if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS
+            && cmd != OBD_IOC_NAME2DEV) {
                 CERROR("OBD ioctl: No device\n");
                 RETURN(-EINVAL);
         } 

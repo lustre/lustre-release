@@ -64,7 +64,7 @@ int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
         EXIT;
  out:
-        *request = req;
+        ptlrpc_free_req(req); 
         return rc;
 }
 

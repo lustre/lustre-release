@@ -10,8 +10,8 @@ test_fail() {
 	kill -9 $!
 
         echo 0 > /proc/sys/lustre/fail_loc
-        umount /mnt/lustre
-        mount -t lustre_lite -o device=3 none /mnt/lustre
+        umount /mnt/lustre || exit 1
+        mount -t lustre_lite -o device=5 none /mnt/lustre || exit 1
 }
 
 [ -c /dev/request ] || mknod /dev/request c 10 244

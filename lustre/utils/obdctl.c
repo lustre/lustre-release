@@ -467,6 +467,18 @@ static int jt_attach(int argc, char **argv)
         if (rc < 0)
                 fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_ATTACH, strerror(rc = errno));
+        else if (argc == 3) { 
+                char name[1024];
+                if (strlen(argv[2]) > 128) { 
+                        printf("Name too long to set environment\n");
+                        return -EINVAL;
+                }
+                snprintf(name, 512, "LUSTRE-dev-%s", argv[2]);
+                rc = setenv(name, argv[1], 1); 
+                if (rc) { 
+                        printf("error setting env variable %s\n", name); 
+                }
+        }
 
         return rc;
 }
@@ -475,6 +487,14 @@ static int jt_name2dev(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         int rc;
+
+        if (fd == -1)
+                fd = open("/dev/obd", O_RDWR);
+        if (fd == -1) {
+                fprintf(stderr, "error: %s: opening /dev/obd: %s\n",
+                        cmdname(argv[0]), strerror(errno));
+                return errno;
+        }
 
         IOCINIT(data);
 
@@ -486,25 +506,17 @@ static int jt_name2dev(int argc, char **argv)
         data.ioc_inllen1 =  strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
 
-        printf("%s: len %d addr %p name %s\n",
-               cmdname(argv[0]), data.ioc_len, buf,
-               MKSTR(data.ioc_inlbuf1));
 
         if (obd_ioctl_pack(&data, &buf, max)) {
                 fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
                 return -2;
         }
-        printf("%s: len %d addr %p raw %p name %s and %s\n",
-               cmdname(argv[0]), data.ioc_len, buf, rawbuf,
-               MKSTR(data.ioc_inlbuf1), &buf[516]);
-
         rc = ioctl(fd, OBD_IOC_NAME2DEV , buf);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
                         OBD_IOC_NAME2DEV, strerror(rc = errno));
         memcpy((char *)(&data), buf, sizeof(data));
-        printf("device set to %d (name %s)\n", data.ioc_dev, argv[1]);
-
+        printf("%d\n", data.ioc_dev);
         return rc;
 }
 
