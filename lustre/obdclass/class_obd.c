@@ -170,7 +170,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	switch (cmd) {
 	case OBD_IOC_ATTACH: {
 		struct obd_type *type;
-		struct oic_attach input;
+		struct oic_generic input;
 
 		/* have we attached a type to this device */
 		if ( obddev->obd_type || (obddev->obd_flags & OBD_ATTACHED) ){
@@ -760,9 +760,55 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		return rc;
 		
 	}
-	default:
-		printk("invalid ioctl: cmd = %x, arg = %lx\n", cmd, arg);
-		return -ENOTTY;
+	default: {
+		struct obd_type *type;
+		struct oic_generic input;
+		void *karg;
+
+		/* get data structures */
+		err = copy_from_user(&input, (void *) arg, sizeof(input));
+		if (err) {
+			EXIT;
+			return err;
+		}
+
+		if ( (err = getdata(input.att_typelen + 1, &input.att_type))){
+			EXIT;
+			return err;
+		}
+
+		/* find the type */
+		err = -EINVAL;
+		type = obd_nm_to_type(input.att_type);
+		OBD_FREE(input.att_type, input.att_typelen + 1);
+		if ( !type ) {
+			printk("Unknown obd type dev %d\n", dev);
+			EXIT;
+			return err;
+		}
+		
+		if ( !type->typ_ops->o_iocontrol ) {
+			EXIT;
+			return -EINVAL;
+		}
+
+		
+		CDEBUG(D_IOCTL, "Calling ioctl %x for type %s, len %d\n",
+		       cmd, type->typ_name, input.att_datalen);
+
+		/* get the generic data */
+		if ( (err = getdata(input.att_datalen, &karg)) ) {
+			EXIT;
+			return err;
+		}
+
+		err = type->typ_ops->o_iocontrol(cmd, input.att_datalen, 
+						 karg, input.att_data);
+		OBD_FREE(karg, input.att_datalen);
+
+		EXIT;
+		return err;
+	}
 	}
 }
 

@@ -61,6 +61,10 @@ eval 'sub OBD_IOC_COPY () { &_IOC(3, ord(\'f\'), 22, 4);}' unless
   defined(&OBD_IOC_COPY);
 eval 'sub OBD_IOC_MIGR () { &_IOC(3, ord(\'f\'), 23, 4);}' unless
   defined(&OBD_IOC_MIGR);
+eval 'sub OBD_SNAP_SETTABLE () { &_IOC(3, ord(\'f\'), 40, 4);}' unless
+  defined(&OBD_SNAP_SETTABLE);
+eval 'sub OBD_SNAP_PRINTTABLE () { &_IOC(3, ord(\'f\'), 41, 4);}' unless
+  defined(&OBD_SNAP_PRINTTABLE);
 
 eval 'sub ATTR_MODE () {1;}' unless defined(&ATTR_MODE);
 eval 'sub ATTR_UID () {2;}' unless defined(&ATTR_UID);
@@ -95,7 +99,10 @@ my %commands =
      'create' => {func => "Create", doc => "create: creates a new inode"},
      'attach' => {func => "Attach", doc => "attach type [adapter bus tid lun]"},
      'detach' => {func => "Detach", doc => "detach this device"},
-     'snapattach' => {func => "SnapAttach", doc => "snapattach snapno snapcount time1 index1 .... timek indexk"},
+     'snapattach' => {func => "SnapAttach", doc => "snapattach snapno table"},
+     'snapset' => {func => "SnapSetTable", doc => "snapset tableno file" },
+     'snapprint' => {func => "SnapPrint", doc => "snapprint tableno"},
+
      'snaptable' => {func => "SnapShotTable", doc => "snaptable: build a snapshot table (interactive)"},
      'copy' => {func => "Copy", doc => "copy srcid tgtid"},
      'migrate' => {func => "Migrate", doc => "migrate srcid tgtid"},
@@ -288,11 +295,35 @@ sub Detach {
 }
 
 
-sub SnapAttach {
+sub SnapPrint { 
     my $err = 0;
     my $type = "snap_obd";
-    my $snapdev = shift;
-    my $snapno = shift;
+    my $snaptableno = shift;
+
+    $data = pack("i", $snaptableno);
+    $datalen = 4;
+
+    my $len = length($type);
+    my $cl = length($data);
+    my $add = pack("p", $data);
+    print "type $type (len $len), datalen $datalen ($cl)\n";
+    my $packed = pack("ipip", length($type), $type, $datalen, $data);
+
+    my $rc = ioctl(DEV_OBD, &OBD_SNAP_PRINTTABLE, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub SnapSetTable {
+    my $err = 0;
+    my $type = "snap_obd";
+    my $snaptableno = shift;
     my $file = shift;
     my $snapcount;
     my $table = {};
@@ -312,12 +343,48 @@ sub SnapAttach {
 	print "No current snapshot in table! First make one\n";
 	return ;
     }
-    $data = pack("iii", $snapdev, $snapno, $snapcount);
-    $datalen = 3 * 4;
+    $data = pack("ii", $snaptableno, $snapcount);
+    $datalen = 2 * 4;
     foreach my $time (sort keys %{$table}) {
 	$data .= pack("Ii", $time, $table->{$time});
 	$datalen += 8;
     }
+
+    my $len = length($type);
+    my $cl = length($data);
+    my $add = pack("p", $data);
+    print "type $type (len $len), datalen $datalen ($cl)\n";
+    my $packed = pack("ipip", length($type), $type, $datalen, $data);
+
+    my $rc = ioctl(DEV_OBD, &OBD_SNAP_SETTABLE, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+
+sub SnapAttach {
+    my $err = 0;
+    my $type = "snap_obd";
+    my $snapdev = shift;
+    my $snapno = shift;
+    my $tableno = shift;
+    my $snapcount;
+    my $data;
+    my $datalen = 0;
+
+    if ( ! -f $file ) {
+	print "No such file $file\n";
+    }
+
+    $table = ReadSnapShotTable($file);
+    $data = pack("iii", $snapdev, $snapno, $tableno);
+    $datalen = 3 * 4;
 
     my $len = length($type);
     my $cl = length($data);
