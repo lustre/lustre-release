@@ -200,8 +200,8 @@ class LCTLInterface:
         p = popen2.Popen3(self.lctl, 1)
         p.tochild.write(cmds + "\n")
         p.tochild.close()
+        ret = p.wait()
         out = p.fromchild.readlines()
-        ret = p.poll()
         for l in out:
             debug('lctl:',string.strip(l))
         err = p.childerr.readlines()
@@ -350,7 +350,7 @@ def do_find_file(base, mod):
 
 def find_module(src_dir, modname):
     mod = '%s.o' % (modname)
-    search = (src_dir + "/lustre", src_dir + "/portals")
+    search = (src_dir + "/lustre", src_dir + "/portals/linux")
     for d in search:
         try:
             module = do_find_file(d, mod)
