@@ -73,7 +73,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn, s
                 req->rq_replen = lustre_msg_size(1, &size);
         }
 
-        lock->l_connection = conn;
+        lock->l_connection = ptlrpc_connection_addref(conn);
         lock->l_client = cl;
 
         rc = ptlrpc_queue_wait(req);
@@ -83,7 +83,10 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn, s
         if (rc != ELDLM_OK) {
                 LDLM_DEBUG(lock, "client-side enqueue END (%s)",
                            rc == ELDLM_LOCK_ABORTED ? "ABORTED" : "FAILED");
+                ldlm_lock_put(lock);
                 ldlm_lock_decref(lockh, mode);
+                /* FIXME: if we've already received a completion AST, this will
+                 * LBUG! */
                 ldlm_lock_destroy(lock);
                 GOTO(out, rc);
         }

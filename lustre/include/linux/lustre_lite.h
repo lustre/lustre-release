@@ -82,6 +82,8 @@ static inline struct lustre_handle *ll_s2obdconn(struct super_block *sb)
 static inline struct mdc_obd *sbi2mdc(struct ll_sb_info *sbi)
 {
         struct obd_device *obd = class_conn2obd(&sbi->ll_mdc_conn);
+        if (obd == NULL)
+                LBUG();
         return &obd->u.mdc;
 }
 

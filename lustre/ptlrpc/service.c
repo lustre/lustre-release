@@ -154,22 +154,22 @@ static int handle_incoming_request(struct obd_device *obddev,
 
         if (request.rq_reqlen < sizeof(struct lustre_msg)) {
                 CERROR("incomplete request: ptl %d from %Lx xid %Ld\n",
-                       svc->srv_req_portal, event->initiator.nid, 
-                       request.rq_xid); 
-                return -EINVAL;
-        }
-        
-        if (request.rq_reqmsg->magic != PTLRPC_MSG_MAGIC) { 
-                CERROR("wrong lustre_msg magic: ptl %d from %Lx xid %Ld\n",
-                       svc->srv_req_portal, event->initiator.nid, 
-                       request.rq_xid); 
+                       svc->srv_req_portal, event->initiator.nid,
+                       request.rq_xid);
                 return -EINVAL;
         }
 
-        if (request.rq_reqmsg->version != PTLRPC_MSG_VERSION) { 
+        if (request.rq_reqmsg->magic != PTLRPC_MSG_MAGIC) {
+                CERROR("wrong lustre_msg magic: ptl %d from %Lx xid %Ld\n",
+                       svc->srv_req_portal, event->initiator.nid,
+                       request.rq_xid);
+                return -EINVAL;
+        }
+
+        if (request.rq_reqmsg->version != PTLRPC_MSG_VERSION) {
                 CERROR("wrong lustre_msg version: ptl %d from %Lx xid %Ld\n",
-                       svc->srv_req_portal, event->initiator.nid, 
-                       request.rq_xid); 
+                       svc->srv_req_portal, event->initiator.nid,
+                       request.rq_xid);
                 return -EINVAL;
         }
 
@@ -180,23 +180,23 @@ static int handle_incoming_request(struct obd_device *obddev,
          * We don't know how to find that from here. */
         peer.peer_ni = svc->srv_self.peer_ni;
 
-        request.rq_export = class_conn2export((struct lustre_handle *) request.rq_reqmsg); 
+        request.rq_export = class_conn2export((struct lustre_handle *) request.rq_reqmsg);
 
         if (request.rq_export) {
                 request.rq_connection = request.rq_export->export_connection;
-                ptlrpc_connection_addref(request.rq_connection); 
-        } else { 
+                ptlrpc_connection_addref(request.rq_connection);
+        } else {
                 request.rq_connection = ptlrpc_get_connection(&peer);
         }
 
         spin_unlock(&svc->srv_lock);
         rc = svc->srv_handler(&request);
-        ptlrpc_put_connection(request.rq_connection); 
+        ptlrpc_put_connection(request.rq_connection);
         ptl_handled_rpc(svc, start);
         return rc;
 }
 
-void ptlrpc_rotate_reqbufs(struct ptlrpc_service *service, 
+void ptlrpc_rotate_reqbufs(struct ptlrpc_service *service,
                             ptl_event_t *ev)
 {
         int index;
@@ -204,7 +204,7 @@ void ptlrpc_rotate_reqbufs(struct ptlrpc_service *service,
         for (index = 0; index < service->srv_ring_length; index++)
                 if (service->srv_buf[index] == ev->mem_desc.start)
                         break;
-        
+
         if (index == service->srv_ring_length)
                 LBUG();
 
@@ -274,10 +274,10 @@ static int ptlrpc_main(void *arg)
                         EXIT;
                         break;
                 }
-                
-                if (thread->t_flags & SVC_EVENT) { 
+
+                if (thread->t_flags & SVC_EVENT) {
                         thread->t_flags &= ~SVC_EVENT;
-                        ptlrpc_rotate_reqbufs(svc, &event); 
+                        ptlrpc_rotate_reqbufs(svc, &event);
 
                         rc = handle_incoming_request(obddev, svc, &event);
                         thread->t_flags &= ~SVC_EVENT;

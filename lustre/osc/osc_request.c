@@ -25,14 +25,6 @@
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
 
-static void osc_obd2cl(struct obd_device *obd, struct ptlrpc_client **cl,
-                       struct ptlrpc_connection **connection)
-{
-        struct osc_obd *osc = &obd->u.osc;
-        *cl = osc->osc_client;
-        *connection = osc->osc_conn;
-}
-
 static void osc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
                        struct ptlrpc_connection **connection)
 {
@@ -54,8 +46,6 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
         struct osc_obd *osc = &obd->u.osc;
         struct obd_import *import;
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
         char *tmp = osc->osc_target_uuid;
         int rc, size = sizeof(osc->osc_target_uuid);
         ENTRY;
@@ -69,11 +59,10 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
         if (rc)
                 RETURN(rc); 
 
-        osc_obd2cl(obd, &cl, &connection);
         request = ptlrpc_prep_req(osc->osc_client, osc->osc_conn, 
                                   OST_CONNECT, 1, &size, &tmp);
         if (!request)
-                GOTO(out_disco, -ENOMEM);
+                GOTO(out_disco, rc = -ENOMEM);
 
         request->rq_replen = lustre_msg_size(0, NULL);
 
@@ -89,13 +78,13 @@ static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
         osc->osc_connh.cookie = request->rq_repmsg->cookie;
 
         EXIT;
-        return 0;
  out:
         ptlrpc_free_req(request);
  out_disco:
-        class_disconnect(conn); 
-        if (rc)
+        if (rc) {
+                class_disconnect(conn);
                 MOD_DEC_USE_COUNT;
+        }
         return rc;
 }
 

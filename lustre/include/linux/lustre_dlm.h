@@ -194,18 +194,18 @@ extern struct obd_ops ldlm_obd_ops;
 extern char *ldlm_lockname[];
 extern char *ldlm_typename[];
 
-#define LDLM_DEBUG(lock, format, a...)                          \
-do {                                                            \
-        CDEBUG(D_DLMTRACE, "### " format                        \
-               " (%s: lock %p mode %s/%s on res %Lu (rc %d) "   \
-               " type %s remote %Lx)\n" , ## a,                 \
-               lock->l_resource->lr_namespace->ns_name, lock,   \
-               ldlm_lockname[lock->l_granted_mode],             \
-               ldlm_lockname[lock->l_req_mode],                 \
-               lock->l_resource->lr_name[0],                    \
-               atomic_read(&lock->l_resource->lr_refcount),     \
-               ldlm_typename[lock->l_resource->lr_type],        \
-               lock->l_remote_handle.addr);                     \
+#define LDLM_DEBUG(lock, format, a...)                                  \
+do {                                                                    \
+        CDEBUG(D_DLMTRACE, "### " format                                \
+               " (%s: lock %p(rc=%d) mode %s/%s on res %Lu(rc=%d) "     \
+               " type %s remote %Lx)\n" , ## a,                         \
+               lock->l_resource->lr_namespace->ns_name, lock,           \
+               lock->l_refc, ldlm_lockname[lock->l_granted_mode],       \
+               ldlm_lockname[lock->l_req_mode],                         \
+               lock->l_resource->lr_name[0],                            \
+               atomic_read(&lock->l_resource->lr_refcount),             \
+               ldlm_typename[lock->l_resource->lr_type],                \
+               lock->l_remote_handle.addr);                             \
 } while (0)
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \

@@ -762,13 +762,13 @@ static int mdc_connect(struct lustre_handle *conn, struct obd_device *obd)
         mdc->mdc_connh.cookie = request->rq_repmsg->cookie;
 
         EXIT;
-        return 0;
  out:
         ptlrpc_free_req(request);
  out_disco:
-        class_disconnect(conn);
-        if (rc) 
+        if (rc) {
+                class_disconnect(conn);
                 MOD_DEC_USE_COUNT;
+        }
         return rc;
 }
 

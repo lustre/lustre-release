@@ -99,7 +99,6 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         }
         l_unlock(nslock);
         EXIT;
-        return;
 }
 
 void ldlm_lock_destroy(struct ldlm_lock *lock)
@@ -123,6 +122,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
                 LBUG();
 
         if (lock->l_flags & LDLM_FL_DESTROYED) {
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 EXIT;
                 return;
         }
@@ -131,8 +131,8 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         ldlm_lock_put(lock);
         EXIT;
-        return;
 }
+
 /*
    usage: pass in a resource on which you have done get
           pass in a parent lock on which you have done a get
@@ -494,7 +494,8 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
         } else
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
-        ldlm_lock_put(lock);
+        ldlm_lock_put(lock); /* matches the ldlm_lock_get in addref */
+        ldlm_lock_put(lock); /* matches the handle2lock above */
 
         EXIT;
 }
@@ -648,7 +649,6 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
 }
 
 /*   Returns a referenced, lock */
-
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    struct lustre_handle *parent_lock_handle,
                                    __u64 *res_id, __u32 type,
