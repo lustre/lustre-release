@@ -513,11 +513,6 @@ _ksocknal_put_conn (ksock_conn_t *conn)
         LASSERT (conn->ksnc_sock->sk->user_data == NULL);
         LASSERT (!conn->ksnc_rx_scheduled);
 
-        if (!in_interrupt()) {
-                ksocknal_close_conn (conn);
-                return;
-        }
-
         spin_lock_irqsave (&ksocknal_data.ksnd_reaper_lock, flags);
 
         list_add (&conn->ksnc_list, &ksocknal_data.ksnd_reaper_list);
