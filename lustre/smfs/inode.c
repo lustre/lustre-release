@@ -79,7 +79,6 @@ static void smfs_clear_inode(struct inode *inode)
 	if (cache_sb->s_op->clear_inode)
 		cache_sb->s_op->clear_inode(cache_inode);
 
-	//clear_inode(cache_inode);
 	duplicate_inode(inode, cache_inode);
 	
 	return;	
@@ -93,9 +92,11 @@ static void smfs_delete_inode(struct inode *inode)
 	cache_inode = I2CI(inode);
 	cache_sb = S2CSB(inode->i_sb);
 
-	if (!cache_inode || !cache_sb)
+	if (!cache_inode || !cache_sb || 
+	    !cache_inode->i_nlink) {
+		clear_inode(inode);	
 		return;
-		
+	}	
 	duplicate_inode(inode, cache_inode); 
 	
 	list_del(&cache_inode->i_hash);
@@ -162,9 +163,7 @@ static void smfs_put_inode(struct inode *inode)
 
 	if (!cache_inode || !cache_sb)
 		return;
-		
-	if (cache_sb->s_op->put_inode)
-		cache_sb->s_op->put_inode(cache_inode);
+	iput(cache_inode);
 
 	return;
 }
@@ -228,7 +227,7 @@ static int smfs_statfs(struct super_block * sb, struct statfs * buf)
 	cache_sb = S2CSB(sb);
 
 	if (!cache_sb)
-		return;
+		RETURN(-EINVAL);
 		
 	if (cache_sb->s_op->statfs)
 		rc = cache_sb->s_op->statfs(cache_sb, buf);

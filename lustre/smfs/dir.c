@@ -95,6 +95,7 @@ static void prepare_parent_dentry(struct dentry *dentry, struct inode *inode)
         INIT_LIST_HEAD(&dentry->d_subdirs);
         INIT_LIST_HEAD(&dentry->d_alias);
 }
+
 static int smfs_create(struct inode *dir, 
 		       struct dentry *dentry, 
 		       int mode)
@@ -129,8 +130,6 @@ static int smfs_create(struct inode *dir,
 	sm_set_inode_ops(cache_inode, inode);
 exit:
 	smfs_clear_dentry(&cache_dentry);	
-	if (cache_inode)
-		iput(cache_inode);
 	RETURN(rc);
 }
 
@@ -167,9 +166,6 @@ static struct dentry *smfs_lookup(struct inode *dir,
 	d_add(dentry, inode);	
 exit:
 	smfs_clear_dentry(&cache_dentry);	
-	
-	if (cache_inode)
-		iput(cache_inode);
 	RETURN(rc);
 }		       
 

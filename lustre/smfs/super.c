@@ -197,7 +197,6 @@ static void duplicate_sb(struct super_block *csb,
 	sb->s_magic = csb->s_magic;
 	sb->s_blocksize_bits = csb->s_blocksize_bits;
 	sb->s_maxbytes = csb->s_maxbytes;
-	sb->s_flags = csb->s_flags;
 }
 extern struct super_operations smfs_super_ops;
 
@@ -225,8 +224,8 @@ static int sm_mount_cache(struct super_block *sb,
         free_page(page);
 	
 	if (IS_ERR(mnt)) {
-                CERROR("do_kern_mount failed: rc = %d\n", err);
-                GOTO(err_out, 0);
+                CERROR("do_kern_mount failed: rc = %d\n", PTR_ERR(mnt));
+                GOTO(err_out, err = PTR_ERR(mnt));
         }
 	smb = S2SMI(sb); 
 	smb->smsi_sb = mnt->mnt_sb;
@@ -288,7 +287,7 @@ smfs_read_super(
 		CERROR("Can not mount %s as %s\n", devstr, typestr);
 		GOTO(out_err, 0);
 	}
-
+	dget(S2CSB(sb)->s_root);
 	root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
 	root_inode = iget(sb, root_ino);
 		
