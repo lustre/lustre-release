@@ -146,15 +146,6 @@ AC_ARG_ENABLE([snapfs],
 AC_MSG_RESULT([$enable_snapfs])
 AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
 
-# smfs compilation
-AC_MSG_CHECKING([whether to enable smfs support])
-AC_ARG_ENABLE([smfs],
-	AC_HELP_STRING([--enable-smfs],
-			[build smfs]),
-	[],[enable_smfs='no'])
-AC_MSG_RESULT([$enable_smfs])
-AM_CONDITIONAL(SMFS, test x$enable_smfs = xyes)
-
 sinclude(portals/build.m4)
 sinclude(portals/archdep.m4)
 
