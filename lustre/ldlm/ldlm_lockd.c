@@ -120,7 +120,9 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
                 GOTO(out, err);
 
         lock = lustre_handle2object(&lockh);
-        LDLM_DEBUG(lock, "server-side enqueue handler");
+        memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
+               sizeof(lock->l_remote_handle));
+        LDLM_DEBUG(lock, "server-side enqueue handler START");
 
         flags = dlm_req->lock_flags;
         err = ldlm_local_lock_enqueue(&lockh, cookie, cookielen, &flags,
@@ -139,8 +141,6 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
                 memcpy(dlm_rep->lock_resource_name, lock->l_resource->lr_name,
                        sizeof(dlm_rep->lock_resource_name));
 
-        memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
-               sizeof(lock->l_remote_handle));
         lock->l_connection = ptlrpc_connection_addref(req->rq_connection);
         EXIT;
  out:
@@ -152,6 +152,10 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
 
         if (!err)
                 ldlm_reprocess_all(lock->l_resource);
+        if (err)
+                LDLM_DEBUG_NOLOCK("server-side enqueue handler END");
+        else
+                LDLM_DEBUG(lock, "server-side enqueue handler END");
 
         return 0;
 }
@@ -175,7 +179,7 @@ static int _ldlm_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         dlm_rep->lock_flags = dlm_req->lock_flags;
 
         lock = lustre_handle2object(&dlm_req->lock_handle1);
-        LDLM_DEBUG(lock, "server-side convert handler");
+        LDLM_DEBUG(lock, "server-side convert handler START");
 
         res = ldlm_local_lock_convert(&dlm_req->lock_handle1,
                                       dlm_req->lock_desc.l_req_mode,
@@ -185,6 +189,7 @@ static int _ldlm_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
                 LBUG();
 
         ldlm_reprocess_all(res);
+        LDLM_DEBUG(lock, "server-side convert handler END");
 
         RETURN(0);
 }
@@ -205,7 +210,7 @@ static int _ldlm_cancel(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
         lock = lustre_handle2object(&dlm_req->lock_handle1);
-        LDLM_DEBUG(lock, "server-side cancel handler");
+        LDLM_DEBUG(lock, "server-side cancel handler START");
         res = ldlm_local_lock_cancel(lock);
         req->rq_status = 0;
         if (ptlrpc_reply(svc, req) != 0)
@@ -213,6 +218,7 @@ static int _ldlm_cancel(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 
         if (res != NULL)
                 ldlm_reprocess_all(res);
+        LDLM_DEBUG_NOLOCK("server-side cancel handler END");
 
         RETURN(0);
 }

@@ -56,9 +56,9 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
                 __u32 type = lock->l_resource->lr_type;
                 __u64 new_resid[3] = {0, 0, 0}, old_res;
-                int bufcount, rc, size[3] = {sizeof(struct ldlm_reply),
-                                             sizeof(struct mds_body),
-                                             sizeof(struct obdo)};
+                int bufcount = -1, rc, size[3] = {sizeof(struct ldlm_reply),
+                                                  sizeof(struct mds_body),
+                                                  sizeof(struct obdo)};
 
                 it->opc = NTOH__u64(it->opc);
 
