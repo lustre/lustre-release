@@ -3,20 +3,15 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-DEFS= 
+#
+# ldlm is built into ptlrpc
+#
 
-LDLMSOURCES= l_lock.c ldlm_lock.c ldlm_resource.c ldlm_lib.c ldlm_plain.c \
-ldlm_extent.c ldlm_flock.c ldlm_request.c ldlm_lockd.c ldlm_internal.h
+DEFS= 
 
 if LIBLUSTRE
 lib_LIBRARIES = libldlm.a
 libldlm_a_SOURCES = $(LDLMSOURCES)
-else
-MODULE = ldlm
-modulefs_DATA = ldlm.o
-EXTRA_PROGRAMS = ldlm
-
-ldlm_SOURCES = $(LDLMSOURCES)
 endif
 
 include $(top_srcdir)/Rules
