@@ -20,7 +20,7 @@ mdsfailover_HOST=${mdsfailover_HOST}
 ost_HOST=${ost_HOST:-`hostname`}
 client_HOST=${client_HOST:-`hostname`}
 
-NETWORKTYPE=tcp
+NETTYPE=${NETTYPE:-tcp}
 
 PDSH=${PDSH:-no_dsh}
 
@@ -90,8 +90,8 @@ start ost --reformat $OSTLCONFARGS
 start mds $MDSLCONFARGS --gdb
 
 # 0-conf client
-lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETWORKTYPE $mds_HOST` \
-    --local_nid `h2$NETWORKTYPE $client_HOST` --profile client_facet --mount $MOUNT
+lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
+    --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT
 
 echo $TIMEOUT > /proc/sys/lustre/timeout
 echo $UPCALL > /proc/sys/lustre/upcall

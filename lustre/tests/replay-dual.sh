@@ -13,7 +13,7 @@ mdsfailover_HOST=${mdsfailover_HOST}
 ost_HOST=${ost_HOST:-`hostname`}
 client_HOST=${client_HOST:-`hostname`}
 
-NETWORKTYPE=tcp
+NETTYPE=${NETTYPE:-tcp}
 
 PDSH=${PDSH:-no_dsh}
 MOUNT=${MOUNT:-/mnt/lustre}
@@ -81,10 +81,10 @@ if [ "$PINGER" != "on" ]; then
 fi
 
 # 0-conf client
-lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETWORKTYPE $mds_HOST` \
-    --local_nid `h2$NETWORKTYPE $client_HOST` --profile client_facet --mount $MOUNT
-lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETWORKTYPE $mds_HOST` \
-    --local_nid `h2$NETWORKTYPE $client_HOST` --profile client_facet --mount $MOUNT2
+lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
+    --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT
+lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
+    --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT2
 
 echo $TIMEOUT > /proc/sys/lustre/timeout
 echo $UPCALL > /proc/sys/lustre/upcall
