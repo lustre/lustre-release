@@ -210,8 +210,22 @@ extern void kportal_assertion_failed(char *expr, char *file, const char *func,
                                      const int line);
 #define LASSERT(e) ((e) ? 0 : kportal_assertion_failed( #e , __FILE__,  \
                                                         __FUNCTION__, __LINE__))
+/* it would be great to dump_stack() here, but some kernels
+ * export it as show_stack() and I can't be bothered to
+ * proprely engage in that dance right now */ 
+#define LASSERTF(cond, fmt...)                                                \
+        do {                                                                  \
+                if (unlikely(!(cond))) {                                      \
+                        portals_debug_msg(0, D_EMERG,  __FILE__, __FUNCTION__,\
+                                          __LINE__,  CDEBUG_STACK,            \
+                                          "ASSERTION(" #cond ") failed:" fmt);\
+                        LBUG();                                               \
+                }                                                             \
+        } while (0)
+                                
 #else
 #define LASSERT(e)
+#define LASSERTF(cond, fmt...) do { } while (0)
 #endif
 
 #ifdef __arch_um__
@@ -609,8 +623,10 @@ extern void kportal_blockallsigs (void);
 #  undef NDEBUG
 #  include <assert.h>
 #  define LASSERT(e)     assert(e)
+#  define LASSERTF(cond, args...)     assert(cond)
 # else
 #  define LASSERT(e)
+#  define LASSERTF(cond, args...) do { } while (0)
 # endif
 # define printk(format, args...) printf (format, ## args)
 # define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
