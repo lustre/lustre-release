@@ -83,7 +83,7 @@ struct file_operations obdfs_file_operations = {
 extern int obdfs_notify_change(struct dentry *de, struct iattr *attr);
 struct inode_operations obdfs_file_inode_operations = {
         create: obdfs_create,
-        lookup: obdfs_lookup,
+        lookup: NULL,
         link: obdfs_link,
         unlink: obdfs_unlink,
         symlink: obdfs_symlink,

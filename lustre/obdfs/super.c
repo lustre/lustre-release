@@ -324,6 +324,7 @@ static void obdfs_read_inode(struct inode *inode)
         } else if (S_ISDIR(inode->i_mode)) {
                 inode->i_op = &obdfs_dir_inode_operations;
                 inode->i_fop = &obdfs_dir_operations; 
+                inode->i_mapping->a_ops = &obdfs_aops;
                 EXIT;
         } else if (S_ISLNK(inode->i_mode)) {
                 if (inode->i_blocks) { 

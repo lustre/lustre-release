@@ -77,8 +77,7 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 /* returns the page unlocked, but with a reference */
 int obdfs_readpage(struct file *file, struct page *page)
 {
-        struct dentry *dentry = file->f_dentry;
-        struct inode *inode = dentry->d_inode;
+	struct inode *inode = page->mapping->host;
         int rc;
 
         ENTRY;

@@ -10,6 +10,10 @@ OBDDIR="`dirname $0`/.."
 # source config info
 . $OBDDIR/demos/config.sh
 
+insmod obdclass
+insmod obdext2
+insmod obdfs
+
 # module configuration
 if [ "$MODCONF" -a -f $MODCONF ]; then
     if [ -z "`grep -i "alias  *char-major-$OBDMAJ  *obdclass" $MODCONF`" ]; then

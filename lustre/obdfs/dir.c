@@ -48,15 +48,17 @@ static ssize_t obdfs_dir_read (struct file * filp, char * buf,
 }
 
 static int obdfs_readdir(struct file *, void *, filldir_t);
+extern int new_obdfs_readdir(struct file *, void *, filldir_t);
 
 struct file_operations obdfs_dir_operations = {
         read: obdfs_dir_read,
-        readdir: obdfs_readdir
+        readdir: new_obdfs_readdir
 };
 
+extern struct dentry *new_obdfs_lookup(struct inode * dir, struct dentry *dentry);
 struct inode_operations obdfs_dir_inode_operations = {
         create: obdfs_create,
-        lookup: obdfs_lookup,
+        lookup: new_obdfs_lookup,
         link: obdfs_link,
         unlink: obdfs_unlink,
         symlink: obdfs_symlink,

@@ -22,6 +22,8 @@
  * 
  *  Changes for use in OBDFS
  *  Copyright (c) 1999, Seagate Technology Inc.
+ *  Copyright (C) 2001, Cluster File Systems, Inc.
+ *                       Rewritten based on recent ext2 page cache use.
  * 
  */
 
@@ -30,16 +32,62 @@
 #include <linux/quotaops.h>
 #include <linux/obd_support.h>
 #include <linux/obdfs.h>
-
-
+extern struct address_space_operations obdfs_aops;
 /*
- * define how far ahead to read directories while searching them.
+ * Couple of helper functions - make the code slightly cleaner.
  */
-#define NAMEI_RA_CHUNKS  2
-#define NAMEI_RA_BLOCKS  4
-#define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
-#define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
 
+extern int ext2_add_link (struct dentry *dentry, struct inode *inode);
+extern ino_t ext2_inode_by_name(struct inode * dir, struct dentry *dentry);
+int ext2_make_empty(struct inode *inode, struct inode *parent);
+struct ext2_dir_entry_2 * ext2_find_entry (struct inode * dir,
+		   struct dentry *dentry, struct page ** res_page);
+int ext2_delete_entry (struct ext2_dir_entry_2 * dir, struct page * page );
+
+
+static inline void ext2_inc_count(struct inode *inode)
+{
+	inode->i_nlink++;
+	mark_inode_dirty(inode);
+}
+
+static inline void ext2_dec_count(struct inode *inode)
+{
+	inode->i_nlink--;
+	mark_inode_dirty(inode);
+}
+
+static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
+{
+	int err = ext2_add_link(dentry, inode);
+	if (!err) {
+		d_instantiate(dentry, inode);
+		return 0;
+	}
+	ext2_dec_count(inode);
+	iput(inode);
+	return err;
+}
+
+/* methods */
+struct dentry *new_obdfs_lookup(struct inode * dir, struct dentry *dentry)
+{
+	struct inode * inode;
+	ino_t ino;
+	
+	if (dentry->d_name.len > EXT2_NAME_LEN)
+		return ERR_PTR(-ENAMETOOLONG);
+
+	ino = ext2_inode_by_name(dir, dentry);
+	inode = NULL;
+	if (ino) {
+		inode = iget(dir->i_sb, ino);
+		if (!inode) 
+			return ERR_PTR(-EACCES);
+	}
+	d_add(dentry, inode);
+	return NULL;
+}
 
 
 /*
@@ -57,6 +105,7 @@ static inline int ext2_match (int len, const char * const name,
                 return 0;
         return !memcmp(name, de->name, len);
 }
+
 
 /*
  *      obdfs_find_entry()
@@ -146,42 +195,6 @@ failure:
         EXIT;
         return NULL;
 } /* obdfs_find_entry */
-
-struct dentry *obdfs_lookup(struct inode *dir, struct dentry *dentry)
-{
-        struct inode * inode;
-        struct ext2_dir_entry_2 * de;
-        struct page *page;
-        ENTRY;
-
-        if (dentry->d_name.len > EXT2_NAME_LEN)
-                return ERR_PTR(-ENAMETOOLONG);
-
-        page = obdfs_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
-                                &de, LOCKED);
-        inode = NULL;
-        if ( !page ) 
-                CDEBUG(D_INFO, "No page - negative entry.\n");
-        if ( page && !de ) {
-                CDEBUG(D_INODE, "Danger: PAGE but de.\n");
-                return ERR_PTR(-ENOENT);
-        }
-        if (page) {
-                unsigned long ino = le32_to_cpu(de->inode);
-                page_cache_release(page);
-                obd_unlock_page(page);
-                inode = iget(dir->i_sb, ino);
-
-                if (!inode) { 
-                        CDEBUG(D_INODE, "No inode.\n");
-                        EXIT;
-                        return ERR_PTR(-EACCES);
-                }
-        }
-        d_add(dentry, inode);
-        EXIT;
-        return NULL;
-} /* obdfs_lookup */
 
 /*
  *      obdfs_add_entry()
@@ -342,7 +355,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
                         dir->i_version = ++event;
                         *res_dir = de;
                         *err = 0;
-                        PDEBUG(page, "add_entry");
+			//                        PDEBUG(page, "add_entry");
                         /* XXX unlock page here */
                         EXIT;
                         return page;
@@ -519,174 +532,158 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
  */
 int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 {
-        struct inode * inode;
-        struct page *page;
-        struct ext2_dir_entry_2 * de;
-        int err = -EIO;
-
-        ENTRY;
-        inode = obdfs_new_inode(dir, mode);
-        if ( IS_ERR(inode) ) {
-                EXIT;
-                return PTR_ERR(inode);
-        }
-
-        inode->i_op = &obdfs_file_inode_operations;
-        mark_inode_dirty(inode);
-        page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
-        if (!page) {
-                inode->i_nlink--;
-                mark_inode_dirty(inode);
-                iput (inode);
-                EXIT;
-                return err;
-        }
-        de->inode = cpu_to_le32(inode->i_ino);
-        ext2_set_de_type(dir->i_sb, de, S_IFREG);
-        dir->i_version = ++event;
-
-        err = obdfs_do_writepage(page, IS_SYNC(dir));
-        obd_unlock_page(page);
-        page_cache_release(page);
-        d_instantiate(dentry, inode);
-        EXIT;
-        return err;
+	struct inode * inode = obdfs_new_inode (dir, mode);
+	int err = PTR_ERR(inode);
+	if (!IS_ERR(inode)) {
+		inode->i_op = &obdfs_file_inode_operations;
+		inode->i_fop = &obdfs_file_operations;
+		inode->i_mapping->a_ops = &obdfs_aops;
+		mark_inode_dirty(inode);
+		err = ext2_add_nondir(dentry, inode);
+	}
+	return err;
 } /* obdfs_create */
+
 
 int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 {
-        struct inode * inode;
-        struct page *page;
-        struct ext2_dir_entry_2 * de;
+	struct inode * inode = obdfs_new_inode (dir, mode);
+	int err = PTR_ERR(inode);
+	if (!IS_ERR(inode)) {
+		init_special_inode(inode, mode, rdev);
+		mark_inode_dirty(inode);
+		err = ext2_add_nondir(dentry, inode);
+	}
+	return err;
+}
+
+int obdfs_symlink (struct inode * dir, struct dentry * dentry,
+	const char * symname)
+{
+	struct super_block * sb = dir->i_sb;
+	int err = -ENAMETOOLONG;
+	unsigned l = strlen(symname)+1;
+	struct inode * inode;
         struct obdfs_inode_info *oinfo;
-        int err;
-
-        ENTRY;
-        inode = obdfs_new_inode(dir, mode);
-        if ( IS_ERR(inode) ) {
-                EXIT;
-                return PTR_ERR(inode);
-        }
-
-        inode->i_uid = current->fsuid;
-        init_special_inode(inode, mode, rdev);
         oinfo = obdfs_i2info(inode);
-        ((obd_count *)oinfo->oi_inline)[0] = rdev;
-        oinfo->oi_flags |= OBD_FL_INLINEDATA;
 
-        page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
-        if (!page)
-                goto out_no_entry;
-        de->inode = cpu_to_le32(inode->i_ino);
-        dir->i_version = ++event;
-        ext2_set_de_type(dir->i_sb, de, inode->i_mode);
-        mark_inode_dirty(inode);
+	if (l > sb->s_blocksize)
+		goto out;
 
-        err = obdfs_do_writepage(page, IS_SYNC(dir));
-        obd_unlock_page(page);
+	inode = obdfs_new_inode (dir, S_IFLNK | S_IRWXUGO);
+	err = PTR_ERR(inode);
+	if (IS_ERR(inode))
+		goto out;
 
-        d_instantiate(dentry, inode);
-        page_cache_release(page);
-        err = 0;
+        if (l >= sizeof(oinfo->oi_inline)) {
+		/* slow symlink */
+		inode->i_op = &obdfs_symlink_inode_operations;
+		inode->i_mapping->a_ops = &obdfs_aops;
+		err = block_symlink(inode, symname, l);
+		if (err)
+			goto out_fail;
+	} else {
+		/* fast symlink */
+		inode->i_op = &obdfs_fast_symlink_inode_operations;
+		memcpy((char*)&inode->u.ext2_i.i_data,symname,l);
+		inode->i_size = l-1;
+	}
+	mark_inode_dirty(inode);
+
+	err = ext2_add_nondir(dentry, inode);
 out:
-        return err;
+	return err;
 
-out_no_entry:
-        inode->i_nlink--;
-        mark_inode_dirty(inode);
-        iput(inode);
-        goto out;
-} /* obdfs_mknod */
+out_fail:
+	ext2_dec_count(inode);
+	iput (inode);
+	goto out;
+}
+
+
+
+int obdfs_link (struct dentry * old_dentry, struct inode * dir,
+	struct dentry *dentry)
+{
+	struct inode *inode = old_dentry->d_inode;
+
+	if (S_ISDIR(inode->i_mode))
+		return -EPERM;
+
+	if (inode->i_nlink >= EXT2_LINK_MAX)
+		return -EMLINK;
+
+	inode->i_ctime = CURRENT_TIME;
+	ext2_inc_count(inode);
+	atomic_inc(&inode->i_count);
+
+	return ext2_add_nondir(dentry, inode);
+}
+
 
 int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 {
-        struct inode * inode;
-        struct page *page, *inode_page;
-        struct ext2_dir_entry_2 * de;
-        int err;
+	struct inode * inode;
+	int err = -EMLINK;
 
-        ENTRY;
+	if (dir->i_nlink >= EXT2_LINK_MAX)
+		goto out;
 
-        err = -EMLINK;
-        if (dir->i_nlink >= EXT2_LINK_MAX)
-                goto out;
+	ext2_inc_count(dir);
 
-        mode |= S_IFDIR;
-        if (dir->i_mode & S_ISGID)
-                mode |= S_ISGID;
+	inode = obdfs_new_inode (dir, S_IFDIR | mode);
+	err = PTR_ERR(inode);
+	if (IS_ERR(inode))
+		goto out_dir;
 
-        inode = obdfs_new_inode(dir, mode);
-        if ( IS_ERR(inode) ) {
-                EXIT;
-                return PTR_ERR(inode);
-        }
+	inode->i_op = &obdfs_dir_inode_operations;
+	inode->i_fop = &obdfs_dir_operations;
+	inode->i_mapping->a_ops = &obdfs_aops;
 
-        inode->i_op = &obdfs_dir_inode_operations;
-        inode->i_blocks = 0;    
-        inode_page = obdfs_getpage(inode, 0, 1, LOCKED);
-        if (!inode_page) {
-                inode->i_nlink--; /* is this nlink == 0? */
-                mark_inode_dirty(inode);
-                iput (inode);
-                return -EIO;
-        }
-        de = (struct ext2_dir_entry_2 *) page_address(inode_page);
+	ext2_inc_count(inode);
 
-        /* create . and .. */
-        de->inode = cpu_to_le32(inode->i_ino);
-        de->name_len = 1;
-        de->rec_len = cpu_to_le16(EXT2_DIR_REC_LEN(de->name_len));
-        strcpy (de->name, ".");
-        ext2_set_de_type(dir->i_sb, de, S_IFDIR);
-        de = (struct ext2_dir_entry_2 *) ((char *) de + le16_to_cpu(de->rec_len));
-        de->inode = cpu_to_le32(dir->i_ino);
-        de->rec_len = cpu_to_le16(PAGE_SIZE - EXT2_DIR_REC_LEN(1));
-        de->name_len = 2;
-        strcpy (de->name, "..");
-        ext2_set_de_type(dir->i_sb, de, S_IFDIR);
-        inode->i_nlink = 2;
-        
-        err = obdfs_do_writepage(inode_page, IS_SYNC(inode));
-        inode->i_blocks = PAGE_SIZE/inode->i_sb->s_blocksize;
-        inode->i_size = PAGE_SIZE;
-        obd_unlock_page(inode_page);
-        page_cache_release(inode_page);
-        mark_inode_dirty(inode);
-        if (err) {
-                EXIT;
-                goto out_no_entry;
-        }
+	err = ext2_make_empty(inode, dir);
+	if (err)
+		goto out_fail;
 
-        /* now deal with the parent */
-        page = obdfs_add_entry(dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
-        if (!page) {
-                EXIT;
-                goto out_no_entry;
-        }
+	err = ext2_add_link(dentry, inode);
+	if (err)
+		goto out_fail;
 
-        de->inode = cpu_to_le32(inode->i_ino);
-        ext2_set_de_type(dir->i_sb, de, S_IFDIR);
-        dir->i_version = ++event;
-
-        dir->i_nlink++;
-        dir->u.ext2_i.i_flags &= ~EXT2_BTREE_FL;
-        mark_inode_dirty(dir);
-        err = obdfs_do_writepage(page, IS_SYNC(dir));
-
-        obd_unlock_page(page);
-
-        page_cache_release(page);
-        d_instantiate(dentry, inode);
-        EXIT;
+	d_instantiate(dentry, inode);
 out:
-        return err;
+	return err;
 
-out_no_entry:
-        inode->i_nlink = 0;
-        mark_inode_dirty(inode);
-        iput (inode);
-        goto out;
-} /* obdfs_mkdir */
+out_fail:
+	ext2_dec_count(inode);
+	ext2_dec_count(inode);
+	iput(inode);
+out_dir:
+	ext2_dec_count(dir);
+	goto out;
+}
+
+int obdfs_unlink(struct inode * dir, struct dentry *dentry)
+{
+	struct inode * inode = dentry->d_inode;
+	struct ext2_dir_entry_2 * de;
+	struct page * page;
+	int err = -ENOENT;
+
+	de = ext2_find_entry (dir, dentry, &page);
+	if (!de)
+		goto out;
+
+	err = ext2_delete_entry (de, page);
+	if (err)
+		goto out;
+
+	inode->i_ctime = dir->i_ctime;
+	ext2_dec_count(inode);
+	err = 0;
+out:
+	return err;
+}
 
 
 /*
@@ -810,171 +807,7 @@ end_rmdir:
         return retval;
 } /* obdfs_rmdir */
 
-int obdfs_unlink(struct inode * dir, struct dentry *dentry)
-{
-        int retval;
-        struct inode * inode;
-        struct page *page;
-        struct ext2_dir_entry_2 * de;
 
-        ENTRY;
-
-        retval = -ENOENT;
-        page = obdfs_find_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, LOCKED);
-        if (!page)
-                goto end_unlink;
-
-        inode = dentry->d_inode;
-        DQUOT_INIT(inode);
-
-        retval = -EIO;
-        if (le32_to_cpu(de->inode) != inode->i_ino)
-                goto end_unlink;
-        
-        if (!inode->i_nlink) {
-                ext2_warning (inode->i_sb, "ext2_unlink",
-                              "Deleting nonexistent file (%lu), %d",
-                              inode->i_ino, inode->i_nlink);
-                inode->i_nlink = 1;
-        }
-        retval = obdfs_delete_entry (de, page);
-        if (retval)
-                goto end_unlink;
-        dir->i_version = ++event;
-        retval = obdfs_do_writepage(page, IS_SYNC(dir));
-        /* XXX handle err? */
-        obd_unlock_page(page);
-
-        dir->i_ctime = dir->i_mtime = CURRENT_TIME;
-        dir->u.ext2_i.i_flags &= ~EXT2_BTREE_FL;
-        mark_inode_dirty(dir);
-        inode->i_nlink--;
-        mark_inode_dirty(inode);
-        inode->i_ctime = dir->i_ctime;
-        d_delete(dentry);       /* This also frees the inode */
-
-end_unlink:
-        if (page)
-                page_cache_release(page);
-        EXIT;
-        return retval;
-} /* obdfs_unlink */
-
-int obdfs_symlink (struct inode * dir, struct dentry *dentry,
-                   const char * symname)
-{
-        struct inode * inode;
-        struct ext2_dir_entry_2 * de;
-        struct obdfs_inode_info *oinfo;
-        struct page* page = NULL, * name_page = NULL;
-        char * link;
-        int l, err;
-
-        ENTRY;
-        err = -ENAMETOOLONG;
-        l = strlen(symname)+1;
-        if (l > PAGE_SIZE) {
-                EXIT;
-                goto out;
-        }
-
-        inode = obdfs_new_inode(dir, S_IFLNK);
-        if ( IS_ERR(inode) ) {
-                EXIT;
-                goto out;
-        }
-
-        inode->i_mode = S_IFLNK | S_IRWXUGO;
-        oinfo = obdfs_i2info(inode);
-
-        if (l >= sizeof(oinfo->oi_inline)) {
-                CDEBUG(D_INFO, "l=%d, normal symlink\n", l);
-                inode->i_op = &obdfs_symlink_inode_operations;
-
-                name_page = obdfs_getpage(inode, 0, 1, LOCKED);
-                if (!name_page) {
-                        EXIT;
-                        err = -ENOMEM;
-                        goto out_no_entry;
-                }
-                link = (char *)page_address(name_page);
-        } else {
-                CDEBUG(D_INFO, "l=%d, fast symlink\n", l);
-                inode->i_op = &obdfs_fast_symlink_inode_operations;
-                link = oinfo->oi_inline;
-                oinfo->oi_flags |= OBD_FL_INLINEDATA;
-        }
-        memcpy(link, symname, l);
-        if (name_page) {
-                err = obdfs_do_writepage(name_page, IS_SYNC(inode));
-                /* PDEBUG(name_page, "symlink"); */
-                obd_unlock_page(name_page);
-                page_cache_release(name_page);
-                if (err) {
-                        EXIT;
-                        goto out_no_entry;
-                }
-        }
-        inode->i_size = l-1;
-        mark_inode_dirty(inode);
-
-        page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len,
-                                &de, &err);
-        if (!page)
-                goto out_no_entry;
-        de->inode = cpu_to_le32(inode->i_ino);
-        ext2_set_de_type(dir->i_sb, de, S_IFLNK);
-        dir->i_version = ++event;
-        err = obdfs_do_writepage(page, IS_SYNC(dir));
-        obd_unlock_page(page);
-
-        d_instantiate(dentry, inode);
-out:
-        EXIT;
-        return err;
-
-out_no_entry:
-        inode->i_nlink--;
-        mark_inode_dirty(inode);
-        iput (inode);
-        goto out;
-} /* obdfs_symlink */
-
-int obdfs_link (struct dentry * old_dentry,
-                struct inode * dir, struct dentry *dentry)
-{
-        struct inode *inode = old_dentry->d_inode;
-        struct ext2_dir_entry_2 * de;
-        struct page *page;
-        int err;
-
-        ENTRY;
-
-        if (S_ISDIR(inode->i_mode))
-                return -EPERM;
-
-        if (inode->i_nlink >= EXT2_LINK_MAX)
-                return -EMLINK;
-
-        page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
-        if (!page)
-                return err;
-
-        de->inode = cpu_to_le32(inode->i_ino);
-        ext2_set_de_type(dir->i_sb, de, inode->i_mode);
-        dir->i_version = ++event;
-
-        err = obdfs_do_writepage(page, IS_SYNC(dir));
-        obd_unlock_page(page);
-
-        page_cache_release(page);
-        inode->i_nlink++;
-        inode->i_ctime = CURRENT_TIME;
-        mark_inode_dirty(inode);
-        atomic_inc(&inode->i_count);
-        d_instantiate(dentry, inode);
-        return err;
-} /* obdfs_link */
 
 #define PARENT_INO(buffer) \
         ((struct ext2_dir_entry_2 *) ((char *) buffer + \
