@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Lite I/O Page Cache
+ * Lustre Lite I/O page cache routines shared by different kernel revs
  *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *
@@ -34,13 +34,6 @@
 #include <asm/uaccess.h>
 
 #include <linux/fs.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#include <linux/buffer_head.h>
-#include <linux/mpage.h>
-#include <linux/writeback.h>
-#else
-#include <linux/iobuf.h>
-#endif
 #include <linux/stat.h>
 #include <asm/uaccess.h>
 #include <asm/segment.h>
@@ -55,43 +48,14 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-/*
- * Remove page from dirty list
- */
-static void __set_page_clean(struct page *page)
-{
-        struct address_space *mapping = page->mapping;
-        struct inode *inode;
-
-        if (!mapping)
-                return;
-
-        PGCACHE_WRLOCK(mapping);
-
-        list_del(&page->list);
-        list_add(&page->list, &mapping->clean_pages);
-
-        /* XXX doesn't inode_lock protect i_state ? */
-        inode = mapping->host;
-        if (list_empty(&mapping->dirty_pages)) {
-                CDEBUG(D_INODE, "inode clean\n");
-                inode->i_state &= ~I_DIRTY_PAGES;
-        }
-
-        PGCACHE_WRUNLOCK(mapping);
-        EXIT;
-}
-
-void set_page_clean(struct page *page)
-{
-        if (PageDirty(page)) {
-                ClearPageDirty(page);
-                __set_page_clean(page);
-        }
-}
+#ifndef list_for_each_prev_safe
+#define list_for_each_prev_safe(pos, n, head) \
+        for (pos = (head)->prev, n = pos->prev; pos != (head); \
+                pos = n, n = pos->prev )
+#endif
 
 /* SYNCHRONOUS I/O to object storage for an inode */
-static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
+static int ll_brw(int cmd, struct inode *inode, struct obdo *oa, 
                   struct page *page, int flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -126,207 +90,13 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_BRW_READ, pg.count);
-        rc = obd_brw(cmd, ll_i2obdconn(inode), oa, lsm, 1, &pg, NULL);
-        if (rc != 0 && rc != -EIO)
+        rc = obd_brw(cmd, ll_i2obdexp(inode), oa, lsm, 1, &pg, NULL);
+        if (rc == 0)
+                obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
+        else if (rc != -EIO)
                 CERROR("error from obd_brw: rc = %d\n", rc);
-
         RETURN(rc);
 }
-
-/*
- * we were asked to read a single page but we're going to try and read a batch
- * of pages all at once.  this vaguely simulates 2.5's readpages.
- */
-static int ll_readpage(struct file *file, struct page *first_page)
-{
-        struct inode *inode = first_page->mapping->host;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct page *page = first_page;
-        struct list_head *pos;
-        struct brw_page *pgs;
-        struct obdo *oa;
-        unsigned long end_index, extent_end = 0;
-        struct ptlrpc_request_set *set;
-        int npgs = 0, rc = 0, max_pages;
-        ENTRY;
-
-        LASSERT(PageLocked(page));
-        LASSERT(!PageUptodate(page));
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),offset="LPX64"\n",
-               inode->i_ino, inode->i_generation, inode,
-               (((obd_off)page->index) << PAGE_SHIFT));
-        LASSERT(atomic_read(&file->f_dentry->d_inode->i_count) > 0);
-
-        if (inode->i_size <= ((obd_off)page->index) << PAGE_SHIFT) {
-                CERROR("reading beyond EOF\n");
-                memset(kmap(page), 0, PAGE_SIZE);
-                kunmap(page);
-                SetPageUptodate(page);
-                unlock_page(page);
-                RETURN(rc);
-        }
-
-        /* try to read the file's preferred block size in a one-er */
-        end_index = first_page->index +
-                (inode->i_blksize >> PAGE_CACHE_SHIFT);
-        if (end_index > (inode->i_size >> PAGE_CACHE_SHIFT))
-                end_index = inode->i_size >> PAGE_CACHE_SHIFT;
-
-        max_pages = ((end_index - first_page->index) << PAGE_CACHE_SHIFT) >>
-                PAGE_SHIFT;
-        OBD_ALLOC_GFP(pgs, max_pages * sizeof(*pgs), GFP_USER);
-        if (pgs == NULL)
-                RETURN(-ENOMEM);
-
-        /*
-         * find how far we're allowed to read under the extent ll_file_read
-         * is passing us..
-         */
-        spin_lock(&lli->lli_read_extent_lock);
-        list_for_each(pos, &lli->lli_read_extents) {
-                struct ll_read_extent *rextent;
-                rextent = list_entry(pos, struct ll_read_extent, re_lli_item);
-                if (rextent->re_task != current)
-                        continue;
-
-                if (rextent->re_extent.end + PAGE_SIZE < rextent->re_extent.end)
-                        /* extent wrapping */
-                        extent_end = ~0;
-                else {
-                        extent_end = (rextent->re_extent.end + PAGE_SIZE)
-                                                        << PAGE_CACHE_SHIFT;
-                        /* 32bit indexes, 64bit extents.. */
-                        if (((u64)extent_end >> PAGE_CACHE_SHIFT) <
-                                        rextent->re_extent.end)
-                                extent_end = ~0;
-                }
-                break;
-        }
-        spin_unlock(&lli->lli_read_extent_lock);
-
-        if (extent_end == 0) {
-                static long next_print;
-                if (time_after(jiffies, next_print)) {
-                        next_print = jiffies + 30 * HZ;
-                        CDEBUG(D_INODE, "mmap readpage - check locks\n");
-                }
-                end_index = page->index + 1;
-        } else if (extent_end < end_index)
-                end_index = extent_end;
-
-        CDEBUG(D_INFO, "max_pages: %d, extent_end: %lu, end_index: %lu, "
-               "i_size: %llu\n",
-               max_pages, extent_end, end_index, inode->i_size);
-
-        /* to balance the find_get_page ref the other pages get that is
-         * decrefed on teardown.. */
-        page_cache_get(page);
-        do {
-                unsigned long index ;
-
-                pgs[npgs].pg = page;
-                pgs[npgs].off = ((obd_off)page->index) << PAGE_CACHE_SHIFT;
-                pgs[npgs].flag = 0;
-                pgs[npgs].count = PAGE_SIZE;
-                /* XXX Workaround for BA OSTs returning short reads at EOF.
-                 * The linux OST will return the full page, zero-filled at the
-                 * end, which will just overwrite the data we set here.  Bug
-                 * 593 relates to fixing this properly.
-                 */
-                if (inode->i_size < pgs[npgs].off + PAGE_SIZE) {
-                        int count = inode->i_size - pgs[npgs].off;
-                        void *addr = kmap(page);
-                        pgs[npgs].count = count;
-                        //POISON(addr, 0x7c, count);
-                        memset(addr + count, 0, PAGE_SIZE - count);
-                        kunmap(page);
-                }
-
-                npgs++;
-                if (npgs == max_pages)
-                        break;
-
-                /*
-                 * find pages ahead of us that we can read in.
-                 * grab_cache_page waits on pages that are locked so
-                 * we first try find_get_page, which doesn't.  this stops
-                 * the worst case behaviour of racing threads waiting on
-                 * each other, but doesn't remove it entirely.
-                 */
-                for (index = page->index + 1, page = NULL;
-                     page == NULL && index < end_index; index++) {
-
-                        /* see if the page already exists and needs updating */
-                        page = find_get_page(inode->i_mapping, index);
-                        if (page) {
-                                if (Page_Uptodate(page) || TryLockPage(page))
-                                        goto out_release;
-                                if (!page->mapping || Page_Uptodate(page))
-                                        goto out_unlock;
-                        } else {
-                                /* ok, we have to create it.. */
-                                page = grab_cache_page(inode->i_mapping, index);
-                                if (page == NULL)
-                                        continue;
-                                if (Page_Uptodate(page))
-                                        goto out_unlock;
-                        }
-
-                        break;
-
-                out_unlock:
-                        unlock_page(page);
-                out_release:
-                        page_cache_release(page);
-                        page = NULL;
-                }
-
-        } while (page);
-
-        if ((oa = obdo_alloc()) == NULL) {
-                CERROR("ENOMEM allocing obdo\n");
-                rc = -ENOMEM;
-        } else if ((set = ptlrpc_prep_set()) == NULL) {
-                CERROR("ENOMEM allocing request set\n");
-                obdo_free(oa);
-                rc = -ENOMEM;
-        } else {
-                struct ll_file_data *fd = file->private_data;
-
-                oa->o_id = lli->lli_smd->lsm_object_id;
-                memcpy(obdo_handle(oa), &fd->fd_ost_och.och_fh,
-                       sizeof(fd->fd_ost_och.och_fh));
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLHANDLE;
-                obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME);
-
-                rc = obd_brw_async(OBD_BRW_READ, ll_i2obdconn(inode), oa,
-                                   ll_i2info(inode)->lli_smd, npgs, pgs,
-                                   set, NULL);
-                if (rc == 0)
-                        rc = ptlrpc_set_wait(set);
-                ptlrpc_set_destroy(set);
-                if (rc == 0) {
-                        /* bug 1598: don't clobber blksize */
-                        oa->o_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLKSZ);
-                        obdo_refresh_inode(inode, oa, oa->o_valid);
-                }
-                if (rc && rc != -EIO)
-                        CERROR("error from obd_brw_async: rc = %d\n", rc);
-                obdo_free(oa);
-        }
-
-        while (npgs-- > 0) {
-                page = pgs[npgs].pg;
-
-                if (rc == 0)
-                        SetPageUptodate(page);
-                unlock_page(page);
-                page_cache_release(page);
-        }
-
-        OBD_FREE(pgs, max_pages * sizeof(*pgs));
-        RETURN(rc);
-} /* ll_readpage */
 
 /* this isn't where truncate starts.   roughly:
  * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
@@ -335,24 +105,17 @@ void ll_truncate(struct inode *inode)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct obdo oa;
-        int err;
+        int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-        /* object not yet allocated */
+        /* object not yet allocated - this is handled in ll_setattr_raw */
         if (!lsm) {
                 CERROR("truncate on inode %lu with no objects\n", inode->i_ino);
                 EXIT;
                 return;
         }
-
-        /* vmtruncate will just throw away our dirty pages, make sure
-         * we don't think they're still dirty, being careful to round
-         * i_size to the first whole page that was tossed */
-        err = ll_clear_dirty_pages(ll_i2obdconn(inode), lsm,
-                        (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT,
-                        ~0);
 
         oa.o_id = lsm->lsm_object_id;
         oa.o_valid = OBD_MD_FLID;
@@ -363,10 +126,10 @@ void ll_truncate(struct inode *inode)
                oa.o_id, inode->i_size);
 
         /* truncate == punch from new size to absolute end of file */
-        err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
-                        OBD_OBJECT_EOF, NULL);
-        if (err)
-                CERROR("obd_truncate fails (%d) ino %lu\n", err, inode->i_ino);
+        rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
+                       OBD_OBJECT_EOF, NULL);
+        if (rc)
+                CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else
                 obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                           OBD_MD_FLATIME | OBD_MD_FLMTIME |
@@ -376,14 +139,11 @@ void ll_truncate(struct inode *inode)
         return;
 } /* ll_truncate */
 
-//#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
-static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
-                            unsigned to)
+int ll_prepare_write(struct file *file, struct page *page, unsigned from,
+                     unsigned to)
 {
         struct inode *inode = page->mapping->host;
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct ll_file_data *fd = file->private_data;
         struct lov_stripe_md *lsm = lli->lli_smd;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         struct brw_page pg;
@@ -397,21 +157,22 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         if (PageUptodate(page))
                 RETURN(0);
 
-        //POISON(addr + from, 0xca, to - from);
-
         /* Check to see if we should return -EIO right away */
         pg.pg = page;
         pg.off = offset;
         pg.count = PAGE_SIZE;
         pg.flag = 0;
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdconn(inode), NULL, lsm, 1,&pg,NULL);
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), NULL, lsm, 1, &pg, 
+                     NULL);
         if (rc)
                 RETURN(rc);
 
         /* We're completely overwriting an existing page, so _don't_ set it up
          * to date until commit_write */
-        if (from == 0 && to == PAGE_SIZE)
+        if (from == 0 && to == PAGE_SIZE) {
+                POISON_PAGE(page, 0x11);
                 RETURN(0);
+        }
 
         /* If are writing to a new page, no need to read old data.
          * the extent locking and getattr procedures in ll_file_write have
@@ -424,10 +185,9 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 
         oa.o_id = lsm->lsm_object_id;
         oa.o_mode = inode->i_mode;
-        memcpy(obdo_handle(&oa), &fd->fd_ost_och.och_fh,
-               sizeof(fd->fd_ost_och.och_fh));
-        oa.o_valid = OBD_MD_FLID |OBD_MD_FLMODE |OBD_MD_FLTYPE |OBD_MD_FLHANDLE;
-
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
+        
+        /* XXX could be an async ocp read.. read-ahead? */
         rc = ll_brw(OBD_BRW_READ, inode, &oa, page, 0);
         if (rc == 0) {
                 /* bug 1598: don't clobber blksize */
@@ -443,170 +203,171 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         return rc;
 }
 
-/*
- * background file writeback.  This is called regularly from kupdated to write
- * dirty data, from kswapd when memory is low, and from filemap_fdatasync when
- * super blocks or inodes are synced..
- *
- * obd_brw errors down in _batch_writepage are ignored, so pages are always
- * unlocked.  Also, there is nobody to return an error code to from here - the
- * application may not even be running anymore.
- *
- * this should be async so that things like kswapd can have a chance to
- * free some more pages that our allocating writeback may need, but it isn't
- * yet.
- */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static unsigned long ll_local_cache_dirty_pages;
-static unsigned long ll_max_dirty_pages = 20 * 1024 * 1024 / PAGE_SIZE;
-
-static spinlock_t ll_local_cache_page_count_lock = SPIN_LOCK_UNLOCKED;
-
-int ll_rd_dirty_pages(char *page, char **start, off_t off, int count, int *eof,
-                      void *data)
+int ll_write_count(struct page *page)
 {
-        unsigned long dirty_count;
-        spin_lock(&ll_local_cache_page_count_lock);
-        dirty_count = ll_local_cache_dirty_pages;
-        spin_unlock(&ll_local_cache_page_count_lock);
-        return snprintf(page, count, "%lu\n", dirty_count);
+        struct inode *inode = page->mapping->host;
+
+        /* catch race with truncate */
+        if (((loff_t)page->index << PAGE_SHIFT) >= inode->i_size)
+                return 0;
+
+        /* catch sub-page write at end of file */
+        if (((loff_t)page->index << PAGE_SHIFT) + PAGE_SIZE > inode->i_size)
+                return inode->i_size % PAGE_SIZE;
+
+        return PAGE_SIZE;
 }
 
-int ll_rd_max_dirty_pages(char *page, char **start, off_t off, int count,
-                          int *eof, void *data)
+struct ll_async_page *llap_from_cookie(void *cookie)
 {
-        unsigned long max_dirty;
-        spin_lock(&ll_local_cache_page_count_lock);
-        max_dirty = ll_max_dirty_pages;
-        spin_unlock(&ll_local_cache_page_count_lock);
-        return snprintf(page, count, "%lu\n", max_dirty);
-}
+        struct ll_async_page *llap = cookie;
+        if (llap->llap_magic != LLAP_MAGIC)
+                return ERR_PTR(-EINVAL);
+        return llap;
+};
 
-int ll_wr_max_dirty_pages(struct file *file, const char *buffer,
-                          unsigned long count, void *data)
+static int ll_ap_make_ready(void *data, int cmd)
 {
-        unsigned long max_dirty;
-        signed long max_dirty_signed;
-        char kernbuf[20], *end;
+        struct ll_async_page *llap;
+        struct page *page;
+        ENTRY;
         
-        if (count > (sizeof(kernbuf) - 1))
-                return -EINVAL;
+        /* reads are always locked between queueing and completion, 
+         * llite should never queue pages without _READY */
+        LASSERT(cmd != OBD_BRW_READ);
 
-        if (copy_from_user(kernbuf, buffer, count))
-                return -EFAULT;
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) 
+                RETURN(-EINVAL);
 
-        kernbuf[count] = '\0';
+        page = llap->llap_page;
 
-        max_dirty_signed = simple_strtol(kernbuf, &end, 0);
-        if (kernbuf == end)
-                return -EINVAL;
-        max_dirty = (unsigned long)max_dirty_signed;
+        if (TryLockPage(page))
+                RETURN(-EBUSY);
 
-#if 0
-        if (max_dirty < ll_local_cache_dirty_pages)
-                flush_to_new_max_dirty();
-#endif
+        LL_CDEBUG_PAGE(page, "made ready\n");
+        page_cache_get(page);
 
-        spin_lock(&ll_local_cache_page_count_lock);
-        CDEBUG(D_CACHE, "changing max_dirty from %lu to %lu\n",
-               ll_max_dirty_pages, max_dirty);
-        ll_max_dirty_pages = max_dirty;
-        spin_unlock(&ll_local_cache_page_count_lock);
-        return count;
+        /* if we left PageDirty we might get another writepage call
+         * in the future.  list walkers are bright enough
+         * to check page dirty so we can leave it on whatever list
+         * its on.  XXX also, we're called with the cli list so if
+         * we got the page cache list we'd create a lock inversion
+         * with the removepage path which gets the page lock then the
+         * cli lock */
+        clear_page_dirty(page);
+        RETURN(0);
 }
 
-static int ll_local_cache_full(void)
+static int ll_ap_refresh_count(void *data, int cmd)
 {
-        int full = 0;
-        spin_lock(&ll_local_cache_page_count_lock);
-        if (ll_max_dirty_pages &&
-            ll_local_cache_dirty_pages >= ll_max_dirty_pages) {
-                full = 1;
+        struct ll_async_page *llap;
+        ENTRY;
+
+        /* readpage queues with _COUNT_STABLE, shouldn't get here. */
+        LASSERT(cmd != OBD_BRW_READ);
+
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap))
+                RETURN(PTR_ERR(llap));
+
+        return ll_write_count(llap->llap_page);
+}
+
+void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
+{
+        struct lov_stripe_md *lsm;
+        obd_flag valid_flags;
+
+        lsm = ll_i2info(inode)->lli_smd;
+
+        oa->o_id = lsm->lsm_object_id;
+        oa->o_valid = OBD_MD_FLID;
+        valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
+        if (cmd == OBD_BRW_WRITE) {
+                oa->o_valid |= OBD_MD_FLIFID | OBD_MD_FLEPOCH;
+                mdc_pack_fid(obdo_fid(oa), inode->i_ino, 0, inode->i_mode);
+                oa->o_easize = ll_i2info(inode)->lli_io_epoch;
+
+                valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
         }
-        spin_unlock(&ll_local_cache_page_count_lock);
-        /* XXX instrument? */
-        /* XXX trigger async writeback when full, or 75% of full? */
-        return full;
+
+        obdo_from_inode(oa, inode, valid_flags);
 }
 
-static void ll_local_cache_flushed_pages(unsigned long pgcount)
+static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
-        unsigned long dirty_count;
-        spin_lock(&ll_local_cache_page_count_lock);
-        dirty_count = ll_local_cache_dirty_pages;
-        ll_local_cache_dirty_pages -= pgcount;
-        CDEBUG(D_CACHE, "dirty pages: %lu->%lu)\n",
-               dirty_count, ll_local_cache_dirty_pages);
-        spin_unlock(&ll_local_cache_page_count_lock);
-        LASSERT(dirty_count >= pgcount);
-}
-
-static void ll_local_cache_dirtied_pages(unsigned long pgcount)
-{
-        unsigned long dirty_count;
-        spin_lock(&ll_local_cache_page_count_lock);
-        dirty_count = ll_local_cache_dirty_pages;
-        ll_local_cache_dirty_pages += pgcount;
-        CDEBUG(D_CACHE, "dirty pages: %lu->%lu\n",
-               dirty_count, ll_local_cache_dirty_pages);
-        spin_unlock(&ll_local_cache_page_count_lock);
-        /* XXX track maximum cached, report to lprocfs */
-}
-
-int ll_clear_dirty_pages(struct lustre_handle *conn, struct lov_stripe_md *lsm,
-                         unsigned long start, unsigned long end)
-{
-        unsigned long cleared;
-        int rc;
-
+        struct ll_async_page *llap;
         ENTRY;
-        rc = obd_clear_dirty_pages(conn, lsm, start, end, &cleared);
-        if (!rc)
-                ll_local_cache_flushed_pages(cleared);
-        RETURN(rc);
+
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) {
+                EXIT;
+                return;
+        }
+
+        ll_inode_fill_obdo(llap->llap_page->mapping->host, cmd, oa);
+        EXIT;
 }
 
-int ll_mark_dirty_page(struct lustre_handle *conn, struct lov_stripe_md *lsm,
-                       unsigned long index)
+static struct obd_async_page_ops ll_async_page_ops = {
+        .ap_make_ready =        ll_ap_make_ready,
+        .ap_refresh_count =     ll_ap_refresh_count,
+        .ap_fill_obdo =         ll_ap_fill_obdo,
+        .ap_completion =        ll_ap_completion,
+};
+
+/* XXX have the exp be an argument? */
+struct ll_async_page *llap_from_page(struct page *page)
 {
+        struct ll_async_page *llap;
+        struct obd_export *exp;
+        struct inode *inode = page->mapping->host;
         int rc;
-
         ENTRY;
-        if (ll_local_cache_full())
-                RETURN(-EDQUOT);
 
-        rc = obd_mark_page_dirty(conn, lsm, index);
-        if (!rc)
-                ll_local_cache_dirtied_pages(1);
-        RETURN(rc);
+        if (page->private != 0) {
+                llap = (struct ll_async_page *)page->private;
+                if (llap->llap_magic != LLAP_MAGIC)
+                        RETURN(ERR_PTR(-EINVAL));
+                RETURN(llap);
+        } 
+
+        exp = ll_i2obdexp(page->mapping->host);
+        if (exp == NULL)
+                RETURN(ERR_PTR(-EINVAL));
+
+        OBD_ALLOC(llap, sizeof(*llap));
+        llap->llap_magic = LLAP_MAGIC;
+        rc = obd_prep_async_page(exp, ll_i2info(inode)->lli_smd,
+                                 NULL, page, 
+                                 (obd_off)page->index << PAGE_SHIFT,
+                                 &ll_async_page_ops, llap, &llap->llap_cookie);
+        if (rc) {
+                OBD_FREE(llap, sizeof(*llap));
+                RETURN(ERR_PTR(rc));
+        }
+
+        CDEBUG(D_CACHE, "llap %p page %p cookie %p obj off "LPU64"\n", llap, 
+               page, llap->llap_cookie, (obd_off)page->index << PAGE_SHIFT);
+        page->private = (unsigned long)llap;
+        llap->llap_page = page;
+        RETURN(llap);
 }
 
-static int ll_writepage(struct page *page)
+/* update our write count to account for i_size increases that may have
+ * happened since we've queued the page for io. */
+
+/* be careful not to return success without setting the page Uptodate or
+ * the next pass through prepare_write will read in stale data from disk. */
+int ll_commit_write(struct file *file, struct page *page, unsigned from,
+                    unsigned to)
 {
         struct inode *inode = page->mapping->host;
-        struct obdo oa;
-        ENTRY;
-
-        CDEBUG(D_CACHE, "page %p [lau %d] inode %p\n", page,
-               PageLaunder(page), inode);
-        LASSERT(PageLocked(page));
-
-        oa.o_id = ll_i2info(inode)->lli_smd->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
-        RETURN(ll_batch_writepage(inode, &oa, page));
-}
-
-/*
- * we really don't want to start writeback here, we want to give callers some
- * time to further dirty the pages before we write them out.
- */
-static int ll_commit_write(struct file *file, struct page *page,
-                           unsigned from, unsigned to)
-{
-        struct inode *inode = page->mapping->host;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct obd_export *exp = NULL;
+        struct ll_async_page *llap;
         loff_t size;
         int rc = 0;
         ENTRY;
@@ -617,152 +378,273 @@ static int ll_commit_write(struct file *file, struct page *page,
 
         CDEBUG(D_INODE, "inode %p is writing page %p from %d to %d at %lu\n",
                inode, page, from, to, page->index);
+
+        llap = llap_from_page(page);
+        if (IS_ERR(llap))
+                RETURN(PTR_ERR(llap));
+
+        /* queue a write for some time in the future the first time we
+         * dirty the page */
         if (!PageDirty(page)) {
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                      LPROC_LL_DIRTY_MISSES);
-                rc = ll_mark_dirty_page(ll_i2obdconn(inode),
-                                        ll_i2info(inode)->lli_smd,
-                                        page->index);
-                if (rc < 0 && rc != -EDQUOT)
-                        RETURN(rc); /* XXX lproc counter here? */
+
+                exp = ll_i2obdexp(inode);
+                if (exp == NULL)
+                        RETURN(-EINVAL);
+
+                rc = obd_queue_async_io(exp, lsm, NULL, llap->llap_cookie, 
+                                        OBD_BRW_WRITE, 0, 0, 0, 0);
+                if (rc != 0) { /* async failed, try sync.. */
+                        struct obd_sync_io_container osic;
+                        osic_init(&osic);
+
+                        rc = obd_queue_sync_io(exp, lsm, NULL, &osic, 
+                                               llap->llap_cookie, 
+                                               OBD_BRW_WRITE, 0, to, 0);
+                        if (rc)
+                                GOTO(out, rc);
+
+                        rc = obd_trigger_sync_io(exp, lsm, NULL, &osic);
+                        if (rc)
+                                GOTO(out, rc);
+
+                        rc = osic_wait(&osic);
+                        GOTO(out, rc);
+                }
+                LL_CDEBUG_PAGE(page, "write queued\n");
+                llap->llap_queued = 1;
+                //llap_write_pending(inode, llap);
         } else {
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                      LPROC_LL_DIRTY_HITS);
         }
 
-        size = (((obd_off)page->index) << PAGE_SHIFT) + to;
-        if (size > inode->i_size)
-                inode->i_size = size;
-
-        SetPageUptodate(page);
+        /* put the page in the page cache, from now on ll_removepage is 
+         * responsible for cleaning up the llap */
         set_page_dirty(page);
 
-        /* This means that we've hit either the local cache limit or the limit
-         * of the OST's grant. */
-        if (rc == -EDQUOT) {
-                struct ll_file_data *fd = file->private_data;
-                struct obdo oa;
-                int rc;
-
-                oa.o_id = ll_i2info(inode)->lli_smd->lsm_object_id;
-                memcpy(obdo_handle(&oa), &fd->fd_ost_och.och_fh,
-                       sizeof(fd->fd_ost_och.och_fh));
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLHANDLE;
-                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
-                rc = ll_batch_writepage(inode, &oa, page);
-                lock_page(page); /* caller expects to unlock */
-                RETURN(rc);
+out:
+        if (rc == 0) {
+                /* XXX needs to be pushed down to the OSC as EOC */
+                size = (((obd_off)page->index) << PAGE_SHIFT) + to;
+                if (size > inode->i_size) {
+                        inode->i_size = size;
+                        /* see commentary in file.c:ll_inode_getattr() */
+                        set_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags);
+                }
+                SetPageUptodate(page);
         }
-
-        RETURN(0);
-} /* ll_commit_write */
-#else
-static int ll_writepage(struct page *page,
-                        struct writeback_control *wbc)
-{
-
-        return 0;
+        RETURN(rc);
 }
-static int ll_commit_write(struct file *file, struct page *page,
-                           unsigned from, unsigned to)
-{
-        return 0;
-}
-#endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
-                        unsigned long blocknr, int blocksize)
+/* the kernel calls us here when a page is unhashed from the page cache.
+ * the page will be locked and the kernel is holding a spinlock, so
+ * we need to be careful.  we're just tearing down our book-keeping
+ * here. */
+void ll_removepage(struct page *page)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct brw_page *pga;
-        struct ptlrpc_request_set *set;
-        struct obdo oa;
-        int length, i, flags, rc = 0;
-        loff_t offset;
+        struct inode *inode = page->mapping->host;
+        struct obd_export *exp;
+        struct ll_async_page *llap;
+        int rc;
         ENTRY;
 
-        if (!lsm || !lsm->lsm_object_id)
-                RETURN(-EBADF);
+        LASSERT(!in_interrupt());
 
-        /* FIXME: io smaller than PAGE_SIZE is broken on ia64 */
-        if ((iobuf->offset & (PAGE_SIZE - 1)) ||
-            (iobuf->length & (PAGE_SIZE - 1)))
-                RETURN(-EINVAL);
-
-        set = ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
-
-        OBD_ALLOC(pga, sizeof(*pga) * iobuf->nr_pages);
-        if (!pga) {
-                ptlrpc_set_destroy(set);
-                RETURN(-ENOMEM);
+        /* sync pages or failed read pages can leave pages in the page
+         * cache that don't have our data associated with them anymore */
+        if (page->private == 0) {
+                EXIT;
+                return;
         }
 
-        flags = (rw == WRITE ? OBD_BRW_CREATE : 0) /* | OBD_BRW_DIRECTIO */;
-        offset = ((obd_off)blocknr << inode->i_blkbits);
-        length = iobuf->length;
+        LL_CDEBUG_PAGE(page, "being evicted\n");
 
-        for (i = 0, length = iobuf->length; length > 0;
-             length -= pga[i].count, offset += pga[i].count, i++) { /*i last!*/
-                pga[i].pg = iobuf->maplist[i];
-                pga[i].off = offset;
-                /* To the end of the page, or the length, whatever is less */
-                pga[i].count = min_t(int, PAGE_SIZE - (offset & ~PAGE_MASK),
-                                     length);
-                pga[i].flag = flags;
-                if (rw == READ) {
-                        //POISON(kmap(iobuf->maplist[i]), 0xc5, PAGE_SIZE);
-                        //kunmap(iobuf->maplist[i]);
+        exp = ll_i2obdexp(inode);
+        if (exp == NULL) {
+                CERROR("page %p ind %lu gave null export\n", page, 
+                       page->index);
+                EXIT;
+                return;
+        }
+
+        llap = llap_from_page(page);
+        if (IS_ERR(llap)) {
+                CERROR("page %p ind %lu couldn't find llap: %ld\n", page, 
+                       page->index, PTR_ERR(llap));
+                EXIT;
+                return;
+        }
+
+        //llap_write_complete(inode, llap);
+        rc = obd_teardown_async_page(exp, ll_i2info(inode)->lli_smd, NULL, 
+                                     llap->llap_cookie);
+        if (rc != 0)
+                CERROR("page %p ind %lu failed: %d\n", page, page->index, rc);
+
+        /* this unconditional free is only safe because the page lock
+         * is providing exclusivity to memory pressure/truncate/writeback..*/
+        page->private = 0;
+        OBD_FREE(llap, sizeof(*llap));
+        EXIT;
+}
+
+static int ll_start_readpage(struct obd_export *exp, struct inode *inode, 
+                             struct page *page)
+{
+        struct ll_async_page *llap;
+        int rc;
+        ENTRY;
+
+        llap = llap_from_page(page);
+        if (IS_ERR(llap))
+                RETURN(PTR_ERR(llap));
+
+        page_cache_get(page);
+
+        rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL, 
+                                llap->llap_cookie, OBD_BRW_READ, 0, PAGE_SIZE, 
+                                0, ASYNC_READY | ASYNC_URGENT | 
+                                   ASYNC_COUNT_STABLE);
+        /* XXX verify that failed pages here will make their way
+         * through ->removepage.. I suspect they will. */
+        if (rc)
+                page_cache_release(page);
+        else  {
+                llap->llap_queued = 1;
+                LL_CDEBUG_PAGE(page, "read queued\n");
+        }
+        RETURN(rc);
+}
+
+static void ll_start_readahead(struct obd_export *exp, struct inode *inode, 
+                               unsigned long first_index)
+{
+        struct lustre_handle match_lockh = {0};
+        struct ldlm_extent page_extent;
+        unsigned long index, end_index;
+        struct page *page;
+        int flags, matched, rc;
+
+        /* for good throughput we need to have many 'blksize' rpcs in
+         * flight per stripe, so we try to read-ahead a ridiculous amount
+         * of data. "- 3" for 8 rpcs */
+        end_index = first_index + (inode->i_blksize >> (PAGE_CACHE_SHIFT - 3));
+        if (end_index > (inode->i_size >> PAGE_CACHE_SHIFT))
+                end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+
+        for (index = first_index + 1; index < end_index; index++) {
+                /* try to get a ref on an existing page or create a new
+                 * one.  if we find a locked page or lose the race
+                 * with another reader we stop trying */
+                page = grab_cache_page_nowait(inode->i_mapping, index);
+                if (page == NULL)
+                        break;
+                /* make sure we didn't race with other teardown/readers */
+                if (!page->mapping || Page_Uptodate(page)) {
+                        unlock_page(page);
+                        page_cache_release(page);
+                        continue;
+                }
+
+                /* make sure the page we're about to read is covered
+                 * by a lock, stop when we go past the end of the lock */
+                page_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
+                page_extent.end = page_extent.start + PAGE_CACHE_SIZE - 1;
+                flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
+                matched = obd_match(ll_i2sbi(inode)->ll_osc_exp, 
+                                    ll_i2info(inode)->lli_smd, LDLM_EXTENT,
+                                    &page_extent, sizeof(page_extent), LCK_PR, 
+                                    &flags, inode, &match_lockh);
+                if (!matched) {
+                        LL_CDEBUG_PAGE(page, "didn't match a lock\n");
+                        unlock_page(page);
+                        page_cache_release(page);
+                        break;
+                }
+
+                /* interestingly, we don't need to hold the lock across the IO.
+                 * As long as we match the lock while the page is locked in the
+                 * page cache we know that the lock's cancelation will wait for
+                 * the page to be unlocked.  XXX this should transition to
+                 * proper association of pages and locks in the future */
+                obd_cancel(ll_i2sbi(inode)->ll_osc_exp,
+                           ll_i2info(inode)->lli_smd, LCK_PR, &match_lockh);
+
+                rc = ll_start_readpage(exp, inode, page);
+                if (rc != 0) {
+                        unlock_page(page);
+                        page_cache_release(page);
+                        break;
+                }
+                page_cache_release(page);
+        }
+}
+/*
+ * for now we do our readpage the same on both 2.4 and 2.5.  The kernel's
+ * read-ahead assumes it is valid to issue readpage all the way up to
+ * i_size, but our dlm locks make that not the case.  We disable the
+ * kernel's read-ahead and do our own by walking ahead in the page cache
+ * checking for dlm lock coverage.  the main difference between 2.4 and
+ * 2.6 is how read-ahead gets batched and issued, but we're using our own,
+ * so they look the same.
+ */
+int ll_readpage(struct file *file, struct page *page)
+{
+        struct inode *inode = page->mapping->host;
+        struct lustre_handle match_lockh = {0};
+        struct obd_export *exp;
+        struct ldlm_extent page_extent;
+        int flags, rc = 0, matched;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        ENTRY;
+
+        LASSERT(PageLocked(page));
+        LASSERT(!PageUptodate(page));
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),offset="LPX64"\n",
+               inode->i_ino, inode->i_generation, inode,
+               (((obd_off)page->index) << PAGE_SHIFT));
+        LASSERT(atomic_read(&file->f_dentry->d_inode->i_count) > 0);
+
+        if (inode->i_size <= ((obd_off)page->index) << PAGE_SHIFT) {
+                CERROR("reading beyond EOF\n");
+                memset(kmap(page), 0, PAGE_SIZE);
+                kunmap(page);
+                SetPageUptodate(page);
+                GOTO(out, rc = 0);
+        }
+
+        exp = ll_i2obdexp(inode);
+        if (exp == NULL)
+                GOTO(out, rc = -EINVAL);
+
+        page_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
+        page_extent.end = page_extent.start + PAGE_CACHE_SIZE - 1;
+        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
+        matched = obd_match(sbi->ll_osc_exp, ll_i2info(inode)->lli_smd, 
+                            LDLM_EXTENT, &page_extent, sizeof(page_extent), 
+                            LCK_PR, &flags, inode, &match_lockh);
+
+        if (!matched) {
+                static unsigned long next_print;
+                CDEBUG(D_INODE, "didn't match a lock");
+                if (time_after(jiffies, next_print)) {
+                        next_print = jiffies + 30 * HZ;
+                        CERROR("not covered by a lock (mmap?).  check debug "
+                               "logs.\n");
                 }
         }
 
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        rc = ll_start_readpage(exp, inode, page);
+        if (rc == 0 && (sbi->ll_flags & LL_SBI_READAHEAD))
+                ll_start_readahead(exp, inode, page->index);
 
-        if (rw == WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, iobuf->length);
-        else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, iobuf->length);
-        rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdconn(inode), &oa, lsm, iobuf->nr_pages, pga,
-                           set, NULL);
-        if (rc) {
-                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
-                       "error from obd_brw_async: rc = %d\n", rc);
-        } else {
-                rc = ptlrpc_set_wait(set);
-                if (rc)
-                        CERROR("error from callback: rc = %d\n", rc);
-        }
-        ptlrpc_set_destroy(set);
-        if (rc == 0)
-                rc = iobuf->length;
-
-        OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);
+        if (matched)
+                obd_cancel(ll_i2sbi(inode)->ll_osc_exp, 
+                           ll_i2info(inode)->lli_smd, LCK_PR, &match_lockh);
+out:
+        if (rc)
+                unlock_page(page);
         RETURN(rc);
 }
-#endif
-
-//#endif
-
-struct address_space_operations ll_aops = {
-        readpage: ll_readpage,
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
-        direct_IO: ll_direct_IO,
-#endif
-        writepage: ll_writepage,
-        sync_page: block_sync_page,
-        prepare_write: ll_prepare_write,
-        commit_write: ll_commit_write,
-        bmap: NULL
-//#endif
-};

@@ -49,6 +49,17 @@ static struct super_block *ll_read_super(struct super_block *sb,
         RETURN(sb);
 }
 
+static struct super_block *lustre_read_super(struct super_block *sb,
+                                         void *data, int silent)
+{
+        int err;
+        ENTRY;
+        err = lustre_fill_super(sb, data, silent);
+        if (err)
+                RETURN(NULL);
+        RETURN(sb);
+}
+
 /* exported operations */
 struct super_operations ll_super_operations =
 {
@@ -57,19 +68,43 @@ struct super_operations ll_super_operations =
         //        delete_inode: ll_delete_inode,
         put_super: ll_put_super,
         statfs: ll_statfs,
-        umount_begin: ll_umount_begin
+        umount_begin: ll_umount_begin,
+        fh_to_dentry: ll_fh_to_dentry,
+        dentry_to_fh: ll_dentry_to_fh
 };
 
 static struct file_system_type lustre_lite_fs_type = {
         name:           "lustre_lite",
-        fs_flags:       0,
+        fs_flags:       FS_NFSEXP_FSID,
         read_super:     ll_read_super,
+        owner:          THIS_MODULE,
+};
+
+/* exported operations */
+struct super_operations lustre_super_operations =
+{
+        read_inode2: ll_read_inode2,
+        clear_inode: ll_clear_inode,
+        //        delete_inode: ll_delete_inode,
+        put_super: lustre_put_super,
+        statfs: ll_statfs,
+        umount_begin: ll_umount_begin,
+        fh_to_dentry: ll_fh_to_dentry,
+        dentry_to_fh: ll_dentry_to_fh
+};
+
+static struct file_system_type lustre_fs_type = {
+        name:           "lustre",
+        fs_flags:       FS_NFSEXP_FSID,
+        read_super:     lustre_read_super,
         owner:          THIS_MODULE,
 };
 
 static int __init init_lustre_lite(void)
 {
-        printk(KERN_INFO "Lustre Lite Client File System; "
+        int rc;
+
+        printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
                "info@clusterfs.com\n");
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
@@ -79,12 +114,19 @@ static int __init init_lustre_lite(void)
 
         proc_lustre_fs_root = proc_lustre_root ? proc_mkdir("llite", proc_lustre_root) : NULL;
 
-        return register_filesystem(&lustre_lite_fs_type);
+        rc = register_filesystem(&lustre_lite_fs_type);
+        if (rc == 0)
+                rc = register_filesystem(&lustre_fs_type);
+        if (rc)
+                unregister_filesystem(&lustre_lite_fs_type);
+        return rc;
 }
 
 static void __exit exit_lustre_lite(void)
 {
         unregister_filesystem(&lustre_lite_fs_type);
+        unregister_filesystem(&lustre_fs_type);
+
         kmem_cache_destroy(ll_file_data_slab);
 
         if (proc_lustre_fs_root) {

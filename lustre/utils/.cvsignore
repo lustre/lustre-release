@@ -9,12 +9,14 @@ tags
 TAGS
 obdctl
 lctl
-lfind
-lstripe
 obdstat
 obdio
 obdbarrier
 lload
 wirecheck
+lfs
+llmount
+mount.lustre
+wiretest
 .*.cmd
 .*.d

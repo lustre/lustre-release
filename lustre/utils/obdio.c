@@ -35,28 +35,18 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
                          int reps, int locked, uint64_t oid,
                          uint64_t offset, uint32_t size)
 {
-        struct lustre_handle fh;
         struct lustre_handle lh;
         void                *space;
         void                *buffer;
         uint32_t            *ibuf;
         int                  i;
         int                  j;
-        int                  rc;
-        int                  rc2;
-
-        rc = obdio_open (conn, oid, &fh);
-        if (rc != 0) {
-                fprintf (stderr, "Failed to open object "LPX64": %s\n",
-                         oid, strerror (errno));
-                return (rc);
-        }
+        int                  rc = 0;
 
         buffer = obdio_alloc_aligned_buffer (&space, size);
         if (buffer == NULL) {
                 fprintf (stderr, "Can't allocate buffer size %d\n", size);
-                rc = -1;
-                goto out_0;
+                return (-1);
         }
 
         for (i = 0; i < reps; i++) {
@@ -70,43 +60,47 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
                 }
 
                 if (locked) {
-                        rc = obdio_enqueue (conn, oid, LCK_PW, offset, size, &lh);
+                        rc = obdio_enqueue(conn, oid, LCK_PW, offset, size,&lh);
                         if (rc != 0) {
-                                fprintf (stderr, "Error on enqueue "LPX64" @ "LPU64" for %u: %s\n",
-                                         oid, offset, size, strerror (errno));
-                                goto out_1;
+                                fprintf(stderr, "Error on enqueue "LPX64" @ "
+                                        LPU64" for %u: %s\n",
+                                        oid, offset, size, strerror (errno));
+                                goto out;
                         }
                 }
 
                 rc = obdio_pwrite (conn, oid, buffer, size, offset);
                 if (rc != 0) {
-                        fprintf (stderr, "Error writing "LPX64" @ "LPU64" for %u: %s\n",
-                                 oid, offset, size, strerror (errno));
+                        fprintf(stderr, "Error writing "LPX64" @ "LPU64
+                                " for %u: %s\n",
+                                oid, offset, size, strerror (errno));
                         if (locked)
                                 obdio_cancel (conn, &lh);
                         rc = -1;
-                        goto out_1;
+                        goto out;
                 }
 
                 memset (buffer, 0xbb, size);
 
                 rc = obdio_pread (conn, oid, buffer, size, offset);
                 if (rc != 0) {
-                        fprintf (stderr, "Error reading "LPX64" @ "LPU64" for %u: %s\n",
-                                 oid, offset, size, strerror (errno));
+                        fprintf(stderr, "Error reading "LPX64" @ "LPU64
+                                " for %u: %s\n",
+                                oid, offset, size, strerror (errno));
                         if (locked)
                                 obdio_cancel (conn, &lh);
                         rc = -1;
-                        goto out_1;
+                        goto out;
                 }
 
                 if (locked) {
                         rc = obdio_cancel (conn, &lh);
                         if (rc != 0) {
-                                fprintf (stderr, "Error on cancel "LPX64" @ "LPU64" for %u: %s\n",
-                                         oid, offset, size, strerror (errno));
+                                fprintf(stderr, "Error on cancel "LPX64" @ "
+                                        LPU64" for %u: %s\n",
+                                        oid, offset, size, strerror (errno));
                                 rc = -1;
-                                goto out_1;
+                                goto out;
                         }
                 }
 
@@ -116,23 +110,21 @@ obdio_test_fixed_extent (struct obdio_conn *conn,
                             ibuf[1] != mypid ||
                             ibuf[2] != i ||
                             ibuf[3] != j) {
-                                fprintf (stderr, "Error checking "LPX64" @ "LPU64" for %u, chunk %d\n",
-                                         oid, offset, size, j);
-                                fprintf (stderr, "Expected [%x,%x,%x,%x], got [%x,%x,%x,%x]\n",
-                                         myhid, mypid, i, j, ibuf[0], ibuf[1], ibuf[2], ibuf[3]);
+                                fprintf(stderr, "Error checking "LPX64" @ "
+                                        LPU64" for %u, chunk %d\n",
+                                        oid, offset, size, j);
+                                fprintf(stderr, "Expected [%x,%x,%x,%x], "
+                                        "got [%x,%x,%x,%x]\n",
+                                        myhid, mypid, i, j,
+                                        ibuf[0], ibuf[1], ibuf[2], ibuf[3]);
                                 rc = -1;
-                                goto out_1;
+                                goto out;
                         }
                         ibuf += 4;
                 }
         }
- out_1:
+ out:
         free (space);
- out_0:
-        rc2 = obdio_close (conn, oid, &fh);
-        if (rc2 != 0)
-                fprintf (stderr, "Error closing object "LPX64": %s\n",
-                         oid, strerror (errno));
         return (rc);
 }
 

@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
@@ -30,16 +30,6 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 
-/* This function will be called to judge if one extent overlaps with another */
-int ldlm_extent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
-{
-        if ((a->l_extent.start <= b->l_extent.end) &&
-            (a->l_extent.end >=  b->l_extent.start))
-                RETURN(0);
-
-        RETURN(1);
-}
-
 #include "ldlm_internal.h"
 
 /* The purpose of this function is to return:
@@ -47,78 +37,171 @@ int ldlm_extent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
  * - containing the requested extent
  * - and not overlapping existing conflicting extents outside the requested one
  *
- * An alternative policy is to not shrink the new extent when conflicts exist.
- *
- * To reconstruct our formulas, take a deep breath. */
-static void policy_internal(struct list_head *queue, struct ldlm_extent *req_ex,
-                            struct ldlm_extent *new_ex, ldlm_mode_t mode)
+ * An alternative policy is to not shrink the new extent when conflicts exist */
+static void
+ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
+                            struct ldlm_extent *new_ex)
 {
         struct list_head *tmp;
+        ldlm_mode_t req_mode = req->l_req_mode;
+        __u64 req_start = req->l_policy_data.l_extent.start;
+        __u64 req_end = req->l_policy_data.l_extent.end;
+        ENTRY;
+
+        if (new_ex->start == req_start && new_ex->end == req_end) {
+                EXIT;
+                return;
+        }
 
         list_for_each(tmp, queue) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
+                if (req == lock) {
+                        EXIT;
+                        return;
+                }
+
                 /* if lock doesn't overlap new_ex, skip it. */
-                if (lock->l_extent.end < new_ex->start ||
-                    lock->l_extent.start > new_ex->end)
+                if (lock->l_policy_data.l_extent.end < new_ex->start ||
+                    lock->l_policy_data.l_extent.start > new_ex->end)
                         continue;
 
                 /* Locks are compatible, overlap doesn't matter */
-                if (lockmode_compat(lock->l_req_mode, mode))
+                if (lockmode_compat(lock->l_req_mode, req_mode))
                         continue;
 
-                if (lock->l_extent.start < req_ex->start) {
-                        if (lock->l_extent.end == ~0) {
-                                new_ex->start = req_ex->start;
-                                new_ex->end = req_ex->end;
+                if (lock->l_policy_data.l_extent.start < req_start) {
+                        if (lock->l_policy_data.l_extent.end == ~0) {
+                                new_ex->start = req_start;
+                                new_ex->end = req_end;
+                                EXIT;
                                 return;
                         }
-                        new_ex->start = MIN(lock->l_extent.end + 1,
-                                            req_ex->start);
+                        new_ex->start = MIN(lock->l_policy_data.l_extent.end+1,
+                                            req_start);
                 }
 
-                if (lock->l_extent.end > req_ex->end) {
-                        if (lock->l_extent.start == 0) {
-                                new_ex->start = req_ex->start;
-                                new_ex->end = req_ex->end;
+                if (lock->l_policy_data.l_extent.end > req_end) {
+                        if (lock->l_policy_data.l_extent.start == 0) {
+                                new_ex->start = req_start;
+                                new_ex->end = req_end;
+                                EXIT;
                                 return;
                         }
-                        new_ex->end = MAX(lock->l_extent.start - 1,
-                                          req_ex->end);
+                        new_ex->end = MAX(lock->l_policy_data.l_extent.start-1,
+                                          req_end);
                 }
         }
+        EXIT;
 }
 
-/* apply the internal policy by walking all the lists */
-int ldlm_extent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
-                       void *req_cookie, ldlm_mode_t mode, int flags,
-                       void *data)
+/* Determine if the lock is compatible with all locks on the queue. */
+static int
+ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
+                         int send_cbs)
 {
-        struct ldlm_lock *lock = *lockp;
+        struct list_head *tmp;
+        struct ldlm_lock *lock;
+        ldlm_mode_t req_mode = req->l_req_mode;
+        __u64 req_start = req->l_policy_data.l_extent.start;
+        __u64 req_end = req->l_policy_data.l_extent.end;
+        int compat = 1;
+        ENTRY;
+
+        list_for_each(tmp, queue) {
+                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+
+                if (req == lock)
+                        RETURN(compat);
+
+                /* locks are compatible, overlap doesn't matter */
+                if (lockmode_compat(lock->l_req_mode, req_mode))
+                        continue;
+
+                /* if lock doesn't overlap skip it */
+                if (lock->l_policy_data.l_extent.end < req_start ||
+                    lock->l_policy_data.l_extent.start > req_end)
+                        continue;
+
+                if (!send_cbs)
+                        RETURN(0);
+
+                compat = 0;
+                if (lock->l_blocking_ast)
+                        ldlm_add_ast_work_item(lock, req, NULL, 0);
+        }
+
+        RETURN(compat);
+}
+
+/* If first_enq is 0 (ie, called from ldlm_reprocess_queue):
+  *   - blocking ASTs have already been sent
+  *   - the caller has already initialized req->lr_tmp
+  *   - must call this function with the ns lock held
+  *
+  * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
+  *   - blocking ASTs have not been sent
+  *   - the caller has NOT initialized req->lr_tmp, so we must
+  *   - must call this function with the ns lock held once */
+int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
+                             ldlm_error_t *err)
+{
         struct ldlm_resource *res = lock->l_resource;
-        struct ldlm_extent *req_ex = req_cookie;
-        struct ldlm_extent new_ex;
-        new_ex.start = 0;
-        new_ex.end = ~0;
+        struct ldlm_extent new_ex = {0, ~0};
+        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        int rc;
+        ENTRY;
 
-        if (!res)
-                LBUG();
+        LASSERT(list_empty(&res->lr_converting));
 
-        l_lock(&ns->ns_lock);
-        policy_internal(&res->lr_granted, req_ex, &new_ex, mode);
-        policy_internal(&res->lr_converting, req_ex, &new_ex, mode);
-        policy_internal(&res->lr_waiting, req_ex, &new_ex, mode);
-        l_unlock(&ns->ns_lock);
+        if (!first_enq) {
+                LASSERT(res->lr_tmp != NULL);
+                rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 0);
+                if (!rc)
+                        RETURN(LDLM_ITER_STOP);
+                rc = ldlm_extent_compat_queue(&res->lr_waiting, lock, 0);
+                if (!rc)
+                        RETURN(LDLM_ITER_STOP);
 
-        memcpy(&lock->l_extent, &new_ex, sizeof(new_ex));
+                ldlm_resource_unlink_lock(lock);
+                ldlm_grant_lock(lock, NULL, 0, 1);
+                RETURN(LDLM_ITER_CONTINUE);
+        }
 
-        LDLM_DEBUG(lock, "requested extent ["LPU64"->"LPU64"], new extent ["
-                   LPU64"->"LPU64"]",
-                   req_ex->start, req_ex->end, new_ex.start, new_ex.end);
+        /* In order to determine the largest possible extent we can
+         * grant, we need to scan all of the queues. */
+        ldlm_extent_internal_policy(&res->lr_granted, lock, &new_ex);
+        ldlm_extent_internal_policy(&res->lr_waiting, lock, &new_ex);
 
-        if (new_ex.end != req_ex->end || new_ex.start != req_ex->start)
-                return ELDLM_LOCK_CHANGED;
-        else 
-                return 0;
+        if (new_ex.start != lock->l_policy_data.l_extent.start ||
+            new_ex.end != lock->l_policy_data.l_extent.end)  {
+                *flags |= LDLM_FL_LOCK_CHANGED;
+                lock->l_policy_data.l_extent.start = new_ex.start;
+                lock->l_policy_data.l_extent.end = new_ex.end;
+        }
+
+ restart:
+        LASSERT(res->lr_tmp == NULL);
+        res->lr_tmp = &rpc_list;
+        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 1);
+        rc += ldlm_extent_compat_queue(&res->lr_waiting, lock, 1);
+        res->lr_tmp = NULL;
+
+        if (rc != 2) {
+                /* If either of the compat_queue()s returned 0, then we
+                 * have ASTs to send and must go onto the waiting list. */
+                ldlm_resource_unlink_lock(lock);
+                ldlm_resource_add_lock(res, &res->lr_waiting, lock);
+                l_unlock(&res->lr_namespace->ns_lock);
+                rc = ldlm_run_ast_work(res->lr_namespace, &rpc_list);
+                l_lock(&res->lr_namespace->ns_lock);
+                if (rc == -ERESTART)
+                        GOTO(restart, -ERESTART);
+                *flags |= LDLM_FL_BLOCK_GRANTED;
+        } else {
+                ldlm_resource_unlink_lock(lock);
+                ldlm_grant_lock(lock, NULL, 0, 0);
+        }
+        RETURN(0);
 }

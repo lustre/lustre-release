@@ -104,6 +104,13 @@ typedef enum {
 typedef unsigned PTL_SEQ_BASETYPE ptl_seq_t;
 #define PTL_SEQ_GT(a,b)	(((signed PTL_SEQ_BASETYPE)((a) - (b))) > 0)
 
+/* XXX
+ * cygwin need the pragma line, not clear if it's needed in other places.
+ * checking!!!
+ */
+#ifdef __CYGWIN__
+#pragma pack(push, 4)
+#endif
 typedef struct {
         ptl_event_kind_t type;
         ptl_process_id_t initiator;
@@ -116,6 +123,9 @@ typedef struct {
         struct timeval arrival_time;
         volatile ptl_seq_t sequence;
 } ptl_event_t;
+#ifdef __CYGWIN__
+#pragma pop
+#endif
 
 typedef enum {
         PTL_ACK_REQ,

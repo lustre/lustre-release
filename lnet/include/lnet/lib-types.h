@@ -54,72 +54,68 @@ typedef enum {
         PTL_MSG_HELLO,
 } ptl_msg_type_t;
 
-/* Each of these structs should start with an odd number of
- * __u32, or the compiler could add its own padding and confuse
- * everyone.
- *
- * Also, "length" needs to be at offset 28 of each struct.
- */
+/* The variant fields of the portals message header are aligned on an 8
+ * byte boundary in the message header.  Note that all types used in these
+ * wire structs MUST be fixed size and the smaller types are placed at the
+ * end. */
 typedef struct ptl_ack {
-        ptl_size_t mlength;
-        ptl_handle_wire_t dst_wmd;
-        ptl_match_bits_t match_bits;
-        ptl_size_t length;                      /* common length (0 for acks) moving out RSN */
+        ptl_handle_wire_t  dst_wmd;
+        ptl_match_bits_t   match_bits;
+        ptl_size_t         mlength;
 } WIRE_ATTR ptl_ack_t;
 
 typedef struct ptl_put {
-        ptl_pt_index_t ptl_index;
-        ptl_handle_wire_t ack_wmd;
-        ptl_match_bits_t match_bits;
-        ptl_size_t length;                      /* common length moving out RSN */
-        ptl_size_t offset;
-        ptl_hdr_data_t hdr_data;
+        ptl_handle_wire_t  ack_wmd;
+        ptl_match_bits_t   match_bits;
+        ptl_hdr_data_t     hdr_data;
+        ptl_pt_index_t     ptl_index;
+        ptl_size_t         offset;
 } WIRE_ATTR ptl_put_t;
 
 typedef struct ptl_get {
-        ptl_pt_index_t ptl_index;
-        ptl_handle_wire_t return_wmd;
-        ptl_match_bits_t match_bits;
-        ptl_size_t length;                      /* common length (0 for gets) moving out RSN */
-        ptl_size_t src_offset;
-        ptl_size_t return_offset;               /* unused: going RSN */
-        ptl_size_t sink_length;
+        ptl_handle_wire_t  return_wmd;
+        ptl_match_bits_t   match_bits;
+        ptl_pt_index_t     ptl_index;
+        ptl_size_t         src_offset;
+        ptl_size_t         sink_length;
 } WIRE_ATTR ptl_get_t;
 
 typedef struct ptl_reply {
-        __u32 unused1;                          /* unused fields going RSN */
-        ptl_handle_wire_t dst_wmd;
-        ptl_size_t dst_offset;                  /* unused: going RSN */
-        __u32 unused2;
-        ptl_size_t length;                      /* common length moving out RSN */
+        ptl_handle_wire_t  dst_wmd;
 } WIRE_ATTR ptl_reply_t;
 
+typedef struct ptl_hello {
+        __u64              incarnation;
+        __u32              type;
+} WIRE_ATTR ptl_hello_t;
+
 typedef struct {
-        ptl_nid_t dest_nid;
-        ptl_nid_t src_nid;
-        ptl_pid_t dest_pid;
-        ptl_pid_t src_pid;
-        __u32 type; /* ptl_msg_type_t */
+        ptl_nid_t           dest_nid;
+        ptl_nid_t           src_nid;
+        ptl_pid_t           dest_pid;
+        ptl_pid_t           src_pid;
+        __u32               type;               /* ptl_msg_type_t */
+        __u32               payload_length;     /* payload data to follow */
+        /*<------__u64 aligned------->*/
         union {
-                ptl_ack_t ack;
-                ptl_put_t put;
-                ptl_get_t get;
+                ptl_ack_t   ack;
+                ptl_put_t   put;
+                ptl_get_t   get;
                 ptl_reply_t reply;
+                ptl_hello_t hello;
         } msg;
 } WIRE_ATTR ptl_hdr_t;
 
-/* All length fields in individual unions at same offset */
-/* LASSERT for same in lib-move.c */
-#define PTL_HDR_LENGTH(h) ((h)->msg.ack.length)
-
 /* A HELLO message contains the portals magic number and protocol version
  * code in the header's dest_nid, the peer's NID in the src_nid, and
- * PTL_MSG_HELLO in the type field.  All other fields are zero (including
- * PTL_HDR_LENGTH; i.e. no payload).
+ * PTL_MSG_HELLO in the type field.  All other common fields are zero
+ * (including payload_size; i.e. no payload).  
  * This is for use by byte-stream NALs (e.g. TCP/IP) to check the peer is
  * running the same protocol and to find out its NID, so that hosts with
  * multiple IP interfaces can have a single NID. These NALs should exchange
- * HELLO messages when a connection is first established. */
+ * HELLO messages when a connection is first established. 
+ * Individual NALs can put whatever else they fancy in ptl_hdr_t::msg. 
+ */
 typedef struct {
         __u32	magic;                          /* PORTALS_PROTO_MAGIC */
         __u16   version_major;                  /* increment on incompatible change */
@@ -129,7 +125,7 @@ typedef struct {
 #define PORTALS_PROTO_MAGIC                0xeebc0ded
 
 #define PORTALS_PROTO_VERSION_MAJOR        0
-#define PORTALS_PROTO_VERSION_MINOR        1
+#define PORTALS_PROTO_VERSION_MINOR        3
 
 typedef struct {
         long recv_count, recv_length, send_count, send_length, drop_count,
@@ -137,11 +133,9 @@ typedef struct {
 } lib_counters_t;
 
 /* temporary expedient: limit number of entries in discontiguous MDs */
-#if PTL_LARGE_MTU
-# define PTL_MD_MAX_IOV	64
-#else
-# define PTL_MD_MAX_IOV 16
-#endif
+# define PTL_MTU        (512<<10)
+# define PTL_MD_MAX_IOV 128
+# define PTL_MD_MAX_PAGES min_t(int, PTL_MD_MAX_IOV, PTL_MTU / PAGE_SIZE)
 
 struct lib_msg_t {
         struct list_head  msg_list;

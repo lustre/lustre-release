@@ -1,5 +1,6 @@
 2.6.0-test6-mm4.patch 
-netpoll-core.patch 
+netpoll-core.patch
+netpoll-pcnet32.patch
 kgdb-over-netpoll.patch 
 export-netpoll.patch 
 lkcd-cvs-2.6.0-test6.patch

@@ -7,7 +7,9 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"35 32q 37 39"} # bugs 1360, 1504
+# bug number for skipped test: 1979
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42b"}
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
@@ -22,6 +24,9 @@ OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
+MUNLINK=${MUNLINK:-munlink}
+SOCKETSERVER=${SOCKETSERVER:-socketserver}
+SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -38,19 +43,21 @@ SAVE_PWD=$PWD
 clean() {
 	echo -n "cln.."
 	sh llmountcleanup.sh > /dev/null || exit 20
+	I_MOUNTED=no
 }
 CLEAN=${CLEAN:-clean}
 
 start() {
 	echo -n "mnt.."
 	sh llrmount.sh > /dev/null || exit 10
+	I_MOUNTED=yes
 	echo "done"
 }
 START=${START:-start}
 
 log() {
 	echo "$*"
-	lctl mark "$*" || true
+	lctl mark "$*" 2> /dev/null || true
 }
 
 run_one() {
@@ -58,37 +65,68 @@ run_one() {
 		$START
 	fi
 	log "== test $1: $2"
-	test_$1 || error
+	test_$1 || error "test_$1: $?"
 	pass
 	cd $SAVE_PWD
 	$CLEAN
 }
 
-run_test() {
-	for O in $ONLY; do
-		if [ "`echo $1 | grep '\<'$O'[a-z]*\>'`" ]; then
-			echo ""
-			run_one $1 "$2"
-			return $?
-		else
-			echo -n "."
-		fi
-	done
-	for X in $EXCEPT $ALWAYS_EXCEPT; do
-		if [ "`echo $1 | grep '\<'$X'[a-z]*\>'`" ]; then
-			echo "skipping excluded test $1"
-			return 0
-		fi
-	done
-	if [ -z "$ONLY" ]; then
-		run_one $1 "$2"
-		return $?
-	fi
+build_test_filter() {
+        for O in $ONLY; do
+            eval ONLY_${O}=true
+        done
+        for E in $EXCEPT $ALWAYS_EXCEPT; do
+            eval EXCEPT_${E}=true
+        done
 }
 
+_basetest() {
+    echo $*
+}
+
+basetest() {
+    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+}
+
+run_test() {
+         base=`basetest $1`
+         if [ "$ONLY" ]; then
+                 testname=ONLY_$1
+                 if [ ${!testname}x != x ]; then
+ 			run_one $1 "$2"
+ 			return $?
+                 fi
+                 testname=ONLY_$base
+                 if [ ${!testname}x != x ]; then
+                         run_one $1 "$2"
+                         return $?
+                 fi
+                 echo -n "."
+                 return 0
+ 	fi
+        testname=EXCEPT_$1
+        if [ ${!testname}x != x ]; then
+                 echo "skipping excluded test $1"
+                 return 0
+        fi
+        testname=EXCEPT_$base
+        if [ ${!testname}x != x ]; then
+                 echo "skipping excluded test $1 (base $base)"
+                 return 0
+        fi
+        run_one $1 "$2"
+ 	return $?
+}
+
+[ "$SANITYLOG" ] && rm -f $SANITYLOG || true
+
 error() { 
-	echo "FAIL: $@"
-	exit 1
+	log "FAIL: $@"
+	if [ "$SANITYLOG" ]; then
+		echo "FAIL: $@" >> $SANITYLOG
+	else
+		exit 1
+	fi
 }
 
 pass() { 
@@ -108,7 +146,14 @@ fi
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
+LOVNAME=`cat /proc/fs/lustre/llite/fs0/lov/common_name`
+STRIPECOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/numobd`
+
+[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
+[ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 rm -rf $DIR/[Rdfs][1-9]*
+
+build_test_filter
 
 echo preparing for tests involving mounts
 EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
@@ -117,7 +162,7 @@ mke2fs -F $EXT2_DEV 1000 > /dev/null
 
 test_0() {
 	touch $DIR/f
-	$CHECKSTAT -t file $DIR/f || error 
+	$CHECKSTAT -t file $DIR/f || error
 	rm $DIR/f
 	$CHECKSTAT -a $DIR/f || error
 }
@@ -148,7 +193,7 @@ test_2b() {
 	rm -r $DIR/d2
 	$CHECKSTAT -a $DIR/d2 || error
 }
-run_test 2b "rm -r .../d2; touch .../d2/f ======================"
+run_test 2b "rm -r .../d2; checkstat .../d2/f ======================"
 
 test_3a() {
 	mkdir $DIR/d3
@@ -157,6 +202,9 @@ test_3a() {
 run_test 3a "mkdir .../d3 ======================================"
 
 test_3b() {
+	if [ ! -d $DIR/d3 ]; then
+		mkdir $DIR/d3
+	fi
 	touch $DIR/d3/f
 	$CHECKSTAT -t file $DIR/d3/f || error
 }
@@ -175,6 +223,9 @@ test_4a() {
 run_test 4a "mkdir .../d4 ======================================"
 
 test_4b() {
+	if [ ! -d $DIR/d4 ]; then
+		mkdir $DIR/d4
+	fi
 	mkdir $DIR/d4/d2
 	$CHECKSTAT -t dir $DIR/d4/d2 || error
 }
@@ -197,6 +248,10 @@ run_test 6a "touch .../f6a; chmod .../f6a ======================"
 
 test_6b() {
 	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6b" && return
+	if [ ! -f $DIR/f6a ]; then
+		touch $DIR/f6a
+		chmod 0666 $DIR/f6a
+	fi
 	$RUNAS chmod 0444 $DIR/f6a && error
 	$CHECKSTAT -t file -p 0666 -u \#$UID $DIR/f6a || error
 }
@@ -212,6 +267,10 @@ run_test 6c "touch .../f6c; chown .../f6c ======================"
 
 test_6d() {
 	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6d" && return
+	if [ ! -f $DIR/f6c ]; then
+		touch $DIR/f6c
+		chown $RUNAS_ID $DIR/f6c
+	fi
 	$RUNAS chown $UID $DIR/f6c && error
 	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/f6c || error
 }
@@ -227,10 +286,25 @@ run_test 6e "touch .../f6e; chgrp .../f6e ======================"
 
 test_6f() {
 	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6f" && return
+	if [ ! -f $DIR/f6e ]; then
+		touch $DIR/f6e
+		chgrp $RUNAS_ID $DIR/f6e
+	fi
 	$RUNAS chgrp $UID $DIR/f6e && error
 	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/f6e || error
 }
 run_test 6f "$RUNAS chgrp .../f6e (should return error) =="
+
+test_6g() {
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6g" && return
+        mkdir $DIR/d6g || error
+        chmod 777 $DIR/d6g || error
+        $RUNAS mkdir $DIR/d6g/d || error
+        chmod g+s $DIR/d6g/d || error
+        mkdir $DIR/d6g/d/subdir
+	$CHECKSTAT -g \#$RUNAS_ID $DIR/d6g/d/subdir || error
+}
+run_test 6g "Is new dir in sgid dir inheriting group?"
 
 test_7a() {
 	mkdir $DIR/d7
@@ -241,6 +315,9 @@ test_7a() {
 run_test 7a "mkdir .../d7; mcreate .../d7/f; chmod .../d7/f ===="
 
 test_7b() {
+	if [ ! -d $DIR/d7 ]; then
+		mkdir $DIR/d7
+	fi
 	$MCREATE $DIR/d7/f2
 	echo -n foo > $DIR/d7/f2
 	[ "`cat $DIR/d7/f2`" = "foo" ] || error
@@ -335,6 +412,9 @@ test_17a() {
 run_test 17a "symlinks: create, remove (real) =================="
 
 test_17b() {
+	if [ ! -d $DIR/d17 ]; then
+		mkdir $DIR/d17
+	fi
 	ln -s no-such-file $DIR/d17/l-dangle
 	ls -l $DIR/d17
 	$CHECKSTAT -l no-such-file $DIR/d17/l-dangle || error
@@ -350,13 +430,29 @@ test_18() {
 }
 run_test 18 "touch .../f ; ls ... =============================="
 
-test_19() {
-	touch $DIR/f
+test_19a() {
+	touch $DIR/f19
 	ls -l $DIR
-	rm $DIR/f
-	$CHECKSTAT -a $DIR/f || error
+	rm $DIR/f19
+	$CHECKSTAT -a $DIR/f19 || error
 }
-run_test 19 "touch .../f ; ls -l ... ==========================="
+run_test 19a "touch .../f19 ; ls -l ... ; rm .../f19 ==========="
+
+test_19b() {
+	ls -l $DIR/f19 && error || true
+}
+run_test 19b "ls -l .../f19 (should return error) =============="
+
+test_19c() {
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 19c" && return
+	$RUNAS touch $DIR/f19 && error || true
+}
+run_test 19c "$RUNAS touch .../f19 (should return error) =="
+
+test_19d() {
+	cat $DIR/f19 && error || true
+}
+run_test 19d "cat .../f19 (should return error) =============="
 
 test_20() {
 	touch $DIR/f
@@ -498,6 +594,15 @@ test_24j() {
 }
 run_test 24j "source does not exist ============================" 
 
+test_24k() {
+	mkdir $DIR/R11a $DIR/R11a/d
+	touch $DIR/R11a/f
+	mv $DIR/R11a/f $DIR/R11a/d
+	$CHECKSTAT -a $DIR/R11a/f || error
+	$CHECKSTAT -t file $DIR/R11a/d/f || error
+}
+run_test 24k "touch .../R11a/f; mv .../R11a/f .../R11a/d ======="
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 	mkdir $DIR/d25
@@ -507,6 +612,9 @@ test_25a() {
 run_test 25a "create file in symlinked directory ==============="
 
 test_25b() {
+	if [ ! -d $DIR/d25 ]; then
+		run_one	25a
+	fi
 	$CHECKSTAT -t file $DIR/s25/foo || error
 }
 run_test 25b "lookup file in symlinked directory ==============="
@@ -543,6 +651,9 @@ test_26d() {
 run_test 26d "create multiple component recursive symlink ======"
 
 test_26e() {
+	if [ ! -h $DIR/d26-3 ]; then
+		run_one 26d
+	fi
 	rm $DIR/d26-3
 }
 run_test 26e "unlink multiple component recursive symlink ======"
@@ -550,52 +661,72 @@ run_test 26e "unlink multiple component recursive symlink ======"
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir $DIR/d27
-	$LSTRIPE $DIR/d27/f0 8192 0 1
-	$CHECKSTAT -t file $DIR/d27/f0
+	$LSTRIPE $DIR/d27/f0 8192 0 1 || error
+	$CHECKSTAT -t file $DIR/d27/f0 || error
 	pass
 	log "== test_27b: write to one stripe file ========================="
-	cp /etc/hosts $DIR/d27/f0
+	cp /etc/hosts $DIR/d27/f0 || error
 }
 run_test 27a "one stripe file =================================="
 
 test_27c() {
-	$LSTRIPE $DIR/d27/f01 8192 0 2
+	[ "$STRIPECOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	if [ ! -d $DIR/d27 ]; then
+		mkdir $DIR/d27
+	fi
+	$LSTRIPE $DIR/d27/f01 8192 0 2 || error
+	[ `$LFIND $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
+		error "two-stripe file doesn't have two stripes"
 	pass
 	log "== test_27d: write to two stripe file file f01 ================"
-	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4
+	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error
 }
 run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
-	$LSTRIPE $DIR/d27/fdef 0 -1 0
-	$CHECKSTAT -t file $DIR/d27/fdef
-	#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4
+	if [ ! -d $DIR/d27 ]; then
+		mkdir $DIR/d27
+	fi
+	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error
+	$CHECKSTAT -t file $DIR/d27/fdef || error
+	#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
 run_test 27d "create file with default settings ================"
 
 test_27e() {
-	$LSTRIPE $DIR/d27/f12 8192 1 2
+	if [ ! -d $DIR/d27 ]; then
+		mkdir $DIR/d27
+	fi
+	$LSTRIPE $DIR/d27/f12 8192 1 2 || error
 	$LSTRIPE $DIR/d27/f12 8192 1 2 && error
 	$CHECKSTAT -t file $DIR/d27/f12 || error
-	#dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4
 }
 run_test 27e "lstripe existing file (should return error) ======"
 
-
 test_27f() {
-	$LSTRIPE $DIR/d27/fbad 100 1 2 || true
-	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4
-	$LFIND $DIR/d27/fbad
+	if [ ! -d $DIR/d27 ]; then
+		mkdir $DIR/d27
+	fi
+	$LSTRIPE $DIR/d27/fbad 100 1 1 && error
+	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error
+	$LFIND $DIR/d27/fbad || error
 }
-run_test 27f "lstripe with bad stripe size (should return error on LOV)"
+run_test 27f "lstripe with bad stripe size (should return error)"
 
 test_27g() {
+	if [ ! -d $DIR/d27 ]; then
+		mkdir $DIR/d27
+	fi
 	$MCREATE $DIR/d27/fnone || error
 	pass
-	log "== test 27h: lfind ============================================"
-	$LFIND $DIR/d27/fnone | grep -q "Has no stripe info" || error
+	log "== test 27h: lfind with no objects ============================"
+	$LFIND $DIR/d27/fnone 2>&1 | grep -q "no stripe info" || error
+	pass
+	log "== test 27i: lfind with some objects =========================="
+	touch $DIR/d27/fsome || error
+	$LFIND $DIR/d27/fsome | grep -q obdidx || error
 }
-run_test 27g "mcreate file without objects to test lfind ======="
+run_test 27g "test lfind ======================================="
 
 test_28() {
 	mkdir $DIR/d28
@@ -603,12 +734,20 @@ test_28() {
 }
 run_test 28 "create/mknod/mkdir with bad file types ============"
 
+cancel_lru_locks() {
+	for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
+		echo clear > $d/lru_size
+	done
+	grep [0-9] /proc/fs/lustre/ldlm/namespaces/$1*/lock_unused_count /dev/null
+}
+
 test_29() {
+	cancel_lru_locks MDC
 	mkdir $DIR/d29
 	touch $DIR/d29/foo
 	log 'first d29'
 	ls -l $DIR/d29
-	MDCDIR=${MDCDIR:-/proc/fs/lustre/ldlm/ldlm/MDC_*}
+	MDCDIR=${MDCDIR:-/proc/fs/lustre/ldlm/namespaces/MDC_*}
 	LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
 	LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
 	log 'second d29'
@@ -634,10 +773,37 @@ test_30() {
 }
 run_test 30 "run binary from Lustre (execve) ==================="
 
-test_31() {
+test_31a() {
 	$OPENUNLINK $DIR/f31 $DIR/f31 || error
+	$CHECKSTAT -a $DIR/f31 || error
 }
-run_test 31 "open-unlink file =================================="
+run_test 31a "open-unlink file =================================="
+
+test_31b() {
+	touch $DIR/f31 || error
+	ln $DIR/f31 $DIR/f31b || error
+	multiop $DIR/f31b Ouc || error
+	$CHECKSTAT -t file $DIR/f31 || error
+}
+run_test 31b "unlink file with multiple links while open ======="
+
+test_31c() {
+	touch $DIR/f31 || error
+	ln $DIR/f31 $DIR/f31c || error
+	multiop $DIR/f31 O_uc &
+	MULTIPID=$!
+	multiop $DIR/f31c Ouc
+	usleep 500
+	kill -USR1 $MULTIPID
+	wait $MUTLIPID
+}
+run_test 31c "open-unlink file with multiple links ============="
+
+test_31d() {
+	opendirunlink $DIR/d31d $DIR/d31d || error
+	$CHECKSTAT -a $DIR/d31d || error
+}
+run_test 31d "remove of open directory ========================="
 
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
@@ -808,26 +974,47 @@ test_32o() {
 run_test 32o "stat d32o/symlink->tmp/symlink->lustre-root/test_file"
 
 test_32p() {
+    log 32p_1
 	rm -fr $DIR/d32p
+    log 32p_2
 	rm -f $DIR/test_file
+    log 32p_3
 	touch $DIR/test_file 
+    log 32p_4
 	mkdir -p $DIR/d32p/tmp    
+    log 32p_5
 	TMP_DIR=$DIR/d32p/tmp       
+    log 32p_6
 	ln -s $DIR/test_file $TMP_DIR/symlink12 
+    log 32p_7
 	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+    log 32p_8
 	cat $DIR/d32p/tmp/symlink12 || error
-	cat $DIR/d32p/symlink02  || error
+    log 32p_9
+	cat $DIR/d32p/symlink02 || error
+    log 32p_10
 }
 run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/test_file"
 
 test_32q() {
 	[ -e $DIR/d32q ] && rm -fr $DIR/d32q
 	mkdir -p $DIR/d32q
+        touch $DIR/d32q/under_the_mount
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32q
-	ls $DIR/d32q || error
+	ls $DIR/d32q/under_the_mount &&  error || true
 	umount $DIR/d32q || error
 }
-run_test 32q "ls a mounted file system ========================="
+run_test 32q "stat follows mountpoints in Lustre ========================="
+
+test_32r() {
+	[ -e $DIR/d32r ] && rm -fr $DIR/d32r
+	mkdir -p $DIR/d32r
+        touch $DIR/d32r/under_the_mount
+	mount -t ext2 -o loop $EXT2_DEV $DIR/d32r
+	ls $DIR/d32r | grep -q under_the_mount &&  error || true
+	umount $DIR/d32r || error
+}
+run_test 32r "opendir follows mountpoints in Lustre ========================="
 
 #   chmod 444 /mnt/lustre/somefile
 #   open(/mnt/lustre/somefile, O_RDWR)
@@ -837,7 +1024,9 @@ test_33() {
 	touch $DIR/test_33_file
 	chmod 444 $DIR/test_33_file
 	chown $RUNAS_ID $DIR/test_33_file
-	$RUNAS $OPENFILE -f O_RDWR $DIR/test_33_file && error || true
+        log 33_1
+        $RUNAS $OPENFILE -f O_RDWR $DIR/test_33_file && error || true
+        log 33_2
 }
 run_test 33 "write file with mode 444 (should return error) ===="
 
@@ -845,25 +1034,27 @@ TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/test_34_file
 	$MCREATE $DIR/test_34_file || error
-	$LFIND $DIR/test_34_file | grep -q "Has no stripe information" || error
+	$LFIND $DIR/test_34_file 2>&1 | grep -q "no stripe info" || error
 	$TRUNCATE $DIR/test_34_file $TEST_34_SIZE || error
-	$LFIND $DIR/test_34_file | grep -q "Has no stripe information" || error
+	$LFIND $DIR/test_34_file 2>&1 | grep -q "no stripe info" || error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
 }
 run_test 34a "truncate file that has not been opened ==========="
 
 test_34b() {
+	[ ! -f $DIR/test_34_file ] && run_one 34a
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
 	$OPENFILE -f O_RDONLY $DIR/test_34_file
-	$LFIND $DIR/test_34_file | grep -q "Has no stripe information" || error
+	$LFIND $DIR/test_34_file 2>&1 | grep -q "no stripe info" || error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
 }
 run_test 34b "O_RDONLY opening file doesn't create objects ====="
 
 test_34c() {
+	[ ! -f $DIR/test_34_file ] && run_one 34a 
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
 	$OPENFILE -f O_RDWR $DIR/test_34_file
-	$LFIND $DIR/test_34_file | grep -q "Has no stripe information" && error
+	$LFIND $DIR/test_34_file 2>&1 | grep -q "no stripe info" && error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
 }
 run_test 34c "O_RDWR opening file-with-size works =============="
@@ -885,31 +1076,29 @@ test_34e() {
 }
 run_test 34e "create objects, some with size and some without =="
 
-test_35() {
-	cp /bin/sh $DIR/test_35_file
-	chmod 444 $DIR/test_35_file
-	chown $RUNAS_ID $DIR/test_35_file
-	$DIR/test_35_file && error || true
-	rm $DIR/test_35_file
+test_35a() {
+	cp /bin/sh $DIR/test_35a_file
+	chmod 444 $DIR/test_35a_file
+	chown $RUNAS_ID $DIR/test_35a_file
+	$RUNAS $DIR/test_35a_file && error || true
+	rm $DIR/test_35a_file
 }
-run_test 35 "exec file with mode 444 (should return error) ====="
+run_test 35a "exec file with mode 444 (should return and not leak) ====="
+
 
 test_36a() {
-	sleep 1		# we need a rest, or UMLs clock becomes skewed
 	rm -f $DIR/test_36_file
 	utime $DIR/test_36_file || error
 }
 run_test 36a "MDS utime check (mknod, utime) ==================="
 
 test_36b() {
-	sleep 1
 	echo "" > $DIR/test_36_file
 	utime $DIR/test_36_file || error
 }
 run_test 36b "OST utime check (open, utime) ===================="
 
 test_36c() {
-	sleep 1
 	rm -f $DIR/d36/test_36_file
 	mkdir $DIR/d36
 	chown $RUNAS_ID $DIR/d36
@@ -918,15 +1107,15 @@ test_36c() {
 run_test 36c "non-root MDS utime check (mknod, utime) =========="
 
 test_36d() {
-	sleep 1
+	[ ! -d $DIR/d36 ] && run_one 36c
 	echo "" > $DIR/d36/test_36_file
 	$RUNAS utime $DIR/d36/test_36_file || error
 }
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	sleep 1
 	[ $RUNAS_ID -eq $UID ] && return
+	[ ! -d $DIR/d36 ] && mkdir $DIR/d36
 	touch $DIR/d36/test_36_file2
 	$RUNAS utime $DIR/d36/test_36_file2 && error || true
 }
@@ -942,7 +1131,6 @@ test_37() {
 }
 run_test 37 "ls a mounted file system to check old content ====="
 
-# open(file, O_DIRECTORY) will leak a request and not cleanup (bug 1501)
 test_38() {
 	o_directory $DIR/test38
 }
@@ -976,6 +1164,406 @@ test_41() {
 }
 run_test 41 "test small file write + fstat ====================="
 
+count_ost_writes() {
+        cat /proc/fs/lustre/osc/*/stats |
+            awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }'
+}
+start_kupdated() {
+	# in 2.6, restore /proc/sys/vm/dirty_writeback_centisecs
+	kill -CONT `pidof kupdated`
+}
+stop_kupdated() {
+	# in 2.6, save and 0 /proc/sys/vm/dirty_writeback_centisecs
+	kill -STOP `pidof kupdated`
+	trap start_kupdated EXIT
+}
+
+# Tests 42* verify that our behaviour is correct WRT caching, file closure,
+# file truncation, and file removal.
+test_42a() {
+	cancel_lru_locks OSC
+	stop_kupdated
+        sync # just to be safe
+        BEFOREWRITES=`count_ost_writes`
+        dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
+        AFTERWRITES=`count_ost_writes`
+        [ $BEFOREWRITES -eq $AFTERWRITES ] || \
+		error "$BEFOREWRITES < $AFTERWRITES"
+	start_kupdated
+}
+run_test 42a "ensure that we don't flush on close =============="
+
+test_42b() {
+	cancel_lru_locks OSC
+	stop_kupdated
+        sync
+        dd if=/dev/zero of=$DIR/f42b bs=1024 count=100
+        BEFOREWRITES=`count_ost_writes`
+        $MUNLINK $DIR/f42b || error "$MUNLINK $DIR/f42b: $?"
+        AFTERWRITES=`count_ost_writes`
+        [ $BEFOREWRITES -eq $AFTERWRITES ] ||
+            error "$BEFOREWRITES < $AFTERWRITES on unlink"
+        BEFOREWRITES=`count_ost_writes`
+        sync || error "sync: $?"
+        AFTERWRITES=`count_ost_writes`
+        [ $BEFOREWRITES -eq $AFTERWRITES ] ||
+            error "$BEFOREWRITES < $AFTERWRITES on sync"
+        dmesg | grep 'error from obd_brw_async' && error 'error writing back'
+	start_kupdated
+        return 0
+}
+run_test 42b "test destroy of file with cached dirty data ======"
+
+# if these tests just want to test the effect of truncation,
+# they have to be very careful.  consider:
+# - the first open gets a {0,EOF}PR lock
+# - the first write conflicts and gets a {0, count-1}PW
+# - the rest of the writes are under {count,EOF}PW
+# - the open for truncate tries to match a {0,EOF}PR
+#   for the filesize and cancels the PWs.
+# any number of fixes (don't get {0,EOF} on open, match
+# composite locks, do smarter file size management) fix
+# this, but for now we want these tests to verify that
+# the cancelation with truncate intent works, so we
+# start the file with a full-file pw lock to match against
+# until the truncate.
+trunc_test() {
+        test=$1
+        file=$DIR/$test
+        offset=$2
+	cancel_lru_locks OSC
+	stop_kupdated
+	# prime the file with 0,EOF PW to match
+	touch $file
+        $TRUNCATE $file 0
+        sync; sync
+	# now the real test..
+        dd if=/dev/zero of=$file bs=1024 count=100
+        BEFOREWRITES=`count_ost_writes`
+        $TRUNCATE $file $offset
+        cancel_lru_locks OSC
+        AFTERWRITES=`count_ost_writes`
+	start_kupdated
+}
+
+test_42c() {
+        trunc_test 42c 1024
+        [ $BEFOREWRITES -eq $AFTERWRITES ] && \
+            error "$BEFOREWRITES < $AFTERWRITES on truncate"
+        rm $file
+}
+run_test 42c "test partial truncate of file with cached dirty data ===="
+
+test_42d() {
+        trunc_test 42d 0
+        [ $BEFOREWRITES -eq $AFTERWRITES ] || \
+            error "beforewrites $BEFOREWRITES != afterwrites $AFTERWRITES on truncate"
+        rm $file
+}
+run_test 42d "test complete truncate of file with cached dirty data ===="
+
+test_43() {
+	mkdir $DIR/d43
+	cp -p /bin/ls $DIR/d43/f
+	exec 100>> $DIR/d43/f	
+	$DIR/d43/f && error || true
+	exec 100<&-
+}
+run_test 43 "execution of file opened for write should return -ETXTBSY=="
+
+test_43a() {
+        mkdir -p $DIR/d43
+	cp -p `which multiop` $DIR/d43/multiop
+        touch $DIR/d43/g
+        $DIR/d43/multiop $DIR/d43/g o_c &
+        MULTIPID=$!
+        sleep 1
+        multiop $DIR/d43/multiop Oc && error "expected error, got success"
+        kill -USR1 $MULTIPID || return 2
+        wait $MULTIPID || return 3
+}
+run_test 43a "open(RDWR) of file being executed should return -ETXTBSY=="
+
+test_43b() {
+        mkdir -p $DIR/d43
+	cp -p `which multiop` $DIR/d43/multiop
+        touch $DIR/d43/g
+        $DIR/d43/multiop $DIR/d43/g o_c &
+        MULTIPID=$!
+        sleep 1
+        truncate $DIR/d43/multiop 0 && error "expected error, got success"
+        kill -USR1 $MULTIPID || return 2
+        wait $MULTIPID || return 3
+}
+run_test 43b "truncate of file being executed should return -ETXTBSY===="
+
+test_43c() {
+	local testdir="$DIR/43a"
+	mkdir -p $testdir
+	cp $SHELL $testdir/
+	( cd $(dirname $SHELL) && md5sum $(basename $SHELL) ) |  \
+		( cd $testdir && md5sum -c)
+}
+run_test 43c "md5sum of copy into lustre================================"
+
+test_44() {
+	[  "$STRIPECOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
+	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=127
+	dd if=$DIR/f1 bs=4k count=1
+}
+run_test 44 "zero length read from a sparse stripe ============="
+
+test_44a() {
+    local nstripe=`$LCTL lov_getconfig $DIR | grep default_stripe_count: | \
+                         awk '{print $2}'`
+    local stride=`$LCTL lov_getconfig $DIR | grep default_stripe_size: | \
+                      awk '{print $2}'`
+    if [ $nstripe -eq 0 ] ; then
+        nstripe=`$LCTL lov_getconfig $DIR | grep obd_count: | awk '{print $2}'`
+    fi
+
+    OFFSETS="0 $((stride/2)) $((stride-1))"
+    for offset in $OFFSETS ; do
+      for i in `seq 0 $((nstripe-1))`; do
+        rm -f $DIR/44a
+        local GLOBALOFFSETS=""
+        local size=$((((i + 2 * $nstripe )*$stride + $offset)))  # Bytes
+        ll_sparseness_write $DIR/44a $size  || error "ll_sparseness_write"
+        GLOBALOFFSETS="$GLOBALOFFSETS $size"
+        ll_sparseness_verify $DIR/44a $GLOBALOFFSETS \
+                            || error "ll_sparseness_verify $GLOBALOFFSETS"
+
+        for j in `seq 0 $((nstripe-1))`; do
+            size=$((((j + $nstripe )*$stride + $offset)))  # Bytes
+            ll_sparseness_write $DIR/44a $size || error "ll_sparseness_write"
+            GLOBALOFFSETS="$GLOBALOFFSETS $size"
+        done
+        ll_sparseness_verify $DIR/44a $GLOBALOFFSETS \
+                            || error "ll_sparseness_verify $GLOBALOFFSETS"
+      done
+    done
+}
+run_test 44a "test sparse pwrite ==============================="
+
+dirty_osc_total() {
+	tot=0
+	for d in /proc/fs/lustre/osc/*/cur_dirty_bytes; do
+		tot=$(($tot + `cat $d`))
+	done
+	echo $tot
+}
+do_dirty_record() {
+	before=`dirty_osc_total`
+	echo executing "\"$*\""
+	eval $*
+	after=`dirty_osc_total`
+	echo before $before, after $after
+}
+test_45() {
+	f="$DIR/45"
+	stop_kupdated
+	sync
+	do_dirty_record "echo blah > $f"
+	[ $before -eq $after ] && error "write wasn't cached"
+	do_dirty_record "> $f"
+	[ $before -gt $after ] || error "truncate didn't lower dirty count"
+	do_dirty_record "echo blah > $f"
+	[ $before -eq $after ] && error "write wasn't cached"
+	do_dirty_record "sync"
+	[ $before -gt $after ] || error "writeback didn't lower dirty count"
+	do_dirty_record "echo blah > $f"
+	[ $before -eq $after ] && error "write wasn't cached"
+	do_dirty_record "cancel_lru_locks OSC"
+	[ $before -gt $after ] || error "lock cancelation didn't lower dirty count"
+	start_kupdated
+}
+run_test 45 "osc io page accounting ============================"
+
+page_size() {
+	getconf PAGE_SIZE
+}
+
+# in a 2 stripe file (lov.sh), page 63 maps to page 31 in its object.  this
+# test tickles a bug where re-dirtying a page was failing to be mapped to the
+# objects offset and an assert hit when an rpc was built with 63's mapped 
+# offset 31 and 31's raw 31 offset. it also found general redirtying bugs.
+test_46() {
+	f="$DIR/46"
+	stop_kupdated
+	sync
+	dd if=/dev/zero of=$f bs=`page_size` seek=31 count=1
+	sync
+	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=63 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=31 count=1
+	sync
+	start_kupdated
+}
+run_test 46 "dirtying a previously written page ================"
+
+# Check that device nodes are created and then visible correctly (#2091)
+test_47() {
+	cmknod $DIR/test_47_node || error
+}
+run_test 47 "Device nodes check ================================"
+
+test_48() {
+        mkdir $DIR/d48
+        cd $DIR/d48
+        mv $DIR/d48 $DIR/d48.new || error "move directory failed"
+        mkdir $DIR/d48 || error "recreate diectory failed"
+        ls || error "can't list after recreate directory"
+}
+run_test 48 "Access renamed current working directory ========="
+
+test_50() {
+	# bug 1485
+	mkdir $DIR/d50
+	cd $DIR/d50
+	ls /proc/$$/cwd || error
+}
+run_test 50 "special situations: /proc symlinks  ==============="
+
+test_51() {
+	# bug 1516 - create an empty entry right after ".." then split dir
+	mkdir $DIR/d49
+	touch $DIR/d49/foo
+	$MCREATE $DIR/d49/bar
+	rm $DIR/d49/foo
+	createmany -m $DIR/d49/longfile 201
+	FNUM=202
+	while [ `ls -sd $DIR/d49 | awk '{ print $1 }'` -eq 4 ]; do
+		$MCREATE $DIR/d49/longfile$FNUM
+		FNUM=$(($FNUM + 1))
+		echo -n "+"
+	done
+	ls -l $DIR/d49 > /dev/null || error
+}
+run_test 51 "special situations: split htree with empty entry =="
+
+test_52a() {
+	[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
+	mkdir -p $DIR/d52a
+	touch $DIR/d52a/foo
+	chattr =a $DIR/d52a/foo || error
+	echo bar >> $DIR/d52a/foo || error
+	cp /etc/hosts $DIR/d52a/foo && error
+	rm -f $DIR/d52a/foo 2>/dev/null && error
+	link $DIR/d52a/foo $DIR/d52a/foo_link 2>/dev/null && error
+	echo foo >> $DIR/d52a/foo || error
+	mrename $DIR/d52a/foo $DIR/d52a/foo_ren && error
+	lsattr $DIR/d52a/foo | egrep -q "^-+a-+ $DIR/d52a/foo" || error
+	chattr -a $DIR/d52a/foo || error
+
+	rm -fr $DIR/d52a || error
+}
+run_test 52a "append-only flag test ============================"
+
+test_52b() {
+	[ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
+	mkdir -p $DIR/d52b
+	touch $DIR/d52b/foo
+	chattr =i $DIR/d52b/foo || error
+	cat test > $DIR/d52b/foo && error
+	cp /etc/hosts $DIR/d52b/foo && error
+	rm -f $DIR/d52b/foo 2>/dev/null && error
+	link $DIR/d52b/foo $DIR/d52b/foo_link 2>/dev/null && error
+	echo foo >> $DIR/d52b/foo && error
+	mrename $DIR/d52b/foo $DIR/d52b/foo_ren && error
+	[ -f $DIR/d52b/foo ] || error
+	[ -f $DIR/d52b/foo_ren ] && error
+	lsattr $DIR/d52b/foo | egrep -q "^-+i-+ $DIR/d52b/foo" || error
+	chattr -i $DIR/d52b/foo || error
+
+	rm -fr $DIR/d52b || error
+}
+run_test 52b "immutable flag test =============================="
+
+test_53() {
+        for i in /proc/fs/lustre/osc/OSC*mds1 ; do
+                ostname=`echo $i | cut -d _ -f 3-4`
+                ost_last=`cat /proc/fs/lustre/obdfilter/$ostname/last_id`
+                mds_last=`cat $i/prealloc_last_id`
+                echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
+                if [ $ost_last != $mds_last ]; then
+                    error "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
+                fi
+        done
+}
+run_test 53 "verify that MDS and OSTs agree on pre-creation====="
+
+test_54a() {
+     	$SOCKETSERVER $DIR/socket &
+	sleep 1
+     	$SOCKETCLIENT $DIR/socket || error
+      	$MUNLINK $DIR/socket
+}
+run_test 54a "unix damain socket test ==========================="
+
+test_54b() {
+	f="$DIR/f54b"
+	mknod $f c 1 3
+	chmod 0666 $f
+	dd if=/dev/zero of=$f bs=`page_size` count=1 
+}
+run_test 54b "char device works in lustre"
+
+test_54c() {
+	f="$DIR/f54c"
+	dir="$DIR/dir54c"
+	loopdev="$DIR/loop54c"
+	
+	mknod $loopdev b 7 1
+	dd if=/dev/zero of=$f bs=`page_size` count=1024 > /dev/null
+	chmod 0666 $f
+	losetup $loopdev $f
+	echo "make a loop file system..."	
+	mkfs.ext2  -F $f > /dev/null
+	mkdir -p $dir
+	mount $loopdev $dir 
+	dd if=/dev/zero of=$dir/tmp bs=`page_size` count=30 || error
+	dd if=$dir/tmp of=/dev/zero bs=`page_size` count=30 || error
+	umount $dir
+}
+run_test 54c "loop device works in lustre"
+
+test_54d() {
+	f="$DIR/f54d"
+	string="aaaaaa"
+	mknod $f p
+	[ "$string" = `echo $string > $f | cat $f` ] || error
+}
+run_test 54d "fifo device works in lustre"
+
+test_59() {
+	echo "touch 130 files"
+	for i in `seq 1 130` ; do
+		touch $DIR/59-$i
+	done
+	echo "rm 130 files"
+	for i in `seq 1 130` ; do
+		rm -f $DIR/59-$i
+	done
+	sync
+	sleep 2
+        # wait for commitment of removal
+}
+run_test 59 "verify cancellation of llog records async=========="
+
+test_60() {
+	echo 60 "llog tests run from kernel mode"
+	sh run-llog.sh
+}
+run_test 60 "llog sanity tests run from kernel module =========="
+
+test_61() {
+	f="$DIR/f61"
+	dd if=/dev/zero of=$f bs=`page_size` count=1
+	cancel_lru_locks OSC
+	multiop $f OSMWUc || error
+	sync
+}
+run_test 61 "mmap() writes don't make sync hang =========="
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.
@@ -996,12 +1584,14 @@ test_99a() {
 run_test 99a "cvs init ========================================="
 
 test_99b() {
+	[ ! -d $DIR/d99cvsroot ] && run_one 99a
 	cd /etc/init.d
 	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" d99reposname vtag rtag
 }
 run_test 99b "cvs import ======================================="
 
 test_99c() {
+	[ ! -d $DIR/d99cvsroot ] && run_one 99b
 	cd $DIR
 	mkdir -p $DIR/d99reposname
 	chown $RUNAS_ID $DIR/d99reposname
@@ -1010,6 +1600,7 @@ test_99c() {
 run_test 99c "cvs checkout ====================================="
 
 test_99d() {
+	[ ! -d $DIR/d99cvsroot ] && run_one 99c
 	cd $DIR/d99reposname
 	$RUNAS touch foo99
 	$RUNAS cvs add -m 'addmsg' foo99
@@ -1017,12 +1608,14 @@ test_99d() {
 run_test 99d "cvs add =========================================="
 
 test_99e() {
+	[ ! -d $DIR/d99cvsroot ] && run_one 99c
 	cd $DIR/d99reposname
 	$RUNAS cvs update
 }
 run_test 99e "cvs update ======================================="
 
 test_99f() {
+	[ ! -d $DIR/d99cvsroot ] && run_one 99d
 	cd $DIR/d99reposname
 	$RUNAS cvs commit -m 'nomsg' foo99
 }
@@ -1033,9 +1626,10 @@ TMP=$OLDTMP
 HOME=$OLDHOME
 
 log "cleanup: ======================================================"
-rm -rf $DIR/[Rdfs][1-9]*
-if [ "$I_MOUNTED" = "yes" ]; then
+if [ "$I_MOUNTED" = "yes" -a "`mount | grep ^$NAME`" ]; then
+	rm -rf $DIR/[Rdfs][1-9]*
 	sh llmountcleanup.sh || error
 fi
 
 echo '=========================== finished ==============================='
+[ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true

@@ -23,7 +23,9 @@
 
 #ifndef _KPTLROUTER_H
 #define _KPTLROUTER_H
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -69,7 +71,7 @@ typedef struct
 
 typedef struct
 {
-        struct tq_struct        kpru_tq;
+        work_struct_t           kpru_tq;
         int                     kpru_nal_id;
         ptl_nid_t               kpru_nid;
         int                     kpru_alive;

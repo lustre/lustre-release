@@ -32,7 +32,8 @@
 #include <linux/lustre_handles.h>
 
 static spinlock_t handle_lock = SPIN_LOCK_UNLOCKED;
-static spinlock_t random_lock = SPIN_LOCK_UNLOCKED;
+static __u64 handle_base;
+#define HANDLE_INCR 7
 static struct list_head *handle_hash = NULL;
 static int handle_count = 0;
 
@@ -47,16 +48,13 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
         LASSERT(h != NULL);
         LASSERT(list_empty(&h->h_link));
 
-        /* My hypothesis is that get_random_bytes, if called from two threads at
-         * the same time, will return the same bytes. -phil */
-        spin_lock(&random_lock);
-        get_random_bytes(&h->h_cookie, sizeof(h->h_cookie));
-        spin_unlock(&random_lock);
+        spin_lock(&handle_lock);
+        h->h_cookie = handle_base;
+        handle_base += HANDLE_INCR;
+        spin_unlock(&handle_lock);
 
         h->h_addref = cb;
-
         bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
-
         CDEBUG(D_INFO, "adding object %p with handle "LPX64" to hash\n",
                h, h->h_cookie);
 
@@ -69,7 +67,11 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
 
 static void class_handle_unhash_nolock(struct portals_handle *h)
 {
-        LASSERT(!list_empty(&h->h_link));
+        if (list_empty(&h->h_link)) {
+                CERROR("removing an already-removed handle ("LPX64")\n",
+                       h->h_cookie);
+                return;
+        }
 
         CDEBUG(D_INFO, "removing object %p with handle "LPX64" from hash\n",
                h, h->h_cookie);
@@ -93,9 +95,9 @@ void *class_handle2object(__u64 cookie)
 
         LASSERT(handle_hash != NULL);
 
-        spin_lock(&handle_lock);
         bucket = handle_hash + (cookie & HANDLE_HASH_MASK);
 
+        spin_lock(&handle_lock);
         list_for_each(tmp, bucket) {
                 struct portals_handle *h;
                 h = list_entry(tmp, struct portals_handle, h_link);
@@ -124,6 +126,9 @@ int class_handle_init(void)
         for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
              bucket--)
                 INIT_LIST_HEAD(bucket);
+
+        get_random_bytes(&handle_base, sizeof(handle_base));
+        LASSERT(handle_base != 0ULL);
 
         return 0;
 }

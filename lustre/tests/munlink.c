@@ -1,3 +1,6 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -8,16 +11,18 @@
 
 int main(int argc, char ** argv)
 {
-        int rc;
+        int rc, i;
 
         if (argc < 2) { 
                 printf("Usage %s filename\n", argv[0]);
                 return 1;
         }
 
-        rc = unlink(argv[1]);
-        if (rc) { 
-                printf("unlink(%s) error: %s\n", argv[1], strerror(errno));
+        for (i = 1; i < argc; i++) {
+        	rc = unlink(argv[i]);
+        	if (rc)
+                	printf("unlink(%s) error: %s\n", argv[i],
+                               strerror(errno));
         }
         return rc;
 } 

@@ -20,7 +20,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -57,6 +59,8 @@ int
 lwt_lookup_string (int *size, char *knl_ptr,
                    char *user_ptr, int user_size)
 {
+        int   maxsize = 128;
+        
         /* knl_ptr was retrieved from an LWT snapshot and the caller wants to
          * turn it into a string.  NB we can crash with an access violation
          * trying to determine the string length, so we're trusting our
@@ -65,12 +69,24 @@ lwt_lookup_string (int *size, char *knl_ptr,
         if (!capable(CAP_SYS_ADMIN))
                 return (-EPERM);
 
-        *size = strlen (knl_ptr) + 1;
+        if (user_size > 0 && 
+            maxsize > user_size)
+                maxsize = user_size;
+
+        *size = strnlen (knl_ptr, maxsize - 1) + 1;
         
-        if (user_ptr != NULL &&
-            copy_to_user (user_ptr, knl_ptr, *size))
-                return (-EFAULT);
-        
+        if (user_ptr != NULL) {
+                if (user_size < 4)
+                        return (-EINVAL);
+                
+                if (copy_to_user (user_ptr, knl_ptr, *size))
+                        return (-EFAULT);
+
+                /* Did I truncate the string?  */
+                if (knl_ptr[*size - 1] != 0)
+                        copy_to_user (user_ptr + *size - 4, "...", 4);
+        }
+
         return (0);
 }
 
@@ -87,11 +103,10 @@ lwt_control (int enable, int clear)
         if (clear)
                 for (i = 0; i < num_online_cpus(); i++) {
                         p = lwt_cpus[i].lwtc_current_page;
-                        
+
                         for (j = 0; j < lwt_pages_per_cpu; j++) {
-                                
                                 memset (p->lwtp_events, 0, PAGE_SIZE);
-                                
+
                                 p = list_entry (p->lwtp_list.next,
                                                 lwt_page_t, lwtp_list);
                         }
@@ -108,8 +123,7 @@ lwt_control (int enable, int clear)
 }
 
 int
-lwt_snapshot (int *ncpu, int *total_size, 
-              void *user_ptr, int user_size) 
+lwt_snapshot (int *ncpu, int *total_size, void *user_ptr, int user_size)
 {
         const int    events_per_page = PAGE_SIZE / sizeof(lwt_event_t);
         const int    bytes_per_page = events_per_page * sizeof(lwt_event_t);

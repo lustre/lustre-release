@@ -20,12 +20,12 @@
  */
 
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/major.h>
 #include <linux/smp.h>
 
 #define DEBUG_SUBSYSTEM S_PTLBD
 
-#include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h>
 

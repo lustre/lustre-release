@@ -113,7 +113,7 @@ struct file_system_type lustre_lite_fs_type = {
 static int __init init_lustre_lite(void)
 {
         int rc;
-        printk(KERN_INFO "Lustre Lite Client File System; "
+        printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
                "info@clusterfs.com\n");
         rc = ll_init_inodecache();
         if (rc)

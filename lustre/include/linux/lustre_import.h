@@ -13,6 +13,18 @@
 #include <linux/lustre_handles.h>
 #include <linux/lustre_idl.h>
 
+enum lustre_imp_state {
+//        LUSTRE_IMP_INVALID    = 1,
+        LUSTRE_IMP_NEW        = 2,
+        LUSTRE_IMP_DISCON     = 3,
+        LUSTRE_IMP_CONNECTING = 4,
+        LUSTRE_IMP_REPLAY     = 5,
+        LUSTRE_IMP_RECOVER    = 6,
+        LUSTRE_IMP_FULL       = 7,
+        LUSTRE_IMP_EVICTED    = 8,
+};
+
+
 struct obd_import {
         struct portals_handle     imp_handle;
         atomic_t                  imp_refcount;
@@ -30,20 +42,22 @@ struct obd_import {
         struct list_head          imp_delayed_list;
 
         struct obd_device        *imp_obd;
-        int                       imp_level;
+        struct semaphore          imp_recovery_sem;
+        enum lustre_imp_state     imp_state;
         int                       imp_generation;
+        __u32                     imp_conn_cnt;
         __u64                     imp_max_transno;
         __u64                     imp_peer_committed_transno;
         struct obd_uuid           imp_target_uuid; /* XXX -> lustre_name */
         struct lustre_handle      imp_remote_handle;
         unsigned long             imp_next_ping;
         
-        /* Protects flags, level, generation, *_list */
+        /* Protects flags, level, generation, conn_cnt, *_list */
         spinlock_t                imp_lock;
 
         /* flags */
         int                       imp_invalid:1, imp_replayable:1,
-                                  imp_dlm_fake:1;
+                                  imp_dlm_fake:1, imp_server_timeout:1;
         __u32                     imp_connect_op;
 };
 
@@ -67,7 +81,8 @@ void class_notify_import_observers(struct obd_import *imp, int event,
 #define IMP_EVENT_INACTIVE 2
 
 /* genops.c */
+struct obd_export;
+extern struct obd_import *class_exp2cliimp(struct obd_export *);
 extern struct obd_import *class_conn2cliimp(struct lustre_handle *);
-extern struct obd_import *class_conn2ldlmimp(struct lustre_handle *);
 
 #endif /* __IMPORT_H */

@@ -21,7 +21,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/version.h>
 #include <linux/fs.h>
@@ -31,6 +33,7 @@
 
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_compat25.h>
 
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
@@ -177,7 +180,7 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
                 GOTO(out_up, dchild);
         }
 
-        err = vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG);
+        err = ll_vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG, NULL);
         if (err)
                 GOTO(out_err, err);
 
@@ -261,17 +264,3 @@ int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off)
 }
 EXPORT_SYMBOL(lustre_fwrite);
 
-/*
- * Sync a file from within kernel context.  Prior to calling this
- * function we should already have done a push_ctxt().
- */
-int lustre_fsync(struct file *file)
-{
-        ENTRY;
-        ASSERT_KERNEL_CTXT("kernel doing sync outside kernel context\n");
-        if (!file || !file->f_op || !file->f_op->fsync)
-                RETURN(-ENOSYS);
-
-        RETURN(file->f_op->fsync(file, file->f_dentry, 0));
-}
-EXPORT_SYMBOL(lustre_fsync);

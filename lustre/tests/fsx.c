@@ -524,8 +524,8 @@ domapread(unsigned offset, unsigned size)
 	pg_offset = offset & page_mask;
 	map_size  = pg_offset + size;
 
-	if ((p = (char *)mmap(0, map_size, PROT_READ, MAP_FILE | MAP_SHARED, fd,
-			      (off_t)(offset - pg_offset))) == (char *)-1) {
+	if ((p = mmap(0, map_size, PROT_READ, MAP_FILE | MAP_SHARED, fd,
+		      (off_t)(offset - pg_offset))) == MAP_FAILED) {
 	        prterr("domapread: mmap");
 		report_failure(190);
 	}
@@ -698,9 +698,8 @@ domapwrite(unsigned offset, unsigned size)
 	pg_offset = offset & page_mask;
 	map_size  = pg_offset + size;
 
-	if ((p = (char *)mmap(0, map_size, PROT_READ | PROT_WRITE,
-			      MAP_FILE | MAP_SHARED, fd,
-			      (off_t)(offset - pg_offset))) == (char *)-1) {
+	if ((p = mmap(0, map_size, PROT_READ | PROT_WRITE, MAP_FILE|MAP_SHARED,
+		      fd, (off_t)(offset - pg_offset))) == MAP_FAILED) {
 	        prterr("domapwrite: mmap");
 		report_failure(202);
 	}

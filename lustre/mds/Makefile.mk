@@ -7,5 +7,5 @@ include $(src)/../portals/Kernelenv
 
 obj-y += mds.o
 mds-objs := mds_lov.o handler.o mds_reint.o mds_fs.o lproc_mds.o mds_open.o \
-		mds_lib.o
+		mds_lib.o mds_unlink_open.o mds_log.o
 	

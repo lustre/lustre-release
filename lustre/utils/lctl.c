@@ -24,6 +24,7 @@
  */
 
 
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <portals/api-support.h>
@@ -70,13 +71,13 @@ command_t cmdlist[] = {
         {"autoconn_list", jt_ptl_print_autoconnects, 0, "print autoconnect entries\n"
          "usage: print_autoconns"},
         {"add_autoconn", jt_ptl_add_autoconnect, 0, "add an autoconnect entry\n"
-         "usage: add_autoconn <nid> <host> <port> [ixse]"},
+         "usage: add_autoconn <nid> <host> <port> [ise]"},
         {"del_autoconn", jt_ptl_del_autoconnect, 0, "remove an autoconnect entry\n"
          "usage: del_autoconn [<nid>] [<host>] [ks]"},
         {"conn_list", jt_ptl_print_connections, 0, "connect to a remote nid\n"
          "usage: print_conns"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
-         "usage: connect <host> <port> [ix]"},
+         "usage: connect <host> <port> [iIOC]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
          "usage: disconnect [<nid>]"},
         {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits (no args)\n"
@@ -87,11 +88,11 @@ command_t cmdlist[] = {
          "usage: mynid [<nid>]"},
         {"shownid", jt_ptl_shownid, 0, "print the local NID\n"
          "usage: shownid"},
-        {"add_uuid", jt_obd_add_uuid, 0, "associate a UUID with a nid\n"
+        {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid> <net_type>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
          "usage: close_uuid <uuid> <net-type>)"},
-        {"del_uuid", jt_obd_del_uuid, 0, "delete a UUID association\n"
+        {"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_ptl_add_route, 0,
          "add an entry to the portals routing table\n"
@@ -120,23 +121,28 @@ command_t cmdlist[] = {
 
         /* Device selection commands */
         {"=== device selection ===", jt_noop, 0, "device selection"},
-        {"newdev", jt_obd_newdev, 0, "create a new device\n"
+        {"newdev", jt_lcfg_newdev, 0, "create a new device\n"
          "usage: newdev"},
         {"device", jt_obd_device, 0,
          "set current device to <%name|$name|devno>\n"
          "usage: device <%name|$name|devno>"},
+        {"cfg_device", jt_lcfg_device, 0,
+         "set current device being configured to <$name>\n"
+         "usage: device <name>"},
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
+        {"dl", jt_obd_list, 0, "show all devices\n"
+         "usage: dl"},
         {"lustre_build_version", jt_get_version, 0,
          "print the build version of lustre\n"
          "usage: lustre_build_version"},
 
         /* Device configuration commands */
         {"==== device config =====", jt_noop, 0, "device config"},
-        {"attach", jt_obd_attach, 0,
+        {"attach", jt_lcfg_attach, 0,
          "set the type of the current device (with <name> and <uuid>)\n"
          "usage: attach type [name [uuid]]"},
-        {"setup", jt_obd_setup, 0,
+        {"setup", jt_lcfg_setup, 0,
          "type specific device configuration information\n"
          "usage: setup <args...>"},
         {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
@@ -144,12 +150,20 @@ command_t cmdlist[] = {
         {"detach", jt_obd_detach, 0,
          "remove driver (and name and uuid) from current device\n"
          "usage: detach"},
-        {"lov_setconfig", jt_obd_lov_setconfig, 0,
-         "write lov configuration to an mds device\n"
+        {"lov_setup", jt_lcfg_lov_setup, 0,
+         "write setup an lov device\n"
          "usage: lov_setconfig lov-uuid stripe-count stripe-size offset pattern UUID1 [UUID2 ...]"},
         {"lov_getconfig", jt_obd_lov_getconfig, 0,
          "read lov configuration from an mds device\n"
          "usage: lov_getconfig lov-uuid"},
+        {"record", jt_cfg_record, 0, "record commands that follow in log\n"
+         "usage: record cfg-uuid-name"},
+        {"endrecord", jt_cfg_endrecord, 0, "stop recording\n"
+         "usage: endrecord"},
+        {"parse", jt_cfg_parse, 0, "parse the log of recorded commands for this config\n"
+         "usage: parse config-uuid-name"},
+        {"dump_log", jt_cfg_dump_log, 0, "print log of recorded commands for this config to kernel debug log\n"
+         "usage: dump_log config-uuid-name"},
 
         /* Device operations */
         {"=== device operations ==", jt_noop, 0, "device operations"},
@@ -209,8 +223,34 @@ command_t cmdlist[] = {
          "disable writes to the underlying device\n"},
         {"abort_recovery", jt_obd_abort_recovery, 0,
          "abort recovery on MDS device\n"},
-        {"mount_option", jt_obd_mount_option, 0,
-         "dump mount options to file\n"},
+        {"mount_option", jt_lcfg_mount_option, 0, 
+         "usage: mount_option profile osc_name [mdc_name] \n"},
+        {"del_mount_option", jt_lcfg_del_mount_option, 0,
+         "usage: del_mount_option profile\n"},
+        {"set_timeout", jt_lcfg_set_timeout, 0,
+         "usage: set_timeout <secs>\n"},
+        {"set_lustre_upcall", jt_lcfg_set_lustre_upcall, 0,
+         "usage: set_lustre_upcall </full/path/to/upcall> \n"},
+       
+        /* Llog operations */ 
+        {"llog_catlist", jt_llog_catlist, 0, 
+         "list all catalog logs on current device.\n"
+         "usage: llog_catlist"},
+        {"llog_info", jt_llog_info, 0,
+         "print log header information.\n"
+         "usage: llog_info <$logname|#oid#ogr#ogen>\n"
+         "       oid, ogr and ogen are hexadecimal."},
+        {"llog_print", jt_llog_print, 0,
+         "print log content information.\n"
+         "usage: llog_print <$logname|#oid#ogr#ogen> [from] [to]\n"
+         "       oid, ogr and ogen are hexadecimal.\n"
+         "       print all records from index 1 by default."},
+        {"llog_cancel", jt_llog_cancel, 0,
+         "cancel one record in log.\n"
+         "usage: llog_cancel <catlog id|catlog name> <log id> <index>"},
+        {"llog_remove", jt_llog_remove, 0,
+         "remove one log from catlog, erase it from disk.\n"
+         "usage: llog_remove <catlog id|catlog name> <log id>"},
 
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
@@ -254,9 +294,7 @@ command_t cmdlist[] = {
         { 0, 0, 0, NULL }
 };
 
-
-
-int main(int argc, char **argv)
+int lctl_main(int argc, char **argv)
 {
         int rc;
 
@@ -276,7 +314,13 @@ int main(int argc, char **argv)
                 rc = Parser_commands();
         }
 
-        obd_cleanup(argc, argv);
+        obd_finalize(argc, argv);
         return rc;
 }
 
+#if !LIBLUSTRE_TEST
+int main (int argc, char **argv)
+{
+        return (lctl_main (argc, argv));
+}
+#endif

@@ -25,7 +25,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <error.h>
 #include <assert.h>
 #include <time.h>
 #include <sys/types.h>
@@ -39,28 +38,80 @@
 
 #include "llite_lib.h"
 
-int llu_iop_iodone(struct ioctx *ioctxp __IS_UNUSED)
-{
-        return 1;
-}
-
-/*
- * this grabs a lock and manually implements behaviour that makes it look
- * like the OST is returning the file size with each lock acquisition
- */
-int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
-                   struct lov_stripe_md *lsm,
-                   int mode, struct ldlm_extent *extent,
-                   struct lustre_handle *lockh)
-{
 #if 0
-        struct ll_inode_info *lli = ll_i2info(inode);
-        int rc;
+void llu_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
+                               struct ldlm_lock *lock)
+{
+        clear_bit(LLI_F_HAVE_SIZE_LOCK, &(llu_i2info(inode)->lli_flags));
+#if 0
+        struct ldlm_extent *extent = &lock->l_extent;
+        unsigned long start, end, count, skip, i, j;
+        struct page *page;
+        int ret;
         ENTRY;
 
-        rc = ll_extent_lock_no_validate(fd, inode, lsm, mode, extent, lockh);
-        if (rc != ELDLM_OK)
-                RETURN(rc);
+        CDEBUG(D_INODE, "obdo %lu inode %p ["LPU64"->"LPU64"] size: %llu\n",
+               inode->i_ino, inode, extent->start, extent->end, inode->i_size);
+
+        start = extent->start >> PAGE_CACHE_SHIFT;
+        count = ~0;
+        skip = 0;
+        end = (extent->end >> PAGE_CACHE_SHIFT) + 1;
+        if ((end << PAGE_CACHE_SHIFT) < extent->end)
+                end = ~0;
+        if (lsm->lsm_stripe_count > 1) {
+                struct {
+                        char name[16];
+                        struct ldlm_lock *lock;
+                        struct lov_stripe_md *lsm;
+                } key = { .name = "lock_to_stripe", .lock = lock, .lsm = lsm };
+                __u32 stripe;
+                __u32 vallen = sizeof(stripe);
+                int rc;
+
+                /* get our offset in the lov */
+                rc = obd_get_info(ll_i2obdconn(inode), sizeof(key),
+                                  &key, &vallen, &stripe);
+                if (rc != 0) {
+                        CERROR("obd_get_info: rc = %d\n", rc);
+                        LBUG();
+                }
+                LASSERT(stripe < lsm->lsm_stripe_count);
+
+                count = lsm->lsm_stripe_size >> PAGE_CACHE_SHIFT;
+                skip = (lsm->lsm_stripe_count - 1) * count;
+                start += (start/count * skip) + (stripe * count);
+                if (end != ~0)
+                        end += (end/count * skip) + (stripe * count);
+        }
+
+        i = (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
+        if (end >= i)
+                clear_bit(LLI_F_HAVE_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
+        if (i < end)
+                end = i;
+
+        CDEBUG(D_INODE, "start: %lu j: %lu count: %lu skip: %lu end: %lu\n",
+               start, start % count, count, skip, end);
+
+        /* start writeback on dirty pages in the extent when its PW */
+        for (i = start, j = start % count;
+                        lock->l_granted_mode == LCK_PW && i < end; j++, i++) {
+                if (j == count) {
+                        i += skip;
+                        j = 0;
+                }
+                /* its unlikely, but give us a chance to bail when we're out */
+                PGCACHE_WRLOCK(inode->i_mapping);
+                if (list_empty(&inode->i_mapping->dirty_pages)) {
+                        CDEBUG(D_INODE, "dirty list empty\n");
+                        PGCACHE_WRUNLOCK(inode->i_mapping);
+                        break;
+                }
+                PGCACHE_WRUNLOCK(inode->i_mapping);
+
+                if (need_resched())
+                        schedule();
 
         /* always do a getattr for the first person to pop out of lock
          * acquisition.. the DID_GETATTR flag and semaphore serialize
@@ -74,277 +125,500 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
         down(&lli->lli_getattr_sem);
 
         if (!test_bit(LLI_F_DID_GETATTR, &lli->lli_flags)) {
-                rc = ll_inode_getattr(inode, lsm, fd ? &fd->fd_ost_och : NULL);
+                rc = ll_inode_getattr(inode, lsm);
                 if (rc == 0) {
                         set_bit(LLI_F_DID_GETATTR, &lli->lli_flags);
                 } else {
-                        /* XXX can this fail? */
-                        ll_extent_unlock(fd, inode, lsm, mode, lockh);
+                        unlock_page(page);
                 }
+                page_cache_release(page);
+
         }
 
-        up(&lli->lli_getattr_sem);
-        RETURN(rc);
+        /* our locks are page granular thanks to osc_enqueue, we invalidate the
+         * whole page. */
+        LASSERT((extent->start & ~PAGE_CACHE_MASK) == 0);
+        LASSERT(((extent->end+1) & ~PAGE_CACHE_MASK) == 0);
+        for (i = start, j = start % count ; i < end ; j++, i++) {
+                if ( j == count ) {
+                        i += skip;
+                        j = 0;
+                }
+                PGCACHE_WRLOCK(inode->i_mapping);
+                if (list_empty(&inode->i_mapping->dirty_pages) &&
+                     list_empty(&inode->i_mapping->clean_pages) &&
+                     list_empty(&inode->i_mapping->locked_pages)) {
+                        CDEBUG(D_INODE, "nothing left\n");
+                        PGCACHE_WRUNLOCK(inode->i_mapping);
+                        break;
+                }
+                PGCACHE_WRUNLOCK(inode->i_mapping);
+                if (need_resched())
+                        schedule();
+                page = find_get_page(inode->i_mapping, i);
+                if (page == NULL)
+                        continue;
+                CDEBUG(D_INODE, "dropping page %p at %lu\n", page, page->index);
+                lock_page(page);
+                if (page->mapping) /* might have raced */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                        truncate_complete_page(page);
 #else
-        return ELDLM_OK;
+                        truncate_complete_page(page->mapping, page);
+#endif                
+                unlock_page(page);
+                page_cache_release(page);
+        }
+        EXIT;
 #endif
 }
 
-int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
-                struct lov_stripe_md *lsm, int mode,
-                struct lustre_handle *lockh)
+int llu_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
+                      void *data, int flag)
 {
-#if 0
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct inode *inode = data;
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct lustre_handle lockh = {0};
         int rc;
         ENTRY;
 
+        if (inode == NULL)
+                LBUG();
+
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc != ELDLM_OK)
+                        CERROR("ldlm_cli_cancel failed: %d\n", rc);
+                break;
+        case LDLM_CB_CANCELING: {
+                /* FIXME: we could be given 'canceling intents' so that we
+                 * could know to write-back or simply throw away the pages
+                 * based on if the cancel comes from a desire to, say,
+                 * read or truncate.. */
+                llu_pgcache_remove_extent(inode, lli->lli_smd, lock);
+                break;
+        }
+        default:
+                LBUG();
+        }
+
+        RETURN(0);
+}
+#endif
+
+static int llu_extent_lock_callback(struct ldlm_lock *lock,
+                                    struct ldlm_lock_desc *new, void *data,
+                                    int flag)
+{
+        struct lustre_handle lockh = { 0 };
+        int rc;
+        ENTRY;
+        
+
+        if ((unsigned long)data > 0 && (unsigned long)data < 0x1000) {
+                LDLM_ERROR(lock, "cancelling lock with bad data %p", data);
+                LBUG();
+        }
+        
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc != ELDLM_OK)
+                        CERROR("ldlm_cli_cancel failed: %d\n", rc);
+                break;
+        case LDLM_CB_CANCELING: {
+                struct inode *inode = llu_inode_from_lock(lock);
+                struct llu_inode_info *lli;
+                
+                if (!inode)
+                        RETURN(0);
+                lli= llu_i2info(inode);
+                if (!lli) {
+                        I_RELE(inode);
+                        RETURN(0);
+                }
+                if (!lli->lli_smd) {
+                        I_RELE(inode);
+                        RETURN(0);
+                }
+
+/*
+                ll_pgcache_remove_extent(inode, lli->lli_smd, lock);
+                iput(inode);
+*/
+                I_RELE(inode);
+                break;
+        }
+        default:
+                LBUG();
+        }
+        
+        RETURN(0);
+}
+
+int llu_extent_lock_no_validate(struct ll_file_data *fd,
+                                struct inode *inode,
+                                struct lov_stripe_md *lsm,
+                                int mode,
+                                struct ldlm_extent *extent,
+                                struct lustre_handle *lockh,
+                                int ast_flags)
+{
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct llu_inode_info *lli = llu_i2info(inode);
+        int rc;
+        ENTRY;
+
+        LASSERT(lockh->cookie == 0);
+
+#if 0
         /* XXX phil: can we do this?  won't it screw the file size up? */
         if ((fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK)) ||
             (sbi->ll_flags & LL_SBI_NOLCK))
                 RETURN(0);
+#endif
 
-        rc = obd_cancel(&sbi->ll_osc_conn, lsm, mode, lockh);
+        CDEBUG(D_DLMTRACE, "Locking inode %lu, start "LPU64" end "LPU64"\n",
+               lli->lli_st_ino, extent->start, extent->end);
+
+        rc = obd_enqueue(sbi->ll_osc_exp, lsm, NULL, LDLM_EXTENT, extent,
+                         sizeof(extent), mode, &ast_flags,
+                         llu_extent_lock_callback, inode, lockh);
 
         RETURN(rc);
-#else
-        return 0;
-#endif
 }
 
-static int llu_brw(int cmd, struct inode *inode, struct page *page, int flags)
+/*
+ * this grabs a lock and manually implements behaviour that makes it look like
+ * the OST is returning the file size with each lock acquisition.
+ */
+int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
+                    struct lov_stripe_md *lsm, int mode,
+                    struct ldlm_extent *extent, struct lustre_handle *lockh)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct brw_page pg;
-        int rc;
+        struct obd_export *exp = llu_i2obdexp(inode);
+        struct ldlm_extent size_lock;
+        struct lustre_handle match_lockh = {0};
+        int flags, rc, matched;
         ENTRY;
 
-        pg.pg = page;
-        pg.off = ((obd_off)page->index) << PAGE_SHIFT;
+        rc = llu_extent_lock_no_validate(fd, inode, lsm, mode, extent, lockh, 0);
+        if (rc != ELDLM_OK)
+                RETURN(rc);
 
-        /* FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME FIXME */
-#if 0
-        if (cmd == OBD_BRW_WRITE && (pg.off + PAGE_SIZE > lli->lli_st_size))
-                pg.count = lli->lli_st_size % PAGE_SIZE;
-        else
-#endif
-                pg.count = PAGE_SIZE;
+        if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
+                RETURN(0);
 
-        CDEBUG(D_PAGE, "%s %d bytes ino %lu at "LPU64"/"LPX64"\n",
-               cmd & OBD_BRW_WRITE ? "write" : "read", pg.count, lli->lli_st_ino,
-               pg.off, pg.off);
-        if (pg.count == 0) {
-                LBUG();
-        }
-
-        pg.flag = flags;
-
-        rc = obd_brw(cmd, llu_i2obdconn(inode), lsm, 1, &pg, set, NULL);
+        rc = llu_inode_getattr(inode, lsm);
         if (rc) {
-                CERROR("error from obd_brw: rc = %d\n", rc);
+                llu_extent_unlock(fd, inode, lsm, mode, lockh);
+                RETURN(rc);
         }
 
-        RETURN(rc);
-}
+        size_lock.start = lli->lli_st_size;
+        size_lock.end = OBD_OBJECT_EOF;
 
-static int llu_prepare_write(struct inode *inode, struct page *page,
-                             unsigned from, unsigned to)
-{
-        struct llu_inode_info *lli = llu_i2info(inode);
-        obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
-        int rc = 0;
-        ENTRY;
+        /* XXX I bet we should be checking the lock ignore flags.. */
+        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
+        matched = obd_match(exp, lsm, LDLM_EXTENT, &size_lock,
+                            sizeof(size_lock), LCK_PR, &flags, inode,
+                            &match_lockh);
 
-#if 0
-        if (!PageLocked(page))
-                LBUG();
-
-        if (PageUptodate(page))
-                RETURN(0);
-
-        //POISON(addr + from, 0xca, to - from);
-#endif
-        /* We're completely overwriting an existing page, so _don't_ set it up
-         * to date until commit_write */
-        if (from == 0 && to == PAGE_SIZE)
-                RETURN(0);
-
-        /* If are writing to a new page, no need to read old data.
-         * the extent locking and getattr procedures in ll_file_write have
-         * guaranteed that i_size is stable enough for our zeroing needs */
-        if (lli->lli_st_size <= offset) {
-                memset(kmap(page), 0, PAGE_SIZE);
-                kunmap(page);
-                GOTO(prepare_done, rc = 0);
-        }
-
-        rc = llu_brw(OBD_BRW_READ, inode, page, 0);
-
-        EXIT;
-
- prepare_done:
-        return rc;
-}
-
-static int llu_commit_write(struct inode *inode, struct page *page,
-                            unsigned from, unsigned to)
-{
-        struct llu_inode_info *lli = llu_i2info(inode);
-        loff_t size;
-        int rc;
-        ENTRY;
-#if 0
-        LASSERT(inode == file->f_dentry->d_inode);
-        LASSERT(PageLocked(page));
-
-        CDEBUG(D_INODE, "inode %p is writing page %p from %d to %d at %lu\n",
-               inode, page, from, to, page->index);
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu,from=%d,to=%d\n",
-               inode->i_ino, from, to);
-        /* to match full page case in prepare_write */
-        SetPageUptodate(page);
-        /* mark the page dirty, put it on mapping->dirty,
-         * mark the inode PAGES_DIRTY, put it on sb->dirty */
-        set_page_dirty(page);
-#endif
-        rc = llu_brw(OBD_BRW_WRITE, inode, page, 0);
-        if (rc)
-                return rc;
-
-        /* this is matched by a hack in obdo_to_inode at the moment */
-        size = (((obd_off)page->index) << PAGE_SHIFT) + to;
-        if (size > lli->lli_st_size)
-                lli->lli_st_size = size;
+        /* hey, alright, we hold a size lock that covers the size we 
+         * just found, its not going to change for a while.. */
+        if (matched == 1) {
+                set_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags);
+                obd_cancel(exp, lsm, LCK_PR, &match_lockh);
+        } 
 
         RETURN(0);
-} /* ll_commit_write */
-
-ssize_t
-llu_generic_file_write(struct inode *inode, const char *buf,
-                       size_t count, loff_t pos)
-{
-	struct page	*page;
-	ssize_t		written;
-	long		status = 0;
-	int		err;
-	unsigned	bytes;
-
-	if ((ssize_t) count < 0)
-		return -EINVAL;
-#if 0
-	down(&inode->i_sem);
-#endif
-	if (pos < 0)
-                return -EINVAL;
-
-	written = 0;
-
-#if 0
-	remove_suid(inode);
-	update_inode_times(inode);
-#endif
-	do {
-		unsigned long index, offset;
-		char *kaddr;
-
-		/*
-		 * Try to find the page in the cache. If it isn't there,
-		 * allocate a free page.
-		 */
-		offset = (pos & (PAGE_CACHE_SIZE -1)); /* Within page */
-		index = pos >> PAGE_CACHE_SHIFT;
-		bytes = PAGE_CACHE_SIZE - offset;
-		if (bytes > count) {
-			bytes = count;
-		}
-
-		status = -ENOMEM;	/* we'll assign it later anyway */
-		page = __grab_cache_page(index);
-		if (!page)
-			break;
-
-		kaddr = kmap(page);
-		status = llu_prepare_write(inode, page, offset, offset+bytes);
-		if (status)
-			goto sync_failure;
-
-		memcpy(kaddr+offset, buf, bytes);
-
-		status = llu_commit_write(inode, page, offset, offset+bytes);
-		if (!status)
-			status = bytes;
-
-		if (status >= 0) {
-			written += status;
-			count -= status;
-			pos += status;
-			buf += status;
-		}
-unlock:
-		kunmap(page);
-		page_cache_release(page);
-
-		if (status < 0)
-			break;
-	} while (count);
-done:
-	err = written ? written : status;
-
-#if 0
-	up(&inode->i_sem);
-#endif
-	return err;
-
-	status = -EFAULT;
-	goto unlock;
-
-sync_failure:
-	/*
-	 * If blocksize < pagesize, prepare_write() may have instantiated a
-	 * few blocks outside i_size.  Trim these off again.
-	 */
-	kunmap(page);
-	page_cache_release(page);
-	goto done;
 }
 
-ssize_t llu_file_write(struct inode *inode, const struct iovec *iovec,
-                       size_t iovlen, loff_t pos)
+int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
+                struct lov_stripe_md *lsm, int mode,
+                struct lustre_handle *lockh)
+{
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        int rc;
+        ENTRY;
+#if 0
+        /* XXX phil: can we do this?  won't it screw the file size up? */
+        if ((fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK)) ||
+            (sbi->ll_flags & LL_SBI_NOLCK))
+                RETURN(0);
+#endif
+        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh);
+
+        RETURN(rc);
+}
+
+#define LLAP_MAGIC 12346789
+
+struct ll_async_page {
+        int             llap_magic;
+        void           *llap_cookie;
+        int             llap_queued;
+        struct page    *llap_page;
+        struct inode   *llap_inode;
+};
+
+static struct ll_async_page *llap_from_cookie(void *cookie)
+{
+        struct ll_async_page *llap = cookie;
+        if (llap->llap_magic != LLAP_MAGIC)
+                return ERR_PTR(-EINVAL);
+        return llap;
+};
+
+static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
+{
+        struct ll_async_page *llap;
+        struct inode *inode;
+        struct lov_stripe_md *lsm;
+        obd_flag valid_flags;
+        ENTRY;
+
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) {
+                EXIT;
+                return;
+        }
+
+        inode = llap->llap_inode;
+        lsm = llu_i2info(inode)->lli_smd;
+
+        oa->o_id = lsm->lsm_object_id;
+        oa->o_valid = OBD_MD_FLID;
+        valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
+        if (cmd == OBD_BRW_WRITE)
+                valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+
+        obdo_from_inode(oa, inode, valid_flags);
+        EXIT;
+}
+
+/* called for each page in a completed rpc.*/
+static void llu_ap_completion(void *data, int cmd, int rc)
+{
+        struct ll_async_page *llap;
+        struct page *page;
+
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) {
+                EXIT;
+                return;
+        }
+
+        llap->llap_queued = 0;
+        page = llap->llap_page;
+
+        if (rc != 0) {
+                if (cmd == OBD_BRW_WRITE)
+                        CERROR("writeback error on page %p index %ld: %d\n", 
+                               page, page->index, rc);
+        }
+        EXIT;
+}
+
+static struct obd_async_page_ops llu_async_page_ops = {
+        .ap_make_ready =        NULL,
+        .ap_refresh_count =     NULL,
+        .ap_fill_obdo =         llu_ap_fill_obdo,
+        .ap_completion =        llu_ap_completion,
+};
+
+static
+struct llu_sysio_cookie* get_sysio_cookie(struct inode *inode, int npages)
+{
+        struct llu_sysio_cookie *cookie;
+
+        OBD_ALLOC(cookie, LLU_SYSIO_COOKIE_SIZE(npages));
+        if (cookie) {
+                I_REF(inode);
+                cookie->lsc_inode = inode;
+                cookie->lsc_npages = npages;
+                cookie->lsc_llap = (struct ll_async_page *)(cookie + 1);
+                cookie->lsc_pages = (struct page *) (cookie->lsc_llap + npages);
+
+                osic_init(&cookie->lsc_osic);
+        }
+
+        return cookie;
+}
+
+static
+void put_sysio_cookie(struct llu_sysio_cookie *cookie)
+{
+        struct lov_stripe_md *lsm = llu_i2info(cookie->lsc_inode)->lli_smd;
+        struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
+        struct ll_async_page *llap = cookie->lsc_llap;
+        int i;
+
+        for (i = 0; i< cookie->lsc_npages; i++) {
+                if (llap[i].llap_cookie)
+                        obd_teardown_async_page(exp, lsm, NULL,
+                                                llap[i].llap_cookie);
+        }
+
+        I_RELE(cookie->lsc_inode);
+
+        OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(cookie->lsc_npages));
+}
+
+static
+int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
+                      char *buf, loff_t pos, size_t count)
+{
+        struct lov_stripe_md *lsm = llu_i2info(cookie->lsc_inode)->lli_smd;
+        struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
+        struct page *pages = cookie->lsc_pages;
+        struct ll_async_page *llap = cookie->lsc_llap;
+        int i, rc, npages = 0;
+        ENTRY;
+
+        if (!exp)
+                RETURN(-EINVAL);
+
+        cookie->lsc_rwcount = count;
+
+        /* prepare the pages array */
+	do {
+                unsigned long index, offset, bytes;
+
+                offset = (pos & ~PAGE_CACHE_MASK);
+                index = pos >> PAGE_CACHE_SHIFT;
+                bytes = PAGE_CACHE_SIZE - offset;
+                if (bytes > count)
+                        bytes = count;
+
+                /* prepare page for this index */
+                pages[npages].index = index;
+                pages[npages].addr = buf - offset;
+
+                pages[npages]._offset = offset;
+                pages[npages]._count = bytes;
+
+                npages++;
+                count -= bytes;
+                pos += bytes;
+                buf += bytes;
+        } while (count);
+
+        for (i = 0; i < npages; i++) {
+                llap[i].llap_magic = LLAP_MAGIC;
+                rc = obd_prep_async_page(exp, lsm, NULL, &pages[i],
+                                         (obd_off)pages[i].index << PAGE_SHIFT,
+                                         &llu_async_page_ops,
+                                         &llap[i], &llap[i].llap_cookie);
+                if (rc) {
+                        llap[i].llap_cookie = NULL;
+                        RETURN(rc);
+                }
+                CDEBUG(D_CACHE, "llap %p page %p cookie %p obj off "LPU64"\n",
+                       &llap[i], &pages[i], llap[i].llap_cookie,
+                       (obd_off)pages[i].index << PAGE_SHIFT);
+                pages[i].private = (unsigned long)&llap[i];
+                llap[i].llap_page = &pages[i];
+                llap[i].llap_inode = cookie->lsc_inode;
+
+                rc = obd_queue_sync_io(exp, lsm, NULL, &cookie->lsc_osic,
+                                       llap[i].llap_cookie, cmd,
+                                       pages[i]._offset, pages[i]._count, 0);
+                if (rc)
+                        RETURN(rc);
+
+                llap[i].llap_queued = 1;
+        }
+
+        RETURN(0);
+}
+
+static
+int llu_start_async_io(struct llu_sysio_cookie *cookie)
+{
+        struct lov_stripe_md *lsm = llu_i2info(cookie->lsc_inode)->lli_smd;
+        struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
+
+        return obd_trigger_sync_io(exp, lsm, NULL, &cookie->lsc_osic);
+}
+
+/*
+ * read/write a continuous buffer for an inode (zero-copy)
+ */
+struct llu_sysio_cookie*
+llu_rw(int cmd, struct inode *inode, char *buf, size_t count, loff_t pos)
+{
+        struct llu_sysio_cookie *cookie;
+        int max_pages, rc;
+        ENTRY;
+
+        max_pages = (count >> PAGE_SHIFT) + 2;
+
+        cookie = get_sysio_cookie(inode, max_pages);
+        if (!cookie)
+                RETURN(ERR_PTR(-ENOMEM));
+
+        rc = llu_prep_async_io(cookie, cmd, buf, pos, count);
+        if (rc)
+                GOTO(out_cleanup, rc);
+
+        rc = llu_start_async_io(cookie);
+        if (rc)
+                GOTO(out_cleanup, rc);
+
+/*
+        rc = osic_wait(&osic);
+        if (rc) {
+                CERROR("file i/o error!\n");
+                rw_count = rc;
+        }
+*/
+        RETURN(cookie);
+
+out_cleanup:
+        put_sysio_cookie(cookie);
+        RETURN(ERR_PTR(rc));
+}
+
+struct llu_sysio_callback_args*
+llu_file_write(struct inode *inode, const struct iovec *iovec,
+               size_t iovlen, loff_t pos)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
-        struct ll_file_data *fd = lli->lli_file_data; /* XXX not ready don't use it now */
-        struct lustre_handle lockh = { 0 };
+        struct ll_file_data *fd = lli->lli_file_data;
+        struct lustre_handle lockh = {0};
         struct lov_stripe_md *lsm = lli->lli_smd;
+        struct llu_sysio_callback_args *lsca;
+        struct llu_sysio_cookie *cookie;
         struct ldlm_extent extent;
         ldlm_error_t err;
-        ssize_t retval = 0;
+        int iovidx;
         ENTRY;
 
         /* XXX consider other types later */
         if (!S_ISREG(lli->lli_st_mode))
                 LBUG();
-#if 0
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu,size="LPSZ",offset=%Ld\n",
-               inode->i_ino, count, *ppos);
 
-        /*
-         * sleep doing some writeback work of this mount's dirty data
-         * if the VM thinks we're low on memory.. other dirtying code
-         * paths should think about doing this, too, but they should be
-         * careful not to hold locked pages while they do so.  like
-         * ll_prepare_write.  *cough*
-         */
-        ll_check_dirty(inode->i_sb);
-#endif
-        while (iovlen--) {
-                const char *buf = iovec[iovlen].iov_base;
-                size_t count = iovec[iovlen].iov_len;
+        LASSERT(iovlen <= MAX_IOVEC);
 
-                /* POSIX, but surprised the VFS doesn't check this already */
+        OBD_ALLOC(lsca, sizeof(*lsca));
+        if (!lsca)
+                RETURN(ERR_PTR(-ENOMEM));
+
+        /* FIXME optimize the following extent locking */
+        for (iovidx = 0; iovidx < iovlen; iovidx++) {
+                char *buf = iovec[iovidx].iov_base;
+                size_t count = iovec[iovidx].iov_len;
+
                 if (count == 0)
                         continue;
 
+                /* FIXME libsysio haven't consider the open flags
+                 * such as O_APPEND */
 #if 0
                 if (!S_ISBLK(lli->lli_st_mode) && file->f_flags & O_APPEND) {
                         extent.start = 0;
@@ -360,26 +634,48 @@ ssize_t llu_file_write(struct inode *inode, const struct iovec *iovec,
 
                 err = llu_extent_lock(fd, inode, lsm, LCK_PW, &extent, &lockh);
                 if (err != ELDLM_OK)
-                        RETURN(-ENOLCK);
-
-#if 0
-                if (!S_ISBLK(inode->i_mode) && file->f_flags & O_APPEND)
-                        *ppos = inode->i_size;
+                        GOTO(err_out, err = -ENOLCK);
 
                 CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
-                       inode->i_ino, count, *ppos);
-#endif
-                retval += llu_generic_file_write(inode, buf, count, pos);
+                       lli->lli_st_ino, count, pos);
+
+                cookie = llu_rw(OBD_BRW_WRITE, inode, buf, count, pos);
+                if (!IS_ERR(cookie)) {
+                        /* save cookie */
+                        lsca->cookies[lsca->ncookies++] = cookie;
+                        pos += count;
+                        /* file size grow. XXX should be done here? */
+                        if (pos > lli->lli_st_size) {
+                                lli->lli_st_size = pos;
+                                set_bit(LLI_F_PREFER_EXTENDED_SIZE,
+                                        &lli->lli_flags);
+                        }
+                } else {
+                        llu_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
+                        GOTO(err_out, err = PTR_ERR(cookie));
+                }
+
+                /* XXX errors? */
+                err = llu_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
+                if (err)
+                        CERROR("extent unlock error %d\n", err);
         }
 
-        /* XXX errors? */
-        ll_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
-        return(retval);
+        RETURN(lsca);
+
+err_out:
+        /* teardown all async stuff */
+        while (lsca->ncookies--) {
+                put_sysio_cookie(lsca->cookies[lsca->ncookies]);
+        }
+        OBD_FREE(lsca, sizeof(*lsca));
+
+        RETURN(ERR_PTR(err));
 }
 
+#if 0
 static void llu_update_atime(struct inode *inode)
 {
-#if 0
         struct llu_inode_info *lli = llu_i2info(inode);
 
 #ifdef USE_ATIME
@@ -398,122 +694,109 @@ static void llu_update_atime(struct inode *inode)
         /* update atime, but don't explicitly write it out just this change */
         inode->i_atime = CURRENT_TIME;
 #endif
+}
 #endif
-}
 
-static size_t llu_generic_file_read(struct inode *inode, char *buf,
-                                    size_t count, loff_t pos)
-{
-        struct llu_inode_info *lli = llu_i2info(inode);
-	unsigned long index, offset;
-	int error = 0;
-        size_t readed = 0;
-
-	index = pos >> PAGE_CACHE_SHIFT;
-	offset = pos & ~PAGE_CACHE_MASK;
-
-	do {
-		struct page *page;
-		unsigned long end_index, nr;
-
-		end_index = lli->lli_st_size >> PAGE_CACHE_SHIFT;
-
-		if (index > end_index)
-			break;
-		nr = PAGE_CACHE_SIZE;
-		if (index == end_index) {
-			nr = lli->lli_st_size & ~PAGE_CACHE_MASK;
-			if (nr <= offset)
-				break;
-		}
-
-		nr = nr - offset;
-                if (nr > count)
-                        nr = count;
-
-                page = grab_cache_page(index);
-                if (!page) {
-                        error = -ENOMEM;
-                        break;
-                }
-
-                error = llu_brw(OBD_BRW_READ, inode, page, 0);
-		if (error) {
-		        page_cache_release(page);
-                        break;
-		}
-
-                memcpy(buf, kmap(page)+offset, nr);
-		offset += nr;
-		index += offset >> PAGE_CACHE_SHIFT;
-		offset &= ~PAGE_CACHE_MASK;
-                readed += nr;
-                count -= nr;
-
-		page_cache_release(page);
-	} while (count);
-
-        if (error)
-                return error;
-        return readed;
-}
-
-ssize_t llu_file_read(struct inode *inode, const struct iovec *iovec,
+struct llu_sysio_callback_args*
+llu_file_read(struct inode *inode, const struct iovec *iovec,
                        size_t iovlen, loff_t pos)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct lustre_handle lockh = { 0 };
-#if 0
-        struct ll_read_extent rextent;
-#else
         struct ldlm_extent extent;
-#endif
+        struct llu_sysio_callback_args *lsca;
+        struct llu_sysio_cookie *cookie;
+        int iovidx;
+
         ldlm_error_t err;
-        ssize_t retval = 0;
         ENTRY;
 
-        while (iovlen--) {
-                char *buf = iovec[iovlen].iov_base;
-                size_t count = iovec[iovlen].iov_len;
+        OBD_ALLOC(lsca, sizeof(*lsca));
+        if (!lsca)
+                RETURN(ERR_PTR(-ENOMEM));
+
+        for (iovidx = 0; iovidx < iovlen; iovidx++) {
+                char *buf = iovec[iovidx].iov_base;
+                size_t count = iovec[iovidx].iov_len;
 
                 /* "If nbyte is 0, read() will return 0 and have no other results."
                  *                      -- Single Unix Spec */
                 if (count == 0)
-                        RETURN(0);
+                        continue;
 
-#if 0
-                rextent.re_extent.start = pos;
-                rextent.re_extent.end = pos + count - 1;
-#else
                 extent.start = pos;
                 extent.end = pos + count - 1;
-#endif
+
                 err = llu_extent_lock(fd, inode, lsm, LCK_PR, &extent, &lockh);
                 if (err != ELDLM_OK)
-                        RETURN(-ENOLCK);
-#if 0
-                rextent.re_task = current;
-                spin_lock(&lli->lli_read_extent_lock);
-                list_add(&rextent.re_lli_item, &lli->lli_read_extents);
-                spin_unlock(&lli->lli_read_extent_lock);
-#endif
+                        GOTO(err_out, err = -ENOLCK);
+
                 CDEBUG(D_INFO, "Reading inode %lu, "LPSZ" bytes, offset %Ld\n",
                        lli->lli_st_ino, count, pos);
-                retval = llu_generic_file_read(inode, buf, count, pos);
-#if 0
-                spin_lock(&lli->lli_read_extent_lock);
-                list_del(&rextent.re_lli_item);
-                spin_unlock(&lli->lli_read_extent_lock);
-#endif
+
+                cookie = llu_rw(OBD_BRW_READ, inode, buf, count, pos);
+                if (!IS_ERR(cookie)) {
+                        /* save cookie */
+                        lsca->cookies[lsca->ncookies++] = cookie;
+                        pos += count;
+                } else {
+                        llu_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
+                        GOTO(err_out, err = PTR_ERR(cookie));
+                }
+
+                /* XXX errors? */
+                err = llu_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
+                if (err)
+                        CERROR("extent_unlock fail: %d\n", err);
         }
-
-        if (retval > 0)
+#if 0
+        if (readed > 0)
                 llu_update_atime(inode);
+#endif
+        RETURN(lsca);
 
-        /* XXX errors? */
-        ll_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
-        RETURN(retval);
+err_out:
+        /* teardown all async stuff */
+        while (lsca->ncookies--) {
+                put_sysio_cookie(lsca->cookies[lsca->ncookies]);
+        }
+        OBD_FREE(lsca, sizeof(*lsca));
+
+        RETURN(ERR_PTR(err));
 }
 
+int llu_iop_iodone(struct ioctx *ioctxp)
+{
+        struct llu_sysio_callback_args *lsca = ioctxp->ioctx_private;
+        struct llu_sysio_cookie *cookie;
+        int i, err = 0, rc = 0;
+        ENTRY;
+
+        /* write/read(fd, buf, 0) */
+        if (!lsca)
+                return 1;
+
+        LASSERT(!IS_ERR(lsca));
+
+        for (i = 0; i < lsca->ncookies; i++) {
+                cookie = lsca->cookies[i];
+                if (cookie) {
+                        err = osic_wait(&cookie->lsc_osic);
+                        if (err && !rc)
+                                rc = err;
+                        if (!rc)
+                                ioctxp->ioctx_cc += cookie->lsc_rwcount;
+                        put_sysio_cookie(cookie);
+                }
+        }
+
+        if (rc)
+                ioctxp->ioctx_cc = rc;
+
+        OBD_FREE(lsca, sizeof(*lsca));
+        ioctxp->ioctx_private = NULL;
+
+        RETURN(1);
+}

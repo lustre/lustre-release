@@ -25,26 +25,31 @@
 #ifndef PTLRPC_INTERNAL_H
 #define PTLRPC_INTERNAL_H
 
+#include "../ldlm/ldlm_internal.h"
+
 struct ldlm_namespace;
 struct obd_import;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
 
-/* ldlm hooks that we need, managed via inter_module_{get,put} */
-extern int (*ptlrpc_ldlm_namespace_cleanup)(struct ldlm_namespace *, int);
-extern int (*ptlrpc_ldlm_cli_cancel_unused)(struct ldlm_namespace *,
-                                            struct ldlm_res_id *, int);
-extern int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
-
-int ptlrpc_get_ldlm_hooks(void);
 void ptlrpc_daemonize(void);
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
 
-void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
+#ifdef __KERNEL__
+void ptlrpc_lprocfs_register_service(struct proc_dir_entry *proc_entry,
                                      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
+void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req);
+void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
+                                     long q_usec, long work_usec);
+#else
+#define ptlrpc_lprocfs_register_service(params...) do{}while(0)
+#define ptlrpc_lprocfs_unregister_service(params...) do{}while(0)
+#define ptlrpc_lprocfs_rpc_sent(params...) do{}while(0)
+#define ptlrpc_lprocfs_do_request_stat(params...) do{}while(0)
+#endif /* __KERNEL__ */
 
 /* recovd_thread.c */
 int llog_init_commit_master(void);
@@ -96,7 +101,10 @@ enum {
 };
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
-int ptlrpc_check_set(struct ptlrpc_request_set *set);
 
+/* pinger.c */
+int ptlrpc_start_pinger(void);
+int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
+
 #endif /* PTLRPC_INTERNAL_H */

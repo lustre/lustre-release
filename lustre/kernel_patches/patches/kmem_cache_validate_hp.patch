@@ -108,11 +108,11 @@
  unsigned long highstart_pfn, highend_pfn;
  static unsigned long totalram_pages;
  static unsigned long totalhigh_pages;
-+                                                                                                                                             
++
 +struct page *check_get_page(unsigned long kaddr)
 +{
 +#warning FIXME: Lustre team, is this solid?
-+       return virt_to_page(kaddr);
++	return virt_to_page(kaddr);
 +}
  
  int do_check_pgt_cache(int low, int high)

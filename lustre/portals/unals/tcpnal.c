@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  Copyright (c) 2002 Cray Inc.
+ *  Copyright (c) 2003 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -27,7 +28,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include <syscall.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -36,6 +36,11 @@
 #include <bridge.h>
 #include <ipmap.h>
 #include <connection.h>
+#include <pthread.h>
+#include <errno.h>
+#ifndef __CYGWIN__
+#include <syscall.h>
+#endif
 
 /* Function:  tcpnal_send
  * Arguments: nal:     pointer to my nal control block
@@ -50,7 +55,6 @@
  *
  * sends a packet to the peer, after insuring that a connection exists
  */
-#warning FIXME: "param 'type' is newly added, make use of it!!"
 int tcpnal_send(nal_cb_t *n,
 		void *private,
 		lib_msg_t *cookie,
@@ -64,8 +68,11 @@ int tcpnal_send(nal_cb_t *n,
 {
     connection c;
     bridge b=(bridge)n->nal_data;
-    struct iovec tiov[2];
-    int count = 1;
+    struct iovec tiov[257];
+    static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
+    int   rc;
+    int   total;
+    int i;
 
     if (!(c=force_tcp_connection((manager)b->lower,
                                  PNAL_IP(nid,b),
@@ -83,18 +90,46 @@ int tcpnal_send(nal_cb_t *n,
     LASSERT (niov <= 1);
     if (len) syscall(SYS_write, c->fd,iov[0].iov_base,len);
 #else
-    LASSERT (niov <= 1);
+    LASSERT (niov <= 256);
 
     tiov[0].iov_base = hdr;
     tiov[0].iov_len = sizeof(ptl_hdr_t);
 
-    if (len) {
-            tiov[1].iov_base = iov[0].iov_base;
-            tiov[1].iov_len = len;
-            count++;
+    if (niov > 0)
+            memcpy(&tiov[1], iov, niov * sizeof(struct iovec));
+    pthread_mutex_lock(&send_lock);
+#if 1
+    for (i = total = 0; i <= niov; i++)
+            total += tiov[i].iov_len;
+    
+    rc = syscall(SYS_writev, c->fd, tiov, niov+1);
+    if (rc != total) {
+            fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
+                     rc, total, errno);
+            abort();
     }
-
-    syscall(SYS_writev, c->fd, tiov, count);
+#else
+    for (i = total = 0; i <= niov; i++) {
+            rc = send(c->fd, tiov[i].iov_base, tiov[i].iov_len, 0);
+            
+            if (rc != tiov[i].iov_len) {
+                    fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
+                             rc, tiov[i].iov_len, errno);
+                    abort();
+            }
+            total != rc;
+    }
+#endif
+#if 0
+    fprintf (stderr, "sent %s total %d in %d frags\n", 
+             hdr->type == PTL_MSG_ACK ? "ACK" :
+             hdr->type == PTL_MSG_PUT ? "PUT" :
+             hdr->type == PTL_MSG_GET ? "GET" :
+             hdr->type == PTL_MSG_REPLY ? "REPLY" :
+             hdr->type == PTL_MSG_HELLO ? "HELLO" : "UNKNOWN",
+             total, niov + 1);
+#endif
+    pthread_mutex_unlock(&send_lock);
 #endif
     lib_finalize(n, private, cookie);
         
@@ -120,15 +155,29 @@ int tcpnal_recv(nal_cb_t *n,
 		lib_msg_t *cookie,
                 unsigned int niov,
                 struct iovec *iov,
-		ptl_size_t mlen,
-		ptl_size_t rlen)
+		size_t mlen,
+		size_t rlen)
 
 {
-    if (mlen) {
-        LASSERT (niov <= 1);
-        read_connection(private,iov[0].iov_base,mlen);
-        lib_finalize(n, private, cookie);
-    }
+    int i;
+
+    if (!niov)
+            goto finalize;
+
+    LASSERT(mlen);
+    LASSERT(rlen);
+    LASSERT(rlen >= mlen);
+
+    /* FIXME
+     * 1. Is this effecient enough? change to use readv() directly?
+     * 2. need check return from read_connection()
+     * - MeiJia
+     */
+    for (i = 0; i < niov; i++)
+        read_connection(private, iov[i].iov_base, iov[i].iov_len);
+
+finalize:
+    lib_finalize(n, private, cookie);
 
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
@@ -153,15 +202,15 @@ int tcpnal_recv(nal_cb_t *n,
  */
 static int from_connection(void *a, void *d)
 {
-        connection c = d;
-        bridge b=a;
-        ptl_hdr_t hdr;
+    connection c = d;
+    bridge b = a;
+    ptl_hdr_t hdr;
 
-        if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
-                lib_parse(b->nal_cb, &hdr, c);
-                return(1);
-        }
-        return(0);
+    if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
+        lib_parse(b->nal_cb, &hdr, c);
+        return(1);
+    }
+    return(0);
 }
 
 

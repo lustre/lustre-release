@@ -34,9 +34,9 @@
 #include <linux/smp_lock.h>
 #include <asm/uaccess.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/locks.h>   // for wait_on_buffer
+# include <linux/locks.h>   // for wait_on_buffer
 #else
-#include <linux/buffer_head.h>   // for wait_on_buffer
+# include <linux/buffer_head.h>   // for wait_on_buffer
 #endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -48,6 +48,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
+#include "llite_internal.h"
 
 typedef struct ext2_dir_entry_2 ext2_dirent;
 
@@ -59,6 +60,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 {
         struct inode *inode = page->mapping->host;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_fid mdc_fid;
         __u64 offset;
         int rc = 0;
         struct ptlrpc_request *request;
@@ -66,10 +68,9 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         struct mds_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
         struct mdc_op_data data;
-        struct obd_device *obddev = class_conn2obd(&sbi->ll_mdc_conn);
+        struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
         struct ldlm_res_id res_id =
                 { .name = {inode->i_ino, (__u64)inode->i_generation} };
-        int flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_MATCH_DATA;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
@@ -85,17 +86,16 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 GOTO(readpage_out, rc);
         }
 
-        rc = ldlm_lock_match(obddev->obd_namespace, flags, &res_id,
-                             LDLM_PLAIN, NULL, 0, LCK_PR, inode,
-                             &lockh);
+        rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
+                             &res_id, LDLM_PLAIN, NULL, 0, LCK_PR, &lockh);
         if (!rc) {
                 ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_PR,
+                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, &it, LCK_PR,
                                  &data, &lockh, NULL, 0,
                                  ldlm_completion_ast, ll_mdc_blocking_ast,
                                  inode);
-                request = (struct ptlrpc_request *)it.it_data;
+                request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
                         ptlrpc_req_finished(request);
                 if (rc < 0) {
@@ -111,9 +111,11 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 GOTO(readpage_out, rc);
         }
 
+        mdc_pack_fid(&mdc_fid, inode->i_ino, inode->i_generation, S_IFDIR);
+
         offset = page->index << PAGE_SHIFT;
-        rc = mdc_readpage(&sbi->ll_mdc_conn, inode->i_ino,
-                          S_IFDIR, offset, page, &request);
+        rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,
+                          offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
                 LASSERT (body != NULL);         /* checked by mdc_readpage() */
@@ -377,21 +379,23 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         struct obd_ioctl_data *data;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%u\n", inode->i_ino,
-               inode->i_generation, inode, cmd);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), cmd=%#x\n",
+               inode->i_ino, inode->i_generation, inode, cmd);
 
         if (_IOC_TYPE(cmd) == 'T') /* tty ioctls */
                 return -ENOTTY;
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_IOCTL);
         switch(cmd) {
+        case EXT3_IOC_GETFLAGS:
+        case EXT3_IOC_SETFLAGS:
+                RETURN( ll_iocontrol(inode, file, cmd, arg) );
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
                 struct ll_fid fid;
                 char *buf = NULL;
-                struct mds_body *body;
                 char *filename;
-                int namelen, rc, err, len = 0;
+                int namelen, rc, len = 0;
                 unsigned long valid;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
@@ -403,33 +407,20 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 namelen = data->ioc_inllen1;
 
                 if (namelen < 1) {
-                        CERROR("IOC_MDC_LOOKUP missing filename\n");
+                        CDEBUG(D_INFO, "IOC_MDC_LOOKUP missing filename\n");
                         GOTO(out, rc = -EINVAL);
                 }
 
-                valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
+                valid = OBD_MD_FLID;
                 ll_inode2fid(&fid, inode);
-                rc = mdc_getattr_name(&sbi->ll_mdc_conn, &fid,
+                rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid,
                                       filename, namelen, valid, 0, &request);
                 if (rc < 0) {
-                        CERROR("mdc_getattr_name: %d\n", rc);
+                        CDEBUG(D_INFO, "mdc_getattr_name: %d\n", rc);
                         GOTO(out, rc);
                 }
 
-                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
-                LASSERT(body != NULL);         /* checked by mdc_getattr_name */
-                LASSERT_REPSWABBED(request, 0);/* swabbed by mdc_getattr_name */
-
-                /* surely there's a better way -phik */
-                data->ioc_obdo1.o_mode = body->mode;
-                data->ioc_obdo1.o_uid = body->uid;
-                data->ioc_obdo1.o_gid = body->gid;
-
                 ptlrpc_req_finished(request);
-
-                err = copy_to_user((void *)arg, buf, len);
-                if (err)
-                        GOTO(out, rc = -EFAULT);
 
                 EXIT;
         out:
@@ -443,6 +434,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct ptlrpc_request *request = NULL;
                 struct ll_fid fid;
                 struct mds_body *body;
+                struct lov_user_md *lump = (struct lov_user_md *)arg;
                 struct lov_mds_md *lmm;
                 char *filename;
                 int rc, lmmsize;
@@ -452,12 +444,12 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(PTR_ERR(filename));
 
                 ll_inode2fid(&fid, inode);
-                rc = mdc_getattr_name(&sbi->ll_mdc_conn, &fid, filename,
+                rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, filename,
                                       strlen(filename)+1, OBD_MD_FLEASIZE,
-                                      obd_size_diskmd(&sbi->ll_osc_conn, NULL),
+                                      obd_size_diskmd(sbi->ll_osc_exp, NULL),
                                       &request);
                 if (rc < 0) {
-                        CERROR("mdc_getattr_name: failed on %s: rc %d\n",
+                        CDEBUG(D_INFO, "mdc_getattr_name failed on %s: rc %d\n",
                                filename, rc);
                         GOTO(out_name, rc);
                 }
@@ -478,7 +470,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 LASSERT(lmm != NULL);
                 LASSERT_REPSWABBED(request, 1);
 
-                rc = copy_to_user((struct lov_mds_md *)arg, lmm, lmmsize);
+                rc = copy_to_user(lump, lmm, lmmsize);
                 if (rc)
                         GOTO(out_req, rc = -EFAULT);
 
@@ -489,8 +481,48 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 putname(filename);
                 return rc;
         }
+        case OBD_IOC_PING: {
+                struct ptlrpc_request *req = NULL;
+                char *buf = NULL;
+                int rc, len=0;
+                struct client_obd *cli;
+                struct obd_device *obd;
+                                                                                                                             
+                rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
+                if (rc)
+                        RETURN(rc);
+                data = (void *)buf;
+
+                obd = class_name2obd(data->ioc_inlbuf1);
+                                                                                                                             
+                if (!obd )
+                        GOTO(out_ping, rc = -ENODEV);
+                                                                                                                             
+                if (!obd->obd_attached) {
+                        CERROR("Device %d not attached\n", obd->obd_minor);
+                        GOTO(out_ping, rc = -ENODEV);
+                }
+                if (!obd->obd_set_up) {
+                        CERROR("Device %d still not setup\n", obd->obd_minor);
+                        GOTO(out_ping, rc = -ENODEV);
+                }
+                cli = &obd->u.cli;
+                req = ptlrpc_prep_req(cli->cl_import, OBD_PING, 0, NULL, NULL);
+                if (!req)
+                        GOTO(out_ping, rc = -ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, NULL);
+                req->rq_send_state = LUSTRE_IMP_FULL;
+
+                rc = ptlrpc_queue_wait(req);
+
+                ptlrpc_req_finished(req);                                                                                                 
+        out_ping:
+                obd_ioctl_freedata(buf, len);
+                return rc;
+        }
         default:
-                return obd_iocontrol(cmd,&sbi->ll_osc_conn,0,NULL,(void *)arg);
+                return obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg);
         }
 }
 

@@ -213,7 +213,6 @@ parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 	
 	fd = syscall(SYS_open, dump_file, O_RDONLY);
 
-#warning FIXME: cleanup fstat issue here
 #ifndef SYS_fstat64
 #define __SYS_fstat__ SYS_fstat
 #else

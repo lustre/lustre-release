@@ -49,7 +49,7 @@ struct ll_rpc_opcode {
         { OST_STATFS,       "ost_statfs" },
         { OST_SAN_READ,     "ost_san_read" },
         { OST_SAN_WRITE,    "ost_san_write" },
-        { OST_SYNCFS,       "ost_syncfs" },
+        { OST_SYNC,         "ost_sync" },
         { OST_SET_INFO,     "ost_set_info" },
         { MDS_GETATTR,      "mds_getattr" },
         { MDS_GETATTR_NAME, "mds_getattr_name" },
@@ -60,9 +60,10 @@ struct ll_rpc_opcode {
         { MDS_DISCONNECT,   "mds_disconnect" },
         { MDS_GETSTATUS,    "mds_getstatus" },
         { MDS_STATFS,       "mds_statfs" },
-        { MDS_GETLOVINFO,   "mds_getlovinfo" },
         { MDS_PIN,          "mds_pin" },
         { MDS_UNPIN,        "mds_unpin" },
+        { MDS_SYNC,         "mds_sync" },
+        { MDS_DONE_WRITING, "mds_done_writing" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
@@ -75,7 +76,7 @@ struct ll_rpc_opcode {
         { PTLBD_CONNECT,    "ptlbd_connect" },
         { PTLBD_DISCONNECT, "ptlbd_disconnect" },
         { OBD_PING,         "obd_ping" },
-        { OBD_LOG_CANCEL,   "obd_log_cancel" },
+        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel"},
 };
 
 const char* ll_opcode2str(__u32 opcode)
@@ -99,8 +100,9 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc) { return; }
 #else
 
-void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
-                                     struct ptlrpc_service *svc)
+void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
+                             char *name, struct proc_dir_entry **procroot_ret,
+                             struct lprocfs_stats **stats_ret)
 {
         struct proc_dir_entry *svc_procroot;
         struct lprocfs_stats *svc_stats;
@@ -108,19 +110,21 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
         unsigned int svc_counter_config = LPROCFS_CNTR_EXTERNALLOCK |
                 LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV;
 
-        LASSERT(svc->svc_procroot == NULL);
-        LASSERT(svc->svc_stats == NULL);
-
-        svc_procroot = lprocfs_register(svc->srv_name, obddev->obd_proc_entry,
-                                        NULL, NULL);
-        if (svc_procroot == NULL)
-                return;
+        LASSERT(*procroot_ret == NULL);
+        LASSERT(*stats_ret == NULL);
 
         svc_stats = lprocfs_alloc_stats(PTLRPC_LAST_CNTR + LUSTRE_MAX_OPCODES);
-        if (svc_stats == NULL) {
-                lprocfs_remove(svc_procroot);
+        if (svc_stats == NULL)
                 return;
-        }
+
+        if (dir) {
+                svc_procroot = lprocfs_register(dir, root, NULL, NULL);
+                if (IS_ERR(svc_procroot)) {
+                        lprocfs_free_stats(svc_stats);
+                        return;
+                }
+        } else 
+                svc_procroot = root;
 
         lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
                              svc_counter_config, "req_waittime", "usec");
@@ -139,14 +143,43 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                                      "usec");
         }
 
-        rc = lprocfs_register_stats(svc_procroot, "stats", svc_stats);
+        rc = lprocfs_register_stats(svc_procroot, name, svc_stats);
         if (rc < 0) {
-                lprocfs_remove(svc_procroot);
+                if (dir)
+                        lprocfs_remove(svc_procroot);
                 lprocfs_free_stats(svc_stats);
         } else {
-                svc->svc_procroot = svc_procroot;
-                svc->svc_stats = svc_stats;
+                if (dir)
+                        *procroot_ret = svc_procroot;
+                *stats_ret = svc_stats;
         }
+}
+
+void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
+                                     struct ptlrpc_service *svc)
+{
+        ptlrpc_lprocfs_register(entry, svc->srv_name,
+                                "stats", &svc->svc_procroot, 
+                                &svc->svc_stats);
+}
+
+void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
+{
+        ptlrpc_lprocfs_register(obddev->obd_proc_entry, NULL, "stats", 
+                                &obddev->obd_svc_procroot, 
+                                &obddev->obd_svc_stats);
+}
+
+void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
+{
+        struct lprocfs_stats *svc_stats;
+        int opc =  opcode_offset(req->rq_reqmsg->opc);
+
+        svc_stats = req->rq_import->imp_obd->obd_svc_stats;
+        if (svc_stats == NULL || opc <= 0)
+                return;
+        LASSERT(opc < LUSTRE_MAX_OPCODES);
+        lprocfs_counter_add(svc_stats, opc + PTLRPC_LAST_CNTR, 0);
 }
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
@@ -158,6 +191,17 @@ void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
         if (svc->svc_stats) {
                 lprocfs_free_stats(svc->svc_stats);
                 svc->svc_stats = NULL;
+        }
+}
+void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
+{
+        if (obd->obd_svc_procroot) {
+                lprocfs_remove(obd->obd_svc_procroot);
+                obd->obd_svc_procroot = NULL;
+        }
+        if (obd->obd_svc_stats) {
+                lprocfs_free_stats(obd->obd_svc_stats);
+                obd->obd_svc_stats = NULL;
         }
 }
 #endif /* LPROCFS */

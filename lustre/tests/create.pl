@@ -12,10 +12,13 @@ use Getopt::Long;
 
 use vars qw(
 	    $MAX_THREADS
+	    $SCRIPT_NAME
 	    );
 
 # Don't try to run more than this many threads concurrently.
 $MAX_THREADS = 16;
+
+$SCRIPT_NAME = "create.pl";
 
 # Initialize variables
 my $silent = 0;
@@ -113,15 +116,15 @@ sub fork_and_create ($) {
 		  }
 		  $d = int(rand() * $num_files);
 		  my $path = "${mountpt}${which}/thread${thread_num}.${d}";
-		  print  "Thread $thread_num: Unlink $path start [" . $$."]...\n" if !$silent;
+		  print  "$SCRIPT_NAME - Thread $thread_num: Unlink $path start [" . $$."]...\n" if !$silent;
 		  if (unlink($path)) {
-		      print "Thread $thread_num: Unlink done [$$] $path: Success\n" if !$silent;
+		      print "$SCRIPT_NAME - Thread $thread_num: Unlink done [$$] $path: Success\n" if !$silent;
 		  } else {
-		      print "Thread $thread_num: Unlink done [$$] $path: $!\n"if !$silent;
+		      print "$SCRIPT_NAME - Thread $thread_num: Unlink done [$$] $path: $!\n"if !$silent;
 		  }
 	      }
 	      if (($current_iteration) % 100 == 0) {
-		  print STDERR "Thread $thread_num: " . $current_iteration . " operations [" . $$ . "]\n";
+		  print "$SCRIPT_NAME - Thread $thread_num: " . $current_iteration . " operations [" . $$ . "]\n";
 	      }
 	      $current_iteration++;
 	  }
@@ -135,7 +138,7 @@ sub fork_and_create ($) {
 	      unlink("$path") if (-e $path);
 	  }
 	  
-	  print "Thread $thread_num: Done.\n";
+	  print "$SCRIPT_NAME - Thread $thread_num: Done.\n";
 	  
 	  exit 0;
 
@@ -159,16 +162,16 @@ sub do_open ($) {
     if ($use_mcreate) {
         my $tmp = `./mcreate $path`;
         if ($tmp) {
-            print  "Creating $path [" . $$."]...\n" if !$silent;
+            print  "$SCRIPT_NAME - Creating $path [" . $$."]...\n" if !$silent;
             $tmp =~ /.*error: (.*)\n/;
-            print  "Create done [$$] $path: $!\n" if !$silent;
+            print  "$SCRIPT_NAME - Create done [$$] $path: $!\n" if !$silent;
         } else {
-            print  "Create done [$$] $path: Success\n"if !$silent;
+            print  "$SCRIPT_NAME - Create done [$$] $path: Success\n"if !$silent;
         }
     } else {
-        print  "Opening $path [" . $$."]...\n"if !$silent;
+        print  "$SCRIPT_NAME - Opening $path [" . $$."]...\n"if !$silent;
         open(FH, ">$path") || die "open($path: $!";
-        print  "Open done [$$] $path: Success\n"if !$silent;
+        print  "$SCRIPT_NAME - Open done [$$] $path: Success\n"if !$silent;
         close(FH) || die;
     }
 }

@@ -22,14 +22,6 @@ struct ec_object {
         struct lov_stripe_md  *eco_lsm;
 };
 
-struct ec_open_object {
-        struct list_head         ecoo_exp_chain;
-        struct ec_object        *ecoo_object;
-        __u64                    ecoo_cookie;
-        struct obdo              ecoo_oa;
-        struct obd_client_handle ecoo_och;
-};
-
 struct ec_lock {
         struct list_head       ecl_exp_chain;
         struct ec_object      *ecl_object;

@@ -39,12 +39,16 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         ptl_process_id_t remote_id;
         ptl_handle_md_t md_h;
         ptl_ack_req_t ack_req;
+        char str[PTL_NALFMT_SIZE];
 
         LASSERT (portal != 0);
         LASSERT (conn != NULL);
-        CDEBUG (D_INFO, "conn=%p ni %s nid "LPX64" on %s\n",
+        CDEBUG (D_INFO, "conn=%p ni %s nid "LPX64" (%s) on %s\n",
                 conn, conn->c_peer.peer_ni->pni_name,
-                conn->c_peer.peer_nid, conn->c_peer.peer_ni->pni_name);
+                conn->c_peer.peer_nid,
+                portals_nid2str(conn->c_peer.peer_ni->pni_number,
+                                conn->c_peer.peer_nid, str),
+                conn->c_peer.peer_ni->pni_name);
 
         request->rq_req_md.user_ptr = request;
 
@@ -391,7 +395,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
 
         /* NB no locking required until desc is on the network */
         LASSERT (!desc->bd_network_rw);
-        LASSERT (desc->bd_page_count <= PTL_MD_MAX_IOV);
+        LASSERT (desc->bd_page_count <= PTL_MD_MAX_PAGES);
         LASSERT (desc->bd_req != NULL);
         LASSERT (desc->bd_type == BULK_PUT_SINK ||
                  desc->bd_type == BULK_GET_SOURCE);
@@ -580,8 +584,7 @@ int ptlrpc_error(struct ptlrpc_request *req)
         ENTRY;
 
         if (!req->rq_repmsg) {
-                rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen,
-                                     &req->rq_repmsg);
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc)
                         RETURN(rc);
         }
@@ -615,12 +618,14 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         }
 
         request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
+        request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
 
         source_id.nid = request->rq_connection->c_peer.peer_nid;
         source_id.pid = PTL_PID_ANY;
 
         LASSERT (request->rq_replen != 0);
-        OBD_ALLOC(request->rq_repmsg, request->rq_replen);
+        if (request->rq_repmsg == NULL)
+                OBD_ALLOC(request->rq_repmsg, request->rq_replen);
         if (request->rq_repmsg == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);
@@ -676,8 +681,10 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         ptlrpc_pinger_sending_on_import(request->rq_import);
         rc = ptl_send_buf(request, request->rq_connection,
                           request->rq_request_portal);
-        if (rc == 0)
+        if (rc == 0) {
+                ptlrpc_lprocfs_rpc_sent(request);
                 RETURN(rc);
+        }
 
         spin_lock_irqsave (&request->rq_lock, flags);
         request->rq_receiving_reply = 0;

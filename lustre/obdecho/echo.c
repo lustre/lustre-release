@@ -21,7 +21,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/version.h>
 #include <linux/module.h>
@@ -64,15 +66,28 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
         return class_connect(conn, obd, cluuid);
 }
 
-static int echo_disconnect(struct lustre_handle *conn, int flags)
+static int echo_disconnect(struct obd_export *exp, int flags)
 {
-        struct obd_export *exp = class_conn2export(conn);
+        unsigned long irqflags;
 
         LASSERT (exp != NULL);
 
         ldlm_cancel_locks_for_export(exp);
-        class_export_put(exp);
-        return class_disconnect(conn, flags);
+
+        spin_lock_irqsave(&exp->exp_lock, irqflags);
+        exp->exp_flags = flags;
+        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
+
+        return class_disconnect(exp, flags);
+}
+
+static int echo_destroy_export(struct obd_export *exp)
+{
+        ENTRY;
+        
+        target_destroy_export(exp);
+
+        RETURN(0);
 }
 
 static __u64 echo_next_id(struct obd_device *obddev)
@@ -86,13 +101,14 @@ static __u64 echo_next_id(struct obd_device *obddev)
         return id;
 }
 
-int echo_create(struct lustre_handle *conn, struct obdo *oa,
+int echo_create(struct obd_export *exp, struct obdo *oa,
                 struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = class_exp2obd(exp);
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
+                CERROR("invalid client cookie "LPX64"\n", 
+                       exp->exp_handle.h_cookie);
                 return -EINVAL;
         }
 
@@ -113,13 +129,14 @@ int echo_create(struct lustre_handle *conn, struct obdo *oa,
         return 0;
 }
 
-int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
+int echo_destroy(struct obd_export *exp, struct obdo *oa,
                  struct lov_stripe_md *ea, struct obd_trans_info *oti)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = class_exp2obd(exp);
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
+                CERROR("invalid client cookie "LPX64"\n", 
+                       exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
 
@@ -138,61 +155,15 @@ int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
         return 0;
 }
 
-static int echo_open(struct lustre_handle *conn, struct obdo *oa,
-                     struct lov_stripe_md *md, struct obd_trans_info *oti,
-                     struct obd_client_handle *och)
-{
-        struct lustre_handle *fh = obdo_handle (oa);
-        struct obd_device    *obd = class_conn2obd (conn);
-
-        if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
-                return (-EINVAL);
-        }
-
-        if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR ("obdo missing FLID valid flag: %08x\n", oa->o_valid);
-                return (-EINVAL);
-        }
-
-        fh->cookie = ECHO_HANDLE_MAGIC;
-
-        oa->o_valid |= OBD_MD_FLHANDLE;
-        return 0;
-}
-
-static int echo_close(struct lustre_handle *conn, struct obdo *oa,
-                      struct lov_stripe_md *md, struct obd_trans_info *oti)
-{
-        struct lustre_handle *fh = obdo_handle (oa);
-        struct obd_device    *obd = class_conn2obd(conn);
-
-        if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
-                return (-EINVAL);
-        }
-
-        if (!(oa->o_valid & OBD_MD_FLHANDLE)) {
-                CERROR("obdo missing FLHANDLE valid flag: %08x\n", oa->o_valid);
-                return (-EINVAL);
-        }
-
-        if (fh->cookie != ECHO_HANDLE_MAGIC) {
-                CERROR ("invalid file handle on close: "LPX64"\n", fh->cookie);
-                return (-EINVAL);
-        }
-
-        return 0;
-}
-
-static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
+static int echo_getattr(struct obd_export *exp, struct obdo *oa,
                         struct lov_stripe_md *md)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = class_exp2obd(exp);
         obd_id id = oa->o_id;
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
+                CERROR("invalid client cookie "LPX64"\n", 
+                       exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
 
@@ -207,13 +178,14 @@ static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
         return 0;
 }
 
-static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
+static int echo_setattr(struct obd_export *exp, struct obdo *oa,
                         struct lov_stripe_md *md, struct obd_trans_info *oti)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = class_exp2obd(exp);
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
+                CERROR("invalid client cookie "LPX64"\n", 
+                       exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
 
@@ -305,8 +277,8 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                         } else {
                                 if (verify) {
                                         page_debug_setup(kmap (r->page), r->len,
-                                                         0xecc0ecc0ecc0ecc0,
-                                                         0xecc0ecc0ecc0ecc0);
+                                                         0xecc0ecc0ecc0ecc0ULL,
+                                                         0xecc0ecc0ecc0ecc0ULL);
                                         kunmap (r->page);
                                 }
                         }
@@ -380,7 +352,7 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                         void *addr;
 
                         if (!page || !(addr = kmap(page)) ||
-                            !kern_addr_valid(addr)) {
+                            !kern_addr_valid((unsigned long)addr)) {
 
                                 CERROR("bad page objid "LPU64":%p, buf %d/%d\n",
                                        obj->ioo_id, page, j, obj->ioo_bufcnt);
@@ -443,11 +415,14 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
 
 static int echo_cleanup(struct obd_device *obddev, int flags)
 {
+        int     leaked;
         ENTRY;
 
-        ldlm_namespace_free(obddev->obd_namespace);
-        CERROR("%d prep/commitrw pages leaked\n",
-               atomic_read(&obddev->u.echo.eo_prep));
+        ldlm_namespace_free(obddev->obd_namespace, flags & OBD_OPT_FORCE);
+
+        leaked = atomic_read(&obddev->u.echo.eo_prep);
+        if (leaked != 0)
+                CERROR("%d prep/commitrw pages leaked\n", leaked);
 
         RETURN(0);
 }
@@ -479,25 +454,24 @@ int echo_detach(struct obd_device *dev)
 }
 
 static struct obd_ops echo_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_attach:      echo_attach,
-        o_detach:      echo_detach,
-        o_connect:     echo_connect,
-        o_disconnect:  echo_disconnect,
-        o_create:      echo_create,
-        o_destroy:     echo_destroy,
-        o_open:        echo_open,
-        o_close:       echo_close,
-        o_getattr:     echo_getattr,
-        o_setattr:     echo_setattr,
-        o_preprw:      echo_preprw,
-        o_commitrw:    echo_commitrw,
-        o_setup:       echo_setup,
-        o_cleanup:     echo_cleanup
+        o_owner:           THIS_MODULE,
+        o_attach:          echo_attach,
+        o_detach:          echo_detach,
+        o_connect:         echo_connect,
+        o_disconnect:      echo_disconnect,
+        o_destroy_export:  echo_destroy_export,
+        o_create:          echo_create,
+        o_destroy:         echo_destroy,
+        o_getattr:         echo_getattr,
+        o_setattr:         echo_setattr,
+        o_preprw:          echo_preprw,
+        o_commitrw:        echo_commitrw,
+        o_setup:           echo_setup,
+        o_cleanup:         echo_cleanup
 };
 
 extern int echo_client_init(void);
-extern void echo_client_cleanup(void);
+extern void echo_client_exit(void);
 
 static void
 echo_object0_pages_fini (void)
@@ -541,7 +515,7 @@ static int __init obdecho_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        printk(KERN_INFO "Lustre Echo OBD driver; info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: Echo OBD driver; info@clusterfs.com\n");
 
         lprocfs_init_vars(echo, &lvars);
 
@@ -567,7 +541,7 @@ static int __init obdecho_init(void)
 
 static void /*__exit*/ obdecho_exit(void)
 {
-        echo_client_cleanup();
+        echo_client_exit();
         class_unregister_type(OBD_ECHO_DEVICENAME);
         echo_object0_pages_fini ();
 }

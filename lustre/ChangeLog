@@ -1,9 +1,9 @@
 tbd
        * version v0_8
        * bug fixes
-        - orphans are moved into the PENDING directory for possible recovery
-        - replayed opens now open by fid for orphan/rename safety (1042)
-        - last close of an orphan inode generates a transno (683)
+	- orphans are moved into the PENDING directory for possible recovery
+	- replayed opens now open by fid for orphan/rename safety (1042)
+	- last close of an orphan inode generates a transno (683)
 	- chdir() and mount() now pin the directory entry (1020)
 	- avoid CERROR in normal ll_setattr_raw() error case (1500)
 	- discard very old requests without processing them (1502)
@@ -21,7 +21,36 @@ tbd
 	- exit early from mds_open if we get a lookup error (1749)
 	- partial page read at EOF wouldn't wait for disk before sending (1642)
 	- avoid NULL deref in obdfilter when reading page past EOF (1592)
-	- bug 56: POSIX utime.4 -EPERM on FIFO not owned by user
+	- avoid LASSERT in ll_intent_lock if server failed very early (1090)
+	- fix LBUG in ll_it_open_error with rc = -2 (1861)
+	- write/truncate lock inversion (1639)
+	- Don't auto-load obdclass, portals modules during cleanup (1495)
+	- fix timestamps from jumping to "now" (1763)
+	- extra journal assertions (1648)
+	- add an extra multiunlink test (1771)
+	- fix read_record/write_record API (1776)
+	- fix leak of offset_extent, possible incorrect i_size later (1772)
+	- fix lasserts in mis-matched transnos during open-unlink testing (1541)
+	- Debugging for the kqswnal_get_idle_tx problems (1820)
+	- Allow recovery to be attempted multiple times (1536)
+	- Write out MDS last_rcvd file after it is first created (1600)
+	- Fix tx_descriptor leak in failed transmit situations (1827)
+	- ext3 journaling fixes for assertion failure after IO error (1871)
+	- class_export_put() on freed export after completion AST error (1896)
+	- Fix revalidate looping in VFS (1322)
+	- Don't access a freed export during MDS_REINT timeout (1521)
+	- Add open-unlink recovery support on the MDS (1673,1764)
+	- Return an error if no MDS data was read from last_rcvd (1946)
+	- Fix for lookup "." or ".." crash on error (1932,1931,1935)
+	- Don't setup a disk device that doesn't match exported UUID (317)
+	- Reduce bulk RPC timeout to avoid cascading client/OST failures (1845)
+	- avoid committing NULL handle in force close
+	- local.sh is now a one-stripe LOV configuration
+	- POSIX utime.4 -EPERM on FIFO not owned by user (56)
+	- fix ext3 htree duplicate directory entry corruption (1516)
+	- POSIX creat.13, fstat.1, open.18, stat.3 new file atime/mtime (2020)
+	- update to new LOV EA format (2097)
+	- interoperability for different PAGE_SIZE/wordsize (686,1821,1343,2042)
 
 2003-06-15  Phil Schwan  <phil@clusterfs.com>
        * version v0_7

@@ -113,3 +113,26 @@ int l_has_lock(struct lustre_lock *lock)
                 CDEBUG(D_INFO, "lock_depth: %d\n", depth);
         return owner;
 }
+
+#ifdef __KERNEL__
+#include <linux/lustre_version.h>
+void l_check_no_ns_lock(struct ldlm_namespace *ns)
+{
+        static long next_msg;
+
+        if (l_has_lock(&ns->ns_lock) && time_after(jiffies, next_msg)) {
+                CERROR("namespace %s lock held during RPCs; tell phil\n",
+                       ns->ns_name);
+#if (LUSTRE_KERNEL_VERSION >= 30)
+                CERROR(portals_debug_dumpstack());
+#endif
+                next_msg = jiffies + 60 * HZ;
+        }
+}
+
+#else
+void l_check_no_ns_lock(struct ldlm_namespace *ns)
+{
+#warning "FIXME: check lock in user space??"
+}
+#endif /* __KERNEL__ */

@@ -20,7 +20,9 @@
  *
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #define DEBUG_SUBSYSTEM S_RPC
 
 #ifdef __KERNEL__
@@ -38,62 +40,6 @@
 
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
-static int ldlm_hooks_referenced = 0;
-
-int (*ptlrpc_ldlm_namespace_cleanup)(struct ldlm_namespace *, int);
-int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
-
-#define GET_HOOK(name)                                                         \
-if (!ptlrpc_##name) {                                                          \
-        if (!(ptlrpc_##name = inter_module_get(#name))) {                      \
-                CERROR("can't i_m_g(\"" #name "\")\n");                        \
-                return 0;                                                      \
-        }                                                                      \
-}
-
-static int ldlm_hooks_referenced;
-
-/* This is called from ptlrpc_get_connection, which runs after all the modules
- * are loaded, but before anything else interesting happens.
- */
-int ptlrpc_get_ldlm_hooks(void)
-{
-        if (ldlm_hooks_referenced)
-                return 1;
-
-        GET_HOOK(ldlm_namespace_cleanup);
-        GET_HOOK(ldlm_replay_locks);
-
-        ldlm_hooks_referenced = 1;
-        RETURN(1);
-}
-
-#undef GET_HOOK
-
-#define PUT_HOOK(hook)                                                         \
-if (ptlrpc_##hook) {                                                           \
-        inter_module_put(#hook);                                               \
-        ptlrpc_##hook = NULL;                                                  \
-}
-
-void ptlrpc_put_ldlm_hooks(void)
-{
-        ENTRY;
-        if (!ldlm_hooks_referenced)
-                return;
-
-        PUT_HOOK(ldlm_namespace_cleanup);
-        PUT_HOOK(ldlm_replay_locks);
-        ldlm_hooks_referenced = 0;
-        EXIT;
-}
-
-#undef PUT_HOOK
-
-int ptlrpc_ldlm_hooks_referenced(void)
-{
-        return ldlm_hooks_referenced;
-}
 
 __init int ptlrpc_init(void)
 {
@@ -111,16 +57,20 @@ __init int ptlrpc_init(void)
 
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
         ptlrpc_abort_inflight_superhack = ptlrpc_abort_inflight;
+
+        ptlrpc_start_pinger();
+        ldlm_init();
         RETURN(0);
 }
 
+#ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
+        ldlm_exit();
+        ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
-#ifdef ENABLE_ORPHANS
         llog_cleanup_commit_master(0);
-#endif
 }
 
 /* connection.c */
@@ -156,6 +106,7 @@ EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_free_req);
 EXPORT_SYMBOL(ptlrpc_unregister_reply);
 EXPORT_SYMBOL(ptlrpc_req_finished);
+EXPORT_SYMBOL(ptlrpc_req_finished_with_imp_lock);
 EXPORT_SYMBOL(ptlrpc_request_addref);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_imp);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
@@ -168,17 +119,25 @@ EXPORT_SYMBOL(ptlrpc_next_xid);
 
 EXPORT_SYMBOL(ptlrpc_prep_set);
 EXPORT_SYMBOL(ptlrpc_set_add_req);
+EXPORT_SYMBOL(ptlrpc_set_add_new_req);
 EXPORT_SYMBOL(ptlrpc_set_destroy);
+EXPORT_SYMBOL(ptlrpc_set_next_timeout);
+EXPORT_SYMBOL(ptlrpc_check_set);
 EXPORT_SYMBOL(ptlrpc_set_wait);
+EXPORT_SYMBOL(ptlrpc_expired_set);
+EXPORT_SYMBOL(ptlrpc_interrupted_set);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);
 EXPORT_SYMBOL(ptlrpc_stop_all_threads);
+EXPORT_SYMBOL(ptlrpc_start_n_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 
 /* pack_generic.c */
-EXPORT_SYMBOL(lustre_pack_msg);
+EXPORT_SYMBOL(lustre_msg_swabbed);
+EXPORT_SYMBOL(lustre_pack_request);
+EXPORT_SYMBOL(lustre_pack_reply);
 EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
@@ -190,9 +149,9 @@ EXPORT_SYMBOL(lustre_swab_obd_statfs);
 EXPORT_SYMBOL(lustre_swab_obd_ioobj);
 EXPORT_SYMBOL(lustre_swab_niobuf_remote);
 EXPORT_SYMBOL(lustre_swab_ost_body);
+EXPORT_SYMBOL(lustre_swab_ost_last_id);
 EXPORT_SYMBOL(lustre_swab_ll_fid);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
-EXPORT_SYMBOL(lustre_swab_mds_fileh_body);
 EXPORT_SYMBOL(lustre_swab_mds_body);
 EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);
@@ -201,7 +160,7 @@ EXPORT_SYMBOL(lustre_swab_mds_rec_unlink);
 EXPORT_SYMBOL(lustre_swab_mds_rec_rename);
 EXPORT_SYMBOL(lustre_swab_lov_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
-EXPORT_SYMBOL(lustre_swab_ldlm_extent);
+EXPORT_SYMBOL(lustre_swab_ldlm_policy_data);
 EXPORT_SYMBOL(lustre_swab_ldlm_intent);
 EXPORT_SYMBOL(lustre_swab_ldlm_resource_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
@@ -211,14 +170,11 @@ EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
 
-/* ptlrpc_module.c */
-EXPORT_SYMBOL(ptlrpc_put_ldlm_hooks);
-EXPORT_SYMBOL(ptlrpc_ldlm_hooks_referenced);
-
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);
 EXPORT_SYMBOL(ptlrpc_run_failed_import_upcall);
-EXPORT_SYMBOL(ptlrpc_reconnect_import);
+EXPORT_SYMBOL(ptlrpc_connect_import);
+EXPORT_SYMBOL(ptlrpc_disconnect_import);
 EXPORT_SYMBOL(ptlrpc_replay);
 EXPORT_SYMBOL(ptlrpc_resend);
 EXPORT_SYMBOL(ptlrpc_wake_delayed);
@@ -227,18 +183,24 @@ EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_fail_export);
 EXPORT_SYMBOL(ptlrpc_recover_import);
 
-/*ptlrpc_lib.c*/
-EXPORT_SYMBOL(client_obd_setup);
-EXPORT_SYMBOL(client_obd_cleanup);
-
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);
 EXPORT_SYMBOL(ptlrpc_pinger_del_import);
 EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
 
-#ifdef __KERNEL__
+/* lproc_ptlrpc.c */
+EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
+EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
+
+/* llogd.c */
+EXPORT_SYMBOL(llog_origin_handle_create);
+EXPORT_SYMBOL(llog_origin_handle_next_block);
+EXPORT_SYMBOL(llog_origin_handle_read_header);
+EXPORT_SYMBOL(llog_origin_handle_close);
+EXPORT_SYMBOL(llog_client_ops);
+
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Request Processor");
+MODULE_DESCRIPTION("Lustre Request Processor and Lock Management");
 MODULE_LICENSE("GPL");
 
 module_init(ptlrpc_init);

@@ -46,23 +46,32 @@ struct fsfilt_operations {
         void   *(* fs_brw_start)(int objcount, struct fsfilt_objinfo *fso,
                                  int niocount, void *desc_private);
         int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
+        int     (* fs_commit_async)(struct inode *inode, void *handle,
+                                        void **wait_handle);
+        int     (* fs_commit_wait)(struct inode *inode, void *handle);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr, int do_trunc);
+        int     (* fs_iocontrol)(struct inode *inode, struct file *file,
+                                 unsigned int cmd, unsigned long arg);
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
                               int size);
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
-        int     (* fs_journal_data)(struct file *file);
-        int     (* fs_set_last_rcvd)(struct obd_device *obd, __u64 last_rcvd,
-                                     void *handle, fsfilt_cb_t cb_func,
-                                     void *cb_data);
+        int     (* fs_add_journal_cb)(struct obd_device *obd, __u64 last_rcvd,
+                                      void *handle, fsfilt_cb_t cb_func,
+                                      void *cb_data);
         int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
         int     (* fs_sync)(struct super_block *sb);
+        int     (* fs_map_inode_page)(struct inode *inode, struct page *page,
+                                      unsigned long *blocks, int *created,
+                                      int create);
         int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
                                       int nblocks, loff_t newsize);
-        int     (* fs_write_record)(struct file *, void *, int size, loff_t *);
+        int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
+                                    int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
+        int     (* fs_setup)(struct super_block *sb);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -141,6 +150,30 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
         return rc;
 }
 
+static inline int fsfilt_commit_async(struct obd_device *obd,
+                                         struct inode *inode,
+                                         void *handle,
+                                         void **wait_handle)
+{
+        unsigned long now = jiffies;
+        int rc = obd->obd_fsops->fs_commit_async(inode, handle, wait_handle);
+        CDEBUG(D_HA, "committing handle %p (async)\n", *wait_handle);
+        if (time_after(jiffies, now + 15 * HZ))
+                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        return rc;
+}
+
+static inline int fsfilt_commit_wait(struct obd_device *obd, struct inode *inode,
+                                        void *handle)
+{
+        unsigned long now = jiffies;
+        int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
+        CDEBUG(D_HA, "waiting for completion %p\n", handle);
+        if (time_after(jiffies, now + 15 * HZ))
+                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        return rc;
+}
+
 static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
                                  void *handle, struct iattr *iattr,int do_trunc)
 {
@@ -150,6 +183,13 @@ static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long setattr time %lus\n", (jiffies - now) / HZ);
         return rc;
+}
+
+static inline int fsfilt_iocontrol(struct obd_device *obd, struct inode *inode,
+                                   struct file *file, unsigned int cmd,
+                                   unsigned long arg)
+{
+        return obd->obd_fsops->fs_iocontrol(inode, file, cmd, arg);
 }
 
 static inline int fsfilt_set_md(struct obd_device *obd, struct inode *inode,
@@ -171,28 +211,32 @@ static inline ssize_t fsfilt_readpage(struct obd_device *obd,
         return obd->obd_fsops->fs_readpage(file, buf, count, offset);
 }
 
-static inline int fsfilt_journal_data(struct obd_device *obd, struct file *file)
+static inline int fsfilt_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
+                                        void *handle, fsfilt_cb_t cb_func,
+                                        void *cb_data)
 {
-        return obd->obd_fsops->fs_journal_data(file);
+        return obd->obd_fsops->fs_add_journal_cb(obd, last_rcvd, handle,
+                                                 cb_func, cb_data);
 }
 
-static inline int fsfilt_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
-                                       void *handle, fsfilt_cb_t cb_func,
-                                       void *cb_data)
-{
-        return obd->obd_fsops->fs_set_last_rcvd(obd, last_rcvd, handle,
-                                                cb_func, cb_data);
-}
-
-static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *fs,
+static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
                                 struct obd_statfs *osfs)
 {
-        return obd->obd_fsops->fs_statfs(fs, osfs);
+        return obd->obd_fsops->fs_statfs(sb, osfs);
 }
 
-static inline int fsfilt_sync(struct obd_device *obd, struct super_block *fs)
+static inline int fsfilt_sync(struct obd_device *obd, struct super_block *sb)
 {
-        return obd->obd_fsops->fs_sync(fs);
+        return obd->obd_fsops->fs_sync(sb);
+}
+
+static inline int fsfilt_map_inode_page(struct obd_device *obd,
+                                        struct inode *inode, struct page *page,
+                                        unsigned long *blocks, int *created,
+                                        int create)
+{
+        return obd->obd_fsops->fs_map_inode_page(inode, page, blocks, created,
+                                                 create);
 }
 
 static inline int fs_prep_san_write(struct obd_device *obd,
@@ -212,9 +256,17 @@ static inline int fsfilt_read_record(struct obd_device *obd, struct file *file,
 }
 
 static inline int fsfilt_write_record(struct obd_device *obd, struct file *file,
-                                      void *buf, loff_t size, loff_t *offs)
+                                      void *buf, loff_t size, loff_t *offs,
+                                      int force_sync)
 {
-        return obd->obd_fsops->fs_write_record(file, buf, size, offs);
+        return obd->obd_fsops->fs_write_record(file, buf, size,offs,force_sync);
+}
+
+static inline int fsfilt_setup(struct obd_device *obd, struct super_block *fs)
+{
+        if (obd->obd_fsops->fs_setup)
+                return obd->obd_fsops->fs_setup(fs);
+        return 0;
 }
 
 #endif /* __KERNEL__ */

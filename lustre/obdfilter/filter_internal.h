@@ -16,6 +16,8 @@
 #include <linux/lustre_handles.h>
 #include <linux/obd.h>
 
+#define FILTER_LAYOUT_VERSION "2"
+
 #ifndef OBD_FILTER_DEVICENAME
 # define OBD_FILTER_DEVICENAME "obdfilter"
 #endif
@@ -25,9 +27,7 @@
 #endif
 
 #define LAST_RCVD "last_rcvd"
-#define FILTER_INIT_OBJID 2
-/* max creates/sec * journal->j_commit_interval */
-#define FILTER_SKIP_OBJID (10000 * 5)
+#define FILTER_INIT_OBJID 0
 
 #define FILTER_LR_SERVER_SIZE    512
 
@@ -39,15 +39,21 @@
 #define FILTER_LR_MAX_CLIENT_WORDS (FILTER_LR_MAX_CLIENTS/sizeof(unsigned long))
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
+#define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
 #define FILTER_MOUNT_RECOV 2
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
-/* Data stored per server at the head of the last_rcvd file.  In le32 order. */
+#define FILTER_ROCOMPAT_SUPP   (0)
+
+#define FILTER_INCOMPAT_GROUPS 0x00000001
+#define FILTER_INCOMPAT_SUPP   (FILTER_INCOMPAT_GROUPS)
+
+/* Data stored per server at the head of the last_rcvd file.  In le32 order.
+ * Try to keep this the same as mds_server_data so we might one day merge. */
 struct filter_server_data {
-        __u8  fsd_uuid[37];        /* server UUID */
-        __u8  fsd_uuid_padding[3]; /* unused */
-        __u64 fsd_last_objid;      /* last created object ID */
+        __u8  fsd_uuid[40];        /* server UUID */
+        __u64 fsd_unused;          /* was fsd_last_objid - don't use for now */
         __u64 fsd_last_transno;    /* last completed transaction ID */
         __u64 fsd_mount_count;     /* FILTER incarnation number */
         __u32 fsd_feature_compat;  /* compatible feature flags */
@@ -59,35 +65,17 @@ struct filter_server_data {
         __u16 fsd_subdir_count;    /* number of subdirectories for objects */
         __u64 fsd_catalog_oid;     /* recovery catalog object id */
         __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  fsd_peeruuid[37];    /* UUID of MDS associated with this OST */
-        __u8  peer_padding[3];     /* unused */
+        __u8  fsd_peeruuid[40];    /* UUID of MDS associated with this OST */
         __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct filter_client_data {
-        __u8  fcd_uuid[37];        /* client UUID */
-        __u8  fcd_uuid_padding[3]; /* unused */
+        __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_mount_count;     /* FILTER incarnation number */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
         __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 64];
-};
-
-/* file data for open files on OST */
-struct filter_file_data {
-        struct portals_handle ffd_handle;
-        atomic_t              ffd_refcount;
-        struct list_head      ffd_export_list; /* export open list - fed_lock */
-        struct file          *ffd_file;         /* file handle */
-};
-
-struct filter_dentry_data {
-        struct llog_cookie      fdd_cookie;
-        obd_id                  fdd_objid;
-        __u32                   fdd_magic;
-        atomic_t                fdd_open_count;
-        int                     fdd_flags;
 };
 
 #define FILTER_DENTRY_MAGIC 0x9efba101
@@ -105,21 +93,22 @@ enum {
 };
 
 /* filter.c */
-struct dentry *filter_parent(struct obd_device *, obd_mode mode, obd_id objid);
-struct dentry *filter_parent_lock(struct obd_device *, obd_mode mode,
-                                  obd_id objid, ldlm_mode_t lock_mode,
-                                  struct lustre_handle *lockh);
+struct dentry *filter_parent(struct obd_device *, obd_gr group, obd_id objid);
+struct dentry *filter_parent_lock(struct obd_device *, obd_gr, obd_id,
+                                  ldlm_mode_t, struct lustre_handle *);
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
-                                 obd_mode mode, obd_id id);
+                                 obd_gr group, obd_id id);
 struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
                                   const char *what);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
-__u64 filter_next_id(struct filter_obd *);
+__u64 filter_next_id(struct filter_obd *, struct obdo *);
+__u64 filter_last_id(struct filter_obd *, struct obdo *);
 int filter_update_server_data(struct obd_device *, struct file *,
-                              struct filter_server_data *);
+                              struct filter_server_data *, int force_sync);
+int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         char *option);
 
@@ -130,23 +119,35 @@ int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *);
-int filter_brw(int cmd, struct lustre_handle *, struct obdo *,
+int filter_brw(int cmd, struct obd_export *, struct obdo *,
 	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
 	       struct obd_trans_info *);
+void flip_into_page_cache(struct inode *inode, struct page *new_page);
+
+/* filter_io_*.c */
+int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
+                          struct obd_ioobj *obj, int niocount,
+                          struct niobuf_local *res, struct obd_trans_info *oti);
 
 /* filter_log.c */
-int filter_log_cancel(struct lustre_handle *, struct lov_stripe_md *,
-                      int num_cookies, struct llog_cookie *, int flags);
-int filter_log_op_create(struct llog_handle *cathandle, struct ll_fid *mds_fid,
-                         obd_id oid, obd_count ogen, struct llog_cookie *);
-int filter_log_op_orphan(struct llog_handle *cathandle, obd_id oid,
-                         obd_count ogen, struct llog_cookie *);
-struct llog_handle *filter_get_catalog(struct obd_device *);
-void filter_put_catalog(struct llog_handle *cathandle);
+struct ost_filterdata {
+        __u32  ofd_epoch;
+};
+int filter_log_sz_change(struct llog_handle *cathandle, 
+                         struct ll_fid *mds_fid,
+                         __u32 io_epoch,
+                         struct llog_cookie *logcookie, 
+                         struct inode *inode);
+//int filter_get_catalog(struct obd_device *);
+void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
+                              void *cb_data, int error);
+int filter_recov_log_unlink_cb(struct llog_handle *llh,
+                               struct llog_rec_hdr *rec, void *data);
 
 /* filter_san.c */
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf);
 int filter_san_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                       struct obd_ioobj *, int niocount, struct niobuf_remote *);
+
 
 #endif

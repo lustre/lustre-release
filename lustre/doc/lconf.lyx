@@ -1,5 +1,5 @@
-#LyX 1.2 created this file. For more info see http://www.lyx.org/
-\lyxformat 220
+#LyX 1.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 221
 \textclass amsart
 \language english
 \inputencoding auto
@@ -56,32 +56,8 @@ This program configures a node following directives in the <XML-config-file>.
  on an LDAP server that can be reached from all the cluster nodes.
 \layout Description
 
---ldapurl\SpecialChar ~
-<arg> LDAP server URL 
-\layout Description
-
 --config\SpecialChar ~
 <arg> Cluster configuration name used for LDAP query
-\layout Description
-
---select\SpecialChar ~
-<arg> Select a particular node for a service 
-\layout Description
-
---node\SpecialChar ~
-node_name Specify a specific node to configure.
- By default, lconf will search for nodes with the local hostname and 'localhost'.
- When
-\emph on 
- --node
-\emph default 
- is used, only 
-\emph on 
-node_name
-\emph default 
- is searched for.
- If a matching node is not found in the config, then lconf exits with an
- error.
 \layout Description
 
 --d|--cleanup Unconfigure a node.
@@ -94,12 +70,14 @@ node_name
  including unloading the kernel modules.
 \layout Description
 
---force Forced unmounting and/or obd detach during cleanup.
- Default is 0.
- 
+--dump\SpecialChar ~
+<file> Dump the kernel debug log to the specified file before portals
+ is unloaded during cleanup.
 \layout Description
 
---mds_ost_conn Open connections to OSTs on MDS.
+--dump_path\SpecialChar ~
+<arg> Path to save debug dumps.
+ Default is /tmp/lustre_log
 \layout Description
 
 --failover Used to shutdown without saving state.
@@ -109,12 +87,9 @@ node_name
  This will not be a clean shutdown.
 \layout Description
 
---noexec Print, but don't execute, the steps lconf will perform.
- This is useful for debugging a configuration, and when used with 
-\emph on 
---node
-\emph default 
-, can be run on any host.
+--force Forced unmounting and/or obd detach during cleanup.
+ Default is 0.
+ 
 \layout Description
 
 --gdb Causes lconf to print a message and pause for 5 seconds after creating
@@ -127,34 +102,28 @@ node_name
  Default is /tmp/ogdb.
 \layout Description
 
---dump_path\SpecialChar ~
-<arg> Path to save debug dumps.
- Default is /tmp/lustre_log
-\layout Description
-
---recover\SpecialChar ~
-<arg> Recover a device.
-\layout Description
-
---nosetup Only load modules, do not configure devices or services.
-\layout Description
-
 --group\SpecialChar ~
 <arg> The group of devices to cleanup/configure.
 \layout Description
 
---nomod Only setup devices and services, do not load modules.
+-h,--help Print help.
 \layout Description
 
---noexec,-n Don't do anything, but print what would happen.
- Useful for debugging purposes.
+--inactive\SpecialChar ~
+<UUID> The UUID of the service to be ignored by a client mounting
+ Lustre.
+ Allows the client to mount in the presence of some inactive services.
+ (currently OST only).
+ Multiple UUIDs can be specified by repeating the option.
+ 
 \layout Description
 
---verbose,-v Be verbose and show actions while going along.
+--lctl-dump\SpecialChar ~
+<arg> Dump all ioctls to the specified file
 \layout Description
 
---timeout\SpecialChar ~
-<arg> Set the recovery timeout period.
+--ldapurl\SpecialChar ~
+<arg> LDAP server URL 
 \layout Description
 
 --lustre_upcall\SpecialChar ~
@@ -162,30 +131,11 @@ node_name
  by the client for recovery
 \layout Description
 
---portals_upcall\SpecialChar ~
-<path> Specify the location of the Portals upcall scripts
- used by the client for recovery
+--lustre=src_dir Specify the base directory for Lustre sources, this parameter
+ will cause lconf to load the lustre modules from this soure tree.
 \layout Description
 
---upcall\SpecialChar ~
-<path> Set the location of both Lustre and Portals upcall scripts
- used by the client for recovery
-\layout Description
-
---lctl-dump\SpecialChar ~
-<arg> Dump all ioctls to the specified file
-\layout Description
-
---dump\SpecialChar ~
-<file> Dump the kernel debug log to the specified file before portals
- is unloaded during cleanup.
-\layout Description
-
---reformat Reformat all the devices.
- This is essential on the first time the file system is brought up.
-\layout Description
-
--h,--help Print help.
+--mds_ost_conn Open connections to OSTs on MDS.
 \layout Description
 
 --maxlevel\SpecialChar ~
@@ -210,8 +160,39 @@ When used in conjunction with cleanup, services are torn down up to a certain
  Default is 0.
 \layout Description
 
---lustre=src_dir Specify the base directory for Lustre sources, this parameter
- will cause lconf to load the lustre modules from this soure tree.
+--node\SpecialChar ~
+node_name Specify a specific node to configure.
+ By default, lconf will search for nodes with the local hostname and 'localhost'.
+ When
+\emph on 
+ --node
+\emph default 
+ is used, only 
+\emph on 
+node_name
+\emph default 
+ is searched for.
+ If a matching node is not found in the config, then lconf exits with an
+ error.
+\layout Description
+
+--noexec,-n Print, but don't execute, the steps lconf will perform.
+ This is useful for debugging a configuration, and when used with 
+\emph on 
+--node
+\emph default 
+, can be run on any host.
+\layout Description
+
+--nomod Only setup devices and services, do not load modules.
+\layout Description
+
+--nosetup Only load modules, do not configure devices or services.
+\layout Description
+
+--portals_upcall\SpecialChar ~
+<path> Specify the location of the Portals upcall scripts
+ used by the client for recovery
 \layout Description
 
 --ptldebug\SpecialChar ~
@@ -220,8 +201,35 @@ level This options can be used to set the required debug
  level.
 \layout Description
 
+--recover\SpecialChar ~
+<arg> Recover a device.
+\layout Description
+
+--reformat Reformat all the devices.
+ This is essential on the first time the file system is brought up.
+\layout Description
+
+--select\SpecialChar ~
+<arg> Select a particular node for a service 
+\layout Description
+
 --subsystem\SpecialChar ~
 <arg> Set the portals debug subsystem.
+\layout Description
+
+--timeout\SpecialChar ~
+<arg> Set the recovery timeout period.
+\layout Description
+
+--upcall\SpecialChar ~
+<path> Set the location of both Lustre and Portals upcall scripts
+ used by the client for recovery
+\layout Description
+
+--verbose,-v Be verbose and show actions while going along.
+\layout Description
+
+--write_conf Save all client configuration information on the MDS
 \layout Subsection
 
 EXAMPLES
@@ -277,6 +285,16 @@ ldlm|ha
 \end_inset 
 
 
+\layout Standard
+
+A subset of failed OSTs can be ignored during Lustre mount on the clients
+ by using the following option:
+\layout LyX-Code
+
+   lconf --inactive OST_ost1_UUID --inactive OST_ost2_UUID config.xml
+\layout Standard
+
+where OST1 and OST2 have failed and need to be ignored.
 \layout Subsection
 
 BUGS

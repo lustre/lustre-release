@@ -19,6 +19,7 @@ struct lov_getattr_async_args {
         struct lov_stripe_md  *aa_lsm;
         struct obdo           *aa_oa;
         struct obdo           *aa_obdos;
+        struct lov_obd        *aa_lov;
 };
 
 static inline int lov_stripe_md_size(int stripes)
@@ -26,9 +27,17 @@ static inline int lov_stripe_md_size(int stripes)
         return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo);
 }
 
-static inline int lov_mds_md_size(int stripes)
+static inline int lov_mds_md_v0_size(int stripes)
 {
-        return sizeof(struct lov_mds_md) + stripes*sizeof(struct lov_object_id);
+        return sizeof(struct lov_mds_md_v0) +
+                stripes * sizeof(struct lov_ost_data_v0);
+}
+
+#define lov_mds_md_size(stripes) lov_mds_md_v1_size(stripes)
+static inline int lov_mds_md_v1_size(int stripes)
+{
+        return sizeof(struct lov_mds_md_v1) +
+                stripes * sizeof(struct lov_ost_data_v1);
 }
 
 #define IOC_LOV_TYPE                   'g'

@@ -47,3 +47,10 @@ o_directory
 mkdirdeep
 utime
 small_write
+multiop
+sleeptest
+write_append_truncate
+ll_sparseness_verify
+ll_sparseness_write
+mrename
+cmknod

@@ -14,15 +14,15 @@ my $max = 0;
 while ($line = <>) {
     $debug_line++;
     my ($file, $func, $lno, $name, $size, $addr, $type);
-    if ($line =~ m/^.*\((.*):(\d+):(.*)\(\) (\d+ \| )?\d+\+\d+\): (k|v|slab-)(.*) '(.*)': (\d+) at (.*) \(tot (.*)\).*$/) {
-        $file = $1;
-        $lno = $2;
-        $func = $3;
+    if ($line =~ m/^.*(\.).*\((.*):(\d+):(.*)\(\)\) (k|v|slab-)(.*) '(.*)': (\d+) at (.*) \(tot (.*)\).*$/){
+        $file = $2;
+        $lno  = $3;
+        $func = $4;
         $type = $6;
         $name = $7;
         $size = $8;
         $addr = $9;
-        $tot = $10;
+        $tot  = $10;
 
 	# we can't dump the log after portals has exited, so skip "leaks"
 	# from memory freed in the portals module unloading.
@@ -86,4 +86,4 @@ foreach $key (@sorted) {
     print STDERR "*** Leak: $memory->{$key}->{size} bytes allocated at $key ($memory->{$key}->{file}:$memory->{$key}->{func}:$memory->{$key}->{lno}, debug file line $memory->{$key}->{debug_line})\n";
 }
 
-print "maximum used: $max, amount leaked: $total\n";
+print STDERR "maximum used: $max, amount leaked: $total\n";

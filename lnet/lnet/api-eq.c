@@ -123,13 +123,22 @@ static jmp_buf eq_jumpbuf;
 
 static void eq_timeout(int signal)
 {
+        sigset_t set;
+
+        /* signal will be automatically disabled in sig handler,
+         * must enable it before long jump
+         */
+        sigemptyset(&set);
+        sigaddset(&set, SIGALRM);
+        sigprocmask(SIG_UNBLOCK, &set, NULL);
+
         longjmp(eq_jumpbuf, -1);
 }
 
 int PtlEQWait_timeout(ptl_handle_eq_t eventq_in, ptl_event_t * event_out,
                       int timeout)
 {
-        static void (*prev) (int);
+        static void (*prev) (int) = NULL;
         static int left_over;
         time_t time_at_start;
         int rc;
@@ -143,7 +152,7 @@ int PtlEQWait_timeout(ptl_handle_eq_t eventq_in, ptl_event_t * event_out,
         left_over = alarm(timeout);
         prev = signal(SIGALRM, eq_timeout);
         time_at_start = time(NULL);
-        if (left_over < timeout)
+        if (left_over && left_over < timeout)
                 alarm(left_over);
 
         rc = PtlEQWait(eventq_in, event_out);

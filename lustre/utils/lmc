@@ -65,7 +65,6 @@ Object creation command summary:
   --port port
   --tcpbuf size
   --irq_affinity 0|1
-  --nid_exchange 0|1
   --router
 
 --add mds
@@ -75,6 +74,7 @@ Object creation command summary:
   --fstype extN|ext3
   --size size
   --nspath
+  --journal_size size
 
 --add lov
   --lov lov_name
@@ -83,21 +83,32 @@ Object creation command summary:
   --stripe_cnt num
   --stripe_pattern num
 
--add ost
+--add ost
   --node node_name
   --ost ost_name 
   --lov lov_name 
   --dev path
   --size size
   --fstype extN|ext3
+  --journal_size size
+  --obdtype obdecho|obdfilter
   --ostuuid uuid
-  --nspath
-  
+ 
 --add mtpt  - Mountpoint
   --node node_name
   --path /mnt/point
   --mds mds_name
   --ost ost_name OR --lov lov_name
+
+--add route
+  --node nodename
+  --gw nid
+  --tgt nid
+  --lo nid
+  --hi nid
+
+--add echo_client
+  --node nodename
 
 --add mgmt  - Management/monitoring service
   --node node_name
@@ -129,7 +140,6 @@ lmc_options = [
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
     ('tcpbuf', "Optional argument to specify the TCP buffer size.", PARAM, "0"),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
-    ('nid_exchange', "Optional argument to indicate if nid exchange should be done.", PARAM, 0),
     ('irq_affinity', "Optional argument.", PARAM, 0),
     ('hostaddr', "", PARAM,""),
     ('cluster_id', "Specify the cluster ID", PARAM, "0"),
@@ -153,6 +163,7 @@ lmc_options = [
     ('size', "Specify the size of the device if needed.", PARAM,"0"),
     ('journal_size', "Specify new journal size for underlying ext3 file system.", PARAM,"0"),
     ('fstype', "Optional argument to specify the filesystem type.", PARAM, "ext3"),
+    ('mkfsoptions', "Optional argument to mkfs.", PARAM, ""),
     ('ostuuid', "", PARAM,""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
@@ -274,7 +285,7 @@ class GenConfig:
         return new
 
     def network(self, name, uuid, nid, cluster_id, net, hostaddr="",
-                port=0, tcpbuf=0, irq_aff=0, nid_xchg=0):
+                port=0, tcpbuf=0, irq_aff=0):
         """create <network> node"""
         network = self.newService("network", name, uuid)
         network.setAttribute("nettype", net);
@@ -289,8 +300,6 @@ class GenConfig:
             self.addElement(network, "recvmem", "%d" %(tcpbuf))
         if irq_aff:
             self.addElement(network, "irqaffinity", "%d" %(irq_aff))
-        if nid_xchg:
-            self.addElement(network, "nidexchange", "%d" %(nid_xchg))
             
         return network
 
@@ -384,7 +393,7 @@ class GenConfig:
         return mds
 
     def mdsdev(self, name, uuid, fs, devname, format, node_uuid,
-            mds_uuid, dev_size=0, journal_size=0, nspath=""):
+            mds_uuid, dev_size=0, journal_size=0, nspath="", mkfsoptions=""):
         mdd = self.newService("mdsdev", name, uuid)
         self.addElement(mdd, "fstype", fs)
         dev = self.addElement(mdd, "devpath", devname)
@@ -395,6 +404,8 @@ class GenConfig:
             self.addElement(mdd, "journalsize", "%s" % (journal_size))
         if nspath:
             self.addElement(mdd, "nspath", nspath)
+        if mkfsoptions:
+            self.addElement(mdd, "mkfsoptions", mkfsoptions)
         mdd.appendChild(self.ref("node", node_uuid))
         mdd.appendChild(self.ref("target", mds_uuid))
         return mdd
@@ -585,12 +596,10 @@ def add_net(gen, lustre, options):
         port = get_option_int(options, 'port')
         tcpbuf = get_option_int(options, 'tcpbuf')
         irq_aff = get_option_int(options, 'irq_affinity')
-        nid_xchg = get_option_int(options, 'nid_exchange')
     elif net_type in ('elan', 'gm', 'scimac'):
         port = 0
         tcpbuf = 0
         irq_aff = 0
-        nid_xchg = 0
     else:
         print "Unknown net_type: ", net_type
         sys.exit(2)
@@ -605,7 +614,7 @@ def add_net(gen, lustre, options):
     net_name = new_name('NET_'+ node_name +'_'+ net_type)
     net_uuid = new_uuid(net_name)
     node.appendChild(gen.network(net_name, net_uuid, nid, cluster_id, net_type,
-                                 hostaddr, port, tcpbuf, irq_aff, nid_xchg))
+                                 hostaddr, port, tcpbuf, irq_aff))
     node_add_profile(gen, node, "network", net_uuid)
 
 
@@ -660,6 +669,7 @@ def add_mds(gen, lustre, options):
     fstype = get_option(options, 'fstype')
     journal_size = get_option(options, 'journal_size')
     nspath = get_option(options, 'nspath')
+    mkfsoptions = get_option(options, 'mkfsoptions')
 
     node_uuid = name2uuid(lustre, node_name, 'node')
 
@@ -671,7 +681,7 @@ def add_mds(gen, lustre, options):
 
     mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname,
                      get_format_flag(options), node_uuid, mds_uuid,
-                     size, journal_size, nspath)
+                     size, journal_size, nspath, mkfsoptions)
     lustre.appendChild(mdd)
                    
 

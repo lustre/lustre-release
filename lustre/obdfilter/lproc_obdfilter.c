@@ -25,6 +25,8 @@
 #include <linux/lprocfs_status.h>
 #include <linux/obd.h>
 
+#include "filter_internal.h"
+
 #ifndef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
@@ -42,6 +44,18 @@ static int lprocfs_filter_rd_mntdev(char *page, char **start, off_t off,
                         obd->u.filter.fo_vfsmnt->mnt_devname);
 }
 
+static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        if (obd == NULL)
+                return 0;
+
+        return snprintf(page, count, LPU64"\n",
+                        filter_last_id(&obd->u.filter, 0));
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -52,6 +66,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         //{ "filegroups",   lprocfs_rd_filegroups,    0, 0 },
         { "fstype",       lprocfs_rd_fstype,        0, 0 },
         { "mntdev",       lprocfs_filter_rd_mntdev, 0, 0 },
+        { "last_id",      lprocfs_filter_rd_last_id, 0, 0 },
         { 0 }
 };
 

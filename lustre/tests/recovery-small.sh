@@ -9,7 +9,7 @@ PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 RLUSTRE=${RLUSTRE:-$LUSTRE}
 RPWD=${RPWD:-$PWD}
 
-. $LTESTDIR/functional/llite/common/common.sh
+. $LUSTRE/tests/test-framework.sh
 
 # Allow us to override the setup if we already have a mounted system by
 # setting SETUP=" " and CLEANUP=" "
@@ -73,10 +73,12 @@ make_config() {
     done
     lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --dev $MDSDEV \
         --size $MDSSIZE --fstype $FSTYPE || exit 5
-    lmc -m $CONFIG --add ost --node $OSTNODE --ost ost1 --dev $OSTDEV \
-        --size $OSTSIZE --fstype $FSTYPE || exit 6
+    lmc -m $CONFIG --add lov --lov lov1 --mds mds1 --stripe_sz 65536 \
+	--stripe_cnt 0 --stripe_pattern 0 || exit 6 
+    lmc -m $CONFIG --add ost --nspath /mnt/ost_ns --node $OSTNODE \
+	--lov lov1 --dev $OSTDEV --size $OSTSIZE --fstype $FSTYPE || exit 7
     lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --mds mds1 \
-        --ost ost1 || exit 7
+        --lov lov1 || exit 8
 }
 
 start_mds() {
@@ -104,8 +106,8 @@ unmount_client() {
 }
 
 setup() {
-    start_mds --timeout=$TIMEOUT ${REFORMAT}
     start_ost --timeout=$TIMEOUT ${REFORMAT}
+    start_mds --timeout=$TIMEOUT ${REFORMAT}
     # XXX we should write our own upcall, when we move this somewhere better.
     mount_client --timeout=${TIMEOUT} \
         --lustre_upcall=$UPCALL
@@ -113,9 +115,9 @@ setup() {
 
 cleanup() {
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
-    unmount_client $@ || true
-    shutdown_mds $@ || true
-    shutdown_ost $@ || true
+    unmount_client $@ || exit 97
+    shutdown_mds $@ || exit 98
+    shutdown_ost $@ || exit 99
 }
 
 replay() {

@@ -40,6 +40,8 @@ struct osc_brw_async_args {
         int              aa_nio_count;
         obd_count        aa_page_count;
         struct brw_page *aa_pga;
+        struct client_obd *aa_cli;
+        struct list_head aa_oaps;
 };
 
 struct osc_getattr_async_args {

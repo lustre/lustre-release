@@ -52,12 +52,13 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
                 ptlrpc_init_svc(PTLBD_NEVENTS, PTLBD_NBUFS, PTLBD_BUFSIZE,
                                 PTLBD_MAXREQSIZE, PTLBD_REQUEST_PORTAL,
                                 PTLBD_REPLY_PORTAL,
-                                ptlbd_handle, "ptlbd_sv", obddev);
+                                ptlbd_handle, "ptlbd_sv", 
+                                obddev->obd_proc_entry);
 
         if (ptlbd->ptlbd_service == NULL) 
                 GOTO(out_filp, rc = -ENOMEM);
 
-        rc = ptlrpc_start_thread(obddev, ptlbd->ptlbd_service, "ptldb");
+        rc = ptlrpc_start_n_threads(obddev, ptlbd->ptlbd_service, 1, "ptldb");
         if (rc != 0) 
                 GOTO(out_thread, rc);
 
@@ -66,7 +67,6 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(0);
 
 out_thread:
-        ptlrpc_stop_all_threads(ptlbd->ptlbd_service);
         ptlrpc_unregister_service(ptlbd->ptlbd_service);
 out_filp:
         filp_close(ptlbd->filp, NULL);

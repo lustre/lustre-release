@@ -5,25 +5,58 @@
  fs/ext3/inode.c        |   55 +++++++++++++++++++++++++++++++++++++++++++++++++
  2 files changed, 58 insertions(+)
 
---- linux-2.4.18-p4smp/fs/ext3/inode.c~ext3-map_inode_page_2.4.18	2003-07-21 22:51:45.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/ext3/inode.c	2003-07-21 22:51:47.000000000 -0600
-@@ -3003,3 +3003,58 @@ int ext3_prep_san_write(struct inode *in
+Index: linux-2.4.18-p4smp/fs/ext3/ext3-exports.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/fs/ext3/ext3-exports.c	Thu Nov 27 22:18:40 2003
++++ linux-2.4.18-p4smp/fs/ext3/ext3-exports.c	Thu Nov 27 22:18:40 2003
+@@ -9,6 +9,8 @@
+ 
+ int ext3_prep_san_write(struct inode *inode, long *blocks,
+ 	                int nblocks, loff_t newsize);
++int ext3_map_inode_page(struct inode *inode, struct page *page,
++                        unsigned long *block, int *created, int create);
+ 
+ EXPORT_SYMBOL(ext3_force_commit);
+ EXPORT_SYMBOL(ext3_bread);
+@@ -18,3 +20,4 @@
+ EXPORT_SYMBOL(ext3_xattr_list);
+ EXPORT_SYMBOL(ext3_xattr_set);
+ EXPORT_SYMBOL(ext3_prep_san_write);
++EXPORT_SYMBOL(ext3_map_inode_page);
+Index: linux-2.4.18-p4smp/fs/ext3/inode.c
+===================================================================
+--- linux-2.4.18-p4smp.orig/fs/ext3/inode.c	Thu Nov 27 22:18:40 2003
++++ linux-2.4.18-p4smp/fs/ext3/inode.c	Thu Nov 27 22:20:36 2003
+@@ -3004,3 +3004,75 @@
  		ret = ret2;
  	return ret;
  }
++
++/* copied from fs/buffer.c */
++static void unmap_underlying_metadata(struct buffer_head * bh)
++{
++        struct buffer_head *old_bh;
++
++        old_bh = get_hash_table(bh->b_dev, bh->b_blocknr, bh->b_size);
++        if (old_bh) {
++                mark_buffer_clean(old_bh);
++                wait_on_buffer(old_bh);
++                clear_bit(BH_Req, &old_bh->b_state);
++                __brelse(old_bh);
++        }
++}
 +
 +int ext3_map_inode_page(struct inode *inode, struct page *page,
 +                        unsigned long *blocks, int *created, int create)
 +{
 +        unsigned int blocksize, blocks_per_page;
 +        unsigned long iblock;
-+        struct buffer_head dummy;
 +        void *handle;
 +        int i, rc = 0, failed = 0, needed_blocks;
 +
 +        blocksize = inode->i_sb->s_blocksize;
 +        blocks_per_page = PAGE_SIZE >> inode->i_sb->s_blocksize_bits;
-+        iblock = page->index >> (PAGE_SHIFT - inode->i_sb->s_blocksize_bits);
++        iblock = page->index * blocks_per_page;
 +
 +        for (i = 0; i < blocks_per_page; i++, iblock++) {
 +                blocks[i] = ext3_bmap(inode->i_mapping, iblock);
@@ -38,25 +71,29 @@
 +        if (failed == 0 || create == 0)
 +                return 0;
 +
-+        needed_blocks = ext3_writepage_trans_blocks(inode) * failed;
++        needed_blocks = ext3_writepage_trans_blocks(inode);
 +        lock_kernel();
 +        handle = ext3_journal_start(inode, needed_blocks);
 +        unlock_kernel();
 +        if (IS_ERR(handle))
 +                return PTR_ERR(handle);
 +
-+        iblock = page->index >> (PAGE_SHIFT - inode->i_sb->s_blocksize_bits);
++        iblock = page->index * blocks_per_page;
 +        for (i = 0; i < blocks_per_page; i++, iblock++) {
++                struct buffer_head bh;
++
 +                if (blocks[i] != 0)
 +                        continue;
 +
-+                rc = ext3_get_block_handle(handle, inode, iblock, &dummy, 1);
++                rc = ext3_get_block_handle(handle, inode, iblock, &bh, 1);
 +                if (rc) {
-+                        printk(KERN_INFO "ext3_map_inode_page: error reading "
-+                               "block %ld\n", iblock);
++                        printk(KERN_INFO "ext3_map_inode_page: error %d "
++                               "allocating block %ld\n", rc, iblock);
 +                        goto out;
 +                }
-+                blocks[i] = dummy.b_blocknr;
++                if (buffer_new(&bh))
++                        unmap_underlying_metadata(&bh);
++                blocks[i] = bh.b_blocknr;
 +                created[i] = 1;
 +        }
 +
@@ -66,21 +103,3 @@
 +	unlock_kernel();
 +        return rc;
 +}
---- linux-2.4.18-p4smp/fs/ext3/ext3-exports.c~ext3-map_inode_page_2.4.18	2003-07-21 22:51:45.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/ext3/ext3-exports.c	2003-07-21 22:51:47.000000000 -0600
-@@ -9,6 +9,8 @@
- 
- int ext3_prep_san_write(struct inode *inode, long *blocks,
- 	                int nblocks, loff_t newsize);
-+int ext3_map_inode_page(struct inode *inode, struct page *page,
-+                        unsigned long *block, int *created, int create);
- 
- EXPORT_SYMBOL(ext3_force_commit);
- EXPORT_SYMBOL(ext3_bread);
-@@ -18,3 +20,4 @@ EXPORT_SYMBOL(ext3_xattr_get);
- EXPORT_SYMBOL(ext3_xattr_list);
- EXPORT_SYMBOL(ext3_xattr_set);
- EXPORT_SYMBOL(ext3_prep_san_write);
-+EXPORT_SYMBOL(ext3_map_inode_page);
-
-_

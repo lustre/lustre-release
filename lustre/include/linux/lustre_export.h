@@ -23,25 +23,36 @@ struct mds_export_data {
         int                     med_idx;
 };
 
-struct ldlm_export_data {
-        struct list_head       led_held_locks; /* protected by namespace lock */
-        struct obd_import     *led_import;
+struct osc_creator {
+        spinlock_t              oscc_lock;
+        struct list_head        oscc_list;
+        struct obd_export      *oscc_exp;
+        obd_id                  oscc_last_id;//last available pre-created object
+        obd_id                  oscc_next_id;// what object id to give out next
+        int                     oscc_initial_create_count;
+        int                     oscc_grow_count;
+        int                     oscc_kick_barrier;
+        struct osc_created     *oscc_osccd;
+        struct obdo             oscc_oa;
+        int                     oscc_flags;
+        wait_queue_head_t       oscc_waitq; /* creating procs wait on this */
 };
 
-struct lov_export_data {
-        spinlock_t       led_lock;
-        struct list_head led_open_head;
+struct osc_export_data {
+        struct osc_creator      oed_oscc;
+};
+
+struct ldlm_export_data {
+        struct list_head       led_held_locks; /* protected by namespace lock */
 };
 
 struct ec_export_data { /* echo client */
-        struct list_head eced_open_head;
         struct list_head eced_locks;
 };
 
 /* In-memory access to client data from OST struct */
 struct filter_client_data;
 struct filter_export_data {
-        struct list_head           fed_open_head; //files to close on disconnect
         spinlock_t                 fed_lock;      /* protects fed_open_head */
         struct filter_client_data *fed_fcd;
         loff_t                     fed_lr_off;
@@ -54,7 +65,9 @@ struct obd_export {
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
         struct obd_device        *exp_obd;
+        struct obd_import        *exp_imp_reverse;  /* to make rpc's backwards */
         struct ptlrpc_connection *exp_connection;
+        __u32                     exp_conn_cnt;
         struct ldlm_export_data   exp_ldlm_data;
         struct ptlrpc_request    *exp_outstanding_reply;
         time_t                    exp_last_request_time;
@@ -64,14 +77,15 @@ struct obd_export {
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
-                struct lov_export_data    eu_lov_data;
-                struct ec_export_data     eu_ec_data;
+                struct ec_export_data     eu_ec_data;         
+                struct osc_export_data    eu_osc_data;
         } u;
 };
 
 #define exp_mds_data    u.eu_mds_data
 #define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data
+#define exp_osc_data    u.eu_osc_data
 #define exp_ec_data     u.eu_ec_data
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);

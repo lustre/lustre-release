@@ -28,6 +28,7 @@ class Options:
     FLAG = 1
     PARAM = 2
     INTPARAM = 3
+    PARAMLIST = 4
     def __init__(self, cmd, remain_help, options):
         self.options = options
         shorts = ""
@@ -36,9 +37,13 @@ class Options:
         for opt in options:
             long = self.long(opt)
             short = self.short(opt)
-            if self.type(opt) in (Options.PARAM, Options.INTPARAM):
-                if short:  short = short + ':'
-                if long: long = long + '='
+            if self.type(opt) in (Options.PARAM, Options.INTPARAM,
+                                  Options.PARAMLIST):
+                if short: short = short + ':'
+                if long:
+                    long = long + '='
+            if string.find(long, '_') >= 0:
+                longs.append(string.replace(long, '_', '-'))
             shorts = shorts + short
             longs.append(long)
         self.short_opts = shorts
@@ -77,6 +82,8 @@ class Options:
     def default(self, option):
         if len(option) >= 4:
             return option[3]
+        if self.type(option) == Options.PARAMLIST:
+            return []
         return None
 
     def lookup_option(self, key, key_func):
@@ -88,6 +95,7 @@ class Options:
         return self.lookup_option(key, self.short)
 
     def lookup_long(self, key):
+        key = string.replace(key, '-', '_')
         return self.lookup_option(key, self.long)
 
     def handle_opts(self, opts):
@@ -104,6 +112,9 @@ class Options:
                     val = int(a)
                 except ValueError, e:
                     raise error.OptionError("option: '%s' expects integer value, got '%s' "  % (o,a))
+            elif self.type(option) == Options.PARAMLIST:
+                val = values[self.key(option)];
+                val.append(a)
             else:
                 val = 1
             values[self.key(option)] = val
@@ -114,6 +125,11 @@ class Options:
         def __init__(self, values):
             self.__dict__['values'] = values
         def __getattr__(self, name):
+            if self.values.has_key(name):
+                return self.values[name]
+            else:
+                raise error.OptionError("bad option name: " + name)
+        def __getitem__(self, name):
             if self.values.has_key(name):
                 return self.values[name]
             else:

@@ -24,13 +24,13 @@ void commit_confd_conf_import(struct obd_import *import,
 
 
         list_for_each_safe(&import->import_cc_list, tmp, save) {
-                struct llog_commit_data *cd;
+                struct llog_canceld_ctxt *cd;
 
                 if (atomic_read(import->import_cc_count) <=
                     lccd->llcconf_lowwater)
                         break;
 
-                cd = list_entry(tmp, struct llog_commit_data *, llcconf_entry);
+                cd = list_entry(tmp, struct llog_canceld_ctxt *, llcconf_entry);
                 atomic_dec(&import->import_cc_count);
                 commit_confd_add_and_fire(cd);
         }

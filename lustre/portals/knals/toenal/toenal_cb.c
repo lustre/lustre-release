@@ -140,7 +140,7 @@ ktoenal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
 ksock_ltx_t *
 ktoenal_get_ltx (int may_block)
 {
-        long	     flags;
+        unsigned long   flags;
         ksock_ltx_t *ltx = NULL;
         
         for (;;)
@@ -268,7 +268,7 @@ ktoenal_recvmsg(struct file *sock, struct iovec *iov, int niov, int toread)
 }
 
 void
-ktoenal_process_transmit (ksock_conn_t *conn, long *irq_flags)
+ktoenal_process_transmit (ksock_conn_t *conn, unsigned long *irq_flags)
 {
         ksock_tx_t *tx = list_entry (conn->ksnc_tx_queue.next, ksock_tx_t, tx_list);
         int         rc;
@@ -300,7 +300,7 @@ ktoenal_process_transmit (ksock_conn_t *conn, long *irq_flags)
                         rc = 0;                 /* nothing sent */
                 else
                 {
-#warning FIXME: handle socket errors properly
+                        //warning FIXME: handle socket errors properly
                         CERROR ("Error socknal send(%d) %p: %d\n", tx->tx_nob, conn, rc);
                         rc = tx->tx_nob;        /* kid on for now whole packet went */
                 }
@@ -358,7 +358,7 @@ ktoenal_process_transmit (ksock_conn_t *conn, long *irq_flags)
 void
 ktoenal_launch_packet (ksock_conn_t *conn, ksock_tx_t *tx)
 {
-        long          flags;
+        unsigned long flags;
         int           nob = tx->tx_nob;
         struct iovec *iov = tx->tx_iov;
         int           niov = 1;
@@ -371,7 +371,6 @@ ktoenal_launch_packet (ksock_conn_t *conn, ksock_tx_t *tx)
         for (;;)
         {
                 LASSERT (niov <= tx->tx_niov);
-                LASSERT (iov->iov_len >= 0);
                 
                 if (iov->iov_len >= nob)
                 {
@@ -542,7 +541,7 @@ ktoenal_fmb_callback (void *arg, int error)
         ksock_fmb_t       *fmb = (ksock_fmb_t *)arg;
         ptl_hdr_t         *hdr = (ptl_hdr_t *) page_address(fmb->fmb_pages[0]);
         ksock_conn_t      *conn;
-        long               flags;
+        unsigned long     flags;
 
         CDEBUG (D_NET, "routed packet from "LPX64" to "LPX64": %d\n", 
                 hdr->src_nid, hdr->dest_nid, error);
@@ -709,26 +708,7 @@ ktoenal_fwd_parse (ksock_conn_t *conn)
         LASSERT (conn->ksnc_rx_state == SOCKNAL_RX_HEADER);
         LASSERT (conn->ksnc_rx_scheduled);
 
-        switch (conn->ksnc_hdr.type)
-        {
-        case PTL_MSG_GET:
-        case PTL_MSG_ACK:
-                body_len = 0;
-                break;
-        case PTL_MSG_PUT:
-                body_len = conn->ksnc_hdr.msg.put.length;
-                break;
-        case PTL_MSG_REPLY:
-                body_len = conn->ksnc_hdr.msg.reply.length;
-                break;
-        default:
-                /* Unrecognised packet type */
-                CERROR ("Unrecognised packet type %d from "LPX64" for "LPX64"\n",
-                        conn->ksnc_hdr.type, conn->ksnc_hdr.src_nid, conn->ksnc_hdr.dest_nid);
-                /* Ignore this header and go back to reading a new packet. */
-                ktoenal_new_packet (conn, 0);
-                return;
-        }
+        body_len = conn->ksnc_hdr.payload_length;
 
         if (body_len < 0)                               /* length corrupt */
         {
@@ -738,7 +718,7 @@ ktoenal_fwd_parse (ksock_conn_t *conn)
                 return;
         }
 
-        if (body_len > SOCKNAL_MAX_FWD_PAYLOAD)         /* too big to forward */
+        if (body_len > PTL_MTU)         /* too big to forward */
         {
                 CERROR ("dropping packet from "LPX64" for "LPX64": packet size %d too big\n",
                         conn->ksnc_hdr.src_nid, conn->ksnc_hdr.dest_nid, body_len);
@@ -810,7 +790,7 @@ ktoenal_new_packet (ksock_conn_t *conn, int nob_to_skip)
 }
 
 void
-ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
+ktoenal_process_receive (ksock_conn_t *conn, unsigned long *irq_flags)
 {
         ksock_fmb_t *fmb;
         int          len;
@@ -862,7 +842,7 @@ ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
                 if (len != -EAGAIN &&           /* ! nothing to read now */
                     len != 0)                   /* ! nothing to read ever */
                 {
-#warning FIXME: handle socket errors properly
+                        // warning FIXME: handle socket errors properly
                         CERROR ("Error socknal read(%d) %p: %d\n",
                                 conn->ksnc_rx_nob_wanted, conn, len);
                 }

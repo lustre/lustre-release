@@ -31,13 +31,16 @@
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
-#include <syscall.h>
+#ifndef __CYGWIN__
+# include <syscall.h>
+#endif
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+
 #define BUG()                            /* workaround for module.h includes */
 #include <linux/version.h>
 
@@ -55,6 +58,8 @@ static int max = 8192;
 //static int g_pfd = -1;
 static int subsystem_mask = ~0;
 static int debug_mask = ~0;
+
+#define MAX_MARK_SIZE 100
 
 static const char *portal_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
@@ -410,13 +415,17 @@ int jt_dbg_debug_file(int argc, char **argv)
                         strerror(errno));
                 return -1;
         }
-#warning FIXME: cleanup fstat issue here
-#ifndef SYS_fstat64
-#define __SYS_fstat__ SYS_fstat
-#else
-#define __SYS_fstat__ SYS_fstat64
-#endif
+
+#ifndef __CYGWIN__
+# ifndef SYS_fstat64
+#  define __SYS_fstat__ SYS_fstat
+# else
+#  define __SYS_fstat__ SYS_fstat64
+# endif
         rc = syscall(__SYS_fstat__, fd, &statbuf);
+#else
+        rc = fstat(fd, &statbuf);
+#endif
         if (rc < 0) {
                 fprintf(stderr, "fstat failed: %s\n", strerror(errno));
                 goto out;
@@ -480,21 +489,28 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
 
 int jt_dbg_mark_debug_buf(int argc, char **argv)
 {
-        int rc;
+        int rc, max_size = MAX_MARK_SIZE-1;
         struct portal_ioctl_data data;
         char *text;
         time_t now = time(NULL);
 
-        if (argc > 2) {
-                fprintf(stderr, "usage: %s [marker text]\n", argv[0]);
-                return 0;
-        }
-
-        if (argc == 2) {
-                text = argv[1];
+        if (argc > 1) {
+                int counter;
+                text = malloc(MAX_MARK_SIZE);
+                strncpy(text, argv[1], max_size);
+                max_size-=strlen(argv[1]);
+                for(counter = 2; (counter < argc) && (max_size > 0) ; counter++){
+                        strncat(text, " ", 1);
+                        max_size-=1;
+                        strncat(text, argv[counter], max_size);
+                        max_size-=strlen(argv[counter]);
+                }
         } else {
                 text = ctime(&now);
                 text[strlen(text) - 1] = '\0'; /* stupid \n */
+        }
+        if (!max_size) {
+                text[MAX_MARK_SIZE - 1] = '\0';
         }
 
         memset(&data, 0, sizeof(data));
@@ -514,7 +530,6 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
         return 0;
 }
 
-
 int jt_dbg_modules(int argc, char **argv)
 {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -523,7 +538,10 @@ int jt_dbg_modules(int argc, char **argv)
         } *mp, mod_paths[] = {
                 {"portals", "lustre/portals/libcfs"},
                 {"ksocknal", "lustre/portals/knals/socknal"},
+                {"kptlrouter", "lustre/portals/router"},
+                {"lvfs", "lustre/lvfs"},
                 {"obdclass", "lustre/obdclass"},
+                {"llog_test", "lustre/obdclass"},
                 {"ptlrpc", "lustre/ptlrpc"},
                 {"obdext2", "lustre/obdext2"},
                 {"ost", "lustre/ost"},
@@ -536,8 +554,9 @@ int jt_dbg_modules(int argc, char **argv)
                 {"obdfilter", "lustre/obdfilter"},
                 {"extN", "lustre/extN"},
                 {"lov", "lustre/lov"},
-                {"fsfilt_ext3", "lustre/obdclass"},
-                {"fsfilt_extN", "lustre/obdclass"},
+                {"fsfilt_ext3", "lustre/lvfs"},
+                {"fsfilt_extN", "lustre/lvfs"},
+                {"fsfilt_reiserfs", "lustre/lvfs"},
                 {"mds_ext2", "lustre/mds"},
                 {"mds_ext3", "lustre/mds"},
                 {"mds_extN", "lustre/mds"},

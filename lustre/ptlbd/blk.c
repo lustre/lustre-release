@@ -26,7 +26,6 @@
 
 #define DEBUG_SUBSYSTEM S_PTLBD
 
-#include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h>
 #include <linux/lustre_idl.h>

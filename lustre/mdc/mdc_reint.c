@@ -19,7 +19,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #define DEBUG_SUBSYSTEM S_MDC
 
 #ifdef __KERNEL__
@@ -41,7 +43,7 @@ static int mdc_reint(struct ptlrpc_request *request,
         int rc;
         
 
-        request->rq_level = level;
+        request->rq_send_state = level;
 
         mdc_get_rpc_lock(rpc_lock, NULL);
         rc = ptlrpc_queue_wait(request);
@@ -62,13 +64,14 @@ static int mdc_reint(struct ptlrpc_request *request,
  * If it is called with iattr->ia_valid & ATTR_FROM_OPEN, then it is a
  * magic open-path setattr that should take the setattr semaphore and
  * go to the setattr portal. */
-int mdc_setattr(struct lustre_handle *conn, struct mdc_op_data *data,
+int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_rec_setattr *rec;
         struct mdc_rpc_lock *rpc_lock;
+        struct obd_device *obd = exp->exp_obd;
         int rc, bufcount = 1, size[3] = {sizeof(*rec), ealen, ea2len};
         ENTRY;
 
@@ -80,27 +83,27 @@ int mdc_setattr(struct lustre_handle *conn, struct mdc_op_data *data,
                         bufcount = 3;
         }
 
-        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_REINT, bufcount,
                               size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
         if (iattr->ia_valid & ATTR_FROM_OPEN) {
                 req->rq_request_portal = MDS_SETATTR_PORTAL; //XXX FIXME bug 249
-                rpc_lock = &mdc_setattr_lock;
+                rpc_lock = obd->u.cli.cl_setattr_lock;
         } else {
-                rpc_lock = &mdc_rpc_lock;
+                rpc_lock = obd->u.cli.cl_rpc_lock;
         }
 
         if (iattr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu\n",
-                       iattr->ia_mtime, iattr->ia_ctime);
+                       LTIME_S(iattr->ia_mtime), LTIME_S(iattr->ia_ctime));
         mdc_setattr_pack(req, data, iattr, ea, ealen, ea2, ea2len);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(req, rpc_lock, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
@@ -108,10 +111,11 @@ int mdc_setattr(struct lustre_handle *conn, struct mdc_op_data *data,
         RETURN(rc);
 }
 
-int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
+int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u64 time, __u64 rdev, struct ptlrpc_request **request)
+               __u64 rdev, struct ptlrpc_request **request)
 {
+        struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
         int rc, size[3] = {sizeof(struct mds_rec_create), op_data->namelen + 1};
         int level, bufcount = 2;
@@ -122,25 +126,24 @@ int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
                 bufcount++;
         }
 
-        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_REINT, bufcount,
                               size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
         /* mdc_create_pack fills msg->bufs[1] with name
          * and msg->bufs[2] with tgt, for symlinks or lov MD data */
-        mdc_create_pack(req, 0, op_data, mode, rdev, uid, gid, time,
-                        data, datalen);
+        mdc_create_pack(req, 0, op_data, mode, rdev, data, datalen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        level = LUSTRE_CONN_FULL;
+        level = LUSTRE_IMP_FULL;
  resend:
-        rc = mdc_reint(req, &mdc_rpc_lock, level);
+        rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, level);
         /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
-                level = LUSTRE_CONN_RECOVER;
+                level = LUSTRE_IMP_RECOVER;
                 goto resend;
         }
 
@@ -151,16 +154,16 @@ int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
         RETURN(rc);
 }
 
-int mdc_unlink(struct lustre_handle *conn, struct mdc_op_data *data,
+int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request)
 {
-        struct obd_device *obddev = class_conn2obd(conn);
+        struct obd_device *obddev = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
         int rc, size[2] = {sizeof(struct mds_rec_unlink), data->namelen + 1};
         ENTRY;
 
         LASSERT(req == NULL);
-        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 2, size,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_REINT, 2, size,
                               NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -173,20 +176,21 @@ int mdc_unlink(struct lustre_handle *conn, struct mdc_op_data *data,
 
         mdc_unlink_pack(req, 0, data);
 
-        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, obddev->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
         if (rc == -ERESTARTSYS)
                 rc = 0;
         RETURN(rc);
 }
 
-int mdc_link(struct lustre_handle *conn, struct mdc_op_data *data,
+int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
              struct ptlrpc_request **request)
 {
+        struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
         int rc, size[2] = {sizeof(struct mds_rec_link), data->namelen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 2, size,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_REINT, 2, size,
                               NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -196,7 +200,7 @@ int mdc_link(struct lustre_handle *conn, struct mdc_op_data *data,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
@@ -204,16 +208,17 @@ int mdc_link(struct lustre_handle *conn, struct mdc_op_data *data,
         RETURN(rc);
 }
 
-int mdc_rename(struct lustre_handle *conn, struct mdc_op_data *data,
+int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request)
 {
+        struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
         int rc, size[3] = {sizeof(struct mds_rec_rename), oldlen + 1,
                            newlen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 3, size,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_REINT, 3, size,
                               NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -221,9 +226,10 @@ int mdc_rename(struct lustre_handle *conn, struct mdc_op_data *data,
         mdc_rename_pack(req, 0, data, old, oldlen, new, newlen);
 
         size[0] = sizeof(struct mds_body);
-        req->rq_replen = lustre_msg_size(1, size);
+        size[1] = obd->u.cli.cl_max_mds_easize;
+        req->rq_replen = lustre_msg_size(2, size);
 
-        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;

@@ -17,14 +17,10 @@ if [ "$LUSTRE" ]; then
   lustre_opt="--lustre=$LUSTRE"
 fi
 
-if [ "$1" = "--force" ]; then
-  force="--force"
-fi
-
 if [ "$LDAPURL" ]; then
     conf_opt="--ldapurl $LDAPURL --config $NAME"
 else
-    if [ ! -f $config -o $mkconfig -nt $config ]; then
+    if [ ! -f $config ]; then
 	sh $mkconfig $config || exit 1
     fi
     conf_opt="$config"
@@ -33,7 +29,7 @@ fi
 [ "$NODE" ] && node_opt="--node $NODE"
 
 sync; sleep 2; sync
-${LCONF} $portals_opt $lustre_opt $node_opt --cleanup $force \
+${LCONF} $portals_opt $lustre_opt $node_opt --cleanup $@ \
     --dump $TMP/debug $conf_opt
 rc=$?
 BUSY=`dmesg | grep -i destruct`

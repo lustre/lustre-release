@@ -91,14 +91,14 @@ static int pingcli_callback(ptl_event_t *ev)
         magic = *(int *)(ev->mem_desc.start + ev->offset);
 
         if(magic != 0xcafebabe) {
-                printk ("Unexpected response \n");
+                printk ("LustreError: Unexpected response \n");
                 return 1;
         }
 
         if((i == count) || !count)
                 wake_up_process (client->tsk);
         else
-                printk ("Received response after timeout for %d\n",i);
+                printk ("LustreError: Received response after timeout for %d\n",i);
         return 1;
 }
 
@@ -111,11 +111,15 @@ pingcli_start(struct portal_ioctl_data *args)
         unsigned ping_bulk_magic = PING_BULK_MAGIC;
         int rc;
         struct timeval tv1, tv2;
+        char str[PTL_NALFMT_SIZE];
+        
         client->tsk = current;
         client->args = args;
-        CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64",  \
+        CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  \
                         nal %d, size %u, count: %u, timeout: %u\n",
-                        args->ioc_nid, args->ioc_nal, args->ioc_size,
+                        args->ioc_nid,
+                        portals_nid2str(args->ioc_nal, args->ioc_nid, str),
+                        args->ioc_nal, args->ioc_size,
                         args->ioc_count, args->ioc_timeout);
 
 
@@ -229,15 +233,15 @@ pingcli_start(struct portal_ioctl_data *args)
                          pingcli_shutdown (1);
                          return NULL;
                 }
-                printk ("sent msg no %d", count);
+                printk ("Lustre: sent msg no %d", count);
 
                 set_current_state (TASK_INTERRUPTIBLE);
                 rc = schedule_timeout (20 * args->ioc_timeout);
                 if (rc == 0) {
-                        printk ("   ::  timeout .....\n");
+                        printk ("LustreError:   ::  timeout .....\n");
                 } else {
                         do_gettimeofday (&tv2);
-                        printk("   ::  Reply in %u usec\n",
+                        printk("Lustre:   ::  Reply in %u usec\n",
                                 (unsigned)((tv2.tv_sec - tv1.tv_sec)
                                  * 1000000 +  (tv2.tv_usec - tv1.tv_usec)));
                 }

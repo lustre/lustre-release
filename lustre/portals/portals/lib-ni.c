@@ -27,7 +27,7 @@
 #include <portals/lib-p30.h>
 #include <portals/arg-blocks.h>
 
-#define MAX_DIST 18446744073709551615UL
+#define MAX_DIST 18446744073709551615ULL
 
 int do_PtlNIDebug(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 {

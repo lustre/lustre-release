@@ -37,8 +37,13 @@
 #define HDR_SIZE(count) \
     size_round(offsetof (struct lustre_msg, buflens[(count)]))
 
-int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
-                    struct lustre_msg **msg)
+int lustre_msg_swabbed(struct lustre_msg *msg)
+{
+        return (msg->magic == __swab32(PTLRPC_MSG_MAGIC));
+}
+
+static int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
+                           struct lustre_msg **msg)
 {
         char *ptr;
         struct lustre_msg *m;
@@ -71,6 +76,20 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
         }
 
         return 0;
+}
+
+int lustre_pack_request(struct ptlrpc_request *req, int count, int *lens,
+                        char **bufs)
+{
+        return lustre_pack_msg(count, lens, bufs, &req->rq_reqlen,
+                               &req->rq_reqmsg);
+}
+
+int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
+                      char **bufs)
+{
+        return lustre_pack_msg(count, lens, bufs, &req->rq_replen,
+                               &req->rq_repmsg);
 }
 
 /* This returns the size of the buffer that is required to hold a lustre_msg
@@ -334,6 +353,11 @@ void lustre_swab_ost_body (struct ost_body *b)
         lustre_swab_obdo (&b->oa);
 }
 
+void lustre_swab_ost_last_id(obd_id *id)
+{
+        __swab64s(id);
+}
+
 void lustre_swab_ll_fid (struct ll_fid *fid)
 {
         __swab64s (&fid->id);
@@ -345,11 +369,6 @@ void lustre_swab_mds_status_req (struct mds_status_req *r)
 {
         __swab32s (&r->flags);
         __swab32s (&r->repbuf);
-}
-
-void lustre_swab_mds_fileh_body (struct mds_fileh_body *f)
-{
-        lustre_swab_ll_fid (&f->f_fid);
 }
 
 void lustre_swab_mds_body (struct mds_body *b)
@@ -384,7 +403,7 @@ void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
         __swab32s (&sa->sa_fsuid);
         __swab32s (&sa->sa_fsgid);
         __swab32s (&sa->sa_cap);
-        __swab32s (&sa->sa_reserved);
+        __swab32s (&sa->sa_suppgid);
         __swab32s (&sa->sa_valid);
         lustre_swab_ll_fid (&sa->sa_fid);
         __swab32s (&sa->sa_mode);
@@ -395,7 +414,6 @@ void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
         __swab64s (&sa->sa_atime);
         __swab64s (&sa->sa_mtime);
         __swab64s (&sa->sa_ctime);
-        __swab32s (&sa->sa_suppgid);
 }
 
 void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
@@ -408,8 +426,6 @@ void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
         __swab32s (&cr->cr_mode);
         lustre_swab_ll_fid (&cr->cr_fid);
         lustre_swab_ll_fid (&cr->cr_replayfid);
-        __swab32s (&cr->cr_uid);
-        __swab32s (&cr->cr_gid);
         __swab64s (&cr->cr_time);
         __swab64s (&cr->cr_rdev);
         __swab32s (&cr->cr_suppgid);
@@ -433,9 +449,8 @@ void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
         __swab32s (&ul->ul_fsuid);
         __swab32s (&ul->ul_fsgid);
         __swab32s (&ul->ul_cap);
-        __swab32s (&ul->ul_reserved);
-        __swab32s (&ul->ul_mode);
         __swab32s (&ul->ul_suppgid);
+        __swab32s (&ul->ul_mode);
         lustre_swab_ll_fid (&ul->ul_fid1);
         lustre_swab_ll_fid (&ul->ul_fid2);
 }
@@ -471,10 +486,14 @@ void lustre_swab_ldlm_res_id (struct ldlm_res_id *id)
                 __swab64s (&id->name[i]);
 }
 
-void lustre_swab_ldlm_extent (struct ldlm_extent *e)
+void lustre_swab_ldlm_policy_data (ldlm_policy_data_t *d)
 {
-        __swab64s (&e->start);
-        __swab64s (&e->end);
+        /* the lock data is a union and the first two fields are always an
+         * extent so it's ok to process an LDLM_EXTENT and LDLM_FLOCK lock
+         * data the same way. */
+        __swab64s (&d->l_flock.start);
+        __swab64s (&d->l_flock.end);
+        __swab32s (&d->l_flock.pid);
 }
 
 void lustre_swab_ldlm_intent (struct ldlm_intent *i)
@@ -499,7 +518,7 @@ void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l)
         lustre_swab_ldlm_resource_desc (&l->l_resource);
         __swab32s (&l->l_req_mode);
         __swab32s (&l->l_granted_mode);
-        lustre_swab_ldlm_extent (&l->l_extent);
+        lustre_swab_ldlm_policy_data (&l->l_policy_data);
         for (i = 0; i < RES_VERSION_SIZE; i++)
                 __swab32s (&l->l_version[i]);
 }
@@ -518,7 +537,7 @@ void lustre_swab_ldlm_reply (struct ldlm_reply *r)
         __swab32s (&r->lock_mode);
         lustre_swab_ldlm_res_id (&r->lock_resource_name);
         /* lock_handle opaque */
-        lustre_swab_ldlm_extent (&r->lock_extent);
+        lustre_swab_ldlm_policy_data (&r->lock_policy_data);
         __swab64s (&r->lock_policy_res1);
         __swab64s (&r->lock_policy_res2);
 }
@@ -544,6 +563,52 @@ void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r)
 {
         __swab16s (&r->r_status);
         __swab16s (&r->r_error_cnt);
+}
+
+/* no one calls this */
+int llog_log_swabbed(struct llog_log_hdr *hdr)
+{
+        if (hdr->llh_hdr.lrh_type == __swab32(LLOG_HDR_MAGIC))
+                return 1;
+        if (hdr->llh_hdr.lrh_type == LLOG_HDR_MAGIC)
+                return 0;
+        return -1;
+}
+
+void lustre_swab_llogd_body (struct llogd_body *d)
+{
+        __swab64s (&d->lgd_logid.lgl_oid);
+        __swab64s (&d->lgd_logid.lgl_ogr);
+        __swab32s (&d->lgd_logid.lgl_ogen);
+        __swab32s (&d->lgd_ctxt_idx);
+        __swab32s (&d->lgd_llh_flags);
+        __swab32s (&d->lgd_index);
+        __swab32s (&d->lgd_saved_index);
+        __swab32s (&d->lgd_len);
+        __swab64s (&d->lgd_cur_offset);
+}
+
+void lustre_swab_llog_hdr (struct llog_log_hdr *h)
+{
+        __swab32s (&h->llh_hdr.lrh_index);
+        __swab32s (&h->llh_hdr.lrh_len);
+        __swab32s (&h->llh_hdr.lrh_type);
+        __swab64s (&h->llh_timestamp);
+        __swab32s (&h->llh_count);
+        __swab32s (&h->llh_bitmap_offset);
+        __swab32s (&h->llh_flags);
+        __swab32s (&h->llh_tail.lrt_index);
+        __swab32s (&h->llh_tail.lrt_len);
+}
+
+void lustre_swab_llogd_conn_body (struct llogd_conn_body *d)
+{
+        __swab64s (&d->lgdc_gen.mnt_cnt);
+        __swab64s (&d->lgdc_gen.conn_cnt);
+        __swab64s (&d->lgdc_logid.lgl_oid);
+        __swab64s (&d->lgdc_logid.lgl_ogr);
+        __swab32s (&d->lgdc_logid.lgl_ogen);
+        __swab32s (&d->lgdc_ctxt_idx);
 }
 
 void lustre_assert_wire_constants (void)
@@ -578,7 +643,7 @@ void lustre_assert_wire_constants (void)
         LASSERT (OST_STATFS == 13);
         LASSERT (OST_SAN_READ == 14);
         LASSERT (OST_SAN_WRITE == 15);
-        LASSERT (OST_SYNCFS == 16);
+        LASSERT (OST_SYNC == 16);
         LASSERT (OST_LAST_OPC == 17);
         LASSERT (OST_FIRST_OPC == 0);
         LASSERT (OBD_FL_INLINEDATA == 1);
@@ -639,7 +704,7 @@ void lustre_assert_wire_constants (void)
         LASSERT (DISP_OPEN_OPEN == 32);
         LASSERT (MDS_STATUS_CONN == 1);
         LASSERT (MDS_STATUS_LOV == 2);
-        LASSERT (MDS_OPEN_HAS_EA == 1);
+        LASSERT (MDS_OPEN_HAS_EA == (1 << 30));
         LASSERT (LOV_RAID0 == 0);
         LASSERT (LOV_RAIDRR == 1);
         LASSERT (LDLM_ENQUEUE == 101);
@@ -793,11 +858,6 @@ void lustre_assert_wire_constants (void)
         LASSERT (sizeof (((struct mds_status_req *)0)->flags) == 4);
         LASSERT (offsetof (struct mds_status_req, repbuf) == 4);
         LASSERT (sizeof (((struct mds_status_req *)0)->repbuf) == 4);
-
-        /* Checks for struct mds_fileh_body */
-        LASSERT (sizeof (struct mds_fileh_body) == 24);
-        LASSERT (offsetof (struct mds_fileh_body, f_fid) == 0);
-        LASSERT (sizeof (((struct mds_fileh_body *)0)->f_fid) == 16);
 
         /* Checks for struct mds_body */
         LASSERT (sizeof (struct mds_body) == 124);
@@ -989,12 +1049,14 @@ void lustre_assert_wire_constants (void)
         LASSERT (offsetof (struct ldlm_res_id, name[3]) == 24);
         LASSERT (sizeof (((struct ldlm_res_id *)0)->name[3]) == 8);
 
-        /* Checks for struct ldlm_extent */
-        LASSERT (sizeof (struct ldlm_extent) == 16);
-        LASSERT (offsetof (struct ldlm_extent, start) == 0);
-        LASSERT (sizeof (((struct ldlm_extent *)0)->start) == 8);
-        LASSERT (offsetof (struct ldlm_extent, end) == 8);
-        LASSERT (sizeof (((struct ldlm_extent *)0)->end) == 8);
+        /* Checks for struct ldlm_data */
+        LASSERT (sizeof (struct ldlm_data) == 16);
+        LASSERT (offsetof (struct ldlm_data, l_extent.start) == 0);
+        LASSERT (sizeof (((struct ldlm_data *)0)->l_extent.start) == 8);
+        LASSERT (offsetof (struct ldlm_data, l_extent.end) == 8);
+        LASSERT (sizeof (((struct ldlm_data *)0)->l_extent.end) == 8);
+        LASSERT (sizeof (((struct ldlm_data *)0)->l_flock.pid) == 4);
+        LASSERT (offsetof (struct ldlm_data, l_flock.pid) == 16);
 
         /* Checks for struct ldlm_intent */
         LASSERT (sizeof (struct ldlm_intent) == 8);

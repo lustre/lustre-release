@@ -92,7 +92,7 @@ int ptlbd_send_rw_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd,
         req->rq_replen = lustre_msg_size(1, &rep_size);
 
         /* XXX find out how we're really supposed to manage levels */
-        req->rq_level = imp->imp_level;
+        req->rq_send_state = imp->imp_state;
         rc = ptlrpc_queue_wait(req);
 
         if ( rc != 0 )
@@ -144,7 +144,7 @@ int ptlbd_send_flush_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd)
         req->rq_replen = lustre_msg_size(1, &rep_size);
 
         /* XXX find out how we're really supposed to manage levels */
-        req->rq_level = imp->imp_level;
+        req->rq_send_state = imp->imp_state;
 
         rc = ptlrpc_queue_wait(req);
         if ( rc != 0 )
@@ -199,7 +199,7 @@ int ptlbd_srv_rw_req(ptlbd_cmd_t cmd, __u16 index,
         struct ptlbd_niob *niob, *niobs;
         struct ptlbd_rsp *rsp;
         struct ptlrpc_bulk_desc *desc = NULL;
-        struct file *filp = req->rq_obd->u.ptlbd.filp;
+        struct file *filp = req->rq_export->exp_obd->u.ptlbd.filp;
         struct l_wait_info lwi;
         int size[1], i, page_count, rc = 0, error_cnt = 0;
         struct list_head *pos, *n;
@@ -213,7 +213,7 @@ int ptlbd_srv_rw_req(ptlbd_cmd_t cmd, __u16 index,
                 GOTO (out, rc = -EFAULT);
 
         size[0] = sizeof(struct ptlbd_rsp);
-        rc = lustre_pack_msg(1, size, NULL, &req->rq_replen, &req->rq_repmsg);
+        rc = lustre_pack_reply(req, 1, size, NULL);
         if ( rc )
                 GOTO(out, rc);
 
@@ -314,12 +314,12 @@ int ptlbd_srv_flush_req(ptlbd_cmd_t cmd, __u16 index,
                         struct ptlrpc_request *req)
 {
         struct ptlbd_rsp *rsp;
-        struct file *filp = req->rq_obd->u.ptlbd.filp;
+        struct file *filp = req->rq_export->exp_obd->u.ptlbd.filp;
         int size[1], rc, status;
         ENTRY;
 
         size[0] = sizeof(struct ptlbd_rsp);
-        rc = lustre_pack_msg(1, size, NULL, &req->rq_replen, &req->rq_repmsg);
+        rc = lustre_pack_reply(req, 1, size, NULL);
         if ( rc )
                 RETURN(rc);
 

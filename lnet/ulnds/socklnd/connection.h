@@ -10,6 +10,7 @@
 
 typedef struct manager {
     table connections;
+    pthread_mutex_t conn_lock; /* protect connections table */
     int bound;
     io_handler bound_handler;
     int (*handler)(void *, void *);

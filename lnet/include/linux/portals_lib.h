@@ -42,6 +42,16 @@ static inline int size_round (int val)
         return (val + 7) & (~0x7);
 }
 
+static inline int size_round16(int val)
+{
+        return (val + 0xf) & (~0xf);
+}
+
+static inline int size_round32(int val)
+{
+        return (val + 0x1f) & (~0x1f);
+}
+
 static inline int size_round0(int val)
 {
         if (!val)

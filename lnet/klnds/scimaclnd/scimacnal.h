@@ -43,10 +43,10 @@
 #define MAC_SAPID_LUSTRE MAC_SAPID_TEST1
 #endif /* MAC_SAPID_LUSTRE */
 
+/* scimac has an annoying MTU limit of 64k */
 #define SCIMACNAL_MTU 65536
-/* FIXME: What is really the MTU of lustre? */
-#if PTL_MD_MAX_IOV*PAGE_SIZE > SCIMACNAL_MTU
-#error Max MTU of ScaMAC is 64k, PTL_MD_MAX_IOV*PAGE_SIZE is bigger.
+#if PTL_MTU > SCIMACNAL_MTU
+#error Max MTU of ScaMAC is 64k, PTL_MTU is bigger.
 #endif
 
 typedef struct {
@@ -62,6 +62,9 @@ typedef struct {
         void            *ktx_private;
         lib_msg_t       *ktx_cookie;
         ptl_hdr_t       ktx_hdr;
+        /* To be able to kunmap() kmap():ed pages */
+        struct page     *ktx_kpages[PTL_MD_MAX_IOV];
+        int              ktx_nmapped;
 }  kscimacnal_tx_t;
 
 

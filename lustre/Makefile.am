@@ -12,17 +12,14 @@ DIRS24 = ptlbd
 endif
 
 if LIBLUSTRE
-SUBDIRS = portals obdclass lov ptlrpc obdecho ldlm osc utils mdc #liblustre
+SUBDIRS = portals obdclass lov ptlrpc obdecho  osc utils mdc lvfs #liblustre
 else
-# NOTE: keep extN before obdclass, mds, and obdfilter.  Keep obdclass as early
-# as possible, to have the best chance at stopping with "wrong kernel version"
-# instead of some related build failure.
-SUBDIRS = portals obdclass $(DIRS24) mds utils ldlm obdfilter mdc osc ost
+SUBDIRS = lvfs portals obdclass include $(DIRS24) mds utils obdfilter mdc osc ost 
 SUBDIRS+= llite obdecho lov cobd tests doc scripts conf ptlrpc
 endif
 
 DIST_SUBDIRS = $(SUBDIRS) liblustre
-EXTRA_DIST = BUGS FDL Rules include kernel_patches
+EXTRA_DIST = BUGS FDL Rules kernel_patches
 
 # We get the version from the spec file.
 CONFIGURE_DEPENDENCIES = scripts/lustre.spec.in
@@ -36,3 +33,19 @@ include $(top_srcdir)/Rules
 rpms: dist Makefile
 	rpmbuild -ta $(distdir).tar.gz
 
+CSTK=/tmp/checkstack
+CSTKO=/tmp/checkstack.orig
+
+checkstack:
+	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv ${CSTK} ${CSTKO} || true
+	for i in ${SUBDIRS} portals/knals/*; do				     \
+		MOD=$$i/`basename $$i`.o;				     \
+		[ -f $$MOD ] && objdump -d $$MOD | perl tests/checkstack.pl; \
+	done | sort -nr > ${CSTK}
+	[ -f ${CSTKO} ] && ! diff -u ${CSTKO} ${CSTK} || head -30 ${CSTK}
+
+checkstack-update:
+	[ -f ${CSTK} ] && mv ${CSTK} ${CSTKO}
+
+checkstack-clean:
+	rm -f ${CSTK} ${CSTKO}

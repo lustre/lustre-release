@@ -44,10 +44,9 @@
 #endif
 
 
-#ifndef LPROCFS
-#ifdef  CONFIG_PROC_FS  /* Ensure that /proc is configured */
-#define LPROCFS
-#endif
+#undef LPROCFS
+#if (defined(__KERNEL__) && defined(CONFIG_PROC_FS))
+# define LPROCFS
 #endif
 
 struct lprocfs_vars {
@@ -256,6 +255,9 @@ extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
+
+extern int lprocfs_write_helper(const char *buffer, unsigned long count, 
+                                int *val);
 
 /* lprocfs_status.c: counter read/write functions */
 extern int lprocfs_counter_read(char *page, char **start, off_t off,

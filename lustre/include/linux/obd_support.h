@@ -32,13 +32,13 @@
 
 #endif
 #include <linux/kp30.h>
+#include <linux/lustre_compat25.h>
 
 /* global variables */
 extern atomic_t obd_memory;
 extern int obd_memmax;
 extern unsigned int obd_fail_loc;
 extern unsigned int obd_timeout;
-extern unsigned long obd_max_dirty_pages;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
 
@@ -78,6 +78,10 @@ extern unsigned int obd_sync_filter;
 #define OBD_FAIL_MDS_UNPIN_NET           0x121
 #define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
 #define OBD_FAIL_MDS_ALL_REQUEST_NET     0x123
+#define OBD_FAIL_MDS_SYNC_NET            0x124
+#define OBD_FAIL_MDS_SYNC_PACK           0x125
+#define OBD_FAIL_MDS_DONE_WRITING_NET    0x126
+#define OBD_FAIL_MDS_DONE_WRITING_PACK   0x127
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -95,7 +99,7 @@ extern unsigned int obd_sync_filter;
 #define OBD_FAIL_OST_HANDLE_UNPACK       0x20d
 #define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
 #define OBD_FAIL_OST_BRW_READ_BULK       0x20f
-#define OBD_FAIL_OST_SYNCFS_NET          0x210
+#define OBD_FAIL_OST_SYNC_NET            0x210
 #define OBD_FAIL_OST_ALL_REPLY_NET       0x211
 #define OBD_FAIL_OST_ALL_REQUESTS_NET    0x212
 #define OBD_FAIL_OST_LDLM_REPLY_NET      0x213
@@ -120,6 +124,7 @@ extern unsigned int obd_sync_filter;
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
+#define OBD_FAIL_OBD_LOGD_NET            0x602
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
@@ -174,40 +179,46 @@ do {                                                                         \
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
-#define ll_bdevname(DEV, STORAGE) __bdevname(DEV, STORAGE)
+#define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
 #define ll_lock_kernel lock_kernel()
+#define ll_sbdev(SB)    ((SB)->s_bdev)
+void dev_set_rdonly(struct block_device *, int);
 #else
 #define BDEVNAME_DECLARE_STORAGE(foo) char __unused_##foo
-#define ll_bdevname(DEV, STORAGE) ((void)__unused_##STORAGE, bdevname((DEV)))
+#define ll_sbdev(SB)    (kdev_t_to_nr((SB)->s_dev))
+#define ll_bdevname(SB,STORAGE) ((void)__unused_##STORAGE,bdevname(ll_sbdev(SB)))
 #define ll_lock_kernel
+void dev_set_rdonly(kdev_t, int);
 #endif
 
-void dev_set_rdonly(kdev_t dev, int no_write);
 void dev_clear_rdonly(int);
 
-static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
+static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 {
         if (OBD_FAIL_CHECK(id)) {
                 BDEVNAME_DECLARE_STORAGE(tmp);
-#ifdef CONFIG_DEV_RDONLY
                 CERROR("obd_fail_loc=%x, fail write operation on %s\n",
-                       id, ll_bdevname(kdev_t_to_nr(dev), tmp));
-                dev_set_rdonly(dev, 2);
-#else
-                CERROR("obd_fail_loc=%x, can't fail write operation on %s\n",
-                       id, ll_bdevname(kdev_t_to_nr(dev), tmp));
-#endif
+                       id, ll_bdevname(sb, tmp));
+                dev_set_rdonly(ll_sbdev(sb), 2);
                 /* We set FAIL_ONCE because we never "un-fail" a device */
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
         }
 }
 #else /* !__KERNEL__ */
 #define LTIME_S(time) (time)
+/* for obd_class.h */
+#ifndef ERR_PTR
+# define ERR_PTR(a) ((void *)(a))
+#endif
 #endif  /* __KERNEL__ */
+
+#ifndef GFP_MEMALLOC
+#define GFP_MEMALLOC 0
+#endif
 
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
 do {                                                                          \
-        (ptr) = kmalloc(size, gfp_mask);                                      \
+        (ptr) = kmalloc(size, (gfp_mask));                                    \
         if ((ptr) == NULL) {                                                  \
                 CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
@@ -222,10 +233,11 @@ do {                                                                          \
 } while (0)
 
 #ifndef OBD_GFP_MASK
-# define OBD_GFP_MASK GFP_KERNEL
+# define OBD_GFP_MASK (GFP_KERNEL | GFP_MEMALLOC)
 #endif
 
 #define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, OBD_GFP_MASK)
+#define OBD_ALLOC_WAIT(ptr, size) OBD_ALLOC_GFP(ptr, size, GFP_KERNEL)
 
 #ifdef __arch_um__
 # define OBD_VMALLOC(ptr, size) OBD_ALLOC(ptr, size)
@@ -251,6 +263,13 @@ do {                                                                          \
 #define POISON(ptr, c, s) do {} while (0)
 #else
 #define POISON(ptr, c, s) memset(ptr, c, s)
+#endif
+
+#if POISON_BULK
+#define POISON_PAGE(page, val) do { memset(kmap(page), val, PAGE_SIZE);       \
+                                    kunmap(page); } while (0)
+#else
+#define POISON_PAGE(page, val) do { } while (0)
 #endif
 
 #define OBD_FREE(ptr, size)                                                   \
@@ -279,13 +298,17 @@ do {                                                                          \
 } while (0)
 #endif
 
+#ifndef SLAB_MEMALLOC
+#define SLAB_MEMALLOC 0
+#endif
+
 /* we memset() the slab object to 0 when allocation succeeds, so DO NOT
  * HAVE A CTOR THAT DOES ANYTHING.  its work will be cleared here.  we'd
  * love to assert on that, but slab.c keeps kmem_cache_s all to itself. */
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
         LASSERT(!in_interrupt());                                             \
-        (ptr) = kmem_cache_alloc(slab, type);                                 \
+        (ptr) = kmem_cache_alloc(slab, (type | SLAB_MEMALLOC));               \
         if ((ptr) == NULL) {                                                  \
                 CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n", \
                        (int)(size), __FILE__, __LINE__);                      \

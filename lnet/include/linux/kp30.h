@@ -19,6 +19,7 @@ extern unsigned int portal_subsystem_debug;
 extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
+extern unsigned int portal_cerror;
 /* Debugging subsystems (32 bits, non-overlapping) */
 #define S_UNDEFINED    (1 << 0)
 #define S_MDC          (1 << 1)
@@ -42,6 +43,7 @@ extern unsigned int portal_printk;
 #define S_GMNAL       (1 << 19)
 #define S_PTLROUTER   (1 << 20)
 #define S_COBD        (1 << 21)
+#define S_IBNAL       (1 << 22)
 
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */
@@ -57,7 +59,7 @@ extern unsigned int portal_printk;
 #define D_IOCTL     (1 << 7) /* ioctl related information */
 #define D_BLOCKS    (1 << 8) /* ext2 block allocation */
 #define D_NET       (1 << 9) /* network communications */
-#define D_WARNING   (1 << 10)
+#define D_WARNING   (1 << 10) /* CWARN(...) == CDEBUG (D_WARNING, ...) */
 #define D_BUFFS     (1 << 11)
 #define D_OTHER     (1 << 12)
 #define D_DENTRY    (1 << 13)
@@ -72,9 +74,13 @@ extern unsigned int portal_printk;
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
-#else
-# define THREAD_SIZE 8192
+#else 
+# ifndef THREAD_SIZE /* x86_64 has THREAD_SIZE in userspace */
+#  define THREAD_SIZE 8192
+# endif
 #endif
+
+#define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
 #ifdef __KERNEL__
 # ifdef  __ia64__
@@ -106,6 +112,8 @@ extern unsigned int portal_printk;
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
+        if (portal_cerror == 0)                                               \
+                break;                                                        \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (!(mask) || ((mask) & (D_ERROR | D_EMERG)) ||                      \
             (portal_debug & (mask) &&                                         \
@@ -185,6 +193,7 @@ static inline void our_cond_resched(void)
         if (current->need_resched)
                schedule ();
 }
+#define work_struct_t       struct tq_struct 
 
 #else
 
@@ -200,6 +209,8 @@ static inline void our_cond_resched(void)
 {
         cond_resched();
 }
+#define work_struct_t      struct work_struct
+
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */
 
 #ifdef PORTAL_DEBUG
@@ -207,8 +218,22 @@ extern void kportal_assertion_failed(char *expr, char *file, const char *func,
                                      const int line);
 #define LASSERT(e) ((e) ? 0 : kportal_assertion_failed( #e , __FILE__,  \
                                                         __FUNCTION__, __LINE__))
+/* it would be great to dump_stack() here, but some kernels
+ * export it as show_stack() and I can't be bothered to
+ * proprely engage in that dance right now */ 
+#define LASSERTF(cond, fmt...)                                                \
+        do {                                                                  \
+                if (unlikely(!(cond))) {                                      \
+                        portals_debug_msg(0, D_EMERG,  __FILE__, __FUNCTION__,\
+                                          __LINE__,  CDEBUG_STACK,            \
+                                          "ASSERTION(" #cond ") failed:" fmt);\
+                        LBUG();                                               \
+                }                                                             \
+        } while (0)
+                                
 #else
 #define LASSERT(e)
+#define LASSERTF(cond, fmt...) do { } while (0)
 #endif
 
 #ifdef __arch_um__
@@ -254,13 +279,17 @@ do {                                                                          \
 
 #define PORTAL_VMALLOC_SIZE        16384
 
+#ifndef GFP_MEMALLOC
+#define GFP_MEMALLOC 0
+#endif
+
 #define PORTAL_ALLOC(ptr, size)                                           \
 do {                                                                      \
         LASSERT (!in_interrupt());                                        \
         if ((size) > PORTAL_VMALLOC_SIZE)                                 \
                 (ptr) = vmalloc(size);                                    \
         else                                                              \
-                (ptr) = kmalloc((size), GFP_NOFS);                        \
+                (ptr) = kmalloc((size), (GFP_KERNEL | GFP_MEMALLOC));     \
         if ((ptr) == NULL)                                                \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
@@ -289,10 +318,14 @@ do {                                                                    \
                s, (ptr), atomic_read(&portal_kmemory));                 \
 } while (0)
 
+#ifndef SLAB_MEMALLOC
+#define SLAB_MEMALLOC 0
+#endif
+
 #define PORTAL_SLAB_ALLOC(ptr, slab, size)                                \
 do {                                                                      \
         LASSERT(!in_interrupt());                                         \
-        (ptr) = kmem_cache_alloc((slab), SLAB_KERNEL);                    \
+        (ptr) = kmem_cache_alloc((slab), (SLAB_KERNEL | SLAB_MEMALLOC));  \
         if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \
@@ -575,6 +608,9 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #endif /* PORTALS_PROFILING */
 
 /* debug.c */
+extern spinlock_t stack_backtrace_lock;
+
+char *portals_debug_dumpstack(void);
 void portals_run_upcall(char **argv);
 void portals_run_lbug_upcall(char * file, const char *fn, const int line);
 void portals_debug_dumplog(void);
@@ -596,7 +632,7 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len);
 #endif
 void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                        const int line, unsigned long stack,
-                       const char *format, ...)
+                       char *format, ...)
         __attribute__ ((format (printf, 7, 8)));
 #else
 void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
@@ -617,6 +653,8 @@ extern void kportal_blockallsigs (void);
 # include <stdlib.h>
 #ifndef __CYGWIN__
 # include <stdint.h>
+#else
+# include <cygwin-ioctl.h>
 #endif
 # include <unistd.h>
 # include <time.h>
@@ -628,8 +666,10 @@ extern void kportal_blockallsigs (void);
 #  undef NDEBUG
 #  include <assert.h>
 #  define LASSERT(e)     assert(e)
+#  define LASSERTF(cond, args...)     assert(cond)
 # else
 #  define LASSERT(e)
+#  define LASSERTF(cond, args...) do { } while (0)
 # endif
 # define printk(format, args...) printf (format, ## args)
 # define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
@@ -639,6 +679,9 @@ extern void kportal_blockallsigs (void);
            (subsys), (mask), (long)time(0), file, fn, line,                   \
            getpid() , stack, ## a);
 #endif
+
+/* support decl needed both by kernel and liblustre */
+char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
@@ -657,6 +700,9 @@ typedef struct {
         long        lwte_p2;
         long        lwte_p3;
         long        lwte_p4;
+#if BITS_PER_LONG > 32
+        long        lwte_pad;
+#endif
 } lwt_event_t;
 
 #if LWT_SUPPORT
@@ -735,6 +781,40 @@ do {                                                                    \
 /*
  * USER LEVEL STUFF BELOW
  */
+
+#define PORTALS_CFG_VERSION 0x00010001;
+
+struct portals_cfg {
+        __u32 pcfg_version;
+        __u32 pcfg_command;
+
+        __u32 pcfg_nal;
+        __u32 pcfg_flags;
+
+        __u32 pcfg_gw_nal;
+        __u64 pcfg_nid;
+        __u64 pcfg_nid2;
+        __u64 pcfg_nid3;
+        __u32 pcfg_id;
+        __u32 pcfg_misc;
+        __u32 pcfg_fd;
+        __u32 pcfg_count;
+        __u32 pcfg_size;
+        __u32 pcfg_wait;
+
+        __u32 pcfg_plen1; /* buffers in userspace */
+        char *pcfg_pbuf1;
+        __u32 pcfg_plen2; /* buffers in userspace */
+        char *pcfg_pbuf2;
+};
+
+#define PCFG_INIT(pcfg, cmd)                            \
+do {                                                    \
+        memset(&pcfg, 0, sizeof(pcfg));                 \
+        pcfg.pcfg_version = PORTALS_CFG_VERSION;        \
+        pcfg.pcfg_command = (cmd);                      \
+                                                        \
+} while (0)
 
 #define PORTAL_IOCTL_VERSION 0x00010007
 #define PING_SYNC       0
@@ -957,18 +1037,14 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_CLEAR_DEBUG             _IOWR('e', 32, long)
 #define IOC_PORTAL_MARK_DEBUG              _IOWR('e', 33, long)
 #define IOC_PORTAL_PANIC                   _IOWR('e', 34, long)
-#define IOC_PORTAL_ADD_ROUTE               _IOWR('e', 35, long)
-#define IOC_PORTAL_DEL_ROUTE               _IOWR('e', 36, long)
-#define IOC_PORTAL_GET_ROUTE               _IOWR('e', 37, long)
-#define IOC_PORTAL_NAL_CMD	           _IOWR('e', 38, long)
-#define IOC_PORTAL_GET_NID                 _IOWR('e', 39, long)
-#define IOC_PORTAL_FAIL_NID                _IOWR('e', 40, long)
-#define IOC_PORTAL_SET_DAEMON              _IOWR('e', 41, long)
-#define IOC_PORTAL_NOTIFY_ROUTER           _IOWR('e', 42, long)
-#define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 43, long)
-#define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 44, long)
-#define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 45, long)
-#define IOC_PORTAL_MAX_NR                             45
+#define IOC_PORTAL_NAL_CMD	           _IOWR('e', 35, long)
+#define IOC_PORTAL_GET_NID                 _IOWR('e', 36, long)
+#define IOC_PORTAL_FAIL_NID                _IOWR('e', 37, long)
+#define IOC_PORTAL_SET_DAEMON              _IOWR('e', 38, long)
+#define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, long)
+#define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, long)
+#define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, long)
+#define IOC_PORTAL_MAX_NR                             41
 
 enum {
         QSWNAL  =  1,
@@ -977,6 +1053,8 @@ enum {
         TOENAL,
         TCPNAL,
         SCIMACNAL,
+        ROUTER,
+        IBNAL,
         NAL_ENUM_END_MARKER
 };
 
@@ -985,8 +1063,11 @@ extern ptl_handle_ni_t  kqswnal_ni;
 extern ptl_handle_ni_t  ksocknal_ni;
 extern ptl_handle_ni_t  ktoenal_ni;
 extern ptl_handle_ni_t  kgmnal_ni;
+extern ptl_handle_ni_t  kibnal_ni;
 extern ptl_handle_ni_t  kscimacnal_ni;
 #endif
+
+#define PTL_NALFMT_SIZE         16
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 
@@ -999,6 +1080,10 @@ extern ptl_handle_ni_t  kscimacnal_ni;
 #define NAL_CMD_ADD_AUTOCONN         106
 #define NAL_CMD_GET_AUTOCONN         107
 #define NAL_CMD_GET_TXDESC           108
+#define NAL_CMD_ADD_ROUTE            109
+#define NAL_CMD_DEL_ROUTE            110
+#define NAL_CMD_GET_ROUTE            111
+#define NAL_CMD_NOTIFY_ROUTER        112
 
 enum {
         DEBUG_DAEMON_START       =  1,
@@ -1013,10 +1098,19 @@ struct lustre_peer {
         ptl_handle_ni_t peer_ni;
 };
 
+
 /* module.c */
-typedef int (*nal_cmd_handler_t)(struct portal_ioctl_data *, void * private);
+typedef int (*nal_cmd_handler_t)(struct portals_cfg *, void * private);
 int kportal_nal_register(int nal, nal_cmd_handler_t handler, void * private);
 int kportal_nal_unregister(int nal);
+
+enum cfg_record_type {
+        PORTALS_CFG_TYPE = 1,
+        LUSTRE_CFG_TYPE = 123,
+};
+
+typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
+int kportal_nal_cmd(struct portals_cfg *);
 
 ptl_handle_ni_t *kportal_get_ni (int nal);
 void kportal_put_ni (int nal);
@@ -1031,14 +1125,19 @@ void kportal_put_ni (int nal);
 # endif
 #endif
 
-#if (BITS_PER_LONG == 32 || __WORDSIZE == 32)
+#if defined(__x86_64__)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
-#endif
-#if (BITS_PER_LONG == 64 || __WORDSIZE == 64)
+#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"

@@ -25,14 +25,21 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
+#ifndef __KERNEL__
+#include <liblustre.h>
+#else
 #include <linux/module.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_idl.h>
+#endif
 
 #ifdef __KERNEL__
 #include <linux/fs.h>
+#include <linux/pagemap.h> /* for PAGE_CACHE_SIZE */
 
 void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned int ia_valid)
 {
@@ -114,6 +121,10 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
                 attr->ia_gid = oa->o_gid;
                 attr->ia_valid |= ATTR_GID;
         }
+        if (valid & OBD_MD_FLFLAGS) {
+                attr->ia_attr_flags = oa->o_flags;
+                attr->ia_valid |= ATTR_ATTR_FLAG;
+        }
 }
 EXPORT_SYMBOL(iattr_from_obdo);
 
@@ -125,7 +136,8 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, src->i_mtime, src->i_ctime);
+                       valid, LTIME_S(src->i_mtime), 
+                       LTIME_S(src->i_ctime));
 
         if (valid & OBD_MD_FLATIME) {
                 dst->o_atime = LTIME_S(src->i_atime);
@@ -180,7 +192,11 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 newvalid |= OBD_MD_FLGENER;
         }
         if (valid & OBD_MD_FLRDEV) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 dst->o_rdev = (__u32)kdev_t_to_nr(src->i_rdev);
+#else
+                dst->o_rdev = (__u32)old_decode_dev(src->i_rdev);
+#endif
                 newvalid |= OBD_MD_FLRDEV;
         }
 
@@ -194,7 +210,8 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, dst->i_mtime, dst->i_ctime,
+                       src->o_valid, LTIME_S(dst->i_mtime), 
+                       LTIME_S(dst->i_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(dst->i_atime))
@@ -203,11 +220,13 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 LTIME_S(dst->i_mtime) = src->o_mtime;
         if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
                 LTIME_S(dst->i_ctime) = src->o_ctime;
-        if (valid & OBD_MD_FLSIZE && src->o_size > dst->i_size)
+        if (valid & OBD_MD_FLSIZE) 
                 dst->i_size = src->o_size;
         /* optimum IO size */
         if (valid & OBD_MD_FLBLKSZ && src->o_blksize > dst->i_blksize)
                 dst->i_blksize = src->o_blksize;
+        if (dst->i_blksize < PAGE_CACHE_SIZE)
+                dst->i_blksize = PAGE_CACHE_SIZE;
         /* allocation of space */
         if (valid & OBD_MD_FLBLOCKS && src->o_blocks > dst->i_blocks)
                 dst->i_blocks = src->o_blocks;
@@ -220,7 +239,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, dst->i_mtime, dst->i_ctime,
+                       src->o_valid, 
+                       LTIME_S(dst->i_mtime), LTIME_S(dst->i_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
 
         if (valid & OBD_MD_FLATIME)
@@ -250,7 +270,11 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         if (valid & OBD_MD_FLGENER)
                 dst->i_generation = src->o_generation;
         if (valid & OBD_MD_FLRDEV)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 dst->i_rdev = to_kdev_t(src->o_rdev);
+#else
+                dst->i_rdev = old_decode_dev(src->o_rdev);
+#endif
 }
 EXPORT_SYMBOL(obdo_to_inode);
 #endif
@@ -341,3 +365,14 @@ int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare)
         return res;
 }
 EXPORT_SYMBOL(obdo_cmp_md);
+
+void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj)
+{
+        ioobj->ioo_id = oa->o_id;
+        if (oa->o_valid & OBD_MD_FLGROUP)
+                ioobj->ioo_gr = oa->o_gr;
+        else 
+                ioobj->ioo_gr = 0;
+        ioobj->ioo_type = oa->o_mode;
+}
+EXPORT_SYMBOL(obdo_to_ioobj);

@@ -62,13 +62,6 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
                peer->peer_nid, peer->peer_ni->pni_name);
 
         spin_lock(&conn_lock);
-        if (list_empty(&conn_list)) {
-                if (!ptlrpc_get_ldlm_hooks()) {
-                        spin_unlock(&conn_lock);
-                        RETURN(NULL);
-                }
-        }
-
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 if (peer->peer_nid == c->c_peer.peer_nid &&
@@ -95,15 +88,10 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
         if (c == NULL)
                 GOTO(out, c);
 
-        c->c_generation = 1;
-        c->c_epoch = 1;
-        c->c_bootcount = 0;
-        c->c_flags = 0;
         if (uuid && uuid->uuid)                         /* XXX ???? */
                 obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
         atomic_set(&c->c_refcount, 0);
         memcpy(&c->c_peer, peer, sizeof(c->c_peer));
-        spin_lock_init(&c->c_lock);
 
         ptlrpc_connection_addref(c);
 
@@ -133,9 +121,6 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 spin_lock(&conn_lock);
                 list_del(&c->c_link);
                 list_add(&c->c_link, &conn_unused_list);
-                if (list_empty(&conn_list)) {
-                        ptlrpc_put_ldlm_hooks();
-                }
                 spin_unlock(&conn_lock);
                 rc = 1;
         }

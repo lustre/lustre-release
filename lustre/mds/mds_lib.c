@@ -48,7 +48,6 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_mds.h>
-#include <linux/lustre_lite.h>
 
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
@@ -60,12 +59,14 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
 /* Note that we can copy all of the fields, just some will not be "valid" */
 void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
 {
-        b->valid = OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID | OBD_MD_FLGID |
-                OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER;
+        b->valid |= OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID |
+                    OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
+                    OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER |
+                    OBD_MD_FLATIME | OBD_MD_FLMTIME; /* bug 2020 */
 
         if (!S_ISREG(inode->i_mode))
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
-                            OBD_MD_FLMTIME;
+                            OBD_MD_FLMTIME | OBD_MD_FLRDEV;
 
         b->ino = inode->i_ino;
         b->atime = LTIME_S(inode->i_atime);
@@ -77,7 +78,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->uid = inode->i_uid;
         b->gid = inode->i_gid;
         b->flags = inode->i_flags;
-        b->rdev = b->rdev;
+        b->rdev = inode->i_rdev;
         /* Return the correct link count for orphan inodes */
         b->nlink = mds_inode_is_orphan(inode) ? 0 : inode->i_nlink;
         b->generation = inode->i_generation;
@@ -151,8 +152,6 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
-        r->ur_uid = rec->cr_uid;
-        r->ur_gid = rec->cr_gid;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
         r->ur_suppgid1 = rec->cr_suppgid;
@@ -199,6 +198,7 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         r->ur_suppgid2 = rec->lk_suppgid2;
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
+        r->ur_time = rec->lk_time;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
@@ -227,6 +227,7 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         r->ur_suppgid2 = -1;
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
+        r->ur_time = rec->ul_time;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
@@ -254,6 +255,7 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         r->ur_suppgid2 = rec->rn_suppgid2;
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
+        r->ur_time = rec->rn_time;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
@@ -269,6 +271,45 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         RETURN(0);
 }
 
+static int mds_open_unpack(struct ptlrpc_request *req, int offset,
+                           struct mds_update_record *r)
+{
+        struct mds_rec_create *rec;
+        ENTRY;
+
+        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
+                                  lustre_swab_mds_rec_create);
+        if (rec == NULL)
+                RETURN (-EFAULT);
+
+        r->ur_fsuid = rec->cr_fsuid;
+        r->ur_fsgid = rec->cr_fsgid;
+        r->ur_cap = rec->cr_cap;
+        r->ur_fid1 = &rec->cr_fid;
+        r->ur_fid2 = &rec->cr_replayfid;
+        r->ur_mode = rec->cr_mode;
+        r->ur_rdev = rec->cr_rdev;
+        r->ur_time = rec->cr_time;
+        r->ur_flags = rec->cr_flags;
+        r->ur_suppgid1 = rec->cr_suppgid;
+        r->ur_suppgid2 = -1;
+
+        LASSERT_REQSWAB (req, offset + 1);
+        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        if (r->ur_name == NULL)
+                RETURN (-EFAULT);
+        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+
+        LASSERT_REQSWAB (req, offset + 2);
+        if (req->rq_reqmsg->bufcount > offset + 2) {
+                r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
+                if (r->ur_eadata == NULL)
+                        RETURN (-EFAULT);
+                r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 2];
+        }
+        RETURN(0);
+}
+
 typedef int (*update_unpacker)(struct ptlrpc_request *req, int offset,
                                struct mds_update_record *r);
 
@@ -278,7 +319,7 @@ static update_unpacker mds_unpackers[REINT_MAX + 1] = {
         [REINT_LINK] mds_link_unpack,
         [REINT_UNLINK] mds_unlink_unpack,
         [REINT_RENAME] mds_rename_unpack,
-        [REINT_OPEN] mds_create_unpack,
+        [REINT_OPEN] mds_open_unpack,
 };
 
 int mds_update_unpack(struct ptlrpc_request *req, int offset,

@@ -36,23 +36,23 @@ static int ptlbd_cl_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
         struct obd_import *imp;
-        struct obd_ioctl_data* data = buf;
+        struct lustre_cfg* lcfg = buf;
         ENTRY;
 
         if (ptlbd->bd_import != NULL)
                 RETURN(-EALREADY);
 
-        if (data->ioc_inllen1 < 1) {
+        if (lcfg->lcfg_inllen1 < 1) {
                 CERROR("requires a PTLBD server UUID\n");
                 RETURN(-EINVAL);
         }
 
-        if (data->ioc_inllen1 > 37) {
+        if (lcfg->lcfg_inllen1 > 37) {
                 CERROR("PTLBD server UUID must be less than 38 characters\n");
                 RETURN(-EINVAL);
         }
 
-        obd_str2uuid(&ptlbd->bd_server_uuid, data->ioc_inlbuf1);
+        obd_str2uuid(&ptlbd->bd_server_uuid, lcfg->lcfg_inlbuf1);
 
         /*
          * from client_obd_connect.. *shrug*
@@ -64,13 +64,14 @@ static int ptlbd_cl_setup(struct obd_device *obd, obd_count len, void *buf)
                 class_import_put(imp);
                 RETURN(-ENOENT);
         }
-        imp->imp_level = LUSTRE_CONN_FULL;
+        imp->imp_state = LUSTRE_IMP_FULL;
 
         ptlrpc_init_client(PTLBD_REQUEST_PORTAL, PTLBD_REPLY_PORTAL, 
                         "ptlbd", &ptlbd->bd_client);
         imp->imp_client = &ptlbd->bd_client;
         imp->imp_obd = obd;
-        memcpy(imp->imp_target_uuid.uuid, data->ioc_inlbuf1, data->ioc_inllen1);
+        memcpy(imp->imp_target_uuid.uuid, lcfg->lcfg_inlbuf1, 
+               lcfg->lcfg_inllen1);
         ptlbd_blk_register(ptlbd);
 
         RETURN(0);
@@ -120,40 +121,40 @@ int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
         rc = class_connect(conn, obd, target_uuid);
         if (rc)
                 RETURN(rc);
+        exp = class_conn2export(conn);
 
         request = ptlrpc_prep_req(imp, PTLBD_CONNECT, 3, size, tmp);
         if (!request)
                 GOTO(out_disco, rc = -ENOMEM);
-        request->rq_level = LUSTRE_CONN_NEW;
+        request->rq_send_state = LUSTRE_IMP_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
 
         imp->imp_dlm_handle = *conn;
 
-        imp->imp_level = LUSTRE_CONN_CON;
+        imp->imp_state = LUSTRE_IMP_NEW;
         rc = ptlrpc_queue_wait(request);
         if (rc)
                 GOTO(out_req, rc);
 
-        exp = class_conn2export(conn);
         exp->exp_connection = ptlrpc_connection_addref(request->rq_connection);
-        class_export_put(exp);
 
-        imp->imp_level = LUSTRE_CONN_FULL;
+        imp->imp_state = LUSTRE_IMP_FULL;
         imp->imp_remote_handle = request->rq_repmsg->handle;
         
 out_req:
         ptlrpc_req_finished(request);
 out_disco:
         if (rc)
-                class_disconnect(conn, 0);
+                class_disconnect(exp, 0);
+        class_export_put(exp);
         RETURN(rc);
 }
 
 
 /* modelled after ptlrpc_import_disconnect() */
-int ptlbd_cl_disconnect(struct lustre_handle *conn, int failover)
+int ptlbd_cl_disconnect(struct obd_export *exp, int failover)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = exp->exp_obd;
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
         struct obd_import *imp = ptlbd->bd_import;
         struct ptlrpc_request *request;
@@ -168,14 +169,14 @@ int ptlbd_cl_disconnect(struct lustre_handle *conn, int failover)
                 GOTO(out_req, rc = -ENOMEM);
 
         request->rq_replen = lustre_msg_size(0, NULL);
-        request->rq_level = LUSTRE_CONN_RECOVER;
+        request->rq_send_state = LUSTRE_IMP_FULL;
 
         rc = ptlrpc_queue_wait(request);
 
 out_req:
         if (request)
                 ptlrpc_req_finished(request);
-        err = class_disconnect(conn, 0);
+        err = class_disconnect(exp, 0);
         memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
         if (!rc && err)
                 rc = err;
@@ -215,11 +216,14 @@ int ptlbd_do_connect(struct ptlbd_obd *ptlbd)
 {
         int     rc;
         struct obd_device       *obd = ptlbd->bd_import->imp_obd;
+        struct lustre_handle conn;
         ENTRY;
 
-        memset(&ptlbd->bd_connect_handle, 0, sizeof(ptlbd->bd_connect_handle));
-        rc = obd_connect(&ptlbd->bd_connect_handle, obd, 
-                         &ptlbd->bd_server_uuid);
+        memset(&conn, 0, sizeof(conn));
+        rc = obd_connect(&conn, obd, &ptlbd->bd_server_uuid);
+        if (rc < 0)
+                RETURN(rc);
+        ptlbd->bd_exp = class_conn2export(&conn);
         RETURN(rc);
 }
 
@@ -229,7 +233,7 @@ int ptlbd_do_disconnect(struct ptlbd_obd *ptlbd)
         int     rc;
         ENTRY;
 
-        rc = obd_disconnect(&ptlbd->bd_connect_handle, 0);
+        rc = obd_disconnect(ptlbd->bd_exp, 0);
         RETURN(rc);
 }
 

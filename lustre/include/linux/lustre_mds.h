@@ -56,89 +56,14 @@ struct lustre_md {
         struct lov_stripe_md *lsm;
 };
 
-struct mdc_rpc_lock {
-        struct semaphore rpcl_sem;
-        struct lookup_intent *rpcl_it;
-};
-extern struct mdc_rpc_lock mdc_rpc_lock;
-extern struct mdc_rpc_lock mdc_setattr_lock;
-
-static inline void mdc_init_rpc_lock(struct mdc_rpc_lock *lck)
-{
-        sema_init(&lck->rpcl_sem, 1);
-        lck->rpcl_it = NULL;
-}
-
-#ifdef __KERNEL__
-/* Compat code for kernel patch v18 users, can be removed when everyone has
- * upgraded --phik 02 June 2003 */
-#ifdef IT_FL_LOCKED
-static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck, 
-                                    struct lookup_intent *it)
-{
-        down(&lck->rpcl_sem);
-        if (it) { 
-                lck->rpcl_it = it;
-                it->it_int_flags |= IT_FL_LOCKED;
-        }
-}
-
-static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck, 
-                                    struct lookup_intent *it)
-{
-        if (it == NULL) {
-                LASSERT(it == lck->rpcl_it);
-                up(&lck->rpcl_sem);
-                return;
-        }
-        if (it != NULL && (it->it_int_flags & IT_FL_LOCKED)) {
-                it->it_int_flags &= ~IT_FL_LOCKED;
-                LASSERT(it == lck->rpcl_it);
-                lck->rpcl_it = NULL;
-                up(&lck->rpcl_sem);
-        }
-}
-#else
-static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck, 
-                                    struct lookup_intent *it)
-{
-        down(&lck->rpcl_sem);
-        if (it) { 
-                lck->rpcl_it = it;
-                it->it_iattr = (void *)1;
-        }
-}
-
-static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck, 
-                                    struct lookup_intent *it)
-{
-        if (it == NULL) {
-                LASSERT(it == lck->rpcl_it);
-                up(&lck->rpcl_sem);
-                return;
-        }
-        if (it && it->it_iattr) {
-                it->it_iattr = NULL;
-                LASSERT(it == lck->rpcl_it);
-                lck->rpcl_it = NULL;
-                up(&lck->rpcl_sem);
-        }
-}
-#endif
-#endif
-
 struct mdc_op_data {
-        __u64   ino1;
-        __u32   gen1;
-        __u32   typ1;
-        __u32   gid1;
-        __u64   ino2;
-        __u32   gen2;
-        __u32   typ2;
-        __u32   gid2;
+        struct ll_fid fid1;
+        struct ll_fid fid2;
+        struct ll_uctxt ctxt;
+        __u64 mod_time;
         const char *name;
-        int     namelen;
-        int     mode;
+        int namelen;
+        __u32 create_mode;
 };
 
 struct mds_update_record {
@@ -157,8 +82,6 @@ struct mds_update_record {
         struct obd_ucred ur_uc;
         __u64 ur_rdev;
         __u32 ur_mode;
-        __u32 ur_uid;
-        __u32 ur_gid;
         __u64 ur_time;
         __u32 ur_flags;
 };
@@ -170,7 +93,7 @@ struct mds_update_record {
 #define ur_suppgid2 ur_uc.ouc_suppgid2
 
 /* i_attr_flags holds the open count in the inode in 2.4 */
-//Alex implement on 2.4 with i_attr_flags and find soln for 2.5 please
+//XXX Alex implement on 2.4 with i_attr_flags and find soln for 2.5 please
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 # define mds_open_orphan_count(inode)   (0)
 # define mds_open_orphan_inc(inode)  do { } while (0);
@@ -199,14 +122,18 @@ struct mds_update_record {
 
 #define MDS_MOUNT_RECOV 2
 
-/* Data stored per server at the head of the last_rcvd file.  In le32 order. */
+#define MDS_ROCOMPAT_LOVOBJID   0x00000001
+#define MDS_ROCOMPAT_SUPP       (MDS_ROCOMPAT_LOVOBJID)
+
+#define MDS_INCOMPAT_SUPP       (0)
+
+/* Data stored per server at the head of the last_rcvd file.  In le32 order.
+ * Try to keep this the same as fsd_server_data so we might one day merge. */
 struct mds_server_data {
-        __u8  msd_uuid[37];        /* server UUID */
-        __u8  uuid_padding[3];     /* unused */
-//      __u64 msd_last_objid;      /* last created object ID */
+        __u8  msd_uuid[40];        /* server UUID */
         __u64 msd_last_transno;    /* last completed transaction ID */
         __u64 msd_mount_count;     /* MDS incarnation number */
-        __u64 msd_padding_until_last_objid_is_enabled;
+        __u64 msd_unused;
         __u32 msd_feature_compat;  /* compatible feature flags */
         __u32 msd_feature_rocompat;/* read-only compatible feature flags */
         __u32 msd_feature_incompat;/* incompatible feature flags */
@@ -216,15 +143,13 @@ struct mds_server_data {
         __u16 msd_subdir_count;    /* number of subdirectories for objects */
         __u64 msd_catalog_oid;     /* recovery catalog object id */
         __u32 msd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  msd_peeruuid[37];    /* UUID of LOV/OSC associated with MDS */
-        __u8  peer_padding[3];     /* unused */
+        __u8  msd_peeruuid[40];    /* UUID of LOV/OSC associated with MDS */
         __u8  msd_padding[MDS_LR_SERVER_SIZE - 140];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_client_data {
-        __u8 mcd_uuid[37];      /* client UUID */
-        __u8 uuid_padding[3];   /* unused */
+        __u8 mcd_uuid[40];      /* client UUID */
         __u64 mcd_mount_count;  /* MDS incarnation number */
         __u64 mcd_last_transno; /* last completed transaction ID */
         __u64 mcd_last_xid;     /* xid for the last transaction */
@@ -256,15 +181,14 @@ struct dentry *mds_name2locked_dentry(struct obd_device *, struct dentry *dir,
                                       int dir_lock_mode);
 struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
-                                     struct lustre_handle *lockh);
+                                     struct lustre_handle *lockh,
+                                     char *name, int namelen);
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt);
 int mds_reint(struct ptlrpc_request *req, int offset, struct lustre_handle *);
-int mds_pack_md(struct obd_device *mds, struct lustre_msg *msg,
-                int offset, struct mds_body *body, struct inode *inode);
 void mds_steal_ack_locks(struct obd_export *exp,
                          struct ptlrpc_request *req);
-int mds_update_server_data(struct obd_device *);
+int mds_update_server_data(struct obd_device *, int force_sync);
 
 /* mds/mds_fs.c */
 int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
@@ -272,59 +196,86 @@ int mds_fs_cleanup(struct obd_device *obddev, int failover);
 #endif
 
 /* mds/mds_lov.c */
-extern int mds_get_lovtgts(struct mds_obd *obd, int tgt_count,
-                           struct obd_uuid *uuidarray);
-extern int mds_get_lovdesc(struct mds_obd  *obd, struct lov_desc *desc);
 
-/* mdc/mdc_request.c */
-int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
-                      struct lustre_handle *obd_import,
-                      struct lustre_md *md);
-int mdc_enqueue(struct lustre_handle *conn, int lock_type,
-                struct lookup_intent *it, int lock_mode,
-                struct mdc_op_data *enq_data,
-                struct lustre_handle *lockh, char *tgt, int tgtlen,
+/* mdc/mdc_locks.c */
+int it_disposition(struct lookup_intent *it, int flag);
+void it_set_disposition(struct lookup_intent *it, int flag);
+int it_open_error(int phase, struct lookup_intent *it);
+void mdc_set_lock_data(__u64 *lockh, void *data);
+int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+                      ldlm_iterator_t it, void *data);
+int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *, 
+                    struct ll_fid *parent, 
+                    const char *name, int len, void *lmm, int lmmsize,
+                    struct ll_fid *child,
+                    struct lookup_intent *, int, 
+                    struct ptlrpc_request **reqp,
+                    ldlm_blocking_callback cb_blocking);
+int mdc_enqueue(struct obd_export *exp,
+                int lock_type,
+                struct lookup_intent *it,
+                int lock_mode,
+                struct mdc_op_data *data,
+                struct lustre_handle *lockh,
+                void *lmm,
+                int lmmlen,
                 ldlm_completion_callback cb_completion,
                 ldlm_blocking_callback cb_blocking,
                 void *cb_data);
-int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
-                   struct ptlrpc_request **request);
-int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid);
-int mdc_getattr(struct lustre_handle *conn, struct ll_fid *fid,
+
+/* mdc/mdc_request.c */
+int mdc_init_ea_size(struct obd_device *obd, char *lov_name);
+int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
+                      struct obd_export *exp,
+                      struct lustre_md *md);
+int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
+int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 unsigned long valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
-int mdc_getattr_name(struct lustre_handle *conn, struct ll_fid *fid,
+int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
                      char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request);
-int mdc_setattr(struct lustre_handle *conn,
-                struct mdc_op_data *data,
+int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request);
-int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
+int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
              struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **);
 struct obd_client_handle;
-void mdc_set_open_replay_data(struct obd_client_handle *och);
-int mdc_close(struct lustre_handle *conn, obd_id ino, int type,
-              struct lustre_handle *fh,  struct ptlrpc_request **req);
-int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
+void mdc_set_open_replay_data(struct obd_client_handle *och,
+                              struct ptlrpc_request *open_req);
+void mdc_clear_open_replay_data(struct obd_client_handle *och);
+int mdc_close(struct obd_export *, struct obdo *, struct obd_client_handle *,
+              struct ptlrpc_request **);
+int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
                  struct page *, struct ptlrpc_request **);
-int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
+int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u64 time, __u64 rdev, struct ptlrpc_request **request);
-int mdc_unlink(struct lustre_handle *conn, struct mdc_op_data *data,
+               __u64 rdev, struct ptlrpc_request **request);
+int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request);
-int mdc_link(struct lustre_handle *conn, struct mdc_op_data *data,
+int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
              struct ptlrpc_request **);
-int mdc_rename(struct lustre_handle *conn, struct mdc_op_data *data,
+int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request);
+int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
+             struct ptlrpc_request **);
 int mdc_create_client(struct obd_uuid uuid, struct ptlrpc_client *cl);
 
 /* Store the generation of a newly-created inode in |req| for replay. */
 void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
                                 int repoff);
+int mdc_llog_process(struct obd_export *, char *logname, llog_cb_t, void *data);
+int mdc_done_writing(struct obd_export *exp, struct obdo *);
 
+static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
+                                int type)
+{
+        fid->id = ino;
+        fid->generation = gen;
+        fid->f_type = type;
+}
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'

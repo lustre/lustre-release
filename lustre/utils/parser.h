@@ -2,7 +2,7 @@
 #define _PARSER_H_
 
 #define HISTORY	100		/* Don't let history grow unbounded    */
-#define MAXARGS 100
+#define MAXARGS 512
 
 #define CMD_COMPLETE	0
 #define CMD_INCOMPLETE	1

@@ -4,7 +4,7 @@
 set -vxe
 
 [ "$CONFIGS" -a -z "$SANITYN" ] && SANITYN=no
-[ "$CONFIGS" ] || CONFIGS="local lov"
+[ "$CONFIGS" ] || CONFIGS="local-large-inode local lov"
 [ "$MAX_THREADS" ] || MAX_THREADS=10
 if [ -z "$THREADS" ]; then
 	KB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
@@ -14,14 +14,16 @@ fi
 [ "$SIZE" ] || SIZE=20480
 [ "$RSIZE" ] || RSIZE=64
 [ "$UID" ] || UID=1000
-[ "$MNT" ] || MNT=/mnt/lustre
+[ "$MOUNT" ] || MOUNT=/mnt/lustre
 [ "$TMP" ] || TMP=/tmp
 [ "$COUNT" ] || COUNT=1000
-[ "$DEBUG_OFF" ] || DEBUG_OFF="eval echo 0 > /proc/sys/portals/debug"
+#[ "$DEBUG_LVL" ] || DEBUG_LVL=0x370200
+[ "$DEBUG_LVL" ] || DEBUG_LVL=0
+[ "$DEBUG_OFF" ] || DEBUG_OFF="eval echo $DEBUG_LVL > /proc/sys/portals/debug"
 [ "$DEBUG_ON" ] || DEBUG_ON="eval echo -1 > /proc/sys/portals/debug"
 
 for NAME in $CONFIGS; do
-	export NAME
+	export NAME MOUNT
 	[ -e $NAME.sh ] && sh $NAME.sh
 	[ ! -e $NAME.xml ] && [ -z "$LDAPURL" ] && echo "no config '$NAME.xml'" 1>&2 && exit 1
 
@@ -31,12 +33,12 @@ for NAME in $CONFIGS; do
 
 	#[ "$SANITY" != "no" ] && sh sanity.sh
 	if [ "$SANITY" != "no" ]; then
-		START=: CLEAN=: sh sanity.sh
+		SANITYLOG=/tmp/sanity.log START=: CLEAN=: sh sanity.sh
 	fi
 
 	if [ "$DBENCH" != "no" ]; then
-		mount | grep $MNT || sh llmount.sh
-		SPACE=`df $MNT | tail -1 | awk '{ print $4 }'`
+		mount | grep $MOUNT || sh llmount.sh
+		SPACE=`df $MOUNT | tail -1 | awk '{ print $4 }'`
 		DB_THREADS=`expr $SPACE / 50000`
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
 
@@ -52,21 +54,21 @@ for NAME in $CONFIGS; do
 			sh llmountcleanup.sh
 			sh llrmount.sh
 		fi
-		rm -f /mnt/lustre/client.txt
+		rm -f /mnt/lustre/`hostname`/client.txt
 	fi
-	chown $UID $MNT && chmod 700 $MNT
+	chown $UID $MOUNT && chmod 700 $MOUNT
 	if [ "$BONNIE" != "no" ]; then
-		mount | grep $MNT || sh llmount.sh
+		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF
-		bonnie++ -s 0 -n 10 -u $UID -d $MNT
+		bonnie++ -s 0 -n 10 -u $UID -d $MOUNT
 		$DEBUG_ON
 		sh llmountcleanup.sh
 		sh llrmount.sh
 	fi
 	IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r $RSIZE -s $SIZE"
-	IOZONE_FILE="-f $MNT/iozone"
+	IOZONE_FILE="-f $MOUNT/iozone"
 	if [ "$IOZONE" != "no" ]; then
-		mount | grep $MNT || sh llmount.sh
+		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF
 		iozone $IOZONE_OPTS $IOZONE_FILE
 		$DEBUG_ON
@@ -74,8 +76,8 @@ for NAME in $CONFIGS; do
 		sh llrmount.sh
 	fi
 	if [ "$IOZONE_DIR" != "no" ]; then
-		mount | grep $MNT || sh llmount.sh
-		SPACE=`df $MNT | tail -1 | awk '{ print $4 }'`
+		mount | grep $MOUNT || sh llmount.sh
+		SPACE=`df $MOUNT | tail -1 | awk '{ print $4 }'`
 		IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 1000 \)`
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 
@@ -90,7 +92,7 @@ for NAME in $CONFIGS; do
 			THREAD=1
 			IOZONE_FILE="-F "
 			while [ $THREAD -le $IOZ_THREADS ]; do
-				IOZONE_FILE="$IOZONE_FILE $MNT/iozone.$THREAD"
+				IOZONE_FILE="$IOZONE_FILE $MOUNT/iozone.$THREAD"
 				THREAD=`expr $THREAD + 1`
 			done
 			iozone -I $IOZONE_OPTS -t $IOZ_THREADS $IOZONE_FILE
@@ -103,19 +105,22 @@ for NAME in $CONFIGS; do
 		fi
 	fi
 	if [ "$FSX" != "no" ]; then
-		mount | grep $MNT || sh llmount.sh
+		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF
-		./fsx -W -c 50 -p 1000 -P $TMP -l 1024000 -N $(($COUNT * 100)) $MNT/fsxfile
+		./fsx -W -c 50 -p 1000 -P $TMP -l 1024000 -N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
 		sh llmountcleanup.sh
 		#sh llrmount.sh
 	fi	
-	mount | grep $MNT && sh llmountcleanup.sh
+	mount | grep $MOUNT && sh llmountcleanup.sh
 done
 
+if [ "$REPLAY_SINGLE" != "no" ]; then
+	sh replay-single.sh
+fi
 if [ "$SANITYN" != "no" ]; then
 	export NAME=mount2
-	mount | grep $MNT || sh llmount.sh
+	mount | grep $MOUNT || sh llmount.sh
 	sh sanityN.sh
-	mount | grep $MNT && sh llmountcleanup.sh
+	mount | grep $MOUNT && sh llmountcleanup.sh
 fi

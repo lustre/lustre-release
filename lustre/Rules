@@ -22,12 +22,17 @@ AM_CPPFLAGS=-I$(top_builddir)/include
 
 endif
 
-$(MODULE).o: $($(MODULE)_OBJECTS)
+$(MODULE).o: $($(MODULE)_OBJECTS) $($(MODULE)_DEPENDENCIES)
 	$(LD) -m "`$(LD) --help | awk '/supported emulations/ {print $$4}'`" -r -o $(MODULE).o $($(MODULE)_OBJECTS)
 
 tags:
 	rm -f $(top_srcdir)/TAGS
+	ETAGSF=`etags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	find $(top_srcdir) -name '*.[hc]' | xargs etags $$ETAGSF -a
+
 	rm -f $(top_srcdir)/tags
-	find $(top_srcdir) -name '*.[hc]' | grep -v ".orig" | xargs etags -a
-	find $(top_srcdir) -name '*.[hc]' | grep -v ".orig" | xargs ctags -a
+	CTAGSF=`ctags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	find $(top_srcdir) -name '*.[hc]' | xargs ctags $$CTAGSF -a
 

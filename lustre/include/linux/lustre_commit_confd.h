@@ -26,11 +26,12 @@
 
 #include <linux/lustre_log.h>
 
-struct llog_commit_data {
+struct llog_canceld_ctxt {
         struct list_head           llcd_list;  /* free or pending struct list */
         struct obd_import         *llcd_import;
         struct llog_commit_master *llcd_lcm;
         int                        llcd_tries; /* number of tries to send */
+        struct llog_ctxt_gen       llcd_gen; 
         int                        llcd_cookiebytes;
         struct llog_cookie         llcd_cookies[0];
 };
@@ -46,9 +47,9 @@ struct llog_commit_master {
         int                     lcm_flags;
         wait_queue_head_t       lcm_waitq;
 
-        struct list_head        lcm_llcd_pending; /* llog_commit_data to send */
+        struct list_head        lcm_llcd_pending; /* llog_canceld_ctxt to send */
         struct list_head        lcm_llcd_resend;  /* try to resend this data */
-        struct list_head        lcm_llcd_free;    /* free llog_commit_data */
+        struct list_head        lcm_llcd_free;    /* free llog_canceld_ctxt */
         spinlock_t              lcm_llcd_lock;    /* protects llcd_free */
         atomic_t                lcm_llcd_numfree; /* items on llcd_free */
         int                     lcm_llcd_minfree; /* min free on llcd_free */
@@ -67,7 +68,7 @@ struct llog_commit_daemon {
 
 /* ptlrpc/recov_thread.c */
 int llog_start_commit_thread(void);
-struct llog_commit_data *llcd_grab(void);
-void llcd_send(struct llog_commit_data *llcd);
+struct llog_canceld_ctxt *llcd_grab(void);
+void llcd_send(struct llog_canceld_ctxt *llcd);
 
 #endif /* _LUSTRE_COMMIT_CONFD_H */

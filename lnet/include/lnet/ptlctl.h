@@ -29,6 +29,7 @@
 #define OBD_DEV_PATH "/dev/obd"
 
 int ptl_name2nal(char *str);
+int ptl_parse_ipaddr (__u32 *ipaddrp, char *str);
 int ptl_parse_nid (ptl_nid_t *nidp, char *str);
 char * ptl_nid2str (char *buffer, ptl_nid_t nid);
 
@@ -71,7 +72,11 @@ int jt_dbg_mark_debug_buf(int argc, char **argv);
 int jt_dbg_modules(int argc, char **argv);
 int jt_dbg_panic(int argc, char **argv);
 
+int ptl_set_cfg_record_cb(cfg_record_cb_t cb);
+
 /* l_ioctl.c */
+typedef int (ioc_handler_t)(int dev_id, int opc, void *buf);
+void set_ioc_handler(ioc_handler_t *handler);
 int register_ioc_dev(int dev_id, const char * dev_name);
 void unregister_ioc_dev(int dev_id);
 int set_ioctl_dump(char * file);

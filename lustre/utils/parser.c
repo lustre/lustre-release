@@ -61,7 +61,7 @@ static int process(char *s, char **next, command_t *lookup, command_t **result,
                    char **prev);
 static void print_commands(char *str, command_t *table);
 
-static char * skipwhitespace(char * s) 
+static char * skipwhitespace(char * s)
 {
         char * t;
         int    len;
@@ -72,7 +72,7 @@ static char * skipwhitespace(char * s)
 }
 
 
-static char * skiptowhitespace(char * s) 
+static char * skiptowhitespace(char * s)
 {
         char * t;
 
@@ -83,13 +83,13 @@ static char * skiptowhitespace(char * s)
 static int line2args(char *line, char **argv, int maxargs)
 {
         char *arg;
-        int i = 0; 
-    
+        int i = 0;
+
         arg = strtok(line, " \t");
         if ( arg ) {
                 argv[i] = arg;
                 i++;
-        } else 
+        } else
                 return 0;
 
         while( (arg = strtok(NULL, " \t")) && (i <= maxargs)) {
@@ -111,7 +111,7 @@ static command_t *Parser_findargcmd(char *name, command_t cmds[])
         return NULL;
 }
 
-void Parser_ignore_errors(int ignore) 
+void Parser_ignore_errors(int ignore)
 {
         ignore_errors = ignore;
 }
@@ -122,9 +122,12 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
 
         cmd = Parser_findargcmd(argv[0], cmds);
         if ( cmd ) {
-                return (cmd->pc_func)(argc, argv);
+                int rc = (cmd->pc_func)(argc, argv);
+                if (rc == CMD_HELP)
+                        fprintf(stderr, "%s\n", cmd->pc_help);
+                return rc;
         } else {
-                printf("Try interactive use without arguments or use one of:\n");
+		printf("Try interactive use without arguments or use one of:\n");
                 for (cmd = cmds; cmd->pc_name; cmd++)
                         printf("\"%s\"\n", cmd->pc_name);
                 printf("as argument.\n");
@@ -135,20 +138,20 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
 /* returns the command_t * (NULL if not found) corresponding to a
    _partial_ match with the first token in name.  It sets *next to
    point to the following token. Does not modify *name. */
-static command_t * find_cmd(char * name, command_t cmds[], char ** next) 
+static command_t * find_cmd(char * name, command_t cmds[], char ** next)
 {
         int    i, len;
-    
-        if (!cmds || !name ) 
+
+        if (!cmds || !name )
                 return NULL;
-    
+
         /* This sets name to point to the first non-white space character,
            and next to the first whitespace after name, len to the length: do
            this with strtok*/
         name = skipwhitespace(name);
         *next = skiptowhitespace(name);
         len = *next - name;
-        if (len == 0) 
+        if (len == 0)
                 return NULL;
 
         for (i = 0; cmds[i].pc_name; i++) {
@@ -167,19 +170,37 @@ static int process(char *s, char ** next, command_t *lookup,
                    command_t **result, char **prev)
 {
         *result = find_cmd(s, lookup, next);
-        *prev = s; 
+        *prev = s;
 
         /* non existent */
-        if ( ! *result ) 
+        if (!*result)
                 return CMD_NONE;
 
         /* found entry: is it ambigous, i.e. not exact command name and
            more than one command in the list matches.  Note that find_cmd
            points to the first ambiguous entry */
-        if ( strncasecmp(s, (*result)->pc_name, strlen((*result)->pc_name)) &&
-             find_cmd(s, (*result) + 1, next)) 
-                return CMD_AMBIG;
+        if (strncasecmp(s, (*result)->pc_name, strlen((*result)->pc_name))) {
+                char *another_next;
+                command_t *another_result = find_cmd(s, (*result) + 1,
+                                                     &another_next);
+                int found_another = 0;
 
+                while (another_result) {
+                        if (strncasecmp(s, another_result->pc_name,
+                                        strlen(another_result->pc_name)) == 0){
+                                *result = another_result;
+                                *next = another_next;
+                                goto got_it;
+                        }
+                        another_result = find_cmd(s, another_result + 1,
+                                                  &another_next);
+                        found_another = 1;
+                }
+                if (found_another)
+                        return CMD_AMBIG;
+        }
+
+got_it:
         /* found a unique command: component or full? */
         if ( (*result)->pc_func ) {
                 return CMD_COMPLETE;
@@ -187,7 +208,8 @@ static int process(char *s, char ** next, command_t *lookup,
                 if ( *next == '\0' ) {
                         return CMD_INCOMPLETE;
                 } else {
-                        return process(*next, next, (*result)->pc_sub_cmd, result, prev);
+                        return process(*next, next, (*result)->pc_sub_cmd,
+                                       result, prev);
                 }
         }
 }
@@ -251,7 +273,7 @@ int execute_line(char * line)
         int         i;
         int rc = 0;
 
-        switch( process(line, &next, top_level, &cmd, &prev) ) {
+        switch (process(line, &next, top_level, &cmd, &prev)) {
         case CMD_AMBIG:
                 fprintf(stderr, "Ambiguous command \'%s\'\nOptions: ", line);
                 while( (ambig = find_cmd(prev, cmd, &tmp)) ) {
@@ -292,9 +314,9 @@ noop_fn ()
         return (0);
 }
 
-/* just in case you're ever in an airplane and discover you 
+/* just in case you're ever in an airplane and discover you
    forgot to install readline-dev. :) */
-int init_input() 
+int init_input()
 {
         int   interactive = isatty (fileno (stdin));
 
@@ -310,13 +332,13 @@ int init_input()
 
         rl_attempted_completion_function = (CPPFunction *)command_completion;
         rl_completion_entry_function = (void *)command_generator;
-#endif 
+#endif
         return interactive;
 }
 
 #ifndef HAVE_LIBREADLINE
 #define add_history(s)
-char * readline(char * prompt) 
+char * readline(char * prompt)
 {
         char line[2048];
         int n = 0;
@@ -337,7 +359,7 @@ int Parser_commands(void)
         char *line, *s;
         int rc = 0, save_error = 0;
         int interactive;
-        
+
         interactive = init_input();
 
         while(!done) {
@@ -368,7 +390,7 @@ int Parser_commands(void)
 
 
 /* sets the parser prompt */
-void Parser_init(char * prompt, command_t * cmds) 
+void Parser_init(char * prompt, command_t * cmds)
 {
         done = 0;
         top_level = cmds;
@@ -377,7 +399,7 @@ void Parser_init(char * prompt, command_t * cmds)
 }
 
 /* frees the parser prompt */
-void Parser_exit(int argc, char *argv[]) 
+void Parser_exit(int argc, char *argv[])
 {
         done = 1;
         free(parser_prompt);
@@ -410,7 +432,7 @@ void Parser_qhelp(int argc, char *argv[]) {
         printf("For more help type: help command-name\n");
 }
 
-int Parser_help(int argc, char **argv) 
+int Parser_help(int argc, char **argv)
 {
         char line[1024];
         char *next, *prev, *tmp;
@@ -454,21 +476,19 @@ int Parser_help(int argc, char **argv)
                 break;
         }
         return 0;
-}  
+}
 
 
 void Parser_printhelp(char *cmd)
 {
-        char *argv[] = { "help", cmd }; 
+        char *argv[] = { "help", cmd };
         Parser_help(2, argv);
 }
 
 
 /*************************************************************************
- * COMMANDS                                                                 *
- *************************************************************************/ 
-
-
+ * COMMANDS                                                              *
+ *************************************************************************/
 static void print_commands(char * str, command_t * table) {
         command_t * cmds;
         char         buf[80];
@@ -489,7 +509,7 @@ static void print_commands(char * str, command_t * table) {
         }
 }
 
-char *Parser_getstr(const char *prompt, const char *deft, char *res, 
+char *Parser_getstr(const char *prompt, const char *deft, char *res,
                     size_t len)
 {
         char *line = NULL;
@@ -573,9 +593,9 @@ int Parser_getbool(const char *prompt, int deft)
         assert(theprompt);
 
         fflush(stdout);
-    
+
         if ( deft != 0 && deft != 1 ) {
-                fprintf(stderr, "Error: Parser_getbool given bad default (%d).\n",
+                fprintf(stderr, "Error: Parser_getbool given bad default %d\n",
                         deft);
                 assert ( 0 );
         }
@@ -600,15 +620,15 @@ int Parser_getbool(const char *prompt, int deft)
                         result = 0;
                         break;
                 }
-                if ( line ) 
+                if ( line )
                         free(line);
                 fprintf(stdout, "Invalid string. Must start with yY or nN\n");
                 fflush(stdout);
         } while ( 1 );
 
-        if ( line ) 
+        if ( line )
                 free(line);
-        if ( theprompt ) 
+        if ( theprompt )
                 free(theprompt);
         return result;
 }
@@ -618,8 +638,8 @@ long Parser_intarg(const char *inp, const char *prompt, int deft,
                    int min, int max, int base)
 {
         long result;
-        int rc; 
-    
+        int rc;
+
         rc = Parser_arg2int(inp, &result, base);
 
         if ( rc == 0 ) {
@@ -635,7 +655,7 @@ char *Parser_strarg(char *inp, const char *prompt, const char *deft,
 {
         if ( inp == NULL || *inp == '\0' ) {
                 return Parser_getstr(prompt, deft, answer, len);
-        } else 
+        } else
                 return inp;
 }
 
@@ -652,7 +672,7 @@ int Parser_arg2int(const char *inp, long *result, int base)
 
         if ( *inp != '\0' && *endptr == '\0' )
                 return 0;
-        else 
+        else
                 return 1;
 }
 
@@ -704,7 +724,7 @@ int Parser_bool (int *b, char *str) {
                 *b = 0;
                 return (0);
         }
-        
+
         if (!strcasecmp (str, "yes") ||
             !strcasecmp (str, "y") ||
             !strcasecmp (str, "on") ||
@@ -714,7 +734,7 @@ int Parser_bool (int *b, char *str) {
                 *b = 1;
                 return (0);
         }
-        
+
         return (-1);
 }
 

@@ -38,6 +38,24 @@ kpr_nal_interface_t kscimacnal_router_interface = {
 };
 
 
+int kscimacnal_cmd (struct portal_ioctl_data *data, void *private)
+{
+        LASSERT (data != NULL);
+
+        switch (data->ioc_nal_cmd) {
+                case NAL_CMD_REGISTER_MYNID:
+                        if(kscimacnal_lib.ni.nid == data->ioc_nid) {
+                                break;
+                        }
+                        CDEBUG (D_IOCTL, "Can't change NID from "LPX64" to "LPX64")\n", kscimacnal_lib.ni.nid, data->ioc_nid);
+                        return(-EINVAL);
+                default:
+                        return(-EINVAL);
+        }
+
+        return(0);
+}
+
 static int kscimacnal_forward(nal_t   *nal,
                           int     id,
                           void    *args,  size_t args_len,
@@ -105,7 +123,7 @@ static nal_t *kscimacnal_init(int interface, ptl_pt_index_t  ptl_size,
 {
         int     nnids = 512; /* FIXME: Need ScaMac funktion to get #nodes */
 
-        CDEBUG(D_NET, "calling lib_init with nid 0x%Lx nnids %d\n", kscimacnal_data.ksci_nid, nnids);
+        CDEBUG(D_NET, "calling lib_init with nid "LPX64" nnids %d\n", kscimacnal_data.ksci_nid, nnids);
         lib_init(&kscimacnal_lib, kscimacnal_data.ksci_nid, 0, nnids,ptl_size, ac_size); 
         return &kscimacnal_api;
 }
@@ -200,6 +218,16 @@ kscimacnal_initialize(void)
                 return (-ENOMEM);
         }
 
+        /* Init command interface */
+        rc = kportal_nal_register (SCIMACNAL, &kscimacnal_cmd, NULL);
+        if (rc != 0) {
+                CERROR ("Can't initialise command interface (rc = %d)\n", rc);
+                PtlNIFini(kscimacnal_ni);
+                mac_finish(machandle);
+                return (rc);
+        }
+
+
         PORTAL_SYMBOL_REGISTER(kscimacnal_ni);
 
         /* We're done now, it's OK for the RX callback to do stuff */
@@ -210,7 +238,7 @@ kscimacnal_initialize(void)
 
 
 MODULE_AUTHOR("Niklas Edmundsson <nikke@hpc2n.umu.se>");
-MODULE_DESCRIPTION("Kernel Scali ScaMAC SCI NAL v0.0");
+MODULE_DESCRIPTION("Kernel Scali ScaMAC SCI NAL v0.1");
 MODULE_LICENSE("GPL");
 
 module_init (kscimacnal_initialize);

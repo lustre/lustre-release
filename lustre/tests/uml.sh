@@ -7,7 +7,7 @@ LMC=${LMC:-lmc}
 TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
-MDSSIZE=${MDSSIZE:-50000}
+MDSSIZE=${MDSSIZE:-100000}
 
 OSTDEVBASE=$TMP/ost
 #OSTDEV1=${OSTDEV1:-${OSTDEVBASE}1}
@@ -15,11 +15,13 @@ OSTDEVBASE=$TMP/ost
 #etc
 OSTSIZE=${OSTSIZE:-100000}
 STRIPECNT=${STRIPECNT:-1}
+OSDTYPE=${OSDTYPE:-obdfilter}
+OSTFAILOVER=${OSTFAILOVER:-}
 
 FSTYPE=${FSTYPE:-ext3}
 
 NETTYPE=${NETTYPE:-tcp}
-NIDTYPE=${NIDTYPE:-$NODETYPE}
+NIDTYPE=${NIDTYPE:-$NETTYPE}
 
 # NOTE - You can't have different MDS/OST nodes and also have clients on the
 #        MDS/OST nodes without using --endlevel and --startlevel during lconf.
@@ -69,6 +71,10 @@ h2elan () {
 	esac
 }
 
+h2gm () {
+	echo `gmnalnid -n$1`
+}
+
 # create nodes
 echo -n "adding NET for:"
 for NODE in `echo $MDSNODE $OSTNODES $CLIENTS | tr -s " " "\n" | sort -u`; do
@@ -88,7 +94,15 @@ for NODE in $OSTNODES; do
 	eval OSTDEV=\$OSTDEV$COUNT
 	echo -n " $NODE"
 	OSTDEV=${OSTDEV:-$OSTDEVBASE$COUNT-`hostname`}
-        ${LMC} -m $config --add ost --node $NODE --lov lov1 --fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE || exit 21
+	case "$OSDTYPE" in
+		obdfilter)
+			OSTARGS="--fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE"
+			;;
+		obdecho)
+			OSTARGS="--osdtype=obdecho"
+			;;
+	esac
+        ${LMC} -m $config --add ost --node $NODE --lov lov1 $OSTARGS $OSTFAILOVER || exit 21
 	COUNT=`expr $COUNT + 1`
 done
 

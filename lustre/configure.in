@@ -26,8 +26,17 @@ if test x$enable_orphans = xyes ; then
   AC_DEFINE(ENABLE_ORPHANS, 1, Compile with orphan support)
 fi
 
-AC_ARG_WITH(obd-buffer-size, [  --with-obd-buffer-size=[size] set lctl ioctl maximum (default=8K)],OBD_BUFFER_SIZE=$with_obd_buffer_size,OBD_BUFFER_SIZE=8192)
+AC_ARG_WITH(obd-buffer-size, [  --with-obd-buffer-size=[size] set lctl ioctl maximum bytes (default=8192)],OBD_BUFFER_SIZE=$with_obd_buffer_size,OBD_BUFFER_SIZE=8192)
 AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
+
+# specify location of libsysio tree
+AC_ARG_WITH(sysio, [  --with-sysio=[path] set path to libsysio source (default=../libsysio)], sysiodir=$withval)
+if test x$sysiodir = x; then
+	SYSIO='$(top_srcdir)/../libsysio'
+else
+	SYSIO=$sysiodir
+fi
+AC_SUBST(SYSIO)
 
 sinclude(portals/build.m4)
 sinclude(portals/archdep.m4)
@@ -39,16 +48,17 @@ fi
 
 AM_CONFIG_HEADER(portals/include/config.h)
 
-AC_OUTPUT([Makefile portals/Makefile portals/Kernelenv \
+AC_OUTPUT([Makefile lvfs/Makefile portals/Makefile portals/Kernelenv \
           portals/libcfs/Makefile portals/portals/Makefile \
           portals/unals/Makefile portals/knals/Makefile \
           portals/router/Makefile portals/knals/socknal/Makefile \
           portals/knals/gmnal/Makefile portals/knals/qswnal/Makefile \
 	  portals/knals/scimacnal/Makefile portals/knals/toenal/Makefile \
+	  portals/knals/ibnal/Makefile \
           portals/utils/Makefile portals/tests/Makefile portals/doc/Makefile \
-          ldlm/Makefile obdecho/Makefile ptlrpc/Makefile liblustre/Makefile \
+          obdecho/Makefile ptlrpc/Makefile liblustre/Makefile \
 	  lov/Makefile osc/Makefile mdc/Makefile mds/Makefile ost/Makefile \
 	  cobd/Makefile ptlbd/Makefile conf/Makefile  tests/Makefile \
 	  utils/Makefile utils/Lustre/Makefile obdfilter/Makefile \
-          obdclass/Makefile llite/Makefile doc/Makefile scripts/Makefile \
+          obdclass/Makefile include/Makefile include/linux/Makefile llite/Makefile doc/Makefile scripts/Makefile \
 	  scripts/lustre.spec])

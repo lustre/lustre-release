@@ -48,7 +48,7 @@ static int ll_readlink_internal(struct inode *inode,
         }
 
         ll_inode2fid(&fid, inode);
-        rc = mdc_getattr(&sbi->ll_mdc_conn, &fid,
+        rc = mdc_getattr(sbi->ll_mdc_exp, &fid,
                          OBD_MD_LINKNAME, symlen, request);
         if (rc) {
                 CERROR("inode %lu: rc = %d\n", inode->i_ino, rc);
@@ -127,11 +127,11 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 
         if (it != NULL) {
                 int op = it->it_op;
-                int mode = it->it_mode;
+                int mode = it->it_create_mode;
 
                 ll_intent_release(it);
                 it->it_op = op;
-                it->it_mode = mode;
+                it->it_create_mode = mode;
         }
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");

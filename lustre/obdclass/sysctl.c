@@ -79,7 +79,7 @@ static ctl_table obd_table[] = {
          &proc_dostring, &sysctl_string },
         {OBD_SYNCFILTER, "filter_sync_on_commit", &obd_sync_filter, sizeof(int),
                 0644, NULL, &proc_dointvec},
-	{ 0 }
+        { 0 }
 };
 
 static ctl_table parent_table[] = {

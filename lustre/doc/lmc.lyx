@@ -1,5 +1,5 @@
-#LyX 1.2 created this file. For more info see http://www.lyx.org/
-\lyxformat 220
+#LyX 1.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 221
 \textclass amsart
 \language english
 \inputencoding auto
@@ -237,19 +237,6 @@ client
 --router Optional flag to mark this node as a router
 \layout Description
 
---profile\SpecialChar ~
-[not\SpecialChar ~
-implemented] Optional flag to mark this node as a profile node.
- This would be very useful to configure several client nodes in large clusters.
- It will allow user to define 
-\series bold 
-profiles
-\series default 
- for the various client configurations, and then load the correct profile
- on the client nodes using lconf.
- 
-\layout Description
-
 --port\SpecialChar ~
 [port] Optional arguement to indicate the tcp port.
  The default is 988.
@@ -294,8 +281,8 @@ name> Name of the node on which the MDS resides
 \layout Description
 
 --size\SpecialChar ~
-<size> Optional arguement indicating the size of the device to be
- created (used typically for loop devices).
+<size> Optional argument indicating the size (in KB) of the device
+ to be created (used typically for loop devices).
 \layout Description
 
 --node\SpecialChar ~
@@ -308,7 +295,7 @@ name> Name of the node on which the MDS resides
 \layout Description
 
 --fstype\SpecialChar ~
-extN|ext3 Optional arguement used to specify the file system type.
+extN|ext3 Optional argument used to specify the file system type.
  Default is ext3.
 \layout Description
 
@@ -380,10 +367,11 @@ ost Creates an OBD, OST, and OSC.
 \layout Description
 
 --size\SpecialChar ~
-[size]
+[size] Optional argument indicating the size (in KB) of the device
+ to be created (used typically for loop devices).
 \layout Description
 
---osdtype\SpecialChar ~
+--obdtype\SpecialChar ~
 obdfilter|obdecho 
 \layout Description
 
@@ -461,7 +449,7 @@ nid
 \layout Description
 
 --node\SpecialChar ~
-node Node or profile node to add the route to.
+node Node to add the route to.
 \layout Description
 
 --gw\SpecialChar ~

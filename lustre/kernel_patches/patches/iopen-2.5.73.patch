@@ -9,7 +9,7 @@
  8 files changed, 300 insertions(+), 1 deletion(-)
 
 --- linux-2.6.0-test1/Documentation/filesystems/ext2.txt~iopen-2.5.73	2003-07-13 21:31:56.000000000 -0600
-+++ linux-2.6.0-test1-braam/Documentation/filesystems/ext2.txt	2003-07-22 01:15:46.000000000 -0600
++++ linux-2.6.0-test1-braam/Documentation/filesystems/ext2.txt	2003-07-22 13:03:47.000000000 -0600
 @@ -35,6 +35,22 @@ resgid=n			The group ID which may use th
  
  sb=n				Use alternate superblock at this location.
@@ -34,7 +34,7 @@
  
  
 --- linux-2.6.0-test1/fs/ext3/Makefile~iopen-2.5.73	2003-07-13 21:30:37.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/ext3/Makefile	2003-07-22 01:15:46.000000000 -0600
++++ linux-2.6.0-test1-braam/fs/ext3/Makefile	2003-07-22 13:03:47.000000000 -0600
 @@ -5,7 +5,7 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
@@ -44,8 +44,8 @@
  
  ifeq ($(CONFIG_EXT3_FS_XATTR),y)
  ext3-objs += xattr.o xattr_user.o xattr_trusted.o
---- linux-2.6.0-test1/fs/ext3/inode.c~iopen-2.5.73	2003-07-22 01:15:25.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/ext3/inode.c	2003-07-22 01:16:19.000000000 -0600
+--- linux-2.6.0-test1/fs/ext3/inode.c~iopen-2.5.73	2003-07-22 13:03:47.000000000 -0600
++++ linux-2.6.0-test1-braam/fs/ext3/inode.c	2003-07-22 13:03:47.000000000 -0600
 @@ -37,6 +37,7 @@
  #include <linux/mpage.h>
  #include <linux/uio.h>
@@ -64,7 +64,7 @@
  		goto bad_inode;
  	bh = iloc.bh;
 --- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.6.0-test1-braam/fs/ext3/iopen.c	2003-07-22 01:15:46.000000000 -0600
++++ linux-2.6.0-test1-braam/fs/ext3/iopen.c	2003-07-22 13:07:32.000000000 -0600
 @@ -0,0 +1,239 @@
 +
 +
@@ -96,7 +96,7 @@
 +/*
 + * This implements looking up an inode by number.
 + */
-+static struct dentry *iopen_lookup(struct inode * dir, struct dentry *dentry)
++static struct dentry *iopen_lookup(struct inode * dir, struct dentry *dentry, struct nameidata *nd)
 +{
 +	struct inode * inode;
 +	unsigned long ino;
@@ -306,7 +306,7 @@
 +	return 1;
 +}
 --- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.6.0-test1-braam/fs/ext3/iopen.h	2003-07-22 01:15:46.000000000 -0600
++++ linux-2.6.0-test1-braam/fs/ext3/iopen.h	2003-07-22 13:03:47.000000000 -0600
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -324,7 +324,7 @@
 +
 +
 --- linux-2.6.0-test1/fs/ext3/namei.c~iopen-2.5.73	2003-07-13 21:34:43.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/ext3/namei.c	2003-07-22 01:17:20.000000000 -0600
++++ linux-2.6.0-test1-braam/fs/ext3/namei.c	2003-07-22 13:03:47.000000000 -0600
 @@ -37,6 +37,7 @@
  #include <linux/buffer_head.h>
  #include <linux/smp_lock.h>
@@ -368,8 +368,8 @@
  	d_add(dentry, inode);
  	return NULL;
  }
---- linux-2.6.0-test1/fs/ext3/super.c~iopen-2.5.73	2003-07-22 01:15:25.000000000 -0600
-+++ linux-2.6.0-test1-braam/fs/ext3/super.c	2003-07-22 01:15:46.000000000 -0600
+--- linux-2.6.0-test1/fs/ext3/super.c~iopen-2.5.73	2003-07-22 13:03:47.000000000 -0600
++++ linux-2.6.0-test1-braam/fs/ext3/super.c	2003-07-22 13:03:47.000000000 -0600
 @@ -755,6 +755,17 @@ static int parse_options (char * options
  		         || !strcmp (this_char, "quota")
  		         || !strcmp (this_char, "usrquota"))
@@ -388,8 +388,8 @@
  		else if (!strcmp (this_char, "journal")) {
  			/* @@@ FIXME */
  			/* Eventually we will want to be able to create
---- linux-2.6.0-test1/include/linux/ext3_fs.h~iopen-2.5.73	2003-07-22 01:14:05.000000000 -0600
-+++ linux-2.6.0-test1-braam/include/linux/ext3_fs.h	2003-07-22 01:15:46.000000000 -0600
+--- linux-2.6.0-test1/include/linux/ext3_fs.h~iopen-2.5.73	2003-07-22 11:04:35.000000000 -0600
++++ linux-2.6.0-test1-braam/include/linux/ext3_fs.h	2003-07-22 13:03:47.000000000 -0600
 @@ -324,6 +324,8 @@ struct ext3_inode {
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */

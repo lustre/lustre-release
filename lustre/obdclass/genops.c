@@ -29,6 +29,7 @@
 #include <linux/obd_class.h>
 #include <linux/random.h>
 #include <linux/slab.h>
+#include <linux/pagemap.h>
 #else 
 #include <liblustre.h>
 #include <linux/obd_class.h>
@@ -43,8 +44,6 @@ kmem_cache_t *import_cachep = NULL;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
-
-struct obd_uuid lctl_fake_uuid = { .uuid = "OBD_CLASS_UUID" };
 
 /*
  * support functions: we could use inter-module communication, but this
@@ -119,8 +118,10 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
         *(type->typ_ops) = *ops;
         strcpy(type->typ_name, name);
 
+#ifdef LPROCFS
         type->typ_procroot = lprocfs_register(type->typ_name, proc_lustre_root,
                                               vars, type);
+#endif
         if (IS_ERR(type->typ_procroot)) {
                 rc = PTR_ERR(type->typ_procroot);
                 type->typ_procroot = NULL;
@@ -134,10 +135,11 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
         RETURN (0);
 
  failed:
-        if (type->typ_ops != NULL)
+        if (type->typ_name != NULL)
                 OBD_FREE(type->typ_name, strlen(name) + 1);
         if (type->typ_ops != NULL)
                 OBD_FREE (type->typ_ops, sizeof (*type->typ_ops));
+        OBD_FREE(type, sizeof(*type));
         RETURN(rc);
 }
 
@@ -173,6 +175,23 @@ int class_unregister_type(char *name)
         OBD_FREE(type, sizeof(*type));
         RETURN(0);
 } /* class_unregister_type */
+
+struct obd_device *class_newdev(int *dev)
+{
+        struct obd_device *result = NULL;
+        int i;
+
+        for (i = 0 ; i < MAX_OBD_DEVICES ; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if (!obd->obd_type) {
+                        result = obd;
+                        if (dev)
+                                *dev = i;
+                        break;
+                }
+        }
+        return result;
+}
 
 int class_name2dev(char *name)
 {
@@ -217,6 +236,34 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
         if (dev < 0)
                 return NULL;
         return &obd_dev[dev];
+}
+
+/* Search for a client OBD connected to tgt_uuid.  If grp_uuid is
+   specified, then only the client with that uuid is returned,
+   otherwise any client connected to the tgt is returned. */
+struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid, 
+                                          char * typ_name,
+                                          struct obd_uuid *grp_uuid)
+{
+        int i;
+
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if (obd->obd_type == NULL)
+                        continue;
+                if ((strncmp(obd->obd_type->typ_name, typ_name, 
+                             strlen(typ_name)) == 0)) {
+                        struct client_obd *cli = &obd->u.cli;
+                        struct obd_import *imp = cli->cl_import;
+                        if (obd_uuid_equals(tgt_uuid, &imp->imp_target_uuid) &&
+                            ((grp_uuid)? obd_uuid_equals(grp_uuid, 
+                                                        &obd->obd_uuid) : 1)) {
+                                return obd;
+                        }
+                }
+        }
+
+        return NULL;
 }
 
 void obd_cleanup_caches(void)
@@ -282,6 +329,13 @@ struct obd_export *class_conn2export(struct lustre_handle *conn)
         RETURN(export);
 }
 
+struct obd_device *class_exp2obd(struct obd_export *exp)
+{
+        if (exp)
+                return exp->exp_obd;
+        return NULL;
+}
+
 struct obd_device *class_conn2obd(struct lustre_handle *conn)
 {
         struct obd_export *export;
@@ -294,6 +348,14 @@ struct obd_device *class_conn2obd(struct lustre_handle *conn)
         return NULL;
 }
 
+struct obd_import *class_exp2cliimp(struct obd_export *exp)
+{
+        struct obd_device *obd = exp->exp_obd;
+        if (obd == NULL)
+                return NULL;
+        return obd->u.cli.cl_import;
+}
+
 struct obd_import *class_conn2cliimp(struct lustre_handle *conn)
 {
         struct obd_device *obd = class_conn2obd(conn);
@@ -302,18 +364,6 @@ struct obd_import *class_conn2cliimp(struct lustre_handle *conn)
         return obd->u.cli.cl_import;
 }
 
-struct obd_import *class_conn2ldlmimp(struct lustre_handle *conn)
-{
-        struct obd_export *export;
-        export = class_conn2export(conn);
-        if (export) {
-                struct obd_import *imp = export->exp_ldlm_data.led_import;
-                class_export_put(export);
-                return imp;
-        }
-        fixme();
-        return NULL;
-}
 
 /* Export management functions */
 static void export_handle_addref(void *export)
@@ -321,24 +371,8 @@ static void export_handle_addref(void *export)
         class_export_get(export);
 }
 
-struct obd_export *class_export_get(struct obd_export *exp)
+void __class_export_put(struct obd_export *exp)
 {
-        atomic_inc(&exp->exp_refcount);
-        CDEBUG(D_INFO, "GETting export %p : new refcount %d\n", exp,
-               atomic_read(&exp->exp_refcount));
-        return exp;
-}
-
-void class_export_put(struct obd_export *exp)
-{
-        ENTRY;
-        LASSERT(exp != NULL);
-
-        LASSERT(exp);
-        CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
-               atomic_read(&exp->exp_refcount) - 1);
-        LASSERT(atomic_read(&exp->exp_refcount) > 0);
-        LASSERT(atomic_read(&exp->exp_refcount) < 0x5a5a5a);
         if (atomic_dec_and_test(&exp->exp_refcount)) {
                 struct obd_device *obd = exp->exp_obd;
                 CDEBUG(D_IOCTL, "destroying export %p/%s\n", exp,
@@ -351,16 +385,19 @@ void class_export_put(struct obd_export *exp)
                         ptlrpc_put_connection_superhack(exp->exp_connection);
 
                 LASSERT(list_empty(&exp->exp_handle.h_link));
-
                 obd_destroy_export(exp);
 
                 OBD_FREE(exp, sizeof(*exp));
-                atomic_dec(&obd->obd_refcount);
-                wake_up(&obd->obd_refcount_waitq);
+                if (obd->obd_set_up) {
+                        atomic_dec(&obd->obd_refcount);
+                        wake_up(&obd->obd_refcount_waitq);
+                }
         }
-        EXIT;
 }
 
+/* Creates a new export, adds it to the hash table, and returns a
+ * pointer to it. The refcount is 2: one for the hash reference, and
+ * one for the pointer returned by this function. */
 struct obd_export *class_new_export(struct obd_device *obd)
 {
         struct obd_export *export;
@@ -371,6 +408,7 @@ struct obd_export *class_new_export(struct obd_device *obd)
                 return NULL;
         }
 
+        export->exp_conn_cnt = 0;
         atomic_set(&export->exp_refcount, 2);
         export->exp_obd = obd;
         /* XXX this should be in LDLM init */
@@ -386,6 +424,7 @@ struct obd_export *class_new_export(struct obd_device *obd)
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
         export->exp_obd->obd_num_exports++;
         spin_unlock(&obd->obd_dev_lock);
+        obd_init_export(export);
         return export;
 }
 
@@ -450,8 +489,11 @@ struct obd_import *class_new_import(void)
         INIT_LIST_HEAD(&imp->imp_sending_list);
         INIT_LIST_HEAD(&imp->imp_delayed_list);
         spin_lock_init(&imp->imp_lock);
+        imp->imp_conn_cnt = 0;
         imp->imp_max_transno = 0;
         imp->imp_peer_committed_transno = 0;
+        imp->imp_state = LUSTRE_IMP_NEW;
+        sema_init(&imp->imp_recovery_sem, 1);
 
         atomic_set(&imp->imp_refcount, 2);
         INIT_LIST_HEAD(&imp->imp_handle.h_link);
@@ -463,6 +505,7 @@ struct obd_import *class_new_import(void)
 void class_destroy_import(struct obd_import *import)
 {
         LASSERT(import != NULL);
+        LASSERT((unsigned long)import != 0x5a5a5a5a);
 
         class_handle_unhash(&import->imp_handle);
 
@@ -476,8 +519,10 @@ void class_destroy_import(struct obd_import *import)
         class_import_put(import);
 }
 
-/* a connection defines an export context in which preallocation can
-   be managed. */
+/* A connection defines an export context in which preallocation can
+   be managed. This releases the export pointer reference, and returns
+   the export handle, so the export refcount is 1 when this function
+   returns. */
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid)
 {
@@ -485,10 +530,11 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(conn != NULL);
         LASSERT(obd != NULL);
         LASSERT(cluuid != NULL);
+        ENTRY;
 
         export = class_new_export(obd);
         if (export == NULL)
-                return -ENOMEM;
+                RETURN(-ENOMEM);
 
         conn->cookie = export->exp_handle.h_cookie;
         memcpy(&export->exp_client_uuid, cluuid,
@@ -497,22 +543,32 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         CDEBUG(D_IOCTL, "connect: client %s, cookie "LPX64"\n",
                cluuid->uuid, conn->cookie);
-        return 0;
+        RETURN(0);
 }
 
-int class_disconnect(struct lustre_handle *conn, int flags)
+/* This function removes two references from the export: one for the
+ * hash entry and one for the export pointer passed in.  The export
+ * pointer passed to this function is destroyed should not be used
+ * again. */
+int class_disconnect(struct obd_export *export, int flags)
 {
-        struct obd_export *export = class_conn2export(conn);
         ENTRY;
 
         if (export == NULL) {
                 fixme();
                 CDEBUG(D_IOCTL, "disconnect: attempting to free "
-                       "nonexistent client "LPX64"\n", conn->cookie);
+                       "null export %p\n", export);
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n", conn->cookie);
+        /* XXX this shouldn't have to be here, but double-disconnect will crash
+         * otherwise, and sometimes double-disconnect happens.  abort_recovery,
+         * for example. */
+        if (list_empty(&export->exp_handle.h_link))
+                RETURN(0);
+
+        CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n", 
+               export->exp_handle.h_cookie);
 
         class_unlink_export(export);
         class_export_put(export);
@@ -524,6 +580,7 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
         int rc;
         struct list_head *tmp, *n, work_list;
         struct lustre_handle fake_conn;
+        struct obd_export *fake_exp, *exp;
         ENTRY;
 
         /* Move all of the exports from obd_exports to a work list, en masse. */
@@ -535,18 +592,26 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
         CDEBUG(D_IOCTL, "OBD device %d (%p) has exports, "
                "disconnecting them\n", obd->obd_minor, obd);
         list_for_each_safe(tmp, n, &work_list) {
-                struct obd_export *exp = list_entry(tmp, struct obd_export,
-                                                    exp_obd_chain);
-
+                exp = list_entry(tmp, struct obd_export, exp_obd_chain);
                 class_export_get(exp);
-                fake_conn.cookie = exp->exp_handle.h_cookie;
-                rc = obd_disconnect(&fake_conn, flags);
-                /* exports created from last_rcvd data, and "fake"
-                   exports created by lctl don't have an import */
-                if (exp->exp_ldlm_data.led_import != NULL)
-                        class_destroy_import(exp->exp_ldlm_data.led_import);
-                class_export_put(exp);
+                
+                if (obd_uuid_equals(&exp->exp_client_uuid, 
+                                    &exp->exp_obd->obd_uuid)) {
+                        CDEBUG(D_IOCTL, 
+                               "exp %p export uuid == obd uuid, don't discon\n",
+                               exp);
+                        class_export_put(exp);
+                        continue;
+                }
 
+                fake_conn.cookie = exp->exp_handle.h_cookie;
+                fake_exp = class_conn2export(&fake_conn);
+                if (!fake_exp) {
+                        class_export_put(exp);
+                        continue;
+                }
+                rc = obd_disconnect(fake_exp, flags);
+                class_export_put(exp);
                 if (rc) {
                         CDEBUG(D_IOCTL, "disconnecting export %p failed: %d\n",
                                exp, rc);
@@ -555,4 +620,62 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
                 }
         }
         EXIT;
+}
+
+void osic_init(struct obd_sync_io_container *osic)
+{
+        spin_lock_init(&osic->osic_lock);
+        osic->osic_rc = 0;
+        osic->osic_pending = 0;
+        init_waitqueue_head(&osic->osic_waitq);
+};
+
+void osic_add_one(struct obd_sync_io_container *osic)
+{
+        unsigned long flags;
+        CDEBUG(D_CACHE, "osic %p ready to roll\n", osic);
+        spin_lock_irqsave(&osic->osic_lock, flags);
+        osic->osic_pending++;
+        spin_unlock_irqrestore(&osic->osic_lock, flags);
+}
+
+void osic_complete_one(struct obd_sync_io_container *osic, int rc)
+{
+        unsigned long flags;
+        wait_queue_head_t *wake = NULL; 
+        int old_rc;
+
+        spin_lock_irqsave(&osic->osic_lock, flags);
+        old_rc = osic->osic_rc;
+        if (osic->osic_rc == 0 && rc != 0)
+                osic->osic_rc = rc;
+        if (--osic->osic_pending <= 0)
+                wake = &osic->osic_waitq;
+        spin_unlock_irqrestore(&osic->osic_lock, flags);
+        CDEBUG(D_CACHE, "osic %p completed, rc %d -> %d via %d, %d now "
+                        "pending (racey)\n", osic, old_rc, osic->osic_rc, rc, 
+                        osic->osic_pending);
+        if (wake)
+                wake_up(wake);
+}
+
+static int osic_done(struct obd_sync_io_container *osic)
+{
+        unsigned long flags;
+        int rc = 0;
+        spin_lock_irqsave(&osic->osic_lock, flags);
+        if (osic->osic_pending <= 0)
+                rc = 1;
+        spin_unlock_irqrestore(&osic->osic_lock, flags);
+        return rc;
+}
+
+int osic_wait(struct obd_sync_io_container *osic)
+{
+        struct l_wait_info lwi = LWI_INTR(NULL, NULL);
+
+        CDEBUG(D_CACHE, "waiting for osic %p\n", osic);
+        l_wait_event(osic->osic_waitq, osic_done(osic), &lwi);
+        CDEBUG(D_CACHE, "done waiting on osic %p\n", osic);
+        return osic->osic_rc;
 }

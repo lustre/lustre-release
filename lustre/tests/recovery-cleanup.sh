@@ -29,15 +29,15 @@ OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
 OSTSIZE=${OSTSIZE:-100000}
 
 do_mds() {
-    $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@" || exit $?
 }
 
 do_client() {
-    $PDSH $CLIENT "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $CLIENT "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@" || exit $?
 }
 
 do_ost() {
-    $PDSH $OSTNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $OSTNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@" || exit $?
 }
 
 drop_request() {
@@ -54,10 +54,12 @@ make_config() {
     done
     lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --fstype $FSTYPE \
     	--dev $MDSDEV --size $MDSSIZE || exit 5
-    lmc -m $CONFIG --add ost --node $OSTNODE --ost ost1 --fstype $FSTYPE \
-    	--dev $OSTDEV --size $OSTSIZE || exit 6
+    lmc -m $CONFIG --add lov --lov lov1 --mds mds1 --stripe_sz 65536 \
+        --stripe_cnt 0 --stripe_pattern 0 || exit 6
+    lmc -m $CONFIG --add ost --nspath /mnt/ost_ns --node $OSTNODE \
+        --lov lov1 --dev $OSTDEV --size $OSTSIZE --fstype $FSTYPE || exit 7
     lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --mds mds1 \
-        --ost ost1 || exit 7
+        --lov lov1 || exit 8
 }
 
 start_mds() {
@@ -88,14 +90,14 @@ setup() {
     make_config
     start_mds ${REFORMAT:---reformat}
     start_ost ${REFORMAT:---reformat}
-    mount_client --timeout=${TIMEOUT:-5} --recovery_upcall=/bin/true
+    mount_client --timeout=${TIMEOUT:-5} --lustre_upcall=/bin/true
 }
 
 cleanup() {
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
-    unmount_client $@ || true
-    shutdown_mds $@ || true
-    shutdown_ost $@ || true
+    unmount_client $@ || exit 97
+    shutdown_mds $@ || exit 98
+    shutdown_ost $@ || exit 99
 }
 
 wait_for_timeout() {
@@ -107,7 +109,7 @@ wait_for_timeout() {
 try_to_cleanup() {
     kill -INT $!
     unmount_client --force --dump /tmp/client-cleanup-`date +%s`.log
-    mount_client --timeout=${TIMEOUT:-5} --recovery_upcall=/bin/true
+    mount_client --timeout=${TIMEOUT:-5} --lustre_upcall=/bin/true
 }
 
 if [ ! -z "$ONLY" ]; then

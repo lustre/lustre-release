@@ -1,6 +1,5 @@
 dev_read_only_hp_2.4.20.patch
 exports_2.4.20-rh-hp.patch
-kmem_cache_validate_hp.patch
 lustre_version.patch
 vfs_intent-2.4.20-hp.patch
 invalidate_show.patch
@@ -25,3 +24,15 @@ ext3-map_inode_page.patch
 ext3-error-export.patch
 iopen-2.4.20.patch
 tcp-zero-copy.patch
+add_page_private.patch
+socket-exports-vanilla.patch
+removepage-2.4.20.patch
+jbd-ctx_switch.patch
+jbd-flushtime.patch
+jbd-get_write_access.patch
+nfs_export_kernel-2.4.20-hp.patch
+ext3-ea-in-inode-2.4.20.patch
+listman-2.4.20.patch
+ext3-trusted_ea-2.4.20.patch
+gfp_memalloc-2.4.22.patch
+ext3-xattr-ptr-arith-fix.patch

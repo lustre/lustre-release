@@ -1,5 +1,5 @@
 # lustre.spec
-%define version HEAD
+%define version b_devel
 %define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
 
@@ -96,11 +96,16 @@ make distdir distdir=lustre-source/lustre-%{version}
 mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 
 %files
+%attr(-, root, root) /sbin/mount.lustre
 %attr(-, root, root) /usr/sbin/lmc
 %attr(-, root, root) /usr/sbin/lctl
 %attr(-, root, root) /usr/sbin/lconf
+%attr(-, root, root) /usr/sbin/lwizard
+%attr(-, root, root) /usr/sbin/wiretest
 %attr(-, root, root) /usr/sbin/lactive
 %attr(-, root, root) /usr/sbin/llanalyze
+%attr(-, root, root) /usr/sbin/lfs
+%attr(-, root, root) /usr/sbin/gmnalnid
 %attr(-, root, root) /usr/bin/lfind
 %attr(-, root, root) /usr/bin/lstripe
 %attr(-, root, root) /usr/bin/mcreate
@@ -126,6 +131,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /lib/libportals.a
 %attr(-, root, root) /lib/libptlctl.a
 %attr(-, root, root) /lib/libtcpnal.a
+%attr(-, root, root) /lib/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre/*.h
 %attr(-, root, root) /usr/sbin/lload
 %attr(-, root, root) /usr/sbin/obdbarrier
@@ -150,29 +156,9 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ldlm.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/llite.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mdc.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mds.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/fsfilt_ext3.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/fsfilt_reiserfs.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdclass.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdecho.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdfilter.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/lov.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/osc.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ost.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ptlrpc.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ptlbd.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/cobd.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/*.o
 #portals modules
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/kptlrouter.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/*nal.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/portals.o
-%ifarch alpha
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/p3mod.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/rtscts.o
-%endif
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/*.o
 
 %files -n lustre-source
 %attr(-, root, root) /usr/src/lustre-%{version}

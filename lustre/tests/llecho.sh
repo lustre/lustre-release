@@ -14,7 +14,7 @@ fi
 
 sh -x $mkconfig $config || exit 1
 
-$LCONF $lustre_opt --reformat --gdb $OPTS $config || exit 4
+$LCONF $lustre_opt --reformat $@ $OPTS $config || exit 4
 
 cat <<EOF
 

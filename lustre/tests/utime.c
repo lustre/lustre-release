@@ -21,11 +21,15 @@ void usage(char *prog)
 int main(int argc, char *argv[])
 {
 	long before_mknod, after_mknod;
-	long before_utime, after_utime;
 	const char *prog = argv[0];
 	const char *filename = argv[1];
+        struct utimbuf utb;
 	struct stat st;
 	int rc;
+
+        utb.actime = 0x47114711;
+        utb.modtime = 0x11471147;
+                
 
 	if (argc != 2)
 		usage(argv[0]);
@@ -63,13 +67,10 @@ int main(int argc, char *argv[])
 		       prog, before_mknod, before_mknod == st.st_mtime ? "*":"",
 		       st.st_mtime, after_mknod);
 
-		sleep(5);
 	}
 
 	/* See above */
-	before_utime = time(0) - 1;
-	rc = utime(filename, NULL);
-	after_utime = time(0);
+	rc = utime(filename, &utb);
 	if (rc) {
 		fprintf(stderr, "%s: utime(%s) failed: rc %d: %s\n",
 			prog, filename, errno, strerror(errno));
@@ -83,15 +84,20 @@ int main(int argc, char *argv[])
 		return 6;
 	}
 
-	if (st.st_mtime < before_utime || st.st_mtime > after_utime) {
-		fprintf(stderr, "%s: bad utime times %lu <= %lu <= %lu false\n",
-			prog, before_utime, st.st_mtime, after_utime);
+	if (st.st_mtime != utb.modtime ) {
+		fprintf(stderr, "%s: bad utime mtime %lu should be  %lu\n",
+			prog, st.st_mtime, utb.modtime);
 		return 7;
 	}
 
-	printf("%s: good utime times %lu%s <= %lu <= %lu\n",
-	       prog, before_utime, before_utime == st.st_mtime ? "*" : "",
-	       st.st_mtime, after_utime);
+	if (st.st_atime != utb.actime ) {
+		fprintf(stderr, "%s: bad utime mtime %lu should be  %lu\n",
+			prog, st.st_atime, utb.actime);
+		return 7;
+	}
+
+	printf("%s: good utime mtimes %lu, atime %lu\n",
+	       prog, utb.modtime, utb.actime);
 
 	return 0;
 }

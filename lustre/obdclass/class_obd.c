@@ -25,7 +25,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #ifdef __KERNEL__
 #include <linux/config.h> /* for CONFIG_PROC_FS */
 #include <linux/module.h>
@@ -52,6 +54,7 @@
 #include <asm/uaccess.h>
 #include <linux/miscdevice.h>
 #include <linux/smp_lock.h>
+#include <linux/seq_file.h>
 #else
 # include <liblustre.h>
 #endif
@@ -60,9 +63,9 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_debug.h>
 #include <linux/lprocfs_status.h>
-#include <portals/lib-types.h> /* for PTL_MD_MAX_IOV */
 #include <linux/lustre_build_version.h>
 #include <portals/list.h>
+#include "llog_internal.h"
 
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -70,10 +73,6 @@ struct list_head obd_types;
 atomic_t obd_memory;
 int obd_memmax;
 
-/* Root for /proc/lustre */
-struct proc_dir_entry *proc_lustre_root = NULL;
-int obd_proc_read_version(char *page, char **start, off_t off, int count, int *eof, void *data);
-struct lprocfs_vars lprocfs_version[] = {{"version", obd_proc_read_version, NULL, NULL },{NULL,NULL,NULL,NULL}};
 int proc_version;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
@@ -112,10 +111,10 @@ static int obd_class_release(struct inode * inode, struct file * file)
                                 struct obd_class_user_conn, ocuc_chain);
                 list_del (&c->ocuc_chain);
 
-                CDEBUG (D_IOCTL, "Auto-disconnect %p\n", &c->ocuc_conn);
+                CDEBUG (D_IOCTL, "Auto-disconnect exp %p\n", c->ocuc_exp);
 
                 down (&obd_conf_sem);
-                obd_disconnect (&c->ocuc_conn, 0);
+                obd_disconnect (c->ocuc_exp, 0);
                 up (&obd_conf_sem);
 
                 OBD_FREE (c, sizeof (*c));
@@ -128,40 +127,40 @@ static int obd_class_release(struct inode * inode, struct file * file)
 }
 #endif
 
-static int
-obd_class_add_user_conn (struct obd_class_user_state *ocus,
-                         struct lustre_handle *conn)
+static int obd_class_add_user_exp(struct obd_class_user_state *ocus,
+                                  struct obd_export *exp)
 {
         struct obd_class_user_conn *c;
-
+        ENTRY;
         /* NB holding obd_conf_sem */
 
         OBD_ALLOC (c, sizeof (*c));
-        if (ocus == NULL)
-                return (-ENOMEM);
+        if (c == NULL)
+                RETURN(-ENOMEM);
 
-        c->ocuc_conn = *conn;
+        c->ocuc_exp = class_export_get(exp);
         list_add (&c->ocuc_chain, &ocus->ocus_conns);
-        return (0);
+        RETURN(0);
 }
 
-static void
-obd_class_remove_user_conn (struct obd_class_user_state *ocus,
-                            struct lustre_handle *conn)
+static void obd_class_remove_user_exp(struct obd_class_user_state *ocus,
+                                      struct obd_export *exp)
 {
-        struct list_head *e;
         struct obd_class_user_conn *c;
+        ENTRY;
 
         /* NB holding obd_conf_sem or last reference */
 
-        list_for_each (e, &ocus->ocus_conns) {
-                c = list_entry (e, struct obd_class_user_conn, ocuc_chain);
-                if (conn->cookie == c->ocuc_conn.cookie) {
+        list_for_each_entry(c, &ocus->ocus_conns, ocuc_chain) {
+                if (exp == c->ocuc_exp) {
                         list_del (&c->ocuc_chain);
                         OBD_FREE (c, sizeof (*c));
+                        class_export_put(exp);
+                        EXIT;
                         return;
                 }
         }
+        EXIT;
 }
 
 static inline void obd_data2conn(struct lustre_handle *conn,
@@ -177,16 +176,32 @@ static inline void obd_conn2data(struct obd_ioctl_data *data,
         data->ioc_cookie = conn->cookie;
 }
 
-static void dump_exports(struct obd_device *obd)
+int class_resolve_dev_name(uint32_t len, char *name)
 {
-        struct obd_export *exp, *n;
+        int rc;
+        int dev;
 
-        list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
-                CERROR("%s: %p %s %d %d %p\n",
-                       obd->obd_name, exp, exp->exp_client_uuid.uuid,
-                       atomic_read(&exp->exp_refcount),
-                       exp->exp_failed, exp->exp_outstanding_reply );
+        if (!len || !name) {
+                CERROR("No name passed,!\n");
+                GOTO(out, rc = -EINVAL);
         }
+        if (name[len - 1] != 0) {
+                CERROR("Name not nul terminated!\n");
+                GOTO(out, rc = -EINVAL);
+        }
+
+        CDEBUG(D_IOCTL, "device name %s\n", name);
+        dev = class_name2dev(name);
+        if (dev == -1) {
+                CDEBUG(D_IOCTL, "No device for name %s!\n", name);
+                GOTO(out, rc = -EINVAL);
+        }
+
+        CDEBUG(D_IOCTL, "device name %s, dev %d\n", name, dev);
+        rc = dev;
+
+out:
+        RETURN(rc);
 }
 
 int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
@@ -199,6 +214,9 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         struct lustre_handle conn;
         int err = 0, len = 0, serialised = 0;
         ENTRY;
+
+        if (current->fsuid != 0)
+                RETURN(err = -EACCES);
 
         if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
                 RETURN(err = -ENOTTY);
@@ -217,6 +235,12 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         case OBD_IOC_GETATTR:
         case ECHO_IOC_ENQUEUE:
         case ECHO_IOC_CANCEL:
+        case OBD_IOC_CLIENT_RECOVER:
+        case OBD_IOC_CATLOGLIST:
+        case OBD_IOC_LLOG_INFO:
+        case OBD_IOC_LLOG_PRINT:
+        case OBD_IOC_LLOG_CANCEL:
+        case OBD_IOC_LLOG_REMOVE:
                 break;
         default:
                 down(&obd_conf_sem);
@@ -228,8 +252,7 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         if (!obd && cmd != OBD_IOC_DEVICE &&
             cmd != OBD_IOC_LIST && cmd != OBD_GET_VERSION &&
             cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_UUID2DEV &&
-            cmd != OBD_IOC_NEWDEV && cmd != OBD_IOC_ADD_UUID &&
-            cmd != OBD_IOC_DEL_UUID && cmd != OBD_IOC_CLOSE_UUID) {
+            cmd != OBD_IOC_PROCESS_CFG) {
                 CERROR("OBD ioctl: No device\n");
                 GOTO(out, err = -EINVAL);
         }
@@ -242,15 +265,40 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         switch (cmd) {
         case OBD_IOC_DEVICE: {
                 CDEBUG(D_IOCTL, "\n");
-                if (data->ioc_dev >= MAX_OBD_DEVICES || data->ioc_dev < 0) {
+                if (data->ioc_dev >= MAX_OBD_DEVICES) {
                         CERROR("OBD ioctl: DEVICE invalid device %d\n",
                                data->ioc_dev);
+                        ocus->ocus_current_obd = &obd_dev[data->ioc_dev];
                         GOTO(out, err = -EINVAL);
                 }
                 CDEBUG(D_IOCTL, "device %d\n", data->ioc_dev);
-
                 ocus->ocus_current_obd = &obd_dev[data->ioc_dev];
                 GOTO(out, err = 0);
+        }
+
+        case OBD_IOC_PROCESS_CFG: {
+                char *buf;
+                struct lustre_cfg *lcfg;
+
+                /* FIXME hack to liblustre dump, remove when switch
+                   to zeroconf */
+#ifndef __KERNEL__
+                data->ioc_pbuf1 = data->ioc_inlbuf1;
+                data->ioc_plen1 = data->ioc_inllen1;
+#endif
+                if (!data->ioc_plen1 || !data->ioc_pbuf1) {
+                        CERROR("No config buffer passed!\n");
+                        GOTO(out, err = -EINVAL);
+                }
+                err = lustre_cfg_getdata(&buf, data->ioc_plen1,
+                                         data->ioc_pbuf1, 0);
+                if (err)
+                        GOTO(out, err);
+                lcfg = (struct lustre_cfg* ) buf;
+
+                err = class_process_config(lcfg);
+                lustre_cfg_freedata(buf, data->ioc_plen1);
+                GOTO(out, err);
         }
 
         case OBD_IOC_LIST: {
@@ -322,26 +370,12 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                  */
                 int dev;
 
-                if (!data->ioc_inllen1 || !data->ioc_inlbuf1 ) {
-                        CERROR("No name passed,!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-                if (data->ioc_inlbuf1[data->ioc_inllen1 - 1] != 0) {
-                        CERROR("Name not nul terminated!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-
-                CDEBUG(D_IOCTL, "device name %s\n", data->ioc_inlbuf1);
-                dev = class_name2dev(data->ioc_inlbuf1);
+                dev = class_resolve_dev_name(data->ioc_inllen1,
+                                             data->ioc_inlbuf1);
                 data->ioc_dev = dev;
-                if (dev == -1) {
-                        CDEBUG(D_IOCTL, "No device for name %s!\n",
-                               data->ioc_inlbuf1);
+                if (dev < 0)
                         GOTO(out, err = -EINVAL);
-                }
 
-                CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
-                       dev);
                 err = copy_to_user((void *)arg, data, sizeof(*data));
                 if (err)
                         err = -EFAULT;
@@ -384,301 +418,46 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
 
 
 
-        case OBD_IOC_NEWDEV: {
-                int dev = -1;
-                int i;
-
-                ocus->ocus_current_obd = NULL;
-                for (i = 0 ; i < MAX_OBD_DEVICES ; i++) {
-                        struct obd_device *obd = &obd_dev[i];
-                        if (!obd->obd_type) {
-                                ocus->ocus_current_obd = obd;
-                                dev = i;
-                                break;
-                        }
-                }
-
-
-                data->ioc_dev = dev;
-                if (dev == -1)
-                        GOTO(out, err = -EINVAL);
-
-                err = copy_to_user((void *)arg, data, sizeof(*data));
-                if (err)
-                        err = -EFAULT;
-                GOTO(out, err);
-        }
-
-        case OBD_IOC_ATTACH: {
-                struct obd_type *type;
-                int minor, len;
-
-                /* have we attached a type to this device */
-                if (obd->obd_attached|| obd->obd_type) {
-                        CERROR("OBD: Device %d already typed as %s.\n",
-                               obd->obd_minor, MKSTR(obd->obd_type->typ_name));
-                        GOTO(out, err = -EBUSY);
-                }
-
-                if (!data->ioc_inllen1 || !data->ioc_inlbuf1) {
-                        CERROR("No type passed!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-                if (data->ioc_inlbuf1[data->ioc_inllen1 - 1] != 0) {
-                        CERROR("Type not nul terminated!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-                if (!data->ioc_inllen2 || !data->ioc_inlbuf2) {
-                        CERROR("No name passed!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-                if (data->ioc_inlbuf2[data->ioc_inllen2 - 1] != 0) {
-                        CERROR("Name not nul terminated!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-                if (!data->ioc_inllen3 || !data->ioc_inlbuf3) {
-                        CERROR("No UUID passed!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-                if (data->ioc_inlbuf3[data->ioc_inllen3 - 1] != 0) {
-                        CERROR("UUID not nul terminated!\n");
-                        GOTO(out, err = -EINVAL);
-                }
-
-                CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
-                       MKSTR(data->ioc_inlbuf1),
-                       MKSTR(data->ioc_inlbuf2), MKSTR(data->ioc_inlbuf3));
-
-                /* find the type */
-                type = class_get_type(data->ioc_inlbuf1);
-                if (!type) {
-                        CERROR("OBD: unknown type dev %d\n", obd->obd_minor);
-                        GOTO(out, err = -EINVAL);
-                }
-
-                minor = obd->obd_minor;
-                memset(obd, 0, sizeof(*obd));
-                obd->obd_minor = minor;
-                obd->obd_type = type;
-                INIT_LIST_HEAD(&obd->obd_exports);
-                obd->obd_num_exports = 0;
-                INIT_LIST_HEAD(&obd->obd_imports);
-                spin_lock_init(&obd->obd_dev_lock);
-                init_waitqueue_head(&obd->obd_refcount_waitq);
-
-                /* XXX belong ins setup not attach  */
-                /* recovery data */
-                spin_lock_init(&obd->obd_processing_task_lock);
-                init_waitqueue_head(&obd->obd_next_transno_waitq);
-                INIT_LIST_HEAD(&obd->obd_recovery_queue);
-                INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
-
-                init_waitqueue_head(&obd->obd_commit_waitq);
-
-                len = strlen(data->ioc_inlbuf2) + 1;
-                OBD_ALLOC(obd->obd_name, len);
-                if (!obd->obd_name) {
-                        class_put_type(obd->obd_type);
-                        obd->obd_type = NULL;
-                        GOTO(out, err = -ENOMEM);
-                }
-                memcpy(obd->obd_name, data->ioc_inlbuf2, len);
-
-                len = strlen(data->ioc_inlbuf3);
-                if (len >= sizeof(obd->obd_uuid)) {
-                        CERROR("uuid must be < "LPSZ" bytes long\n",
-                               sizeof(obd->obd_uuid));
-                        if (obd->obd_name)
-                                OBD_FREE(obd->obd_name,
-                                         strlen(obd->obd_name) + 1);
-                        class_put_type(obd->obd_type);
-                        obd->obd_type = NULL;
-                        GOTO(out, err = -EINVAL);
-                }
-                memcpy(obd->obd_uuid.uuid, data->ioc_inlbuf3, len);
-
-                /* do the attach */
-                if (OBP(obd, attach))
-                        err = OBP(obd,attach)(obd, sizeof(*data), data);
-                if (err) {
-                        if(data->ioc_inlbuf2)
-                                OBD_FREE(obd->obd_name,
-                                         strlen(obd->obd_name) + 1);
-                        class_put_type(obd->obd_type);
-                        obd->obd_type = NULL;
-                } else {
-                        obd->obd_attached = 1;
-
-                        type->typ_refcnt++;
-                        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
-                               obd->obd_minor, data->ioc_inlbuf1);
-                }
-
-                GOTO(out, err);
-        }
-
-        case OBD_IOC_DETACH: {
-                ENTRY;
-                if (obd->obd_set_up) {
-                        CERROR("OBD device %d still set up\n", obd->obd_minor);
-                        GOTO(out, err = -EBUSY);
-                }
-                if (!obd->obd_attached) {
-                        CERROR("OBD device %d not attached\n", obd->obd_minor);
-                        GOTO(out, err = -ENODEV);
-                }
-                if (OBP(obd, detach))
-                        err = OBP(obd,detach)(obd);
-
-                if (obd->obd_name) {
-                        OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
-                        obd->obd_name = NULL;
-                }
-
-                obd->obd_attached = 0;
-                obd->obd_type->typ_refcnt--;
-                class_put_type(obd->obd_type);
-                obd->obd_type = NULL;
-                memset(obd, 0, sizeof(*obd));
-                GOTO(out, err = 0);
-        }
-
-        case OBD_IOC_SETUP: {
-                /* have we attached a type to this device? */
-                if (!obd->obd_attached) {
-                        CERROR("Device %d not attached\n", obd->obd_minor);
-                        GOTO(out, err = -ENODEV);
-                }
-
-                /* has this been done already? */
-                if (obd->obd_set_up) {
-                        CERROR("Device %d already setup (type %s)\n",
-                               obd->obd_minor, obd->obd_type->typ_name);
-                        GOTO(out, err = -EBUSY);
-                }
-
-                atomic_set(&obd->obd_refcount, 0);
-
-                if (OBT(obd) && OBP(obd, setup))
-                        err = obd_setup(obd, sizeof(*data), data);
-
-                if (!err) {
-                        obd->obd_type->typ_refcnt++;
-                        obd->obd_set_up = 1;
-                        atomic_inc(&obd->obd_refcount);
-                }
-
-                GOTO(out, err);
-        }
-        case OBD_IOC_CLEANUP: {
-                int flags = 0;
-                char *flag;
-
-                if (!obd->obd_set_up) {
-                        CERROR("Device %d not setup\n", obd->obd_minor);
-                        GOTO(out, err = -ENODEV);
-                }
-
-                if (data->ioc_inlbuf1) {
-                        for (flag = data->ioc_inlbuf1; *flag != 0; flag++)
-                                switch (*flag) {
-                                case 'F':
-                                        flags |= OBD_OPT_FORCE;
-                                        break;
-                                case 'A':
-                                        flags |= OBD_OPT_FAILOVER;
-                                        break;
-                                default:
-                                        CERROR("unrecognised flag '%c'\n",
-                                               *flag);
-                                }
-                }
-
-                if (atomic_read(&obd->obd_refcount) == 1 ||
-                    flags & OBD_OPT_FORCE) {
-                        /* this will stop new connections, and need to
-                           do it before class_disconnect_exports() */
-                        obd->obd_stopping = 1;
-                }
-
-                if (atomic_read(&obd->obd_refcount) > 1) {
-                        struct l_wait_info lwi = LWI_TIMEOUT_INTR(60 * HZ, NULL,
-                                                                  NULL, NULL);
-                        int rc;
-
-                        if (!(flags & OBD_OPT_FORCE)) {
-                                CERROR("OBD device %d (%p) has refcount %d\n",
-                                       obd->obd_minor, obd,
-                                       atomic_read(&obd->obd_refcount));
-                                dump_exports(obd);
-                                GOTO(out, err = -EBUSY);
-                        }
-                        class_disconnect_exports(obd, flags);
-                        CDEBUG(D_IOCTL,
-                               "%s: waiting for obd refs to go away: %d\n",
-                               obd->obd_name, atomic_read(&obd->obd_refcount));
-
-                        rc = l_wait_event(obd->obd_refcount_waitq,
-                                     atomic_read(&obd->obd_refcount) < 2, &lwi);
-                        if (rc == 0) {
-                                LASSERT(atomic_read(&obd->obd_refcount) == 1);
-                        } else {
-                                CERROR("wait cancelled cleaning anyway. "
-                                       "refcount: %d\n",
-                                       atomic_read(&obd->obd_refcount));
-                                dump_exports(obd);
-                        }
-                        CDEBUG(D_IOCTL, "%s: awake, now finishing cleanup\n",
-                               obd->obd_name);
-                }
-
-                if (OBT(obd) && OBP(obd, cleanup))
-                        err = obd_cleanup(obd, flags);
-
-                if (!err) {
-                        obd->obd_set_up = obd->obd_stopping = 0;
-                        obd->obd_type->typ_refcnt--;
-                        atomic_dec(&obd->obd_refcount);
-                        /* XXX this should be an LASSERT */
-                        if (atomic_read(&obd->obd_refcount) > 0) 
-                                CERROR("%s still has refcount %d after "
-                                       "cleanup.\n", obd->obd_name,
-                                       atomic_read(&obd->obd_refcount));
-                }
-
-                GOTO(out, err);
-        }
-
         case OBD_IOC_CONNECT: {
-                struct obd_uuid cluuid = { "OBD_CLASS_UUID" };
+                struct obd_export *exp;
                 obd_data2conn(&conn, data);
 
-                err = obd_connect(&conn, obd, &cluuid);
+                err = obd_connect(&conn, obd, &obd->obd_uuid);
 
                 CDEBUG(D_IOCTL, "assigned export "LPX64"\n", conn.cookie);
                 obd_conn2data(data, &conn);
                 if (err)
                         GOTO(out, err);
 
-                err = obd_class_add_user_conn (ocus, &conn);
+                exp = class_conn2export(&conn);
+                if (exp == NULL)
+                        GOTO(out, err = -EINVAL);
+
+                err = obd_class_add_user_exp(ocus, exp);
                 if (err != 0) {
-                        obd_disconnect (&conn, 0);
+                        obd_disconnect(exp, 0);
                         GOTO (out, err);
                 }
 
                 err = copy_to_user((void *)arg, data, sizeof(*data));
                 if (err != 0) {
-                        obd_class_remove_user_conn (ocus, &conn);
-                        obd_disconnect (&conn, 0);
+                        obd_class_remove_user_exp(ocus, exp);
+                        obd_disconnect(exp, 0);
                         GOTO (out, err = -EFAULT);
                 }
+                class_export_put(exp);
                 GOTO(out, err);
         }
 
         case OBD_IOC_DISCONNECT: {
+                struct obd_export *exp;
                 obd_data2conn(&conn, data);
-                obd_class_remove_user_conn (ocus, &conn);
-                err = obd_disconnect(&conn, 0);
+                exp = class_conn2export(&conn);
+                if (exp == NULL)
+                        GOTO(out, err = -EINVAL);
+
+                obd_class_remove_user_exp(ocus, exp);
+                err = obd_disconnect(exp, 0);
                 GOTO(out, err);
         }
 
@@ -701,27 +480,16 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                 lustre_uuid_to_peer(data->ioc_inlbuf1, &peer);
                 GOTO(out, err = 0);
         }
-        case OBD_IOC_ADD_UUID: {
-                CDEBUG(D_IOCTL, "adding mapping from uuid %s to nid "LPX64
-                       ", nal %d\n", data->ioc_inlbuf1, data->ioc_nid,
-                       data->ioc_nal);
 
-                err = class_add_uuid(data->ioc_inlbuf1, data->ioc_nid,
-                                     data->ioc_nal);
-                GOTO(out, err);
-        }
-        case OBD_IOC_DEL_UUID: {
-                CDEBUG(D_IOCTL, "removing mappings for uuid %s\n",
-                       data->ioc_inlbuf1 == NULL ? "<all uuids>" :
-                       data->ioc_inlbuf1);
-
-                err = class_del_uuid(data->ioc_inlbuf1);
-                GOTO(out, err);
-        }
-        default: { 
+        default: {
                 // obd_data2conn(&conn, data);
-                struct obd_class_user_conn *oconn = list_entry(ocus->ocus_conns.next, struct obd_class_user_conn, ocuc_chain);
-                err = obd_iocontrol(cmd, &oconn->ocuc_conn, len, data, NULL);
+                struct obd_class_user_conn *oconn;
+
+                if (list_empty(&ocus->ocus_conns)) 
+                        GOTO(out, err = -ENOTCONN);
+                        
+                oconn = list_entry(ocus->ocus_conns.next, struct obd_class_user_conn, ocuc_chain);
+                err = obd_iocontrol(cmd, oconn->ocuc_exp, len, data, NULL);
                 if (err)
                         GOTO(out, err);
 
@@ -780,8 +548,6 @@ EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 EXPORT_SYMBOL(ptlrpc_abort_inflight_superhack);
 EXPORT_SYMBOL(proc_lustre_root);
 
-EXPORT_SYMBOL(lctl_fake_uuid);
-
 EXPORT_SYMBOL(class_register_type);
 EXPORT_SYMBOL(class_unregister_type);
 EXPORT_SYMBOL(class_get_type);
@@ -790,8 +556,8 @@ EXPORT_SYMBOL(class_name2dev);
 EXPORT_SYMBOL(class_name2obd);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
-EXPORT_SYMBOL(class_export_get);
-EXPORT_SYMBOL(class_export_put);
+EXPORT_SYMBOL(class_find_client_obd);
+EXPORT_SYMBOL(__class_export_put);
 EXPORT_SYMBOL(class_new_export);
 EXPORT_SYMBOL(class_unlink_export);
 EXPORT_SYMBOL(class_import_get);
@@ -800,20 +566,136 @@ EXPORT_SYMBOL(class_new_import);
 EXPORT_SYMBOL(class_destroy_import);
 EXPORT_SYMBOL(class_connect);
 EXPORT_SYMBOL(class_conn2export);
+EXPORT_SYMBOL(class_exp2obd);
 EXPORT_SYMBOL(class_conn2obd);
+EXPORT_SYMBOL(class_exp2cliimp);
 EXPORT_SYMBOL(class_conn2cliimp);
-EXPORT_SYMBOL(class_conn2ldlmimp);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_exports);
+
+EXPORT_SYMBOL(osic_init);
+EXPORT_SYMBOL(osic_add_one);
+EXPORT_SYMBOL(osic_wait);
+EXPORT_SYMBOL(osic_complete_one);
 
 /* uuid.c */
 EXPORT_SYMBOL(class_uuid_unparse);
 EXPORT_SYMBOL(lustre_uuid_to_peer);
-EXPORT_SYMBOL(client_tgtuuid2obd);
 
 EXPORT_SYMBOL(class_handle_hash);
 EXPORT_SYMBOL(class_handle_unhash);
 EXPORT_SYMBOL(class_handle2object);
+
+/* config.c */
+EXPORT_SYMBOL(class_get_profile);
+EXPORT_SYMBOL(class_process_config);
+EXPORT_SYMBOL(class_config_parse_llog);
+EXPORT_SYMBOL(class_config_dump_llog);
+EXPORT_SYMBOL(class_attach);
+EXPORT_SYMBOL(class_setup);
+EXPORT_SYMBOL(class_cleanup);
+EXPORT_SYMBOL(class_detach);
+
+#ifdef LPROCFS
+int obd_proc_read_version(char *page, char **start, off_t off, int count,
+                          int *eof, void *data)
+{
+        *eof = 1;
+        return snprintf(page, count, "%s\n", BUILD_VERSION);
+}
+
+int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
+                         int *eof, void *data)
+{
+        *eof = 1;
+        return snprintf(page, count, "%s\n",
+#ifdef ENABLE_PINGER
+                        "on"
+#else
+                        "off"
+#endif
+                       );
+}
+
+/* Root for /proc/fs/lustre */
+struct proc_dir_entry *proc_lustre_root = NULL;
+struct lprocfs_vars lprocfs_base[] = {
+        { "version", obd_proc_read_version, NULL, NULL },
+        { "pinger", obd_proc_read_pinger, NULL, NULL },
+        { 0 }
+};
+
+static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
+{
+        if (*pos >= MAX_OBD_DEVICES)
+                return NULL;
+        return &obd_dev[*pos];
+}
+
+static void obd_device_list_seq_stop(struct seq_file *p, void *v)
+{
+}
+
+static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+        ++*pos;
+        if (*pos >= MAX_OBD_DEVICES)
+                return NULL;
+        return &obd_dev[*pos];
+}
+
+static int obd_device_list_seq_show(struct seq_file *p, void *v)
+{
+        struct obd_device *obd = (struct obd_device *)v;
+        int index = obd - &obd_dev[0];
+        char *status;
+
+        if (!obd->obd_type)
+                return 0;
+        if (obd->obd_stopping)
+                status = "ST";
+        else if (obd->obd_set_up)
+                status = "UP";
+        else if (obd->obd_attached)
+                status = "AT";
+        else
+                status = "--";
+
+        return seq_printf(p, "%3d %s %s %s %s %d\n",
+                          (int)index, status, obd->obd_type->typ_name,
+                          obd->obd_name, obd->obd_uuid.uuid,
+                          atomic_read(&obd->obd_refcount));
+}
+
+struct seq_operations obd_device_list_sops = {
+        .start = obd_device_list_seq_start,
+        .stop = obd_device_list_seq_stop,
+        .next = obd_device_list_seq_next,
+        .show = obd_device_list_seq_show,
+};
+
+static int obd_device_list_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct seq_file *seq;
+        int rc = seq_open(file, &obd_device_list_sops);
+
+        if (rc)
+                return rc;
+
+        seq = file->private_data;
+        seq->private = dp->data;
+
+        return 0;
+}
+
+struct file_operations obd_device_list_fops = {
+        .open = obd_device_list_open,
+        .read = seq_read,
+        .llseek = seq_lseek,
+        .release = seq_release,
+};
+#endif
 
 #ifdef __KERNEL__
 static int __init init_obdclass(void)
@@ -822,11 +704,14 @@ int init_obdclass(void)
 #endif
 {
         struct obd_device *obd;
+#ifdef LPROCFS
+        struct proc_dir_entry *entry;
+#endif
         int err;
         int i;
 
-        printk(KERN_INFO "OBD class driver Build Version: " BUILD_VERSION
-                      ", info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: OBD class driver Build Version: "
+               BUILD_VERSION", info@clusterfs.com\n");
 
         class_init_uuidlist();
         err = class_handle_init();
@@ -856,24 +741,23 @@ int init_obdclass(void)
 
 #ifdef LPROCFS
         proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
-        if (!proc_lustre_root)
-                printk(KERN_ERR "error registering /proc/fs/lustre\n");
-        proc_version = lprocfs_add_vars(proc_lustre_root,lprocfs_version,NULL);
-#else
-        proc_lustre_root = NULL;
-        proc_version = -1;
+        if (!proc_lustre_root) {
+                printk(KERN_ERR
+                       "LustreError: error registering /proc/fs/lustre\n");
+                RETURN(-ENOMEM);
+        }
+        proc_version = lprocfs_add_vars(proc_lustre_root, lprocfs_base, NULL);
+        entry = create_proc_entry("devices", 0444, proc_lustre_root);
+        if (entry == NULL) {
+                printk(KERN_ERR "LustreError: error registering "
+                       "/proc/fs/lustre/devices\n");
+                lprocfs_remove(proc_lustre_root);
+                RETURN(-ENOMEM);
+        }
+        entry->proc_fops = &obd_device_list_fops;
 #endif
         return 0;
 }
-
-#ifdef LPROCFS
-int obd_proc_read_version(char *page, char **start, off_t off, int count, int *eof, void *data) {
-        *eof = 1;
-        return snprintf(page, count, "%s\n", BUILD_VERSION);
-}
-#else
-int obd_proc_read_version(char *page, char **start, off_t off, int count, int *eof, void *data) { return 0; }
-#endif
 
 #ifdef __KERNEL__
 static void /*__exit*/ cleanup_obdclass(void)
@@ -881,7 +765,7 @@ static void /*__exit*/ cleanup_obdclass(void)
 static void cleanup_obdclass(void)
 #endif
 {
-        int i;
+        int i, leaked;
         ENTRY;
 
         misc_deregister(&obd_psdev);
@@ -898,16 +782,20 @@ static void cleanup_obdclass(void)
 #ifdef __KERNEL__
         obd_sysctl_clean();
 #endif
+#ifdef LPROCFS
         if (proc_lustre_root) {
                 lprocfs_remove(proc_lustre_root);
                 proc_lustre_root = NULL;
         }
+#endif
 
         class_handle_cleanup();
         class_exit_uuidlist();
 
-        CERROR("obd mem max: %d leaked: %d\n", obd_memmax,
-               atomic_read(&obd_memory));
+        leaked = atomic_read(&obd_memory);
+        CDEBUG(leaked ? D_ERROR : D_INFO,
+               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
+
         EXIT;
 }
 
@@ -915,8 +803,8 @@ static void cleanup_obdclass(void)
  * kernel patch */
 #ifdef __KERNEL__
 #include <linux/lustre_version.h>
-#define LUSTRE_MIN_VERSION 23
-#define LUSTRE_MAX_VERSION 23
+#define LUSTRE_MIN_VERSION 28
+#define LUSTRE_MAX_VERSION 32
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)

@@ -57,10 +57,12 @@ class LustreDB:
         uuids = self._get_all_refs()
         return uuids
 
-    def nid2server(self, nid, net_type):
+    def nid2server(self, nid, net_type, cluster_id):
         netlist = self.lookup_class('network')
         for net_db in netlist:
-            if net_db.get_val('nid') == nid and net_db.get_val('nettype') == net_type: 
+            if (net_db.get_val('nid') == nid and
+                net_db.get_val('nettype') == net_type and
+                net_db.get_val('clusterid') == cluster_id):
                 return net_db
         return None
     
@@ -298,7 +300,7 @@ class LustreDB_LDAP(LustreDB):
             # user and pw only needed if modifying db
             self.l.bind_s(self._user, self._pw, ldap.AUTH_SIMPLE);
         except ldap.LDAPError, e:
-            raise Lustre.LconfError('Unable to connection to ldap server')
+            raise Lustre.LconfError('Unable to connect to ldap server:' + self._url)
 
         try:
             self._name, self._attrs = self.l.search_s(self._base,

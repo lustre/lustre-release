@@ -1,0 +1,116 @@
+Index: linux-2.4.20-uml/arch/um/kernel/Makefile
+===================================================================
+--- linux-2.4.20-uml.orig/arch/um/kernel/Makefile	2003-11-10 13:42:48.000000000 +0800
++++ linux-2.4.20-uml/arch/um/kernel/Makefile	2003-11-10 13:43:06.000000000 +0800
+@@ -37,7 +37,8 @@
+ export-objs-$(CONFIG_GPROF) += gprof_syms.o
+ export-objs-$(CONFIG_GCOV) += gmon_syms.o
+ 
+-export-objs = ksyms.o process_kern.o signal_kern.o user_syms.o $(export-objs-y)
++export-objs = ksyms.o process_kern.o signal_kern.o user_syms.o sysrq.o \
++	$(export-objs-y)
+ 
+ CFLAGS_user_syms.o = -D__AUTOCONF_INCLUDED__ $(DMODULES-y) $(DMODVERSIONS-y) \
+ 	-I/usr/include -I../include
+Index: linux-2.4.20-uml/arch/um/kernel/sysrq.c
+===================================================================
+--- linux-2.4.20-uml.orig/arch/um/kernel/sysrq.c	2003-11-10 13:42:49.000000000 +0800
++++ linux-2.4.20-uml/arch/um/kernel/sysrq.c	2003-11-10 13:43:06.000000000 +0800
+@@ -86,6 +86,37 @@
+ 	show_trace((unsigned long *)esp);
+ }
+ 
++#ifdef CONFIG_MODULES
++extern struct module *module_list;
++extern struct module kernel_module;
++#endif
++
++int is_kernel_text_address(unsigned long addr)
++{
++	int retval = 0;
++#ifdef CONFIG_MODULES
++	struct module *mod;
++#endif
++	if (addr >= (unsigned long) &_stext &&
++	    addr <= (unsigned long) &_etext)
++		return 1;
++
++#ifdef CONFIG_MODULES
++	for (mod = module_list; mod != &kernel_module; mod = mod->next) {
++		/* mod_bound tests for addr being inside the vmalloc'ed
++		 * module area. Of course it'd be better to test only
++		 * for the .text subset... */
++		if (mod_bound(addr, 0, mod)) {
++			retval = 1;
++			break;
++		}
++	}
++#endif
++	return retval;
++}
++
++EXPORT_SYMBOL(is_kernel_text_address);
++
+ /*
+  * Overrides for Emacs so that we follow Linus's tabbing style.
+  * Emacs will notice this stuff at the end of the file and automatically
+Index: linux-2.4.20-uml/arch/i386/kernel/Makefile
+===================================================================
+--- linux-2.4.20-uml.orig/arch/i386/kernel/Makefile	2002-11-29 07:53:09.000000000 +0800
++++ linux-2.4.20-uml/arch/i386/kernel/Makefile	2003-11-10 14:39:28.000000000 +0800
+@@ -14,7 +14,8 @@
+ 
+ O_TARGET := kernel.o
+ 
+-export-objs     := mca.o mtrr.o msr.o cpuid.o microcode.o i386_ksyms.o time.o
++export-objs     := mca.o mtrr.o msr.o cpuid.o microcode.o i386_ksyms.o time.o \
++			traps.o
+ 
+ obj-y	:= process.o semaphore.o signal.o entry.o traps.o irq.o vm86.o \
+ 		ptrace.o i8259.o ioport.o ldt.o setup.o time.o sys_i386.o \
+Index: linux-2.4.20-uml/arch/i386/kernel/traps.c
+===================================================================
+--- linux-2.4.20-uml.orig/arch/i386/kernel/traps.c	2002-11-29 07:53:09.000000000 +0800
++++ linux-2.4.20-uml/arch/i386/kernel/traps.c	2003-11-10 14:53:53.000000000 +0800
+@@ -1004,3 +1004,41 @@
+ 	cobalt_init();
+ #endif
+ }
++
++#ifdef CONFIG_MODULES
++extern struct module *module_list;
++extern struct module kernel_module;
++#endif
++                                                                                
++int is_kernel_text_address(unsigned long addr)
++{
++       int retval = 0;
++#ifdef CONFIG_MODULES
++       struct module *mod;
++#endif
++       if (addr >= (unsigned long) &_stext &&
++           addr <= (unsigned long) &_etext);
++               return 1;
++                                                                                
++#ifdef CONFIG_MODULES
++       for (mod = module_list; mod != &kernel_module; mod = mod->next) {
++               /* mod_bound tests for addr being inside the vmalloc'ed
++                * module area. Of course it'd be better to test only
++                * for the .text subset... */
++               if (mod_bound(addr, 0, mod)) {
++                       retval = 1;
++                       break;
++               }
++       }
++#endif
++                                                                                
++       return retval;
++}
++
++int lookup_symbol(unsigned long address, char *buf, int buflen)
++{
++	return -ENOSYS;
++}
++
++EXPORT_SYMBOL_GPL(is_kernel_text_address);
++EXPORT_SYMBOL_GPL(lookup_symbol);

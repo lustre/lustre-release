@@ -1,3 +1,6 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
@@ -44,41 +47,27 @@ int main(int argc, char **argv)
         }
 
         if (argc == 3) {
-                fprintf(stderr, "closing %s\n", fname);
-                rc = close(fd);
-                if (rc) {
-                        fprintf(stderr, "close (normal) %s\n", strerror(errno));
-                        exit(1);
-                }
-
-                fprintf(stderr, "opening %s\n", fname2);
-                fd = open(fname2, O_RDWR);
-                if (fd == -1) {
-                        fprintf(stderr, "open (unlink) %s\n", strerror(errno));
-                        exit(1);
-                }
-
                 fprintf (stderr, "unlinking %s\n", fname2);
                 rc = unlink(fname2);
                 if (rc) {
                         fprintf(stderr, "unlink %s\n", strerror(errno));
                         exit(1);
                 }
-
-                if (access(fname2, F_OK) == 0) {
-                        fprintf(stderr, "%s still exists\n", fname2);
-                        exit(1);
-                }
         } else {
-                fprintf(stderr, "resetting fd offset\n");
-                rc = lseek(fd, 0, SEEK_SET);
-                if (rc) {
-                        fprintf(stderr, "seek %s\n", strerror(errno));
-                        exit(1);
-                }
-
                 printf("unlink %s and press enter\n", fname);
                 getc(stdin);
+        }
+
+        if (access(fname, F_OK) == 0) {
+                fprintf(stderr, "%s still exists\n", fname2);
+                exit(1);
+        }
+
+        fprintf(stderr, "resetting fd offset\n");
+        rc = lseek(fd, 0, SEEK_SET);
+        if (rc) {
+                fprintf(stderr, "seek %s\n", strerror(errno));
+                exit(1);
         }
 
         if (access(fname, F_OK) == 0) {
@@ -86,7 +75,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        fprintf(stderr, "fstating\n");
+        fprintf(stderr, "fstat...\n");
         rc = fstat(fd, &st);
         if (rc) {
                 fprintf(stderr, "fstat (unlink) %s\n", strerror(errno));

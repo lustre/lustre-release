@@ -3,7 +3,7 @@ SRCDIR="`dirname $0`/"
 export PATH=/sbin:/usr/sbin:$SRCDIR/../utils:$PATH
 
 LOOPS=${LOOPS:-1}
-COUNT=${COUNT:-1000000}
+COUNT=${COUNT:-100000}
 COUNT_10=`expr $COUNT / 10`
 COUNT_100=`expr $COUNT / 100`
 

@@ -32,6 +32,7 @@
 # include <sys/types.h>
 #else
 # include <asm/semaphore.h>
+# include <linux/rwsem.h>
 # include <linux/sched.h>
 # include <linux/signal.h>
 # include <linux/types.h>
@@ -39,9 +40,11 @@
 #include <linux/portals_lib.h>
 #include <linux/kp30.h> /* XXX just for LASSERT! */
 #include <linux/lustre_idl.h>
+#include <linux/lustre_cfg.h>
 
 #ifndef LPU64
-#if BITS_PER_LONG > 32
+/* x86_64 has 64bit longs and defines u64 as long long */
+#if BITS_PER_LONG > 32 && !defined(__x86_64__)
 #define LPU64 "%lu"
 #define LPD64 "%ld"
 #define LPX64 "%#lx"
@@ -60,9 +63,11 @@ struct obd_export;
 #include <linux/lustre_ha.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_compat25.h>
+#include <linux/lvfs.h>
 
 int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler);
 int target_handle_disconnect(struct ptlrpc_request *req);
+void target_destroy_export(struct obd_export *exp);
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                             struct obd_uuid *cluuid);
 int target_handle_ping(struct ptlrpc_request *req);
@@ -78,25 +83,19 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 /* client.c */
 
-int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf);
-int client_obd_cleanup(struct obd_device * obddev, int flags);
 struct client_obd *client_conn2cli(struct lustre_handle *conn);
-struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid);
 
-/* It is important that och_fh remain the first item in this structure: that
- * way, we don't have to re-pack the obdo's inline data before we send it to
- * the server, we can just send the whole struct unaltered. */
+struct mdc_open_data;
 struct obd_client_handle {
         struct lustre_handle och_fh;
         struct llog_cookie och_cookie;
-        struct ptlrpc_request *och_req;
+        struct mdc_open_data *och_mod;
         __u32 och_magic;
 };
 #define OBD_CLIENT_HANDLE_MAGIC 0xd15ea5ed
 
 /* statfs_pack.c */
-struct statfs;
 void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs);
 void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs);
 
@@ -113,94 +112,13 @@ void l_lock(struct lustre_lock *);
 void l_unlock(struct lustre_lock *);
 int l_has_lock(struct lustre_lock *);
 
-/* simple.c */
-struct obd_ucred {
-        __u32 ouc_fsuid;
-        __u32 ouc_fsgid;
-        __u32 ouc_cap;
-        __u32 ouc_suppgid1;
-        __u32 ouc_suppgid2;
-};
-
-#define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
-#define OBD_CTXT_DEBUG          /* development-only debugging */
-struct obd_run_ctxt {
-        struct vfsmount *pwdmnt;
-        struct dentry   *pwd;
-        mm_segment_t     fs;
-        struct obd_ucred ouc;
-        int              ngroups;
-#ifdef OBD_CTXT_DEBUG
-        __u32            magic;
-#endif
-};
-
-
-#ifdef OBD_CTXT_DEBUG
-#define OBD_SET_CTXT_MAGIC(ctxt) (ctxt)->magic = OBD_RUN_CTXT_MAGIC
-#else
-#define OBD_SET_CTXT_MAGIC(ctxt) do {} while(0)
-#endif
-
-#ifdef __KERNEL__
-
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
-               struct obd_ucred *cred);
-void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
-              struct obd_ucred *cred);
-struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
-struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
-int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
-int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
-int lustre_fsync(struct file *file);
-
-static inline void l_dput(struct dentry *de)
-{
-        if (!de || IS_ERR(de))
-                return;
-        //shrink_dcache_parent(de);
-        LASSERT(atomic_read(&de->d_count) > 0);
-        dput(de);
-}
-
-/* We need to hold the inode semaphore over the dcache lookup itself, or we
- * run the risk of entering the filesystem lookup path concurrently on SMP
- * systems, and instantiating two inodes for the same entry.  We still
- * protect against concurrent addition/removal races with the DLM locking.
- */
-static inline struct dentry *ll_lookup_one_len(char *fid_name,
-                                               struct dentry *dparent,
-                                               int fid_namelen)
-{
-        struct dentry *dchild;
-
-        down(&dparent->d_inode->i_sem);
-        dchild = lookup_one_len(fid_name, dparent, fid_namelen);
-        up(&dparent->d_inode->i_sem);
-
-        return dchild;
-}
-
-static inline void ll_sleep(int t)
-{
-        set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(t * HZ);
-        set_current_state(TASK_RUNNING);
-}
-#endif
-
-#define LL_FID_NAMELEN         (16 + 1 + 8 + 1)
-static inline int ll_fid2str(char *str, __u64 id, __u32 generation)
-{
-        return sprintf(str, "%llx:%08x", (unsigned long long)id, generation);
-}
 
 #include <linux/portals_lib.h>
 
 /*
  *   OBD IOCTLS
  */
-#define OBD_IOCTL_VERSION 0x00010003
+#define OBD_IOCTL_VERSION 0x00010004
 
 struct obd_ioctl_data {
         uint32_t ioc_len;
@@ -220,6 +138,7 @@ struct obd_ioctl_data {
 
         uint64_t ioc_nid;
         uint32_t ioc_nal;
+        uint32_t ioc_type;
 
         /* buffers the kernel will treat as user pointers */
         uint32_t ioc_plen1;
@@ -259,59 +178,59 @@ static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
 static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 {
         if (data->ioc_len > (1<<30)) {
-                printk("OBD ioctl: ioc_len larger than 1<<30\n");
+                printk("LustreError: OBD ioctl: ioc_len larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen1 > (1<<30)) {
-                printk("OBD ioctl: ioc_inllen1 larger than 1<<30\n");
+                printk("LustreError: OBD ioctl: ioc_inllen1 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen2 > (1<<30)) {
-                printk("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
+                printk("LustreError: OBD ioctl: ioc_inllen2 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen3 > (1<<30)) {
-                printk("OBD ioctl: ioc_inllen3 larger than 1<<30\n");
+                printk("LustreError: OBD ioctl: ioc_inllen3 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen4 > (1<<30)) {
-                printk("OBD ioctl: ioc_inllen4 larger than 1<<30\n");
+                printk("LustreError: OBD ioctl: ioc_inllen4 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inlbuf1 && !data->ioc_inllen1) {
-                printk("OBD ioctl: inlbuf1 pointer but 0 length\n");
+                printk("LustreError: OBD ioctl: inlbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf2 && !data->ioc_inllen2) {
-                printk("OBD ioctl: inlbuf2 pointer but 0 length\n");
+                printk("LustreError: OBD ioctl: inlbuf2 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf3 && !data->ioc_inllen3) {
-                printk("OBD ioctl: inlbuf3 pointer but 0 length\n");
+                printk("LustreError: OBD ioctl: inlbuf3 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf4 && !data->ioc_inllen4) {
-                printk("OBD ioctl: inlbuf4 pointer but 0 length\n");
+                printk("LustreError: OBD ioctl: inlbuf4 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf1 && !data->ioc_plen1) {
-                printk("OBD ioctl: pbuf1 pointer but 0 length\n");
+                printk("LustreError: OBD ioctl: pbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf2 && !data->ioc_plen2) {
-                printk("OBD ioctl: pbuf2 pointer but 0 length\n");
+                printk("LustreError: OBD ioctl: pbuf2 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_plen1 && !data->ioc_pbuf1) {
-                printk("OBD ioctl: plen1 set but NULL pointer\n");
+                printk("LustreError: OBD ioctl: plen1 set but NULL pointer\n");
                 return 1;
         }
         if (data->ioc_plen2 && !data->ioc_pbuf2) {
-                printk("OBD ioctl: plen2 set but NULL pointer\n");
+                printk("LustreError: OBD ioctl: plen2 set but NULL pointer\n");
                 return 1;
         }
         if (obd_ioctl_packlen(data) != data->ioc_len) {
-                printk("OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
+                printk("LustreError: OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
                        obd_ioctl_packlen(data), data->ioc_len);
                 return 1;
         }
@@ -392,6 +311,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         struct obd_ioctl_hdr hdr;
         struct obd_ioctl_data *data;
         int err;
+        int offset = 0;
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
@@ -412,7 +332,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         }
 
         if (hdr.ioc_len < sizeof(struct obd_ioctl_data)) {
-                printk("OBD: user buffer too small for ioctl\n");
+                printk("LustreError: OBD: user buffer too small for ioctl\n");
                 return -EINVAL;
         }
 
@@ -440,24 +360,21 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
         if (data->ioc_inllen1) {
                 data->ioc_inlbuf1 = &data->ioc_bulk[0];
+                offset += size_round(data->ioc_inllen1);
         }
 
         if (data->ioc_inllen2) {
-                data->ioc_inlbuf2 = &data->ioc_bulk[0] +
-                        size_round(data->ioc_inllen1);
+                data->ioc_inlbuf2 = &data->ioc_bulk[0] + offset;
+                offset += size_round(data->ioc_inllen2);
         }
 
         if (data->ioc_inllen3) {
-                data->ioc_inlbuf3 = &data->ioc_bulk[0] +
-                        size_round(data->ioc_inllen1) +
-                        size_round(data->ioc_inllen2);
+                data->ioc_inlbuf3 = &data->ioc_bulk[0] + offset;
+                offset += size_round(data->ioc_inllen3);
         }
 
         if (data->ioc_inllen4) {
-                data->ioc_inlbuf4 = &data->ioc_bulk[0] +
-                        size_round(data->ioc_inllen1) +
-                        size_round(data->ioc_inllen2) + 
-                        size_round(data->ioc_inllen3) ;
+                data->ioc_inlbuf4 = &data->ioc_bulk[0] + offset;
         }
 
         EXIT;
@@ -474,8 +391,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 }
 
 #define OBD_IOC_CREATE                 _IOR ('f', 101, long)
-#define OBD_IOC_SETUP                  _IOW ('f', 102, long)
-#define OBD_IOC_CLEANUP                _IO  ('f', 103      )
 #define OBD_IOC_DESTROY                _IOW ('f', 104, long)
 #define OBD_IOC_PREALLOCATE            _IOWR('f', 105, long)
 
@@ -490,8 +405,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_READ2                  _IOWR('f', 115, long)
 #define OBD_IOC_FORMAT                 _IOWR('f', 116, long)
 #define OBD_IOC_PARTITION              _IOWR('f', 117, long)
-#define OBD_IOC_ATTACH                 _IOWR('f', 118, long)
-#define OBD_IOC_DETACH                 _IOWR('f', 119, long)
 #define OBD_IOC_COPY                   _IOWR('f', 120, long)
 #define OBD_IOC_MIGR                   _IOWR('f', 121, long)
 #define OBD_IOC_PUNCH                  _IOWR('f', 122, long)
@@ -500,17 +413,13 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_BRW_READ               _IOWR('f', 125, long)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 126, long)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 127, long)
-#define OBD_IOC_NEWDEV                 _IOWR('f', 128, long)
 #define OBD_IOC_LIST                   _IOWR('f', 129, long)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
 
-#define OBD_IOC_LOV_SET_CONFIG         _IOWR('f', 131, long)
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, long)
-#define OBD_IOC_LOV_CONFIG             OBD_IOC_LOV_SET_CONFIG
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, long)
 
-#define OBD_IOC_OPEN                   _IOWR('f', 134, long)
-#define OBD_IOC_CLOSE                  _IOWR('f', 135, long)
+#define OBD_IOC_PING                   _IOWR('f', 135, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
 #define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, long)
@@ -519,11 +428,25 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_GET_VERSION                _IOWR ('f', 144, long)
 
-#define OBD_IOC_ADD_UUID               _IOWR ('f', 145, long)
-#define OBD_IOC_DEL_UUID               _IOWR ('f', 146, long)
 #define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, long)
 
+#define OBD_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
+#define OBD_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
+
 #define OBD_IOC_MOUNTOPT               _IOWR('f', 170, long)
+
+#define OBD_IOC_RECORD                 _IOWR('f', 180, long)
+#define OBD_IOC_ENDRECORD              _IOWR('f', 181, long)
+#define OBD_IOC_PARSE                  _IOWR('f', 182, long)
+#define OBD_IOC_DORECORD               _IOWR('f', 183, long)
+#define OBD_IOC_PROCESS_CFG            _IOWR('f', 184, long)
+#define OBD_IOC_DUMP_LOG               _IOWR('f', 185, long)
+
+#define OBD_IOC_CATLOGLIST             _IOWR('f', 190, long)
+#define OBD_IOC_LLOG_INFO              _IOWR('f', 191, long)
+#define OBD_IOC_LLOG_PRINT             _IOWR('f', 192, long)
+#define OBD_IOC_LLOG_CANCEL            _IOWR('f', 193, long)
+#define OBD_IOC_LLOG_REMOVE            _IOWR('f', 194, long)
 
 #define ECHO_IOC_GET_STRIPE            _IOWR('f', 200, long)
 #define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, long)
@@ -539,6 +462,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define LUSTRE_STRIPE_MAXBYTES 0x1fffffff000ULL
 
 #define CHECKSUM_BULK 0
+#define POISON_BULK 0
 
 #if CHECKSUM_BULK
 static inline void ost_checksum(obd_count *cksum, void *addr, int len)
@@ -553,6 +477,17 @@ static inline void ost_checksum(obd_count *cksum, void *addr, int len)
         *cksum = (*cksum << 2) + sum;
 }
 #endif
+
+static inline int ll_insecure_random_int(void)
+{
+#ifdef __arch_um__
+        struct timeval t;
+        do_gettimeofday(&t);
+        return (int)(t.tv_usec);
+#else
+        return (int)(get_cycles() >> 2);
+#endif
+}
 
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller
@@ -622,7 +557,8 @@ struct l_wait_info {
 })
 
 #define LUSTRE_FATAL_SIGS (sigmask(SIGKILL) | sigmask(SIGINT) |                \
-                           sigmask(SIGTERM) | sigmask(SIGQUIT))
+                           sigmask(SIGTERM) | sigmask(SIGQUIT) |               \
+                           sigmask(SIGALRM))
 
 #ifdef __KERNEL__
 static inline sigset_t l_w_e_set_sigs(int sigs)
@@ -639,7 +575,7 @@ static inline sigset_t l_w_e_set_sigs(int sigs)
         return old;
 }
 
-#define __l_wait_event(wq, condition, info, ret)                               \
+#define __l_wait_event(wq, condition, info, ret, excl)                         \
 do {                                                                           \
         wait_queue_t __wait;                                                   \
         int __timed_out = 0;                                                   \
@@ -647,7 +583,10 @@ do {                                                                           \
         sigset_t blocked;                                                      \
                                                                                \
         init_waitqueue_entry(&__wait, current);                                \
-        add_wait_queue(&wq, &__wait);                                          \
+        if (excl)                                                              \
+            add_wait_queue_exclusive(&wq, &__wait);                            \
+        else                                                                   \
+            add_wait_queue(&wq, &__wait);                                      \
                                                                                \
         /* Block all signals (just the non-fatal ones if no timeout). */       \
         if (info->lwi_signals && !info->lwi_timeout)                           \
@@ -691,19 +630,45 @@ do {                                                                           \
         remove_wait_queue(&wq, &__wait);                                       \
 } while(0)
 
+#else /* !__KERNEL__ */
+#define __l_wait_event(wq, condition, info, ret, excl)                         \
+do {                                                                           \
+        int __timed_out = 0;                                                   \
+                                                                               \
+        for (;;) {                                                             \
+            if (condition)                                                     \
+                break;                                                         \
+            if (liblustre_wait_event(info->lwi_timeout))                       \
+                continue;                                                      \
+            if (info->lwi_timeout && !__timed_out) {                           \
+                __timed_out = 1;                                               \
+                if (info->lwi_on_timeout == NULL ||                            \
+                    info->lwi_on_timeout(info->lwi_cb_data)) {                 \
+                    ret = -ETIMEDOUT;                                          \
+                    break;                                                     \
+                }                                                              \
+            }                                                                  \
+        }                                                                      \
+} while (0)
+
+#endif /* __KERNEL__ */
+
 #define l_wait_event(wq, condition, info)                                      \
 ({                                                                             \
         int __ret = 0;                                                         \
         struct l_wait_info *__info = (info);                                   \
         if (!(condition))                                                      \
-                __l_wait_event(wq, condition, __info, __ret);                  \
+                __l_wait_event(wq, condition, __info, __ret, 0);               \
         __ret;                                                                 \
 })
-#else
-#define l_wait_event(wq, condition, info)       \
-({                                              \
-        0;                                      \
+
+#define l_wait_event_exclusive(wq, condition, info)                            \
+({                                                                             \
+        int __ret = 0;                                                         \
+        struct l_wait_info *__info = (info);                                   \
+        if (!(condition))                                                      \
+                __l_wait_event(wq, condition, __info, __ret, 1);               \
+        __ret;                                                                 \
 })
-#endif /* __KERNEL__ */
 
 #endif /* _LUSTRE_LIB_H */

@@ -109,8 +109,11 @@ static inline void *kmalloc(int size, int prot)
 #define kfree(a) free(a)
 #define GFP_KERNEL 1
 #define GFP_HIGHUSER 1
+#define GFP_ATOMIC 1
+#define GFP_MEMALLOC 1
 #define IS_ERR(a) (((a) && abs((int)(a)) < 500) ? 1 : 0)
 #define PTR_ERR(a) ((int)(a))
+#define ERR_PTR(a) ((void*)(a))
 
 #define capable(foo) 1
 #define CAP_SYS_ADMIN 1
@@ -120,9 +123,12 @@ typedef struct {
 
 }mm_segment_t;
 
-typedef void *read_proc_t;
-typedef void *write_proc_t;
+typedef int (read_proc_t)(char *page, char **start, off_t off,
+                          int count, int *eof, void *data);
 
+struct file; /* forward ref */
+typedef int (write_proc_t)(struct file *file, const char *buffer,
+                           unsigned long count, void *data);
 
 /* byteorder */
 #define __swab16(x) \
@@ -179,6 +185,24 @@ typedef void *write_proc_t;
 # error "do more check here!!!"
 #endif
 
+#define NIPQUAD(addr) \
+        ((unsigned char *)&addr)[0], \
+        ((unsigned char *)&addr)[1], \
+        ((unsigned char *)&addr)[2], \
+        ((unsigned char *)&addr)[3]
+                                                                                                                        
+#if defined(__LITTLE_ENDIAN__)
+#define HIPQUAD(addr) \
+        ((unsigned char *)&addr)[3], \
+        ((unsigned char *)&addr)[2], \
+        ((unsigned char *)&addr)[1], \
+        ((unsigned char *)&addr)[0]
+#elif defined(__BIG_ENDIAN__)
+#define HIPQUAD NIPQUAD
+#else
+#error "Please fix asm/byteorder.h"
+#endif /* __LITTLE_ENDIAN__ */
+
 /* bits ops */
 static __inline__ int set_bit(int nr,long * addr)
 {
@@ -211,6 +235,21 @@ static __inline__ int test_bit(int nr, long * addr)
 	return ((mask & *addr) != 0);
 }
 
+static __inline__ int ext2_set_bit(int nr, void *addr)
+{
+        return set_bit(nr, (long*)addr);
+}
+
+static __inline__ int ext2_clear_bit(int nr, void *addr)
+{
+        return clear_bit(nr, (long*)addr);
+}
+
+static __inline__ int ext2_test_bit(int nr, void *addr)
+{
+        return test_bit(nr, (long*)addr);
+}
+
 /* modules */
 
 struct module {
@@ -234,12 +273,23 @@ static inline int misc_register(void *foo)
 {
         return 0;
 }
-#define misc_deregister misc_register
+
+static inline int misc_deregister(void *foo)
+{
+        return 0;
+}
+
+static inline int request_module(char *name)
+{
+        return (-EINVAL);
+}
 
 #define __MOD_INC_USE_COUNT(m)  do {int a = 1; a++; } while (0)
 #define __MOD_DEC_USE_COUNT(m)  do {int a = 1; a++; } while (0)
 #define MOD_INC_USE_COUNT  do {int a = 1; a++; } while (0)
 #define MOD_DEC_USE_COUNT  do {int a = 1; a++; } while (0)
+#define try_module_get                  __MOD_INC_USE_COUNT
+#define module_put                      __MOD_DEC_USE_COUNT
 
 /* module initialization */
 extern int init_obdclass(void);
@@ -261,9 +311,13 @@ typedef int spinlock_t;
 typedef __u64 kdev_t;
 
 #define SPIN_LOCK_UNLOCKED 0
-#define spin_lock(l) do {int a = 1; a++; } while (0)
-#define spin_unlock(l) do {int a= 1; a++; } while (0)
-#define spin_lock_init(l) do {int a= 1; a++; } while (0)
+static inline void spin_lock(spinlock_t *l) {return;}
+static inline void spin_unlock(spinlock_t *l) {return;}
+static inline void spin_lock_init(spinlock_t *l) {return;}
+static inline void local_irq_save(unsigned long flag) {return;}
+static inline void local_irq_restore(unsigned long flag) {return;}
+static inline int spin_is_locked(spinlock_t *l) {return 1;}
+
 static inline void spin_lock_bh(spinlock_t *l)
 {
         return;
@@ -272,19 +326,26 @@ static inline void spin_unlock_bh(spinlock_t *l)
 {
         return;
 }
-static inline void spin_unlock_irqrestore(spinlock_t *a, long b)
+static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b)
 {
         return;
 }
-static inline void spin_lock_irqsave(spinlock_t *a, long b)
+static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b)
 {
         return;
 }
-
-#define barrier() do {int a= 1; a++; } while (0)
 
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
+
+#ifndef min_t
+#define min_t(type,x,y) \
+	({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+#endif
+#ifndef max_t
+#define max_t(type,x,y) \
+	({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
+#endif
 
 /* registering symbols */
 
@@ -347,7 +408,6 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
         free(a);
         return 0;
 }
-#define kmem_cache_validate(a,b) 1
 #define kmem_cache_alloc(cache, prio) malloc(cache->size)
 #define kmem_cache_free(cache, obj) free(obj)
 
@@ -356,8 +416,14 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define PAGE_CACHE_MASK PAGE_MASK
 
 struct page {
-        void *addr;
-        int index;
+        void   *addr;
+        unsigned long index;
+        struct list_head list;
+        unsigned long private;
+
+        /* internally used by liblustre file i/o */
+        int     _offset;
+        int     _count;
 };
 
 #define kmap(page) (page)->addr
@@ -369,7 +435,7 @@ static inline struct page *alloc_pages(int mask, unsigned long order)
 
         if (!pg)
                 return NULL;
-#ifdef MAP_ANONYMOUS
+#if 0 //#ifdef MAP_ANONYMOUS
         pg->addr = mmap(0, PAGE_SIZE << order, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
 #else
         pg->addr = malloc(PAGE_SIZE << order);
@@ -382,9 +448,11 @@ static inline struct page *alloc_pages(int mask, unsigned long order)
         return pg;
 }
 
+#define alloc_page(mask) alloc_pages((mask), 0)
+
 static inline void __free_pages(struct page *pg, int what)
 {
-#ifdef MAP_ANONYMOUS
+#if 0 //#ifdef MAP_ANONYMOUS
         munmap(pg->addr, PAGE_SIZE);
 #else
         free(pg->addr);
@@ -392,7 +460,9 @@ static inline void __free_pages(struct page *pg, int what)
         free(pg);
 }
 
-static inline struct page* __grab_cache_page(int index)
+#define __free_page(page) __free_pages((page), 0)
+
+static inline struct page* __grab_cache_page(unsigned long index)
 {
         struct page *pg = alloc_pages(0, 0);
 
@@ -441,25 +511,48 @@ struct iattr {
         unsigned int    ia_attr_flags;
 };
 
-/* copy from kernel header */
-#define IT_OPEN     (1)
-#define IT_CREAT    (1<<1)
-#define IT_READDIR  (1<<2)
-#define IT_GETATTR  (1<<3)
-#define IT_LOOKUP   (1<<4)
-#define IT_UNLINK   (1<<5)
+#define IT_OPEN     0x0001
+#define IT_CREAT    0x0002
+#define IT_READDIR  0x0004
+#define IT_GETATTR  0x0008
+#define IT_LOOKUP   0x0010
+#define IT_UNLINK   0x0020
+#define IT_GETXATTR 0x0040
+#define IT_EXEC     0x0080
+#define IT_PIN      0x0100
 
-struct lookup_intent {
-        int it_op;
-        int it_mode;
-        int it_flags;
-        int it_disposition;
-        int it_status;
-        struct iattr *it_iattr;
-        __u64 it_lock_handle[2];
-        int it_lock_mode;
-        void *it_data;
+#define IT_FL_LOCKED   0x0001
+#define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */
+
+#define INTENT_MAGIC 0x19620323
+
+struct lustre_intent_data {
+        int       it_disposition;
+        int       it_status;
+        __u64     it_lock_handle;
+        void     *it_data;
+        int       it_lock_mode;
+        int it_int_flags;
 };
+struct lookup_intent {
+        int     it_magic;
+        void    (*it_op_release)(struct lookup_intent *);
+        int     it_op;
+        int     it_flags;
+        int     it_create_mode;
+        union {
+                struct lustre_intent_data lustre;
+        } d;
+};
+
+static inline void intent_init(struct lookup_intent *it, int op, int flags)
+{
+        memset(it, 0, sizeof(*it));
+        it->it_magic = INTENT_MAGIC;
+        it->it_op = op;
+        it->it_flags = flags;
+}
+
 
 struct dentry {
         int d_count;
@@ -472,13 +565,30 @@ struct vfsmount {
 #define cpu_to_le32(x) ((__u32)(x))
 
 /* semaphores */
+struct rw_semaphore {
+        int count;
+};
+
+/* semaphores */
 struct semaphore {
         int count;
 };
 
 #define down(a) do {(a)->count++;} while (0)
 #define up(a) do {(a)->count--;} while (0)
+#define down_read(a) do {(a)->count++;} while (0)
+#define up_read(a) do {(a)->count--;} while (0)
+#define down_write(a) do {(a)->count++;} while (0)
+#define up_write(a) do {(a)->count--;} while (0)
 #define sema_init(a,b) do { (a)->count = b; } while (0)
+#define init_rwsem(a) do {} while (0)
+#define DECLARE_MUTEX(name)     \
+        struct semaphore name = { 1 }
+static inline void init_MUTEX (struct semaphore *sem)
+{
+        sema_init(sem, 1);
+}
+
 
 typedef struct  {
         struct list_head sleepers;
@@ -525,6 +635,18 @@ extern struct task_struct *current;
 #define TASK_UNINTERRUPTIBLE 1
 #define TASK_RUNNING 2
 
+#define wait_event_interruptible(wq, condition)                         \
+({                                                                      \
+        struct l_wait_info lwi;                                         \
+        int timeout = 100000000;/* for ever */                          \
+        int ret;                                                        \
+                                                                        \
+        lwi = LWI_TIMEOUT(timeout, NULL, NULL);                         \
+        ret = l_wait_event(NULL, condition, &lwi);                      \
+                                                                        \
+        ret;                                                            \
+})
+
 #define in_interrupt() (0)
 
 #define schedule() do { int a; a++; } while (0)
@@ -537,7 +659,9 @@ static inline int schedule_timeout(signed long t)
 #define daemonize(l) do { int a; a++; } while (0)
 #define sigfillset(l) do { int a; a++; } while (0)
 #define recalc_sigpending(l) do { int a; a++; } while (0)
-#define kernel_thread(l,m,n)
+#define kernel_thread(l,m,n) LBUG()
+
+#define USERMODEHELPER(path, argv, envp) (0)
 
 static inline int call_usermodehelper(char *prog, char **argv, char **evnp, int unknown)
 {
@@ -545,6 +669,7 @@ static inline int call_usermodehelper(char *prog, char **argv, char **evnp, int 
 }
 
 
+#define SIGNAL_MASK_ASSERT()
 
 #define KERN_INFO
 
@@ -553,8 +678,8 @@ static inline int call_usermodehelper(char *prog, char **argv, char **evnp, int 
 struct timer_list {
         struct list_head tl_list;
         void (*function)(unsigned long unused);
-        void *data;
-        int expires;
+        unsigned long data;
+        long expires;
 };
 
 static inline int timer_pending(struct timer_list *l)
@@ -591,11 +716,52 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
 
+#define likely(exp) (exp)
+#define unlikely(exp) (exp)
+
+/* log related */
+static inline int llog_init_commit_master(void) { return 0; }
+static inline int llog_cleanup_commit_master(int force) { return 0; }
+static inline void portals_run_lbug_upcall(char *file, const char *fn,
+                                           const int l){}
+
 #define LBUG()                                                          \
         do {                                                            \
                 printf("!!!LBUG at %s:%d\n", __FILE__, __LINE__);       \
                 sleep(1000000);                                         \
         } while (0)
+
+
+
+/* completion */
+struct completion {
+        unsigned int done;
+        wait_queue_head_t wait;
+};
+
+#define COMPLETION_INITIALIZER(work) \
+        { 0, __WAIT_QUEUE_HEAD_INITIALIZER((work).wait) }
+
+#define DECLARE_COMPLETION(work) \
+        struct completion work = COMPLETION_INITIALIZER(work)
+
+#define INIT_COMPLETION(x)      ((x).done = 0)
+
+static inline void init_completion(struct completion *x)
+{
+        x->done = 0;
+        init_waitqueue_head(&x->wait);
+}
+
+struct liblustre_wait_callback {
+        struct list_head    llwc_list;
+        int               (*llwc_fn)(void *arg);
+        void               *llwc_arg;
+};
+
+void *liblustre_register_wait_callback(int (*fn)(void *arg), void *arg);
+void liblustre_deregister_wait_callback(void *notifier);
+int liblustre_wait_event(int timeout);
 
 #include <linux/obd_support.h>
 #include <linux/lustre_idl.h>

@@ -35,32 +35,86 @@ kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
 spinlock_t ldlm_namespace_lock = SPIN_LOCK_UNLOCKED;
 struct list_head ldlm_namespace_list = LIST_HEAD_INIT(ldlm_namespace_list);
-static struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
-
-int ldlm_proc_setup(struct obd_device *obd)
-{
-        int rc;
-        ENTRY;
-        LASSERT(ldlm_ns_proc_dir == NULL);
-        LASSERT(obd != NULL);
-        rc = lprocfs_obd_attach(obd, 0);
-        if (rc) {
-                CERROR("LProcFS failed in ldlm-init\n");
-                RETURN(rc);
-        }
-        ldlm_ns_proc_dir = obd->obd_proc_entry;
-        RETURN(0);
-}
-
-void ldlm_proc_cleanup(struct obd_device *obd)
-{
-        if (ldlm_ns_proc_dir) {
-                lprocfs_obd_detach(obd);
-                ldlm_ns_proc_dir = NULL;
-        }
-}
+struct proc_dir_entry *ldlm_type_proc_dir = NULL;
+struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
+struct proc_dir_entry *ldlm_svc_proc_dir = NULL;
 
 #ifdef __KERNEL__
+static int ldlm_proc_dump_ns(struct file *file, const char *buffer, unsigned long count, void *data)
+{
+        ldlm_dump_all_namespaces();
+        RETURN(count);
+}
+
+int ldlm_proc_setup(void)
+{
+        int rc;
+        struct lprocfs_vars list[] = { 
+                { "dump_namespaces", NULL, ldlm_proc_dump_ns, NULL },
+                { NULL }};
+        ENTRY;
+        LASSERT(ldlm_ns_proc_dir == NULL);
+
+        ldlm_type_proc_dir = lprocfs_register(OBD_LDLM_DEVICENAME,
+                                               proc_lustre_root,
+                                               NULL, NULL);
+        if (IS_ERR(ldlm_type_proc_dir)) {
+                CERROR("LProcFS failed in ldlm-init\n");
+                rc = PTR_ERR(ldlm_type_proc_dir);
+                GOTO(err, rc);
+        }
+
+        ldlm_ns_proc_dir = lprocfs_register("namespaces",
+                                            ldlm_type_proc_dir,
+                                            NULL, NULL);
+        if (IS_ERR(ldlm_ns_proc_dir)) {
+                CERROR("LProcFS failed in ldlm-init\n");
+                rc = PTR_ERR(ldlm_ns_proc_dir);
+                GOTO(err_type, rc);
+        }
+
+        ldlm_svc_proc_dir = lprocfs_register("services",
+                                            ldlm_type_proc_dir,
+                                            NULL, NULL);
+        if (IS_ERR(ldlm_svc_proc_dir)) {
+                CERROR("LProcFS failed in ldlm-init\n");
+                rc = PTR_ERR(ldlm_svc_proc_dir);
+                GOTO(err_ns, rc);
+        }
+
+        rc = lprocfs_add_vars(ldlm_type_proc_dir, list, NULL);
+
+        RETURN(0);
+
+err_ns:        
+        lprocfs_remove(ldlm_ns_proc_dir);
+err_type:        
+        lprocfs_remove(ldlm_type_proc_dir);
+err:
+        ldlm_type_proc_dir = NULL;
+        ldlm_ns_proc_dir = NULL;
+        ldlm_svc_proc_dir = NULL;
+        RETURN(rc);
+}
+
+void ldlm_proc_cleanup(void)
+{
+        if (ldlm_svc_proc_dir) {
+                lprocfs_remove(ldlm_svc_proc_dir);
+                ldlm_svc_proc_dir = NULL;
+        }
+
+        if (ldlm_ns_proc_dir) {
+                lprocfs_remove(ldlm_ns_proc_dir);
+                ldlm_ns_proc_dir = NULL;
+        }
+
+        if (ldlm_type_proc_dir) {
+                lprocfs_remove(ldlm_type_proc_dir);
+                ldlm_type_proc_dir = NULL;
+        }
+}
+
 static int lprocfs_uint_rd(char *page, char **start, off_t off,
                            int count, int *eof, void *data)
 {
@@ -152,11 +206,18 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
+        int rc;
         ENTRY;
+
+        rc = ldlm_get_ref();
+        if (rc) {
+                CERROR("ldlm_get_ref failed: %d\n", rc);
+                RETURN(NULL);
+        }
 
         OBD_ALLOC(ns, sizeof(*ns));
         if (!ns)
-                RETURN(NULL);
+                GOTO(out_ref, NULL);
 
         OBD_VMALLOC(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         if (!ns->ns_hash)
@@ -197,21 +258,24 @@ out_hash:
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
 out_ns:
         OBD_FREE(ns, sizeof(*ns));
-        return NULL;
+out_ref:
+        ldlm_put_ref(0);
+        RETURN(NULL);
 }
 
 extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
 
-/* If 'local_only' is true, don't try to tell the server, just cleanup.
+/* If flags contains FL_LOCAL_ONLY, don't try to tell the server, just cleanup.
  * This is currently only used for recovery, and we make certain assumptions
  * as a result--notably, that we shouldn't cancel locks with refs. -phil
  *
  * Called with the ns_lock held. */
 static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
-                             int local_only)
+                             int flags)
 {
         struct list_head *tmp, *pos;
         int rc = 0, client = res->lr_namespace->ns_client;
+        int local_only = (flags & LDLM_FL_LOCAL_ONLY);
         ENTRY;
 
         list_for_each_safe(tmp, pos, q) {
@@ -227,15 +291,15 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                         lock->l_flags |= LDLM_FL_CBPENDING;
                         /* ... without sending a CANCEL message. */
                         lock->l_flags |= LDLM_FL_LOCAL_ONLY;
+                        /* caller may also specify additional flags */
+                        lock->l_flags |= flags;
                         LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");
-                        /* ... and without calling the cancellation callback */
-                        lock->l_flags |= LDLM_FL_CANCEL;
                         LDLM_LOCK_PUT(lock);
                         continue;
                 }
 
-                /* At shutdown time, don't call the cancellation callback */
-                lock->l_flags |= LDLM_FL_CANCEL;
+ 
+                lock->l_flags |= flags;
 
                 if (client) {
                         struct lustre_handle lockh;
@@ -260,7 +324,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
         EXIT;
 }
 
-int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
+int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
 {
         int i;
 
@@ -277,15 +341,16 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
 
-                        cleanup_resource(res, &res->lr_granted, local_only);
-                        cleanup_resource(res, &res->lr_converting, local_only);
-                        cleanup_resource(res, &res->lr_waiting, local_only);
+                        cleanup_resource(res, &res->lr_granted, flags);
+                        cleanup_resource(res, &res->lr_converting, flags);
+                        cleanup_resource(res, &res->lr_waiting, flags);
 
                         /* XXX what a mess: don't force cleanup if we're
                          * local_only (which is only used by recovery).  In that
                          * case, we probably still have outstanding lock refs
                          * which reference these resources. -phil */
-                        if (!ldlm_resource_putref(res) && !local_only) {
+                        if (!ldlm_resource_putref(res) &&
+                            !(flags & LDLM_FL_LOCAL_ONLY)) {
                                 CERROR("Resource refcount nonzero (%d) after "
                                        "lock cleanup; forcing cleanup.\n",
                                        atomic_read(&res->lr_refcount));
@@ -301,7 +366,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
 }
 
 /* Cleanup, but also free, the namespace */
-int ldlm_namespace_free(struct ldlm_namespace *ns)
+int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 {
         if (!ns)
                 RETURN(ELDLM_OK);
@@ -311,12 +376,28 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         spin_unlock(&ldlm_namespace_lock);
 
-        ldlm_namespace_cleanup(ns, 0);
+        /* At shutdown time, don't call the cancellation callback */
+        ldlm_namespace_cleanup(ns, LDLM_FL_CANCEL);
+
+#ifdef __KERNEL__
+        {
+                struct proc_dir_entry *dir;
+                dir = lprocfs_srch(ldlm_ns_proc_dir, ns->ns_name);
+                if (dir == NULL) {
+                        CERROR("dlm namespace %s has no procfs dir?\n",
+                               ns->ns_name);
+                } else {
+                        lprocfs_remove(dir);
+                }
+        }
+#endif
 
         POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE(ns, sizeof(*ns));
+
+        ldlm_put_ref(force);
 
         return ELDLM_OK;
 }
@@ -442,6 +523,8 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 {
+        LASSERT(res != NULL);
+        LASSERT(res != (void *)0x5a5a5a5a);
         atomic_inc(&res->lr_refcount);
         CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount));
@@ -494,9 +577,9 @@ int ldlm_resource_putref(struct ldlm_resource *res)
                 ns->ns_refcount--;
                 list_del_init(&res->lr_hash);
                 list_del_init(&res->lr_childof);
+                l_unlock(&ns->ns_lock);
 
                 OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
-                l_unlock(&ns->ns_lock);
 
                 spin_lock(&ns->ns_counter_lock);
                 ns->ns_resources--;
@@ -580,18 +663,14 @@ void ldlm_namespace_dump(struct ldlm_namespace *ns)
 void ldlm_resource_dump(struct ldlm_resource *res)
 {
         struct list_head *tmp;
-        char name[256];
         int pos;
 
-        if (RES_NAME_SIZE != 3)
+        if (RES_NAME_SIZE != 4)
                 LBUG();
 
-        snprintf(name, sizeof(name), "%Lx %Lx %Lx",
-                 (unsigned long long)res->lr_name.name[0],
-                 (unsigned long long)res->lr_name.name[1],
-                 (unsigned long long)res->lr_name.name[2]);
-
-        CDEBUG(D_OTHER, "--- Resource: %p (%s) (rc: %d)\n", res, name,
+        CDEBUG(D_OTHER, "--- Resource: %p ("LPU64"/"LPU64"/"LPU64"/"LPU64
+               ") (rc: %d)\n", res, res->lr_name.name[0], res->lr_name.name[1],
+               res->lr_name.name[2], res->lr_name.name[3],
                atomic_read(&res->lr_refcount));
         CDEBUG(D_OTHER, "Namespace: %p (%s)\n", res->lr_namespace,
                res->lr_namespace->ns_name);

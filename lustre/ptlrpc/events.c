@@ -99,7 +99,7 @@ int reply_in_callback(ptl_event_t *ev)
         /* replies always contiguous */
         LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
 
-        if (req->rq_xid == 0x5a5a5a5a5a5a5a5a) {
+        if (req->rq_xid == 0x5a5a5a5a5a5a5a5aULL) {
                 CERROR("Reply received for freed request!  Probably a missing "
                        "ptlrpc_abort()\n");
                 LBUG();
@@ -218,7 +218,7 @@ static int bulk_put_sink_callback(ptl_event_t *ev)
         LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) ==
                 PTL_MD_KIOV);
         /* Honestly, it's best to find out early. */
-        if (desc->bd_page_count == 0x5a5a5a5a5a ||
+        if (desc->bd_page_count == 0x5a5a5a5a ||
             desc->bd_page_count != ev->mem_desc.niov ||
             ev->mem_desc.start != &desc->bd_iov) {
                 /* not guaranteed (don't LASSERT) but good for this bug hunt */
@@ -453,6 +453,60 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         return (rc);
 }
 
+#ifndef __KERNEL__
+int
+liblustre_check_events (int block)
+{
+        ptl_event_t ev;
+        int         rc;
+        ENTRY;
+
+        if (block) {
+                /* XXX to accelerate recovery tests XXX */
+                if (block > 10)
+                        block = 10;
+                rc = PtlEQWait_timeout(ptlrpc_interfaces[0].pni_eq_h, &ev, block);
+        } else {
+                rc = PtlEQGet (ptlrpc_interfaces[0].pni_eq_h, &ev);
+        }
+        if (rc == PTL_EQ_EMPTY)
+                RETURN(0);
+        
+        LASSERT (rc == PTL_EQ_DROPPED || rc == PTL_OK);
+        
+#if PORTALS_DOES_NOT_SUPPORT_CALLBACKS
+        if (rc == PTL_EQ_DROPPED)
+                CERROR ("Dropped an event!!!\n");
+        
+        ptlrpc_master_callback (&ev);
+#endif
+        RETURN(1);
+}
+
+int liblustre_wait_event(struct l_wait_info *lwi) 
+{
+        ENTRY;
+
+        /* non-blocking checks (actually we might block in a service for
+         * bulk but we won't block in a blocked service)
+         */
+        if (liblustre_check_events(0) ||
+            liblustre_check_services()) {
+                /* the condition the caller is waiting for may now hold */
+                RETURN(0);
+        }
+        
+        /* block for an event */
+        liblustre_check_events(lwi->lwi_timeout);
+
+        /* check it's not for some service */
+        liblustre_check_services ();
+
+        /* XXX check this */
+        RETURN(0);
+}
+#endif
+
 int ptlrpc_init_portals(void)
 {
         /* Add new portals network interfaces here.
@@ -464,6 +518,7 @@ int ptlrpc_init_portals(void)
                 {QSWNAL,  "qswnal"},
                 {SOCKNAL, "socknal"},
                 {GMNAL,   "gmnal"},
+                {IBNAL,   "ibnal"},
                 {TOENAL,  "toenal"},
                 {TCPNAL,  "tcpnal"},
                 {SCIMACNAL, "scimacnal"}};

@@ -35,6 +35,7 @@
 #include <linux/kp30.h>
 // #include <linux/obd.h>
 #include <portals/p30.h>
+#include <portals/lib-types.h>                  /* FIXME (for PTL_MD_MAX_IOV) */
 #include <linux/lustre_idl.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_import.h>
@@ -55,18 +56,21 @@
  * is left in them.
  */
 
-#define LDLM_NUM_THREADS        4
+#define LDLM_NUM_THREADS        min(smp_num_cpus * smp_num_cpus * 8, 64)
 #define LDLM_NEVENT_MAX 8192UL
-#define LDLM_NEVENTS    min(num_physpages / 64, LDLM_NEVENT_MAX)
+#define LDLM_NEVENTS    min_t(unsigned long, num_physpages / 64,  \
+                              LDLM_NEVENT_MAX)
 #define LDLM_NBUF_MAX   256UL
 #define LDLM_NBUFS      min(LDLM_NEVENTS / 16, LDLM_NBUF_MAX)
 #define LDLM_BUFSIZE    (8 * 1024)
-#define LDLM_MAXREQSIZE 1024
+#define LDLM_MAXREQSIZE (5 * 1024)
 
 #define MDT_MAX_THREADS 32UL
-#define MDT_NUM_THREADS min(num_physpages / 8192, MDT_MAX_THREADS)
+#define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
+                                  MDT_MAX_THREADS), 2UL)
 #define MDS_NEVENT_MAX  8192UL
-#define MDS_NEVENTS     min(num_physpages / 64, MDS_NEVENT_MAX)
+#define MDS_NEVENTS     min_t(unsigned long, num_physpages / 64, \
+                              MDS_NEVENT_MAX)
 #define MDS_NBUF_MAX    512UL
 #define MDS_NBUFS       min(MDS_NEVENTS / 16, MDS_NBUF_MAX)
 #define MDS_BUFSIZE     (8 * 1024)
@@ -87,11 +91,13 @@
 #define MDS_MAXREQSIZE  (5 * 1024)
 
 #define OST_MAX_THREADS 36UL
-#define OST_NUM_THREADS min(num_physpages / 8192, OST_MAX_THREADS)
-#define OST_NEVENT_MAX  32768UL
-#define OST_NEVENTS     min(num_physpages / 16, OST_NEVENT_MAX)
-#define OST_NBUF_MAX    1280UL
-#define OST_NBUFS       min(OST_NEVENTS / 64, OST_NBUF_MAX)
+#define OST_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
+                                  OST_MAX_THREADS), 2UL)
+#define OST_NEVENT_MAX  16384UL
+#define OST_NEVENTS     min_t(unsigned long, num_physpages / 16, \
+                              OST_NEVENT_MAX)
+#define OST_NBUF_MAX    5000UL
+#define OST_NBUFS       min(OST_NEVENTS / 2, OST_NBUF_MAX)
 #define OST_BUFSIZE     (8 * 1024)
 /* OST_MAXREQSIZE ~= 1640 bytes =
  * lustre_msg + obdo + 16 * obd_ioobj + 64 * niobuf_remote
@@ -107,8 +113,6 @@
 #define PTLBD_BUFSIZE    (32 * 1024)
 #define PTLBD_MAXREQSIZE 1024
 
-#define CONN_INVALID 1
-
 struct ptlrpc_peer {
         ptl_nid_t         peer_nid;
         struct ptlrpc_ni *peer_ni;
@@ -117,30 +121,13 @@ struct ptlrpc_peer {
 struct ptlrpc_connection {
         struct list_head        c_link;
         struct ptlrpc_peer      c_peer;
-        struct obd_uuid         c_local_uuid;  /* XXX do we need this? */
         struct obd_uuid         c_remote_uuid;
-
-        __u32                   c_generation;  /* changes upon new connection */
-        __u32                   c_epoch;       /* changes when peer changes */
-        __u32                   c_bootcount;   /* peer's boot count */
-
-        spinlock_t              c_lock;
-
         atomic_t                c_refcount;
-        __u64                   c_token;
-        __u64                   c_remote_conn;
-        __u64                   c_remote_token;
-
-        __u32                   c_flags; // can we indicate INVALID elsewhere?
 };
 
 struct ptlrpc_client {
         __u32                     cli_request_portal;
         __u32                     cli_reply_portal;
-
-        __u32                     cli_target_devno;
-
-        void                     *cli_data;
         char                     *cli_name;
 };
 
@@ -149,7 +136,7 @@ struct ptlrpc_client {
 #define PTL_RPC_FL_INTR      (1 << 0)  /* reply wait was interrupted by user */
 #define PTL_RPC_FL_TIMEOUT   (1 << 7)  /* request timed out waiting for reply */
 
-#define REQ_MAX_ACK_LOCKS 4
+#define REQ_MAX_ACK_LOCKS 8
 
 #define SWAB_PARANOIA 1
 #if SWAB_PARANOIA
@@ -189,7 +176,7 @@ union ptlrpc_async_args {
          * big enough.  For _tons_ of context, OBD_ALLOC a struct and store
          * a pointer to it here.  The pointer_arg ensures this struct is at
          * least big enough for that. */
-        void      *pointer_arg[5];
+        void      *pointer_arg[9];
         __u64      space[4];
 };
 
@@ -203,6 +190,10 @@ struct ptlrpc_request_set {
         struct list_head  set_requests;
         set_interpreter_func    set_interpret; /* completion callback */
         union ptlrpc_async_args set_args; /* completion context */
+        /* locked so that any old caller can communicate requests to
+         * the set holder who can then fold them into the lock-free set */
+        spinlock_t        set_new_req_lock;
+        struct list_head  set_new_requests;
 };
 
 struct ptlrpc_bulk_desc;
@@ -215,8 +206,7 @@ struct ptlrpc_request {
         spinlock_t rq_lock;
         unsigned int rq_intr:1, rq_replied:1, rq_want_ack:1, rq_err:1,
             rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
-            rq_no_resend:1, rq_resent:1, rq_no_recov:1, rq_waiting:1,
-            rq_receiving_reply:1;
+            rq_no_resend:1, rq_resent:1, rq_waiting:1, rq_receiving_reply:1;
         int rq_phase;
                 
         atomic_t rq_refcount;
@@ -239,7 +229,7 @@ struct ptlrpc_request {
 #endif
 
         int rq_import_generation;
-        int rq_level;
+        enum lustre_imp_state rq_send_state;
         wait_queue_head_t rq_wait_for_rep; /* XXX also _for_ack */
 
         /* incoming reply */
@@ -256,7 +246,8 @@ struct ptlrpc_request {
         struct ptlrpc_service *rq_svc;
 
         void (*rq_replay_cb)(struct ptlrpc_request *);
-        void  *rq_replay_data;
+        void (*rq_commit_cb)(struct ptlrpc_request *);
+        void  *rq_cb_data;
 
         struct ptlrpc_bulk_desc *rq_bulk;       /* client side bulk */
         time_t rq_sent;                         /* when the request was sent */
@@ -273,6 +264,7 @@ struct ptlrpc_request {
                 __u32                mode;
         } rq_ack_locks[REQ_MAX_ACK_LOCKS];
 };
+
 
 #define RQ_PHASE_NEW           0xebc0de00
 #define RQ_PHASE_RPC	       0xebc0de01
@@ -294,16 +286,16 @@ struct ptlrpc_request {
         FLAG(req->rq_timedout, "X") /* eXpired */, FLAG(req->rq_resend, "S"),  \
         FLAG(req->rq_restart, "T"), FLAG(req->rq_replay, "P"),                 \
         FLAG(req->rq_no_resend, "N"), FLAG(req->rq_resent, "s"),               \
-        FLAG(req->rq_no_recov, "n"), FLAG(req->rq_waiting, "W")
+        FLAG(req->rq_waiting, "W")
 
-#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s%s"
+#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s"
 
 #define DEBUG_REQ(level, req, fmt, args...)                                    \
 do {                                                                           \
 CDEBUG(level, "@@@ " fmt                                                       \
        " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d ref %d fl "         \
        REQ_FLAGS_FMT"/%x/%x rc %x\n" ,  ## args, req, req->rq_xid,             \
-       req->rq_reqmsg ? req->rq_reqmsg->transno : -1,                          \
+       req->rq_transno,                                                        \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
        req->rq_import ? (char *)req->rq_import->imp_target_uuid.uuid : "<?>",  \
        req->rq_connection ?                                                    \
@@ -354,9 +346,9 @@ struct ptlrpc_bulk_desc {
         int bd_callback_count;                  /* server side callbacks */
 
 #ifdef __KERNEL__
-        ptl_kiov_t bd_iov[16];    /* self-sized pre-allocated iov */
+        ptl_kiov_t bd_iov[PTL_MD_MAX_IOV];
 #else
-        struct iovec bd_iov[16];    /* self-sized pre-allocated iov */
+        struct iovec bd_iov[PTL_MD_MAX_IOV];
 #endif
 };
 
@@ -375,8 +367,11 @@ struct ptlrpc_request_buffer_desc {
         char                  *rqbd_buffer;
 };
 
-struct ptlrpc_ni {
-        /* Generic interface state */
+/* event queues are per-ni, because one day we may get a hardware
+ * supported NAL that delivers events asynchonously wrt kernel portals
+ * into the eq.
+ */
+struct ptlrpc_ni { /* Generic interface state */
         char                   *pni_name;
         int                     pni_number;
         ptl_handle_ni_t         pni_ni_h;
@@ -480,14 +475,21 @@ void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void);
+int ptlrpc_set_next_timeout(struct ptlrpc_request_set *);
+int ptlrpc_check_set(struct ptlrpc_request_set *set);
 int ptlrpc_set_wait(struct ptlrpc_request_set *);
+int ptlrpc_expired_set(void *data);
+void ptlrpc_interrupted_set(void *data);
 void ptlrpc_set_destroy(struct ptlrpc_request_set *);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *, struct ptlrpc_request *);
+void ptlrpc_set_add_new_req(struct ptlrpc_request_set *,
+                            struct ptlrpc_request *);
 
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                                        int count, int *lengths, char **bufs);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
+void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request);
 struct ptlrpc_request *ptlrpc_request_addref(struct ptlrpc_request *req);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp (struct ptlrpc_request *req,
                                                int type, int portal);
@@ -501,16 +503,14 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
                                       struct obd_import *imp);
 __u64 ptlrpc_next_xid(void);
 
-/* ptlrpc/ptlrpc_module.c */
-void ptlrpc_put_ldlm_hooks(void);
-int ptlrpc_ldlm_hooks_referenced(void);
-
 /* ptlrpc/service.c */
 struct ptlrpc_service *
 ptlrpc_init_svc(__u32 nevents, __u32 nbufs, __u32 bufsize, __u32 max_req_size,
                 int req_portal, int rep_portal, svc_handler_t, char *name,
-                struct obd_device *dev);
+                struct proc_dir_entry *proc_entry);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
+int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
+                           int cnt, char *base_name);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
@@ -522,9 +522,16 @@ struct ptlrpc_svc_data {
         struct obd_device *dev;
 };
 
+/* ptlrpc/import.c */
+int ptlrpc_connect_import(struct obd_import *imp);
+int ptlrpc_disconnect_import(struct obd_import *imp);
+
 /* ptlrpc/pack_generic.c */
-int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
-                    struct lustre_msg **msg);
+int lustre_msg_swabbed(struct lustre_msg *msg);
+int lustre_pack_request(struct ptlrpc_request *, int count, int *lens,
+                        char **bufs);
+int lustre_pack_reply(struct ptlrpc_request *, int count, int *lens,
+                      char **bufs);
 int lustre_msg_size(int count, int *lengths);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
 void *lustre_msg_buf(struct lustre_msg *m, int n, int minlen);
@@ -535,12 +542,34 @@ void *lustre_swab_repbuf (struct ptlrpc_request *req, int n, int minlen,
                           void *swabber);
 
 /* ldlm/ldlm_lib.c */
-int client_import_connect(struct lustre_handle *conn, struct obd_device *obd,
+int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
+int client_obd_cleanup(struct obd_device * obddev, int flags);
+int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid);
-int client_import_disconnect(struct lustre_handle *conn, int failover);
+int client_disconnect_export(struct obd_export *exp, int failover);
 
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
+
+/* ptlrpc/lproc_ptlrpc.c */
+#ifdef __KERNEL__
+void ptlrpc_lprocfs_register_obd(struct obd_device *obddev);
+void ptlrpc_lprocfs_unregister_obd(struct obd_device *obddev);
+#else
+#define ptlrpc_lprocfs_register_obd(param...) do{}while(0)
+#define ptlrpc_lprocfs_unregister_obd(param...) do{}while(0)
+#endif
+
+/* ptlrpc/llog_server.c */
+struct llog_obd_ctxt;
+int llog_origin_handle_create(struct ptlrpc_request *req);
+int llog_origin_handle_next_block(struct ptlrpc_request *req);
+int llog_origin_handle_read_header(struct ptlrpc_request *req);
+int llog_origin_handle_close(struct ptlrpc_request *req);
+int llog_origin_handle_cancel(struct ptlrpc_request *req);
+
+/* ptlrpc/llog_client.c */
+extern struct llog_operations llog_client_ops;
 
 #endif

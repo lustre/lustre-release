@@ -1,0 +1,62 @@
+
+
+
+ fs/ext3/Makefile   |    4 +++-
+ fs/ext3/super.c    |    2 +-
+ include/linux/fs.h |    1 +
+ kernel/ksyms.c     |    5 +++++
+ 4 files changed, 10 insertions(+), 2 deletions(-)
+
+Index: linux-2.4.19-pre1/fs/ext3/Makefile
+===================================================================
+--- linux-2.4.19-pre1.orig/fs/ext3/Makefile	2003-11-21 02:39:49.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/Makefile	2003-11-21 02:41:04.000000000 +0300
+@@ -9,6 +9,8 @@
+ 
+ O_TARGET := ext3.o
+ 
++export-objs :=	super.o inode.o
++
+ obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
+ 		ioctl.o namei.o super.o symlink.o
+ obj-m    := $(O_TARGET)
+Index: linux-2.4.19-pre1/fs/ext3/super.c
+===================================================================
+--- linux-2.4.19-pre1.orig/fs/ext3/super.c	2003-11-21 02:39:49.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/super.c	2003-11-21 02:41:04.000000000 +0300
+@@ -1744,7 +1744,7 @@
+ 	unregister_filesystem(&ext3_fs_type);
+ }
+ 
+-EXPORT_NO_SYMBOLS;
++EXPORT_SYMBOL(ext3_bread);
+ 
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+Index: linux-2.4.19-pre1/include/linux/fs.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/fs.h	2003-11-21 02:39:49.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/fs.h	2003-11-21 02:41:41.000000000 +0300
+@@ -984,6 +984,7 @@
+ extern struct vfsmount *kern_mount(struct file_system_type *);
+ extern int may_umount(struct vfsmount *);
+ extern long do_mount(char *, char *, char *, unsigned long, void *);
++struct vfsmount *do_kern_mount(char *type, int flags, char *name, void *data);
+ 
+ #define kern_umount mntput
+ 
+Index: linux-2.4.19-pre1/kernel/ksyms.c
+===================================================================
+--- linux-2.4.19-pre1.orig/kernel/ksyms.c	2003-11-21 02:39:49.000000000 +0300
++++ linux-2.4.19-pre1/kernel/ksyms.c	2003-11-21 02:41:04.000000000 +0300
+@@ -271,6 +271,10 @@
+ EXPORT_SYMBOL(lock_may_write);
+ EXPORT_SYMBOL(dcache_readdir);
+ 
++/* lustre */
++EXPORT_SYMBOL(panic_notifier_list);
++EXPORT_SYMBOL(do_kern_mount);
++
+ /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
+ EXPORT_SYMBOL(default_llseek);
+ EXPORT_SYMBOL(dentry_open);

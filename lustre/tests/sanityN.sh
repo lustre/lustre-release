@@ -46,7 +46,7 @@ START=${START:-start}
 
 log() {
 	echo "$*"
-	lctl mark "$*" || true
+	lctl mark "$*" 2> /dev/null || true
 }
 
 run_one() {
@@ -54,7 +54,7 @@ run_one() {
 		$START
 	fi
 	log "== test $1: $2"
-	test_$1 || error
+	test_$1 || error "test_$1: $?"
 	pass
 	cd $SAVE_PWD
 	$CLEAN
@@ -83,7 +83,7 @@ run_test() {
 }
 
 error () {
-	echo "FAIL: $@"
+	log "FAIL: $@"
 	exit 1
 }
 
@@ -103,7 +103,7 @@ DIR2=${DIR2:-$MOUNT2}
 [ -z "`echo $DIR1 | grep $MOUNT1`" ] && echo "$DIR1 not in $MOUNT1" && exit 96
 [ -z "`echo $DIR2 | grep $MOUNT2`" ] && echo "$DIR2 not in $MOUNT2" && exit 95
 
-rm -f $DIR1/[df][0-9]* $DIR1/lnk
+rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 
 test_1a() {
 	touch $DIR1/f1
@@ -144,6 +144,19 @@ test_2b() {
 	$CHECKSTAT -t file -p 0777 $DIR2/f2b || error
 }
 run_test 2b "check cached attribute updates on 2 mtpt's ========"
+
+# NEED TO SAVE ROOT DIR MODE
+test_2c() {
+	chmod 777 $DIR1
+	$CHECKSTAT -t dir -p 0777 $DIR2 || error
+}
+run_test 2c "check cached attribute updates on 2 mtpt's root ==="
+
+test_2d() {
+	chmod 755 $DIR1
+	$CHECKSTAT -t dir -p 0755 $DIR2 || error
+}
+run_test 2c "check cached attribute updates on 2 mtpt's root ==="
 
 test_3() {
 	( cd $DIR1 ; ln -s this/is/good lnk )
@@ -205,4 +218,19 @@ test_10() {
 }
 run_test 10 "write of file with sub-page size on multiple mounts "
 
-rm -f $DIR1/f[0-9]* $DIR1/lnk
+test_11() {
+	mkdir $DIR1/d11
+	multiop $DIR1/d11/f O_c &
+	MULTIPID=$!
+	cp -p /bin/ls $DIR1/d11/f
+	$DIR2/d11/f
+	RC=$?
+	kill -USR1 $MULTIPID
+	wait $MULTIPID || error
+	[ $RC -eq 0 ] && error || true
+}
+run_test 11 "execution of file opened for write should return error ===="
+
+log "cleanup: ======================================================"
+rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
+echo '=========================== finished ==============================='

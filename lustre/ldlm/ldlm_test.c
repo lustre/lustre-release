@@ -197,7 +197,7 @@ int ldlm_test_basics(struct obd_device *obddev)
                 ldlm_reprocess_all(res);
 
         ldlm_resource_dump(res);
-        ldlm_namespace_free(ns);
+        ldlm_namespace_free(ns, 0);
 
         RETURN(0);
 }
@@ -267,7 +267,7 @@ int ldlm_test_extents(struct obd_device *obddev)
         if (res == NULL)
                 LBUG();
         ldlm_resource_dump(res);
-        ldlm_namespace_free(ns);
+        ldlm_namespace_free(ns, 0);
 
         RETURN(0);
 }

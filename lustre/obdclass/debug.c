@@ -23,7 +23,9 @@
 
 #define DEBUG_SUBSYSTEM D_OTHER
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #ifndef __KERNEL__
 # include <liblustre.h>
 #endif
@@ -82,15 +84,15 @@ int dump_obdo(struct obdo *oa)
                        oa->o_mode & ((valid & OBD_MD_FLTYPE ?  S_IFMT : 0) |
                                      (valid & OBD_MD_FLMODE ? ~S_IFMT : 0)));
         if (valid & OBD_MD_FLUID)
-                CERROR("obdo: o_uid = %d\n", oa->o_uid);
+                CERROR("obdo: o_uid = %u\n", oa->o_uid);
         if (valid & OBD_MD_FLGID)
-                CERROR("obdo: o_gid = %d\n", oa->o_gid);
+                CERROR("obdo: o_gid = %u\n", oa->o_gid);
         if (valid & OBD_MD_FLFLAGS)
                 CERROR("obdo: o_flags = %x\n", oa->o_flags);
         if (valid & OBD_MD_FLNLINK)
-                CERROR("obdo: o_nlink = %d\n", oa->o_nlink);
+                CERROR("obdo: o_nlink = %u\n", oa->o_nlink);
         if (valid & OBD_MD_FLGENER)
-                CERROR("obdo: o_generation = %d\n", oa->o_generation);
+                CERROR("obdo: o_generation = %u\n", oa->o_generation);
 
         return -EINVAL;
 }
