@@ -19,8 +19,12 @@ insmod $R/usr/src/obd/mds/mds.o || exit -1
 insmod $R/usr/src/obd/mdc/mdc.o || exit -1
 insmod $R/usr/src/obd/llight/llight.o || exit -1
 
+$R/usr/src/obd/utils/obdctl modules > $R/tmp/ogdb
+echo "The GDB module script is in /tmp/ogdb.  Press enter to continue"
+read
+
 $R/usr/src/portals/linux/utils/ptlctl <<EOF
-mynid
+mynid localhost
 setup tcp
 connect localhost 1234
 add_uuid self
