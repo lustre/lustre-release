@@ -43,7 +43,8 @@ lgmnal_cmd(struct portal_ioctl_data *data, void *private)
 	gm_status_t	gm_status;
 
 
-	CDEBUG(D_TRACE, "lgmnal_cmd [%d] private [%p]\n", data->ioc_nal_cmd, private);
+	CDEBUG(D_TRACE, "lgmnal_cmd [%d] private [%p]\n", 
+	       data->ioc_nal_cmd, private);
 	nal_data = (lgmnal_data_t*)private;
 	switch(data->ioc_nal_cmd) {
 	/*
@@ -59,10 +60,12 @@ lgmnal_cmd(struct portal_ioctl_data *data, void *private)
 		LGMNAL_GM_UNLOCK(nal_data);
 		CDEBUG(D_INFO, "Local node id is [%d]\n", nid);
 		LGMNAL_GM_LOCK(nal_data);
-		gm_status = gm_node_id_to_global_id(nal_data->gm_port, nid, &gnid);
+		gm_status = gm_node_id_to_global_id(nal_data->gm_port, 
+						    nid, &gnid);
 		LGMNAL_GM_UNLOCK(nal_data);
 		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n", gm_status);
+			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n", 
+			       gm_status);
 			return(-1);
 		}
 		CDEBUG(D_INFO, "Global node is is [%u][%x]\n", gnid, gnid);
@@ -107,7 +110,7 @@ lgmnal_load(void)
 
 	CDEBUG(D_INFO, "Calling PORTAL_SYMBOL_REGISTER\n");
 	PORTAL_SYMBOL_REGISTER(lgmnal_ni);
-	CDEBUG(D_INFO, "This is the end of the lgmnal module initialisation routine");
+	CDEBUG(D_INFO, "This is the end of the lgmnal init routine");
 
 
 	return(0);

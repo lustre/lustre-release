@@ -44,9 +44,8 @@ lgmnal_is_rxthread(lgmnal_data_t *nal_data)
  *	so they are wired and set up for DMA. This is a costly operation.
  *	Also allocate a corrosponding descriptor to keep track of 
  *	the buffer.
- *	Put all descriptors on singly linked list to be available to send function.
- *	This function is only called when the API mutex is held (init or shutdown),
- *	so there is no need to hold the txd spinlock.
+ *	Put all descriptors on singly linked list to be available to send 
+ *	function.
  */
 int
 lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
@@ -91,10 +90,13 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 			return(LGMNAL_STATUS_NOMEM);
 		}
 		LGMNAL_GM_LOCK(nal_data);
-		txbuffer = gm_dma_malloc(nal_data->gm_port, LGMNAL_SMALL_MSG_SIZE(nal_data));
+		txbuffer = gm_dma_malloc(nal_data->gm_port, 
+					 LGMNAL_SMALL_MSG_SIZE(nal_data));
 		LGMNAL_GM_UNLOCK(nal_data);
 		if (!txbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d], size [%d]\n", i, LGMNAL_SMALL_MSG_SIZE(nal_data));
+			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d],
+			       size [%d]\n", i, 
+			       LGMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(txd, sizeof(lgmnal_stxd_t));
 			return(LGMNAL_STATUS_FAIL);
 		}
@@ -106,7 +108,8 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 
 		txd->next = nal_data->stxd;
 		nal_data->stxd = txd;
-		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], 
+		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
 	}
 
 	for (i=0; i<=nrxt_stx; i++) {
@@ -116,10 +119,13 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 			return(LGMNAL_STATUS_NOMEM);
 		}
 		LGMNAL_GM_LOCK(nal_data);
-		txbuffer = gm_dma_malloc(nal_data->gm_port, LGMNAL_SMALL_MSG_SIZE(nal_data));
+		txbuffer = gm_dma_malloc(nal_data->gm_port, 
+					 LGMNAL_SMALL_MSG_SIZE(nal_data));
 		LGMNAL_GM_UNLOCK(nal_data);
 		if (!txbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d], size [%d]\n", i, LGMNAL_SMALL_MSG_SIZE(nal_data));
+			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d],
+			       size [%d]\n", i, 
+			       LGMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(txd, sizeof(lgmnal_stxd_t));
 			return(LGMNAL_STATUS_FAIL);
 		}
@@ -131,16 +137,15 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 
 		txd->next = nal_data->rxt_stxd;
 		nal_data->rxt_stxd = txd;
-		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], 
+		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
 	}
 
 	return(LGMNAL_STATUS_OK);
 }
 
-/*	Free the list of wired and gm_registered small tx buffers and the tx descriptors
-  	that go along with them.
- *	This function is only called when the API mutex is held (init or shutdown),
- *	so there is no need to hold the txd spinlock.
+/*	Free the list of wired and gm_registered small tx buffers and 
+ *	the tx descriptors that go along with them.
  */
 void
 lgmnal_free_stxd(lgmnal_data_t *nal_data)
@@ -150,7 +155,8 @@ lgmnal_free_stxd(lgmnal_data_t *nal_data)
 	CDEBUG(D_TRACE, "lgmnal_free_small tx\n");
 
 	while(txd) {
-		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], 
+		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
 		_txd = txd;
 		txd = txd->next;
 		LGMNAL_GM_LOCK(nal_data);
@@ -160,7 +166,8 @@ lgmnal_free_stxd(lgmnal_data_t *nal_data)
 	}
         txd = nal_data->rxt_stxd;
 	while(txd) {
-		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], 
+		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
 		_txd = txd;
 		txd = txd->next;
 		LGMNAL_GM_LOCK(nal_data);
@@ -186,7 +193,7 @@ lgmnal_get_stxd(lgmnal_data_t *nal_data, int block)
 
 
 	CDEBUG(D_TRACE, "lgmnal_get_stxd nal_data [%p] block[%d] pid [%d]\n", 
-						nal_data, block, pid);
+	       nal_data, block, pid);
 
 	if (lgmnal_is_rxthread(nal_data)) {
                 CDEBUG(D_INFO, "RXTHREAD Attempting to get token\n");
@@ -196,7 +203,8 @@ lgmnal_get_stxd(lgmnal_data_t *nal_data, int block)
 	        if (txd)
 		        nal_data->rxt_stxd = txd->next;
 	        LGMNAL_RXT_TXD_UNLOCK(nal_data);
-	        CDEBUG(D_INFO, "lgmnal_get_stxd RXTHREAD got [%p], head is [%p]\n", txd, nal_data->rxt_stxd);
+	        CDEBUG(D_INFO, "RXTHREAD got [%p], head is [%p]\n", 
+		       txd, nal_data->rxt_stxd);
                 txd->kniov = 0;
                 txd->rxt = 1;
         } else {
@@ -206,7 +214,7 @@ lgmnal_get_stxd(lgmnal_data_t *nal_data, int block)
                         CDEBUG(D_PORTALS, "Got token\n");
 	        } else {
 		        if (LGMNAL_TXD_TRYGETTOKEN(nal_data)) {
-			        CDEBUG(D_ERROR, "lgmnal_get_stxd can't get token\n");
+			        CDEBUG(D_ERROR, "can't get token\n");
 			        return(NULL);
 		        }
 	        }
@@ -215,7 +223,8 @@ lgmnal_get_stxd(lgmnal_data_t *nal_data, int block)
 	        if (txd)
 		        nal_data->stxd = txd->next;
 	        LGMNAL_TXD_UNLOCK(nal_data);
-	        CDEBUG(D_INFO, "lgmnal_get_stxd got [%p], head is [%p]\n", txd, nal_data->stxd);
+	        CDEBUG(D_INFO, "got [%p], head is [%p]\n", txd, 
+		       nal_data->stxd);
                 txd->kniov = 0;
         }       /* general txd get */
 	return(txd);
@@ -227,7 +236,8 @@ lgmnal_get_stxd(lgmnal_data_t *nal_data, int block)
 void
 lgmnal_return_stxd(lgmnal_data_t *nal_data, lgmnal_stxd_t *txd)
 {
-	CDEBUG(D_TRACE, "lgmnal_return_stxd nal_data [%p], txd[%p] rxt[%d]\n", nal_data, txd, txd->rxt);
+	CDEBUG(D_TRACE, "nal_data [%p], txd[%p] rxt[%d]\n", nal_data, 
+	       txd, txd->rxt);
 
         /*
          *      this transmit descriptor is 
@@ -257,9 +267,8 @@ lgmnal_return_stxd(lgmnal_data_t *nal_data, lgmnal_stxd_t *txd)
  *	so they are wired and set up for DMA. This is a costly operation.
  *	Also allocate a corrosponding descriptor to keep track of 
  *	the buffer.
- *	Put all descriptors on singly linked list to be available to receive thread.
- *	This function is only called when the API mutex is held (init or shutdown),
- *	so there is no need to hold the rxd spinlock.
+ *	Put all descriptors on singly linked list to be available to 
+ *	receive thread.
  */
 int
 lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
@@ -273,16 +282,19 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 	LGMNAL_GM_LOCK(nal_data);
 	nrx = gm_num_receive_tokens(nal_data->gm_port);
 	LGMNAL_GM_UNLOCK(nal_data);
-	CDEBUG(D_INFO, "total number of receive tokens available is [%d]\n", nrx);
+	CDEBUG(D_INFO, "total number of receive tokens available is [%d]\n", 
+	       nrx);
 	
 	nsrx = nrx/2;
 	nsrx = 12;
 
-	CDEBUG(D_INFO, "Allocated [%d] receive tokens to small messages\n", nsrx);
+	CDEBUG(D_INFO, "Allocated [%d] receive tokens to small messages\n", 
+	       nsrx);
 
 
 	LGMNAL_GM_LOCK(nal_data);
-	nal_data->srxd_hash = gm_create_hash(gm_hash_compare_ptrs, gm_hash_hash_ptr, 0, 0, nsrx, 0);
+	nal_data->srxd_hash = gm_create_hash(gm_hash_compare_ptrs, 
+					     gm_hash_hash_ptr, 0, 0, nsrx, 0);
 	LGMNAL_GM_UNLOCK(nal_data);
 	if (!nal_data->srxd_hash) {
 			CDEBUG(D_ERROR, "Failed to create hash table\n");
@@ -301,29 +313,35 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 #if 0
 		PORTAL_ALLOC(rxbuffer, LGMNAL_SMALL_MSG_SIZE(nal_data));
 		if (!rxbuffer) {
-			CDEBUG(D_ERROR, "Failed to malloc rxbuffer [%d], size [%d]\n", i, LGMNAL_SMALL_MSG_SIZE(nal_data));
+			CDEBUG(D_ERROR, "Failed to malloc rxbuffer [%d], 
+			       size [%d]\n", i, 
+			       LGMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(rxd, sizeof(lgmnal_srxd_t));
 			return(LGMNAL_STATUS_FAIL);
 		}
-		CDEBUG(D_NET, "Calling gm_register_memory with port [%p] rxbuffer [%p], size [%d]\n",
-				nal_data->gm_port, rxbuffer, LGMNAL_SMALL_MSG_SIZE(nal_data));
+		CDEBUG(D_NET, "Calling gm_register_memory with port [%p] 
+		       rxbuffer [%p], size [%d]\n", nal_data->gm_port, 
+		       rxbuffer, LGMNAL_SMALL_MSG_SIZE(nal_data));
 		LGMNAL_GM_LOCK(nal_data);
-		gm_status = gm_register_memory(nal_data->gm_port, rxbuffer, LGMNAL_SMALL_MSG_SIZE(nal_data));
+		gm_status = gm_register_memory(nal_data->gm_port, rxbuffer, 
+					       LGMNAL_SMALL_MSG_SIZE(nal_data));
 		LGMNAL_GM_UNLOCK(nal_data);
 		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_ERROR, "gm_register_memory failed buffer [%p], index [%d]\n", rxbuffer, i);
+			CDEBUG(D_ERROR, "gm_register_memory failed buffer [%p],
+			       index [%d]\n", rxbuffer, i);
 			switch(gm_status) {
 				case(GM_FAILURE):
 					CDEBUG(D_ERROR, "GM_FAILURE\n");
 				break;
 				case(GM_PERMISSION_DENIED):
-					CDEBUG(D_ERROR, "GM_PERMISSION_DENIED\n");
+					CDEBUG(D_ERROR, "PERMISSION_DENIED\n");
 				break;
 				case(GM_INVALID_PARAMETER):
-					CDEBUG(D_ERROR, "GM_INVALID_PARAMETER\n");
+					CDEBUG(D_ERROR, "INVALID_PARAMETER\n");
 				break;
 				default:
-					CDEBUG(D_ERROR, "Unknown GM error[%d]\n", gm_status);
+					CDEBUG(D_ERROR, "Unknown error[%d]\n", 
+					       gm_status);
 				break;
 				
 			}
@@ -331,10 +349,13 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 		}
 #else
 		LGMNAL_GM_LOCK(nal_data);
-		rxbuffer = gm_dma_malloc(nal_data->gm_port, LGMNAL_SMALL_MSG_SIZE(nal_data));
+		rxbuffer = gm_dma_malloc(nal_data->gm_port, 
+					 LGMNAL_SMALL_MSG_SIZE(nal_data));
 		LGMNAL_GM_UNLOCK(nal_data);
 		if (!rxbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc rxbuffer [%d], size [%d]\n", i, LGMNAL_SMALL_MSG_SIZE(nal_data));
+			CDEBUG(D_ERROR, "Failed to gm_dma_malloc rxbuffer [%d],
+			       size [%d]\n", i, 
+			       LGMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(rxd, sizeof(lgmnal_srxd_t));
 			return(LGMNAL_STATUS_FAIL);
 		}
@@ -344,14 +365,18 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 		rxd->size = LGMNAL_SMALL_MSG_SIZE(nal_data);
 		rxd->gmsize = gm_min_size_for_length(rxd->size);
 
-		if (gm_hash_insert(nal_data->srxd_hash, (void*)rxbuffer, (void*)rxd)) {
-			CDEBUG(D_ERROR, "failed to create hash entry rxd[%p] for rxbuffer[%p]\n", rxd, rxbuffer);
+		if (gm_hash_insert(nal_data->srxd_hash, 
+				   (void*)rxbuffer, (void*)rxd)) {
+
+			CDEBUG(D_ERROR, "failed to create hash entry rxd[%p] 
+			       for rxbuffer[%p]\n", rxd, rxbuffer);
 			return(LGMNAL_STATUS_FAIL);
 		}
 
 		rxd->next = nal_data->srxd;
 		nal_data->srxd = rxd;
-		CDEBUG(D_INFO, "Registered rxd [%p] with buffer [%p], size [%d]\n", rxd, rxd->buffer, rxd->size);
+		CDEBUG(D_INFO, "Registered rxd [%p] with buffer [%p], 
+		       size [%d]\n", rxd, rxd->buffer, rxd->size);
 	}
 
 	return(LGMNAL_STATUS_OK);
@@ -359,10 +384,8 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 
 
 
-/*	Free the list of wired and gm_registered small rx buffers and the rx descriptors
- *	that go along with them.
- *	This function is only called when the API mutex is held (init or shutdown),
- *	so there is no need to hold the rxd spinlock.
+/*	Free the list of wired and gm_registered small rx buffers and the 
+ *	rx descriptors that go along with them.
  */
 void
 lgmnal_free_srxd(lgmnal_data_t *nal_data)
@@ -372,13 +395,15 @@ lgmnal_free_srxd(lgmnal_data_t *nal_data)
 	CDEBUG(D_TRACE, "lgmnal_free_small rx\n");
 
 	while(rxd) {
-		CDEBUG(D_INFO, "Freeing rxd [%p] with buffer [%p], size [%d]\n", rxd, rxd->buffer, rxd->size);
+		CDEBUG(D_INFO, "Freeing rxd [%p] buffer [%p], size [%d]\n",
+		       rxd, rxd->buffer, rxd->size);
 		_rxd = rxd;
 		rxd = rxd->next;
 
 #if 0
 		LGMNAL_GM_LOCK(nal_data);
-		gm_deregister_memory(nal_data->gm_port, _rxd->buffer, _rxd->size);
+		gm_deregister_memory(nal_data->gm_port, _rxd->buffer, 
+				     _rxd->size);
 		LGMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(_rxd->buffer, LGMNAL_SMALL_RXBUFFER_SIZE);
 #else
@@ -402,7 +427,7 @@ lgmnal_get_srxd(lgmnal_data_t *nal_data, int block)
 {
 
 	lgmnal_srxd_t	*rxd = NULL;
-	CDEBUG(D_TRACE, "lgmnal_get_srxd nal_data [%p] block [%d]\n", nal_data, block);
+	CDEBUG(D_TRACE, "nal_data [%p] block [%d]\n", nal_data, block);
 
 	if (block) {
 		LGMNAL_RXD_GETTOKEN(nal_data);
@@ -417,7 +442,7 @@ lgmnal_get_srxd(lgmnal_data_t *nal_data, int block)
 	if (rxd)
 		nal_data->srxd = rxd->next;
 	LGMNAL_RXD_UNLOCK(nal_data);
-	CDEBUG(D_INFO, "lgmnal_get_srxd got [%p], head is [%p]\n", rxd, nal_data->srxd);
+	CDEBUG(D_INFO, "got [%p], head is [%p]\n", rxd, nal_data->srxd);
 	return(rxd);
 }
 
@@ -427,7 +452,7 @@ lgmnal_get_srxd(lgmnal_data_t *nal_data, int block)
 void
 lgmnal_return_srxd(lgmnal_data_t *nal_data, lgmnal_srxd_t *rxd)
 {
-	CDEBUG(D_TRACE, "lgmnal_return_srxd nal_data [%p], rxd[%p]\n", nal_data, rxd);
+	CDEBUG(D_TRACE, "nal_data [%p], rxd[%p]\n", nal_data, rxd);
 
 	LGMNAL_RXD_LOCK(nal_data);
 	rxd->next = nal_data->srxd;
@@ -448,7 +473,7 @@ lgmnal_srxd_t *
 lgmnal_rxbuffer_to_srxd(lgmnal_data_t *nal_data, void *rxbuffer)
 {
 	lgmnal_srxd_t	*srxd = NULL;
-	CDEBUG(D_TRACE, "lgmnal_rxbuffer_to_srxd nal_data [%p], rxbuffer [%p]\n", nal_data, rxbuffer);
+	CDEBUG(D_TRACE, "nal_data [%p], rxbuffer [%p]\n", nal_data, rxbuffer);
 	srxd = gm_hash_find(nal_data->srxd_hash, rxbuffer);
 	CDEBUG(D_INFO, "srxd is [%p]\n", srxd);
 	return(srxd);
@@ -462,7 +487,8 @@ lgmnal_stop_rxthread(lgmnal_data_t *nal_data)
 
 
 
-	CDEBUG(D_TRACE, "Attempting to stop rxthread nal_data [%p]\n", nal_data);
+	CDEBUG(D_TRACE, "Attempting to stop rxthread nal_data [%p]\n", 
+	        nal_data);
 	
 	nal_data->rxthread_stop_flag = LGMNAL_THREAD_STOP;
 
@@ -479,9 +505,9 @@ lgmnal_stop_rxthread(lgmnal_data_t *nal_data)
 	}
 
 	if (nal_data->rxthread_flag != LGMNAL_THREAD_RESET) {
-		CDEBUG(D_ERROR, "I DON'T KNOW HOW TO WAKE THE THREAD\n");
+		CDEBUG(D_ERROR, "I don't know how to wake the thread\n");
 	} else {
-		CDEBUG(D_INFO, "RX THREAD SEEMS TO HAVE STOPPED\n");
+		CDEBUG(D_INFO, "rx thread seems to have stopped\n");
 	}
 }
 
@@ -492,11 +518,13 @@ lgmnal_stop_ctthread(lgmnal_data_t *nal_data)
 
 
 
-	CDEBUG(D_TRACE, "Attempting to stop ctthread nal_data [%p]\n", nal_data);
+	CDEBUG(D_TRACE, "Attempting to stop ctthread nal_data [%p]\n", 
+	       nal_data);
 	
 	nal_data->ctthread_flag = LGMNAL_THREAD_STOP;
 	LGMNAL_GM_LOCK(nal_data);
-	gm_set_alarm(nal_data->gm_port, &nal_data->ctthread_alarm, 10, NULL, NULL);
+	gm_set_alarm(nal_data->gm_port, &nal_data->ctthread_alarm, 10, 
+		     NULL, NULL);
 	LGMNAL_GM_UNLOCK(nal_data);
 
 	while(nal_data->ctthread_flag == LGMNAL_THREAD_STOP && delay--) {
@@ -767,11 +795,16 @@ lgmnal_yield(int delay)
 }
 
 int
-lgmnal_is_small_message(lgmnal_data_t *nal_data, int niov, struct iovec *iov, int len)
+lgmnal_is_small_msg(lgmnal_data_t *nal_data, int niov, struct iovec *iov, 
+		    int len)
 {
 
-	CDEBUG(D_TRACE, "lgmnal_is_small_message len [%d] limit[%d]\n", len, LGMNAL_SMALL_MSG_SIZE(nal_data));
-	if ((len + sizeof(ptl_hdr_t) + sizeof(lgmnal_msghdr_t)) < LGMNAL_SMALL_MSG_SIZE(nal_data)) {
+	CDEBUG(D_TRACE, "len [%d] limit[%d]\n", len, 
+	       LGMNAL_SMALL_MSG_SIZE(nal_data));
+
+	if ((len + sizeof(ptl_hdr_t) + sizeof(lgmnal_msghdr_t)) 
+	             < LGMNAL_SMALL_MSG_SIZE(nal_data)) {
+
 		CDEBUG(D_INFO, "Yep, small message\n");
 		return(1);
 	} else {
@@ -887,7 +920,8 @@ lgmnal_start_kernel_threads(lgmnal_data_t *nal_data)
 
 
 	CDEBUG(D_INFO, "Starting caretaker thread\n");
-	nal_data->ctthread_pid = kernel_thread(lgmnal_ct_thread, (void*)nal_data, 0);
+	nal_data->ctthread_pid = 
+	         kernel_thread(lgmnal_ct_thread, (void*)nal_data, 0);
 	if (nal_data->ctthread_pid <= 0) {
 		CDEBUG(D_ERROR, "Caretaker thread failed to start\n");
 		return(LGMNAL_STATUS_FAIL);
@@ -923,7 +957,8 @@ lgmnal_start_kernel_threads(lgmnal_data_t *nal_data)
                 num_rx_threads = smp_num_cpus;
 	CDEBUG(D_INFO, "Starting [%d] receive threads\n", num_rx_threads);
 	for (threads=0; threads<num_rx_threads; threads++) {
-		nal_data->rxthread_pid[threads] = kernel_thread(lgmnal_rx_thread, (void*)nal_data, 0);
+		nal_data->rxthread_pid[threads] = 
+		       kernel_thread(lgmnal_rx_thread, (void*)nal_data, 0);
 		if (nal_data->rxthread_pid[threads] <= 0) {
 			CDEBUG(D_ERROR, "Receive thread failed to start\n");
 			lgmnal_stop_rxthread(nal_data);
@@ -940,7 +975,6 @@ lgmnal_start_kernel_threads(lgmnal_data_t *nal_data)
 		}
 		spin_unlock(&nal_data->rxthread_flag_lock);
 		lgmnal_yield(1);
-		CDEBUG(D_INFO, "Waiting for receive thread signs of life is [%ld] e[%d]\n", nal_data->rxthread_flag, LGMNAL_RXTHREADS_STARTED);
 	}
 
 	CDEBUG(D_INFO, "receive threads seem to have started\n");

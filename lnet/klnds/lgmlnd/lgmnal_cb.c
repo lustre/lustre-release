@@ -27,25 +27,28 @@
 
 #include "lgmnal.h"
 
-int lgmnal_cb_recv(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned int niov, struct iovec *iov, size_t mlen, size_t rlen)
+int lgmnal_cb_recv(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+		   unsigned int niov, struct iovec *iov, size_t mlen, 
+		   size_t rlen)
 {
 	lgmnal_srxd_t	*srxd = (lgmnal_srxd_t*)private;
 	int		status = PTL_OK;
 
 
-	CDEBUG(D_TRACE, "lgmnal_cb_recv nal_cb [%p], private[%p], cookie[%p], niov[%d], iov [%p], mlen["LPSZ"], rlen["LPSZ"]\n", nal_cb, private, cookie, niov, iov, mlen, rlen);
+	CDEBUG(D_TRACE, "lgmnal_cb_recv nal_cb [%p], private[%p], cookie[%p], 
+	       niov[%d], iov [%p], mlen["LPSZ"], rlen["LPSZ"]\n", 
+	       nal_cb, private, cookie, niov, iov, mlen, rlen);
 
-	if (niov == 0) {
-		CDEBUG(D_INFO, "lgmnal_cb_recv Context [%p] nriov is ZERO\n", private);
-	}
 	switch(srxd->type) {
 	case(LGMNAL_SMALL_MESSAGE):
 		CDEBUG(D_INFO, "lgmnal_cb_recv got small message\n");
-		status = lgmnal_small_rx(nal_cb, private, cookie, niov, iov, mlen, rlen);
+		status = lgmnal_small_rx(nal_cb, private, cookie, niov, 
+				         iov, mlen, rlen);
 	break;
 	case(LGMNAL_LARGE_MESSAGE_INIT):
 		CDEBUG(D_INFO, "lgmnal_cb_recv got large message init\n");
-		status = lgmnal_large_rx(nal_cb, private, cookie, niov, iov, mlen, rlen);
+		status = lgmnal_large_rx(nal_cb, private, cookie, niov, 
+					 iov, mlen, rlen);
 	}
 		
 
@@ -53,7 +56,9 @@ int lgmnal_cb_recv(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned 
 	return(status);
 }
 
-int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned int kniov, ptl_kiov_t *kiov, size_t mlen, size_t rlen)
+int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+			 unsigned int kniov, ptl_kiov_t *kiov, size_t mlen, 
+			 size_t rlen)
 {
 	lgmnal_srxd_t	*srxd = (lgmnal_srxd_t*)private;
 	int		status = PTL_OK;
@@ -61,7 +66,9 @@ int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, uns
 	int		i = 0;
 
 
-	CDEBUG(D_TRACE, "lgmnal_cb_recv_pages nal_cb [%p],private[%p], cookie[%p], kniov[%d], kiov [%p], mlen["LPSZ"], rlen["LPSZ"]\n", nal_cb, private, cookie, kniov, kiov, mlen, rlen);
+	CDEBUG(D_TRACE, "lgmnal_cb_recv_pages nal_cb [%p],private[%p], 
+	       cookie[%p], kniov[%d], kiov [%p], mlen["LPSZ"], rlen["LPSZ"]\n",
+	       nal_cb, private, cookie, kniov, kiov, mlen, rlen);
 
 	if (srxd->type == LGMNAL_SMALL_MESSAGE) {
 		PORTAL_ALLOC(iovec, sizeof(struct iovec)*kniov);
@@ -76,16 +83,22 @@ int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, uns
 		 */
 		for (i=0; i<kniov; i++) {
 			CDEBUG(D_INFO, "processing kniov [%d] [%p]\n", i, kiov);
-			CDEBUG(D_INFO, "kniov page [%p] len [%d] offset[%d]\n", kiov->kiov_page, kiov->kiov_len, kiov->kiov_offset);
+			CDEBUG(D_INFO, "kniov page [%p] len [%d] offset[%d]\n",
+		 	       kiov->kiov_page, kiov->kiov_len, 
+			       kiov->kiov_offset);
 			iovec->iov_len = kiov->kiov_len;
 			CDEBUG(D_INFO, "Calling kmap[%p]", kiov->kiov_page);
-			iovec->iov_base = kmap(kiov->kiov_page) + kiov->kiov_offset;
+
+			iovec->iov_base = kmap(kiov->kiov_page) + 
+					          kiov->kiov_offset;
+
 			CDEBUG(D_INFO, "iov_base is [%p]\n", iovec->iov_base);
                         iovec++;
                         kiov++;
 		}
 		CDEBUG(D_INFO, "calling lgmnal_small_rx\n");
-		status = lgmnal_small_rx(nal_cb, private, cookie, kniov, iovec_dup, mlen, rlen);
+		status = lgmnal_small_rx(nal_cb, private, cookie, kniov, 
+				         iovec_dup, mlen, rlen);
 		PORTAL_FREE(iovec_dup, sizeof(struct iovec)*kniov);
 	}
 		
@@ -95,30 +108,34 @@ int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, uns
 }
 
 
-int lgmnal_cb_send(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl_hdr_t *hdr,
-	int type, ptl_nid_t nid, ptl_pid_t pid, unsigned int niov, struct iovec *iov, size_t len)
+int lgmnal_cb_send(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+		   ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid, 
+		   unsigned int niov, struct iovec *iov, size_t len)
 {
 
 	lgmnal_data_t	*nal_data;
 
 
-	CDEBUG(D_TRACE, "lgmnal_cb_send niov[%d] len["LPSZ"] nid["LPU64"]\n", niov, len, nid);
+	CDEBUG(D_TRACE, "lgmnal_cb_send niov[%d] len["LPSZ"] nid["LPU64"]\n", 
+	       niov, len, nid);
 	nal_data = nal_cb->nal_data;
 	
 	if (LGMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, len)) {
 		CDEBUG(D_INFO, "This is a small message send\n");
-		lgmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, pid, niov, iov, len);
+		lgmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, pid, 
+			       	niov, iov, len);
 	} else {
-		CDEBUG(D_ERROR, "This is a large message send it is not supported yet\n");
+		CDEBUG(D_ERROR, "Large message send it is not supported\n");
 		lib_finalize(nal_cb, private, cookie);
 		return(PTL_FAIL);
-		lgmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, niov, iov, len);
+		lgmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, 
+				niov, iov, len);
 	}
 	return(PTL_OK);
 }
 
-int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl_hdr_t *hdr,
-	int type, ptl_nid_t nid, ptl_pid_t pid, unsigned int kniov, ptl_kiov_t *kiov, size_t len)
+int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+			 ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid, 			 unsigned int kniov, ptl_kiov_t *kiov, size_t len)
 {
 
 	int	i = 0;
@@ -134,49 +151,58 @@ int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl
 		
 		for (i=0; i<kniov; i++) {
 			CDEBUG(D_INFO, "processing kniov [%d] [%p]\n", i, kiov);
-			CDEBUG(D_INFO, "kniov page [%p] len [%d] offset[%d]\n", kiov->kiov_page, kiov->kiov_len, kiov->kiov_offset);
-			iovec->iov_len = kiov->kiov_len;
-			iovec->iov_base = kmap(kiov->kiov_page) + kiov->kiov_offset;
+			CDEBUG(D_INFO, "kniov page [%p] len [%d] offset[%d]\n",
+			       kiov->kiov_page, kiov->kiov_len, 
+			       kiov->kiov_offset);
+
+			iovec->iov_base = kmap(kiov->kiov_page) 
+					        + kiov->kiov_offset;
+
 			iovec->iov_len = kiov->kiov_len;
                         iovec++;
                         kiov++;
 		}
-		lgmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, pid, kniov, iovec_dup, len);
+		lgmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, 
+				pid, kniov, iovec_dup, len);
 	} else {
-		CDEBUG(D_ERROR, "lgmnal_cb_send_pages This is a large message send it is not supported yet\n");
+		CDEBUG(D_ERROR, "Large message send it is not supported yet\n");
 		return(PTL_FAIL);
 		for (i=0; i<kniov; i++) {
 			CDEBUG(D_INFO, "processing kniov [%d] [%p]\n", i, kiov);
-			CDEBUG(D_INFO, "kniov page [%p] len [%d] offset[%d]\n", kiov->kiov_page, kiov->kiov_len, kiov->kiov_offset);
-			iovec->iov_len = kiov->kiov_len;
-			iovec->iov_base = kmap(kiov->kiov_page) + kiov->kiov_offset;
+			CDEBUG(D_INFO, "kniov page [%p] len [%d] offset[%d]\n",
+			       kiov->kiov_page, kiov->kiov_len, 
+			       kiov->kiov_offset);
+
+			iovec->iov_base = kmap(kiov->kiov_page) 
+					         + kiov->kiov_offset;
 			iovec->iov_len = kiov->kiov_len;
                         iovec++;
                         kiov++;
 		}
-		lgmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, kniov, iovec, len);
+		lgmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, 
+				pid, kniov, iovec, len);
 	}
 	PORTAL_FREE(iovec_dup, kniov*sizeof(struct iovec));
 	return(PTL_OK);
 }
 
-int lgmnal_cb_read(nal_cb_t *nal_cb, void *private, void *dst, user_ptr src, size_t len)
+int lgmnal_cb_read(nal_cb_t *nal_cb, void *private, void *dst, 
+		   user_ptr src, size_t len)
 {
-	CDEBUG(D_TRACE, "lgmnal_cb_read dst [%p] src [%p] len["LPSZ"]\n", dst, src, len);
 	gm_bcopy(src, dst, len);
 	return(PTL_OK);
 }
 
-int lgmnal_cb_write(nal_cb_t *nal_cb, void *private, user_ptr dst, void *src, size_t len)
+int lgmnal_cb_write(nal_cb_t *nal_cb, void *private, user_ptr dst, 
+		    void *src, size_t len)
 {
-	CDEBUG(D_TRACE, "lgmnal_cb_write :: dst [%p] src [%p] len["LPSZ"]\n", dst, src, len);
 	gm_bcopy(src, dst, len);
 	return(PTL_OK);
 }
 
-int lgmnal_cb_callback(nal_cb_t *nal_cb, void *private, lib_eq_t *eq, ptl_event_t *ev)
+int lgmnal_cb_callback(nal_cb_t *nal_cb, void *private, lib_eq_t *eq, 
+		       ptl_event_t *ev)
 {
-	CDEBUG(D_TRACE, "lgmnal_cb_callback nal_cb[%p], private[%p], eq[%p], ev[%p]\n", nal_cb, private, eq, ev);
 
 	if (eq->event_callback != NULL) {
 		CDEBUG(D_INFO, "found callback\n");
@@ -201,15 +227,15 @@ void lgmnal_cb_free(nal_cb_t *nal_cb, void *buf, size_t len)
 	return;
 }
 
-void lgmnal_cb_unmap(nal_cb_t *nal_cb, unsigned int niov, struct iovec *iov, void **addrkey)
+void lgmnal_cb_unmap(nal_cb_t *nal_cb, unsigned int niov, struct iovec *iov, 
+		     void **addrkey)
 {
-	CDEBUG(D_TRACE, "lgmnal_cb_unmap niov[%d] iov[%p], addrkey[%p]\n", niov, iov, addrkey);
 	return;
 }
 
-int  lgmnal_cb_map(nal_cb_t *nal_cb, unsigned int niov, struct iovec *iov, void**addrkey)
+int  lgmnal_cb_map(nal_cb_t *nal_cb, unsigned int niov, struct iovec *iov, 
+		   void**addrkey)
 {
-	CDEBUG(D_TRACE, "lgmnal_cb_map niov[%d], iov[%p], addrkey[%p]\n", niov, iov, addrkey);
 	return(PTL_OK);
 }
 

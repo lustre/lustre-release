@@ -33,8 +33,8 @@ lgmnal_data_t	*global_nal_data = NULL;
  *	the args and calls the appropriate function indicated by index.
  *	Typically this function is used to pass args between kernel and use
  *	space.
- *	As lgmanl exists entirely in kernel, just pass the arg block directly to
- *	the NAL CB, buy passing the args to lib_dispatch
+ *	As lgmanl exists entirely in kernel, just pass the arg block directly 
+ *	to the NAL CB, buy passing the args to lib_dispatch
  *	Arguments are
  *	nal_t	nal 	Our nal
  *	int	index	the api function that initiated this call 
@@ -56,7 +56,6 @@ lgmnal_api_forward(nal_t *nal, int index, void *args, size_t arg_len,
 
 
 
-	CDEBUG(D_INFO, "lgmnal_api_forward: nal [%p], index [%d], args [%p], arglen ["LPSZ"], ret [%p], retlen ["LPSZ"]\n", nal, index, args, arg_len, ret, ret_len);
 
 	if (!nal || !args || (index < 0) || (arg_len < 0)) {
 			CDEBUG(D_ERROR, "Bad args to lgmnal_api_forward\n");
@@ -119,8 +118,6 @@ int
 lgmnal_api_validate(nal_t *nal, void *base, size_t extent)
 {
 
-	CDEBUG(D_TRACE, "lgmnal_api_validate : nal [%p], base [%p], extent [%d]\n", nal, base, (int)extent);
-
 	return(PTL_OK);
 }
 
@@ -153,7 +150,6 @@ lgmnal_api_lock(nal_t *nal, unsigned long *flags)
 
 	lgmnal_data_t	*nal_data;
 	nal_cb_t	*nal_cb;
-	CDEBUG(D_TRACE, "lgmnal_api_lock : nal [%p], flagsa [%p] flags[%lu]\n", nal, flags, *flags);
 
 	nal_data = nal->nal_data;
 	nal_cb = nal_data->nal_cb;
@@ -172,7 +168,6 @@ lgmnal_api_unlock(nal_t *nal, unsigned long *flags)
 {
 	lgmnal_data_t	*nal_data;
 	nal_cb_t	*nal_cb;
-	CDEBUG(D_TRACE, "lgmnal_api_lock : nal [%p], flags [%p]\n", nal, flags);
 
 	nal_data = nal->nal_data;
 	nal_cb = nal_data->nal_cb;
@@ -184,7 +179,8 @@ lgmnal_api_unlock(nal_t *nal, unsigned long *flags)
 
 
 nal_t *
-lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_pid_t rpid)
+lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, 
+	    ptl_pid_t rpid)
 {
 
 	nal_t		*nal = NULL;
@@ -197,8 +193,8 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	ptl_pid_t	portals_pid = 0;
 
 
-	CDEBUG(D_TRACE, "lgmnal_init : interface [%d], ptl_size [%d], ac_size[%d]\n",
-			interface, ptl_size, ac_size);
+	CDEBUG(D_TRACE, "lgmnal_init : interface [%d], ptl_size [%d], 
+	       ac_size[%d]\n", interface, ptl_size, ac_size);
 
 
 	PORTAL_ALLOC(nal_data, sizeof(lgmnal_data_t));
@@ -259,15 +255,19 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	}
 
 
-	CDEBUG(D_NET, "Calling gm_open with interface [%d], port [%d], name [%s], version [%d]\n", interface, LGMNAL_GM_PORT, "lgmnal", GM_API_VERSION);
+	CDEBUG(D_NET, "Calling gm_open with interface [%d], port [%d], 
+       	       name [%s], version [%d]\n", interface, LGMNAL_GM_PORT, 
+	       "lgmnal", GM_API_VERSION);
 
 	LGMNAL_GM_LOCK(nal_data);
-	gm_status = gm_open(&nal_data->gm_port, 0, LGMNAL_GM_PORT, "lgmnal", GM_API_VERSION);
+	gm_status = gm_open(&nal_data->gm_port, 0, LGMNAL_GM_PORT, "lgmnal", 
+			    GM_API_VERSION);
 	LGMNAL_GM_UNLOCK(nal_data);
 
 	CDEBUG(D_INFO, "gm_open returned [%d]\n", gm_status);
 	if (gm_status == GM_SUCCESS) {
-		CDEBUG(D_INFO, "gm_open succeeded port[%p]\n", nal_data->gm_port);
+		CDEBUG(D_INFO, "gm_open succeeded port[%p]\n", 
+		       nal_data->gm_port);
 	} else {
 		switch(gm_status) {
 		case(GM_INVALID_PARAMETER):
@@ -280,13 +280,15 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 			CDEBUG(D_ERROR, "gm_open Failure. No such device\n");
 			break;
 		case(GM_INCOMPATIBLE_LIB_AND_DRIVER):
-			CDEBUG(D_ERROR, "gm_open Failure. Incompatile lib and driver\n");
+			CDEBUG(D_ERROR, "gm_open Failure. Incompatile lib 
+			       and driver\n");
 			break;
 		case(GM_OUT_OF_MEMORY):
 			CDEBUG(D_ERROR, "gm_open Failure. Out of Memory\n");
 			break;
 		default:
-			CDEBUG(D_ERROR, "gm_open Failure. Unknow error code [%d]\n", gm_status);
+			CDEBUG(D_ERROR, "gm_open Failure. Unknow error 
+			       code [%d]\n", gm_status);
 			break;
 		}	
 		LGMNAL_GM_LOCK(nal_data);
@@ -300,7 +302,8 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 
 	
 	nal_data->small_msg_size = lgmnal_small_msg_size;
-	nal_data->small_msg_gmsize = gm_min_size_for_length(lgmnal_small_msg_size);
+	nal_data->small_msg_gmsize = 
+			gm_min_size_for_length(lgmnal_small_msg_size);
 
 	if (lgmnal_alloc_srxd(nal_data) != LGMNAL_STATUS_OK) {
 		CDEBUG(D_ERROR, "Failed to allocate small rx descriptors\n");
@@ -321,10 +324,12 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	 *	In fact hang them all out
 	 */
 	while((srxd = lgmnal_get_srxd(nal_data, 0))) {
-		CDEBUG(D_NET, "giving [%p] to gm_provide_recvive_buffer\n", srxd->buffer);
+		CDEBUG(D_NET, "giving [%p] to gm_provide_recvive_buffer\n", 
+		       srxd->buffer);
 		LGMNAL_GM_LOCK(nal_data);
-		gm_provide_receive_buffer_with_tag(nal_data->gm_port, srxd->buffer, 
-									srxd->gmsize, GM_LOW_PRIORITY, 0);
+		gm_provide_receive_buffer_with_tag(nal_data->gm_port, 
+						   srxd->buffer, srxd->gmsize, 
+						   GM_LOW_PRIORITY, 0);
 		LGMNAL_GM_UNLOCK(nal_data);
 	}
 	
@@ -378,7 +383,8 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	nal_data->gm_local_nid = local_nid;
 	CDEBUG(D_INFO, "Local node id is [%u]\n", local_nid);
 	LGMNAL_GM_LOCK(nal_data);
-	gm_status = gm_node_id_to_global_id(nal_data->gm_port, local_nid, &global_nid);
+	gm_status = gm_node_id_to_global_id(nal_data->gm_port, local_nid, 
+					    &global_nid);
 	LGMNAL_GM_UNLOCK(nal_data);
 	if (gm_status != GM_SUCCESS) {
 		CDEBUG(D_ERROR, "failed to obtain global id\n");
@@ -406,7 +412,8 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	CDEBUG(D_INFO, "portals_nid is ["LPU64"]\n", portals_nid);
 	
 	CDEBUG(D_PORTALS, "calling lib_init\n");
-	if (lib_init(nal_cb, portals_nid, portals_pid, 1024, ptl_size, ac_size) != PTL_OK) {
+	if (lib_init(nal_cb, portals_nid, portals_pid, 1024, ptl_size, 
+		     ac_size) != PTL_OK) {
 		CDEBUG(D_ERROR, "lib_init failed\n");
 		lgmnal_stop_rxthread(nal_data);
 		lgmnal_stop_ctthread(nal_data);
