@@ -236,9 +236,8 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
                 obd_flag         flagw = OBD_BRW_CREATE;
 
                 page->index = index;
-                err = OBP(src_conn->oc_dev, brw)(READ, src_conn, num_oa, &src,
-                                                 &num_buf, &page, &brw_count,
-                                                 &brw_offset, &flagr, NULL);
+                err = obd_brw(OBD_BRW_READ, src_conn, num_oa, &src, &num_buf,
+			      &page, &brw_count, &brw_offset, &flagr, NULL);
 
                 if ( err ) {
                         EXIT;
@@ -246,9 +245,8 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
                 }
                 CDEBUG(D_INFO, "Read page %ld ...\n", page->index);
 
-                err = OBP(dst_conn->oc_dev, brw)(WRITE, dst_conn, num_oa, &dst,
-                                                 &num_buf, &page, &brw_count,
-                                                 &brw_offset, &flagw, NULL);
+                err = obd_brw(OBD_BRW_WRITE, dst_conn, num_oa, &dst, &num_buf,
+			      &page, &brw_count, &brw_offset, &flagw, NULL);
 
                 /* XXX should handle dst->o_size, dst->o_blocks here */
                 if ( err ) {
