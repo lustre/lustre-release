@@ -38,9 +38,14 @@ int console_loglevel;
 /* SYNCHRONOUS I/O for an inode */
 static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 {
-	struct obdo *oa;
-	obd_size count = PAGE_SIZE;
-	int err;
+	obd_count	 num_io = 1;
+	struct obdo	*oa;
+	char		*buf = (char *)page_address(page);
+	obd_size	 size = PAGE_SIZE;
+	obd_size	*count = &size;
+	obd_off		 offset = ((obd_off)page->index) << PAGE_SHIFT;
+	obd_flag	 flags = create ? OBD_BRW_CREATE : 0;
+	int		 err;
 
 	ENTRY;
 	oa = obdo_fromid(IID(inode), inode->i_ino, OBD_MD_FLNOTOBD);
@@ -50,8 +55,8 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 	}
 	obdfs_from_inode(oa, inode);
 
-	err = IOPS(inode, brw)(rw, IID(inode), oa, (char *)page_address(page),
-			       &count, (page->index) >> PAGE_SHIFT, create);
+	err = IOPS(inode, brw)(rw, IID(inode), &num_io, &oa, &buf, &count,
+			       &offset, &flags);
 
 	if ( !err )
 		obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */

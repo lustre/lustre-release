@@ -264,15 +264,24 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 	
 	lck_page(page);
 	
+	/* XXX with brw vector I/O, we could batch up reads and writes here,
+	 *     all we need to do is allocate multiple pages to handle the I/Os
+	 *     and arrays to handle the request parameters.
+	 */
 	while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
-		obd_size brw_count;
+		obd_count	 num = 1;
+		char		*buf;
+		obd_size	 brw_size = PAGE_SIZE;
+		obd_size	*brw_count = &brw_size;
+		obd_off		 brw_offset = (page->index) << PAGE_SHIFT;
+		obd_flag	 flagr = 0;
+		obd_flag	 flagw = OBD_BRW_CREATE;
 		
-		brw_count = PAGE_SIZE;
-
 		page->index = index;
-		err = OBP(src_conn->oc_dev, brw)
-			(READ, src_conn, src, (char *)page_address(page), 
-			 &brw_count, (page->index) << PAGE_SHIFT, 0);
+		buf = (char *)page_address(page); 
+		err = OBP(src_conn->oc_dev, brw)(READ, src_conn, &num, &src,
+						 &buf, &brw_count, &brw_offset,
+						 &flagr);
 
 		if ( err ) {
 			EXIT;
@@ -280,9 +289,9 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 		}
 		CDEBUG(D_INODE, "Read page %ld ...\n", page->index);
 
-		err = OBP(dst_conn->oc_dev, brw)
-			(WRITE, dst_conn, dst, (char *)page_address(page), 
-			 &brw_count, (page->index) << PAGE_SHIFT, 1);
+		err = OBP(dst_conn->oc_dev, brw)(WRITE, dst_conn, &num, &dst,
+						 &buf, &brw_count, &brw_offset,
+						 &flagw);
 
 		/* XXX should handle dst->o_size, dst->o_blocks here */
 		if ( err ) {

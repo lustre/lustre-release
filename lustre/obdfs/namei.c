@@ -244,14 +244,16 @@ static struct page *obdfs_add_entry (struct inode * dir,
 		return NULL;
 	}
 	rec_len = EXT2_DIR_REC_LEN(namelen);
-	CDEBUG(D_INODE, "reclen: %d\n", rec_len);
+	/* CDEBUG(D_INODE, "reclen: %d\n", rec_len); */
 	PDEBUG(page, "starting search");
 	offset = 0;
 	de = (struct ext2_dir_entry_2 *) page_address(page);
 	*err = -ENOSPC;
 	while (1) {
-		CDEBUG(D_INODE, "Considering entry at %p, (page at %#lx - %#lx), offset %ld\n",
-		       de, page_address(page), page_address(page) + PAGE_SIZE, offset);
+		/* CDEBUG(D_INODE,
+		       "Entry at %p, (page at %#lx - %#lx), offset %ld\n",
+		       de, page_address(page), page_address(page) + PAGE_SIZE,
+		       offset); */
 		if ((char *)de >= PAGE_SIZE + (char *)page_address(page)) {
 			UnlockPage(page);
 			page_cache_release(page);
@@ -283,7 +285,6 @@ static struct page *obdfs_add_entry (struct inode * dir,
 				de = (struct ext2_dir_entry_2 *) page_address(page);
 			}
 		}
-		CDEBUG(D_INODE, "\n");
 		if (!obdfs_check_dir_entry ("ext2_add_entry", dir, de, page,
 					   offset)) {
 			*err = -ENOENT;
@@ -300,27 +301,32 @@ static struct page *obdfs_add_entry (struct inode * dir,
 				EXIT;
 				return NULL;
 		}
-		CDEBUG(D_INODE, "Testing for enough space at de %p\n", de);
+		/* CDEBUG(D_INODE, "Testing for enough space at de %p\n", de);*/
 		if ( (le32_to_cpu(de->inode) == 0 && le16_to_cpu(de->rec_len) >= rec_len) ||
 		     (le16_to_cpu(de->rec_len) >= EXT2_DIR_REC_LEN(de->name_len) + rec_len)) {
 			offset += le16_to_cpu(de->rec_len);
-			CDEBUG(D_INODE, "Found enough space de %p, offset %#lx\n", de, offset);
+			/* CDEBUG(D_INODE,
+			       "Found enough space de %p, offset %#lx\n",
+			       de, offset); */
 			if (le32_to_cpu(de->inode)) {
-				CDEBUG(D_INODE, "Inserting new in %p\n", de);
+				/*CDEBUG(D_INODE, "Insert new in %p\n", de);*/
 				de1 = (struct ext2_dir_entry_2 *) ((char *) de +
 					EXT2_DIR_REC_LEN(de->name_len));
-				CDEBUG(D_INODE, "-- de1 at %p\n", de1);
+				/*CDEBUG(D_INODE, "-- de1 at %p\n", de1);*/
 				de1->rec_len = cpu_to_le16(le16_to_cpu(de->rec_len) -
 					EXT2_DIR_REC_LEN(de->name_len));
 				de->rec_len = cpu_to_le16(EXT2_DIR_REC_LEN(de->name_len));
 				de = de1;
 			}
-			CDEBUG(D_INODE, "Reclen adjusted; copy %d bytes to %p, page at %#lx EOP at %#lx\n", namelen, de->name, page_address(page), page_address(page) + PAGE_SIZE);
+			/* CDEBUG(D_INODE,
+			       "Reclen adjusted; copy %d bytes to %p, "
+			       "page at %#lx EOP at %#lx\n",
+			       namelen, de->name, page_address(page),
+			       page_address(page) + PAGE_SIZE); */
 			de->inode = 0;
 			de->name_len = namelen;
 			de->file_type = 0;
 			memcpy (de->name, name, namelen);
-			CDEBUG(D_INODE, "Copy done\n");
 			/*
 			 * XXX shouldn't update any times until successful
 			 * completion of syscall, but too many callers depend
@@ -339,16 +345,13 @@ static struct page *obdfs_add_entry (struct inode * dir,
 			*res_dir = de;
 			*err = 0;
 			PDEBUG(page, "add_entry");
-			CDEBUG(D_INODE, "Regular exit from add_entry");
 			EXIT;
 			return page;
 		}
-		CDEBUG(D_INODE, "\n");
 		offset += le16_to_cpu(de->rec_len);
 		de = (struct ext2_dir_entry_2 *) ((char *) de + le16_to_cpu(de->rec_len));
 		
 	}
-	CDEBUG(D_INODE, "\n");
 
 	UnlockPage(page);
 	page_cache_release(page);

@@ -30,8 +30,8 @@ typedef uint32_t	obd_gid;
 typedef uint32_t	obd_flag;
 typedef uint32_t	obd_count;
 
-#define OBD_FL_INLINEDATA	(1UL)  
-#define OBD_FL_OBDMDEXISTS	(1UL << 1)
+#define OBD_FL_INLINEDATA	(0x00000001UL)  
+#define OBD_FL_OBDMDEXISTS	(0x00000002UL)
 
 #define OBD_INLINESZ	60
 #define OBD_OBDMDSZ	60
@@ -60,22 +60,22 @@ struct obdo {
 };
 
 #define OBD_MD_FLALL	(~0UL)
-#define OBD_MD_FLID	(0x0001UL)
-#define OBD_MD_FLATIME	(0x0002UL)
-#define OBD_MD_FLMTIME	(0x0004UL)
-#define OBD_MD_FLCTIME	(0x0008UL)
-#define OBD_MD_FLSIZE	(0x0010UL)
-#define OBD_MD_FLBLOCKS	(0x0020UL)
-#define OBD_MD_FLBLKSZ	(0x0040UL)
-#define OBD_MD_FLMODE	(0x0080UL)
-#define OBD_MD_FLUID	(0x0100UL)
-#define OBD_MD_FLGID	(0x0200UL)
-#define OBD_MD_FLFLAGS	(0x0400UL)
-#define OBD_MD_FLOBDFLG	(0x0800UL)
-#define OBD_MD_FLNLINK	(0x1000UL)
-#define OBD_MD_FLGENER	(0x2000UL)
-#define OBD_MD_FLINLINE	(0x4000UL)
-#define OBD_MD_FLOBDMD	(0x8000UL)
+#define OBD_MD_FLID	(0x00000001UL)
+#define OBD_MD_FLATIME	(0x00000002UL)
+#define OBD_MD_FLMTIME	(0x00000004UL)
+#define OBD_MD_FLCTIME	(0x00000008UL)
+#define OBD_MD_FLSIZE	(0x00000010UL)
+#define OBD_MD_FLBLOCKS	(0x00000020UL)
+#define OBD_MD_FLBLKSZ	(0x00000040UL)
+#define OBD_MD_FLMODE	(0x00000080UL)
+#define OBD_MD_FLUID	(0x00000100UL)
+#define OBD_MD_FLGID	(0x00000200UL)
+#define OBD_MD_FLFLAGS	(0x00000400UL)
+#define OBD_MD_FLOBDFLG	(0x00000800UL)
+#define OBD_MD_FLNLINK	(0x00001000UL)
+#define OBD_MD_FLGENER	(0x00002000UL)
+#define OBD_MD_FLINLINE	(0x00004000UL)
+#define OBD_MD_FLOBDMD	(0x00008000UL)
 #define OBD_MD_FLNOTOBD	(~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG))
 
 /*
@@ -123,6 +123,10 @@ struct obd_device {
  *  ======== OBD Operations Declarations ===========
  */
 
+#define OBD_BRW_READ	(READ)
+#define OBD_BRW_WRITE	(WRITE)
+#define OBD_BRW_RWMASK	(READ | WRITE)
+#define OBD_BRW_CREATE	(0x00000010UL)
 
 struct obd_ops {
 	int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg,
@@ -147,8 +151,9 @@ struct obd_ops {
 		      obd_size *count, obd_off offset);
 	int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
 		       obd_size *count, obd_off offset);
-	int (*o_brw)(int rw, struct obd_conn *conn, struct obdo *oa,
-		     char *buf, obd_size *count, obd_off offset, obd_flag flags);
+	int (*o_brw)(int rw, struct obd_conn *conn, obd_count *num_io,
+		     struct obdo **oa, char **buf, obd_size **count,
+		     obd_off *offset, obd_flag *flags);
 	int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
 		       obd_off offset);
 	int (*o_sync)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
