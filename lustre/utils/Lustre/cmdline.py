@@ -125,6 +125,11 @@ class Options:
                 return self.values[name]
             else:
                 raise error.OptionError("bad option name: " + name)
+        def __getitem__(self, name):
+            if self.values.has_key(name):
+                return self.values[name]
+            else:
+                raise error.OptionError("bad option name: " + name)
         def __setattr__(self, name, value):
             self.values[name] = value
 

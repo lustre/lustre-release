@@ -170,6 +170,7 @@ int class_attach(struct lustre_cfg *lcfg)
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int err = 0;
+        struct obd_export *exp;
         ENTRY;
 
         /* have we attached a type to this device? */
@@ -188,11 +189,40 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         atomic_set(&obd->obd_refcount, 0);
 
         err = obd_setup(obd, sizeof(*lcfg), lcfg);
-        if (!err) {
-                obd->obd_type->typ_refcnt++;
-                obd->obd_set_up = 1;
-                atomic_inc(&obd->obd_refcount);
+        if (err) {
+                RETURN(err);
+        }
+        
+        obd->obd_type->typ_refcnt++;
+        obd->obd_set_up = 1;
+        atomic_inc(&obd->obd_refcount);
+
+        exp = class_new_export(obd);
+        if (exp == NULL) {
+                GOTO(err_cleanup, err = -ENOMEM);
+        }
+        memcpy(&exp->exp_client_uuid, &obd->obd_uuid, 
+               sizeof(exp->exp_client_uuid));
+        obd->obd_self_export = exp;
+        class_export_put(exp);
+
+        if (OBT(obd) && OBP(obd, postsetup)) {
+                err = obd_postsetup(obd);
+                if (err) 
+                        GOTO(err_exp, err);
         } 
+
+        RETURN(err);
+
+err_exp:
+        class_unlink_export(obd->obd_self_export);
+        obd->obd_self_export = NULL;
+err_cleanup:
+        obd->obd_stopping = 1;
+        obd_cleanup(obd, 0);
+        obd->obd_set_up = obd->obd_stopping = 0;
+        obd->obd_type->typ_refcnt--;
+        atomic_dec(&obd->obd_refcount);
         RETURN(err);
 }
 
@@ -269,6 +299,9 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (err) 
                 RETURN(err);
         
+        LASSERT(obd->obd_self_export);
+        class_unlink_export(obd->obd_self_export);
+
         if (atomic_read(&obd->obd_refcount) == 1 ||
             flags & OBD_OPT_FORCE) {
                 /* this will stop new connections, and need to
@@ -286,7 +319,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                obd->obd_minor, obd,
                                atomic_read(&obd->obd_refcount));
                         dump_exports(obd);
-                        RETURN(-EBUSY);
+                        GOTO(out, err = -EBUSY);
                 }
                 class_disconnect_exports(obd, flags);
                 CDEBUG(D_IOCTL,
@@ -307,6 +340,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                        obd->obd_name);
         }
 
+out:
         err = obd_cleanup(obd, flags);
         if (!err) {
                 obd->obd_set_up = obd->obd_stopping = 0;
@@ -317,9 +351,16 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         CERROR("%s still has refcount %d after "
                                "cleanup.\n", obd->obd_name,
                                atomic_read(&obd->obd_refcount));
+        } else {
+                /* attempt to leave OBD in a usable state. */
+                obd->obd_stopping = 0;
+                if (OBT(obd) && OBP(obd, postsetup)) {
+                        obd_postsetup(obd);
+                }
         }
 
         RETURN(err);
+
 }
 
 LIST_HEAD(lustre_profile_list);
@@ -360,11 +401,13 @@ int class_add_profile(int proflen, char *prof,
                 GOTO(out, err = -ENOMEM);
         memcpy(lprof->lp_osc, osc, osclen);
 
-        LASSERT(mdclen == (strlen(mdc) + 1));
-        OBD_ALLOC(lprof->lp_mdc, mdclen);
-        if (lprof->lp_mdc == NULL)
-                GOTO(out, err = -ENOMEM);
-        memcpy(lprof->lp_mdc, mdc, mdclen);
+        if (mdclen > 0) {
+                LASSERT(mdclen == (strlen(mdc) + 1));
+                OBD_ALLOC(lprof->lp_mdc, mdclen);
+                if (lprof->lp_mdc == NULL)
+                        GOTO(out, err = -ENOMEM);
+                memcpy(lprof->lp_mdc, mdc, mdclen);
+        }
 
         list_add(&lprof->lp_list, &lustre_profile_list);
 
@@ -381,7 +424,8 @@ void class_del_profile(char *prof)
                 list_del(&lprof->lp_list);
                 OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
                 OBD_FREE(lprof->lp_osc, strlen(lprof->lp_osc) + 1);
-                OBD_FREE(lprof->lp_mdc, strlen(lprof->lp_mdc) + 1);
+                if (lprof->lp_mdc)
+                        OBD_FREE(lprof->lp_mdc, strlen(lprof->lp_mdc) + 1);
                 OBD_FREE(lprof, sizeof *lprof);
         }
 }
@@ -443,7 +487,7 @@ int class_process_config(struct lustre_cfg *lcfg)
 	/* Commands that require a device */
         obd = class_name2obd(lcfg->lcfg_dev_name);
         if (obd == NULL) {
-                CERROR("no device\n");
+                CERROR("no device for: %s\n", lcfg->lcfg_dev_name);
                 GOTO(out, err = -EINVAL);
 	}
 	    
@@ -461,9 +505,9 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         default: { 
-                err = obd_config(obd, lcfg);
-                if (err)
-                        GOTO(out, err);
+                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+                GOTO(out, err = -EINVAL);
+
         }
 	}
 out:
@@ -493,10 +537,12 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         GOTO(out, rc);
                 lcfg = (struct lustre_cfg* ) buf;
 
-                if (cfg && lcfg->lcfg_dev_name) {
+                if (cfg && cfg->cfg_instance && lcfg->lcfg_dev_name) {
                         inst_len = strlen(lcfg->lcfg_dev_name) + 
                                 strlen(cfg->cfg_instance) + 2;
                         OBD_ALLOC(inst_name, inst_len);
+                        if (inst_name == NULL) 
+                                GOTO(out, rc = -ENOMEM);
                         sprintf(inst_name, "%s-%s", lcfg->lcfg_dev_name, 
                                 cfg->cfg_instance);
                         old_name = lcfg->lcfg_dev_name;
@@ -534,20 +580,21 @@ out:
         RETURN(rc);
 }
 
-int class_config_parse_llog(struct obd_export *exp, char *name, 
+int class_config_parse_llog(struct llog_obd_ctxt *ctxt, char *name, 
                           struct config_llog_instance *cfg)
 {
+        struct obd_export *exp = ctxt->loc_exp;
         struct llog_handle *llh;
-        struct obd_device *obd = exp->exp_obd;
         int rc, rc2;
         ENTRY;
 
-        if (obd->obd_log_exp == NULL) {
-                CERROR("No log export on obd:%s\n", obd->obd_name);
+        if (exp == NULL) {
+                LBUG();
+                CERROR("No log export on obd\n");
                 RETURN(-ENOTCONN);
         }
 
-        rc = llog_create(obd, &llh, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) 
                 RETURN(rc);
 
@@ -556,6 +603,82 @@ int class_config_parse_llog(struct obd_export *exp, char *name,
                 GOTO(parse_out, rc);
 
         rc = llog_process(llh, class_config_llog_handler, cfg);
+parse_out:
+        rc2 = llog_close(llh);
+        if (rc == 0)
+                rc = rc2;
+
+        RETURN(rc);
+
+}
+
+static int class_config_dump_handler(struct llog_handle * handle,
+                                     struct llog_rec_hdr *rec, void *data)
+{
+        int cfg_len = rec->lrh_len;
+        char *cfg_buf = (char*) (rec + 1);
+        int rc = 0;
+
+        if (rec->lrh_type == OBD_CFG_REC) {
+                char *buf;
+                struct lustre_cfg *lcfg;
+
+                rc = lustre_cfg_getdata(&buf, cfg_len, cfg_buf, 1);
+                if (rc) 
+                        GOTO(out, rc);
+                lcfg = (struct lustre_cfg* ) buf;
+                
+                CDEBUG(D_INFO, "lcfg command: %x\n", lcfg->lcfg_command);
+                if (lcfg->lcfg_dev_name)
+                        CDEBUG(D_INFO, "     devname: %s\n",
+                               lcfg->lcfg_dev_name);
+                if (lcfg->lcfg_flags)
+                        CDEBUG(D_INFO, "       flags: %x\n", lcfg->lcfg_flags);
+                if (lcfg->lcfg_nid)
+                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
+                               lcfg->lcfg_nid);
+                if (lcfg->lcfg_nal)
+                        CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_nal);
+                if (lcfg->lcfg_inlbuf1)
+                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf1);
+                if (lcfg->lcfg_inlbuf2)
+                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf2);
+                if (lcfg->lcfg_inlbuf3)
+                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf3);
+                if (lcfg->lcfg_inlbuf4)
+                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf4);
+
+                lustre_cfg_freedata(buf, cfg_len);
+        } else if (rec->lrh_type == PTL_CFG_REC) {
+                ;
+        }
+out:
+        RETURN(rc);
+}
+
+int class_config_dump_llog(struct llog_obd_ctxt *ctxt, char *name, 
+                          struct config_llog_instance *cfg)
+{
+        struct obd_export *exp = ctxt->loc_exp;
+        struct llog_handle *llh;
+        int rc, rc2;
+        ENTRY;
+
+        if (exp == NULL) {
+                LBUG();
+                CERROR("No log export on obd\n");
+                RETURN(-ENOTCONN);
+        }
+
+        rc = llog_create(ctxt, &llh, NULL, name);
+        if (rc) 
+                RETURN(rc);
+
+        rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
+        if (rc) 
+                GOTO(parse_out, rc);
+
+        rc = llog_process(llh, class_config_dump_handler, cfg);
 parse_out:
         rc2 = llog_close(llh);
         if (rc == 0)

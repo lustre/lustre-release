@@ -183,6 +183,7 @@ EXPORT_SYMBOL(ptlrpc_interrupted_set);
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);
 EXPORT_SYMBOL(ptlrpc_stop_all_threads);
+EXPORT_SYMBOL(ptlrpc_start_n_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 
@@ -238,10 +239,6 @@ EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_fail_export);
 EXPORT_SYMBOL(ptlrpc_recover_import);
 
-/*ptlrpc_lib.c*/
-EXPORT_SYMBOL(client_obd_setup);
-EXPORT_SYMBOL(client_obd_cleanup);
-
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);
 EXPORT_SYMBOL(ptlrpc_pinger_del_import);
@@ -252,15 +249,11 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 
 /* llogd.c */
-EXPORT_SYMBOL(llogd_create);
-EXPORT_SYMBOL(llogd_next_block);
-EXPORT_SYMBOL(llogd_read_header);
-EXPORT_SYMBOL(llogd_close);
-EXPORT_SYMBOL(llogd_client_create);
-EXPORT_SYMBOL(llogd_client_next_block);
-EXPORT_SYMBOL(llogd_client_read_header);
-EXPORT_SYMBOL(llogd_client_close);
-EXPORT_SYMBOL(llogd_client_ops);
+EXPORT_SYMBOL(llog_origin_handle_create);
+EXPORT_SYMBOL(llog_origin_handle_next_block);
+EXPORT_SYMBOL(llog_origin_handle_read_header);
+EXPORT_SYMBOL(llog_origin_handle_close);
+EXPORT_SYMBOL(llog_client_ops);
 
 #ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
