@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  *  linux/mds/handler.c
  *  
  *  Lustre Metadata Server (mds) request handler
@@ -74,7 +76,7 @@ static int mds_queue_req(struct ptlrpc_request *req)
 }
 
 int mds_sendpage(struct ptlrpc_request *req, struct file *file, 
-		    __u64 offset, struct niobuf *dst)
+                 __u64 offset, struct niobuf *dst)
 {
 	int rc; 
 	mm_segment_t oldfs = get_fs();
@@ -321,7 +323,7 @@ int mds_readpage(struct ptlrpc_request *req)
 		req->rq_rephdr->status = PTR_ERR(file);
 		return 0;
 	}
-		
+
 	niobuf = mds_req_tgt(req->rq_req.mds);
 
 	/* to make this asynchronous make sure that the handling function 
@@ -427,6 +429,7 @@ int mds_main(void *arg)
 {
 	struct mds_obd *mds = (struct mds_obd *) arg;
 	struct timer_list timer;
+        DECLARE_WAITQUEUE(wait, current);
 
 	lock_kernel();
 	daemonize();
@@ -461,47 +464,96 @@ int mds_main(void *arg)
 
 		if (mds->mds_service != NULL) {
 			ptl_event_t ev;
+                        struct ptlrpc_request request;
+                        struct ptlrpc_service *service;
 
-			while (1) {
-				struct ptlrpc_request request;
-				struct ptlrpc_service *service;
 
+                        CDEBUG(D_IOCTL, "-- sleeping\n");
+                        add_wait_queue(&mds->mds_waitq, &wait);
+                        while (1) {
 				rc = PtlEQGet(mds->mds_service->srv_eq_h, &ev);
-				if (rc != PTL_OK && rc != PTL_EQ_DROPPED)
-					break;
-				
-				service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;	
+                                if (rc == PTL_OK || rc == PTL_EQ_DROPPED)
+                                        break;
 
-				/* FIXME: If we move to an event-driven model,
-				 * we should put the request on the stack of
-				 * mds_handle instead. */
-				memset(&request, 0, sizeof(request));
-				request.rq_reqbuf = ev.mem_desc.start +
-					ev.offset;
-				request.rq_reqlen = ev.mem_desc.length;
-				request.rq_obd = MDS;
-				request.rq_xid = ev.match_bits;
+                                set_current_state(TASK_INTERRUPTIBLE);
 
-				request.rq_peer.peer_nid = ev.initiator.nid;
-				/* FIXME: this NI should be the incoming NI.
-				 * We don't know how to find that from here. */
-				request.rq_peer.peer_ni =
-					mds->mds_service->srv_self.peer_ni;
-				rc = mds_handle(&request);
+                                /* if this process really wants to die,
+                                 * let it go */
+                                if (sigismember(&(current->pending.signal),
+                                                SIGKILL) ||
+                                    sigismember(&(current->pending.signal),
+                                                SIGINT))
+                                        break;
 
-				/* Inform the rpc layer the event has been handled */ 
-				ptl_received_rpc(service);
-			}
+                                schedule();
+                        }
+                        remove_wait_queue(&mds->mds_waitq, &wait);
+                        set_current_state(TASK_RUNNING);
+                        CDEBUG(D_IOCTL, "-- done\n");
+
+                        if (rc == PTL_EQ_EMPTY) {
+                                /* We broke out because of a signal */
+                                EXIT;
+                                return -EINTR;
+                        }
+
+                        service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;	
+
+                        /* FIXME: If we move to an event-driven model,
+                         * we should put the request on the stack of
+                         * mds_handle instead. */
+                        memset(&request, 0, sizeof(request));
+                        request.rq_reqbuf = ev.mem_desc.start + ev.offset;
+                        request.rq_reqlen = ev.mem_desc.length;
+                        request.rq_obd = MDS;
+                        request.rq_xid = ev.match_bits;
+
+                        request.rq_peer.peer_nid = ev.initiator.nid;
+                        /* FIXME: this NI should be the incoming NI.
+                         * We don't know how to find that from here. */
+                        request.rq_peer.peer_ni =
+                                mds->mds_service->srv_self.peer_ni;
+                        rc = mds_handle(&request);
+
+                        /* Inform the rpc layer the event has been handled */ 
+                        ptl_received_rpc(service);
 		} else {
 			struct ptlrpc_request *request;
 
+                        CDEBUG(D_IOCTL, "-- sleeping\n");
+                        add_wait_queue(&mds->mds_waitq, &wait);
+                        while (1) {
+                                spin_lock(&mds->mds_lock);
+                                if (!list_empty(&mds->mds_reqs))
+                                        break;
+
+                                set_current_state(TASK_INTERRUPTIBLE);
+
+                                /* if this process really wants to die,
+                                 * let it go */
+                                if (sigismember(&(current->pending.signal),
+                                                SIGKILL) ||
+                                    sigismember(&(current->pending.signal),
+                                                SIGINT))
+                                        break;
+
+                                spin_unlock(&mds->mds_lock);
+
+                                schedule();
+                        }
+                        remove_wait_queue(&mds->mds_waitq, &wait);
+                        set_current_state(TASK_RUNNING);
+                        CDEBUG(D_IOCTL, "-- done\n");
+
 			if (list_empty(&mds->mds_reqs)) {
-				CDEBUG(D_INODE, "woke because of timer\n");
+				CDEBUG(D_INODE, "woke because of signal\n");
+                                spin_unlock(&mds->mds_lock);
 			} else {
 				request = list_entry(mds->mds_reqs.next,
 						     struct ptlrpc_request,
 						     rq_list);
 				list_del(&request->rq_list);
+                                spin_unlock(&mds->mds_lock);
 				rc = mds_handle(request);
 			}
 		}
