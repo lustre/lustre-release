@@ -374,7 +374,7 @@ static int ldlm_cleanup(struct obd_device *obddev)
         struct ldlm_obd *ldlm = &obddev->u.ldlm;
         ENTRY;
 
-        ptlrpc_stop_thread(ldlm->ldlm_service);
+        ptlrpc_stop_all_threads(ldlm->ldlm_service);
         rpc_unregister_service(ldlm->ldlm_service);
 
         if (!list_empty(&ldlm->ldlm_service->srv_reqs)) {

@@ -43,6 +43,7 @@ void ptlrpc_init_client(struct recovd_obd *recovd,
         INIT_LIST_HEAD(&cl->cli_sent_head);
         INIT_LIST_HEAD(&cl->cli_replied_head);
         INIT_LIST_HEAD(&cl->cli_replay_head);
+        INIT_LIST_HEAD(&cl->cli_dying_head);
         spin_lock_init(&cl->cli_lock);
         sema_init(&cl->cli_rpc_sem, 32);
 }
@@ -284,8 +285,8 @@ void ptlrpc_free_committed(struct ptlrpc_client *cli)
                         break; 
 
                 /* retain for replay if flagged */
+                list_del(&req->rq_list);
                 if (req->rq_flags & PTL_RPC_FL_RETAIN) {
-                        list_del(&req->rq_list); 
                         list_add(&req->rq_list, &cli->cli_replay_head);
                 } else {
                         CDEBUG(D_INFO, "Marking request %p as committed ("
@@ -293,6 +294,8 @@ void ptlrpc_free_committed(struct ptlrpc_client *cli)
                                req->rq_transno, cli->cli_last_committed);
                         if (atomic_dec_and_test(&req->rq_refcount))
                                 ptlrpc_free_req(req);
+                        else
+                                list_add(&req->rq_list, &cli->cli_dying_head);
                 }
         }
 
@@ -310,28 +313,35 @@ void ptlrpc_cleanup_client(struct ptlrpc_client *cli)
         list_for_each_safe(tmp, saved, &cli->cli_replied_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 /* We do this to prevent ptlrpc_free_req from taking cli_lock */
-                CDEBUG(D_INFO, "Cleaning req %p from replied head.\n", req);
+                CDEBUG(D_INFO, "Cleaning req %p from replied list.\n", req);
                 list_del(&req->rq_list);
                 req->rq_client = NULL;
                 ptlrpc_free_req(req); 
         }
         list_for_each_safe(tmp, saved, &cli->cli_sent_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                CDEBUG(D_INFO, "Cleaning req %p from sent head.\n", req);
+                CDEBUG(D_INFO, "Cleaning req %p from sent list.\n", req);
                 list_del(&req->rq_list);
                 req->rq_client = NULL;
                 ptlrpc_free_req(req); 
         }
         list_for_each_safe(tmp, saved, &cli->cli_replay_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                CERROR("Request %p is on the replay head at cleanup!\n", req);
+                CERROR("Request %p is on the replay list at cleanup!\n", req);
                 list_del(&req->rq_list);
                 req->rq_client = NULL;
                 ptlrpc_free_req(req); 
         }
         list_for_each_safe(tmp, saved, &cli->cli_sending_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                CDEBUG(D_INFO, "Cleaning req %p from sending head.\n", req);
+                CDEBUG(D_INFO, "Cleaning req %p from sending list.\n", req);
+                list_del(&req->rq_list);
+                req->rq_client = NULL;
+                ptlrpc_free_req(req); 
+        }
+        list_for_each_safe(tmp, saved, &cli->cli_dying_head) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                CERROR("Request %p is on the dying list at cleanup!\n", req);
                 list_del(&req->rq_list);
                 req->rq_client = NULL;
                 ptlrpc_free_req(req); 

@@ -598,6 +598,11 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
         err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
         if (err)
                 GOTO(error_disc, err = -EINVAL);
+#if 0
+        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
+        if (err)
+                GOTO(error_disc, err = -EINVAL);
+#endif
 
         RETURN(0);
 
@@ -620,7 +625,7 @@ static int ost_cleanup(struct obd_device * obddev)
                 RETURN(-EBUSY);
         }
 
-        ptlrpc_stop_thread(ost->ost_service);
+        ptlrpc_stop_all_threads(ost->ost_service);
         rpc_unregister_service(ost->ost_service);
 
         if (!list_empty(&ost->ost_service->srv_reqs)) {

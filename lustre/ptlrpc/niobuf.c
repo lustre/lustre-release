@@ -323,7 +323,7 @@ void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i)
 
         /* Attach the leading ME on which we build the ring */
         rc = PtlMEAttach(service->srv_self.peer_ni, service->srv_req_portal,
-                         service->srv_id, 0, ~0, PTL_RETAIN, PTL_INS_BEFORE,
+                         local_id, 0, ~0, PTL_RETAIN, PTL_INS_BEFORE,
                          &(service->srv_me_h[i]));
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);

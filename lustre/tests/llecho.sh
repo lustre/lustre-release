@@ -12,13 +12,13 @@ setup_portals
 setup_lustre
 
 $OBDCTL <<EOF
-device 0
+newdev
 attach obdecho OBDDEV
 setup
-device 1
+newdev
 attach ost OSTDEV
-setup 0
-device 2
+setup \$OBDDEV
+newdev
 attach osc OSCDEV
 setup -1
 quit

@@ -926,7 +926,7 @@ static int mds_cleanup(struct obd_device * obddev)
                 RETURN(-EBUSY);
         }
 
-        ptlrpc_stop_thread(mds->mds_service);
+        ptlrpc_stop_all_threads(mds->mds_service);
         rpc_unregister_service(mds->mds_service);
         if (!list_empty(&mds->mds_service->srv_reqs)) {
                 // XXX reply with errors and clean up

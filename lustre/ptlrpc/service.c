@@ -28,7 +28,8 @@
 extern int request_in_callback(ptl_event_t *ev, void *data);
 extern int ptl_handled_rpc(struct ptlrpc_service *service, void *start);
 
-static int ptlrpc_check_event(struct ptlrpc_service *svc, ptl_event_t *event)
+static int ptlrpc_check_event(struct ptlrpc_service *svc,
+                              struct ptlrpc_thread *thread, ptl_event_t *event)
 {
         int rc = 0;
         ENTRY;
@@ -37,11 +38,11 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc, ptl_event_t *event)
         if (sigismember(&(current->pending.signal), SIGKILL) ||
             sigismember(&(current->pending.signal), SIGTERM) ||
             sigismember(&(current->pending.signal), SIGINT)) {
-                svc->srv_flags |= SVC_KILLED;
+                thread->t_flags |= SVC_KILLED;
                 GOTO(out, rc = 1);
         }
 
-        if (svc->srv_flags & SVC_STOPPING)
+        if (thread->t_flags & SVC_STOPPING)
                 GOTO(out, rc = 1);
 
         if (ptl_is_valid_handle(&svc->srv_eq_h)) {
@@ -49,7 +50,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc, ptl_event_t *event)
                 err = PtlEQGet(svc->srv_eq_h, event);
 
                 if (err == PTL_OK) {
-                        svc->srv_flags |= SVC_EVENT;
+                        thread->t_flags |= SVC_EVENT;
                         GOTO(out, rc = 1);
                 }
 
@@ -84,11 +85,8 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
 
         spin_lock_init(&service->srv_lock);
         INIT_LIST_HEAD(&service->srv_reqs);
-        init_waitqueue_head(&service->srv_ctl_waitq);
+        INIT_LIST_HEAD(&service->srv_threads);
         init_waitqueue_head(&service->srv_waitq);
-
-        service->srv_thread = NULL;
-        service->srv_flags = 0;
 
         service->srv_buf_size = bufsize;
         service->srv_rep_portal = rep_portal;
@@ -102,8 +100,6 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         }
 
         service->srv_ring_length = RPC_RING_LENGTH;
-        service->srv_id.nid = PTL_ID_ANY;
-        service->srv_id.pid = PTL_ID_ANY;
 
         rc = PtlEQAlloc(service->srv_self.peer_ni, 128, request_in_callback,
                         service, &(service->srv_eq_h));
@@ -191,8 +187,6 @@ static int handle_incoming_request(struct obd_device *obddev,
                         LBUG();
         }
 
-        svc->srv_flags &= ~SVC_EVENT;
-
         spin_unlock(&svc->srv_lock);
         rc = svc->srv_handler(obddev, svc, &request);
         ptlrpc_put_connection(request.rq_connection);
@@ -206,6 +200,7 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct obd_device *obddev = data->dev;
         struct ptlrpc_service *svc = data->svc;
+        struct ptlrpc_thread *thread = data->thread;
 
         ENTRY;
 
@@ -218,10 +213,9 @@ static int ptlrpc_main(void *arg)
 
         sprintf(current->comm, data->name);
 
-        /* Record that the  thread is running */
-        svc->srv_thread = current;
-        svc->srv_flags = SVC_RUNNING;
-        wake_up(&svc->srv_ctl_waitq);
+        /* Record that the thread is running */
+        thread->t_flags = SVC_RUNNING;
+        wake_up(&thread->t_ctl_waitq);
 
         /* XXX maintain a list of all managed devices: insert here */
 
@@ -229,26 +223,28 @@ static int ptlrpc_main(void *arg)
         while (1) {
                 ptl_event_t event;
 
-                wait_event(svc->srv_waitq, ptlrpc_check_event(svc, &event));
+                wait_event(svc->srv_waitq,
+                           ptlrpc_check_event(svc, thread, &event));
 
                 spin_lock(&svc->srv_lock);
-                if (svc->srv_flags & SVC_SIGNAL) {
-                        svc->srv_flags &= ~SVC_SIGNAL;
+                if (thread->t_flags & SVC_SIGNAL) {
+                        thread->t_flags &= ~SVC_SIGNAL;
                         spin_unlock(&svc->srv_lock);
                         EXIT;
                         break;
                 }
 
-                if (svc->srv_flags & SVC_STOPPING) {
-                        svc->srv_flags &= ~SVC_STOPPING;
+                if (thread->t_flags & SVC_STOPPING) {
+                        thread->t_flags &= ~SVC_STOPPING;
                         spin_unlock(&svc->srv_lock);
                         EXIT;
                         break;
                 }
                 
-                if (svc->srv_flags & SVC_EVENT) { 
-                        svc->srv_flags &= ~SVC_EVENT;
+                if (thread->t_flags & SVC_EVENT) { 
+                        thread->t_flags &= ~SVC_EVENT;
                         rc = handle_incoming_request(obddev, svc, &event);
+                        thread->t_flags &= ~SVC_EVENT;
                         continue;
                 }
 
@@ -258,43 +254,69 @@ static int ptlrpc_main(void *arg)
                 break;
         }
 
-        svc->srv_thread = NULL;
-        svc->srv_flags = SVC_STOPPED;
-        wake_up(&svc->srv_ctl_waitq);
-        CDEBUG(D_NET, "svc exiting process %d\n", current->pid);
+        thread->t_flags = SVC_STOPPED;
+        wake_up(&thread->t_ctl_waitq);
+        CDEBUG(D_NET, "service thread exiting, process %d\n", current->pid);
         return 0;
 }
 
-void ptlrpc_stop_thread(struct ptlrpc_service *svc)
+static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
+                               struct ptlrpc_thread *thread)
 {
-        svc->srv_flags = SVC_STOPPING;
+        thread->t_flags = SVC_STOPPING;
 
         wake_up(&svc->srv_waitq);
-        wait_event_interruptible(svc->srv_ctl_waitq,
-                                 (svc->srv_flags & SVC_STOPPED));
+        wait_event_interruptible(thread->t_ctl_waitq,
+                                 (thread->t_flags & SVC_STOPPED));
+}
+
+void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
+{
+        spin_lock(&svc->srv_lock);
+        while (!list_empty(&svc->srv_threads)) {
+                struct ptlrpc_thread *thread;
+                thread = list_entry(svc->srv_threads.next, struct ptlrpc_thread,
+                                    t_link);
+                spin_unlock(&svc->srv_lock);
+                ptlrpc_stop_thread(svc, thread);
+                spin_lock(&svc->srv_lock);
+                list_del(&thread->t_link);
+                OBD_FREE(thread, sizeof(*thread));
+        }
+        spin_unlock(&svc->srv_lock);
 }
 
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
-                                char *name)
+                        char *name)
 {
         struct ptlrpc_svc_data d;
+        struct ptlrpc_thread *thread;
         int rc;
         ENTRY;
+
+        OBD_ALLOC(thread, sizeof(*thread));
+        if (thread == NULL) {
+                LBUG();
+                RETURN(-ENOMEM);
+        }
+        init_waitqueue_head(&thread->t_ctl_waitq);
 
         d.dev = dev;
         d.svc = svc;
         d.name = name;
+        d.thread = thread;
 
-        init_waitqueue_head(&svc->srv_waitq);
+        spin_lock(&svc->srv_lock);
+        list_add(&thread->t_link, &svc->srv_threads);
+        spin_unlock(&svc->srv_lock);
 
-        init_waitqueue_head(&svc->srv_ctl_waitq);
         rc = kernel_thread(ptlrpc_main, (void *) &d,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread\n");
                 RETURN(-EINVAL);
         }
-        wait_event(svc->srv_ctl_waitq, svc->srv_flags & SVC_RUNNING);
+        wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
 
         RETURN(0);
 }

@@ -111,7 +111,8 @@ struct ptlrpc_client {
         struct list_head cli_sent_head;
         struct list_head cli_replied_head;
         struct list_head cli_replay_head;
-        struct list_head cli_ha_item; 
+        struct list_head cli_dying_head;
+        struct list_head cli_ha_item;
         void (*cli_recover)(struct ptlrpc_client *); 
 
         struct recovd_obd *cli_recovd;
@@ -136,7 +137,6 @@ struct ptlrpc_client {
 
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
-        spinlock_t rq_lock;
         struct list_head rq_list;
         struct obd_device *rq_obd;
         int rq_status;
@@ -190,6 +190,13 @@ struct ptlrpc_bulk_desc {
         ptl_handle_me_t b_me_h;
 };
 
+struct ptlrpc_thread {
+        struct list_head t_link;
+
+        __u32 t_flags; 
+        wait_queue_head_t t_ctl_waitq;
+};
+
 struct ptlrpc_service {
         time_t srv_time;
         time_t srv_timeout;
@@ -209,16 +216,13 @@ struct ptlrpc_service {
         /* event queue */
         ptl_handle_eq_t srv_eq_h;
 
-        __u32 srv_flags; 
         struct lustre_peer srv_self;
-        ptl_process_id_t srv_id;
 
-        struct task_struct *srv_thread;
-        wait_queue_head_t srv_waitq;
-        wait_queue_head_t srv_ctl_waitq;
+        wait_queue_head_t srv_waitq; /* all threads sleep on this */
 
         spinlock_t srv_lock;
         struct list_head srv_reqs;
+        struct list_head srv_threads;
         int (*srv_handler)(struct obd_device *obddev, 
                            struct ptlrpc_service *svc,
                            struct ptlrpc_request *req);
@@ -268,7 +272,7 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 struct ptlrpc_service *
 ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
                 svc_handler_t);
-void ptlrpc_stop_thread(struct ptlrpc_service *svc);
+void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);
 int rpc_unregister_service(struct ptlrpc_service *service);
@@ -276,6 +280,7 @@ int rpc_unregister_service(struct ptlrpc_service *service);
 struct ptlrpc_svc_data { 
         char *name;
         struct ptlrpc_service *svc; 
+        struct ptlrpc_thread *thread;
         struct obd_device *dev;
 }; 
 

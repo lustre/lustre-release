@@ -87,7 +87,7 @@ int connmgr_cleanup(struct obd_device *dev)
         if (err) 
                 LBUG();
 
-        ptlrpc_stop_thread(recovd->recovd_service);
+        ptlrpc_stop_all_threads(recovd->recovd_service);
         rpc_unregister_service(recovd->recovd_service);
         if (!list_empty(&recovd->recovd_service->srv_reqs)) {
                 // XXX reply with errors and clean up
