@@ -1022,11 +1022,11 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         struct ldlm_namespace *ns;
         ENTRY;
 
-        l_lock(&ns->ns_lock);
-        ldlm_del_waiting_lock(lock);
-
         res = lock->l_resource;
         ns = res->lr_namespace;
+
+        l_lock(&ns->ns_lock);
+        ldlm_del_waiting_lock(lock);
 
         /* Please do not, no matter how tempting, remove this LBUG without
          * talking to me first. -phik */
