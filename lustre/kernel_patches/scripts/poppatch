@@ -64,6 +64,7 @@ do
 	then
 		if [ $STOP_AT == $(toppatch) ]
 		then
+                        sum-series applied-patch
 			exit 0
 		fi
 	fi

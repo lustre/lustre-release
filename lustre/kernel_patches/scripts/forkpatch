@@ -36,7 +36,7 @@ if [ -f $P/$BASE.patch ] ; then
         exit 1
 fi
 
-if  grep $BASE $SERIES > 2&>1 /dev/null ; then 
+if  grep $BASE $SERIES >& /dev/null ; then 
         echo "Patch $NEW already exists in series"
         exit 1
 fi
