@@ -389,6 +389,21 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                                            0, &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(out_oa, rc);
+                } else {
+                        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+                        if (lmm == NULL)
+                                GOTO(out_oa, rc = -ENOMEM);
+                                                                                                                                                                                                     
+                        lmm_size = mds->mds_max_mdsize;
+                        rc = mds_get_md(obd, dchild->d_parent->d_inode,
+                                        lmm, &lmm_size, 1);
+                        if (rc > 0)
+                                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
+                                                   mds->mds_osc_exp,
+                                                   0, &lsm, lmm);
+                        OBD_FREE(lmm, mds->mds_max_mdsize);
+                        if (rc)
+                                GOTO(out_oa, rc);
                 }
                 LASSERT(oa->o_gr >= FILTER_GROUP_FIRST_MDS);
                 rc = obd_create(mds->mds_osc_exp, oa, &lsm, &oti);
