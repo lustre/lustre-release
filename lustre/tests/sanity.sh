@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+
 CHECKSTAT=${CHECKSTAT:-"./checkstat -v"}
 MOUNT=${MOUNT:-/mnt/lustre}
 export NAME=$NAME
@@ -274,10 +275,10 @@ $START
 echo '== unpack tar archive as nonroot user =========== test 22'
 mkdir $MOUNT/d22
 which sudo && chown 4711 $MOUNT/d22
-SUDO=`which sudo` && SUDO="$SUDO -u \#4711" || SUDO=""
+SUDO=`which sudo` && SUDO="$SUDO -u #4711" || SUDO=""
 $SUDO tar cf - /etc/hosts /etc/sysconfig/network | $SUDO tar xfC - $MOUNT/d22
 ls -lR $MOUNT/d22/etc
-$CHECKSTAT -t dir $MOUNT/d22/etc || error
+$CHECKSTAT -u \#4711 -t dir $MOUNT/d22/etc || error
 pass
 $CLEAN
 $START
@@ -324,7 +325,7 @@ $START
 echo '-- test 24-R4: mkdir a b ; rename a b;'
 mkdir $MOUNT/R4
 mkdir $MOUNT/R4/{f,g}
-perl -e "rename \"$MOUNT/R3/f\", \"$MOUNT/R3/g\";"
+perl -e "rename \"$MOUNT/R4/f\", \"$MOUNT/R4/g\";"
 $CHECKSTAT -a $MOUNT/R4/f || error
 $CHECKSTAT -t dir $MOUNT/R4/g || error
 pass
@@ -378,7 +379,8 @@ mkdir $MOUNT/R9
 mkdir $MOUNT/R9/a
 touch $MOUNT/R9/f
 perl -e "rename \"$MOUNT/R9/f\", \"$MOUNT/R9/a\";"
-$CHECKSTAT -a $MOUNT/R9/f || error
+$CHECKSTAT -t file $MOUNT/R9/f || error
+$CHECKSTAT -t dir  $MOUNT/R9/a || error
 $CHECKSTAT -a file $MOUNT/R9/a/f || error
 pass
 $CLEAN
@@ -386,7 +388,7 @@ $START
 
 echo "--test 24-R10 source does not exist" 
 mkdir $MOUNT/R10
-! mv $MOUNT/R10/f $MOUNT/R10/g 
+perl -e "rename \"$MOUNT/R10/f\", \"$MOUNT/R10/g\"" 
 $CHECKSTAT -t dir $MOUNT/R10 || error
 $CHECKSTAT -a $MOUNT/R10/f || error
 $CHECKSTAT -a $MOUNT/R10/g || error
