@@ -5,6 +5,6 @@
 include ../config.mk
 
 MODULE = obdfs.o
-CFILES=file.c dir.c sysctl.c super.c rw.c namei.c symlink.c
+CFILES= flush.c file.c dir.c sysctl.c super.c rw.c namei.c symlink.c
 
 include ../make.rules

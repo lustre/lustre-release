@@ -17,6 +17,9 @@
 /* super.c */
 void obdfs_read_inode(struct inode *inode);
 
+/* flush.c */
+int flushd_init(void);
+
 
 /* rw.c */
 int obdfs_init_wreqcache(void);
@@ -43,6 +46,11 @@ int obdfs_check_dir_entry (const char * function, struct inode * dir,
 /* symlink.c */
 int obdfs_readlink (struct dentry *, char *, int);
 struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int); 
+
+struct obdfs_super_entry {
+	struct list_head sl_chain;
+	struct obdfs_sb_info *sbi;
+};
 
 struct obdfs_wreq {
 	struct list_head	 wb_list;	/* linked list of req's */

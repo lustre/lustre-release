@@ -55,6 +55,8 @@ struct super_operations obdfs_super_operations =
 	NULL			/* remount_fs */
 };
 
+struct list_head obdfs_super_list;
+
 static char *obdfs_read_opt(const char *opt, char *data)
 {
 	char *value;
@@ -120,6 +122,8 @@ static int obdfs_getdev(char *devpath, int *dev)
 	return 0;
 }
 
+
+/* XXX allocate a super_entry, and add the super to the obdfs_super_list */
 static struct super_block * obdfs_read_super(struct super_block *sb, 
 					    void *data, int silent)
 {
@@ -265,6 +269,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         return NULL;
 }
 
+/* XXX remove the super to the obdfs_super_list */
 static void obdfs_put_super(struct super_block *sb)
 {
         struct obdfs_sb_info *sbi;
@@ -394,9 +399,12 @@ int init_obdfs(void)
 
 	obdfs_sysctl_init();
 
+	INIT_LIST_HEAD(&obdfs_super_list);
 	err = obdfs_init_wreqcache();
 	if (err)
 		return err;
+
+	flushd_init();
 
 	return register_filesystem(&obdfs_fs_type);
 }
