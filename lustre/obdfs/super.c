@@ -28,12 +28,6 @@
 #include <../obd/linux/sim_obd.h>
 #include <obdfs.h>
 
-/* DEBUGGING! */
-#undef MOD_INC_USE_COUNT
-#define MOD_INC_USE_COUNT
-#undef MOD_DEC_USE_COUNT
-#define MOD_DEC_USE_COUNT
-
 /* VFS super_block ops */
 static struct super_block *obdfs_read_super(struct super_block *, void *, int);
 static void obdfs_read_inode(struct inode *);
@@ -281,6 +275,7 @@ void cleanup_module(void)
         ENTRY;
 
 	obdfs_sysctl_clean();
+	unregister_filesystem(&obdfs_fs_type);
 }
 void obdfs_psdev_dec_use_count(void)
 {
