@@ -1069,10 +1069,6 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                                 GOTO(cleanup, rc = PTR_ERR(dchild));
                         }
                         memcpy(child_lockh, parent_lockh, sizeof(parent_lockh[0]));
-#ifdef S_PDIROPS
-                        if (parent_lockh[1].cookie)
-                                ldlm_lock_decref(parent_lockh + 1, update_mode);
-#endif
                 }
         } else {
                 struct ldlm_lock *granted_lock;
