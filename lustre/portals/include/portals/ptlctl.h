@@ -39,7 +39,6 @@ char * ptl_nid2str (char *buffer, ptl_nid_t nid);
 
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
-int jt_ptl_privileged_only(int argc, char **argv);
 int jt_ptl_print_interfaces(int argc, char **argv);
 int jt_ptl_add_interface(int argc, char **argv);
 int jt_ptl_del_interface(int argc, char **argv);
