@@ -638,7 +638,7 @@ int jt_obd_newdev(int argc, char **argv)
 int jt_obd_list(int argc, char **argv)
 {
         int rc;
-        char buf[1024];
+        char buf[8192];
         struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
 
         if (getfd(argv[0]))
