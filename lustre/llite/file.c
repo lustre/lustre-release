@@ -53,7 +53,6 @@ static int ll_file_open(struct inode *inode, struct file *file)
         if (lsm == NULL) {
                 struct inode *inode = file->f_dentry->d_inode;
 
-#warning FIXME: need to get an LDLM lock to prevent racy multi-client creates
                 down(&lli->lli_open_sem);
                 /* Check to see if we lost the race */
                 if (lli->lli_smd == NULL) {
