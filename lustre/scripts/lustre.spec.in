@@ -1,14 +1,9 @@
 # obd.spec
-%define linuxdir @LINUX@
 %define version 0.3.2.0
-%define kversion @KVERSION@
-%define extra_version @EXTRAVERSION@
-%define module_dir @moduledir@
+%define kversion @RELEASE@
+%define linuxdir @LINUX@
+%define portalsdir @PORTALS@
 Release: 0
-%define extraversion -%{extra_version}
-%define kuname %{kversion}%{extraversion}
-%define knamever %{kversion}_%{aclevel}
-%define bdir $RPM_BUILD_DIR/%{module_dir}/fs
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -24,11 +19,11 @@ The Lustre Lite Cluster File System: kernel drivers for file system,
 servers and utilities.
 
 %package -n lustre-modules
-Summary: Kernel Lustre drivers for Linux %{kuname}
+Summary: Kernel Lustre drivers for Linux %{kversion}
 Group: Development/Kernel
 
 %description -n lustre-modules
-Lustre file System, server and network drivers for Linux %{kuname}.
+Lustre file System, server and network drivers for Linux %{kversion}.
 
 %package -n lustre-source
 Summary: Object-Based Disk storage driver source
@@ -48,7 +43,7 @@ mkdir -p $RPM_BUILD_ROOT/usr/src/obd-%{version}
 tar -cf - . | (cd $RPM_BUILD_ROOT/usr/src/obd-%{version} && tar -xvBpf -)
 
 # Set an explicit path to our Linux tree, if we can.
-./configure --enable-linuxdir=$linuxdir
+./configure --enable-linuxdir=%{linuxdir} --enable-portalsdir=%{portalsdir}
 make
 
 %install
@@ -59,20 +54,20 @@ make install prefix=$RPM_BUILD_ROOT
 %attr(-, root, root) %doc doc/API.txt doc/OBD-HOWTO.sgml doc/obdspec.sgml
 %attr(-, root, root) %doc doc/OLVM.txt doc/figs doc/notes.txt
 %attr(-, root, root) %doc doc/obdtrace_demo.txt
-%attr(-, root, root) /usr/bin/obdcontrol
+%attr(-, root, root) /usr/bin/obdctl
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) /lib/modules/%{kuname}/fs/llight.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/ptlrpc.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/mds.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/mdc.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/ost.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/osc.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/obdclass.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/obdfilter.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/obdecho.o
-%attr(-, root, root) /lib/modules/%{kuname}/fs/obdext2.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/llight.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/ptlrpc.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/mds.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/mdc.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/ost.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/osc.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/obdclass.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/obdfilter.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/obdecho.o
+%attr(-, root, root) /lib/modules/%{kversion}/fs/obdext2.o
 
 %files -n lustre-source
 %attr(-, root, root) /usr/src/obd-%{version}
