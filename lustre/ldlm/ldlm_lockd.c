@@ -466,6 +466,12 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
+        if (req->rq_export == NULL) {
+                CERROR("lustre_dlm: operation %d with missing/invalid export\n",
+                       req->rq_reqmsg->opc);
+                GOTO(out, rc = -ENOTCONN);
+        }
+
         switch (req->rq_reqmsg->opc) {
         case LDLM_BL_CALLBACK:
                 CDEBUG(D_INODE, "blocking ast\n");
