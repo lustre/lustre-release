@@ -6,6 +6,9 @@ set -e
 # 3 - bug 1852
 ALWAYS_EXCEPT="3"
 
+LCONF=${LCONF:-"../utils/lconf"}
+LMC=${LMC:-"../utils/lmc"}
+LCTL=${LCTL:-"../utils/lctl"}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 PATH=$LUSTRE/utils:$LUSTRE/tests:$PATH

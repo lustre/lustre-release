@@ -22,6 +22,7 @@ init_test_env() {
     [ -d /r ] && export ROOT=/r
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
+    export PATH=$PATH:$RLUSTRE/utils:$RLUSTRE/tests
     export PATH=$RLUSTRE/utils:$RLUSTRE/tests:$PATH
     
     export CHECKSTAT="${CHECKSTAT:-checkstat} -v"
@@ -31,24 +32,24 @@ start() {
     facet=$1
     shift
     active=`facet_active $facet`
-    do_facet $facet lconf --select ${facet}1=${active}_facet --node ${active}_facet $@ $XMLCONFIG
+    do_facet $facet $LCONF --select ${facet}1=${active}_facet --node ${active}_facet $@ $XMLCONFIG
 }
 
 stop() {
     facet=$1
     active=`facet_active $facet`
     shift
-    do_facet $facet lconf --select ${facet}1=${active}_facet --node ${active}_facet $@ --cleanup $XMLCONFIG
+    do_facet $facet $LCONF --select ${facet}1=${active}_facet --node ${active}_facet $@ --cleanup $XMLCONFIG
 }
 
 replay_barrier() {
     local facet=$1
     do_facet $facet sync
     df $MOUNT
-    do_facet $facet lctl --device %${facet}1 readonly
-    do_facet $facet lctl --device %${facet}1 notransno
-    do_facet $facet lctl mark "REPLAY BARRIER"
-    lctl mark "REPLAY BARRIER"
+    do_facet $facet $LCTL --device %${facet}1 readonly
+    do_facet $facet $LCTL --device %${facet}1 notransno
+    do_facet $facet $LCTL mark "REPLAY BARRIER"
+    $LCTL mark "REPLAY BARRIER"
 }
 
 mds_evict_client() {
@@ -65,7 +66,7 @@ fail() {
 }
 
 do_lmc() {
-    lmc -m ${XMLCONFIG} $@
+    $LMC -m ${XMLCONFIG} $@
 }
 
 h2tcp() {
