@@ -547,11 +547,13 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *obdo,
         if (cmd == OBD_BRW_WRITE)
                 return filter_preprw_write(exp, obdo, objcount, obj, niocount,
                                            nb, res, oti);
-        else if (cmd == OBD_BRW_READ)
+
+        if (cmd == OBD_BRW_READ)
                 return filter_preprw_read(exp, obdo, objcount, obj, niocount,
                                           nb, res, oti);
-        else
-                LBUG();
+        LBUG();
+
+        return -EPROTO;
 }
 
 /* It is highly unlikely that we would ever get an error here.  The page we want
