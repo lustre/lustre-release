@@ -628,7 +628,7 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
         return rc;
 }
 
-static int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
+static int osc_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
                    struct obdo **oa, obd_count *oa_bufs, struct page **buf,
                    obd_size *count, obd_off *offset, obd_flag *flags,
                    void *callback)
@@ -636,12 +636,12 @@ static int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
         if (num_oa != 1)
                 LBUG();
 
-        if (rw == OBD_BRW_READ)
-                return osc_brw_read(conn, num_oa, oa, oa_bufs, buf, count,
-                                    offset, flags, (bulk_callback_t)callback);
-        else
+        if (cmd & OBD_BRW_WRITE)
                 return osc_brw_write(conn, num_oa, oa, oa_bufs, buf, count,
                                      offset, flags, (bulk_callback_t)callback);
+        else
+                return osc_brw_read(conn, num_oa, oa, oa_bufs, buf, count,
+                                    offset, flags, (bulk_callback_t)callback);
 }
 
 static int osc_enqueue(struct obd_conn *oconn,
@@ -804,24 +804,19 @@ static int osc_cleanup(struct obd_device * obddev)
 }
 
 #if 0
-static int osc_statfs(struct obd_conn *conn, struct statfs *statfs);
+static int osc_statfs(struct obd_conn *conn, struct statfs *sfs);
 {
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
-        struct ost_body *body;
-        int rc, size = sizeof(*body);
+        struct obd_statfs *osfs;
+        int rc, size = sizeof(*osfs);
         ENTRY;
 
         osc_con2cl(conn, &cl, &connection);
-        request = ptlrpc_prep_req(cl, connection, OST_STATFS, 1, &size, NULL);
+        request = ptlrpc_prep_req(cl, connection, OST_STATFS, 0, NULL, NULL);
         if (!request)
                 RETURN(-ENOMEM);
-
-        body = lustre_msg_buf(request->rq_reqmsg, 0);
-        memcpy(&body->oa, oa, sizeof(*oa));
-        body->oa.o_valid = ~0;
-        body->connid = conn->oc_id;
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -830,8 +825,8 @@ static int osc_statfs(struct obd_conn *conn, struct statfs *statfs);
         if (rc)
                 GOTO(out, rc);
 
-        body = lustre_msg_buf(request->rq_repmsg, 0);
-        memcpy(oa, &body->oa, sizeof(*oa));
+        osfs = lustre_msg_buf(request->rq_repmsg, 0);
+        obd_statfs_unpack(sfs, osfs);
 
         EXIT;
  out:
