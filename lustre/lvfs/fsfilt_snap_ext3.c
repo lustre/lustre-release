@@ -60,7 +60,7 @@
 #define EXT3_MAX_SNAP_DATA (sizeof(struct snap_ea))
 #define EXT3_SNAP_INDEX EXT3_XATTR_INDEX_LUSTRE
 #define EXT3_SNAP_COUNT "@snapcount"
-
+#define EXT3_SNAP_ROOT_INO "@snap_rootino"
 
 #define SB_FEATURE_COMPAT(sb)  (EXT3_SB(sb)->s_es->s_feature_compat)
                                                                                                                                                                                                      
@@ -214,7 +214,7 @@ static struct inode *fsfilt_ext3_get_indirect(struct inode *primary, int *table,
 		inode = iget(primary->i_sb, ino);
 		GOTO(err_free, rc);
 	}
-	if( slot == -1) {
+	if(slot == -1 && table) {
 		CDEBUG(D_INODE, "redirector not found, using primary\n");
 		inode = iget(primary->i_sb, primary->i_ino);
 	}
@@ -922,7 +922,7 @@ static ino_t fsfilt_ext3_get_indirect_ino(struct super_block *sb,
         ino_t ino = 0;
         int err;
         ENTRY;                                                                                                                                                                                             
-        if (index < 0 || index > EXT3_MAX_SNAPS || !primary)
+        if (index < 0 || index > EXT3_MAX_SNAPS)
                 RETURN(0);
         primary = iget(sb, primary_ino);   
        
@@ -1571,6 +1571,10 @@ static int fsfilt_ext3_get_snap_info(struct inode *inode, void *key,
                         *vallen = sizeof(int);
                         rc = 0;
                 }
+                if (rc > 0) {
+                        rc = 0;
+                        *vallen = rc;
+                }
                 RETURN(rc);
         } else if (keylen >= strlen(SNAP_COUNT) && 
                    strcmp(key, SNAP_COUNT) == 0) {
@@ -1581,9 +1585,22 @@ static int fsfilt_ext3_get_snap_info(struct inode *inode, void *key,
                         *vallen = sizeof(int);
                         rc = 0;
                 }
+                if (rc > 0) {
+                        rc = 0;
+                        *vallen = rc;
+                }
+                RETURN(rc);
+        } else if (keylen >= strlen(SNAP_ROOT_INO) && 
+                   (strcmp(key, SNAP_ROOT_INO) == 0)) {
+                
+                rc = ext3_xattr_get(inode, EXT3_SNAP_INDEX,
+                                    EXT3_SNAP_ROOT_INO, val, *vallen);
+                if (rc > 0) {
+                        rc = 0;
+                        *vallen = rc;
+                }
                 RETURN(rc);
         }
- 
         RETURN(-EINVAL);
 } 
 
@@ -1631,10 +1648,16 @@ static int fsfilt_ext3_set_snap_info(struct inode *inode, void *key,
                 RETURN(rc);
         } else if (keylen >= strlen(SNAP_ROOT_INO) && 
                    (strcmp(key, SNAP_ROOT_INO) == 0)) {
-        
-
-
-
+                handle_t *handle;
+                EXT3_JOURNAL_START(inode->i_sb, handle, 
+                                   EXT3_XATTR_TRANS_BLOCKS, rc); 
+                if(rc)
+                        RETURN(rc);
+                rc = ext3_xattr_set_handle(handle, inode, EXT3_SNAP_INDEX, 
+                                           EXT3_SNAP_ROOT_INO, val, *vallen, 0); 
+	        journal_stop(handle);
+                
+                RETURN(rc);
         }       
  
         RETURN(-EINVAL);

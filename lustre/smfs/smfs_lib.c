@@ -163,6 +163,7 @@ err_out:
 
 static int smfs_umount_cache(struct smfs_super_info *smb)
 {
+        
         mntput(smb->smsi_mnt);
         smfs_cleanup_sm_ops(smb);
         smfs_cleanup_fsfilt_ops(smb);
@@ -232,9 +233,8 @@ void smfs_put_super(struct super_block *sb)
 {
         struct smfs_super_info *smfs_info = S2SMI(sb);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         smfs_cleanup_hooks(smfs_info);
-#endif
+        
         if (sb)
                 smfs_umount_cache(smfs_info);
         smfs_cleanup_smb(sb); 

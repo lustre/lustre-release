@@ -324,8 +324,10 @@ static inline void post_smfs_inode(struct inode *inode,
 static inline void pre_smfs_inode(struct inode *inode,
                                   struct inode *cache_inode)
 {
-        if (inode && cache_inode)
-                duplicate_inode(cache_inode, inode);
+        if (inode && cache_inode) {
+                cache_inode->i_state = inode->i_state;
+        //      duplicate_inode(cache_inode, inode);
+        }
 }
 
 /* instantiate a file handle to the cache file */

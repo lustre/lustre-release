@@ -301,11 +301,9 @@ int smfs_open(struct inode *inode, struct file *filp)
         if ((rc = smfs_init_cache_file(inode, filp)))
                 RETURN(rc);
 
-        pre_smfs_inode(inode, cache_inode);
         if (cache_inode->i_fop->open)
                 rc = cache_inode->i_fop->open(cache_inode, F2CF(filp));
 
-        post_smfs_inode(inode, cache_inode);
         duplicate_file(filp, F2CF(filp));
         RETURN(rc);
 }
@@ -327,12 +325,10 @@ int smfs_release(struct inode *inode, struct file *filp)
                         LBUG();
                 cache_file = sfi->c_file;
         }
-        pre_smfs_inode(inode, cache_inode);
         if (cache_inode->i_fop->release)
                 rc = cache_inode->i_fop->release(cache_inode, cache_file);
 
         post_smfs_inode(inode, cache_inode);
-        duplicate_file(filp, cache_file);
 
         smfs_cleanup_cache_file(filp);
         RETURN(rc);

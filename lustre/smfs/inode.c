@@ -63,14 +63,17 @@ static void smfs_init_inode_info (struct inode *inode, void *opaque)
 
 static void smfs_clear_inode_info(struct inode *inode)
 {
-        struct inode *cache_inode = I2CI(inode);
- 
-        LASSERTF(atomic_read(&cache_inode->i_count) == 1, 
-                 "inode %lu i_count %d != 1\n", cache_inode->i_ino, 
-                 atomic_read(&cache_inode->i_count));
-      
-        iput(cache_inode);
-        OBD_FREE(I2SMI(inode), sizeof(struct smfs_inode_info));
+        if (I2SMI(inode)) {
+                struct inode *cache_inode = I2CI(inode);
+                LASSERTF(((atomic_read(&cache_inode->i_count) == 0) || 
+                           cache_inode == cache_inode->i_sb->s_root->d_inode),  
+                         "inode %p cache inode %p %lu i_count %d != 0 \n", 
+                          inode, cache_inode, cache_inode->i_ino, 
+                          atomic_read(&cache_inode->i_count));
+
+                OBD_FREE(I2SMI(inode), sizeof(struct smfs_inode_info));
+                I2SMI(inode) = NULL;
+        }
 }
 
 static void smfs_read_inode2(struct inode *inode, void *opaque)
@@ -130,8 +133,9 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
         if (inode) {
                 if (inode->i_state & I_NEW)
                         unlock_new_inode(inode);
-                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
-                       inode->i_generation, inode);
+                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p) index %d ino %lu \n", 
+                       inode->i_ino, inode->i_generation, inode, sargs->s_index, 
+                       sargs->s_ino);
                 inode->i_ino = hash;
         }
         return inode;
@@ -267,13 +271,7 @@ static void smfs_put_inode(struct inode *inode)
                 return;
         }
         
-        CDEBUG(D_INFO, "cache_inode i_count ino %lu i_count %d\n",
-               inode->i_ino, atomic_read(&inode->i_count));
-        if (atomic_read(&cache_inode->i_count) > 1 /*&& 
-            cache_inode != cache_inode->i_sb->s_root->d_inode*/) {
-                CDEBUG(D_INFO, "cache_inode i_count ino %lu i_count %d\n",
-                       cache_inode->i_ino, 
-                       atomic_read(&cache_inode->i_count) - 1);
+        if (atomic_read(&cache_inode->i_count) > 0) {
                 iput(cache_inode);
         }
         
