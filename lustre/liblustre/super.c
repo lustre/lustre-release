@@ -27,6 +27,7 @@
 #include <string.h>
 #include <error.h>
 #include <assert.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/queue.h>
 
@@ -264,7 +265,7 @@ static int llu_iop_lookup(struct pnode *pnode,
                 return -EINVAL;
 
         /* mdc_getattr_name require NULL-terminated name */
-        pname = malloc(name->len + 1);
+        OBD_ALLOC(pname, name->len + 1);
         if (!pname)
                 return -ENOMEM;
         memcpy(pname, name->name, name->len);
@@ -333,6 +334,7 @@ static int llu_iop_lookup(struct pnode *pnode,
 
 out:
         ptlrpc_req_finished(request);
+        OBD_FREE(pname, name->len + 1);
 
         return rc;
 }
@@ -518,6 +520,46 @@ static int llu_iop_setattr(struct pnode *pno,
 }
 
 
+static int llu_mkdir2(struct inode *dir, const char *name, int len, int mode)
+{
+        struct ptlrpc_request *request = NULL;
+        time_t curtime = CURRENT_TIME;
+        struct llu_sb_info *sbi = llu_i2sbi(dir);
+        struct llu_inode_info *lli = llu_i2info(dir);
+        struct mdc_op_data op_data;
+        int err = -EMLINK;
+        ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu\n",
+               name, lli->lli_st_ino);
+
+        /* FIXME check this later */
+#if 0 
+        if (dir->i_nlink >= EXT2_LINK_MAX)
+                RETURN(err);
+        mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
+#endif
+        mode |= S_IFDIR;
+        llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        err = mdc_create(&sbi->ll_mdc_conn, &op_data, NULL, 0, mode,
+                         current->fsuid, current->fsgid,
+                         curtime, 0, &request);
+        ptlrpc_req_finished(request);
+        RETURN(err);
+}
+
+static llu_iop_mkdir(struct pnode *pno, mode_t mode)
+{
+        struct inode *dir = pno->p_base->pb_parent->pb_ino;
+        struct qstr *qstr = &pno->p_base->pb_name;
+        int rc;
+
+        LASSERT(dir);
+
+        rc = llu_mkdir2(dir, qstr->name, qstr->len, mode);
+
+        return rc;
+}
+
 struct filesys_ops llu_filesys_ops =
 {
         fsop_gone: llu_fsop_gone,
@@ -529,7 +571,7 @@ static struct inode_ops llu_inode_ops = {
         inop_getattr:   llu_iop_getattr,
         inop_setattr:   llu_iop_setattr,
         inop_getdirentries:     NULL,
-        inop_mkdir:     NULL,
+        inop_mkdir:     llu_iop_mkdir,
         inop_rmdir:     NULL,
         inop_symlink:   NULL,
         inop_readlink:  NULL,

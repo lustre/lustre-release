@@ -89,6 +89,8 @@ void init_current(char *comm)
 { 
         current = malloc(sizeof(*current));
         current->fs = malloc(sizeof(*current->fs));
+        current->fs->umask = umask(0777);
+        umask(current->fs->umask);
         strncpy(current->comm, comm, sizeof(current->comm));
         current->pid = getpid();
         current->fsuid = 0;
