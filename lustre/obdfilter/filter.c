@@ -26,6 +26,7 @@
 long filter_memory;
 
 #define FILTER_ROOTINO 2
+#define FILTER_ROOTINO_STR __stringify(FILTER_ROOTINO)
 
 #define S_SHIFT 12
 static char *obd_type_by_mode[S_IFMT >> S_SHIFT] = {
@@ -64,10 +65,10 @@ static int filter_prep(struct obd_device *obddev)
         struct obd_run_ctxt saved;
         struct filter_obd *filter = &obddev->u.filter;
         struct dentry *dentry;
+        struct dentry *root;
         struct file *file;
         struct inode *inode;
         int rc = 0;
-        char rootid[128];
         __u64 lastino = 2;
         int mode = 0;
 
@@ -87,8 +88,6 @@ static int filter_prep(struct obd_device *obddev)
                 CERROR("cannot open/create P: rc = %d\n", rc);
                 GOTO(out_O, rc);
         }
-        CDEBUG(D_INODE, "putting P: %p, count = %d\n", dentry,
-               atomic_read(&dentry->d_count) - 1);
         f_dput(dentry);
         dentry = simple_mkdir(current->fs->pwd, "D", 0700);
         CDEBUG(D_INODE, "got/created D: %p\n", dentry);
@@ -97,9 +96,16 @@ static int filter_prep(struct obd_device *obddev)
                 CERROR("cannot open/create D: rc = %d\n", rc);
                 GOTO(out_O, rc);
         }
-        CDEBUG(D_INODE, "putting D: %p, count = %d\n", dentry,
-               atomic_read(&dentry->d_count) - 1);
+
+        root = simple_mknod(dentry, FILTER_ROOTINO_STR, S_IFREG | 0755);
         f_dput(dentry);
+        if (IS_ERR(root)) {
+                rc = PTR_ERR(root);
+                CERROR("OBD filter: cannot open/create root %d: rc = %d\n",
+                       FILTER_ROOTINO, rc);
+                GOTO(out_O, rc);
+        }
+        f_dput(root);
 
         /*
          * Create directories and/or get dentries for each object type.
@@ -121,16 +127,6 @@ static int filter_prep(struct obd_device *obddev)
                 }
                 filter->fo_dentry_O_mode[mode] = dentry;
         }
-
-        filter_id(rootid, FILTER_ROOTINO, S_IFDIR);
-        file = filp_open(rootid, O_RDWR | O_CREAT, 0755);
-        if (IS_ERR(file)) {
-                rc = PTR_ERR(file);
-                CERROR("OBD filter: cannot open/create root %s: rc = %d\n",
-                       rootid, rc);
-                GOTO(out_O_mode, rc);
-        }
-        filp_close(file, 0);
 
         file = filp_open("D/status", O_RDWR | O_CREAT, 0700);
         if ( !file || IS_ERR(file) ) {
@@ -483,6 +479,7 @@ static int filter_getattr(struct lustre_handle *conn, struct obdo *oa,
 {
         struct obd_device *obddev = class_conn2obd(conn);
         struct dentry *dentry;
+        int rc = 0;
         ENTRY;
 
         if (!class_conn2export(conn)) {
@@ -496,10 +493,16 @@ static int filter_getattr(struct lustre_handle *conn, struct obdo *oa,
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
+        if (!dentry->d_inode) {
+                CERROR("getattr on non-existent object: "LPU64"\n", oa->o_id);
+                GOTO(out_getattr, rc = -ENOENT);
+        }
+
         filter_from_inode(oa, dentry->d_inode, oa->o_valid);
 
+out_getattr:
         f_dput(dentry);
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
@@ -548,7 +551,7 @@ out_setattr:
 }
 
 static int filter_open(struct lustre_handle *conn, struct obdo *oa,
-                          struct lov_stripe_md *ea)
+                       struct lov_stripe_md *ea)
 {
         struct obd_export *export;
         struct obd_device *obd;
@@ -631,7 +634,8 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
         sprintf(name, LPU64, oa->o_id);
         mode = (oa->o_mode & ~S_IFMT) | S_IFREG;
         push_ctxt(&saved, &obd->u.filter.fo_ctxt);
-        new = simple_mknod(filter->fo_dentry_O_mode[S_IFREG >> S_SHIFT], name, oa->o_mode);
+        new = simple_mknod(filter->fo_dentry_O_mode[S_IFREG >> S_SHIFT], name,
+                           mode);
         pop_ctxt(&saved);
         if (IS_ERR(new)) {
                 CERROR("Error mknod obj %s, err %ld\n", name, PTR_ERR(new));
@@ -675,7 +679,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
                 GOTO(out, rc = -ENOENT);
 
         inode = object_dentry->d_inode;
-        if (inode == NULL) {
+        if (!inode) {
                 CERROR("trying to destroy negative inode "LPX64"!\n", oa->o_id);
                 GOTO(out, rc = -ENOENT);
         }
@@ -686,6 +690,11 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
                 inode->i_nlink = 1;
         }
         inode->i_mode = S_IFREG;
+
+        if (atomic_read(&inode->i_count) > 1) {
+#warning FIXME: need to handle open-unlinked case and move to hold dir
+                CERROR("inode has count %d\n", atomic_read(&inode->i_count));
+        }
 
         filter = &obd->u.filter;
         push_ctxt(&saved, &filter->fo_ctxt);

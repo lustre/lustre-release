@@ -92,13 +92,13 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
                 GOTO(out, PTR_ERR(dchild));
 
         if (dchild->d_inode) {
-                if (!S_ISDIR(dchild->d_inode->i_mode))
-                        GOTO(out, err = -ENOTDIR);
+                if (((dchild->d_inode->i_mode ^ mode) & S_IFMT) != 0)
+                        GOTO(out, err = -EEXIST);
 
                 GOTO(out, dchild);
         }
 
-        err = vfs_create(dir->d_inode, dchild, S_IFREG | mode);
+        err = vfs_create(dir->d_inode, dchild, (mode & S_IFMT) | S_IFREG);
         EXIT;
 out:
         up(&dir->d_inode->i_sem);
