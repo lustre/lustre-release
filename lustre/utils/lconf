@@ -1476,7 +1476,7 @@ class LMV(Module):
 
     def cleanup_module(self):
         Module.cleanup_module(self)
-        for mds in self.mdclist:
+        for mdc in self.mdclist:
             mdc.cleanup_module()
             break
 
