@@ -31,6 +31,13 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
 
+static inline void l_dput(struct dentry *de) 
+{
+        if (!de || IS_ERR(de)) 
+                return; 
+        dput(de); 
+}
+
 struct mds_run_ctxt { 
 	struct vfsmount *pwdmnt;
 	struct dentry   *pwd;
@@ -94,7 +101,10 @@ int mds_reint_rec(struct mds_update_record *r, struct ptlrpc_request *req);
 int mds_update_unpack(char *buf, int len, struct mds_update_record *r); 
 
 void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct iattr *iattr);
-void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time);
+void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time, const char *tgt, int tgtlen);
+void mds_unlink_pack(struct mds_rec_unlink *rec, struct inode *inode, const char *name, int namelen);
+void mds_link_pack(struct mds_rec_link *rec, struct inode *inode, struct inode *dir, const char *name, int namelen);
+void mds_rename_pack(struct mds_rec_rename *rec, struct inode *srcdir, struct inode *tgtdir, const char *name, int namelen, const char *tgt, int tgtlen);
 
 /* mds/handler.c */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
@@ -107,10 +117,21 @@ int mdc_setattr(struct lustre_peer *peer, struct inode *inode,
                 struct ptlrep_hdr **hdr);
 int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
                  char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr);
-int mdc_create(struct lustre_peer *peer, struct inode *dir, const char *name, 
-               int namelen, int mode, __u64 id, __u32 uid, 
-               __u32 gid, __u64 time, 
+int mdc_create(struct lustre_peer *peer, 
+	       struct inode *dir, const char *name, int namelen, 
+	       const char *tgt, int tgtlen, 
+	       int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
                struct mds_rep **rep, struct ptlrep_hdr **hdr);
+int mdc_unlink(struct lustre_peer *peer, 
+	       struct inode *dir, const char *name, int namelen, 
+               struct mds_rep **rep, struct ptlrep_hdr **hdr);
+int mdc_link(struct lustre_peer *peer, struct dentry *src, 
+	       struct inode *dir, const char *name, int namelen, 
+               struct mds_rep **rep, struct ptlrep_hdr **hdr);
+int mdc_rename(struct lustre_peer *peer, struct inode *src, 
+	       struct inode *tgt, const char *old, int oldlen, 
+	       const char *new, int newlen, 
+	       struct mds_rep **rep, struct ptlrep_hdr **hdr);
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'

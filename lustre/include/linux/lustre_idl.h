@@ -182,7 +182,10 @@ struct obd_ioobj {
 
 #define REINT_SETATTR 0
 #define REINT_CREATE  1
-#define REINT_MAX     1
+#define REINT_LINK    2
+#define REINT_UNLINK  3
+#define REINT_RENAME  4
+#define REINT_MAX     4
 
 struct ll_fid { 
 	__u64 id;
@@ -243,9 +246,7 @@ struct mds_rep {
         __u64                       objid;
 };
 
-
 /* MDS update records */ 
-
 struct mds_update_record_hdr { 
         __u32 ur_reclen;
         __u32 ur_opcode;
@@ -277,7 +278,33 @@ struct mds_rec_create {
         /* overloaded: id for create, tgtlen for symlink, rdev for mknod */ 
 	__u64		cr_id; 
         __u32           cr_namelen;
+        __u32           cr_tgtlen;
         /* name here */
+        /* symlink target here */ 
+};
+
+struct mds_rec_link { 
+        __u32           lk_reclen;
+        __u32           lk_opcode;
+	struct ll_fid   lk_fid1;
+	struct ll_fid   lk_fid2;
+        __u32           lk_namelen;
+};
+
+struct mds_rec_unlink { 
+        __u32           ul_reclen;
+        __u32           ul_opcode;
+	struct ll_fid   ul_fid1;
+        __u32           ul_namelen;
+};
+
+struct mds_rec_rename { 
+        __u32           rn_reclen;
+        __u32           rn_opcode;
+	struct ll_fid   rn_fid1;
+	struct ll_fid   rn_fid2;
+        __u32           rn_namelen;
+        __u32           rn_tgtlen;
 };
 
 #ifdef __KERNEL__ 
@@ -503,6 +530,7 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 #define OBD_IOC_MIGR                   _IOWR('f', 23, long)
 #define OBD_IOC_PUNCH                  _IOWR('f', 24, long)
 #define OBD_IOC_DEVICE                 _IOWR('f', 25, long)
+#define OBD_IOC_MODULE_DEBUG           _IOWR('f', 26, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
 

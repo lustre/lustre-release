@@ -78,7 +78,9 @@ static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
 {
 	struct inode *dir = page->mapping->host;
 	int err = 0;
+
 	dir->i_version = ++event;
+	dir->i_size = (page->index << PAGE_CACHE_SHIFT) + to; 
 	SetPageUptodate(page);
 	set_page_clean(page);
 

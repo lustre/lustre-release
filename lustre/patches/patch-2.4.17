@@ -33,6 +33,7 @@
 +/* Lustre symbols */
 +EXPORT_SYMBOL(pagecache_lock);
 +EXPORT_SYMBOL(do_kern_mount);
++EXPORT_SYMBOL(module_list);
 +EXPORT_SYMBOL(sys_mkdir);
 +EXPORT_SYMBOL(sys_rmdir);
 +EXPORT_SYMBOL(sys_unlink);

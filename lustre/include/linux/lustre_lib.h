@@ -52,6 +52,13 @@ static inline int size_round (int val)
 	return (val + 3) & (~0x3);
 }
 
+static inline int size_round0(int val)
+{
+        if (!val) 
+                return 0;
+	return (val + 1 + 3) & (~0x3);
+}
+
 static inline size_t round_strlen(char *fset)
 {
 	return size_round(strlen(fset) + 1);
@@ -142,17 +149,37 @@ do {                                            \
  */
 #define UNLOGL(var,type,len,ptr,end)            \
 do {                                            \
+        if (!len) {                             \
+               var = NULL;                      \
+               break;                           \
+        }                                       \
         var = (type *)ptr;                      \
         ptr += size_round(len * sizeof(type));  \
         if (ptr > end )                         \
                 return -EFAULT;                 \
 } while (0)
 
+#define UNLOGL0(var,type,len,ptr,end)           \
+do {                                            \
+        UNLOGL(var,type,len,ptr,end);           \
+        if ( *((char *)ptr - size_round(len) + len - 1) != '\0')\
+                        return -EFAULT;                        \
+} while (0)
+
 
 #define LOGL(var,len,ptr)                               \
 do {                                                    \
+        if (!len) break;                                \
         memcpy((char *)ptr, (const char *)var, len);    \
         ptr += size_round(len);                         \
+} while (0)
+
+#define LOGL0(var,len,ptr)                              \
+do {                                                    \
+        if (!len) break;                                \
+        memcpy((char *)ptr, (const char *)var, len);    \
+        *((char *)(ptr) + len) = 0;                     \
+        ptr += size_round(len + 1);                     \
 } while (0)
 
 #endif /* _LUSTRE_LIB_H */

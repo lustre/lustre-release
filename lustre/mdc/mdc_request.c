@@ -303,8 +303,9 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_create(peer_ptr, &inode, "foofile",
-				 strlen("foofile"), 0100707, 47114711, 
+		err = mdc_create(peer_ptr, &inode, 
+				 "foofile", strlen("foofile"), 
+				 NULL, 0, 0100707, 47114711, 
 				 11, 47, 0, NULL, &hdr);
 		printk("-- done err %d\n", err);
 		if (!err) { 
@@ -354,6 +355,9 @@ MODULE_DESCRIPTION("Lustre MDS Request Tester v1.0");
 MODULE_LICENSE("GPL");
 
 EXPORT_SYMBOL(mdc_create); 
+EXPORT_SYMBOL(mdc_unlink); 
+EXPORT_SYMBOL(mdc_rename); 
+EXPORT_SYMBOL(mdc_link); 
 EXPORT_SYMBOL(mdc_getattr); 
 EXPORT_SYMBOL(mdc_readpage); 
 EXPORT_SYMBOL(mdc_setattr); 

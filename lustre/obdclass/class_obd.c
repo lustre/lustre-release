@@ -377,6 +377,30 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	}
 
 #if 0
+        case OBD_IOC_MODULE_DEBUG:
+        {
+		struct module *mod = module_list;
+		char *tmp = data->ioc_inlbuf1;
+		char line[128];
+
+		snprintf(line, 128, "symbol-file\n"
+			 "symbol-file /usr/src/lum/linux\n"
+			 "b panic\n"
+			 "b stop\n"); 
+		tmp += strlen(line); 
+
+		do { 
+			sprintf(line, 
+				"add-symbol-file /usr/src/obd/%s/%s.o %p\n",
+				mod->name, mod->name, mod); 
+			memcpy(tmp, line, strlen(line));
+			tmp += strlen(line); 
+		} while ( mod->next != NULL)
+
+                return copy_to_user((int *)arg, data, sizeof(*data) + 
+				    data->ioc_inllen1);
+        }
+
         case OBD_IOC_SYNC: {
                 struct oic_range_s *range = tmp_buf;
 

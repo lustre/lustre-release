@@ -35,12 +35,13 @@
 
 /* packing of MDS records */
 
-void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time)
+void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time, const char *tgt, int tgtlen)
 {
 	char *tmp = (char *)rec + sizeof(*rec); 
 	/* XXX do something about time, uid, gid */
 	rec->cr_reclen = 
-		HTON__u32(sizeof(*rec) + size_round(namelen + 1));
+		HTON__u32(sizeof(*rec) + size_round0(namelen) + 
+			  size_round0(tgtlen));
 	rec->cr_opcode = HTON__u32(REINT_CREATE);
 
 	ll_inode2fid(&rec->cr_fid, inode); 
@@ -49,9 +50,12 @@ void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char
 	rec->cr_uid = HTON__u32(uid);
 	rec->cr_gid = HTON__u32(gid);
 	rec->cr_time = HTON__u64(time);
-	rec->cr_namelen = namelen;
-	LOGL(name, namelen, tmp); 
-	*tmp = '\0';
+	rec->cr_namelen = HTON__u32(namelen + 1); /* for terminating \0 */ 
+	LOGL0(name, namelen, tmp); 
+	if (tgt) { 
+		rec->cr_tgtlen = HTON__u32(tgtlen + 1); 
+		LOGL0(tgt, tgtlen, tmp); 
+	}
 }
 
 
@@ -70,6 +74,52 @@ void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct i
 	rec->sa_mtime = HTON__u64(iattr->ia_mtime);
 	rec->sa_ctime = HTON__u64(iattr->ia_ctime);
 	rec->sa_attr_flags = HTON__u32(iattr->ia_attr_flags);
+}
+
+void mds_unlink_pack(struct mds_rec_unlink *rec, 
+		     struct inode *inode, const char *name, int namelen)
+{
+	char *tmp = (char *)rec + sizeof(*rec); 
+
+	rec->ul_reclen = HTON__u32(sizeof(*rec)) + size_round0(namelen);
+	rec->ul_opcode = HTON__u32(REINT_UNLINK);
+
+	ll_inode2fid(&rec->ul_fid1, inode); 
+	rec->ul_namelen = HTON__u32(namelen + 1); /* for terminating \0 */ 
+	LOGL0(name, namelen, tmp); 
+}
+
+void mds_link_pack(struct mds_rec_link *rec, 
+		     struct inode *inode, struct inode *dir,
+		     const char *name, int namelen)
+{
+	char *tmp = (char *)rec + sizeof(*rec); 
+	rec->lk_reclen = HTON__u32(sizeof(*rec)) + size_round0(namelen);
+	rec->lk_opcode = HTON__u32(REINT_LINK);
+
+	ll_inode2fid(&rec->lk_fid1, inode); 
+	ll_inode2fid(&rec->lk_fid2, dir); 
+	rec->lk_namelen = HTON__u32(namelen + 1); /* for terminating \0 */ 
+	LOGL0(name, namelen, tmp); 
+}
+
+void mds_rename_pack(struct mds_rec_rename *rec, struct inode *srcdir, struct inode *tgtdir, const char *name, int namelen, const char *tgt, int tgtlen)
+{
+	char *tmp = (char *)rec + sizeof(*rec); 
+	/* XXX do something about time, uid, gid */
+	rec->rn_reclen = 
+		HTON__u32(sizeof(*rec) + size_round0(namelen) + 
+			  size_round0(tgtlen));
+	rec->rn_opcode = HTON__u32(REINT_RENAME);
+
+	ll_inode2fid(&rec->rn_fid1, srcdir); 
+	ll_inode2fid(&rec->rn_fid2, tgtdir); 
+	rec->rn_namelen = HTON__u32(namelen + 1); /* for terminating \0 */ 
+	LOGL0(name, namelen, tmp); 
+	if (tgt) { 
+		rec->rn_tgtlen = HTON__u32(tgtlen + 1); 
+		LOGL0(tgt, tgtlen, tmp); 
+	}
 }
 
 /* unpacking */
@@ -130,9 +180,76 @@ static int mds_create_unpack(char *buf, int len, struct mds_update_record *r)
 	r->ur_uid = NTOH__u32(rec->cr_uid);
 	r->ur_gid = NTOH__u32(rec->cr_gid);
 	r->ur_time = NTOH__u64(rec->cr_time);
-	r->ur_namelen = NTOH__u64(rec->cr_namelen);
+	r->ur_namelen = NTOH__u32(rec->cr_namelen);
+	r->ur_tgtlen = NTOH__u32(rec->cr_tgtlen);
 
-	UNLOGL(r->ur_name, char, r->ur_namelen, ptr, end); 
+	UNLOGL0(r->ur_name, char, r->ur_namelen, ptr, end); 
+	UNLOGL0(r->ur_tgt, char, r->ur_tgtlen, ptr, end);
+	return 0;
+}
+
+static int mds_link_unpack(char *buf, int len, struct mds_update_record *r)
+{
+	struct mds_rec_link *rec = (struct mds_rec_link *)buf; 
+	char *ptr, *end;
+
+	if (len < sizeof(*rec)) { 
+		printk(__FUNCTION__ "invalid buffer length\n"); 
+		return -EFAULT;
+	}
+	
+	ptr = (char *)rec + sizeof(*rec); 
+	end = ptr + len - sizeof(*rec); 
+	
+	r->ur_fid1 = &rec->lk_fid1;
+	r->ur_fid2 = &rec->lk_fid2;
+	r->ur_namelen = NTOH__u32(rec->lk_namelen);
+	UNLOGL0(r->ur_name, char, r->ur_namelen, ptr, end); 
+	return 0;
+}
+
+
+static int mds_unlink_unpack(char *buf, int len, struct mds_update_record *r)
+{
+	struct mds_rec_unlink *rec = (struct mds_rec_unlink *)buf; 
+	char *ptr, *end;
+	ENTRY;
+
+	if (len < sizeof(*rec)) { 
+		printk(__FUNCTION__ "invalid buffer length\n"); 
+		return -EFAULT;
+	}
+	
+	ptr = (char *)rec + sizeof(*rec); 
+	end = ptr + len - sizeof(*rec); 
+	
+	r->ur_fid1 = &rec->ul_fid1;
+	r->ur_namelen = NTOH__u32(rec->ul_namelen);
+	UNLOGL0(r->ur_name, char, r->ur_namelen, ptr, end); 
+	EXIT;
+	return 0;
+}
+
+static int mds_rename_unpack(char *buf, int len, struct mds_update_record *r)
+{
+	struct mds_rec_rename *rec = (struct mds_rec_rename *)buf; 
+	char *ptr, *end;
+
+	if (len < sizeof(*rec)) { 
+		printk(__FUNCTION__ "invalid buffer length\n"); 
+		return -EFAULT;
+	}
+	
+	ptr = (char *)rec + sizeof(*rec); 
+	end = ptr + len - sizeof(*rec); 
+	
+	r->ur_fid1 = &rec->rn_fid1;
+	r->ur_fid2 = &rec->rn_fid2;
+	r->ur_namelen = NTOH__u32(rec->rn_namelen);
+	r->ur_tgtlen = NTOH__u32(rec->rn_tgtlen);
+
+	UNLOGL0(r->ur_name, char, r->ur_namelen, ptr, end); 
+	UNLOGL0(r->ur_tgt, char, r->ur_tgtlen, ptr, end);
 	return 0;
 }
 
@@ -140,7 +257,10 @@ typedef int (*update_unpacker)(char *, int , struct mds_update_record *);
 
 static update_unpacker mds_unpackers[REINT_MAX + 1] = {
 	[REINT_SETATTR] mds_setattr_unpack, 	
-        [REINT_CREATE] mds_create_unpack
+        [REINT_CREATE] mds_create_unpack,
+        [REINT_LINK] mds_link_unpack,
+        [REINT_UNLINK] mds_unlink_unpack,
+        [REINT_RENAME] mds_rename_unpack,
 };
 
 int mds_update_unpack(char *buf, int len, struct mds_update_record *r)

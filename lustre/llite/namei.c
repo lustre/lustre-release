@@ -134,20 +134,22 @@ static inline int ext2_match (int len, const char * const name,
 }
 
 static struct inode *ll_create_node(struct inode *dir, const char *name, 
-				    int namelen, int mode, __u64 id)
+				    int namelen, const char *tgt, int tgtlen, 
+				    int mode, __u64 id)
 {
         struct inode *inode;
 	struct mds_rep *rep;
 	struct ptlrep_hdr *hdr;
         int err;
+	time_t time = CURRENT_TIME;
         struct ll_sb_info *sbi =
 		(struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
 
         ENTRY;
 
-     	err = mdc_create(sbi->ll_peer_ptr, dir, name, namelen, mode, id,
-			 current->uid, current->gid, CURRENT_TIME, 
-			 &rep, &hdr); 
+     	err = mdc_create(sbi->ll_peer_ptr, dir, name, namelen, tgt, tgtlen,
+			 mode, id, 
+			 current->uid, current->gid, time, &rep, &hdr); 
 	if (err) { 
                 EXIT;
 		return ERR_PTR(err);
@@ -160,6 +162,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
 	rep->objid = id; 
 	rep->nlink = 1;
+	rep->atime = rep->ctime = rep->mtime = time;
 	rep->mode = mode;
 	printk("-- new_inode: objid %lld, ino %d, mode %o\n", 
 	       rep->objid, rep->ino, rep->mode); 
@@ -185,6 +188,85 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         return inode;
 } /* ll_new_inode */
 
+int ll_mdc_unlink(struct inode *dir, const char *name, int len)
+{
+	struct mds_rep *rep;
+	struct ptlrep_hdr *hdr;
+        int err;
+        struct ll_sb_info *sbi =
+		(struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
+
+        ENTRY;
+
+     	err = mdc_unlink(sbi->ll_peer_ptr, dir, name, len, &rep, &hdr); 
+
+	if (err) { 
+                EXIT;
+		return err;
+	}
+	if ( hdr->status) {
+		EXIT;
+		return hdr->status;
+	}
+
+        EXIT;
+	return 0;
+}
+
+int ll_mdc_link(struct dentry *src, struct inode *dir, 
+		const char *name, int len)
+{
+	struct mds_rep *rep;
+	struct ptlrep_hdr *hdr;
+        int err;
+        struct ll_sb_info *sbi =
+		(struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
+
+        ENTRY;
+
+     	err = mdc_link(sbi->ll_peer_ptr, src, dir, name, len, &rep, &hdr); 
+
+	if (err) { 
+                EXIT;
+		return err;
+	}
+	if ( hdr->status) {
+		EXIT;
+		return hdr->status;
+	}
+
+        EXIT;
+	return 0;
+}
+
+int ll_mdc_rename(struct inode *src, struct inode *tgt, 
+		  struct dentry *old, struct dentry *new)
+{
+	struct mds_rep *rep;
+	struct ptlrep_hdr *hdr;
+        int err;
+        struct ll_sb_info *sbi =
+		(struct ll_sb_info *)(&src->i_sb->u.generic_sbp);
+
+        ENTRY;
+
+     	err = mdc_rename(sbi->ll_peer_ptr, src, tgt, 
+			 old->d_name.name, old->d_name.len, 
+			 new->d_name.name, new->d_name.len, 
+			 &rep, &hdr); 
+
+	if (err) { 
+                EXIT;
+		return err;
+	}
+	if ( hdr->status) {
+		EXIT;
+		return hdr->status;
+	}
+
+        EXIT;
+	return 0;
+}
 
 /*
  * By the time this is called, we already have created
@@ -208,8 +290,8 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 
 	mode = mode | S_IFREG;
 	printk("ll_create: name %s mode %o\n", dentry->d_name.name, mode);
-	inode = ll_create_node(dir, dentry->d_name.name, 
-			       dentry->d_name.len, 
+	inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len, 
+			       NULL, 0,
 			       mode, oa.o_id);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
@@ -227,7 +309,8 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 static int ll_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 {
 	struct inode * inode = ll_create_node(dir, dentry->d_name.name, 
-					      dentry->d_name.len, mode, 0);
+					      dentry->d_name.len, NULL, 0,
+					      mode, 0);
 	int err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		init_special_inode(inode, mode, rdev);
@@ -241,7 +324,7 @@ static int ll_symlink (struct inode * dir, struct dentry * dentry,
 {
 	struct super_block * sb = dir->i_sb;
 	int err = -ENAMETOOLONG;
-	unsigned l = strlen(symname)+1;
+	unsigned l = strlen(symname);
 	struct inode * inode;
         struct ll_inode_info *oinfo;
 
@@ -249,26 +332,17 @@ static int ll_symlink (struct inode * dir, struct dentry * dentry,
 		goto out;
 
 	inode = ll_create_node(dir, dentry->d_name.name, 
-			       dentry->d_name.len, 
+			       dentry->d_name.len, symname, l,
 			       S_IFLNK | S_IRWXUGO, 0);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode))
 		goto out;
 
         oinfo = ll_i2info(inode);
-        if (l >= sizeof(oinfo->lli_inline)) {
-		/* slow symlink */
-		inode->i_op = &page_symlink_inode_operations;
-		inode->i_mapping->a_ops = &ll_aops;
-		err = block_symlink(inode, symname, l);
-		if (err)
-			goto out_fail;
-	} else {
-		/* fast symlink */
-		inode->i_op = &ll_fast_symlink_inode_operations;
-		memcpy(oinfo->lli_inline, symname, l);
-		inode->i_size = l-1;
-	}
+	
+	inode->i_op = &ll_fast_symlink_inode_operations;
+	memcpy(oinfo->lli_inline, symname, l);
+	inode->i_size = l-1;
 
 	err = ext2_add_nondir(dentry, inode);
 out:
@@ -280,11 +354,10 @@ out_fail:
 	goto out;
 }
 
-
-
 static int ll_link (struct dentry * old_dentry, struct inode * dir,
 	struct dentry *dentry)
 {
+	int err;
 	struct inode *inode = old_dentry->d_inode;
 
 	if (S_ISDIR(inode->i_mode))
@@ -292,6 +365,13 @@ static int ll_link (struct dentry * old_dentry, struct inode * dir,
 
 	if (inode->i_nlink >= EXT2_LINK_MAX)
 		return -EMLINK;
+
+	err = ll_mdc_link(old_dentry, dir, 
+			  dentry->d_name.name, dentry->d_name.len);
+	if (err) { 
+		EXIT;
+		return err;
+	}
 
 	inode->i_ctime = CURRENT_TIME;
 	ext2_inc_count(inode);
@@ -313,7 +393,7 @@ static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	ext2_inc_count(dir);
 
 	inode = ll_create_node (dir, dentry->d_name.name, 
-				dentry->d_name.len,
+				dentry->d_name.len, NULL, 0, 
 				S_IFDIR | mode, 0);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode))
@@ -322,7 +402,7 @@ static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	inode->i_op = &ll_dir_inode_operations;
 	inode->i_fop = &ll_dir_operations;
 	inode->i_mapping->a_ops = &ll_aops;
-
+	inode->i_nlink = 1;
 	ext2_inc_count(inode);
 
 	err = ext2_make_empty(inode, dir);
@@ -359,6 +439,11 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
 	de = ext2_find_entry (dir, dentry, &page);
 	if (!de)
 		goto out;
+	
+	err = ll_mdc_unlink(dir, dentry->d_name.name, dentry->d_name.len);
+	if (err) 
+		goto out;
+
 
 	err = ext2_delete_entry (de, page);
 	if (err)
@@ -398,6 +483,10 @@ static int ll_rename (struct inode * old_dir, struct dentry * old_dentry,
 	struct page * old_page;
 	struct ext2_dir_entry_2 * old_de;
 	int err = -ENOENT;
+
+	err = ll_mdc_rename(old_dir, new_dir, old_dentry, new_dentry); 
+	if (err) 
+		goto out;
 
 	old_de = ext2_find_entry (old_dir, old_dentry, &old_page);
 	if (!old_de)

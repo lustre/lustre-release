@@ -18,10 +18,11 @@
 
 #define LL_SUPER_MAGIC 0x0BD00BD0;
 
+#define LL_INLINESZ      60
 struct ll_inode_info {
         int              lli_flags;
 	__u64            lli_objid; 
-        char             lli_inline[OBD_INLINESZ];
+        char             lli_inline[LL_INLINESZ];
 };
 
 struct ll_sb_info {

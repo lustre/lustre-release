@@ -190,11 +190,10 @@ static int ll_commit_page(struct page *page, int create, int from, int to)
         obd_count        bufs_per_obdo = 1;
         struct obdo     *oa;
         obd_size         count = to;
-        obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT);
+        obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT) + to;
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
         int              err;
 	struct iattr     iattr;
-	loff_t           pos = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
 
         ENTRY;
         oa = obdo_alloc();
@@ -215,9 +214,9 @@ static int ll_commit_page(struct page *page, int create, int from, int to)
 		set_page_clean(page);
 	}
 
-	if (pos > inode->i_size) {
+	if (offset > inode->i_size) {
 		iattr.ia_valid = ATTR_SIZE;
-		iattr.ia_size = inode->i_size;
+		iattr.ia_size = offset;
 		err = ll_inode_setattr(inode, &iattr);
 		if (err) {
 			printk("mds_inode_setattr failed; do something dramatic.\n");
@@ -271,7 +270,10 @@ int ll_readpage(struct file *file, struct page *page)
 } /* ll_readpage */
 
 
-
+int ll_dir_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
+{
+	return 0;
+}
 /* returns the page unlocked, but with a reference */
 int ll_dir_readpage(struct file *file, struct page *page)
 {
@@ -577,5 +579,6 @@ struct address_space_operations ll_aops = {
 
 
 struct address_space_operations ll_dir_aops = {
-        readpage: ll_dir_readpage
+        readpage: ll_dir_readpage,
+        prepare_write: ll_dir_prepare_write
 };

@@ -235,11 +235,14 @@ static int ll_attr2inode(struct inode * inode, struct iattr * attr)
 	unsigned int ia_valid = attr->ia_valid;
 	int error = 0;
 
-	if (ia_valid & ATTR_SIZE) {
+	if ((ia_valid & ATTR_SIZE) && attr->ia_size < inode->i_size ) {
 		error = vmtruncate(inode, attr->ia_size);
 		if (error)
 			goto out;
-	}
+	} else if (ia_valid & ATTR_SIZE) { 
+		inode->i_size = attr->ia_size;
+	}		
+
 	if (ia_valid & ATTR_UID)
 		inode->i_uid = attr->ia_uid;
 	if (ia_valid & ATTR_GID)
