@@ -11,9 +11,9 @@ DB=applied-patches
 # Otherwise use "."
 #
 
-if [ x$PATCHSCRIPTS != x ]
+if [ x$PATCHSCRIPTS_LIBDIR != x ]
 then
-	P=$PATCHSCRIPTS
+	P=$PATCHSCRIPTS_LIBDIR
 elif [ -d ./patch-scripts ]
 then
 	P=./patch-scripts
@@ -69,7 +69,20 @@ is_applied()
 		return 1
 	fi
 }
-
+check_pc_match()
+{
+	if [ -f /usr/bin/lsdiff ]; then
+		tmpfile=$(mktemp /tmp/p_XXXXXX) || exit 1
+		lsdiff --strip=1 $1 > $tmpfile 
+		diff $2 $tmpfile > /dev/null
+		if [ $? != 0 ]; then
+			echo " $1 do not match with $2 "
+			echo " $2 will be changed to match $2"
+			cat $tmpfile > $P/pc/$PATCH_NAME.pc
+		fi
+		rm -rf $tmpfile
+	fi
+} 
 can_apply()
 {
 	if patch -p1 --dry-run -i "$1" -f
@@ -175,7 +188,7 @@ copy_file_to_bup()
 
 	if [ -e $file ]
 	then
-		cp $file "$file"~"$patch"
+		cp -p $file "$file"~"$patch"
 	else
 		echo "file $file appears to be newly added"
 	fi
