@@ -61,7 +61,7 @@ void l_lock_init(struct lustre_lock *lock)
 
 void l_lock(struct lustre_lock *lock)
 {
-        int owner;
+        int owner = 0;
         spin_lock(&lock->l_spin);
         if (lock->l_owner == current) { 
                 owner = 1;
