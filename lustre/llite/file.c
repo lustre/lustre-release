@@ -355,12 +355,12 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
 #else
                         rc = inode->i_mapping->a_ops->writepage(page, NULL);
 #endif
-                        if (rc != 0) {
+                        if (rc != 0)
                                 CERROR("writepage of page %p failed: %d\n",
                                        page, rc);
-                        } else {
-                                lock_page(page); /* wait for io to complete */
-                        }
+                        /* either waiting for io to complete or reacquiring
+                         * the lock that the failed writepage released */
+                        lock_page(page);
                 }
 
                 /* checking again to account for writeback's lock_page() */
