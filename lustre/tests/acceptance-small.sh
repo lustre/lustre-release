@@ -23,6 +23,7 @@ for NAME in $CONFIGS; do
 	fi
 
 	[ "$SANITY" != "no" ] && sh sanity.sh
+	[ "$SANITY" != "no" ] && START=" " CLEAN=" " sh sanity.sh
 
 	if [ "$DBENCH" != "no" ]; then
 		mount | grep $MNT || sh llmount.sh
@@ -88,3 +89,6 @@ for NAME in $CONFIGS; do
 	fi	
 	mount | grep $MNT && sh llmountcleanup.sh
 done
+
+[ "$SANITYN" != "no" ] && NAME=mount2 sh sanityN.sh
+

@@ -2,18 +2,28 @@
 
 set -e
 
+SRCDIR=`dirname $0`
+PATH=$SRCDIR:$SRCDIR/../utils:$PATH
+
 CHECKSTAT=${CHECKSTAT:-"./checkstat -v"}
+CREATETEST=${CREATETEST:-createtest}
+LFIND=${LFIND:-lfind}
+LSTRIPE=${LSTRIPE:-lstripe}
+MCREATE=${MCREATE:-mcreate}
+TOEXCL=${TOEXCL:-toexcl}
+
 MOUNT=${MOUNT:-/mnt/lustre}
+DIR=${DIR:-$MOUNT}
 export NAME=$NAME
 clean() {
         echo -n "cln.."
-        sh llmountcleanup.sh > /dev/null
+        sh llmountcleanup.sh > /dev/null || exit 20
 }
 CLEAN=${CLEAN:-clean}
 start() {
         echo -n "mnt.."
-        sh llrmount.sh > /dev/null
-        echo -n "done"
+        sh llrmount.sh > /dev/null || exit 10
+        echo "done"
 }
 START=${START:-start}
 
@@ -26,270 +36,279 @@ pass() {
     echo PASS
 }
 
-mount | grep $MOUNT || $START
+mount | grep $MOUNT || sh llmount.sh
 
 echo '== touch .../f ; rm .../f ======================== test 0'
-touch $MOUNT/f
-$CHECKSTAT -t file $MOUNT/f || error 
-rm $MOUNT/f
-$CHECKSTAT -a $MOUNT/f || error
+touch $DIR/f
+$CHECKSTAT -t file $DIR/f || error 
+rm $DIR/f
+$CHECKSTAT -a $DIR/f || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d1; mkdir .../d1/d2 ================= test 1'
-mkdir $MOUNT/d1
-mkdir $MOUNT/d1/d2
-$CHECKSTAT -t dir $MOUNT/d1/d2 || error
+mkdir $DIR/d1
+mkdir $DIR/d1/d2
+$CHECKSTAT -t dir $DIR/d1/d2 || error
 pass
 $CLEAN
 $START
 
 echo '== rmdir .../d1/d2; rmdir .../d1 ================= test 1b'
-rmdir $MOUNT/d1/d2
-rmdir $MOUNT/d1
-$CHECKSTAT -a $MOUNT/d1 || error
+rmdir $DIR/d1/d2
+rmdir $DIR/d1
+$CHECKSTAT -a $DIR/d1 || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d2; touch .../d2/f ================== test 2'
-mkdir $MOUNT/d2
-touch $MOUNT/d2/f
-$CHECKSTAT -t file $MOUNT/d2/f || error
+mkdir $DIR/d2
+touch $DIR/d2/f
+$CHECKSTAT -t file $DIR/d2/f || error
 pass
 $CLEAN
 $START
 
 echo '== rm -r .../d2; touch .../d2/f ================== test 2b'
-rm -r $MOUNT/d2
-$CHECKSTAT -a $MOUNT/d2 || error
+rm -r $DIR/d2
+$CHECKSTAT -a $DIR/d2 || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d3 ================================== test 3'
-mkdir $MOUNT/d3
-$CHECKSTAT -t dir $MOUNT/d3 || error
+mkdir $DIR/d3
+$CHECKSTAT -t dir $DIR/d3 || error
 pass
 $CLEAN
 $START
 echo '== touch .../d3/f ================================ test 3b'
-touch $MOUNT/d3/f
-$CHECKSTAT -t file $MOUNT/d3/f || error
+touch $DIR/d3/f
+$CHECKSTAT -t file $DIR/d3/f || error
 pass
 $CLEAN
 $START
 echo '== rm -r .../d3 ================================== test 3c'
-rm -r $MOUNT/d3
-$CHECKSTAT -a $MOUNT/d3 || error
+rm -r $DIR/d3
+$CHECKSTAT -a $DIR/d3 || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d4 ================================== test 4'
-mkdir $MOUNT/d4
-$CHECKSTAT -t dir $MOUNT/d4 || error
+mkdir $DIR/d4
+$CHECKSTAT -t dir $DIR/d4 || error
 pass
 $CLEAN
 $START
 echo '== mkdir .../d4/d2 =============================== test 4b'
-mkdir $MOUNT/d4/d2
-$CHECKSTAT -t dir $MOUNT/d4/d2 || error
+mkdir $DIR/d4/d2
+$CHECKSTAT -t dir $DIR/d4/d2 || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d5; mkdir .../d5/d2; chmod .../d5/d2 = test 5'
-mkdir $MOUNT/d5
-mkdir $MOUNT/d5/d2
-chmod 0666 $MOUNT/d5/d2
-$CHECKSTAT -t dir -p 0666 $MOUNT/d5/d2 || error
+mkdir $DIR/d5
+mkdir $DIR/d5/d2
+chmod 0707 $DIR/d5/d2
+$CHECKSTAT -t dir -p 0707 $DIR/d5/d2 || error
 pass
 $CLEAN
 $START
 
 echo '== touch .../f6; chmod .../f6 ==================== test 6'
-touch $MOUNT/f6
-chmod 0666 $MOUNT/f6
-$CHECKSTAT -t file -p 0666 $MOUNT/f6 || error
+touch $DIR/f6
+chmod 0666 $DIR/f6
+$CHECKSTAT -t file -p 0666 $DIR/f6 || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d7; mcreate .../d7/f; chmod .../d7/f = test 7'
-mkdir $MOUNT/d7
-./mcreate $MOUNT/d7/f
-chmod 0666 $MOUNT/d7/f
-$CHECKSTAT -t file -p 0666 $MOUNT/d7/f || error
+mkdir $DIR/d7
+$MCREATE $DIR/d7/f
+chmod 0666 $DIR/d7/f
+$CHECKSTAT -t file -p 0666 $DIR/d7/f || error
+pass
+$CLEAN
+$START
+
+echo '== mkdir .../d7; mcreate .../d7/f2; chmod .../d7/f2 = test 7b'
+$MCREATE $DIR/d7/f2
+echo -n foo > $DIR/d7/f2
+[ "`cat $DIR/d7/f2`" = "foo" ] || error
+$CHECKSTAT -t file -s 3 $DIR/d7/f2 || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d8; touch .../d8/f; chmod .../d8/f == test 8'
-mkdir $MOUNT/d8
-touch $MOUNT/d8/f
-chmod 0666 $MOUNT/d8/f
-$CHECKSTAT -t file -p 0666 $MOUNT/d8/f || error
+mkdir $DIR/d8
+touch $DIR/d8/f
+chmod 0666 $DIR/d8/f
+$CHECKSTAT -t file -p 0666 $DIR/d8/f || error
 pass
 $CLEAN
 $START
 
 
 echo '== mkdir .../d9 .../d9/d2 .../d9/d2/d3 =========== test 9'
-mkdir $MOUNT/d9
-mkdir $MOUNT/d9/d2
-mkdir $MOUNT/d9/d2/d3
-$CHECKSTAT -t dir $MOUNT/d9/d2/d3 || error
+mkdir $DIR/d9
+mkdir $DIR/d9/d2
+mkdir $DIR/d9/d2/d3
+$CHECKSTAT -t dir $DIR/d9/d2/d3 || error
 pass
 $CLEAN
 $START
 
 
 echo '== mkdir .../d10 .../d10/d2; touch .../d10/d2/f = test 10'
-mkdir $MOUNT/d10
-mkdir $MOUNT/d10/d2
-touch $MOUNT/d10/d2/f
-$CHECKSTAT -t file $MOUNT/d10/d2/f || error
+mkdir $DIR/d10
+mkdir $DIR/d10/d2
+touch $DIR/d10/d2/f
+$CHECKSTAT -t file $DIR/d10/d2/f || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d11 d11/d2; chmod .../d11/d2 ======= test 11'
-mkdir $MOUNT/d11
-mkdir $MOUNT/d11/d2
-chmod 0666 $MOUNT/d11/d2
-chmod 0555 $MOUNT/d11/d2
-$CHECKSTAT -t dir -p 0555 $MOUNT/d11/d2 || error
+mkdir $DIR/d11
+mkdir $DIR/d11/d2
+chmod 0666 $DIR/d11/d2
+chmod 0705 $DIR/d11/d2
+$CHECKSTAT -t dir -p 0705 $DIR/d11/d2 || error
 pass
 $CLEAN
 $START
 
 echo '== mkdir .../d12; touch .../d12/f; chmod .../d12/f == test 12'
-mkdir $MOUNT/d12
-touch $MOUNT/d12/f
-chmod 0666 $MOUNT/d12/f
-chmod 0555 $MOUNT/d12/f
-$CHECKSTAT -t file -p 0555 $MOUNT/d12/f || error
+mkdir $DIR/d12
+touch $DIR/d12/f
+chmod 0666 $DIR/d12/f
+chmod 0654 $DIR/d12/f
+$CHECKSTAT -t file -p 0654 $DIR/d12/f || error
 pass
 $CLEAN
 $START
 
-echo '== mkdir .../d13; cp /etc/passwd .../d13/f; > .../d13/f == test 13'
-mkdir $MOUNT/d13
-cp /etc/hosts $MOUNT/d13/f
->  $MOUNT/d13/f
-$CHECKSTAT -t file -s 0 $MOUNT/d13/f || error
+echo '== mkdir .../d13; creat .../d13/f;  .../d13/f; > .../d13/f == test 13'
+mkdir $DIR/d13
+dd if=/dev/zero of=$DIR/d13/f count=10
+>  $DIR/d13/f
+$CHECKSTAT -t file -s 0 $DIR/d13/f || error
 pass
 $CLEAN
 $START
-
 
 echo '================================================== test 14'
-mkdir $MOUNT/d14
-touch $MOUNT/d14/f
-rm $MOUNT/d14/f
-$CHECKSTAT -a $MOUNT/d14/f || error
+mkdir $DIR/d14
+touch $DIR/d14/f
+rm $DIR/d14/f
+$CHECKSTAT -a $DIR/d14/f || error
 pass
 $CLEAN
 $START
 
-
 echo '================================================== test 15'
-mkdir $MOUNT/d15
-touch $MOUNT/d15/f
-mv $MOUNT/d15/f $MOUNT/d15/f2
-$CHECKSTAT -t file $MOUNT/d15/f2 || error
+mkdir $DIR/d15
+touch $DIR/d15/f
+mv $DIR/d15/f $DIR/d15/f2
+$CHECKSTAT -t file $DIR/d15/f2 || error
 pass
 $CLEAN
 $START
 
 echo '================================================== test 16'
-mkdir $MOUNT/d16
-touch $MOUNT/d16/f
-rm -rf $MOUNT/d16/f
-$CHECKSTAT -a $MOUNT/d16/f || error
+mkdir $DIR/d16
+touch $DIR/d16/f
+rm -rf $DIR/d16/f
+$CHECKSTAT -a $DIR/d16/f || error
 pass
 $CLEAN
 $START
 
 echo '== symlinks: create, remove (dangling and real) == test 17'
-mkdir $MOUNT/d17
-touch $MOUNT/d17/f
-ln -s $MOUNT/d17/f $MOUNT/d17/l-exist
-ln -s no-such-file $MOUNT/d17/l-dangle
-ls -l $MOUNT/d17
-$CHECKSTAT -l $MOUNT/d17/f $MOUNT/d17/l-exist || error
-$CHECKSTAT -f -t f $MOUNT/d17/l-exist || error
-$CHECKSTAT -l no-such-file $MOUNT/d17/l-dangle || error
-$CHECKSTAT -fa $MOUNT/d17/l-dangle || error
-rm -f $MOUNT/l-dangle
-rm -f $MOUNT/l-exist
-$CHECKSTAT -a $MOUNT/l-dangle || error
-$CHECKSTAT -a $MOUNT/l-exist || error
+mkdir $DIR/d17
+touch $DIR/d17/f
+ln -s $DIR/d17/f $DIR/d17/l-exist
+ln -s no-such-file $DIR/d17/l-dangle
+ls -l $DIR/d17
+$CHECKSTAT -l $DIR/d17/f $DIR/d17/l-exist || error
+$CHECKSTAT -f -t f $DIR/d17/l-exist || error
+$CHECKSTAT -l no-such-file $DIR/d17/l-dangle || error
+$CHECKSTAT -fa $DIR/d17/l-dangle || error
+rm -f $DIR/l-dangle
+rm -f $DIR/l-exist
+$CHECKSTAT -a $DIR/l-dangle || error
+$CHECKSTAT -a $DIR/l-exist || error
 pass
 $CLEAN
 $START
 
 echo "== touch .../f ; ls ... ========================= test 18"
-touch $MOUNT/f
-ls $MOUNT || error
+touch $DIR/f
+ls $DIR || error
 pass
 $CLEAN
 $START
 
 echo "== touch .../f ; ls -l ... ====================== test 19"
-touch $MOUNT/f
-ls -l $MOUNT
-rm $MOUNT/f
-$CHECKSTAT -a $MOUNT/f || error
+touch $DIR/f
+ls -l $DIR
+rm $DIR/f
+$CHECKSTAT -a $DIR/f || error
 pass
 $CLEAN
 $START
 
 echo "== touch .../f ; ls -l ... ====================== test 20"
-touch $MOUNT/f
-rm $MOUNT/f
+touch $DIR/f
+rm $DIR/f
 echo "1 done"
-touch $MOUNT/f
-rm $MOUNT/f
+touch $DIR/f
+rm $DIR/f
 echo "2 done"
-touch $MOUNT/f
-rm $MOUNT/f
+touch $DIR/f
+rm $DIR/f
 echo "3 done"
-$CHECKSTAT -a $MOUNT/f || error
+$CHECKSTAT -a $DIR/f || error
 pass
 $CLEAN
 $START
 
 echo '== write to dangling link ======================== test 21'
-mkdir $MOUNT/d21
-[ -f $MOUNT/d21/dangle ] && rm -f $MOUNT/d21/dangle
-ln -s dangle $MOUNT/d21/link
-echo foo >> $MOUNT/d21/link
-cat $MOUNT/d21/dangle
-$CHECKSTAT -t link $MOUNT/d21/link || error
-$CHECKSTAT -f -t file $MOUNT/d21/link || error
+mkdir $DIR/d21
+[ -f $DIR/d21/dangle ] && rm -f $DIR/d21/dangle
+ln -s dangle $DIR/d21/link
+echo foo >> $DIR/d21/link
+cat $DIR/d21/dangle
+$CHECKSTAT -t link $DIR/d21/link || error
+$CHECKSTAT -f -t file $DIR/d21/link || error
 pass
 $CLEAN
 $START
 
 echo '== unpack tar archive as non-root user =========== test 22'
-mkdir $MOUNT/d22
-which sudo && chown 4711 $MOUNT/d22
+mkdir $DIR/d22
+which sudo && chown 4711 $DIR/d22
 SUDO=`which sudo 2> /dev/null` && SUDO="$SUDO -u #4711" || SUDO=""
-$SUDO tar cf - /etc/hosts /etc/sysconfig/network | $SUDO tar xfC - $MOUNT/d22
-ls -lR $MOUNT/d22/etc
-$CHECKSTAT -t dir $MOUNT/d22/etc || error
-[ -z "$SUDO" ] || $CHECKSTAT -u \#4711 $MOUNT/d22/etc || error
+echo '**** FIX THIS TEST ****'
+SUDO=""
+$SUDO tar cf - /etc/hosts /etc/sysconfig/network | $SUDO tar xfC - $DIR/d22
+ls -lR $DIR/d22/etc
+$CHECKSTAT -t dir $DIR/d22/etc || error
+[ -z "$SUDO" ] || $CHECKSTAT -u \#4711 $DIR/d22/etc || error
 pass
 $CLEAN
 $START
 
 echo '== O_CREAT|O_EXCL in subdir ====================== test 23'
-mkdir $MOUNT/d23
-./toexcl $MOUNT/d23/f23
-./toexcl -e $MOUNT/d23/f23 || error
+mkdir $DIR/d23
+$TOEXCL $DIR/d23/f23
+$TOEXCL -e $DIR/d23/f23 || error
 pass
 $CLEAN
 $START
@@ -297,152 +316,228 @@ $START
 echo '== rename sanity ================================= test24'
 echo '-- same directory rename'
 echo '-- test 24-R1: touch a ; rename a b'
-mkdir $MOUNT/R1
-touch $MOUNT/R1/f
-mv $MOUNT/R1/f $MOUNT/R1/g
-$CHECKSTAT -t file $MOUNT/R1/g || error
+mkdir $DIR/R1
+touch $DIR/R1/f
+mv $DIR/R1/f $DIR/R1/g
+$CHECKSTAT -t file $DIR/R1/g || error
 pass
 $CLEAN
 $START
 
 echo '-- test 24-R2: touch a b ; rename a b;'
-mkdir $MOUNT/R2
-touch $MOUNT/R2/{f,g}
-mv $MOUNT/R2/f $MOUNT/R2/g
-$CHECKSTAT -a $MOUNT/R2/f || error
-$CHECKSTAT -t file $MOUNT/R2/g || error
+mkdir $DIR/R2
+touch $DIR/R2/{f,g}
+mv $DIR/R2/f $DIR/R2/g
+$CHECKSTAT -a $DIR/R2/f || error
+$CHECKSTAT -t file $DIR/R2/g || error
 pass
 $CLEAN
 $START
 
 echo '-- test 24-R3: mkdir a  ; rename a b;'
-mkdir $MOUNT/R3
-mkdir $MOUNT/R3/f
-mv $MOUNT/R3/f $MOUNT/R3/g
-$CHECKSTAT -a $MOUNT/R3/f || error
-$CHECKSTAT -t dir $MOUNT/R3/g || error
+mkdir $DIR/R3
+mkdir $DIR/R3/f
+mv $DIR/R3/f $DIR/R3/g
+$CHECKSTAT -a $DIR/R3/f || error
+$CHECKSTAT -t dir $DIR/R3/g || error
 pass
 $CLEAN
 $START
 
 echo '-- test 24-R4: mkdir a b ; rename a b;'
-mkdir $MOUNT/R4
-mkdir $MOUNT/R4/{f,g}
-perl -e "rename \"$MOUNT/R4/f\", \"$MOUNT/R4/g\";"
-$CHECKSTAT -a $MOUNT/R4/f || error
-$CHECKSTAT -t dir $MOUNT/R4/g || error
+mkdir $DIR/R4
+mkdir $DIR/R4/{f,g}
+perl -e "rename \"$DIR/R4/f\", \"$DIR/R4/g\";"
+$CHECKSTAT -a $DIR/R4/f || error
+$CHECKSTAT -t dir $DIR/R4/g || error
 pass
 $CLEAN
 $START
 
 echo '-- cross directory renames --' 
 echo '-- test 24-R5: touch a ; rename a b'
-mkdir $MOUNT/R5{a,b}
-touch $MOUNT/R5a/f
-mv $MOUNT/R5a/f $MOUNT/R5b/g
-$CHECKSTAT -a $MOUNT/R5a/f || error
-$CHECKSTAT -t file $MOUNT/R5b/g || error
+mkdir $DIR/R5{a,b}
+touch $DIR/R5a/f
+mv $DIR/R5a/f $DIR/R5b/g
+$CHECKSTAT -a $DIR/R5a/f || error
+$CHECKSTAT -t file $DIR/R5b/g || error
 pass
 $CLEAN
 $START
 
 echo '-- test 24-R6: touch a ; rename a b'
-mkdir $MOUNT/R6{a,b}
-touch $MOUNT/R6a/f $MOUNT/R6b/g
-mv $MOUNT/R6a/f $MOUNT/R6b/g
-$CHECKSTAT -a $MOUNT/R6a/f || error
-$CHECKSTAT -t file $MOUNT/R6b/g || error
+mkdir $DIR/R6{a,b}
+touch $DIR/R6a/f $DIR/R6b/g
+mv $DIR/R6a/f $DIR/R6b/g
+$CHECKSTAT -a $DIR/R6a/f || error
+$CHECKSTAT -t file $DIR/R6b/g || error
 pass
 $CLEAN
 $START
 
 echo '-- test 24-R7: touch a ; rename a b'
-mkdir $MOUNT/R7{a,b}
-mkdir $MOUNT/R7a/f
-mv $MOUNT/R7a/f $MOUNT/R7b/g
-$CHECKSTAT -a $MOUNT/R7a/f || error
-$CHECKSTAT -t dir $MOUNT/R7b/g || error
+mkdir $DIR/R7{a,b}
+mkdir $DIR/R7a/f
+mv $DIR/R7a/f $DIR/R7b/g
+$CHECKSTAT -a $DIR/R7a/f || error
+$CHECKSTAT -t dir $DIR/R7b/g || error
 pass
 $CLEAN
 $START
 
 echo '-- test 24-R8: touch a ; rename a b'
-mkdir $MOUNT/R8{a,b}
-mkdir $MOUNT/R8a/f $MOUNT/R8b/g
-perl -e "rename \"$MOUNT/R8a/f\", \"$MOUNT/R8b/g\";"
-$CHECKSTAT -a $MOUNT/R8a/f || error
-$CHECKSTAT -t dir $MOUNT/R8b/g || error
+mkdir $DIR/R8{a,b}
+mkdir $DIR/R8a/f $DIR/R8b/g
+perl -e "rename \"$DIR/R8a/f\", \"$DIR/R8b/g\";"
+$CHECKSTAT -a $DIR/R8a/f || error
+$CHECKSTAT -t dir $DIR/R8b/g || error
 pass
 $CLEAN
 $START
 
 echo "-- rename error cases"
 echo "-- test 24-R9 target error: touch f ; mkdir a ; rename f a"
-mkdir $MOUNT/R9
-mkdir $MOUNT/R9/a
-touch $MOUNT/R9/f
-perl -e "rename \"$MOUNT/R9/f\", \"$MOUNT/R9/a\";"
-$CHECKSTAT -t file $MOUNT/R9/f || error
-$CHECKSTAT -t dir  $MOUNT/R9/a || error
-$CHECKSTAT -a file $MOUNT/R9/a/f || error
+mkdir $DIR/R9
+mkdir $DIR/R9/a
+touch $DIR/R9/f
+perl -e "rename \"$DIR/R9/f\", \"$DIR/R9/a\";"
+$CHECKSTAT -t file $DIR/R9/f || error
+$CHECKSTAT -t dir  $DIR/R9/a || error
+$CHECKSTAT -a file $DIR/R9/a/f || error
 pass
 $CLEAN
 $START
 
 echo "--test 24-R10 source does not exist" 
-mkdir $MOUNT/R10
-perl -e "rename \"$MOUNT/R10/f\", \"$MOUNT/R10/g\"" 
-$CHECKSTAT -t dir $MOUNT/R10 || error
-$CHECKSTAT -a $MOUNT/R10/f || error
-$CHECKSTAT -a $MOUNT/R10/g || error
+mkdir $DIR/R10
+perl -e "rename \"$DIR/R10/f\", \"$DIR/R10/g\"" 
+$CHECKSTAT -t dir $DIR/R10 || error
+$CHECKSTAT -a $DIR/R10/f || error
+$CHECKSTAT -a $DIR/R10/g || error
 pass
 $CLEAN
 $START
 
 echo '== symlink sanity ================================ test25'
 echo "--test 25.1 create file in symlinked directory"
-mkdir $MOUNT/d25
-ln -s d25 $MOUNT/s25
-touch $MOUNT/s25/foo
+mkdir $DIR/d25
+ln -s d25 $DIR/s25
+touch $DIR/s25/foo
 pass
 $CLEAN
 $START
 
 echo "--test 25.2 lookup file in symlinked directory"
-$CHECKSTAT -t file $MOUNT/s25/foo
+$CHECKSTAT -t file $DIR/s25/foo
 pass
 $CLEAN
 $START
 
 echo "--test 26 multiple component symlink"
-mkdir $MOUNT/d26
-mkdir $MOUNT/d26/d26-2
-ln -s d26/d26-2 $MOUNT/s26
-touch $MOUNT/s26/foo
+mkdir $DIR/d26
+mkdir $DIR/d26/d26-2
+ln -s d26/d26-2 $DIR/s26
+touch $DIR/s26/foo
 pass
 $CLEAN
 $START
 
 echo "--test 26.1 multiple component symlink at the end of a lookup"
-ln -s d26/d26-2/foo $MOUNT/s26-2
-touch $MOUNT/s26-2
+ln -s d26/d26-2/foo $DIR/s26-2
+touch $DIR/s26-2
 pass
 $CLEAN
 $START
 
 echo "--test 26.2 a chain of symlinks"
-mkdir $MOUNT/d26.2
-touch $MOUNT/d26.2/foo
-ln -s d26.2 $MOUNT/s26.2-1
-ln -s s26.2-1 $MOUNT/s26.2-2
-ln -s s26.2-2 $MOUNT/s26.2-3
-chmod 0666 $MOUNT/s26.2-3/foo
+mkdir $DIR/d26.2
+touch $DIR/d26.2/foo
+ln -s d26.2 $DIR/s26.2-1
+ln -s s26.2-1 $DIR/s26.2-2
+ln -s s26.2-2 $DIR/s26.2-3
+chmod 0666 $DIR/s26.2-3/foo
 pass
 $CLEAN
 $START
 
-echo '== cleanup ========================================='
-rm -r $MOUNT/[Rdfs][1-9]*
+# recursive symlinks (bug 439)
+echo "--test 26.3 create multiple component recursive symlink"
+ln -s d26-3/foo $DIR/d26-3
+pass
+$CLEAN
+$START
+
+echo "--test 26.3 unlink multiple component recursive symlink"
+rm $DIR/d26-3
+pass
+$CLEAN
+$START
+
+echo '== stripe sanity ================================= test27'
+echo "--test 27.1 create one stripe"
+mkdir $DIR/d27
+$LSTRIPE $DIR/d27/f0 8192 0 1
+$CHECKSTAT -t file $DIR/d27/f0
+echo "--test 27.2 write to one stripe file"
+cp /etc/hosts $DIR/d27/f0
+pass
+
+echo "--test 27.3 create two stripe file f01"
+$LSTRIPE $DIR/d27/f01 8192 0 2
+echo "--test 27.4 write to two stripe file file f01"
+dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4
+pass
+
+echo "--test 27.5 create file with default settings"
+$LSTRIPE $DIR/d27/fdef 0 -1 0
+$CHECKSTAT -t file $DIR/d27/fdef
+#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4
+
+echo "--test 27.6 lstripe existing file (should return error)"
+$LSTRIPE $DIR/d27/f12 8192 1 2
+! $LSTRIPE $DIR/d27/f12 8192 1 2
+$CHECKSTAT -t file $DIR/d27/f12
+#dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4
+pass
+
+
+echo "--test 27.7 lstripe with bad stripe size (should return error on LOV)"
+$LSTRIPE $DIR/d27/fbad 100 1 2 || /bin/true
+dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4
+pass
+$CLEAN
+$START
+
+echo "--test 27.8 lfind "
+$LFIND $DIR/d27
+pass
+$CLEAN
+$START
+
+echo '== create/mknod/mkdir with bad file types ======== test28'
+mkdir $DIR/d28
+$CREATETEST $DIR/d28/ct || error
+pass
+
+echo '== IT_GETATTR regression  ======================== test29'
+mkdir $MOUNT/d29
+touch $MOUNT/d29/foo
+ls -l $MOUNT/d29
+MDCDIR=${MDCDIR:-/proc/fs/lustre/ldlm/ldlm/MDC_MNT_localhost_mds1}
+LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
+LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
+ls -l $MOUNT/d29
+LOCKCOUNTCURRENT=`cat $MDCDIR/lock_count`
+LOCKUNUSEDCOUNTCURRENT=`cat $MDCDIR/lock_unused_count`
+if [ $LOCKCOUNTCURRENT -gt $LOCKCOUNTORIG ] || [ $LOCKUNUSEDCOUNTCURRENT -gt $LOCKUNUSEDCOUNTORIG ]; then
+    error
+fi
+pass
+$CLEAN
+$START
+
+echo '== cleanup ============================================='
+rm -r $DIR/[Rdfs][1-9]*
 
 echo '======================= finished ======================='
 exit
