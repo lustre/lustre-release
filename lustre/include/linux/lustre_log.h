@@ -76,7 +76,7 @@ extern void llog_free_handle(struct llog_handle *handle);
 
 
 /* llog_cat.c   -  catalog api */
-void llog_cat_put(struct llog_handle *cathandle);
+int llog_cat_put(struct llog_handle *cathandle);
 int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                      struct llog_cookie *reccookie, void *buf);
 

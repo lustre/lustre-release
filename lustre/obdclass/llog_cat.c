@@ -50,7 +50,6 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         int rc, index, bitmap_size, i;
         ENTRY;
 
-        /* does this need a tgt uuid */
         rc = llog_create(cathandle->lgh_obd, &loghandle, NULL, NULL);
         if (rc)
                 RETURN(ERR_PTR(rc));
@@ -101,7 +100,8 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
 
  out_destroy:
-        llog_destroy(loghandle);
+        if (rc)
+                llog_destroy(loghandle);
 
         RETURN(loghandle);
 }
@@ -146,16 +146,20 @@ out:
         RETURN(rc);
 }
 
-void llog_cat_put(struct llog_handle *cathandle)
+int llog_cat_put(struct llog_handle *cathandle)
 {
         struct llog_handle *loghandle, *n;
+        int rc;
         ENTRY;
 
         list_for_each_entry_safe(loghandle, n, &cathandle->u.chd.chd_head, 
-                                 u.phd.phd_entry)
-                llog_close(loghandle);
-        llog_close(cathandle);
-        EXIT;
+                                 u.phd.phd_entry) {
+                int err = llog_close(loghandle);
+                if (err)
+                        CERROR("error closing loghandle\n");
+        }
+        rc = llog_close(cathandle);
+        RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_put);
 

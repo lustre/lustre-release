@@ -128,6 +128,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         }
         rc = 0;
 
+        handle->lgh_last_idx = 1; /* header is record 0 */
         llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
         llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
@@ -135,9 +136,14 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         llh->llh_flags = flags;
         memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
         llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
+        /* for the header record */
+        llh->llh_count = 1;
+        ext2_set_bit(0, llh->llh_bitmap);
 
-        if (flags & LLOG_F_IS_CAT)
+        if (flags & LLOG_F_IS_CAT) {
                 INIT_LIST_HEAD(&handle->u.chd.chd_head);
+                llh->llh_size = sizeof(struct llog_logid_rec);
+        }
         else if (llh->llh_flags & LLOG_F_IS_PLAIN)
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
         else

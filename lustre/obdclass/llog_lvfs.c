@@ -184,13 +184,14 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (idx != -1) { 
                 loff_t saved_offset;
 
-                /* no header: only allowed to insert record 0 */
-                if (idx != 0 && !file->f_dentry->d_inode->i_size) {
+                /* no header: only allowed to insert record 1 */
+                if (idx != 1 && !file->f_dentry->d_inode->i_size) {
                         CERROR("idx != -1 in empty log\n");
                         LBUG();
                 }
 
-                if (!loghandle->lgh_hdr->llh_size != rec->lrh_len)
+                if (loghandle->lgh_hdr->llh_size &&
+                    loghandle->lgh_hdr->llh_size != rec->lrh_len)
                         RETURN(-EINVAL);
 
                 rc = llog_lvfs_write_blob(file, &llh->llh_hdr, NULL, 0);
@@ -200,8 +201,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 
                 saved_offset = sizeof(*llh) + idx * rec->lrh_len;
                 rc = llog_lvfs_write_blob(file, rec, buf, saved_offset);
-                if (rc)
-                        RETURN(rc);
+                RETURN(rc);
         }
 
         /* Make sure that records don't cross a chunk boundary, so we can
@@ -385,7 +385,7 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                 if (rc)
                         GOTO(cleanup, rc);
                 dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id,
-                                             oa->o_gr);
+                                             oa->o_generation);
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
                 cleanup_phase = 2;
@@ -436,7 +436,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         oa->o_id = handle->lgh_id.lgl_oid;
         oa->o_gr = handle->lgh_id.lgl_ogr;
         oa->o_generation = handle->lgh_id.lgl_ogen;
-        oa->o_valid = OBD_MD_FLGROUP | OBD_MD_FLGENER;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLGENER;
 
         rc = llog_lvfs_close(handle);
         if (rc)
