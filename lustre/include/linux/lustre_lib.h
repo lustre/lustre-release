@@ -404,6 +404,8 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 /*
  * Like wait_event_interruptible, but we're only interruptible by KILL, INT, or
  * TERM.
+ *
+ * XXXshaver These are going away soon, I hope.
  */
 #define __l_wait_event_killable(wq, condition, ret)                          \
 do {                                                                         \
@@ -433,6 +435,33 @@ do {                                                                         \
         if (!(condition))                                               \
                 __l_wait_event_killable(wq, condition, __ret);          \
         __ret;                                                          \
+})
+
+#define __l_wait_event_timeout(wq, condition, timeout, ret)                   \
+do {                                                                          \
+        wait_queue_t __wait;                                                  \
+        init_waitqueue_entry(&__wait, current);                               \
+                                                                              \
+        add_wait_queue(&wq, &__wait);                                         \
+        for (;;) {                                                            \
+                set_current_state(TASK_INTERRUPTIBLE);                        \
+                if (condition)                                                \
+                        break;                                                \
+                if (timeout)                                                  \
+                        schedule_timeout(timeout);                            \
+                else                                                          \
+                        schedule();                                           \
+        }                                                                     \
+        current->state = TASK_RUNNING;                                        \
+        remove_wait_queue(&wq, &__wait);                                      \
+} while(0)
+
+#define l_wait_event_timeout(wq, condition, timeout)                          \
+({                                                                            \
+        int __ret = 0;                                                        \
+        if (!(condition))                                                     \
+                __l_wait_event_timeout(wq, condition, timeout, __ret);        \
+        __ret;                                                                \
 })
 
 #endif /* _LUSTRE_LIB_H */

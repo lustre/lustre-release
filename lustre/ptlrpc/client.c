@@ -261,6 +261,11 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         }
 
         if (req->rq_flags & PTL_RPC_FL_RESEND) { 
+                if (l_killable_pending(current)) {
+                        CERROR("-- INTR --\n");
+                        req->rq_flags |= PTL_RPC_FL_INTR;
+                        GOTO(out, rc = 1);
+                }
                 CERROR("-- RESEND --\n");
                 GOTO(out, rc = 1);
         }
@@ -270,8 +275,13 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 GOTO(out, rc = 1);
         }
 
+        if (req->rq_flags & PTL_RPC_FL_TIMEOUT && l_killable_pending(current)) {
+                req->rq_flags |= PTL_RPC_FL_INTR;
+                GOTO(out, rc = 1);
+        }
 
-        if (CURRENT_TIME - req->rq_time >= req->rq_timeout) {
+        if (req->rq_timeout &&
+            (CURRENT_TIME - req->rq_time >= req->rq_timeout)) {
                 CERROR("-- REQ TIMEOUT ON CONNID %d XID %Ld --\n",
                        req->rq_connid, (unsigned long long)req->rq_xid);
                 /* clear the timeout */
@@ -280,20 +290,15 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 req->rq_flags |= PTL_RPC_FL_TIMEOUT;
                 if (req->rq_client && req->rq_client->cli_recovd)
                         recovd_cli_fail(req->rq_client);
-                if (req->rq_level < LUSTRE_CONN_FULL)
+                if (req->rq_level < LUSTRE_CONN_FULL) {
                         rc = 1;
-                else
+                } else if (l_killable_pending(current)) {
+                        req->rq_flags |= PTL_RPC_FL_INTR;
+                        rc = 1;
+                } else {
                         rc = 0;
+                }
                 GOTO(out, rc);
-        }
-
-        if (req->rq_timeout) { 
-                schedule_timeout(req->rq_timeout * HZ);
-        }
-
-        if (l_killable_pending(current)) {
-                req->rq_flags |= PTL_RPC_FL_INTR;
-                GOTO(out, rc = 1);
         }
 
  out:
@@ -459,7 +464,7 @@ void ptlrpc_restart_req(struct ptlrpc_request *req)
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
-        int rc = 0;
+        int rc = 0, timeout;
         struct ptlrpc_client *cli = req->rq_client;
         ENTRY;
 
@@ -503,7 +508,13 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         spin_unlock(&cli->cli_lock);
 
         CDEBUG(D_OTHER, "-- sleeping\n");
-        l_wait_event_killable(req->rq_wait_for_rep, ptlrpc_check_reply(req));
+        /*
+         * req->rq_timeout gets reset in the timeout case, and
+         * l_wait_event_timeout is a macro, so save the timeout value here.
+         */
+        timeout = req->rq_timeout * HZ;
+        l_wait_event_timeout(req->rq_wait_for_rep, ptlrpc_check_reply(req),
+                             timeout);
         CDEBUG(D_OTHER, "-- done\n");
 
         if (req->rq_flags & PTL_RPC_FL_RESEND) {
@@ -512,14 +523,14 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         }
 
         up(&cli->cli_rpc_sem);
-        if (req->rq_flags & PTL_RPC_FL_TIMEOUT)
-                GOTO(out, rc = -ETIMEDOUT);
-
         if (req->rq_flags & PTL_RPC_FL_INTR) {
                 /* Clean up the dangling reply buffers */
                 ptlrpc_abort(req);
                 GOTO(out, rc = -EINTR);
         }
+
+        if (req->rq_flags & PTL_RPC_FL_TIMEOUT)
+                GOTO(out, rc = -ETIMEDOUT);
 
         if (!(req->rq_flags & PTL_RPC_FL_REPLIED))
                 GOTO(out, rc = req->rq_status);
