@@ -201,7 +201,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct ldlm_reply *rep = lustre_msg_buf(req->rq_repmsg, 0);
         struct file *file;
         struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
-        struct dentry *dchild, *parent;
+        struct dentry *dchild = NULL, *parent;
         struct mds_export_data *med;
         struct mds_file_data *mfd = NULL;
         struct ldlm_res_id child_res_id = { .name = {0} };
