@@ -21,8 +21,8 @@ BEGIN { require "asm/ioctl.ph" };
 # p2ph generated invalid macros for ioctl stuff, so I override some of it here
 eval 'sub OBD_IOC_CREATE () { &_IOC(2, ord(\'f\'), 3, 4);}' unless
   defined(&OBD_IOC_CREATE);
-eval 'sub OBD_IOC_SETUP_OBDDEV () { &_IOC(1, ord(\'f\'), 4, 4);}' unless
-  defined(&OBD_IOC_SETUP_OBDDEV);
+eval 'sub OBD_IOC_SETUP () { &_IOC(1, ord(\'f\'), 4, 4);}' unless
+  defined(&OBD_IOC_SETUP);
 eval 'sub OBD_IOC_CLEANUP () { &_IOC(0, ord(\'f\'), 5, 0);}' unless
   defined(&OBD_IOC_CLEANUP);
 eval 'sub OBD_IOC_DESTROY () { &_IOC(1, ord(\'f\'), 6, 4);}' unless
@@ -55,6 +55,12 @@ eval 'sub OBD_IOC_PARTITION () { &_IOC(3, ord(\'f\'), 19, 4);}' unless
   defined(&OBD_IOC_PARTITION);
 eval 'sub OBD_IOC_ATTACH () { &_IOC(3, ord(\'f\'), 20, 4);}' unless
   defined(&OBD_IOC_ATTACH);
+eval 'sub OBD_IOC_DETACH () { &_IOC(3, ord(\'f\'), 21, 4);}' unless
+  defined(&OBD_IOC_DETACH);
+eval 'sub OBD_IOC_COPY () { &_IOC(3, ord(\'f\'), 22, 4);}' unless
+  defined(&OBD_IOC_COPY);
+eval 'sub OBD_IOC_MIGR () { &_IOC(3, ord(\'f\'), 23, 4);}' unless
+  defined(&OBD_IOC_MIGR);
 
 eval 'sub ATTR_MODE () {1;}' unless defined(&ATTR_MODE);
 eval 'sub ATTR_UID () {2;}' unless defined(&ATTR_UID);
@@ -87,7 +93,12 @@ my %commands =
     ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
      'filesystem' => {func => "Filesystem", doc => "filesystem <dev>: partition for direct OBD device"},
      'create' => {func => "Create", doc => "create: creates a new inode"},
-     'attach' => {func => "Attach", doc => "format type [adapter bus tid lun]"},
+     'attach' => {func => "Attach", doc => "attach type [adapter bus tid lun]"},
+     'detach' => {func => "Detach", doc => "detach this device"},
+     'snapattach' => {func => "SnapAttach", doc => "snapattach snapno snapcount time1 index1 .... timek indexk"},
+     'snaptable' => {func => "SnapShotTable", doc => "snaptable: build a snapshot table (interactive)"},
+     'copy' => {func => "Copy", doc => "copy srcid tgtid"},
+     'migrate' => {func => "Migrate", doc => "migrate srcid tgtid"},
      'format' => {func => "Format", doc => "format type adapter bus tid lun size"},
      'partition' => {func => "Partition", doc => "partition type adapter bus tid lun partition size"},
      'setup' => {func => "Setup", doc => "setup: link the ext2 partition (default /dev/loop0) to this obddev"},
@@ -121,6 +132,19 @@ my $term, $attribs;
 
 Device($::device);
 Filesystem($::filesystem);
+
+sub readl {
+    if ( $file ) {
+	my $str = <STDIN>;
+	chop($str);
+	return $str;
+  } else {
+      return $term->readline(@_);
+  }
+}
+
+
+
 if ( $file ) {
 	while ( <STDIN> ) {
 	    print $_;
@@ -216,7 +240,7 @@ sub Device {
     $::device = $device;
     # Open the device, as we need an FD for the ioctl
     sysopen(DEV_OBD, $device, 0) || die "Cannot open $device";
-
+    print "Device now $device\n";
 }
 
 
@@ -248,6 +272,190 @@ sub Attach {
 	print "ioctl returned error code $rc.\n";
     }
 }
+
+sub Detach {
+    my $err = 0;
+    my $data = "";
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_DETACH, $data);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+
+sub SnapAttach {
+    my $err = 0;
+    my $type = "snap_obd";
+    my $snapdev = shift;
+    my $snapno = shift;
+    my $file = shift;
+    my $snapcount;
+    my $table = {};
+    my $data;
+    my $datalen = 0;
+
+    if ( ! -f $file ) {
+	print "No such file $file\n";
+    }
+
+    $table = ReadSnapShotTable($file);
+
+    $snapcount = keys %{$table};
+    print "Snapcount $snapcount\n";
+    $data = pack("iii", $snapdev, $snapno, $snapcount);
+    $datalen = 3 * 4;
+    foreach my $time (sort keys %{$table}) {
+	$data .= pack("Ii", $time, $table->{$time});
+	$datalen += 8;
+    }
+
+    my $len = length($type);
+    my $cl = length($data);
+    my $add = pack("p", $data);
+    print "type $type (len $len), datalen $datalen ($cl)\n";
+    printf "Addr of data %x\n", $add; 
+    my $packed = pack("ipip", length($type), $type, $datalen, $data);
+
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_ATTACH, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+
+sub SnapShotTable  {
+
+    my $file = &readl("enter file name: ");
+    if ( ! -f $file ) {
+	`touch $file`;
+    }
+    my $table = ReadSnapShotTable($file);
+  
+  again:
+    PrintSnapShotTable($table);
+    my $action = &readl("Add, Delete or Quit [adq]: ");
+    goto done if ($action  =~ "^q.*" );
+    goto add if ($action =~ "^a.*");
+    goto del  if ($action =~ "^d.*");
+    goto again;
+
+  add:
+    my $idx = &readl("enter new index: ");
+    my $time = &readl("enter time (hit RET for \"now\"): ");
+    my $oldtime = SnapFindTimeFromIdx($idx, $table);
+    delete $table->{$oldtime} if defined $oldtime;
+    $time = time unless $time;
+    $table->{$time} = $idx;
+    goto again;
+
+  del:
+    $didx = &readl("Enter index to delete: ");
+    my $deltime = SnapFindTimeFromIdx($didx, $table);
+    delete $table->{$deltime} if defined $deltime;
+    goto again;
+
+  done:
+    my $ok = &readl("OK with new table? [Yn]: ");
+    unless ( $ok eq "no" )  {
+      WriteSnapShotTable($file, $table);
+  }
+}
+
+sub SnapFindTimeFromIdx {
+    my $idx = shift;
+    my $table = shift;
+
+    foreach my $time ( keys %{$table} ) {
+	if ( $table->{$time} == $idx ) {
+	    return $time;
+	}
+    }
+    undef;
+}
+
+sub PrintSnapShotTable {
+    my $table = shift;
+    my $time;
+    
+    foreach  $time ( sort keys %{$table} ) {
+	my $stime = localtime($time);
+	printf "Time: %s -- Index %d\n", $stime, $table->{$time};
+    }
+}
+
+sub ReadSnapShotTable {
+
+    my $file = shift;
+    my $table = {};
+
+    open FH, "<$file";
+    while ( <FH> ) {
+	my ($time, $index) = split ;
+	$table->{$time} = $index;
+    }
+    close FH;
+    return $table;
+}
+
+sub WriteSnapShotTable {
+    my $file = shift;
+    my $table = shift;
+
+    open FH, ">$file";
+    foreach my $time ( sort keys %{$table}  ) {
+	print FH "$time $table->{$time}\n";
+    }
+    close FH;
+}
+
+sub Copy {
+    my $err = 0;
+    my $srcid = shift;
+    my $tgtid = shift;
+    my $data = pack("III", $::client_id, $srcid, $tgtid);
+    my $datalen = 12;
+
+    my $packed = pack("ip", $datalen, $data);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_COPY, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Migrate {
+    my $err = 0;
+    my $srcid = shift;
+    my $tgtid = shift;
+    my $data = pack("III", $::client_id, $srcid, $tgtid);
+    my $datalen = 12;
+
+    my $packed = pack("ip", $datalen, $data);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_MIGR, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
 
 sub Format {
     my $err = 0;
@@ -302,7 +510,7 @@ sub Setup {
     }
 
     my $packed = pack("ip", $datalen, $data);
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP_OBDDEV, $packed);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP, $packed);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";

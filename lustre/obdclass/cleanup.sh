@@ -5,6 +5,7 @@ rmmod obdfs
 
 ./obdcontrol -f << EOF
 cleanup
+detach
 quit
 EOF
 

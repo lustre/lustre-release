@@ -24,23 +24,18 @@
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 /* map connection to client */
-struct obd_client *gen_client(int cli_id)
+struct obd_client *gen_client(struct obd_conn *conn)
 {
-	struct obd_device * obddev;
+	struct obd_device * obddev = conn->oc_dev;
 	struct list_head * lh, * next;
 	struct obd_client * cli;
-	int a;
 
-	for (a = 0; a < MAX_OBD_DEVICES; a++) {
-		obddev = &obd_dev[a];
-
-		lh = next = &obddev->obd_gen_clients;
-		while ((lh = lh->next) != &obddev->obd_gen_clients) {
-			cli = list_entry(lh, struct obd_client, cli_chain);
-			
-			if (cli->cli_id == cli_id)
-				return cli;
-		}
+	lh = next = &obddev->obd_gen_clients;
+	while ((lh = lh->next) != &obddev->obd_gen_clients) {
+		cli = list_entry(lh, struct obd_client, cli_chain);
+		
+		if (cli->cli_id == conn->oc_id)
+			return cli;
 	}
 
 	return NULL;
@@ -49,47 +44,46 @@ struct obd_client *gen_client(int cli_id)
 
 
 /* a connection defines a context in which preallocation can be managed. */ 
-int gen_connect (struct obd_device *obddev, 
-			struct obd_conn_info * conninfo)
+int gen_connect (struct obd_conn *conn)
 {
 	struct obd_client * cli;
 
 	OBD_ALLOC(cli, struct obd_client *, sizeof(struct obd_client));
 	if ( !cli ) {
 		printk("obd_connect (minor %d): no memory!\n", 
-		       obddev->obd_minor);
+		       conn->oc_dev->obd_minor);
 		return -ENOMEM;
 	}
 
 	INIT_LIST_HEAD(&cli->cli_prealloc_inodes);
 	/* this should probably spinlocked? */
-	cli->cli_id = ++obddev->obd_gen_last_id;
+	cli->cli_id = ++conn->oc_dev->obd_gen_last_id;
 	cli->cli_prealloc_quota = 0;
-	cli->cli_obd = obddev;
-	list_add(&(cli->cli_chain), obddev->obd_gen_clients.prev);
+	cli->cli_obd = conn->oc_dev;
+	list_add(&(cli->cli_chain), conn->oc_dev->obd_gen_clients.prev);
 
 	CDEBUG(D_IOCTL, "connect: new ID %u\n", cli->cli_id);
-	conninfo->conn_id = cli->cli_id;
+	conn->oc_id = cli->cli_id;
 	return 0;
 } /* gen_obd_connect */
 
 
-int gen_disconnect(unsigned int conn_id)
+int gen_disconnect(struct obd_conn *conn)
 {
 	struct obd_client * cli;
-
 	ENTRY;
 
-	if (!(cli = gen_client(conn_id))) {
+	if (!(cli = gen_client(conn))) {
 		CDEBUG(D_IOCTL, "disconnect: attempting to free "
-		       "nonexistent client %u\n", conn_id);
+		       "nonexistent client %u\n", conn->oc_id);
 		return -EINVAL;
 	}
+
 
 	list_del(&(cli->cli_chain));
 	OBD_FREE(cli, sizeof(struct obd_client));
 
-	CDEBUG(D_IOCTL, "disconnect: ID %u\n", conn_id);
+	CDEBUG(D_IOCTL, "disconnect: ID %u\n", conn->oc_id);
 
 	EXIT;
 	return 0;
@@ -104,12 +98,11 @@ int gen_disconnect(unsigned int conn_id)
 int gen_multi_setup(struct obd_device *obddev, int len, void *data)
 {
 	int i;
-	struct obd_device *rdev = obddev->obd_multi_dev[0];
 
 	for (i = 0 ; i < obddev->obd_multi_count ; i++ ) {
 		int rc;
-		struct obd_device *child = rdev + i;
-		rc  = OBP(child, connect)(child, &rdev->obd_multi_conns[i]);
+		struct obd_conn *ch_conn = &obddev->obd_multi_conn[i];
+		rc  = OBP(ch_conn->oc_dev, connect)(ch_conn);
 
 		if ( rc != 0 ) {
 			/* XXX disconnect others */
@@ -119,27 +112,8 @@ int gen_multi_setup(struct obd_device *obddev, int len, void *data)
 	return 0;
 }
 
-int gen_multi_cleanup(struct obd_device * obddev)
-{
-	int i;
-	struct obd_device **rdev = obddev->obd_multi_dev;
 
-	for (i = 0 ; i < obddev->obd_multi_count ; i++ ) {
-		int rc;
-		struct obd_device *child = *(rdev + i);
-		rc  = OBP(child, cleanup)(child);
-		*(rdev + i) = NULL;
-
-		if ( rc != 0 ) {
-			/* XXX disconnect others */
-			return -EINVAL;
-		}
-	}
-	gen_cleanup(obddev);
-	return 0;
-} /* sim_cleanup_obddev */
-
-
+#if 0
 int gen_multi_attach(struct obd_device *obddev, int len, void *data)
 {
 	int i;
@@ -156,7 +130,7 @@ int gen_multi_attach(struct obd_device *obddev, int len, void *data)
 	}
 	return 0;
 }
-
+#endif
 
 
 /*
@@ -164,22 +138,18 @@ int gen_multi_attach(struct obd_device *obddev, int len, void *data)
  *    close all connections to lower devices
  *    needed for forced unloads of OBD client drivers
  */
-int gen_multi_cleanup_device(struct obd_device *obddev)
+int gen_multi_cleanup(struct obd_device *obddev)
 {
 	int i;
-	struct obd_device **rdev;
 
-	rdev =  obddev->obd_multi_dev;
 	for (i = 0 ; i < obddev->obd_multi_count ; i++ ) {
+		struct obd_conn *ch_conn = &obddev->obd_multi_conn[i];
 		int rc;
-		struct obd_device *child = *(rdev + i);
-		rc  = OBP(child, disconnect)
-			(obddev->obd_multi_conns[i].conn_id);
+		rc  = OBP(ch_conn->oc_dev, disconnect)(ch_conn);
 
 		if ( rc != 0 ) {
-			printk("OBD multi cleanup dev: disconnect failure %d\n", child->obd_minor);
+			printk("OBD multi cleanup dev: disconnect failure %d\n", ch_conn->oc_dev->obd_minor);
 		}
-		*(rdev + i) = NULL;
 	}		
 	return 0;
 } /* gen_multi_cleanup_device */
@@ -202,8 +172,64 @@ int gen_cleanup(struct obd_device * obddev)
 		cli = list_entry(tmp, struct obd_client, cli_chain);
 		CDEBUG(D_IOCTL, "Disconnecting obd_connection %d, at %p\n",
 		       cli->cli_id, cli);
-		OBP(obddev, disconnect)(cli->cli_id);
 	}
-
-	return OBP(obddev, cleanup_device)(obddev);
+	return 0;
 } /* sim_cleanup_device */
+
+void ___wait_on_page(struct page *page)
+{
+        struct task_struct *tsk = current;
+        DECLARE_WAITQUEUE(wait, tsk);
+
+        add_wait_queue(&page->wait, &wait);
+        do {
+                run_task_queue(&tq_disk);
+                set_task_state(tsk, TASK_UNINTERRUPTIBLE);
+                if (!PageLocked(page))
+                        break;
+                schedule();
+        } while (PageLocked(page));
+        tsk->state = TASK_RUNNING;
+        remove_wait_queue(&page->wait, &wait);
+}
+
+void lck_page(struct page *page)
+{
+        while (TryLockPage(page))
+                ___wait_on_page(page);
+}
+
+int gen_copy_data(struct obd_conn *conn, obdattr *src, obdattr *tgt)
+{
+	struct page *page;
+	unsigned long offset = 0;
+	int rc;
+
+	page = __get_pages(GFP_USER, 0);
+	if ( !page ) 
+		return -ENOMEM;
+
+	
+	lck_page(page);
+	
+	while (offset < src->i_size) {
+		
+		page->offset = offset;
+		rc = OBP(conn->oc_dev, brw)(READ, conn, src, page, 0);
+
+		if ( rc != PAGE_SIZE ) 
+			break;
+
+		rc = OBP(conn->oc_dev,brw)(WRITE, conn, tgt, page, 1);
+		if ( rc != PAGE_SIZE)
+			break;
+		
+		offset += rc;
+	}
+	tgt->i_size = src->i_size;
+	tgt->i_blocks = src->i_blocks;
+	UnlockPage(page);
+	__free_page(page);
+
+	return 0;
+}
