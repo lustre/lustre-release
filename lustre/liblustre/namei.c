@@ -327,6 +327,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         spin_unlock(&dcache_lock);
         d_rehash(de);
         */
+        if (it->it_op & (IT_OPEN | IT_GETATTR))
+                LL_SAVE_INTENT(pb->pb_ino, it);
         RETURN(1);
  out:
         if (req)
@@ -340,6 +342,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         } else {
                 llu_lookup_finish_locks(it, pnode);
                 llu_i2info(pb->pb_ino)->lli_stale_flag = 0;
+                if (it->it_op & (IT_OPEN | IT_GETATTR))
+                        LL_SAVE_INTENT(pb->pb_ino, it);
         }
         RETURN(rc);
 }
