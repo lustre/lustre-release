@@ -23,12 +23,13 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifdef __KERNEL__
-#include <linux/lustre_dlm.h>
+# include <linux/lustre_dlm.h>
 #else
-#include <liblustre.h>
+# include <liblustre.h>
 #endif
 
 #include <linux/obd_class.h>
+#include "ldlm_internal.h"
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
@@ -67,8 +68,46 @@ static int lprocfs_uint_rd(char *page, char **start, off_t off,
         return snprintf(page, count, "%u\n", *temp);
 }
 
+static int lprocfs_read_lru_size(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct ldlm_namespace *ns = data;
+        return lprocfs_uint_rd(page, start, off, count, eof,
+                               &ns->ns_max_unused);
+}
 
 #define MAX_STRING_SIZE 128
+static int lprocfs_write_lru_size(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct ldlm_namespace *ns = data;
+        char dummy[MAX_STRING_SIZE + 1];
+        unsigned long tmp;
+
+        dummy[MAX_STRING_SIZE] = '\0';
+        copy_from_user(dummy, buffer, MAX_STRING_SIZE);
+
+        if (count == 6 && memcmp(dummy, "clear", 5) == 0) {
+                CDEBUG(D_DLMTRACE,
+                       "dropping all unused locks from namespace %s\n",
+                       ns->ns_name);
+                tmp = ns->ns_max_unused;
+                ns->ns_max_unused = 0;
+                ldlm_cancel_lru(ns);
+                ns->ns_max_unused = tmp;
+                return count;
+        }
+
+        tmp = simple_strtoul(dummy, NULL, 0);
+        CDEBUG(D_DLMTRACE, "changing namespace %s max_unused from %u to %u\n",
+               ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
+        ns->ns_max_unused = (unsigned int)tmp;
+
+        ldlm_cancel_lru(ns);
+
+        return count;
+}
+
 void ldlm_proc_namespace(struct ldlm_namespace *ns)
 {
         struct lprocfs_vars lock_vars[2];
@@ -81,29 +120,34 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
 
         memset(lock_vars, 0, sizeof(lock_vars));
         lock_vars[0].read_fptr = lprocfs_rd_u64;
-
         lock_vars[0].name = lock_name;
 
         snprintf(lock_name, MAX_STRING_SIZE, "%s/resource_count", ns->ns_name);
-
         lock_vars[0].data = &ns->ns_resources;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
         snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_count", ns->ns_name);
-
         lock_vars[0].data = &ns->ns_locks;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
-        snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_unused_count",
-                 ns->ns_name);
-        lock_vars[0].data = &ns->ns_nr_unused;
-        lock_vars[0].read_fptr = lprocfs_uint_rd;
-        lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+        if (ns->ns_client) {
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_unused_count",
+                         ns->ns_name);
+                lock_vars[0].data = &ns->ns_nr_unused;
+                lock_vars[0].read_fptr = lprocfs_uint_rd;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/lru_size",
+                         ns->ns_name);
+                lock_vars[0].data = ns;
+                lock_vars[0].read_fptr = lprocfs_read_lru_size;
+                lock_vars[0].write_fptr = lprocfs_write_lru_size;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+        }
 }
 #endif
 #undef MAX_STRING_SIZE
 
-#define LDLM_MAX_UNUSED 100
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
@@ -138,7 +182,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
         INIT_LIST_HEAD(&ns->ns_unused_list);
         ns->ns_nr_unused = 0;
-        ns->ns_max_unused = LDLM_MAX_UNUSED;
+        ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
 
         spin_lock(&ldlm_namespace_lock);
         list_add(&ns->ns_list_chain, &ldlm_namespace_list);
