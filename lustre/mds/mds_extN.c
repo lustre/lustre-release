@@ -249,6 +249,7 @@ static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
 #ifdef HAVE_JOURNAL_CALLBACK_STATUS
         CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
                (unsigned long long)mcb->cb_last_rcvd);
+        /* Note that an "incompatible pointer warning here is OK for now */
         journal_callback_set(handle, mds_extN_callback_status,
                              (struct journal_callback *)mcb);
 #else
