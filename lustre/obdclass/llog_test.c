@@ -72,15 +72,13 @@ static int verify_handle(char * test, struct llog_handle *llh, int num_recs)
 }
 
 /* Test named-log create/open, close */
-static int llog_test_1(struct obd_device *obd)
+static int llog_test_1(struct obd_device *obd, char * name)
 {
         struct llog_handle *llh;
-        char name[10];
         int rc;
         int rc2;
         ENTRY;
 
-        sprintf(name, "%x", llog_test_rand);
         CERROR("1a: create a log with name: %s\n", name);
 
         rc = llog_create(obd, &llh, NULL, name);
@@ -105,13 +103,11 @@ static int llog_test_1(struct obd_device *obd)
 }
 
 /* Test named-log reopen; returns opened log on success */
-static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
+static int llog_test_2(struct obd_device *obd, char * name, struct llog_handle **llh)
 {
-        char name[10];
         int rc;
         ENTRY;
 
-        sprintf(name, "%x", llog_test_rand);
         CERROR("2: re-open a log with name: %s\n", name);
         rc = llog_create(obd, llh, NULL, name);
         if (rc) {
@@ -338,6 +334,46 @@ static int llog_test_5(struct obd_device *obd)
 }
 
 
+static int llog_test6_process_rec(struct llog_rec_hdr * rec, void * private) 
+{
+        return 0;
+}
+
+/* Test client api; open log by name and process */
+static int llog_test_6(struct obd_device *obd, char * name)
+{
+        struct obd_device *mdc_obd;
+        struct obd_uuid *mds_uuid = &obd->obd_log_exp->exp_obd->obd_uuid;
+        struct lustre_handle exph = {0, };
+        struct obd_export * exp;
+        struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
+        int rc;
+
+        CERROR("6a: re-open log %s using client API\n", name);
+        mdc_obd = class_find_client_obd(mds_uuid, LUSTRE_MDC_NAME, NULL);
+        if (mdc_obd == NULL) {
+                CERROR("No MDC devices connected to %s found.\n", 
+                       mds_uuid->uuid);
+                RETURN(-ENOENT);
+        }
+
+        rc = obd_connect(&exph, mdc_obd, &uuid);
+        if (rc) {
+                CERROR("Failed to connect to MDC: %s\n", mdc_obd->obd_name);
+                RETURN(rc);
+        }
+
+        exp = class_conn2export(&exph);
+        rc = mdc_llog_process(exp, name, NULL, llog_test6_process_rec);
+        if (rc) {
+                CERROR("mdc_llog_process failed: rc = %d\n", rc);
+        }
+
+        rc = obd_disconnect(exp, 0);
+        
+        RETURN(rc);
+                
+}
 
 /* -------------------------------------------------------------------------
  * Tests above, boring obd functions below
@@ -347,15 +383,17 @@ static int llog_run_tests(struct obd_device *obd)
         struct llog_handle *llh;
         struct obd_run_ctxt saved;
         int rc, err, cleanup_phase = 0;
+        char name[10];
         ENTRY;
 
+        sprintf(name, "%x", llog_test_rand);
         push_ctxt(&saved, &obd->obd_log_exp->exp_obd->obd_ctxt, NULL);
 
-        rc = llog_test_1(obd);
+        rc = llog_test_1(obd, name);
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = llog_test_2(obd, &llh);
+        rc = llog_test_2(obd, name, &llh);
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 1; /* close llh */
@@ -369,6 +407,10 @@ static int llog_run_tests(struct obd_device *obd)
                 GOTO(cleanup, rc);
 
         rc = llog_test_5(obd);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        rc = llog_test_6(obd, name);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -398,28 +440,28 @@ static int llog_test_cleanup(struct obd_device *obd, int flags)
 
 static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct obd_ioctl_data *data = buf;
+        struct lustre_cfg *lcfg = buf;
         struct lustre_handle exph = {0, };
         struct obd_device *tgt;
         struct obd_uuid fake_uuid = { "LLOG_TEST_UUID" };
         int rc;
         ENTRY;
 
-        if (data->ioc_inllen1 < 1) {
+        if (lcfg->lcfg_inllen1 < 1) {
                 CERROR("requires a TARGET OBD name\n");
                 RETURN(-EINVAL);
         }
 
-        tgt = class_name2obd(data->ioc_inlbuf1);
+        tgt = class_name2obd(lcfg->lcfg_inlbuf1);
         if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
                 CERROR("target device not attached or not set up (%d/%s)\n",
-                       data->ioc_dev, data->ioc_inlbuf1);
+                       lcfg->lcfg_dev, lcfg->lcfg_inlbuf1);
                 RETURN(-EINVAL);
         }
 
         rc = obd_connect(&exph, tgt, &fake_uuid);
         if (rc) {
-                CERROR("fail to connect to target device %d\n", data->ioc_dev);
+                CERROR("fail to connect to target device %d\n", lcfg->lcfg_dev);
                 RETURN(rc);
         }
         obd->obd_log_exp = class_conn2export(&exph);
