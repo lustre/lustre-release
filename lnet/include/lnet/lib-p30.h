@@ -170,10 +170,10 @@ lib_msg_free (nal_cb_t *nal, lib_msg_t *msg)
 
 #else
 
-extern kmem_cache_t *ptl_md_slab; 
-extern kmem_cache_t *ptl_msg_slab; 
-extern kmem_cache_t *ptl_me_slab; 
-extern kmem_cache_t *ptl_eq_slab; 
+extern kmem_cache_t *ptl_md_slab;
+extern kmem_cache_t *ptl_msg_slab;
+extern kmem_cache_t *ptl_me_slab;
+extern kmem_cache_t *ptl_eq_slab;
 extern atomic_t      md_in_use_count;
 extern atomic_t      msg_in_use_count;
 extern atomic_t      me_in_use_count;
@@ -183,28 +183,28 @@ static inline lib_eq_t *
 lib_eq_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_eq_t *eq = kmem_cache_alloc(ptl_eq_slab, GFP_KERNEL);
-        
+        lib_eq_t *eq = kmem_cache_alloc(ptl_eq_slab, GFP_NOFS);
+
         if (eq == NULL)
                 return (NULL);
-        
+
         atomic_inc (&eq_in_use_count);
         return (eq);
 }
 
-static inline void 
+static inline void
 lib_eq_free (nal_cb_t *nal, lib_eq_t *eq)
 {
         /* ALWAYS called with statelock held */
         atomic_dec (&eq_in_use_count);
-        kmem_cache_free(ptl_eq_slab, eq); 
+        kmem_cache_free(ptl_eq_slab, eq);
 }
 
 static inline lib_md_t *
 lib_md_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_md_t *md = kmem_cache_alloc(ptl_md_slab, GFP_KERNEL); 
+        lib_md_t *md = kmem_cache_alloc(ptl_md_slab, GFP_NOFS);
 
         if (md == NULL)
                 return (NULL);
@@ -225,11 +225,11 @@ static inline lib_me_t *
 lib_me_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_me_t *me = kmem_cache_alloc(ptl_me_slab, GFP_KERNEL);
+        lib_me_t *me = kmem_cache_alloc(ptl_me_slab, GFP_NOFS);
 
         if (me == NULL)
                 return (NULL);
-        
+
         atomic_inc (&me_in_use_count);
         return (me);
 }
@@ -246,7 +246,7 @@ static inline lib_msg_t *
 lib_msg_alloc(nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_msg_t *msg = kmem_cache_alloc(ptl_msg_slab, GFP_ATOMIC); 
+        lib_msg_t *msg = kmem_cache_alloc(ptl_msg_slab, GFP_ATOMIC);
 
         if (msg == NULL)
                 return (NULL);
@@ -370,6 +370,7 @@ extern void lib_copy_buf2iov (int niov, struct iovec *iov, char *dest, ptl_size_
 extern ptl_size_t lib_kiov_nob (int niov, ptl_kiov_t *iov);
 extern void lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *iov, ptl_size_t len);
 extern void lib_copy_buf2kiov (int niov, ptl_kiov_t *iov, char *src, ptl_size_t len);
+extern void lib_assert_wire_constants (void);
 
 extern void lib_recv (nal_cb_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
                       ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen);

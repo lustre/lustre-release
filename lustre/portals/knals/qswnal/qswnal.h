@@ -24,7 +24,9 @@
 
 #ifndef _QSWNAL_H
 #define _QSWNAL_H
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #ifdef PROPRIETARY_ELAN
 # include <qsw/kernel.h>
@@ -200,6 +202,10 @@ typedef struct
 	ELAN3_DMA_HANDLE  *kqn_eptxdmahandle;   /* elan reserved tx vaddrs */
 	ELAN3_DMA_HANDLE  *kqn_eprxdmahandle;   /* elan reserved rx vaddrs */
         kpr_router_t       kqn_router;          /* connection to Kernel Portals Router module */
+
+        ptl_nid_t          kqn_nid_offset;      /* this cluster's NID offset */
+        int                kqn_nnodes;          /* this cluster's size */
+        int                kqn_elanid;          /* this nodes's elan ID */
 }  kqswnal_data_t;
 
 /* kqn_init state */
@@ -216,6 +222,23 @@ extern int kqswnal_thread_start (int (*fn)(void *arg), void *arg);
 extern void kqswnal_rxhandler(EP_RXD *rxd);
 extern int kqswnal_scheduler (void *);
 extern void kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd);
+
+static inline ptl_nid_t
+kqswnal_elanid2nid (int elanid) 
+{
+        return (kqswnal_data.kqn_nid_offset + elanid);
+}
+
+static inline int
+kqswnal_nid2elanid (ptl_nid_t nid) 
+{
+        /* not in this cluster? */
+        if (nid < kqswnal_data.kqn_nid_offset ||
+            nid >= kqswnal_data.kqn_nid_offset + kqswnal_data.kqn_nnodes)
+                return (-1);
+        
+        return (nid - kqswnal_data.kqn_nid_offset);
+}
 
 static inline void
 kqswnal_requeue_rx (kqswnal_rx_t *krx)

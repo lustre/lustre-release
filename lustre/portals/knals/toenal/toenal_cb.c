@@ -300,7 +300,7 @@ ktoenal_process_transmit (ksock_conn_t *conn, long *irq_flags)
                         rc = 0;                 /* nothing sent */
                 else
                 {
-#warning FIXME: handle socket errors properly
+                        /* FIXME: handle socket errors properly */
                         CERROR ("Error socknal send(%d) %p: %d\n", tx->tx_nob, conn, rc);
                         rc = tx->tx_nob;        /* kid on for now whole packet went */
                 }
@@ -423,11 +423,10 @@ ktoenal_send(nal_cb_t *nal, void *private, lib_msg_t *cookie,
          * packet as a side-effect of another packet, such as when an ACK has
          * been requested. -phil */
 
-        CDEBUG(D_NET, "sending "LPSZ" bytes from [%d](%p,%d)... to nid: "LPX64" pid %d\n",
-               payload_len, payload_niov,
+        CDEBUG(D_NET, "sending %d bytes from [%d](%p,%d)... to nid: "
+               LPX64" pid %d\n", (int)payload_len, payload_niov,
                payload_niov > 0 ? payload_iov[0].iov_base : NULL,
-               payload_niov > 0 ? payload_iov[0].iov_len  : 0,
-               nid, pid);
+               (int)(payload_niov > 0 ? payload_iov[0].iov_len : 0), nid, pid);
 
         if ((conn = ktoenal_get_conn (nid)) == NULL)
         {
@@ -862,7 +861,7 @@ ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
                 if (len != -EAGAIN &&           /* ! nothing to read now */
                     len != 0)                   /* ! nothing to read ever */
                 {
-#warning FIXME: handle socket errors properly
+                        /* FIXME: handle socket errors properly */
                         CERROR ("Error socknal read(%d) %p: %d\n",
                                 conn->ksnc_rx_nob_wanted, conn, len);
                 }

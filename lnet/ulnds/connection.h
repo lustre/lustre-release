@@ -25,14 +25,8 @@ typedef struct connection {
     manager m;
 } *connection;
 
-connection force_tcp_connection(manager m,
-                                unsigned int ip,  
-				unsigned int short);
-manager init_connections(unsigned short,
-                         int (*f)(void *,connection),
-                         void *);
+connection force_tcp_connection(manager m, unsigned int ip, unsigned int short);
+manager init_connections(unsigned short, int (*f)(void *, void *), void *);
 void remove_connection(void *arg);
 void shutdown_connections(manager m);
-int read_connection(connection c,
-                    unsigned char *dest,
-                    int len);
+int read_connection(connection c, unsigned char *dest, int len);

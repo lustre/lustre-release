@@ -1,5 +1,4 @@
 /*
- * TITLE(ppid_h, "@(#) $Id: ppid.h,v 1.1.4.1 2003/05/19 17:04:14 meijia Exp $");
  */
 
 #ifndef _INCppidh_

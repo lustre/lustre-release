@@ -160,15 +160,17 @@ check_len:
  *  available. It attempts to read the portals header and 
  *  pass it to the generic library for processing.
  */
-static int from_connection(void *a,connection c)
+static int from_connection(void *a, void *d)
 {
-    bridge b=a;
-    ptl_hdr_t hdr;
-    if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
-        lib_parse(b->nal_cb, &hdr, c);
-        return(1);
-    }
-    return(0);
+        connection c = d;
+        bridge b=a;
+        ptl_hdr_t hdr;
+
+        if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
+                lib_parse(b->nal_cb, &hdr, c);
+                return(1);
+        }
+        return(0);
 }
 
 

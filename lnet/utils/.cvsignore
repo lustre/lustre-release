@@ -5,3 +5,4 @@ debugctl
 ptlctl
 .deps
 routerstat
+wirecheck

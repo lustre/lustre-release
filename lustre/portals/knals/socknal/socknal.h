@@ -25,7 +25,9 @@
  */
 
 #define DEBUG_PORTAL_ALLOC
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -106,7 +108,6 @@ typedef struct {
         struct list_head  ksnd_socklist;        /* all my connections */
         rwlock_t          ksnd_socklist_lock;   /* stabilise add/find/remove */
 
-        ptl_nid_t         ksnd_mynid;
         nal_cb_t         *ksnd_nal_cb;
         spinlock_t        ksnd_nal_cb_lock;     /* lib cli/sti lock */
 
@@ -273,9 +274,9 @@ extern void ksocknal_close_conn (ksock_conn_t *conn);
 static inline void
 ksocknal_put_conn (ksock_conn_t *conn)
 {
-        CDEBUG (D_OTHER, "putting conn[%p] -> "LPX64" (%d)\n", 
+        CDEBUG (D_OTHER, "putting conn[%p] -> "LPX64" (%d)\n",
                 conn, conn->ksnc_peernid, atomic_read (&conn->ksnc_refcount));
-        
+
         if (atomic_dec_and_test (&conn->ksnc_refcount))
                 _ksocknal_put_conn (conn);
 }

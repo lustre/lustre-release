@@ -1,5 +1,4 @@
-
-# ----------  directories ---------
+# ----------  other tests and settings ---------
 
 
 # ---------  unsigned long long sane? -------
@@ -93,7 +92,4 @@ else
 fi
 AC_SUBST(LIBEFENCE)
 AC_SUBST(HAVE_LIBEFENCE)
-
-# end -------- Kernel build environment. -----------------
-
 
