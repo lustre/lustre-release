@@ -163,7 +163,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
 
         while (try_again) {
                 spin_lock(&oscc->oscc_lock);
-                if (oscc->oscc_last_id > oscc->oscc_next_id) {
+                if (oscc->oscc_last_id >= oscc->oscc_next_id) {
                         oa->o_id = oscc->oscc_next_id;
                         memcpy(oa, &oscc->oscc_oa, sizeof(*oa));
                         lsm->lsm_object_id = oscc->oscc_next_id;
