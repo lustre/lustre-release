@@ -48,330 +48,312 @@
 
 static int ost_destroy(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = ost->ost_tgt;
 
-	req->rq_rep.ost->result = obd_destroy(&conn, &req->rq_req.ost->oa); 
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
 
-	EXIT;
-	return 0;
+        req->rq_rep.ost->result = obd_destroy(&conn, &req->rq_req.ost->oa);
+
+        RETURN(0);
 }
 
 static int ost_getattr(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
-	req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
-	req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = ost->ost_tgt;
 
-	req->rq_rep.ost->result =  obd_getattr(&conn, &req->rq_rep.ost->oa); 
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
+        req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
+        req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
 
-	EXIT;
-	return 0;
+        req->rq_rep.ost->result =  obd_getattr(&conn, &req->rq_rep.ost->oa);
+
+        RETURN(0);
 }
 
 static int ost_open(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
-	req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
-	req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = ost->ost_tgt;
 
-	req->rq_rep.ost->result =  obd_open(&conn, &req->rq_rep.ost->oa); 
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
+        req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
+        req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
 
-	EXIT;
-	return 0;
+        req->rq_rep.ost->result =  obd_open(&conn, &req->rq_rep.ost->oa);
+
+        RETURN(0);
 }
 
 static int ost_close(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
-	req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
-	req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = ost->ost_tgt;
 
-	req->rq_rep.ost->result =  obd_close(&conn, &req->rq_rep.ost->oa); 
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
+        req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
+        req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
 
-	EXIT;
-	return 0;
+        req->rq_rep.ost->result =  obd_close(&conn, &req->rq_rep.ost->oa);
+
+        RETURN(0);
 }
 
 
 static int ost_create(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = ost->ost_tgt;
 
-	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
+
+        memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
                sizeof(req->rq_req.ost->oa));
 
-	req->rq_rep.ost->result =obd_create(&conn, &req->rq_rep.ost->oa); 
+        req->rq_rep.ost->result =obd_create(&conn, &req->rq_rep.ost->oa);
 
-	EXIT;
-	return 0;
+        RETURN(0);
 }
 
 static int ost_punch(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = ost->ost_tgt;
 
-	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
+
+        memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
                sizeof(req->rq_req.ost->oa));
 
-	req->rq_rep.ost->result = obd_punch(&conn, &req->rq_rep.ost->oa, 
+        req->rq_rep.ost->result = obd_punch(&conn, &req->rq_rep.ost->oa,
                                             req->rq_rep.ost->oa.o_size,
-                                            req->rq_rep.ost->oa.o_blocks); 
+                                            req->rq_rep.ost->oa.o_blocks);
 
-	EXIT;
-	return 0;
+        RETURN(0);
 }
 
 
 static int ost_setattr(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = ost->ost_tgt;
 
-	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
-	       sizeof(req->rq_req.ost->oa));
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
 
-	req->rq_rep.ost->result = obd_setattr(&conn, &req->rq_rep.ost->oa); 
+        memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
+               sizeof(req->rq_req.ost->oa));
 
-	EXIT;
-	return 0;
+        req->rq_rep.ost->result = obd_setattr(&conn, &req->rq_rep.ost->oa);
+
+        RETURN(0);
 }
 
 static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
+        conn.oc_dev = ost->ost_tgt;
 
-	req->rq_rep.ost->result = obd_connect(&conn);
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
+
+        req->rq_rep.ost->result = obd_connect(&conn);
 
         CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repbuf, conn.oc_id);
-	req->rq_rep.ost->connid = conn.oc_id;
-	EXIT;
-	return 0;
+        req->rq_rep.ost->connid = conn.oc_id;
+        RETURN(0);
 }
 
 static int ost_disconnect(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
+        struct obd_conn conn;
+        int rc;
 
-	ENTRY;
-	
-	conn.oc_dev = ost->ost_tgt;
-	conn.oc_id = req->rq_req.ost->connid;
+        ENTRY;
 
-	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
+        conn.oc_dev = ost->ost_tgt;
+        conn.oc_id = req->rq_req.ost->connid;
+
+        rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+                          &req->rq_replen, &req->rq_repbuf);
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
         CDEBUG(D_IOCTL, "Disconnecting %d\n", conn.oc_id);
-	req->rq_rep.ost->result = obd_disconnect(&conn);
+        req->rq_rep.ost->result = obd_disconnect(&conn);
 
-	EXIT;
-	return 0;
+        RETURN(0);
 }
 
 static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
-	int vallen;
-	void *val;
-	char *ptr; 
+        struct obd_conn conn;
+        int rc;
+        int vallen;
+        void *val;
+        char *ptr;
 
-	ENTRY;
-	
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = ost->ost_tgt;
+        ENTRY;
 
-	ptr = ost_req_buf1(req->rq_req.ost);
-	req->rq_rep.ost->result = obd_get_info(&conn, 
-                                               req->rq_req.ost->buflen1, ptr, 
-                                               &vallen, &val); 
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = ost->ost_tgt;
 
-	rc = ost_pack_rep(val, vallen, NULL, 0, &req->rq_rephdr,
-                          &req->rq_rep, &req->rq_replen, &req->rq_repbuf); 
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
+        ptr = ost_req_buf1(req->rq_req.ost);
+        req->rq_rep.ost->result = obd_get_info(&conn, req->rq_req.ost->buflen1,
+                                               ptr, &vallen, &val);
 
-	EXIT;
-	return 0;
+        rc = ost_pack_rep(val, vallen, NULL, 0, &req->rq_rephdr,
+                          &req->rq_rep, &req->rq_replen, &req->rq_repbuf);
+        if (rc)
+                CERROR("cannot pack reply\n");
+
+        RETURN(rc);
 }
 
 static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
         struct ptlrpc_bulk_desc **bulk_vec = NULL;
         struct ptlrpc_bulk_desc *bulk = NULL;
-	struct obd_conn conn; 
-	int rc;
-	int i, j;
-	int objcount, niocount;
-	char *tmp1, *tmp2, *end2;
-	char *res = NULL;
-	int cmd;
-	struct niobuf *nb, *src, *dst;
-	struct obd_ioobj *ioo;
-	struct ost_req *r = req->rq_req.ost;
+        struct obd_conn conn;
+        int rc;
+        int i, j;
+        int objcount, niocount;
+        char *tmp1, *tmp2, *end2;
+        char *res = NULL;
+        int cmd;
+        struct niobuf *nb, *src, *dst;
+        struct obd_ioobj *ioo;
+        struct ost_req *r = req->rq_req.ost;
 
-	ENTRY;
-	
-	tmp1 = ost_req_buf1(r);
-	tmp2 = ost_req_buf2(r);
-	end2 = tmp2 + req->rq_req.ost->buflen2;
-	objcount = r->buflen1 / sizeof(*ioo); 
-	niocount = r->buflen2 / sizeof(*nb); 
-	cmd = r->cmd;
+        ENTRY;
 
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = req->rq_obd->u.ost.ost_tgt;
+        tmp1 = ost_req_buf1(r);
+        tmp2 = ost_req_buf2(r);
+        end2 = tmp2 + req->rq_req.ost->buflen2;
+        objcount = r->buflen1 / sizeof(*ioo);
+        niocount = r->buflen2 / sizeof(*nb);
+        cmd = r->cmd;
+
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = req->rq_obd->u.ost.ost_tgt;
 
         for (i = 0; i < objcount; i++) {
-		ost_unpack_ioo((void *)&tmp1, &ioo);
-		if (tmp2 + ioo->ioo_bufcnt > end2) { 
+                ost_unpack_ioo((void *)&tmp1, &ioo);
+                if (tmp2 + ioo->ioo_bufcnt > end2) {
                         BUG();
-			rc = -EFAULT;
-			break; 
-		}
-                for (j = 0; j < ioo->ioo_bufcnt; j++) {
-			ost_unpack_niobuf((void *)&tmp2, &nb); 
-		}
-	}
+                        rc = -EFAULT;
+                        break;
+                }
+                for (j = 0; j < ioo->ioo_bufcnt; j++)
+                        ost_unpack_niobuf((void *)&tmp2, &nb);
+        }
 
         rc = ost_pack_rep(NULL, 0, NULL, 0,
                           &req->rq_rephdr, &req->rq_rep,
                           &req->rq_replen, &req->rq_repbuf);
-	if (rc) {
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
-        OBD_ALLOC(res, sizeof(struct niobuf) * niocount);
-        if (res == NULL) {
-                EXIT;
-                return -ENOMEM;
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
         }
+        OBD_ALLOC(res, sizeof(struct niobuf) * niocount);
+        if (res == NULL)
+                RETURN(-ENOMEM);
 
-	/* The unpackers move tmp1 and tmp2, so reset them before using */
-	tmp1 = ost_req_buf1(r);
-	tmp2 = ost_req_buf2(r);
-	req->rq_rep.ost->result = obd_preprw
-		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
-		 niocount, (struct niobuf *)tmp2, (struct niobuf *)res); 
+        /* The unpackers move tmp1 and tmp2, so reset them before using */
+        tmp1 = ost_req_buf1(r);
+        tmp2 = ost_req_buf2(r);
+        req->rq_rep.ost->result = obd_preprw
+                (cmd, &conn, objcount, (struct obd_ioobj *)tmp1,
+                 niocount, (struct niobuf *)tmp2, (struct niobuf *)res);
 
-	if (req->rq_rep.ost->result) {
-		EXIT;
-                goto out;
-	}
+        if (req->rq_rep.ost->result)
+                GOTO(out, 0);
 
         for (i = 0; i < niocount; i++) {
                 bulk = ptlrpc_prep_bulk(&req->rq_peer);
                 if (bulk == NULL) {
                         CERROR("cannot alloc bulk desc\n");
                         rc = -ENOMEM;
-                        goto out;
+                        GOTO(out, rc);
                 }
 
                 src = &((struct niobuf *)res)[i];
@@ -380,17 +362,13 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                 bulk->b_buf = (void *)(unsigned long)src->addr;
                 bulk->b_buflen = PAGE_SIZE;
                 rc = ptlrpc_send_bulk(bulk, OST_BULK_PORTAL);
-                if (rc) {
-                        EXIT;
-                        goto out;
-                }
+                if (rc)
+                        GOTO(out, rc);
                 wait_event_interruptible(bulk->b_waitq,
                                          ptlrpc_check_bulk_sent(bulk));
 
-                if (bulk->b_flags == PTL_RPC_INTR) {
-                        EXIT;
-                        goto out;
-                }
+                if (bulk->b_flags == PTL_RPC_INTR)
+                        GOTO(out, 0);
 
                 OBD_FREE(bulk, sizeof(*bulk));
                 bulk = NULL;
@@ -404,13 +382,14 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
 #endif
         barrier();
 
-	/* The unpackers move tmp1 and tmp2, so reset them before using */
-	tmp1 = ost_req_buf1(r);
-	tmp2 = ost_req_buf2(r);
+        /* The unpackers move tmp1 and tmp2, so reset them before using */
+        tmp1 = ost_req_buf1(r);
+        tmp2 = ost_req_buf2(r);
         req->rq_rep.ost->result = obd_commitrw
-		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
-		 niocount, (struct niobuf *)res);
+                (cmd, &conn, objcount, (struct obd_ioobj *)tmp1,
+                 niocount, (struct niobuf *)res);
 
+        EXIT;
  out:
         if (res != NULL)
                 OBD_FREE(res, sizeof(struct niobuf) * niocount);
@@ -425,8 +404,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                          niocount * sizeof(struct ptlrpc_bulk_desc *));
         }
 
-	EXIT;
-	return 0;
+        return 0;
 }
 
 static int ost_commit_page(struct obd_conn *conn, struct page *page)
@@ -441,10 +419,9 @@ static int ost_commit_page(struct obd_conn *conn, struct page *page)
 
         buf.page = page;
         obj.ioo_bufcnt = 1;
-        
-        rc = obd_commitrw(OBD_BRW_WRITE, conn, 1, &obj, 1, &buf); 
-        EXIT;
-        return rc;
+
+        rc = obd_commitrw(OBD_BRW_WRITE, conn, 1, &obj, 1, &buf);
+        RETURN(rc);
 }
 
 static int ost_brw_write_cb(struct ptlrpc_bulk_desc *bulk, void *data)
@@ -457,66 +434,62 @@ static int ost_brw_write_cb(struct ptlrpc_bulk_desc *bulk, void *data)
         if (rc)
                 CERROR("ost_commit_page failed: %d\n", rc);
 
-        EXIT;
-        return rc;
+        RETURN(rc);
 }
 
 int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
-	struct obd_conn conn; 
-	int rc;
-	int i, j;
-	int objcount, niocount;
-	char *tmp1, *tmp2, *end2;
-	char *res;
-	int cmd;
-	struct niobuf *nb, *dst;
-	struct obd_ioobj *ioo;
-	struct ost_req *r = req->rq_req.ost;
+        struct obd_conn conn;
+        int rc;
+        int i, j;
+        int objcount, niocount;
+        char *tmp1, *tmp2, *end2;
+        char *res;
+        int cmd;
+        struct niobuf *nb, *dst;
+        struct obd_ioobj *ioo;
+        struct ost_req *r = req->rq_req.ost;
 
-	ENTRY;
-	
-	tmp1 = ost_req_buf1(r);
-	tmp2 = ost_req_buf2(r);
-	end2 = tmp2 + req->rq_req.ost->buflen2;
-	objcount = r->buflen1 / sizeof(*ioo); 
-	niocount = r->buflen2 / sizeof(*nb); 
-	cmd = r->cmd;
+        ENTRY;
 
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = req->rq_obd->u.ost.ost_tgt;
+        tmp1 = ost_req_buf1(r);
+        tmp2 = ost_req_buf2(r);
+        end2 = tmp2 + req->rq_req.ost->buflen2;
+        objcount = r->buflen1 / sizeof(*ioo);
+        niocount = r->buflen2 / sizeof(*nb);
+        cmd = r->cmd;
+
+        conn.oc_id = req->rq_req.ost->connid;
+        conn.oc_dev = req->rq_obd->u.ost.ost_tgt;
 
         for (i = 0; i < objcount; i++) {
-		ost_unpack_ioo((void *)&tmp1, &ioo);
-		if (tmp2 + ioo->ioo_bufcnt > end2) { 
-			rc = -EFAULT;
-			break; 
-		}
-                for (j = 0; j < ioo->ioo_bufcnt; j++) {
-			ost_unpack_niobuf((void *)&tmp2, &nb); 
-		}
-	}
+                ost_unpack_ioo((void *)&tmp1, &ioo);
+                if (tmp2 + ioo->ioo_bufcnt > end2) {
+                        rc = -EFAULT;
+                        break;
+                }
+                for (j = 0; j < ioo->ioo_bufcnt; j++)
+                        ost_unpack_niobuf((void *)&tmp2, &nb);
+        }
 
         rc = ost_pack_rep(NULL, 0, NULL, niocount * sizeof(*nb),
                           &req->rq_rephdr, &req->rq_rep,
                           &req->rq_replen, &req->rq_repbuf);
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
+        if (rc) {
+                CERROR("cannot pack reply\n");
+                RETURN(rc);
+        }
         res = ost_rep_buf2(req->rq_rep.ost);
 
-	/* The unpackers move tmp1 and tmp2, so reset them before using */
-	tmp1 = ost_req_buf1(r);
-	tmp2 = ost_req_buf2(r);
-	req->rq_rep.ost->result = obd_preprw
-		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
-		 niocount, (struct niobuf *)tmp2, (struct niobuf *)res); 
+        /* The unpackers move tmp1 and tmp2, so reset them before using */
+        tmp1 = ost_req_buf1(r);
+        tmp2 = ost_req_buf2(r);
+        req->rq_rep.ost->result = obd_preprw
+                (cmd, &conn, objcount, (struct obd_ioobj *)tmp1,
+                 niocount, (struct niobuf *)tmp2, (struct niobuf *)res);
 
-	if (req->rq_rep.ost->result) {
-		EXIT;
-                goto out;
-	}
+        if (req->rq_rep.ost->result)
+                GOTO(out, 0);
 
         for (i = 0; i < niocount; i++) {
                 struct ptlrpc_bulk_desc *bulk;
@@ -526,7 +499,7 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 if (bulk == NULL) {
                         CERROR("cannot alloc bulk desc\n");
                         rc = -ENOMEM;
-                        goto out;
+                        GOTO(out, rc);
                 }
 
                 spin_lock(&srv->srv_lock);
@@ -544,7 +517,7 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 bulk->b_portal = OSC_BULK_PORTAL;
                 rc = ptlrpc_register_bulk(bulk);
                 if (rc)
-                        goto out;
+                        GOTO(out, rc);
 
 #if 0
                 /* Local delivery */
@@ -555,15 +528,16 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         }
         barrier();
 
+        EXIT;
  out:
-	EXIT;
-	return 0;
+        /* FIXME: should we return 'rc' here? */
+        return 0;
 }
 
 int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
-	struct ost_req *r = req->rq_req.ost;
-	int cmd = r->cmd;
+        struct ost_req *r = req->rq_req.ost;
+        int cmd = r->cmd;
 
         if (cmd == OBD_BRW_READ)
                 return ost_brw_read(obddev, req);
@@ -571,9 +545,8 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
                 return ost_brw_write(obddev, req);
 }
 
-static int ost_handle(struct obd_device *obddev, 
-               struct ptlrpc_service *svc, 
-               struct ptlrpc_request *req)
+static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
+                      struct ptlrpc_request *req)
 {
 	int rc;
 	struct ost_obd *ost = &obddev->u.ost;
@@ -587,171 +560,177 @@ static int ost_handle(struct obd_device *obddev,
 		       NTOH__u32(hdr->type));
                 BUG();
 		rc = -EINVAL;
-		goto out;
+                GOTO(out, rc);
 	}
 
-	rc = ost_unpack_req(req->rq_reqbuf, req->rq_reqlen, 
-			    &req->rq_reqhdr, &req->rq_req);
-	if (rc) { 
-		CERROR("lustre_ost: Invalid request\n");
-		EXIT; 
-		goto out;
-	}
+        rc = ost_unpack_req(req->rq_reqbuf, req->rq_reqlen,
+                            &req->rq_reqhdr, &req->rq_req);
+        if (rc) {
+                CERROR("lustre_ost: Invalid request\n");
+                GOTO(out, rc);
+        }
 
-	switch (req->rq_reqhdr->opc) { 
+        switch (req->rq_reqhdr->opc) {
 
-	case OST_CONNECT:
-		CDEBUG(D_INODE, "connect\n");
-		rc = ost_connect(ost, req);
-		break;
-	case OST_DISCONNECT:
-		CDEBUG(D_INODE, "disconnect\n");
-		rc = ost_disconnect(ost, req);
-		break;
-	case OST_GET_INFO:
-		CDEBUG(D_INODE, "get_info\n");
-		rc = ost_get_info(ost, req);
-		break;
-	case OST_CREATE:
-		CDEBUG(D_INODE, "create\n");
-		rc = ost_create(ost, req);
-		break;
-	case OST_DESTROY:
-		CDEBUG(D_INODE, "destroy\n");
-		rc = ost_destroy(ost, req);
-		break;
-	case OST_GETATTR:
-		CDEBUG(D_INODE, "getattr\n");
-		rc = ost_getattr(ost, req);
-		break;
-	case OST_SETATTR:
-		CDEBUG(D_INODE, "setattr\n");
-		rc = ost_setattr(ost, req);
-		break;
-	case OST_OPEN:
-		CDEBUG(D_INODE, "setattr\n");
-		rc = ost_open(ost, req);
-		break;
-	case OST_CLOSE:
-		CDEBUG(D_INODE, "setattr\n");
-		rc = ost_close(ost, req);
-		break;
-	case OST_BRW:
-		CDEBUG(D_INODE, "brw\n");
-		rc = ost_brw(ost, req);
-		break;
-	case OST_PUNCH:
-		CDEBUG(D_INODE, "punch\n");
-		rc = ost_punch(ost, req);
-		break;
-	default:
-		req->rq_status = -ENOTSUPP;
-		return ptlrpc_error(obddev, svc, req);
-	}
+        case OST_CONNECT:
+                CDEBUG(D_INODE, "connect\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_CONNECT);
+                rc = ost_connect(ost, req);
+                break;
+        case OST_DISCONNECT:
+                CDEBUG(D_INODE, "disconnect\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_DISCONNECT);
+                rc = ost_disconnect(ost, req);
+                break;
+        case OST_GET_INFO:
+                CDEBUG(D_INODE, "get_info\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_GET_INFO);
+                rc = ost_get_info(ost, req);
+                break;
+        case OST_CREATE:
+                CDEBUG(D_INODE, "create\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_CREATE);
+                rc = ost_create(ost, req);
+                break;
+        case OST_DESTROY:
+                CDEBUG(D_INODE, "destroy\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_DESTROY);
+                rc = ost_destroy(ost, req);
+                break;
+        case OST_GETATTR:
+                CDEBUG(D_INODE, "getattr\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_GETATTR);
+                rc = ost_getattr(ost, req);
+                break;
+        case OST_SETATTR:
+                CDEBUG(D_INODE, "setattr\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_SETATTR);
+                rc = ost_setattr(ost, req);
+                break;
+        case OST_OPEN:
+                CDEBUG(D_INODE, "setattr\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_OPEN);
+                rc = ost_open(ost, req);
+                break;
+        case OST_CLOSE:
+                CDEBUG(D_INODE, "setattr\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_CLOSE);
+                rc = ost_close(ost, req);
+                break;
+        case OST_BRW:
+                CDEBUG(D_INODE, "brw\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_BRW);
+                rc = ost_brw(ost, req);
+                break;
+        case OST_PUNCH:
+                CDEBUG(D_INODE, "punch\n");
+                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_PUNCH);
+                rc = ost_punch(ost, req);
+                break;
+        default:
+                req->rq_status = -ENOTSUPP;
+                rc = ptlrpc_error(obddev, svc, req);
+                RETURN(rc);
+        }
 
+        EXIT;
 out:
-	req->rq_status = rc;
-	if (rc) { 
-		CERROR("ost: processing error %d\n", rc);
-		ptlrpc_error(obddev, svc, req);
-	} else { 
-		CDEBUG(D_INODE, "sending reply\n"); 
-		ptlrpc_reply(obddev, svc, req); 
-	}
+        req->rq_status = rc;
+        if (rc) {
+                CERROR("ost: processing error %d\n", rc);
+                ptlrpc_error(obddev, svc, req);
+        } else {
+                CDEBUG(D_INODE, "sending reply\n");
+                ptlrpc_reply(obddev, svc, req);
+        }
 
-	return 0;
+        return 0;
 }
 
 
 /* mount the file system (secretly) */
 static int ost_setup(struct obd_device *obddev, obd_count len,
-			void *buf)
-			
+                        void *buf)
+
 {
-	struct obd_ioctl_data* data = buf;
-	struct ost_obd *ost = &obddev->u.ost;
-	struct obd_device *tgt;
-	int err; 
+        struct obd_ioctl_data* data = buf;
+        struct ost_obd *ost = &obddev->u.ost;
+        struct obd_device *tgt;
+        int err;
         ENTRY;
 
-	if (data->ioc_dev  < 0 || data->ioc_dev > MAX_OBD_DEVICES) { 
-		EXIT;
-		return -ENODEV;
-	}
+        if (data->ioc_dev  < 0 || data->ioc_dev > MAX_OBD_DEVICES)
+                RETURN(-ENODEV);
 
         tgt = &obd_dev[data->ioc_dev];
-	ost->ost_tgt = tgt;
-        if ( ! (tgt->obd_flags & OBD_ATTACHED) || 
+        ost->ost_tgt = tgt;
+        if ( ! (tgt->obd_flags & OBD_ATTACHED) ||
              ! (tgt->obd_flags & OBD_SET_UP) ){
-                CERROR("device not attached or not set up (%d)\n", 
+                CERROR("device not attached or not set up (%d)\n",
                        data->ioc_dev);
-                EXIT;
-		return -EINVAL;
-        } 
+                RETURN(-EINVAL);
+        }
 
-	ost->ost_conn.oc_dev = tgt;
-	err = obd_connect(&ost->ost_conn);
-	if (err) { 
-		CERROR("fail to connect to device %d\n", data->ioc_dev); 
-		return -EINVAL;
-	}
+        ost->ost_conn.oc_dev = tgt;
+        err = obd_connect(&ost->ost_conn);
+        if (err) {
+                CERROR("fail to connect to device %d\n", data->ioc_dev);
+                RETURN(-EINVAL);
+        }
 
-        ost->ost_service = ptlrpc_init_svc( 64 * 1024, 
+        ost->ost_service = ptlrpc_init_svc( 64 * 1024,
                                             OST_REQUEST_PORTAL,
                                             OSC_REPLY_PORTAL,
-                                            "self", 
+                                            "self",
                                             ost_unpack_req,
                                             ost_pack_rep,
                                             ost_handle);
-        if (!ost->ost_service) { 
-                obd_disconnect(&ost->ost_conn); 
-                return -EINVAL;
+        if (!ost->ost_service) {
+                obd_disconnect(&ost->ost_conn);
+                RETURN(-EINVAL);
         }
-                                            
+
         rpc_register_service(ost->ost_service, "self");
 
-        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost"); 
-        if (err) { 
-                obd_disconnect(&ost->ost_conn); 
-                return -EINVAL;
+        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
+        if (err) {
+                obd_disconnect(&ost->ost_conn);
+                RETURN(-EINVAL);
         }
-                
+
         MOD_INC_USE_COUNT;
-        EXIT; 
-        return 0;
-} 
+        RETURN(0);
+}
 
 static int ost_cleanup(struct obd_device * obddev)
 {
-	struct ost_obd *ost = &obddev->u.ost;
-	int err;
+        struct ost_obd *ost = &obddev->u.ost;
+        int err;
 
         ENTRY;
 
         if ( !list_empty(&obddev->obd_gen_clients) ) {
                 CERROR("still has clients!\n");
-                EXIT;
-                return -EBUSY;
+                RETURN(-EBUSY);
         }
 
-	ptlrpc_stop_thread(ost->ost_service);
-	rpc_unregister_service(ost->ost_service);
+        ptlrpc_stop_thread(ost->ost_service);
+        rpc_unregister_service(ost->ost_service);
 
-	if (!list_empty(&ost->ost_service->srv_reqs)) {
-		// XXX reply with errors and clean up
-		CERROR("Request list not empty!\n");
-	}
+        if (!list_empty(&ost->ost_service->srv_reqs)) {
+                // XXX reply with errors and clean up
+                CERROR("Request list not empty!\n");
+        }
         OBD_FREE(ost->ost_service, sizeof(*ost->ost_service));
 
-	err = obd_disconnect(&ost->ost_conn);
-	if (err) { 
-		CERROR("lustre ost: fail to disconnect device\n");
-		return -EINVAL;
-	}
+        err = obd_disconnect(&ost->ost_conn);
+        if (err) {
+                CERROR("lustre ost: fail to disconnect device\n");
+                RETURN(-EINVAL);
+        }
 
         MOD_DEC_USE_COUNT;
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 
 /* use obd ops to offer management infrastructure */
@@ -763,12 +742,12 @@ static struct obd_ops ost_obd_ops = {
 static int __init ost_init(void)
 {
         obd_register_type(&ost_obd_ops, LUSTRE_OST_NAME);
-	return 0;
+        return 0;
 }
 
 static void __exit ost_exit(void)
 {
-	obd_unregister_type(LUSTRE_OST_NAME);
+        obd_unregister_type(LUSTRE_OST_NAME);
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");

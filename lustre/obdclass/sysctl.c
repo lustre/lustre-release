@@ -1,10 +1,23 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001  Cluster File Systems, Inc.
+ *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
  */
 
 #include <linux/module.h>
@@ -39,18 +52,18 @@ static int obd_sctl_reset( ctl_table * table, int write, struct file
 
 #define OBD_SYSCTL 300
 
-#define OBD_DEBUG           1       /* control debugging */
+#define OBD_DROP_PACKET     1       /* control packet drop instrumentation */
 #define OBD_ENTRY           2       /* control enter/leave pattern */
 #define OBD_TIMEOUT         3       /* timeout on upcalls to become intrble */
 #define OBD_HARD            4       /* mount type "hard" or "soft" */
-#define OBD_VARS            5       
+#define OBD_VARS            5
 #define OBD_INDEX           6
 #define OBD_RESET           7
 
 #define OBD_VARS_SLOT       2
 
 static ctl_table obd_table[] = {
-        {OBD_DEBUG, "debug", &obd_debug_level, sizeof(int), 0644, NULL, &proc_dointvec},
+        {OBD_VARS, "drop_packet", &obd_drop_packet, sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_VARS, "vars", &vars[0], sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_INDEX, "index", &index, sizeof(int), 0644, NULL, &obd_sctl_vars},
         {OBD_RESET, "reset", NULL, 0, 0644, NULL, &obd_sctl_reset},
@@ -58,7 +71,7 @@ static ctl_table obd_table[] = {
 };
 
 static ctl_table parent_table[] = {
-       {OBD_SYSCTL, "obd",    NULL, 0, 0555, obd_table},
+       {OBD_SYSCTL, "obd", NULL, 0, 0555, obd_table},
        {0}
 };
 

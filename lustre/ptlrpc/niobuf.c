@@ -244,7 +244,7 @@ int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
 	}
 
 	memset(hdr, 0, sizeof(*hdr));
-	
+
 	hdr->xid = req->rq_reqhdr->xid;
 	hdr->status = req->rq_status; 
 	hdr->type = OST_TYPE_ERR;
