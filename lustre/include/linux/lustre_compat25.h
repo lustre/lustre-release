@@ -38,6 +38,7 @@
  * initialization routines must be called after device
  * driver initialization
  */
+#undef module_init
 #define module_init(a)     late_initcall(a)
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
@@ -68,15 +69,26 @@
 static inline void lustre_daemonize_helper(void)
 {
         LASSERT(current->signal != NULL);
-        current->signal->session = 1;
-        current->signal->pgrp = 1;
-        current->signal->tty = NULL;
+        current->session = 1;
+        if (current->group_leader)
+                current->group_leader->__pgrp = 1;
+        else
+                CERROR("we aren't group leader\n");
+        current->tty = NULL;
 }
 
 #define  rb_node_s rb_node
 #define  rb_root_s rb_root
 typedef struct rb_root_s rb_root_t;
 typedef struct rb_node_s rb_node_t;
+
+#define smp_num_cpus    NR_CPUS
+
+#ifndef conditional_schedule
+#define conditional_schedule() cond_resched()
+#endif
+
+#include <linux/proc_fs.h>
 
 #else /* 2.4.. */
 
@@ -110,7 +122,7 @@ static inline void clear_page_dirty(struct page *page)
 #define try_module_get                  __MOD_INC_USE_COUNT
 #define module_put                      __MOD_DEC_USE_COUNT
 #define LTIME_S(time)                   (time)
-#ifndef CONFIG_RH_2_4_20
+#if !defined(CONFIG_RH_2_4_20) && !defined(cpu_online)
 #define cpu_online(cpu)                 (cpu_online_map & (1<<cpu))
 #endif
 
@@ -145,12 +157,10 @@ static inline void lustre_daemonize_helper(void)
 #define conditional_schedule() if (unlikely(need_resched())) schedule()
 #endif
 
-/* 2.6 has the lovely PagePrivate bit for indicating that a filesystem
- * has hung state off of page->private.  We use it. */
-#define PG_private 9 /* unused in 2.4, apparently. */
-#define SetPagePrivate(page)    set_bit(PG_private, &(page)->flags)
-#define ClearPagePrivate(page)  clear_bit(PG_private, &(page)->flags)
-#define PagePrivate(page)       test_bit(PG_private, &(page)->flags)
+/* to find proc_dir_entry from inode. 2.6 has native one -bzzz */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,23)
+#define PDE(ii)         ((ii)->u.generic_ip)
+#endif
 
 #endif /* end of 2.4 compat macros */
 
