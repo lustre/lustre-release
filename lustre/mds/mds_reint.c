@@ -1099,7 +1099,7 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
         for (i = 0; i < 4; i++) {
                 flags = 0;
                 if (res_id[i]->name[0] == 0)
-                        break;
+                        continue;
                 if (i != 0 &&
                     !memcmp(res_id[i], res_id[i-1], sizeof(*res_id[i])) &&
                     (policies[i]->l_inodebits.bits &
