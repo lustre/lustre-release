@@ -676,22 +676,30 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         l_unlock(&ns->ns_lock);
 
         if (lock) {
-                struct l_wait_info lwi;
                 ldlm_lock2handle(lock, lockh);
-                if (lock->l_completion_ast)
-                        lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC,
-                                               NULL);
+                if (!(lock->l_flags & LDLM_FL_CAN_MATCH)) {
+                        struct l_wait_info lwi;
+                        if (lock->l_completion_ast)
+                                lock->l_completion_ast(lock,
+                                                       LDLM_FL_WAIT_NOREPROC,
+                                                       NULL);
 
-                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, NULL, NULL, NULL);
+                        lwi = LWI_TIMEOUT_INTR(obd_timeout*HZ, NULL,NULL,NULL);
 
-                /* XXX FIXME see comment about CAN_MATCH in lustre_dlm.h */
-                l_wait_event(lock->l_waitq,
-                             (lock->l_flags & LDLM_FL_CAN_MATCH), &lwi);
+                        /* XXX FIXME see comment on CAN_MATCH in lustre_dlm.h */
+                        l_wait_event(lock->l_waitq,
+                                     (lock->l_flags & LDLM_FL_CAN_MATCH), &lwi);
+                }
         }
         if (rc)
-                LDLM_DEBUG(lock, "matched");
-        else
-                LDLM_DEBUG_NOLOCK("not matched");
+                LDLM_DEBUG(lock, "matched ("LPU64" "LPU64")",
+                           type == LDLM_PLAIN ? res_id->name[2] :
+                                policy->l_extent.start,
+                           type == LDLM_PLAIN ? res_id->name[3] :
+                                policy->l_extent.end);
+        else if (!(flags & LDLM_FL_TEST_LOCK)) /* less verbose for test-only */
+                LDLM_DEBUG_NOLOCK("not matched type %u mode %u res "LPU64"/"LPU64,
+                                  type, mode, res_id->name[0], res_id->name[1]);
 
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
