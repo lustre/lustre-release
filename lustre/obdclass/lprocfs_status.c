@@ -77,7 +77,7 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                 cur_root = root;
 
                 /* need copy of path for strsep */
-                if (strlen(list->name) > sizeof[pathbuf] - 1) {
+                if (strlen(list->name) > sizeof(pathbuf) - 1) {
                         OBD_ALLOC(pathcopy, pathsize);
                         if (pathcopy == NULL)
                                 return -ENOMEM;
