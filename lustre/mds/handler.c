@@ -281,6 +281,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
+        mcd->mcd_mount_count = cpu_to_le64(obd->u.mds.mds_mount_count);
 
         rc = mds_client_add(obd, &obd->u.mds, med, -1);
         if (rc == 0)
@@ -1253,7 +1254,6 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         msd->msd_last_transno = cpu_to_le64(mds->mds_last_transno);
-        msd->msd_mount_count = cpu_to_le64(mds->mds_mount_count);
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
                mds->mds_mount_count, mds->mds_last_transno);
@@ -1261,6 +1261,7 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
         if (rc)
                 CERROR("error writing MDS server data: rc = %d\n", rc);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+
         RETURN(rc);
 }
 

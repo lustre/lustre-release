@@ -102,7 +102,7 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                 spin_unlock(&filter->fo_translock);
         }
         fcd->fcd_last_rcvd = cpu_to_le64(last_rcvd);
-        fcd->fcd_mount_count = filter->fo_fsd->fsd_mount_count;
+        fcd->fcd_mount_count = cpu_to_le64(filter->fo_mount_count);
 
         /* could get xid from oti, if it's ever needed */
         fcd->fcd_last_xid = 0;
@@ -382,13 +382,13 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 filter->fo_subdir_count = le16_to_cpu(fsd->fsd_subdir_count);
         }
 
-        if (fsd->fsd_feature_incompat & ~le32_to_cpu(FILTER_INCOMPAT_SUPP)) {
+        if (fsd->fsd_feature_incompat & ~cpu_to_le32(FILTER_INCOMPAT_SUPP)) {
                 CERROR("unsupported feature %x\n",
                        le32_to_cpu(fsd->fsd_feature_incompat) &
                        ~FILTER_INCOMPAT_SUPP);
                 GOTO(err_fsd, rc = -EINVAL);
         }
-        if (fsd->fsd_feature_rocompat & ~le32_to_cpu(FILTER_ROCOMPAT_SUPP)) {
+        if (fsd->fsd_feature_rocompat & ~cpu_to_le32(FILTER_ROCOMPAT_SUPP)) {
                 CERROR("read-only feature %x\n",
                        le32_to_cpu(fsd->fsd_feature_rocompat) &
                        ~FILTER_ROCOMPAT_SUPP);
@@ -398,8 +398,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 
         CDEBUG(D_INODE, "%s: server last_rcvd : "LPU64"\n",
                obd->obd_name, le64_to_cpu(fsd->fsd_last_transno));
-        CDEBUG(D_INODE, "%s: server last_mount: "LPU64"\n",
-               obd->obd_name, mount_count);
+        CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
+               obd->obd_name, mount_count + 1);
         CDEBUG(D_INODE, "%s: server data size: %u\n",
                obd->obd_name, le32_to_cpu(fsd->fsd_server_size));
         CDEBUG(D_INODE, "%s: per-client data start: %u\n",
@@ -483,17 +483,17 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
                        cl_idx, last_rcvd);
 
-                if (last_rcvd > le64_to_cpu(filter->fo_fsd->fsd_last_transno))
-                        filter->fo_fsd->fsd_last_transno=cpu_to_le64(last_rcvd);
+                if (last_rcvd > le64_to_cpu(fsd->fsd_last_transno))
+                        fsd->fsd_last_transno = cpu_to_le64(last_rcvd);
 
         }
 
-        obd->obd_last_committed = le64_to_cpu(filter->fo_fsd->fsd_last_transno);
+        obd->obd_last_committed = le64_to_cpu(fsd->fsd_last_transno);
 
         if (obd->obd_recoverable_clients) {
                 CERROR("RECOVERY: %d recoverable clients, last_rcvd "
                        LPU64"\n", obd->obd_recoverable_clients,
-                       le64_to_cpu(filter->fo_fsd->fsd_last_transno));
+                       le64_to_cpu(fsd->fsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
         }
@@ -502,7 +502,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 OBD_FREE(fcd, sizeof(*fcd));
 
 out:
-        fsd->fsd_mount_count = cpu_to_le64(mount_count + 1);
+        filter->fo_mount_count = mount_count + 1;
+        fsd->fsd_mount_count = cpu_to_le64(filter->fo_mount_count);
 
         /* save it, so mount count and last_transno is current */
         rc = filter_update_server_data(obd, filp, filter->fo_fsd, 1);
@@ -1291,7 +1292,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         memcpy(fcd->fcd_uuid, cluuid, sizeof(fcd->fcd_uuid));
         fed->fed_fcd = fcd;
-        fcd->fcd_mount_count = cpu_to_le64(filter->fo_fsd->fsd_mount_count);
+        fcd->fcd_mount_count = cpu_to_le64(filter->fo_mount_count);
 
         rc = filter_client_add(obd, filter, fed, -1);
 

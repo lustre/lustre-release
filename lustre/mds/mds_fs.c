@@ -179,13 +179,15 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
         struct mds_client_data *mcd = NULL;
         loff_t off = 0;
         unsigned long last_rcvd_size = file->f_dentry->d_inode->i_size;
-        __u64 last_transno = 0;
         __u64 mount_count;
         int cl_idx, rc = 0;
         ENTRY;
 
-        LASSERT(sizeof(struct mds_client_data) == MDS_LR_CLIENT_SIZE);
-        LASSERT(sizeof(struct mds_server_data) <= MDS_LR_SERVER_SIZE);
+        /* ensure padding in the struct is the correct size */
+        LASSERT (offsetof(struct mds_server_data, msd_padding) +
+                 sizeof(msd->msd_padding) == MDS_LR_SERVER_SIZE);
+        LASSERT (offsetof(struct mds_client_data, mcd_padding) +
+                 sizeof(mcd->mcd_padding) == MDS_LR_CLIENT_SIZE);
 
         OBD_ALLOC_WAIT(msd, sizeof(*msd));
         if (!msd)
@@ -202,32 +204,27 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
 
         if (last_rcvd_size == 0) {
                 CWARN("%s: initializing new %s\n", obd->obd_name, LAST_RCVD);
+
                 memcpy(msd->msd_uuid, obd->obd_uuid.uuid,sizeof(msd->msd_uuid));
+                msd->msd_last_transno = 0;
+                mount_count = msd->msd_mount_count = 0; 
                 msd->msd_server_size = cpu_to_le32(MDS_LR_SERVER_SIZE);
                 msd->msd_client_start = cpu_to_le32(MDS_LR_CLIENT_START);
                 msd->msd_client_size = cpu_to_le16(MDS_LR_CLIENT_SIZE);
                 msd->msd_feature_rocompat = cpu_to_le32(MDS_ROCOMPAT_LOVOBJID);
-                rc = fsfilt_write_record(obd, file, msd, sizeof(*msd), &off, 1);
-
-                if (rc == 0)
-                        RETURN(0);
-
-                CERROR("%s: error writing new MSD: %d\n", obd->obd_name, rc);
-                GOTO(err_msd, rc);
+        } else {
+                rc = fsfilt_read_record(obd, file, msd, sizeof(*msd), &off);
+                if (rc) {
+                        CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD, rc);
+                        GOTO(err_msd, rc);
+                }
+                if (strcmp(msd->msd_uuid, obd->obd_uuid.uuid) != 0) {
+                        CERROR("OBD UUID %s does not match last_rcvd UUID %s\n",
+                               obd->obd_uuid.uuid, msd->msd_uuid);
+                        GOTO(err_msd, rc = -EINVAL);
+                }
+                mount_count = le64_to_cpu(msd->msd_mount_count);
         }
-
-        rc = fsfilt_read_record(obd, file, msd, sizeof(*msd), &off);
-        if (rc) {
-                CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD, rc);
-                GOTO(err_msd, rc);
-        }
-        if (!msd->msd_server_size)
-                msd->msd_server_size = cpu_to_le32(MDS_LR_SERVER_SIZE);
-        if (!msd->msd_client_start)
-                msd->msd_client_start = cpu_to_le32(MDS_LR_CLIENT_START);
-        if (!msd->msd_client_size)
-                msd->msd_client_size = cpu_to_le16(MDS_LR_CLIENT_SIZE);
-
         if (msd->msd_feature_incompat & ~cpu_to_le32(MDS_INCOMPAT_SUPP)) {
                 CERROR("unsupported incompat feature %x\n",
                        le32_to_cpu(msd->msd_feature_incompat) &
@@ -244,16 +241,12 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 GOTO(err_msd, rc = -EINVAL);
         }
 
-        last_transno = le64_to_cpu(msd->msd_last_transno);
-        mds->mds_last_transno = last_transno;
-
-        mount_count = le64_to_cpu(msd->msd_mount_count);
-        mds->mds_mount_count = mount_count;
+        mds->mds_last_transno = le64_to_cpu(msd->msd_last_transno);
 
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
-               obd->obd_name, last_transno);
+               obd->obd_name, mds->mds_last_transno);
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
-               obd->obd_name, mount_count);
+               obd->obd_name, mount_count + 1);
         CDEBUG(D_INODE, "%s: server data size: %u\n",
                obd->obd_name, le32_to_cpu(msd->msd_server_size));
         CDEBUG(D_INODE, "%s: per-client data start: %u\n",
@@ -338,7 +331,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                        cl_idx, last_transno);
 
                 if (last_transno > mds->mds_last_transno)
-                        mds->mds_last_transno = last_transno;
+                       mds->mds_last_transno = last_transno;
         }
 
         obd->obd_last_committed = mds->mds_last_transno;
@@ -352,14 +345,20 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
 
         if (mcd)
                 OBD_FREE(mcd, sizeof(*mcd));
+        
+        mds->mds_mount_count = mount_count + 1;
+        msd->msd_mount_count = cpu_to_le64(mds->mds_mount_count);
 
-        return 0;
+        /* save it, so mount count and last_transno is current */
+        rc = mds_update_server_data(obd, 1);
+
+        RETURN(rc);
 
 err_client:
         class_disconnect_exports(obd, 0);
 err_msd:
         mds_server_free_data(mds);
-        return rc;
+        RETURN(rc);
 }
 
 int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
