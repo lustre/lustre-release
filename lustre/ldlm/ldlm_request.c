@@ -363,6 +363,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 /* Set this flag to prevent others from getting new references*/
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
+                ldlm_cancel_callback(lock);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 req = ptlrpc_prep_req(class_conn2cliimp(lock->l_connh), 

@@ -425,7 +425,7 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
 
                 /* FIXME: need a real 'desc' here */
                 lock->l_blocking_ast(lock, NULL, lock->l_data,
-                                     lock->l_data_len);
+                                     lock->l_data_len, LDLM_CB_BLOCKING);
         } else
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
@@ -741,7 +741,7 @@ void ldlm_run_ast_work(struct list_head *rpc_list)
                 if (w->w_blocking)
                         rc = w->w_lock->l_blocking_ast
                                 (w->w_lock, &w->w_desc, w->w_data,
-                                 w->w_datalen);
+                                 w->w_datalen, LDLM_CB_BLOCKING);
                 else
                         rc = w->w_lock->l_completion_ast(w->w_lock, w->w_flags);
                 if (rc)
@@ -780,6 +780,17 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
         EXIT;
 }
 
+void ldlm_cancel_callback(struct ldlm_lock *lock)
+{
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        if (!(lock->l_flags & LDLM_FL_CANCEL)) {
+                lock->l_flags |= LDLM_FL_CANCEL;
+                lock->l_blocking_ast(lock, NULL, lock->l_data,
+                                     lock->l_data_len, LDLM_CB_CANCELING);
+        }
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+}
+
 void ldlm_lock_cancel(struct ldlm_lock *lock)
 {
         struct ldlm_resource *res;
@@ -793,6 +804,8 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         if (lock->l_readers || lock->l_writers)
                 CDEBUG(D_INFO, "lock still has references (%d readers, %d "
                        "writers)\n", lock->l_readers, lock->l_writers);
+
+        ldlm_cancel_callback(lock);
 
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy(lock);

@@ -148,7 +148,7 @@ extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
 struct ldlm_lock;
 int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data,
-                     __u32 data_len);
+                     __u32 data_len, int flag);
 int ll_size_lock(struct inode *, struct lov_stripe_md *, __u64 start, int mode,
                  struct lustre_handle **);
 int ll_size_unlock(struct inode *, struct lov_stripe_md *, int mode,

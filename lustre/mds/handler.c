@@ -414,10 +414,15 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
 }
 
 int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-                     void *data, __u32 data_len)
+                     void *data, __u32 data_len, int flag)
 {
         int do_ast;
         ENTRY;
+
+        if (flag == LDLM_CB_CANCELING) {
+                /* Don't need to do anything here. */
+                RETURN(0);
+        }
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         lock->l_flags |= LDLM_FL_CBPENDING;

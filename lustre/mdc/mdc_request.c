@@ -153,7 +153,7 @@ int mdc_getattr(struct lustre_handle *conn,
 }
 
 static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-                            void *data, __u32 data_len)
+                            void *data, __u32 data_len, int flag)
 {
         int rc;
         struct inode *inode = data;
@@ -167,22 +167,29 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 RETURN(-EINVAL);
         }
 
-        if (inode == NULL)
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0) {
+                        CERROR("ldlm_cli_cancel: %d\n", rc);
+                        LBUG();
+                }
+                break;
+        case LDLM_CB_CANCELING:
+                /* FIXME: do something better than throwing away everything */
+                if (inode == NULL)
+                        LBUG();
+                if (S_ISDIR(inode->i_mode)) {
+                        CDEBUG(D_INODE, "invalidating inode %ld\n",
+                               inode->i_ino);
+                        invalidate_inode_pages(inode);
+                }
+                break;
+        default:
                 LBUG();
-
-        /* FIXME: do something better than throwing away everything */
-        if (S_ISDIR(inode->i_mode)) {
-                CDEBUG(D_INODE, "invalidating inode %ld\n",
-                       inode->i_ino);
-                invalidate_inode_pages(inode);
         }
 
-        ldlm_lock2handle(lock, &lockh);
-        rc = ldlm_cli_cancel(&lockh);
-        if (rc < 0) {
-                CERROR("ldlm_cli_cancel: %d\n", rc);
-                LBUG();
-        }
         RETURN(0);
 }
 

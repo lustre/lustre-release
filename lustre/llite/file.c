@@ -340,7 +340,7 @@ static void ll_update_atime(struct inode *inode)
 }
 
 int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
-                     void *data, __u32 data_len)
+                     void *data, __u32 data_len, int flag)
 {
         struct inode *inode = data;
         struct lustre_handle lockh;
@@ -353,16 +353,24 @@ int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
         if (inode == NULL)
                 LBUG();
 
-        down(&inode->i_sem);
-        CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
-        /* FIXME: do something better than throwing away everything */
-        invalidate_inode_pages(inode);
-        up(&inode->i_sem);
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc != ELDLM_OK)
+                        CERROR("ldlm_cli_cancel failed: %d\n", rc);
+                break;
+        case LDLM_CB_CANCELING:
+                down(&inode->i_sem);
+                CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
+                /* FIXME: do something better than throwing away everything */
+                invalidate_inode_pages(inode);
+                up(&inode->i_sem);
+                break;
+        default:
+                LBUG();
+        }
 
-        ldlm_lock2handle(lock, &lockh);
-        rc = ldlm_cli_cancel(&lockh);
-        if (rc != ELDLM_OK)
-                CERROR("ldlm_cli_cancel failed: %d\n", rc);
         RETURN(0);
 }
 
