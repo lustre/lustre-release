@@ -1300,7 +1300,7 @@
  }
  
 +/* Allocate a new handle.  This should probably be in a slab... */
-+static handle_t *get_handle(int nblocks)
++static handle_t *new_handle(int nblocks)
 +{
 +	handle_t *handle = jbd_kmalloc(sizeof (handle_t), GFP_NOFS);
 +	if (!handle)
@@ -1323,7 +1323,7 @@
 -	
 -	handle = jbd_kmalloc(sizeof (handle_t), GFP_NOFS);
 +
-+	handle = get_handle(nblocks);
++	handle = new_handle(nblocks);
  	if (!handle)
  		return ERR_PTR(-ENOMEM);
 -	memset (handle, 0, sizeof (handle_t));
@@ -1340,7 +1340,7 @@
 -	
 -	handle = jbd_kmalloc(sizeof (handle_t), GFP_NOFS);
 +
-+	handle = get_handle(nblocks);
++	handle = new_handle(nblocks);
  	if (!handle)
  		return ERR_PTR(-ENOMEM);
 -	memset (handle, 0, sizeof (handle_t));
