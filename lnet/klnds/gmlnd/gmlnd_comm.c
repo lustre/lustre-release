@@ -203,14 +203,14 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	gmnal_msghdr = (gmnal_msghdr_t*)buffer;
 	portals_hdr = (ptl_hdr_t*)(buffer+GMNAL_MSGHDR_SIZE);
 
-	CDEBUG(D_INFO, "rx_event:: Sender node [%d], Sender Port [%d], 
-	       type [%d], length [%d], buffer [%p]\n",
+	CDEBUG(D_INFO, "rx_event:: Sender node [%d], Sender Port [%d], "
+	       "type [%d], length [%d], buffer [%p]\n",
 	       snode, sport, type, length, buffer);
-	CDEBUG(D_INFO, "gmnal_msghdr:: Sender node [%u], magic [%d], 
-	       gmnal_type [%d]\n", gmnal_msghdr->sender_node_id, 
+	CDEBUG(D_INFO, "gmnal_msghdr:: Sender node [%u], magic [%d], "
+	       "gmnal_type [%d]\n", gmnal_msghdr->sender_node_id, 
 	       gmnal_msghdr->magic, gmnal_msghdr->type);
-	CDEBUG(D_INFO, "portals_hdr:: Sender node ["LPD64"], 
-	       dest_node ["LPD64"]\n", portals_hdr->src_nid, 
+	CDEBUG(D_INFO, "portals_hdr:: Sender node ["LPD64"], "
+	       "dest_node ["LPD64"]\n", portals_hdr->src_nid, 
 	       portals_hdr->dest_nid);
 
 	
@@ -321,6 +321,7 @@ gmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 
 	if (!private) {
 		CDEBUG(D_ERROR, "gmnal_small_rx no context\n");
+		lib_finalize(nal_cb, private, cookie);
 		return(PTL_FAIL);
 	}
 
@@ -342,8 +343,10 @@ gmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
  	 *	let portals library know receive is complete
 	 */
 	CDEBUG(D_PORTALS, "calling lib_finalize\n");
-	lib_finalize(nal_cb, private, cookie, PTL_OK);
-
+	if (lib_finalize(nal_cb, private, cookie) != PTL_OK) {
+		/* TO DO what to do with failed lib_finalise? */
+		CDEBUG(D_INFO, "lib_finalize failed\n");
+	}
 	/*
 	 *	return buffer so it can be used again
 	 */
@@ -377,9 +380,9 @@ gmnal_small_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	unsigned int	local_nid;
 	gm_status_t	gm_status = GM_SUCCESS;
 
-	CDEBUG(D_TRACE, "gmnal_small_tx nal_cb [%p] private [%p] cookie [%p] 
-	       hdr [%p] type [%d] global_nid ["LPU64"] pid [%d] niov [%d] 
-	       iov [%p] size [%d]\n", nal_cb, private, cookie, hdr, type, 
+	CDEBUG(D_TRACE, "gmnal_small_tx nal_cb [%p] private [%p] cookie [%p] "
+	       "hdr [%p] type [%d] global_nid ["LPU64"] pid [%d] niov [%d] "
+	       "iov [%p] size [%d]\n", nal_cb, private, cookie, hdr, type, 
 	       global_nid, pid, niov, iov, size);
 
 	CDEBUG(D_INFO, "portals_hdr:: dest_nid ["LPU64"], src_nid ["LPU64"]\n",
@@ -440,9 +443,9 @@ gmnal_small_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	stxd->msg_size = tot_size;
 
 
-	CDEBUG(D_NET, "Calling gm_send_to_peer port [%p] buffer [%p] 
-   	       gmsize [%lu] msize [%d] global_nid ["LPU64"] local_nid[%d] 
-	       stxd [%p]\n", nal_data->gm_port, stxd->buffer, stxd->gm_size, 
+	CDEBUG(D_NET, "Calling gm_send_to_peer port [%p] buffer [%p] "
+   	       "gmsize [%lu] msize [%d] global_nid ["LPU64"] local_nid[%d] "
+	       "stxd [%p]\n", nal_data->gm_port, stxd->buffer, stxd->gm_size, 
 	       stxd->msg_size, global_nid, local_nid, stxd);
 
 	GMNAL_GM_LOCK(nal_data);
@@ -493,8 +496,8 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		/*
 		 *	do a resend on the dropped ones
 		 */
-			CDEBUG(D_ERROR, "send stxd [%p] was dropped 
-			       resending\n", context);
+			CDEBUG(D_ERROR, "send stxd [%p] was dropped "
+			       "resending\n", context);
 			GMNAL_GM_LOCK(nal_data);
 			gm_send_to_peer_with_callback(nal_data->gm_port, 
 						      stxd->buffer, 
@@ -569,6 +572,11 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
   		case(GM_YP_NO_MATCH):
 		default:
 			CDEBUG(D_ERROR, "Unknown send error\n");
+                gm_resume_sending(nal_data->gm_port, stxd->gm_priority,
+                                      stxd->gm_target_node, GMNAL_GM_PORT,
+                                      gmnal_resume_sending_callback, context);
+                return;
+
 	}
 
 	/*
@@ -587,11 +595,26 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		return;
 	}
 	gmnal_return_stxd(nal_data, stxd);
-	lib_finalize(nal_cb, stxd, cookie, PTL_OK);
-
+	if (lib_finalize(nal_cb, stxd, cookie) != PTL_OK) {
+		CDEBUG(D_INFO, "Call to lib_finalize failed for stxd [%p]\n", 
+		       stxd);
+	}
 	return;
 }
 
+/*
+ *	After an error on the port
+ *	call this to allow future sends to complete
+ */
+void gmnal_resume_sending_callback(struct gm_port *gm_port, void *context,
+                                 gm_status_t status)
+{
+        gmnal_data_t    *nal_data;
+        gmnal_stxd_t    *stxd = (gmnal_stxd_t*)context;
+        CDEBUG(D_TRACE, "status is [%d] context is [%p]\n", status, context);
+        gmnal_return_stxd(stxd->nal_data, stxd);
+        return;
+}
 
 
 void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context, 
@@ -611,8 +634,8 @@ void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
 					      context);
 		GMNAL_GM_LOCK(nal_data);
 	} else {
-		CDEBUG(D_ERROR, "send_to_peer status for stxd [%p] is 
-		       [%d][%s]\n", stxd, status, gmnal_gm_error(status));
+		CDEBUG(D_ERROR, "send_to_peer status for stxd [%p] is "
+		       "[%d][%s]\n", stxd, status, gmnal_gm_error(status));
 	}
 
 
@@ -644,9 +667,9 @@ gmnal_large_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	int		niov_dup;
 
 
-	CDEBUG(D_TRACE, "gmnal_large_tx nal_cb [%p] private [%p], cookie [%p] 
-	       hdr [%p], type [%d] global_nid ["LPU64"], pid [%d], niov [%d], 
-	       iov [%p], size [%d]\n", nal_cb, private, cookie, hdr, type, 
+	CDEBUG(D_TRACE, "gmnal_large_tx nal_cb [%p] private [%p], cookie [%p] "
+	       "hdr [%p], type [%d] global_nid ["LPU64"], pid [%d], niov [%d], "
+	       "iov [%p], size [%d]\n", nal_cb, private, cookie, hdr, type, 
 	       global_nid, pid, niov, iov, size);
 
 	if (nal_cb)
@@ -729,8 +752,8 @@ gmnal_large_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 					       iov->iov_base, iov->iov_len);
 		if (gm_status != GM_SUCCESS) {
 			GMNAL_GM_UNLOCK(nal_data);
-			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] 
-			       for memory [%p] len ["LPSZ"]\n", 
+			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] "
+			       "for memory [%p] len ["LPSZ"]\n", 
 			       gm_status, gmnal_gm_error(gm_status), 
 			       iov->iov_base, iov->iov_len);
 			GMNAL_GM_LOCK(nal_data);
@@ -806,12 +829,13 @@ gmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	gmnal_msghdr_t	*msghdr = NULL;
 	gm_status_t	gm_status;
 
-	CDEBUG(D_TRACE, "gmnal_large_rx :: nal_cb[%p], private[%p], 
-	       cookie[%p], niov[%d], iov[%p], mlen["LPSZ"], rlen["LPSZ"]\n",
+	CDEBUG(D_TRACE, "gmnal_large_rx :: nal_cb[%p], private[%p], "
+	       "cookie[%p], niov[%d], iov[%p], mlen["LPSZ"], rlen["LPSZ"]\n",
 		nal_cb, private, cookie, nriov, riov, mlen, rlen);
 
 	if (!srxd) {
 		CDEBUG(D_ERROR, "gmnal_large_rx no context\n");
+		lib_finalize(nal_cb, private, cookie);
 		return(PTL_FAIL);
 	}
 
@@ -846,8 +870,8 @@ gmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 					       riov->iov_base, riov->iov_len);
 		if (gm_status != GM_SUCCESS) {
 			GMNAL_GM_UNLOCK(nal_data);
-			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] 
-			       for memory [%p] len ["LPSZ"]\n", 
+			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] "
+			       "for memory [%p] len ["LPSZ"]\n", 
 			       gm_status, gmnal_gm_error(gm_status), 
 			       riov->iov_base, riov->iov_len);
 			GMNAL_GM_LOCK(nal_data);
@@ -902,8 +926,8 @@ gmnal_remote_get(gmnal_srxd_t *srxd, int nsiov, struct iovec *siov,
 
 	int	ncalls = 0;
 
-	CDEBUG(D_TRACE, "gmnal_remote_get srxd[%p], nriov[%d], riov[%p], 
-	       nsiov[%d], siov[%p]\n", srxd, nriov, riov, nsiov, siov);
+	CDEBUG(D_TRACE, "gmnal_remote_get srxd[%p], nriov[%d], riov[%p], "
+	       "nsiov[%d], siov[%p]\n", srxd, nriov, riov, nsiov, siov);
 
 
 	ncalls = gmnal_copyiov(0, srxd, nsiov, siov, nriov, riov);
@@ -958,8 +982,8 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 					    srxd->gm_source_node, 
 					    &source_node) != GM_SUCCESS) {
 
-			CDEBUG(D_ERROR, "cannot resolve global_id [%u] 
-			       to local node_id\n", srxd->gm_source_node);
+			CDEBUG(D_ERROR, "cannot resolve global_id [%u] "
+			       "to local node_id\n", srxd->gm_source_node);
 			GMNAL_GM_UNLOCK(nal_data);
 			return(GMNAL_STATUS_FAIL);
 		}
@@ -1108,7 +1132,10 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 	 *	Let our client application proceed
 	 */	
 	CDEBUG(D_ERROR, "final callback context[%p]\n", srxd);
-	lib_finalize(nal_cb, srxd, srxd->cookie, PTL_OK);
+	if (lib_finalize(nal_cb, srxd, srxd->cookie) != PTL_OK) {
+		CDEBUG(D_INFO, "Call to lib_finalize failed for srxd [%p]\n", 
+		       srxd);
+	}
 
 	/*
 	 *	send an ack to the sender to let him know we got the data
@@ -1201,9 +1228,9 @@ gmnal_large_tx_ack(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 	stxd->msg_size= sizeof(gmnal_msghdr_t);
 
 
-	CDEBUG(D_NET, "Calling gm_send_to_peer port [%p] buffer [%p] 
-	       gmsize [%lu] msize [%d] global_nid [%u] local_nid[%d] 
-	       stxd [%p]\n", nal_data->gm_port, stxd->buffer, stxd->gm_size, 
+	CDEBUG(D_NET, "Calling gm_send_to_peer port [%p] buffer [%p] "
+	       "gmsize [%lu] msize [%d] global_nid [%u] local_nid[%d] "
+	       "stxd [%p]\n", nal_data->gm_port, stxd->buffer, stxd->gm_size, 
 	       stxd->msg_size, srxd->gm_source_node, local_nid, stxd);
 	GMNAL_GM_LOCK(nal_data);
 	stxd->gm_priority = GM_LOW_PRIORITY;
@@ -1273,7 +1300,10 @@ gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 
 	CDEBUG(D_INFO, "gmnal_large_tx_ack_received stxd [%p]\n", stxd);
 
-	lib_finalize(nal_cb, stxd, stxd->cookie, PTL_OK);
+	if (lib_finalize(nal_cb, stxd, stxd->cookie) != PTL_OK) {
+		CDEBUG(D_INFO, "Call to lib_finalize failed for stxd [%p]\n", 
+		       stxd);
+	}
 
 	/*
 	 *	extract the iovec from the stxd, deregister the memory.

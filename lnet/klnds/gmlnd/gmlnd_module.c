@@ -30,6 +30,7 @@ int gmnal_small_msg_size = 525312;
  */
 int num_rx_threads = -1;
 int num_stxds = 5;
+int gm_port = 4;
 
 ptl_handle_ni_t	kgmnal_ni;
 
@@ -139,6 +140,7 @@ EXPORT_SYMBOL(kgmnal_ni);
 MODULE_PARM(gmnal_small_msg_size, "i");
 MODULE_PARM(num_rx_threads, "i");
 MODULE_PARM(num_stxds, "i");
+MODULE_PARM(gm_port, "i");
 
 MODULE_AUTHOR("Morgan Doyle");
 
