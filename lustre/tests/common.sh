@@ -454,8 +454,8 @@ setup_mount() {
 		fi
 
 		[ ! -d $MTPT ] && mkdir $MTPT
-		echo mount -t lustre_lite -o ost=`find_devno $THEOSC`,mds=`find_devno $THEMDC` none $MTPT
-		mount -t lustre_lite -o ost=`find_devno $THEOSC`,mds=`find_devno $THEMDC` none $MTPT
+		echo mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
+		mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
 	    done
 	done
 }
