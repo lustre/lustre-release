@@ -114,6 +114,7 @@ static int lfs_find(int argc, char **argv)
         int quiet, verbose, recursive, c, rc;
         struct obd_uuid *obduuid = NULL;
 	
+        optind = 0;
         quiet = verbose = recursive = 0;
         while ((c = getopt_long(argc, argv, short_opts, 
                                         long_opts, NULL)) != -1) {
