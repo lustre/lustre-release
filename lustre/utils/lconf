@@ -969,7 +969,7 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
             if not local:
-                panic ("unable to determine ip for:", wildcard)
+                panic("unable to determine ip for:", wildcard)
         else:
             host = socket.gethostname()
             local = socket.gethostbyname(host)

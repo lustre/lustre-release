@@ -14,11 +14,10 @@
 
 struct osc_async_page {
         int                     oap_magic;
+        int                     oap_cmd;
         struct list_head        oap_pending_item;
         struct list_head        oap_urgent_item;
         struct list_head        oap_rpc_item;
-        struct page             *oap_page;
-        int                     oap_cmd;
 
         obd_off                 oap_obj_off;
         obd_off                 oap_page_off;
@@ -27,8 +26,9 @@ struct osc_async_page {
         enum async_flags        oap_async_flags;
 
         unsigned long           oap_interrupted:1;
-        struct obd_io_group     *oap_oig;
         struct oig_callback_context oap_occ;
+        struct page             *oap_page;
+        struct obd_io_group     *oap_oig;
         struct ptlrpc_request   *oap_request;
         struct client_obd       *oap_cli;
         struct lov_oinfo        *oap_loi;

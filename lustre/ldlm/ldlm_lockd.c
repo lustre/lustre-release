@@ -170,7 +170,7 @@ static int expired_lock_main(void *arg)
 
 static void waiting_locks_callback(unsigned long unused)
 {
-        struct ldlm_lock *lock;
+        struct ldlm_lock *lock, *last = NULL;
         char str[PTL_NALFMT_SIZE];
 
         spin_lock_bh(&waiting_locks_spinlock);
@@ -186,6 +186,17 @@ static void waiting_locks_callback(unsigned long unused)
                            lock->l_export->exp_client_uuid.uuid,
                            lock->l_export->exp_connection->c_remote_uuid.uuid,
                            ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer, str));
+
+                if (lock == last) {
+                        LDLM_ERROR(lock, "waiting on lock multiple times");
+                        CERROR("wll %p .prev %p, l_pending.next %p .prev %p\n",
+                               waiting_locks_list.next, waiting_locks_list.prev,
+                               lock->l_pending_chain.next,
+                               lock->l_pending_chain.prev);
+                        spin_unlock(&waiting_locks_spinlock);
+                        LBUG();
+                }
+                last = lock;
 
                 spin_lock_bh(&expired_lock_thread.elt_lock);
                 list_del(&lock->l_pending_chain);

@@ -258,7 +258,12 @@ static int filter_client_free(struct obd_export *exp, int flags)
         memset(&zero_fcd, 0, sizeof zero_fcd);
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_fcd,
-                                 sizeof(zero_fcd), &off, 1);
+                                 sizeof(zero_fcd), &off, 0);
+
+        if (rc == 0)
+                /* update server's transno */
+                filter_update_server_data(obd, filter->fo_rcvd_filp,
+                                          filter->fo_fsd, 1);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
         CDEBUG(rc == 0 ? D_INFO : D_ERROR,
@@ -1033,8 +1038,8 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
         ENTRY;
 
         if (inode->i_nlink != 1 || atomic_read(&inode->i_count) != 1) {
-                CERROR("destroying objid %.*s nlink = %lu, count = %d\n",
-                       dchild->d_name.len, dchild->d_name.name,
+                CERROR("destroying objid %.*s ino %lu nlink %lu count %d\n",
+                       dchild->d_name.len, dchild->d_name.name, inode->i_ino,
                        (unsigned long)inode->i_nlink,
                        atomic_read(&inode->i_count));
         }
@@ -1420,7 +1425,6 @@ static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
         obd_size maxsize = obd->obd_osfs.os_blocks * obd->obd_osfs.os_bsize;
         obd_size tot_dirty = 0, tot_pending = 0, tot_granted = 0;
         obd_size fo_tot_dirty, fo_tot_pending, fo_tot_granted;
-        int level = D_CACHE;
 
         if (list_empty(&obd->obd_exports))
                 return;
@@ -1428,10 +1432,11 @@ static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
         spin_lock(&obd->obd_osfs_lock);
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
+                int error = 0;
                 fed = &exp->exp_filter_data;
                 if (fed->fed_grant < 0 || fed->fed_pending < 0 ||
                     fed->fed_dirty < 0)
-                        level = D_ERROR;
+                        error = 1;
                 if (maxsize > 0) { /* we may not have done a statfs yet */
                         LASSERTF(fed->fed_grant + fed->fed_pending <= maxsize,
                                  "%s: cli %s/%p %ld+%ld > "LPU64"\n", func,
@@ -1442,9 +1447,14 @@ static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
                                  exp->exp_client_uuid.uuid, exp,
                                  fed->fed_dirty, maxsize);
                 }
-                CDEBUG(level, "%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
-                       obd->obd_name, exp->exp_client_uuid.uuid, exp,
-                       fed->fed_dirty, fed->fed_pending, fed->fed_grant);
+                if (error)
+                        CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
+                               obd->obd_name, exp->exp_client_uuid.uuid, exp,
+                               fed->fed_dirty, fed->fed_pending,fed->fed_grant);
+                else
+                        CDEBUG(D_CACHE, "%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
+                               obd->obd_name, exp->exp_client_uuid.uuid, exp,
+                               fed->fed_dirty, fed->fed_pending,fed->fed_grant);
                 tot_granted += fed->fed_grant + fed->fed_pending;
                 tot_pending += fed->fed_pending;
                 tot_dirty += fed->fed_dirty;

@@ -224,8 +224,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 
 int ptlrpc_resend(struct obd_import *imp)
 {
-        struct list_head *tmp, *pos;
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *req, *next;
         unsigned long flags;
 
         ENTRY;
@@ -243,8 +242,10 @@ int ptlrpc_resend(struct obd_import *imp)
         }
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-        list_for_each_safe(tmp, pos, &imp->imp_sending_list) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+        list_for_each_entry_safe(req, next, &imp->imp_sending_list, rq_list) {
+                LASSERTF((long)req > PAGE_SIZE && req != LP_POISON,
+                         "req %p bad\n", req);
+                LASSERTF(req->rq_type != LI_POISON, "req %p freed\n", req);
                 ptlrpc_resend_req(req);
         }
 

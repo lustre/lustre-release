@@ -434,12 +434,12 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                 GOTO(out, rc);
 
         /* make full-page requests if we are not at EOF (bug 4410) */
-        if (llap->llap_page->index < size_index) {
+        if (to != PAGE_SIZE && llap->llap_page->index < size_index) {
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page,
                                "sync write before EOF: size_index %lu, to %d\n",
                                size_index, to);
                 to = PAGE_SIZE;
-        } else if (llap->llap_page->index == size_index) {
+        } else if (to != PAGE_SIZE && llap->llap_page->index == size_index) {
                 int size_to = inode->i_size & ~PAGE_MASK;
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page,
                                "sync write at EOF: size_index %lu, to %d/%d\n",

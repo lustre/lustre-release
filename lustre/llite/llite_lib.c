@@ -742,7 +742,8 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
                 lock->l_ast_data = NULL;
 
                 if (lock->l_req_mode != lock->l_granted_mode)
-                        LDLM_ERROR(lock,"clearing inode with ungranted lock\n");        }
+                        LDLM_ERROR(lock,"clearing inode with ungranted lock\n");
+        }
 
         return LDLM_ITER_CONTINUE;
 }

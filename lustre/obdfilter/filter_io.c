@@ -187,18 +187,11 @@ restat:
         if (left >= tot_granted) {
                 left -= tot_granted;
         } else {
-                static unsigned long next;
-                if (left < tot_granted - obd->u.filter.fo_tot_pending &&
-                    time_after(jiffies, next)) {
-                        spin_unlock(&obd->obd_osfs_lock);
+                if (left < tot_granted - obd->u.filter.fo_tot_pending + 65536) {
                         CERROR("%s: cli %s/%p grant "LPU64" > available "
                                LPU64" and pending "LPU64"\n", obd->obd_name,
                                exp->exp_client_uuid.uuid, exp, tot_granted,
                                left, obd->u.filter.fo_tot_pending);
-                        if (next == 0)
-                                portals_debug_dumplog();
-                        next = jiffies + 20 * HZ;
-                        spin_lock(&obd->obd_osfs_lock);
                 }
                 left = 0;
         }

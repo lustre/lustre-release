@@ -148,7 +148,7 @@ test_10() {
 run_test 10 "finish request on server after client eviction (bug 1521)"
 
 #bug 2460
-# wake up a thead waiting for completion after eviction
+# wake up a thread waiting for completion after eviction
 test_11(){
     do_facet client multiop $MOUNT/$tfile Ow  || return 1
     do_facet client multiop $MOUNT/$tfile or  || return 2
@@ -161,7 +161,7 @@ test_11(){
 
     do_facet client munlink $MOUNT/$tfile  || return 4
 }
-run_test 11 "wake up a thead waiting for completion after eviction (b=2460)"
+run_test 11 "wake up a thread waiting for completion after eviction (b=2460)"
 
 #b=2494
 test_12(){

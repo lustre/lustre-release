@@ -447,6 +447,10 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NO_SPACE);
+                spin_lock_irqsave (&request->rq_lock, flags);
+                /* ...but the MD attach didn't succeed... */
+                request->rq_receiving_reply = 0;
+                spin_unlock_irqrestore (&request->rq_lock, flags);
                 GOTO(cleanup_me, rc -ENOMEM);
         }
 
@@ -456,7 +460,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                request->rq_reply_portal,
                connection->c_peer.peer_ni->pni_name);
 
-        ptlrpc_request_addref(request);        /* +1 ref for the SENT callback */
+        ptlrpc_request_addref(request);       /* +1 ref for the SENT callback */
 
         request->rq_sent = CURRENT_SECONDS;
         ptlrpc_pinger_sending_on_import(request->rq_import);

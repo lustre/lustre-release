@@ -56,10 +56,10 @@ struct lov_async_page {
         int                             lap_magic;
         int                             lap_stripe;
         obd_off                         lap_sub_offset;
+        obd_id                          lap_loi_id;
         void                            *lap_sub_cookie;
         struct obd_async_page_ops       *lap_caller_ops;
         void                            *lap_caller_data;
-        obd_id                          lap_loi_id;
 };
 
 #define LAP_FROM_COOKIE(c)                                                      \
