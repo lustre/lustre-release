@@ -153,10 +153,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
         mdc_conn = sbi2mdc(sbi)->cl_import.imp_connection;
         mdc_conn->c_level = LUSTRE_CONN_FULL;
         list_add(&mdc_conn->c_sb_chain, &sbi->ll_conn_chain);
-        spin_lock(&ptlrpc_recovd->recovd_lock);
         recovd_conn_manage(class_conn2export(&sbi->ll_mdc_conn)->exp_connection,
                            ptlrpc_recovd, ll_recover);
-        spin_unlock(&ptlrpc_recovd->recovd_lock);
 
         obd = class_uuid2obd(osc);
         if (!obd) {
@@ -169,10 +167,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, sb = NULL);
         }
-        spin_lock(&ptlrpc_recovd->recovd_lock);
         recovd_conn_manage(class_conn2export(&sbi->ll_osc_conn)->exp_connection,
                            ptlrpc_recovd, ll_recover);
-        spin_unlock(&ptlrpc_recovd->recovd_lock);
 
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
