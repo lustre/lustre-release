@@ -193,7 +193,7 @@ static struct llog_handle *filter_log_create(struct obd_device *obd)
         }
 
         rc = filter_update_server_data(obd, filter->fo_rcvd_filp,
-                                       filter->fo_fsd);
+                                       filter->fo_fsd, 0);
         if (rc) {
                 CERROR("can't write lastobjid but log created: rc %d\n",rc);
                 GOTO(out_destroy, rc);
@@ -272,7 +272,7 @@ struct llog_handle *filter_get_catalog(struct obd_device *obd)
                 lgl = &cathandle->lgh_cookie.lgc_lgl;
                 fsd->fsd_catalog_oid = cpu_to_le64(lgl->lgl_oid);
                 fsd->fsd_catalog_ogen = cpu_to_le32(lgl->lgl_ogen);
-                rc = filter_update_server_data(obd, filter->fo_rcvd_filp, fsd);
+                rc = filter_update_server_data(obd, filter->fo_rcvd_filp,fsd,0);
                 if (rc) {
                         CERROR("error writing new catalog to disk: rc %d\n",rc);
                         GOTO(out_handle, rc);
