@@ -45,7 +45,8 @@
 
 #ifdef __KERNEL__
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
-                        struct llog_logid *logid, struct llog_gen *gen)
+                        struct llog_logid *logid, struct llog_gen *gen,
+                        struct obd_uuid *uuid)
 {
         struct llog_gen_rec *lgr;
         struct obd_import *imp;
@@ -108,7 +109,7 @@ int llog_handle_connect(struct ptlrpc_request *req)
 
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,
-                          &req_body->lgdc_gen);
+                          &req_body->lgdc_gen, NULL);
         if (rc != 0)
                 CERROR("failed at llog_relp_connect\n");
 
