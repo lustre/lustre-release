@@ -1,0 +1,4 @@
+MODULES := lov
+lov-objs := lov_log.o lov_obd.o lov_pack.o lproc_lov.o
+
+@INCLUDE_RULES@
