@@ -23,6 +23,11 @@ ECHO_CLIENT=${ECHO_CLIENT:-}
 STRIPE_BYTES=65536
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-$((OSTCOUNT -1))}
 
+# specific journal size for the ost, in MB
+JSIZE=${JSIZE:-0}
+JARG=""
+[ "$JSIZE" -gt 0 ] && JARG="--journal_size $JSIZE"
+
 # create nodes
 ${LMC} -o $config --add net --node localhost --nid localhost --nettype tcp
 
@@ -36,7 +41,7 @@ for num in `seq $OSTCOUNT`; do
     OST=ost$num
     DEVPTR=OSTDEV$num
     eval $DEVPTR=${!DEVPTR:=$TMP/$OST-`hostname`}
-    ${LMC} -m $config --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --dev ${!DEVPTR} --size $OSTSIZE
+    ${LMC} -m $config --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --dev ${!DEVPTR} --size $OSTSIZE $JARG
 done
 
 
