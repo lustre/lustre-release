@@ -440,7 +440,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_GETATTR: {
 
                 obd_data2conn(&conn, data);
-                err = obd_getattr(&conn, &data->ioc_obdo1);
+                err = obd_getattr(&conn, &data->ioc_obdo1, NULL);
                 if (err)
                         GOTO(out, err);
 
@@ -450,7 +450,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
         case OBD_IOC_SETATTR: {
                 obd_data2conn(&conn, data);
-                err = obd_setattr(&conn, &data->ioc_obdo1);
+                err = obd_setattr(&conn, &data->ioc_obdo1, NULL);
                 if (err)
                         GOTO(out, err);
 

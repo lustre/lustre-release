@@ -30,15 +30,20 @@
 #else
 # include <asm/semaphore.h>
 #endif
-
 #include <linux/portals_lib.h>
 #include <linux/lustre_idl.h>
 
 #ifdef __KERNEL__
 /* l_net.c */
 struct ptlrpc_request;
+struct obd_device;
 int target_handle_connect(struct ptlrpc_request *req);
 int target_handle_disconnect(struct ptlrpc_request *req);
+int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd);
+int client_obd_disconnect(struct lustre_handle *conn);
+int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
+int client_obd_cleanup(struct obd_device * obddev);
+struct client_obd *client_conn2cli(struct lustre_handle *conn); 
 
 /* l_lock.c */
 struct lustre_lock { 

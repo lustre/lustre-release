@@ -29,7 +29,7 @@
 
   <lov name="lov1" uuid="lov1-UUID">
     <mdc_ref uuidref="mdc1-UUID"/>
-    <devices stripesize="65536" pattern="0">
+    <devices stripesize="65536" stripeoffset="0" pattern="0">
       <osc_ref uuidref="osc1-UUID"/>
       <osc_ref uuidref="osc2-UUID"/>
     </devices>

@@ -82,12 +82,12 @@ static inline struct lustre_handle *ll_s2obdconn(struct super_block *sb)
         return &(ll_s2sbi(sb))->ll_osc_conn;
 }
 
-static inline struct mdc_obd *sbi2mdc(struct ll_sb_info *sbi)
+static inline struct client_obd *sbi2mdc(struct ll_sb_info *sbi)
 {
         struct obd_device *obd = class_conn2obd(&sbi->ll_mdc_conn);
         if (obd == NULL)
                 LBUG();
-        return &obd->u.mdc;
+        return &obd->u.cli;
 }
 
 static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)

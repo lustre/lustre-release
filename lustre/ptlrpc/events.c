@@ -37,6 +37,8 @@ static int request_out_callback(ptl_event_t *ev)
 {
         ENTRY;
 
+        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* requests always contiguous */
+
         if (ev->type != PTL_EVENT_SENT) {
                 // XXX make sure we understand all events, including ACK's
                 CERROR("Unknown event %d\n", ev->type);
@@ -53,6 +55,8 @@ static int request_out_callback(ptl_event_t *ev)
 static int reply_out_callback(ptl_event_t *ev)
 {
         ENTRY;
+
+        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* replies always contiguous */
 
         if (ev->type == PTL_EVENT_SENT) {
                 OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);
@@ -72,6 +76,8 @@ static int reply_in_callback(ptl_event_t *ev)
 {
         struct ptlrpc_request *req = ev->mem_desc.user_ptr;
         ENTRY;
+
+        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* replies always contiguous */
 
         if (req->rq_xid == 0x5a5a5a5a5a5a5a5a) {
                 CERROR("Reply received for freed request!  Probably a missing "
@@ -101,6 +107,8 @@ int request_in_callback(ptl_event_t *ev)
 {
         struct ptlrpc_service *service = ev->mem_desc.user_ptr;
 
+        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* requests always contiguous */
+        
         if (ev->rlength != ev->mlength)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
@@ -115,22 +123,30 @@ int request_in_callback(ptl_event_t *ev)
 
 static int bulk_source_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_bulk_page *bulk = ev->mem_desc.user_ptr;
-        struct ptlrpc_bulk_desc *desc = bulk->b_desc;
+        struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_page *bulk;
+        struct list_head        *tmp;
+        struct list_head        *next;
         ENTRY;
 
+        /* 1 fragment for each page always */
+        LASSERT (ev->mem_desc.niov == desc->b_page_count);
+        
         if (ev->type == PTL_EVENT_SENT) {
                 CDEBUG(D_NET, "got SENT event\n");
         } else if (ev->type == PTL_EVENT_ACK) {
                 CDEBUG(D_NET, "got ACK event\n");
-                if (bulk->b_cb != NULL)
-                        bulk->b_cb(bulk);
-                if (atomic_dec_and_test(&desc->b_pages_remaining)) {
-                        desc->b_flags |= PTL_BULK_FL_SENT;
-                        wake_up(&desc->b_waitq);
-                        if (desc->b_cb != NULL)
-                                desc->b_cb(desc, desc->b_cb_data);
+                
+                list_for_each_safe(tmp, next, &desc->b_page_list) {
+                        bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+                        
+                        if (bulk->b_cb != NULL)
+                                bulk->b_cb(bulk);
                 }
+                desc->b_flags |= PTL_BULK_FL_SENT;
+                wake_up(&desc->b_waitq);
+                if (desc->b_cb != NULL)
+                        desc->b_cb(desc, desc->b_cb_data);
         } else {
                 CERROR("Unexpected event type!\n");
                 LBUG();
@@ -141,21 +157,36 @@ static int bulk_source_callback(ptl_event_t *ev)
 
 static int bulk_sink_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_bulk_page *bulk = ev->mem_desc.user_ptr;
-        struct ptlrpc_bulk_desc *desc = bulk->b_desc;
+        struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_page *bulk;
+        struct list_head        *tmp;
+        struct list_head        *next;
+        ptl_size_t               total = 0;
         ENTRY;
 
         if (ev->type == PTL_EVENT_PUT) {
-                if (bulk->b_buf != ev->mem_desc.start + ev->offset)
-                        CERROR("bulkbuf != mem_desc -- why?\n");
-                if (bulk->b_cb != NULL)
-                        bulk->b_cb(bulk);
-                if (atomic_dec_and_test(&desc->b_pages_remaining)) {
-                        desc->b_flags |= PTL_BULK_FL_RCVD;
-                        wake_up(&desc->b_waitq);
-                        if (desc->b_cb != NULL)
-                                desc->b_cb(desc, desc->b_cb_data);
+                /* put with zero offset */
+                LASSERT (ev->offset == 0);
+                /* used iovs */
+                LASSERT ((ev->mem_desc.options & PTL_MD_IOV) != 0);
+                /* 1 fragment for each page always */
+                LASSERT (ev->mem_desc.niov == desc->b_page_count);
+
+                list_for_each_safe (tmp, next, &desc->b_page_list) {
+                        bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+
+                        total += bulk->b_buflen;
+                        
+                        if (bulk->b_cb != NULL)
+                                bulk->b_cb(bulk);
                 }
+
+                LASSERT (ev->mem_desc.length == total);
+                
+                desc->b_flags |= PTL_BULK_FL_RCVD;
+                wake_up(&desc->b_waitq);
+                if (desc->b_cb != NULL)
+                        desc->b_cb(desc, desc->b_cb_data);
         } else {
                 CERROR("Unexpected event type!\n");
                 LBUG();

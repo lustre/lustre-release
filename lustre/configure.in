@@ -100,7 +100,8 @@ AC_SUBST(docdir)
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
 
-AM_CONFIG_HEADER(include/config.h)
+# not needed until the AC_CHECK_LIB(readline) above works
+# AM_CONFIG_HEADER(include/config.h)
 
 AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile \
          obdecho/Makefile ptlrpc/Makefile \

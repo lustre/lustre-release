@@ -13,8 +13,6 @@
  *  by Peter Braam <braam@clusterfs.com> &
  *     Andreas Dilger <braam@clusterfs.com>
  *
- *  This server is single threaded at present (but can easily be multi threaded)
- *
  */
 
 #define EXPORT_SYMTAB
@@ -36,6 +34,7 @@ inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
         return &req->rq_export->exp_obd->u.mds;
 }
+
 
 /* Assumes caller has already pushed into the kernel filesystem context */
 static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
@@ -95,7 +94,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 }
 
 /* 'dir' is a inode for which a lock has already been taken */
-struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
+struct dentry *mds_name2locked_dentry(struct obd_device *obd, struct dentry *dir,
                                       struct vfsmount **mnt, char *name,
                                       int namelen, int lock_mode,
                                       struct lustre_handle *lockh,
@@ -123,11 +122,9 @@ struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
                 RETURN(dchild);
 
         res_id[0] = dchild->d_inode->i_ino;
-        rc = ldlm_match_or_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                   (struct lustre_handle *)&mds->mds_connh,
-                                   NULL, mds->mds_local_namespace, NULL,
+        rc = ldlm_match_or_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                    res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                   &flags, (void *)mds_lock_callback, NULL,
+                                   &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
                                    0, lockh);
         if (rc != ELDLM_OK) {
                 l_dput(dchild);
@@ -138,10 +135,11 @@ struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
         RETURN(dchild);
 }
 
-struct dentry *mds_fid2locked_dentry(struct mds_obd *mds, struct ll_fid *fid,
+struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh)
 {
+        struct mds_obd *mds = &obd->u.mds;
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
         int flags, rc;
         __u64 res_id[3] = {0};
@@ -151,11 +149,9 @@ struct dentry *mds_fid2locked_dentry(struct mds_obd *mds, struct ll_fid *fid,
                 RETURN(de);
 
         res_id[0] = de->d_inode->i_ino;
-        rc = ldlm_match_or_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                   (struct lustre_handle *)&mds->mds_connh,
-                                   NULL, mds->mds_local_namespace, NULL,
+        rc = ldlm_match_or_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                    res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                   &flags, (void *)mds_lock_callback, NULL,
+                                   &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
                                    0, lockh);
         if (rc != ELDLM_OK) {
                 l_dput(de);
@@ -197,9 +193,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                 RETURN(ERR_PTR(-ESTALE));
         }
 
-        /* now to find a dentry.
-         * If possible, get a well-connected one
-         */
+        /* now to find a dentry. If possible, get a well-connected one */
         if (mnt)
                 *mnt = mds->mds_vfsmnt;
         spin_lock(&dcache_lock);
@@ -374,6 +368,7 @@ int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
 static int mds_getattr_name(int offset, struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct obd_run_ctxt saved;
         struct mds_body *body;
         struct dentry *de = NULL, *dchild = NULL;
@@ -412,15 +407,13 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = dir->i_ino;
 
-        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+        rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &lockh);
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                      (struct lustre_handle *)&mds->mds_connh, 
-                                      NULL, mds->mds_local_namespace, NULL,
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, (void *)mds_lock_callback,
+                                      &flags, ldlm_completion_ast, (void *)mds_lock_callback,
                                       NULL, 0, &lockh);
                 if (rc != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", rc);
@@ -450,7 +443,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                 if (S_ISREG(inode->i_mode)) {
                         struct lov_stripe_md *md;
                         md = lustre_msg_buf(req->rq_repmsg, offset + 1);
-                        md->lmd_size = mds->mds_max_mdsize;
+                        md->lmd_easize = mds->mds_max_mdsize;
                         mds_fs_get_md(mds, inode, md);
                 }
                 /* now a normal case for intent locking */
@@ -634,11 +627,9 @@ static int mds_open(struct ptlrpc_request *req)
                 void *handle;
                 struct lov_stripe_md *md;
                 struct inode *inode = de->d_inode;
-                //struct iattr iattr;
                 int rc;
 
                 md = lustre_msg_buf(req->rq_reqmsg, 1);
-                //iattr.ia_mode = inode->i_mode;
 
                 handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
                 if (!handle) {
@@ -648,7 +639,6 @@ static int mds_open(struct ptlrpc_request *req)
 
                 /* XXX error handling */
                 rc = mds_fs_set_md(mds, inode, handle, md);
-                //                rc = mds_fs_setattr(mds, de, handle, &iattr);
                 if (!rc) {
                         struct obd_run_ctxt saved;
                         push_ctxt(&saved, &mds->mds_ctxt);
@@ -881,6 +871,37 @@ int mds_handle(struct ptlrpc_request *req)
                 rc = mds_close(req);
                 break;
 
+        case LDLM_ENQUEUE:
+                CDEBUG(D_INODE, "enqueue\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
+                rc = ldlm_handle_enqueue(req);
+                if (rc)
+                        break;
+                RETURN(0);
+
+        case LDLM_CONVERT:
+                CDEBUG(D_INODE, "convert\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
+                rc = ldlm_handle_convert(req);
+                if (rc)
+                        break;
+                RETURN(0);
+
+        case LDLM_CANCEL:
+                CDEBUG(D_INODE, "cancel\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
+                rc = ldlm_handle_cancel(req);
+                if (rc)
+                        break;
+                RETURN(0);
+        case LDLM_CALLBACK:
+                CDEBUG(D_INODE, "callback\n");
+                CERROR("callbacks should not happen on MDS\n");
+                LBUG();
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
+                break;
+
+
         default:
                 rc = ptlrpc_error(req->rq_svc, req);
                 RETURN(rc);
@@ -963,12 +984,12 @@ static int mds_recover(struct obd_device *obddev)
         return rc;
 }
 
-
+#define MDS_NUM_THREADS 8
 /* mount the file system (secretly) */
 static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
+        int i;
         struct obd_ioctl_data* data = buf;
-        struct obd_export *export;
         struct mds_obd *mds = &obddev->u.mds;
         struct vfsmount *mnt;
         int rc = 0;
@@ -1008,57 +1029,29 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_fs, rc = -EINVAL);
         }
 
-        rc = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
-        if (rc) {
-                CERROR("cannot start thread: rc = %d\n", rc);
-                GOTO(err_svc, rc);
-        }
-
         rc = -ENOENT;
-        mds->mds_ldlm_conn = ptlrpc_uuid_to_connection("self");
-        if (!mds->mds_ldlm_conn) {
-                mds_cleanup(obddev);
-                GOTO(err_thread, rc);
-        }
-
         obddev->obd_namespace =
                 ldlm_namespace_new("mds_server", LDLM_NAMESPACE_SERVER);
         if (obddev->obd_namespace == NULL) {
                 LBUG();
                 mds_cleanup(obddev);
-                GOTO(err_thread, rc);
+                GOTO(err_svc, rc);
         }
 
-        mds->mds_local_namespace =
-                ldlm_namespace_new("mds_client", LDLM_NAMESPACE_CLIENT);
-        if (mds->mds_local_namespace == NULL) {
-                LBUG();
-                mds_cleanup(obddev);
-                GOTO(err_thread, rc);
+        for (i = 0; i < MDS_NUM_THREADS; i++) {
+                char name[32];
+                sprintf(name, "lustre_MDS_%2d", i); 
+                rc = ptlrpc_start_thread(obddev, mds->mds_service, name);
+                if (rc) {
+                        CERROR("cannot start MDS thread #%d: rc %d\n", i, rc);
+                        LBUG();
+                        GOTO(err_thread, rc);
+                }
         }
-
-        OBD_ALLOC(mds->mds_ldlm_client, sizeof(*mds->mds_ldlm_client));
-        if (mds->mds_ldlm_client == NULL) {
-                LBUG();
-                mds_cleanup(obddev);
-                GOTO(err_thread, rc);
-        }
-        ptlrpc_init_client(NULL, NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           mds->mds_ldlm_client);
-        mds->mds_ldlm_client->cli_target_devno = obddev->obd_minor;
-        mds->mds_ldlm_client->cli_name = "mds ldlm";
 
         rc = mds_recover(obddev);
         if (rc)
                 GOTO(err_thread, rc);
-
-        rc = class_connect(&mds->mds_connh, obddev);
-        if (rc)
-                GOTO(err_thread, rc);
-        export = class_conn2export(&mds->mds_connh);
-        if (!export)
-                LBUG();
-        export->exp_connection = mds->mds_ldlm_conn;
 
         RETURN(0);
 
@@ -1088,8 +1081,6 @@ static int mds_cleanup(struct obd_device * obddev)
         struct mds_obd *mds = &obddev->u.mds;
 
         ENTRY;
-        class_disconnect(&mds->mds_connh);
-
 
         if ( !list_empty(&obddev->obd_exports) ) {
                 CERROR("still has exports!\n");
@@ -1118,13 +1109,7 @@ static int mds_cleanup(struct obd_device * obddev)
         mds->mds_sb = 0;
         kfree(mds->mds_fstype);
 
-        ldlm_namespace_free(mds->mds_local_namespace);
         ldlm_namespace_free(obddev->obd_namespace);
-
-        if (mds->mds_ldlm_conn != NULL)
-                ptlrpc_put_connection(mds->mds_ldlm_conn);
-
-        OBD_FREE(mds->mds_ldlm_client, sizeof(*mds->mds_ldlm_client));
 
         lock_kernel();
 #ifdef CONFIG_DEV_RDONLY
@@ -1135,6 +1120,145 @@ static int mds_cleanup(struct obd_device * obddev)
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }
+
+static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
+                              ldlm_mode_t mode, void *data)
+{
+        struct ptlrpc_request *req = req_cookie;
+        int rc = 0;
+        ENTRY;
+
+        if (!req_cookie)
+                RETURN(0);
+
+        if (req->rq_reqmsg->bufcount > 1) {
+                /* an intent needs to be considered */
+                struct ldlm_intent *it = lustre_msg_buf(req->rq_reqmsg, 1);
+                struct mds_obd *mds= &req->rq_export->exp_obd->u.mds;
+                struct mds_body *mds_rep;
+                struct ldlm_reply *rep;
+                __u64 new_resid[3] = {0, 0, 0}, old_res;
+                int bufcount = -1, rc, size[3] = {sizeof(struct ldlm_reply),
+                                                  sizeof(struct mds_body),
+                                                  mds->mds_max_mdsize};
+
+                it->opc = NTOH__u64(it->opc);
+
+                LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
+
+                /* prepare reply */
+                switch((long)it->opc) {
+                case IT_GETATTR:
+                        /* Note that in the negative case you may be returning
+                         * a file and its obdo */
+                case IT_CREAT:
+                case IT_CREAT|IT_OPEN:
+                case IT_LINK:
+                case IT_LOOKUP:
+                case IT_MKDIR:
+                case IT_MKNOD:
+                case IT_OPEN:
+                case IT_READLINK:
+                case IT_RENAME:
+                case IT_RMDIR:
+                case IT_SETATTR:
+                case IT_SYMLINK:
+                case IT_UNLINK:
+                        bufcount = 3;
+                        break;
+                case IT_RENAME2:
+                        bufcount = 1;
+                        break;
+                default:
+                        LBUG();
+                }
+
+                rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
+                                     &req->rq_repmsg);
+                if (rc) {
+                        rc = req->rq_status = -ENOMEM;
+                        RETURN(rc);
+                }
+
+                rep = lustre_msg_buf(req->rq_repmsg, 0);
+                rep->lock_policy_res1 = 1;
+
+                /* execute policy */
+                switch ((long)it->opc) {
+                case IT_CREAT:
+                case IT_CREAT|IT_OPEN:
+                case IT_LINK:
+                case IT_MKDIR:
+                case IT_MKNOD:
+                case IT_RENAME2:
+                case IT_RMDIR:
+                case IT_SYMLINK:
+                case IT_UNLINK:
+                        rc = mds_reint(2, req);
+                        if (rc || req->rq_status != 0) {
+                                rep->lock_policy_res2 = req->rq_status;
+                                RETURN(ELDLM_LOCK_ABORTED);
+                        }
+                        break;
+                case IT_GETATTR:
+                case IT_LOOKUP:
+                case IT_OPEN:
+                case IT_READDIR:
+                case IT_READLINK:
+                case IT_RENAME:
+                case IT_SETATTR:
+                        rc = mds_getattr_name(2, req);
+                        /* FIXME: we need to sit down and decide on who should
+                         * set req->rq_status, who should return negative and
+                         * positive return values, and what they all mean. */
+                        if (rc || req->rq_status != 0) {
+                                rep->lock_policy_res2 = req->rq_status;
+                                RETURN(ELDLM_LOCK_ABORTED);
+                        }
+                        break;
+                case IT_READDIR|IT_OPEN:
+                        LBUG();
+                        break;
+                default:
+                        CERROR("Unhandled intent\n");
+                        LBUG();
+                }
+
+                if (it->opc == IT_UNLINK || it->opc == IT_RMDIR ||
+                    it->opc == IT_RENAME || it->opc == IT_RENAME2)
+                        RETURN(ELDLM_LOCK_ABORTED);
+
+                rep->lock_policy_res2 = req->rq_status;
+                mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
+                new_resid[0] = NTOH__u32(mds_rep->ino);
+                if (new_resid[0] == 0)
+                        LBUG();
+                old_res = lock->l_resource->lr_name[0];
+
+                CDEBUG(D_INFO, "remote intent: locking %d instead of"
+                       "%ld\n", mds_rep->ino, (long)old_res);
+
+                ldlm_lock_change_resource(lock, new_resid);
+                if (lock->l_resource == NULL) {
+                        LBUG();
+                        RETURN(-ENOMEM);
+                }
+                LDLM_DEBUG(lock, "intent policy, old res %ld",
+                           (long)old_res);
+                RETURN(ELDLM_LOCK_CHANGED);
+        } else {
+                int size = sizeof(struct ldlm_reply);
+                rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen,
+                                     &req->rq_repmsg);
+                if (rc) {
+                        CERROR("out of memory\n");
+                        LBUG();
+                        RETURN(-ENOMEM);
+                }
+        }
+        RETURN(rc);
+}
+
 
 extern int mds_iocontrol(long cmd, struct lustre_handle *conn, 
                           int len, void *karg, void *uarg);
@@ -1150,17 +1274,14 @@ static struct obd_ops mds_obd_ops = {
 
 static int __init mds_init(void)
 {
-        inter_module_register("mds_reint", THIS_MODULE, &mds_reint);
-        inter_module_register("mds_getattr_name", THIS_MODULE,
-                              &mds_getattr_name);
         class_register_type(&mds_obd_ops, LUSTRE_MDS_NAME);
+        ldlm_register_intent(ldlm_intent_policy);
         return 0;
 }
 
 static void __exit mds_exit(void)
 {
-        inter_module_unregister("mds_reint");
-        inter_module_unregister("mds_getattr_name");
+        ldlm_unregister_intent();
         class_unregister_type(LUSTRE_MDS_NAME);
 }
 

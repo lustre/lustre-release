@@ -238,14 +238,16 @@ static inline int obd_destroy(struct lustre_handle *conn, struct obdo *obdo, str
         RETURN(rc);
 }
 
-static inline int obd_getattr(struct lustre_handle *conn, struct obdo *obdo)
+static inline int obd_getattr(struct lustre_handle *conn, 
+                              struct obdo *obdo,
+                              struct lov_stripe_md *ea)
 {
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->exp_obd,getattr);
 
-        rc = OBP(export->exp_obd, getattr)(conn, obdo);
+        rc = OBP(export->exp_obd, getattr)(conn, obdo, ea);
         RETURN(rc);
 }
 
@@ -271,14 +273,16 @@ static inline int obd_open(struct lustre_handle *conn, struct obdo *obdo,
         RETURN(rc);
 }
 
-static inline int obd_setattr(struct lustre_handle *conn, struct obdo *obdo)
+static inline int obd_setattr(struct lustre_handle *conn, 
+                              struct obdo *obdo,
+                              struct lov_stripe_md *ea)
 {
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->exp_obd,setattr);
 
-        rc = OBP(export->exp_obd, setattr)(conn, obdo);
+        rc = OBP(export->exp_obd, setattr)(conn, obdo, ea);
         RETURN(rc);
 }
 

@@ -28,7 +28,6 @@
 #include <sys/param.h>
 #include <assert.h>
 
-#include <config.h>
 #ifdef HAVE_LIBREADLINE
 #define READLINE_LIBRARY
 #include <readline/readline.h>

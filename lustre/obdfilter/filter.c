@@ -490,7 +490,8 @@ static inline void filter_from_inode(struct obdo *oa, struct inode *inode)
         EXIT;
 }
 
-static int filter_getattr(struct lustre_handle *conn, struct obdo *oa)
+static int filter_getattr(struct lustre_handle *conn, struct obdo *oa, 
+                          struct lov_stripe_md *md)
 {
         struct obd_device *obddev = class_conn2obd(conn);
         struct dentry *dentry;
@@ -514,7 +515,8 @@ static int filter_getattr(struct lustre_handle *conn, struct obdo *oa)
         RETURN(0);
 }
 
-static int filter_setattr(struct lustre_handle *conn, struct obdo *oa)
+static int filter_setattr(struct lustre_handle *conn, struct obdo *oa, 
+                          struct lov_stripe_md *md)
 {
         struct obd_run_ctxt saved;
         struct obd_device *obd = class_conn2obd(conn);
@@ -698,15 +700,19 @@ out:
 /* NB count and offset are used for punch, but not truncate */
 static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
                            struct lov_stripe_md *md,
-                           obd_size count, obd_off offset)
+                           obd_off start, obd_off end)
 {
         int error;
         ENTRY;
 
-        CDEBUG(D_INODE, "calling truncate for object #%Ld, valid = %x, "
-               "o_size = %Ld\n", oa->o_id, oa->o_valid, oa->o_size);
-        error = filter_setattr(conn, oa);
+        if ( end != 0xffffffffffffffff ) { 
+                CERROR("PUNCH not supported, only truncate works\n"); 
+        }
 
+        CDEBUG(D_INODE, "calling truncate for object #%Ld, valid = %x, "
+               "o_size = %Ld\n", oa->o_id, oa->o_valid, start);
+        oa->o_size = start;
+        error = filter_setattr(conn, oa, NULL);
         RETURN(error);
 }
 

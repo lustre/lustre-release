@@ -10,11 +10,13 @@ EXTRA_PROGRAMS = ldlm
 
 l_lock.c: 
 	test -e l_lock.c || ln -sf $(top_srcdir)/lib/l_lock.c
+l_net.c: 
+	test -e l_net.c || ln -sf $(top_srcdir)/lib/l_net.c
 
-LINX=l_lock.c
+LINX=l_lock.c l_net.c
 
 ldlm_SOURCES = l_lock.c ldlm_lock.c ldlm_resource.c ldlm_test.c ldlm_lockd.c \
-ldlm_extent.c ldlm_request.c
+ldlm_extent.c ldlm_request.c l_net.c
 
 include $(top_srcdir)/Rules
 

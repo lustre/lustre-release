@@ -59,6 +59,17 @@
 #include "parser.h"
 #include <stdio.h>
 
+#define SHMEM_STATS 1
+#if SHMEM_STATS
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#define MAX_SHMEM_COUNT 1024
+static long long *shared_counters;
+static long long  counter_snapshot[2][MAX_SHMEM_COUNT];
+struct timeval    prev_time;
+#endif
+
 static int jt_newdev(int argc, char **argv);
 static int jt_attach(int argc, char **argv);
 static int jt_setup(int argc, char **argv);
@@ -242,6 +253,95 @@ static int do_disconnect(char *func, int verbose)
 
         return rc;
 }
+
+#if SHMEM_STATS
+static void
+shmem_setup ()
+{
+        int shmid = shmget (IPC_PRIVATE, sizeof (counter_snapshot[0]), 0600);
+
+        if (shmid == -1)
+        {
+                fprintf (stderr, "Can't create shared memory counters: %s\n", strerror (errno));
+                return;
+        }
+        
+        shared_counters = (long long *)shmat (shmid, NULL, 0);
+
+        if (shared_counters == (long long *)(-1))
+        {
+                fprintf (stderr, "Can't attach shared memory counters: %s\n", strerror (errno));
+                shared_counters = NULL;
+                return;
+        }
+}
+
+static inline void
+shmem_reset ()
+{
+        if (shared_counters == NULL)
+                return;
+        
+        memset (shared_counters, 0, sizeof (counter_snapshot[0]));
+        memset (counter_snapshot, 0, sizeof (counter_snapshot));
+        gettimeofday (&prev_time, NULL);
+}
+
+static inline void
+shmem_bump ()
+{
+        if (shared_counters == NULL || 
+            thread <= 0 || thread > MAX_SHMEM_COUNT)
+                return;
+        
+        shared_counters[thread - 1]++;
+}
+
+static void
+shmem_snap (int n)
+{
+        struct timeval this_time;
+        int            non_zero = 0;
+        long long      total = 0;
+        double         secs;
+        int            i;
+        
+        if (shared_counters == NULL || n > MAX_SHMEM_COUNT)
+                return;
+
+        memcpy (counter_snapshot[1], counter_snapshot[0], n * sizeof (counter_snapshot[0][0]));
+        memcpy (counter_snapshot[0], shared_counters, n * sizeof (counter_snapshot[0][0]));
+        gettimeofday (&this_time, NULL);
+        
+        for (i = 0; i < n; i++)
+        {
+                long long this_count = counter_snapshot[0][i] - counter_snapshot[1][i];
+                
+                if (this_count != 0)
+                {
+                        non_zero++;
+                        total += this_count;
+                }
+        }
+        
+        secs = (this_time.tv_sec + this_time.tv_usec/1000000.0) -
+               (prev_time.tv_sec + prev_time.tv_usec/1000000.0);
+        
+        printf ("%d/%d Total: %f/second\n", non_zero, n, total / secs);
+
+        prev_time = this_time;
+}
+
+#define SHMEM_SETUP()	shmem_setup()
+#define SHMEM_RESET()	shmem_reset()
+#define SHMEM_BUMP()	shmem_bump()
+#define SHMEM_SNAP(n)	shmem_snap(n)
+#else
+#define SHMEM_SETUP()
+#define SHMEM_RESET()
+#define SHMEM_BUMP()
+#define SHMEM_SNAP(n)
+#endif
 
 extern command_t cmdlist[];
 
@@ -828,7 +928,7 @@ static int jt__threads(int argc, char **argv)
 {
         int threads, next_thread;
         int verbose;
-        int i, j;
+        int i;
 
         if (argc < 5) {
                 fprintf(stderr,
@@ -841,9 +941,12 @@ static int jt__threads(int argc, char **argv)
 
         verbose = get_verbose(argv[2]);
 
-        printf("%s: starting %d threads on device %s running %s\n",
-               argv[0], threads, argv[3], argv[4]);
+        if (verbose != 0)
+                printf("%s: starting %d threads on device %s running %s\n",
+                       argv[0], threads, argv[3], argv[4]);
 
+        SHMEM_RESET();
+        
         for (i = 1, next_thread = verbose; i <= threads; i++) {
                 rc = fork();
                 if (rc < 0) {
@@ -861,14 +964,23 @@ static int jt__threads(int argc, char **argv)
         }
 
         if (!thread) { /* parent process */
-                if (!verbose)
-                        printf("%s: started %d threads\n\n", argv[0], i - 1);
-                else
-                        printf("\n");
+                int live_threads = threads;
+                
+                while (live_threads > 0)
+                {
+                        int    status;
+                        pid_t  ret;
 
-                for (j = 1; j < i; j++) {
-                        int status;
-                        int ret = wait(&status);
+                        ret = waitpid (0, &status, verbose < 0 ? WNOHANG : 0);
+                        if (ret == 0)
+                        {
+                                if (verbose >= 0)
+                                        abort ();
+
+                                sleep (-verbose);
+                                SHMEM_SNAP (threads);
+                                continue;
+                        }
 
                         if (ret < 0) {
                                 fprintf(stderr, "error: %s: wait - %s\n",
@@ -889,6 +1001,8 @@ static int jt__threads(int argc, char **argv)
                                                 argv[0], ret, err);
                                 if (!rc)
                                         rc = err;
+
+                                live_threads--;
                         }
                 }
         }
@@ -1165,6 +1279,7 @@ static int jt_create(int argc, char **argv)
 
         for (i = 1, next_count = verbose; i <= count ; i++) {
                 rc = ioctl(fd, OBD_IOC_CREATE , &data);
+                SHMEM_BUMP();
                 if (rc < 0) {
                         fprintf(stderr, "error: %s: #%d - %s\n",
                                 cmdname(argv[0]), i, strerror(rc = errno));
@@ -1272,11 +1387,13 @@ static int jt_test_getattr(int argc, char **argv)
         gettimeofday(&start, NULL);
         next_time.tv_sec = start.tv_sec - verbose;
         next_time.tv_usec = start.tv_usec;
-        printf("%s: getting %d attrs (testing only): %s", cmdname(argv[0]),
-               count, ctime(&start.tv_sec));
+        if (verbose != 0)
+                printf("%s: getting %d attrs (testing only): %s", cmdname(argv[0]),
+                       count, ctime(&start.tv_sec));
 
         for (i = 1, next_count = verbose; i <= count; i++) {
                 rc = ioctl(fd, OBD_IOC_GETATTR , &data);
+                SHMEM_BUMP();
                 if (rc < 0) {
                         fprintf(stderr, "error: %s: #%d - %s\n",
                                 cmdname(argv[0]), i, strerror(rc = errno));
@@ -1296,9 +1413,10 @@ static int jt_test_getattr(int argc, char **argv)
                 diff = difftime(&end, &start);
 
                 --i;
-                printf("%s: %d attrs in %.4gs (%.4g attr/s): %s",
-                       cmdname(argv[0]), i, diff, (double)i / diff,
-                       ctime(&end.tv_sec));
+                if (verbose != 0)
+                        printf("%s: %d attrs in %.4gs (%.4g attr/s): %s",
+                               cmdname(argv[0]), i, diff, (double)i / diff,
+                               ctime(&end.tv_sec));
         }
         return rc;
 }
@@ -1366,9 +1484,10 @@ static int jt_test_brw(int argc, char **argv)
         next_time.tv_sec = start.tv_sec - verbose;
         next_time.tv_usec = start.tv_usec;
 
-        printf("%s: %s %d (%dx%d pages) (testing only): %s",
-               cmdname(argv[0]), write ? "writing" : "reading",
-               count, obdos, pages, ctime(&start.tv_sec));
+        if (verbose != 0)
+                printf("%s: %s %d (%dx%d pages) (testing only): %s",
+                       cmdname(argv[0]), write ? "writing" : "reading",
+                       count, obdos, pages, ctime(&start.tv_sec));
 
         /*
          * We will put in the start time (and loop count inside the loop)
@@ -1393,6 +1512,7 @@ static int jt_test_brw(int argc, char **argv)
                 }
 
                 rc = ioctl(fd, rw, &data);
+                SHMEM_BUMP();
                 if (rc) {
                         fprintf(stderr, "error: %s: #%d - %s on %s\n",
                                 cmdname(argv[0]), i, strerror(rc = errno),
@@ -1414,10 +1534,11 @@ static int jt_test_brw(int argc, char **argv)
                 diff = difftime(&end, &start);
 
                 --i;
-                printf("%s: %s %dx%dx%d pages in %.4gs (%.4g pg/s): %s",
-                       cmdname(argv[0]), write ? "wrote" : "read", obdos,
-                       pages, i, diff, (double)obdos * i * pages / diff,
-                       ctime(&end.tv_sec));
+                if (verbose != 0)
+                        printf("%s: %s %dx%dx%d pages in %.4gs (%.4g pg/s): %s",
+                               cmdname(argv[0]), write ? "wrote" : "read", obdos,
+                               pages, i, diff, (double)obdos * i * pages / diff,
+                               ctime(&end.tv_sec));
         }
         return rc;
 }
@@ -1429,6 +1550,9 @@ static int jt_lov_config(int argc, char **argv)
         uuid_t *uuidarray;
         int size, i;
         IOCINIT(data);
+
+        printf("WARNING: obdctl lovconfig NOT MAINTAINED\n"); 
+        return -1;
 
         if (argc <= 5 ){
                 Parser_printhelp("lovconfig"); 
@@ -1443,8 +1567,8 @@ static int jt_lov_config(int argc, char **argv)
             
         memset(&desc, 0, sizeof(desc)); 
         strcpy(desc.ld_uuid, argv[1]); 
-        desc.ld_default_stripecount = strtoul(argv[2], NULL, 0); 
-        desc.ld_default_stripesize = strtoul(argv[3], NULL, 0); 
+        desc.ld_default_stripe_count = strtoul(argv[2], NULL, 0); 
+        desc.ld_default_stripe_size = strtoul(argv[3], NULL, 0); 
         desc.ld_pattern = strtoul(argv[4], NULL, 0); 
         desc.ld_tgt_count = argc - 5;
 
@@ -1590,7 +1714,9 @@ int main(int argc, char **argv)
         sigact.sa_flags = SA_RESTART;
         sigaction(SIGINT, &sigact, NULL);
 
-
+        setlinebuf (stdout);
+        SHMEM_SETUP();
+        
         if (argc > 1) {
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
         } else {

@@ -13,8 +13,86 @@
 
 #include <linux/lustre_dlm.h>
 
-int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
-                     struct lustre_handle *connh, 
+int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
+{
+
+        ENTRY;
+
+        if (flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+                      LDLM_FL_BLOCK_CONV)) {
+                /* Go to sleep until the lock is granted. */
+                /* FIXME: or cancelled. */
+                LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock,"
+                           " sleeping");
+                ldlm_lock_dump(lock);
+                ldlm_reprocess_all(lock->l_resource);
+                wait_event(lock->l_waitq, lock->l_req_mode == lock->l_granted_mode);
+                LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
+        } else if (flags == LDLM_FL_WAIT_NOREPROC) { 
+                wait_event(lock->l_waitq, lock->l_req_mode == lock->l_granted_mode);
+        } else if (flags == 0) { 
+                wake_up(&lock->l_waitq);
+
+        }
+
+        RETURN(0);
+}
+
+
+static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
+                                  struct lustre_handle *parent_lockh,
+                                  __u64 *res_id,
+                                  __u32 type,
+                                  void *cookie, int cookielen,
+                                  ldlm_mode_t mode,
+                                  int *flags,
+                                  ldlm_completion_callback completion,
+                                  ldlm_lock_callback callback,
+                                  void *data,
+                                  __u32 data_len,
+                                  struct lustre_handle *lockh)
+{
+        struct ldlm_lock *lock; 
+        int err; 
+
+        if (ns->ns_client) { 
+                CERROR("Trying to cancel local lock\n"); 
+                LBUG();
+        }
+
+        lock = ldlm_lock_create(ns, parent_lockh, res_id, type, mode, NULL, 0);
+        if (!lock)
+                GOTO(out_nolock, err = -ENOMEM);
+        LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");
+
+        ldlm_lock_addref_internal(lock, mode);
+        ldlm_lock2handle(lock, lockh);
+        lock->l_connh = NULL; 
+
+        err = ldlm_lock_enqueue(lock, cookie, cookielen, flags, completion, callback);
+        if (err != ELDLM_OK)
+                GOTO(out, err);
+
+        if (type == LDLM_EXTENT)
+                memcpy(cookie, &lock->l_extent, sizeof(lock->l_extent));
+        if ((*flags) & LDLM_FL_LOCK_CHANGED)
+                memcpy(res_id, lock->l_resource->lr_name, sizeof(*res_id));
+
+        LDLM_DEBUG_NOLOCK("client-side local enqueue handler END (lock %p)", lock);
+
+        if (lock->l_completion_ast)
+                lock->l_completion_ast(lock, *flags); 
+
+        LDLM_DEBUG(lock, "client-side local enqueue END");
+        EXIT;
+ out:
+        LDLM_LOCK_PUT(lock);
+ out_nolock:
+        return err;
+}
+
+
+int ldlm_cli_enqueue(struct lustre_handle *connh, 
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
                      struct lustre_handle *parent_lock_handle,
@@ -23,16 +101,24 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                      void *cookie, int cookielen,
                      ldlm_mode_t mode,
                      int *flags,
+                     ldlm_completion_callback completion,
                      ldlm_lock_callback callback,
                      void *data,
                      __u32 data_len,
                      struct lustre_handle *lockh)
 {
+        struct ptlrpc_connection *connection;
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
         int rc, size = sizeof(*body), req_passed_in = 1;
         ENTRY;
+
+        if (connh == NULL) 
+                return ldlm_cli_enqueue_local(ns, parent_lock_handle, res_id, 
+                                              type, cookie, cookielen, mode, 
+                                              flags, completion, callback, data, data_len, lockh);
+        connection = client_conn2cli(connh)->cl_conn;
 
         *flags = 0;
         lock = ldlm_lock_create(ns, parent_lock_handle, res_id, type, mode,
@@ -45,8 +131,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         ldlm_lock2handle(lock, lockh);
 
         if (req == NULL) {
-                req = ptlrpc_prep_req2(cl, conn, connh, 
-                                       LDLM_ENQUEUE, 1, &size, NULL);
+                req = ptlrpc_prep_req2(connh, LDLM_ENQUEUE, 1, &size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
                 req_passed_in = 0;
@@ -72,21 +157,9 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 size = sizeof(*reply);
                 req->rq_replen = lustre_msg_size(1, &size);
         }
-
-        lock->l_connection = ptlrpc_connection_addref(conn);
-        lock->l_client = cl;
-
-        /* I apologize in advance for what I am about to do.
-         *
-         * The MDS needs to send lock requests to itself, but it doesn't want to
-         * go through the whole hassle of setting up proper connections.  Soon,
-         * these will just be function calls, but until I have the time, just
-         * set this connection to level FULL so that they go through.
-         *
-         * Since the MDS is the only user of PLAIN locks right now, we can use
-         * that to distinguish.  Sorry. */
-        if (type == LDLM_PLAIN)
-                conn->c_level = LUSTRE_CONN_FULL;
+        lock->l_connh = connh; 
+        lock->l_connection = ptlrpc_connection_addref(connection);
+        lock->l_client = client_conn2cli(connh)->cl_client;
 
         rc = ptlrpc_queue_wait(req);
         /* FIXME: status check here? */
@@ -135,21 +208,11 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         if (!req_passed_in)
                 ptlrpc_free_req(req);
 
-        rc = ldlm_lock_enqueue(lock, cookie, cookielen, flags, callback,
+        rc = ldlm_lock_enqueue(lock, cookie, cookielen, flags, completion,
                                callback);
+        if (lock->l_completion_ast)
+                lock->l_completion_ast(lock, *flags); 
 
-        if (*flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                      LDLM_FL_BLOCK_CONV)) {
-                /* Go to sleep until the lock is granted. */
-                /* FIXME: or cancelled. */
-                LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock,"
-                           " sleeping");
-                ldlm_lock_dump(lock);
-#warning ldlm needs to time out
-                wait_event(lock->l_waitq,
-                           lock->l_req_mode == lock->l_granted_mode);
-                LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
-        }
         LDLM_DEBUG(lock, "client-side enqueue END");
         EXIT;
  out:
@@ -158,9 +221,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         return rc;
 }
 
-int ldlm_match_or_enqueue(struct ptlrpc_client *cl,
-                          struct ptlrpc_connection *conn,
-                          struct lustre_handle *connh, 
+int ldlm_match_or_enqueue(struct lustre_handle *connh, 
                           struct ptlrpc_request *req,
                           struct ldlm_namespace *ns,
                           struct lustre_handle *parent_lock_handle,
@@ -169,6 +230,7 @@ int ldlm_match_or_enqueue(struct ptlrpc_client *cl,
                           void *cookie, int cookielen,
                           ldlm_mode_t mode,
                           int *flags,
+                          ldlm_completion_callback completion,
                           ldlm_lock_callback callback,
                           void *data,
                           __u32 data_len,
@@ -178,9 +240,9 @@ int ldlm_match_or_enqueue(struct ptlrpc_client *cl,
         ENTRY;
         rc = ldlm_lock_match(ns, res_id, type, cookie, cookielen, mode, lockh);
         if (rc == 0) {
-                rc = ldlm_cli_enqueue(cl, conn, connh, req, ns,
+                rc = ldlm_cli_enqueue(connh, req, ns,
                                       parent_lock_handle, res_id, type, cookie,
-                                      cookielen, mode, flags, callback, data,
+                                      cookielen, mode, flags, completion, callback, data,
                                       data_len, lockh);
                 if (rc != ELDLM_OK)
                         CERROR("ldlm_cli_enqueue: err: %d\n", rc);
@@ -237,11 +299,29 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
         return rc;
 }
 
-int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
-                     struct lustre_handle *connh, 
-                     int new_mode, int *flags)
+
+
+static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode, int *flags)
+{
+
+        if (lock->l_resource->lr_namespace->ns_client) { 
+                CERROR("Trying to cancel local lock\n"); 
+                LBUG();
+        }
+        LDLM_DEBUG(lock, "client-side local convert");
+
+        ldlm_lock_convert(lock, new_mode, flags); 
+        ldlm_reprocess_all(lock->l_resource);
+
+        LDLM_DEBUG(lock, "client-side local convert handler END");
+        LDLM_LOCK_PUT(lock);
+        RETURN(0);
+}
+
+int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
 {
         struct ldlm_request *body;
+        struct lustre_handle *connh;
         struct ldlm_reply *reply;
         struct ldlm_lock *lock;
         struct ldlm_resource *res;
@@ -255,11 +335,14 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
                 RETURN(-EINVAL);
         }
         *flags = 0;
+        connh = lock->l_connh; 
+
+        if (!connh)
+                return ldlm_cli_convert_local(lock, new_mode, flags);
 
         LDLM_DEBUG(lock, "client-side convert");
 
-        req = ptlrpc_prep_req(cl, lock->l_connection,
-                               LDLM_CONVERT, 1, &size, NULL);
+        req = ptlrpc_prep_req2(connh, LDLM_CONVERT, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -282,15 +365,10 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
         res = ldlm_lock_convert(lock, new_mode, &reply->lock_flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
-        if (lock->l_req_mode != lock->l_granted_mode) {
-                /* Go to sleep until the lock is granted. */
-                /* FIXME: or cancelled. */
-                CDEBUG(D_NET, "convert returned a blocked lock, "
-                       "going to sleep.\n");
-                wait_event(lock->l_waitq,
-                           lock->l_req_mode == lock->l_granted_mode);
-                CDEBUG(D_NET, "waking up, the lock must be granted.\n");
-        }
+        /* Go to sleep until the lock is granted. */
+        /* FIXME: or cancelled. */
+        if (lock->l_completion_ast)
+                lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC); 
         EXIT;
  out:
         LDLM_LOCK_PUT(lock);
@@ -303,7 +381,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         struct ptlrpc_request *req;
         struct ldlm_lock *lock;
         struct ldlm_request *body;
-        int rc, size = sizeof(*body);
+        int rc = 0, size = sizeof(*body);
         ENTRY;
 
         lock = ldlm_handle2lock(lockh); 
@@ -317,25 +395,36 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 RETURN(-EINVAL);
         }
 
-        LDLM_DEBUG(lock, "client-side cancel");
-        req = ptlrpc_prep_req(lock->l_client, lock->l_connection,
-                              LDLM_CANCEL, 1, &size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
+        if (lock->l_connh) { 
+                LDLM_DEBUG(lock, "client-side cancel");
+                req = ptlrpc_prep_req2(lock->l_connh, LDLM_CANCEL, 1, &size, NULL);
+                if (!req)
+                        GOTO(out, rc = -ENOMEM);
+                
+                body = lustre_msg_buf(req->rq_reqmsg, 0);
+                memcpy(&body->lock_handle1, &lock->l_remote_handle,
+                       sizeof(body->lock_handle1));
+                
+                req->rq_replen = lustre_msg_size(0, NULL);
+                
+                rc = ptlrpc_queue_wait(req);
+                rc = ptlrpc_check_status(req, rc);
+                ptlrpc_free_req(req);
+                if (rc != ELDLM_OK)
+                        GOTO(out, rc);
+                
+                ldlm_lock_cancel(lock);
+        } else { 
+                LDLM_DEBUG(lock, "client-side local cancel");
+                if (lock->l_resource->lr_namespace->ns_client) { 
+                        CERROR("Trying to cancel local lock\n"); 
+                        LBUG();
+                }
+                ldlm_lock_cancel(lock); 
+                ldlm_reprocess_all(lock->l_resource); 
+                LDLM_DEBUG(lock, "client-side local cancel handler END");
+        }
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0);
-        memcpy(&body->lock_handle1, &lock->l_remote_handle,
-               sizeof(body->lock_handle1));
-
-        req->rq_replen = lustre_msg_size(0, NULL);
-
-        rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
-        ptlrpc_free_req(req);
-        if (rc != ELDLM_OK)
-                GOTO(out, rc);
-
-        ldlm_lock_cancel(lock);
         EXIT;
  out:
         LDLM_LOCK_PUT(lock);

@@ -113,7 +113,7 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
                 md->lmd_magic = cpu_to_le32(XATTR_MDS_MO_MAGIC);
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, md, 
-                                    md->lmd_size, XATTR_CREATE);
+                                    md->lmd_easize, XATTR_CREATE);
         }
         up(&inode->i_sem);
         unlock_kernel();
@@ -127,7 +127,7 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
 static int mds_extN_get_md(struct inode *inode, struct lov_stripe_md *md)
 {
         int rc;
-        int size = md->lmd_size;
+        int size = md->lmd_easize;
 
         lock_kernel();
         down(&inode->i_sem);

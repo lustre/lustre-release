@@ -30,15 +30,15 @@
 void lov_packdesc(struct lov_desc *ld)
 {
         ld->ld_tgt_count = HTON__u32(ld->ld_tgt_count); 
-        ld->ld_default_stripecount = HTON__u32(ld->ld_default_stripecount); 
-        ld->ld_default_stripesize = HTON__u32(ld->ld_default_stripesize); 
+        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count); 
+        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size); 
         ld->ld_pattern = HTON__u32(ld->ld_pattern); 
 }
 
 void lov_unpackdesc(struct lov_desc *ld)
 {
         ld->ld_tgt_count = NTOH__u32(ld->ld_tgt_count); 
-        ld->ld_default_stripecount = HTON__u32(ld->ld_default_stripecount); 
-        ld->ld_default_stripesize = HTON__u32(ld->ld_default_stripesize); 
+        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count); 
+        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size); 
         ld->ld_pattern = HTON__u32(ld->ld_pattern); 
 }

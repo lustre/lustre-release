@@ -58,27 +58,28 @@ struct filter_obd {
 struct mds_client_info;
 struct mds_server_data;
 
-struct mdc_obd {
-        struct ptlrpc_client *mdc_client;
-        struct ptlrpc_client *mdc_ldlm_client;
-        struct ptlrpc_connection *mdc_conn;
-        int mdc_max_mdsize;
-        __u8 mdc_target_uuid[37];
+struct client_obd {
+        struct ptlrpc_client *cl_client;
+        struct ptlrpc_client *cl_ldlm_client;
+        struct ptlrpc_connection *cl_conn;
+        struct lustre_handle cl_exporth;
+        struct semaphore cl_sem;
+        int cl_conn_count;
+        __u8 cl_target_uuid[37];
+        int cl_max_mdsize;
 };
 
+#if 0
 struct osc_obd {
         struct ptlrpc_client *osc_client;
         struct ptlrpc_client *osc_ldlm_client;
         struct ptlrpc_connection *osc_conn;
         __u8 osc_target_uuid[37];
 };
+#endif
 
 struct mds_obd {
-        struct ldlm_namespace *mds_local_namespace;
         struct ptlrpc_service *mds_service;
-        struct ptlrpc_client *mds_ldlm_client; /* to be an LDLM client */
-        struct ptlrpc_connection *mds_ldlm_conn; /* to be an LDLM client */
-        struct lustre_handle mds_connh; /* to be one's on DLM client */
 
         char *mds_fstype;
         struct super_block *mds_sb;
@@ -195,9 +196,9 @@ struct obd_device {
                 struct ext2_obd ext2;
                 struct filter_obd filter;
                 struct mds_obd mds;
-                struct mdc_obd mdc;
+                struct client_obd cli;
                 struct ost_obd ost;
-                struct osc_obd osc;
+                //                struct osc_obd osc;
                 struct ldlm_obd ldlm;
                 struct echo_obd echo;
                 struct recovd_obd recovd;
@@ -233,8 +234,10 @@ struct obd_ops {
                         struct lov_stripe_md **ea);
         int (*o_destroy)(struct lustre_handle *conn, struct obdo *oa,
                          struct lov_stripe_md *ea);
-        int (*o_setattr)(struct lustre_handle *conn, struct obdo *oa);
-        int (*o_getattr)(struct lustre_handle *conn, struct obdo *oa);
+        int (*o_setattr)(struct lustre_handle *conn, struct obdo *oa,
+                         struct lov_stripe_md *ea);
+        int (*o_getattr)(struct lustre_handle *conn, struct obdo *oa,
+                         struct lov_stripe_md *ea);
         int (*o_open)(struct lustre_handle *conn, struct obdo *oa,
                       struct lov_stripe_md *);
         int (*o_close)(struct lustre_handle *conn, struct obdo *oa,

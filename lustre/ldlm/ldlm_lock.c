@@ -35,13 +35,50 @@ char *ldlm_typename[] = {
         [LDLM_MDSINTENT] "INT"
 };
 
+char *ldlm_it2str(int it)
+{
+        switch (it) { 
+        case IT_OPEN:
+                return "open";
+        case IT_CREAT:
+                return "creat";
+        case (IT_OPEN|IT_CREAT):
+                return "open|creat";
+        case IT_MKDIR:
+                return "mkdir";
+        case IT_LINK:
+               return "link";
+        case IT_SYMLINK:
+                return "symlink";
+        case IT_UNLINK:
+                return "unlink";
+        case IT_RMDIR:
+               return "rmdir";
+        case IT_RENAME:
+                return "rename";
+        case IT_RENAME2:
+                return "rename2";
+        case IT_READDIR:
+                return "readdir";
+        case IT_GETATTR:
+                return "getattr";
+        case IT_SETATTR:
+                return "setattr";
+        case IT_READLINK:
+                return "readlink";
+        case IT_MKNOD:
+                return "mknod";
+        case IT_LOOKUP:
+                return "lookup";
+        default:
+                CERROR("Unknown intent %d\n", it); 
+                return "UNKNOWN";
+        }
+}
+
 extern kmem_cache_t *ldlm_lock_slab;
-int (*mds_reint_p)(int offset, struct ptlrpc_request *req) = NULL;
-int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req) = NULL;
 
 static int ldlm_plain_compat(struct ldlm_lock *a, struct ldlm_lock *b);
-static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
-                              ldlm_mode_t mode, void *data);
 
 ldlm_res_compat ldlm_res_compat_table [] = {
         [LDLM_PLAIN] ldlm_plain_compat,
@@ -52,9 +89,19 @@ ldlm_res_compat ldlm_res_compat_table [] = {
 ldlm_res_policy ldlm_res_policy_table [] = {
         [LDLM_PLAIN] NULL,
         [LDLM_EXTENT] ldlm_extent_policy,
-        [LDLM_MDSINTENT] ldlm_intent_policy
+        [LDLM_MDSINTENT] NULL
 };
 
+void ldlm_register_intent(int (*arg)(struct ldlm_lock *lock, void *req_cookie,
+                              ldlm_mode_t mode, void *data))
+{
+        ldlm_res_policy_table[LDLM_MDSINTENT] = arg;
+}
+
+void ldlm_unregister_intent()
+{
+        ldlm_res_policy_table[LDLM_MDSINTENT] = NULL;
+}
 
 /*
  * REFCOUNTED LOCK OBJECTS
@@ -251,143 +298,6 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
 
 
 
-static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
-                              ldlm_mode_t mode, void *data)
-{
-        struct ptlrpc_request *req = req_cookie;
-        int rc = 0;
-        ENTRY;
-
-        if (!req_cookie)
-                RETURN(0);
-
-        if (req->rq_reqmsg->bufcount > 1) {
-                /* an intent needs to be considered */
-                struct ldlm_intent *it = lustre_msg_buf(req->rq_reqmsg, 1);
-                struct mds_obd *mds= &req->rq_export->exp_obd->u.mds;
-                struct mds_body *mds_rep;
-                struct ldlm_reply *rep;
-                __u64 new_resid[3] = {0, 0, 0}, old_res;
-                int bufcount = -1, rc, size[3] = {sizeof(struct ldlm_reply),
-                                                  sizeof(struct mds_body),
-                                                  mds->mds_max_mdsize};
-
-                it->opc = NTOH__u64(it->opc);
-
-                LDLM_DEBUG(lock, "intent policy, opc: %Ld", it->opc);
-
-                /* prepare reply */
-                switch(it->opc) {
-                case IT_GETATTR:
-                        /* Note that in the negative case you may be returning
-                         * a file and its obdo */
-                case IT_CREAT:
-                case IT_CREAT|IT_OPEN:
-                case IT_LINK:
-                case IT_LOOKUP:
-                case IT_MKDIR:
-                case IT_MKNOD:
-                case IT_OPEN:
-                case IT_READLINK:
-                case IT_RENAME:
-                case IT_RMDIR:
-                case IT_SETATTR:
-                case IT_SYMLINK:
-                case IT_UNLINK:
-                        bufcount = 3;
-                        break;
-                case IT_RENAME2:
-                        bufcount = 1;
-                        break;
-                default:
-                        LBUG();
-                }
-
-                rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
-                                     &req->rq_repmsg);
-                if (rc) {
-                        rc = req->rq_status = -ENOMEM;
-                        RETURN(rc);
-                }
-
-                rep = lustre_msg_buf(req->rq_repmsg, 0);
-                rep->lock_policy_res1 = 1;
-
-                /* execute policy */
-                switch (it->opc) {
-                case IT_CREAT:
-                case IT_CREAT|IT_OPEN:
-                case IT_LINK:
-                case IT_MKDIR:
-                case IT_MKNOD:
-                case IT_RENAME2:
-                case IT_RMDIR:
-                case IT_SYMLINK:
-                case IT_UNLINK:
-                        rc = mds_reint_p(2, req);
-                        if (rc || req->rq_status != 0) {
-                                rep->lock_policy_res2 = req->rq_status;
-                                RETURN(ELDLM_LOCK_ABORTED);
-                        }
-                        break;
-                case IT_GETATTR:
-                case IT_LOOKUP:
-                case IT_OPEN:
-                case IT_READDIR:
-                case IT_READLINK:
-                case IT_RENAME:
-                case IT_SETATTR:
-                        rc = mds_getattr_name_p(2, req);
-                        /* FIXME: we need to sit down and decide on who should
-                         * set req->rq_status, who should return negative and
-                         * positive return values, and what they all mean. */
-                        if (rc || req->rq_status != 0) {
-                                rep->lock_policy_res2 = req->rq_status;
-                                RETURN(ELDLM_LOCK_ABORTED);
-                        }
-                        break;
-                case IT_READDIR|IT_OPEN:
-                        LBUG();
-                        break;
-                default:
-                        CERROR("Unhandled intent\n");
-                        LBUG();
-                }
-
-                if (it->opc == IT_UNLINK || it->opc == IT_RMDIR ||
-                    it->opc == IT_RENAME || it->opc == IT_RENAME2)
-                        RETURN(ELDLM_LOCK_ABORTED);
-
-                rep->lock_policy_res2 = req->rq_status;
-                mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
-                new_resid[0] = NTOH__u32(mds_rep->ino);
-                if (new_resid[0] == 0)
-                        LBUG();
-                old_res = lock->l_resource->lr_name[0];
-
-                CDEBUG(D_INFO, "remote intent: locking %d instead of"
-                       "%ld\n", mds_rep->ino, (long)old_res);
-
-                ldlm_lock_change_resource(lock, new_resid);
-                if (lock->l_resource == NULL) {
-                        LBUG();
-                        RETURN(-ENOMEM);
-                }
-                LDLM_DEBUG(lock, "intent policy, old res %ld",
-                           (long)old_res);
-                RETURN(ELDLM_LOCK_CHANGED);
-        } else {
-                int size = sizeof(struct ldlm_reply);
-                rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen,
-                                     &req->rq_repmsg);
-                if (rc) {
-                        CERROR("out of memory\n");
-                        LBUG();
-                        RETURN(-ENOMEM);
-                }
-        }
-        RETURN(rc);
-}
 
 static int ldlm_plain_compat(struct ldlm_lock *a, struct ldlm_lock *b)
 {
@@ -572,6 +482,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock)
         EXIT;
 }
 
+/* returns a referenced lock or NULL */ 
 static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                                       struct ldlm_extent *extent)
 {
@@ -604,7 +515,8 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
 /* Must be called with no resource or lock locks held.
  *
  * Returns 1 if it finds an already-existing lock that is compatible; in this
- * case, lockh is filled in with a addref()ed lock */
+ * case, lockh is filled in with a addref()ed lock 
+*/
 int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
                     void *cookie, int cookielen, ldlm_mode_t mode,
                     struct lustre_handle *lockh)
@@ -635,8 +547,8 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
 
         if (lock) {
                 ldlm_lock2handle(lock, lockh);
-                wait_event(lock->l_waitq,
-                           lock->l_req_mode == lock->l_granted_mode);
+                if (lock->l_completion_ast)
+                        lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC); 
         }
         if (rc)
                 LDLM_DEBUG(lock, "matched");
@@ -681,7 +593,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock,
                                void *cookie, int cookie_len,
                                int *flags,
-                               ldlm_lock_callback completion,
+                               ldlm_completion_callback completion,
                                ldlm_lock_callback blocking)
 {
         struct ldlm_resource *res;
@@ -799,8 +711,7 @@ void ldlm_run_ast_work(struct list_head *rpc_list)
                         rc = w->w_lock->l_blocking_ast
                                 (&lockh, &w->w_desc, w->w_data, w->w_datalen);
                 else
-                        rc = w->w_lock->l_completion_ast
-                                (&lockh, NULL, w->w_data, w->w_datalen);
+                        rc = w->w_lock->l_completion_ast(w->w_lock, w->w_flags);
                 if (rc)
                         CERROR("Failed AST - should clean & disconnect "
                                "client\n");
@@ -885,7 +796,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         res->lr_tmp = NULL;
                         granted = 1;
                         /* FIXME: completion handling not with ns_lock held ! */
-                        wake_up(&lock->l_waitq);
+                        if (lock->l_completion_ast)
+                                lock->l_completion_ast(lock, 0); 
                 }
         } else
                 list_add(&lock->l_res_link, res->lr_converting.prev);

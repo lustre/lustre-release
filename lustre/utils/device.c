@@ -501,7 +501,7 @@ int jt_dev_lov_config(int argc, char **argv)
         int rc, size, i;
 
         IOCINIT(data);
-        if (argc <= 5)
+        if (argc <= 6)
                 return CMD_HELP;
 
         if (strlen(argv[1]) > sizeof(uuid_t) - 1) { 
@@ -512,10 +512,11 @@ int jt_dev_lov_config(int argc, char **argv)
             
         memset(&desc, 0, sizeof(desc)); 
         strcpy(desc.ld_uuid, argv[1]); 
-        desc.ld_default_stripecount = strtoul(argv[2], NULL, 0); 
-        desc.ld_default_stripesize = strtoul(argv[3], NULL, 0); 
-        desc.ld_pattern = strtoul(argv[4], NULL, 0); 
-        desc.ld_tgt_count = argc - 5;
+        desc.ld_default_stripe_count = strtoul(argv[2], NULL, 0); 
+        desc.ld_default_stripe_size = (__u64) strtoul(argv[3], NULL, 0); 
+        desc.ld_default_stripe_offset = (__u64) strtoul(argv[3], NULL, 0); 
+        desc.ld_pattern = strtoul(argv[5], NULL, 0); 
+        desc.ld_tgt_count = argc - 6;
 
 
         size = sizeof(uuid_t) * desc.ld_tgt_count;
@@ -526,8 +527,8 @@ int jt_dev_lov_config(int argc, char **argv)
                 return -ENOMEM;
         }
         memset(uuidarray, 0, size); 
-        for (i=5 ; i < argc ; i++) { 
-                char *buf = (char *) (uuidarray + i -5 );
+        for (i=6 ; i < argc ; i++) { 
+                char *buf = (char *) (uuidarray + i -6 );
                 if (strlen(argv[i]) >= sizeof(uuid_t)) { 
                         fprintf(stderr, "lov_config: arg %d (%s) too long\n",  
                                 i, argv[i]);

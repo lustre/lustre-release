@@ -196,12 +196,15 @@ struct lov_object_id { /* per-child structure */
         __u64 l_object_id;
 };
 
+#define LOV_MAGIC  0x0BD00BD0
+
 struct lov_stripe_md {
-        __u64 lmd_magic;
-        __u64 lmd_object_id;     /* lov object id */
-        __u64 lmd_stripe_count;
-        __u32 lmd_size;
-        __u32 lmd_stripe_size;
+        __u32 lmd_magic;
+        __u32 lmd_easize;          /* packed size of extended */
+        __u64 lmd_object_id;       /* lov object id */
+        __u64 lmd_stripe_offset;   /* offset of the stripe */ 
+        __u64 lmd_stripe_size;     /* size of the stripe */
+        __u32 lmd_stripe_count;    /* how many objects are being striped */
         __u32 lmd_stripe_pattern;  /* per-lov object stripe pattern */
         struct lov_object_id lmd_objects[0];
 };
@@ -400,25 +403,26 @@ struct mds_rec_rename {
  *  LOV data structures
  */
 
-#define LOV_RAID0  0
+#define LOV_RAID0   0
+#define LOV_RAIDRR  1
+
 struct lov_desc { 
-        __u32 ld_tgt_count; /* how many OBD's */
-        __u32 ld_default_stripecount;
-        __u32 ld_default_stripesize;   /* in bytes */
-        __u32 ld_pattern; /* RAID 0,1 etc */
+        __u32 ld_tgt_count;                /* how many OBD's */
+        __u32 ld_default_stripe_count;     /* how many objects are used */
+        __u64 ld_default_stripe_size;      /* in bytes */
+        __u64 ld_default_stripe_offset;    /* in bytes */
+        __u32 ld_pattern;                  /* RAID 0,1 etc */
          uuid_t ld_uuid;
 }; 
 
 /*
  *   LDLM requests:
  */
-
-/* opcodes */
-#define LDLM_REPLY         0
-#define LDLM_ENQUEUE       1
-#define LDLM_CONVERT       2
-#define LDLM_CANCEL        3
-#define LDLM_CALLBACK      4
+/* opcodes -- MUST be distinct from OST/MDS opcodes */
+#define LDLM_ENQUEUE       101
+#define LDLM_CONVERT       102
+#define LDLM_CANCEL        103
+#define LDLM_CALLBACK      104
 
 #define RES_NAME_SIZE 3
 #define RES_VERSION_SIZE 4

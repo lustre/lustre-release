@@ -398,7 +398,7 @@ setup_ost() {
 	$OBDCTL <<- EOF || return $?
 	newdev
 	attach ost OSTDEV OSTUUID
-	setup \$OBDDEV
+	setup OBDUUID
 	quit
 	EOF
 }
@@ -482,8 +482,8 @@ setup_mount() {
 		fi
 
 		[ ! -d $MTPT ] && mkdir $MTPT
-		echo mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
-		mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
+		echo mount -t lustre_lite -o osc=${THEOSC}-UUID,mdc=${THEMDC}-UUID none $MTPT
+                mount -t lustre_lite -o osc=${THEOSC}-UUID,mdc=${THEMDC}-UUID none $MTPT
 	    done
 	done
 }

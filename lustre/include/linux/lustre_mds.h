@@ -126,12 +126,12 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 
 /* mds/handler.c */
-struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
+struct dentry *mds_name2locked_dentry(struct obd_device *obd, struct dentry *dir,
                                       struct vfsmount **mnt, char *name,
                                       int namelen, int lock_mode,
                                       struct lustre_handle *lockh,
                                       int dir_lock_mode);
-struct dentry *mds_fid2locked_dentry(struct mds_obd *mds, struct ll_fid *fid,
+struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh);
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,

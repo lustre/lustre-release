@@ -138,6 +138,7 @@ static int handle_incoming_request(struct obd_device *obddev,
 
         /* FIXME: If we move to an event-driven model, we should put the request
          * on the stack of mds_handle instead. */
+        LASSERT ((event->mem_desc.options & PTL_MD_IOV) == 0);
         start = event->mem_desc.start;
 
         memset(&request, 0, sizeof(request));
@@ -198,6 +199,8 @@ void ptlrpc_rotate_reqbufs(struct ptlrpc_service *service,
                             ptl_event_t *ev)
 {
         int index;
+
+        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0);
 
         for (index = 0; index < service->srv_ring_length; index++)
                 if (service->srv_buf[index] == ev->mem_desc.start)

@@ -71,7 +71,7 @@ static int ost_getattr(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_getattr(conn, &repbody->oa);
+        req->rq_status = obd_getattr(conn, &repbody->oa, NULL);
         RETURN(0);
 }
 
@@ -192,7 +192,7 @@ static int ost_setattr(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_setattr(conn, &repbody->oa);
+        req->rq_status = obd_setattr(conn, &repbody->oa, NULL);
         RETURN(0);
 }
 
@@ -297,6 +297,8 @@ static int ost_brw_write(struct ptlrpc_request *req)
         void *tmp1, *tmp2, *end2;
         void *desc_priv = NULL;
         int reply_sent = 0;
+        struct ptlrpc_service *srv;
+        __u32 xid;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -343,17 +345,19 @@ static int ost_brw_write(struct ptlrpc_request *req)
         desc->b_desc_private = desc_priv;
         memcpy(&(desc->b_conn), &conn, sizeof(conn));
 
+        srv = req->rq_obd->u.ost.ost_service;
+        spin_lock(&srv->srv_lock);
+        xid = srv->srv_xid++;                   /* single xid for all pages */
+        spin_unlock(&srv->srv_lock);
+
         for (i = 0, lnb = local_nb; i < niocount; i++, lnb++) {
-                struct ptlrpc_service *srv = req->rq_obd->u.ost.ost_service;
                 struct ptlrpc_bulk_page *bulk;
 
                 bulk = ptlrpc_prep_bulk_page(desc);
                 if (bulk == NULL)
                         GOTO(fail_bulk, rc = -ENOMEM);
 
-                spin_lock(&srv->srv_lock);
-                bulk->b_xid = srv->srv_xid++;
-                spin_unlock(&srv->srv_lock);
+                bulk->b_xid = xid;              /* single xid for all pages */
 
                 bulk->b_buf = lnb->addr;
                 bulk->b_page = lnb->page;
@@ -489,6 +493,36 @@ static int ost_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OST_STATFS_NET, 0);
                 rc = ost_statfs(req);
                 break;
+        case LDLM_ENQUEUE:
+                CDEBUG(D_INODE, "enqueue\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
+                rc = ldlm_handle_enqueue(req);
+                if (rc)
+                        break;
+                RETURN(0);
+        case LDLM_CONVERT:
+                CDEBUG(D_INODE, "convert\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
+                rc = ldlm_handle_convert(req);
+                if (rc)
+                        break;
+                RETURN(0);
+        case LDLM_CANCEL:
+                CDEBUG(D_INODE, "cancel\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
+                rc = ldlm_handle_cancel(req);
+                if (rc)
+                        break;
+                RETURN(0);
+        case LDLM_CALLBACK:
+                CDEBUG(D_INODE, "callback\n");
+                CERROR("callbacks should not happen on MDS\n");
+                LBUG();
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
+                break;
+
+
+
         default:
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req->rq_svc, req);
@@ -526,12 +560,18 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
         int i;
         ENTRY;
 
-        if (data->ioc_dev < 0 || data->ioc_dev > MAX_OBD_DEVICES)
-                RETURN(-ENODEV);
+        if (data->ioc_inllen1 < 1) {
+                CERROR("requires a TARGET OBD UUID\n");
+                RETURN(-EINVAL);
+        }
+        if (data->ioc_inllen1 > 37) {
+                CERROR("OBD UUID must be less than 38 characters\n");
+                RETURN(-EINVAL);
+        }
 
         MOD_INC_USE_COUNT;
-        tgt = &obd_dev[data->ioc_dev];
-        if (!(tgt->obd_flags & OBD_ATTACHED) ||
+        tgt = class_uuid2obd(data->ioc_inlbuf1);
+        if (!tgt || !(tgt->obd_flags & OBD_ATTACHED) ||
             !(tgt->obd_flags & OBD_SET_UP)) {
                 CERROR("device not attached or not set up (%d)\n",
                        data->ioc_dev);
@@ -552,8 +592,9 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
         }
 
         for (i = 0; i < OST_NUM_THREADS; i++) {
-                err = ptlrpc_start_thread(obddev, ost->ost_service,
-                                          "lustre_ost");
+                char name[32];
+                sprintf(name, "lustre_ost_%2d", i);
+                err = ptlrpc_start_thread(obddev, ost->ost_service, name);
                 if (err) {
                         CERROR("error starting thread #%d: rc %d\n", i, err);
                         GOTO(error_disc, err = -EINVAL);

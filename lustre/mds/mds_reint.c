@@ -101,6 +101,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                              struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *de;
         void *handle;
         struct lustre_handle child_lockh;
@@ -113,7 +114,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 int namelen;
 
                 /* a name was supplied by the client; fid1 is the directory */
-                dir = mds_fid2locked_dentry(mds, rec->ur_fid1, NULL, LCK_PR,
+                dir = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_PR,
                                             &dir_lockh);
                 if (!dir || IS_ERR(dir)) {
                         l_dput(dir);
@@ -123,7 +124,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
                 name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
                 namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
-                de = mds_name2locked_dentry(mds, dir, NULL, name, namelen,
+                de = mds_name2locked_dentry(obd, dir, NULL, name, namelen,
                                             0, &child_lockh, LCK_PR);
                 l_dput(dir);
                 if (!de || IS_ERR(de)) {
@@ -222,6 +223,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 {
         struct dentry *de = NULL;
         struct mds_obd *mds = mds_req2mds(req);
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *dchild = NULL;
         struct inode *dir;
         void *handle;
@@ -249,15 +251,13 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = dir->i_ino;
 
-        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+        rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &lockh);
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                      (struct lustre_handle *)&mds->mds_connh,
-                                      NULL, mds->mds_local_namespace, NULL,
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, (void *)mds_lock_callback, NULL,
+                                      &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
                                       0, &lockh);
                 if (rc != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", rc);
@@ -289,7 +289,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 /* If i_file_acl is set, this inode has an EA */
                 if (S_ISREG(inode->i_mode) && inode->u.ext3_i.i_file_acl) {
                         md = lustre_msg_buf(req->rq_repmsg, offset + 1);
-                        md->lmd_size = mds->mds_max_mdsize;
+                        md->lmd_easize = mds->mds_max_mdsize;
                         mds_fs_get_md(mds, inode, md);
                 }
                 /* now a normal case for intent locking */
@@ -435,6 +435,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct dentry *de = NULL;
         struct dentry *dchild = NULL;
         struct mds_obd *mds = mds_req2mds(req);
+        struct obd_device *obd = req->rq_export->exp_obd;
         char *name;
         int namelen;
         struct inode *dir, *inode;
@@ -447,7 +448,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         /* a name was supplied by the client; fid1 is the directory */
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
-        de = mds_fid2locked_dentry(mds, rec->ur_fid1, NULL, lock_mode,
+        de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, lock_mode,
                                     &lockh);
         if (IS_ERR(de)) {
                 LBUG();
@@ -457,9 +458,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
-
-        dchild = mds_name2locked_dentry(mds, de, NULL, name, namelen,
-                                        LCK_EX, &child_lockh, lock_mode);
+        dchild = mds_name2locked_dentry(obd, de, NULL, name, namelen,
+                                    LCK_EX, &child_lockh, lock_mode);
 
         if (IS_ERR(dchild) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
                 LBUG();
@@ -498,7 +498,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         if (rc < 0) { 
                                 CDEBUG(D_INFO, "No md for ino %ld err %d\n",
                                        inode->i_ino, rc);
-                                memset(md, 0, md->lmd_size); 
+                                memset(md, 0, md->lmd_easize); 
                         }
                 }
         default:
@@ -608,6 +608,7 @@ out_link:
 static int mds_reint_rename(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *de_srcdir = NULL;
         struct dentry *de_tgtdir = NULL;
         struct dentry *de_old = NULL;
@@ -626,15 +627,13 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = de_srcdir->d_inode->i_ino;
 
-        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+        rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                                    NULL, 0, lock_mode, &srclockh);
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                      (struct lustre_handle *)&mds->mds_connh,
-                                      NULL, mds->mds_local_namespace, NULL,
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, (void *)mds_lock_callback, NULL,
+                                      &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
                                       0, &srclockh);
                 if (rc != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", rc);
@@ -650,15 +649,13 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = de_tgtdir->d_inode->i_ino;
 
-        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+        rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                                    NULL, 0, lock_mode, &tgtlockh);
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                      (struct lustre_handle *)&mds->mds_connh,
-                                      NULL, mds->mds_local_namespace, NULL,
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, (void *)mds_lock_callback, NULL,
+                                      &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
                                       0, &tgtlockh);
                 if (rc != ELDLM_OK) {
                         CERROR("lock enqueue: err: %d\n", rc);
@@ -714,12 +711,10 @@ out_rename_deold:
                  * about to free, to force everyone to drop their
                  * locks. */
                 LDLM_DEBUG_NOLOCK("getting EX lock res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                      (struct lustre_handle *)&mds->mds_connh,
-                                      NULL, mds->mds_local_namespace, NULL, 
+                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL, 
                                       res_id,
                                       LDLM_PLAIN, NULL, 0, LCK_EX, &flags,
-                                      (void *)mds_lock_callback, NULL, 0, 
+                                      ldlm_completion_ast, (void *)mds_lock_callback, NULL, 0, 
                                       &oldhandle);
                 if (rc) 
                         CERROR("failed to get child inode lock (child ino %Ld, "

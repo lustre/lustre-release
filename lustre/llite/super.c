@@ -64,8 +64,8 @@ static void ll_options(char *options, char **ost, char **mds)
              this_char != NULL;
              this_char = strtok (NULL, ",")) {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
-                if ( (!*ost && (*ost = ll_read_opt("ost", this_char)))||
-                     (!*mds && (*mds = ll_read_opt("mds", this_char))) )
+                if ( (!*ost && (*ost = ll_read_opt("osc", this_char)))||
+                     (!*mds && (*mds = ll_read_opt("mdc", this_char))) )
                         continue;
         }
         EXIT;
@@ -81,8 +81,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
         struct inode *root = 0;
         struct obd_device *obd;
         struct ll_sb_info *sbi;
-        char *ost = NULL;
-        char *mds = NULL;
+        char *osc = NULL;
+        char *mdc = NULL;
         int err;
         struct ll_fid rootfid;
         struct statfs sfs;
@@ -102,47 +102,47 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         sb->u.generic_sbp = sbi;
 
-        ll_options(data, &ost, &mds);
+        ll_options(data, &osc, &mdc);
 
-        if (!ost) {
-                CERROR("no ost\n");
+        if (!osc) {
+                CERROR("no osc\n");
                 GOTO(out_free, sb = NULL);
         }
 
-        if (!mds) {
-                CERROR("no mds\n");
+        if (!mdc) {
+                CERROR("no mdc\n");
                 GOTO(out_free, sb = NULL);
         }
 
-        obd = class_uuid2obd(mds); 
+        obd = class_uuid2obd(mdc); 
         if (!obd) {
-                CERROR("MDS %s: not setup or attached\n", mds);
+                CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, sb = NULL);
         }
 
 #if 0
-        err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
+        err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mdc_conn);
         if (err) {
-                CERROR("cannot connect to MDS: rc = %d\n", err);
+                CERROR("cannot connect to MDC: rc = %d\n", err);
                 GOTO(out_rpc, sb = NULL);
         }
 #endif 
 
         err = obd_connect(&sbi->ll_mdc_conn, obd);
         if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", mds, err);
+                CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, sb = NULL);
         }
-        sbi2mdc(sbi)->mdc_conn->c_level = LUSTRE_CONN_FULL;
+        sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_FULL;
 
-        obd = class_uuid2obd(ost);
+        obd = class_uuid2obd(osc);
         if (!obd) {
-                CERROR("OST %s: not setup or attached\n", ost);
+                CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, sb = NULL);
         }
         err = obd_connect(&sbi->ll_osc_conn, obd);
         if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", ost, err);
+                CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, sb = NULL);
         }
 
@@ -150,7 +150,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
                             &last_rcvd, &last_xid, &request);
         if (err) {
-                CERROR("cannot mds_connect: rc = %d\n", err);
+                CERROR("cannot mdc_connect: rc = %d\n", err);
                 GOTO(out_request, sb = NULL);
         }
         CDEBUG(D_SUPER, "rootfid %Ld\n", (unsigned long long)rootfid.id);
@@ -199,10 +199,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
         ptlrpc_free_req(request);
 
 out_dev:
-        if (mds)
-                OBD_FREE(mds, strlen(mds) + 1);
-        if (ost)
-                OBD_FREE(ost, strlen(ost) + 1);
+        if (mdc)
+                OBD_FREE(mdc, strlen(mdc) + 1);
+        if (osc)
+                OBD_FREE(osc, strlen(osc) + 1);
 
         RETURN(sb);
 
@@ -240,7 +240,7 @@ static void ll_clear_inode(struct inode *inode)
                 struct lov_stripe_md *md = lli->lli_smd;
 
                 if (md) {
-                        OBD_FREE(md, md->lmd_size); 
+                        OBD_FREE(md, md->lmd_easize); 
                         lli->lli_smd = NULL;
                 }
                 if (lli->lli_symlink_name) {
@@ -262,7 +262,7 @@ static void ll_delete_inode(struct inode *inode)
                         GOTO(out, -EINVAL);
 
                 oa.o_id = md->lmd_object_id;
-                oa.o_easize = md->lmd_size;
+                oa.o_easize = md->lmd_easize;
                 if (oa.o_id == 0) {
                         CERROR("This really happens\n");
                         /* No obdo was ever created */
@@ -382,8 +382,8 @@ out:
 
 inline int ll_stripe_md_size(struct super_block *sb)
 {
-        struct mdc_obd *mdc = sbi2mdc(ll_s2sbi(sb));
-        return mdc->mdc_max_mdsize;
+        struct client_obd *mdc = sbi2mdc(ll_s2sbi(sb));
+        return mdc->cl_max_mdsize;
 }
 
 static void ll_to_inode(struct inode *dst, struct ll_inode_md *md)
@@ -419,7 +419,7 @@ static void ll_to_inode(struct inode *dst, struct ll_inode_md *md)
         if (md && md->md && md->md->lmd_stripe_count) { 
                 struct lov_stripe_md *smd = md->md;
                 int size = ll_stripe_md_size(dst->i_sb);
-                if (md->md->lmd_size != size) { 
+                if (md->md->lmd_easize != size) { 
                         CERROR("Striping metadata size error %ld\n",
                                dst->i_ino); 
                         LBUG();

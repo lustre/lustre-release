@@ -26,127 +26,17 @@
 #include <linux/obd_lov.h>
 #include <linux/init.h>
 
-static void osc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
-                       struct ptlrpc_connection **connection,
-                       struct lustre_handle **rconn)
-{
-        struct obd_export *export = class_conn2export(conn);
-        struct osc_obd *osc = &export->exp_obd->u.osc;
 
-        *cl = osc->osc_client;
-        *connection = osc->osc_conn;
-        *rconn = &export->exp_rconnh;
-}
 
-static void osc_con2dlmcl(struct lustre_handle *conn, struct ptlrpc_client **cl,
-                          struct ptlrpc_connection **connection,
-                          struct lustre_handle **rconn)
-{
-        struct obd_export *export = class_conn2export(conn);
-        struct osc_obd *osc = &export->exp_obd->u.osc;
-
-        *cl = osc->osc_ldlm_client;
-        *connection = osc->osc_conn;
-        *rconn = &export->exp_rconnh;
-}
-
-static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
-{
-        struct osc_obd *osc = &obd->u.osc;
-        //struct obd_import *import;
-        struct ptlrpc_request *request;
-        char *tmp = osc->osc_target_uuid;
-        int rc, size = sizeof(osc->osc_target_uuid);
-        ENTRY;
-
-        /* not used yet
-        OBD_ALLOC(import, sizeof(*import));
-        if (!import)
-                RETURN(-ENOMEM);
-         */
-
-        MOD_INC_USE_COUNT;
-        rc = class_connect(conn, obd);
-        if (rc)
-                RETURN(rc);
-
-        request = ptlrpc_prep_req(osc->osc_client, osc->osc_conn,
-                                  OST_CONNECT, 1, &size, &tmp);
-        if (!request)
-                GOTO(out_disco, rc = -ENOMEM);
-
-        request->rq_level = LUSTRE_CONN_NEW;
-        request->rq_replen = lustre_msg_size(0, NULL);
-        request->rq_reqmsg->addr = -1;
-        /* Sending our local connection info breaks for local connections
-        request->rq_reqmsg->addr = conn->addr;
-        request->rq_reqmsg->cookie = conn->cookie;
-         */
-
-        rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
-        if (rc) {
-                CERROR("%s failed: rc = %d\n", __FUNCTION__, rc);
-                GOTO(out, rc);
-        }
-
-        /* XXX eventually maybe more refinement */
-        osc->osc_conn->c_level = LUSTRE_CONN_FULL;
-
-        class_rconn2export(conn, (struct lustre_handle *)request->rq_repmsg);
-
-        EXIT;
- out:
-        ptlrpc_free_req(request);
- out_disco:
-        if (rc) {
-                class_disconnect(conn);
-                MOD_DEC_USE_COUNT;
-        }
-        return rc;
-}
-
-static int osc_disconnect(struct lustre_handle *conn)
+static int osc_getattr(struct lustre_handle *conn, struct obdo *oa, 
+                       struct lov_stripe_md *md)
 {
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
-        int rc;
-        ENTRY;
-
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_DISCONNECT, 0, NULL, NULL);
-        if (!request)
-                RETURN(-ENOMEM);
-        request->rq_replen = lustre_msg_size(0, NULL);
-
-        rc = ptlrpc_queue_wait(request);
-        if (rc)
-                GOTO(out, rc);
-        rc = class_disconnect(conn);
-        if (!rc)
-                MOD_DEC_USE_COUNT;
-
- out:
-        ptlrpc_free_req(request);
-        return rc;
-}
-
-static int osc_getattr(struct lustre_handle *conn, struct obdo *oa)
-{
-        struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_GETATTR, 1, &size, NULL);
+        request = ptlrpc_prep_req2(conn, OST_GETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -178,16 +68,11 @@ static int osc_open(struct lustre_handle *conn, struct obdo *oa,
                     struct lov_stripe_md *md)
 {
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_OPEN, 1, &size, NULL);
+        request = ptlrpc_prep_req2(conn, OST_OPEN, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -217,16 +102,11 @@ static int osc_close(struct lustre_handle *conn, struct obdo *oa,
                      struct lov_stripe_md *md)
 {
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_CLOSE, 1, &size, NULL);
+        request = ptlrpc_prep_req2(conn, OST_CLOSE, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -254,19 +134,15 @@ static int osc_close(struct lustre_handle *conn, struct obdo *oa,
         return rc;
 }
 
-static int osc_setattr(struct lustre_handle *conn, struct obdo *oa)
+static int osc_setattr(struct lustre_handle *conn, struct obdo *oa,
+                       struct lov_stripe_md *md)
 {
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                  OST_SETATTR, 1, &size, NULL);
+        request = ptlrpc_prep_req2(conn, OST_SETATTR, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -288,9 +164,6 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
                       struct lov_stripe_md **ea)
 {
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -308,12 +181,10 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
                 OBD_ALLOC(*ea, oa->o_easize);
                 if (!*ea)
                         RETURN(-ENOMEM);
-                (*ea)->lmd_size = oa->o_easize;
+                (*ea)->lmd_easize = oa->o_easize;
         }
 
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                  OST_CREATE, 1, &size, NULL);
+        request = ptlrpc_prep_req2(conn, OST_CREATE, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -339,13 +210,10 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
 }
 
 static int osc_punch(struct lustre_handle *conn, struct obdo *oa,
-                     struct lov_stripe_md *md, obd_size count,
-                     obd_off offset)
+                     struct lov_stripe_md *md, obd_size start,
+                     obd_size end)
 {
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -354,16 +222,18 @@ static int osc_punch(struct lustre_handle *conn, struct obdo *oa,
                 CERROR("oa NULL\n");
                 RETURN(-EINVAL);
         }
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_PUNCH, 1, &size, NULL);
+
+        request = ptlrpc_prep_req2(conn, OST_PUNCH, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->oa.o_blocks = count;
-        body->oa.o_valid |= OBD_MD_FLBLOCKS;
+
+        /* overload the blocks and size fields in the oa with start/end */ 
+        body->oa.o_blocks = start;
+        body->oa.o_size = end;
+        body->oa.o_valid |= OBD_MD_FLBLOCKS | OBD_MD_FLSIZE;
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -385,9 +255,6 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *ea)
 {
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ost_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -396,9 +263,7 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
                 CERROR("oa NULL\n");
                 RETURN(-EINVAL);
         }
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_DESTROY, 1, &size, NULL);
+        request = ptlrpc_prep_req2(conn, OST_DESTROY, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -476,9 +341,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
                         obd_size *count, obd_off *offset, obd_flag *flags,
                         brw_callback_t callback, void *data)
 {
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
+        struct ptlrpc_connection *connection = client_conn2cli(conn)->cl_conn;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ost_body *body;
@@ -486,14 +349,13 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
         int rc, size[3] = {sizeof(*body)};
         void *iooptr, *nioptr;
         int mapped = 0;
+        __u32 xid;
         ENTRY;
 
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(struct niobuf_remote);
 
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_READ, 3, size, NULL);
+        request = ptlrpc_prep_req2(conn, OST_READ, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -517,14 +379,16 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
         ost_pack_ioo(&iooptr, md, page_count);
         /* end almost identical to brw_write case */
 
+        spin_lock(&connection->c_lock);
+        xid = ++connection->c_xid_out;       /* single xid for all pages */
+        spin_unlock(&connection->c_lock);
+
         for (mapped = 0; mapped < page_count; mapped++) {
                 struct ptlrpc_bulk_page *bulk = ptlrpc_prep_bulk_page(desc);
                 if (bulk == NULL)
                         GOTO(out_unmap, rc = -ENOMEM);
 
-                spin_lock(&connection->c_lock);
-                bulk->b_xid = ++connection->c_xid_out;
-                spin_unlock(&connection->c_lock);
+                bulk->b_xid = xid;           /* single xid for all pages */
 
                 bulk->b_buf = kmap(page_array[mapped]);
                 bulk->b_page = page_array[mapped];
@@ -603,9 +467,7 @@ static int osc_brw_write(struct lustre_handle *conn,
                          obd_off *offset, obd_flag *flags,
                          brw_callback_t callback, void *data)
 {
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
+        struct ptlrpc_connection *connection = client_conn2cli(conn)->cl_conn;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ost_body *body;
@@ -620,9 +482,7 @@ static int osc_brw_write(struct lustre_handle *conn,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*remote);
 
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_WRITE, 3, size, NULL);
+        request = ptlrpc_prep_req2(conn, OST_WRITE, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -754,16 +614,13 @@ static int osc_brw(int cmd, struct lustre_handle *conn,
                                     offset, flags, callback, data);
 }
 
-static int osc_enqueue(struct lustre_handle *conn,
+static int osc_enqueue(struct lustre_handle *connh,
                        struct lustre_handle *parent_lock, __u64 *res_id,
                        __u32 type, void *extentp, int extent_len, __u32 mode,
                        int *flags, void *callback, void *data, int datalen,
                        struct lustre_handle *lockh)
 {
-        struct obd_device *obddev = class_conn2obd(conn);
-        struct ptlrpc_connection *connection;
-        struct ptlrpc_client *cl;
-        struct lustre_handle *rconn;
+        struct obd_device *obddev = class_conn2obd(connh);
         struct ldlm_extent *extent = extentp;
         int rc;
         __u32 mode2;
@@ -774,7 +631,7 @@ static int osc_enqueue(struct lustre_handle *conn,
         extent->end = (extent->end + PAGE_SIZE - 1) & PAGE_MASK;
 
         /* Next, search for already existing extent locks that will cover us */
-        osc_con2dlmcl(conn, &cl, &connection, &rconn);
+        //osc_con2dlmcl(conn, &cl, &connection, &rconn);
         rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
                              sizeof(extent), mode, lockh);
         if (rc == 1) {
@@ -804,16 +661,16 @@ static int osc_enqueue(struct lustre_handle *conn,
                 if (mode == LCK_PR)
                         return 0;
 
-                rc = ldlm_cli_convert(cl, lockh, rconn, mode, &flags);
+                rc = ldlm_cli_convert(lockh, mode, &flags);
                 if (rc)
                         LBUG();
 
                 return rc;
         }
 
-        rc = ldlm_cli_enqueue(cl, connection, rconn, NULL,obddev->obd_namespace,
+        rc = ldlm_cli_enqueue(connh, NULL,obddev->obd_namespace,
                               parent_lock, res_id, type, extent, sizeof(extent),
-                              mode, flags, callback, data, datalen, lockh);
+                              mode, flags, ldlm_completion_ast, callback, data, datalen, lockh);
         return rc;
 }
 
@@ -827,103 +684,14 @@ static int osc_cancel(struct lustre_handle *oconn, __u32 mode,
         RETURN(0);
 }
 
-static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
-{
-        struct obd_ioctl_data* data = buf;
-        struct osc_obd *osc = &obddev->u.osc;
-        char server_uuid[37];
-        int rc;
-        ENTRY;
-
-        if (data->ioc_inllen1 < 1) {
-                CERROR("osc setup requires a TARGET UUID\n");
-                RETURN(-EINVAL);
-        }
-
-        if (data->ioc_inllen1 > 37) {
-                CERROR("osc TARGET UUID must be less than 38 characters\n");
-                RETURN(-EINVAL);
-        }
-
-        if (data->ioc_inllen2 < 1) {
-                CERROR("osc setup requires a SERVER UUID\n");
-                RETURN(-EINVAL);
-        }
-
-        if (data->ioc_inllen2 > 37) {
-                CERROR("osc SERVER UUID must be less than 38 characters\n");
-                RETURN(-EINVAL);
-        }
-
-        memcpy(osc->osc_target_uuid, data->ioc_inlbuf1, data->ioc_inllen1);
-        memcpy(server_uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
-                                                   sizeof(server_uuid)));
-
-        osc->osc_conn = ptlrpc_uuid_to_connection(server_uuid);
-        if (!osc->osc_conn)
-                RETURN(-ENOENT);
-
-        obddev->obd_namespace =
-                ldlm_namespace_new("osc", LDLM_NAMESPACE_CLIENT);
-        if (obddev->obd_namespace == NULL)
-                GOTO(out_conn, rc = -ENOMEM);
-
-        OBD_ALLOC(osc->osc_client, sizeof(*osc->osc_client));
-        if (osc->osc_client == NULL)
-                GOTO(out_ns, rc = -ENOMEM);
-
-        OBD_ALLOC(osc->osc_ldlm_client, sizeof(*osc->osc_ldlm_client));
-        if (osc->osc_ldlm_client == NULL)
-                GOTO(out_client, rc = -ENOMEM);
-
-        ptlrpc_init_client(NULL, NULL, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
-                           osc->osc_client);
-        ptlrpc_init_client(NULL, NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           osc->osc_ldlm_client);
-        osc->osc_client->cli_name = "osc";
-        osc->osc_ldlm_client->cli_name = "ldlm";
-
-        MOD_INC_USE_COUNT;
-        RETURN(0);
-
- out_client:
-        OBD_FREE(osc->osc_client, sizeof(*osc->osc_client));
- out_ns:
-        ldlm_namespace_free(obddev->obd_namespace);
- out_conn:
-        ptlrpc_put_connection(osc->osc_conn);
-        return rc;
-}
-
-static int osc_cleanup(struct obd_device * obddev)
-{
-        struct osc_obd *osc = &obddev->u.osc;
-
-        ldlm_namespace_free(obddev->obd_namespace);
-
-        ptlrpc_cleanup_client(osc->osc_client);
-        OBD_FREE(osc->osc_client, sizeof(*osc->osc_client));
-        ptlrpc_cleanup_client(osc->osc_ldlm_client);
-        OBD_FREE(osc->osc_ldlm_client, sizeof(*osc->osc_ldlm_client));
-        ptlrpc_put_connection(osc->osc_conn);
-
-        MOD_DEC_USE_COUNT;
-        return 0;
-}
-
 static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs)
 {
         struct ptlrpc_request *request;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct obd_statfs *osfs;
         int rc, size = sizeof(*osfs);
         ENTRY;
 
-        osc_con2cl(conn, &cl, &connection, &rconn);
-        request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_STATFS, 0, NULL, NULL);
+        request = ptlrpc_prep_req2(conn, OST_STATFS, 0, NULL, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -946,8 +714,8 @@ static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs)
 }
 
 struct obd_ops osc_obd_ops = {
-        o_setup:        osc_setup,
-        o_cleanup:      osc_cleanup,
+        o_setup:        client_obd_setup,
+        o_cleanup:      client_obd_cleanup,
         o_statfs:       osc_statfs,
         o_create:       osc_create,
         o_destroy:      osc_destroy,
@@ -955,8 +723,8 @@ struct obd_ops osc_obd_ops = {
         o_setattr:      osc_setattr,
         o_open:         osc_open,
         o_close:        osc_close,
-        o_connect:      osc_connect,
-        o_disconnect:   osc_disconnect,
+        o_connect:      client_obd_connect,
+        o_disconnect:   client_obd_disconnect,
         o_brw:          osc_brw,
         o_punch:        osc_punch,
         o_enqueue:      osc_enqueue,

@@ -17,7 +17,7 @@ noinst_DATA = ext2_10000.gz ext2_25000.gz ext3_10000.gz lov.xml
 noinst_SCRIPTS = fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 	lldlm.sh llecho.sh llext3.sh llmodules.sh llmount-client.sh \
 	llmount-server.sh llmount.sh llmountcleanup.sh llrext3.sh \
-	llrmount.sh llsimple.sh mdcreq.sh mdcreqcleanup.sh \
+	llrmount.sh llsimple.sh  mdcreq.sh mdcreqcleanup.sh \
 	ostreq.sh runfailure-client-mds-recover.sh runfailure-mds \
 	runfailure-net runfailure-ost runiozone runregression-net.sh \
 	runtests runvmstat snaprun.sh

@@ -23,6 +23,7 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_ha.h>
 
@@ -94,10 +95,11 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
         OBD_ALLOC(desc, sizeof(*desc));
         if (desc != NULL) {
                 desc->b_connection = ptlrpc_connection_addref(conn);
-                atomic_set(&desc->b_pages_remaining, 0);
                 atomic_set(&desc->b_refcount, 1);
                 init_waitqueue_head(&desc->b_waitq);
                 INIT_LIST_HEAD(&desc->b_page_list);
+                ptl_set_inv_handle(&desc->b_md_h);
+                ptl_set_inv_handle(&desc->b_me_h);
         }
 
         return desc;
@@ -110,11 +112,8 @@ struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc)
         OBD_ALLOC(bulk, sizeof(*bulk));
         if (bulk != NULL) {
                 bulk->b_desc = desc;
-                ptl_set_inv_handle(&bulk->b_md_h);
-                ptl_set_inv_handle(&bulk->b_me_h);
                 list_add_tail(&bulk->b_link, &desc->b_page_list);
                 desc->b_page_count++;
-                atomic_inc(&desc->b_pages_remaining);
         }
         return bulk;
 }
@@ -198,15 +197,25 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 
         RETURN(request);
 }
-struct ptlrpc_request *ptlrpc_prep_req2(struct ptlrpc_client *cl,
-                                        struct ptlrpc_connection *conn,
-                                        struct lustre_handle *handle, 
+struct ptlrpc_request *ptlrpc_prep_req2(struct lustre_handle *conn, 
                                        int opcode, int count, int *lengths,
                                        char **bufs)
 {
+        struct client_obd *clobd; 
         struct ptlrpc_request *req;
-        req = ptlrpc_prep_req(cl, conn, opcode, count, lengths, bufs);
-        ptlrpc_hdl2req(req, handle);
+        struct obd_export *export;
+
+        export = class_conn2export(conn);
+        if (!export) { 
+                LBUG();
+                CERROR("NOT connected\n"); 
+                return NULL;
+        }
+
+        clobd = &export->exp_obd->u.cli;
+        req = ptlrpc_prep_req(clobd->cl_client, clobd->cl_conn, 
+                              opcode, count, lengths, bufs);
+        ptlrpc_hdl2req(req, &clobd->cl_exporth);
         return req;
 }
 

@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.18 2002/07/26 16:54:55 rread Exp $";
-#define OBDECHO_VERSION "$Revision: 1.18 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.19 2002/07/31 20:49:37 braam Exp $";
+#define OBDECHO_VERSION "$Revision: 1.19 $"
 
 #define EXPORT_SYMTAB
 
@@ -23,6 +23,7 @@ static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.18 2002/07/26 16:5
 #include <linux/locks.h>
 #include <linux/ext2_fs.h>
 #include <linux/quotaops.h>
+#include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <asm/unistd.h>
 
@@ -36,6 +37,60 @@ extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 static struct obdo OA;
 static obd_count GEN;
 static long echo_pages = 0;
+
+static atomic_t echo_page_rws;
+static atomic_t echo_getattrs;
+
+#define ECHO_PROC_STAT "sys/obdecho"
+
+int
+echo_proc_read (char *page, char **start, off_t off, int count, int *eof, void *data)
+{
+	int                len;
+        int                attrs = atomic_read (&echo_getattrs);
+        int                pages = atomic_read (&echo_page_rws);
+	
+	*eof = 1;
+	if (off != 0)
+		return (0);
+	
+	len = sprintf (page, "%d %d\n", pages, attrs);
+	
+	*start = page;
+	return (len);
+}
+
+int
+echo_proc_write (struct file *file, const char *ubuffer, unsigned long count, void *data)
+{
+	/* Ignore what we've been asked to write, and just zero the stats counters */
+        atomic_set (&echo_page_rws, 0);
+        atomic_set (&echo_getattrs, 0);
+        
+	return (count);
+}
+
+void
+echo_proc_init(void)
+{
+        struct proc_dir_entry *entry = create_proc_entry (ECHO_PROC_STAT, S_IFREG | S_IRUGO | S_IWUSR, NULL);
+
+        if (entry == NULL) 
+	{
+                CERROR("couldn't create proc entry %s\n", ECHO_PROC_STAT);
+                return;
+        }
+
+        entry->data = NULL;
+        entry->read_proc = echo_proc_read;
+	entry->write_proc = echo_proc_write;
+}
+
+void 
+echo_proc_fini(void)
+{
+        remove_proc_entry(ECHO_PROC_STAT, 0);
+}
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
@@ -61,10 +116,13 @@ static int echo_disconnect(struct lustre_handle *conn)
         return rc;
 }
 
-static int echo_getattr(struct lustre_handle *conn, struct obdo *oa)
+static int echo_getattr(struct lustre_handle *conn, struct obdo *oa, 
+                        struct lov_stripe_md *md)
 {
         memcpy(oa, &OA, sizeof(*oa));
         oa->o_mode = ++GEN;
+
+        atomic_inc (&echo_getattrs);
 
         return 0;
 }
@@ -160,6 +218,8 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
+                        atomic_inc (&echo_page_rws);
+                        
                         kunmap(page);
                         __free_pages(page, 0);
                         echo_pages--;
@@ -193,11 +253,15 @@ static int __init obdecho_init(void)
 {
         printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION " info@clusterfs.com\n");
 
+        echo_proc_init();
+        
         return class_register_type(&echo_obd_ops, OBD_ECHO_DEVICENAME);
 }
 
 static void __exit obdecho_exit(void)
 {
+        echo_proc_fini ();
+        
         CERROR("%ld prep/commitrw pages leaked\n", echo_pages);
         class_unregister_type(OBD_ECHO_DEVICENAME);
 }

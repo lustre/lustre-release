@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -vx
 
 SRCDIR="`dirname $0`/"
 [ -f $SRCDIR/common.sh ] || SRCDIR="/lib/lustre"

@@ -58,7 +58,7 @@ int mdc_setattr(struct lustre_handle *conn,
         ENTRY;
 
         mdc_con2cl(conn, &cl, &connection, &rconn);
-        req = ptlrpc_prep_req2(cl, connection, rconn,
+        req = ptlrpc_prep_req2(conn, 
                                MDS_REINT, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
@@ -83,9 +83,6 @@ int mdc_create(struct lustre_handle *conn,
                struct ptlrpc_request **request)
 {
         struct mds_rec_create *rec;
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ptlrpc_request *req;
         int rc, size[3] = {sizeof(struct mds_rec_create), namelen + 1, 0};
         char *tmp, *bufs[3] = {NULL, NULL, NULL};
@@ -98,7 +95,7 @@ int mdc_create(struct lustre_handle *conn,
                                dir->i_ino, namelen, name); 
                         LBUG();
                 }
-                size[2] = smd->lmd_size;
+                size[2] = smd->lmd_easize;
                 bufs[2] = (char *)smd;
                 bufcount = 3;
         } else if (S_ISLNK(mode)) {
@@ -106,9 +103,7 @@ int mdc_create(struct lustre_handle *conn,
                 bufcount = 3;
         }
 
-        mdc_con2cl(conn, &cl, &connection, &rconn);
-        req = ptlrpc_prep_req2(cl, connection, rconn,
-                               MDS_REINT, bufcount, size, bufs);
+        req = ptlrpc_prep_req2(conn, MDS_REINT, bufcount, size, bufs);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -119,7 +114,7 @@ int mdc_create(struct lustre_handle *conn,
 
         if (S_ISREG(mode)) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, 2);
-                memcpy(tmp, smd, smd->lmd_size);
+                memcpy(tmp, smd, smd->lmd_easize);
         } else if (S_ISLNK(mode)) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, 2);
                 LOGL0(tgt, tgtlen, tmp);
@@ -149,16 +144,11 @@ int mdc_unlink(struct lustre_handle *conn,
                struct inode *dir, struct inode *child, const char *name,
                int namelen, struct ptlrpc_request **request)
 {
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ptlrpc_request *req;
         int rc, size[2] = {sizeof(struct mds_rec_unlink), namelen + 1};
         ENTRY;
 
-        mdc_con2cl(conn, &cl, &connection, &rconn);
-        req = ptlrpc_prep_req2(cl, connection, rconn,
-                               MDS_REINT, 2, size, NULL);
+        req = ptlrpc_prep_req2(conn, MDS_REINT, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -179,16 +169,11 @@ int mdc_link(struct lustre_handle *conn,
              struct dentry *src, struct inode *dir, const char *name,
              int namelen, struct ptlrpc_request **request)
 {
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ptlrpc_request *req;
         int rc, size[2] = {sizeof(struct mds_rec_link), namelen + 1};
         ENTRY;
 
-        mdc_con2cl(conn, &cl, &connection, &rconn);
-        req = ptlrpc_prep_req2(cl, connection, rconn,
-                               MDS_REINT, 2, size, NULL);
+        req = ptlrpc_prep_req2(conn, MDS_REINT, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -210,17 +195,12 @@ int mdc_rename(struct lustre_handle *conn,
                int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request)
 {
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ptlrpc_request *req;
         int rc, size[3] = {sizeof(struct mds_rec_rename), oldlen + 1,
                            newlen + 1};
         ENTRY;
 
-        mdc_con2cl(conn, &cl, &connection, &rconn);
-        req = ptlrpc_prep_req2(cl, connection, rconn,
-                               MDS_REINT, 3, size, NULL);
+        req = ptlrpc_prep_req2(conn, MDS_REINT, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 

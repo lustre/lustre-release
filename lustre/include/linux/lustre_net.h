@@ -144,10 +144,6 @@ struct ptlrpc_bulk_page {
         __u32 b_flags;
         struct dentry *b_dentry;
         int (*b_cb)(struct ptlrpc_bulk_page *);
-
-        ptl_md_t b_md;
-        ptl_handle_md_t b_md_h;
-        ptl_handle_me_t b_me_h;
 };
 
 struct ptlrpc_bulk_desc {
@@ -162,10 +158,15 @@ struct ptlrpc_bulk_desc {
         wait_queue_head_t b_waitq;
         struct list_head b_page_list;
         __u32 b_page_count;
-        atomic_t b_pages_remaining;
         atomic_t b_refcount;
         void *b_desc_private;
         struct tq_struct b_queue;
+
+        ptl_md_t b_md;
+        ptl_handle_md_t b_md_h;
+        ptl_handle_me_t b_me_h;
+
+        struct iovec b_iov[16];                 /* self-sized pre-allocated iov */
 };
 
 struct ptlrpc_thread {
@@ -209,9 +210,7 @@ static inline void ptlrpc_hdl2req(struct ptlrpc_request *req, struct lustre_hand
         req->rq_reqmsg->addr = h->addr;
         req->rq_reqmsg->cookie = h->cookie;
 }
-struct ptlrpc_request *ptlrpc_prep_req2(struct ptlrpc_client *cl,
-                                        struct ptlrpc_connection *conn,
-                                        struct lustre_handle *handle,
+struct ptlrpc_request *ptlrpc_prep_req2(struct lustre_handle *conn, 
                                         int opcode, int count, int *lengths,
                                         char **bufs);
 

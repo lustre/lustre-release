@@ -26,8 +26,6 @@ struct ldlm_test_thread {
 static spinlock_t ctl_lock = SPIN_LOCK_UNLOCKED;
 static struct list_head ctl_threads;
 static int regression_running = 0;
-static struct ptlrpc_client ctl_client;
-static struct ptlrpc_connection *ctl_conn;
 
 static int ldlm_test_callback(struct lustre_handle *lockh,
                               struct ldlm_lock_desc *new,
@@ -63,7 +61,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         if (lock1 == NULL)
                 LBUG();
         err = ldlm_lock_enqueue(lock1, NULL, 0, &flags,
-                                ldlm_test_callback, ldlm_test_callback);
+                                ldlm_completion_ast, ldlm_test_callback);
         if (err != ELDLM_OK)
                 LBUG();
 
@@ -71,7 +69,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         if (lock == NULL)
                 LBUG();
         err = ldlm_lock_enqueue(lock, NULL, 0, &flags,
-                                ldlm_test_callback, ldlm_test_callback);
+                                ldlm_completion_ast, ldlm_test_callback);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_BLOCK_GRANTED))
@@ -162,7 +160,6 @@ int ldlm_test_extents(struct obd_device *obddev)
 static int ldlm_test_network(struct obd_device *obddev,
                              struct ptlrpc_connection *conn)
 {
-        struct ldlm_obd *ldlm = &obddev->u.ldlm;
 
         __u64 res_id[RES_NAME_SIZE] = {1, 2, 3};
         struct ldlm_extent ext = {4, 6};
@@ -172,9 +169,8 @@ static int ldlm_test_network(struct obd_device *obddev,
 
         /* FIXME: this needs a connh as 3rd paramter, before it will work */
 
-        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, NULL, NULL,
-                               obddev->obd_namespace, NULL, res_id, LDLM_EXTENT,
-                               &ext, sizeof(ext), LCK_PR, &flags, NULL, NULL, 0,
+        err = ldlm_cli_enqueue(NULL, NULL, obddev->obd_namespace, NULL, res_id, LDLM_EXTENT,
+                               &ext, sizeof(ext), LCK_PR, &flags, NULL, NULL, NULL, 0,
                                &lockh1);
         CERROR("ldlm_cli_enqueue: %d\n", err);
         if (err == ELDLM_OK)
@@ -223,9 +219,9 @@ static int ldlm_test_main(void *data)
                 get_random_bytes(&random, sizeof(random));
                 lock_mode = random % LCK_NL + 1;
 
-                rc = ldlm_cli_enqueue(&ctl_client, ctl_conn, NULL, NULL, ns, NULL,
+                rc = ldlm_cli_enqueue(NULL, NULL, ns, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, ldlm_test_callback, NULL, 0,
+                                      &flags, ldlm_completion_ast, ldlm_test_callback, NULL, 0,
                                       &lockh);
                 if (rc < 0) {
                         CERROR("ldlm_cli_enqueue: %d\n", rc);

@@ -356,7 +356,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         struct obdo oa;
         struct inode *inode;
         struct lov_stripe_md *smd;
-        struct ll_inode_info *ii;
+        struct ll_inode_info *ii = NULL;
 
         if (dentry->d_it->it_disposition == 0) {
                 memset(&oa, 0, sizeof(oa));
@@ -395,7 +395,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         RETURN(rc);
 
 out_destroy:
-        oa.o_easize = ii->lli_smd->lmd_size;
+        oa.o_easize = ii->lli_smd->lmd_easize;
         err = obd_destroy(ll_i2obdconn(dir), &oa, ii->lli_smd);
         if (err)
                 CERROR("error destroying object %Ld in error path: err = %d\n",
