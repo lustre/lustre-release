@@ -125,7 +125,8 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
 }
 
-int ll_process_log_rec(struct llog_rec_hdr *rec, void *data)
+int ll_process_log_rec(struct llog_handle * handle,
+                       struct llog_rec_hdr *rec, void *data)
 {
         struct ll_sb_info * sbi = data;
         int cfg_len = rec->lrh_len;
@@ -199,6 +200,7 @@ int ll_process_log(char *mds, char *config, void  * instance)
         struct obd_uuid uuid = { "MDC_mount_UUID" };
         int rc = 0;
         int err;
+        ENTRY;
 
         lcfg.lcfg_command = LCFG_ATTACH;
         lcfg.lcfg_dev_name = "mdc_dev";
@@ -235,7 +237,8 @@ int ll_process_log(char *mds, char *config, void  * instance)
         }
         
         exp = class_conn2export(&mdc_conn);
-        rc = mdc_llog_process(exp, config, instance, ll_process_log_rec);
+        
+        rc = mdc_llog_process(exp, config, ll_process_log_rec, instance);
         if (rc) {
                 CERROR("mdc_llog_process failed: rc = %d\n", err);
         }
