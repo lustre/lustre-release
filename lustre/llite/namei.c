@@ -326,11 +326,13 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
         request = it->it_data;
         LASSERT(request != NULL);
 
-        /* non-zero it_disposition indicates that the server performed the
-         * intent on our behalf. */
-        LASSERT(it_disposition(it, DISP_IT_EXECD));
+        if (!it_disposition(it, DISP_IT_EXECD)) {
+                /* The server failed before it even started executing the
+                 * intent, i.e. because it couldn't unpack the request. */
+                LASSERT(it->it_status != 0);
+                GOTO(drop_req, rc = it->it_status);
+        }
 
-                
         mds_body = lustre_msg_buf(request->rq_repmsg, 1, sizeof(*mds_body));
         LASSERT(mds_body != NULL);           /* mdc_enqueue checked */
         LASSERT_REPSWABBED(request, 1); /* mdc_enqueue swabbed */
