@@ -123,7 +123,8 @@ extern unsigned int portal_cerror;
 
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
-#ifdef __KERNEL__
+//#ifdef __KERNEL__
+#if 0
 # ifdef  __ia64__
 #  define CDEBUG_STACK (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_dwarf_cfa() &            \
@@ -152,9 +153,8 @@ extern unsigned int portal_cerror;
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
-        if (portal_cerror == 0)                                               \
+        if (likely(portal_debug == 0))                                        \
                 break;                                                        \
-        CHECK_STACK(CDEBUG_STACK);                                            \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||                     \
             (portal_debug & (mask) &&                                         \
              portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
@@ -163,9 +163,26 @@ do {                                                                          \
                                   CDEBUG_STACK, format, ## a);                \
 } while (0)
 
-#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
-#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
-#define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
+#define CWARN(format, a...) \
+do {                                                                          \
+                portals_debug_msg(DEBUG_SUBSYSTEM, D_WARNING,                 \
+                                  __FILE__, __FUNCTION__, __LINE__,           \
+                                  CDEBUG_STACK, format, ## a);                \
+} while (0)
+
+#define CERROR(format, a...)  \
+do {                                                                          \
+                portals_debug_msg(DEBUG_SUBSYSTEM, D_ERROR,                 \
+                                  __FILE__, __FUNCTION__, __LINE__,           \
+                                  CDEBUG_STACK, format, ## a);                \
+} while (0)
+
+#define CEMERG(format, a...) \
+do {                                                                          \
+                portals_debug_msg(DEBUG_SUBSYSTEM, D_EMERG,                 \
+                                  __FILE__, __FUNCTION__, __LINE__,           \
+                                  CDEBUG_STACK, format, ## a);                \
+} while (0)
 
 #define GOTO(label, rc)                                                 \
 do {                                                                    \
@@ -195,7 +212,7 @@ do {                                                                    \
 } while(0)
 #else
 #define CDEBUG(mask, format, a...)      do { } while (0)
-#define CWARN(format, a...)             do { } while (0)
+#define CWARN(format, a...)             printk("<4>" format, ## a)
 #define CERROR(format, a...)            printk("<3>" format, ## a)
 #define CEMERG(format, a...)            printk("<0>" format, ## a)
 #define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
