@@ -92,6 +92,7 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
         request->rq_req_md.user_ptr = request;
 
         rc = PtlMDBind(peer->peer_ni, request->rq_req_md, &md_h);
+        CERROR("MDBind (outgoing req/rep/bulk): %Lu\n", (__u64)md_h);
         if (rc != 0) {
                 CERROR("PtlMDBind failed: %d\n", rc);
                 BUG();
@@ -177,6 +178,7 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
         bulk->b_md.eventq = bulk_sink_eq;
 
         rc = PtlMDAttach(bulk->b_me_h, bulk->b_md, PTL_UNLINK, &bulk->b_md_h);
+        CERROR("MDAttach (bulk sink): %Lu\n", (__u64)bulk->b_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 BUG();
@@ -315,6 +317,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 
         rc = PtlMDAttach(request->rq_reply_me_h, request->rq_reply_md,
                          PTL_UNLINK, &request->rq_reply_md_h);
+        CERROR("MDAttach (send RPC): %Lu\n", (__u64)request->rq_reply_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 BUG();
@@ -387,6 +390,8 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
                 rc = PtlMDAttach(service->srv_me_h[index],
                                  service->srv_md[index],
                                  PTL_RETAIN, &(service->srv_md_h[index]));
+                CERROR("MDAttach (request MDs): %Lu\n",
+                       (__u64)(service->srv_md_h[index]));
 
                 CDEBUG(D_INFO, "Attach MD in ring, rc %d\n", rc);
                 if (rc != PTL_OK) {

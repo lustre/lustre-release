@@ -181,6 +181,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         }
 
         if (sigismember(&(current->pending.signal), SIGKILL) ||
+            sigismember(&(current->pending.signal), SIGTERM) ||
             sigismember(&(current->pending.signal), SIGSTOP) ||
             sigismember(&(current->pending.signal), SIGINT)) { 
                 req->rq_flags = PTL_RPC_INTR;
@@ -231,11 +232,10 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err)
 /* Abort this request and cleanup any resources associated with it. */
 int ptlrpc_abort(struct ptlrpc_request *request)
 {
-        /* First remove the MD for the reply; in theory, this means
+        /* First remove the ME for the reply; in theory, this means
          * that we can tear down the buffer safely. */
         //spin_lock(&request->rq_lock);
         PtlMEUnlink(request->rq_reply_me_h);
-        PtlMDUnlink(request->rq_reply_md_h);
         OBD_FREE(request->rq_repbuf, request->rq_replen);
         request->rq_repbuf = NULL;
         request->rq_replen = 0;
