@@ -23,6 +23,12 @@
 
 
 int lgmnal_small_msg_size = 525312;
+/*
+ *      -1 indicates default value.
+ *      This is 1 thread per cpu
+ *      See start_kernel_threads
+ */
+int num_rx_threads = -1;
 
 ptl_handle_ni_t	lgmnal_ni;
 
@@ -101,7 +107,6 @@ init_module()
 
 	CDEBUG(D_INFO, "Calling PORTAL_SYMBOL_REGISTER\n");
 	PORTAL_SYMBOL_REGISTER(lgmnal_ni);
-
 	CDEBUG(D_INFO, "This is the end of the lgmnal module initialisation routine");
 
 
@@ -111,7 +116,6 @@ init_module()
 
 void cleanup_module()
 {
-	int interface=0;
 
 	CDEBUG(D_INFO, "Interface [%d] Calling shutdown\n", interface);
 	kportal_nal_unregister(LGMNAL);
@@ -125,6 +129,7 @@ void cleanup_module()
 EXPORT_SYMBOL(lgmnal_ni);
 
 MODULE_PARM(lgmnal_small_msg_size, "i");
+MODULE_PARM(num_rx_threads, "i");
 
 MODULE_AUTHOR("Morgan Doyle");
 

@@ -216,7 +216,7 @@ int  lgmnal_cb_map(nal_cb_t *nal_cb, unsigned int niov, struct iovec *iov, void*
 void lgmnal_cb_printf(nal_cb_t *nal_cb, const char *fmt, ...)
 {
 	CDEBUG(D_TRACE, "lgmnal_cb_printf\n");
-	lgmnal_print(fmt);
+	printk(fmt);
 	return;
 }
 

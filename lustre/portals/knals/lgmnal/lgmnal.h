@@ -77,6 +77,7 @@
 #define LGMNAL_LARGE_MESSAGE_FINI	1081
 
 extern  int lgmnal_small_msg_size;
+extern  int num_rx_threads;
 #define LGMNAL_SMALL_MSG_SIZE(a)		a->small_msg_size
 #define LGMNAL_IS_SMALL_MESSAGE(n,a,b,c)	lgmnal_is_small_message(n, a, b, c)
 #define LGMNAL_MAGIC				0x1234abcd
@@ -152,6 +153,7 @@ typedef struct _lgmnal_rxtwe {
  *	There's one of these for each interface that is initialised
  *	There's a maximum of LGMNAL_NUM_IF lgmnal_data_t
  */
+#define NRXTHREADS 10 /* max number of receiver threads */
 
 typedef struct _lgmnal_data_t {
 	int	refcnt;
@@ -172,7 +174,9 @@ typedef struct _lgmnal_data_t {
 	unsigned int	gm_local_nid;	/* our gm local node id */
 	unsigned int	gm_global_nid;	/* our gm global node id */
 	spinlock_t 	gm_lock;	/* GM is not threadsage */
-	long		rxthread_pid;	/* pid of our receiver thread */
+	long		rxthread_pid[NRXTHREADS];	/* pid of our receiver thread */
+	spinlock_t	rxthread_flag_lock;
+	int		rxthread_stop_flag;
 	long		rxthread_flag;	/* stop the receiver thread */
 	long		ctthread_pid;	/* pid of our caretaker thread */
 	int		ctthread_flag;	/* stop the thread flag	*/
@@ -191,11 +195,10 @@ typedef struct _lgmnal_data_t {
 /*
  *	For nal_data->ctthread_flag
  */
-#define LGMNAL_THREAD_START	444	
-#define LGMNAL_THREAD_STARTED	333
-#define LGMNAL_THREAD_CONTINUE	777
+#define LGMNAL_THREAD_RESET	0
 #define LGMNAL_THREAD_STOP	666
-#define LGMNAL_THREAD_STOPPED	555
+#define LGMNAL_CTTHREAD_STARTED	333
+#define LGMNAL_RXTHREADS_STARTED ( (1<<num_rx_threads)-1)
 
 #define LGMNAL_NUM_IF 	1
 
@@ -395,7 +398,6 @@ void 		lgmnal_return_srxd(lgmnal_data_t *, lgmnal_srxd_t *);
 /*
  *	general utility functions
  */
-void 		lgmnal_print(const char *, ...);
 lgmnal_srxd_t	*lgmnal_rxbuffer_to_srxd(lgmnal_data_t *, void*);
 void		lgmnal_stop_rxthread(lgmnal_data_t *);
 void		lgmnal_stop_ctthread(lgmnal_data_t *);

@@ -47,22 +47,16 @@ lgmnal_ct_thread(void *arg)
 	nal_data = (lgmnal_data_t*)arg;
 	CDEBUG(D_TRACE, "CTTHREAD:: This is the lgmnal_ct_thread nal_data is [%p]\n", arg);
 
-	nal_data->ctthread_flag = LGMNAL_THREAD_STARTED;
-	while (nal_data->ctthread_flag == LGMNAL_THREAD_STARTED) {
-		CDEBUG(D_INFO, "CTTHREAD:: lgmnal_ct_thread waiting for LGMNAL_CONTINUE flag\n");
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(1024);
-		
-	}
-
-	CDEBUG(D_INFO, "CTTHREAD:: calling daemonize\n");
 	daemonize();
+
+	nal_data->ctthread_flag = LGMNAL_CTTHREAD_STARTED;
+
 	LGMNAL_GM_LOCK(nal_data);
-	while(nal_data->ctthread_flag == LGMNAL_THREAD_CONTINUE) {
+	while(nal_data->ctthread_flag == LGMNAL_CTTHREAD_STARTED) {
 		CDEBUG(D_NET, "CTTHREAD:: Caretaker thread waiting\n");
 		rxevent = gm_blocking_receive_no_spin(nal_data->gm_port);
 		CDEBUG(D_INFO, "CTTHREAD:: caretaker thread got [%s]\n", lgmnal_rxevent(rxevent));
-		if (nal_data->ctthread_flag != LGMNAL_THREAD_CONTINUE) {
+		if (nal_data->ctthread_flag == LGMNAL_THREAD_STOP) {
 			CDEBUG(D_INFO, "CTTHREAD:: Caretaker thread time to exit\n");
 			break;
 		}
@@ -103,7 +97,7 @@ lgmnal_ct_thread(void *arg)
 		}
 	}
 	LGMNAL_GM_UNLOCK(nal_data);
-	nal_data->ctthread_flag = LGMNAL_THREAD_STOPPED;
+	nal_data->ctthread_flag = LGMNAL_THREAD_RESET;
 	CDEBUG(D_ERROR, "CTTHREAD:: The lgmnal_receive_thread nal_data [%p] is exiting\n", nal_data);
 	return(LGMNAL_STATUS_OK);
 }
@@ -128,17 +122,21 @@ int lgmnal_rx_thread(void *arg)
 	nal_data = (lgmnal_data_t*)arg;
 	CDEBUG(D_TRACE, "RXTHREAD:: This is the lgmnal_rx_thread nal_data is [%p]\n", arg);
 
-	nal_data->rxthread_flag = LGMNAL_THREAD_STARTED;
-	while (nal_data->rxthread_flag == LGMNAL_THREAD_STARTED) {
-		CDEBUG(D_INFO, "RXTHREAD:: lgmnal_rx_thread waiting for LGMNAL_CONTINUE flag\n");
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(1024);
-		
-	}
-
 	CDEBUG(D_INFO, "RXTHREAD:: calling daemonize\n");
 	daemonize();
-	while(nal_data->rxthread_flag == LGMNAL_THREAD_CONTINUE) {
+	/*
+	 * 	set 1 bit for each thread started
+	 *	doesn't matter which bit
+	 */
+	spin_lock(&nal_data->rxthread_flag_lock);
+	if (nal_data->rxthread_flag)
+		nal_data->rxthread_flag=nal_data->rxthread_flag*2 + 1;
+	else
+		nal_data->rxthread_flag = 1;
+	CDEBUG(D_INFO, "rxthread flag is [%ld]\n", nal_data->rxthread_flag);
+	spin_unlock(&nal_data->rxthread_flag_lock);
+
+	while(nal_data->rxthread_stop_flag != LGMNAL_THREAD_STOP) {
 		CDEBUG(D_NET, "RXTHREAD:: Receive thread waiting\n");
 		we = lgmnal_get_rxtwe(nal_data);
 		if (!we) {
@@ -167,7 +165,10 @@ int lgmnal_rx_thread(void *arg)
 		}
 	}
 
-	nal_data->rxthread_flag = LGMNAL_THREAD_STOPPED;
+	spin_lock(&nal_data->rxthread_flag_lock);
+	nal_data->rxthread_flag/=2;
+	CDEBUG(D_INFO, "rxthread flag is [%d]\n", nal_data->rxthread_flag);
+	spin_unlock(&nal_data->rxthread_flag_lock);
 	CDEBUG(D_ERROR, "RXTHREAD:: The lgmnal_receive_thread nal_data [%p] is exiting\n", nal_data);
 	return(LGMNAL_STATUS_OK);
 }

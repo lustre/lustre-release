@@ -25,47 +25,19 @@
 #include "lgmnal.h"
 
 /*
- *	print a console message
- *	the header of each messages specifies
- *	the function, file and line number of the caller
+ *	Am I one of the lgmnal rxthreads ?
  */
-
-/*
- *	TO DO	lgmnal_print find how to determine the caller function
- */
-
-#define DEFAULT_LEN	64
-void lgmnal_print(const char *fmt, ...)
+int
+lgmnal_is_rxthread(lgmnal_data_t *nal_data)
 {
-	va_list	ap;
-	char	*varbuf = NULL, fixedbuf[DEFAULT_LEN];
-	int	len = 0;
-
-
-	va_start(ap, fmt);
-	sprintf(fixedbuf, "LGMNAL::");
-	len = vsnprintf(fixedbuf+8, DEFAULT_LEN-8, fmt, ap);
-	if ((len+8) >= DEFAULT_LEN) {
-		PORTAL_ALLOC(varbuf, len+1+8);
-		if (!varbuf) {
-			printk("lgmnal_cb_printf Failed to malloc\n");
-			printk("Truncated message is\n");
-			printk(fixedbuf);
-			va_end(ap);
-			return;
-		}
-		sprintf(varbuf, "LGMNAL::");
-		len = vsnprintf(varbuf+8, len+1, fmt, ap);
-	} else {
-		varbuf = fixedbuf;
+	int i;
+	for (i=0; i<num_rx_threads; i++) {
+		if (nal_data->rxthread_pid[i] == current->pid)
+			return(1);
 	}
-	va_end(ap);
-	printk(varbuf);
-	if (fixedbuf != varbuf)
-		PORTAL_FREE(varbuf, len+1+8);
-	return;
+	return(0);
 }
-	
+
 
 /*
  *	allocate a number of small tx buffers and register with GM
@@ -216,7 +188,7 @@ lgmnal_get_stxd(lgmnal_data_t *nal_data, int block)
 	CDEBUG(D_TRACE, "lgmnal_get_stxd nal_data [%p] block[%d] pid [%d]\n", 
 						nal_data, block, pid);
 
-        if (pid == nal_data->rxthread_pid) {
+	if (lgmnal_is_rxthread(nal_data)) {
                 CDEBUG(D_INFO, "RXTHREAD Attempting to get token\n");
 		LGMNAL_RXT_TXD_GETTOKEN(nal_data);
 	        LGMNAL_RXT_TXD_LOCK(nal_data);
@@ -486,17 +458,13 @@ lgmnal_rxbuffer_to_srxd(lgmnal_data_t *nal_data, void *rxbuffer)
 void
 lgmnal_stop_rxthread(lgmnal_data_t *nal_data)
 {
-	int 	delay = 15;
+	int 	delay = 30;
 
 
 
 	CDEBUG(D_TRACE, "Attempting to stop rxthread nal_data [%p]\n", nal_data);
 	
-	if (nal_data->ctthread_flag != LGMNAL_THREAD_CONTINUE) {
-		CDEBUG(D_ERROR, "thread flag not correctly set\n");
-	}	
-
-	nal_data->rxthread_flag = LGMNAL_THREAD_STOP;
+	nal_data->rxthread_stop_flag = LGMNAL_THREAD_STOP;
 
 	lgmnal_remove_rxtwe(nal_data);
 	/*
@@ -504,13 +472,13 @@ lgmnal_stop_rxthread(lgmnal_data_t *nal_data)
 	 */
 	up(&nal_data->rxtwe_wait);
 
-	while(nal_data->rxthread_flag == LGMNAL_THREAD_STOP && delay--) {
+	while(nal_data->rxthread_flag != LGMNAL_THREAD_RESET && delay--) {
 		CDEBUG(D_INFO, "lgmnal_stop_rxthread sleeping\n");
                 lgmnal_yield(1);
 		up(&nal_data->rxtwe_wait);
 	}
 
-	if (nal_data->rxthread_flag == LGMNAL_THREAD_STOP) {
+	if (nal_data->rxthread_flag != LGMNAL_THREAD_RESET) {
 		CDEBUG(D_ERROR, "I DON'T KNOW HOW TO WAKE THE THREAD\n");
 	} else {
 		CDEBUG(D_INFO, "RX THREAD SEEMS TO HAVE STOPPED\n");
@@ -526,10 +494,6 @@ lgmnal_stop_ctthread(lgmnal_data_t *nal_data)
 
 	CDEBUG(D_TRACE, "Attempting to stop ctthread nal_data [%p]\n", nal_data);
 	
-	if (nal_data->ctthread_flag != LGMNAL_THREAD_CONTINUE) {
-		CDEBUG(D_ERROR, "thread flag not correctly set\n");
-	}	
-
 	nal_data->ctthread_flag = LGMNAL_THREAD_STOP;
 	LGMNAL_GM_LOCK(nal_data);
 	gm_set_alarm(nal_data->gm_port, &nal_data->ctthread_alarm, 10, NULL, NULL);
@@ -543,7 +507,7 @@ lgmnal_stop_ctthread(lgmnal_data_t *nal_data)
 	if (nal_data->ctthread_flag == LGMNAL_THREAD_STOP) {
 		CDEBUG(D_ERROR, "I DON'T KNOW HOW TO WAKE THE THREAD\n");
 	} else {
-		CDEBUG(D_INFO, "RX THREAD SEEMS TO HAVE STOPPED\n");
+		CDEBUG(D_INFO, "CT THREAD SEEMS TO HAVE STOPPED\n");
 	}
 }
 
@@ -878,7 +842,7 @@ lgmnal_get_rxtwe(lgmnal_data_t *nal_data)
 
 	do  {
 		down(&nal_data->rxtwe_wait);
-		if (nal_data->rxthread_flag == LGMNAL_THREAD_STOP) {
+		if (nal_data->rxthread_stop_flag == LGMNAL_THREAD_STOP) {
 			/*
 			 *	time to stop
 			 * 	TO DO some one free the work entries	
@@ -903,8 +867,90 @@ lgmnal_get_rxtwe(lgmnal_data_t *nal_data)
 }
 
 
+/*
+ *	Start the caretaker thread and a number of receiver threads
+ *	The caretaker thread gets events from the gm library.
+ *	It passes receive events to the receiver threads via a work list.
+ *	It processes other events itself in gm_unknown. These will be
+ *	callback events or sleeps.
+ */
+int
+lgmnal_start_kernel_threads(lgmnal_data_t *nal_data)
+{
+
+	int	threads = 0;
+	/*
+ 	 *	the alarm is used to wake the caretaker thread from 
+	 *	gm_unknown call (sleeping) to exit it.
+	 */
+	CDEBUG(D_NET, "Initializing caretaker thread alarm and flag\n");
+	gm_initialize_alarm(&nal_data->ctthread_alarm);
+	nal_data->ctthread_flag = LGMNAL_THREAD_RESET;
+
+
+	CDEBUG(D_INFO, "Starting caretaker thread\n");
+	nal_data->ctthread_pid = kernel_thread(lgmnal_ct_thread, (void*)nal_data, 0);
+	if (nal_data->ctthread_pid <= 0) {
+		CDEBUG(D_ERROR, "Caretaker thread failed to start\n");
+		return(LGMNAL_STATUS_FAIL);
+	}
+
+	while (nal_data->rxthread_flag != LGMNAL_THREAD_RESET) {
+		lgmnal_yield(1);
+		CDEBUG(D_INFO, "Waiting for caretaker thread signs of life\n");
+	}
+
+	CDEBUG(D_INFO, "caretaker thread has started\n");
+
+
+	/*
+ 	 *	Now start a number of receiver threads
+	 *	these treads get work to do from the caretaker (ct) thread
+	 */
+	nal_data->rxthread_flag = LGMNAL_THREAD_RESET;
+	nal_data->rxthread_stop_flag = LGMNAL_THREAD_RESET;
+
+	for (threads=0; threads<NRXTHREADS; threads++)
+		nal_data->rxthread_pid[threads] = -1;
+	spin_lock_init(&nal_data->rxtwe_lock);
+	spin_lock_init(&nal_data->rxthread_flag_lock);
+	sema_init(&nal_data->rxtwe_wait, 0);
+	nal_data->rxtwe_head = NULL;
+	nal_data->rxtwe_tail = NULL;
+        /*
+         *      If the default number of receive threades isn't
+         *      modified at load time, then start one thread per cpu
+         */
+        if (num_rx_threads == -1)
+                num_rx_threads = smp_num_cpus;
+	CDEBUG(D_INFO, "Starting [%d] receive threads\n", num_rx_threads);
+	for (threads=0; threads<num_rx_threads; threads++) {
+		nal_data->rxthread_pid[threads] = kernel_thread(lgmnal_rx_thread, (void*)nal_data, 0);
+		if (nal_data->rxthread_pid[threads] <= 0) {
+			CDEBUG(D_ERROR, "Receive thread failed to start\n");
+			lgmnal_stop_rxthread(nal_data);
+			lgmnal_stop_ctthread(nal_data);
+			return(LGMNAL_STATUS_FAIL);
+		}
+	}
+
+	for (;;) {
+		spin_lock(&nal_data->rxthread_flag_lock);
+		if (nal_data->rxthread_flag == LGMNAL_RXTHREADS_STARTED) {
+			spin_unlock(&nal_data->rxthread_flag_lock);
+			break;
+		}
+		spin_unlock(&nal_data->rxthread_flag_lock);
+		lgmnal_yield(1);
+		CDEBUG(D_INFO, "Waiting for receive thread signs of life is [%d] e[%d]\n", nal_data->rxthread_flag, LGMNAL_RXTHREADS_STARTED);
+	}
+
+	CDEBUG(D_INFO, "receive threads seem to have started\n");
+
+	return(LGMNAL_STATUS_OK);
+}
+
 EXPORT_SYMBOL(lgmnal_yield);
-EXPORT_SYMBOL(lgmnal_print);
 EXPORT_SYMBOL(lgmnal_alloc_srxd);
 EXPORT_SYMBOL(lgmnal_get_srxd);
 EXPORT_SYMBOL(lgmnal_return_srxd);
