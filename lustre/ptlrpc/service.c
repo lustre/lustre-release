@@ -275,9 +275,8 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
         service->srv_ring_length = RPC_RING_LENGTH;
         service->srv_md_active = 0;
 
-        service->srv_id.addr_kind = PTL_ADDR_GID;
-        service->srv_id.gid = PTL_ID_ANY;
-        service->srv_id.rid = PTL_ID_ANY;
+        service->srv_id.nid = PTL_ID_ANY;
+        service->srv_id.pid = PTL_ID_ANY;
 
         rc = PtlEQAlloc(peer.peer_ni, 128, server_request_callback,
                         service, &(service->srv_eq_h));
@@ -308,12 +307,12 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
                         return -ENOMEM;
                 }
 
-
                 /* Insert additional ME's to the ring */
                 if (i > 0) {
-                        rc = PtlMEInsert(service->srv_me_h[i-1],
+                        rc = PtlMEInsert(service->srv_me_h[i - 1],
                                          service->srv_id, 0, ~0, PTL_RETAIN,
-                                         PTL_INS_AFTER,&(service->srv_me_h[i]));
+                                         PTL_INS_AFTER,
+                                         &(service->srv_me_h[i]));
                         service->srv_me_tail = i;
 
                         if (rc != PTL_OK) {

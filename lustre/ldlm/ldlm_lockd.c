@@ -97,25 +97,25 @@ static int ldlm_handle(struct obd_device *dev, struct ptlrpc_service *svc,
         switch (req->rq_reqhdr->opc) {
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
-                OBD_FAIL_RETURN(req, OBD_FAIL_LDLM_ENQUEUE);
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
                 rc = ldlm_enqueue(req);
                 break;
 #if 0
         case LDLM_CONVERT:
                 CDEBUG(D_INODE, "convert\n");
-                OBD_FAIL_RETURN(req, OBD_FAIL_LDLM_CONVERT);
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
                 rc = ldlm_convert(req);
                 break;
 
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
-                OBD_FAIL_RETURN(req, OBD_FAIL_LDLM_CANCEL);
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
                 rc = ldlm_cancel(req);
                 break;
 
         case LDLM_CALLBACK:
                 CDEBUG(D_INODE, "callback\n");
-                OBD_FAIL_RETURN(req, OBD_FAIL_LDLM_CALLBACK);
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
                 rc = ldlm_callback(req);
                 break;
 #endif

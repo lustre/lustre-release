@@ -40,11 +40,7 @@ static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL;
  */
 static int sent_packet_callback(ptl_event_t *ev, void *data)
 {
-        ptl_event_t junk_ev;
-
         ENTRY;
-
-        PtlEQGet(sent_pkt_eq, &junk_ev);
 
         if (ev->type == PTL_EVENT_SENT) {
                 OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);

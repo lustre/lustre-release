@@ -33,7 +33,7 @@
 #include <linux/lustre_net.h>
 
 extern ptl_handle_eq_t bulk_source_eq, sent_pkt_eq, rcvd_rep_eq, bulk_sink_eq;
-static ptl_process_id_t local_id = {PTL_ADDR_GID, PTL_ID_ANY, PTL_ID_ANY};
+static ptl_process_id_t local_id = {PTL_ID_ANY, PTL_ID_ANY};
 
 
 int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
@@ -99,7 +99,6 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
                 return rc;
         }
 
-        remote_id.addr_kind = PTL_ADDR_NID;
         remote_id.nid = peer->peer_nid;
         remote_id.pid = 0;
 
@@ -136,7 +135,6 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
                 return rc;
         }
 
-        remote_id.addr_kind = PTL_ADDR_NID;
         remote_id.nid = bulk->b_peer.peer_nid;
         remote_id.pid = 0;
 
@@ -291,9 +289,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
                 return -ENOMEM;
         }
 
-        local_id.addr_kind = PTL_ADDR_GID;
-        local_id.gid = PTL_ID_ANY;
-        local_id.rid = PTL_ID_ANY;
+        local_id.nid = PTL_ID_ANY;
+        local_id.pid = PTL_ID_ANY;
 
         //CERROR("sending req %d\n", request->rq_xid);
         rc = PtlMEPrepend(peer->peer_ni, request->rq_reply_portal, local_id,
