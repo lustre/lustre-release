@@ -632,30 +632,35 @@ kibnal_page2phys (struct page *p)
         return page_to_phys(p);
 }
 
-/* CAVEAT EMPTOR: We rely on tx/rx descriptor alignment to allow us to
- * use the lowest bit of the work request id as a flag to determine if
- * the completion is for a transmit or a receive (the op field is not
- * valid when the wc completes in error). */
+/* CAVEAT EMPTOR: We rely on tx/rx descriptor alignment to allow us to use the
+ * lowest 2 bits of the work request id to stash the work item type (the op
+ * field is not valid when the wc completes in error). */
+
+#define IBNAL_WID_TX    0
+#define IBNAL_WID_RX    1
+#define IBNAL_WID_RDMA  2
+#define IBNAL_WID_MASK  3UL
 
 static inline vv_wr_id_t
-kibnal_ptr2wreqid (void *ptr, int isrx)
+kibnal_ptr2wreqid (void *ptr, int type)
 {
         unsigned long lptr = (unsigned long)ptr;
 
-        LASSERT ((lptr & 1) == 0);
-        return (vv_wr_id_t)(lptr | (isrx ? 1 : 0));
+        LASSERT ((lptr & IBNAL_WID_MASK) == 0);
+        LASSERT ((type & ~IBNAL_WID_MASK) == 0);
+        return (vv_wr_id_t)(lptr | type);
 }
 
 static inline void *
 kibnal_wreqid2ptr (vv_wr_id_t wreqid)
 {
-        return (void *)(((unsigned long)wreqid) & ~1UL);
+        return (void *)(((unsigned long)wreqid) & ~IBNAL_WID_MASK);
 }
 
 static inline int
-kibnal_wreqid_is_rx (vv_wr_id_t wreqid)
+kibnal_wreqid2type (vv_wr_id_t wreqid)
 {
-        return (wreqid & 1) != 0;
+        return (wreqid & IBNAL_WID_MASK);
 }
 
 static inline void

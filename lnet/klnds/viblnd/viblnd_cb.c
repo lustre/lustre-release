@@ -158,7 +158,7 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
         };
 
         rx->rx_wrq = (vv_wr_t) {
-                .wr_id                   = (unsigned long)rx,
+                .wr_id                   = kibnal_ptr2wreqid(rx, IBNAL_WID_RX),
                 .completion_notification = 1,
                 .scatgat_list            = &rx->rx_gl,
                 .num_of_data_segments    = 1,
@@ -436,7 +436,7 @@ kibnal_handle_rx (kib_rx_t *rx)
 }
 
 void
-kibnal_rx_complete (kib_rx_t *rx, int nob, vv_comp_status_t vvrc)
+kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob)
 {
         kib_msg_t    *msg = rx->rx_msg;
         kib_conn_t   *conn = rx->rx_conn;
@@ -1051,32 +1051,29 @@ kibnal_check_sends (kib_conn_t *conn)
 }
 
 void
-kibnal_tx_complete (kib_tx_t *tx, int final_send, vv_comp_status_t vvrc)
+kibnal_tx_complete (kib_tx_t *tx, vv_comp_status_t vvrc)
 {
-        kib_tx_t     *tx = (kib_tx_t *)((unsigned long)wc->wr_id);
         kib_conn_t   *conn = tx->tx_conn;
         int           failed = (vvrc != vv_comp_status_success);
         int           idle;
 
-        CDEBUG(D_NET, "conn %p tx %p [%d/%d]: %d\n", conn, tx,
-               tx->tx_sending, tx->tx_nwrq, wc->completion_status);
+        CDEBUG(D_NET, "tx %p conn %p sending %d nwrq %d vvrc %d\n", 
+               tx, conn, tx->tx_sending, tx->tx_nwrq, vvrc);
+
         LASSERT (tx->tx_sending != 0);
 
         if (failed &&
+            tx->tx_status == 0 &&
             conn->ibc_state == IBNAL_CONN_ESTABLISHED)
                 CERROR ("Tx completion to "LPX64" failed: %d\n", 
-                        conn->ibc_peer->ibp_nid, wc->completion_status);
-
-        /* I should only get RDMA notifications of errors */
-        LASSERT (final_send || failed);
+                        conn->ibc_peer->ibp_nid, vvrc);
 
         spin_lock(&conn->ibc_lock);
 
         /* I could be racing with rdma completion.  Whoever makes 'tx' idle
          * gets to free it, which also drops its ref on 'conn'. */
 
-        if (final_send)                         /* this is the last work item */
-                tx->tx_sending--;
+        tx->tx_sending--;
 
         if (failed) {
                 tx->tx_waiting = 0;
@@ -1127,7 +1124,7 @@ kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob)
 
         memset(wrq, 0, sizeof(*wrq));
 
-        wrq->wr_id = (unsigned long)tx;
+        wrq->wr_id = kibnal_ptr2wreqid(tx, IBNAL_WID_TX);
         wrq->wr_type = vv_wr_send;
         wrq->scatgat_list = gl;
         wrq->num_of_data_segments = 1;
@@ -1196,10 +1193,8 @@ kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
                 gl->l_key     = srcrd->rd_key;
 
                 wrq = &tx->tx_wrq[tx->tx_nwrq];
-                wrq->wr_id = (unsigned long)tx;
-                /* All frags give completion until we've sussed how to submit
-                 * all frags + completion message and only (but reliably) get
-                 * notification on the completion message */
+
+                wrq->wr_id = kibnal_ptr2wreqid(tx, IBNAL_WID_RDMA);
                 wrq->completion_notification = 0;
                 wrq->scatgat_list = gl;
                 wrq->num_of_data_segments = 1;
@@ -1760,7 +1755,7 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
         CDEBUG (error == 0 ? D_NET : D_ERROR,
                 "closing conn to "LPX64": error %d\n", peer->ibp_nid, error);
 
-        /* kib_connd_conns takes ibc_list's ref */
+        /* connd takes ibc_list's ref */
         list_del (&conn->ibc_list);
         
         if (list_empty (&peer->ibp_conns) &&
@@ -3180,20 +3175,40 @@ kibnal_scheduler(void *arg)
                         spin_unlock_irqrestore(&kibnal_data.kib_sched_lock,
                                                flags);
 
-                        switch (wc.operation_type) {
-                        case vv_wc_send_rq:
-                                kibnal_rx_complete((kib_rx_t *)((unsigned long)wc.wr_id),
-                                                   wc.completion_status,
-                                                   wc.num_bytes_transfered);
+                        switch (kibnal_wreqid2type(wc.wr_id)) {
+                        case IBNAL_WID_RX:
+                                kibnal_rx_complete(
+                                        (kib_rx_t *)kibnal_wreqid2ptr(wc.wr_id),
+                                        wc.completion_status,
+                                        wc.num_bytes_transfered);
                                 break;
-                        case vv_wc_send_sq:
-                                kibnal_tx_complete((kib_tx_t *)((unsigned long)wc.wr_id),
-                                                   1, wc.completion_status);
+
+                        case IBNAL_WID_TX:
+                                kibnal_tx_complete(
+                                        (kib_tx_t *)kibnal_wreqid2ptr(wc.wr_id),
+                                        wc.completion_status);
                                 break;
-                        case vv_wc_rdma_write_sq:
-                                kibnal_tx_complete((kib_tx_t *)((unsigned long)wc.wr_id),
-                                                   0, wc.completion_status);
+
+                        case IBNAL_WID_RDMA:
+                                /* We only get RDMA completion notification if
+                                 * it fails.  So we just ignore them completely
+                                 * because...
+                                 *
+                                 * 1) If an RDMA fails, all subsequent work
+                                 * items, including the final SEND will fail
+                                 * too, so I'm still guaranteed to notice that
+                                 * this connection is hosed.
+                                 *
+                                 * 2) It's positively dangerous to look inside
+                                 * the tx descriptor obtained from an RDMA work
+                                 * item.  As soon as I drop the kib_sched_lock,
+                                 * I give a scheduler on another CPU a chance
+                                 * to get the final SEND completion, so the tx
+                                 * descriptor can get freed as I inspect it. */
+                                CERROR ("RDMA failed: %d\n", 
+                                        wc.completion_status);
                                 break;
+
                         default:
                                 LBUG();
                         }
