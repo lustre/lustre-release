@@ -36,13 +36,12 @@
 #include <linux/obd.h>
 #include <linux/module.h>
 
-static struct fsfilt_fs_operations fsfilt_extN_fs_ops;
 static kmem_cache_t *fcb_cache;
 static int fcb_cache_count;
 
 struct fsfilt_cb_data {
         struct journal_callback cb_jcb; /* data private to jbd */
-        fsfilt_cb_t *cb_func;           /* MDS/OBD completion function */
+        fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
         struct obd_device *cb_obd;      /* MDS/OBD completion device */
         __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
 };
@@ -126,7 +125,7 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
 }
 
 static int fsfilt_extN_set_md(struct inode *inode, void *handle,
-                              struct lov_fsfilt_md *lmm, int lmm_size)
+                              void *lmm, int lmm_size)
 {
         int rc;
 
@@ -138,8 +137,8 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
         up(&inode->i_sem);
 
         if (rc) {
-                CERROR("error adding objectid "LPX64" to inode %lu: rc = %d\n",
-                       lmm->lmm_object_id, inode->i_ino, rc);
+                CERROR("error adding MD data to inode %lu: rc = %d\n",
+                       inode->i_ino, rc);
                 if (rc != -ENOSPC) LBUG();
         }
         return rc;
@@ -166,10 +165,6 @@ static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int size)
                 memset(lmm, 0, size);
                 return (rc == -ENODATA) ? 0 : rc;
         }
-
-        /* This field is byteswapped because it appears in the
-         * catalogue.  All others are opaque to the MDS */
-        lmm->lmm_object_id = le64_to_cpu(lmm->lmm_object_id);
 
         return rc;
 }
@@ -207,11 +202,12 @@ static void fsfilt_extN_cb_func(struct journal_callback *jcb, int error)
 
         fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
 
-        kmem_cache_free(fcb);
+        kmem_cache_free(fcb_cache, fcb);
+        --fcb_cache_count;
 }
 
-static int fsfilt_extN_set_callback(struct obd_device *obd, __u64 last_rcvd,
-                                    void *handle, fsfilt_cb_t *cb_func)
+static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
+                                     void *handle, fsfilt_cb_t cb_func)
 {
 #ifdef HAVE_JOURNAL_CALLBACK_STATUS
         struct fsfilt_cb_data *fcb;
@@ -246,12 +242,6 @@ static int fsfilt_extN_set_callback(struct obd_device *obd, __u64 last_rcvd,
         return 0;
 }
 
-static void fsfilt_extN_free_callback(struct fsfilt_cb_data *fcb)
-{
-        kmem_cache_free(fcb_cache, fcb);
-        --fcb_cache_count;
-}
-
 static int fsfilt_extN_journal_data(struct file *filp)
 {
         struct inode *inode = filp->f_dentry->d_inode;
@@ -278,7 +268,7 @@ static int fsfilt_extN_statfs(struct super_block *sb, struct statfs *sfs)
         return rc;
 }
 
-static struct fsfilt_fs_operations fsfilt_extN_fs_ops = {
+static struct fsfilt_operations fsfilt_extN_fs_ops = {
         fs_type:                "extN",
         fs_owner:               THIS_MODULE,
         fs_start:               fsfilt_extN_start,

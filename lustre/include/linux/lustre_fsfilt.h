@@ -40,9 +40,9 @@ struct fsfilt_operations {
         int     (* fs_commit)(struct inode *inode, void *handle);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr);
-        int     (* fs_set_md)(struct inode *inode, void *handle,
-                              struct lov_mds_md *md, int size);
-        int     (* fs_get_md)(struct inode *inode, struct lov_mds_md *md, int size);
+        int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
+                              int size);
+        int     (* fs_get_md)(struct inode *inode, void *md, int size);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         int     (* fs_journal_data)(struct file *file);
