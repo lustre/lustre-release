@@ -1,3 +1,8 @@
+###################################################################
+#Girish C
+#lstat.c ver 0.1
+#Displays information from lproc
+##################################################################
 #include "lstat.h"
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,3 +1,8 @@
+###################################################################
+#Girish C
+#lstat.h ver 0.1
+#Displays information from lproc
+##################################################################
 #include <sys/types.h>
 #include <sys/vfs.h>
 #include <dirent.h>
