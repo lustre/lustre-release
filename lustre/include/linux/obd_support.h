@@ -29,36 +29,73 @@
 
 /* global variables */
 extern unsigned long obd_memory;
-extern unsigned long obd_drop_packet;
+extern unsigned long obd_fail_loc;
 
 enum {
-        OBD_INST_MDS_GETATTR = 1,
-        OBD_INST_MDS_READPAGE,
-        OBD_INST_MDS_READPAGE_BULK,
-        OBD_INST_MDS_REINT,
-        OBD_INST_MDS_OPEN,
-        OBD_INST_MDS_CLOSE,
-        OBD_INST_OST_CONNECT,
-        OBD_INST_OST_DISCONNECT,
-        OBD_INST_OST_GET_INFO,
-        OBD_INST_OST_CREATE,
-        OBD_INST_OST_DESTROY,
-        OBD_INST_OST_GETATTR,
-        OBD_INST_OST_SETATTR,
-        OBD_INST_OST_OPEN,
-        OBD_INST_OST_CLOSE,
-        OBD_INST_OST_BRW,
-        OBD_INST_OST_PUNCH
+        OBD_FAIL_MDS = 0x100,
+        OBD_FAIL_MDS_HANDLE_UNPACK,
+        OBD_FAIL_MDS_GETATTR_NET,
+        OBD_FAIL_MDS_GETATTR_PACK,
+        OBD_FAIL_MDS_READPAGE_NET,
+        OBD_FAIL_MDS_READPAGE_PACK,
+        OBD_FAIL_MDS_READPAGE_BULK_NET,
+        OBD_FAIL_MDS_SENDPAGE,
+        OBD_FAIL_MDS_REINT_NET,
+        OBD_FAIL_MDS_REINT_UNPACK,
+        OBD_FAIL_MDS_REINT_SETATTR,
+        OBD_FAIL_MDS_REINT_SETATTR_WRITE,
+        OBD_FAIL_MDS_REINT_CREATE,
+        OBD_FAIL_MDS_REINT_CREATE_WRITE,
+        OBD_FAIL_MDS_REINT_UNLINK,
+        OBD_FAIL_MDS_REINT_UNLINK_WRITE,
+        OBD_FAIL_MDS_REINT_LINK,
+        OBD_FAIL_MDS_REINT_LINK_WRITE,
+        OBD_FAIL_MDS_REINT_RENAME,
+        OBD_FAIL_MDS_REINT_RENAME_WRITE,
+        OBD_FAIL_MDS_OPEN_NET,
+        OBD_FAIL_MDS_OPEN_PACK,
+        OBD_FAIL_MDS_CLOSE_NET,
+        OBD_FAIL_MDS_CLOSE_PACK,
+
+        OBD_FAIL_OST = 0x200,
+        OBD_FAIL_OST_CONNECT_NET,
+        OBD_FAIL_OST_DISCONNECT_NET,
+        OBD_FAIL_OST_GET_INFO_NET,
+        OBD_FAIL_OST_CREATE_NET,
+        OBD_FAIL_OST_DESTROY_NET,
+        OBD_FAIL_OST_GETATTR_NET,
+        OBD_FAIL_OST_SETATTR_NET,
+        OBD_FAIL_OST_OPEN_NET,
+        OBD_FAIL_OST_CLOSE_NET,
+        OBD_FAIL_OST_BRW_NET,
+        OBD_FAIL_OST_PUNCH_NET,
 };
 
-#define OBD_CHECK_DROP_PACKET(req, id)                                  \
-do {                                                                    \
-        if (obd_drop_packet != id)                                      \
-                break;                                                  \
-                                                                        \
-        CDEBUG(D_OTHER, "obd_drop_packet=%d, dropping packet.\n", id);  \
-        RETURN(0);                                                      \
+/* preparation for a more advanced failure testbed (not functional yet) */
+#define OBD_FAIL_MASK_SYS    0x0000FF00
+#define OBD_FAIL_MASK_LOC    (0x000000FF | OBD_FAIL_MASK_SYS)
+#define OBD_FAIL_ONCE        0x80000000
+#define OBD_FAILED           0x40000000
+#define OBD_FAIL_MDS_ALL_NET 0x01000000
+#define OBD_FAIL_OST_ALL_NET 0x02000000
+
+#define OBD_FAIL_CHECK(id)      ((obd_fail_loc & OBD_FAIL_MASK_LOC) == (id))
+
+#define OBD_FAIL_RETURN(id, ret)                                             \
+do {                                                                         \
+        if (OBD_FAIL_CHECK(id)) {                                            \
+                CERROR("obd_fail_loc=%d, fail operation rc=%d\n", id, ret);  \
+                RETURN(ret);                                                 \
+        }                                                                    \
 } while(0)
+
+#define OBD_FAIL_WRITE(id)                                                   \
+do {                                                                         \
+        if (OBD_FAIL_CHECK(id)) {                                            \
+                CERROR("obd_fail_loc=%d, fail write operation\n", id);       \
+                /* FIXME: do something bad here */                           \
+        }                                                                    \
+} while (0)
 
 #define OBD_ALLOC(ptr, size)                                    \
 do {                                                            \

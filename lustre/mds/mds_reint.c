@@ -41,15 +41,17 @@ extern struct ptlrpc_request *mds_prep_req(int size, int opcode, int namelen, ch
 
 static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_request *req)
 {
+        struct inode *inode;
 	struct dentry *de;
 
 	de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
-	if (IS_ERR(de)) { 
-		req->rq_rephdr->status = -ESTALE;
-		return 0;
+        if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_SETATTR)) {
+                req->rq_rephdr->status = -ESTALE;
+                RETURN(0);
 	}
 
-        CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
+        inode = de->d_inode;
+        CDEBUG(D_INODE, "ino %ld\n", inode->i_ino);
 
 	/* a _really_ horrible hack to avoid removing the data stored
 	   in the block pointers; this data is the object id 
@@ -58,20 +60,30 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
 	if ( rec->ur_iattr.ia_valid & ATTR_SIZE ) { 
 		/* ATTR_SIZE would invoke truncate: clear it */ 
 		rec->ur_iattr.ia_valid &= ~ATTR_SIZE;
-		de->d_inode->i_size = rec->ur_iattr.ia_size;
+                inode->i_size = rec->ur_iattr.ia_size;
+
+                /* an _even_more_ horrible hack to make this hack work with
+                 * ext3.  This is because ext3 keeps a separate inode size
+                 * until the inode is committed to ensure consistency.  This
+                 * will also go away with the move to EAs.
+                 */
+                if (!strcmp(inode->i_sb->s_type->name, "ext3"))
+                        inode->u.ext3_i.i_disksize = inode->i_size;
+
 		/* make sure _something_ gets set - so new inode
 		   goes to disk (probably won't work over XFS */
-		if (!rec->ur_iattr.ia_valid & ATTR_MODE) { 
+		if (!rec->ur_iattr.ia_valid & ATTR_MODE) {
 			rec->ur_iattr.ia_valid |= ATTR_MODE;
-			rec->ur_iattr.ia_mode = de->d_inode->i_mode;
+			rec->ur_iattr.ia_mode = inode->i_mode;
 		}
 	}
-	if ( de->d_inode->i_op->setattr ) {
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE);
+        if ( inode->i_op->setattr ) {
 		req->rq_rephdr->status =
-			de->d_inode->i_op->setattr(de, &rec->ur_iattr);
-	} else { 
+                        inode->i_op->setattr(de, &rec->ur_iattr);
+	} else {
 		req->rq_rephdr->status =
-			inode_setattr(de->d_inode, &rec->ur_iattr);
+                        inode_setattr(inode, &rec->ur_iattr);
 	}
 
 	l_dput(de);
@@ -94,41 +106,34 @@ static int mds_reint_create(struct mds_update_record *rec,
 			    struct ptlrpc_request *req)
 {
 	int type = rec->ur_mode & S_IFMT;
-	struct dentry *de;
+        struct dentry *de = NULL;
 	struct mds_rep *rep = req->rq_rep.mds;
-	struct dentry *dchild; 
+        struct dentry *dchild = NULL;
 	int rc;
 	ENTRY;
 
 	de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
-	if (IS_ERR(de)) { 
-		req->rq_rephdr->status = -ESTALE;
+        if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE)) {
                 BUG();
-		EXIT;
-		return 0;
+                GOTO(out_reint_create, (rc = -ESTALE));
 	}
         CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
 
 	dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
-	rc = PTR_ERR(dchild);
-	if (IS_ERR(dchild)) { 
-		CERROR("child lookup error %d\n", rc);
-		dput(de); 
-		req->rq_rephdr->status = -ESTALE;
+        if (IS_ERR(dchild)) {
+                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 BUG();
-		EXIT;
-		return 0;
+                GOTO(out_reint_create, (rc = -ESTALE));
 	}
 
 	if (dchild->d_inode) {
 		CERROR("child exists (dir %ld, name %s)\n", 
 		       de->d_inode->i_ino, rec->ur_name);
-		dput(de); 
-		req->rq_rephdr->status = -EEXIST;
                 BUG();
-		EXIT;
-		return 0;
+                GOTO(out_reint_create, (rc = -EEXIST));
 	}
+
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
 	switch (type) {
 	case S_IFREG: { 
@@ -157,7 +162,6 @@ static int mds_reint_create(struct mds_update_record *rec,
 	}
 	}
 
-	req->rq_rephdr->status = rc;
 	if (!rc) { 
 		if (type == S_IFREG)
 			mds_store_objid(dchild->d_inode, &rec->ur_id); 
@@ -169,49 +173,43 @@ static int mds_reint_create(struct mds_update_record *rec,
 		rep->ino = dchild->d_inode->i_ino;
 	}
 
-	dput(de);
-	dput(dchild); 
-	EXIT;
-	return 0;
+out_reint_create:
+        req->rq_rephdr->status = rc;
+        l_dput(de);
+        l_dput(dchild);
+        RETURN(0);
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, 
 			    struct ptlrpc_request *req)
 {
-	struct dentry *de;
-	struct dentry *dchild; 
-	int rc;
+        struct dentry *de = NULL;
+        struct dentry *dchild = NULL;
+        int rc = 0;
 	ENTRY;
 
 	de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
-	if (IS_ERR(de)) { 
+        if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
                 BUG();
-		req->rq_rephdr->status = -ESTALE;
-		EXIT;
-		return 0;
+                GOTO(out_unlink, (rc = -ESTALE));
 	}
         CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
 
 	dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
-	rc = PTR_ERR(dchild);
-	if (IS_ERR(dchild)) { 
-		CERROR("child lookup error %d\n", rc);
+        if (IS_ERR(dchild)) {
+                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 BUG();
-		dput(de); 
-		req->rq_rephdr->status = -ESTALE;
-		EXIT;
-		return 0;
+                GOTO(out_unlink, (rc = -ESTALE));
 	}
 
 	if (!dchild->d_inode) {
 		CERROR("child doesn't exist (dir %ld, name %s\n", 
 		       de->d_inode->i_ino, rec->ur_name);
                 BUG();
-		dput(de); 
-		req->rq_rephdr->status = -ESTALE;
-		EXIT;
-		return 0;
+                GOTO(out_unlink, (rc = -ESTALE));
 	}
+
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE);
 
 	switch (dchild->d_inode->i_mode & S_IFMT) {
 	case S_IFDIR:
@@ -219,54 +217,50 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 		EXIT;
 		break;
 	default:
-		rc = vfs_unlink(de->d_inode, dchild);
-		
+                rc = vfs_unlink(de->d_inode, dchild);
 		EXIT;
 		break;
 	}
 
-	req->rq_rephdr->status = rc;
-	dput(de);
-	dput(dchild); 
-	EXIT;
-	return 0;
+out_unlink:
+        req->rq_rephdr->status = rc;
+        l_dput(de);
+        l_dput(dchild);
+        RETURN(0);
 }
 
 static int mds_reint_link(struct mds_update_record *rec, 
 			    struct ptlrpc_request *req)
 {
-	struct dentry *de_src = NULL;
-	struct dentry *de_tgt_dir = NULL;
-	struct dentry *dchild = NULL; 
-	int rc;
-	ENTRY;
+        struct dentry *de_src = NULL;
+        struct dentry *de_tgt_dir = NULL;
+        struct dentry *dchild = NULL;
+        int rc = 0;
 
-	rc = -ESTALE;
-	de_src = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
-	if (IS_ERR(de_src)) { 
-		EXIT;
-		goto out_link;
-	}
+        ENTRY;
+        de_src = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
+        if (IS_ERR(de_src) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK)) {
+                GOTO(out_link, (rc = -ESTALE));
+        }
 
 	de_tgt_dir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
-	if (IS_ERR(de_tgt_dir)) { 
-		EXIT;
-		goto out_link;
+        if (IS_ERR(de_tgt_dir)) {
+                GOTO(out_link, (rc = -ESTALE));
 	}
 
 	dchild = lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen - 1);
-	if (IS_ERR(dchild)) { 
-		CERROR("child lookup error %d\n", rc);
-                EXIT;
-		goto out_link;
+	if (IS_ERR(dchild)) {
+                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
+		GOTO(out_link, (rc = -ESTALE));
 	}
 
 	if (dchild->d_inode) {
 		CERROR("child exists (dir %ld, name %s\n", 
 		       de_tgt_dir->d_inode->i_ino, rec->ur_name);
-		EXIT;
-		goto out_link;
+		GOTO(out_link, (rc = -EEXIST));
 	}
+
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE);
 
 	rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild); 
         EXIT;
@@ -287,35 +281,32 @@ static int mds_reint_rename(struct mds_update_record *rec,
 	struct dentry *de_tgtdir = NULL;
 	struct dentry *de_old = NULL; 
 	struct dentry *de_new = NULL; 
-	int rc;
+	int rc = 0;
 	ENTRY;
 
-	rc = -ESTALE;
 	de_srcdir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
-	if (IS_ERR(de_srcdir)) { 
-		EXIT;
-		goto out_rename;
+        if (IS_ERR(de_srcdir)) {
+                GOTO(out_rename, (rc = -ESTALE));
 	}
 
 	de_tgtdir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
-	if (IS_ERR(de_tgtdir)) { 
-		EXIT;
-		goto out_rename;
+        if (IS_ERR(de_tgtdir)) {
+                GOTO(out_rename, (rc = -ESTALE));
 	}
 
 	de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
-	if (IS_ERR(de_old)) { 
-		CERROR("child lookup error %d\n", rc);
-                EXIT;
-		goto out_rename;
+        if (IS_ERR(de_old)) {
+                CERROR("child lookup error %ld\n", PTR_ERR(de_old));
+                GOTO(out_rename, (rc = -ESTALE));
 	}
 
 	de_new = lookup_one_len(rec->ur_tgt, de_tgtdir, rec->ur_tgtlen - 1);
-	if (IS_ERR(de_new)) { 
-		CERROR("child lookup error %d\n", rc);
-                EXIT;
-		goto out_rename;
+        if (IS_ERR(de_new)) {
+                CERROR("child lookup error %ld\n", PTR_ERR(de_new));
+                GOTO(out_rename, (rc = -ESTALE));
 	}
+
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE);
 
 	rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
         EXIT;
@@ -331,32 +322,30 @@ static int mds_reint_rename(struct mds_update_record *rec,
 
 typedef int (*mds_reinter)(struct mds_update_record *, struct ptlrpc_request*); 
 
-static mds_reinter  reinters[REINT_MAX+1] = { 
-	[REINT_SETATTR]   mds_reint_setattr, 
-	[REINT_CREATE]    mds_reint_create,
-	[REINT_UNLINK]    mds_reint_unlink, 
-	[REINT_LINK]      mds_reint_link,
-	[REINT_RENAME]    mds_reint_rename
+static mds_reinter  reinters[REINT_MAX+1] = {
+        [REINT_SETATTR]   mds_reint_setattr,
+        [REINT_CREATE]    mds_reint_create,
+        [REINT_UNLINK]    mds_reint_unlink,
+        [REINT_LINK]      mds_reint_link,
+        [REINT_RENAME]    mds_reint_rename
 };
 
 int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
 {
 	int rc; 
 
-	if (rec->ur_opcode < 0 || rec->ur_opcode > REINT_MAX) { 
-		CERROR("opcode %d not valid\n", 
-		       rec->ur_opcode); 
-		rc = req->rq_status = -EINVAL;
-		return rc;
+        if (rec->ur_opcode < 0 || rec->ur_opcode > REINT_MAX) {
+                CERROR("opcode %d not valid\n", rec->ur_opcode);
+                rc = req->rq_status = -EINVAL;
+                RETURN(rc);
 	}
 
 	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
 			  &req->rq_replen, &req->rq_repbuf);
-	if (rc) { 
-		EXIT;
-		CERROR("mds: out of memory\n");
-		rc = req->rq_status = -ENOMEM;
-		return rc;
+        if (rc) {
+                CERROR("mds: out of memory\n");
+                rc = req->rq_status = -ENOMEM;
+                RETURN(rc);
 	}
 	req->rq_rephdr->xid = req->rq_reqhdr->xid;
 

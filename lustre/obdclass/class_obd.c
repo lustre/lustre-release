@@ -61,7 +61,7 @@
 
 static int obd_init_magic;
 unsigned long obd_memory = 0;
-unsigned long obd_drop_packet = 0;
+unsigned long obd_fail_loc = 0;
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 
@@ -545,7 +545,7 @@ EXPORT_SYMBOL(obdo_cachep);
 EXPORT_SYMBOL(gen_multi_setup);
 EXPORT_SYMBOL(gen_multi_cleanup);
 EXPORT_SYMBOL(obd_memory);
-EXPORT_SYMBOL(obd_drop_packet);
+EXPORT_SYMBOL(obd_fail_loc);
 
 static int __init init_obdclass(void)
 {

@@ -42,6 +42,8 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         int rc = 0;
         mm_segment_t oldfs = get_fs();
 
+        OBD_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, -EIO);
+
         if (req->rq_peer.peer_nid == 0) {
                 struct inode *inode = file->f_dentry->d_inode;
                 char *buf = (char *)(long)dst->addr;
@@ -59,7 +61,8 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 else if (!strcmp(inode->i_sb->s_type->name, "ext3")) {
                         struct buffer_head *bh;
 
-                        bh = ext3_bread(NULL, inode, offset >> inode->i_blkbits,
+                        bh = ext3_bread(NULL, inode,
+                                        offset >> inode->i_sb->s_blocksize_bits,
                                         0, &rc);
 
                         if (bh) {
@@ -222,7 +225,7 @@ int mds_getattr(struct ptlrpc_request *req)
 
         rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
                           &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
@@ -264,7 +267,7 @@ int mds_open(struct ptlrpc_request *req)
 
         rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
                           &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
@@ -299,7 +302,7 @@ int mds_close(struct ptlrpc_request *req)
 
         rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
                           &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
@@ -336,7 +339,7 @@ int mds_readpage(struct ptlrpc_request *req)
 
         rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
                           &req->rq_replen, &req->rq_repbuf);
-        if (rc) {
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
@@ -382,10 +385,10 @@ int mds_reint(struct ptlrpc_request *req)
         len = req->rq_req.mds->tgtlen;
 
         rc = mds_update_unpack(buf, len, &rec);
-        if (rc) {
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
                 CERROR("invalid record\n");
                 req->rq_status = -EINVAL;
-                return 0;
+                RETURN(0);
         }
         /* rc will be used to interrupt a for loop over multiple records */
         rc = mds_reint_rec(&rec, req);
@@ -411,7 +414,7 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
 
         rc = mds_unpack_req(req->rq_reqbuf, req->rq_reqlen,
                             &req->rq_reqhdr, &req->rq_req);
-        if (rc) {
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_HANDLE_UNPACK)) {
                 CERROR("lustre_mds: Invalid request\n");
                 GOTO(out, rc);
         }
@@ -420,31 +423,31 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
 
         case MDS_GETATTR:
                 CDEBUG(D_INODE, "getattr\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_MDS_GETATTR);
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
                 rc = mds_getattr(req);
                 break;
 
         case MDS_READPAGE:
                 CDEBUG(D_INODE, "readpage\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_MDS_READPAGE);
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_NET, 0);
                 rc = mds_readpage(req);
                 break;
 
         case MDS_REINT:
                 CDEBUG(D_INODE, "reint\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_MDS_REINT);
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
                 rc = mds_reint(req);
                 break;
 
         case MDS_OPEN:
                 CDEBUG(D_INODE, "open\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_MDS_OPEN);
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_OPEN_NET, 0);
                 rc = mds_open(req);
                 break;
 
         case MDS_CLOSE:
                 CDEBUG(D_INODE, "close\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_MDS_CLOSE);
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_CLOSE_NET, 0);
                 rc = mds_close(req);
                 break;
 

@@ -574,57 +574,57 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
 
         case OST_CONNECT:
                 CDEBUG(D_INODE, "connect\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_CONNECT);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
                 rc = ost_connect(ost, req);
                 break;
         case OST_DISCONNECT:
                 CDEBUG(D_INODE, "disconnect\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_DISCONNECT);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_DISCONNECT_NET, 0);
                 rc = ost_disconnect(ost, req);
                 break;
         case OST_GET_INFO:
                 CDEBUG(D_INODE, "get_info\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_GET_INFO);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_GET_INFO_NET, 0);
                 rc = ost_get_info(ost, req);
                 break;
         case OST_CREATE:
                 CDEBUG(D_INODE, "create\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_CREATE);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_CREATE_NET, 0);
                 rc = ost_create(ost, req);
                 break;
         case OST_DESTROY:
                 CDEBUG(D_INODE, "destroy\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_DESTROY);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_DESTROY_NET, 0);
                 rc = ost_destroy(ost, req);
                 break;
         case OST_GETATTR:
                 CDEBUG(D_INODE, "getattr\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_GETATTR);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_GETATTR_NET, 0);
                 rc = ost_getattr(ost, req);
                 break;
         case OST_SETATTR:
                 CDEBUG(D_INODE, "setattr\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_SETATTR);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_SETATTR_NET, 0);
                 rc = ost_setattr(ost, req);
                 break;
         case OST_OPEN:
                 CDEBUG(D_INODE, "setattr\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_OPEN);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_OPEN_NET, 0);
                 rc = ost_open(ost, req);
                 break;
         case OST_CLOSE:
                 CDEBUG(D_INODE, "setattr\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_CLOSE);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_CLOSE_NET, 0);
                 rc = ost_close(ost, req);
                 break;
         case OST_BRW:
                 CDEBUG(D_INODE, "brw\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_BRW);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 rc = ost_brw(ost, req);
                 break;
         case OST_PUNCH:
                 CDEBUG(D_INODE, "punch\n");
-                OBD_CHECK_DROP_PACKET(req, OBD_INST_OST_PUNCH);
+                OBD_FAIL_RETURN(OBD_FAIL_OST_PUNCH_NET, 0);
                 rc = ost_punch(ost, req);
                 break;
         default:

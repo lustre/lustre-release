@@ -52,7 +52,7 @@ static int obd_sctl_reset( ctl_table * table, int write, struct file
 
 #define OBD_SYSCTL 300
 
-#define OBD_DROP_PACKET     1       /* control packet drop instrumentation */
+#define OBD_FAIL_LOC        1       /* control test failures instrumentation */
 #define OBD_ENTRY           2       /* control enter/leave pattern */
 #define OBD_TIMEOUT         3       /* timeout on upcalls to become intrble */
 #define OBD_HARD            4       /* mount type "hard" or "soft" */
@@ -63,7 +63,7 @@ static int obd_sctl_reset( ctl_table * table, int write, struct file
 #define OBD_VARS_SLOT       2
 
 static ctl_table obd_table[] = {
-        {OBD_VARS, "drop_packet", &obd_drop_packet, sizeof(int), 0644, NULL, &proc_dointvec},
+        {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_VARS, "vars", &vars[0], sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_INDEX, "index", &index, sizeof(int), 0644, NULL, &obd_sctl_vars},
         {OBD_RESET, "reset", NULL, 0, 0644, NULL, &obd_sctl_reset},
@@ -71,7 +71,7 @@ static ctl_table obd_table[] = {
 };
 
 static ctl_table parent_table[] = {
-       {OBD_SYSCTL, "obd", NULL, 0, 0555, obd_table},
+       {OBD_SYSCTL, "lustre", NULL, 0, 0555, obd_table},
        {0}
 };
 
