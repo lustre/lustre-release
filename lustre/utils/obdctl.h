@@ -95,6 +95,8 @@ int jt_lcfg_del_uuid(int argc, char **argv);
 int jt_lcfg_lov_setup(int argc, char **argv);
 int jt_lcfg_mount_option(int argc, char **argv);
 int jt_lcfg_del_mount_option(int argc, char **argv);
+int jt_lcfg_set_timeout(int argc, char **argv);
+int jt_lcfg_set_lustre_upcall(int argc, char **argv);
 
 int obd_add_uuid(char *uuid, ptl_nid_t nid, int nal);
 
