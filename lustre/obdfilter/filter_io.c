@@ -124,8 +124,8 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
          * out-or-order and have already consumed some grant.  We want to
          * leave this here in case there is a large error in accounting. */
         CDEBUG(oa->o_grant > fed->fed_grant + 2084 * 1024 ? D_ERROR : D_CACHE,
-               "%s: cli %p reports granted: "LPU64" dropped: %u, local: %lu\n",
-               obd->obd_name, exp, oa->o_grant,
+               "%s: cli %s reports granted: "LPU64" dropped: %u, local: %lu\n",
+               obd->obd_name, exp->exp_client_uuid.uuid, oa->o_grant,
                oa->o_dropped, fed->fed_grant);
 
         /* Update our accounting now so that statfs takes it into account.
@@ -178,9 +178,10 @@ restat:
                 if (left < tot_granted - obd->u.filter.fo_tot_pending &&
                     time_after(jiffies, next)) {
                         spin_unlock(&obd->obd_osfs_lock);
-                        CERROR("%s: cli %p granted "LPU64" more than available "
-                               LPU64" and pending "LPU64"\n", obd->obd_name, exp,
-                               tot_granted, left, obd->u.filter.fo_tot_pending);
+                        CERROR("%s: cli %s granted "LPU64" more than available "
+                               LPU64" and pending "LPU64"\n", obd->obd_name,
+                               exp->exp_client_uuid.uuid, tot_granted, left,
+                               obd->u.filter.fo_tot_pending);
                         if (next == 0)
                                 portals_debug_dumplog();
                         next = jiffies + 20 * HZ;
@@ -195,9 +196,9 @@ restat:
                 goto restat;
         }
 
-        CDEBUG(D_CACHE, "%s: cli %p free: "LPU64" avail: "LPU64" grant "LPU64
-               " left: "LPU64" pending: "LPU64"\n", obd->obd_name, exp,
-               obd->obd_osfs.os_bfree << blockbits,
+        CDEBUG(D_CACHE, "%s: cli %s free: "LPU64" avail: "LPU64" grant "LPU64
+               " left: "LPU64" pending: "LPU64"\n", obd->obd_name,
+               exp->exp_client_uuid.uuid, obd->obd_osfs.os_bfree << blockbits,
                obd->obd_osfs.os_bavail << blockbits, tot_granted, left,
                obd->u.filter.fo_tot_pending);
 
@@ -238,11 +239,11 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                 }
         }
 
-        CDEBUG(D_CACHE,"%s: cli %p wants: "LPU64" granting: "LPU64"\n",
-               obd->obd_name, exp, want, grant);
+        CDEBUG(D_CACHE,"%s: cli %s wants: "LPU64" granting: "LPU64"\n",
+               obd->obd_name, exp->exp_client_uuid.uuid, want, grant);
         CDEBUG(D_CACHE,
-               "%s: cli %p tot cached:"LPU64" granted:"LPU64
-               " num_exports: %d\n", obd->obd_name, exp,
+               "%s: cli %s tot cached:"LPU64" granted:"LPU64
+               " num_exports: %d\n", obd->obd_name, exp->exp_client_uuid.uuid,
                obd->u.filter.fo_tot_dirty,
                obd->u.filter.fo_tot_granted, obd->obd_num_exports);
 
@@ -432,9 +433,10 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
 
                         if (rnb[n].flags & OBD_BRW_FROM_GRANT) {
                                 if (fed->fed_grant < used + bytes) {
-                                        CERROR("client claims %ld+%d GRANT, "
+                                        CERROR("cli %s claims %ld+%d GRANT, "
                                                "not enough grant %ld, idx %d\n",
-                                               used, bytes, fed->fed_grant,n);
+                                               exp->exp_client_uuid.uuid,
+                                               used, bytes, fed->fed_grant, n);
                                 } else {
                                         used += bytes;
                                         rnb[n].flags |= OBD_BRW_GRANTED;
@@ -461,8 +463,9 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                          * ignore this error. */
                         lnb[n].rc = -ENOSPC;
                         rnb[n].flags &= OBD_BRW_GRANTED;
-                        CDEBUG(D_INODE, "%s: idx %d no space for %d\n",
-                               exp->exp_obd->obd_name, n, bytes);
+                        CDEBUG(D_INODE, "%s: cli %s idx %d no space for %d\n",
+                               exp->exp_obd->obd_name,
+                               exp->exp_client_uuid.uuid, n, bytes);
                 }
         }
 
@@ -477,9 +480,9 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         fed->fed_pending += used;
         exp->exp_obd->u.filter.fo_tot_pending += used;
 
-        CDEBUG(D_CACHE,
-               "%s: cli %p used: %ld ungranted: %ld grant: %ld dirty: %ld\n",
-               exp->exp_obd->obd_name, exp, used,
+        CDEBUG(ungranted > PAGE_SIZE ? D_ERROR : D_CACHE,
+               "%s: cli %s used: %ld ungranted: %ld grant: %ld dirty: %ld\n",
+               exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, used,
                ungranted, fed->fed_grant, fed->fed_dirty);
 
         return rc;
