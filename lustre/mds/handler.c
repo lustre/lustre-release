@@ -793,6 +793,33 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         return(rc);
 }
 
+int mds_check_mds_num(struct obd_device *obd, struct inode* inode,
+                      char *name, int namelen)
+{
+        struct mea *mea = NULL;
+        int mea_size, rc = 0;
+        ENTRY;
+                                                                                                                                                                                                     
+        rc = mds_get_lmv_attr(obd, inode, &mea, &mea_size);
+        if (rc)
+                RETURN(rc);
+        if (mea != NULL) {
+                /* dir is already splitted, check is requested filename
+                 * should live at this MDS or at another one */
+                int i;
+                i = mea_name2idx(mea, name, namelen - 1);
+                if (mea->mea_master != i) {
+                        CERROR("inapropriate MDS(%d) for %s. should be %d\n",
+                                mea->mea_master, name, i);
+                        rc = -ERESTART;
+                }
+        }
+                                                                                                                                                                                                     
+        if (mea)
+                OBD_FREE(mea, mea_size);
+        RETURN(rc);
+}
+
 static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                             struct lustre_handle *child_lockh, int child_part)
 {
@@ -926,7 +953,12 @@ fill_inode:
                 intent_set_disposition(rep, DISP_LOOKUP_NEG);
                 /* in the intent case, the policy clears this error:
                    the disposition is enough */
-                GOTO(cleanup, rc = -ENOENT);
+                rc = -ENOENT;
+                if (dparent) {
+                        rc = mds_check_mds_num(obd, dparent->d_inode, name,
+                                               namesize);
+                }
+                GOTO(cleanup, rc);
         } else {
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
         }

@@ -624,6 +624,7 @@ int lmv_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         struct lmv_obj *obj;
         ENTRY;
         lmv_connect(obd);
+repeat:
         obj = lmv_grab_obj(obd, fid, 0);
         if (obj) {
                 /* directory is splitted. look for right mds for this name */
@@ -655,6 +656,14 @@ int lmv_getattr_name(struct obd_export *exp, struct ll_fid *fid,
                                              NULL, 1, valid, ea_size, &req);
                         ptlrpc_req_finished(*request);
                         *request = req;
+                }
+        } else if (rc == -ERESTART) {
+                /* directory got splitted. time to update local object
+                 * and repeat the request with proper MDS */
+                rc = lmv_get_mea_and_update_object(exp, &rfid);
+                if (rc == 0) {
+                        ptlrpc_req_finished(*request);
+                        goto repeat;
                 }
         }
         RETURN(rc);
