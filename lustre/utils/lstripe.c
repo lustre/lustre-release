@@ -9,8 +9,7 @@
 
 
 /****************** Custom includes ********************/
-#include <linux/lustre_lite.h>
-#include <linux/lustre_idl.h>
+#include <linux/lustre_user.h>
 
 
 /******************  Functions ******************/
@@ -31,11 +30,11 @@ void usage(char *prog)
 int create_file(char *name, long stripe_size, int stripe_offset,
 		int stripe_count)
 {
-	struct lov_mds_md a_striping;
+	struct lov_user_md a_striping;
 	int fd, result = 0;
 
 	/*  Initialize IOCTL striping pattern structure  */
-	a_striping.lmm_magic = LOV_MAGIC;
+	a_striping.lmm_magic = LOV_USER_MAGIC;
 	a_striping.lmm_stripe_size = stripe_size;
 	a_striping.lmm_stripe_offset = stripe_offset;
 	a_striping.lmm_stripe_count = stripe_count;
