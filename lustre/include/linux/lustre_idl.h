@@ -595,8 +595,8 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
                 return -EINVAL;
         }
 
-        if (hdr.ioc_len > *len) {
-                printk("OBD: user buffer exceeds kernel buffer\n");
+        if (hdr.ioc_len > 8192) {
+                printk("OBD: user buffer exceeds 8192 max buffer\n");
                 return -EINVAL;
         }
 
