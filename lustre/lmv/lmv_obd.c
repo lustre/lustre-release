@@ -1467,16 +1467,10 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
         RETURN(rc);
 }
 
-/*
- * commented for a while, as it will not work in the case when splitted dir is
- * created from ll_mkdir_stripe(), because mds_reint_create() returns 0 inthis
- * case even if there is created splitted dir with passed number of stripes. So
- * mds_reint_create() and lmv_create() need to be fixed first.
- */
-int lmv_put_inode(struct obd_export *exp, struct lustre_id *id)
+int lmv_delete_inode(struct obd_export *exp, struct lustre_id *id)
 {
         ENTRY;
-//        lmv_delete_obj(exp, id);
+        lmv_delete_obj(exp, id);
         RETURN(0);
 }
 
@@ -1952,7 +1946,7 @@ struct md_ops lmv_md_ops = {
         .m_unlink              = lmv_unlink,
         .m_get_real_obd        = lmv_get_real_obd,
         .m_valid_attrs         = lmv_valid_attrs,
-        .m_put_inode           = lmv_put_inode,
+        .m_delete_inode        = lmv_delete_inode,
 };
 
 int __init lmv_init(void)

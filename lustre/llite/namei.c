@@ -562,8 +562,8 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         RETURN(err);
 }
 
-static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
-                    ll_dev_t rdev)
+static int ll_mknod(struct inode *dir, struct dentry *child,
+                    int mode, ll_dev_t rdev)
 {
         struct ptlrpc_request *request = NULL;
         struct inode *inode = NULL;

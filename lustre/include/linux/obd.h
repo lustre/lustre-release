@@ -889,7 +889,7 @@ struct md_ops {
                                         int repoff);
         int (*m_set_lock_data)(struct obd_export *exp, __u64 *l, void *data);
 
-        int (*m_put_inode)(struct obd_export *, struct lustre_id *);
+        int (*m_delete_inode)(struct obd_export *, struct lustre_id *);
 
         /* NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line to
          * lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c. Also, add a

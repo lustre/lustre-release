@@ -1374,27 +1374,22 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         }
 }
 
-void ll_put_inode(struct inode *inode)
+void ll_delete_inode(struct inode *inode)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct lustre_id id;
         int rc;
         ENTRY;
 
-        /* 
-         * notifying metadata target that any in memory data assosiated 
-         * with object @id should be removed. 
-         */
-        if (atomic_read(&inode->i_count) == 1) {
-                ll_inode2id(&id, inode);
+        ll_inode2id(&id, inode);
 
-                rc = md_put_inode(sbi->ll_lmv_exp, &id);
-                if (rc) {
-                        CERROR("md_put_inode() failed, error %d\n", 
-                               rc);
-                }
+        rc = md_delete_inode(sbi->ll_lmv_exp, &id);
+        if (rc) {
+                CERROR("md_delete_inode() failed, error %d\n", 
+                       rc);
         }
 
+        clear_inode(inode);
         EXIT;
 }
 

@@ -73,7 +73,7 @@ int main(int argc, char ** argv)
         for (i = 0; i < count && time(0) < end; i++, begin++) {
                 sprintf(filename, fmt, begin);
                 if (do_open) {
-                        int fd = open(filename, O_CREAT|O_RDWR, 0644);
+                        int fd = open(filename, O_CREAT | O_RDWR, 0644);
                         if (fd < 0) {
                                 printf("open(%s) error: %s\n", filename,
                                        strerror(errno));
@@ -81,7 +81,7 @@ int main(int argc, char ** argv)
                                 break;
                         }
                         close(fd);
-               } else if (do_link) {
+                } else if (do_link) {
                         rc = link(tgt, filename);
                         if (rc) {
                                 printf("link(%s, %s) error: %s\n",
@@ -90,7 +90,7 @@ int main(int argc, char ** argv)
                                 break;
                         }
                 } else {
-                        rc = mknod(filename, S_IFREG| 0444, 0);
+                        rc = mknod(filename, S_IFREG | 0444, 0);
                         if (rc) {
                                 printf("mknod(%s) error: %s\n",
                                        filename, strerror(errno));

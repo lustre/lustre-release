@@ -1213,17 +1213,17 @@ static inline int md_getstatus(struct obd_export *exp, struct lustre_id *id)
         RETURN(rc);
 }
 
-static inline int md_put_inode(struct obd_export *exp,
-                               struct lustre_id *id)
+static inline int md_delete_inode(struct obd_export *exp,
+                                  struct lustre_id *id)
 {
         int rc;
         ENTRY;
 
-        if (MDP(exp->exp_obd, put_inode) == NULL)
+        if (MDP(exp->exp_obd, delete_inode) == NULL)
                 RETURN(0);
         
-        MD_COUNTER_INCREMENT(exp->exp_obd, put_inode);
-        rc = MDP(exp->exp_obd, put_inode)(exp, id);
+        MD_COUNTER_INCREMENT(exp->exp_obd, delete_inode);
+        rc = MDP(exp->exp_obd, delete_inode)(exp, id);
         RETURN(rc);
 }
 
