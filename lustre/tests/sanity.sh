@@ -697,8 +697,8 @@ test_27e() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/f12 8192 1 2 || error
-	$LSTRIPE $DIR/d27/f12 8192 1 2 && error
+	$LSTRIPE $DIR/d27/f12 8192 0 2 || error
+	$LSTRIPE $DIR/d27/f12 8192 0 2 && error
 	$CHECKSTAT -t file $DIR/d27/f12 || error
 }
 run_test 27e "lstripe existing file (should return error) ======"
@@ -707,7 +707,7 @@ test_27f() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/fbad 100 1 1 && error
+	$LSTRIPE $DIR/d27/fbad 100 0 1 && error
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error
 	$LFIND $DIR/d27/fbad || error
 }
