@@ -1,3 +1,17 @@
+2002-08-30  Peter J. Braam  <braam@clusterfs.com>
+
+	* version v0_5_5
+	* many small fixes to 0_5_4
+	* io/network handling
+	* thinkos in MDS operations
+	
+2002-08-24  Peter J. Braam  <braam@clusterfs.com>
+
+	* version v0_5_4
+	* crucial basic fixes to 0.5.3
+	* IOR, Iozone work over Elan
+	* EOF locks added
+
 2002-08-07  Phil Schwan  <phil@clusterfs.com>
 	* version 0_5_3, our first alpha
 	* we use the new Portals iovs
