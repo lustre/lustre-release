@@ -34,15 +34,6 @@
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
 
-/* lov_packdesc() is in mds/mds_lov.c */
-void lov_unpackdesc(struct lov_desc *ld)
-{
-        ld->ld_tgt_count = NTOH__u32(ld->ld_tgt_count);
-        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count);
-        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size);
-        ld->ld_pattern = HTON__u32(ld->ld_pattern);
-}
-
 void lov_dump_lmm(int level, struct lov_mds_md *lmm)
 {
         struct lov_object_id *loi;
@@ -65,7 +56,8 @@ do {                                                                    \
         LASSERT(test); /* so we know what assertion failed */           \
 } while(0)
 
-/* Pack LOV object metadata for shipment to the MDS.
+/* Pack LOV object metadata for disk storage.  It is packed in LE byte
+ * order and is opaque to the networking layer.
  *
  * XXX In the future, this will be enhanced to get the EA size from the
  *     underlying OSC device(s) to get their EA sizes so we can stack
@@ -108,8 +100,7 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
                 RETURN(lmm_size);
 
         if (*lmmp && !lsm) {
-                /* endianness */
-                ost_count = ((*lmmp)->lmm_ost_count);
+                ost_count = le32_to_cpu ((*lmmp)->lmm_ost_count);
                 OBD_FREE(*lmmp, lov_mds_md_size(ost_count));
                 *lmmp = NULL;
                 RETURN(0);
@@ -122,25 +113,24 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         }
 
         lmm = *lmmp;
+        lmm->lmm_magic = cpu_to_le32 (LOV_MAGIC);
+        lmm->lmm_ost_count = cpu_to_le16 (ost_count);
 
-        lmm->lmm_stripe_count = (stripe_count);
         if (!lsm)
                 RETURN(lmm_size);
 
-        /* XXX endianness */
-        lmm->lmm_magic = (lsm->lsm_magic);
-        lmm->lmm_object_id = (lsm->lsm_object_id);
-        LASSERT(lsm->lsm_object_id);
-        lmm->lmm_stripe_size = (lsm->lsm_stripe_size);
-        lmm->lmm_stripe_offset = (lsm->lsm_stripe_offset);
-        lmm->lmm_ost_count = (ost_count);
+        lmm->lmm_object_id = cpu_to_le64 (lsm->lsm_object_id);
+        lmm->lmm_stripe_count = cpu_to_le16 (stripe_count);
+        lmm->lmm_stripe_size = cpu_to_le32 (lsm->lsm_stripe_size);
+        lmm->lmm_stripe_offset = cpu_to_le32 (lsm->lsm_stripe_offset);
 
         /* Only fill in the object ids which we are actually using.
          * Assumes lmm_objects is otherwise zero-filled. */
         for (i = 0, loi = lsm->lsm_oinfo; i < stripe_count; i++, loi++) {
                 /* XXX call down to osc_packmd() to do the packing */
-                LASSERT(loi->loi_id);
-                lmm->lmm_objects[loi->loi_ost_idx].l_object_id = (loi->loi_id);
+                LASSERT (loi->loi_id);
+                lmm->lmm_objects[loi->loi_ost_idx].l_object_id = 
+                        cpu_to_le64 (loi->loi_id);
         }
 
         RETURN(lmm_size);
@@ -156,14 +146,17 @@ static int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
         return stripe_count;
 }
 
+/* Unpack LOV object metadata from disk storage.  It is packed in LE byte
+ * order and is opaque to the networking layer.
+ */
 int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
-                 struct lov_mds_md *lmm)
+                 struct lov_mds_md *lmm, int lmm_bytes)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct lov_obd *lov = &obd->u.lov;
         struct lov_stripe_md *lsm;
         struct lov_oinfo *loi;
-        int ost_count;
+        int ost_count = 0;
         int ost_offset = 0;
         int stripe_count;
         int lsm_size;
@@ -171,14 +164,31 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         ENTRY;
 
         if (lmm) {
-                /* endianness */
-                if (lmm->lmm_magic != LOV_MAGIC) {
-                        CERROR("bad wire LOV MAGIC: %#08x != %#08x\n",
-                               lmm->lmm_magic, LOV_MAGIC);
+                if (lmm_bytes < sizeof (*lmm)) {
+                        CERROR ("lov_mds_md too small: %d, need at least %d\n",
+                                lmm_bytes, sizeof (*lmm));
+                        RETURN (-EINVAL);
+                }
+                if (le32_to_cpu (lmm->lmm_magic) != LOV_MAGIC) {
+                        CERROR("bad disk LOV MAGIC: %#08x != %#08x\n",
+                               le32_to_cpu (lmm->lmm_magic), LOV_MAGIC);
                         RETURN(-EINVAL);
                 }
-                stripe_count = (lmm->lmm_stripe_count);
-                LASSERT(stripe_count);
+                
+                ost_count = le16_to_cpu (lmm->lmm_ost_count);
+                stripe_count = le16_to_cpu (lmm->lmm_stripe_count);
+
+                if (ost_count == 0 || stripe_count == 0) {
+                        CERROR ("zero ost %d or stripe %d count\n",
+                                ost_count, stripe_count);
+                        RETURN (-EINVAL);
+                }
+
+                if (lmm_bytes < lov_mds_md_size (ost_count)) {
+                        CERROR ("lov_mds_md too small: %d, need %d\n",
+                                lmm_bytes, lov_mds_md_size (ost_count));
+                        RETURN (-EINVAL);
+                }
         } else
                 stripe_count = lov_get_stripecnt(lov, 0);
 
@@ -202,18 +212,15 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         }
 
         lsm = *lsmp;
-
+        lsm->lsm_magic = LOV_MAGIC;
         lsm->lsm_stripe_count = stripe_count;
+
         if (!lmm)
                 RETURN(lsm_size);
 
-        /* XXX endianness */
-        ost_offset = lsm->lsm_stripe_offset = (lmm->lmm_stripe_offset);
-        lsm->lsm_magic = (lmm->lmm_magic);
-        lsm->lsm_object_id = (lmm->lmm_object_id);
-        lsm->lsm_stripe_size = (lmm->lmm_stripe_size);
-
-        ost_count = (lmm->lmm_ost_count);
+        lsm->lsm_object_id = le64_to_cpu (lmm->lmm_object_id);
+        lsm->lsm_stripe_size = le32_to_cpu (lmm->lmm_stripe_size);
+        ost_offset = lsm->lsm_stripe_offset = le32_to_cpu (lmm->lmm_stripe_offset);
 
         LMM_ASSERT(lsm->lsm_object_id);
         LMM_ASSERT(ost_count);
@@ -226,7 +233,7 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
 
                 LMM_ASSERT(loi - lsm->lsm_oinfo < stripe_count);
                 /* XXX LOV STACKING call down to osc_unpackmd() */
-                loi->loi_id = (lmm->lmm_objects[ost_offset].l_object_id);
+                loi->loi_id = le64_to_cpu (lmm->lmm_objects[ost_offset].l_object_id);
                 loi->loi_ost_idx = ost_offset;
                 loi++;
         }
@@ -258,8 +265,10 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         if (rc)
                 RETURN(-EFAULT);
 
+#warning FIXME: struct lov_mds_md is little-endian everywhere else
+
         if (lmm.lmm_magic != LOV_MAGIC) {
-                CERROR("bad wire LOV MAGIC: %#08x != %#08x\n",
+                CERROR("bad userland LOV MAGIC: %#08x != %#08x\n",
                        lmm.lmm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
@@ -314,10 +323,8 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
 int lov_getstripe(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                   struct lov_mds_md *lmmu)
 {
-        struct obd_device *obd = class_conn2obd(conn);
-        struct lov_obd *lov = &obd->u.lov;
         struct lov_mds_md lmm, *lmmk = NULL;
-        int ost_count, rc, lmm_size;
+        int rc, lmm_size;
         ENTRY;
 
         if (!lsm)
@@ -330,23 +337,24 @@ int lov_getstripe(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         if (lmm.lmm_magic != LOV_MAGIC)
                 RETURN(-EINVAL);
 
-        ost_count = lov->desc.ld_tgt_count;
-
-        /* XXX we _could_ check if indices > user lmm_ost_count are zero */
-        if (lmm.lmm_ost_count < ost_count)
-                RETURN(-EOVERFLOW);
-
         rc = lov_packmd(conn, &lmmk, lsm);
         if (rc < 0)
                 RETURN(rc);
-
+#ifdef __KERNEL__
+#if __BIG_ENDIAN
+#error FIXME: convert lmmk to big-endian before copy to userspace
+#endif
+#endif
         lmm_size = rc;
         rc = 0;
 
-        if (lmm_size && copy_to_user(lmmu, lmmk, lmm_size))
+        /* User wasn't expecting this many OST entries */
+        if (lmm.lmm_ost_count < lmmk->lmm_ost_count)
+                rc = -EOVERFLOW;
+        else if (copy_to_user(lmmu, lmmk, lmm_size))
                 rc = -EFAULT;
 
-        obd_free_wiremd(conn, &lmmk);
+        obd_free_diskmd (conn, &lmmk);
 
         RETURN(rc);
 }
