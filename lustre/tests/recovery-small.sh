@@ -2,6 +2,9 @@
 
 set -e
 
+# 17 = bug 2732   2986
+ALWAYS_EXCEPT="17 19b"
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 UPCALL=${UPCALL:-$PWD/recovery-small-upcall.sh}
 . $LUSTRE/tests/test-framework.sh
@@ -220,8 +223,35 @@ test_19b() {
     drop_ldlm_cancel multiop $f Ow  || echo "client evicted, as expected"
 
     do_facet client munlink $f  || return 4
-
 }
 run_test 19b "test expired_lock_main on ost (2867)"
+
+test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
+	mkdir -p $DIR/$tdir
+	multiop $DIR/$tdir/${tfile} O_wc &
+	MULTI_PID=$!
+	usleep 500
+	cancel_lru_locks OSC
+#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
+	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	set -vx
+	kill -USR1 $MULTI_PID
+	wait $MULTI_PID
+	rc=$?
+	[ $rc -eq 0 ] && error "multiop didn't fail enqueue: rc $rc" || true
+	set +vx
+}
+run_test 20a "ldlm_handle_enqueue error (should return error)" 
+
+test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
+	mkdir $DIR/$tdir
+	touch $DIR/$tdir/${tfile}
+	cancel_lru_locks OSC
+#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
+	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	dd if=/etc/hosts of=$DIR/$tdir/$tfile && \
+		error "didn't fail open enqueue" || true
+}
+run_test 20b "ldlm_handle_enqueue error (should return error)"
 
 $CLEANUP

@@ -617,6 +617,9 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                         buffers = 2;
                 }
 
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
+                        GOTO(out, rc = -ENOMEM);
+
                 rc = lustre_pack_reply(req, buffers, size, NULL);
                 if (rc)
                         GOTO(out, rc);
@@ -656,6 +659,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 err = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc == 0)
                         rc = err;
+                req->rq_status = rc;
         }
 
         /* The LOCK_CHANGED code in ldlm_lock_enqueue depends on this
@@ -664,9 +668,10 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
                            "(err=%d, rc=%d)", err, rc);
 
-                if (lock->l_resource->lr_lvb_len > 0) {
+                if (lock->l_resource->lr_lvb_len > 0 && rc == 0) {
                         void *lvb = lustre_msg_buf(req->rq_repmsg, 1,
                                                   lock->l_resource->lr_lvb_len);
+                        LASSERT(lvb != NULL);
                         memcpy(lvb, lock->l_resource->lr_lvb_data,
                                lock->l_resource->lr_lvb_len);
                 }
