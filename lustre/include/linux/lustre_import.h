@@ -13,6 +13,18 @@
 #include <linux/lustre_handles.h>
 #include <linux/lustre_idl.h>
 
+enum lustre_imp_state {
+//        LUSTRE_IMP_INVALID    = 1,
+        LUSTRE_IMP_NEW        = 2,
+        LUSTRE_IMP_DISCON     = 3,
+        LUSTRE_IMP_CONNECTING = 4,
+        LUSTRE_IMP_REPLAY     = 5,
+        LUSTRE_IMP_RECOVER    = 6,
+        LUSTRE_IMP_FULL       = 7,
+        LUSTRE_IMP_EVICTED    = 8,
+};
+
+
 struct obd_import {
         struct portals_handle     imp_handle;
         atomic_t                  imp_refcount;
@@ -30,7 +42,8 @@ struct obd_import {
         struct list_head          imp_delayed_list;
 
         struct obd_device        *imp_obd;
-        int                       imp_level;
+        struct semaphore          imp_recovery_sem;
+        enum lustre_imp_state      imp_state;
         int                       imp_generation;
         __u32                     imp_conn_cnt;
         __u64                     imp_max_transno;
