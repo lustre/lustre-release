@@ -199,6 +199,7 @@ int obdfs_readpage(struct file *file, struct page *page)
 	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
 	     <= page->index) {
 		memset(kmap(page), 0, PAGE_CACHE_SIZE);
+		kunmap(page);
 		goto readpage_out;
 	}
 
@@ -551,7 +552,6 @@ int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsi
 
 	if (cache_writes == 0) { 
 		rc = obdfs_commit_page(page, 1, from, to);
-		kunmap(page);
 	}
 
         if (len > inode->i_size) {
