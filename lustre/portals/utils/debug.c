@@ -412,7 +412,6 @@ int jt_dbg_debug_file(int argc, char **argv)
                         strerror(errno));
                 return -1;
         }
-#warning FIXME: cleanup fstat issue here
 #ifndef SYS_fstat64
 #define __SYS_fstat__ SYS_fstat
 #else
