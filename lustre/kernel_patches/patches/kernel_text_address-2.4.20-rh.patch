@@ -25,30 +25,6 @@ Index: linux-2.4.20-20.9/arch/i386/kernel/traps.c
 ===================================================================
 --- linux-2.4.20-20.9.orig/arch/i386/kernel/traps.c	2003-11-06 18:35:56.000000000 +0800
 +++ linux-2.4.20-20.9/arch/i386/kernel/traps.c	2003-11-06 18:43:26.000000000 +0800
-@@ -52,10 +52,6 @@
- #include <linux/irq.h>
- #include <linux/module.h>
- 
--#ifdef CONFIG_MCL_COREDUMP
--#include <linux/crash.h>
--#endif
--
- asmlinkage int system_call(void);
- asmlinkage void lcall7(void);
- asmlinkage void lcall27(void);
-@@ -313,11 +309,7 @@
- 		netdump_func(regs);
- 	bust_spinlocks(0);
- 	spin_unlock_irq(&die_lock);
--#ifdef CONFIG_MCL_COREDUMP 
--	if(panic_on_oops)
--		panic("die");
--#endif
--	do_exit(SIGSEGV);/* NOTREACHED */
-+	do_exit(SIGSEGV);
- }
- 
- static inline void die_if_kernel(const char * str, struct pt_regs * regs, long err)
 @@ -1027,9 +1019,39 @@
  #endif
  }
