@@ -254,21 +254,41 @@ class LCTLInterface:
             
         self.run(cmds)
 
-    # create a new connection 
-    def connect(self, net, nid, port, servuuid, send_buf, read_buf):
-        # XXX: buf size params not used yet
-        cmds =  """
+    # create a new connection
+    def connect(self, net, nid, port, servuuid, send_mem, recv_mem):
+        if net == 'tcp':
+            cmds =  """
   network %s
-  connect %s %d
   add_uuid %s %s
-  quit""" % (net, nid, port,  servuuid, nid)
+  send_mem %d
+  recv_mem %d
+  connect %s %d
+  quit""" % (net, servuuid, nid, send_mem, recv_mem, nid, port,  )
+        else:
+            cmds =  """
+  network %s
+  add_uuid %s %s
+  connect %s %d
+  quit""" % (net, servuuid, nid, nid, port,  )
+            
         self.run(cmds)
                 
-    # create a new connection 
-    def add_route(self, net, to, via):
+    # add a route to a range
+    def add_route(self, net, gw, lo, hi):
         cmds =  """
-        """ 
-        #self.run(cmds)
+    network %s
+    add_route %s %s %s
+        """ % (net, gw, lo, hi)
+        self.run(cmds)
+
+    # add a route to a host
+    def add_route_host(self, net, uuid, gw, tgt):
+        cmds =  """
+    network %s
+    add_uuid %s %s
+    add_route %s %s
+        """ % (net, uuid, tgt, gw, tgt)
+        self.run(cmds)
 
     # disconnect one connection
     def disconnect(self, net, nid, port, servuuid):
@@ -525,24 +545,43 @@ class Module:
     """ Base class for the rest of the modules. The default cleanup method is
     defined here, as well as some utilitiy funcs.
     """
-    def __init__(self, tag_name, node):
-        self.dom_node = node
-        self.tag_name = tag_name
-        self.name = node.getAttribute('name')
-        self.uuid = node.getAttribute('uuid')
+    def __init__(self, module_name, dom_node):
+        self.dom_node = dom_node
+        self.module_name = module_name
+        self.name = get_attr(dom_node, 'name')
+        self.uuid = get_attr(dom_node, 'uuid')
         self.kmodule_list = []
+        self._server = None
+        self._connected = 0
         
     def info(self, *args):
         msg = string.join(map(str,args))
-        print self.tag_name + ":", self.name, self.uuid, msg
+        print self.module_name + ":", self.name, self.uuid, msg
+
+
+    def lookup_server(self, srv_uuid):
+        """ Lookup a server's network information """
+        net = get_ost_net(self.dom_node.parentNode, srv_uuid)
+        self._server = Network(net)
+
+    def get_server(self):
+        return self._server
 
     def cleanup(self):
         """ default cleanup, used for most modules """
         self.info()
+        srv = self.get_server()
+        if srv:
+            try:
+                lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+            except CommandError, e:
+                log(self.module_name, "disconnect failed: ", self.name)
+                e.dump()
         try:
             lctl.cleanup(self.name, self.uuid)
         except CommandError, e:
-            print "cleanup failed: ", self.name
+            log(self.module_name, "cleanup failed: ", self.name)
+            e.dump()
 
     def add_module(self, modname):
         """Append a module to list of modules to load."""
@@ -594,13 +633,13 @@ class Module:
         
 
 class Network(Module):
-    def __init__(self,node):
-        Module.__init__(self, 'NETWORK', node)
-        self.net_type = node.getAttribute('type')
-        self.nid = getText(node, 'server', '*')
-        self.port = int(getText(node, 'port', 0))
-        self.send_buf = int(getText(node, 'send_buf', 0))
-        self.read_buf = int(getText(node, 'read_buf', 0))
+    def __init__(self,dom_node):
+        Module.__init__(self, 'NETWORK', dom_node)
+        self.net_type = get_attr(dom_node,'type')
+        self.nid = get_text(dom_node, 'server', '*')
+        self.port = get_text_int(dom_node, 'port', 0)
+        self.send_buf = get_text_int(dom_node, 'send_buf', 65536)
+        self.read_buf = get_text_int(dom_node, 'read_buf', 65536)
         if self.nid == '*':
             self.nid = get_local_address(self.net_type)
             if not self.nid:
@@ -622,6 +661,13 @@ class Network(Module):
             ret = run_daemon(TCP_ACCEPTOR, self.port)
             if ret:
                 raise CommandError(TCP_ACCEPTOR, 'failed', ret)
+
+        ret = self.dom_node.getElementsByTagName('route_tbl')
+        for a in ret:
+            for r in a.getElementsByTagName('route'):
+                lctl.add_route(self.net_type, self.nid, get_attr(r, 'lo'),
+                               get_attr(r,'hi', ''))
+            
         lctl.network(self.net_type, self.nid)
         lctl.newdev(attach = "ptlrpc RPCDEV")
 
@@ -631,17 +677,19 @@ class Network(Module):
             lctl.cleanup("RPCDEV", "")
         except CommandError, e:
             print "cleanup failed: ", self.name
+            e.dump()
         try:
             lctl.disconnectAll(self.net_type)
         except CommandError, e:
-            print "cleanup failed: ", self.name
+            print "disconnectAll failed: ", self.name
+            e.dump()
         if self.net_type == 'tcp':
             # yikes, this ugly! need to save pid in /var/something
             run("killall acceptor")
 
 class LDLM(Module):
-    def __init__(self,node):
-        Module.__init__(self, 'LDLM', node)
+    def __init__(self,dom_node):
+        Module.__init__(self, 'LDLM', dom_node)
         self.add_module('ldlm')
     def prepare(self):
         self.info()
@@ -649,24 +697,16 @@ class LDLM(Module):
                     setup ="")
 
 class LOV(Module):
-    def __init__(self,node):
-        Module.__init__(self, 'LOV', node)
-        devs = node.getElementsByTagName('devices')[0]
-        self.stripe_sz = int(devs.getAttribute('stripesize'))
-        self.stripe_off = int(devs.getAttribute('stripeoffset'))
-        self.pattern = int(devs.getAttribute('pattern'))
-        mdsref =  node.getElementsByTagName('mds_ref')[0]
-        self.mdsuuid = mdsref.getAttribute('uuidref')
-        mds= lookup(node.parentNode, self.mdsuuid)
+    def __init__(self,dom_node):
+        Module.__init__(self, 'LOV', dom_node)
+        self.stripe_sz = get_attr_int(dom_node, 'stripesize', 65536)
+        self.stripe_off = get_attr_int(dom_node, 'stripeoffset', 0)
+        self.pattern = get_attr_int(dom_node, 'pattern', 0)
+        self.mdsuuid = get_first_ref(dom_node, 'mds')
+        mds= lookup(dom_node.parentNode, self.mdsuuid)
         self.mdsname = getName(mds)
-        devlist = ""
-        stripe_cnt = 0
-        for child in devs.childNodes:
-            if child.nodeName == 'osc_ref':
-                devlist = devlist +  child.getAttribute('uuidref') + " "
-                stripe_cnt = stripe_cnt + 1
-        self.devlist = devlist
-        self.stripe_cnt = stripe_cnt
+        self.devlist = get_all_refs(dom_node, 'osc')
+        self.stripe_cnt = len(self.devlist)
         self.add_module('osc')
         self.add_module('lov')
 
@@ -675,17 +715,15 @@ class LOV(Module):
         self.devlist, self.mdsname)
         lctl.lovconfig(self.uuid, self.mdsname, self.stripe_cnt,
                        self.stripe_sz, self.stripe_off, self.pattern,
-                       self.devlist)
+                       string.join(self.devlist))
 
-    def cleanup(self):
-        pass
 
 class MDS(Module):
-    def __init__(self,node):
-        Module.__init__(self, 'MDS', node)
-        self.devname, self.size = getDevice(node)
-        self.fstype = getText(node, 'fstype')
-        self.format = getText(node, 'autoformat', "no")
+    def __init__(self,dom_node):
+        Module.__init__(self, 'MDS', dom_node)
+        self.devname, self.size = get_device(dom_node)
+        self.fstype = get_text(dom_node, 'fstype')
+        self.format = get_text(dom_node, 'autoformat', "no")
         if self.fstype == 'extN':
             self.add_module('extN') 
         self.add_module('mds')
@@ -701,43 +739,26 @@ class MDS(Module):
         clean_loop(self.devname)
 
 class MDC(Module):
-    def __init__(self,node):
-        Module.__init__(self, 'MDC', node)
-        ref = node.getElementsByTagName('mds_ref')[0]
-        self.mds_uuid = ref.getAttribute('uuidref')
+    def __init__(self,dom_node):
+        Module.__init__(self, 'MDC', dom_node)
+        self.mds_uuid = get_first_ref(dom_node, 'mds')
+        self.lookup_server(self.mds_uuid)
         self.add_module('mdc')
 
     def prepare(self):
         self.info(self.mds_uuid)
-        mds = lookup(self.dom_node.parentNode, self.mds_uuid)
-        if mds == None:
-            panic(self.mdsuuid, "not found.")
-        net = get_ost_net(self.dom_node.parentNode, self.mds_uuid)
-        srv = Network(net)
+        srv = self.get_server()
         lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
         lctl.newdev(attach="mdc %s %s" % (self.name, self.uuid),
                         setup ="%s %s" %(self.mds_uuid, srv.uuid))
             
-    def cleanup(self):
-        self.info(self.mds_uuid)
-        net = get_ost_net(self.dom_node.parentNode, self.mds_uuid)
-        srv = Network(net)
-        try:
-            lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
-        except CommandError:
-            print "disconnect failed: ", self.name
-        try:
-            lctl.cleanup(self.name, self.uuid)
-        except CommandError:
-            print "cleanup failed: ", self.name
-
 class OBD(Module):
-    def __init__(self, node):
-        Module.__init__(self, 'OBD', node)
-        self.obdtype = node.getAttribute('type')
-        self.devname, self.size = getDevice(node)
-        self.fstype = getText(node, 'fstype')
-        self.format = getText(node, 'autoformat', 'yes')
+    def __init__(self, dom_node):
+        Module.__init__(self, 'OBD', dom_node)
+        self.obdtype = get_attr(dom_node, 'type')
+        self.devname, self.size = get_device(dom_node)
+        self.fstype = get_text(dom_node, 'fstype')
+        self.format = get_text(dom_node, 'autoformat', 'yes')
         if self.fstype == 'extN':
             self.add_module('extN') 
         self.add_module(self.obdtype)
@@ -759,10 +780,9 @@ class OBD(Module):
             clean_loop(self.devname)
 
 class OST(Module):
-    def __init__(self,node):
-        Module.__init__(self, 'OST', node)
-        ref = node.getElementsByTagName('obd_ref')[0]
-        self.obd_uuid = ref.getAttribute('uuidref')
+    def __init__(self,dom_node):
+        Module.__init__(self, 'OST', dom_node)
+        self.obd_uuid = get_first_ref(dom_node, 'obd')
         self.add_module('ost')
 
     def prepare(self):
@@ -771,43 +791,32 @@ class OST(Module):
                     setup ="%s" % (self.obd_uuid))
 
 class OSC(Module):
-    def __init__(self,node):
-        Module.__init__(self, 'OSC', node)
-        ref = node.getElementsByTagName('obd_ref')[0]
-        self.obd_uuid = ref.getAttribute('uuidref')
-        ref = node.getElementsByTagName('ost_ref')[0]
-        self.ost_uuid = ref.getAttribute('uuidref')
+    def __init__(self,dom_node):
+        Module.__init__(self, 'OSC', dom_node)
+        self.obd_uuid = get_first_ref(dom_node, 'obd')
+        self.ost_uuid = get_first_ref(dom_node, 'ost')
+        self.lookup_server(self.ost_uuid)
         self.add_module('osc')
 
     def prepare(self):
         self.info(self.obd_uuid, self.ost_uuid)
-        net = get_ost_net(self.dom_node.parentNode, self.ost_uuid)
-        srv = Network(net)
-        lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
+        srv = self.get_server()
+        if local_net(srv):
+            lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
+        else:
+            r =  find_route(srv)
+            lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
+            
         lctl.newdev(attach="osc %s %s" % (self.name, self.uuid),
                     setup ="%s %s" %(self.obd_uuid, srv.uuid))
 
-    def cleanup(self):
-        self.info(self.obd_uuid, self.ost_uuid)
-        net_uuid = get_ost_net(self.dom_node.parentNode, self.ost_uuid)
-        srv = Network(net_uuid)
-        try:
-            lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
-        except CommandError:
-            print " failed: ", self.name
-        try:
-            lctl.cleanup(self.name, self.uuid)
-        except CommandError:
-            print "cleanup failed: ", self.name
 
 class Mountpoint(Module):
-    def __init__(self,node):
-        Module.__init__(self, 'MTPT', node)
-        self.path = getText(node, 'path')
-        ref = node.getElementsByTagName('mdc_ref')[0]
-        self.mdc_uuid = ref.getAttribute('uuidref')
-        ref = node.getElementsByTagName('osc_ref')[0]
-        self.lov_uuid = ref.getAttribute('uuidref')
+    def __init__(self,dom_node):
+        Module.__init__(self, 'MTPT', dom_node)
+        self.path = get_text(dom_node, 'path')
+        self.mdc_uuid = get_first_ref(dom_node, 'mdc')
+        self.lov_uuid = get_first_ref(dom_node, 'osc')
         self.add_module('osc')
         self.add_module('llite')
 
@@ -815,7 +824,7 @@ class Mountpoint(Module):
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
         if l.nodeName == 'lov':
             lov = LOV(l)
-            for osc_uuid in string.split(lov.devlist):
+            for osc_uuid in lov.devlist:
                 osc = lookup(self.dom_node.parentNode, osc_uuid)
                 if osc:
                     n = OSC(osc)
@@ -837,63 +846,119 @@ class Mountpoint(Module):
             panic("mount failed:", self.path)
     def cleanup(self):
         self.info(self.path, self.mdc_uuid,self.lov_uuid)
-        run("umount", self.path)
+        (rc, out) = run("umount", self.path)
+        if rc:
+            log("umount failed, cleanup will most likely not work.")
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
         if l.nodeName == 'lov':
             lov = LOV(l)
-            for osc_uuid in string.split(lov.devlist):
+            for osc_uuid in lov.devlist:
                 osc = lookup(self.dom_node.parentNode, osc_uuid)
                 if osc:
                     n = OSC(osc)
                     n.cleanup()
                 else:
                     panic('osc not found:', osc_uuid)
-            lov.cleanup()
         else:
             osc = OSC(l)
             osc.cleanup()
             
+class Router(Module):
+    def __init__(self,dom_node):
+        Module.__init__(self, 'ROUTER', dom_node)
+        self.add_module('kptlrouter')
+
+    def prepare(self):
+        self.info()
+
+
 # ============================================================
 # XML processing and query
 # TODO: Change query funcs to use XPath, which is muc cleaner
 
-def getDevice(obd):
+def get_device(obd):
     list = obd.getElementsByTagName('device')
     if len(list) > 0:
         dev = list[0]
         dev.normalize();
-        try:
-            size = int(dev.getAttribute('size'))
-        except ValueError:
-            size = 0
+        size = get_attr_int(dev, 'size', 0)
         return dev.firstChild.data, size
     return '', 0
 
 # Get the text content from the first matching child
 # If there is no content (or it is all whitespace), return
 # the default
-def getText(node, tag, default=""):
-    list = node.getElementsByTagName(tag)
+def get_text(dom_node, tag, default=""):
+    list = dom_node.getElementsByTagName(tag)
     if len(list) > 0:
-        node = list[0]
-        node.normalize()
-        if node.firstChild:
-            txt = string.strip(node.firstChild.data)
+        dom_node = list[0]
+        dom_node.normalize()
+        if dom_node.firstChild:
+            txt = string.strip(dom_node.firstChild.data)
             if txt:
                 return txt
     return default
 
-def get_ost_net(node, uuid):
-    ost = lookup(node, uuid)
-    list = ost.getElementsByTagName('network_ref')
-    if list:
-        uuid = list[0].getAttribute('uuidref')
-    else:
-        return None
-    return lookup(node, uuid)
+def get_text_int(dom_node, tag, default=0):
+    list = dom_node.getElementsByTagName(tag)
+    n = default
+    if len(list) > 0:
+        dom_node = list[0]
+        dom_node.normalize()
+        if dom_node.firstChild:
+            txt = string.strip(dom_node.firstChild.data)
+            if txt:
+                try:
+                    n = int(txt)
+                except ValueError:
+                    panic("text value is not integer:", txt)
+    return n
+
+def get_attr(dom_node, attr, default=""):
+    v = dom_node.getAttribute(attr)
+    if v:
+        return v
+    return default
+
+def get_attr_int(dom_node, attr, default=0):
+    n = default
+    v = dom_node.getAttribute(attr)
+    if v:
+        try:
+            n = int(v)
+        except ValueError:
+            panic("attr value is not integer", v)
+    return n
+
+def get_first_ref(dom_node, tag):
+    """ Get the first uuidref of the type TAG. Used one only
+    one is expected.  Returns the uuid."""
+    uuid = None
+    refname = '%s_ref' % tag
+    list = dom_node.getElementsByTagName(refname)
+    if len(list) > 0:
+        uuid = getRef(list[0])
+    return uuid
     
-def lookup(node, uuid):
-    for n in node.childNodes:
+def get_all_refs(dom_node, tag):
+    """ Get all the refs of type TAG.  Returns list of uuids. """
+    uuids = []
+    refname = '%s_ref' % tag
+    list = dom_node.getElementsByTagName(refname)
+    if len(list) > 0:
+        for i in list:
+            uuids.append(getRef(i))
+    return uuids
+
+def get_ost_net(dom_node, uuid):
+    ost = lookup(dom_node, uuid)
+    uuid = get_first_ref(ost, 'network')
+    if not uuid:
+        return None
+    return lookup(dom_node, uuid)
+    
+def lookup(dom_node, uuid):
+    for n in dom_node.childNodes:
         if n.nodeType == n.ELEMENT_NODE:
             if getUUID(n) == uuid:
                 return n
@@ -902,48 +967,48 @@ def lookup(node, uuid):
                 if n: return n
     return None
             
-# Get name attribute of node
-def getName(node):
-    return node.getAttribute('name')
+# Get name attribute of dom_node
+def getName(dom_node):
+    return dom_node.getAttribute('name')
 
-def getRef(node):
-    return node.getAttribute('uuidref')
+def getRef(dom_node):
+    return dom_node.getAttribute('uuidref')
 
-# Get name attribute of node
-def getUUID(node):
-    return node.getAttribute('uuid')
+# Get name attribute of dom_node
+def getUUID(dom_node):
+    return dom_node.getAttribute('uuid')
 
 # the tag name is the service type
-# fixme: this should do some checks to make sure the node is a service
-def getServiceType(node):
-    return node.nodeName
+# fixme: this should do some checks to make sure the dom_node is a service
+def getServiceType(dom_node):
+    return dom_node.nodeName
 
 #
 # determine what "level" a particular node is at.
-# the order of iniitailization is based on level.  objects
-# are assigned a level based on type:
-#  net,devices,ldlm:1, obd, mdd:2  mds,ost:3 osc,mdc:4 mounts:5
-def getServiceLevel(node):
-    type = getServiceType(node)
-    if type in ('network',):
+# the order of iniitailization is based on level. 
+def getServiceLevel(dom_node):
+    type = getServiceType(dom_node)
+    if type in ('ptlrouter',):
         return 1
-    if type in ('device', 'ldlm'):
-        return 2
+    if type in ('network',):
+        return 10
+    elif type in ('device', 'ldlm'):
+        return 20
     elif type in ('obd', 'mdd'):
-        return 3
+        return 30
     elif type in ('mds','ost'):
-        return 4
+        return 40
     elif type in ('mdc','osc'):
-        return 5
+        return 50
     elif type in ('lov',):
-        return 6
+        return 60
     elif type in ('mountpoint',):
-        return 7
+        return 70
     return 0
 
 #
 # return list of services in a profile. list is a list of tuples
-# [(level, node),]
+# [(level, dom_node),]
 def getServices(lustreNode, profileNode):
     list = []
     for n in profileNode.childNodes:
@@ -957,7 +1022,7 @@ def getServices(lustreNode, profileNode):
     list.sort()
     return list
 
-def getByName(lustreNode, tag, name):
+def getByName(lustreNode, name, tag):
     ndList = lustreNode.getElementsByTagName(tag)
     for nd in ndList:
         if getName(nd) == name:
@@ -965,46 +1030,122 @@ def getByName(lustreNode, tag, name):
     return None
     
 
-# ============================================================
+
+
+############################################################
+# routing ("rooting")
+#
+routes = []
+local_node = []
+
+def init_node(dom_node):
+    global local_node
+    netlist = dom_node.getElementsByTagName('network')
+    for dom_net in netlist:
+        type = get_attr(dom_net, 'type')
+        gw = get_text(dom_net, 'server')
+        local_node.append((type, gw))
+
+
+def get_routes(type, gw, dom_net):
+    """ Return the routes as a list of tuples of the form:
+        [(type, gw, lo, hi),]"""
+    res = []
+    tbl = dom_net.getElementsByTagName('route_tbl')
+    routes = tbl[0].getElementsByTagName('route')
+    for r in routes:
+        lo = get_attr(r, 'lo')
+        hi = get_attr(r, 'hi', '')
+        res.append((type, gw, lo, hi))
+    return res
+    
+
+def init_route_config(lustre):
+    """ Scan the lustre config looking for routers.  Build list of
+    routes. """
+    global routes
+    routes = []
+    list = lustre.getElementsByTagName('node')
+    for node in list:
+        if get_attr(node, 'router'):
+            for (local_type, local_nid) in local_node:
+                gw = None
+                netlist = node.getElementsByTagName('network')
+                for dom_net in netlist:
+                    if local_type == get_attr(dom_net, 'type'):
+                        gw = get_text(dom_net, 'server')
+                        break
+                if not gw:
+                    continue
+                for dom_net in netlist:
+                    if local_type != get_attr(dom_net, 'type'):
+                        for route in get_routes(local_type, gw, dom_net):
+                            routes.append(route)
+    
+
+def local_net(net):
+    global local_node
+    for iface in local_node:
+        if net.net_type == iface[0]:
+            return 1
+    return 0
+
+def find_route(net):
+    global local_node, routes
+    frm_type = local_node[0][0]
+    to_type = net.net_type
+    to = net.nid
+    debug ('looking for route to', to_type,to)
+    for r in routes:
+        if  r[2] == to:
+            return r
+    return None
+           
+    
+        
+
+############################################################
 # lconf level logic
 # Start a service.
-def startService(node, clean_flag, module_flag):
-    type = getServiceType(node)
-    debug('Service:', type, getName(node), getUUID(node))
+def startService(dom_node, module_flag):
+    type = getServiceType(dom_node)
+    debug('Service:', type, getName(dom_node), getUUID(dom_node))
     # there must be a more dynamic way of doing this...
     n = None
     if type == 'ldlm':
-        n = LDLM(node)
+        n = LDLM(dom_node)
     elif type == 'lov':
-        n = LOV(node)
+        n = LOV(dom_node)
     elif type == 'network':
-        n = Network(node)
+        n = Network(dom_node)
     elif type == 'obd':
-        n = OBD(node)
+        n = OBD(dom_node)
     elif type == 'ost':
-        n = OST(node)
+        n = OST(dom_node)
     elif type == 'mds':
-        n = MDS(node)
+        n = MDS(dom_node)
     elif type == 'osc':
-        n = OSC(node)
+        n = OSC(dom_node)
     elif type == 'mdc':
-        n = MDC(node)
+        n = MDC(dom_node)
     elif type == 'mountpoint':
-        n = Mountpoint(node)
+        n = Mountpoint(dom_node)
+    elif type == 'ptlrouter':
+        n = Router(dom_node)
     else:
         panic ("unknown service type:", type)
 
     if module_flag:
         if config.nomod():
             return
-        if clean_flag:
+        if config.cleanup():
             n.cleanup_module()
         else:
             n.load_module()
     else:
         if config.nosetup():
             return
-        if clean_flag:
+        if config.cleanup():
             n.cleanup()
         else:
             n.prepare()
@@ -1017,37 +1158,43 @@ def startService(node, clean_flag, module_flag):
 #  * make sure partitions are in place and prepared
 #  * initialize devices with lctl
 # Levels is important, and needs to be enforced.
-def startProfile(lustreNode, profileNode, clean_flag, module_flag):
+def startProfile(lustreNode, profileNode, module_flag):
     if not profileNode:
         panic("profile:", profile, "not found.")
     services = getServices(lustreNode, profileNode)
-    if clean_flag:
+    if config.cleanup():
         services.reverse()
     for s in services:
-        startService(s[1], clean_flag, module_flag)
+        startService(s[1], module_flag)
+
 
 #
 # Load profile for 
-def doHost(lustreNode, hosts, clean_flag):
-    node = None
+def doHost(lustreNode, hosts):
+    global routes
+    dom_node = None
     for h in hosts:
-        node = getByName(lustreNode, 'node', h)
-        if node:
+        dom_node = getByName(lustreNode, h, 'node')
+        if dom_node:
             break
 
-    if not node:
+    if not dom_node:
         print 'No host entry found.'
         return
 
+    if not get_attr(dom_node, 'router'):
+        init_node(dom_node)
+        init_route_config(lustreNode)
+
     # Two step process: (1) load modules, (2) setup lustre
     # if not cleaning, load modules first.
-    module_flag = not clean_flag
-    reflist = node.getElementsByTagName('profile')
+    module_flag = not config.cleanup()
+    reflist = dom_node.getElementsByTagName('profile')
     for profile in reflist:
-            startProfile(lustreNode,  profile, clean_flag, module_flag)
+            startProfile(lustreNode,  profile, module_flag)
 
-    if not clean_flag:
-        setDebugPath()
+    if not config.cleanup():
+        sys_set_debug_path()
         script = config.gdb_script()
         run(lctl.lctl, ' modules >', script)
         if config.gdb():
@@ -1057,8 +1204,9 @@ def doHost(lustreNode, hosts, clean_flag):
             
     module_flag = not module_flag
     for profile in reflist:
-            startProfile(lustreNode,  profile, clean_flag, module_flag)
+            startProfile(lustreNode,  profile, module_flag)
 
+############################################################
 # Command line processing
 #
 def parse_cmdline(argv):
@@ -1117,7 +1265,7 @@ def setupModulePath(cmd):
     if os.access(base+"/Makefile", os.R_OK):
         config.src_dir(base + "/../../")
 
-def setDebugPath():
+def sys_set_debug_path():
     debug("debug path: ", config.debug_path())
     if config.noexec():
         return
@@ -1129,7 +1277,7 @@ def setDebugPath():
         print e
              
     
-def makeDevices():
+def sys_make_devices():
     if not os.access('/dev/portals', os.R_OK):
         run('mknod /dev/portals c 10 240')
     if not os.access('/dev/obd', os.R_OK):
@@ -1175,8 +1323,8 @@ def main():
     lctl = LCTLInterface('lctl')
 
     setupModulePath(sys.argv[0])
-    makeDevices()
-    doHost(dom.documentElement, node_list, config.cleanup())
+    sys_make_devices()
+    doHost(dom.documentElement, node_list)
 
 if __name__ == "__main__":
     try:

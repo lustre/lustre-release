@@ -1,7 +1,6 @@
 #!/usr/bin/env python
-#
-#  Copyright (C) 2002 Cluster File Systems, Inc.
-#   Author: Robert Read <rread@clusterfs.com>
+# Copyright (C) 2002 Cluster File Systems, Inc.
+# Author: Robert Read <rread@clusterfs.com>
 
 #   This file is part of Lustre, http://www.lustre.org.
 #
@@ -26,6 +25,13 @@ lmc - lustre configurtion data  manager
 # create nodes
 ./lmc --output config.xml --node server --net server1 tcp 
 ./lmc --merge config.xml  --node client --net client1 tcp
+./lmc --merge config.xml  --node client --route gw lo [hi]
+./lmc --merge config.xml --router --node gw1 --net gw1 tcp
+./lmc --merge config.xml --node gw1 --net 1 elan
+
+./lmc --merge config.xml --route elan 1 1 100
+./lmc --merge config.xml --route tcp gw1 ba1
+
 
 
 # configure server
@@ -52,12 +58,21 @@ def usage():
     print """usage: lmc [--node --ost | --mtpt | --lov] args
 Commands:
 --node node_name 
-   Node_name by itself it will create a new node. When used with other
-     commands it specifies the node to modify
+   Node_name by itself it will create a new node. If the --router
+   option is used when creating a new node, then that node will also
+   be configured as a router. When used with other commands it
+   specifies the node to modify.
 
 --net hostname nettype [port, recv_buf, send_buf]
    Nettype is either tcp, elan, or gm.
-   Requires a node argument
+   Requires --node
+
+--route net gw lo [hi]
+   This command is used to create  routes.  NET is the
+   network type this route will be used on.  The GW is an address of
+   one of the local interfaces. LO and HI represent a range of
+   addresses that can be reached through the gateway. If HI is not
+   set, then a route to the specific host in LO is created.
 
 --mds device [size]
    Create a MDS using the device
@@ -113,7 +128,7 @@ def new_name(base):
     names[ret] = 1
     return ret
 
-def get_uuid(name):
+def new_uuid(name):
     return "%s_UUID" % (name)
 
 ldlm_name = 'ldlm'
@@ -121,7 +136,10 @@ ldlm_uuid = 'ldlm_UUID'
 def new_lustre(dom):
     """Create a new empty lustre document"""
     # adding ldlm here is a bit of a hack, but one is enough.
-    str = """<lustre> <ldlm name="%s" uuid="%s"/> </lustre>""" % (ldlm_name, ldlm_uuid)
+    str = """<lustre>
+    <ldlm name="%s" uuid="%s"/>
+    <ptlrouter name="PTLROUTER" uuid="PTLROUTER_UUID"/>
+    </lustre>""" % (ldlm_name, ldlm_uuid)
     return dom.parseString(str)
 
 names = {}
@@ -144,6 +162,9 @@ def get_format_flag(options):
             return 'yes'
     return 'no'
 
+############################################################
+# Build config objects using DOM
+#
 class GenConfig:
     doc = None
     dom = None
@@ -186,6 +207,14 @@ class GenConfig:
             self.addElement(network, "port", "%d" %(port))
         return network
 
+    def route(self, lo, hi):
+        """ create one entry for the route table """
+        ref = self.doc.createElement('route')
+        ref.setAttribute("lo", lo)
+        if hi:
+            ref.setAttribute("hi", hi)
+        return ref
+    
     def node(self, name, uuid):
         """ create a host """
         node = self.newService("node", name, uuid)
@@ -256,6 +285,10 @@ class GenConfig:
         self.addElement(mtpt, "path", path)
         return mtpt
 
+############################################################
+# Utilities to query a DOM tree
+# Using this functions we can treat use config information
+# directly as a database.
 def getName(n):
     return n.getAttribute('name')
 
@@ -274,6 +307,7 @@ def findByName(lustre, name, tag = ""):
                 n = findByName(n, name)
                 if n: return n
     return None
+
 
 def lookup(node, uuid):
     for n in node.childNodes:
@@ -298,6 +332,7 @@ def mds2node(lustre, mds_name):
         error("no node found for :", mds_name)
     return node
 
+
 def name2uuid(lustre, name, tag="",  fatal=1):
     ret = findByName(lustre, name, tag)
     if not ret:
@@ -307,6 +342,7 @@ def name2uuid(lustre, name, tag="",  fatal=1):
             return ""
     return getUUID(ret)
     
+
 # XXX: assumes only one network element per node. will fix this
 # as soon as support for routers is added
 def get_net_uuid(lustre, node_name):
@@ -319,12 +355,14 @@ def get_net_uuid(lustre, node_name):
         return getUUID(net[0])
     return None
 
+
 def lov_add_osc(gen, lov, osc_uuid):
     devs = lov.getElementsByTagName('devices')
     if len(devs) == 1:
         devs[0].appendChild(gen.ref("osc", osc_uuid))
     else:
         error("No devices element found for LOV:", lov)
+
                             
 def node_add_profile(gen, node, ref, uuid):
     ret = node.getElementsByTagName('profile')
@@ -332,9 +370,156 @@ def node_add_profile(gen, node, ref, uuid):
         error('node has no profile:', node)
     ret[0].appendChild(gen.ref(ref, uuid))
     
+def get_attr(dom_node, attr, default=""):
+    v = dom_node.getAttribute(attr)
+    if v:
+        return v
+    return default
+
+############################################################
+# Top level commands
 #
-# Create a new obd, osc, and ost. Add them to the DOM.
-#
+def do_add_node(gen, lustre,  options, node_name):
+    uuid = new_uuid(node_name)
+    node = gen.node(node_name, uuid)
+    node_add_profile(gen, node, 'ldlm', ldlm_uuid)
+    if options.has_key('router'):
+        node.setAttribute('router', '1')
+        node_add_profile(gen, node, "ptlrouter", 'PTLROUTER_UUID')
+    lustre.appendChild(node)
+    return node
+
+    
+def add_node(gen, lustre, options, args):
+    """ create a node with a network config """
+    if len(args) > 1:
+        usage()
+
+    node_name = options['node']
+
+    ret = findByName(lustre, node_name, "node")
+    if ret:
+        print "Node:", node_name, "exists."
+        return
+    do_add_node(gen, lustre, options, node_name)
+
+
+def add_net(gen, lustre, options, args):
+    """ create a node with a network config """
+    if len(args) < 2:
+        usage()
+
+    node_name = options['node']
+    nid = args[0]
+    net_type = args[1]
+
+    if net_type == 'tcp':
+        if len(args) > 2:
+            port = int(args[2])
+        else:
+            port = DEFAULT_PORT
+        # add send, recv buffer size here
+    elif net_type in ('elan', 'gm'):
+        port = 0
+    else:
+        print "Unknown net_type: ", net_type
+        sys.exit(2)
+
+    ret = findByName(lustre, node_name, "node")
+    if not ret:
+        node = do_add_node(gen, lustre, options, node_name)
+    else:
+        node = ret
+    net_name = new_name('NET_'+ node_name +'_'+ net_type)
+    net_uuid = new_uuid(net_name)
+    node.appendChild(gen.network(net_name, net_uuid, nid, net_type, port))
+    node_add_profile(gen, node, "network", net_uuid)
+
+
+def add_route(gen, lustre, options, args):
+    """ create a node with a network config """
+    if len(args) < 3:
+        usage()
+
+    node_name = options['node']
+    net_type= args[0]
+    gw = args[1]
+    lo = args[2]
+    hi = ''
+
+    if len(args) > 3:
+        hi = args[3]
+
+    node = findByName(lustre, node_name, "node")
+    if not node:
+        error (node_name, " not found.")
+    
+    netlist = node.getElementsByTagName('network')
+    for net in netlist:
+        if get_attr(net, 'type') == net_type:
+            rlist = net.getElementsByTagName('route_tbl')
+            if len(rlist) > 0:
+                rtbl = rlist[0]
+            else:
+                rtbl = gen.addElement(net, 'route_tbl')
+            rtbl.appendChild(gen.route(lo, hi))
+
+
+def add_mds(gen, lustre, options, args):
+    if len(args) < 1:
+        usage()
+
+    if options.has_key('node'):
+        node_name = options['node']
+    else:
+        error("--mds requires a --node argument")
+
+    mds_name = new_name(options['mds'])
+    devname = args[0]
+    if len(args) > 1:
+        size = args[1]
+    else:
+        size = 0
+
+    mdc_name = 'MDC_' + mds_name
+    mds_uuid = new_uuid(mds_name)
+    mdc_uuid = new_uuid(mdc_name)
+
+    node_uuid = name2uuid(lustre, node_name)
+
+    node = findByName(lustre, node_name, "node")
+    node_add_profile(gen, node, "mds", mds_uuid)
+    net_uuid = get_net_uuid(lustre, node_name)
+    if not net_uuid:
+        error("NODE: ", node_name, "not found")
+
+
+    mds = gen.mds(mds_name, mds_uuid, "extN", devname, get_format_flag(options),
+                  net_uuid, node_uuid, dev_size=size)
+    mdc = gen.mdc(mdc_name, mdc_uuid, mds_uuid)
+    lustre.appendChild(mds)
+    lustre.appendChild(mdc)
+                   
+
+def add_mdc(gen, lustre, options, args):
+    """ create mtpt on a node """
+    if len(args) < 1:
+        usage()
+
+    if options.has_key('node'):
+        node_name = options['node']
+    else:
+        error("--mdc requires a --node argument")
+
+    mdc_name = args[0]
+    mdc_uuid = name2uuid(lustre, mdc_name)
+
+    node = findByName(lustre, node_name, "node")
+    if not node:
+            error('node:',  node_name, "not found.")
+    node_add_profile(gen, node, "mdc", mdc_uuid)
+
+
 def add_ost(gen, lustre, options, args):
     lovname = ''
     obdtype = 'obdfilter'
@@ -365,9 +550,9 @@ def add_ost(gen, lustre, options, args):
     obdname = new_name('OBD_'+ node_name)
     oscname = new_name('OSC_'+ node_name)
     ostname = new_name('OST_'+ node_name)
-    obd_uuid = get_uuid(obdname)
-    ost_uuid = get_uuid(ostname)
-    osc_uuid = get_uuid(oscname)
+    obd_uuid = new_uuid(obdname)
+    ost_uuid = new_uuid(ostname)
+    osc_uuid = new_uuid(oscname)
 
     net_uuid = get_net_uuid(lustre, node_name)
     if not net_uuid:
@@ -390,6 +575,7 @@ def add_ost(gen, lustre, options, args):
     lustre.appendChild(obd)
     lustre.appendChild(osc)
     lustre.appendChild(ost)
+
                    
 # this is generally only used by llecho.sh
 def add_osc(gen, lustre, options, args):
@@ -405,57 +591,6 @@ def add_osc(gen, lustre, options, args):
     node = findByName(lustre, node_name, "node")
     node_add_profile(gen, node, 'osc', osc_uuid)
 
-def add_net(gen, lustre, options, args):
-    """ create a node with a network config """
-    if len(args) < 2:
-        usage()
-
-    node_name = options['node']
-    nid = args[0]
-    net_type = args[1]
-
-    if net_type == 'tcp':
-        if len(args) > 2:
-            port = int(args[2])
-        else:
-            port = DEFAULT_PORT
-        # add send, recv buffer size here
-    elif net_type in ('elan', 'gm'):
-        port = 0
-    else:
-        print "Unknown net_type: ", net_type
-        sys.exit(2)
-
-    ret = findByName(lustre, node_name, "node")
-    if not ret:
-        node = do_add_node(gen, lustre, node_name)
-    else:
-        node = ret
-    net_name = new_name('NET_'+ node_name +'_'+ net_type)
-    net_uuid = get_uuid(net_name)
-    node.appendChild(gen.network(net_name, net_uuid, nid, net_type, port))
-    node_add_profile(gen, node, "network", net_uuid)
-
-def do_add_node(gen, lustre,  node_name):
-    uuid = get_uuid(node_name)
-    node = gen.node(node_name, uuid)
-    node_add_profile(gen, node, 'ldlm', ldlm_uuid)
-    lustre.appendChild(node)
-    return node
-    
-def add_node(gen, lustre, options, args):
-    """ create a node with a network config """
-    if len(args) > 1:
-        usage()
-
-    node_name = options['node']
-
-    ret = findByName(lustre, node_name, "node")
-    if ret:
-        print "Node:", node_name, "exists."
-        return
-    do_add_node(gen, lustre, node_name)
-
 
 def add_lov(gen, lustre, options, args):
     """ create a lov """
@@ -467,7 +602,7 @@ def add_lov(gen, lustre, options, args):
     stripe_sz = args[1]
     stripe_off = args[2]
     pattern = args[3]
-    uuid = get_uuid(name)
+    uuid = new_uuid(name)
 
     ret = findByName(lustre, name, "lov")
     if ret:
@@ -479,6 +614,7 @@ def add_lov(gen, lustre, options, args):
     node_add_profile(gen, node, "lov", uuid)
     lov = gen.lov(name, uuid, mds_uuid, stripe_sz, stripe_off, pattern)
     lustre.appendChild(lov)
+
 
 def add_mtpt(gen, lustre, options, args):
     """ create mtpt on a node """
@@ -506,7 +642,7 @@ def add_mtpt(gen, lustre, options, args):
     if not lov_uuid:
         lov_uuid = name2uuid(lustre, lov_name, tag='osc', fatal=1)
 
-    uuid = get_uuid(name)
+    uuid = new_uuid(name)
     mtpt = gen.mountpoint(name, uuid, mdc_uuid, lov_uuid, path)
     node = findByName(lustre, node_name, "node")
     if not node:
@@ -515,68 +651,14 @@ def add_mtpt(gen, lustre, options, args):
     node_add_profile(gen, node, "mdc", mdc_uuid)
     lustre.appendChild(mtpt)
 
-def add_mdc(gen, lustre, options, args):
-    """ create mtpt on a node """
-    if len(args) < 1:
-        usage()
 
-    if options.has_key('node'):
-        node_name = options['node']
-    else:
-        error("--mdc requires a --node argument")
-
-    mdc_name = args[0]
-    mdc_uuid = name2uuid(lustre, mdc_name)
-
-    node = findByName(lustre, node_name, "node")
-    if not node:
-            error('node:',  node_name, "not found.")
-    node_add_profile(gen, node, "mdc", mdc_uuid)
-
-def add_mds(gen, lustre, options, args):
-    if len(args) < 1:
-        usage()
-
-    if options.has_key('node'):
-        node_name = options['node']
-    else:
-        error("--mds requires a --node argument")
-
-    mds_name = new_name(options['mds'])
-    devname = args[0]
-    if len(args) > 1:
-        size = args[1]
-    else:
-        size = 0
-
-    mdc_name = 'MDC_' + mds_name
-    mds_uuid = get_uuid(mds_name)
-    mdc_uuid = get_uuid(mdc_name)
-
-    node_uuid = name2uuid(lustre, node_name)
-
-    node = findByName(lustre, node_name, "node")
-    node_add_profile(gen, node, "mds", mds_uuid)
-    net_uuid = get_net_uuid(lustre, node_name)
-    if not net_uuid:
-        error("NODE: ", node_name, "not found")
-
-
-    mds = gen.mds(mds_name, mds_uuid, "extN", devname, get_format_flag(options),
-                  net_uuid, node_uuid, dev_size=size)
-    mdc = gen.mdc(mdc_name, mdc_uuid, mds_uuid)
-    lustre.appendChild(mds)
-    lustre.appendChild(mdc)
-                   
-
-#
+############################################################
 # Command line processing
 #
-
 def parse_cmdline(argv):
     short_opts = "ho:i:m:"
     long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net",
-                 "mdc", "merge=", "format", "reformat", "output=",
+                 "mdc", "route", "router", "merge=", "format", "reformat", "output=",
                  "obdtype=", "in=", "help"]
     opts = []
     args = []
@@ -606,6 +688,10 @@ def parse_cmdline(argv):
             options['mtpt'] = 1
         if o == "--node":
             options['node'] = a
+        if o == "--route":
+            options['route'] = 1
+        if o == "--router":
+            options['router'] = 1
         if o == "--lov":
             options['lov'] = a
         if o in ("-m", "--merge"):
@@ -622,6 +708,7 @@ def parse_cmdline(argv):
     return options, args
 
 
+# simple class for profiling
 import time
 class chrono:
     def __init__(self):
@@ -640,7 +727,9 @@ class chrono:
         str = '%s: %g secs' % (msg, d)
         print str
 
-
+############################################################
+# Main
+#
 def main():
     options, args = parse_cmdline(sys.argv[1:])
     outFile = '-'
@@ -677,6 +766,8 @@ def main():
         add_net(gen, lustre, options, args)
     elif options.has_key('lov'):
         add_lov(gen, lustre, options, args)
+    elif options.has_key('route'):
+        add_route(gen, lustre, options, args)
     elif options.has_key('node'):
         add_node(gen, lustre, options, args)
     else:
