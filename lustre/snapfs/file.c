@@ -21,27 +21,36 @@ static int has_pages(struct inode *inode, int index)
 {
 	unsigned long offset = index << PAGE_CACHE_SHIFT;
 	unsigned long blk_start = offset >> inode->i_sb->s_blocksize_bits; 
-	unsigned long blk_end = (offset + PAGE_CACHE_SIZE) >> inode->i_sb->s_blocksize_bits; 
-	int inside = 0;
+	unsigned long blk_end = (offset + PAGE_CACHE_SIZE) >> 
+				inode->i_sb->s_blocksize_bits; 
 
 	while (blk_start <= blk_end) {
 		if (inode->i_mapping && inode->i_mapping->a_ops) {
-			inside = inode->i_mapping->a_ops->bmap(inode->i_mapping, blk_start);	
+			if (inode->i_mapping->a_ops->bmap(inode->i_mapping, 
+						          blk_start))
+				return 1;
 		}
 		blk_start++;
 	}
-	return inside;
+	return 0;
 }
 
-static int copy_back_page(struct inode *dst, struct inode *src,
-			   int index)
+static int copy_back_page(struct inode *dst, 
+		          struct inode *src,
+			  unsigned long start,
+			  unsigned long end)
 {
 	char *kaddr_src, *kaddr_dst;
         struct snap_cache *cache;
 	struct address_space_operations *c_aops;
 	struct page *src_page, *dst_page;
+	unsigned long index, offset, bytes;
 	int    err = 0;
 	ENTRY;
+
+	index = start >> PAGE_CACHE_SHIFT;
+	bytes = end - start;
+	offset = start & PAGE_CACHE_MASK;
 
 	if (!has_pages(src, index)) 
 		RETURN(0);
@@ -56,7 +65,7 @@ static int copy_back_page(struct inode *dst, struct inode *src,
 
 	src_page = grab_cache_page(src->i_mapping, index);
 	if (!src_page) {
-		CERROR("copy block %d from %lu to %lu ENOMEM \n",
+		CERROR("copy block %lu from %lu to %lu ENOMEM \n",
 			  index, src->i_ino, dst->i_ino);
 		RETURN(-ENOMEM);
 	}
@@ -66,27 +75,27 @@ static int copy_back_page(struct inode *dst, struct inode *src,
 	
 	kaddr_src = kmap(src_page);
 	if (!Page_Uptodate(src_page)) {
-		CERROR("Can not read page index %d of inode %lu\n",
+		CERROR("Can not read page index %lu of inode %lu\n",
 			  index, src->i_ino);
 		err = -EIO;
 		goto unlock_src_page;
 	}
 	dst_page = grab_cache_page(dst->i_mapping, index);
 	if (!dst_page) {
-		CERROR("copy block %d from %lu to %lu ENOMEM \n",
+		CERROR("copy block %lu from %lu to %lu ENOMEM \n",
 			  index, src->i_ino, dst->i_ino);
 		err = -ENOMEM;
 		goto unlock_src_page;
 	}	
 	kaddr_dst = kmap(dst_page);
 
-	err = c_aops->prepare_write(NULL, dst_page, 0, PAGE_CACHE_SIZE);
+	err = c_aops->prepare_write(NULL, dst_page, offset, bytes);
 	if (err) 
 		goto unlock_dst_page; 
 	memcpy(kaddr_dst, kaddr_src, PAGE_CACHE_SIZE);
 	flush_dcache_page(dst_page);
 
-	err = c_aops->commit_write(NULL, dst_page, 0, PAGE_CACHE_SIZE);
+	err = c_aops->commit_write(NULL, dst_page, offset, bytes);
 	if (err) 
 		goto unlock_dst_page; 
 	err = 1;
@@ -106,7 +115,7 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
         struct snap_cache *cache;
 	struct inode *inode = filp->f_dentry->d_inode;
         struct file_operations *fops;
-	long   page[2]={-1,-1};
+	long   start[2]={-1,-1}, end[2]={-1,-1};
 	struct snap_table *table;
 	struct inode *cache_inode = NULL;
 	int slot = 0, index = 0, result = 0;
@@ -139,65 +148,22 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
                 if (pos != *ppos)
                         RETURN(-EINVAL);
         }
-
-	/*
-	 * we only need to copy back the first and last blocks
-	 */
-#if 0
-	mask = inode->i_sb->s_blocksize-1;
-	if( pos & mask )
-		block[0] = pos >> inode->i_sb->s_blocksize_bits;
-	pos += count - 1;
-	if( (pos+1) &  mask )
-		block[1] = pos >> inode->i_sb->s_blocksize_bits;
-	if( block[0] == block[1] )
-		block[1] = -1;
-	
-	snapops = filter_c2csnapops(cache->cache_filter);
-
-	for (i = 0; i < 2; i++) {
-		if (block[i] == -1) 
-			continue;
-		table = &snap_tables[cache->cache_snap_tableno];
-		/*Find the nearest block in snaptable and copy back it*/
-		for (slot = table->tbl_count - 1; slot >= 1; slot--) {
-			cache_inode = NULL;
-               		index = table->snap_items[slot].index;
-			cache_inode = snap_get_indirect(inode, NULL, index);
-
-			if (!cache_inode)  continue;
-
-			CDEBUG(D_SNAP, "find cache_ino %lu\n", cache_inode->i_ino);
-		
-			if (snapops && snapops->copy_block) {
-				result = snapops->copy_block(inode, cache_inode, block[i]);
-				if (result == 1) {
-					CDEBUG(D_SNAP, "copy block %lu back from ind %lu to %lu\n", 
-					       block[i], cache_inode->i_ino, inode->i_ino);
-               				iput(cache_inode);
-					result = 0;
-					break;
-				}
-				if (result < 0) {
-					iput(cache_inode);
-					rc = result;
-					goto exit;
-				}
-			}
-               		iput(cache_inode);
-        	}
+	if (pos & PAGE_CACHE_MASK) {
+		start[0] = pos & PAGE_CACHE_MASK;
+		end[0] = pos;
 	}
-#else
-	if (pos & PAGE_CACHE_MASK)
-		page[0] = pos >> PAGE_CACHE_SHIFT;
 	pos += count - 1;
-	if ((pos+1) & PAGE_CACHE_MASK)
-		page[1] = pos >> PAGE_CACHE_SHIFT;
-	if (page[0] == page[1])
-		page[1] = -1;
+	if ((pos+1) & PAGE_CACHE_MASK) {
+		start[1] = pos;  
+		end[1] = PAGE_CACHE_ALIGN(pos);
+	}
+
+	if (((start[0] >> PAGE_CACHE_SHIFT) == (start[1] >> PAGE_CACHE_SHIFT)) ||
+	    pos > inode->i_size) 
+		start[1] = -1;
 	
 	for (i = 0; i < 2; i++) {
-		if (page[i] == -1) 
+		if (start[i] == -1) 
 			continue;
 		table = &snap_tables[cache->cache_snap_tableno];
 		/*Find the nearest page in snaptable and copy back it*/
@@ -210,10 +176,12 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
 
 			CDEBUG(D_SNAP, "find cache_ino %lu\n", cache_inode->i_ino);
 		
-			result = copy_back_page(inode, cache_inode, page[i]);
+			result = copy_back_page(inode, cache_inode, start[i], end[i]);
 			if (result == 1) {
 				CDEBUG(D_SNAP, "copy page%lu back from ind %lu to %lu\n", 
-				       page[i], cache_inode->i_ino, inode->i_ino);
+				       (start[i] >> PAGE_CACHE_SHIFT), 
+				       cache_inode->i_ino, 
+				       inode->i_ino);
                			iput(cache_inode);
 				result = 0;
 				break;
@@ -226,7 +194,6 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
                		iput(cache_inode);
         	}
 	}
-#endif
 	rc = fops->write(filp, buf, count, ppos);
 exit:
         RETURN(rc);
