@@ -16,7 +16,9 @@ ERROR=
 
 # let's start slowly here...
 touch /mnt/lustre || fail "can't touch /mnt/lustre" 2
+echo "copying /etc/hosts to /mnt/lustre/hosts"
 cp /etc/hosts /mnt/lustre || fail "can't cp /etc/hosts" 3
+echo "comparing /etc/hosts and /mnt/lustre/hosts"
 diff -u /etc/hosts /mnt/lustre/hosts || fail "/etc/hosts copy different" 4
 
 # ok, that hopefully worked, so let's do a little more
