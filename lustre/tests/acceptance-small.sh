@@ -68,7 +68,7 @@ for NAME in $CONFIGS; do
 			iozone -I $IOZONE_OPTS -t $THREADS $IOZONE_FILE
 			sh llmountcleanup.sh
 			sh llrmount.sh
-		elif [ $IOZONEVER -lt 3145 ]; then
+		elif [ $IOZVER -lt 3145 ]; then
 			VER=`iozone -v | awk '/Revision:/ { print $3 }'`
 			echo "iozone $VER too old for multi-threaded tests"
 		fi
