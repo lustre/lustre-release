@@ -1728,7 +1728,7 @@ static void filter_sync_llogs(struct obd_export *dexp)
                         fglog = nlog;
                         group = nlog->group;
                 }
-                spin_lock(&filter->fo_llog_list_lock);
+                spin_unlock(&filter->fo_llog_list_lock);
 
                 if (fglog) {
                         worked = fglog->group;
