@@ -19,22 +19,28 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  *   Top level header file for LProc SNMP
+ *   Author: Hariharan Thantry thantry@users.sourceforge.net
  */
 #ifndef _LPROCFS_SNMP_H
 #define _LPROCFS_SNMP_H
 
-/*
+
 #ifndef LPROC_SNMP
 #define LPROC_SNMP
 #endif
-*/
 
 #include <linux/proc_fs.h>
 
+typedef enum {
+        E_LPROC_OK = 0
+} lproc_error_t;
+
 struct lprocfs_vars{
-        char *name;
-        read_proc_t *read_fptr;
-        write_proc_t *write_fptr;
+
+        char* name;
+        read_proc_t* read_fptr;
+        write_proc_t* write_fptr;
+        void* data;
 };
 
 #ifdef LPROC_SNMP
@@ -87,7 +93,7 @@ static inline int lprocfs_dereg_obd(struct obd_device* device)
 
 static inline struct proc_dir_entry* lprocfs_reg_mnt(char *name)
 {
-        return 0;
+        return NULL;
 }
 
 static inline int lprocfs_dereg_mnt(struct proc_dir_entry* root)
