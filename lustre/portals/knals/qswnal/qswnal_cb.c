@@ -330,12 +330,7 @@ kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
                 list_del (&fwd->kprfd_list);
         }
 
-        if (waitqueue_active (&kqswnal_data.kqn_idletxd_waitq))  /* process? */
-        {
-                /* local sender waiting for tx desc */
-                CDEBUG(D_NET,"wakeup process\n");
-                wake_up (&kqswnal_data.kqn_idletxd_waitq);
-        }
+        wake_up (&kqswnal_data.kqn_idletxd_waitq);
 
         spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 
@@ -346,8 +341,7 @@ kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
         list_add_tail (&fwd->kprfd_list, &kqswnal_data.kqn_delayedfwds);
-        if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
-                wake_up (&kqswnal_data.kqn_sched_waitq);
+        wake_up (&kqswnal_data.kqn_sched_waitq);
 
         spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
 }
@@ -514,8 +508,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                 spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
                 list_add_tail (&ktx->ktx_delayed_list, &kqswnal_data.kqn_delayedtxds);
-                if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
-                        wake_up (&kqswnal_data.kqn_sched_waitq);
+                wake_up (&kqswnal_data.kqn_sched_waitq);
 
                 spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
                 return (0);
@@ -1244,8 +1237,7 @@ kqswnal_rxhandler(EP_RXD *rxd)
         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
         list_add_tail (&krx->krx_list, &kqswnal_data.kqn_readyrxds);
-        if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
-                wake_up (&kqswnal_data.kqn_sched_waitq);
+        wake_up (&kqswnal_data.kqn_sched_waitq);
 
         spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
 }
