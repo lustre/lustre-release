@@ -264,7 +264,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl,
                      void *data,
                      __u32 data_len,
                      struct lustre_handle *lockh);
-int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
+int ldlm_cli_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                       void *data, __u32 data_len, struct ptlrpc_request **reqp);
 int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *,
                      int new_mode, int *flags);

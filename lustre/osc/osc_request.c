@@ -664,8 +664,8 @@ static int osc_enqueue(struct obd_conn *oconn,
 
         /* Next, search for already existing extent locks that will cover us */
         osc_con2dlmcl(oconn, &cl, &conn);
-        rc = ldlm_local_lock_match(obddev->obd_namespace, res_id, type, extent,
-                                   sizeof(extent), mode, lockh);
+        rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
+                             sizeof(extent), mode, lockh);
         if (rc == 1) {
                 /* We already have a lock, and it's referenced */
                 return 0;

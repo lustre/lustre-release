@@ -142,12 +142,17 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 int ldlm_cli_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                       void *data, __u32 data_len, struct ptlrpc_request **reqp)
 {
+        struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
         struct ptlrpc_client *cl =
                 &lock->l_resource->lr_namespace->ns_rpc_client;
         int rc = 0, size = sizeof(*body);
         ENTRY;
+
+        lock = ldlm_handle2lock(lockh);
+        if (lock == NULL)
+                LBUG();
 
         req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CALLBACK, 1,
                               &size, NULL);
@@ -179,8 +184,10 @@ int ldlm_cli_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
         } else
                 *reqp = req;
 
+
         EXIT;
  out:
+        ldlm_lock_put(lock);
         return rc;
 }
 

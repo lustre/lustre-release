@@ -511,7 +511,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock)
                 res->lr_most_restr = lock->l_granted_mode;
 
         if (lock->l_completion_ast) {
-                struct lustre_handle *lockh;
+                struct lustre_handle lockh;
 
                 /* FIXME: this should merely add lock to lr_tmp list */
                 ldlm_lock2handle(lock, &lockh);

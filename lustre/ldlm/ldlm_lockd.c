@@ -218,12 +218,16 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                 do_ast = (!lock->l_readers && !lock->l_writers); 
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 
-                if (do_ast) { 
+                if (do_ast) {
                         CDEBUG(D_INFO, "Lock already unused, calling "
                                "callback (%p).\n", lock->l_blocking_ast);
-                        if (lock->l_blocking_ast != NULL)
-                                lock->l_blocking_ast(lock, descp, lock->l_data,
+                        if (lock->l_blocking_ast != NULL) {
+                                struct lustre_handle lockh;
+                                ldlm_lock2handle(lock, &lockh);
+                                lock->l_blocking_ast(&lockh, descp,
+                                                     lock->l_data,
                                                      lock->l_data_len, NULL);
+                        }
                 } else {
                         LDLM_DEBUG(lock, "Lock still has references, will be"
                                " cancelled later");

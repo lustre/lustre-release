@@ -257,7 +257,7 @@ static int mds_disconnect(struct mds_obd *mds, struct ptlrpc_request *req)
         RETURN(0);
 }
 
-int mds_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock *new,
                       void *data, int data_len, struct ptlrpc_request **reqp)
 {
         ENTRY;
@@ -267,7 +267,7 @@ int mds_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                 RETURN(0);
         }
 
-        if (ldlm_cli_cancel(lock->l_client, lock) < 0)
+        if (ldlm_cancel(lockh) < 0)
                 LBUG();
         RETURN(0);
 }
@@ -314,8 +314,8 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = dir->i_ino;
 
-        rc = ldlm_local_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
-                                   NULL, 0, lock_mode, &lockh);
+        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+                             NULL, 0, lock_mode, &lockh);
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,

@@ -24,12 +24,12 @@ static spinlock_t ctl_lock = SPIN_LOCK_UNLOCKED;
 static struct list_head ctl_threads;
 static int regression_running = 0;
 
-static int ldlm_test_callback(struct ldlm_lock *lock,
+static int ldlm_test_callback(struct lustre_handle *lockh,
                               struct ldlm_lock_desc *new,
                               void *data, __u32 data_len,
                               struct ptlrpc_request **reqp)
 {
-        printk("ldlm_test_callback: lock=%p, new=%p\n", lock, new);
+        printk("ldlm_test_callback: lock=%Lu, new=%p\n", lockh->addr, new);
         return 0;
 }
 

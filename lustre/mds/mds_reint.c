@@ -215,8 +215,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = dir->i_ino;
 
-        rc = ldlm_local_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
-                                   NULL, 0, lock_mode, &lockh);
+        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+                             NULL, 0, lock_mode, &lockh);
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
@@ -539,7 +539,7 @@ out_unlink_de:
         if (!rc) { 
                 lock = lustre_handle2object(&lockh);
                 ldlm_lock_decref(lock, LCK_EX);
-                rc = ldlm_cli_cancel(lock->l_client, lock);
+                rc = ldlm_cancel(lockh);
                 if (rc < 0)
                         CERROR("failed to cancel child inode lock ino "
                                "%Ld: %d\n", res_id[0], rc);
