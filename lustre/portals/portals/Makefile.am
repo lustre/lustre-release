@@ -8,4 +8,7 @@ CPPFLAGS=
 INCLUDES=-I$(top_srcdir)/portals/include -I$(top_srcdir)/include
 lib_LIBRARIES= libportals.a
 libportals_a_SOURCES= api-eq.c api-init.c api-me.c api-errno.c api-ni.c api-wrap.c lib-dispatch.c lib-init.c lib-me.c lib-msg.c lib-eq.c lib-md.c lib-move.c lib-ni.c lib-pid.c
+
+if LIBLUSTRE
 libportals_a_CFLAGS= -fPIC
+endif

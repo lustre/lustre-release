@@ -3,12 +3,12 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-
 COMPILE = $(CC) -Wall -g -I$(srcdir)/../include
 LINK = $(CC) -o $@
 
 if LIBLUSTRE
 tmp=
+#libptlctl_a_CFLAGS = -fPIC
 else
 tmp=gmnalnid
 endif
@@ -21,7 +21,6 @@ acceptor_SOURCES = acceptor.c # -lefence
 wirecheck_SOURCES = wirecheck.c
 
 libptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
-libptlctl_a_CFLAGS = -fPIC
 
 gmnalnid_SOURCES = gmnalnid.c
 
