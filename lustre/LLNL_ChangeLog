@@ -1,0 +1,5 @@
+2003-08-05  Brian Behlendorf  <behlendorf1@llnl.gov>
+       * version llnl_1devel
+       * initial b_llnl_devel branch creation from HEAD on 2003-8-1
+       * bug fixes
+        - obdo_refresh_inode clobbers client blksize, neuters readahead (1598)
