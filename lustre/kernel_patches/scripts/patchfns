@@ -11,9 +11,9 @@ DB=applied-patches
 # Otherwise use "."
 #
 
-if [ x$PATCHSCRIPTS != x ]
+if [ x$PATCHSCRIPTS_LIBDIR != x ]
 then
-	P=$PATCHSCRIPTS
+	P=$PATCHSCRIPTS_LIBDIR
 elif [ -d ./patch-scripts ]
 then
 	P=./patch-scripts
