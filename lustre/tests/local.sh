@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 config=${1:-local.xml}
@@ -29,10 +30,10 @@ ${LMC} --add node --node localhost || exit 10
 ${LMC} --add net --node  localhost --nid localhost --nettype tcp || exit 11
 
 # configure mds server
-${LMC} --add mds  --node localhost --mds mds1 --dev $MDSDEV --size $MDSSIZE || exit 20
+${LMC} --add mds  --node localhost --mds mds1 $FSTYPE --dev $MDSDEV --size $MDSSIZE || exit 20
 
 # configure ost
-${LMC} --add ost --node localhost --ost obd1 --dev $OSTDEV --size  $OSTSIZE || exit 30
+${LMC} --add ost --node localhost --ost obd1 $FSTYPE --dev $OSTDEV --size  $OSTSIZE || exit 30
 
 # create client config
 ${LMC} --add mtpt --node localhost --path /mnt/lustre --mds mds1 --ost obd1 || exit 40
