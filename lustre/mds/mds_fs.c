@@ -477,6 +477,14 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         }
         mds->mds_fids_dir = dentry;
 
+        dentry = simple_mkdir(current->fs->pwd, "UNNAMED", 0777, 1);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("cannot create UNNAMED directory: rc = %d\n", rc);
+                GOTO(err_unnamed, rc);
+        }
+        mds->mds_unnamed_dir = dentry;
+
         /* open and test the last rcvd file */
         file = filp_open(LAST_RCVD, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(file)) {
@@ -527,6 +535,8 @@ err_client:
 err_last_rcvd:
         if (mds->mds_rcvd_filp && filp_close(mds->mds_rcvd_filp, 0))
                 CERROR("can't close %s after error\n", LAST_RCVD);
+err_unnamed:
+        dput(mds->mds_unnamed_dir);
 err_fids:
         dput(mds->mds_fids_dir);
 err_objects:
@@ -572,6 +582,10 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
                 mds->mds_lov_objid_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
+        }
+        if (mds->mds_unnamed_dir != NULL) {
+                l_dput(mds->mds_unnamed_dir);
+                mds->mds_unnamed_dir = NULL;
         }
         if (mds->mds_fids_dir != NULL) {
                 l_dput(mds->mds_fids_dir);

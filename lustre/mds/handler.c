@@ -1353,7 +1353,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
        
         DEBUG_REQ(D_HA, req, "create remote object");
 
-        parent_inode = mds->mds_objects_dir->d_inode;
+        parent_inode = mds->mds_unnamed_dir->d_inode;
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
         if (body == NULL)
@@ -1410,7 +1410,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
 
 repeat:
         rc = sprintf(fidname, "%u.%u", ll_insecure_random_int(), current->pid);
-        new = lookup_one_len(fidname, mds->mds_objects_dir, rc);
+        new = lookup_one_len(fidname, mds->mds_unnamed_dir, rc);
         if (IS_ERR(new)) {
                 CERROR("%s: can't lookup new inode (%s) for mkdir: %d\n",
                        obd->obd_name, fidname, (int) PTR_ERR(new));
