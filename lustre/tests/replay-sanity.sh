@@ -14,7 +14,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-ALWAYS_EXCEPT="1 3"
+ALWAYS_EXCEPT=""
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -71,6 +71,16 @@ if [ "$ONLY" == "setup" ]; then
 fi
 
 mkdir -p $DIR
+
+# b=3550 - replay of unlink
+test_0() {
+    replay_barrier mds
+    createmany -o $DIR/$tfile-%d 400 || return 1
+    unlinkmany $DIR/$tfile-%d 0 400 || return 2
+    fail mds
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
+}
+run_test 0 "re-create llog file as created during fail"
  
 # bug 3488 - test MDS replay more intensely
 test_1() {
