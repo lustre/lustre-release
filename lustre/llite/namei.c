@@ -36,6 +36,8 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
+#include <linux/obd_lov.h>
+
 extern struct address_space_operations ll_aops;
 
 /* from super.c */
@@ -281,6 +283,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         int gid = current->fsgid;
         struct ll_inode_md md;
+        struct lov_mds_md *mds_md = NULL;
+        int mds_md_size = 0;
 
         ENTRY;
 
@@ -299,7 +303,14 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                         GOTO(out, rc);
                 }
                 body = lustre_msg_buf(request->rq_repmsg, 0);
-                md.md = smd;
+                if (smd != NULL) {
+                        mds_md_size = sizeof (struct lov_mds_md) + 
+                                smd->lmd_stripe_count * sizeof(struct lov_object_id);
+                        OBD_ALLOC(mds_md, mds_md_size);
+                        lov_packmd(mds_md, smd);
+                } else
+                        md.md = NULL;
+
         } else {
                 request = it->it_data;
                 body = lustre_msg_buf(request->rq_repmsg, 1);
@@ -336,6 +347,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         EXIT;
  out:
+        if (mds_md != NULL) 
+                OBD_FREE(mds_md, mds_md_size);
         ptlrpc_free_req(request);
         return inode;
 }
