@@ -26,7 +26,7 @@
 # Based in part on the XML obdctl modifications done by Brian Behlendorf 
 
 import sys, getopt
-import string, os, stat, popen2
+import string, os, stat, popen2, socket
 import re, exceptions
 import xml.dom.minidom
 
@@ -142,17 +142,27 @@ class LCTLInterface:
             raise CommandError, err
         return ret, out
 
-    # create a new device with lctl
     def network(self, net, nid):
-        cmds =  """
+        """ initialized network and add "self" """
+        # Idea: "mynid" could be used for all network types to add "self," and then
+        # this special case would be gone and the "self" hack would be hidden.
+        if net  == 'tcp':
+            cmds =  """
   network %s
   mynid %s
   add_uuid self %s
   quit""" % (net, nid, nid)
+        else:
+            cmds =  """
+  network %s
+  add_uuid self %s
+  quit""" % (net, nid)
+            
         self.run(cmds)
 
     # create a new connection 
-    def connect(self, net, nid, port, servuuid):
+    def connect(self, net, nid, port, servuuid, send_buf, read_buf):
+        # XXX: buf size params not used yet
         cmds =  """
   network %s
   connect %s %d
@@ -160,6 +170,12 @@ class LCTLInterface:
   quit""" % (net, nid, port,  servuuid, nid)
         self.run(cmds)
                 
+    # create a new connection 
+    def add_route(self, net, to, via):
+        cmds =  """
+        """ 
+        #self.run(cmds)
+
     # create a new device with lctl
     def disconnect(self, net, nid, port, servuuid):
         cmds =  """
@@ -336,7 +352,7 @@ def prepare_lov(node):
                 setup ="%s" % (mdcuuid))
 
 def prepare_network(node):
-    (name, uuid, type, nid, port) = getNetworkInfo(node)
+    (name, uuid, type, nid, port, send_buf, read_buf) = getNetworkInfo(node)
     print 'NETWORK:', name, uuid, type, nid, port
     if type == 'tcp':
         ret = run_daemon(TCP_ACCEPTOR, port)
@@ -376,7 +392,7 @@ def prepare_osc(node):
     (name, uuid, obduuid, ostuuid) = getOSCInfo(node)
     print 'OSC:', name, uuid, obduuid, ostuuid
     net = lookup(node.parentNode, ostuuid)
-    srvname, srvuuid, net, server, port = getNetworkInfo(net)
+    srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
     lctl.connect(net, server, port, ostuuid)
     lctl.newdev(attach="osc %s %s" % (name, uuid),
                 setup ="%s %s" %(obduuid, ostuuid))
@@ -385,7 +401,7 @@ def prepare_mdc(node):
     (name, uuid, mdsuuid, netuuid) = getMDCInfo(node)
     print 'MDC:', name, uuid, mdsuuid, netuuid
     net = lookup(node.parentNode, netuuid)
-    srvname, srvuuid, net, server, port = getNetworkInfo(net)
+    srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
     mds = lookup(node.parentNode, mdsuuid)
     if mds == None:
         panic(mdsuuid, "not found.")
@@ -422,14 +438,15 @@ def cleanup_lov(node):
         print "cleanup failed: ", name
 
 def cleanup_network(node):
-    (name, uuid, type, nid, port) = getNetworkInfo(node)
+    (name, uuid, type, nid, port, send_buf, read_buf) = getNetworkInfo(node)
     print 'NETWORK:', name, uuid, type, nid, port
     try:
         lctl.cleanup("RPCDEV", "")
     except CommandError:
         print "cleanup failed: ", name
-    # yikes, this ugly! need to save pid in /var/something
-    run("killall acceptor")
+    if type == 'tcp':
+        # yikes, this ugly! need to save pid in /var/something
+        run("killall acceptor")
 
 
 # need to check /proc/mounts and /etc/mtab before
@@ -466,7 +483,7 @@ def cleanup_mdc(node):
     (name, uuid, mdsuuid, netuuid) = getMDCInfo(node)
     print 'MDC:', name, uuid, mdsuuid, netuuid
     net = lookup(node.parentNode, netuuid)
-    srvname, srvuuid, net, server, port = getNetworkInfo(net)
+    srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
     try:
         lctl.disconnect(net, server, port, netuuid)
         lctl.cleanup(name, uuid)
@@ -478,7 +495,7 @@ def cleanup_osc(node):
     (name, uuid, obduuid, ostuuid) = getOSCInfo(node)
     print 'OSC:', name, uuid, obduuid, ostuuid
     net = lookup(node.parentNode, ostuuid)
-    srvname, srvuuid, net, server, port = getNetworkInfo(net)
+    srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
     try:
         lctl.disconnect(net, server, port, ostuuid)
         lctl.cleanup(name, uuid)
@@ -508,7 +525,9 @@ def getNetworkInfo(node):
     type = node.getAttribute('type')
     nid = getText(node, 'server', "")
     port = int(getText(node, 'port', 0))
-    return name, uuid, type, nid, port
+    send_buf = int(getText(node, 'send_buf', 0))
+    read_buf = int(getText(node, 'read_buf', 0))
+    return name, uuid, type, nid, port, send_buf, read_buf
     
 # extract device attributes for an obd
 def getNodeAttr(node):
@@ -842,11 +861,9 @@ def main():
 
     if not options.has_key('hostname'):
         options['hostname'] = []
-        ret, host = run('hostname')
-        if ret:
-            print "unable to determine hostname"
-        elif len(host) > 0:
-            options['hostname'].append(string.strip(host[0]))
+        host = socket.gethostname()
+        if len(host) > 0:
+            options['hostname'].append(host)
         options['hostname'].append('localhost')
     print "configuring for host: ", options['hostname']
     doHost(dom.childNodes[0], options['hostname'], options.has_key('cleanup') )
