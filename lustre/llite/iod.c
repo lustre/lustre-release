@@ -174,9 +174,11 @@ static void ll_writeback(struct inode *inode, struct ll_writeback_pages *llwp)
          */
         if (rc) {
                 CERROR("error from obd_brw_async: rc = %d\n", rc);
-                LPROC_COUNTER_INODE_INCR(inode, LPROC_LL_WB_FAIL, (llwp->npgs));
-        } else 
-                LPROC_COUNTER_INODE_INCR(inode, LPROC_LL_WB_OK, (llwp->npgs));
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_WB_FAIL, llwp->npgs);
+        } else
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_WB_OK, (llwp->npgs));
 
         for (i = 0 ; i < llwp->npgs ; i++) {
                 struct page *page = llwp->pga[i].pg;
@@ -313,11 +315,12 @@ int ll_check_dirty(struct super_block *sb)
                         llwp.npgs = 0;
                         ll_get_dirty_pages(inode, &llwp);
                         if (llwp.npgs) {
-                                LPROC_COUNTER_INODE_INCR(inode, 
-                                        LPROC_LL_WB_PRESSURE, (llwp.npgs));
-                                ll_writeback(inode, &llwp);
-                                rc += llwp.npgs;
-                                making_progress = 1;
+                               lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                                   LPROC_LL_WB_PRESSURE,
+                                                   llwp.npgs);
+                               ll_writeback(inode, &llwp);
+                               rc += llwp.npgs;
+                               making_progress = 1;
                         }
                 } while (llwp.npgs && should_writeback());
 
@@ -383,8 +386,8 @@ int ll_batch_writepage(struct inode *inode, struct page *page)
                 ll_get_dirty_pages(inode, &llwp);
 
         if (llwp.npgs) {
-                LPROC_COUNTER_INODE_INCR(inode, LPROC_LL_WB_WRITEPAGE, 
-                                (llwp.npgs));
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_WB_WRITEPAGE, llwp.npgs);
                 ll_writeback(inode, &llwp);
         }
 
@@ -461,7 +464,8 @@ static inline void lldo_dirty_add(struct inode *inode,
                                   long val)
 {
         lldo->do_num_dirty += val;
-        LPROC_COUNTER_INODE_INCR(inode, LPROC_LL_DIRTY_PAGES, ((long)val));
+        lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_DIRTY_PAGES,
+                            val);
 }
 
 void ll_record_dirty(struct inode *inode, unsigned long offset)
