@@ -648,13 +648,14 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
         }
 
         rc = ldlm_cli_enqueue(connh, NULL,obddev->obd_namespace,
-                              parent_lock, &res_id, type, extent, sizeof(extent),
-                              mode, flags, ldlm_completion_ast, callback, data, datalen, lockh);
+                              parent_lock, &res_id, type, extent,
+                              sizeof(extent), mode, flags, ldlm_completion_ast,
+                              callback, data, datalen, lockh);
         return rc;
 }
 
-static int osc_cancel(struct lustre_handle *oconn, struct lov_stripe_md *md, __u32 mode,
-                      struct lustre_handle *lockh)
+static int osc_cancel(struct lustre_handle *oconn, struct lov_stripe_md *md,
+                      __u32 mode, struct lustre_handle *lockh)
 {
         ENTRY;
 

@@ -311,17 +311,17 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         return inode;
 }
 
-int ll_mdc_unlink(struct inode *dir, struct inode *child,
-                  const char *name, int len)
+static int ll_mdc_unlink(struct inode *dir, struct inode *child, __u32 mode,
+                         const char *name, int len)
 {
         struct ptlrpc_request *request = NULL;
-        int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
+        int err;
 
         ENTRY;
 
-        err = mdc_unlink(&sbi->ll_mdc_conn, dir, child,
-                         name, len, &request);
+        err = mdc_unlink(&sbi->ll_mdc_conn, dir, child, mode, name, len,
+                         &request);
         ptlrpc_free_req(request);
 
         RETURN(err);
@@ -546,7 +546,8 @@ out_dir:
         goto out;
 }
 
-static int ll_unlink(struct inode * dir, struct dentry *dentry)
+static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
+                            __u32 mode)
 {
         struct inode * inode = dentry->d_inode;
         struct ext2_dir_entry_2 * de;
@@ -554,21 +555,22 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
         int err = -ENOENT;
 
         if (dentry->d_it && dentry->d_it->it_disposition) {
-                inode->i_nlink = 0;
-                GOTO(out, err = dentry->d_it->it_status);
-
+                err = dentry->d_it->it_status;
+                if (!err)
+                        inode->i_nlink = 0;
+                GOTO(out, err);
         }
 
-        de = ext2_find_entry (dir, dentry, &page);
+        de = ext2_find_entry(dir, dentry, &page);
         if (!de)
                 goto out;
 
-        err = ll_mdc_unlink(dir, dentry->d_inode,
+        err = ll_mdc_unlink(dir, dentry->d_inode, mode,
                             dentry->d_name.name, dentry->d_name.len);
         if (err)
                 goto out;
 
-        err = ext2_delete_entry (de, page);
+        err = ext2_delete_entry(de, page);
         if (err)
                 goto out;
 
@@ -578,20 +580,26 @@ out:
         return err;
 }
 
-static int ll_rmdir(struct inode * dir, struct dentry *dentry)
+static int ll_unlink(struct inode *dir, struct dentry *dentry)
+{
+        return ll_common_unlink(dir, dentry, S_IFREG);
+}
+
+static int ll_rmdir(struct inode *dir, struct dentry *dentry)
 {
         struct inode * inode = dentry->d_inode;
         int err = 0;
+        ENTRY;
 
         if (!dentry->d_it || dentry->d_it->it_disposition == 0) {
                 if (!ext2_empty_dir(inode))
                         LBUG();
 
-                err = ll_unlink(dir, dentry);
-                if (err)
-                        RETURN(err);
+                err = ll_common_unlink(dir, dentry, S_IFDIR);
         } else
                 err = dentry->d_it->it_status;
+        if (err)
+                RETURN(err);
         inode->i_size = 0;
         ext2_dec_count(inode);
         ext2_dec_count(dir);

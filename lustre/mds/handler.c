@@ -1237,7 +1237,9 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_SYMLINK:
                 case IT_UNLINK:
                         rc = mds_reint(2, req);
-                        if (rc || req->rq_status != 0) {
+                        if (rc || (req->rq_status != 0 &&
+                                   req->rq_status != -EISDIR &&
+                                   req->rq_status != -ENOTDIR)) {
                                 rep->lock_policy_res2 = req->rq_status;
                                 RETURN(ELDLM_LOCK_ABORTED);
                         }

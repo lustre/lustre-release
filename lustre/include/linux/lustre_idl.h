@@ -364,42 +364,45 @@ struct mds_body {
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
-        struct ll_fid   sa_fid;
         __u32           sa_valid;
+        struct ll_fid   sa_fid;
         __u32           sa_mode;
         __u32           sa_uid;
         __u32           sa_gid;
+        __u32           sa_attr_flags;
         __u64           sa_size;
         __u64           sa_atime;
         __u64           sa_mtime;
         __u64           sa_ctime;
-        __u32           sa_attr_flags;
 };
 
 struct mds_rec_create {
         __u32           cr_opcode;
+        __u32           cr_mode;
         struct ll_fid   cr_fid;
         __u32           cr_uid;
         __u32           cr_gid;
         __u64           cr_time;
-        __u32           cr_mode;
         __u64           cr_rdev;
 };
 
 struct mds_rec_link {
         __u32           lk_opcode;
+        __u32           lk_reserved;
         struct ll_fid   lk_fid1;
         struct ll_fid   lk_fid2;
 };
 
 struct mds_rec_unlink {
         __u32           ul_opcode;
+        __u32           ul_mode;
         struct ll_fid   ul_fid1;
         struct ll_fid   ul_fid2;
 };
 
 struct mds_rec_rename {
         __u32           rn_opcode;
+        __u32           rn_reserved;
         struct ll_fid   rn_fid1;
         struct ll_fid   rn_fid2;
 };

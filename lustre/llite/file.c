@@ -158,7 +158,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
 
         if (file->f_mode & FMODE_WRITE) {
                 struct iattr attr;
-                attr.ia_valid = ATTR_MTIME | ATTR_CTIME | ATTR_ATIME | ATTR_SIZE;
+                attr.ia_valid = (ATTR_MTIME | ATTR_CTIME | ATTR_ATIME |
+                                 ATTR_SIZE);
                 attr.ia_mtime = inode->i_mtime;
                 attr.ia_ctime = inode->i_ctime;
                 attr.ia_atime = inode->i_atime;
@@ -222,8 +223,7 @@ static void ll_update_atime(struct inode *inode)
         ll_inode_setattr(inode, &attr, 0);
 }
 
-static int ll_lock_callback(struct ldlm_lock *lock,
-                            struct ldlm_lock_desc *new,
+static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                             void *data, __u32 data_len)
 {
         struct inode *inode = data;

@@ -562,7 +562,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 * res_id, __u32 type,
         return rc;
 }
 
-/*   Returns a referenced, lock */
+/* Returns a referenced lock */
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    struct lustre_handle *parent_lock_handle,
                                    __u64 * res_id, __u32 type,

@@ -1,13 +1,14 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Update Records
- *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
- *
  * Copryright (C) 2002 Cluster File Systems, Inc.
  *
+ *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *
+ *   This code is issued under the GNU General Public License.
+ *   See the file COPYING in this distribution
+ *
+ * Lustre Lite Update Records
  */
 
 #include <linux/config.h>
@@ -97,14 +98,14 @@ static void mds_pack_body(struct mds_body *b)
 }
 
 void mds_getattr_pack(struct ptlrpc_request *req, int offset,
-                      struct inode *inode, 
+                      struct inode *inode,
                       const char *name, int namelen)
 {
         struct mds_body *rec;
         rec = lustre_msg_buf(req->rq_reqmsg, offset);
 
         ll_inode2fid(&rec->fid1, inode);
-        if (name) { 
+        if (name) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
                 LOGL0(name, namelen, tmp);
@@ -112,13 +113,13 @@ void mds_getattr_pack(struct ptlrpc_request *req, int offset,
 }
 
 
-void mds_pack_req_body(struct ptlrpc_request *req) 
+void mds_pack_req_body(struct ptlrpc_request *req)
 {
         struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0);
         mds_pack_body(b);
 }
 
-void mds_pack_rep_body(struct ptlrpc_request *req) 
+void mds_pack_rep_body(struct ptlrpc_request *req)
 {
         struct mds_body *b = lustre_msg_buf(req->rq_repmsg, 0);
         mds_pack_body(b);
@@ -154,7 +155,7 @@ void mds_create_pack(struct ptlrpc_request *req, int offset,
 }
 
 void mds_setattr_pack(struct ptlrpc_request *req, int offset,
-                      struct inode *inode, struct iattr *iattr, 
+                      struct inode *inode, struct iattr *iattr,
                       const char *name, int namelen)
 {
         struct mds_rec_setattr *rec;
@@ -172,7 +173,7 @@ void mds_setattr_pack(struct ptlrpc_request *req, int offset,
         rec->sa_ctime = HTON__u64(iattr->ia_ctime);
         rec->sa_attr_flags = HTON__u32(iattr->ia_attr_flags);
 
-        if (namelen) { 
+        if (namelen) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
                 LOGL0(name, namelen, tmp);
@@ -180,7 +181,7 @@ void mds_setattr_pack(struct ptlrpc_request *req, int offset,
 }
 
 void mds_unlink_pack(struct ptlrpc_request *req, int offset,
-                     struct inode *inode, struct inode *child,
+                     struct inode *inode, struct inode *child, __u32 mode,
                      const char *name, int namelen)
 {
         struct mds_rec_unlink *rec;
@@ -189,8 +190,9 @@ void mds_unlink_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset);
 
         rec->ul_opcode = HTON__u32(REINT_UNLINK);
+        rec->ul_mode = HTON__u32(mode);
         ll_inode2fid(&rec->ul_fid1, inode);
-        if (child) 
+        if (child)
                 ll_inode2fid(&rec->ul_fid2, child);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
@@ -291,10 +293,10 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         attr->ia_ctime = NTOH__u64(rec->sa_ctime);
         attr->ia_attr_flags = NTOH__u32(rec->sa_attr_flags);
 
-        if (req->rq_reqmsg->bufcount == offset + 2) { 
+        if (req->rq_reqmsg->bufcount == offset + 2) {
                 r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
                 r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
-        } else 
+        } else
                 r->ur_namelen = 0;
 
         RETURN(0);
@@ -353,6 +355,7 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
             req->rq_reqmsg->buflens[offset] != sizeof(*rec))
                 RETURN(-EFAULT);
 
+        r->ur_mode = NTOH__u32(rec->ul_mode);
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
 

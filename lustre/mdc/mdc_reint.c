@@ -134,9 +134,9 @@ int mdc_create(struct lustre_handle *conn,
         RETURN(rc);
 }
 
-int mdc_unlink(struct lustre_handle *conn,
-               struct inode *dir, struct inode *child, const char *name,
-               int namelen, struct ptlrpc_request **request)
+int mdc_unlink(struct lustre_handle *conn, struct inode *dir,
+               struct inode *child, __u32 mode, const char *name, int namelen,
+               struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         int rc, size[2] = {sizeof(struct mds_rec_unlink), namelen + 1};
@@ -146,14 +146,14 @@ int mdc_unlink(struct lustre_handle *conn,
         if (!req)
                 RETURN(-ENOMEM);
 
-        mds_unlink_pack(req, 0, dir, child, name, namelen);
+        mds_unlink_pack(req, 0, dir, child, mode, name, namelen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
         rc = mdc_reint(req, LUSTRE_CONN_FULL);
         *request = req;
-        if (rc == -ERESTARTSYS )
+        if (rc == -ERESTARTSYS)
                 rc = 0;
 
         RETURN(rc);

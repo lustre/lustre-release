@@ -441,8 +441,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
 
-#warning FIXME: the file type needs to match the original requested operation
-        switch (inode->i_mode & S_IFMT) {
+        switch (rec->ur_mode) {
         case S_IFDIR:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_RMDIR);
                 if (!handle)
@@ -450,25 +449,24 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 rc = vfs_rmdir(dir, dchild);
                 break;
         case S_IFREG:
-                if (offset) {
+                if ((inode->i_mode & S_IFMT) == S_IFREG && offset) {
                         struct lov_stripe_md *md;
 
                         md = lustre_msg_buf(req->rq_repmsg, 2);
                         md->lmd_easize = mds->mds_max_mdsize;
                         if ((rc = mds_fs_get_md(mds, inode, md)) < 0) {
-                                CDEBUG(D_INFO,
-                                       "No md for ino %ld: rc = %d\n",
+                                CDEBUG(D_INFO, "No md for ino %ld: rc = %d\n",
                                        inode->i_ino, rc);
                                 memset(md, 0, md->lmd_easize);
                         }
                 }
-                /* No break */
-        default:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_UNLINK);
                 if (!handle)
                         GOTO(out_unlink_cancel, rc = PTR_ERR(handle));
                 rc = vfs_unlink(dir, dchild);
                 break;
+        default:
+                LBUG();
         }
 
         if (!rc)

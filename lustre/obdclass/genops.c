@@ -36,7 +36,7 @@ static struct obd_type *class_search_type(char *nm)
         CDEBUG(D_INFO, "SEARCH %s\n", nm);
 
         tmp = &obd_types;
-        while ( (tmp = tmp->next) != &obd_types ) {
+        list_for_each(tmp, &obd_types) {
                 type = list_entry(tmp, struct obd_type, typ_chain);
                 CDEBUG(D_INFO, "TYP %s\n", type->typ_name);
                 if (strlen(type->typ_name) == strlen(nm) &&

@@ -56,7 +56,7 @@ int mdc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
 }
 
 int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
-                  __u64 *last_committed, __u32 *last_xid, 
+                  __u64 *last_committed, __u32 *last_xid,
                   struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -85,12 +85,12 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
 
                 CDEBUG(D_NET, "root ino=%ld, last_committed=%Lu, last_xid=%d\n",
                        (unsigned long)rootfid->id,
-                       (unsigned long long)*last_committed, last_xid);
+                       (unsigned long long)*last_committed, *last_xid);
         }
 
         EXIT;
  out:
-        ptlrpc_free_req(req); 
+        ptlrpc_free_req(req);
         return rc;
 }
 
@@ -221,7 +221,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         __u64 res_id[RES_NAME_SIZE] = {dir->i_ino};
         int size[5] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
         int rc, flags;
-        int repsize[3] = {sizeof(struct ldlm_reply), 
+        int repsize[3] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
                           obddev->u.cli.cl_max_mdsize};
         struct ldlm_reply *dlm_rep;
@@ -230,9 +230,9 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
 
         LDLM_DEBUG_NOLOCK("mdsintent %s dir %ld", ldlm_it2str(it->it_op), dir->i_ino);
 
-        switch (it->it_op) { 
+        switch (it->it_op) {
         case IT_MKDIR:
-                it->it_mode = (it->it_mode | S_IFDIR) & ~current->fs->umask; 
+                it->it_mode = (it->it_mode | S_IFDIR) & ~current->fs->umask;
                 break;
         case (IT_CREAT|IT_OPEN):
         case IT_CREAT:
@@ -241,7 +241,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 it->it_mode &= ~current->fs->umask;
                 break;
         case IT_SYMLINK:
-                it->it_mode = (it->it_mode | S_IFLNK) & ~current->fs->umask; 
+                it->it_mode = (it->it_mode | S_IFLNK) & ~current->fs->umask;
                 break;
         }
 
@@ -293,8 +293,9 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 lit->opc = NTOH__u64((__u64)it->it_op);
 
                 /* pack the intended request */
-                mds_unlink_pack(req, 2, dir, NULL, de->d_name.name, 
-                                de->d_name.len);
+                mds_unlink_pack(req, 2, dir, NULL,
+                                it->it_op == IT_UNLINK ? S_IFREG : S_IFDIR,
+                                de->d_name.name, de->d_name.len);
 
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_GETATTR || it->it_op == IT_RENAME ||
@@ -345,7 +346,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 RETURN(rc);
         }
 
-        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0); 
+        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
         it->it_disposition = (int) dlm_rep->lock_policy_res1;
         it->it_status = (int) dlm_rep->lock_policy_res2;
         it->it_lock_mode = lock_mode;
@@ -402,7 +403,7 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         return rc;
 }
 
-int mdc_close(struct lustre_handle *conn, 
+int mdc_close(struct lustre_handle *conn,
               obd_id ino, int type, __u64 fh, struct ptlrpc_request **request)
 {
         struct mds_body *body;
@@ -472,7 +473,7 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
         if (rc) {
                 ptlrpc_abort_bulk(desc);
                 GOTO(out2, rc);
-        } else { 
+        } else {
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 mds_unpack_body(body);
         }
