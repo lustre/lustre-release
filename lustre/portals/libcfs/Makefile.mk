@@ -6,4 +6,4 @@
 include fs/lustre/portals/Kernelenv
 
 obj-y += libcfs.o
-libcfs-objs    := module.o proc.o debug.o
+libcfs-objs    := module.o proc.o debug.o lwt.o
