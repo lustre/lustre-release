@@ -1242,7 +1242,6 @@ static int filter_write_locked_page(struct niobuf_local *lnb)
                 CERROR("error committing locked page %ld: rc = %d\n",
                        lnb->page->index, rc);
 out:
-        unlock_page(lnb->page);
         lustre_put_page(lnb->page);
 
         return rc;
@@ -1256,7 +1255,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
         struct obd_run_ctxt saved;
         struct obd_ioobj *o;
         struct niobuf_local *r;
-        struct obd_device *obd = class_conn2obd(conn); 
+        struct obd_device *obd = class_conn2obd(conn);
         void *journal_save;
         int found_locked = 0;
         int rc = 0;
@@ -1265,8 +1264,8 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
 
         push_ctxt(&saved, &obd->u.filter.fo_ctxt);
         journal_save = current->journal_info;
-        if (journal_save)
-                CERROR("Existing handle %p???\n", journal_save);
+        LASSERT(!journal_save);
+
         current->journal_info = private;
         for (i = 0, o = obj, r = res; i < objcount; i++, o++) {
                 int j;
@@ -1295,13 +1294,14 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
 
                         CDEBUG(D_INODE,
                                "put inode %p (%ld), count = %d, nlink = %d\n",
-                               page->mapping->host,
-                               page->mapping->host->i_ino,
-                               atomic_read(&page->mapping->host->i_count) - 1,
-                               page->mapping->host->i_nlink);
+                               r->dentry->d_inode, r->dentry->d_inode->i_ino,
+                               atomic_read(&r->dentry->d_inode->i_count) - 1,
+                               r->dentry->d_inode->i_nlink);
                         dput(r->dentry);
                 }
         }
+        current->journal_info = journal_save;
+
         if (!found_locked)
                 goto out_ctxt;
 
@@ -1317,16 +1317,14 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                                 rc = err;
                         CDEBUG(D_INODE,
                                "put inode %p (%ld), count = %d, nlink = %d\n",
-                               r->page->mapping->host,
-                               r->page->mapping->host->i_ino,
-                               atomic_read(&r->page->mapping->host->i_count)-1,
-                               r->page->mapping->host->i_nlink);
+                               r->dentry->d_inode, r->dentry->d_inode->i_ino,
+                               atomic_read(&r->dentry->d_inode->i_count) - 1,
+                               r->dentry->d_inode->i_nlink);
                         dput(r->dentry);
                 }
         }
 
 out_ctxt:
-        current->journal_info = journal_save;
         pop_ctxt(&saved);
         RETURN(0);
 }
