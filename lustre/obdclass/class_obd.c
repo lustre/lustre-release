@@ -527,7 +527,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 err = obd_brw(rw, &conn, &smd, j, pga, ll_sync_io_cb, cbd);
                 EXIT;
         brw_cleanup:
-                for (j = 0, pgp = pga; j < pages; j++) {
+                for (j = 0, pgp = pga; j < pages; j++, pgp++) {
                         if (pgp->pg != NULL) {
                                 int err2;
                                 void *addr = kmap(pgp->pg);
