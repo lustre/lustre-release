@@ -192,7 +192,8 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                          * that the file is already there */
                         if (it->it_status != -EEXIST)
                                 GOTO(negative, NULL);
-                } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP)) {
+                } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP |
+                                        IT_READLINK)) {
                         /* For check ops, we want the lookup to succeed */
                         it->it_data = NULL;
                         if (it->it_status)
@@ -291,7 +292,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
         if (ll_d2d(dentry) == NULL)
                 ll_set_dd(dentry);
         // down(&ll_d2d(dentry)->lld_it_sem);
-        // dentry->d_it = it;        
+        // dentry->d_it = it;
 
         if (it->it_op == IT_LOOKUP)
                 ll_intent_release(dentry);
@@ -414,8 +415,7 @@ int ll_mdc_link(struct dentry *src, struct inode *dir,
 
         ENTRY;
 
-        err = mdc_link(&sbi->ll_mdc_conn, src, dir, name,
-                       len, &request);
+        err = mdc_link(&sbi->ll_mdc_conn, src, dir, name, len, &request);
         ptlrpc_req_finished(request);
 
         RETURN(err);
@@ -623,10 +623,8 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,__u32 mode)
 {
         struct lookup_intent *it = dentry->d_it;
         struct inode *inode = dentry->d_inode;
-#if 0
         struct ext2_dir_entry_2 * de;
         struct page * page;
-#endif
         int rc;
 
         if (it && it->it_disposition) {
@@ -637,21 +635,17 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,__u32 mode)
                 GOTO(out_dec, 0);
         }
 
-#if 0
         de = ext2_find_entry(dir, dentry, &page);
         if (!de)
                 goto out;
-#endif
         rc = ll_mdc_unlink(dir, dentry->d_inode, mode,
                             dentry->d_name.name, dentry->d_name.len);
         if (rc)
                 GOTO(out, rc);
 
-#if 0
         err = ext2_delete_entry(de, page);
         if (err)
                 goto out;
-#endif
 
         /* AED: not sure if needed - directory lock revocation should do it
          * in the case where the client has cached it for non-intent ops.
@@ -703,10 +697,10 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         int err;
 
         if (it && it->it_disposition) {
-		if (tgt_inode) {
-			tgt_inode->i_ctime = CURRENT_TIME;
-			tgt_inode->i_nlink--;
-		}
+                if (tgt_inode) {
+                        tgt_inode->i_ctime = CURRENT_TIME;
+                        tgt_inode->i_nlink--;
+                }
                 invalidate_inode_pages(old_dir);
                 invalidate_inode_pages(new_dir);
                 GOTO(out, err = it->it_status);
