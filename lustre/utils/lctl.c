@@ -55,6 +55,8 @@
 #include <linux/list.h>
 #undef __KERNEL__
 
+int thread;
+
 command_t cmdlist[];
 
 static int jt_quit(int argc, char **argv) {
@@ -67,6 +69,11 @@ static int jt_noop(int argc, char **argv) {
 }
 
 command_t cmdlist[] = {
+        /* Metacommands */
+        {"--device", jt_opt_device, 0, "--device <devno> <command [args ...]>"},
+        {"--threads", jt_opt_threads, 0,
+                "--threads <threads> <devno> <command [args ...]>"},
+
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
         {"network", jt_net_network, 0, "commands that follow apply to net\n"
@@ -161,6 +168,9 @@ command_t cmdlist[] = {
 #endif
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
+        {"debug_lctl", jt_debug_lctl, 0,
+         "set debug status of lctl "
+         "usage: debug_kernel [file] [raw]"},
         {"debug_kernel", jt_debug_kernel, 0,
          "get debug buffer and dump to a file"
          "usage: debug_kernel [file] [raw]"},
@@ -198,6 +208,146 @@ static void signal_server(int sig) {
         } else {
                 fprintf(stderr, "%s: got signal %d\n", cmdname("sigint"), sig);
         }
+}
+
+int get_verbose(const char *arg)
+{
+        int verbose;
+
+        if (!arg || arg[0] == 'v')
+                verbose = 1;
+        else if (arg[0] == 's' || arg[0] == 'q')
+                verbose = 0;
+        else
+                verbose = (int) strtoul(arg, NULL, 0);
+
+        if (verbose < 0)
+                printf("Print status every %d seconds\n", -verbose);
+        else if (verbose == 1)
+                printf("Print status every operation\n");
+        else if (verbose > 1)
+                printf("Print status every %d operations\n", verbose);
+
+        return verbose;
+}
+
+int be_verbose(int verbose, struct timeval *next_time,
+                      int num, int *next_num, int num_total)
+{
+        struct timeval now;
+
+        if (!verbose)
+                return 0;
+
+        if (next_time != NULL)
+                gettimeofday(&now, NULL);
+
+        /* A positive verbosity means to print every X iterations */
+        if (verbose > 0 &&
+            (next_num == NULL || num >= *next_num || num >= num_total)) {
+                *next_num += verbose;
+                if (next_time) {
+                        next_time->tv_sec = now.tv_sec - verbose;
+                        next_time->tv_usec = now.tv_usec;
+                }
+                return 1;
+        }
+
+        /* A negative verbosity means to print at most each X seconds */
+        if (verbose < 0 && next_time != NULL && difftime(&now, next_time) >= 0){
+                next_time->tv_sec = now.tv_sec - verbose;
+                next_time->tv_usec = now.tv_usec;
+                if (next_num)
+                        *next_num = num;
+                return 1;
+        }
+
+        return 0;
+}
+
+int jt_opt_threads(int argc, char **argv)
+{
+        int threads, next_thread;
+        int verbose;
+        int i, j;
+        int rc;
+
+        if (argc < 5) {
+                fprintf(stderr,
+                        "usage: %s numthreads verbose devno <cmd [args ...]>\n",
+                        argv[0]);
+                return -1;
+        }
+
+        threads = strtoul(argv[1], NULL, 0);
+
+        verbose = get_verbose(argv[2]);
+
+        printf("%s: starting %d threads on device %s running %s\n",
+               argv[0], threads, argv[3], argv[4]);
+
+        for (i = 1, next_thread = verbose; i <= threads; i++) {
+                rc = fork();
+                if (rc < 0) {
+                        fprintf(stderr, "error: %s: #%d - %s\n", argv[0], i,
+                                strerror(rc = errno));
+                        break;
+                } else if (rc == 0) {
+                        thread = i;
+                        argv[2] = "--device";
+                        return jt_opt_device(argc - 2, argv + 2);
+                } else if (be_verbose(verbose, NULL, i, &next_thread, threads))
+                        printf("%s: thread #%d (PID %d) started\n",
+                               argv[0], i, rc);
+                rc = 0;
+        }
+
+        if (!thread) { /* parent process */
+                if (!verbose)
+                        printf("%s: started %d threads\n\n", argv[0], i - 1);
+                else
+                        printf("\n");
+
+                for (j = 1; j < i; j++) {
+                        int status;
+                        int ret = wait(&status);
+
+                        if (ret < 0) {
+                                fprintf(stderr, "error: %s: wait - %s\n",
+                                        argv[0], strerror(errno));
+                                if (!rc)
+                                        rc = errno;
+                        } else {
+                                /*
+                                 * This is a hack.  We _should_ be able to use
+                                 * WIFEXITED(status) to see if there was an
+                                 * error, but it appears to be broken and it
+                                 * always returns 1 (OK).  See wait(2).
+                                 */
+                                int err = WEXITSTATUS(status);
+                                if (err)
+                                        fprintf(stderr,
+                                                "%s: PID %d had rc=%d\n",
+                                                argv[0], ret, err);
+                                if (!rc)
+                                        rc = err;
+                        }
+                }
+        }
+
+        return rc;
+}
+
+char *cmdname(char *func)
+{
+	static char buf[512];
+	
+	if (thread) {
+		sprintf(buf, "%s-%d", func, thread);
+		return buf;
+	}
+
+	return func;
 }
 
 int main(int argc, char **argv) {

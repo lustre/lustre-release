@@ -19,6 +19,7 @@ int jt_net_send_mem(int argc, char **argv);
 int jt_net_nagle(int argc, char **argv);
 
 /* Device selection commands */
+int jt_opt_device(int argc, char **argv);
 int jt_dev_newdev(int argc, char **argv);
 int jt_dev_uuid2dev(int argc, char **argv);
 int jt_dev_name2dev(int argc, char **argv);
@@ -51,12 +52,47 @@ int jt_debug_show(int argc, char **argv);
 int jt_debug_list(int argc, char **argv);
 int jt_debug_modules(int argc, char **argv);
 int jt_debug_panic(int argc, char **argv);
+int jt_debug_lctl(int argc, char **argv);
 
 int do_disconnect(char *func, int verbose);
 int network_setup(int argc, char **argv);
 int device_setup(int argc, char **argv);
 int debug_setup(int argc, char **argv);
 
+int jt_opt_threads(int argc, char **argv);
+char *cmdname(char *func);
+int get_verbose(const char *arg);
+int be_verbose(int verbose, struct timeval *next_time,
+	       int num, int *next_num, int num_total);
+
+#define LCTL_DEBUG
+#ifdef LCTL_DEBUG
+extern int lctl_debug;
+#define D_LCTL 1
+
+#ifdef CDEBUG
+#undef CDEBUG
+#endif
+#define CDEBUG(mask, format, a...)                                    \
+        do {                                                            \
+                if (lctl_debug & mask) {                           \
+                        printf("(%s:%s L%d): " format, __FILE__,        \
+                               __FUNCTION__, __LINE__ , ## a);          \
+                }                                                       \
+        } while (0)
+#else  /* !LCTL_DEBUG */
+#  define CDEBUG(mask, format, a...) do {} while (0)
+#endif /* LCTL_DEBUG */
+
+
+#ifdef CERROR
+#undef CERROR
+#endif
+#define CERROR(format, a...)                                    \
+do {                                                            \
+        fprintf(stderr, "(%s:%s L%d): " format, __FILE__, __FUNCTION__, \
+               __LINE__ , ## a);                                \
+} while (0)
 
 /* So we can tell between error codes and devices */
 #define N2D_OFF         0x100
@@ -106,22 +142,12 @@ do {                                                                    \
         ((double)((a)->tv_sec - (b)->tv_sec) +                          \
         ((double)((a)->tv_usec - (b)->tv_usec) / 1000000))
 
-static inline char *cmdname(char *func) {
-	static char buf[512];
-	int thread = 0;
-	
-	if (thread) {
-		sprintf(buf, "%s-%d", func, thread);
-		return buf;
-	}
-
-	return func;
-}
 
 typedef struct {
 	char *name;
 	int num;
 } name2num_t;
+
 
 #endif
 

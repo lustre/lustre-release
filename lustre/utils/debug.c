@@ -43,6 +43,10 @@
 
 #include "lctl.h"
 
+/* current debug flag
+ */
+int lctl_debug;
+
 static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = 8192;
@@ -429,5 +433,13 @@ int jt_debug_panic(int argc, char **argv) {
                         strerror(errno));
                 return -1;
         }
+        return 0;
+}
+
+int jt_debug_lctl(int argc, char **argv) {
+        if (argc == 2) {
+                lctl_debug = strtoul(argv[1], NULL, 0);
+        } else
+                printf("current lctl_debug: 0x%x\n", lctl_debug);
         return 0;
 }

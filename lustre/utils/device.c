@@ -73,58 +73,58 @@ int device_setup(int argc, char **argv) {
 }
 
 /* Misc support functions */
-static int be_verbose(int verbose, struct timeval *next_time,
-                      int num, int *next_num, int num_total) {
-        struct timeval now;
+static int do_name2dev(char *func, char *name) {
+        struct obd_ioctl_data data;
 
-        if (!verbose)
-                return 0;
+        LUSTRE_CONNECT(func);
+        IOCINIT(data);
 
-        if (next_time != NULL)
-                gettimeofday(&now, NULL);
+        data.ioc_inllen1 = strlen(name) + 1;
+        data.ioc_inlbuf1 = name;
 
-        /* A positive verbosity means to print every X iterations */
-        if (verbose > 0 &&
-            (next_num == NULL || num >= *next_num || num >= num_total)) {
-                *next_num += verbose;
-                if (next_time) {
-                        next_time->tv_sec = now.tv_sec - verbose;
-                        next_time->tv_usec = now.tv_usec;
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(func));
+                return -2;
+        }
+        rc = ioctl(fd, OBD_IOC_NAME2DEV , buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s - %s\n", cmdname(func),
+                        name, strerror(rc = errno));
+                return rc;
+        }
+
+        memcpy((char *)(&data), buf, sizeof(data));
+
+        return data.ioc_dev + N2D_OFF;
+}
+
+/* 
+ * resolve a device name to a device number.
+ * supports a number or name.  
+ * FIXME: support UUID 
+ */
+static int parse_devname(char * func, char *name) 
+{
+        int ret = -1;
+
+        if (!name) 
+                return ret;
+        if (name[0] == '$') {
+                rc = do_name2dev(func, name + 1);
+                if (rc >= N2D_OFF) {
+                        ret = rc - N2D_OFF;
+                        printf("%s is device %d\n", name,
+                               ret);
+                } else {
+                        fprintf(stderr, "error: %s: %s: %s\n", cmdname(func),
+                                name, "device not found");
                 }
-                return 1;
-        }
-
-        /* A negative verbosity means to print at most each X seconds */
-        if (verbose < 0 && next_time != NULL && difftime(&now, next_time) >= 0){
-                next_time->tv_sec = now.tv_sec - verbose;
-                next_time->tv_usec = now.tv_usec;
-                if (next_num)
-                        *next_num = num;
-                return 1;
-        }
-
-        return 0;
+                        
+        } else
+                ret = strtoul(name, NULL, 0);
+        return ret;
 }
 
-static int get_verbose(const char *arg) {
-        int verbose;
-
-        if (!arg || arg[0] == 'v')
-                verbose = 1;
-        else if (arg[0] == 's' || arg[0] == 'q')
-                verbose = 0;
-        else
-                verbose = (int) strtoul(arg, NULL, 0);
-
-        if (verbose < 0)
-                printf("Print status every %d seconds\n", -verbose);
-        else if (verbose == 1)
-                printf("Print status every operation\n");
-        else if (verbose > 1)
-                printf("Print status every %d operations\n", verbose);
-
-        return verbose;
-}
 
 #if 0
 /* pack "LL LL LL LL LL LL LL L L L L L L L L L a60 a60 L L L" */
@@ -183,7 +183,7 @@ static int do_device(char *func, int dev) {
         LUSTRE_CONNECT(func);
 
         if (obd_ioctl_pack(&data, &buf, max)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(func));
+                CERROR("error: %s: invalid ioctl\n", cmdname(func));
                 return -2;
         }
 
@@ -191,12 +191,16 @@ static int do_device(char *func, int dev) {
 }
 
 int jt_dev_device(int argc, char **argv) {
+        int dev;
         do_disconnect(argv[0], 1);
 
         if (argc != 2)
                 return CMD_HELP;
-
-        rc = do_device(argv[0], strtoul(argv[1], NULL, 0));
+        dev = parse_devname(argv[0], argv[1]);
+        if (dev < 0) {
+                return -1; 
+        }
+        rc = do_device(argv[0], dev);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
@@ -211,31 +215,6 @@ static int do_uuid2dev(char *func, char *name) {
 int jt_dev_uuid2dev(int argc, char **argv) {
         do_uuid2dev(NULL, NULL);
         return 0;
-}
-
-static int do_name2dev(char *func, char *name) {
-        struct obd_ioctl_data data;
-
-        LUSTRE_CONNECT(func);
-        IOCINIT(data);
-
-        data.ioc_inllen1 = strlen(name) + 1;
-        data.ioc_inlbuf1 = name;
-
-        if (obd_ioctl_pack(&data, &buf, max)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(func));
-                return -2;
-        }
-        rc = ioctl(fd, OBD_IOC_NAME2DEV , buf);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s - %s\n", cmdname(func),
-                        name, strerror(rc = errno));
-                return rc;
-        }
-
-        memcpy((char *)(&data), buf, sizeof(data));
-
-        return data.ioc_dev + N2D_OFF;
 }
 
 int jt_dev_name2dev(int argc, char **argv) {
@@ -351,8 +330,7 @@ int jt_dev_close(int argc, char **argv) {
         return do_disconnect(argv[0], 0);
 }
 
-#if 0
-static int jt__device(int argc, char **argv)
+int jt_opt_device(int argc, char **argv)
 {
         char *arg2[3];
         int ret;
@@ -363,12 +341,12 @@ static int jt__device(int argc, char **argv)
                 return -1;
         }
 
-        rc = do_device("device", strtoul(argv[1], NULL, 0));
+        rc = do_device("device", parse_devname(argv[0], argv[1]));
 
         if (!rc) {
                 arg2[0] = "connect";
                 arg2[1] = NULL;
-                rc = jt_connect(1, arg2);
+                rc = jt_dev_probe(1, arg2);
         }
 
         if (!rc)
@@ -381,78 +359,6 @@ static int jt__device(int argc, char **argv)
         return rc;
 }
 
-static int jt__threads(int argc, char **argv)
-{
-        int threads, next_thread;
-        int verbose;
-        int i, j;
-
-        if (argc < 5) {
-                fprintf(stderr,
-                        "usage: %s numthreads verbose devno <cmd [args ...]>\n",
-                        argv[0]);
-                return -1;
-        }
-
-        threads = strtoul(argv[1], NULL, 0);
-
-        verbose = get_verbose(argv[2]);
-
-        printf("%s: starting %d threads on device %s running %s\n",
-               argv[0], threads, argv[3], argv[4]);
-
-        for (i = 1, next_thread = verbose; i <= threads; i++) {
-                rc = fork();
-                if (rc < 0) {
-                        fprintf(stderr, "error: %s: #%d - %s\n", argv[0], i,
-                                strerror(rc = errno));
-                        break;
-                } else if (rc == 0) {
-                        thread = i;
-                        argv[2] = "--device";
-                        return jt__device(argc - 2, argv + 2);
-                } else if (be_verbose(verbose, NULL, i, &next_thread, threads))
-                        printf("%s: thread #%d (PID %d) started\n",
-                               argv[0], i, rc);
-                rc = 0;
-        }
-
-        if (!thread) { /* parent process */
-                if (!verbose)
-                        printf("%s: started %d threads\n\n", argv[0], i - 1);
-                else
-                        printf("\n");
-
-                for (j = 1; j < i; j++) {
-                        int status;
-                        int ret = wait(&status);
-
-                        if (ret < 0) {
-                                fprintf(stderr, "error: %s: wait - %s\n",
-                                        argv[0], strerror(errno));
-                                if (!rc)
-                                        rc = errno;
-                        } else {
-                                /*
-                                 * This is a hack.  We _should_ be able to use
-                                 * WIFEXITED(status) to see if there was an
-                                 * error, but it appears to be broken and it
-                                 * always returns 1 (OK).  See wait(2).
-                                 */
-                                int err = WEXITSTATUS(status);
-                                if (err)
-                                        fprintf(stderr,
-                                                "%s: PID %d had rc=%d\n",
-                                                argv[0], ret, err);
-                                if (!rc)
-                                        rc = err;
-                        }
-                }
-        }
-
-        return rc;
-}
-#endif
 
 int jt_dev_attach(int argc, char **argv) {
         struct obd_ioctl_data data;
@@ -507,15 +413,10 @@ int jt_dev_setup(int argc, char **argv) {
                 
         data.ioc_dev = -1;
         if (argc > 1) {
-                if (argv[1][0] == '$') {
-                        rc = do_name2dev(argv[0], argv[1] + 1);
-                        if (rc >= N2D_OFF) {
-                                printf("%s is device %d\n", argv[1],
-                                       rc - N2D_OFF);
-                                data.ioc_dev = rc - N2D_OFF;
-                        }
-                } else
-                        data.ioc_dev = strtoul(argv[1], NULL, 0);
+                data.ioc_dev = parse_devname(argv[0], argv[1]);
+                if (data.ioc_dev < 0) 
+                        return rc = -1;
+
                 data.ioc_inllen1 = strlen(argv[1]) + 1;
                 data.ioc_inlbuf1 = argv[1];
         }
@@ -917,3 +818,4 @@ int jt_dev_test_ldlm(int argc, char **argv) {
                         cmdname(argv[0]), strerror(rc = errno));
         return rc;
 }
+
