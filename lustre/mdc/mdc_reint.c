@@ -226,7 +226,8 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
         mdc_rename_pack(req, 0, data, old, oldlen, new, newlen);
 
         size[0] = sizeof(struct mds_body);
-        req->rq_replen = lustre_msg_size(1, size);
+        size[1] = obd->u.cli.cl_max_mds_easize;
+        req->rq_replen = lustre_msg_size(2, size);
 
         rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
