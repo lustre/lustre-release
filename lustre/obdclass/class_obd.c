@@ -703,7 +703,7 @@ static void __exit cleanup_obdclass(void)
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */
 #include <linux/lustre_version.h>
-#if (LUSTRE_KERNEL_VERSION != 4)
+#if (LUSTRE_KERNEL_VERSION != 5)
 # error Cannot continue: Your Lustre kernel patch is out of date
 #endif
 

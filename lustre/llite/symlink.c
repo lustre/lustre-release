@@ -89,23 +89,27 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *request;
-        int op, mode;
+        int op, mode, rc;
         char *symname;
-        int rc;
         ENTRY;
 
-        op = it->it_op;
-        mode = it->it_mode;
+        if (it != NULL) {
+                op = it->it_op;
+                mode = it->it_mode;
 
-        ll_intent_release(dentry, it);
+                ll_intent_release(dentry, it);
+        }
+
         down(&lli->lli_open_sem);
-
-        it->it_op = op;
-        it->it_mode = mode;
 
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
+
+        if (it != NULL) {
+                it->it_op = op;
+                it->it_mode = mode;
+        }
 
         rc = vfs_follow_link_it(nd, symname, it);
  out:

@@ -703,7 +703,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                         GOTO(out_create_de, rc = -EIO);
                 }
         }
-        ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+        ldlm_lock_dump_handle(&lockh);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(name, de, namelen - 1);

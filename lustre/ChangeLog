@@ -19,6 +19,7 @@ TBA
 	 - bulk descriptors were free()d too soon (511)
 	 - fix paths in lconf, which would load incorrect modules (451, 507)
 	 - fix confusing lconf 'host not found' error message (386)
+	 - fix lock order deadlock on OST (O/R i_sem before journal ops, 478)
 
 2002-12-02  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_18

@@ -60,7 +60,7 @@ CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 
 portalsdir_def='$(top_srcdir)/../portals'
 AC_ARG_WITH(portals, [  --with-portals=[path] set path to Portals source (default=../portals)], enable_portalsdir=$withval)
-AC_ARG_ENABLE(portalsdir, [  --enable-portalsdir=[path] (deprecated) set path to Portals source (default=$(top_srcdir)/../portals)],, enable_portalsdir=$portalsdir_def)
+AC_ARG_ENABLE(portalsdir, [  --enable-portalsdir=[path] (deprecated) set path to Portals source (default=$portalsdir_def],, enable_portalsdir=$portalsdir_def)
 PORTALS=$enable_portalsdir
 
 if test $PORTALS = $portalsdir_def; then

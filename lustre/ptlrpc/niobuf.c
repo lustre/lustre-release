@@ -280,6 +280,8 @@ int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 
 void obd_brw_set_add(struct obd_brw_set *set, struct ptlrpc_bulk_desc *desc)
 {
+        LASSERT(list_empty(&desc->bd_set_chain));
+
         ptlrpc_bulk_addref(desc);
         atomic_inc(&set->brw_refcount);
         desc->bd_brw_set = set;
@@ -385,7 +387,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 /* request->rq_repmsg is set only when the reply comes in, in
                  * client_packet_callback() */
                 if (request->rq_reply_md.start) {
-                        PtlMEUnlink(request->rq_reply_me_h);
+                        rc = PtlMEUnlink(request->rq_reply_me_h);
+                        LASSERT (rc == PTL_OK);
                         OBD_FREE(request->rq_reply_md.start,
                                  request->rq_replen);
                         /* If we're resending, rq_repmsg needs to be NULLed out

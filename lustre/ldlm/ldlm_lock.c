@@ -141,10 +141,7 @@ void ldlm_unregister_intent(void)
  */
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
 {
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         atomic_inc(&lock->l_refc);
-        ldlm_resource_getref(lock->l_resource);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return lock;
 }
 
@@ -153,34 +150,25 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         ENTRY;
 
-        l_lock(&ns->ns_lock);
-        atomic_dec(&lock->l_refc);
-        LASSERT(atomic_read(&lock->l_refc) >= 0);
-
-        if (ldlm_resource_putref(lock->l_resource)) {
-                LASSERT(atomic_read(&lock->l_refc) == 0);
-                lock->l_resource = NULL;
-        }
-        if (lock->l_parent)
-                LDLM_LOCK_PUT(lock->l_parent);
-
-        if (atomic_read(&lock->l_refc) == 0) {
-                LASSERT(lock->l_destroyed);
-                l_unlock(&ns->ns_lock);
+        if (atomic_dec_and_test(&lock->l_refc)) {
+                l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
+                LASSERT(lock->l_destroyed);
+                LASSERT(list_empty(&lock->l_res_link));
 
                 spin_lock(&ns->ns_counter_lock);
                 ns->ns_locks--;
                 spin_unlock(&ns->ns_counter_lock);
 
+                ldlm_resource_putref(lock->l_resource);
                 lock->l_resource = NULL;
-                lock->l_random = DEAD_HANDLE_MAGIC;
-                memset(lock, 0x5a, sizeof(*lock));
-                kmem_cache_free(ldlm_lock_slab, lock);
-                CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 0).\n",
-                       sizeof(*lock), lock);
-        } else
+
+                if (lock->l_parent)
+                        LDLM_LOCK_PUT(lock->l_parent);
+
+                PORTAL_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
                 l_unlock(&ns->ns_lock);
+        }
 
         EXIT;
 }
@@ -227,27 +215,35 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         }
         lock->l_destroyed = 1;
 
-        list_del(&lock->l_export_chain);
-        lock->l_export = NULL;
+        list_del_init(&lock->l_export_chain);
         ldlm_lock_remove_from_lru(lock);
 
+#if 0
         /* Wake anyone waiting for this lock */
         /* FIXME: I should probably add yet another flag, instead of using
          * l_export to only call this on clients */
+        lock->l_export = NULL;
         if (lock->l_export && lock->l_completion_ast)
                 lock->l_completion_ast(lock, 0);
+#endif
 
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
         EXIT;
 }
 
+/* this is called by portals_handle2object with the handle lock taken */
+static void lock_handle_addref(void *lock)
+{
+        ldlm_lock_get(lock);
+}
+
 /*
-   usage: pass in a resource on which you have done get
-          pass in a parent lock on which you have done a get
-          do not put the resource or the parent
-   returns: lock with refcount 1
-*/
+ * usage: pass in a resource on which you have done ldlm_resource_get
+ *        pass in a parent lock on which you have done a ldlm_lock_get
+ *        after return, ldlm_*_put the resource and parent
+ * returns: lock with refcount 1
+ */
 static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                                        struct ldlm_resource *resource)
 {
@@ -257,17 +253,14 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         if (resource == NULL)
                 LBUG();
 
-        lock = kmem_cache_alloc(ldlm_lock_slab, SLAB_KERNEL);
+        PORTAL_SLAB_ALLOC(lock, ldlm_lock_slab, sizeof(*lock));
         if (lock == NULL)
                 RETURN(NULL);
 
-        memset(lock, 0, sizeof(*lock));
         get_random_bytes(&lock->l_random, sizeof(__u64));
+        lock->l_resource = ldlm_resource_getref(resource);
 
-        lock->l_resource = resource;
-        /* this refcount matches the one of the resource passed
-           in which is not being put away */
-        atomic_set(&lock->l_refc, 1);
+        atomic_set(&lock->l_refc, 2);
         INIT_LIST_HEAD(&lock->l_children);
         INIT_LIST_HEAD(&lock->l_res_link);
         INIT_LIST_HEAD(&lock->l_lru);
@@ -281,15 +274,11 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
 
         if (parent != NULL) {
                 l_lock(&parent->l_resource->lr_namespace->ns_lock);
-                lock->l_parent = parent;
+                lock->l_parent = LDLM_LOCK_GET(parent);
                 list_add(&lock->l_childof, &parent->l_children);
                 l_unlock(&parent->l_resource->lr_namespace->ns_lock);
         }
 
-        CDEBUG(D_MALLOC, "kmalloced 'lock': %d at "
-               "%p (tot %d).\n", sizeof(*lock), lock, 1);
-        /* this is the extra refcount, to prevent the lock from evaporating */
-        LDLM_LOCK_GET(lock);
         RETURN(lock);
 }
 
@@ -297,7 +286,6 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
 {
         struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         struct ldlm_resource *oldres = lock->l_resource;
-        int i, refc;
         ENTRY;
 
         l_lock(&ns->ns_lock);
@@ -320,17 +308,8 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
                 RETURN(-ENOMEM);
         }
 
-        /* move references over */
-        refc = atomic_read(&lock->l_refc);
-        for (i = 0; i < refc; i++) {
-                int rc;
-                ldlm_resource_getref(lock->l_resource);
-                rc = ldlm_resource_putref(oldres);
-                if (rc == 1 && i != refc - 1)
-                        LBUG();
-        }
-        /* compensate for the initial get above.. */
-        ldlm_resource_putref(lock->l_resource);
+        /* ...and the flowers are still standing! */
+        ldlm_resource_putref(oldres);
 
         l_unlock(&ns->ns_lock);
         RETURN(0);
@@ -398,8 +377,6 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle, int strict,
                 lock->l_flags |= flags;
 
         retval = LDLM_LOCK_GET(lock);
-        if (!retval)
-                CERROR("lock disappeared below us!!! %p\n", lock);
         EXIT;
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -720,10 +697,12 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                 RETURN(NULL);
 
         lock = ldlm_lock_new(parent_lock, res);
-        if (lock == NULL) {
-                ldlm_resource_putref(res);
+        ldlm_resource_putref(res);
+        if (parent_lock != NULL)
+                LDLM_LOCK_PUT(parent_lock);
+
+        if (lock == NULL)
                 RETURN(NULL);
-        }
 
         lock->l_req_mode = mode;
         lock->l_data = data;
@@ -785,7 +764,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
          * We do exactly the same thing during recovery, when the server is
          * more or less trusting the clients not to lie.
          *
-         * FIXME (bug 629283): Detect obvious lies by checking compatibility in
+         * FIXME (bug 268): Detect obvious lies by checking compatibility in
          * granted/converting queues. */
         ldlm_resource_unlink_lock(lock);
         if (local || (*flags & LDLM_FL_REPLAY)) {
@@ -926,8 +905,11 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         ns = res->lr_namespace;
 
         l_lock(&ns->ns_lock);
-        if (lock->l_readers || lock->l_writers)
+        if (lock->l_readers || lock->l_writers) {
                 LDLM_DEBUG(lock, "lock still has references");
+                ldlm_lock_dump(lock);
+                //LBUG();
+        }
 
         ldlm_cancel_callback(lock);
 
@@ -1056,4 +1038,17 @@ void ldlm_lock_dump(struct ldlm_lock *lock)
                 CDEBUG(D_OTHER, "  Extent: %Lu -> %Lu\n",
                        (unsigned long long)lock->l_extent.start,
                        (unsigned long long)lock->l_extent.end);
+}
+
+void ldlm_lock_dump_handle(struct lustre_handle *lockh)
+{
+        struct ldlm_lock *lock;
+
+        lock = ldlm_handle2lock(lockh);
+        if (lock == NULL)
+                return;
+
+        ldlm_lock_dump(lock);
+
+        LDLM_LOCK_PUT(lock);
 }

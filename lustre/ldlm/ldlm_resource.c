@@ -24,7 +24,7 @@ int ldlm_proc_setup(struct obd_device *obd)
 {
         ENTRY;
         LASSERT(ldlm_ns_proc_dir == NULL);
-        ldlm_ns_proc_dir=obd->obd_type->typ_procroot;
+        ldlm_ns_proc_dir = obd->obd_type->typ_procroot;
         RETURN(0);
 }
 
@@ -33,11 +33,20 @@ void ldlm_proc_cleanup(struct obd_device *obd)
         ldlm_ns_proc_dir = NULL;
 }
 
+static int lprocfs_uint_rd(char *page, char **start, off_t off,
+                           int count, int *eof, void *data)
+{
+        unsigned int *temp = (unsigned int *)data;
+        int len;
+        len = snprintf(page, count, "%u\n", *temp);
+        return len;
+}
+
 #define MAX_STRING_SIZE 100
 void ldlm_proc_namespace(struct ldlm_namespace *ns)
 {
         struct lprocfs_vars lock_vars[2];
-        char lock_names[MAX_STRING_SIZE+1];
+        char lock_names[MAX_STRING_SIZE + 1];
 
         memset(lock_vars, 0, sizeof(lock_vars));
         snprintf(lock_names, MAX_STRING_SIZE, "%s/resource_count", ns->ns_name);
@@ -57,6 +66,15 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
         lock_vars[0].data = &ns->ns_locks;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
+        memset(lock_vars, 0, sizeof(lock_vars));
+        snprintf(lock_names, MAX_STRING_SIZE, "%s/lock_unused_count",
+                 ns->ns_name);
+        lock_names[MAX_STRING_SIZE] = '\0';
+        lock_vars[0].name = lock_names;
+        lock_vars[0].read_fptr = lprocfs_uint_rd;
+        lock_vars[0].write_fptr = NULL;
+        lock_vars[0].data = &ns->ns_nr_unused;
+        lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 }
 #undef MAX_STRING_SIZE
 
@@ -307,26 +325,21 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u64 *name, __u32 type, int create)
 {
-        struct list_head *bucket;
-        struct list_head *tmp = bucket;
+        struct list_head *bucket, *tmp;
         struct ldlm_resource *res = NULL;
         ENTRY;
 
-        if (ns == NULL || ns->ns_hash == NULL) {
-                LBUG();
-                RETURN(NULL);
-        }
+        LASSERT(ns != NULL);
+        LASSERT(ns->ns_hash != NULL);
 
         l_lock(&ns->ns_lock);
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
 
         list_for_each(tmp, bucket) {
-                struct ldlm_resource *chk;
-                chk = list_entry(tmp, struct ldlm_resource, lr_hash);
+                res = list_entry(tmp, struct ldlm_resource, lr_hash);
 
-                if (memcmp(chk->lr_name, name, sizeof(chk->lr_name)) == 0) {
-                        res = chk;
-                        atomic_inc(&res->lr_refcount);
+                if (memcmp(res->lr_name, name, sizeof(res->lr_name)) == 0) {
+                        ldlm_resource_getref(res);
                         l_unlock(&ns->ns_lock);
                         RETURN(res);
                 }
@@ -334,6 +347,9 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
 
         if (create)
                 res = ldlm_resource_add(ns, parent, name, type);
+        else
+                res = NULL;
+
         l_unlock(&ns->ns_lock);
 
         RETURN(res);
@@ -351,12 +367,16 @@ struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 int ldlm_resource_putref(struct ldlm_resource *res)
 {
         int rc = 0;
+        ENTRY;
+
+        CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
+               atomic_read(&res->lr_refcount) - 1);
+        LASSERT(atomic_read(&res->lr_refcount) > 0);
+        LASSERT(atomic_read(&res->lr_refcount) < 0x5a5a5a5a);
 
         if (atomic_dec_and_test(&res->lr_refcount)) {
                 struct ldlm_namespace *ns = res->lr_namespace;
                 ENTRY;
-                CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
-                       atomic_read(&res->lr_refcount));
 
                 l_lock(&ns->ns_lock);
 
@@ -387,8 +407,8 @@ int ldlm_resource_putref(struct ldlm_resource *res)
                 }
 
                 ns->ns_refcount--;
-                list_del(&res->lr_hash);
-                list_del(&res->lr_childof);
+                list_del_init(&res->lr_hash);
+                list_del_init(&res->lr_childof);
 
                 memset(res, 0x5a, sizeof(*res));
                 kmem_cache_free(ldlm_resource_slab, res);
@@ -399,11 +419,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
                 spin_unlock(&ns->ns_counter_lock);
 
                 rc = 1;
-        } else {
-                ENTRY;
-                CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
-                       atomic_read(&res->lr_refcount));
-                LASSERT(atomic_read(&res->lr_refcount) >= 0);
+                EXIT;
         }
 
         RETURN(rc);

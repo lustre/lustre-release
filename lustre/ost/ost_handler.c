@@ -613,7 +613,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                                            "self", ost_handle, "ost");
         if (!ost->ost_service) {
                 CERROR("failed to start service\n");
-                GOTO(error_disc, err = -EINVAL);
+                GOTO(error_disc, err = -ENOMEM);
         }
 
         for (i = 0; i < OST_NUM_THREADS; i++) {

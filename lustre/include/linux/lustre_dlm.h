@@ -12,6 +12,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_import.h>
+#include <linux/handles.h>
 
 struct obd_ops;
 struct obd_device;
@@ -151,9 +152,9 @@ struct ldlm_lock {
         struct list_head      l_children;
         struct list_head      l_childof;
         struct list_head      l_lru;
-        struct list_head      l_res_link; /*position in one of three res lists*/
-        struct list_head      l_export_chain; /* per-export chain of locks */
-        struct list_head      l_pending_chain; /* locks with callbacks pending*/
+        struct list_head      l_res_link; // position in one of three res lists
+        struct list_head      l_export_chain; // per-export chain of locks
+        struct list_head      l_pending_chain; // locks with callbacks pending
         unsigned long         l_callback_timeout;
 
         ldlm_mode_t           l_req_mode;
@@ -373,6 +374,7 @@ void ldlm_cancel_locks_for_export(struct obd_export *export);
 void ldlm_run_ast_work(struct list_head *rpc_list);
 void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_lock_dump(struct ldlm_lock *lock);
+void ldlm_lock_dump_handle(struct lustre_handle *);
 
 /* ldlm_test.c */
 int ldlm_test(struct obd_device *device, struct lustre_handle *connh);

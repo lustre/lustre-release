@@ -262,7 +262,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         int rc;
         ENTRY;
 
-        LASSERT(imp);
+        LASSERT((unsigned long)imp > 0x1000);
         conn = imp->imp_connection;
 
         OBD_ALLOC(request, sizeof(*request));

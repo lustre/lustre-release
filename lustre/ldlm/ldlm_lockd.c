@@ -790,6 +790,7 @@ EXPORT_SYMBOL(ldlm_test);
 EXPORT_SYMBOL(ldlm_regression_start);
 EXPORT_SYMBOL(ldlm_regression_stop);
 EXPORT_SYMBOL(ldlm_lock_dump);
+EXPORT_SYMBOL(ldlm_lock_dump_handle);
 EXPORT_SYMBOL(ldlm_namespace_new);
 EXPORT_SYMBOL(ldlm_namespace_cleanup);
 EXPORT_SYMBOL(ldlm_namespace_free);

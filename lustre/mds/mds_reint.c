@@ -220,7 +220,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         CDEBUG(D_INODE, "parent ino %lu name %s mode %o\n",
                dir->i_ino, rec->ur_name, rec->ur_mode);
 
-        ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+        ldlm_lock_dump_handle(&lockh);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
@@ -571,8 +571,9 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_link_src_put, rc = -EIO);
                 }
-        } else
-                ldlm_lock_dump((void *)(unsigned long)srclockh.addr);
+        } else {
+                ldlm_lock_dump_handle(&srclockh);
+        }
 
         de_tgt_dir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
         if (IS_ERR(de_tgt_dir)) {
@@ -595,8 +596,9 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_link_tgt_dir_put, rc = -EIO);
                 }
-        } else
-                ldlm_lock_dump((void *)(unsigned long)tgtlockh.addr);
+        } else {
+                ldlm_lock_dump_handle(&tgtlockh);
+        }
 
         down(&de_tgt_dir->d_inode->i_sem);
         dchild = lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen - 1);
@@ -706,8 +708,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_rename_srcput, rc = -EIO);
                 }
-        } else
-                ldlm_lock_dump((void *)(unsigned long)srclockh.addr);
+        } else {
+                ldlm_lock_dump_handle(&srclockh);
+        }
 
         de_tgtdir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
         if (IS_ERR(de_tgtdir))
@@ -730,8 +733,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_rename_tgtput, rc = -EIO);
                 }
-        } else
-                ldlm_lock_dump((void *)(unsigned long)tgtlockh.addr);
+        } else {
+                ldlm_lock_dump_handle(&tgtlockh);
+        }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         double_lock(de_tgtdir, de_srcdir);

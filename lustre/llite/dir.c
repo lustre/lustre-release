@@ -91,7 +91,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 unlock_page(page);
                 RETURN(rc);
         }
-        ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+        ldlm_lock_dump_handle(&lockh);
 
         if (PageUptodate(page)) {
                 CERROR("Explain this please?\n");
