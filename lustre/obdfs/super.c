@@ -67,6 +67,11 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         struct inode *root = 0; 
 	struct obdfs_sb_info *sbi = NULL;
         int error = 0;
+	unsigned long blocksize;
+	unsigned long blocksize_bits;
+	unsigned long root_ino;
+	int scratch;
+	
 
 	ENTRY;
         MOD_INC_USE_COUNT; 
@@ -82,7 +87,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	sbi->osi_obd = &obd_dev[obd_minor];
 	sbi->osi_ops = sbi->osi_obd->obd_type->typ_ops;
 	
-        error  = sbi->osi_ops->o_connect(obd_minor, &sbi->osi_conn_info);
+        error  = sbi->osi_ops->o_connect(sbi->osi_obd, &sbi->osi_conn_info);
 	if ( error ) {
 		printk("OBDFS: cannot connect to 0x%x.\n", obd_minor);
 		goto error;
@@ -90,15 +95,44 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 
 	sbi->osi_super = sb;
 
+	error = sbi->osi_ops->o_get_info(sbi->osi_conn_info.conn_id, 
+					 strlen("blocksize"), 
+					 "blocksize", 
+					 &scratch, (void *)&blocksize);
+	if ( error ) {
+		printk("Getinfo call to drive failed (blocksize)\n");
+		goto error;
+	}
+
+	error = sbi->osi_ops->o_get_info(sbi->osi_conn_info.conn_id, 
+					 strlen("blocksize_bits"), 
+					 "blocksize_bits", 
+					 &scratch, (void *)&blocksize_bits);
+	if ( error ) {
+		printk("Getinfo call to drive failed (blocksize_bits)\n");
+		goto error;
+	}
+
+	error = sbi->osi_ops->o_get_info(sbi->osi_conn_info.conn_id, 
+					 strlen("root_ino"), 
+					 "root_ino", 
+					 &scratch, (void *)&root_ino);
+	if ( error ) {
+		printk("Getinfo call to drive failed (root_ino)\n");
+		goto error;
+	}
+	
+
         lock_super(sb);
         sb->u.generic_sbp = sbi;
-        sb->s_blocksize = sbi->osi_conn_info.conn_blocksize;
-        sb->s_blocksize_bits = sbi->osi_conn_info.conn_blocksize_bits;
+	
+        sb->s_blocksize = blocksize;
+        sb->s_blocksize_bits = (unsigned char)blocksize_bits;
         sb->s_magic = OBDFS_SUPER_MAGIC;
         sb->s_op = &obdfs_super_operations;
 
 	/* make root inode */
-	root = iget(sb, sbi->osi_conn_info.conn_ino);
+	root = iget(sb, root_ino);
         if (!root || is_bad_inode(root)) {
 	    printk("OBDFS: bad iget for root\n");
 	    sb->s_dev = 0;
@@ -155,47 +189,29 @@ extern struct inode_operations obdfs_inode_ops;
 /* all filling in of inodes postponed until lookup */
 static void obdfs_read_inode(struct inode *inode)
 {
-	struct iattr attr;
 	int error;
 	struct obdfs_sb_info *sbi = inode->i_sb->u.generic_sbp;
 	ENTRY;
 
 	error = sbi->osi_ops->o_getattr(sbi->osi_conn_info.conn_id, 
-					inode->i_ino, &attr);
+					inode->i_ino, inode);
 	if (error) {
 		printk("obdfs_read_inode: ibd_getattr fails (%d)\n", error);
 		return;
 	}
 
-	inode_setattr(inode, &attr);
 	inode->i_op = &obdfs_inode_ops;
 	return;
-}
-
-static void inode_to_iattr(struct inode *inode, struct iattr *tmp)
-{
-	tmp->ia_mode = inode->i_mode;
-	tmp->ia_uid = inode->i_uid;
-	tmp->ia_gid = inode->i_gid;
-	tmp->ia_size = inode->i_size;
-	tmp->ia_atime = inode->i_atime;
-	tmp->ia_mtime = inode->i_mtime;
-	tmp->ia_ctime = inode->i_ctime;
-	tmp->ia_attr_flags = inode->i_flags;
-
-	tmp->ia_valid = ~0;
 }
 
 static void obdfs_write_inode(struct inode *inode) 
 {
         struct obdfs_sb_info *sbi;
-	struct iattr attr;
 	int error;
 	
-	inode_to_iattr(inode, &attr);
 	sbi = inode->i_sb->u.generic_sbp;
 	error = sbi->osi_ops->o_setattr(sbi->osi_conn_info.conn_id, 
-					inode->i_ino, &attr);
+					inode->i_ino, inode);
 	if (error) {
 		printk("obdfs_write_inode: ibd_setattr fails (%d)\n", error);
 		return;
@@ -224,19 +240,21 @@ static void obdfs_delete_inode(struct inode *inode)
 static int  obdfs_notify_change(struct dentry *de, struct iattr *iattr)
 {
 	struct inode *inode = de->d_inode;
+	struct iattr saved_copy;
 	struct obdfs_sb_info * sbi;
 	int error;
 
 	ENTRY;
+	inode_to_iattr(inode, &saved_copy);
 
 	sbi = inode->i_sb->u.generic_sbp;
+	inode_setattr(inode, iattr);
         error = sbi->osi_ops->o_setattr(sbi->osi_conn_info.conn_id, 
-					inode->i_ino, iattr);
+					inode->i_ino, inode);
 	if ( error ) {
+		inode_setattr(inode, &saved_copy);
 		printk("obdfs_notify_change: obd_setattr fails (%d)\n", error);
 		return error;
-	} else {
-		inode_setattr(inode, iattr);
 	}
 	EXIT;
         return error;
@@ -276,7 +294,7 @@ int init_obdfs(void)
 	obdfs_sysctl_init();
 
 	obd_sbi = &obdfs_super_info;
-	obd_fso = &obdfs_file_operations;
+	obd_fso = &obdfs_file_ops;
 
 	return register_filesystem(&obdfs_fs_type);
 }

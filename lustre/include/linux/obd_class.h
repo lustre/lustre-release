@@ -14,10 +14,6 @@ extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 struct obd_conn_info {
 	unsigned int conn_id;     /* handle */
-	unsigned long conn_ino;   /* root inode number */
-	/* XXX do we really need this */
-	unsigned long conn_blocksize; 
-	unsigned char conn_blocksize_bits;
 };
 
 struct obd_type {
@@ -27,9 +23,14 @@ struct obd_type {
 	int  typ_refcnt;
 };
 
+#define OBD_ATTACHED 0x1
+#define OBD_SET_UP   0x2
+
 /* corresponds to one of the obdx */
 struct obd_device {
 	struct obd_type *obd_type;
+	int obd_minor;
+	int obd_flags;
 	int obd_refcnt; 
 	union {
 		struct sim_obd sim;
@@ -37,34 +38,35 @@ struct obd_device {
 	} u;
 };
 
-#define OBD_FL_SETUP 0x1
-
 struct obd_ops {
-	int (*o_format)(void);
-	int (*o_partition)(int partition, unsigned int size);
-	int (*o_connect)(int minor, struct obd_conn_info *info);
+	int (*o_attach)(struct obd_device *, int len, void *);
+	int (*o_format)(struct obd_device *, int len, void *);
+	int (*o_partition)(struct obd_device *, int len, void *);
+	int (*o_connect)(struct obd_device *, struct obd_conn_info *info);
 	int (*o_disconnect)(unsigned int conn_id);
-	int (*o_setup) (struct obd_device *dev, void *data);
+	int (*o_setup) (struct obd_device *dev, int len, void *data);
 	int (*o_cleanup)(struct obd_device *dev);
-	int (*o_setattr)(unsigned int conn_id, unsigned long id, struct iattr *iattr);
-	int (*o_getattr)(unsigned int conn_id, unsigned long id, struct iattr *iattr);
+	int (*o_setattr)(unsigned int conn_id, unsigned long id, struct inode *iattr);
+	int (*o_getattr)(unsigned int conn_id, unsigned long id, struct inode *iattr);
 	int (*o_statfs)(unsigned int conn_id, struct statfs *statfs);
 	int (*o_create)(struct obd_device *, int prealloc_ino, int *er);
 	int (*o_destroy)(unsigned int conn_id, unsigned long ino);
 	unsigned long (*o_read)(unsigned int conn_id, unsigned long ino, char *buf, unsigned long count, loff_t offset, int *err);
 	unsigned long (*o_read2)(unsigned int conn_id, unsigned long ino, char *buf, unsigned long count, loff_t offset, int *err);
 	unsigned long (*o_write)(unsigned int conn_id, unsigned long ino, char *buf, unsigned long count, loff_t offset, int *err);
-	int (*o_brw)(int rw, int conn, int objectid, struct page *page);
+	int (*o_brw)(int rw, int conn, int objectid, struct page *page, int create);
 	long (*o_preallocate)(unsigned int conn_id, int req, long inodes[32], int *err);
 	void (*o_cleanup_device)(int dev);
+	int  (*o_get_info)(unsigned int conn_id, int keylen, void *key, int *vallen, void **val);
+	int  (*o_set_info)(unsigned int conn_id, int keylen, void *key, int vallen, void *val);
 };
 
 int obd_register_type(struct obd_ops *ops, char *nm);
-
+int obd_unregister_type(char *nm);
 
 struct obd_client {
 	struct list_head cli_chain;
-	kdev_t minor;
+	struct obd_device *cli_obd;
 	unsigned int cli_id;
 	unsigned long cli_prealloc_quota;
 	struct list_head cli_prealloc_inodes;
@@ -78,6 +80,13 @@ struct obd_prealloc_inode {
 /*
  * ioctl commands
  */
+struct oic_attach {
+	int  att_typelen;
+	void *att_type;
+	int  att_datalen;
+	void *att_data;
+};
+
 struct oic_prealloc_s {
 	unsigned long cli_id;
 	unsigned long alloc; /* user sets it to the number of inodes requesting
@@ -119,8 +128,9 @@ struct oic_partition {
 #define OBD_IOC_STATFS                 _IOWR('f', 15, long)
 #define OBD_IOC_SYNC                   _IOR ('f',  16, long)
 #define OBD_IOC_READ2                  _IOWR('f', 17, long)
-#define OBD_IOC_FORMAT                 _IO('f', 17, long)
-#define OBD_IOC_READ2                  _IOWR('f', 17, long)
+#define OBD_IOC_FORMAT                 _IOWR('f', 18, long)
+#define OBD_IOC_PARTITION              _IOWR('f', 19, long)
+#define OBD_IOC_ATTACH                 _IOWR('f', 20, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
 

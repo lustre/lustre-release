@@ -89,13 +89,15 @@ int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 	struct page *page;
 	struct inode *inode = filp->f_dentry->d_inode;
 
+	ENTRY;
+
 	sb = inode->i_sb;
 
 	stored = 0;
 	offset = filp->f_pos & (PAGE_SIZE - 1);
 
 	while (!error && !stored && filp->f_pos < inode->i_size) {
-		page = obdfs_getpage(inode, offset);
+		page = obdfs_getpage(inode, offset, 0, NOLOCK);
 		if (!page) {
 			ext2_error (sb, "ext2_readdir",
 				    "directory #%lu contains a hole at offset %lu",
@@ -170,7 +172,9 @@ revalidate:
 			filp->f_pos += le16_to_cpu(de->rec_len);
 		}
 		offset = 0;
-		}
+		page_cache_release(page);
+	}
 	UPDATE_ATIME(inode);
+	EXIT;
 	return 0;
 }

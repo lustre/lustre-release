@@ -37,8 +37,6 @@ eval 'sub OBD_IOC_GETATTR () { &_IOC(2, ord(\'f\'), 10, 4);}' unless
   defined(&OBD_IOC_GETATTR);
 eval 'sub OBD_IOC_READ () { &_IOC(3, ord(\'f\'), 11, 4);}' unless
   defined(&OBD_IOC_READ);
-eval 'sub OBD_IOC_READ2 () { &_IOC(3, ord(\'f\'), 17, 4);}' unless
-  defined(&OBD_IOC_READ2);
 eval 'sub OBD_IOC_WRITE () { &_IOC(3, ord(\'f\'), 12, 4);}' unless
   defined(&OBD_IOC_WRITE);
 eval 'sub OBD_IOC_CONNECT () { &_IOC(2, ord(\'f\'), 13, 4);}' unless
@@ -49,6 +47,14 @@ eval 'sub OBD_IOC_STATFS () { &_IOC(3, ord(\'f\'), 15, 4);}' unless
   defined(&OBD_IOC_STATFS);
 eval 'sub OBD_IOC_SYNC () { &_IOC(2, ord(\'f\'), 16, 4);}' unless
   defined(&OBD_IOC_SYNC);
+eval 'sub OBD_IOC_READ2 () { &_IOC(3, ord(\'f\'), 17, 4);}' unless
+  defined(&OBD_IOC_READ2);
+eval 'sub OBD_IOC_FORMATOBD () { &_IOC(3, ord(\'f\'), 18, 4);}' unless
+  defined(&OBD_IOC_FORMATOBD);
+eval 'sub OBD_IOC_PARTITION () { &_IOC(3, ord(\'f\'), 19, 4);}' unless
+  defined(&OBD_IOC_PARTITION);
+eval 'sub OBD_IOC_ATTACH () { &_IOC(3, ord(\'f\'), 20, 4);}' unless
+  defined(&OBD_IOC_ATTACH);
 
 eval 'sub ATTR_MODE () {1;}' unless defined(&ATTR_MODE);
 eval 'sub ATTR_UID () {2;}' unless defined(&ATTR_UID);
@@ -88,6 +94,9 @@ my $arg;
 
 my %commands =
     ('create' => {func => "Create", doc => "create: creates a new inode"},
+     'attach' => {func => "Attach", doc => "format type [adapter bus tid lun]"},
+     'format' => {func => "Format", doc => "format type adapter bus tid lun size"},
+     'partition' => {func => "Partition", doc => "partition type adapter bus tid lun partition size"},
      'setup' => {func => "Setup", doc => "setup: link the ext2 partition (default /dev/loop0) to this obddev"},
      'connect' => {func => "Connect", doc => "connect: allocates client ID for this session"},
      'disconnect' => {func => "Disconnect", doc => "disconnect [id]: frees client resources"},
@@ -173,10 +182,88 @@ sub execute_line {
     return (&{$commands{$cmd}->{func}}(@arg));
 }
 
+
+sub Attach {
+    my $err = 0;
+    my $type = shift;
+    my $data;
+    my $datalen = 0;
+
+    if ($type eq "obdscsi" ) {
+	my $adapter = shift;
+	my $bus = shift;
+	my $tid = shift;
+	my $lun = shift;
+	$data = pack("iiiii", $adapter, $bus, $tid, $lun, $size);
+	$datalen = 4 * 4;
+    }
+
+    my $packed = pack("ipip", length($type), $type, $datalen, $data);
+
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_ATTACH, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Format {
+    my $err = 0;
+    my $size = shift;
+    my $data = pack("i", $size);
+    my $datalen = 4;
+
+    my $packed = pack("ip", $datalen, $data);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_FORMATOBD, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Partition {
+    my $err = 0;
+    my $partno = shift;
+    my $size = shift;
+    my $data = pack("ii", $partno, $size);
+    my $datalen = 2 * 4;
+
+    my $packed = pack("ip", $datalen, $data);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_PARTITION, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
 sub Setup {
     my $err = 0;
+    my $type = shift;
+    my $data;
+    my $datalen = 0;
     
-    my $packed = pack("La24", $::st->rdev(), "sim_obd");
+    $type = "sim_obd" unless $type;
+
+    if ( $type eq "sim_obd" ) {
+	my $dev = shift;
+	$dev = $::st->rdev() unless $dev;
+	$data = pack("i", $dev);
+	$datalen = 4;
+    }
+
+    my $packed = pack("ip", $datalen, $data);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP_OBDDEV, $packed);
 
     if (!defined $rc) {
@@ -203,29 +290,17 @@ sub Cleanup {
 
 
 sub Connect {
-    my $id = 0;
-    my $ino = 0;
-    my $bs = 0;
-    my $bs_b = 0;
     my $rc;
 
-    # unsigned int conn_id;
-    # unsigned long conn_ino;
-    # unsigned long conn_blocksize;
-    # unsigned char conn_blocksize_bits;
-
-    my $packed = pack("ILLC", $id, $ino, $bs, $bs_b);
+    my $packed = "";
     $rc = ioctl(DEV_OBD, &OBD_IOC_CONNECT, $packed);
-    ($id, $ino, $bs, $bs_b) = unpack("ILLC", $packed);
+    $id = unpack("I", $packed);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
     } elsif ($rc eq "0 but true") {
 	$::client_id = $id;
 	print "Client ID     : $id\n";
-	print "Root inode    : $ino\n";
-	print "Blocksize     : $bs\n";
-	print "Blocksize bits: $bs_b\n";
 	print "Finished (success)\n";
     } else {
 	print "ioctl returned error code $rc.\n";

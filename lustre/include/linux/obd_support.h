@@ -50,16 +50,19 @@ extern int obd_print_entry;
 
 #endif /* SIM_OBD_DEBUG */
 
+
+#define CMD(cmd) (( cmd == READ ) ? "read" : "write")
+
 #define PDEBUG(page,cmd)	{\
-		char *command = ( cmd == READ ) ? "read" : "write";\
 		char *uptodate = (Page_Uptodate(page)) ? "yes" : "no";\
 		char *locked = (PageLocked(page)) ? "yes" : "no";\
 		int count = page->count.counter;\
 		long ino = (page->inode) ? page->inode->i_ino : -1;\
+                long offset = page->offset / PAGE_SIZE;\
 		\
-		CDEBUG(D_IOCTL, " ** %s, cmd: %s, ino: %ld, uptodate: %s, "\
+		CDEBUG(D_IOCTL, " ** %s, cmd: %s, ino: %ld, off %ld, uptodate: %s, "\
 		       "locked: %s, cnt %d ** \n", __FUNCTION__,\
-		       command, ino, uptodate, locked, count);\
+		       cmd, ino, offset, uptodate, locked, count);\
 	}
 
 
@@ -93,5 +96,46 @@ do {							\
 		       (int) size, (int) ptr);		\
 	}						\
 } while (0)
+
+
+
+static inline void inode_to_iattr(struct inode *inode, struct iattr *tmp)
+{
+	tmp->ia_mode = inode->i_mode;
+	tmp->ia_uid = inode->i_uid;
+	tmp->ia_gid = inode->i_gid;
+	tmp->ia_size = inode->i_size;
+	tmp->ia_atime = inode->i_atime;
+	tmp->ia_mtime = inode->i_mtime;
+	tmp->ia_ctime = inode->i_ctime;
+	tmp->ia_attr_flags = inode->i_flags;
+
+	tmp->ia_valid = ~0;
+}
+
+static inline void inode_cpy(struct inode *dest, struct inode *src)
+{
+	dest->i_mode = src->i_mode;
+	dest->i_uid = src->i_uid;
+	dest->i_gid = src->i_gid;
+	dest->i_size = src->i_size;
+	dest->i_atime = src->i_atime;
+	dest->i_mtime = src->i_mtime;
+	dest->i_ctime = src->i_ctime;
+	dest->i_attr_flags = src->i_flags;
+	/* allocation of space */
+	dest->i_blocks = src->i_blocks;
+
+	memcpy(&dest->u, &src->u, sizeof(src->u));
+}
+
+
+
+
+
+
+
+
+
 
 #endif
