@@ -13,7 +13,9 @@ EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
 EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
+EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c
 extN_SOURCES = $(EXTNC) $(EXTNI) xattr.c # punch.c
+extN_DEPENDENCIES = patch-stamp
 EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff
 DISTCLEANFILES = $(EXTNC) $(EXTNI) patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
@@ -25,9 +27,10 @@ include $(top_srcdir)/Rules
 # patch likes to make local copies of files with (sym)links when it is patching
 # them.  To avoid this, we copy/patch in the source dir instead of the build
 # dir (if they are different).
-$(EXTNC) $(EXTNI): patch-stamp
-patch-stamp:
+patch-stamp: $(EXTNP)
 	test -e $(top_srcdir)/fs || ln -sf . $(top_srcdir)/fs
+	set -vx;\
+	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(top_srcdir)/$$f; done
 	set -vx;\
 	list='$(EXTNC)'; for f in $$list; do                                  \
 	sed $(SUB) $(LINUX)/fs/ext3/$$f > $(top_srcdir)/fs/extN/$$f;          \
@@ -45,6 +48,8 @@ patch-stamp:
 	(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff
 	-(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-exports.diff
 	echo timestamp > patch-stamp
+
+$(EXTNC) $(EXTNI): patch-stamp
 
 # Don't distribute any patched files.
 dist-hook:

@@ -57,7 +57,7 @@
   */
  
  #include <linux/fs.h>
-@@ -38,6 +42,438 @@
+@@ -38,6 +42,439 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -485,7 +485,8 @@
 +static void dx_insert_block (struct dx_frame *frame, u32 hash, u32 block)
 +{
 +	struct dx_entry *entries = frame->entries, *at = frame->at;
-+	assert (dx_get_count (entries) < dx_get_limit (entries));
++	assert (dx_get_count (entries) < dx_get_limit (entries) &&
++		frame->at < frame->entries+dx_get_count(entries));
 +	memmove (at + 2, at+1, (char *) (entries + dx_get_count(entries)) - (char *) (at));
 +	dx_set_hash(at + 1, hash);
 +	dx_set_block(at + 1, block);
@@ -803,7 +804,7 @@
 +				dx_set_limit (entries2, dx_node_limit(dir));
 +
 +				/* Which index block gets the new entry? */
-+				if (at - entries > icount1) {
++				if (at - entries >= icount1) {
 +					frame->at = at = at - entries - icount1 + entries2;
 +					frame->entries = entries = entries2;
 +					swap(frame->bh, bh2);

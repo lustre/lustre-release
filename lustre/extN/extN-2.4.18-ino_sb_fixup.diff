@@ -20,14 +20,14 @@
  
  #define EXTN_BLOCK_SIZE(s)		((s)->s_blocksize)
  #define EXTN_BLOCK_SIZE_BITS(s)		((s)->s_blocksize_bits)
-@@ -445,7 +445,9 @@
- };
- 
+@@ -447,7 +447,9 @@
  #define NEXT_ORPHAN(inode) EXTN_I(inode)->i_dtime
--#define orphan_list_entry(l) list_entry((l), struct inode, u.extN_i.i_orphan)
-+#define orphan_list_entry(l) ((struct inode *)((char *)(l) - \
-+		(unsigned long)(offsetof(struct inode, u.generic_ip) + \
-+				offsetof(struct extN_inode_info, i_orphan))))
+ static inline inode *orphan_list_entry(l)
+ {
+-	return list_entry(l, struct inode, u.extN_i.i_orphan);
++	return ((struct inode *)((char *)l -
++		(unsigned long)(offsetof(struct inode, u.generic_ip) +
++				offsetof(struct extN_inode_info, i_orphan))));
+ }
  
  /*
-  * Codes for operating systems
