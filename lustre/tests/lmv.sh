@@ -15,6 +15,7 @@ MDSCOUNT=${MDSCOUNT:-3}
 
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-200000}
+OSTCOUNT=${OSTCOUNT:-1}
 
 # 1 to config an echo client instead of llite
 ECHO_CLIENT=${ECHO_CLIENT:-}
@@ -44,9 +45,15 @@ for num in `seq $MDSCOUNT`; do
         --lmv lmv1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE || exit 13
 done
 
-# configure ost
 ${LMC} -m $config --add lov --lov lov1 --lmv lmv1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 || exit 20
-${LMC} -m $config --add ost --nspath /mnt/ost_ns --node localhost --lov lov1 --fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE $JARG || exit 30
+# configure ost
+for num in `seq $OSTCOUNT`; do
+    OST=ost$num
+    DEVPTR=OSTDEV$num
+    eval $DEVPTR=${!DEVPTR:=$TMP/$OST-`hostname`}
+    echo "$OST -- ${!DEVPTR}"
+    ${LMC} -m $config --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --dev ${!DEVPTR} --size $OSTSIZE $JARG || exit 30
+done
 
 ${LMC} -m $config --add mtpt --node localhost --path $MOUNT --lmv lmv1 --lov lov1 || exit 40
 
