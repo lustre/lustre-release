@@ -359,9 +359,11 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 RETURN(-EINVAL);
         }
 
-        if (lum.lmm_stripe_size & (PAGE_SIZE - 1)) {
-                CDEBUG(D_IOCTL, "stripe size %u not multiple of %lu\n",
-                       lum.lmm_stripe_size, PAGE_SIZE);
+        /* 64kB is the largest common page size we see (ia64), and matches the
+         * check in lfs */
+        if (lum.lmm_stripe_size & (65536 - 1)) {
+                CDEBUG(D_IOCTL, "stripe size %u not multiple of 64kB\n",
+                       lum.lmm_stripe_size);
                 RETURN(-EINVAL);
         }
 
