@@ -68,19 +68,21 @@ struct obd_export {
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
         struct obd_device        *exp_obd;
-        struct obd_import        *exp_imp_reverse;  /* to make rpc's backwards */
+        struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
         struct ldlm_export_data   exp_ldlm_data;
-        struct ptlrpc_request    *exp_outstanding_reply;
+        struct list_head          exp_outstanding_replies;
         time_t                    exp_last_request_time;
         spinlock_t                exp_lock; /* protects flags int below */
-        int                       exp_failed:1;
+        /* ^ protects exp_outstanding_replies too */
         int                       exp_flags;
+        int                       exp_failed:1;
+        int                       exp_libclient:1; /* liblustre client? */
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
-                struct ec_export_data     eu_ec_data;         
+                struct ec_export_data     eu_ec_data;
                 struct osc_export_data    eu_osc_data;
         } u;
 };
