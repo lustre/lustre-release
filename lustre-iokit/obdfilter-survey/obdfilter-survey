@@ -3,22 +3,25 @@
 ######################################################################
 # customize per survey
 
-# specify either the obdecho client names or the obdfilter names
-client_names=()
-ost_names=(ost{1,2,3,4,5,6,7,8})
+# specify obd names (host:name if remote)
+# these can either be the echo_client names (client_names)
+# or the ost names (ost_names)
+#client_names=(ns8:ECHO_ns8 ns9:ECHO_ns9)
+ost_names=(ns9:ost{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16})
 
-# result file prefix
-rslt=/tmp/obdfilter_survey
+# result file prefix (date/time + hostname makes unique)
+rslt=/home_nfs/eeb/obdfilter_survey_`date +%F@%R`_`uname -n`
 
-# lustre root (leave blank unless running with own source)
-lustre_root=
+# lustre root (if running with own source tree)
+lustre_root=/home_nfs/eeb/lustre
 
 # what to do (we always do an initial write)
 #tests="rewrite read reread rewrite_again"
 tests="rewrite read"
 
-# total size (MBytes)
-# large enough to avoid cache effects
+# total size (MBytes) per OST
+# large enough to avoid cache effects 
+# and to make test startup/shutdown overhead insignificant
 size=8192
 
 # record size (KBytes)
@@ -27,11 +30,11 @@ rszhi=1024
 
 # number of objects per OST
 nobjlo=1
-nobjhi=32
+nobjhi=512
 
 # threads per OST (1024 max)
 thrlo=1
-thrhi=128
+thrhi=64
 
 # restart from here iff all are defined
 restart_rsz=
@@ -43,49 +46,83 @@ PAGE_SIZE=64
 
 # max buffer_mem (total_threads * buffer size)
 # (to avoid lctl ENOMEM problems)
-max_buffer_mem=$((256*1024))
+max_buffer_mem=$((1024*1024))
+
+# how to run commands on other nodes
+custom_remote_shell () {
+    host=$1
+    shift
+    cmds="$*"
+    here=`pwd`
+    # Hop on to the remote node, chdir to 'here' and run the given
+    # commands. One of the following will probably work.
+    ssh $host "cd $here; $cmds"
+    #rsh $host "cd $here; $cmds"
+    #pdsh -w $host "cd $here; $cmds"
+}
 
 #####################################################################
+# leave the rest of this alone unless you know what you're doing...
 
 snap=1
 verify=1
 
-check_obdecho() {
-    lsmod | grep obdecho > /dev/null 2>&1
-}
-
-check_obdecho
-load_obdecho=$(($? != 0))
+rsltf="${rslt}.summary"
+workf="${rslt}.detail"
+echo -n > $rsltf
+echo -n > $workf
 
 if [ -z "$lustre_root" ]; then
     lctl=lctl
-    if ((load_obdecho)); then
-	modprobe obdecho
-    fi
 else
-    lctl=${lustre_root}/lctl
-    if ((load_obdecho)); then
-	if [ -f ${lustre_root}/obdecho/obdecho.ko ]; then
-	    insmod ${lustre_root}/obdecho/obdecho.ko
-	else
-	    insmod ${lustre_root}/obdecho/obdecho.o
-	fi
-    fi
+    lctl=${lustre_root}/utils/lctl
 fi
 
-check_obdecho || (echo "Can't load obdecho"; exit 1)
+remote_shell () {
+    host=$1
+    shift
+    cmds="$*"
+    if [ "$host" = "localhost" -o "$host" = `uname -n` ]; then
+	eval "$cmds"
+    else
+	custom_remote_shell $host "$cmds"
+    fi
+}
+
+check_obdecho() {
+    local host=$1
+    remote_shell $host lsmod | grep obdecho > /dev/null 2>&1
+}
+
+load_obdecho () {
+    local host=$1
+    if [ -z "$lustre_root" ]; then
+	remote_shell $host modprobe obdecho
+    elif [ -f ${lustre_root}/obdecho/obdecho.ko ]; then
+	remote_shell $host insmod ${lustre_root}/obdecho/obdecho.ko
+    else
+	remote_shell $host insmod ${lustre_root}/obdecho/obdecho.o
+    fi
+}
+
+unload_obdecho () {
+    local host=$1
+    remote_shell $host rmmod obdecho
+}
 
 get_devno () {
-    local type=$1
-    local name=$2
-    $lctl device_list | awk "{if (\$2 == \"UP\" && \$3 == \"$type\" && \$4 == \"$name\") {\
-	                         print \$1; exit}}"
+    local host=$1
+    local type=$2
+    local name=$3
+    remote_shell $host $lctl device_list | \
+	awk "{if (\$2 == \"UP\" && \$3 == \"$type\" && \$4 == \"$name\") {\
+	          print \$1; exit}}"
 }
 
 get_ec_devno () {
-    local idx=$1
-    local client_name=${client_names[idx]}
-    local ost_name=${ost_names[idx]}
+    local host=$1
+    local client_name="$2"
+    local ost_name="$3"
     if [ -z "$client_name" ]; then
 	if [ -z "$ost_name" ]; then
 	    echo "client and ost name both null" 1>&2
@@ -93,25 +130,25 @@ get_ec_devno () {
 	fi
 	client_name=${ost_name}_echo_client
     fi
-    ec=`get_devno echo_client $client_name`
+    ec=`get_devno $host echo_client $client_name`
     if [ -n "$ec" ]; then
-	echo $ec $client_name 
+	echo $ec $client_name 0
 	return
     fi
     if [ -z "$ost_name" ]; then
 	echo "no echo client and ost_name not set" 1>&2
 	return
     fi
-    ost=`get_devno obdfilter $ost_name`
+    ost=`get_devno $host obdfilter $ost_name`
     if [ -z "$ost" ]; then
 	echo "OST $ost_name not setup" 1>&2
 	return
     fi
-    $lctl <<EOF
+    remote_shell $host "$lctl <<EOF
         attach echo_client $client_name ${client_name}_UUID
 	setup $ost_name
-EOF
-    ec=`get_devno echo_client $client_name`
+EOF"
+    ec=`get_devno $host echo_client $client_name`
     if [ -z "$ec" ]; then
 	echo "Can't setup echo client" 1>&2
 	return
@@ -120,24 +157,23 @@ EOF
 }
 
 teardown_ec_devno () {
-    local idx=$1
-    local client_name=${client_names[$idx]}
-    if ((do_teardown_ec[$idx])); then
-	$lctl <<EOF
+    local host=$1
+    local client_name=$2
+    remote_shell $host "$lctl <<EOF
 	cfg $client_name
 	cleanup
 	detach
-EOF
-   fi
+EOF"
 }
 
 create_objects () {
     # create a set of objects, check there are 'n' contiguous ones and
     # return the first or 'ERROR'
-    local devno=$1
-    local nobj=$2
-    local rfile=$3
-    $lctl --device $devno create $nobj > $rfile 2>&1
+    local host=$1
+    local devno=$2
+    local nobj=$3
+    local rfile=$4
+    remote_shell $host $lctl --device $devno create $nobj > $rfile 2>&1
     n=(`awk < $rfile \
 	'/is object id/ {obj=strtonum($6);\
 	                 first=!not_first; not_first=1;\
@@ -153,11 +189,12 @@ create_objects () {
 }
 
 destroy_objects () {
-    local devno=$1
-    local obj0=$2
-    local nobj=$3
-    local rfile=$4
-    $lctl --device $devno destroy $obj0 $nobj > $rfile 2>&1
+    local host=$1
+    local devno=$2
+    local obj0=$3
+    local nobj=$4
+    local rfile=$5
+    remote_shell $host $lctl --device $devno destroy $obj0 $nobj > $rfile 2>&1
 }
 
 get_stats () {
@@ -197,12 +234,6 @@ testname2type () {
     esac
 }
 
-start=`date +%F@%R`
-rsltf="${rslt}_${start}.summary"
-echo -n > $rsltf
-workf="${rslt}_${start}.detail"
-echo -n > $workf
-
 print_summary () {
     if [ "$1" = "-n" ]; then
 	minusn=$1; shift
@@ -213,22 +244,73 @@ print_summary () {
     echo $minusn "$*"
 }
 
-ndevs=${#client_names[@]}
-if ((ndevs < ${#ost_names[@]} )); then
-    ndevs=${#ost_names[@]}
-fi
+unique () {
+    echo "$@" | xargs -n1 echo | sort -u
+}
 
-for ((idx = 0; idx < ndevs; idx++)); do
-    devno=(`get_ec_devno $idx`)
-    if ((${#devno[@]} < 2)); then
+split_hostname () {
+    name=$1
+    case $name in
+    *:*) host=`echo $name | sed 's/:.*$//'`
+	 name=`echo $name | sed 's/[^:]*://'`
+	 ;;
+    *)   host=localhost
+	 ;;
+    esac
+    echo "$host $name"
+}
+
+ndevs=${#client_names[@]}
+if ((ndevs != 0)); then
+    if ((${#ost_names[@]} != 0)); then
+        echo "Please specify client_names or ost_names, but not both" 1>&2
 	exit 1
     fi
-    devnos[$idx]=${devno[0]}
-    client_names[$idx]=${devno[1]}
-    do_teardown_ec[$idx]=$((${#devno[@]} > 2))
+    for ((i=0; i<ndevs;i++)); do
+	str=(`split_hostname ${client_names[$i]}`)
+	host_names[$i]=${str[0]}
+	client_names[$i]=${str[1]}
+    done
+else
+    ndevs=${#ost_names[@]}
+    if ((ndevs == 0)); then
+        echo "Please specify either client_names or ost_names" 1>&2
+	exit 1
+    fi
+    for ((i=0; i<ndevs;i++)); do
+	str=(`split_hostname ${ost_names[$i]}`)
+	host_names[$i]=${str[0]}
+	ost_names[$i]=${str[1]}
+    done
+fi
+
+unique_hosts=(`unique ${host_names[@]}`)
+
+for host in ${unique_hosts[@]}; do
+    remote_shell $host "echo 0 > /proc/sys/portals/debug"
+    do_unload_obdecho[$host]=0
+    if check_obdecho $host; then
+	continue
+    fi
+    load_obdecho $host
+    if check_obdecho $host; then
+	do_unload_obdecho[$host]=0
+	continue
+    fi
+    echo "Can't load obdecho on $host" 1>&2
+    exit 1
 done
 
-echo 0 > /proc/sys/portals/debug
+for ((i=0; i<ndevs; i++)); do
+    host=${host_names[$i]}
+    devno=(`get_ec_devno $host "${client_names[$i]}" "${ost_names[$i]}"`)
+    if ((${#devno[@]} != 3)); then
+        exit 1
+    fi
+    devnos[$i]=${devno[0]}
+    client_names[$i]=${devno[1]}
+    do_teardown_ec[$i]=${devno[2]}
+done
 
 for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
     for ((nobj=$nobjlo;nobj<=$nobjhi;nobj*=2)); do 
@@ -268,42 +350,59 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	    # create the objects
 	    tmpf="${workf}_tmp"
 	    for ((idx=0; idx < ndevs; idx++)); do
+		host=${host_names[$idx]}
 		devno=${devnos[$idx]}
-		first_obj=`create_objects $devno $nobj $tmpf`
-		echo "========> Create [$idx]" >> $workf
+		client_name="${host}:${client_names[$idx]}"
+		echo "=============> Create $nobj on $client_name" >> $workf
+		first_obj=`create_objects $host $devno $nobj $tmpf`
 		cat $tmpf >> $workf
 		rm $tmpf
 		if [ $first_obj = "ERROR" ]; then
-		    print_summary "created object #s [$idx] not contiguous"
+		    print_summary "created object #s on $client_name not contiguous"
 		    exit 1
 		fi
 		first_objs[$idx]=$first_obj
 	    done
 	    for test in write $tests; do
 		print_summary -n "$test "
-		t0=`date +%s.%N`
+		for host in ${unique_hosts[@]}; do
+		    echo -n > ${workf}_${host}_script
+		done
 		for ((idx=0; idx < ndevs; idx++)); do
+		    host=${host_names[$idx]}
 		    devno=${devnos[$idx]}
 		    tmpfi="${tmpf}_$idx"
 		    first_obj=${first_objs[$idx]}
-		    $lctl > $tmpfi 2>&1 \
-			--threads $thr -$snap $devno \
-			test_brw $count `testname2type $test` q $pages ${thr}t${first_obj} &
+		    echo >> ${workf}_${host}_script \
+		        "$lctl > $tmpfi 2>&1 \\
+                         --threads $thr -$snap $devno \\
+			 test_brw $count `testname2type $test` q $pages ${thr}t${first_obj} &"
+		done
+		for host in ${unique_hosts[@]}; do
+		    echo "wait" >> ${workf}_${host}_script
+		done
+		t0=`date +%s.%N`
+		for host in ${unique_hosts[@]}; do
+		    remote_shell $host bash ${workf}_${host}_script&
 		done
 		wait
 		t1=`date +%s.%N`
+		for host in ${unique_hosts[@]}; do
+		    rm ${workf}_${host}_script
+		done
 		str=`awk "BEGIN {printf \"%7.2f \",\
 		         $total_size / (( $t1 - $t0 ) * 1024)}"`
 		print_summary -n "$str"
 		echo -n > $tmpf
 		for ((idx=0; idx < ndevs; idx++)); do
+		    client_name="${host_names[$idx]}:${client_names[$idx]}"
 		    tmpfi="${tmpf}_$idx"
-		    echo "========> $test [$idx]" >> $workf
+		    echo "=============> $test $client_name" >> $workf
 		    cat $tmpfi >> $workf
 		    get_stats $tmpfi >> $tmpf
 		    rm $tmpfi
 		done
-		echo "========> $test [$idx] global" >> $workf
+		echo "=============> $test global" >> $workf
 		cat $tmpf >> $workf
 		stats=(`get_global_stats $tmpf`)
 		rm $tmpf
@@ -314,7 +413,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 			str=`printf "%15s " SHORT`
 		    fi
 		else
-		    str=`awk "BEGIN {printf \"[%6.2f,%6.2f] \",\
+		    str=`awk "BEGIN {printf \"[%7.2f,%7.2f] \",\
 			     (${stats[1]} * $actual_rsz)/1024,\
 			     (${stats[2]} * $actual_rsz)/1024; exit}"`
 		fi
@@ -322,10 +421,12 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	    done
 	    print_summary ""
 	    for ((idx=0; idx < ndevs; idx++)); do
+		host=${host_names[$idx]}
 		devno=${devnos[$idx]}
+		client_name="${host}:${client_names[$idx]}"
 		first_obj=${first_objs[$idx]}
-		destroy_objects $devno $first_obj $nobj $tmpf
-		echo "========> Destroy [$idx]" >> $workf
+		echo "=============> Destroy $nobj on $client_name" >> $workf
+		destroy_objects $host $devno $first_obj $nobj $tmpf
 		cat $tmpf >> $workf
 		rm $tmpf
 	    done
@@ -333,10 +434,15 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
     done
 done
 
-for ((idx=0; idx < ndevs; idx++)); do
-    teardown_ec_devno $idx
+for ((i=0; i<ndevs; i++)); do
+    host=${host_names[$i]}
+    if ((${do_teardown_ec[$i]})); then
+	teardown_ec_devno $host ${client_names[$i]}
+    fi
 done
 
-if ((load_obdecho)); then
-    rmmod obdecho
-fi
+for host in ${unique_hosts[@]}; do
+    if ((${do_unload_obdecho[$host]})); then
+	unload_obdecho $host
+    fi
+done

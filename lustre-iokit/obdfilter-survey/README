@@ -1,27 +1,84 @@
 
-Requirements
-------------
-
-. lustre OSS up and running
-
-
 Overview
 --------
 
-This survey may be used to characterise the performance of a lustre OSS.
-It can exercise the OSS either locally or remotely via the network.
+This survey script does sequential I/O with varying numbers of threads and
+objects (files) by using lctl::test_brw to drive the echo_client connected
+to local or remote obdfilter instances, or remote obdecho instances.
 
-The script uses lctl::test_brw to drive the echo_client doing sequential
-I/O with varying numbers of threads and objects (files).  One instance of
-lctl is spawned for each OST.
+It can be used to characterise the performance of the following lustre
+components.
 
+1. The Stripe F/S.
 
+   Here the script directly exercises one or more instances of obdfilter.
+   They may be running on 1 or more nodes, e.g. when they are all attached
+   to the same multi-ported disk subsystem.
+
+   You need to tell the script all the names of the obdfilter instances.
+   These should be up and running already .  If some are on different
+   nodes, you need to specify their hostnames too (e.g. node1:ost1).
+
+   All the obdfilter instances are driven directly.  The script
+   automatically loads the obdecho module if required and creates one
+   instance of echo_client for each obdfilter instance.
+
+2. The Network.
+
+   Here the script drives one or more instances of obdecho via instances of
+   echo_client running on 1 or more nodes.
+
+   You need to tell the script all the names of the echo_client instances.
+   These should already be up and running.  If some are on different nodes,
+   you need to specify their hostnames too (e.g. node1:ECHO_node1).
+   
+3. The Stripe F/S over the Network.
+
+   Here the script drives one or more instances of obdfilter via instances
+   of echo_client running on 1 or more nodes.
+
+   As with (2), you need to tell the script all the names of the
+   echo_client instances, which should already be up and running.
+
+Note that the script is _NOT_ scalable to 100s of nodes since it is only
+intended to measure individual servers, not the scalability of the system
+as a whole.
+
+   
 Running
 -------
 
-The script must be customised according to the particular device under test
-and where it should keep its working files.   Customisation variables are
+The script must be customised according to the components under test and
+where it should keep its working files.  Customisation variables are
 described clearly at the start of the script.
+
+If you are driving obdfilter instances directly, set the shell array
+variable 'ost_names' to the names of the obdfilter instances and leave
+'client_names' undefined.
+
+If you are driving obdfilter or obdecho instances over the network, you
+must instantiate the echo_clients yourself using lmc/lconf.  Set the shell
+array variable 'client_names' to the names of the echo_client instances and
+leave 'ost_names' undefined.
+
+You can optionally prefix any name in 'ost_names' or 'client_names' with
+the hostname that it is running on (e.g. remote_node:ost4) if your
+obdfilters or echo_clients are running on more than one node.  In this
+case, you need to ensure 'custom_remote_shell()' works on your cluster.
+
+Use 'lctl device_list' to verify the obdfilter/echo_client instance names
+e.g...
+
+[root@ns9 root]# lctl device_list
+  0 UP confobd conf_ost3 OSD_ost3_ns9_UUID 1
+  1 UP obdfilter ost3 ost3_UUID 1
+  2 UP ost OSS OSS_UUID 1
+  3 AT confobd conf_ost12 OSD_ost12_ns9_UUID 1
+[root@ns9 root]# 
+
+...here device 1 is an instance of obdfilter called 'ost3'.  To exercise it
+directly, add 'ns9:ost3' to 'ost_names'.  If the script is only to be run
+on node 'ns9' you could simply add 'ost3' to 'ost_names'.
 
 When the script runs, it creates a number of working files and a pair of
 result files.  All files start with the prefix given by ${rslt}.
@@ -34,33 +91,11 @@ The script iterates over the given numbers of threads and objects
 performing all the specified tests and checking that all test processes
 completed successfully.
 
-
-Local OSS
----------
-
-To test a local OSS, setup 'ost_names' with the names of each OST.  If you
-are unsure, do 'lctl device_list' and looks for obdfilter instanced e.g...
-
-[root@ns9 root]# lctl device_list
-  0 UP confobd conf_ost3 OSD_ost3_ns9_UUID 1
-  1 UP obdfilter ost3 ost3_UUID 1
-  2 UP ost OSS OSS_UUID 1
-  3 AT confobd conf_ost12 OSD_ost12_ns9_UUID 1
-[root@ns9 root]# 
-
-Here device number 1 is an obdfilter instance called 'ost3'.
-
-The script configures an instance of echo_client for each name in ost_names
-and tears it down on normal completion.  Note that it does NOT clean up
-properly (i.e. manual cleanup is required) if it is not allowed to run to
-completion.
-
-
-Remote OSS
-----------
-
-To test OSS performance over the network, you need to create a lustre
-configuration that creates echo_client instances for each OST.
+Note that the script does NOT clean up properly if it is aborted or if it
+encounters an unrecoverable error.  In this case, manual cleanup may be
+required, possibly including killing any running instances of 'lctl' (local
+or remote), removing echo_client instances created by the script and
+unloading obdecho.
 
 
 Script output
