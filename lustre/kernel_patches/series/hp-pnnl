@@ -5,4 +5,5 @@ jbd-transno-cb.patch
 lustre_version.patch
 vfs_intent_hp.patch
 invalidate_show.patch
+export-truncate.patch
 iod-stock-24-exports_hp.patch

@@ -12,6 +12,28 @@
 #include <linux/obd_class.h>
 #include <portals/procbridge.h>
 
+struct ldlm_namespace;
+struct ldlm_res_id;
+struct obd_import;
+
+extern int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, struct ldlm_res_id *res_id, int flags);
+extern int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only);
+extern int ldlm_replay_locks(struct obd_import *imp);
+
+void *inter_module_get(char *arg)
+{
+        if (!strcmp(arg, "tcpnal_ni"))
+                return &tcpnal_ni;
+        else if (!strcmp(arg, "ldlm_cli_cancel_unused"))
+                return ldlm_cli_cancel_unused;
+        else if (!strcmp(arg, "ldlm_namespace_cleanup"))
+                return ldlm_namespace_cleanup;
+        else if (!strcmp(arg, "ldlm_replay_locks"))
+                return ldlm_replay_locks;
+        else
+                return NULL;
+}
+
 ptl_handle_ni_t         tcpnal_ni;
 
 struct pingcli_args {
@@ -27,7 +49,7 @@ struct task_struct *current;
 struct obd_class_user_state ocus;
 
 /* portals interfaces */
-inline const ptl_handle_ni_t *
+ptl_handle_ni_t *
 kportal_get_ni (int nal)
 {
         return &tcpnal_ni;
@@ -101,10 +123,10 @@ int main(int argc, char **argv)
         init_lib_portals(args);
         ptlrpc_init();
         ldlm_init();
+        mdc_init();
+        lov_init();
         osc_init();
         echo_client_init();
-        /* XXX  need mdc_getlovinfo before lov_init can work.. */
-        //        lov_init();
 
 	parse_dump("/tmp/DUMP_FILE", lib_ioctl);
 
