@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * Lustre Light name resolution
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
@@ -108,8 +108,8 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
                 mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
         }
 
-        /* drop IT_LOOKUP locks */
-        if (it->it_op == IT_LOOKUP)
+        /* drop lookup/getattr locks */
+        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)
                 ll_intent_release(it);
 
 }
@@ -140,6 +140,7 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
         case LDLM_CB_CANCELING: {
                 struct inode *inode = llu_inode_from_lock(lock);
                 struct llu_inode_info *lli;
+                __u64 bits = lock->l_policy_data.l_inodebits.bits;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
@@ -147,14 +148,16 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
 
                 lli =  llu_i2info(inode);
 
-                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+                if (bits & MDS_INODELOCK_UPDATE)
+                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
                 if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
                     lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
                                    lli->lli_st_ino, lli->lli_st_generation);
                 }
-                if (S_ISDIR(lli->lli_st_mode)) {
+                if (S_ISDIR(lli->lli_st_mode) &&
+                    (bits & MDS_INODELOCK_UPDATE)) {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                lli->lli_st_ino);
 
@@ -279,26 +282,27 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 GOTO(out, rc = 0);
 
         rc = pnode_revalidate_finish(req, 1, it, pnode);
+        if (rc != 0) {
+                ll_intent_release(it);
+                GOTO(out, rc = 0);
+        }
+        rc = 1;
 
         /* Note: ll_intent_lock may cause a callback, check this! */
 
-        if (it->it_op & (IT_OPEN | IT_GETATTR))
+        if (it->it_op & IT_OPEN)
                 LL_SAVE_INTENT(pb->pb_ino, it);
-        RETURN(1);
+
  out:
-        if (req)
+        if (req && rc == 1)
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 LASSERT(pb->pb_ino);
-                if (S_ISDIR(llu_i2info(pb->pb_ino)->lli_st_mode))
-                        llu_invalidate_inode_pages(pb->pb_ino);
-                llu_i2info(pb->pb_ino)->lli_stale_flag = 1;
-                unhook_stale_inode(pnode);
+                I_RELE(pb->pb_ino);
+                pb->pb_ino = NULL;
         } else {
                 llu_lookup_finish_locks(it, pnode);
                 llu_i2info(pb->pb_ino)->lli_stale_flag = 0;
-                if (it->it_op & (IT_OPEN | IT_GETATTR))
-                        LL_SAVE_INTENT(pb->pb_ino, it);
         }
         RETURN(rc);
 }
@@ -314,7 +318,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         int rc;
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
-         * when I return 
+         * when I return
          * Note: libsysio require the inode must be generated here
          */
         if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
@@ -342,9 +346,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 /* If this is a stat, get the authoritative file size */
                 if (it->it_op == IT_GETATTR && S_ISREG(lli->lli_st_mode) &&
                     lli->lli_smd != NULL) {
-                        struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                        struct lustre_handle lockh = {0};
                         struct lov_stripe_md *lsm = lli->lli_smd;
+                        struct ost_lvb lvb;
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
@@ -352,20 +355,19 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
-                                            &lockh);
-                        if (rc != ELDLM_OK) {
+                        rc = llu_glimpse_size(inode, &lvb);
+                        if (rc) {
                                 I_RELE(inode);
-                                RETURN(-EIO);
+                                RETURN(rc);
                         }
-                        llu_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
+                        lli->lli_st_size = lvb.lvb_size;
                 }
         } else {
                 ENTRY;
         }
 
         /* intent will be further used in cases of open()/getattr() */
-        if (inode && (it->it_op & (IT_OPEN | IT_GETATTR)))
+        if (inode && (it->it_op & IT_OPEN))
                 LL_SAVE_INTENT(inode, it);
 
         child->p_base->pb_ino = inode;

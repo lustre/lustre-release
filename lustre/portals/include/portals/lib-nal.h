@@ -1,6 +1,7 @@
 #ifndef _LIB_NAL_H_
 #define _LIB_NAL_H_
 
+#include "build_check.h"
 /*
  * nal.h
  *

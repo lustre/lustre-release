@@ -221,7 +221,19 @@ void kibnal_sti(nal_cb_t *nal, unsigned long *flags)
         spin_unlock_irqrestore(&data->kib_dispatch_lock,*flags);
 }
 
+//
+// A new event has just been created
+//
+void kibnal_callback(nal_cb_t *nal, void *private, lib_eq_t *eq, ptl_event_t *ev)
+{
+        /* holding kib_dispatch_lock */
 
+        if (eq->event_callback != NULL)
+                eq->event_callback(ev);
+
+        /* We will wake theads sleeping in yield() here, AFTER the
+         * callback, when we implement blocking yield */
+}
 
 //
 // nic distance 
@@ -1285,5 +1297,6 @@ nal_cb_t kibnal_lib = {
         cb_printf:      kibnal_printf,
         cb_cli:         kibnal_cli,
         cb_sti:         kibnal_sti,
+        cb_callback:    kibnal_callback,
         cb_dist:        kibnal_dist // no used at this moment 
 };

@@ -33,12 +33,12 @@ static int do_forward(ptl_handle_any_t any_h, int cmd, void *argbuf,
 
         if (!ptl_init) {
                 CERROR("Not initialized\n");
-                return PTL_NOINIT;
+                return PTL_NO_INIT;
         }
 
         nal = ptl_hndl2nal(&any_h);
         if (!nal)
-                return PTL_INV_HANDLE;
+                return PTL_HANDLE_INVALID;
 
         nal->forward(nal, cmd, argbuf, argsize, retbuf, retsize);
 
@@ -124,25 +124,6 @@ int PtlNIDist(ptl_handle_ni_t interface_in, ptl_process_id_t process_in,
         return ret.rc;
 }
 
-
-
-unsigned int PtlNIDebug(ptl_handle_ni_t ni, unsigned int mask_in)
-{
-        PtlNIDebug_in args;
-        PtlNIDebug_out ret;
-        int rc;
-
-        args.mask_in = mask_in;
-
-        rc = do_forward(ni, PTL_NIDEBUG, &args, sizeof(args), &ret,
-                        sizeof(ret));
-
-        if (rc != PTL_OK)
-                return rc;
-
-        return ret.rc;
-}
-
 int PtlMEAttach(ptl_handle_ni_t interface_in, ptl_pt_index_t index_in,
                 ptl_process_id_t match_id_in, ptl_match_bits_t match_bits_in,
                 ptl_match_bits_t ignore_bits_in, ptl_unlink_t unlink_in,
@@ -194,7 +175,7 @@ int PtlMEInsert(ptl_handle_me_t current_in, ptl_process_id_t match_id_in,
                         sizeof(ret));
 
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_ME : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
 
         if (handle_out) {
                 handle_out->nal_idx = current_in.nal_idx;
@@ -216,7 +197,7 @@ int PtlMEUnlink(ptl_handle_me_t current_in)
                         sizeof(ret));
 
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_ME : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
 
         return ret.rc;
 }
@@ -250,53 +231,14 @@ int PtlMEDump(ptl_handle_me_t current_in)
                         sizeof(ret));
 
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_ME : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
 
         return ret.rc;
 }
 
-static int validate_md(ptl_handle_any_t current_in, ptl_md_t md_in)
-{
-        nal_t *nal;
-        int rc;
-        int i;
-
-        if (!ptl_init) {
-                CERROR("PtlMDAttach/Bind/Update: Not initialized\n");
-                return PTL_NOINIT;
-        }
-
-        nal = ptl_hndl2nal(&current_in);
-        if (!nal)
-                return PTL_INV_HANDLE;
-
-        if (nal->validate != NULL)                /* nal->validate not a NOOP */
-        {
-                if ((md_in.options & PTL_MD_IOV) == 0)        /* contiguous */
-                {
-                        rc = nal->validate (nal, md_in.start, md_in.length);
-                        if (rc)
-                                return (PTL_SEGV);
-                }
-                else
-                {
-                        struct iovec *iov = (struct iovec *)md_in.start;
-
-                        for (i = 0; i < md_in.niov; i++, iov++)
-                        {
-                                rc = nal->validate (nal, iov->iov_base, iov->iov_len);
-                                if (rc)
-                                        return (PTL_SEGV);
-                        }
-                }
-        }
-
-        return 0;
-}
-
 static ptl_handle_eq_t md2eq (ptl_md_t *md)
 {
-        if (PtlHandleEqual (md->eventq, PTL_EQ_NONE))
+        if (PtlHandleIsEqual (md->eventq, PTL_EQ_NONE))
                 return (PTL_EQ_NONE);
         
         return (ptl_handle2usereq (&md->eventq)->cb_eq_handle);
@@ -310,19 +252,16 @@ int PtlMDAttach(ptl_handle_me_t me_in, ptl_md_t md_in,
         PtlMDAttach_out ret;
         int rc;
 
-        rc = validate_md(me_in, md_in);
-        if (rc == PTL_OK) {
-                args.eq_in = md2eq(&md_in);
-                args.me_in = me_in;
-                args.md_in = md_in;
-                args.unlink_in = unlink_in;
+        args.eq_in = md2eq(&md_in);
+        args.me_in = me_in;
+        args.md_in = md_in;
+        args.unlink_in = unlink_in;
                 
-                rc = do_forward(me_in, PTL_MDATTACH, 
-                                &args, sizeof(args), &ret, sizeof(ret));
-        }
+        rc = do_forward(me_in, PTL_MDATTACH, 
+                        &args, sizeof(args), &ret, sizeof(ret));
 
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_ME : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
 
         if (handle_out) {
                 handle_out->nal_idx = me_in.nal_idx;
@@ -334,19 +273,16 @@ int PtlMDAttach(ptl_handle_me_t me_in, ptl_md_t md_in,
 
 
 int PtlMDBind(ptl_handle_ni_t ni_in, ptl_md_t md_in,
-                       ptl_handle_md_t * handle_out)
+              ptl_unlink_t unlink_in, ptl_handle_md_t * handle_out)
 {
         PtlMDBind_in args;
         PtlMDBind_out ret;
         int rc;
 
-        rc = validate_md(ni_in, md_in);
-        if (rc != PTL_OK)
-                return rc;
-
         args.eq_in = md2eq(&md_in);
         args.ni_in = ni_in;
         args.md_in = md_in;
+        args.unlink_in = unlink_in;
 
         rc = do_forward(ni_in, PTL_MDBIND, 
                         &args, sizeof(args), &ret, sizeof(ret));
@@ -377,15 +313,12 @@ int PtlMDUpdate(ptl_handle_md_t md_in, ptl_md_t *old_inout,
                 args.old_inout_valid = 0;
 
         if (new_inout) {
-                rc = validate_md (md_in, *new_inout);
-                if (rc != PTL_OK)
-                        return (rc == PTL_INV_HANDLE) ? PTL_INV_MD : rc;
                 args.new_inout = *new_inout;
                 args.new_inout_valid = 1;
         } else
                 args.new_inout_valid = 0;
 
-        if (PtlHandleEqual (testq_in, PTL_EQ_NONE)) {
+        if (PtlHandleIsEqual (testq_in, PTL_EQ_NONE)) {
                 args.testq_in = PTL_EQ_NONE;
                 args.sequence_in = -1;
         } else {
@@ -398,7 +331,7 @@ int PtlMDUpdate(ptl_handle_md_t md_in, ptl_md_t *old_inout,
         rc = do_forward(md_in, PTL_MDUPDATE, &args, sizeof(args), &ret,
                         sizeof(ret));
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_MD : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_MD_INVALID : rc;
 
         if (old_inout)
                 *old_inout = ret.old_inout;
@@ -416,13 +349,13 @@ int PtlMDUnlink(ptl_handle_md_t md_in)
         rc = do_forward(md_in, PTL_MDUNLINK, &args, sizeof(args), &ret,
                         sizeof(ret));
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_MD : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_MD_INVALID : rc;
 
         return ret.rc;
 }
 
 int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
-               int (*callback) (ptl_event_t * event),
+               ptl_eq_handler_t callback,
                ptl_handle_eq_t * handle_out)
 {
         ptl_eq_t *eq = NULL;
@@ -433,11 +366,11 @@ int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
         nal_t *nal;
 
         if (!ptl_init)
-                return PTL_NOINIT;
+                return PTL_NO_INIT;
         
         nal = ptl_hndl2nal (&interface);
         if (nal == NULL)
-                return PTL_INV_HANDLE;
+                return PTL_HANDLE_INVALID;
 
         if (count != LOWEST_BIT_SET(count)) {   /* not a power of 2 already */
                 do {                    /* knock off all but the top bit... */
@@ -452,16 +385,10 @@ int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
 
         PORTAL_ALLOC(ev, count * sizeof(ptl_event_t));
         if (!ev)
-                return PTL_NOSPACE;
+                return PTL_NO_SPACE;
 
         for (i = 0; i < count; i++)
                 ev[i].sequence = 0;
-
-        if (nal->validate != NULL) {
-                rc = nal->validate(nal, ev, count * sizeof(ptl_event_t));
-                if (rc != PTL_OK)
-                        goto fail;
-        }
 
         args.ni_in = interface;
         args.count_in = count;
@@ -478,7 +405,7 @@ int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
 
         PORTAL_ALLOC(eq, sizeof(*eq));
         if (!eq) {
-                rc = PTL_NOSPACE;
+                rc = PTL_NO_SPACE;
                 goto fail;
         }
 
