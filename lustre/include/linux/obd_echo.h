@@ -13,7 +13,6 @@
 struct ec_object
 {
 	struct list_head       eco_obj_chain;
-	struct list_head       eco_lockhandles;
 	struct obd_device     *eco_device;
 	int                    eco_refcount;
 	int                    eco_deleted;
@@ -26,12 +25,7 @@ struct ec_open_object
 	struct list_head       ecoo_exp_chain;
 	struct ec_object      *ecoo_object;
 	struct obdo            ecoo_oa;
-};
-
-struct ec_lockhandle
-{
-	struct list_head       eclh_obj_chain;
-	struct lustre_handle   eclh_handle;
+        __u64                  ecoo_cookie;
 };
 
 struct ec_lock
