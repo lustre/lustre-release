@@ -1,0 +1,302 @@
+ 0 files changed
+
+--- linux-2.4.18-chaos52/fs/ext3/super.c~ext3-delete_thread-2.4.18	2003-06-01 03:24:13.000000000 +0800
++++ linux-2.4.18-chaos52-root/fs/ext3/super.c	2003-06-03 17:01:49.000000000 +0800
+@@ -398,6 +398,210 @@ static void dump_orphan_list(struct supe
+ 	}
+ }
+ 
++#ifdef EXT3_DELETE_THREAD
++/*
++ * Delete inodes in a loop until there are no more to be deleted.
++ * Normally, we run in the background doing the deletes and sleeping again,
++ * and clients just add new inodes to be deleted onto the end of the list.
++ * If someone is concerned about free space (e.g. block allocation or similar)
++ * then they can sleep on s_delete_waiter_queue and be woken up when space
++ * has been freed.
++ */
++int ext3_delete_thread(void *data)
++{
++	struct super_block *sb = data;
++	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	struct task_struct *tsk = current;
++
++	/* Almost like daemonize, but not quite */
++	exit_mm(current);
++	tsk->session = 1;
++	tsk->pgrp = 1;
++	tsk->tty = NULL;
++	exit_files(current);
++	reparent_to_init();
++
++	sprintf(tsk->comm, "kdelext3-%s", kdevname(sb->s_dev));
++	sigfillset(&tsk->blocked);
++
++	/*tsk->flags |= PF_KERNTHREAD;*/
++
++	INIT_LIST_HEAD(&sbi->s_delete_list);
++	wake_up(&sbi->s_delete_waiter_queue);
++	ext3_debug("EXT3-fs: delete thread on %s started\n",
++	       kdevname(sb->s_dev));
++
++	/* main loop */
++	for (;;) {
++		sleep_on(&sbi->s_delete_thread_queue);
++		ext3_debug("%s woken up: %lu inodes, %lu blocks\n",
++			   tsk->comm,sbi->s_delete_inodes,sbi->s_delete_blocks);
++
++		spin_lock(&sbi->s_delete_lock);
++		if (list_empty(&sbi->s_delete_list)) {
++			memset(&sbi->s_delete_list, 0,
++			       sizeof(sbi->s_delete_list));
++			spin_unlock(&sbi->s_delete_lock);
++			ext3_debug("ext3 delete thread on %s exiting\n",
++			       kdevname(sb->s_dev));
++			wake_up(&sbi->s_delete_waiter_queue);
++			break;
++		}
++
++		while (!list_empty(&sbi->s_delete_list)) {
++			struct inode *inode=list_entry(sbi->s_delete_list.next,
++						       struct inode, i_dentry);
++			unsigned long blocks = inode->i_blocks >>
++							(inode->i_blkbits - 9);
++
++			list_del_init(&inode->i_dentry);
++			spin_unlock(&sbi->s_delete_lock);
++			ext3_debug("%s delete ino %lu blk %lu\n",
++				   tsk->comm, inode->i_ino, blocks);
++
++			iput(inode);
++
++			spin_lock(&sbi->s_delete_lock);
++			sbi->s_delete_blocks -= blocks;
++			sbi->s_delete_inodes--;
++		}
++		if (sbi->s_delete_blocks != 0 || sbi->s_delete_inodes != 0)
++			ext3_warning(sb, __FUNCTION__,
++				     "%lu blocks, %lu inodes on list?\n", sb,
++				     sbi->s_delete_blocks,sbi->s_delete_inodes);
++		sbi->s_delete_blocks = 0;
++		sbi->s_delete_inodes = 0;
++		spin_unlock(&sbi->s_delete_lock);
++		wake_up(&sbi->s_delete_waiter_queue);
++	}
++
++	return 0;
++}
++
++static void ext3_start_delete_thread(struct super_block *sb)
++{
++	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	int rc;
++
++	spin_lock_init(&sbi->s_delete_lock);
++	memset(&sbi->s_delete_list, 0, sizeof(sbi->s_delete_list));
++	init_waitqueue_head(&sbi->s_delete_thread_queue);
++	init_waitqueue_head(&sbi->s_delete_waiter_queue);
++	sbi->s_delete_blocks = 0;
++	sbi->s_delete_inodes = 0;
++
++	rc = kernel_thread(ext3_delete_thread, sb, CLONE_VM | CLONE_FILES);
++	if (rc < 0)
++		printk(KERN_ERR "EXT3-fs: cannot start delete thread: rc %d\n",
++		       rc);
++	else
++		wait_event(sbi->s_delete_waiter_queue, sbi->s_delete_list.next);
++}
++
++static void ext3_stop_delete_thread(struct ext3_sb_info *sbi)
++{
++	wake_up(&sbi->s_delete_thread_queue);
++	wait_event(sbi->s_delete_waiter_queue, list_empty(&sbi->s_delete_list));
++}
++
++/* Instead of playing games with the inode flags, destruction, etc we just
++ * create a new inode locally and put it on a list for the truncate thread.
++ * We need large parts of the inode struct in order to complete the
++ * truncate and unlink, so we may as well just have a real inode to do it.
++ *
++ * If we have any problem deferring the delete, just delete it right away.
++ * If we defer it, we also mark how many blocks it would free, so that we
++ * can keep the statfs data correct, and we know if we should sleep on the
++ * truncate thread when we run out of space.
++ *
++ * In 2.5 this can be done much more cleanly by just registering a "drop"
++ * method in the super_operations struct.
++ */
++static void ext3_delete_inode_thread(struct inode *old_inode)
++{
++	struct ext3_sb_info *sbi = EXT3_SB(old_inode->i_sb);
++	struct inode *new_inode;
++	unsigned long blocks = old_inode->i_blocks >> (old_inode->i_blkbits-9);
++
++	if (is_bad_inode(old_inode)) {
++		clear_inode(old_inode);
++		return;
++	}
++	
++	if (!test_opt (old_inode->i_sb, ASYNCDEL)) {
++		ext3_delete_inode(old_inode);
++		return;
++	}
++
++	/* We may want to delete the inode immediately and not defer it */
++	if (IS_SYNC(old_inode) || blocks <= EXT3_NDIR_BLOCKS ||
++	    !sbi->s_delete_list.next) {
++		ext3_delete_inode(old_inode);
++		return;
++	}
++
++	if (EXT3_I(old_inode)->i_state & EXT3_STATE_DELETE) {
++		ext3_debug("doing deferred inode %lu delete (%lu blocks)\n",
++			   old_inode->i_ino, blocks);
++		ext3_delete_inode(old_inode);
++		return;
++	}
++
++	/* We can iget this inode again here, because our caller has unhashed
++	 * old_inode, so new_inode will be in a different inode struct.
++	 *
++	 * We need to ensure that the i_orphan pointers in the other inodes
++	 * point at the new inode copy instead of the old one so the orphan
++	 * list doesn't get corrupted when the old orphan inode is freed.
++	 */
++	down(&sbi->s_orphan_lock);
++
++	EXT3_SB(old_inode->i_sb)->s_mount_state |= EXT3_ORPHAN_FS;
++	new_inode = iget(old_inode->i_sb, old_inode->i_ino);
++	EXT3_SB(old_inode->i_sb)->s_mount_state &= ~EXT3_ORPHAN_FS;
++	if (is_bad_inode(new_inode)) {
++		printk(KERN_WARNING "read bad inode %lu\n", old_inode->i_ino);
++		iput(new_inode);
++		new_inode = NULL;
++	}
++	if (!new_inode) {
++		up(&sbi->s_orphan_lock);
++		ext3_debug(KERN_DEBUG "delete inode %lu directly (bad read)\n",
++			   old_inode->i_ino);
++		ext3_delete_inode(old_inode);
++		return;
++	}
++	J_ASSERT(new_inode != old_inode);
++
++	J_ASSERT(!list_empty(&EXT3_I(old_inode)->i_orphan));
++	/* Ugh.  We need to insert new_inode into the same spot on the list
++	 * as old_inode was, to ensure the in-memory orphan list is still
++	 * in the same order as the on-disk orphan list (badness otherwise).
++	 */
++	EXT3_I(new_inode)->i_orphan = EXT3_I(old_inode)->i_orphan;
++	EXT3_I(new_inode)->i_orphan.next->prev = &EXT3_I(new_inode)->i_orphan;
++	EXT3_I(new_inode)->i_orphan.prev->next = &EXT3_I(new_inode)->i_orphan;
++	EXT3_I(new_inode)->i_state |= EXT3_STATE_DELETE;
++	up(&sbi->s_orphan_lock);
++
++	clear_inode(old_inode);
++
++	ext3_debug("delete inode %lu (%lu blocks) by thread\n",
++		   new_inode->i_ino, blocks);
++	spin_lock(&sbi->s_delete_lock);
++	J_ASSERT(list_empty(&new_inode->i_dentry));
++	list_add_tail(&new_inode->i_dentry, &sbi->s_delete_list);
++	sbi->s_delete_blocks += blocks;
++	sbi->s_delete_inodes++;
++	spin_unlock(&sbi->s_delete_lock);
++
++	wake_up(&sbi->s_delete_thread_queue);
++}
++#else
++#define ext3_start_delete_thread(sbi) do {} while(0)
++#define ext3_stop_delete_thread(sbi) do {} while(0)
++#endif /* EXT3_DELETE_THREAD */
++
+ void ext3_put_super (struct super_block * sb)
+ {
+ 	struct ext3_sb_info *sbi = EXT3_SB(sb);
+@@ -405,6 +609,7 @@ void ext3_put_super (struct super_block 
+ 	kdev_t j_dev = sbi->s_journal->j_dev;
+ 	int i;
+ 
++	ext3_stop_delete_thread(sbi);
+ 	ext3_xattr_put_super(sb);
+ 	journal_destroy(sbi->s_journal);
+ 	if (!(sb->s_flags & MS_RDONLY)) {
+@@ -453,7 +658,11 @@ static struct super_operations ext3_sops
+ 	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
+ 	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
+ 	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
++#ifdef EXT3_DELETE_THREAD
++	delete_inode:	ext3_delete_inode_thread,/* BKL not held. We take it */
++#else
+ 	delete_inode:	ext3_delete_inode,	/* BKL not held.  We take it */
++#endif
+ 	put_super:	ext3_put_super,		/* BKL held */
+ 	write_super:	ext3_write_super,	/* BKL held */
+ 	sync_fs:	ext3_sync_fs,
+@@ -514,6 +723,12 @@ static int parse_options (char * options
+ 	     this_char = strtok (NULL, ",")) {
+ 		if ((value = strchr (this_char, '=')) != NULL)
+ 			*value++ = 0;
++#ifdef EXT3_DELETE_THREAD
++		if (!strcmp(this_char, "asyncdel"))
++			set_opt(*mount_options, ASYNCDEL);
++		else
++#endif
++
+ 		if (!strcmp (this_char, "bsddf"))
+ 			clear_opt (*mount_options, MINIX_DF);
+ 		else if (!strcmp (this_char, "nouid32")) {
+@@ -1209,6 +1424,7 @@ struct super_block * ext3_read_super (st
+ 	}
+ 
+ 	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
++	ext3_start_delete_thread(sb);
+ 	/*
+ 	 * akpm: core read_super() calls in here with the superblock locked.
+ 	 * That deadlocks, because orphan cleanup needs to lock the superblock
+--- linux-2.4.18-chaos52/include/linux/ext3_fs.h~ext3-delete_thread-2.4.18	2003-06-01 03:24:11.000000000 +0800
++++ linux-2.4.18-chaos52-root/include/linux/ext3_fs.h	2003-06-03 17:03:28.000000000 +0800
+@@ -190,6 +190,7 @@ struct ext3_group_desc
+  */
+ #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
+ #define EXT3_STATE_NEW			0x00000002 /* inode is newly created */
++#define EXT3_STATE_DELETE		0x00000010 /* deferred delete inode */
+ 
+ /*
+  * ioctl commands
+@@ -317,6 +318,7 @@ struct ext3_inode {
+ #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
+ #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
+ #define EXT3_MOUNT_INDEX		0x4000  /* Enable directory index */
++#define EXT3_MOUNT_ASYNCDEL	       0x20000  /* Delayed deletion */
+ 
+ /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
+ #ifndef _LINUX_EXT2_FS_H
+--- linux-2.4.18-chaos52/include/linux/ext3_fs_sb.h~ext3-delete_thread-2.4.18	2003-06-01 03:24:13.000000000 +0800
++++ linux-2.4.18-chaos52-root/include/linux/ext3_fs_sb.h	2003-06-03 16:59:24.000000000 +0800
+@@ -29,6 +29,8 @@
+ 
+ #define EXT3_MAX_GROUP_LOADED	32
+ 
++#define EXT3_DELETE_THREAD
++
+ /*
+  * third extended-fs super-block data in memory
+  */
+@@ -74,6 +76,14 @@ struct ext3_sb_info {
+ 	struct timer_list turn_ro_timer;	/* For turning read-only (crash simulation) */
+ 	wait_queue_head_t ro_wait_queue;	/* For people waiting for the fs to go read-only */
+ #endif
++#ifdef EXT3_DELETE_THREAD
++	spinlock_t s_delete_lock;
++	struct list_head s_delete_list;
++	unsigned long s_delete_blocks;
++	unsigned long s_delete_inodes;
++	wait_queue_head_t s_delete_thread_queue;
++	wait_queue_head_t s_delete_waiter_queue;
++#endif
+ };
+ 
+ #endif	/* _LINUX_EXT3_FS_SB */
+
+_
