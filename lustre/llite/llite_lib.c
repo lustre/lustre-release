@@ -1231,8 +1231,11 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT(id_fid(&body->id1) != 0);
         id_assign_fid(&lli->lli_id, &body->id1);
         
-        if ((body->valid & OBD_MD_FLID) || (body->valid & OBD_MD_FLGENER))
-                id_assign_stc(&lli->lli_id, &body->id1);
+	if (body->valid & OBD_MD_FLID)
+		id_ino(&lli->lli_id) = id_ino(&body->id1);
+
+	if (body->valid & OBD_MD_FLGENER)
+		id_gen(&lli->lli_id) = id_gen(&body->id1);
 
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = id_ino(&body->id1);
