@@ -36,7 +36,7 @@ int rprintf(int rank, int loop, const char *fmt, ...)
  
         va_start(ap, fmt);
  
-        printf(fmt, ap);
+        vprintf(fmt, ap);
  
         MPI_Finalize();
         exit(1);
@@ -64,14 +64,14 @@ int main (int argc, char *argv[]) {
          
          if (rank == 0) {
                 fd = open(FILENAME, O_WRONLY|O_CREAT|O_TRUNC, 0666);
-                if (fd == 0) 
+                if (fd < 0) 
                         rprintf(rank, -1, "open() returned %s\n", 
                                 strerror(errno));
          }
          MPI_Barrier(MPI_COMM_WORLD);
 
          fd = open(FILENAME, O_RDWR);
-         if (fd == 0)
+         if (fd < 0)
                  rprintf(rank, -1, "open() returned %s\n", strerror(errno));
          
          for (n=0; n < 1000 ; n++) {

@@ -57,7 +57,7 @@ int rprintf(int rank, int loop, const char *fmt, ...)
 
         va_start(ap, fmt);
 
-        printf(fmt, ap);
+        vprintf(fmt, ap);
 
         MPI_Finalize();
         exit(1);
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 
         if (rank == 0) {
                 fd = open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0666);
-                if (fd <= 0)
+                if (fd < 0)
                         rprintf(0, -1, "create %s failed: %s\n", fname,
                                 strerror(errno));
                 printf("using %s\n", fname);
@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
                 rprintf(rank, -1, "prep MPI_Barrier failed: %d\n", error);
 
         fd = open(fname, O_RDWR | O_APPEND);
-        if (fd <= 0)
+        if (fd < 0)
                 rprintf(rank, -1, "open %s failed: %s\n",fname,strerror(errno));
 
         for (n = 0; n < nloops; n++) {
