@@ -1,3 +1,28 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * MDS data structures.  
+ * See also lustre_idl.h for wire formats of requests.
+ *
+ */
+
 #ifndef _LUSTRE_MDS_H
 #define _LUSTRE_MDS_H
 
@@ -60,6 +85,53 @@ struct mds_request {
 	struct mds_rep *rq_rep;
 
 	wait_queue_head_t rq_wait_for_mds_rep;
+};
+
+
+/* more or less identical to the packed structure, except for the pointers */
+struct mds_req {
+	struct lustre_fid        fid1;
+	struct lustre_fid        fid2;
+        int                        namelen;
+        int                        tgtlen;
+        __u32                       valid;
+        __u32 			    mode;
+        __u32                       uid;
+        __u32                       gid;
+        __u64                       size;
+        __u32                       mtime;
+        __u32                       ctime;
+        __u32                       atime;
+        __u32                       flags;
+        __u32                       major;
+        __u32                       minor;
+        __u32                       ino;
+        __u32                       generation;
+        char 		           *name;
+        char                      *tgt;
+};
+
+/* more or less identical to the packed structure, except for the pointers */
+struct mds_rep {
+	struct lustre_fid        fid1;
+	struct lustre_fid        fid2;
+        int                        namelen;
+        int                        tgtlen;
+        __u32                       valid;
+        __u32 			    mode;
+        __u32                       uid;
+        __u32                       gid;
+        __u64                       size;
+        __u32                       mtime;
+        __u32                       ctime;
+        __u32                       atime;
+        __u32                       flags;
+        __u32                       major;
+        __u32                       minor;
+        __u32                       ino;
+        __u32                       generation;
+        char 		           *name;
+        char                      *tgt;
 };
 
 

@@ -3,22 +3,22 @@
  *
  *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
  *
- *   This file is part of InterMezzo, http://www.inter-mezzo.org.
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- *   InterMezzo is free software; you can redistribute it and/or
+ *   Lustre is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public
  *   License as published by the Free Software Foundation.
  *
- *   InterMezzo is distributed in the hope that it will be useful,
+ *   Lustre is distributed in the hope that it will be useful,
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   GNU General Public License for more details.
  *
  *   You should have received a copy of the GNU General Public License
- *   along with InterMezzo; if not, write to the Free Software
+ *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * Unpacking of KML records
+ * (Un)packing of MDS and OST request records
  *
  */
 
@@ -48,6 +48,7 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
+#include <linux/lustre_mds.h>
 
 
 int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, 
@@ -55,9 +56,10 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 		 int *len, char **buf)
 {
 	char *ptr;
+        struct mds_req_packed *preq;
 
 	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
-		sizeof(**req); 
+		sizeof(*preq); 
 
 	*buf = kmalloc(*len, GFP_KERNEL);
 	if (!*buf) {
@@ -67,18 +69,21 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 
 	memset(*buf, 0, *len); 
 	*hdr = (struct mds_req_hdr *)(*buf);
-	*req = (struct mds_req *)(*buf + sizeof(**hdr));
-	ptr = *buf + sizeof(**hdr) + sizeof(**req);
+
+	preq = (struct mds_req_packed *)(*buf + sizeof(**hdr));
+	ptr = *buf + sizeof(**hdr) + sizeof(*preq);
 
 	(*hdr)->type =  MDS_TYPE_REQ;
 
 	(*req)->namelen = NTOH__u32(namelen);
 	if (name) { 
+                preq->name_offset = (__u32)(ptr - (char *)preq);
 		LOGL(name, namelen, ptr); 
 	} 
 
 	(*req)->tgtlen = NTOH__u32(tgtlen);
 	if (tgt) { 
+                preq->tgt_offset = (__u32)(ptr - (char *)preq);
 		LOGL(tgt, tgtlen, ptr);
 	}
 	return 0;
@@ -88,13 +93,21 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 int mds_unpack_req(char *buf, int len, 
 		   struct mds_req_hdr **hdr, struct mds_req **req)
 {
+        struct mds_req_packed *preq;
+        __u32 off1, off2;
+        char *name, *tgt;
+
 	if (len < sizeof(**hdr) + sizeof(**req)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
 	*hdr = (struct mds_req_hdr *) (buf);
-	*req = (struct mds_req *) (buf + sizeof(**hdr));
+	preq = (struct mds_req_packed *) (buf + sizeof(**hdr));
+        off1 = preq->name_offset;
+        off2 = preq->tgt_offset;
+
+        *req = (struct mds_req *) (buf + sizeof(**hdr));
 	(*req)->namelen = NTOH__u32((*req)->namelen); 
 	(*req)->tgtlen = NTOH__u32((*req)->namelen); 
 
@@ -105,22 +118,106 @@ int mds_unpack_req(char *buf, int len,
 	}
 
 	if ((*req)->namelen) { 
-		(*req)->name = buf + sizeof(**hdr) + sizeof(**req);
+		name = buf + sizeof(**hdr) + off1;
 	} else { 
-		(*req)->name = NULL;
+		name = NULL;
 	}
 
 	if ((*req)->tgtlen) { 
-		(*req)->tgt = buf + sizeof(**hdr) + sizeof(**req) + 
-			size_round((*req)->namelen);
+		tgt = buf + sizeof(**hdr) + off2;
 	} else { 
-		(*req)->tgt = NULL;
+		tgt = NULL;
 	}
+        (*req)->name = name;
+        (*req)->tgt = tgt;
 
 	EXIT;
 	return 0;
 }
 
+int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, 
+		 struct mds_rep_hdr **hdr, struct mds_rep **rep, 
+		 int *len, char **buf)
+{
+	char *ptr;
+        struct mds_rep_packed *prep;
+
+	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
+		sizeof(*prep); 
+
+	*buf = kmalloc(*len, GFP_KERNEL);
+	if (!*buf) {
+		EXIT;
+		return -ENOMEM;
+	}
+
+	memset(*buf, 0, *len); 
+	*hdr = (struct mds_rep_hdr *)(*buf);
+
+	prep = (struct mds_rep_packed *)(*buf + sizeof(**hdr));
+	ptr = *buf + sizeof(**hdr) + sizeof(*prep);
+
+	(*hdr)->type =  MDS_TYPE_REP;
+
+	(*rep)->namelen = NTOH__u32(namelen);
+	if (name) { 
+                prep->name_offset = (__u32)(ptr - (char *)prep);
+		LOGL(name, namelen, ptr); 
+	} 
+
+	(*rep)->tgtlen = NTOH__u32(tgtlen);
+	if (tgt) { 
+                prep->tgt_offset = (__u32)(ptr - (char *)prep);
+		LOGL(tgt, tgtlen, ptr);
+	}
+	return 0;
+}
+
+
+int mds_unpack_rep(char *buf, int len, 
+		   struct mds_rep_hdr **hdr, struct mds_rep **rep)
+{
+        struct mds_rep_packed *prep;
+        __u32 off1, off2;
+
+	if (len < sizeof(**hdr) + sizeof(**rep)) { 
+		EXIT;
+		return -EINVAL;
+	}
+
+	*hdr = (struct mds_rep_hdr *) (buf);
+	prep = (struct mds_rep_packed *) (buf + sizeof(**hdr));
+        off1 = prep->name_offset;
+        off2 = prep->tgt_offset;
+
+        *rep = (struct mds_rep *) (buf + sizeof(**hdr));
+	(*rep)->namelen = NTOH__u32((*rep)->namelen); 
+	(*rep)->tgtlen = NTOH__u32((*rep)->namelen); 
+
+	if (len < sizeof(**hdr) + sizeof(**rep) + (*rep)->namelen + 
+	    (*rep)->tgtlen ) { 
+		EXIT;
+		return -EINVAL;
+	}
+
+	if ((*rep)->namelen) { 
+		(*rep)->name = buf + sizeof(**hdr) + off1;
+	} else { 
+		(*rep)->name = NULL;
+	}
+
+	if ((*rep)->tgtlen) { 
+		(*rep)->tgt = buf + sizeof(**hdr) + off2;
+	} else { 
+		(*rep)->tgt = NULL;
+	}
+        
+
+	EXIT;
+	return 0;
+}
+
+#if 0
 int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, 
 		 struct mds_rep_hdr **hdr, struct mds_rep **rep, 
 		 int *len, char **buf)
@@ -189,3 +286,4 @@ int mds_unpack_rep(char *buf, int len,
 	EXIT;
 	return 0;
 }
+#endif

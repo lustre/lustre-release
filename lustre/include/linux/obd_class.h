@@ -22,15 +22,6 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/obd.h>
-
-#include <linux/obd_ext2.h>
-#include <linux/obd_filter.h>
-#include <linux/lustre_mds.h>
-#include <linux/obd_snap.h>
-#include <linux/obd_trace.h>
-/* #include <linux/obd_fc.h> */
-#include <linux/obd_raid1.h>
-#include <linux/obd_rpc.h>
 #endif
 
 
@@ -59,6 +50,9 @@ struct obd_conn {
         uint32_t oc_id;
 };
 
+
+
+
 typedef struct {
 	uint32_t len;
 	char *   name;
@@ -66,6 +60,14 @@ typedef struct {
         __u8           _uuid[16]; /* uuid obd device names */
 } obd_devicename;
 
+#include <linux/obd_ext2.h>
+#include <linux/obd_filter.h>
+#include <linux/lustre_mds.h>
+#include <linux/obd_snap.h>
+#include <linux/obd_trace.h>
+/* #include <linux/obd_fc.h> */
+#include <linux/obd_raid1.h>
+#include <linux/obd_ost.h>
 
 #ifdef __KERNEL__
 /* corresponds to one of the obdx */
@@ -88,7 +90,7 @@ struct obd_device {
                 struct raid1_obd raid1;
                 struct snap_obd snap;
 	        struct trace_obd trace;
-                /* struct fc_obd fc; */
+                struct ost_obd ost;
         } u;
 };
 

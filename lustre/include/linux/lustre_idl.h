@@ -1,7 +1,24 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001 Cluster File Systems, Inc.
+ *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * (Un)packing of OST requests
  */
 
 #ifndef __LUSTRE_IDL_H__
@@ -25,8 +42,36 @@
  */ 
 
 /* 
- *   OBDO & OBD request records
+ *   OST requests: OBDO & OBD request records
  */
+
+
+/* opcodes */
+#define OST_GETATTR  1
+#define OST_SETATTR  2
+#define OST_BRW      3
+#define OST_CREATE   4
+#define OST_DESTROY  5
+#define OST_GETINFO  6
+
+/* packet types */
+#define OST_TYPE_REQ 1
+#define OST_TYPE_REP 2
+#define OST_TYPE_ERR 3
+
+struct ost_req_hdr { 
+	__u32 opc;
+	__u64 seqno;
+	__u32 status;
+	__u32 type;
+};
+
+struct ost_rep_hdr { 
+	__u32 opc;
+	__u64 seqno;
+	__u32 status;
+	__u32 type;
+};
 
 typedef uint64_t        obd_id;
 typedef uint64_t        obd_gr;
@@ -91,6 +136,35 @@ struct obdo {
 #define OBD_MD_FLOBDMD  (0x00010000UL)
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS))
 
+/* request structure for OST's */
+
+#define OST_REQ_HAS_OA1  0x1
+
+struct ost_req_packed { 
+	__u32   connid;
+	__u32   cmd; 
+	struct obdo oa;
+	__u32   buflen1;
+	__u32   buflen2;
+	__u32   bufoffset1;
+	__u32   bufoffset2;
+};
+
+struct ost_rep_packed {
+	__u32   result;
+	struct obdo oa;
+	__u32   buflen1;
+	__u32   buflen2;
+	__u32   bufoffset1;
+	__u32   bufoffset2;
+};
+
+
+/* reply structure for OST's */
+
+
+
+
 
 /* 
  *   MDS REQ RECORDS
@@ -114,27 +188,6 @@ struct lustre_fid {
 	__u32 f_type;
 };
 
-struct mds_req {
-	struct lustre_fid        fid1;
-	struct lustre_fid        fid2;
-        char 		           *name;
-        int                        namelen;
-        char                      *tgt;
-        int                        tgtlen;
-        __u32                       valid;
-        __u32 			    mode;
-        __u32                       uid;
-        __u32                       gid;
-        __u64                       size;
-        __u32                       mtime;
-        __u32                       ctime;
-        __u32                       atime;
-        __u32                       flags;
-        __u32                       major;
-        __u32                       minor;
-        __u32                       ino;
-        __u32                       generation;
-};
 
 struct mds_rep_hdr { 
 	__u32 opc;
@@ -143,12 +196,10 @@ struct mds_rep_hdr {
 	__u32 type;
 };
 
-struct mds_rep {
+struct mds_req_packed {
 	struct lustre_fid        fid1;
 	struct lustre_fid        fid2;
-        char 		           *name;
         int                        namelen;
-        char                      *tgt;
         int                        tgtlen;
         __u32                       valid;
         __u32 			    mode;
@@ -163,6 +214,30 @@ struct mds_rep {
         __u32                       minor;
         __u32                       ino;
         __u32                       generation;
+        __u32  		            name_offset;
+        __u32                       tgt_offset;
+};
+
+struct mds_rep_packed {
+	struct lustre_fid        fid1;
+	struct lustre_fid        fid2;
+        int                        namelen;
+        int                        tgtlen;
+        __u32                       valid;
+        __u32 			    mode;
+        __u32                       uid;
+        __u32                       gid;
+        __u64                       size;
+        __u32                       mtime;
+        __u32                       ctime;
+        __u32                       atime;
+        __u32                       flags;
+        __u32                       major;
+        __u32                       minor;
+        __u32                       ino;
+        __u32                       generation;
+        __u32 		            name_offset;
+        __u32                       tgt_offset;
 };
 
 /* 
@@ -372,7 +447,6 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 #define OBD_IOC_DEVICE                 _IOWR('f', 25, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
-
 
 
 

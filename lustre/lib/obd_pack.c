@@ -3,22 +3,22 @@
  *
  *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
  *
- *   This file is part of InterMezzo, http://www.inter-mezzo.org.
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- *   InterMezzo is free software; you can redistribute it and/or
+ *   Lustre is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public
  *   License as published by the Free Software Foundation.
  *
- *   InterMezzo is distributed in the hope that it will be useful,
+ *   Lustre is distributed in the hope that it will be useful,
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   GNU General Public License for more details.
  *
  *   You should have received a copy of the GNU General Public License
- *   along with InterMezzo; if not, write to the Free Software
+ *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * Unpacking of KML records
+ * (Un)packing of OST requests
  *
  */
 
@@ -46,18 +46,21 @@
 #include <asm/uaccess.h>
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
+#include <linux/obd_ost.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 
 
-int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen, 
-		 struct mds_req_hdr **hdr, struct mds_req **req, 
+int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2, 
+		 struct ost_req_hdr **hdr, struct ost_req **req, 
 		 int *len, char **buf)
 {
 	char *ptr;
+        struct ost_req_packed *preq;
 
-	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
-		sizeof(**req); 
+	*len = sizeof(**hdr) + size_round(buflen1) + size_round(buflen2) + 
+		sizeof(*preq); 
 
 	*buf = kmalloc(*len, GFP_KERNEL);
 	if (!*buf) {
@@ -66,68 +69,77 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 	}
 
 	memset(*buf, 0, *len); 
-	*hdr = (struct mds_req_hdr *)(*buf);
-	*req = (struct mds_req *)(*buf + sizeof(**hdr));
-	ptr = *buf + sizeof(**hdr) + sizeof(**req);
+	*hdr = (struct ost_req_hdr *)(*buf);
 
-	(*hdr)->type =  MDS_TYPE_REQ;
+	preq = (struct ost_req_packed *)(*buf + sizeof(**hdr));
+	ptr = *buf + sizeof(**hdr) + sizeof(*preq);
 
-	(*req)->namelen = NTOH__u32(namelen);
-	if (name) { 
-		LOGL(name, namelen, ptr); 
+	*req = (struct ost_req *)(*buf + sizeof(**hdr));
+
+	(*hdr)->type =  OST_TYPE_REQ;
+
+	(*req)->buflen1 = NTOH__u32(buflen1);
+	if (buf1) { 
+                preq->bufoffset1 = (__u32)(ptr - (char *)preq);
+		LOGL(buf1, buflen1, ptr); 
 	} 
 
-	(*req)->tgtlen = NTOH__u32(tgtlen);
-	if (tgt) { 
-		LOGL(tgt, tgtlen, ptr);
+	(*req)->buflen2 = NTOH__u32(buflen2);
+	if (buf2) { 
+                preq->bufoffset2 = (__u32)(ptr - (char *)preq);
+		LOGL(buf2, buflen2, ptr);
 	}
 	return 0;
 }
 
-
-int mds_unpack_req(char *buf, int len, 
-		   struct mds_req_hdr **hdr, struct mds_req **req)
+int ost_unpack_req(char *buf, int len, 
+		   struct ost_req_hdr **hdr, struct ost_req **req)
 {
-	if (len < sizeof(**hdr) + sizeof(**req)) { 
+        struct ost_req_packed *reqp;
+        __u32 off1, off2;
+
+	if (len < sizeof(**hdr) + sizeof(*reqp)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-	*hdr = (struct mds_req_hdr *) (buf);
-	*req = (struct mds_req *) (buf + sizeof(**hdr));
-	(*req)->namelen = NTOH__u32((*req)->namelen); 
-	(*req)->tgtlen = NTOH__u32((*req)->namelen); 
+	*hdr = (struct ost_req_hdr *) (buf);
+	reqp = (struct ost_req_packed *) (buf + sizeof(**hdr));
+	*req = (struct ost_req *) (buf + sizeof(**hdr));
 
-	if (len < sizeof(**hdr) + sizeof(**req) + (*req)->namelen + 
-	    (*req)->tgtlen ) { 
+	(*req)->buflen1 = NTOH__u32(reqp->buflen1); 
+	(*req)->buflen2 = NTOH__u32(reqp->buflen2); 
+        off1 = NTOH__u32(reqp->bufoffset1); 
+        off2 = NTOH__u32(reqp->bufoffset2); 
+
+	if (len < sizeof(**hdr) + sizeof(*reqp) + size_round(reqp->buflen1) + 
+	    size_round(reqp->buflen2) ) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-	if ((*req)->namelen) { 
-		(*req)->name = buf + sizeof(**hdr) + sizeof(**req);
+	if ((*req)->buflen1) { 
+                (*req)->buf1 = (buf + sizeof(**hdr) + off1);
 	} else { 
-		(*req)->name = NULL;
+		(*req)->buf1 = 0;
 	}
-
-	if ((*req)->tgtlen) { 
-		(*req)->tgt = buf + sizeof(**hdr) + sizeof(**req) + 
-			size_round((*req)->namelen);
+	if ((*req)->buflen2) { 
+		(*req)->buf2 = (buf + sizeof(**hdr) + off2);
 	} else { 
-		(*req)->tgt = NULL;
+		(*req)->buf2 = 0;
 	}
 
 	EXIT;
 	return 0;
 }
 
-int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, 
-		 struct mds_rep_hdr **hdr, struct mds_rep **rep, 
+int ost_pack_rep(void *buf1, __u32 buflen1, void *buf2, __u32 buflen2,
+		 struct ost_rep_hdr **hdr, struct ost_rep **rep, 
 		 int *len, char **buf)
 {
 	char *ptr;
 
-	*len = sizeof(**hdr) + size_round(namelen) + size_round(tgtlen) + 
+	*len = sizeof(**hdr) + size_round(buflen1) + size_round(buflen2) + 
 		sizeof(**rep); 
 
 	*buf = kmalloc(*len, GFP_KERNEL);
@@ -137,53 +149,57 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen,
 	}
 
 	memset(*buf, 0, *len); 
-	*hdr = (struct mds_rep_hdr *)(*buf);
-	*rep = (struct mds_rep *)(*buf + sizeof(**hdr));
+	*hdr = (struct ost_rep_hdr *)(*buf);
+	*rep = (struct ost_rep *)(*buf + sizeof(**hdr));
 	ptr = *buf + sizeof(**hdr) + sizeof(**rep);
 
-	(*rep)->namelen = NTOH__u32(namelen);
-	if (name) { 
-		LOGL(name, namelen, ptr); 
+	(*rep)->buflen1 = NTOH__u32(buflen1);
+	if (buf1) { 
+		LOGL(buf1, buflen1, ptr); 
 	} 
 
-	(*rep)->tgtlen = NTOH__u32(tgtlen);
-	if (tgt) { 
-		LOGL(tgt, tgtlen, ptr);
+	(*rep)->buflen2 = NTOH__u32(buflen2);
+	if (buf2) { 
+		LOGL(buf2, buflen2, ptr);
 	}
 	return 0;
 }
 
 
-int mds_unpack_rep(char *buf, int len, 
-		   struct mds_rep_hdr **hdr, struct mds_rep **rep)
+int ost_unpack_rep(char *buf, int len, 
+		   struct ost_rep_hdr **hdr, struct ost_rep **rep)
 {
+        struct ost_rep_packed *prep;
+        __u32 off1, off2;
+
 	if (len < sizeof(**hdr) + sizeof(**rep)) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-	*hdr = (struct mds_rep_hdr *) (buf);
-	*rep = (struct mds_rep *) (buf + sizeof(**hdr));
-	(*rep)->namelen = NTOH__u32((*rep)->namelen); 
-	(*rep)->tgtlen = NTOH__u32((*rep)->namelen); 
+	*hdr = (struct ost_rep_hdr *) (buf);
+	*rep = (struct ost_rep *) (buf + sizeof(**hdr));
+	prep = (struct ost_rep_packed *) (buf + sizeof(**hdr));
+	(*rep)->buflen1 = NTOH__u32(prep->buflen1); 
+	(*rep)->buflen2 = NTOH__u32(prep->buflen2); 
+        off1 = prep->bufoffset1;
+        off2 = prep->bufoffset2;
 
-	if (len < sizeof(**hdr) + sizeof(**rep) + (*rep)->namelen + 
-	    (*rep)->tgtlen ) { 
+	if (len < sizeof(**hdr) + sizeof(*prep) + size_round((*rep)->buflen1) + 
+	    size_round((*rep)->buflen2) ) { 
 		EXIT;
 		return -EINVAL;
 	}
 
-	if ((*rep)->namelen) { 
-		(*rep)->name = buf + sizeof(**hdr) + sizeof(**rep);
+	if ((*rep)->buflen1) { 
+                (*rep)->buf1 = (buf + sizeof(**hdr) + off1);
 	} else { 
-		(*rep)->name = NULL;
+		(*rep)->buf1 = 0;
 	}
-
-	if ((*rep)->tgtlen) { 
-		(*rep)->tgt = buf + sizeof(**hdr) + sizeof(**rep) + 
-			size_round((*rep)->namelen);
+	if ((*rep)->buflen2) { 
+		(*rep)->buf2 = (buf + sizeof(**hdr) + off2);
 	} else { 
-		(*rep)->tgt = NULL;
+		(*rep)->buf2 = 0;
 	}
 
 	EXIT;

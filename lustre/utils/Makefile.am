@@ -5,7 +5,6 @@ CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I/usr/lib/glib/include -I../include -Wal
 KFLAGS:=
 CPPFLAGS :=
 LDADD := -lreadline -ltermcap # -lefence
-bin_PROGRAMS = obdctl testreq
+bin_PROGRAMS = obdctl
 obdctl_SOURCES = parser.c obdctl.c
-testreq_SOURCES = testreq.c
 
