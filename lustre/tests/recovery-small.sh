@@ -100,7 +100,7 @@ setup() {
     start_ost ${REFORMAT}
     # XXX we should write our own upcall, when we move this somewhere better.
     mount_client --timeout=${TIMEOUT:-5} \
-        --recovery_upcall=$UPCALL
+        --lustre_upcall=$UPCALL
 }
 
 cleanup() {
