@@ -6,7 +6,7 @@ SRCDIR="`dirname $0`"
 rmmod llight
 rmmod mdc
 
-$R/usr/src/obd/utils/obdctl <<EOF
+$OBDCTL <<EOF
 device 0
 cleanup
 detach
@@ -20,7 +20,7 @@ rmmod obdext2
 rmmod obdclass
 rmmod ptlrpc
 
-$R/usr/src/portals/linux/utils/ptlctl <<EOF
+$PTLCTL <<EOF
 setup tcp
 disconnect localhost
 del_uuid self

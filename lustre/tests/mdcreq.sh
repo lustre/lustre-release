@@ -20,7 +20,7 @@ MDS=$LOOPDEV
 
 echo 0xffffffff > /proc/sys/portals/debug
 
-$R/usr/src/obd/utils/obdctl <<EOF
+$OBDCTL <<EOF
 device 0
 attach mds
 setup ${MDS} ${MDSFS}
