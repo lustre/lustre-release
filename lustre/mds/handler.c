@@ -464,10 +464,14 @@ int mds_main(void *arg)
 
 			while (1) {
 				struct ptlrpc_request request;
+				struct ptlrpc_service *service;
 
 				rc = PtlEQGet(mds->mds_service->srv_eq_h, &ev);
 				if (rc != PTL_OK && rc != PTL_EQ_DROPPED)
 					break;
+				
+				service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;	
+
 				/* FIXME: If we move to an event-driven model,
 				 * we should put the request on the stack of
 				 * mds_handle instead. */
@@ -484,6 +488,9 @@ int mds_main(void *arg)
 				request.rq_peer.peer_ni =
 					mds->mds_service->srv_self.peer_ni;
 				rc = mds_handle(&request);
+
+				/* Inform the rpc layer the event has been handled */ 
+				ptl_received_rpc(service);
 			}
 		} else {
 			struct ptlrpc_request *request;
@@ -577,7 +584,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 		OBD_ALLOC(mds->mds_service, sizeof(*mds->mds_service));
 		if (mds->mds_service == NULL)
 			return -ENOMEM;
-		mds->mds_service->srv_buf_size = 64 * 1024;
+		mds->mds_service->srv_buf_size = 4 * 1024;
 		mds->mds_service->srv_portal = MDS_REQUEST_PORTAL;
 		memcpy(&mds->mds_service->srv_self, &peer, sizeof(peer));
 		mds->mds_service->srv_wait_queue = &mds->mds_waitq;

@@ -508,10 +508,14 @@ int ost_main(void *arg)
 
 			while (1) {
 				struct ptlrpc_request request;
+				struct ptlrpc_service *service;
 
 				rc = PtlEQGet(ost->ost_service->srv_eq_h, &ev);
 				if (rc != PTL_OK && rc != PTL_EQ_DROPPED)
 					break;
+
+				service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;
+
 				/* FIXME: If we move to an event-driven model,
 				 * we should put the request on the stack of
 				 * mds_handle instead. */
@@ -528,6 +532,9 @@ int ost_main(void *arg)
 				request.rq_peer.peer_ni =
 					ost->ost_service->srv_self.peer_ni;
 				rc = ost_handle(obddev, &request);
+
+				/* Inform the rpc layer the event has been handled */
+                                ptl_received_rpc(service);
 			}
 		} else {
 			struct ptlrpc_request *request;
@@ -622,7 +629,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 		OBD_ALLOC(ost->ost_service, sizeof(*ost->ost_service));
 		if (ost->ost_service == NULL)
 			return -ENOMEM;
-		ost->ost_service->srv_buf_size = 64 * 1024;
+		ost->ost_service->srv_buf_size = 4 * 1024;
 		ost->ost_service->srv_portal = OST_REQUEST_PORTAL;
 		memcpy(&ost->ost_service->srv_self, &peer, sizeof(peer));
 		ost->ost_service->srv_wait_queue = &ost->ost_waitq;

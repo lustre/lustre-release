@@ -40,21 +40,32 @@
 #define OSC_BULK_PORTAL    9
 #define OST_BULK_PORTAL    10
 
+/* default rpc ring length */
+#define RPC_RING_LENGTH    2
+
+/* generic wrappable next */
+#define NEXT_INDEX(index, max)	(((index+1) >= max) ? 0 : (index+1))
+
+
 struct ptlrpc_service {
-        char *srv_buf;
+        char *srv_buf[RPC_RING_LENGTH];
         __u32 srv_buf_size;
+        __u32 srv_me_active;
+	__u32 srv_me_tail;
+	__u32 srv_md_active;
         __u32 srv_ring_length;
         __u32 srv_portal;
+        __u32 srv_ref_count[RPC_RING_LENGTH];
 
         struct lustre_peer srv_self;
 
         /* FIXME: perhaps a list of EQs, if multiple NIs are used? */
         ptl_handle_eq_t srv_eq_h;
 
-        ptl_handle_me_t srv_me_h;
+        ptl_handle_me_t srv_me_h[RPC_RING_LENGTH];
         ptl_process_id_t srv_id;
-        ptl_md_t srv_md;
-        ptl_handle_md_t srv_md_h;
+        ptl_md_t srv_md[RPC_RING_LENGTH];
+        ptl_handle_md_t srv_md_h[RPC_RING_LENGTH];
         wait_queue_head_t *srv_wait_queue;
 };
 
@@ -99,6 +110,7 @@ struct ptlrpc_request {
 int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
                  int portal, int is_request);
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
+int ptl_received_rpc(struct ptlrpc_service *service);
 int rpc_register_service(struct ptlrpc_service *service, char *uuid);
 int rpc_unregister_service(struct ptlrpc_service *service);
 

@@ -15,6 +15,10 @@
 #define OBD_TGT_SOFT 0x4
 
 
+/* generic wrappable next */
+
+#define NEXT_INDEX(index, max)					\
+	(((index + 1) >= max) ? 0 : (index + 1))
 
 
 /* error codes */
