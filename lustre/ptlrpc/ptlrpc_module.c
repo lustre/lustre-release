@@ -223,6 +223,10 @@ EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_fail_export);
 EXPORT_SYMBOL(ptlrpc_recover_import);
 
+/*ptlrpc_lib.c*/
+EXPORT_SYMBOL(client_obd_setup);
+EXPORT_SYMBOL(client_obd_cleanup);
+
 #ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor");
