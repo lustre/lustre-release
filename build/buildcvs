@@ -3,6 +3,8 @@
 portalstag="HEAD"
 libsysiotag="LIBSYSIO_HEAD_20040809"
 
+export LC_COLLATE=C
+
 case "$lustretag" in
     '')
         warn "a lustretag is required."
