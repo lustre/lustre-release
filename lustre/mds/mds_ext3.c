@@ -183,7 +183,6 @@ static void mds_ext3_delete_inode(struct inode *inode)
                 mds_ext3_fs_ops.cl_delete_inode(inode);
 }
 
-
 static void mds_ext3_callback_status(void *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
@@ -196,13 +195,6 @@ static void mds_ext3_callback_status(void *jcb, int error)
         kmem_cache_free(jcb_cache, mcb);
         --jcb_cache_count;
 }
-
-#ifdef HAVE_JOURNAL_CALLBACK
-static void mds_ext3_callback_func(void *cb_data)
-{
-        mds_ext3_callback_status(cb_data, 0);
-}
-#endif
 
 static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
 {
@@ -221,12 +213,6 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
                (unsigned long long)mcb->cb_last_rcvd);
         journal_callback_set(handle, mds_ext3_callback_status,
                              (void *)mcb);
-#elif defined(HAVE_JOURNAL_CALLBACK)
-        /* XXX original patch version - remove soon */
-#warning "using old journal callback kernel patch, please update"
-        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
-               (unsigned long long)mcb->cb_last_rcvd);
-        journal_callback_set(handle, mds_ext3_callback_func, mcb);
 #else
 #warning "no journal callback kernel patch, faking it..."
         {
