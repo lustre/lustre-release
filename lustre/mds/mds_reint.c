@@ -162,7 +162,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         }
 
         DEBUG_REQ(log_pri, req,
-                  "wrote trans #"LPU64" client %s at idx %u: err = %d\n",
+                  "wrote trans #"LPU64" client %s at idx %u: err = %d",
                   transno, mcd->mcd_uuid, med->med_idx, err);
 
         err = mds_lov_write_objids(obd);
@@ -356,7 +356,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         LASSERT(offset == 0);
 
-        DEBUG_REQ(D_INODE, req, "setattr "LPU64"/%u %x\n", rec->ur_fid1->id,
+        DEBUG_REQ(D_INODE, req, "setattr "LPU64"/%u %x", rec->ur_fid1->id,
                   rec->ur_fid1->generation, rec->ur_iattr.ia_valid);
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
@@ -507,7 +507,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         LASSERT(offset == 0);
         LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds"));
 
-        DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %s mode %o\n",
+        DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %s mode %o",
                   rec->ur_fid1->id, rec->ur_fid1->generation,
                   rec->ur_name, rec->ur_mode);
 

@@ -399,7 +399,7 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
         w->w_data = data;
         w->w_datalen = datalen;
         if (new) {
-                LDLM_DEBUG(lock, "lock incompatible; sending blocking AST.\n");
+                LDLM_DEBUG(lock, "lock incompatible; sending blocking AST.");
                 lock->l_flags |= LDLM_FL_AST_SENT;
                 /* If the enqueuing client said so, tell the AST recipient to
                  * discard dirty data, rather than writing back. */
