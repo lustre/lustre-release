@@ -79,7 +79,7 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 static inline void *fsfilt_start(struct obd_device *obd,
                                  struct inode *inode, int op)
 {
-        long now = jiffies;
+        unsigned long now = jiffies;
         void *handle = obd->obd_fsops->fs_start(inode, op);
         CDEBUG(D_HA, "started handle %p\n", handle);
         if (time_after(jiffies, now + 15*HZ))
@@ -91,7 +91,7 @@ static inline void *fsfilt_brw_start(struct obd_device *obd, int objcount,
                                      struct fsfilt_objinfo *fso, int niocount,
                                      struct niobuf_remote *nb)
 {
-        long now = jiffies;
+        unsigned long now = jiffies;
         void *handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount,nb);
         CDEBUG(D_HA, "started handle %p\n", handle);
         if (time_after(jiffies, now + 15*HZ))
@@ -102,7 +102,7 @@ static inline void *fsfilt_brw_start(struct obd_device *obd, int objcount,
 static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
                                 void *handle, int force_sync)
 {
-        long now = jiffies;
+        unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit(inode, handle, force_sync);
         CDEBUG(D_HA, "committing handle %p\n", handle);
         if (time_after(jiffies, now + 15*HZ))
@@ -113,7 +113,7 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
 static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
                                  void *handle, struct iattr *iattr,int do_trunc)
 {
-        long now = jiffies;
+        unsigned long now = jiffies;
         int rc;
         rc = obd->obd_fsops->fs_setattr(dentry, handle, iattr, do_trunc);
         if (time_after(jiffies, now + 15*HZ))
