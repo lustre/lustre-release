@@ -127,7 +127,9 @@ awk -F"[$IFS:]" '
 		tvtime = $4
 		pname = $20
 		xid = $23
-		opc = $26
+		# sometimes the nid has our seperators
+		# in it, so we hope the last field is the op code
+		opc = $NF
 
 		# the y position of the rpc bar in the graph is determined
 		# by the category which we use the process name for.  when
@@ -176,7 +178,7 @@ awk -F"[$IFS:]" '
 		tvtime = $4
 		pname = $20
 		xid = $23
-		opc = $26
+		opc = $NF
 
 
 		total_rpcs++;
