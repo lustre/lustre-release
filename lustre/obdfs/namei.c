@@ -63,7 +63,8 @@ static inline void ext2_inc_count(struct inode *inode)
 static inline void ext2_dec_count(struct inode *inode)
 {
 	inode->i_nlink--;
-	// obdfs_change_inode(inode);
+	if (inode->i_nlink > 0) 
+		obdfs_change_inode(inode);
 }
 
 static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)

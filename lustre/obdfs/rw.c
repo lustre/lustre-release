@@ -48,12 +48,20 @@ static int cache_writes = 0;
  */
 void __set_page_dirty(struct page *page)
 {
-	struct address_space *mapping = page->mapping;
+	struct address_space *mapping;
+	spinlock_t *pg_lock;
 
-	spin_lock(&pagecache_lock);
+	pg_lock = PAGECACHE_LOCK(page);
+	spin_lock(pg_lock);
+
+	mapping = page->mapping;
+	spin_lock(&mapping->page_lock);
+
 	list_del(&page->list);
 	list_add(&page->list, &mapping->dirty_pages);
-	spin_unlock(&pagecache_lock);
+
+	spin_unlock(&mapping->page_lock);
+	spin_unlock(pg_lock);
 
 	if (mapping->host)
 		mark_inode_dirty_pages(mapping->host);
@@ -64,14 +72,21 @@ void __set_page_dirty(struct page *page)
  */
 void __set_page_clean(struct page *page)
 {
-	struct address_space *mapping = page->mapping;
 	struct inode *inode;
-	ENTRY;
+	struct address_space *mapping;
+	spinlock_t *pg_lock;
 
-	spin_lock(&pagecache_lock);
+	pg_lock = PAGECACHE_LOCK(page);
+	spin_lock(pg_lock);
+
+	mapping = page->mapping;
+	spin_lock(&mapping->page_lock);
+
 	list_del(&page->list);
 	list_add(&page->list, &mapping->clean_pages);
-	spin_unlock(&pagecache_lock);
+
+	spin_unlock(&mapping->page_lock);
+	spin_unlock(pg_lock);
 
 	inode = mapping->host;
 	if (list_empty(&mapping->dirty_pages)) { 
