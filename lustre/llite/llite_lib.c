@@ -358,7 +358,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         char * name = "mdc_dev";
         class_uuid_t uuid;
         struct obd_uuid mdc_uuid;
-        struct llog_obd_ctxt *ctxt;
+        struct llog_ctxt *ctxt;
         int rc = 0;
         int err;
         ENTRY;
@@ -427,7 +427,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         
         exp = class_conn2export(&mdc_conn);
         
-        ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
+        ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
         rc = class_config_parse_llog(ctxt, profile, cfg);
         if (rc) {
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
