@@ -761,8 +761,6 @@ static void ptlrpc_abort_reply (struct ptlrpc_request *req)
                 spin_unlock_irqrestore (&req->rq_lock, flags);
                 return;
         case PTL_INV_MD:
-                /* Both SENT and ACK callbacks happened */
-                LASSERT (!req->rq_want_ack);
                 return;
         case PTL_MD_INUSE:
                 /* Still sending or ACK callback in progress: wait until
