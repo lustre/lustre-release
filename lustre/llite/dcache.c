@@ -28,6 +28,7 @@
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lite.h>
+#include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 
 extern struct address_space_operations ll_aops;
@@ -95,6 +96,36 @@ static int revalidate2_finish(int flag, struct ptlrpc_request *request,
         return 0;
 }
 
+static int ll_have_lock(struct dentry *de)
+{
+       struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
+        struct lustre_handle lockh;
+        __u64 res_id[RES_NAME_SIZE] = {0};
+        struct obd_device *obddev;
+        ENTRY;
+
+       if (!de->d_inode)
+               RETURN(0);
+
+        obddev = class_conn2obd(&sbi->ll_mdc_conn);
+        res_id[0] = de->d_inode->i_ino;
+
+        CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id[0]);
+
+        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_PLAIN,
+                            NULL, 0, LCK_PR, &lockh)) {
+                ldlm_lock_decref(&lockh, LCK_PR);
+                RETURN(1);
+        }
+
+        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_PLAIN,
+                            NULL, 0, LCK_PW, &lockh)) {
+                ldlm_lock_decref(&lockh, LCK_PW);
+                RETURN(1);
+        }
+        RETURN(0);
+}
+
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {
         int rc;
@@ -108,6 +139,9 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
+        if (ll_have_lock(de))
+                GOTO(out, rc = 0);
+
         rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
         if (rc < 0) {
                 /* Something bad happened; overwrite it_status? */
@@ -120,6 +154,7 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         spin_unlock(&dcache_lock);
         d_rehash(de);
 
+ out:
         if (!it)
                 de->d_it = NULL;
 
