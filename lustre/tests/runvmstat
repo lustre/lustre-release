@@ -3,7 +3,7 @@ null() {
 	:
 }
 
-if [ $1 == "-q" ]; then
+if [ "$1" == "-q" ]; then
 	echo "echo off"
 	ECHO="null"
 	shift
