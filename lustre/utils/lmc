@@ -25,7 +25,7 @@ lmc - lustre configuration data manager
 
 """
 
-import sys, os, getopt, string, exceptions, random, re
+import sys, os, getopt, string, exceptions, re
 import xml.dom.minidom
 from xml.dom.ext import PrettyPrint
 
@@ -46,6 +46,7 @@ DEFAULT_PORT = 988
 DEFAULT_STRIPE_SZ = 65536
 DEFAULT_STRIPE_CNT = 1
 DEFAULT_STRIPE_PATTERN = 0
+UUID_MAX_LENGTH = 31
 
 def reference():
     print """usage: lmc --add object [object parameters]
@@ -226,11 +227,18 @@ def new_name(base):
     return ret
 
 def new_uuid(name):
-    ret_uuid = '%05x_%.19s_%05x%05x' % (int(random.random() * 1048576),
-                                        name,
-                                        int(random.random() * 1048576),
-                                        int(random.random() * 1048576))
-    return ret_uuid[:36]
+    ctr = 2
+    ret = "%s_UUID" % (name)
+    if len(ret) > UUID_MAX_LENGTH:
+        ret = ret[-UUID_MAX_LENGTH:]
+    while uuids.has_key(ret):
+        ret = "%s_UUID_%d" % (name, ctr)
+        ctr = 1 + ctr
+        if len(ret) > UUID_MAX_LENGTH:
+            ret = ret[-UUID_MAX_LENGTH:]
+    uuids[ret] = 1
+    return ret
+
 
 ldlm_name = 'ldlm'
 ldlm_uuid = 'ldlm_UUID'
@@ -1123,15 +1131,6 @@ def main():
         sys.exit(1)
 
     gen = GenConfig(doc)
-
-    # the PRNG is normally seeded with time(), which is not so good for starting    # time-synchronized clusters
-    input = open('/dev/urandom', 'r')
-    if not input:
-        print 'Unable to open /dev/urandom!'
-        sys.exit(1)
-    seed = input.read(32)
-    input.close()
-    random.seed(seed)
 
     if options.batch:
         fp = open(options.batch)
