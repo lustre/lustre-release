@@ -152,6 +152,21 @@ When used in conjunction with cleanup, services are torn down up to a certain
  If this is a relative path, it is assumed to be relative to Lustre source
  tree location.
  
+\layout Description
+
+--ptldebug\SpecialChar ~
+
+\begin_inset Quotes eld
+\end_inset 
+
+subsystems\SpecialChar ~
+|\SpecialChar ~
+debug\SpecialChar ~
+type
+\begin_inset Quotes erd
+\end_inset 
+
+ This options can be used to set the required debug level 
 \layout Subsection
 
 EXAMPLES
@@ -166,6 +181,47 @@ lconf --node client config.xml
 \layout Standard
 
 in order to give clients, regardless of hostname, a single configuration.
+\layout Standard
+
+Required debug levels can be set like this:
+\layout LyX-Code
+
+
+\size small 
+   ## Everything but these
+\layout LyX-Code
+
+
+\size small 
+lconf --ptldebug 
+\begin_inset Quotes eld
+\end_inset 
+
+~(portals | malloc | trace)
+\begin_inset Quotes erd
+\end_inset 
+
+
+\layout LyX-Code
+
+\layout LyX-Code
+
+
+\size small 
+## Only these debug types
+\layout LyX-Code
+
+
+\size small 
+lconf --ptldebug 
+\begin_inset Quotes eld
+\end_inset 
+
+ldlm|ha
+\begin_inset Quotes erd
+\end_inset 
+
+
 \layout Subsection
 
 BUGS
