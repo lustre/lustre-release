@@ -94,7 +94,7 @@ struct llog_handle *llog_new_log(struct llog_handle *cathandle,
         llh = loghandle->lgh_hdr;
         llh->llh_hdr.lth_type = LLOG_OBJECT_MAGIC;
         llh->llh_hdr.lth_len = llh->llh_hdr_end_len = sizeof(*llh);
-        llh->llh_timestamp = CURRENT_TIME;
+        llh->llh_timestamp = LTIME_S(CURRENT_TIME);
         llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
         memcpy(&llh->llh_tgtuuid, tgtuuid, sizeof(llh->llh_tgtuuid));
         loghandle->lgh_tgtuuid = &llh->llh_tgtuuid;
@@ -169,7 +169,7 @@ int llog_init_catalog(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
         if (cathandle->lgh_file->f_dentry->d_inode->i_size == 0) {
 write_hdr:      llh->llh_hdr.lth_type = LLOG_CATALOG_MAGIC;
                 llh->llh_hdr.lth_len = llh->llh_hdr_end_len = LLOG_CHUNK_SIZE;
-                llh->llh_timestamp = CURRENT_TIME;
+                llh->llh_timestamp = LTIME_S(CURRENT_TIME);
                 llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
                 memcpy(&llh->llh_tgtuuid, tgtuuid, sizeof(llh->llh_tgtuuid));
                 rc = lustre_fwrite(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,

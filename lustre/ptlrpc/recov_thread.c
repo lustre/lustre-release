@@ -32,10 +32,21 @@
 # define EXPORT_SYMTAB
 #endif
 
+#ifndef __KERNEL__
+#include <portals/list.h>
+#include <liblustre.h>
+#endif
+#include <linux/kp30.h>
 #include <linux/fs.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_commit_confd.h>
+#include <linux/obd_support.h>
+#include <linux/obd_class.h>
+#include <linux/lustre_net.h>
+#include <portals/types.h>
 #include <portals/list.h>
+#include "ptlrpc_internal.h"
+
 
 static struct llog_commit_master lustre_lcm;
 static struct llog_commit_master *lcm = &lustre_lcm;
@@ -114,7 +125,7 @@ static int log_commit_thread(void *arg)
         struct llog_commit_master *lcm = arg;
         struct llog_commit_daemon *lcd;
         struct llog_commit_data *llcd, *n;
-        long flags;
+        unsigned long flags;
 
         OBD_ALLOC(lcd, sizeof(*lcd));
         if (lcd == NULL)
@@ -125,7 +136,7 @@ static int log_commit_thread(void *arg)
         lcd->lcd_lcm = lcm;
 
         lock_kernel();
-        daemonize(); /* thread never needs to do IO */
+        ptlrpc_daemonize(); /* thread never needs to do IO */
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
