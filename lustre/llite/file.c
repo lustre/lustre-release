@@ -135,6 +135,7 @@ out_mdc:
 out_req:
         ptlrpc_free_req(req);
 //out_fd:
+        fd->fd_mdshandle.cookie = DEAD_HANDLE_MAGIC;
         kmem_cache_free(ll_file_data_slab, fd);
 out:
         return rc;
@@ -163,7 +164,7 @@ int ll_size_lock(struct inode *inode, struct lov_stripe_md *lsm, __u64 start,
                 RETURN(-ENOMEM);
 
         extent.start = start;
-        extent.end = OBD_PUNCH_EOF;
+        extent.end = OBD_OBJECT_EOF;
 
         rc = obd_enqueue(&sbi->ll_osc_conn, lsm, NULL, LDLM_EXTENT, &extent,
                          sizeof(extent), mode, &flags, ll_lock_callback,
@@ -324,8 +325,9 @@ out_mdc:
         EXIT;
 
 out_fd:
-        kmem_cache_free(ll_file_data_slab, fd);
+        fd->fd_mdshandle.cookie = DEAD_HANDLE_MAGIC;
         file->private_data = NULL;
+        kmem_cache_free(ll_file_data_slab, fd);
 out:
         return rc;
 }
@@ -410,8 +412,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         ENTRY;
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
-            sbi->ll_flags & LL_SBI_NOLCK) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) &&
+            !(sbi->ll_flags & LL_SBI_NOLCK)) {
                 OBD_ALLOC(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
                         RETURN(-ENOMEM);
@@ -439,8 +441,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (retval > 0)
                 ll_update_atime(inode);
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
-            sbi->ll_flags & LL_SBI_NOLCK) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) &&
+            !(sbi->ll_flags & LL_SBI_NOLCK)) {
                 err = obd_cancel(&sbi->ll_osc_conn, lsm, LCK_PR, lockhs);
                 if (err != ELDLM_OK) {
                         CERROR("lock cancel: err: %d\n", err);

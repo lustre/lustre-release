@@ -567,8 +567,8 @@ static __u64 lov_offset(struct lov_stripe_md *lsm, __u64 lov_off, int stripeno)
         unsigned long swidth = ssize * lsm->lsm_stripe_count;
         unsigned long stripe_off;
 
-        if (lov_off == OBD_PUNCH_EOF)
-                return OBD_PUNCH_EOF;
+        if (lov_off == OBD_OBJECT_EOF)
+                return OBD_OBJECT_EOF;
 
         /* do_div(a, b) returns a % b, and a = a / b */
         stripe_off = do_div(lov_off, swidth);
