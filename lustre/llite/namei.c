@@ -308,6 +308,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                                 smd->lmd_stripe_count * sizeof(struct lov_object_id);
                         OBD_ALLOC(mds_md, mds_md_size);
                         lov_packmd(mds_md, smd);
+                        md.md = mds_md;
                 } else
                         md.md = NULL;
 
