@@ -118,7 +118,7 @@ obdio_connect (int device)
 }
 
 void
-obdio_disconnect (struct obdio_conn *conn)
+obdio_disconnect (struct obdio_conn *conn, int flags)
 {
         close (conn->oc_fd);
         /* obdclass will automatically close on last ref */

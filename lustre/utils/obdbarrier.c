@@ -214,9 +214,9 @@ main (int argc, char **argv)
                 }
         }
 
-        free (b);
+        free(b);
 
-        obdio_disconnect (conn);
+        obdio_disconnect(conn, 0);
 
         return (rc == 0 ? 0 : 1);
 }
