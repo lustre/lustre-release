@@ -53,10 +53,10 @@ make_config() {
     done
     lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --dev $MDSDEV \
         --size $MDSSIZE || exit 5
-    lmc -m $CONFIG --add ost --node $OSTNODE --obd obd1 --dev $OSTDEV \
+    lmc -m $CONFIG --add ost --node $OSTNODE --ost ost1 --dev $OSTDEV \
         --size $OSTSIZE || exit 6
     lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --mds mds1 \
-        --obd obd1 || exit 7
+        --ost ost1 || exit 7
 }
 
 start_mds() {
@@ -109,6 +109,7 @@ replay() {
     shutdown_mds -f
     start_mds
     wait
+    do_client "ls $MOUNPT" # trigger failover, if we haven't already
 }
 
 if [ ! -z "$ONLY" ]; then
