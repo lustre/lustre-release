@@ -113,11 +113,49 @@ kqswnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 }
 
 int
+kqswnal_get_tx_desc (struct portal_ioctl_data *data)
+{
+	unsigned long      flags;
+	struct list_head  *tmp;
+	kqswnal_tx_t      *ktx;
+	int                index = data->ioc_count;
+	int                rc = -ENOENT;
+
+	spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
+
+	list_for_each (tmp, &kqswnal_data.kqn_activetxds) {
+		if (index-- != 0)
+			continue;
+		
+		ktx = list_entry (tmp, kqswnal_tx_t, ktx_list);
+
+		data->ioc_pbuf1 = (char *)ktx;
+		data->ioc_count = NTOH__u32(ktx->ktx_wire_hdr->type);
+		data->ioc_size  = NTOH__u32(PTL_HDR_LENGTH(ktx->ktx_wire_hdr));
+		data->ioc_nid   = NTOH__u64(ktx->ktx_wire_hdr->dest_nid);
+		data->ioc_nid2  = ktx->ktx_nid;
+		data->ioc_misc  = ktx->ktx_launcher;
+		data->ioc_flags = (list_empty (&ktx->ktx_delayed_list) ? 0 : 1) |
+				  ((!ktx->ktx_forwarding)              ? 0 : 2) |
+				  ((!ktx->ktx_isnblk)                  ? 0 : 4);
+
+		rc = 0;
+		break;
+	}
+	
+	spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
+	return (rc);
+}
+
+int
 kqswnal_cmd (struct portal_ioctl_data *data, void *private)
 {
 	LASSERT (data != NULL);
 	
 	switch (data->ioc_nal_cmd) {
+	case NAL_CMD_GET_TXDESC:
+		return (kqswnal_get_tx_desc (data));
+
 	case NAL_CMD_REGISTER_MYNID:
 		CDEBUG (D_IOCTL, "setting NID offset to "LPX64" (was "LPX64")\n",
 			data->ioc_nid - kqswnal_data.kqn_elanid,
@@ -319,6 +357,7 @@ kqswnal_initialise (void)
 
 	INIT_LIST_HEAD (&kqswnal_data.kqn_idletxds);
 	INIT_LIST_HEAD (&kqswnal_data.kqn_nblk_idletxds);
+	INIT_LIST_HEAD (&kqswnal_data.kqn_activetxds);
 	spin_lock_init (&kqswnal_data.kqn_idletxd_lock);
 	init_waitqueue_head (&kqswnal_data.kqn_idletxd_waitq);
 	INIT_LIST_HEAD (&kqswnal_data.kqn_idletxd_fwdq);
@@ -459,12 +498,12 @@ kqswnal_initialise (void)
 		ktx->ktx_basepage = basepage + premapped_pages; /* message mapping starts here */
 		ktx->ktx_npages = KQSW_NTXMSGPAGES - premapped_pages; /* for this many pages */
 
-		if (i < KQSW_NTXMSGS)
-			ktx->ktx_idle = &kqswnal_data.kqn_idletxds;
-		else
-			ktx->ktx_idle = &kqswnal_data.kqn_nblk_idletxds;
+		INIT_LIST_HEAD (&ktx->ktx_delayed_list);
 
-		list_add_tail (&ktx->ktx_list, ktx->ktx_idle);
+		ktx->ktx_isnblk = (i >= KQSW_NTXMSGS);
+		list_add_tail (&ktx->ktx_list, 
+			       ktx->ktx_isnblk ? &kqswnal_data.kqn_nblk_idletxds :
+			                         &kqswnal_data.kqn_idletxds);
 	}
 
 	/**********************************************************************/
