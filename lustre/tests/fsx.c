@@ -92,6 +92,8 @@ char	*original_buf;			/* a pointer to the original data */
 char	*good_buf;			/* a pointer to the correct data */
 char	*temp_buf;			/* a pointer to the current data */
 char	*fname;				/* name of our test file */
+char	logfile[1024];			/* name of our log file */
+char	goodfile[1024];			/* name of our test file */
 int	fd;				/* fd for our test file */
 
 off_t		file_size = 0;
@@ -325,8 +327,8 @@ report_failure(int status)
 		if (good_buf) {
 			save_buffer(good_buf, file_size, fsxgoodfd);
 			prt("Correct content saved for comparison\n");
-			prt("(maybe hexdump \"%s\" vs \"%s.fsxgood\")\n",
-			    fname, fname);
+			prt("(maybe hexdump \"%s\" vs \"%s\")\n",
+			    fname, goodfile);
 		}
 		close(fsxgoodfd);
 	}
@@ -892,13 +894,19 @@ getnum(char *s, char **e)
 }
 
 
+static const char *basename(const char *path)
+{
+	char *c = strrchr(path, '/');
+
+	return c ? c++ : path;
+}
+
 int
 main(int argc, char **argv)
 {
 	int	i, style, ch;
 	char	*endp;
-	char goodfile[1024];
-	char logfile[1024];
+	int  dirpath = 0;
 
 	goodfile[0] = 0;
 	logfile[0] = 0;
@@ -1007,6 +1015,7 @@ main(int argc, char **argv)
 			strcat(goodfile, "/");
 			strncpy(logfile, optarg, sizeof(logfile));
 			strcat(logfile, "/");
+			dirpath = 1;
 			break;
                 case 'R':
                         mapped_reads = 0;
@@ -1054,14 +1063,14 @@ main(int argc, char **argv)
 		prterr(fname);
 		exit(91);
 	}
-	strncat(goodfile, fname, 256);
+	strncat(goodfile, dirpath ? basename(fname) : fname, 256);
 	strcat (goodfile, ".fsxgood");
 	fsxgoodfd = open(goodfile, O_RDWR|O_CREAT|O_TRUNC, 0666);
 	if (fsxgoodfd < 0) {
 		prterr(goodfile);
 		exit(92);
 	}
-	strncat(logfile, fname, 256);
+	strncat(logfile, dirpath ? basename(fname) : fname, 256);
 	strcat (logfile, ".fsxlog");
 	fsxlogf = fopen(logfile, "w");
 	if (fsxlogf == NULL) {
