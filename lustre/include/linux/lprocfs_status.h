@@ -249,6 +249,8 @@ extern int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
+extern int lprocfs_rd_kbytesavail(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filestotal(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
 extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
@@ -339,6 +341,9 @@ int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
 static inline
 int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
                           int count, int *eof, void *data) { return 0; }
+static inline
+int lprocfs_rd_kbytesavail(char *page, char **start, off_t off,
+                           int count, int *eof, void *data) { return 0; }
 static inline
 int lprocfs_rd_filestotal(char *page, char **start, off_t off,
                           int count, int *eof, void *data) { return 0; }

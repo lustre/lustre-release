@@ -1352,7 +1352,7 @@ class MDSDEV(Module):
         self.journal_size = self.db.get_val_int('journalsize', 0)
         self.fstype = self.db.get_val('fstype', '')
         self.nspath = self.db.get_val('nspath', '')
-	self.mkfsoptions = self.db.get_val('mkfsoptions', '')
+        self.mkfsoptions = self.db.get_val('mkfsoptions', '')
         # overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
         target_uuid = self.db.get_first_ref('target')
         mds = self.db.lookup(target_uuid)
@@ -1588,7 +1588,7 @@ class OSD(Module):
         self.uuid = target_uuid
         # modules
         self.add_lustre_module('ost', 'ost')
-	# FIXME: should we default to ext3 here?
+        # FIXME: should we default to ext3 here?
         if self.fstype:
             self.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.fstype))
         self.add_lustre_module(self.osdtype, self.osdtype)
@@ -1760,14 +1760,14 @@ class MDC(Client):
          Client.__init__(self, db, uuid, 'mdc', fs_name)
 
     def permits_inactive(self):
-    	return 0
+        return 0
 
 class OSC(Client):
     def __init__(self, db, uuid, fs_name):
          Client.__init__(self, db, uuid, 'osc', fs_name)
 
     def permits_inactive(self):
-    	return 1
+        return 1
 
 def mgmtcli_name_for_uuid(uuid):
     return 'MGMTCLI_%s' % uuid

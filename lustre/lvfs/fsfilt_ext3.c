@@ -664,7 +664,11 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
 static int fsfilt_ext3_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
         struct kstatfs sfs;
-        int rc = vfs_statfs(sb, &sfs);
+        int rc;
+
+        memset(&sfs, 0, sizeof(sfs));
+
+        rc = sb->s_op->statfs(sb, &sfs);
 
         if (!rc && sfs.f_bfree < sfs.f_ffree) {
                 sfs.f_files = (sfs.f_files - sfs.f_ffree) + sfs.f_bfree;

@@ -688,7 +688,9 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
         if (!lock) {
                 CERROR("received cancel for unknown lock cookie "LPX64
-                       " from nid "LPX64" (%s)\n", dlm_req->lock_handle1.cookie,
+                       " from client %s nid "LPX64" (%s)\n",
+                       dlm_req->lock_handle1.cookie,
+                       req->rq_export->exp_client_uuid.uuid,
                        req->rq_peer.peer_nid,
                        portals_nid2str(req->rq_peer.peer_ni->pni_number,
                                        req->rq_peer.peer_nid, str));

@@ -265,6 +265,24 @@ int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
         return rc;
 }
 
+int lprocfs_rd_kbytesavail(char *page, char **start, off_t off, int count,
+                           int *eof, void *data)
+{
+        struct obd_statfs osfs;
+        int rc = obd_statfs(data, &osfs, jiffies - HZ);
+        if (!rc) {
+                __u32 blk_size = osfs.os_bsize >> 10;
+                __u64 result = osfs.os_bavail;
+
+                while (blk_size >>= 1)
+                        result <<= 1;
+
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", result);
+        }
+        return rc;
+}
+
 int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
@@ -783,6 +801,7 @@ EXPORT_SYMBOL(lprocfs_rd_numrefs);
 EXPORT_SYMBOL(lprocfs_rd_blksize);
 EXPORT_SYMBOL(lprocfs_rd_kbytestotal);
 EXPORT_SYMBOL(lprocfs_rd_kbytesfree);
+EXPORT_SYMBOL(lprocfs_rd_kbytesavail);
 EXPORT_SYMBOL(lprocfs_rd_filestotal);
 EXPORT_SYMBOL(lprocfs_rd_filesfree);
 EXPORT_SYMBOL(lprocfs_rd_filegroups);

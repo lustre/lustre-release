@@ -30,7 +30,7 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
-#else 
+#else
 #include <liblustre.h>
 #include <linux/obd_class.h>
 #include <linux/obd.h>
@@ -241,7 +241,7 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
 /* Search for a client OBD connected to tgt_uuid.  If grp_uuid is
    specified, then only the client with that uuid is returned,
    otherwise any client connected to the tgt is returned. */
-struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid, 
+struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           char * typ_name,
                                           struct obd_uuid *grp_uuid)
 {
@@ -251,13 +251,13 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_type == NULL)
                         continue;
-                if ((strncmp(obd->obd_type->typ_name, typ_name, 
+                if ((strncmp(obd->obd_type->typ_name, typ_name,
                              strlen(typ_name)) == 0)) {
                         struct client_obd *cli = &obd->u.cli;
                         struct obd_import *imp = cli->cl_import;
                         if (obd_uuid_equals(tgt_uuid, &imp->imp_target_uuid) &&
-                            ((grp_uuid)? obd_uuid_equals(grp_uuid, 
-                                                        &obd->obd_uuid) : 1)) {
+                            ((grp_uuid)? obd_uuid_equals(grp_uuid,
+                                                         &obd->obd_uuid) : 1)) {
                                 return obd;
                         }
                 }
@@ -597,7 +597,7 @@ int class_disconnect(struct obd_export *export, int flags)
         if (list_empty(&export->exp_handle.h_link))
                 RETURN(0);
 
-        CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n", 
+        CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
                export->exp_handle.h_cookie);
 
         class_unlink_export(export);
@@ -624,10 +624,10 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
         list_for_each_safe(tmp, n, &work_list) {
                 exp = list_entry(tmp, struct obd_export, exp_obd_chain);
                 class_export_get(exp);
-                
-                if (obd_uuid_equals(&exp->exp_client_uuid, 
+
+                if (obd_uuid_equals(&exp->exp_client_uuid,
                                     &exp->exp_obd->obd_uuid)) {
-                        CDEBUG(D_HA, 
+                        CDEBUG(D_HA,
                                "exp %p export uuid == obd uuid, don't discon\n",
                                exp);
                         class_export_put(exp);
@@ -688,11 +688,11 @@ void osic_add_one(struct obd_sync_io_container *osic,
         osic_grab(osic);
 }
 
-void osic_complete_one(struct obd_sync_io_container *osic, 
+void osic_complete_one(struct obd_sync_io_container *osic,
                        struct osic_callback_context *occ, int rc)
 {
         unsigned long flags;
-        wait_queue_head_t *wake = NULL; 
+        wait_queue_head_t *wake = NULL;
         int old_rc;
 
         spin_lock_irqsave(&osic->osic_lock, flags);
@@ -710,7 +710,7 @@ void osic_complete_one(struct obd_sync_io_container *osic,
         spin_unlock_irqrestore(&osic->osic_lock, flags);
 
         CDEBUG(D_CACHE, "osic %p completed, rc %d -> %d via %d, %d now "
-                        "pending (racey)\n", osic, old_rc, osic->osic_rc, rc, 
+                        "pending (racey)\n", osic, old_rc, osic->osic_rc, rc,
                         osic->osic_pending);
         if (wake)
                 wake_up(wake);
@@ -737,7 +737,7 @@ static void interrupted_osic(void *data)
 
         spin_lock_irqsave(&osic->osic_lock, flags);
         list_for_each(pos, &osic->osic_occ_list) {
-                occ = list_entry(pos, struct osic_callback_context, 
+                occ = list_entry(pos, struct osic_callback_context,
                                  occ_osic_item);
                 occ->occ_interrupted(occ);
         }
@@ -760,10 +760,10 @@ int osic_wait(struct obd_sync_io_container *osic)
                         lwi = (struct l_wait_info){ 0, };
         } while (rc == -EINTR);
 
-        LASSERTF(osic->osic_pending == 0, 
+        LASSERTF(osic->osic_pending == 0,
                  "exiting osic_wait(osic = %p) with %d pending\n", osic,
                  osic->osic_pending);
 
-        CDEBUG(D_CACHE, "done waiting on osic %p\n", osic);
+        CDEBUG(D_CACHE, "done waiting on osic %p rc %d\n", osic, osic->osic_rc);
         return osic->osic_rc;
 }

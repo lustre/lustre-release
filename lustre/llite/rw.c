@@ -146,7 +146,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
-        struct brw_page pg;
+        struct brw_page pga;
         struct obdo oa;
         int rc = 0;
         ENTRY;
@@ -154,18 +154,23 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         if (!PageLocked(page))
                 LBUG();
 
-        if (PageUptodate(page))
-                RETURN(0);
-
         /* Check to see if we should return -EIO right away */
-        pg.pg = page;
-        pg.off = offset;
-        pg.count = PAGE_SIZE;
-        pg.flag = 0;
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), NULL, lsm, 1, &pg, 
+        pga.pg = page;
+        pga.off = offset;
+        pga.count = PAGE_SIZE;
+        pga.flag = 0;
+
+        oa.o_id = lsm->lsm_object_id;
+        oa.o_mode = inode->i_mode;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
+
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), &oa, lsm, 1, &pga,
                      NULL);
         if (rc)
                 RETURN(rc);
+
+        if (PageUptodate(page))
+                RETURN(0);
 
         /* We're completely overwriting an existing page, so _don't_ set it up
          * to date until commit_write */
@@ -183,10 +188,6 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                 GOTO(prepare_done, rc = 0);
         }
 
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_mode = inode->i_mode;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
-        
         /* XXX could be an async ocp read.. read-ahead? */
         rc = ll_brw(OBD_BRW_READ, inode, &oa, page, 0);
         if (rc == 0) {
@@ -231,15 +232,15 @@ static int ll_ap_make_ready(void *data, int cmd)
         struct ll_async_page *llap;
         struct page *page;
         ENTRY;
-        
+
         llap = llap_from_cookie(data);
-        if (IS_ERR(llap)) 
+        if (IS_ERR(llap))
                 RETURN(-EINVAL);
 
         page = llap->llap_page;
 
         if (cmd == OBD_BRW_READ) {
-                /* _sync_page beat us to it and is about to call 
+                /* _sync_page beat us to it and is about to call
                  * _set_async_flags which will fire off rpcs again */
 		if (!test_and_clear_bit(LL_PRIVBITS_READ, &page->private))
                         RETURN(-EAGAIN);
@@ -413,15 +414,15 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 
                 /* _make_ready only sees llap once we've unlocked the page */
                 llap->llap_write_queued = 1;
-                rc = obd_queue_async_io(exp, lsm, NULL, llap->llap_cookie, 
+                rc = obd_queue_async_io(exp, lsm, NULL, llap->llap_cookie,
                                         OBD_BRW_WRITE, 0, 0, 0, 0);
                 if (rc != 0) { /* async failed, try sync.. */
                         struct obd_sync_io_container *osic;
                         osic_init(&osic);
 
                         llap->llap_write_queued = 0;
-                        rc = obd_queue_sync_io(exp, lsm, NULL, osic, 
-                                               llap->llap_cookie, 
+                        rc = obd_queue_sync_io(exp, lsm, NULL, osic,
+                                               llap->llap_cookie,
                                                OBD_BRW_WRITE, 0, to, 0);
                         if (rc)
                                 GOTO(free_osic, rc);
@@ -544,14 +545,13 @@ static int ll_page_matches(struct page *page)
         }
         RETURN(matches);
 }
-  
-static int ll_issue_page_read(struct obd_export *exp, 
-                              struct ll_async_page *llap, 
-                              int defer_uptodate)
-{ 
+
+static int ll_issue_page_read(struct obd_export *exp,
+                              struct ll_async_page *llap, int defer_uptodate)
+{
         struct page *page = llap->llap_page;
         int rc;
-  
+
         /* we don't issue this page as URGENT so that it can be batched
          * with other pages by the kernel's read-ahead.  We have a strong
          * requirement that readpage() callers must call wait_on_page()
@@ -559,8 +559,8 @@ static int ll_issue_page_read(struct obd_export *exp,
         llap->llap_defer_uptodate = defer_uptodate;
         page_cache_get(page);
         set_bit(LL_PRIVBITS_READ, &page->private); /* see ll_sync_page() */
-        rc = obd_queue_async_io(exp, ll_i2info(page->mapping->host)->lli_smd, 
-                                NULL, llap->llap_cookie, OBD_BRW_READ, 0, 
+        rc = obd_queue_async_io(exp, ll_i2info(page->mapping->host)->lli_smd,
+                                NULL, llap->llap_cookie, OBD_BRW_READ, 0,
                                 PAGE_SIZE, 0, ASYNC_COUNT_STABLE);
         if (rc) {
                 LL_CDEBUG_PAGE(page, "read queueing failed\n");

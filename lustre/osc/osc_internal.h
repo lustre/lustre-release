@@ -44,6 +44,13 @@ struct osc_async_page {
         void                   *oap_caller_data;
 };
 
+struct osc_cache_waiter {
+        struct list_head        ocw_entry;
+        wait_queue_head_t       ocw_waitq;
+        struct osc_async_page   *ocw_oap;
+        int                     ocw_rc;
+};
+
 #define OSCC_FLAG_RECOVERING 1
 #define OSCC_FLAG_CREATING   2
 #define OSCC_FLAG_NOSPC      4 /* can't create more objects on this OST */
@@ -53,6 +60,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 void oscc_init(struct obd_export *exp);
+void osc_wake_cache_waiters(struct client_obd *cli);
 
 #ifdef __KERNEL__
 int lproc_osc_attach_seqstat(struct obd_device *dev);

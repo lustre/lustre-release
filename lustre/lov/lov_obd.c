@@ -558,6 +558,32 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
 
+        /* Recreate a specific object id at the given OST index */ 
+        if (src_oa->o_valid & OBD_MD_FLFLAGS && src_oa->o_flags &
+                                                OBD_FL_RECREATE_OBJS) {
+                 struct lov_stripe_md obj_md;
+                 struct lov_stripe_md *obj_mdp = &obj_md;
+
+                 ost_idx = src_oa->o_nlink;
+                 lsm = *ea;
+                 if (lsm == NULL)
+                        RETURN(-EINVAL);
+                 if (ost_idx >= lov->desc.ld_tgt_count)
+                         RETURN(-EINVAL);
+                 for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                         if (lsm->lsm_oinfo[i].loi_ost_idx == ost_idx) {
+                                 if (lsm->lsm_oinfo[i].loi_id != src_oa->o_id)
+                                         RETURN(-EINVAL);
+                                 break;
+                         }
+                 }
+                 if (i == lsm->lsm_stripe_count)
+                         RETURN(-EINVAL);
+
+                 rc = obd_create(lov->tgts[ost_idx].ltd_exp, src_oa, &obj_mdp, oti);
+                 RETURN(rc);
+        }
+
         ret_oa = obdo_alloc();
         if (!ret_oa)
                 RETURN(-ENOMEM);
@@ -1320,10 +1346,11 @@ static int lov_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static int lov_brw_check(struct lov_obd *lov, struct lov_stripe_md *lsm,
+static int lov_brw_check(struct lov_obd *lov, struct obdo *oa,
+                         struct lov_stripe_md *lsm,
                          obd_count oa_bufs, struct brw_page *pga)
 {
-        int i;
+        int i, rc = 0;
 
         /* The caller just wants to know if there's a chance that this
          * I/O can succeed */
@@ -1342,8 +1369,12 @@ static int lov_brw_check(struct lov_obd *lov, struct lov_stripe_md *lsm,
                         CDEBUG(D_HA, "lov idx %d inactive\n", ost);
                         return -EIO;
                 }
+                rc = obd_brw(OBD_BRW_CHECK, lov->tgts[stripe].ltd_exp, oa,
+                             NULL, 1, &pga[i], NULL);
+                if (rc)
+                        break;
         }
-        return 0;
+        return rc;
 }
 
 static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
@@ -1370,7 +1401,7 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
         lov = &exp->exp_obd->u.lov;
 
         if (cmd == OBD_BRW_CHECK) {
-                rc = lov_brw_check(lov, lsm, oa_bufs, pga);
+                rc = lov_brw_check(lov, src_oa, lsm, oa_bufs, pga);
                 RETURN(rc);
         }
 
@@ -1526,7 +1557,7 @@ static int lov_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
         lov = &exp->exp_obd->u.lov;
 
         if (cmd == OBD_BRW_CHECK) {
-                rc = lov_brw_check(lov, lsm, oa_bufs, pga);
+                rc = lov_brw_check(lov, oa, lsm, oa_bufs, pga);
                 RETURN(rc);
         }
 
@@ -1707,24 +1738,24 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* so the callback doesn't need the lsm */ 
         lap->lap_loi_id = loi->loi_id;
 
-        rc = obd_prep_async_page(lov->tgts[loi->loi_ost_idx].ltd_exp, 
+        rc = obd_prep_async_page(lov->tgts[loi->loi_ost_idx].ltd_exp,
                                  lsm, loi, page, lap->lap_sub_offset,
-                                 &lov_async_page_ops, lap, 
+                                 &lov_async_page_ops, lap,
                                  &lap->lap_sub_cookie);
         if (rc) {
                 OBD_FREE(lap, sizeof(*lap));
                 RETURN(rc);
         }
-        CDEBUG(D_CACHE, "lap %p page %p cookie %p off "LPU64"\n", lap, page, 
+        CDEBUG(D_CACHE, "lap %p page %p cookie %p off "LPU64"\n", lap, page,
                lap->lap_sub_cookie, offset);
         *res = lap;
         RETURN(0);
 }
 
-static int lov_queue_async_io(struct obd_export *exp, 
-                              struct lov_stripe_md *lsm, 
-                              struct lov_oinfo *loi, void *cookie, 
-                              int cmd, obd_off off, int count, 
+static int lov_queue_async_io(struct obd_export *exp,
+                              struct lov_stripe_md *lsm,
+                              struct lov_oinfo *loi, void *cookie,
+                              int cmd, obd_off off, int count,
                               obd_flag brw_flags, obd_flag async_flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
@@ -1766,16 +1797,16 @@ static int lov_set_async_flags(struct obd_export *exp,
                 RETURN(PTR_ERR(lap));
 
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
-        rc = obd_set_async_flags(lov->tgts[loi->loi_ost_idx].ltd_exp, 
+        rc = obd_set_async_flags(lov->tgts[loi->loi_ost_idx].ltd_exp,
                                  lsm, loi, lap->lap_sub_cookie, async_flags);
         RETURN(rc);
 }
 
-static int lov_queue_sync_io(struct obd_export *exp, 
-                             struct lov_stripe_md *lsm, 
-                             struct lov_oinfo *loi, 
+static int lov_queue_sync_io(struct obd_export *exp,
+                             struct lov_stripe_md *lsm,
+                             struct lov_oinfo *loi,
                              struct obd_sync_io_container *osic, void *cookie,
-                             int cmd, obd_off off, int count, 
+                             int cmd, obd_off off, int count,
                              obd_flag brw_flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
@@ -1792,17 +1823,17 @@ static int lov_queue_sync_io(struct obd_export *exp,
                 RETURN(PTR_ERR(lap));
 
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
-        rc = obd_queue_sync_io(lov->tgts[loi->loi_ost_idx].ltd_exp, lsm, loi, 
-                               osic, lap->lap_sub_cookie, cmd, off, count, 
+        rc = obd_queue_sync_io(lov->tgts[loi->loi_ost_idx].ltd_exp, lsm, loi,
+                               osic, lap->lap_sub_cookie, cmd, off, count,
                                brw_flags);
         RETURN(rc);
 }
 
 /* this isn't exactly optimal.  we may have queued sync io in oscs on
- * all stripes, but we don't record that fact at queue time.  so we 
+ * all stripes, but we don't record that fact at queue time.  so we
  * trigger sync io on all stripes. */
-static int lov_trigger_sync_io(struct obd_export *exp, 
-                               struct lov_stripe_md *lsm, 
+static int lov_trigger_sync_io(struct obd_export *exp,
+                               struct lov_stripe_md *lsm,
                                struct lov_oinfo *loi,
                                struct obd_sync_io_container *osic)
 {
@@ -1814,7 +1845,7 @@ static int lov_trigger_sync_io(struct obd_export *exp,
         if (lsm_bad_magic(lsm))
                 RETURN(-EINVAL);
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; 
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
              i++, loi++) {
                 err = obd_trigger_sync_io(lov->tgts[loi->loi_ost_idx].ltd_exp, 
                                           lsm, loi, osic);
@@ -2162,6 +2193,9 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 break;
         case LL_IOC_LOV_GETSTRIPE:
                 rc = lov_getstripe(exp, karg, uarg);
+                break;
+        case LL_IOC_LOV_SETEA:
+                rc = lov_setea(exp, karg, uarg);
                 break;
         default: {
                 int set = 0;

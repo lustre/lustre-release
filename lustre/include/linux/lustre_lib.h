@@ -431,6 +431,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
 #define OBD_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
+#define OBD_IOC_LOV_SETEA                _IOW ('f', 156, long)
 
 #define OBD_IOC_MOUNTOPT               _IOWR('f', 170, long)
 

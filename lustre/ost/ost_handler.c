@@ -305,12 +305,13 @@ static int get_per_page_niobufs(struct obd_ioobj *ioo, int nioo,
                                 LASSERT(page < npages);
                                 pp_rnb[page].len = pnob;
                                 pp_rnb[page].offset = off;
-                                pp_rnb[page].flags = rnb->flags;
+                                pp_rnb[page].flags = rnb[rnbidx].flags;
 
-                                CDEBUG(D_PAGE, "   obj %d id "LPX64
-                                       "page %d(%d) "LPX64" for %d\n",
+                                CDEBUG(0, "   obj %d id "LPX64
+                                       "page %d(%d) "LPX64" for %d, flg %x\n",
                                        i, ioo[i].ioo_id, obj_pages, page,
-                                       pp_rnb[page].offset, pp_rnb[page].len);
+                                       pp_rnb[page].offset, pp_rnb[page].len,
+                                       pp_rnb[page].flags);
                                 page++;
                                 obj_pages++;
 
@@ -383,9 +384,6 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 CERROR("Missing/short ost_body\n");
                 GOTO(out, rc = -EFAULT);
         }
-
-        /* BUG 974: when we send back cache grants, don't clear this flag */
-        body->oa.o_valid &= ~OBD_MD_FLRDEV;
 
         ioo = lustre_swab_reqbuf(req, 1, sizeof(*ioo), lustre_swab_obd_ioobj);
         if (ioo == NULL) {
@@ -478,15 +476,15 @@ static int ost_brw_read(struct ptlrpc_request *req)
         rc = obd_commitrw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
                           ioo, npages, local_nb, &oti);
 
-        repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
-        memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
+        if (rc == 0) {
+                repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
+                memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
 
 #if CHECKSUM_BULK
-        if (rc == 0) {
-                repbody->oa.o_nlink = ost_checksum_bulk(desc);
+                repbody->oa.o_cksum = ost_checksum_bulk(desc);
                 repbody->oa.o_valid |= OBD_MD_FLCKSUM;
-        }
 #endif
+        }
 
  out_bulk:
         ptlrpc_free_bulk(desc);
@@ -563,9 +561,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 CERROR("Missing/short ost_body\n");
                 GOTO(out, rc = -EFAULT);
         }
-
-        /* BUG 974: when we send back cache grants, don't clear this flag */
-        body->oa.o_valid &= ~OBD_MD_FLRDEV;
 
         LASSERT_REQSWAB(req, 1);
         objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);
@@ -655,7 +650,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 #if CHECKSUM_BULK
         if (rc == 0 && (body->oa.o_valid & OBD_MD_FLCKSUM) != 0) {
                 static int cksum_counter;
-                obd_count client_cksum = body->oa.o_nlink;
+                obd_count client_cksum = body->oa.o_cksum;
                 obd_count cksum = ost_checksum_bulk(desc);
 
                 portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
@@ -665,7 +660,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                LPX64" (%s)\n", client_cksum, cksum,
                                req->rq_connection->c_peer.peer_nid, str);
                         cksum_counter = 1;
-                        repbody->oa.o_nlink = cksum;
+                        repbody->oa.o_cksum = cksum;
                 } else {
                         cksum_counter++;
                         if ((cksum_counter & (-cksum_counter)) == cksum_counter)
@@ -946,11 +941,12 @@ static int ost_handle(struct ptlrpc_request *req)
         oti_init(oti, req);
 
         switch (req->rq_reqmsg->opc) {
-        case OST_CONNECT:
+        case OST_CONNECT: {
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
                 rc = target_handle_connect(req, ost_handle);
                 break;
+        }
         case OST_DISCONNECT:
                 CDEBUG(D_INODE, "disconnect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_DISCONNECT_NET, 0);

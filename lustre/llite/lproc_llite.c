@@ -105,6 +105,28 @@ static int ll_rd_kbytesfree(char *page, char **start, off_t off, int count,
         return rc;
 }
 
+static int ll_rd_kbytesavail(char *page, char **start, off_t off, int count,
+                             int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct obd_statfs osfs;
+        int rc;
+
+        LASSERT(sb != NULL);
+        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        if (!rc) {
+                __u32 blk_size = osfs.os_bsize >> 10;
+                __u64 result = osfs.os_bavail;
+
+                while (blk_size >>= 1)
+                        result <<= 1;
+
+                *eof = 1;
+                rc = snprintf(page, count, LPU64"\n", result);
+        }
+        return rc;
+}
+
 static int ll_rd_filestotal(char *page, char **start, off_t off, int count,
                             int *eof, void *data)
 {
@@ -206,6 +228,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "blocksize",    ll_rd_blksize,          0, 0 },
         { "kbytestotal",  ll_rd_kbytestotal,      0, 0 },
         { "kbytesfree",   ll_rd_kbytesfree,       0, 0 },
+        { "kbytesavail",  ll_rd_kbytesavail,      0, 0 },
         { "filestotal",   ll_rd_filestotal,       0, 0 },
         { "filesfree",    ll_rd_filesfree,        0, 0 },
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },

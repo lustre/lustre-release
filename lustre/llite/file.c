@@ -690,26 +690,78 @@ out:
         RETURN(retval);
 }
 
-static int ll_lov_setstripe(struct inode *inode, struct file *file,
-                            unsigned long arg)
+static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
+                               unsigned long arg)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct obd_export *exp = ll_i2obdexp(inode);
+        struct ll_recreate_obj ucreatp;
+        struct obd_trans_info oti = { 0 };
+        struct obdo *oa = NULL;
+        int lsm_size;
+        int rc = 0;
+        struct lov_stripe_md *lsm, *lsm2;
+        ENTRY;
+
+        if (!capable (CAP_SYS_ADMIN))
+                RETURN(-EPERM);
+
+        rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg, 
+                            sizeof(struct ll_recreate_obj));
+        if (rc) {
+                RETURN(-EFAULT);
+        }
+        oa = obdo_alloc();
+        if (oa == NULL) {
+                RETURN(-ENOMEM);
+        }
+
+        down(&lli->lli_open_sem);
+        lsm = lli->lli_smd;
+        if (lsm == NULL) {
+                up(&lli->lli_open_sem);
+                obdo_free(oa);
+                RETURN (-ENOENT);
+        }
+        lsm_size = sizeof(*lsm) + (sizeof(struct lov_oinfo) *
+                   (lsm->lsm_stripe_count));
+
+        OBD_ALLOC(lsm2, lsm_size);
+        if (lsm2 == NULL) {
+                up(&lli->lli_open_sem);
+                obdo_free(oa);
+                RETURN(-ENOMEM);
+        }
+
+        oa->o_id = ucreatp.lrc_id; 
+        oa->o_nlink = ucreatp.lrc_ost_idx;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+        oa->o_flags |= OBD_FL_RECREATE_OBJS;
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                   OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
+        oti.oti_objid = NULL;
+        memcpy(lsm2, lsm, lsm_size);
+        rc = obd_create(exp, oa, &lsm2, &oti);
+
+        up(&lli->lli_open_sem);
+        OBD_FREE(lsm2, lsm_size);
+        obdo_free(oa);
+        RETURN (rc);
+}
+
+static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
+                                    int flags, struct lov_user_md *lum, int lum_size)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct file *f;
         struct obd_export *exp = ll_i2obdexp(inode);
         struct lov_stripe_md *lsm;
-        struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = FMODE_WRITE};
-        struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
+        struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
         struct ptlrpc_request *req = NULL;
+        int rc = 0;
         struct lustre_md md;
-        int rc;
         ENTRY;
-
-        /* Bug 1152: copy properly when this is no longer true */
-        LASSERT(sizeof(lum) == sizeof(*lump));
-        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lump->lmm_objects[0]));
-        rc = copy_from_user(&lum, lump, sizeof(lum));
-        if (rc)
-                RETURN(-EFAULT);
 
         down(&lli->lli_open_sem);
         lsm = lli->lli_smd;
@@ -727,7 +779,7 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
         f->f_dentry = file->f_dentry;
         f->f_vfsmnt = file->f_vfsmnt;
 
-        rc = ll_intent_file_open(f, &lum, sizeof(lum), &oit);
+        rc = ll_intent_file_open(f, lum, lum_size, &oit);
         if (rc)
                 GOTO(out, rc);
         if (it_disposition(&oit, DISP_LOOKUP_NEG))
@@ -756,6 +808,55 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
         up(&lli->lli_open_sem);
         if (req != NULL)
                 ptlrpc_req_finished(req);
+        RETURN(rc);
+}
+
+static int ll_lov_setea(struct inode *inode, struct file *file,
+                            unsigned long arg)
+{
+        int flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
+        struct lov_user_md  *lump;
+        int lum_size = sizeof(struct lov_user_md) + 
+                       sizeof(struct lov_user_ost_data);
+        int rc;
+        ENTRY;
+
+        if (!capable (CAP_SYS_ADMIN))
+                RETURN(-EPERM);
+
+        OBD_ALLOC(lump, lum_size);
+        if (lump == NULL) {
+                RETURN(-ENOMEM);
+        }
+        rc = copy_from_user(lump, (struct lov_user_md  *)arg, 
+                            lum_size);
+        if (rc) {
+                OBD_FREE(lump, lum_size);
+                RETURN(-EFAULT);
+        }
+
+        rc = ll_lov_setstripe_ea_info(inode, file, flags, lump, lum_size);
+
+        OBD_FREE(lump, lum_size);
+        RETURN(rc);
+}
+
+static int ll_lov_setstripe(struct inode *inode, struct file *file,
+                            unsigned long arg)
+{
+        struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
+        int rc;
+        int flags = FMODE_WRITE;
+        ENTRY;
+
+        /* Bug 1152: copy properly when this is no longer true */
+        LASSERT(sizeof(lum) == sizeof(*lump));
+        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lump->lmm_objects[0]));
+        rc = copy_from_user(&lum, lump, sizeof(lum));
+        if (rc)
+                RETURN(-EFAULT);
+
+        rc = ll_lov_setstripe_ea_info(inode, file, flags, &lum, sizeof(lum));
         RETURN(rc);
 }
 
@@ -804,8 +905,12 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(0);
         case LL_IOC_LOV_SETSTRIPE:
                 RETURN(ll_lov_setstripe(inode, file, arg));
+        case LL_IOC_LOV_SETEA:
+                RETURN( ll_lov_setea(inode, file, arg) ); 
         case LL_IOC_LOV_GETSTRIPE:
                 RETURN(ll_lov_getstripe(inode, arg));
+        case LL_IOC_RECREATE_OBJ:
+                RETURN(ll_lov_recreate_obj(inode, file, arg));
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
                 RETURN( ll_iocontrol(inode, file, cmd, arg) );

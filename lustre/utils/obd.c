@@ -171,10 +171,10 @@ char *obdo_print(struct obdo *obd)
         sprintf(buf, "id: "LPX64"\ngrp: "LPX64"\natime: "LPU64"\nmtime: "LPU64
                 "\nctime: "LPU64"\nsize: "LPU64"\nblocks: "LPU64
                 "\nblksize: %u\nmode: %o\nuid: %d\ngid: %d\nflags: %x\n"
-                "obdflags: %x\nnlink: %d,\nvalid %x\n",
+                "misc: %x\nnlink: %d,\nvalid %x\n",
                 obd->o_id, obd->o_gr, obd->o_atime, obd->o_mtime, obd->o_ctime,
                 obd->o_size, obd->o_blocks, obd->o_blksize, obd->o_mode,
-                obd->o_uid, obd->o_gid, obd->o_flags, obd->o_obdflags,
+                obd->o_uid, obd->o_gid, obd->o_flags, obd->o_misc,
                 obd->o_nlink, obd->o_valid);
         return strdup(buf);
 }
@@ -1353,7 +1353,7 @@ int jt_obd_test_brw(int argc, char **argv)
 
         cmd = write ? OBD_IOC_BRW_WRITE : OBD_IOC_BRW_READ;
         for (i = 1, next_count = verbose; i <= count; i++) {
-                data.ioc_obdo1.o_valid &= ~(OBD_MD_FLBLOCKS|OBD_MD_FLRDEV);
+                data.ioc_obdo1.o_valid &= ~(OBD_MD_FLBLOCKS|OBD_MD_FLGRANT);
                 IOC_PACK(argv[0], data);
                 rc = l2_ioctl(OBD_DEV_ID, cmd, buf);
                 SHMEM_BUMP();

@@ -633,9 +633,9 @@ int portals_debug_mark_buffer(char *text)
         if (debug_buf == NULL)
                 return -EINVAL;
 
-        CDEBUG(0, "********************************************************\n");
+        CDEBUG(D_TRACE,"***************************************************\n");
         CWARN("DEBUG MARKER: %s\n", text);
-        CDEBUG(0, "********************************************************\n");
+        CDEBUG(D_TRACE,"***************************************************\n");
 
         return 0;
 }

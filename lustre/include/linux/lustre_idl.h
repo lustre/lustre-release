@@ -265,7 +265,6 @@ typedef uint32_t        obd_blksize;
 typedef uint32_t        obd_mode;
 typedef uint32_t        obd_uid;
 typedef uint32_t        obd_gid;
-typedef uint64_t        obd_rdev;
 typedef uint32_t        obd_flag;
 typedef uint32_t        obd_count;
 
@@ -274,6 +273,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_DELORPHAN    (0x00000004) /* if set in o_flags delete orphans */
 #define OBD_FL_NORPC        (0x00000008) // if set in o_flags set in OSC not OST
 #define OBD_FL_IDONLY       (0x00000010) // if set in o_flags only adjust obj id
+#define OBD_FL_RECREATE_OBJS (0x00000020) // recreate missing obj
 
 #define OBD_INLINESZ    64
 
@@ -285,20 +285,25 @@ struct obdo {
         obd_time                o_mtime;
         obd_time                o_ctime;
         obd_size                o_size;
-        obd_blocks              o_blocks; /* brw: clients sent cached bytes */
-        obd_rdev                o_rdev; /* brw: clients/servers sent grant */
+        obd_blocks              o_blocks;       /* brw: cli sent cached bytes */
+        obd_size                o_grant;
         obd_blksize             o_blksize;      /* optimal IO blocksize */
-        obd_mode                o_mode;
+        obd_mode                o_mode;         /* brw: cli sent cache remain */
         obd_uid                 o_uid;
         obd_gid                 o_gid;
         obd_flag                o_flags;
-        obd_count               o_nlink; /* brw: checksum */
+        obd_count               o_nlink;        /* brw: checksum */
         obd_count               o_generation;
         obd_flag                o_valid;        /* hot fields in this obdo */
-        obd_flag                o_obdflags;
+        obd_count               o_misc;
         __u32                   o_easize;       /* epoch in ost writes */
         char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
 };
+
+#define o_dirty   o_blocks
+#define o_undirty o_mode
+#define o_dropped o_misc
+#define o_cksum   o_nlink
 
 extern void lustre_swab_obdo (struct obdo *o);
 
@@ -357,7 +362,6 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLUID    (0x00000200)    /* user ID */
 #define OBD_MD_FLGID    (0x00000400)    /* group ID */
 #define OBD_MD_FLFLAGS  (0x00000800)    /* flags word */
-#define OBD_MD_FLOBDFLG (0x00001000)
 #define OBD_MD_FLNLINK  (0x00002000)    /* link count */
 #define OBD_MD_FLGENER  (0x00004000)    /* generation number */
 #define OBD_MD_FLINLINE (0x00008000)    /* inline data */
@@ -372,7 +376,8 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLGROUP  (0x01000000)    /* group */
 #define OBD_MD_FLIFID   (0x02000000)    /* ->ost write inline fid */
 #define OBD_MD_FLEPOCH  (0x04000000)    /* ->ost write easize is epoch */
-#define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
+#define OBD_MD_FLGRANT  (0x08000000)    /* ost preallocation space grant */
+#define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM|\
                            OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE))
 
@@ -411,10 +416,10 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_READ       0x01
 #define OBD_BRW_WRITE      0x02
 #define OBD_BRW_RWMASK     (OBD_BRW_READ | OBD_BRW_WRITE)
-#define OBD_BRW_CREATE     0x04
 #define OBD_BRW_SYNC       0x08
 #define OBD_BRW_CHECK      0x10
 #define OBD_BRW_FROM_GRANT 0x20 /* the osc manages this under llite */
+#define OBD_BRW_GRANTED    0x40 /* the ost manages this */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -495,6 +500,11 @@ struct ll_fid {
         __u64 id;
         __u32 generation;
         __u32 f_type;
+};
+
+struct ll_recreate_obj {
+        __u64 lrc_id;
+        __u32 lrc_ost_idx;
 };
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
@@ -588,6 +598,7 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
+#define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
 
 struct mds_rec_create {
         __u32           cr_opcode;

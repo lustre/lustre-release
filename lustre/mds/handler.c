@@ -574,7 +574,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                 if (inode->i_size + 1 != body->eadatasize)
                         CERROR("symlink size: %Lu, reply space: %d\n",
                                inode->i_size + 1, body->eadatasize);
-                size[bufcount] = MIN(inode->i_size + 1, body->eadatasize);
+                size[bufcount] = min_t(int, inode->i_size+1, body->eadatasize);
                 bufcount++;
                 CDEBUG(D_INODE, "symlink size: %Lu, reply space: %d\n",
                        inode->i_size + 1, body->eadatasize);
@@ -784,7 +784,15 @@ out_pop:
 static int mds_obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                           unsigned long max_age)
 {
-        return fsfilt_statfs(obd, obd->u.mds.mds_sb, osfs);
+        int rc;
+
+        spin_lock(&obd->obd_osfs_lock);
+        rc = fsfilt_statfs(obd, obd->u.mds.mds_sb, max_age);
+        if (rc == 0)
+                memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
+        spin_unlock(&obd->obd_osfs_lock);
+
+        return rc;
 }
 
 static int mds_statfs(struct ptlrpc_request *req)
@@ -800,7 +808,8 @@ static int mds_statfs(struct ptlrpc_request *req)
         }
 
         /* We call this so that we can cache a bit - 1 jiffie worth */
-        rc = obd_statfs(obd, lustre_msg_buf(req->rq_repmsg,0,size),jiffies-HZ);
+        rc = mds_obd_statfs(obd, lustre_msg_buf(req->rq_repmsg, 0, size),
+                            jiffies - HZ);
         if (rc) {
                 CERROR("mds_obd_statfs failed: rc %d\n", rc);
                 GOTO(out, rc);

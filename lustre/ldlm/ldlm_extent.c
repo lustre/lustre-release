@@ -78,7 +78,7 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
                                 EXIT;
                                 return;
                         }
-                        new_ex->start = MIN(lock->l_policy_data.l_extent.end+1,
+                        new_ex->start = min(lock->l_policy_data.l_extent.end+1,
                                             req_start);
                 }
 

@@ -166,12 +166,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 lli->lli_st_gid = src->o_gid;
         if (valid & OBD_MD_FLFLAGS)
                 lli->lli_st_flags = src->o_flags;
-        if (valid & OBD_MD_FLNLINK)
-                lli->lli_st_nlink = src->o_nlink;
         if (valid & OBD_MD_FLGENER)
                 lli->lli_st_generation = src->o_generation;
-        if (valid & OBD_MD_FLRDEV)
-                lli->lli_st_rdev = to_kdev_t(src->o_rdev);
 }
 
 #define S_IRWXUGO       (S_IRWXU|S_IRWXG|S_IRWXO)
@@ -231,17 +227,9 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 dst->o_flags = lli->lli_st_flags;
                 newvalid |= OBD_MD_FLFLAGS;
         }
-        if (valid & OBD_MD_FLNLINK) {
-                dst->o_nlink = lli->lli_st_nlink;
-                newvalid |= OBD_MD_FLNLINK;
-        }
         if (valid & OBD_MD_FLGENER) {
                 dst->o_generation = lli->lli_st_generation;
                 newvalid |= OBD_MD_FLGENER;
-        }
-        if (valid & OBD_MD_FLRDEV) {
-                dst->o_rdev = (__u32)kdev_t_to_nr(lli->lli_st_rdev);
-                newvalid |= OBD_MD_FLRDEV;
         }
 
         dst->o_valid |= newvalid;

@@ -115,7 +115,7 @@ do {                                                                          \
         if (portal_cerror == 0)                                               \
                 break;                                                        \
         CHECK_STACK(CDEBUG_STACK);                                            \
-        if (!(mask) || ((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||          \
+        if (((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||                     \
             (portal_debug & (mask) &&                                         \
              portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \

@@ -164,9 +164,9 @@ struct filter_obd {
 
         struct list_head     fo_export_list;
         int                  fo_subdir_count;
-        spinlock_t           fo_grant_lock;       /* protects tot_granted */
-        obd_size             fo_tot_granted;
-        obd_size             fo_tot_cached;
+        obd_size             fo_tot_dirty;      /* protected by obd_osfs_lock */
+        obd_size             fo_tot_granted;    /* all values in bytes */
+        obd_size             fo_tot_pending;
 
         obd_size             fo_readcache_max_filesize;
 
@@ -177,7 +177,7 @@ struct filter_obd {
         struct ptlrpc_client fo_mdc_client;
 #endif
         struct file        **fo_last_objid_files;
-        __u64               *fo_last_objids; //last created object ID for groups
+        __u64               *fo_last_objids; /* last created objid for groups */
 
         struct semaphore     fo_alloc_lock;
 
@@ -210,18 +210,14 @@ struct client_obd {
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
 
-        struct semaphore         cl_dirty_sem;
-        obd_size                 cl_dirty;  /* all _dirty_ in bytes */
-        obd_size                 cl_dirty_granted; /* from ost */
-        obd_size                 cl_dirty_max; /* allowed w/o rpc */
-        struct list_head         cl_cache_waiters;
-
         struct obd_device       *cl_mgmtcli_obd;
 
-        /* this is just to keep existing infinitely caching behaviour between
-         * clients and OSTs that don't have the grant code in yet.. it can
-         * be yanked once everything speaks grants */
-        char                     cl_ost_can_grant;
+        /* the grant values are protected by loi_list_lock below */
+        long                     cl_dirty;         /* all _dirty_ in bytes */
+        long                     cl_dirty_max;     /* allowed w/o rpc */
+        long                     cl_avail_grant;   /* bytes of credit for ost */
+        long                     cl_lost_grant;    /* lost credits (trunc) */
+        struct list_head         cl_cache_waiters; /* waiting for cache/grant */
 
         /* keep track of objects that have lois that contain pages which
          * have been queued for async brw.  this lock also protects the
@@ -372,10 +368,10 @@ struct niobuf_local {
         __u64 offset;
         __u32 len;
         __u32 flags;
-        int rc;
         struct page *page;
         struct dentry *dentry;
-        unsigned long start;
+        int lnb_grant_used;
+        int rc;
 };
 
 
@@ -465,6 +461,7 @@ struct obd_device {
         spinlock_t             obd_dev_lock;
         __u64                  obd_last_committed;
         struct fsfilt_operations *obd_fsops;
+        spinlock_t              obd_osfs_lock;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_statfs       obd_osfs;
         unsigned long           obd_osfs_age;

@@ -1,6 +1,8 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
        * bug fixes
+	- account for cache space usage on clients to avoid data loss (974)
+	- lfsck support in lustre kernel code (2349)
 	- reduce journal credits needed for BRW writes (2370)
 	- orphan handling to avoid losing space on client/server crashes
 	- ptlrpcd can be blocked, stopping ALL progress (2477)

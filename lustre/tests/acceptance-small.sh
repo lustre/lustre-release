@@ -3,7 +3,8 @@
 # the CVS HEAD are allowed.
 set -vxe
 
-[ "$CONFIGS" -a -z "$SANITYN" ] && SANITYN=no
+PATH=`dirname $0`/../utils:$PATH
+
 [ "$CONFIGS" ] || CONFIGS="local lov"
 [ "$MAX_THREADS" ] || MAX_THREADS=10
 if [ -z "$THREADS" ]; then
@@ -15,6 +16,7 @@ fi
 [ "$RSIZE" ] || RSIZE=64
 [ "$UID" ] || UID=1000
 [ "$MOUNT" ] || MOUNT=/mnt/lustre
+[ "$MOUNT2" ] || MOUNT2=${MOUNT}2
 [ "$TMP" ] || TMP=/tmp
 [ "$COUNT" ] || COUNT=1000
 #[ "$DEBUG_LVL" ] || DEBUG_LVL=0x370200
@@ -110,22 +112,45 @@ for NAME in $CONFIGS; do
 	if [ "$FSX" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF
-		./fsx -W -c 50 -p 1000 -P $TMP -l 1024000 -N $(($COUNT * 100)) $MOUNT/fsxfile
+		./fsx -W -c 50 -p 1000 -P $TMP -l $SIZE \
+			-N $(($COUNT * 100)) $MOUNT/fsxfile
+		$DEBUG_ON
+		sh llmountcleanup.sh
+		sh llrmount.sh
+	fi	
+	if [ "$SANITYN" != "no" ]; then
+		mount | grep $MOUNT || sh llmount.sh
+		$DEBUG_OFF
+
+		mkdir -p $MOUNT2
+		case $NAME in
+		local|lov)
+			MDSNODE=`hostname`
+			MDSNAME=mds1
+			CLIENT=client
+			;;
+		*)	# we could extract this from $NAME.xml somehow
+			;;
+		esac
+		if [ "$MDSNODE" -a "$MDSNAME" -a "$CLIENT" ]; then
+			llmount $MDSNODE:/$MDSNAME/$CLIENT $MOUNT2
+			SANITYLOG=$TMP/sanity.log START=: CLEAN=: sh sanityN.sh
+			umount $MOUNT2
+		else
+			echo "don't know \$MDSNODE, \$MDSNAME, \$CLIENT"
+			echo "can't mount2 for '$NAME', skipping sanityN.sh"
+		fi
+
 		$DEBUG_ON
 		sh llmountcleanup.sh
 		#sh llrmount.sh
-	fi	
+	fi
+
 	mount | grep $MOUNT && sh llmountcleanup.sh
 done
 
 if [ "$REPLAY_SINGLE" != "no" ]; then
 	sh replay-single.sh
-fi
-if [ "$SANITYN" != "no" ]; then
-	export NAME=mount2
-	mount | grep $MOUNT || sh llmount.sh
-	sh sanityN.sh
-	mount | grep $MOUNT && sh llmountcleanup.sh
 fi
 
 if [ "$CONF_SANITY" != "no" ]; then

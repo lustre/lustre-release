@@ -1414,6 +1414,8 @@ do_dirty_record() {
 }
 test_45() {
 	f="$DIR/f45"
+	# Obtain grants from OST if it supports it
+	echo blah > ${f}_grant
 	stop_kupdated
 	sync
 	do_dirty_record "echo blah > $f"
@@ -1733,6 +1735,17 @@ test_63() {
 	true
 }
 run_test 63 "Verify osic_wait interruption does not crash ======"
+
+test_64a () {
+	df $DIR
+	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/cur*
+}
+run_test 64a "verify filter grant calculations (in kernel) ======"
+
+test_64b () {
+	sh oos.sh $MOUNT
+}
+run_test 64b "check out-of-space detection on client ============"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

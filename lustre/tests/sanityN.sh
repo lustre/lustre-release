@@ -91,7 +91,7 @@ run_test() {
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 error () {
-	log "FAIL: $@"
+	log "FAIL: $TESTNAME $@"
 	if [ "$SANITYLOG" ]; then
 		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
 	else
@@ -284,7 +284,14 @@ test_13() {	# bug 2451 - directory coherency
 }
 run_test 13 "test directory page revocation ===================="
 
+test_14() {	# bug 974 - ENOSPC
+	env
+	sh oos2.sh $MOUNT1 $MOUNT2
+}
+run_test 14 "test out-of-space with multiple writers ==========="
+
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
+
 echo '=========================== finished ==============================='
 [ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true
