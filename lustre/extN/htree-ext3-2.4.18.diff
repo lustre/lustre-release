@@ -57,7 +57,7 @@
   */
  
  #include <linux/fs.h>
-@@ -38,6 +42,439 @@
+@@ -38,6 +42,440 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -132,10 +132,10 @@
 +
 +struct dx_root
 +{
-+	struct fake_dirent fake1;
-+	char dot1[4];
-+	struct fake_dirent fake2;
-+	char dot2[4];
++	struct fake_dirent dot;
++	char dot_name[4];
++	struct fake_dirent dotdot;
++	char dotdot_name[4];
 +	struct dx_root_info
 +	{
 +		le_u32 reserved_zero;
@@ -237,13 +237,14 @@
 +
 +static inline unsigned dx_root_limit (struct inode *dir, unsigned infosize)
 +{
-+	unsigned entry_space = dir->i_sb->s_blocksize - 24 - infosize;
++	unsigned entry_space = dir->i_sb->s_blocksize - EXT3_DIR_REC_LEN(1) -
++		EXT3_DIR_REC_LEN(2) - infosize;
 +	return 0? 20: entry_space / sizeof(struct dx_entry);
 +}
 +
 +static inline unsigned dx_node_limit (struct inode *dir)
 +{
-+	unsigned entry_space = dir->i_sb->s_blocksize - sizeof(struct fake_dirent);
++	unsigned entry_space = dir->i_sb->s_blocksize - EXT3_DIR_REC_LEN(0);
 +	return 0? 22: entry_space / sizeof(struct dx_entry);
 +}
 +
@@ -1036,7 +1037,7 @@
 +			de = de2;
 +		de->rec_len = cpu_to_le16(data1 + blocksize - (char *) de);
 +		/* Initialize the root; the dot dirents already exist */
-+		de = (ext3_dirent *) (&root->fake2);
++		de = (ext3_dirent *) (&root->dotdot);
 +		de->rec_len = cpu_to_le16(blocksize - EXT3_DIR_REC_LEN(2));
 +		memset (&root->info, 0, sizeof(root->info));
 +		root->info.info_length = sizeof(root->info);
