@@ -50,7 +50,6 @@ int client_import_connect(struct lustre_handle *dlm_handle,
                        obd->obd_uuid.uuid,
                        (char *)dlm_handle};
         int msg_flags;
-        unsigned int flags;
 
         ENTRY;
         down(&cli->cl_sem);
