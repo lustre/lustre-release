@@ -158,21 +158,9 @@ static int handle_incoming_request(struct obd_device *obddev,
          * We don't know how to find that from here. */
         peer.peer_ni = svc->srv_self.peer_ni;
 
-        if (request.rq_reqmsg->conn) {
+        if (request.rq_reqmsg->conn2) {
                 request.rq_connection =
-                        (void *)(unsigned long)request.rq_reqmsg->conn;
-                if (request.rq_reqmsg->token !=
-                    request.rq_connection->c_token) {
-                        struct ptlrpc_connection *tmp;
-                        tmp = ptlrpc_get_connection(&peer);
-                        CERROR("rq_reqmsg->conn: %p\n", request.rq_connection);
-                        CERROR("real connection: %p\n", tmp);
-                        CERROR("rq_reqmsg->token: %Lu\n",
-                               (unsigned long long)request.rq_reqmsg->token);
-                        CERROR("real token      : %Lu\n",
-                               (unsigned long long)tmp->c_token);
-                        LBUG();
-                }
+                        (void *)(unsigned long)request.rq_reqmsg->conn2;
                 ptlrpc_connection_addref(request.rq_connection);
         } else {
                 /*

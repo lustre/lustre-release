@@ -52,8 +52,9 @@ struct lustre_handle {
 };
 
 struct lustre_msg {
-        __u64 conn;  /* pointer to ptlrpc_connection */
-        __u64 token; /* security token */
+        __u64 addr;
+        __u64 cookie; /* security token */
+        __u64 conn2; /* pointer to ptlrpc_connection: should go */
 
         __u64 last_rcvd;
         __u64 last_committed;

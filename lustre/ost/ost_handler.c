@@ -198,16 +198,16 @@ static int ost_connect(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        conn.addr = req->rq_reqmsg->conn;
-        conn.cookie = req->rq_reqmsg->token;
+        conn.addr = req->rq_reqmsg->addr;
+        conn.cookie = req->rq_reqmsg->cookie;
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
         req->rq_status = obd_connect(&conn, target);
-        req->rq_repmsg->conn = conn.addr;
-        req->rq_repmsg->token = conn.cookie;
+        req->rq_repmsg->addr = conn.addr;
+        req->rq_repmsg->cookie = conn.cookie;
 
         CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repmsg, conn.oc_id);
         body = lustre_msg_buf(req->rq_repmsg, 0);

@@ -177,8 +177,8 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         request->rq_type = PTL_RPC_TYPE_REQUEST;
         request->rq_connection = ptlrpc_connection_addref(conn);
 
-        request->rq_reqmsg->conn = (__u64)(unsigned long)conn->c_remote_conn;
-        request->rq_reqmsg->token = conn->c_remote_token;
+        request->rq_reqmsg->conn2 = (__u64)(unsigned long)conn->c_remote_conn;
+        //request->rq_reqmsg->token = conn->c_remote_token;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->type = HTON__u32(PTL_RPC_MSG_REQUEST);
         request->rq_reqmsg->target_id = HTON__u32(cl->cli_target_devno);
@@ -197,6 +197,17 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         request->rq_client = cl;
 
         RETURN(request);
+}
+struct ptlrpc_request *ptlrpc_prep_req2(struct ptlrpc_client *cl,
+                                        struct ptlrpc_connection *conn,
+                                        struct lustre_handle *handle, 
+                                       int opcode, int count, int *lengths,
+                                       char **bufs)
+{
+        struct ptlrpc_request *req;
+        req = ptlrpc_prep_req(cl, conn, opcode, count, lengths, bufs);
+        ptlrpc_hdl2req(req, handle);
+        return req;
 }
 
 void ptlrpc_req_finished(struct ptlrpc_request *request)

@@ -248,6 +248,17 @@ struct ptlrpc_service {
         int (*srv_handler)(struct ptlrpc_request *req);
 };
 
+static inline void ptlrpc_hdl2req(struct ptlrpc_request *req, struct lustre_handle *h)
+{
+        req->rq_reqmsg->addr = h->addr;
+        req->rq_reqmsg->cookie = h->cookie;
+}
+struct ptlrpc_request *ptlrpc_prep_req2(struct ptlrpc_client *cl,
+                                        struct ptlrpc_connection *conn,
+                                        struct lustre_handle *handle, 
+                                       int opcode, int count, int *lengths,
+                                        char **bufs);
+
 typedef void (*bulk_callback_t)(struct ptlrpc_bulk_desc *, void *);
 
 typedef int (*svc_handler_t)(struct ptlrpc_request *req);

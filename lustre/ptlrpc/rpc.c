@@ -184,6 +184,7 @@ EXPORT_SYMBOL(ptlrpc_replay_req);
 EXPORT_SYMBOL(ptlrpc_restart_req);
 EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_free_req);
+EXPORT_SYMBOL(ptlrpc_prep_req2);
 EXPORT_SYMBOL(ptlrpc_req_finished);
 EXPORT_SYMBOL(ptlrpc_prep_bulk);
 EXPORT_SYMBOL(ptlrpc_free_bulk);
