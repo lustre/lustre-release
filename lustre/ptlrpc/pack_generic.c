@@ -116,14 +116,16 @@ void *lustre_msg_buf(struct lustre_msg *m, int n)
         }
 
         if (n < 0 || n >= m->bufcount) {
-                CERROR("referencing bad sub buffer (requested %d, count is "
-                       "%d)!\n", n, m->bufcount);
+                CERROR("referencing bad sub buffer (want %d, count is %d)!\n",
+                       n, m->bufcount);
                 LBUG();
                 return NULL;
         }
 
-        if (m->buflens[n] == 0)
+        if (m->buflens[n] == 0) {
+                CERROR("zero-length buffer requested for buffer %d\n", n);
                 return NULL;
+        }
 
         offset = size_round(sizeof(*m) + m->bufcount * sizeof(__u32));
 
