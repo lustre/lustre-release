@@ -64,7 +64,7 @@ void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops)
         /* unlock fsfilt_types list */
 }
 
-struct fsfilt_operations *fsfilt_get_ops(char *type)
+struct fsfilt_operations *fsfilt_get_ops(const char *type)
 {
         struct fsfilt_operations *fs_ops;
 
