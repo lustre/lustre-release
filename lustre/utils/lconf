@@ -32,7 +32,7 @@ import xml.dom.minidom
 
 # Global parameters
 TCP_ACCEPTOR = ''
-
+MAXTCPBUF = 1048576
 #
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
@@ -281,6 +281,15 @@ class LCTLInterface:
   network %s
   add_route %s %s %s
   quit  """ % (net, gw, lo, hi)
+        self.run(cmds)
+
+                
+    # add a route to a range
+    def del_route(self, net, gw, lo, hi):
+        cmds =  """
+  network %s
+  del_route %s %s
+  quit  """ % (net, lo, hi)
         self.run(cmds)
 
     # add a route to a host
@@ -640,8 +649,8 @@ class Network(Module):
         self.net_type = get_attr(dom_node,'type')
         self.nid = get_text(dom_node, 'server', '*')
         self.port = get_text_int(dom_node, 'port', 0)
-        self.send_buf = get_text_int(dom_node, 'send_buf', 65536)
-        self.read_buf = get_text_int(dom_node, 'read_buf', 65536)
+        self.send_mem = get_text_int(dom_node, 'send_mem', 65536)
+        self.recv_mem = get_text_int(dom_node, 'recv_mem', 65536)
         if self.nid == '*':
             self.nid = get_local_address(self.net_type)
             if not self.nid:
@@ -660,21 +669,40 @@ class Network(Module):
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
         if self.net_type == 'tcp':
-            ret = run_daemon(TCP_ACCEPTOR, self.port)
+            ret = run_daemon(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, self.port)
             if ret:
                 raise CommandError(TCP_ACCEPTOR, 'failed', ret)
-
         ret = self.dom_node.getElementsByTagName('route_tbl')
         for a in ret:
             for r in a.getElementsByTagName('route'):
-                lctl.add_route(self.net_type, self.nid, get_attr(r, 'lo'),
-                               get_attr(r,'hi', ''))
+                lo = get_attr(r, 'lo')
+                hi = get_attr(r,'hi', '')
+                lctl.add_route(self.net_type, self.nid, lo, hi)
+                if self.net_type == 'tcp' and hi == '':
+                    srv = nid2server(self.dom_node.parentNode.parentNode, lo)
+                    if not srv:
+                        panic("no server for nid", lo)
+                    else:
+                        lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
+
             
         lctl.network(self.net_type, self.nid)
         lctl.newdev(attach = "ptlrpc RPCDEV")
 
     def cleanup(self):
         self.info(self.net_type, self.nid, self.port)
+        ret = self.dom_node.getElementsByTagName('route_tbl')
+        for a in ret:
+            for r in a.getElementsByTagName('route'):
+                lo = get_attr(r, 'lo')
+                hi = get_attr(r,'hi', '')
+                if self.net_type == 'tcp' and hi == '':
+                    srv = nid2server(self.dom_node.parentNode.parentNode, lo)
+                    if not srv:
+                        panic("no server for nid", lo)
+                    else:
+                        lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+                lctl.del_route(self.net_type, self.nid, lo, hi)
         try:
             lctl.cleanup("RPCDEV", "")
         except CommandError, e:
@@ -750,7 +778,7 @@ class MDC(Module):
     def prepare(self):
         self.info(self.mds_uuid)
         srv = self.get_server()
-        lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
+        lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
         lctl.newdev(attach="mdc %s %s" % (self.name, self.uuid),
                         setup ="%s %s" %(self.mds_uuid, srv.uuid))
             
@@ -804,7 +832,7 @@ class OSC(Module):
         self.info(self.obd_uuid, self.ost_uuid)
         srv = self.get_server()
         if local_net(srv):
-            lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
+            lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
         else:
             r =  find_route(srv)
             if r:
@@ -961,6 +989,13 @@ def get_ost_net(dom_node, uuid):
     if not uuid:
         return None
     return lookup(dom_node, uuid)
+
+def nid2server(dom_node, nid):
+    netlist = dom_node.getElementsByTagName('network')
+    for net_node in netlist:
+        if get_text(net_node, 'server') == nid:
+            return Network(net_node)
+    return None
     
 def lookup(dom_node, uuid):
     for n in dom_node.childNodes:
@@ -1281,6 +1316,21 @@ def sys_set_debug_path():
     except IOError, e:
         print e
              
+#/proc/sys/net/core/rmem_max
+#/proc/sys/net/core/wmem_max
+def sys_set_netmem_max(path, max):
+    debug("setting", path, "to at least", max)
+    if config.noexec():
+        return
+    fp = open(path)
+    str = fp.readline()
+    fp.close
+    cur = int(str)
+    if max > cur:
+        fp = open(path, 'w')
+        fp.write('%d\n' %(max))
+        fp.close()
+    
     
 def sys_make_devices():
     if not os.access('/dev/portals', os.R_OK):
@@ -1294,7 +1344,7 @@ def sys_make_devices():
 # Shutdown does steps in reverse
 #
 def main():
-    global TCP_ACCEPTOR, lctl
+    global TCP_ACCEPTOR, lctl, MAXTCPBUF
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
         if not os.access(args[0], os.R_OK | os.W_OK):
@@ -1329,6 +1379,8 @@ def main():
 
     setupModulePath(sys.argv[0])
     sys_make_devices()
+    sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
+    sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
     doHost(dom.documentElement, node_list)
 
 if __name__ == "__main__":
@@ -1339,4 +1391,3 @@ if __name__ == "__main__":
     except CommandError, e:
         e.dump()
         
-

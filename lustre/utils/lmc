@@ -198,13 +198,17 @@ class GenConfig:
         node.appendChild(new)
         return new
 
-    def network(self, name, uuid, hostname, net, port=0):
+    def network(self, name, uuid, hostname, net, port=0, tcpbuf=0):
         """create <network> node"""
         network = self.newService("network", name, uuid)
         network.setAttribute("type", net);
         self.addElement(network, "server", hostname)
         if port:
             self.addElement(network, "port", "%d" %(port))
+        if tcpbuf:
+            self.addElement(network, "send_mem", "%d" %(tcpbuf))
+            self.addElement(network, "recv_mem", "%d" %(tcpbuf))
+            
         return network
 
     def route(self, lo, hi):
@@ -412,13 +416,16 @@ def add_net(gen, lustre, options, args):
     node_name = options['node']
     nid = args[0]
     net_type = args[1]
+    port = 0
+    tcpbuf = 0
 
     if net_type == 'tcp':
         if len(args) > 2:
             port = int(args[2])
         else:
             port = DEFAULT_PORT
-        # add send, recv buffer size here
+        if options.has_key('tcpbuf'):
+            tcpbuf = int(options['tcpbuf'])
     elif net_type in ('elan', 'gm'):
         port = 0
     else:
@@ -432,7 +439,7 @@ def add_net(gen, lustre, options, args):
         node = ret
     net_name = new_name('NET_'+ node_name +'_'+ net_type)
     net_uuid = new_uuid(net_name)
-    node.appendChild(gen.network(net_name, net_uuid, nid, net_type, port))
+    node.appendChild(gen.network(net_name, net_uuid, nid, net_type, port, tcpbuf))
     node_add_profile(gen, node, "network", net_uuid)
 
 
@@ -657,7 +664,7 @@ def add_mtpt(gen, lustre, options, args):
 #
 def parse_cmdline(argv):
     short_opts = "ho:i:m:"
-    long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net",
+    long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net", "tcpbuf=",
                  "mdc", "route", "router", "merge=", "format", "reformat", "output=",
                  "obdtype=", "in=", "help"]
     opts = []
@@ -698,6 +705,8 @@ def parse_cmdline(argv):
             options['merge'] = a
         if o == "--obdtype":
             options['obdtype'] = a
+        if o == "--tcpbuf":
+            options['tcpbuf'] = a
         if o == "--format":
             options['format'] = 1
         if o  == "--reformat":
