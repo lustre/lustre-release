@@ -6,7 +6,6 @@
 EXTRA_DIST = lustre.dtd lustre.schema slapd-lustre.conf lustre2ldif.xsl top.ldif
 ldapconfdir = $(sysconfdir)/openldap
 ldapschemadir = $(sysconfdir)/openldap/schema
-pkglibdir = '${exec_prefix}/usr/lib/$(PACKAGE)'
 
 if UTILS
 ldapconf_SCRIPTS = slapd-lustre.conf
