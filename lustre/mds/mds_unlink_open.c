@@ -163,7 +163,7 @@ out_free_memmd:
 }
 
 static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
-                      struct inode *inode, struct inode *pending_dir)
+                             struct inode *inode, struct inode *pending_dir)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct mds_body *body;
@@ -201,7 +201,8 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         }
         rc = vfs_unlink(pending_dir, dchild);
         if (rc) 
-                CERROR("error unlinking orphan from PENDING directory");
+                CERROR("error %d unlinking orphan %*s from PENDING directory\n",
+                       rc, dchild->d_name.len, dchild->d_name.name);
 
 #ifdef ENABLE_ORPHANS
         if ((body->valid & OBD_MD_FLEASIZE)) {
@@ -212,8 +213,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         if (handle) {
                 int err = fsfilt_commit(obd, pending_dir, handle, 0);
                 if (err) {
-                        CERROR("error committing orphan unlink: %d\n",
-                               err);
+                        CERROR("error committing orphan unlink: %d\n", err);
                         rc = err;
                         GOTO(out_free_msg, rc);
                 }

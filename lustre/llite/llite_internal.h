@@ -37,6 +37,22 @@ struct ll_sb_info {
         struct ll_close_queue    *ll_lcq;
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
+
+        spinlock_t                ll_pglist_lock; 
+        unsigned long             ll_pglist_gen;
+        struct list_head          ll_pglist;
+};
+
+struct ll_readahead_state {
+        spinlock_t      ras_lock;
+        unsigned long   ras_last, ras_window, ras_next_index;
+};
+
+extern kmem_cache_t *ll_file_data_slab;
+struct ll_file_data {
+        struct obd_client_handle fd_mds_och;
+        struct ll_readahead_state fd_ras;
+        __u32 fd_flags;
 };
 
 struct lustre_handle;
@@ -91,9 +107,12 @@ struct it_cb_data {
 struct ll_async_page {
         int             llap_magic;
         void            *llap_cookie;
-        int             llap_queued;
         struct page     *llap_page;
         struct list_head llap_pending_write;
+         /* only trust these if the page lock is providing exclusion */
+         int             llap_write_queued:1,
+                         llap_defer_uptodate:1;
+        struct list_head llap_proc_item;
 };
 
 #define LL_CDEBUG_PAGE(page, STR)                                       \
@@ -133,19 +152,19 @@ void ll_ap_completion_24(void *data, int cmd, int rc);
 #define ll_ap_completion ll_ap_completion_26
 void ll_ap_completion_26(void *data, int cmd, int rc);
 #endif
-int ll_ocp_update_obdo(struct obd_client_page *ocp, int cmd, struct obdo *oa);
-int ll_ocp_set_io_ready(struct obd_client_page *ocp, int cmd);
-int ll_ocp_update_io_args(struct obd_client_page *ocp, int cmd);
 void ll_removepage(struct page *page);
+int ll_sync_page(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
 struct ll_async_page *llap_from_page(struct page *page);
+void ll_readahead_init(struct ll_readahead_state *ras);
 
 void ll_truncate(struct inode *inode);
 
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
+extern struct inode_operations ll_special_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, struct ldlm_extent *,
@@ -159,25 +178,13 @@ int ll_extent_lock_no_validate(struct ll_file_data *, struct inode *,
                                struct lov_stripe_md *, int mode,
                                struct ldlm_extent *, struct lustre_handle *,
                                int ast_flags);
-
-int ll_local_open(struct file *file, struct lookup_intent *it);
-int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode, 
-                 struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 #endif
 
-/* llite/special.c */
-extern struct inode_operations ll_special_inode_operations;
-extern struct file_operations ll_special_chr_inode_fops;
-extern struct file_operations ll_special_chr_file_fops;
-extern struct file_operations ll_special_blk_inode_fops;
-extern struct file_operations ll_special_fifo_inode_fops;
-extern struct file_operations ll_special_fifo_file_fops;
-extern struct file_operations ll_special_sock_inode_fops;
-
 /* llite/dcache.c */
+void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
 extern void ll_set_dd(struct dentry *de);
 void ll_unhash_aliases(struct inode *);

@@ -1,11 +1,62 @@
 Index: linux-2.4.18-chaos/include/linux/list.h
 ===================================================================
---- linux-2.4.18-chaos.orig/include/linux/list.h	2003-10-22 13:43:39.000000000 +0400
-+++ linux-2.4.18-chaos/include/linux/list.h	2003-10-22 13:44:17.000000000 +0400
-@@ -173,6 +173,16 @@
+--- linux-2.4.18-chaos.orig/include/linux/list.h	2003-11-23 00:07:05.000000000 +0300
++++ linux-2.4.18-chaos/include/linux/list.h	2003-12-11 00:25:15.000000000 +0300
+@@ -173,6 +173,67 @@
  	for (pos = (head)->prev, prefetch(pos->prev); pos != (head); \
          	pos = pos->prev, prefetch(pos->prev))
          	
++/**
++ * list_for_each_entry	-	iterate over list of given type
++ * @pos:	the type * to use as a loop counter.
++ * @head:	the head for your list.
++ * @member:	the name of the list_struct within the struct.
++ */
++#define list_for_each_entry(pos, head, member)				\
++	for (pos = list_entry((head)->next, typeof(*pos), member),	\
++		     prefetch(pos->member.next);			\
++	     &pos->member != (head); 					\
++	     pos = list_entry(pos->member.next, typeof(*pos), member),	\
++		     prefetch(pos->member.next))
++
++#ifndef list_for_each_entry_safe
++/**
++ * list_for_each_entry_safe  -       iterate over list of given type safe against removal of list entry
++ * @pos:        the type * to use as a loop counter.
++ * @n:          another type * to use as temporary storage
++ * @head:       the head for your list.
++ * @member:     the name of the list_struct within the struct.
++ */
++#define list_for_each_entry_safe(pos, n, head, member)			\
++        for (pos = list_entry((head)->next, typeof(*pos), member),	\
++		n = list_entry(pos->member.next, typeof(*pos), member);	\
++	     &pos->member != (head);					\
++	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
++#endif
++
++/**
++ * list_move - delete from one list and add as another's head
++ * @list: the entry to move
++ * @head: the head that will precede our entry
++ */
++static inline void list_move(struct list_head *list, struct list_head *head)
++{
++	__list_del(list->prev, list->next);
++	list_add(list, head);
++}
++
++/**
++ * list_move_tail - delete from one list and add as another's tail
++ * @list: the entry to move
++ * @head: the head that will follow our entry
++ */
++static inline void list_move_tail(struct list_head *list,
++				  struct list_head *head)
++{
++	__list_del(list->prev, list->next);
++	list_add_tail(list, head);
++}
++
 +/* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
 + * as 2.5 and let macros drop back.. */
 +#define hlist_entry                     list_entry
