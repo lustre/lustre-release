@@ -227,7 +227,7 @@ static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         return rc;
 }
 
-static int cobd_commitrw(int cmd, struct obd_export *exp,
+static int cobd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                          int objcount, struct obd_ioobj *obj,
                          int niocount, struct niobuf_local *local,
                          struct obd_trans_info *oti)
@@ -242,12 +242,12 @@ static int cobd_commitrw(int cmd, struct obd_export *exp,
                 return -EOPNOTSUPP;
 
         cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
-        rc = obd_commitrw(cmd, cobd_exp, objcount, obj, niocount, local, oti);
+        rc = obd_commitrw(cmd, cobd_exp, oa, objcount, obj,niocount,local,oti);
         class_export_put(cobd_exp);
         return rc;
 }
 
-static int cobd_brw(int cmd, struct lustre_handle *conn,
+static int cobd_brw(int cmd, struct lustre_handle *conn, struct obdo *oa,
                     struct lov_stripe_md *lsm, obd_count oa_bufs,
                     struct brw_page *pga, struct obd_trans_info *oti)
 {
@@ -263,8 +263,7 @@ static int cobd_brw(int cmd, struct lustre_handle *conn,
                 return -EOPNOTSUPP;
 
         cobd = &obd->u.cobd;
-        return (obd_brw (cmd, &cobd->cobd_target,
-                         lsm, oa_bufs, pga, oti));
+        return (obd_brw(cmd, &cobd->cobd_target, oa, lsm, oa_bufs, pga, oti));
 }
 
 static int cobd_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
