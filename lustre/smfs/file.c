@@ -91,7 +91,7 @@ static ssize_t smfs_write (struct file *filp, const char *buf,
 		rc = cache_inode->i_fop->write(&open_file, buf, count, cache_ppos);
 	
 	*ppos = *cache_ppos;
-	duplicate_inode(cache_inode, inode);
+	post_smfs_inode(inode, cache_inode);
 	smfs_update_file(filp, &open_file);
 
 	RETURN(rc);
@@ -118,7 +118,7 @@ int smfs_ioctl(struct inode * inode, struct file * filp,
 	if (cache_inode->i_fop->ioctl)
 		rc = cache_inode->i_fop->ioctl(cache_inode, &open_file, cmd, arg);
 		
-	duplicate_inode(cache_inode, inode);
+	post_smfs_inode(inode, cache_inode);
 	smfs_update_file(filp, &open_file);
         RETURN(rc);
 }
@@ -157,7 +157,7 @@ static ssize_t smfs_read (struct file *filp, char *buf,
 		rc = cache_inode->i_fop->read(&open_file, buf, count, cache_ppos);
     
 	*ppos = *cache_ppos;
-	duplicate_inode(cache_inode, inode);
+	post_smfs_inode(inode, cache_inode);
 	smfs_update_file(filp, &open_file);
 	RETURN(rc);
 }
@@ -184,7 +184,7 @@ static loff_t smfs_llseek(struct file *file,
 	if (cache_inode->i_fop->llseek)
 		rc = cache_inode->i_fop->llseek(&open_file, offset, origin);
 
-	duplicate_inode(cache_inode, dentry->d_inode);
+	post_smfs_inode(dentry->d_inode, cache_inode);
 	smfs_update_file(file, &open_file);
 		
         RETURN(rc);
@@ -211,7 +211,7 @@ static int smfs_mmap(struct file * file, struct vm_area_struct * vma)
 	if (cache_inode->i_fop->mmap)
 		rc = cache_inode->i_fop->mmap(&open_file, vma);
       
-	duplicate_inode(cache_inode, inode);
+	post_smfs_inode(inode, cache_inode);
 	smfs_update_file(file, &open_file);
 	
 	RETURN(rc);
@@ -234,7 +234,7 @@ static int smfs_open(struct inode * inode, struct file * filp)
 	if (cache_inode->i_fop->open)
 		rc = cache_inode->i_fop->open(cache_inode, &open_file);
         
-	duplicate_inode(cache_inode, inode);
+	post_smfs_inode(inode, cache_inode);
 	smfs_update_file(filp, &open_file);
 	
 	RETURN(rc);
@@ -257,7 +257,7 @@ static int smfs_release(struct inode * inode, struct file * filp)
 	if (cache_inode->i_fop->release)
 		rc = cache_inode->i_fop->release(cache_inode, &open_file);
 
-	duplicate_inode(cache_inode, inode);
+	post_smfs_inode(inode, cache_inode);
 	smfs_update_file(filp, &open_file);
         
 	RETURN(rc);
@@ -282,7 +282,7 @@ int smfs_fsync(struct file * file,
 	if (cache_inode->i_fop->fsync)
 		rc = cache_inode->i_fop->fsync(&open_file, &open_dentry, datasync);
 	
-	duplicate_inode(cache_inode, inode);
+	post_smfs_inode(inode, cache_inode);
 	smfs_update_file(file, &open_file);
 	
 	RETURN(rc);
@@ -326,7 +326,7 @@ static void smfs_truncate(struct inode * inode)
 	if (cache_inode->i_op->truncate)
 		cache_inode->i_op->truncate(cache_inode);
 
-	duplicate_inode(inode, cache_inode);		
+	post_smfs_inode(inode, cache_inode);
         
 	return;	
 } 
@@ -344,10 +344,11 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
 		RETURN(-ENOENT);
 	smfs_prepare_cache_dentry(&open_dentry, cache_inode);
 	
+	pre_smfs_inode(dentry->d_inode, cache_inode);
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->setattr(&open_dentry, attr);
 
-	duplicate_inode(cache_inode, dentry->d_inode);		
+	post_smfs_inode(dentry->d_inode, cache_inode);
 	
 	RETURN(rc);
 } 
@@ -364,12 +365,13 @@ int smfs_setxattr(struct dentry *dentry, const char *name,
 	if (!cache_inode) 
 		RETURN(-ENOENT);
 
+	pre_smfs_inode(dentry->d_inode, cache_inode);
 	smfs_prepare_cache_dentry(&open_dentry, cache_inode);
 	
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->setxattr(&open_dentry, name, value, size, flags);
 
-	duplicate_inode(cache_inode, dentry->d_inode);		
+	post_smfs_inode(dentry->d_inode, cache_inode);
 	RETURN(rc);
 } 
                         
@@ -386,11 +388,12 @@ int smfs_getxattr(struct dentry *dentry, const char *name,
 		RETURN(-ENOENT);
 
 	smfs_prepare_cache_dentry(&open_dentry, cache_inode);
+	pre_smfs_inode(dentry->d_inode, cache_inode);
 	
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->getxattr(&open_dentry, name, buffer, size);
 
-	duplicate_inode(cache_inode, dentry->d_inode);		
+	post_smfs_inode(dentry->d_inode, cache_inode);
 	RETURN(rc);
 }
 
@@ -406,11 +409,12 @@ ssize_t smfs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 		RETURN(-ENOENT);
 
 	smfs_prepare_cache_dentry(&open_dentry, cache_inode);
+	pre_smfs_inode(dentry->d_inode, cache_inode);
 	
 	if (cache_inode->i_op->listxattr)
 		rc = cache_inode->i_op->listxattr(&open_dentry, buffer, size);
 
-	duplicate_inode(cache_inode, dentry->d_inode);		
+	post_smfs_inode(dentry->d_inode, cache_inode);
 	RETURN(rc);
 }                                                                                                                                                           
 
@@ -426,11 +430,12 @@ int smfs_removexattr(struct dentry *dentry, const char *name)
 		RETURN(-ENOENT);
 
 	smfs_prepare_cache_dentry(&open_dentry, cache_inode);
+	pre_smfs_inode(dentry->d_inode, cache_inode);
 	
 	if (cache_inode->i_op->removexattr)
 		rc = cache_inode->i_op->removexattr(&open_dentry, name);
 
-	duplicate_inode(cache_inode, dentry->d_inode);		
+	post_smfs_inode(dentry->d_inode, cache_inode);
 	RETURN(rc);
 }
 

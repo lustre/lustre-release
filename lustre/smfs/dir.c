@@ -17,7 +17,7 @@
 
 #define NAME_ALLOC_LEN(len)     ((len+16) & ~15)
                                                                                                                                                                                         
-static void prepare_parent_dentry(struct dentry *dentry, struct inode *inode)
+void prepare_parent_dentry(struct dentry *dentry, struct inode *inode)
 {
         atomic_set(&dentry->d_count, 1);
         dentry->d_vfs_flags = 0;
@@ -170,7 +170,7 @@ static int smfs_link(struct dentry * old_dentry,
 		GOTO(exit, rc); 
 	
 	atomic_inc(&inode->i_count);
-	duplicate_inode(cache_old_dentry->d_inode, inode);
+	post_smfs_inode(inode, cache_old_dentry->d_inode);
 	d_instantiate(dentry, inode);
 
 exit:
@@ -205,8 +205,8 @@ static int smfs_unlink(struct inode * dir,
 		rc = cache_dir->i_op->unlink(cache_dir, cache_dentry);
 
 	
-	duplicate_inode(cache_dentry->d_inode, dentry->d_inode);
-	duplicate_inode(cache_dir, dir);
+	post_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
+	post_smfs_inode(dir, cache_dir);
 	
 	igrab(cache_dentry->d_inode);
 
@@ -289,7 +289,7 @@ static int smfs_mkdir(struct inode * dir,
 		rc = post_kml_mkdir(dir, dentry);
 		GOTO(exit, rc);
 	}
-	duplicate_inode(cache_dir, dir);
+	post_smfs_inode(dir, cache_dir);
 exit:
 	unlock_kernel();	
 	smfs_trans_commit(handle);
@@ -318,9 +318,8 @@ static int  smfs_rmdir(struct inode * dir,
 	if (cache_dir->i_op->rmdir)
 		rc = cache_dir->i_op->rmdir(cache_dir, cache_dentry);
 
-	duplicate_inode(cache_dir, dir);
-	duplicate_inode(cache_dentry->d_inode, dentry->d_inode);
-
+	post_smfs_inode(dir, cache_dir);
+	post_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
 	d_unalloc(cache_dentry);
 	RETURN(rc);		
 }
@@ -351,8 +350,8 @@ static int smfs_mknod(struct inode * dir, struct dentry *dentry,
 	
 	inode = iget(dir->i_sb, cache_inode->i_ino);
 	d_instantiate(dentry, inode);
-	duplicate_inode(cache_dir, dir);
-	duplicate_inode(cache_dentry->d_inode, dentry->d_inode);
+	post_smfs_inode(dir, cache_dir);
+	post_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
 exit:
 	d_unalloc(cache_dentry);
 	RETURN(rc);		
@@ -384,8 +383,8 @@ static int smfs_rename(struct inode * old_dir, struct dentry *old_dentry,
 		rc = cache_old_dir->i_op->rename(cache_old_dir, cache_old_dentry,
 					         cache_new_dir, cache_new_dentry);
 
-	duplicate_inode(cache_old_dir, old_dir);
-	duplicate_inode(cache_new_dir, new_dir);
+	post_smfs_inode(old_dir, cache_old_dir) ;
+	post_smfs_inode(new_dir, cache_new_dir);
 	if (cache_new_dentry->d_inode) {
 		igrab(cache_new_dentry->d_inode);	
 	}
