@@ -226,11 +226,6 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(err_discon, rc);
         }
 
-        rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
-                          0, NULL);
-        if (rc) 
-                GOTO(err_reg, rc);
-        
         valsize = sizeof(mds->mds_lov_desc);
         rc = obd_get_info(mds->mds_osc_exp, strlen("lovdesc") + 1, "lovdesc", 
                           &valsize, &mds->mds_lov_desc);
@@ -248,14 +243,18 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         } 
 
 #ifdef ENABLE_ORPHANS
-        /* before this set info call is made, we must initialize the logging */
         rc = llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
         if (rc) {
                 CERROR("failed to initialize catalog %d\n", rc);
                 GOTO(err_reg, rc);
         }
 #endif
-
+        /* FIXME before this set info call is made, we must initialize the logging */
+        rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
+                          0, NULL);
+        if (rc) 
+                GOTO(err_reg, rc);
+        
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
         if (!mds->mds_lov_objids_valid) {
@@ -281,7 +280,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
          * the OBD is full available. */
         if (!obd->obd_recovering) {
                 rc = mds_cleanup_orphans(obd);
-                LASSERT(rc == 0);
+                if (rc > 0)
+                        CERROR("Cleanup %d orphans while MDS isn't recovering\n", rc);
 
                 rc = mds_lov_set_nextid(obd);
                 if (rc)
@@ -351,7 +351,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         RETURN(-EBUSY);
 
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                rc = llog_create(obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT], 
+                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
                                  &mds->mds_cfg_llh, NULL, name);
                 if (rc == 0)
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN, 
@@ -411,8 +411,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_PARSE: {
-                struct llog_obd_ctxt *ctxt = 
-                        obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
                 rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
@@ -423,8 +423,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_DUMP_LOG: {
-                struct llog_obd_ctxt *ctxt = 
-                        obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
                 rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
