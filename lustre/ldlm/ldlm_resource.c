@@ -225,16 +225,21 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
  */
 int ldlm_resource_put(struct ldlm_resource *res)
 {
-        int rc = 0; 
+        int rc = 0;
 
-        res->lr_refcount--;
-        if (res->lr_refcount < 0)
-                LBUG();
-
-        if (res->lr_refcount == 0) {
+        if (res->lr_refcount == 1) {
                 struct ldlm_namespace *ns = res->lr_namespace;
+                ENTRY;
 
+                spin_unlock(&res->lr_lock);
                 spin_lock(&ns->ns_lock);
+                spin_lock(&res->lr_lock);
+
+                if (res->lr_refcount != 1) {
+                        spin_unlock(&ns->ns_lock);
+                        goto out;
+                }
+
                 if (!list_empty(&res->lr_granted))
                         LBUG();
 
@@ -255,9 +260,15 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 kmem_cache_free(ldlm_resource_slab, res);
                 spin_unlock(&ns->ns_lock);
                 rc = 1;
+        } else {
+                ENTRY;
+        out:
+                res->lr_refcount--;
+                if (res->lr_refcount < 0)
+                        LBUG();
         }
 
-        return rc; 
+        RETURN(rc); 
 }
 
 /* Must be called with resource->lr_lock taken */
