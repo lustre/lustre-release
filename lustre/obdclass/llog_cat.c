@@ -84,7 +84,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         /* build the record for this log in the catalog */
         rec.lid_hdr.lrh_len = sizeof(rec);
         rec.lid_hdr.lrh_index = index;
-        rec.lid_hdr.lrh_type = LLOG_HDR_MAGIC;
+        rec.lid_hdr.lrh_type = LLOG_LOGID_MAGIC;
         rec.lid_id = loghandle->lgh_id;
         rec.lid_tail.lrt_len = sizeof(rec);
         rec.lid_tail.lrt_index = index;
@@ -140,6 +140,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
         } else {
                 list_add(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
         }
+        rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
 
 out:
         *res = loghandle;
@@ -180,10 +181,11 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                if (loghandle->lgh_last_idx < sizeof(llh->llh_bitmap) * 8)
+                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap) * 8) - 1)
                         RETURN(loghandle);
         }
 
+        CDEBUG(D_INODE, "creating new log\n");
         if (create)
                 loghandle = llog_cat_new_log(cathandle);
         RETURN(loghandle);
@@ -210,7 +212,6 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         }
         down(&loghandle->lgh_lock);
         up(&cathandle->lgh_lock);
-
         rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
 
         up(&loghandle->lgh_lock);

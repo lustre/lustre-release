@@ -199,7 +199,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 if (rc || idx == 0)
                         RETURN(rc);
 
-                saved_offset = sizeof(*llh) + idx * rec->lrh_len;
+                saved_offset = sizeof(*llh) + (idx-1) * rec->lrh_len;
                 rc = llog_lvfs_write_blob(file, rec, buf, saved_offset);
                 RETURN(rc);
         }
@@ -216,6 +216,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 reclen = sizeof(*rec) + size_round(rec->lrh_len) + 
                         sizeof(struct llog_rec_tail);
 
+        /* NOTE: padding is a record, but no bit is set */
         if (left != 0 && left < reclen) {
                 loghandle->lgh_last_idx++;
                 rc = llog_lvfs_pad(file, left, loghandle->lgh_last_idx);
@@ -223,7 +224,8 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                         RETURN(rc);
         }
 
-        index = loghandle->lgh_last_idx++;
+        loghandle->lgh_last_idx++;
+        index = loghandle->lgh_last_idx;
         rec->lrh_index = index;
         if (ext2_set_bit(index, llh->llh_bitmap)) {
                 CERROR("argh, index %u already set in log bitmap?\n", index);
@@ -250,6 +252,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         RETURN(rc);
 }
 
+/* sets cur_offset to the furthest point red in the log file */
 static int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
                                 int next_idx, __u64 *cur_offset, void *buf,
                                 int len)
@@ -269,15 +272,16 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
          * larger than minimum size) we just skip some more records. */
         while ((*cur_offset = (*cur_offset +
                                (next_idx - cur_idx) * LLOG_MIN_REC_SIZE) &
-                                ~(LLOG_CHUNK_SIZE - 1)) <
+                ~(LLOG_CHUNK_SIZE - 1)) <
                loghandle->lgh_file->f_dentry->d_inode->i_size) {
                 struct llog_rec_hdr *rec;
+                struct llog_rec_tail *tail;
 
                 rc = lustre_fread(loghandle->lgh_file, buf, LLOG_CHUNK_SIZE, 
                                   cur_offset);
-                if (rc)
+                if (rc < LLOG_MIN_REC_SIZE)
                         RETURN(rc);
-
+                rc = 0;
                 rec = buf;
                 /* sanity check that the start of the new buffer is no farther
                  * than the record that we wanted.  This shouldn't happen. */
@@ -293,13 +297,13 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
                  * this means that the record we are looking for is in the
                  * current buffer, or the client asked for a record beyond the
                  * end of the log, which is the client's problem. */
-                rec = buf + LLOG_CHUNK_SIZE - sizeof(__u32);
-                if (rec->lrh_index == 0)
+                tail = buf + LLOG_CHUNK_SIZE - sizeof(struct llog_rec_tail);
+                if (tail->lrt_index == 0)
                         RETURN(0);
 
-                cur_idx = rec->lrh_index;
-                if (cur_idx >= next_idx) {
-                        while (rc == 0 && (len -= LLOG_CHUNK_SIZE) > 0) {
+                if (tail->lrt_index >= next_idx) {
+                        /* fill up the rest of buf */
+                        while (rc > 0 && (len -= LLOG_CHUNK_SIZE) > 0) {
                                 buf += LLOG_CHUNK_SIZE;
                                 *cur_offset += LLOG_CHUNK_SIZE;
 
@@ -307,9 +311,9 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
                                                   buf, LLOG_CHUNK_SIZE,
                                                   cur_offset);
                         }
-
-                        RETURN(rc);
+                        RETURN(0);
                 }
+                cur_idx = tail->lrt_index;
         }
 
         RETURN(-ENOENT);

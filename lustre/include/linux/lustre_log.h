@@ -73,16 +73,15 @@ struct llog_handle {
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
 int llog_init_handle(struct llog_handle *handle, int flags, struct obd_uuid *uuid);
 extern void llog_free_handle(struct llog_handle *handle);
+int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data);
 
 
 /* llog_cat.c   -  catalog api */
 int llog_cat_put(struct llog_handle *cathandle);
 int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                      struct llog_cookie *reccookie, void *buf);
-
-
-extern int llog_cancel_records(struct llog_handle *cathandle, int count,
-                               struct llog_cookie *cookies);
+int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
+                            struct llog_cookie *cookies);
 
 extern struct llog_handle *llog_alloc_handle(void);
 extern int llog_init_catalog(struct llog_handle *cathandle,
@@ -170,6 +169,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 RETURN(rc);
         if (lop->lop_write_rec == NULL)
                 RETURN(-EOPNOTSUPP);
+        LASSERT((rec->lrh_len % LLOG_MIN_REC_SIZE) == 0);
 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
         RETURN(rc);

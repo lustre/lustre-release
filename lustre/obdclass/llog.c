@@ -79,6 +79,11 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         CDEBUG(D_HA, "canceling %d in log "LPX64"\n",
                index, loghandle->lgh_id.lgl_oid);
 
+        if (index == 0) {
+                CERROR("cannot cancel index 0 (which is header)\n");
+                RETURN(-EINVAL);
+        }
+
         if (!ext2_clear_bit(index, llh->llh_bitmap)) {
                 CERROR("catalog index %u already clear?\n", index);
                 LBUG();
@@ -88,7 +93,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
 
         if (llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY &&
             llh->llh_count == 1 &&
-            loghandle->lgh_last_idx == LLOG_BITMAP_BYTES * 8) {
+            loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1) {
                 rc = llog_destroy(loghandle);
                 if (rc)
                         CERROR("failure destroying log after last cancel: %d\n",
@@ -120,15 +125,17 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         handle->lgh_hdr = llh;
         rc = llog_read_header(handle);
         if (rc == 0) {
-                LASSERT(llh->llh_flags == flags);
-                LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
-                RETURN(0);
+                LASSERT((llh->llh_flags & flags)== flags);
+                if (uuid)
+                        LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
+                GOTO(out, rc);
         } else if (rc != LLOG_EEMPTY) {
                 GOTO(out, rc);
         }
         rc = 0;
 
-        handle->lgh_last_idx = 1; /* header is record 0 */
+        handle->lgh_last_idx = 0; /* header is record with index 0 */
+        llh->llh_count = 1;         /* for the header record */
         llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
         llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
@@ -136,10 +143,9 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         llh->llh_flags = flags;
         memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
         llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
-        /* for the header record */
-        llh->llh_count = 1;
         ext2_set_bit(0, llh->llh_bitmap);
 
+ out:
         if (flags & LLOG_F_IS_CAT) {
                 INIT_LIST_HEAD(&handle->u.chd.chd_head);
                 llh->llh_size = sizeof(struct llog_logid_rec);
@@ -148,7 +154,6 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
         else
                 LBUG();
- out:
         if (rc)
                 OBD_FREE(llh, sizeof(*llh));
         return(rc);
@@ -160,50 +165,56 @@ int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
         struct llog_log_hdr *llh = loghandle->lgh_hdr;
         void *buf;
         __u64 cur_offset = LLOG_CHUNK_SIZE;
-        int rc = 0, index = 0;
+        int rc = 0, index = 1;
         ENTRY;
 
-        OBD_ALLOC(buf, PAGE_SIZE);
+        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
         if (!buf)
                 RETURN(-ENOMEM);
 
         while (rc == 0) {
                 struct llog_rec_hdr *rec;
 
-                /* there is likely a more efficient way than this */
-                while (index < LLOG_BITMAP_BYTES * 8 &&
+                /* skip records not set in bitmap */
+                while (index < (LLOG_BITMAP_BYTES * 8) &&
                        !ext2_test_bit(index, llh->llh_bitmap))
                         ++index;
 
-                if (index >= LLOG_BITMAP_BYTES * 8)
+                LASSERT(index <= LLOG_BITMAP_BYTES * 8);
+                if (index == LLOG_BITMAP_BYTES * 8)
                         break;
 
+                /* get the buf with our target record */
                 rc = llog_next_block(loghandle, 0, index, 
                                      &cur_offset, buf, PAGE_SIZE);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(out, rc);
+                LASSERT(ext2_test_bit(index, llh->llh_bitmap));
 
                 rec = buf;
+                index = rec->lrh_index;
 
-                /* skip records in buffer until we are at the one we want */
-                while (rec->lrh_index < index) {
+                /* process records in buffer, starting where we found one */
+                while ((void *)rec < buf+PAGE_SIZE) {
                         if (rec->lrh_index == 0)
-                                RETURN(0); /* no more records */
+                                GOTO(out, 0); /* no more records */
 
-                        cur_offset += rec->lrh_len;
-                        rec = ((void *)rec + rec->lrh_len);
-
-                        if ((void *)rec > buf + PAGE_SIZE) {
-                                CERROR("log index %u not in log @ "LPU64"\n",
-                                       index, cur_offset);
-                                LBUG(); /* record not in this buffer? */
+                        /* if set, process the callback on this record */
+                        if (ext2_test_bit(index, llh->llh_bitmap)) {
+                                rc = cb(loghandle, rec, data);
+                                if (rc) 
+                                        GOTO(out, rc);
                         }
 
-                        rc = cb(loghandle, rec, data);
+                        /* next record, still in buffer? */
                         ++index;
+                        rec = ((void *)rec + rec->lrh_len);
                 }
         }
 
+ out:
+        if (buf)
+                OBD_FREE(buf, LLOG_CHUNK_SIZE);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_process_log);
