@@ -34,8 +34,9 @@
 static int mdc_reint(struct ptlrpc_request *request, int level)
 {
         int rc;
-        __u32 *opcodeptr = lustre_msg_buf(request->rq_reqmsg, 0);
+        __u32 *opcodeptr;
 
+        opcodeptr = lustre_msg_buf(request->rq_reqmsg, 0, sizeof (*opcodeptr));
         request->rq_level = level;
 
         if (!(*opcodeptr == REINT_SETATTR))
