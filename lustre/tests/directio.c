@@ -17,30 +17,38 @@ int main(int argc, char **argv)
 {
         int fd;
         char *buf;
-        int blocks;
+        int blocks, seek_blocks;
         long len;
-        struct stat st;
+        off64_t seek;
+        struct stat64 st;
         int rc;
 
-        if (argc != 3) {
-                printf("Usage: %s file nr_blocks\n", argv[0]);
+        if (argc != 4) {
+                printf("Usage: %s file seek nr_blocks\n", argv[0]);
                 return 1;
         }
 
-        blocks = strtoul(argv[2], 0, 0);
-        fd = open(argv[1], O_DIRECT | O_RDWR | O_CREAT, 0644);
+        seek_blocks = strtoul(argv[2], 0, 0);
+        blocks = strtoul(argv[3], 0, 0);
+        fd = open(argv[1], O_LARGEFILE | O_DIRECT | O_RDWR | O_CREAT, 0644);
         if (fd == -1) {
                 printf("Cannot open %s:  %s\n", argv[1], strerror(errno));
                 return 1;
         }
 
-        if (fstat(fd, &st) < 0) {
+        if (fstat64(fd, &st) < 0) {
                 printf("Cannot stat %s:  %s\n", argv[1], strerror(errno));
                 return 1;
         }
 
         printf("directio on %s for %dx%lu blocks \n", argv[1], blocks,
                st.st_blksize);
+
+        seek = (off64_t)seek_blocks * (off64_t)st.st_blksize;
+        if (lseek64(fd, seek, SEEK_SET) < 0) {
+                printf("lseek64 failed: %s\n", strerror(errno));
+                return 1;
+        }
 
         len = blocks * st.st_blksize;
         buf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
@@ -56,7 +64,7 @@ int main(int argc, char **argv)
                 return 1;
         }
 
-        if (lseek(fd, 0, SEEK_SET) != 0) {
+        if (lseek64(fd, seek, SEEK_SET) < 0) {
                 printf("Cannot seek %s\n", strerror(errno));
                 return 1;
         }
