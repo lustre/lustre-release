@@ -99,11 +99,13 @@ patch-stamp: sed-stamp $(EXTNP)
 	else                                                                  \
 	  echo "If first patch fails, read NOTE in extN/Makefile.am";         \
 	  list='$(EXTNP)'; \
-	  sed '/i_version/q' $(srcdir)/extN.orig/namei.c | tail -2 | grep extN_mark_inode_dirty >/dev/null && list="$(EXTN_FIXES) $$list"; \
-	  for p in $$list; do                                \
+	  sed '/i_version/q' $(srcdir)/extN.orig/namei.c | tail -2 |          \
+	    grep extN_mark_inode_dirty >/dev/null && list="$(EXTN_FIXES) $$list"; \
+	  for p in $$list; do                                                 \
 	    echo "applying patch $$p";                                        \
 	    sed $(SUB) $(srcdir)/$$p |                                        \
-	      (cd $(top_srcdir) && patch -p1) || exit $$?;                    \
+	      (cd $(top_srcdir) && patch -p1) ||                              \
+	      echo "error: read NOTE in extN/Makefile.am" 1>&2 && exit $$?;   \
 	  done;                                                               \
 	  echo "It is OK if the next patch says it is already applied";       \
 	  echo "applying patch $(srcdir)/extN-2.4.18-exports.diff";           \
