@@ -236,8 +236,7 @@ int lllib_init(char *dumpfile)
 #if 0
 static void llu_check_request()
 {
-        liblustre_check_events(0);
-        liblustre_check_services();
+        liblustre_wait_event(0);
 }
 #endif
 
