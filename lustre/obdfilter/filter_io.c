@@ -431,7 +431,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
         int blocksize = exp->exp_obd->u.filter.fo_sb->s_blocksize;
-        unsigned long used = 0, ungranted = 0;
+        unsigned long used = 0, ungranted = 0, using;
         int i, rc = -ENOSPC, obj, n = 0, mask = D_CACHE;
 
         for (obj = 0; obj < objcount; obj++) {
@@ -501,10 +501,10 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                ungranted, fed->fed_grant, fed->fed_dirty);
 
         /* Rough calc in case we don't refresh cached statfs data */
-        used = (used + ungranted + 1 ) >>
+        using = (used + ungranted + 1 ) >>
                 exp->exp_obd->u.filter.fo_sb->s_blocksize_bits;
-        if (exp->exp_obd->obd_osfs.os_bavail > used)
-                exp->exp_obd->obd_osfs.os_bavail -= used;
+        if (exp->exp_obd->obd_osfs.os_bavail > using)
+                exp->exp_obd->obd_osfs.os_bavail -= using;
         else
                 exp->exp_obd->obd_osfs.os_bavail = 0;
 
