@@ -58,9 +58,20 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 LBUG();
 
         fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL); 
-        if (!fd) { 
-                rc = -ENOMEM;
-                goto out;
+        if (!fd)
+                GOTO(out, rc = -ENOMEM);
+        memset(fd, 0, sizeof(*fd));
+
+        rc = mdc_open(&sbi->ll_mds_client, inode->i_ino, S_IFREG,
+                      file->f_flags, &fd->fd_mdshandle, &req); 
+        if (!fd->fd_mdshandle)
+                CERROR("mdc_open didn't assign fd_mdshandle\n");
+
+        ptlrpc_free_req(req);
+        if (rc) {
+                if (rc > 0) 
+                        rc = -rc;
+                GOTO(out, rc);
         }
 
         oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
@@ -68,35 +79,24 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 LBUG();
         rc = obd_open(ll_i2obdconn(inode), oa); 
         obdo_free(oa);
-        if (rc) { 
+        if (rc) {
+                /* XXX: Need to do mdc_close here! */
                 if (rc > 0) 
                         rc = -rc;
-                EXIT;
-                goto out;
+                GOTO(out, rc);
         }
 
-        rc = mdc_open(&sbi->ll_mds_client, inode->i_ino, S_IFREG,
-                      file->f_flags, &fd->fd_mdshandle, &req); 
-        if (!fd->fd_mdshandle) 
-                LBUG();
-
-        ptlrpc_free_req(req);
-        if (rc) { 
-                if (rc > 0) 
-                        rc = -rc;
-                EXIT;
-                goto out;
-        }
         file->private_data = fd;
 
         EXIT; 
  out:
-        if (rc && fd)
+        if (rc && fd) {
                 kmem_cache_free(ll_file_data_slab, fd); 
+                file->private_data = NULL;
+        }
 
         return rc;
 }
-
 
 static int ll_file_release(struct inode *inode, struct file *file)
 {
@@ -112,8 +112,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         fd = (struct ll_file_data *)file->private_data;
         if (!fd || !fd->fd_mdshandle) { 
                 LBUG();
-                rc = -EINVAL;
-                goto out;
+                GOTO(out, rc = -EINVAL);
         }
 
         oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
@@ -124,8 +123,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         if (rc) { 
                 if (rc > 0) 
                         rc = -rc;
-                EXIT;
-                goto out;
+                GOTO(out, rc);
         }
 
         iattr.ia_valid = ATTR_SIZE;
@@ -142,8 +140,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         if (rc) { 
                 if (rc > 0) 
                         rc = -rc;
-                EXIT;
-                goto out;
+                GOTO(out, rc);
         }
         EXIT; 
 
