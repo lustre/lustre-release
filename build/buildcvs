@@ -24,9 +24,13 @@ case "$lustretag" in
 	portalstag="b1_4_bgl"
 	;;
 
-    b_port_step)
-        portalstag="b_port_step"
-	;;
+    b_cray)
+        libsysiotag="LIBSYSIO_HEAD_20041101"
+        ;;
+
+    b_hd_sec)
+        portalstag="b_hd_sec"
+        ;;
 
     b_port_ahead)
         portalstag="b_port_ahead"
@@ -35,9 +39,10 @@ case "$lustretag" in
     b_port_netid)
         portalstag="b_port_netid"
 	;;
-    b_hd_sec)
-        portalstag="b_hd_sec"
-	;;
+
+    b_port_step)
+        portalstag="b_port_step"
+        ;;
 esac
 
 cvs_cmd libsysio libsysio "$libsysiotag"
