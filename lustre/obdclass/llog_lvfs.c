@@ -57,7 +57,7 @@ static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
         int rc;
         ENTRY;
 
-        LASSERT(len >= LLOG_MIN_REC_SIZE && (len & 0xf) == 0);
+        LASSERT(len >= LLOG_MIN_REC_SIZE && (len & 0x7) == 0);
 
         tail.lrt_len = rec.lrh_len = cpu_to_le32(len);
         tail.lrt_index = rec.lrh_index = cpu_to_le32(index);
@@ -247,7 +247,8 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                         sizeof(struct llog_rec_tail);
 
         /* NOTE: padding is a record, but no bit is set */
-        if (left != 0 && left < reclen) {
+        if (left != 0 && left != reclen && 
+            left < (reclen + LLOG_MIN_REC_SIZE)) {
                 loghandle->lgh_last_idx++;
                 rc = llog_lvfs_pad(obd, file, left, loghandle->lgh_last_idx);
                 if (rc)

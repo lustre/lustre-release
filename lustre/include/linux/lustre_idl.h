@@ -878,7 +878,7 @@ struct llog_rec_tail {
 struct llog_logid_rec {
         struct llog_rec_hdr     lid_hdr;
         struct llog_logid       lid_id;
-        __u32                   padding[5];
+        __u32                   padding;
         struct llog_rec_tail    lid_tail;
 } __attribute__((packed));
 
@@ -887,7 +887,7 @@ struct llog_create_rec {
         struct ll_fid           lcr_fid;
         obd_id                  lcr_oid;
         obd_count               lcr_ogen;
-        __u32                   padding[3];
+        __u32                   padding;
         struct llog_rec_tail    lcr_tail;
 } __attribute__((packed));
 
@@ -895,7 +895,7 @@ struct llog_orphan_rec {
         struct llog_rec_hdr     lor_hdr;
         obd_id                  lor_oid;
         obd_count               lor_ogen;
-        __u32                   padding[7];
+        __u32                   padding;
         struct llog_rec_tail    lor_tail;
 } __attribute__((packed));
 
@@ -903,7 +903,7 @@ struct llog_unlink_rec {
         struct llog_rec_hdr     lur_hdr;
         obd_id                  lur_oid;
         obd_count               lur_ogen;
-        __u32                   padding[7];
+        __u32                   padding;
         struct llog_rec_tail    lur_tail;
 } __attribute__((packed));
 
@@ -911,7 +911,7 @@ struct llog_size_change_rec {
         struct llog_rec_hdr     lsc_hdr;
         struct ll_fid           lsc_fid;
         __u32                   lsc_io_epoch;
-        __u32                   padding[5];
+        __u32                   padding;
         struct llog_rec_tail    lsc_tail;
 } __attribute__((packed));
 
@@ -920,7 +920,7 @@ struct llog_size_change_rec {
 #define LLOG_HEADER_SIZE        (96)
 #define LLOG_BITMAP_BYTES       (LLOG_CHUNK_SIZE - LLOG_HEADER_SIZE)
 
-#define LLOG_MIN_REC_SIZE       (32) /* round(struct llog_rec_hdr+end_len) */
+#define LLOG_MIN_REC_SIZE       (24) /* round(llog_rec_hdr + llog_rec_tail) */
 
 /* flags for the logs */
 #define LLOG_F_ZAP_WHEN_EMPTY   0x1

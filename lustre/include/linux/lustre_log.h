@@ -231,12 +231,7 @@ static inline int llog_handle2ops(struct llog_handle *loghandle,
 
 static inline int llog_data_len(int len)
 {
-        int mask = LLOG_MIN_REC_SIZE - 1;
-        int remains = LLOG_MIN_REC_SIZE - sizeof(struct llog_rec_hdr) -
-                sizeof(struct llog_rec_tail); 
-        
-        return (len <= remains) ? 
-                remains : (((len + mask) & (~mask)) + remains);
+        return size_round(len);
 }
 
 static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
@@ -268,7 +263,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                 + sizeof(struct llog_rec_tail);
         else
                 buflen = le32_to_cpu(rec->lrh_len);
-        LASSERT((buflen % LLOG_MIN_REC_SIZE) == 0);
+        LASSERT(size_round(buflen) == buflen);
 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
         RETURN(rc);

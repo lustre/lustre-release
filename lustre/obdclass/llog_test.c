@@ -40,7 +40,6 @@ static struct llog_logid cat_logid;
 
 struct llog_mini_rec {
         struct llog_rec_hdr     lmr_hdr;
-        __u32                   padding[2];
         struct llog_rec_tail    lmr_tail;
 } __attribute__((packed));
 
