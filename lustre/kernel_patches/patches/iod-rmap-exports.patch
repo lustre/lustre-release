@@ -5,8 +5,8 @@
  mm/vmscan.c     |    3 +++
  5 files changed, 11 insertions(+), 3 deletions(-)
 
---- linux-rh-2.4.20-6/fs/inode.c~iod-rmap-exports	Tue Apr  1 01:01:56 2003
-+++ linux-rh-2.4.20-6-braam/fs/inode.c	Tue Apr  1 01:01:56 2003
+--- linux-2.4.18-18/fs/inode.c~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/fs/inode.c	Thu Apr  3 00:40:01 2003
 @@ -5,6 +5,7 @@
   */
  
@@ -25,8 +25,8 @@
  
  /*
   * Statistics gathering..
---- linux-rh-2.4.20-6/fs/Makefile~iod-rmap-exports	Tue Apr  1 01:01:56 2003
-+++ linux-rh-2.4.20-6-braam/fs/Makefile	Tue Apr  1 01:02:34 2003
+--- linux-2.4.18-18/fs/Makefile~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/fs/Makefile	Thu Apr  3 00:40:29 2003
 @@ -1,3 +1,5 @@
 +
 +
@@ -37,15 +37,15 @@
  
  O_TARGET := fs.o
  
--export-objs :=	filesystems.o open.o dcache.o buffer.o dquot.o dcookies.o
-+export-objs :=	filesystems.o open.o dcache.o buffer.o dquot.o dcookies.o inode.o
+-export-objs :=	filesystems.o open.o dcache.o buffer.o
++export-objs :=	filesystems.o open.o dcache.o buffer.o inode.o
  mod-subdirs :=	nls
  
  obj-y :=	open.o read_write.o devices.o file_table.o buffer.o \
---- linux-rh-2.4.20-6/mm/vmscan.c~iod-rmap-exports	Tue Apr  1 01:01:56 2003
-+++ linux-rh-2.4.20-6-braam/mm/vmscan.c	Tue Apr  1 01:01:56 2003
-@@ -15,6 +15,8 @@
-  *  O(1) rmap vm, Arjan van de ven <arjanv@redhat.com>
+--- linux-2.4.18-18/mm/vmscan.c~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/mm/vmscan.c	Thu Apr  3 00:40:01 2003
+@@ -14,6 +14,8 @@
+  *  Multiqueue VM started 5.8.00, Rik van Riel.
   */
  
 +#include <linux/config.h>
@@ -53,7 +53,7 @@
  #include <linux/slab.h>
  #include <linux/kernel_stat.h>
  #include <linux/swap.h>
-@@ -1061,6 +1063,7 @@ void wakeup_kswapd(unsigned int gfp_mask
+@@ -837,6 +839,7 @@ void wakeup_kswapd(unsigned int gfp_mask
  	set_current_state(TASK_RUNNING);
  	remove_wait_queue(&kswapd_done, &wait);
  }
@@ -61,8 +61,8 @@
  
  static void wakeup_memwaiters(void)
  {
---- linux-rh-2.4.20-6/mm/Makefile~iod-rmap-exports	Tue Apr  1 01:01:56 2003
-+++ linux-rh-2.4.20-6-braam/mm/Makefile	Tue Apr  1 01:01:56 2003
+--- linux-2.4.18-18/mm/Makefile~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/mm/Makefile	Thu Apr  3 00:40:01 2003
 @@ -9,7 +9,7 @@
  
  O_TARGET := mm.o
@@ -72,15 +72,15 @@
  
  obj-y	 := memory.o mmap.o filemap.o mprotect.o mlock.o mremap.o \
  	    vmalloc.o slab.o bootmem.o swap.o vmscan.o page_io.o \
---- linux-rh-2.4.20-6/mm/page_alloc.c~iod-rmap-exports	Tue Apr  1 01:01:56 2003
-+++ linux-rh-2.4.20-6-braam/mm/page_alloc.c	Tue Apr  1 01:01:56 2003
-@@ -27,6 +27,7 @@
- 
- int nr_swap_pages;
+--- linux-2.4.18-18/mm/page_alloc.c~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/mm/page_alloc.c	Thu Apr  3 00:40:01 2003
+@@ -31,6 +31,7 @@ int nr_active_pages;
+ int nr_inactive_dirty_pages;
+ int nr_inactive_clean_pages;
  pg_data_t *pgdat_list;
 +EXPORT_SYMBOL(pgdat_list);
  
  /*
-  *
+  * The zone_table array is used to look up the address of the
 
 _
