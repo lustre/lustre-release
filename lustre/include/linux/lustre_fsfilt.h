@@ -63,6 +63,9 @@ struct fsfilt_operations {
                                       void *cb_data);
         int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
         int     (* fs_sync)(struct super_block *sb);
+        int     (* fs_map_inode_page)(struct inode *inode, struct page *page,
+                                      unsigned long *blocks, int *created,
+                                      int create);
         int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
                                       int nblocks, loff_t newsize);
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
@@ -225,6 +228,15 @@ static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
 static inline int fsfilt_sync(struct obd_device *obd, struct super_block *sb)
 {
         return obd->obd_fsops->fs_sync(sb);
+}
+
+static inline int fsfilt_map_inode_page(struct obd_device *obd,
+                                        struct inode *inode, struct page *page,
+                                        unsigned long *blocks, int *created,
+                                        int create)
+{
+        return obd->obd_fsops->fs_map_inode_page(inode, page, blocks, created,
+                                                 create);
 }
 
 static inline int fs_prep_san_write(struct obd_device *obd,
