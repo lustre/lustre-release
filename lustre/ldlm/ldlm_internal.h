@@ -1,5 +1,10 @@
 /* ldlm_request.c */
-int ldlm_cancel_lru(struct ldlm_namespace *ns);
+typedef enum {
+	LDLM_ASYNC,
+	LDLM_SYNC,
+} ldlm_sync_t;
+
+int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync);
 
 /* ldlm_resource.c */
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
@@ -26,6 +31,9 @@ int ldlm_run_ast_work(struct ldlm_namespace *, struct list_head *rpc_list);
 /* ldlm_lockd.c */
 int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
                       struct ldlm_lock *lock);
+void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
+                             struct ldlm_lock_desc *ld, 
+			     struct ldlm_lock *lock);
 
 /* ldlm_plain.c */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,

@@ -796,9 +796,8 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
-                                    struct ldlm_lock_desc *ld,
-                                    struct ldlm_lock *lock)
+void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
+                             struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
 {
         int do_ast;
         ENTRY;
@@ -944,10 +943,10 @@ static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
         return ptlrpc_reply(req);
 }
 
-#ifdef __KERNEL__
 int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
                       struct ldlm_lock *lock)
 {
+#ifdef __KERNEL__
         struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
         struct ldlm_bl_work_item *blwi;
         ENTRY;
@@ -965,18 +964,12 @@ int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
         list_add_tail(&blwi->blwi_entry, &blp->blp_list);
         wake_up(&blp->blp_waitq);
         spin_unlock(&blp->blp_lock);
+#else
+        LBUG();
+#endif
 
         RETURN(0);
 }
-#else
-/* XXX */
-void liblustre_ldlm_handle_bl_callback(struct ldlm_namespace *ns,
-                                       struct ldlm_lock_desc *ld,
-                                       struct ldlm_lock *lock)
-{
-        ldlm_handle_bl_callback(ns, ld, lock);
-}
-#endif
 
 static int ldlm_callback_handler(struct ptlrpc_request *req)
 {

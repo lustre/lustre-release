@@ -590,13 +590,16 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         return rc;
 }
 
-int ldlm_cancel_lru(struct ldlm_namespace *ns)
+/* when called with LDLM_ASYNC the blocking callback will be handled
+ * in a thread and this function will return after the thread has been
+ * asked to call the callback.  when called with LDLM_SYNC the blocking
+ * callback will be performed in this function. */
+int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 {
         struct list_head *tmp, *next;
-#ifndef __KERNEL__
-        LIST_HEAD(cblist);
-#endif
+        struct ldlm_lock *lock;
         int count, rc = 0;
+        LIST_HEAD(cblist);
         ENTRY;
 
         l_lock(&ns->ns_lock);
@@ -608,7 +611,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns)
         }
 
         list_for_each_safe(tmp, next, &ns->ns_unused_list) {
-                struct ldlm_lock *lock;
+
                 lock = list_entry(tmp, struct ldlm_lock, l_lru);
 
                 LASSERT(!lock->l_readers && !lock->l_writers);
@@ -622,25 +625,21 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns)
 
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
-#if __KERNEL__
-                ldlm_bl_to_thread(ns, NULL, lock);
-#else
-                list_add(&lock->l_lru, &cblist);
-#endif
+                if (sync == LDLM_ASYNC)
+                        ldlm_bl_to_thread(ns, NULL, lock);
+                else
+                        list_add(&lock->l_lru, &cblist);
 
                 if (--count == 0)
                         break;
         }
         l_unlock(&ns->ns_lock);
-#ifndef __KERNEL__
-        while (!list_empty(&cblist)) {
-                struct ldlm_lock *lock;
 
-                lock = list_entry(cblist.next, struct ldlm_lock, l_lru);
+        list_for_each_safe(tmp, next, &cblist) {
+                lock = list_entry(tmp, struct ldlm_lock, l_lru);
                 list_del_init(&lock->l_lru);
-                liblustre_ldlm_handle_bl_callback(ns, NULL, lock);
+                ldlm_handle_bl_callback(ns, NULL, lock);
         }
-#endif
         RETURN(rc);
 }
 

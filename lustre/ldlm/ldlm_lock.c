@@ -482,7 +482,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 l_unlock(&ns->ns_lock);
 #else
                 l_unlock(&ns->ns_lock);
-                liblustre_ldlm_handle_bl_callback(ns, NULL, lock);
+                ldlm_handle_bl_callback(ns, NULL, lock);
 #endif
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers) {
@@ -493,7 +493,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 list_add_tail(&lock->l_lru, &ns->ns_unused_list);
                 ns->ns_nr_unused++;
                 l_unlock(&ns->ns_lock);
-                ldlm_cancel_lru(ns);
+                ldlm_cancel_lru(ns, LDLM_ASYNC);
         } else {
                 l_unlock(&ns->ns_lock);
         }

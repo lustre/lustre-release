@@ -148,7 +148,7 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                        ns->ns_name);
                 tmp = ns->ns_max_unused;
                 ns->ns_max_unused = 0;
-                ldlm_cancel_lru(ns);
+                ldlm_cancel_lru(ns, LDLM_SYNC);
                 ns->ns_max_unused = tmp;
                 return count;
         }
@@ -158,7 +158,7 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
         ns->ns_max_unused = (unsigned int)tmp;
 
-        ldlm_cancel_lru(ns);
+        ldlm_cancel_lru(ns, LDLM_ASYNC);
 
         return count;
 }
