@@ -509,7 +509,7 @@ static int mds_open(struct ptlrpc_request *req)
         body = lustre_msg_buf(req->rq_reqmsg, 0);
 
         /* was this animal open already? */
-        /* XXX we chould only check on re-open, or do a refcount... */
+        /* XXX we should only check on re-open, or do a refcount... */
         list_for_each(tmp, &mci->mci_open_head) {
                 struct mds_file_data *fd;
                 fd = list_entry(tmp, struct mds_file_data, mfd_list);
@@ -588,8 +588,7 @@ static int mds_open(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static
-int mds_close(struct ptlrpc_request *req)
+static int mds_close(struct ptlrpc_request *req)
 {
         struct dentry *de;
         struct mds_body *body;

@@ -31,6 +31,13 @@ do_insmod() {
 	insmod  $MODULE
 }
 
+do_rmmod() {
+	MODULE=$1
+	[ "$MODULE" ] || fail "usage: $0 <module>"
+	lsmod | grep -q $MODULE || return 0
+	rmmod $MODULE || lsmod | sed "s/^/$MODULE failed: /"
+}
+
 # Return the next unused loop device on stdout and in the $LOOPDEV
 # environment variable.
 next_loop_dev() {
@@ -456,9 +463,9 @@ cleanup_portals() {
 	quit
 	EOF
 
-	rmmod kqswnal
-	rmmod ksocknal
-	rmmod portals
+	do_rmmod kqswnal
+	do_rmmod ksocknal
+	do_rmmod portals
 }
 
 cleanup_lustre() {
@@ -468,23 +475,23 @@ cleanup_lustre() {
 	losetup -d ${LOOP}1
 	losetup -d ${LOOP}2
 
-	rmmod llite
-	rmmod mdc
+	do_rmmod llite
+	do_rmmod mdc
 
-	rmmod mds_extN
-	rmmod mds_ext3
-	rmmod mds_ext2
-	rmmod mds
-	rmmod ost
-	rmmod osc
-	rmmod obdecho
-	rmmod obdfilter
-	rmmod obdext2
-	rmmod extN
+	do_rmmod mds_extN
+	do_rmmod mds_ext3
+	do_rmmod mds_ext2
+	do_rmmod mds
+	do_rmmod ost
+	do_rmmod osc
+	do_rmmod obdecho
+	do_rmmod obdfilter
+	do_rmmod obdext2
+	do_rmmod extN
 
-	rmmod ldlm
-	rmmod ptlrpc
-	rmmod obdclass
+	do_rmmod ldlm
+	do_rmmod ptlrpc
+	do_rmmod obdclass
 }
 
 cleanup_ldlm() {

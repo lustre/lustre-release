@@ -601,6 +601,8 @@ out:
         return 0;
 }
 
+#define OST_NUM_THREADS 6
+
 /* mount the file system (secretly) */
 static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -608,6 +610,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct ost_obd *ost = &obddev->u.ost;
         struct obd_device *tgt;
         int err;
+        int i;
         ENTRY;
 
         if (data->ioc_dev < 0 || data->ioc_dev > MAX_OBD_DEVICES)
@@ -642,24 +645,14 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(error_disc, err = -EINVAL);
         }
 
-        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
-        if (err)
-                GOTO(error_disc, err = -EINVAL);
-        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
-        if (err)
-                GOTO(error_disc, err = -EINVAL);
-        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
-        if (err)
-                GOTO(error_disc, err = -EINVAL);
-        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
-        if (err)
-                GOTO(error_disc, err = -EINVAL);
-        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
-        if (err)
-                GOTO(error_disc, err = -EINVAL);
-        err = ptlrpc_start_thread(obddev, ost->ost_service, "lustre_ost");
-        if (err)
-                GOTO(error_disc, err = -EINVAL);
+        for (i = 0; i < OST_NUM_THREADS; i++) {
+                err = ptlrpc_start_thread(obddev, ost->ost_service,
+                                          "lustre_ost");
+                if (err) {
+                        CERROR("error starting thread #%d: rc %d\n", i, err);
+                        GOTO(error_disc, err = -EINVAL);
+                }
+        }
 
         RETURN(0);
 

@@ -231,13 +231,13 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         ENTRY;
 
         if (blocksize != PAGE_SIZE) {
-                CERROR("direct_IO blocksize != PAGE_SIZE, what to do?\n");
-                LBUG();
+                CERROR("direct_IO blocksize != PAGE_SIZE\n");
+                return -EINVAL;
         }
 
-        OBD_ALLOC(count, sizeof(obd_size) * bufs_per_obdo);
-        OBD_ALLOC(offset, sizeof(obd_off) * bufs_per_obdo);
-        OBD_ALLOC(flags, sizeof(obd_flag) * bufs_per_obdo);
+        OBD_ALLOC(count, sizeof(*count) * bufs_per_obdo);
+        OBD_ALLOC(offset, sizeof(*offset) * bufs_per_obdo);
+        OBD_ALLOC(flags, sizeof(*flags) * bufs_per_obdo);
         if (!count || !offset || !flags)
                 GOTO(out, rc = -ENOMEM);
 
@@ -253,19 +253,17 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         oa = ll_i2info(inode)->lli_obdo;
         if (!oa)
                 GOTO(out, rc = -ENOMEM);
+
         rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                      ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
                      iobuf->maplist, count, offset, flags, NULL);
         if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;
 
- out:
-        if (flags) 
-                OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo); 
-        if (count) 
-                OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo); 
-        if (offset) 
-                OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo); 
+out:
+        OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo);
+        OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo);
+        OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo);
         RETURN(rc);
 }
 
@@ -317,14 +315,10 @@ int ll_flush_inode_pages(struct inode * inode)
                 err = bufs_per_obdo * 4096;
 #endif
  out:
-        if (oa) 
-                obdo_free(oa);
-        if (flags) 
-                OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo); 
-        if (count) 
-                OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo); 
-        if (offset) 
-                OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo); 
+        obdo_free(oa);
+        OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo);
+        OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo);
+        OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo);
         RETURN(err);
 }
 

@@ -165,7 +165,7 @@ static int filter_prep(struct obd_device *obddev)
         return(rc);
 
 out_O_mode:
-        while (--mode >= 0) {
+        while (mode-- > 0) {
                 struct dentry *dentry = filter->fo_dentry_O_mode[mode];
                 if (dentry) {
                         CDEBUG(D_INODE, "putting O/%s: %p, count = %d\n",
@@ -404,9 +404,10 @@ static int filter_setup(struct obd_device *obddev, obd_count len, void *buf)
         filter->fo_vfsmnt = mnt;
         filter->fo_fstype = strdup(data->ioc_inlbuf2);
 
+        OBD_SET_CTXT_MAGIC(&filter->fo_ctxt);
         filter->fo_ctxt.pwdmnt = mnt;
         filter->fo_ctxt.pwd = mnt->mnt_root;
-        filter->fo_ctxt.fs = KERNEL_DS;
+        filter->fo_ctxt.fs = get_ds();
 
         err = filter_prep(obddev);
         if (err)
@@ -793,7 +794,7 @@ static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
         return err;
 } /* filter_write */
 
-static int filter_pgcache_brw(int rw, struct obd_conn *conn, obd_count num_oa,
+static int filter_pgcache_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
                                struct obdo **oa, obd_count *oa_bufs,
                                struct page **pages, obd_size *count,
                                obd_off *offset, obd_flag *flags, void *callback)
@@ -813,7 +814,6 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn, obd_count num_oa,
         }
 
         sb = conn->oc_dev->u.filter.fo_sb;
-        // if (rw == WRITE)
         push_ctxt(&saved, &conn->oc_dev->u.filter.fo_ctxt);
         pnum = 0; /* pnum indexes buf 0..num_pages */
         for (onum = 0; onum < num_oa; onum++) {
@@ -828,11 +828,11 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn, obd_count num_oa,
                 for (pg = 0; pg < oa_bufs[onum]; pg++) {
                         CDEBUG(D_INODE, "OP %d obdo no/pno: (%d,%d) (%ld,%ld) "
                                "off count (%Ld,%Ld)\n",
-                               rw, onum, pnum, file->f_dentry->d_inode->i_ino,
+                               cmd, onum, pnum, file->f_dentry->d_inode->i_ino,
                                (unsigned long)offset[pnum] >> PAGE_CACHE_SHIFT,
                                (unsigned long long)offset[pnum],
                                (unsigned long long)count[pnum]);
-                        if (rw == WRITE) {
+                        if (cmd & OBD_BRW_WRITE) {
                                 loff_t off;
                                 char *buffer;
                                 off = offset[pnum];
@@ -867,7 +867,6 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 
         EXIT;
 out:
-        // if (rw == WRITE)
         pop_ctxt(&saved);
         error = (retval >= 0) ? 0 : retval;
         return error;
@@ -1065,6 +1064,9 @@ static int filter_journal_stop(void *journal_save, struct filter_obd *filter,
             !strcmp(filter->fo_fstype, "extN"))
                 rc = ext3_filter_journal_stop(handle);
 
+        if (rc)
+                CERROR("error on journal stop: rc = %d\n", rc);
+
         current->journal_info = journal_save;
 
         return rc;
@@ -1080,10 +1082,11 @@ struct page *filter_get_page_write(struct inode *inode, unsigned long index,
         //ASSERT_PAGE_INDEX(index, GOTO(err, rc = -EINVAL));
         page = grab_cache_page_nowait(mapping, index); /* locked page */
 
-        /* This page is currently locked, so we grab a new one temporarily */
+        /* This page is currently locked, so get a temporary page instead */
         if (!page) {
                 unsigned long addr;
-                addr = __get_free_pages(GFP_KERNEL, 0);
+                CDEBUG(D_PAGE, "ino %ld page %ld locked\n", inode->i_ino,index);
+                addr = __get_free_pages(GFP_KERNEL, 0); /* locked page */
                 if (!addr) {
                         CERROR("no memory for a temp page\n");
                         LBUG();
@@ -1122,6 +1125,38 @@ err:
         return ERR_PTR(rc);
 }
 
+/*
+ * We need to balance prepare_write() calls with commit_write() calls.
+ * If the page has been prepared, but we have no data for it, we don't
+ * want to overwrite valid data on disk, but we still need to zero out
+ * data for space which was newly allocated.  Like part of what happens
+ * in __block_prepare_write() for newly allocated blocks.
+ *
+ * XXX currently __block_prepare_write() creates buffers for all the
+ *     pages, and the filesystems mark these buffers as BH_New if they
+ *     were newly allocated from disk. We use the BH_New flag similarly.
+ */
+static int filter_commit_write(struct page *page, unsigned from, unsigned to,
+                               int err)
+{
+        if (err) {
+                unsigned block_start, block_end;
+                struct buffer_head *bh, *head = page->buffers;
+                unsigned blocksize = head->b_size;
+                void *addr = page_address(page);
+
+                /* Currently one buffer per page, but in the future... */
+                for (bh = head, block_start = 0; bh != head || !block_start;
+                     block_start = block_end, bh = bh->b_this_page) {
+                        block_end = block_start + blocksize;
+                        if (buffer_new(bh))
+                                memset(addr + block_start, 0, blocksize);
+                }
+        }
+
+        return lustre_commit_write(page, from, to);
+}
+
 static int filter_preprw(int cmd, struct obd_conn *conn,
                          int objcount, struct obd_ioobj *obj,
                          int niocount, struct niobuf_remote *nb,
@@ -1142,7 +1177,7 @@ static int filter_preprw(int cmd, struct obd_conn *conn,
 
         push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
 
-        if (cmd == OBD_BRW_WRITE) {
+        if (cmd & OBD_BRW_WRITE) {
                 *desc_private = filter_journal_start(&journal_save,
                                                      &obddev->u.filter,
                                                      objcount, obj, niocount,
@@ -1160,44 +1195,33 @@ static int filter_preprw(int cmd, struct obd_conn *conn,
                                            filter_parent(obddev, S_IFREG),
                                            o->ioo_id, S_IFREG);
                 if (IS_ERR(dentry))
-                        GOTO(out_ctxt, rc = PTR_ERR(dentry));
+                        GOTO(out_clean, rc = PTR_ERR(dentry));
                 inode = dentry->d_inode;
+                if (!inode) {
+                        CERROR("trying to BRW to non-existent file %Ld\n",
+                               (unsigned long long)o->ioo_id);
+                        dput(dentry);
+                        GOTO(out_clean, rc = -ENOENT);
+                }
 
                 for (j = 0; j < o->ioo_bufcnt; j++, b++, r++) {
                         unsigned long index = b->offset >> PAGE_SHIFT;
                         struct page *page;
 
-                        /* XXX  We _might_ change this to a dcount if we
-                         * wanted to pass a dentry pointer in the niobuf
-                         * to avoid doing so many igets on an inode we
-                         * already have.  It appears to be solely for the
-                         * purpose of having a refcount that we can drop
-                         * in commitrw where we get one call per page.
-                         */
-                        if (j > 0)
-                                r->dentry = dget(dentry);
-                        else
+                        if (j == 0)
                                 r->dentry = dentry;
+                        else
+                                r->dentry = dget(dentry);
 
-                        /* FIXME: we need to iput all inodes on error */
-                        if (!inode)
-                                GOTO(out_ctxt, rc = -EINVAL);
-
-                        if (cmd == OBD_BRW_WRITE) {
+                        if (cmd & OBD_BRW_WRITE)
                                 page = filter_get_page_write(inode, index, r);
-
-                                /* We unlock the page to avoid deadlocks with
-                                 * the page I/O because we are preparing
-                                 * multiple pages at one time and we have lock
-                                 * ordering problems.  Lustre I/O and disk I/O
-                                 * on this page can happen concurrently.
-                                 */
-                        } else
+                        else
                                 page = lustre_get_page_read(inode, index);
 
-                        /* FIXME: we need to clean up here... */
-                        if (IS_ERR(page))
-                                GOTO(out_ctxt, rc = PTR_ERR(page));
+                        if (IS_ERR(page)) {
+                                dput(dentry);
+                                GOTO(out_clean, rc = PTR_ERR(page));
+                        }
 
                         r->addr = page_address(page);
                         r->offset = b->offset;
@@ -1206,14 +1230,25 @@ static int filter_preprw(int cmd, struct obd_conn *conn,
                 }
         }
 
-        if (cmd == OBD_BRW_WRITE) {
-                /* FIXME: need to clean up here */
-                rc = filter_journal_stop(journal_save, &obddev->u.filter,
-                                         *desc_private);
+out_stop:
+        if (cmd & OBD_BRW_WRITE) {
+                int err = filter_journal_stop(journal_save, &obddev->u.filter,
+                                              *desc_private);
+                if (!rc)
+                        rc = err;
         }
 out_ctxt:
         pop_ctxt(&saved);
         RETURN(rc);
+out_clean:
+        while (r-- > res) {
+                dput(r->dentry);
+                if (cmd & OBD_BRW_WRITE)
+                        filter_commit_write(r->page, 0, PAGE_SIZE, rc);
+                else
+                        lustre_put_page(r->page);
+        }
+        goto out_stop;
 }
 
 static int filter_write_locked_page(struct niobuf_local *lnb)
@@ -1222,13 +1257,32 @@ static int filter_write_locked_page(struct niobuf_local *lnb)
         int rc;
 
         lpage = lustre_get_page_write(lnb->dentry->d_inode, lnb->page->index);
-        /* XXX */
+        if (IS_ERR(lpage)) {
+                /* It is highly unlikely that we would ever get an error here.
+                 * The page we want to get was previously locked, so it had to
+                 * have already allocated the space, and we were just writing
+                 * over the same data, so there would be no hole in the file.
+                 *
+                 * XXX: possibility of a race with truncate could exist, need
+                 *      to check that.  There are no guarantees w.r.t.
+                 *      write order even on a local filesystem, although the
+                 *      normal response would be to return the number of bytes
+                 *      successfully written and leave the rest to the app.
+                 */
+                rc = PTR_ERR(lpage);
+                CERROR("error getting locked page index %ld: rc = %d\n",
+                       lnb->page->index, rc);
+                GOTO(out, rc);
+        }
 
         memcpy(page_address(lpage), kmap(lnb->page), PAGE_SIZE);
+        rc = lustre_commit_write(lpage, 0, PAGE_SIZE);
+        if (rc)
+                CERROR("error committing locked page %ld: rc = %d\n",
+                       lnb->page->index, rc);
+out:
         kunmap(lnb->page);
         __free_pages(lnb->page, 0);
-
-        rc = lustre_commit_page(lpage, 0, PAGE_SIZE);
         dput(lnb->dentry);
 
         return rc;
@@ -1244,10 +1298,10 @@ static int filter_commitrw(int cmd, struct obd_conn *conn,
         struct niobuf_local *r = res;
         void *journal_save;
         int found_locked = 0;
+        int rc = 0;
         int i;
         ENTRY;
 
-        // if (cmd == OBD_BRW_WRITE)
         push_ctxt(&saved, &conn->oc_dev->u.filter.fo_ctxt);
         journal_save = current->journal_info;
         if (journal_save)
@@ -1258,11 +1312,6 @@ static int filter_commitrw(int cmd, struct obd_conn *conn,
                 for (j = 0 ; j < o->ioo_bufcnt ; j++, r++) {
                         struct page *page = r->page;
 
-                        /* If there was an error setting up a particular page
-                         * for I/O we still need to continue with the rest of
-                         * the pages in order to balance prepate/commit_write
-                         * calls, and to complete as much I/O as possible.
-                         */
                         if (!page)
                                 LBUG();
 
@@ -1271,13 +1320,12 @@ static int filter_commitrw(int cmd, struct obd_conn *conn,
                                 continue;
                         }
 
-                        if (cmd == OBD_BRW_WRITE) {
-                                int rc;
-                                rc = lustre_commit_page(page, 0, PAGE_SIZE);
+                        if (cmd & OBD_BRW_WRITE) {
+                                int err = filter_commit_write(page, 0,
+                                                              PAGE_SIZE, 0);
 
-                                /* FIXME: still need to iput the other inodes */
-                                if (rc)
-                                        RETURN(rc);
+                                if (!rc)
+                                        rc = err;
                         } else
                                 lustre_put_page(page);
 
@@ -1291,21 +1339,22 @@ static int filter_commitrw(int cmd, struct obd_conn *conn,
                 }
         }
         if (!found_locked)
-                goto out;
+                goto out_ctxt;
 
         for (i = 0; i < objcount; i++, obj++) {
                 int j;
                 for (j = 0 ; j < o->ioo_bufcnt ; j++, r++) {
-                        int rc;
+                        int err;
                         if (!(r->flags & N_LOCAL_TEMP_PAGE))
                                 continue;
 
-                        rc = filter_write_locked_page(r);
-                        /* XXX */
+                        err = filter_write_locked_page(r);
+                        if (!rc)
+                                rc = err;
                 }
         }
 
-out:
+out_ctxt:
         current->journal_info = journal_save;
         pop_ctxt(&saved);
         RETURN(0);

@@ -303,9 +303,8 @@ int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, uns
         }
 
         rc = obdfs_brw(OBD_BRW_READ, inode, page, 0);
-        if ( !rc ) {
+        if (!rc)
                 SetPageUptodate(page);
-        }
 
  prepare_done:
         set_page_dirty(page);

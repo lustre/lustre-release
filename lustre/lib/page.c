@@ -200,7 +200,7 @@ err_unlock:
         return ERR_PTR(rc);
 }
 
-int lustre_commit_page(struct page *page, unsigned from, unsigned to)
+int lustre_commit_write(struct page *page, unsigned from, unsigned to)
 {
         struct inode *inode = page->mapping->host;
         int err = 0;

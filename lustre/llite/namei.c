@@ -564,7 +564,6 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
 
         inode->i_ctime = dir->i_ctime;
         ext2_dec_count(inode);
-        err = 0;
 out:
         return err;
 }
