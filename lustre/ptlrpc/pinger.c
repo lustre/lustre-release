@@ -149,10 +149,10 @@ static int ptlrpc_pinger_main(void *arg)
                                 /* Add a ping. */
                                 spin_lock_irqsave(&imp->imp_lock, flags);
                                 generation = imp->imp_generation;
-                                level = imp->imp_level;
+                                level = imp->imp_state;
                                 spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-                                if (level != LUSTRE_CONN_FULL) {
+                                if (level != LUSTRE_IMP_FULL) {
                                         CDEBUG(D_HA,
                                                "not pinging %s (in recovery)\n",
                                                imp->imp_target_uuid.uuid);
@@ -167,7 +167,7 @@ static int ptlrpc_pinger_main(void *arg)
                                 }
                                 req->rq_no_resend = 1;
                                 req->rq_replen = lustre_msg_size(0, NULL);
-                                req->rq_level = LUSTRE_CONN_FULL;
+                                req->rq_send_state = LUSTRE_IMP_FULL;
                                 req->rq_phase = RQ_PHASE_RPC;
                                 req->rq_import_generation = generation;
                                 ptlrpc_set_add_req(set, req);

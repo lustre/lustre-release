@@ -104,7 +104,7 @@ static int mgmtcli_connect_to_svc(struct obd_device *obd)
         ENTRY;
 
         /* Connect to ourselves, and thusly to the mgmt service. */
-        rc = client_import_connect(&mc->mc_ping_handle, obd, &obd->obd_uuid);
+        rc = client_connect_import(&mc->mc_ping_handle, obd, &obd->obd_uuid);
         if (rc) {
                 CERROR("failed to connect to mgmt svc: %d\n", rc);
                 (void)client_obd_cleanup(obd, 0);
@@ -126,7 +126,7 @@ static int mgmtcli_connect_to_svc(struct obd_device *obd)
                 CERROR("can't start thread to ping mgmt svc %s: %d\n",
                        mc->mc_import->imp_target_uuid.uuid, rc);
                 OBD_FREE(mc->mc_ping_thread, sizeof (*mc->mc_ping_thread));
-                (void)client_import_disconnect(&mc->mc_ping_handle, 0);
+                (void)client_disconnect_import(&mc->mc_ping_handle, 0);
                 RETURN(rc);
         }
         l_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING, &lwi);
@@ -143,7 +143,7 @@ static int mgmtcli_disconnect_from_svc(struct obd_device *obd)
         int rc;
 
         ENTRY;
-        rc = client_import_disconnect(&mc->mc_ping_handle, 0);
+        rc = client_disconnect_import(&mc->mc_ping_handle, 0);
         if (rc) {
                 CERROR("can't disconnect from %s: %d (%s)\n",
                        imp->imp_target_uuid.uuid, rc,
