@@ -41,9 +41,9 @@ STRIPES_PER_OBJ=0
 
 gen_config() {
     rm -f $XMLCONFIG
-    add_facet mds
-    add_facet ost
-    add_facet client --lustre_upcall $UPCALL
+    add_facet mds --timeout=${TIMEOUT}
+    add_facet ost --timeout=${TIMEOUT}
+    add_facet client --lustre_upcall $UPCALL --timeout=${TIMEOUT}
     do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
     if [ ! -z "$mdsfailover_HOST" ]; then
 	 add_facet mdsfailover
