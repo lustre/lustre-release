@@ -2,16 +2,25 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  linux/mds/mds_lov.c
- *
  *  Lustre Metadata Server (mds) handling of striped file data
  *
- *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
  *
- *  This code is issued under the GNU General Public License.
- *  See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- *  by Peter Braam <braam@clusterfs.com> &
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define EXPORT_SYMTAB
@@ -35,7 +44,7 @@ void lov_packdesc(struct lov_desc *ld)
 }
 
 int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
-                    obd_uuid_t *uuidarray)
+                    struct obd_uuid *uuidarray)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
@@ -46,6 +55,32 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
         ENTRY;
 
         tgt_count = desc->ld_tgt_count;
+        if (desc->ld_default_stripe_count > desc->ld_tgt_count) {
+                CERROR("default stripe count %u > OST count %u\n",
+                       desc->ld_default_stripe_count, desc->ld_tgt_count);
+                RETURN(-EINVAL);
+        }
+        if (desc->ld_default_stripe_size & (PAGE_SIZE - 1)) {
+                CERROR("default stripe size "LPU64" not a multiple of %lu\n",
+                       desc->ld_default_stripe_size, PAGE_SIZE);
+                RETURN(-EINVAL);
+        }
+        if (desc->ld_default_stripe_offset > desc->ld_tgt_count) {
+                CERROR("default stripe offset "LPU64" > max OST index %u\n",
+                       desc->ld_default_stripe_offset, desc->ld_tgt_count);
+                RETURN(-EINVAL);
+        }
+        if (desc->ld_pattern != 0) {
+                CERROR("stripe pattern %u unknown\n",
+                       desc->ld_pattern);
+                RETURN(-EINVAL);
+        }
+
+        memcpy(&mds->mds_lov_desc, desc, sizeof *desc);
+        mds->mds_has_lov_desc = 1;
+        /* XXX the MDS should not really know about this */
+        mds->mds_max_mdsize = lov_mds_md_size(desc->ld_tgt_count);
+
         lov_packdesc(desc);
 
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
@@ -55,6 +90,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                 GOTO(out, rc = PTR_ERR(f));
         }
 
+#warning FIXME: if there is an existing LOVDESC, verify new tgt_count > old
         rc = lustre_fwrite(f, (char *)desc, sizeof(*desc), &f->f_pos);
         if (filp_close(f, 0))
                 CERROR("Error closing LOVDESC file\n");
@@ -69,13 +105,14 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                 GOTO(out, rc = PTR_ERR(f));
         }
 
+#warning FIXME: if there is an existing LOVTGTS, verify existing UUIDs same
         rc = 0;
         for (i = 0; i < tgt_count ; i++) {
-                rc = lustre_fwrite(f, uuidarray[i],
+                rc = lustre_fwrite(f, uuidarray[i].uuid,
                                    sizeof(uuidarray[i]), &f->f_pos);
                 if (rc != sizeof(uuidarray[i])) {
                         CERROR("cannot write LOV UUID %s (%d)\n",
-                               uuidarray[i], i);
+                               uuidarray[i].uuid, i);
                         if (rc >= 0)
                                 rc = -EIO;
                         break;
@@ -120,7 +157,7 @@ out:
         return rc;
 }
 
-int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,obd_uuid_t *uuidarray)
+int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,struct obd_uuid *uuidarray)
 {
         struct obd_run_ctxt saved;
         struct file *f;
@@ -160,10 +197,9 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
         struct obd_device *obd = class_conn2obd(conn);
         struct obd_ioctl_data *data = karg;
         struct lov_desc *desc;
-        obd_uuid_t *uuidarray;
+        struct obd_uuid *uuidarray;
         int count;
         int rc;
-
 
         switch (cmd) {
         case OBD_IOC_LOV_SET_CONFIG:
@@ -174,7 +210,7 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
                 }
 
                 count = desc->ld_tgt_count;
-                uuidarray = (obd_uuid_t *)data->ioc_inlbuf2;
+                uuidarray = (struct obd_uuid *)data->ioc_inlbuf2;
                 if (sizeof(*uuidarray) * count != data->ioc_inllen2) {
                         CERROR("UUID array size wrong\n");
                         RETURN(-EINVAL);
@@ -190,7 +226,7 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
                 }
 
                 count = desc->ld_tgt_count;
-                uuidarray = (obd_uuid_t *)data->ioc_inlbuf2;
+                uuidarray = (struct obd_uuid *)data->ioc_inlbuf2;
                 if (sizeof(*uuidarray) * count != data->ioc_inllen2) {
                         CERROR("UUID array size wrong\n");
                         RETURN(-EINVAL);
@@ -203,9 +239,15 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
                 rc = mds_get_lovtgts(&obd->u.mds, desc->ld_tgt_count, uuidarray);
 
                 RETURN(rc);
+
+            case OBD_IOC_SET_READONLY:
+                CERROR("setting device %s read-only\n",
+                       ll_bdevname(obd->u.mds.mds_sb->s_dev));
+                dev_set_rdonly(obd->u.mds.mds_sb->s_dev, 2);
+                RETURN(0);
+
         default:
                 RETURN(-EINVAL);
         }
-
         RETURN(0);
 }
