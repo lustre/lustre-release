@@ -65,8 +65,8 @@ struct ll_writeback_pages {
  * the brw_page array.  returns 0 if there is more room and 1
  * if the array is full.
  */
-static int llwp_consume_page(struct ll_writeback_pages *llwp, 
-                              struct inode *inode, struct page *page)
+static int llwp_consume_page(struct ll_writeback_pages *llwp,
+                             struct inode *inode, struct page *page)
 {
         obd_off off = ((obd_off)page->index) << PAGE_SHIFT;
         struct brw_page *pg;
@@ -145,18 +145,16 @@ static void ll_get_dirty_pages(struct inode *inode,
         EXIT;
 }
 
-static void ll_writeback( struct inode *inode,
-                                 struct ll_writeback_pages *llwp)
+static void ll_writeback(struct inode *inode, struct ll_writeback_pages *llwp)
 {
-        int rc, i;
         struct obd_brw_set *set;
-        unsigned int nbytes;
+        int rc, i;
         ENTRY;
 
-        nbytes = ((llwp->npgs-1)<< PAGE_SHIFT) + llwp->pga[llwp->npgs-1].count;
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu,bytes=%u\n",
+               inode->i_ino, ((llwp->npgs-1) << PAGE_SHIFT) +
+                             llwp->pga[llwp->npgs-1].count);
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu,bytes=%u\n", 
-               inode->i_ino, nbytes);
         set = obd_brw_set_new();
         if (set == NULL) {
                 EXIT;
@@ -186,7 +184,7 @@ static void ll_writeback( struct inode *inode,
         else
                 INODE_IO_STAT_ADD(inode, wb_ok, llwp->npgs);
 
-        for ( i = 0 ; i < llwp->npgs ; i++) {
+        for (i = 0 ; i < llwp->npgs ; i++) {
                 struct page *page = llwp->pga[i].pg;
 
                 CDEBUG(D_CACHE, "finished page %p at index %lu\n", page,
@@ -324,7 +322,7 @@ int ll_check_dirty( struct super_block *sb)
                         llwp.npgs = 0;
                         ll_get_dirty_pages(inode, &llwp);
                         if (llwp.npgs) {
-                                INODE_IO_STAT_ADD(inode, wb_from_pressure, 
+                                INODE_IO_STAT_ADD(inode, wb_from_pressure,
                                                   llwp.npgs);
                                 ll_writeback(inode, &llwp);
                                 rc += llwp.npgs;
@@ -358,8 +356,8 @@ int ll_check_dirty( struct super_block *sb)
                 if (list_empty(&sb->s_locked_inodes))
                         break;
 
-                inode = list_entry(sb->s_locked_inodes.next, struct inode, 
-                                i_list);
+                inode = list_entry(sb->s_locked_inodes.next, struct inode,
+                                   i_list);
 
                 atomic_inc(&inode->i_count); /* XXX hack? */
                 spin_unlock(&inode_lock);
@@ -416,24 +414,24 @@ struct offset_extent {
         unsigned long   oe_start, oe_end;
 };
 
-static struct offset_extent * ll_find_oe(rb_root_t *root, 
-                                      struct offset_extent *needle)
+static struct offset_extent * ll_find_oe(rb_root_t *root,
+                                         struct offset_extent *needle)
 {
         struct rb_node_s *node = root->rb_node;
         struct offset_extent *oe;
         ENTRY;
 
-        CDEBUG(D_INODE, "searching [%lu -> %lu]\n", needle->oe_start, 
+        CDEBUG(D_INODE, "searching [%lu -> %lu]\n", needle->oe_start,
                needle->oe_end);
 
         while (node) {
                 oe = rb_entry(node, struct offset_extent, oe_node);
-                if (needle->oe_end < oe->oe_start )
+                if (needle->oe_end < oe->oe_start)
                         node = node->rb_left;
-                else if (needle->oe_start > oe->oe_end )
+                else if (needle->oe_start > oe->oe_end)
                         node = node->rb_right;
                 else {
-                        CDEBUG(D_INODE, "returning [%lu -> %lu]\n", 
+                        CDEBUG(D_INODE, "returning [%lu -> %lu]\n",
                                oe->oe_start, oe->oe_end);
                         RETURN(oe);
                 }
@@ -460,7 +458,7 @@ static void ll_insert_oe(rb_root_t *root, struct offset_extent *new_oe)
                         p = &(*p)->rb_left;
                 else if ( new_oe->oe_start > oe->oe_end )
                         p = &(*p)->rb_right;
-                else 
+                else
                         LBUG();
         }
         rb_link_node(&new_oe->oe_node, parent, p);
@@ -468,8 +466,8 @@ static void ll_insert_oe(rb_root_t *root, struct offset_extent *new_oe)
         EXIT;
 }
 
-static inline void lldo_dirty_add(struct inode *inode, 
-                                  struct ll_dirty_offsets *lldo, 
+static inline void lldo_dirty_add(struct inode *inode,
+                                  struct ll_dirty_offsets *lldo,
                                   long val)
 {
         lldo->do_num_dirty += val;
@@ -509,7 +507,7 @@ void ll_record_dirty(struct inode *inode, unsigned long offset)
         /* ok, need to check for adjacent neighbours */
         needle.oe_start = offset;
         needle.oe_end = offset;
-        if ( ll_find_oe(&lldo->do_root, &needle) ) 
+        if (ll_find_oe(&lldo->do_root, &needle))
                 GOTO(out, rc = 3);
 
         /* ok, its safe to extend the oe we found */
@@ -530,7 +528,7 @@ out:
         return;
 }
 
-void ll_remove_dirty(struct inode *inode, unsigned long start, 
+void ll_remove_dirty(struct inode *inode, unsigned long start,
                      unsigned long end)
 {
         struct ll_dirty_offsets *lldo = &ll_i2info(inode)->lli_dirty;
@@ -617,7 +615,7 @@ int ll_farthest_dirty(struct ll_dirty_offsets *lldo, unsigned long *farthest)
 
         spin_lock(&lldo->do_lock);
         for (node = lldo->do_root.rb_node, last = NULL;
-             node; 
+             node;
              last = node, node = node->rb_right)
                 ;
 
@@ -644,23 +642,23 @@ static int ll_pgcache_seq_show(struct seq_file *seq, void *v)
         struct ll_sb_info *sbi = seq->private;
         do_gettimeofday(&now);
 
-        seq_printf(seq, "snapshot_time:            %lu:%lu (secs:usecs)\n", 
+        seq_printf(seq, "snapshot_time:            %lu:%lu (secs:usecs)\n",
                    now.tv_sec, now.tv_usec);
-        seq_printf(seq, "VM_under_pressure:        %s\n", 
+        seq_printf(seq, "VM_under_pressure:        %s\n",
                    should_writeback() ? "yes" : "no");
-        seq_printf(seq, "dirty_pages:              "LPU64"\n", 
+        seq_printf(seq, "dirty_pages:              "LPU64"\n",
                    sbi->ll_iostats.fis_dirty_pages);
-        seq_printf(seq, "dirty_page_hits:          "LPU64"\n", 
+        seq_printf(seq, "dirty_page_hits:          "LPU64"\n",
                    sbi->ll_iostats.fis_dirty_hits);
-        seq_printf(seq, "dirty_page_misses:        "LPU64"\n", 
+        seq_printf(seq, "dirty_page_misses:        "LPU64"\n",
                    sbi->ll_iostats.fis_dirty_misses);
-        seq_printf(seq, "writeback_from_writepage: "LPU64"\n", 
+        seq_printf(seq, "writeback_from_writepage: "LPU64"\n",
                    sbi->ll_iostats.fis_wb_from_writepage);
-        seq_printf(seq, "writeback_from_pressure:  "LPU64"\n", 
+        seq_printf(seq, "writeback_from_pressure:  "LPU64"\n",
                    sbi->ll_iostats.fis_wb_from_pressure);
-        seq_printf(seq, "writeback_ok_pages:       "LPU64"\n", 
+        seq_printf(seq, "writeback_ok_pages:       "LPU64"\n",
                    sbi->ll_iostats.fis_wb_ok);
-        seq_printf(seq, "writeback_failed_pages:   "LPU64"\n", 
+        seq_printf(seq, "writeback_failed_pages:   "LPU64"\n",
                    sbi->ll_iostats.fis_wb_fail);
         return 0;
 }
@@ -690,7 +688,7 @@ struct seq_operations ll_pgcache_seq_sops = {
 static int ll_pgcache_seq_open(struct inode *inode, struct file *file)
 {
         struct proc_dir_entry *dp = inode->u.generic_ip;
-        struct seq_file *seq; 
+        struct seq_file *seq;
         int rc;
 
         rc = seq_open(file, &ll_pgcache_seq_sops);
