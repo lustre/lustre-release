@@ -76,6 +76,12 @@ void ll_ap_completion_24(void *data, int cmd, int rc)
         LL_CDEBUG_PAGE(page, "io complete, unlocking\n");
 
         unlock_page(page);
+
+        if (0 && cmd == OBD_BRW_WRITE) {
+                llap_write_complete(page->mapping->host, llap);
+                ll_try_done_writing(page->mapping->host);
+        }
+
         page_cache_release(page);
 }
 
@@ -168,10 +174,7 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
                         POISON_PAGE(iobuf->maplist[i], 0x0d);
         }
 
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        ll_inode_fill_obdo(inode, rw, &oa);
 
         if (rw == WRITE)
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
