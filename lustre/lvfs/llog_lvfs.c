@@ -583,9 +583,14 @@ static int llog_add_link_object(struct llog_ctxt *ctxt, struct llog_logid logid,
         lock_kernel();
         rc = vfs_link(dentry, ctxt->loc_objects_dir->d_inode, new_child);
         unlock_kernel();
-        if (rc)
-                CERROR("error link new object "LPX64":%u: rc %d\n",
+        if (rc) {
+                CERROR("error link new object "LPX64":%08x: rc %d\n",
                        logid.lgl_oid, logid.lgl_ogen, rc);
+                /* it doesn't make much sense to get -EEXIST here */
+                LASSERTF(rc != -EEXIST, "bug 3490: dentry: %p "
+                         "dir->d_ionode %p new_child: %p  \n",
+                         dentry, ctxt->loc_objects_dir->d_inode, new_child);
+        }
         err = llog_fsfilt_commit(ctxt, ctxt->loc_objects_dir->d_inode, handle, 0);
 out_dput:
         l_dput(new_child);
