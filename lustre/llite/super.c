@@ -87,7 +87,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         char *mdc = NULL;
         int err;
         struct ll_fid rootfid;
-        struct statfs sfs;
+        struct obd_statfs osfs;
         __u64 last_committed;
         __u64 last_xid;
         struct ptlrpc_request *request = NULL;
@@ -157,14 +157,14 @@ static struct super_block * ll_read_super(struct super_block *sb,
         CDEBUG(D_SUPER, "rootfid %Ld\n", (unsigned long long)rootfid.id);
         sbi->ll_rootino = rootfid.id;
 
-        memset(&sfs, 0, sizeof(sfs));
+        memset(&osfs, 0, sizeof(osfs));
         request = NULL;
-        err = mdc_statfs(&sbi->ll_mdc_conn, &sfs, &request);
+        err = mdc_statfs(&sbi->ll_mdc_conn, &osfs, &request);
         ptlrpc_req_finished(request);
-        sb->s_blocksize = sfs.f_bsize;
-        sb->s_blocksize_bits = log2(sfs.f_bsize);
+        sb->s_blocksize = osfs.os_bsize;
+        sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
-        sb->s_maxbytes = (1ULL << (32 + 9)) - sfs.f_bsize;
+        sb->s_maxbytes = (1ULL << (32 + 9)) - osfs.os_bsize;
 
         sb->s_op = &ll_super_operations;
 
@@ -356,31 +356,36 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
 {
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct obd_statfs osfs;
         int rc;
         ENTRY;
 
         memset(sfs, 0, sizeof(*sfs));
-        rc = mdc_statfs(&sbi->ll_mdc_conn, sfs, &request);
+        rc = mdc_statfs(&sbi->ll_mdc_conn, &osfs, &request);
+        statfs_unpack(sfs, &osfs);
         ptlrpc_req_finished(request);
         if (rc)
-                CERROR("obd_statfs fails: rc = %d\n", rc);
+                CERROR("mdc_statfs fails: rc = %d\n", rc);
         else
-                CDEBUG(D_SUPER, "statfs shows blocks %lu/%lu objects %lu/%lu\n",
-                       sfs->f_bavail, sfs->f_blocks, sfs->f_ffree,sfs->f_files);
+                CDEBUG(D_SUPER, "mdc_statfs shows blocks "LPU64"/"LPU64
+                       " objects "LPU64"/"LPU64"\n",
+                       osfs.os_bavail, osfs.os_blocks,
+                       osfs.os_ffree, osfs.os_files);
 
         /* temporary until mds_statfs returns statfs info for all OSTs */
         if (!rc) {
                 struct statfs obd_sfs;
 
-                rc = obd_statfs(&sbi->ll_osc_conn, &obd_sfs);
+                rc = obd_statfs(&sbi->ll_osc_conn, &osfs);
+                statfs_unpack(&obd_sfs, &osfs);
                 if (rc) {
                         CERROR("obd_statfs fails: rc = %d\n", rc);
                         GOTO(out, rc);
                 }
-                CDEBUG(D_SUPER, "obd_statfs returns blocks %lu/%lu, "
-                       "objects %lu/%lu\n",
-                       obd_sfs.f_bavail, obd_sfs.f_blocks,
-                       obd_sfs.f_ffree, obd_sfs.f_files);
+                CDEBUG(D_SUPER, "obd_statfs shows blocks "LPU64"/"LPU64
+                       " objects "LPU64"/"LPU64"\n",
+                       osfs.os_bavail, osfs.os_blocks,
+                       osfs.os_ffree, osfs.os_files);
 
                 sfs->f_bfree = obd_sfs.f_bfree;
                 sfs->f_bavail = obd_sfs.f_bavail;

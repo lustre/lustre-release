@@ -288,14 +288,14 @@ static inline int obd_disconnect(struct lustre_handle *conn)
         RETURN(rc);
 }
 
-static inline int obd_statfs(struct lustre_handle *conn, struct statfs *buf)
+static inline int obd_statfs(struct lustre_handle *conn,struct obd_statfs *osfs)
 {
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->exp_obd,statfs);
 
-        rc = OBP(export->exp_obd, statfs)(conn, buf);
+        rc = OBP(export->exp_obd, statfs)(conn, osfs);
         RETURN(rc);
 }
 

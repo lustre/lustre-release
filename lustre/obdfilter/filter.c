@@ -1,14 +1,15 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/fs/filter/filter.c
+ *  linux/fs/obdfilter/filter.c
  *
- * Copyright (C) 2001  Cluster File Systems, Inc.
+ * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  *
  * by Peter Braam <braam@clusterfs.com>
+ * and Andreas Dilger <adilger@clusterfs.com>
  */
 
 #define EXPORT_SYMTAB
@@ -1359,12 +1360,18 @@ out_ctxt:
         RETURN(rc);
 }
 
-static int filter_statfs(struct lustre_handle *conn, struct statfs *statfs)
+static int filter_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
 {
         struct obd_device *obd = class_conn2obd(conn);
+        struct statfs sfs;
+        int rc;
 
         ENTRY;
-        RETURN(vfs_statfs(obd->u.filter.fo_sb, statfs));
+        rc = vfs_statfs(obd->u.filter.fo_sb, &sfs);
+        if (!rc)
+                statfs_pack(osfs, &sfs);
+
+        return rc;
 }
 
 static int filter_get_info(struct lustre_handle *conn, obd_count keylen,

@@ -129,8 +129,14 @@ static inline void ldlm_object2handle(void *object, struct lustre_handle *handle
 
 struct obd_statfs;
 struct statfs;
-void obd_statfs_pack(struct obd_statfs *osfs, struct statfs *sfs);
-void obd_statfs_unpack(struct obd_statfs *osfs, struct statfs *sfs);
+void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs);
+void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs);
+void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src);
+static inline void
+obd_statfs_unpack(struct obd_statfs *tgt, struct obd_statfs *src)
+{
+        obd_statfs_pack(tgt, src);
+}
 
 #include <linux/portals_lib.h>
 

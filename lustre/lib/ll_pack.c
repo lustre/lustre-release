@@ -27,19 +27,30 @@
 #include <linux/lustre_net.h>
 #include <linux/obd_support.h>
 
-void obd_statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
+void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src)
 {
-        if (osfs == NULL || sfs == NULL)
-                LBUG();
+        tgt->os_type = HTON__u64(src->os_type);
+        tgt->os_blocks = HTON__u64(src->os_blocks);
+        tgt->os_bfree = HTON__u64(src->os_bfree);
+        tgt->os_bavail = HTON__u64(src->os_bavail);
+        tgt->os_files = HTON__u64(src->os_files);
+        tgt->os_ffree = HTON__u64(src->os_ffree);
+        tgt->os_bsize = HTON__u32(src->os_bsize);
+        tgt->os_namelen = HTON__u32(src->os_namelen);
+}
 
-        osfs->os_type = HTON__u64(sfs->f_type);
-        osfs->os_blocks = HTON__u64(sfs->f_blocks);
-        osfs->os_bfree = HTON__u64(sfs->f_bfree);
-        osfs->os_bavail = HTON__u64(sfs->f_bavail);
-        osfs->os_files = HTON__u64(sfs->f_files);
-        osfs->os_ffree = HTON__u64(sfs->f_ffree);
-        osfs->os_bsize = HTON__u32(sfs->f_bsize);
-        osfs->os_namelen = HTON__u32(sfs->f_namelen);
+#define obd_statfs_unpack(tgt, src) obd_statfs_pack(tgt, src)
+
+void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
+{
+        osfs->os_type = sfs->f_type;
+        osfs->os_blocks = sfs->f_blocks;
+        osfs->os_bfree = sfs->f_bfree;
+        osfs->os_bavail = sfs->f_bavail;
+        osfs->os_files = sfs->f_files;
+        osfs->os_ffree = sfs->f_ffree;
+        osfs->os_bsize = sfs->f_bsize;
+        osfs->os_namelen = sfs->f_namelen;
 }
 
 #if BITS_PER_LONG > 32
@@ -59,18 +70,15 @@ static inline long statfs_max(__u64 val)
  * fields as an unsigned long, which is helps us a bit, and it also
  * appears to do 64-bit math for at least some of the computations.
  */
-void obd_statfs_unpack(struct obd_statfs *osfs, struct statfs *sfs)
+void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
 {
-        if (osfs == NULL || sfs == NULL)
-                LBUG();
-
-        sfs->f_type = NTOH__u64(osfs->os_type);
-        sfs->f_blocks = statfs_max(NTOH__u64(osfs->os_blocks));
-        sfs->f_bfree = statfs_max(NTOH__u64(osfs->os_bfree));
-        sfs->f_bavail = statfs_max(NTOH__u64(osfs->os_bavail));
-        sfs->f_files = statfs_max(NTOH__u64(osfs->os_files));
-        sfs->f_ffree = statfs_max(NTOH__u64(osfs->os_ffree));
-        sfs->f_bsize = NTOH__u32(osfs->os_bsize);
-        sfs->f_namelen = NTOH__u32(osfs->os_namelen);
+        sfs->f_type = osfs->os_type;
+        sfs->f_blocks = statfs_max(osfs->os_blocks);
+        sfs->f_bfree = statfs_max(osfs->os_bfree);
+        sfs->f_bavail = statfs_max(osfs->os_bavail);
+        sfs->f_files = statfs_max(osfs->os_files);
+        sfs->f_ffree = statfs_max(osfs->os_ffree);
+        sfs->f_bsize = osfs->os_bsize;
+        sfs->f_namelen = osfs->os_namelen;
 }
 

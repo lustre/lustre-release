@@ -468,10 +468,9 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
         return rc;
 }
 
-int mdc_statfs(struct lustre_handle *conn, struct statfs *sfs,
+int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs,
                struct ptlrpc_request **request)
 {
-        struct obd_statfs *osfs;
         struct ptlrpc_request *req;
         int rc, size = sizeof(*osfs);
         ENTRY;
@@ -488,8 +487,7 @@ int mdc_statfs(struct lustre_handle *conn, struct statfs *sfs,
         if (rc)
                 GOTO(out, rc);
 
-        osfs = lustre_msg_buf(req->rq_repmsg, 0);
-        obd_statfs_unpack(osfs, sfs);
+        obd_statfs_unpack(osfs, lustre_msg_buf(req->rq_repmsg, 0));
 
         EXIT;
 out:

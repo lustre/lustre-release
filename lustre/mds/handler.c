@@ -628,7 +628,8 @@ static int mds_statfs(struct ptlrpc_request *req)
         }
         osfs = lustre_msg_buf(req->rq_repmsg, 0);
         memset(osfs, 0, size);
-        obd_statfs_pack(osfs, &sfs);
+        statfs_pack(osfs, &sfs);
+        obd_statfs_pack(osfs, osfs);
 
 out:
         req->rq_status = rc;

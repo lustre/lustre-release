@@ -79,16 +79,8 @@ static int ost_statfs(struct ptlrpc_request *req)
 {
         struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct obd_statfs *osfs;
-        struct statfs sfs;
         int rc, size = sizeof(*osfs);
         ENTRY;
-
-        rc = obd_statfs(conn, &sfs);
-        if (rc) {
-                CERROR("ost: statfs failed: rc %d\n", rc);
-                req->rq_status = rc;
-                RETURN(rc);
-        }
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
@@ -96,7 +88,15 @@ static int ost_statfs(struct ptlrpc_request *req)
 
         osfs = lustre_msg_buf(req->rq_repmsg, 0);
         memset(osfs, 0, size);
-        obd_statfs_pack(osfs, &sfs);
+
+        rc = obd_statfs(conn, osfs);
+        if (rc) {
+                CERROR("ost: statfs failed: rc %d\n", rc);
+                req->rq_status = rc;
+                RETURN(rc);
+        }
+        obd_statfs_pack(osfs, osfs);
+
         RETURN(0);
 }
 

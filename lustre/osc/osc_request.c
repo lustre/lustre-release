@@ -672,10 +672,9 @@ static int osc_cancel(struct lustre_handle *oconn, struct lov_stripe_md *md,
         RETURN(0);
 }
 
-static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs)
+static int osc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
 {
         struct ptlrpc_request *request;
-        struct obd_statfs *osfs;
         int rc, size = sizeof(*osfs);
         ENTRY;
 
@@ -693,8 +692,7 @@ static int osc_statfs(struct lustre_handle *conn, struct statfs *sfs)
                 GOTO(out, rc);
         }
 
-        osfs = lustre_msg_buf(request->rq_repmsg, 0);
-        obd_statfs_unpack(osfs, sfs);
+        obd_statfs_unpack(osfs, lustre_msg_buf(request->rq_repmsg, 0));
 
         EXIT;
  out:

@@ -263,7 +263,7 @@ struct obd_ops {
         int (*o_disconnect)(struct lustre_handle *conn);
 
 
-        int (*o_statfs)(struct lustre_handle *conn, struct statfs *statfs);
+        int (*o_statfs)(struct lustre_handle *conn, struct obd_statfs *osfs);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         int (*o_create)(struct lustre_handle *conn,  struct obdo *oa,

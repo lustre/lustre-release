@@ -738,11 +738,11 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md,
         RETURN(rc);
 }
 
-static int lov_statfs(struct lustre_handle *conn, struct statfs *sfs)
+static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
 {
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
-        struct statfs lov_sfs;
+        struct obd_statfs lov_sfs;
         int set = 0;
         int rc = 0;
         int i;
@@ -766,12 +766,12 @@ static int lov_statfs(struct lustre_handle *conn, struct statfs *sfs)
                         continue; /* XXX or break? - probably OK to continue */
                 }
                 if (!set) {
-                        memcpy(sfs, &lov_sfs, sizeof(lov_sfs));
+                        memcpy(osfs, &lov_sfs, sizeof(lov_sfs));
                         set = 1;
                 } else {
-                        sfs->f_bfree += lov_sfs.f_bfree;
-                        sfs->f_bavail += lov_sfs.f_bavail;
-                        sfs->f_blocks += lov_sfs.f_blocks;
+                        osfs->os_bfree += lov_sfs.os_bfree;
+                        osfs->os_bavail += lov_sfs.os_bavail;
+                        osfs->os_blocks += lov_sfs.os_blocks;
                         /* XXX not sure about this one - depends on policy.
                          *   - could be minimum if we always stripe on all OBDs
                          *     (but that would be wrong for any other policy,
