@@ -259,13 +259,14 @@ int lprocfs_rd_filegroups(char* page, char **start, off_t off, int count,
 int lprocfs_rd_server_uuid(char* page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
-        struct obd_device* obd = (struct obd_device*)data;
-        struct client_obd* cli;
+        struct obd_device *obd = (struct obd_device *)data;
+        struct client_obd *cli;
 
         LASSERT(obd != NULL);
         cli = &obd->u.cli;
         *eof = 1;
-        return snprintf(page, count, "%s\n", cli->cl_target_uuid.uuid);
+        return snprintf(page, count, "%s\n",
+                        cli->cl_import->imp_target_uuid.uuid);
 }
 
 int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
@@ -275,7 +276,7 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
         struct ptlrpc_connection *conn;
 
         LASSERT(obd != NULL);
-        conn = obd->u.cli.cl_import.imp_connection;
+        conn = obd->u.cli.cl_import->imp_connection;
         LASSERT(conn != NULL);
         *eof = 1;
         return snprintf(page, count, "%s\n", conn->c_remote_uuid.uuid);
