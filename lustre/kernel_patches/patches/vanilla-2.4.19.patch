@@ -26,7 +26,7 @@
 --- /dev/null	Fri Aug 30 17:31:37 2002
 +++ linux-2.4.19-root/include/linux/lustre_version.h	Sun Dec 15 16:58:43 2002
 @@ -0,0 +1 @@
-+#define LUSTRE_KERNEL_VERSION 4
++#define LUSTRE_KERNEL_VERSION 5
 --- linux-2.4.19/arch/ia64/mm/init.c~vanilla-2.4.19	Sun Dec 15 16:58:43 2002
 +++ linux-2.4.19-root/arch/ia64/mm/init.c	Sun Dec 15 16:58:43 2002
 @@ -37,6 +37,12 @@ unsigned long MAX_DMA_ADDRESS = PAGE_OFF
@@ -695,7 +695,7 @@
 -		if (inode->i_op->follow_link) {
 -			err = do_follow_link(dentry, nd);
 +		if (inode->i_op->follow_link || inode->i_op->follow_link2) {
-+			err = do_follow_link(dentry, nd, it);
++			err = do_follow_link(dentry, nd, NULL);
  			dput(dentry);
  			if (err)
  				goto return_err;

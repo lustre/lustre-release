@@ -1,7 +1,7 @@
 --- lum-pristine/include/linux/lustre_version.h	Wed Dec 31 19:00:00 1969
 +++ lum/include/linux/lustre_version.h	Tue Nov 26 07:02:14 2002
 @@ -0,0 +1,1 @@
-+#define LUSTRE_KERNEL_VERSION 4
++#define LUSTRE_KERNEL_VERSION 5
 --- lum-pristine/arch/ia64/mm/init.c	Fri Nov  9 17:26:17 2001
 +++ lum/arch/ia64/mm/init.c	Thu Aug  1 18:07:35 2002
 @@ -37,6 +37,12 @@
@@ -671,7 +671,7 @@
 -		if (inode->i_op->follow_link) {
 -			err = do_follow_link(dentry, nd);
 +		if (inode->i_op->follow_link || inode->i_op->follow_link2) {
-+			err = do_follow_link(dentry, nd, it);
++			err = do_follow_link(dentry, nd, NULL);
  			dput(dentry);
  			if (err)
  				goto return_err;
