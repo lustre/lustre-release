@@ -274,6 +274,7 @@ case $BACKINGFS in
 		LC_FSHOOKS([
 			LDISKFS_SERIES="2.6-suse.series"
 		],[
+			AC_MSG_ERROR([Only SuSE 2.6 kernels (with fshooks) are supported at this time])
 			LDISKFS_SERIES="2.6-vanilla.series"
 		])
 		AC_SUBST(LDISKFS_SERIES)
@@ -435,8 +436,6 @@ AC_DEFUN([LC_CONFIG_FILES],
 lustre/Makefile
 lustre/autoMakefile
 lustre/autoconf/Makefile
-lustre/cmobd/Makefile
-lustre/cmobd/autoMakefile
 lustre/cobd/Makefile
 lustre/cobd/autoMakefile
 lustre/conf/Makefile
@@ -451,8 +450,6 @@ lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile
 lustre/llite/Makefile
 lustre/llite/autoMakefile
-lustre/lmv/Makefile
-lustre/lmv/autoMakefile
 lustre/lov/Makefile
 lustre/lov/autoMakefile
 lustre/lvfs/Makefile
