@@ -90,7 +90,7 @@ static int ll_commitcbd_main(void *arg)
 
                 schedule_timeout(sbi->ll_commitcbd_timeout);
                 CERROR("commit callback daemon woken up - FIXME\n"); 
-                spin_unlock(&mgr->mgr_lock);
+                spin_unlock(&sbi->ll_commitcbd_lock);
         }
 
         sbi->ll_commitcbd_thread = NULL;
