@@ -30,6 +30,9 @@
 #include <linux/smp.h>
 #include <linux/ctype.h>
 #include <asm/uaccess.h>
+#ifdef HAVE_MM_INLINE
+#include <linux/mm_inline.h>
+#endif
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
