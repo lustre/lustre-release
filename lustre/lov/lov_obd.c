@@ -101,16 +101,17 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 GOTO(out_conn, rc = -EINVAL);
         }
 
-        if (desc->ld_default_stripe_count == 0)
-                desc->ld_default_stripe_count = desc->ld_tgt_count;
-
         /* Because of 64-bit divide/mod operations only work with a 32-bit
          * divisor in a 32-bit kernel, we cannot support a stripe width
-         * of 4GB or larger.
+         * of 4GB or larger on 32-bit CPUs.
          */
-        if (desc->ld_default_stripe_size * desc->ld_tgt_count > ~0UL) {
-                CERROR("LOV desc: stripe width > %lu on 32-bit system\n",
-                       ~0UL);
+        if ((desc->ld_default_stripe_count ?
+             desc->ld_default_stripe_count : desc->ld_tgt_count) *
+             desc->ld_default_stripe_size > ~0UL) {
+                CERROR("LOV: stripe width "LPU64"x%u > %lu on 32-bit system\n",
+                       desc->ld_default_stripe_size,
+                       desc->ld_default_stripe_count ?
+                       desc->ld_default_stripe_count : desc->ld_tgt_count,~0UL);
                 GOTO(out_conn, rc = -EINVAL);
         }
 
@@ -301,7 +302,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         struct lov_stripe_md *lsm;
         struct lov_oinfo *loi;
         struct obdo *tmp;
-        int sub_offset, stripe_offset, ost_count, ost_idx, i, rc = 0;
+        int ost_count, ost_idx, i, rc = 0;
         ENTRY;
 
         LASSERT(ea);
@@ -316,7 +317,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         lov = &export->exp_obd->u.lov;
 
         spin_lock(&lov->lov_lock);
-        ost_count = lov->desc.ld_active_tgt_count;
+        ost_count = lov->desc.ld_tgt_count;
         oa->o_easize = lov_stripe_md_size(ost_count);
 
         lsm = *ea;
@@ -334,26 +335,39 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         lsm->lsm_object_id = oa->o_id;
         if (!lsm->lsm_stripe_count)
                 lsm->lsm_stripe_count = lov->desc.ld_default_stripe_count;
-        if (lsm->lsm_stripe_count > ost_count)
-                lsm->lsm_stripe_count = ost_count;
+        if (!lsm->lsm_stripe_count)
+                lsm->lsm_stripe_count = lov->desc.ld_active_tgt_count;
+        else if (lsm->lsm_stripe_count > lov->desc.ld_active_tgt_count)
+                lsm->lsm_stripe_count = lov->desc.ld_active_tgt_count;
 
         if (!lsm->lsm_stripe_size)
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;
 
+        /* Because of 64-bit divide/mod operations only work with a 32-bit
+         * divisor in a 32-bit kernel, we cannot support a stripe width
+         * of 4GB or larger on 32-bit CPUs.
+         */
+        if (lsm->lsm_stripe_size * lsm->lsm_stripe_count > ~0UL) {
+                CERROR("LOV: stripe width "LPU64"x%u > %lu on 32-bit system\n",
+                       lsm->lsm_stripe_size, lsm->lsm_stripe_count, ~0UL);
+                spin_unlock(&lov->lov_lock);
+                GOTO(out_free, rc = -EINVAL);
+        }
+
         lsm->lsm_ost_count = ost_count;
-        stripe_offset = (((int)lsm->lsm_object_id * lsm->lsm_stripe_count) %
-                         ost_count);
-        sub_offset = ((int)lsm->lsm_object_id*lsm->lsm_stripe_count/ost_count) %
-                lsm->lsm_stripe_count;
-        /* We don't use lsm_stripe_offset anywhere else, so it's not clear why
-         * we save it. -phil */
-        lsm->lsm_stripe_offset = stripe_offset + sub_offset;
+        if (!lsm->lsm_stripe_offset) {
+                int mult = lsm->lsm_object_id * lsm->lsm_stripe_count;
+                int stripe_offset = mult % ost_count;
+                int sub_offset = (mult / ost_count) % lsm->lsm_stripe_count;
+
+                lsm->lsm_stripe_offset = stripe_offset + sub_offset;
+        }
 
         /* Pick the OSTs before we release the lock */
         ost_idx = lsm->lsm_stripe_offset;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 do {
-                        ost_idx = (ost_idx + 1) % lov->desc.ld_tgt_count;
+                        ost_idx = (ost_idx + 1) % ost_count;
                 } while (!lov->tgts[ost_idx].active);
                 CDEBUG(D_INFO, "Using ost_idx %d (uuid %s)\n", ost_idx,
                        lov->tgts[ost_idx].uuid);
@@ -407,6 +421,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                                oa->o_id, loi->loi_id, loi->loi_ost_idx,
                                err);
         }
+ out_free:
         OBD_FREE(lsm, oa->o_easize);
         goto out_tmp;
 }
@@ -1127,7 +1142,7 @@ static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
             _IOC_NR(cmd) < IOC_LOV_MIN_NR || _IOC_NR(cmd) > IOC_LOV_MAX_NR) {
                 CDEBUG(D_IOCTL, "invalid ioctl (type %ld, nr %ld, size %ld)\n",
                        _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
-                RETURN(-EINVAL);
+                RETURN(-ENOTTY);
         }
 
         switch (cmd) {
@@ -1136,7 +1151,7 @@ static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
                                         data->ioc_offset);
                 break;
         default:
-                RETURN(-EINVAL);
+                RETURN(-ENOTTY);
         }
 
         RETURN(rc);

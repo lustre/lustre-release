@@ -281,7 +281,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(out_create_dchild, rc = -EEXIST);
         }
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, 
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE,
                        to_kdev_t(dir->i_sb->s_dev));
 
         if (dir->i_mode & S_ISGID) {

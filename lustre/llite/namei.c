@@ -332,8 +332,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
         if (it->it_status == 0) {
                 LL_SAVE_INTENT(dentry, it);
-        }
-        else {
+        } else {
                 dentry->d_it = NULL;
                 CDEBUG(D_DENTRY,
                        "D_IT dentry %p fsdata %p intent: %s status %d\n",
@@ -734,7 +733,6 @@ static int ll_rmdir(struct inode *dir, struct dentry *dentry)
         ENTRY;
 
         LL_GET_INTENT(dentry, it);
-
 
         if ((!it || !it->it_disposition) && !ext2_empty_dir(inode))
                 RETURN(-ENOTEMPTY);
