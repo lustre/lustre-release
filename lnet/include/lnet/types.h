@@ -14,6 +14,7 @@ typedef ptl_err_t ptl_ni_fail_t;
 typedef __u32 ptl_uid_t;
 typedef __u32 ptl_jid_t;
 typedef __u64 ptl_nid_t;
+typedef __u32 ptl_netid_t;
 typedef __u32 ptl_pid_t;
 typedef __u32 ptl_pt_index_t;
 typedef __u32 ptl_ac_index_t;

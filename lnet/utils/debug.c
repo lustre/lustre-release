@@ -66,7 +66,7 @@ static const char *portal_debug_subsystems[] =
          "pinger", "filter", "ptlbd", "echo", 
          "ldlm", "lov", "router", "cobd", 
          "sm", "asobd", "confobd", "lmv", 
-         "cmobd", NULL};
+         "cmobd", "sec", NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", 
          "malloc", "cache", "info", "ioctl",
@@ -74,7 +74,7 @@ static const char *portal_debug_masks[] =
          "other", "dentry", "portals", "page", 
          "dlmtrace", "error", "emerg", "ha", 
          "rpctrace", "vfstrace", "reada", "mmap",
-         "config", "console", "quota", NULL};
+         "config", "console", "quota", "sec", NULL};
 
 struct debug_daemon_cmd {
         char *cmd;
@@ -665,6 +665,8 @@ static struct mod_paths {
         {"lvfs", "lustre/lvfs"},
         {"obdclass", "lustre/obdclass"},
         {"llog_test", "lustre/obdclass"},
+        {"ptlrpcs", "lustre/sec"},
+        {"ptlrpcs_gss", "lustre/sec/gss"},
         {"ptlrpc", "lustre/ptlrpc"},
         {"obdext2", "lustre/obdext2"},
         {"ost", "lustre/ost"},

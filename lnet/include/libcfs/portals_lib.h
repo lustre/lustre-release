@@ -39,6 +39,11 @@
 #define MAX(a,b) (((a)>(b)) ? (a): (b))
 #define MKSTR(ptr) ((ptr))? (ptr) : ""
 
+static inline int size_round4 (int val)
+{
+        return (val + 3) & (~0x3);
+}
+
 static inline int size_round (int val)
 {
         return (val + 7) & (~0x7);
