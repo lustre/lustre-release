@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  *  linux/mds/mds_reint.c
  *  
  *  Lustre Metadata Server (mds) reintegration routines
@@ -115,7 +117,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 	}
 
 	if (dchild->d_inode) {
-		CERROR("child exists (dir %ld, name %s\n", 
+		CERROR("child exists (dir %ld, name %s)\n", 
 		       de->d_inode->i_ino, rec->ur_name);
 		dput(de); 
 		req->rq_rephdr->status = -EEXIST;

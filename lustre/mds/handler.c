@@ -108,8 +108,8 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 
 		req->rq_bulkbuf = buf;
 		req->rq_bulklen = PAGE_SIZE;
-		rc = ptl_send_buf(req, &req->rq_peer, MDS_BULK_PORTAL, 0);
 		init_waitqueue_head(&req->rq_wait_for_bulk);
+		rc = ptl_send_buf(req, &req->rq_peer, MDS_BULK_PORTAL, 0);
 		sleep_on(&req->rq_wait_for_bulk);
                 OBD_FREE(buf, PAGE_SIZE);
 		req->rq_bulklen = 0; /* FIXME: eek. */
@@ -499,7 +499,6 @@ int mds_main(void *arg)
                 int signal;
 		int rc;
 
-
 		wake_up(&mds->mds_done_waitq);
 		CDEBUG(D_INODE, "mds_wakes pick up req here and continue\n"); 
 
@@ -519,7 +518,6 @@ int mds_main(void *arg)
                                 CERROR("EQGet rc %d\n", rc); 
                                 if (mds->mds_flags & MDS_STOPPING)
                                         break;
-
 
                                 /* if this process really wants to die,
                                  * let it go */
@@ -546,7 +544,7 @@ int mds_main(void *arg)
                                 break;
                         }
 
-                        service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;	
+                        service = (struct ptlrpc_service *)ev.mem_desc.user_ptr;
 
                         /* FIXME: If we move to an event-driven model,
                          * we should put the request on the stack of
@@ -633,8 +631,7 @@ static void mds_start_srv_thread(struct mds_obd *mds)
 {
 	init_waitqueue_head(&mds->mds_waitq);
 	init_waitqueue_head(&mds->mds_done_waitq);
-	kernel_thread(mds_main, (void *)mds, 
-		      CLONE_VM | CLONE_FS | CLONE_FILES);
+	kernel_thread(mds_main, (void *)mds, CLONE_VM | CLONE_FS | CLONE_FILES);
 	while (!mds->mds_thread) 
 		sleep_on(&mds->mds_done_waitq);
 }
