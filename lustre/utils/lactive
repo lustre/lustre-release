@@ -31,6 +31,7 @@
 import sys, getopt, types
 import string, os
 import ldap
+from stat import S_IROTH, S_IRGRP
 PYMOD_DIR = "/usr/lib/lustre/python"
 
 def development_mode():
@@ -43,20 +44,20 @@ if not development_mode():
     sys.path.append(PYMOD_DIR)
 
 import Lustre
+PARAM = Lustre.Options.PARAM
 
 lactive_options = [
-    ('ldapurl',"LDAP server URL", Lustre.Options.PARAM,
-     "ldap://localhost"),
-    ('config', "Cluster config name used for LDAP query", Lustre.Options.PARAM),
-    ('group', "The group of devices to update", Lustre.Options.PARAM),
-    ('active', "The active node name", Lustre.Options.PARAM),
+    ('ldapurl',"LDAP server URL", PARAM, "ldap://localhost"),
+    ('config', "Cluster config name used for LDAP query", PARAM),
+    ('group', "The group of devices to update", PARAM),
+    ('active', "The active node name", PARAM),
+    ('pwfile', "File containing password", PARAM),
     ]
 
 def fatal(*args):
     msg = string.join(map(str,args))
     print "! " + msg
     sys.exit(1)
-
 
 cl = Lustre.Options("lactive","", lactive_options)
 config, args = cl.parse(sys.argv[1:])
@@ -66,10 +67,32 @@ if not (config.group or config.active):
 
 if not config.config:
     fatal("Missing config")
-    
+
+if config.pwfile:
+    try:
+        pwperm = os.stat(config.pwfile)[0]
+        pwreadable = pwperm & (S_IRGRP | S_IROTH)
+        if pwreadable:
+            if pwreadable == (S_IRGRP | S_IROTH):
+                readable_by = "group and others"
+            elif pwreadable == S_IRGRP:
+                readable_by = "group"
+            else:
+                readable_by = "others"
+            print "WARNING: Password file %s is readable by %s" % (
+                config.pwfile, readable_by)
+                 
+        pwfile = open(config.pwfile, "r")
+        pw = string.strip(pwfile.readline())
+        pwfile.close()
+    except Exception, e:
+        fatal("Can't read secret from pwfile %s: %s" % (config.pwfile, e))
+else:
+    print "no pwfile specified, binding anonymously"
+    pw = ""
+
 base = "config=%s,fs=lustre" % (config.config,)
-db = Lustre.LustreDB_LDAP('', {}, base=base, pw = "secret",
-                          url = config.ldapurl)
+db = Lustre.LustreDB_LDAP('', {}, base=base, pw = pw, url = config.ldapurl)
 
 active_node = db.lookup_name(config.active)
 if not active_node:
