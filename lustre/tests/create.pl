@@ -10,7 +10,7 @@ sub usage () {
 my $mtpt = shift || usage();
 my $mount_count = shift || usage();
 my $i = shift || usage();
-my $files = 5;
+my $files = 2;
 
 while ($i--) {
     $which = int(rand() * $mount_count) + 1;

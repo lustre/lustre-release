@@ -606,9 +606,11 @@ cleanup_mount() {
 	[ "$MOUNT_LIST" ] || fail "error: $0: MOUNT_LIST unset"
 
 	for THEMOUNT in $MOUNT_LIST; do
-	    if [ "`mount | grep $THEMOUNT`" ]; then
-		umount $THEMOUNT || fail "unable to unmount $THEMOUNT"
-	    fi
+	    eval "echo \$$THEMOUNT" | while read MTPT THEOSC THEMDC; do
+                if [ "`mount | grep $MTPT`" ]; then
+                    umount $MTPT || fail "unable to unmount $MTPT"
+                fi
+            done
 	done
 }
 
