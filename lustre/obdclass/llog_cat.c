@@ -157,6 +157,7 @@ void llog_cat_put(struct llog_handle *cathandle)
         llog_close(cathandle);
         EXIT;
 }
+EXPORT_SYMBOL(llog_cat_put);
 
 /* Return the currently active log handle.  If the current log handle doesn't
  * have enough space left for the current record, start a new one.
@@ -314,8 +315,5 @@ write_hdr:
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_init);
-
-
-
 
 #endif
