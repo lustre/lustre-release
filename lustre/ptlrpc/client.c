@@ -163,7 +163,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         rc = lustre_pack_msg(count, lengths, bufs,
                              &request->rq_reqlen, &request->rq_reqmsg);
         if (rc) {
-                OBD_FREE(request);
+                OBD_FREE(request, sizeof(*request));
                 CERROR("cannot pack request %d\n", rc);
                 RETURN(NULL);
         }
