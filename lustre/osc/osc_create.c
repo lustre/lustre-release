@@ -186,6 +186,10 @@ void osccd_do_create(struct osc_created *osccd)
                                                       oscc_list);
                 list_del_init(&oscc->oscc_list);
                 list_add(&oscc->oscc_list, &osccd->osccd_work_list_head);
+                spin_lock(&oscc->oscc_lock);
+		oscc->oscc_oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
+		oscc->oscc_oa.o_valid |= OBD_MD_FLID;
+                spin_unlock(&oscc->oscc_lock);
                 spin_unlock(&osccd->osccd_lock);
 
                 rc = osc_real_create(oscc->oscc_exph, &oscc->oscc_oa,
