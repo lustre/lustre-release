@@ -109,6 +109,12 @@ struct inode* llu_new_inode(struct filesys *fs, ino_t ino, mode_t mode);
 extern struct fssw_ops llu_fssw_ops;
 
 /* file.c */
+void llu_prepare_mdc_op_data(struct mdc_op_data *data,
+                             struct inode *i1,
+                             struct inode *i2,
+                             const char *name,
+                             int namelen,
+                             int mode);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
 int llu_iop_close(struct inode *inode);
