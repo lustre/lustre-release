@@ -73,7 +73,7 @@ int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
         int err; 
 
         memset(cl, 0, sizeof(*cl));
-	cl->cli_xid = 0;
+	cl->cli_xid = 1;
 	cl->cli_obd = NULL; 
 	cl->cli_request_portal = req_portal;
 	cl->cli_reply_portal = rep_portal;

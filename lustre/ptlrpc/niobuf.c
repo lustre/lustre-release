@@ -90,7 +90,8 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
         return rc;
 }
 
-int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_request *req)
+int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
+                 struct ptlrpc_request *req)
 {
 	struct ptlrpc_request *clnt_req = req->rq_reply_handle;
 	ENTRY;
@@ -99,7 +100,7 @@ int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_request *req)
 		/* This is a request that came from the network via portals. */
 
 		/* FIXME: we need to increment the count of handled events */
-		ptl_send_buf(req, &req->rq_peer, OST_REPLY_PORTAL, 0);
+		ptl_send_buf(req, &req->rq_peer, svc->srv_rep_portal, 0);
 	} else {
 		/* This is a local request that came from another thread. */
 
@@ -121,7 +122,8 @@ int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_request *req)
 	return 0;
 }
 
-int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_request *req)
+int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
+                 struct ptlrpc_request *req)
 {
 	struct ptlrep_hdr *hdr;
 
@@ -148,7 +150,7 @@ int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_request *req)
 	req->rq_replen = sizeof(*hdr); 
 
 	EXIT;
-	return ptlrpc_reply(obddev, req);
+	return ptlrpc_reply(obddev, svc, req);
 }
 
 
