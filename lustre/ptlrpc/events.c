@@ -281,4 +281,6 @@ void ptlrpc_exit_portals(void)
                 inter_module_put("ksocknal_ni");
         if (gmnal_nip != NULL)
                 inter_module_put("kgmnal_ni");
+        if (toenal_nip != NULL)
+                inter_module_put("toenal_ni");
 }
