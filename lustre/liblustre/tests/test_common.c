@@ -244,7 +244,7 @@ void t_echo_create(const char *path, const char *str)
         }
 }
 
-void _t_grep(const char *path, char *str, int should_contain)
+static void _t_grep(const char *path, char *str, int should_contain)
 {
 	char buf[1024];
 	int fd;
