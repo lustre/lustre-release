@@ -86,7 +86,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
 
         ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
         CDEBUG(D_INODE, "creating directory %*s\n", strlen(name), name);
-        down(&dir->i_sem);
+        down(&dir->d_inode->i_sem);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
                 GOTO(out, PTR_ERR(dchild));
@@ -101,7 +101,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
         err = vfs_mkdir(dir->d_inode, dchild, mode);
         EXIT;
 out:
-        up(&dir->i_sem);
+        up(&dir->d_inode->i_sem);
         if (err) {
                 dput(dchild);
                 RETURN(ERR_PTR(err));
