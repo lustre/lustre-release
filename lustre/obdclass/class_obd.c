@@ -422,11 +422,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_CREATE: {
-                void *ea;
                 obd_data2conn(&conn, data);
 
 
-                err = obd_create(&conn, &data->ioc_obdo1, &ea);
+                err = obd_create(&conn, &data->ioc_obdo1);
                 if (err)
                         GOTO(out, err);
 
@@ -456,10 +455,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_DESTROY: {
-                void *ea;
                 obd_data2conn(&conn, data);
 
-                err = obd_destroy(&conn, &data->ioc_obdo1, ea);
+                err = obd_destroy(&conn, &data->ioc_obdo1);
                 if (err)
                         GOTO(out, err);
 
