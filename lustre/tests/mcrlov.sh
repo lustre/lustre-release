@@ -8,6 +8,7 @@ LMC="../utils/lmc -m $config"
 SERVERS="ba-ost-1  ba-ost-2"
 ROUTER=dev5
 MDS=dev7
+TMP=${TMP:-/tmp}
 
 # Elan clients
 CLIENT_LO=dev2
@@ -35,7 +36,7 @@ ${LMC} --node $ROUTER --net `h2elan $ROUTER` elan|| exit 1
 ${LMC} --node $ROUTER --route elan `h2elan $ROUTER` `h2elan $CLIENT_LO` `h2elan $CLIENT_HI` || exit 2
 
 ${LMC} --node $MDS --net `h2elan $MDS` elan || exit 1
-${LMC} --node $MDS --mds mds1 /tmp/mds1 100000 || exit 1
+${LMC} --node $MDS --mds mds1 $TMP/mds1 100000 || exit 1
 ${LMC} --lov lov1 mds1 65536 0 0
 
 ${LMC} --node client --mtpt /mnt/lustre mds1 lov1

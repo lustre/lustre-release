@@ -7,12 +7,13 @@ NETWORK=tcp
 LOCALHOST=localhost
 SERVER=localhost
 PORT=988
+TMP=${TMP:-/tmp}
 
 setup_portals
 setup_lustre
 
 MDSFS=ext2
-new_fs ${MDSFS} /tmp/mds 1000
+new_fs ${MDSFS} $TMP/mds 1000
 MDS=$LOOPDEV
 
 echo 0xffffffff > /proc/sys/portals/debug

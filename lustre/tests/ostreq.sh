@@ -5,6 +5,7 @@ SRCDIR="`dirname $0`/"
 
 SERVER=localhost
 PORT=988
+TMP=${TMP:-/tmp}
 
 $ACCEPTOR $PORT
 
@@ -19,7 +20,7 @@ EOF
 
 setup_lustre
 
-tmp_fs ext2 /tmp/fs 10000
+tmp_fs ext2 $TMP/fs 10000
 OBD=${LOOPDEV}
 
 $OBDCTL <<EOF

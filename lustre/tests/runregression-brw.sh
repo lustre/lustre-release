@@ -4,6 +4,8 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
+ENDRUN=endrun-`hostname`
+
 OSCNAME="`$OBDCTL device_list 2> /dev/null | awk '/ UP osc / { print $4 }'`"
 
 if [ -z "$OSCNAME" ]; then
@@ -35,9 +37,9 @@ runthreads() {
 
 	$OBDCTL --threads $THR v \$$OSCNAME $DO $CNT $RW $V $PGS $OID || exit 1
 
-	if [ -e endrun ]; then
-		rm endrun
-		echo "exiting because endrun file was found"
+	if [ -e $ENDRUN ]; then
+		rm $ENDRUN
+		echo "exiting because $ENDRUN file was found"
 		exit 0
 	fi
 }
