@@ -123,8 +123,8 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
         } else {
                 printf("Try interactive use without arguments or use one of:\n");
                 for (cmd = cmds; cmd->pc_name; cmd++)
-                        printf("\"%s\" ", cmd->pc_name);
-                printf("\nas argument.\n");
+                        printf("\"%s\"\n", cmd->pc_name);
+                printf("as argument.\n");
         }
         return -1;
 }
