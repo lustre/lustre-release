@@ -37,7 +37,6 @@
 
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
-#include <linux/lustre_net.h>
 #include <linux/obd.h>
 #endif
 
@@ -55,6 +54,8 @@ struct obd_conn {
         struct obd_device *oc_dev;
         uint32_t oc_id;
 };
+
+#include <linux/lustre_net.h>
 
 typedef struct {
 	uint32_t len;

@@ -141,7 +141,9 @@ struct ptlrpc_bulk_desc {
         __u32 b_portal;
         char *b_buf;
         int b_buflen;
-        int (*b_cb)(struct ptlrpc_request *, void *);
+        int (*b_cb)(struct ptlrpc_bulk_desc *, void *);
+        struct page *b_page;
+        struct obd_conn b_conn;
         __u32 b_xid;
 
 	wait_queue_head_t b_waitq;

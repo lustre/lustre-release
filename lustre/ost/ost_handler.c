@@ -359,6 +359,13 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
 #endif
         barrier();
 
+	/* The unpackers move tmp1 and tmp2, so reset them before using */
+	tmp1 = ost_req_buf1(r);
+	tmp2 = ost_req_buf2(r);
+        req->rq_rep.ost->result = obd_commitrw
+		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
+		 niocount, (struct niobuf *)tmp2);
+
  out:
         if (res != NULL)
                 OBD_FREE(res, sizeof(struct niobuf) * niocount);
@@ -375,6 +382,32 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
 
 	EXIT;
 	return 0;
+}
+
+static int ost_commit_page(struct obd_conn *conn, struct page *page)
+{
+        struct obd_ioobj obj;
+        struct niobuf buf;
+        int rc;
+        ENTRY;
+
+        memset(&buf, 0, sizeof(buf));
+        memset(&obj, 0, sizeof(obj));
+
+        buf.page = page;
+        obj.ioo_bufcnt = 1;
+        
+        rc = obd_commitrw(OBD_BRW_WRITE, conn, 1, &obj, 1, &buf); 
+        EXIT;
+        return rc;
+}
+
+static int ost_brw_write_cb(struct ptlrpc_bulk_desc *bulk, void *data)
+{
+        int rc = ost_commit_page(&bulk->b_conn, bulk->b_page);
+        if (rc)
+                CERROR("ost_commit_page failed: %d\n", rc);
+        return rc;
 }
 
 int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
@@ -463,6 +496,9 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 dst->xid = HTON__u32(bulk_vec[i]->b_xid);
 
                 bulk_vec[i]->b_buf = (void *)(unsigned long)dst->addr;
+                bulk_vec[i]->b_cb = ost_brw_write_cb;
+                bulk_vec[i]->b_page = dst->page;
+                memcpy(&bulk_vec[i]->b_conn, &conn, sizeof(conn));
                 bulk_vec[i]->b_buflen = PAGE_SIZE;
                 bulk_vec[i]->b_portal = OSC_BULK_PORTAL;
                 rc = ptlrpc_register_bulk(bulk_vec[i]);
@@ -494,25 +530,6 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
 	return 0;
 }
 
-int ost_commit_page(struct obd_conn *conn, struct page *page)
-{
-        struct obd_ioobj obj;
-        struct niobuf buf;
-        int rc;
-        ENTRY;
-
-        memset(&buf, 0, sizeof(buf));
-        memset(&obj, 0, sizeof(obj));
-
-        buf.page = page;
-        obj.ioo_bufcnt = 1;
-        
-        rc = obd_commitrw(OBD_BRW_WRITE, conn, 1, &obj, 1, &buf); 
-        EXIT;
-        return rc;
-}
-
-
 int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
 	struct ost_req *r = req->rq_req.ost;
@@ -522,57 +539,6 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
                 return ost_brw_read(obddev, req);
         else
                 return ost_brw_write(obddev, req);
-}
-
-int ost_brw_complete(struct ost_obd *obddev, struct ptlrpc_request *req)
-{
-	struct obd_conn conn; 
-	int rc, i, j, cmd;
-	int objcount, niocount;
-	char *tmp1, *tmp2, *end2;
-	struct niobuf *nb;
-	struct obd_ioobj *ioo;
-	struct ost_req *r = req->rq_req.ost;
-
-	ENTRY;
-	
-	tmp1 = ost_req_buf1(r);
-	tmp2 = ost_req_buf2(r);
-	end2 = tmp2 + req->rq_req.ost->buflen2;
-	objcount = r->buflen1 / sizeof(*ioo); 
-	niocount = r->buflen2 / sizeof(*nb); 
-	cmd = r->cmd;
-
-	conn.oc_id = req->rq_req.ost->connid;
-	conn.oc_dev = req->rq_obd->u.ost.ost_tgt;
-
-        for (i = 0; i < objcount; i++) {
-		ost_unpack_ioo((void *)&tmp1, &ioo);
-		if (tmp2 + ioo->ioo_bufcnt > end2) { 
-			rc = -EFAULT;
-			break; 
-		}
-                for (j = 0; j < ioo->ioo_bufcnt; j++) {
-			ost_unpack_niobuf((void *)&tmp2, &nb); 
-		}
-	}
-
-        rc = ost_pack_rep(NULL, 0, NULL, 0,
-                          &req->rq_rephdr, &req->rq_rep,
-                          &req->rq_replen, &req->rq_repbuf);
-	if (rc) { 
-		CERROR("cannot pack reply\n"); 
-		return rc;
-	}
-
-	/* The unpackers move tmp1 and tmp2, so reset them before using */
-	tmp1 = ost_req_buf1(r);
-	tmp2 = ost_req_buf2(r);
-        req->rq_rep.ost->result = obd_commitrw
-		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
-		 niocount, (struct niobuf *)tmp2);
-
-        return 0;
 }
 
 static int ost_handle(struct obd_device *obddev, 
@@ -634,10 +600,6 @@ static int ost_handle(struct obd_device *obddev,
 	case OST_BRW:
 		CDEBUG(D_INODE, "brw\n");
 		rc = ost_brw(ost, req);
-		break;
-	case OST_BRW_COMPLETE:
-		CDEBUG(D_INODE, "brw_complete\n");
-		rc = ost_brw_complete(ost, req);
 		break;
 	case OST_PUNCH:
 		CDEBUG(D_INODE, "punch\n");

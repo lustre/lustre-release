@@ -414,7 +414,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                   obd_off *offset, obd_flag *flags)
 {
 	struct ptlrpc_client *cl = osc_con2cl(conn);
-        struct ptlrpc_request *request, *req2 = NULL;
+        struct ptlrpc_request *request;
 	struct obd_ioobj ioo;
 	struct niobuf src;
 	int pages, rc, i, j, n, size1, size2 = 0; 
@@ -480,27 +480,9 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 		}
 	}
 
-	req2 = ptlrpc_prep_req(cl, OST_BRW_COMPLETE, size1, ptr1,
-                               request->rq_rep.ost->buflen2, ptr2);
-        ptr2 = ost_rep_buf2(request->rq_rep.ost);
-	if (!req2) { 
-		CERROR("cannot pack second request!\n"); 
-		return -ENOMEM;
-	}
-
-	req2->rq_reqhdr->opc = OST_BRW_COMPLETE;
-	req2->rq_replen = sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
-	rc = ptlrpc_queue_wait(cl, req2);
-	if (rc) { 
-		EXIT;
-		goto out;
-	}
-
  out:
 	if (request->rq_rephdr)
 		OBD_FREE(request->rq_rephdr, request->rq_replen);
-	if (req2 && req2->rq_rephdr)
-		OBD_FREE(req2->rq_rephdr, req2->rq_replen);
 	n = 0;
         for (i = 0; i < num_oa; i++) {
                 for (j = 0; j < oa_bufs[i]; j++) {
@@ -509,8 +491,6 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 		}
 	}
 
-        if (req2)
-                ptlrpc_free_req(req2);
 	ptlrpc_free_req(request);
 	return 0;
 }
