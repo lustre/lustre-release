@@ -19,8 +19,8 @@ extern int obd_print_entry;
 #define D_UNUSED2     4
 #define D_UNUSED3     8
 #define D_UNUSED4    16
-#define D_UNUSED5    32
-#define D_UNUSED6    64
+#define D_WARNING    32 /* misc warnings */
+#define D_EXT2       64 /* anything from ext2_debug */
 #define D_MALLOC    128 /* print malloc, free information */
 #define D_CACHE     256 /* cache-related items */
 #define D_INFO      512 /* general information, especially from interface.c */
@@ -33,7 +33,7 @@ extern int obd_print_entry;
 	if (obd_debug_level & mask) {					\
 		printk("(%s,l. %d): ",  __FUNCTION__, __LINE__);	\
 		printk(format, ## a); }					\
-	} while (0);
+	} while (0)
 
 #define ENTRY								      \
         if (obd_print_entry)						      \
@@ -45,7 +45,7 @@ extern int obd_print_entry;
 
 #else /* SYM_OBD_DEBUG */
 
-#       define CDEBUG(mask, format, a...) ;
+#       define CDEBUG ;
 #       define ENTRY ;
 #       define EXIT ;
 
@@ -101,18 +101,19 @@ struct ioc_prealloc {
 #define OBD_IOC_DESTROY                _IOW('f', 6, long)
 
 #define OBD_IOC_DEC_USE_COUNT          _IO('f', 8)
-
+#define OBD_IOC_SETATTR                _IOR('f', 9, long)
+#define OBD_IOC_READ                   _IOWR('f', 10, long)
 
 /* balloc.c */
-int obd_new_block (const struct inode * inode, unsigned long goal,
+int ext2_new_block (const struct inode * inode, unsigned long goal,
                    u32 * prealloc_count, u32 * prealloc_block, int * err);
-void obd_free_blocks (const struct inode * inode, unsigned long block,
+void ext2_free_blocks (const struct inode * inode, unsigned long block,
                       unsigned long count);
-unsigned long obd_count_free_blocks (struct super_block * sb);
+unsigned long ext2_count_free_blocks (struct super_block * sb);
 int ext2_group_sparse(int group);
 struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
-                                            unsigned int block_group,
-                                            struct buffer_head ** bh);
+					     unsigned int block_group,
+					     struct buffer_head ** bh);
 
 
 /* bitmap.c */
@@ -145,17 +146,36 @@ extern int obd_create (struct super_block * sb, int inode_hint, int * err);
 extern void obd_unlink (struct inode * inode);
 
 /* ioctl.c */
+struct oic_setattr_s {
+	unsigned long inode;
+	struct iattr iattr;
+};
+struct oic_read_s {
+	unsigned long inode;
+	char * buf;
+	unsigned long count;
+	loff_t offset;
+};
 int obd_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
 	       unsigned long arg);
 
 /* super.c */
+#define ext2_warning obd_warning
+#define ext2_error obd_warning
+#define ext2_panic obd_warning
+
+#ifdef EXT2FS_DEBUG
+#  undef ext2_debug
+#  define ext2_debug(format, a...) CDEBUG(D_EXT2, format, ## a)
+#endif
+
 #define obd_error obd_warning
 #define obd_panic obd_warning
-extern void obd_warning (struct super_block *, const char *, const char *, ...)
-	__attribute__ ((format (printf, 3, 4)));
+#define obd_warning(sb, func, format, a...) CDEBUG(D_WARNING, format, ## a)
+
 int obd_remount (struct super_block * sb, int * flags, char * data);
-struct super_block * obd_read_super (struct super_block * sb, void * data,
-				     int silent);
+struct super_block * ext2_read_super (struct super_block * sb, void * data,
+				      int silent);
 
 /* sysctl.c */
 extern void obd_sysctl_init (void);
@@ -166,9 +186,10 @@ void obd_truncate (struct inode * inode);
 
 /* operations */
 /* dir.c */
-extern struct inode_operations obd_dir_inode_operations;
+extern struct inode_operations ext2_dir_inode_operations;
 
 /* file.c */
-extern struct inode_operations obd_file_inode_operations;
+extern struct file_operations ext2_file_operations;
+extern struct inode_operations ext2_file_inode_operations;
 
 #endif /* __LINUX_SYM_OBD_H */

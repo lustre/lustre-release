@@ -15,6 +15,8 @@ eval 'sub OBD_IOC_DESTROY () { &_IOC(1, ord(\'f\'), 6, 4);}' unless
   defined(&OBD_IOC_DESTROY);
 eval 'sub OBD_IOC_DEC_USE_COUNT () { &_IOC(0, ord(\'f\'), 8, 0);}' unless
   defined(&OBD_IOC_DEC_USE_COUNT);
+eval 'sub OBD_IOC_READ () { &_IOC(3, ord(\'f\'), 10, 4);}' unless
+  defined(&OBD_IOC_READ);
 
 use Getopt::Long;
 use File::stat;
@@ -47,7 +49,8 @@ my %commands =
      'setup' => {func => "Setup", doc => "setup: initializes the environment"},
      'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
      'destroy' => {func => "Destroy", doc => "setup: destroys an inode"},
-     'dec_use_count' => {func => "Decusecount", doc => "decreases the module use count so that it can be unmounted following an oops"},
+     'dec_use_count' => {func => "Decusecount", doc => "decreases the module use count so that the module can be removed following an oops"},
+     'read' => {func => "Read", doc => "read <inode> <count> [offset]"},
      'help' => {func => \&Help,  doc => "help: this message"},
      'quit' => {func => \&Quit,  doc => "see \"exit\""},
      'exit' => {func => \&Quit,  doc => "see \"quit\""}
@@ -209,6 +212,49 @@ sub Destroy {
     }
 }
 
+sub Read {
+    my $inode = shift;
+    my $count = shift;
+    my $offset = shift;
+
+    if (!defined($inode) || scalar($inode) < 1 || !defined($count) ||
+	$count < 1 || (defined($offset) && $offset < 0)) {
+	print "invalid arguments; type \"help read\" for a synopsis\n";
+	return;
+    }
+
+    if (!defined($offset)) {
+	$offset = 0;
+    }
+
+    print("Reading $count bytes starting at byte $offset from object " .
+	  "$inode...\n");
+
+    # "allocate" a large enough buffer
+    my $buf = sprintf("%${count}s", " ");
+    die "suck" if (length($buf) != $count);
+
+    my $packed = pack("LpLLL", $inode, $buf, $count, 0, $offset);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_READ, $packed);
+
+    $retval = unpack("x4x4L", $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	if ($retval >= 0) {
+		print substr($buf, 0, $retval);
+		print "\nRead $retval of an attempted $count bytes.\n";
+		print "Finished (success)\n";
+	} else {
+		print "Finished (error $retval)\n";
+	}
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+# Unused for now
 sub Preallocate {
     my $arg = shift;
 
@@ -238,7 +284,7 @@ sub Preallocate {
 }
 
 sub Decusecount {
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_DEC_USE_COUNT, NULL);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_DEC_USE_COUNT, 0);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
