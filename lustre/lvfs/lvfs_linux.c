@@ -50,6 +50,10 @@
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
 
+atomic_t obd_memory;
+int obd_memmax;
+
+
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
 # define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
@@ -189,9 +193,18 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
                 GOTO(out_up, dchild);
 
         if (dchild->d_inode) {
-                if (!S_ISREG(dchild->d_inode->i_mode))
+                int old_mode = dchild->d_inode->i_mode;
+                if (!S_ISREG(old_mode))
                         GOTO(out_err, err = -EEXIST);
 
+                /* Fixup file permissions if necessary */
+                if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                        CWARN("fixing permissions on %s from %o to %o\n",
+                              name, old_mode, mode);
+                        dchild->d_inode->i_mode = (mode & S_IALLUGO) |
+                                                  (old_mode & ~S_IALLUGO);
+                        mark_inode_dirty(dchild->d_inode);
+                }
                 GOTO(out_up, dchild);
         }
 
@@ -224,9 +237,18 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
                 GOTO(out_up, dchild);
 
         if (dchild->d_inode) {
-                if (!S_ISDIR(dchild->d_inode->i_mode))
+                int old_mode = dchild->d_inode->i_mode;
+                if (!S_ISDIR(old_mode))
                         GOTO(out_err, err = -ENOTDIR);
 
+                /* Fixup directory permissions if necessary */
+                if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                        CWARN("fixing permissions on %s from %o to %o\n",
+                              name, old_mode, mode);
+                        dchild->d_inode->i_mode = (mode & S_IALLUGO) |
+                                                  (old_mode & ~S_IALLUGO);
+                        mark_inode_dirty(dchild->d_inode);
+                }
                 GOTO(out_up, dchild);
         }
 
@@ -308,51 +330,45 @@ static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
 {
         struct l_linux_dirent *dirent;
         struct l_readdir_callback *buf = (struct l_readdir_callback *)__buf;
-        int reclen = size_round(offsetof(struct l_linux_dirent, d_name) + namlen + 1);
         
-        buf->error = -EINVAL;
-        if (reclen > buf->count)
-                return -EINVAL;
-        dirent = buf->previous;
+        dirent = buf->lrc_dirent;
         if (dirent)
-               dirent->d_off = offset; 
-        dirent = buf->current_dir;
-        buf->previous = dirent;
-        dirent->d_ino = ino;
-        dirent->d_reclen = reclen;
-        memcpy(dirent->d_name, name, namlen);
-        ((char *)dirent) += reclen;
-        buf->current_dir = dirent;
-        buf->count -= reclen; 
+               dirent->lld_off = offset; 
+
+        OBD_ALLOC(dirent, sizeof(*dirent));
+
+        list_add_tail(&dirent->lld_list, buf->lrc_list);
+
+        buf->lrc_dirent = dirent;
+        dirent->lld_ino = ino;
+        LASSERT(sizeof(dirent->lld_name) >= namlen + 1);
+        memcpy(dirent->lld_name, name, namlen);
+
         return 0;
 }
 
-long l_readdir(struct file * file, void * dirent, unsigned int count)
+long l_readdir(struct file *file, struct list_head *dentry_list)
 {
-        struct l_linux_dirent * lastdirent;
+        struct l_linux_dirent *lastdirent;
         struct l_readdir_callback buf;
         int error;
 
-        buf.current_dir = (struct l_linux_dirent *)dirent;
-        buf.previous = NULL;
-        buf.count = count;
-        buf.error = 0;
+        buf.lrc_dirent = NULL;
+        buf.lrc_list = dentry_list; 
 
         error = vfs_readdir(file, l_filldir, &buf);
         if (error < 0)
                 return error;
-        error = buf.error;
-        lastdirent = buf.previous;
 
-        if (lastdirent) {
-                lastdirent->d_off = file->f_pos;
-                error = count - buf.count;        
-        }
-        return error; 
+        lastdirent = buf.lrc_dirent;
+        if (lastdirent)
+                lastdirent->lld_off = file->f_pos;
+
+        return 0; 
 }
 EXPORT_SYMBOL(l_readdir);
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+EXPORT_SYMBOL(obd_memory);
+EXPORT_SYMBOL(obd_memmax);
 
 static int __init lvfs_linux_init(void)
 {
@@ -361,6 +377,12 @@ static int __init lvfs_linux_init(void)
 
 static void __exit lvfs_linux_exit(void)
 {
+        int leaked;
+        ENTRY;
+
+        leaked = atomic_read(&obd_memory);
+        CDEBUG(leaked ? D_ERROR : D_INFO,
+               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
 
         return;
 }
@@ -371,10 +393,3 @@ MODULE_LICENSE("GPL");
 
 module_init(lvfs_linux_init);
 module_exit(lvfs_linux_exit);
-
-#else
-
-#warning "lvfs_linux_init() and fsfilt_ext3_exit() aren't called on 2.6. MUST be fixed"
-
-
-#endif
