@@ -127,7 +127,7 @@ class Config:
 
     def force(self, flag = None):
         if flag: self._force = flag
-        return self._flag
+        return self._force
 
     def node(self, val = None):
         if val: self._node = val
