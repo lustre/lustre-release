@@ -530,6 +530,18 @@ if test x$enable_modules != xno ; then
 		],[
 			AC_MSG_RESULT([no])
 		])
+	AC_MSG_CHECKING([if kernel defines cpumask_t])
+	LUSTRE_MODULE_TRY_COMPILE(
+		[
+			#include <linux/sched.h>
+		],[
+			return sizeof (cpumask_t);
+		],[
+			AC_MSG_RESULT([yes])
+			AC_DEFINE(HAVE_CPUMASK_T, 1, [cpumask_t found])
+		],[
+			AC_MSG_RESULT([no])
+		])
 
 
 	# ---------- modules? ------------------------
