@@ -4,49 +4,18 @@
 #ifndef _LIBCFS_H
 #define _LIBCFS_H
 
-#define PORTAL_DEBUG
+#include <asm/types.h>
 
 #ifdef __KERNEL__
 # include <linux/time.h>
+# include <asm/timex.h>
 #else
 # include <sys/time.h>
 # define do_gettimeofday(tv) gettimeofday(tv, NULL);
-#endif
-
-/* I think this beast is just trying to get cycles_t and get_cycles().
- * this should be in its own header. */
-#ifdef __linux__
-# include <asm/types.h>
-# if defined(__powerpc__) && !defined(__KERNEL__)
-#  define __KERNEL__
-#  include <asm/timex.h>
-#  undef __KERNEL__
-# else
-#  if defined(__KERNEL__)
-#   include <asm/timex.h>
-#  else
-#   include <sys/time.h>
 typedef unsigned long long cycles_t;
-static inline cycles_t get_cycles(void) 
-{
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        return (tv.tv_sec * 100000) + tv.tv_usec;
-}
-#  endif
-# endif
-#else
-# include <sys/types.h>
-typedef u_int32_t __u32;
-typedef u_int64_t __u64;
 #endif
 
-#ifdef __KERNEL__
-# include <linux/time.h>
-#else
-# include <sys/time.h>
-# define do_gettimeofday(tv) gettimeofday(tv, NULL);
-#endif
+#define PORTAL_DEBUG
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
