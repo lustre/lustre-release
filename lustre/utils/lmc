@@ -25,7 +25,7 @@ lmc - lustre configuration data manager
 
 """
 
-import sys, os, getopt, string, exceptions
+import sys, os, getopt, string, exceptions, random
 import xml.dom.minidom
 from xml.dom.ext import PrettyPrint
 
@@ -216,7 +216,11 @@ def new_name(base):
     return ret
 
 def new_uuid(name):
-    return "%s_UUID" % (name)
+    ret_uuid = '%05x_%.19s_%05x%05x' % (int(random.random() * 1048576),
+                                        name,
+                                        int(random.random() * 1048576),
+                                        int(random.random() * 1048576))
+    return ret_uuid[:36]
 
 ldlm_name = 'ldlm'
 ldlm_uuid = 'ldlm_UUID'
@@ -1005,6 +1009,15 @@ def main():
         sys.exit(1)
 
     gen = GenConfig(doc)
+
+    # the PRNG is normally seeded with time(), which is not so good for starting    # time-synchronized clusters
+    input = open('/dev/urandom', 'r')
+    if not input:
+        print 'Unable to open /dev/urandom!'
+        sys.exit(1)
+    seed = input.read(32)
+    input.close()
+    random.seed(seed)
 
     if options.batch:
         fp = open(options.batch)
