@@ -167,10 +167,10 @@ pass() {
 	echo PASS $@
 }
 
-MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
+MOUNT="`cat /proc/mounts | egrep "lustre|lustre_lite" | awk '{print $2}'`"
 if [ -z "$MOUNT" ]; then
 	sh llmount.sh
-	MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
+	MOUNT="`cat /proc/mounts | egrep "lustre|lustre_lite" | awk '{print $2}'`"
 	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
 	I_MOUNTED=yes
 fi
