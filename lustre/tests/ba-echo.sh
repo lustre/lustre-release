@@ -22,17 +22,17 @@ save_cmd() {
 [ -f $config ] && rm $config
 
 # Client node
-${LMC} --node $CLIENT --tcpbuf $TCPBUF --net '*' tcp
+${LMC} --add net --node $CLIENT --tcpbuf $TCPBUF --nid '*' --nettype tcp
 
 OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
 [ "$OBD_UUID" ] && OBD_UUID="--obduuid=$OBD_UUID" || echo "$OST: no UUID"
 
 # server node
-${LMC} --node $OST --tcpbuf $TCPBUF --net $OST tcp
-${LMC} --node $OST --obdtype=obdecho $OBD_UUID --ost
+${LMC} --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp
+${LMC} --add ost --node $OST --obd obd1 --obdtype=obdecho -obduuid $OBD_UUID 
 
 # osc on client
-${LMC} --node $CLIENT --osc OSC_$OST
+${LMC} --add oscref --node $CLIENT --echo_client obd1
 
 $LMC_REAL --batch $BATCH
 rm -f $BATCH
