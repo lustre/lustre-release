@@ -24,6 +24,8 @@ SRC=/etc
 
 [ "$LCONF" ] || LCONF=$SRCDIR/../utils/lconf
 
+[ "$MCREATE" ] || MCREATE=$SRCDIR/../tests/mcreate
+
 OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 if [ -z "$OSCMT" ]; then
 	[ -z "$*" ] && fail "usage: $0 [--reformat] <conf>.xml" 1
@@ -50,6 +52,11 @@ USED=`expr $USED + 16`	# Some space for the status file
 echo "touching $OSCMT"
 touch $OSCMT || fail "can't touch $OSCMT" 2
 HOSTS=$OSCMT/hosts.$$
+
+# this will cause the following cp to trigger bug #620096
+#echo "create an empty file $HOSTS"
+#$MCREATE $HOSTS
+
 echo "copying /etc/hosts to $HOSTS"
 cp /etc/hosts $HOSTS || fail "can't cp /etc/hosts to $HOSTS" 3
 echo "comparing /etc/hosts and $HOSTS"
