@@ -21,42 +21,8 @@ extern struct file_operations *obd_fso;
 /* ext2_obd.c */
 extern struct obd_ops ext2_obd_ops;
 
-/* balloc.c */
-int ext2_new_block (const struct inode * inode, unsigned long goal,
-                   u32 * prealloc_count, u32 * prealloc_block, int * err);
-void ext2_free_blocks (const struct inode * inode, unsigned long block,
-                      unsigned long count);
-unsigned long ext2_count_free_blocks (struct super_block * sb);
-int ext2_group_sparse(int group);
-struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
-                                             unsigned int block_group,
-                                             struct buffer_head ** bh);
 
-/* bitmap.c */
-unsigned long ext2_count_free(struct buffer_head * map, unsigned int numchars);
-
-/* dir.c */
-extern struct inode_operations ext2_dir_inode_operations;
-
-/* file.c */
-extern struct file_operations ext2_file_operations;
-extern struct inode_operations ext2_file_inode_operations;
-
-/* fsync.c */
-int ext2_sync_file(struct file * file, struct dentry *dentry, int);
-
-/* ialloc.c */
-void ext2_free_inode (struct inode * inode);
-struct inode * ext2_new_inode (const struct inode * dir, int );
-unsigned long ext2_count_free_inodes (struct super_block * sb);
-void ext2_check_inodes_bitmap (struct super_block * sb);
-int load_inode_bitmap (struct super_block * sb,
-                              unsigned int block_group);
-
-/* inode.c */
-int ext2_bmap(struct address_space *mapping, long block);
-int ext2_get_block(struct inode *inode, long iblock, struct buffer_head *bh_result, int create);
-
+#include <linux/ext2_fs.h>
 
 /* super.c */
 #ifdef EXT2_OBD_DEBUG

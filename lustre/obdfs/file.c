@@ -34,7 +34,7 @@
 #include <linux/obd_support.h>
 #include <linux/obdfs.h>
 
-static inline void remove_suid(struct inode *inode)
+static inline void obdfs_remove_suid(struct inode *inode)
 {
         unsigned int mode;
 
@@ -63,7 +63,7 @@ obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         CDEBUG(D_INFO, "Wrote %d\n", retval);
         if (retval > 0) {
                 struct inode *inode = file->f_dentry->d_inode;
-                remove_suid(inode);
+                obdfs_remove_suid(inode);
                 inode->i_ctime = inode->i_mtime = CURRENT_TIME;
                 mark_inode_dirty(inode);
         }

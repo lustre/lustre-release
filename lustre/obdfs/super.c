@@ -296,7 +296,6 @@ static void obdfs_put_super(struct super_block *sb)
 static void obdfs_read_inode(struct inode *inode)
 {
         struct obdo *oa;
-
         ENTRY;
         oa = obdo_fromid(IID(inode), inode->i_ino,
                          OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
@@ -337,7 +336,7 @@ static void obdfs_read_inode(struct inode *inode)
         }
 
         return;
-} /* obdfs_read_inode */
+}
 
 static void obdfs_write_inode(struct inode *inode, int wait) 
 {

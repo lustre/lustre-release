@@ -1,4 +1,3 @@
-include ../config.mk
 
 MODULE = obdclass.o
 

@@ -13,6 +13,8 @@
 #define INOFS_H
 #include <linux/obd_class.h>
 
+#include <linux/obdo.h>
+
 /* super.c */
 void inofs_read_inode(struct inode *inode);
 
@@ -36,18 +38,19 @@ int inofs_mknod(struct inode *dir, struct dentry *dentry, int mode, int rdev);
 int inofs_symlink(struct inode *dir, struct dentry *dentry, const char *symname);
 int inofs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry);
 int inofs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry);
+
 /* dir.c */
 int inofs_readdir(struct file * filp, void * dirent, filldir_t filldir);
-int inofs_check_dir_entry (const char * function, struct inode * dir,
-			  struct ext2_dir_entry_2 * de,
-			  struct page * page,
-			   unsigned long offset);
 
 struct inofs_sb_info {
-	struct obd_conn_info osi_conn_info;
-	struct super_block *osi_super;
-	struct obd_device *osi_obd;
-	struct obd_ops *osi_ops;
+        struct list_head osi_list;      /* list of supers */
+        struct obd_conn osi_conn;
+        struct super_block *osi_super;
+        struct obd_device *osi_obd;
+        struct obd_ops *osi_ops;
+        struct list_head         osi_inodes;    /* list of dirty inodes */
+        unsigned long            osi_cache_count;
+        struct semaphore         osi_list_mutex;
 };
 
 void inofs_sysctl_init(void);
@@ -60,8 +63,8 @@ extern struct inode_operations inofs_inode_ops;
 
 static inline struct obd_ops *iops(struct inode *i)
 {
-	struct inofs_sb_info *sbi = (struct inofs_sb_info *) i->i_sb->u.generic_sbp;
-	return sbi->osi_ops;
+        struct inofs_sb_info *sbi = (struct inofs_sb_info *) i->i_sb->u.generic_sbp;
+        return sbi->osi_ops;
 }
 
 #define NOLOCK 0

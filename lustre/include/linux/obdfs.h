@@ -12,10 +12,11 @@
 #ifndef _OBDFS_H
 #define OBDFS_H
 #include <linux/obd_class.h>
+#include <linux/obdo.h>
 #include <linux/list.h>
 
 
-
+/* super.c */ 
 struct obdfs_pgrq {
         struct list_head         rq_plist;      /* linked list of req's */
         unsigned long            rq_jiffies;
@@ -24,25 +25,7 @@ struct obdfs_pgrq {
 
 struct list_head obdfs_super_list;       /* list of all OBDFS superblocks */
 
-struct obdfs_sb_info {
-        struct list_head         osi_list;      /* list of supers */
-        struct obd_conn          osi_conn;
-        struct super_block      *osi_super;
-        struct obd_device       *osi_obd;
-        struct obd_ops          *osi_ops;
-        ino_t                    osi_rootino;   /* number of root inode */
-        int                      osi_minor;     /* minor of /dev/obdX */
-        struct list_head         osi_inodes;    /* list of dirty inodes */
-        unsigned long            osi_cache_count;
-        struct semaphore         osi_list_mutex;
-};
 
-struct obdfs_inode_info {
-        int              oi_flags;
-        struct list_head oi_inodes;
-        struct list_head oi_pages;
-        char             oi_inline[OBD_INLINESZ];
-};
 
 /* dir.c */
 #define EXT2_DIR_PAD                    4
@@ -50,6 +33,7 @@ struct obdfs_inode_info {
 #define EXT2_DIR_REC_LEN(name_len)      (((name_len) + 8 + EXT2_DIR_ROUND) & \
                                          ~EXT2_DIR_ROUND)
 #define EXT2_NAME_LEN 255
+#if 0
 struct ext2_dir_entry_2 {
         __u32   inode;                  /* Inode number */
         __u16   rec_len;                /* Directory entry length */
@@ -57,6 +41,7 @@ struct ext2_dir_entry_2 {
         __u8    file_type;
         char    name[EXT2_NAME_LEN];    /* File name */
 };
+#endif
 int obdfs_check_dir_entry (const char * function, struct inode * dir,
                           struct ext2_dir_entry_2 * de, struct page * page,
                           unsigned long offset);
@@ -78,6 +63,8 @@ int obdfs_flush_dirty_pages(unsigned long check_time);
 /*
  * Structure of the super block
  */
+
+#if 0
 struct ext2_super_block {
         __u32   s_inodes_count;         /* Inodes count */
         __u32   s_blocks_count;         /* Blocks count */
@@ -136,6 +123,7 @@ struct ext2_super_block {
         __u16   s_padding1;
         __u32   s_reserved[204];        /* Padding to the end of the block */
 };
+#endif
 
 #define EXT2_SB(sb)     (&((sb)->u.ext2_sb))
 /*
@@ -211,12 +199,6 @@ extern struct inode_operations obdfs_symlink_inode_operations;
 void obdfs_sysctl_init(void);
 void obdfs_sysctl_clean(void);
 
-
-static inline struct obdfs_inode_info *obdfs_i2info(struct inode *inode)
-{
-        return (struct obdfs_inode_info *)&(inode->u.generic_ip);
-}
-
 static inline struct obdfs_sb_info *obdfs_i2sbi(struct inode *inode)
 {
         return (struct obdfs_sb_info *) &(inode->i_sb->u.generic_sbp);
@@ -290,61 +272,7 @@ static inline void obdfs_print_plist(struct inode *inode)
         CDEBUG(D_INFO, "\n");
         /* obd_up(&obdfs_i2sbi(inode)->osi_list_mutex); */
 }
-
-static inline int obdfs_has_inline(struct inode *inode)
-{
-        return (obdfs_i2info(inode)->oi_flags & OBD_FL_INLINEDATA);
-}
-
-static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
-{
-        struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
-
-        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
-               inode->i_ino, (long)oa->o_id, oa->o_valid);
-        obdo_from_inode(oa, inode);
-        if (obdfs_has_inline(inode)) {
-                CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
-                memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
-                oa->o_obdflags |= OBD_FL_INLINEDATA;
-                oa->o_valid |= OBD_MD_FLINLINE;
-        }
-} /* obdfs_from_inode */
-
-static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
-{
-        struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
-
-        CDEBUG(D_INFO, "src obdo %ld valid 0x%08x, dst inode %ld\n",
-               (long)oa->o_id, oa->o_valid, inode->i_ino);
-
-        obdo_to_inode(inode, oa);
-
-        if (obdo_has_inline(oa)) {
-                CDEBUG(D_INODE, "copying inline data from obdo to inode\n");
-                memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
-                oinfo->oi_flags |= OBD_FL_INLINEDATA;
-        }
-} /* obdfs_to_inode */
-
-#define NOLOCK 0
-#define LOCKED 1
-
-#ifdef OPS
-#warning "*** WARNING redefining OPS"
-#else
-#define OPS(sb,op) ((struct obdfs_sb_info *)(& ## sb ## ->u.generic_sbp))->osi_ops->o_ ## op
-#define IOPS(inode,op) ((struct obdfs_sb_info *)(& ## inode->i_sb ## ->u.generic_sbp))->osi_ops->o_ ## op
-#endif
-
-#ifdef ID
-#warning "*** WARNING redefining ID"
-#else
-#define ID(sb) (&((struct obdfs_sb_info *)( & ## sb ## ->u.generic_sbp))->osi_conn)
-#define IID(inode) (&((struct obdfs_sb_info *)( & ## inode->i_sb ## ->u.generic_sbp))->osi_conn)
-#endif
-
-#define OBDFS_SUPER_MAGIC 0x4711
+#include <linux/obdo.h>
 
 #endif
 
