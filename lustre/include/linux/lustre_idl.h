@@ -245,6 +245,8 @@ struct obd_statfs {
 #define OBD_BRW_RWMASK	(OBD_BRW_READ | OBD_BRW_WRITE)
 #define OBD_BRW_CREATE	0x4
 
+#define OBD_PUNCH_EOF 0xffffffffffffffffULL
+
 struct obd_ioobj {
         obd_id    ioo_id;
         obd_gr    ioo_gr;
