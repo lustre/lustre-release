@@ -46,6 +46,7 @@ new_fs () {
 	MKFSOPT="-b 4096"
 
 	[ "$1" = "ext3" ] && MKFS="mkfs.ext2 -j"
+	[ "$1" = "extN" ] && MKFS="mkfs.ext2 -j" && EFILE="$1_ext3.gz"
 
 	if [ -b "$2" ]; then
 		[ $# -lt 2 -o $# -gt 3 ] && \
