@@ -411,12 +411,12 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
         }
         request->rq_req.ost->cmd = OBD_BRW_READ;
 
-        OBD_ALLOC(bulk, pages * sizeof(struct ptlrpc_bulk_desc *));
+        OBD_ALLOC(bulk, pages * sizeof(*bulk));
         if (bulk == NULL) {
                 CERROR("cannot alloc bulk desc vector\n");
                 return -ENOMEM;
         }
-        memset(bulk, 0, pages * sizeof(struct ptlrpc_bulk_desc *));
+        memset(bulk, 0, pages * sizeof(*bulk));
 
         n = 0;
         ptr1 = ost_req_buf1(request->rq_req.ost);
@@ -460,12 +460,12 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                         if (bulk[n] == NULL)
                                 continue;
                         kunmap(buf[n]);
-                        OBD_FREE(bulk[n], sizeof(struct ptlrpc_bulk_desc));
+                        OBD_FREE(bulk[n], sizeof(**bulk));
                         n++;
                 }
         }
 
-        OBD_FREE(bulk, pages * sizeof(struct ptlrpc_bulk_desc *));
+        OBD_FREE(bulk, pages * sizeof(*bulk));
         ptlrpc_free_req(request);
         return rc;
 }

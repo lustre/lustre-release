@@ -190,7 +190,7 @@ ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
                 rc = policy(parent_res, res_id, new_id, mode, NULL);
                 if (rc == ELDLM_RES_CHANGED) {
                         *flags |= LDLM_FL_RES_CHANGED;
-                        memcpy(res_id, new_id, sizeof(__u64) * RES_NAME_SIZE);
+                        memcpy(res_id, new_id, sizeof(*new_id));
                 }
         }
 

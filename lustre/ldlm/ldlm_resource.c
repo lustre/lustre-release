@@ -54,7 +54,8 @@ static void res_hash_init(struct ldlm_namespace *ns)
         if (ns->ns_hash != NULL)
                 return;
 
-        OBD_ALLOC(res_hash, sizeof(struct list_head) * RES_HASH_SIZE);
+        /* FIXME: this memory appears to be leaked */
+        OBD_ALLOC(res_hash, sizeof(*res_hash) * RES_HASH_SIZE);
         if (!res_hash)
                 LBUG();
 
@@ -148,7 +149,7 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         if (!res)
                 LBUG();
 
-        memcpy(res->lr_name, name, RES_NAME_SIZE * sizeof(__u32));
+        memcpy(res->lr_name, name, sizeof(res->lr_name));
         res->lr_namespace = ns;
         if (type < 0 || type > LDLM_MAX_TYPE) 
                 LBUG();
@@ -187,8 +188,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                 struct ldlm_resource *chk;
                 chk = list_entry(tmp, struct ldlm_resource, lr_hash);
 
-                if (memcmp(chk->lr_name, name,
-                           RES_NAME_SIZE * sizeof(__u32)) == 0) {
+                if (memcmp(chk->lr_name, name, sizeof(chk->lr_name)) == 0) {
                         res = chk;
                         atomic_inc(&res->lr_refcount);
                         break;

@@ -203,7 +203,7 @@ static void ll_put_super(struct super_block *sb)
         struct ll_sb_info *sbi = sb->u.generic_sbp;
         ENTRY;
         obd_disconnect(&sbi->ll_conn);
-        OBD_FREE(sb->u.generic_sbp, sizeof(struct ll_sb_info));
+        OBD_FREE(sb->u.generic_sbp, sizeof(*sbi));
         MOD_DEC_USE_COUNT;
         EXIT;
 } /* ll_put_super */

@@ -387,10 +387,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 CDEBUG(D_INODE, "BRW %s with %dx%d pages\n",
                        rw == OBD_BRW_READ ? "read" : "write",
                        num, oa_bufs[0]);
-                bufs = kmalloc(pages * sizeof(struct page *), GFP_KERNEL);
-                counts = kmalloc(pages * sizeof(obd_size), GFP_KERNEL);
-                offsets = kmalloc(pages * sizeof(obd_off), GFP_KERNEL);
-                flags = kmalloc(pages * sizeof(obd_flag), GFP_KERNEL);
+                bufs = kmalloc(pages * sizeof(*bufs), GFP_KERNEL);
+                counts = kmalloc(pages * sizeof(*counts), GFP_KERNEL);
+                offsets = kmalloc(pages * sizeof(*offsets), GFP_KERNEL);
+                flags = kmalloc(pages * sizeof(*flags), GFP_KERNEL);
                 if (!bufs || !counts || !offsets || !flags) {
                         CERROR("no memory for %d BRW per-page data\n", pages);
                         err = -ENOMEM;
@@ -553,12 +553,12 @@ static int __init init_obdclass(void)
         int i;
 
         printk(KERN_INFO "OBD class driver  v0.01, braam@stelias.com\n");
-        
+
         INIT_LIST_HEAD(&obd_types);
-        
-        if ( (err = misc_register(&obd_psdev)) ) { 
+
+        if ((err = misc_register(&obd_psdev))) {
                 CERROR("cannot register %d err %d\n", OBD_MINOR, err);
-                return -EIO;
+                return err;
         }
 
         for (i = 0; i < MAX_OBD_DEVICES; i++) {

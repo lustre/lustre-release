@@ -89,7 +89,7 @@ int gen_connect (struct obd_conn *conn)
 {
         struct obd_client * cli;
 
-        OBD_ALLOC(cli, sizeof(struct obd_client));
+        OBD_ALLOC(cli, sizeof(*cli));
         if ( !cli ) {
                 CERROR("no memory! (minor %d)\n", conn->oc_dev->obd_minor);
                 return -ENOMEM;
@@ -121,7 +121,7 @@ int gen_disconnect(struct obd_conn *conn)
 
 
         list_del(&(cli->cli_chain));
-        OBD_FREE(cli, sizeof(struct obd_client));
+        OBD_FREE(cli, sizeof(*cli));
 
         CDEBUG(D_INFO, "disconnect: ID %u\n", conn->oc_id);
 

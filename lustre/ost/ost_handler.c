@@ -298,9 +298,8 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         int i, j;
         int objcount, niocount;
         char *tmp1, *tmp2, *end2;
-        char *res = NULL;
         int cmd;
-        struct niobuf *nb, *src, *dst;
+        struct niobuf *nb, *dst, *res = NULL;
         struct obd_ioobj *ioo;
         struct ost_req *r = req->rq_req.ost;
 
@@ -334,7 +333,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                 CERROR("cannot pack reply\n");
                 RETURN(rc);
         }
-        OBD_ALLOC(res, sizeof(struct niobuf) * niocount);
+        OBD_ALLOC(res, sizeof(*res) * niocount);
         if (res == NULL)
                 RETURN(-ENOMEM);
 
@@ -343,7 +342,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         tmp2 = ost_req_buf2(r);
         req->rq_rep.ost->result = obd_preprw
                 (cmd, &conn, objcount, (struct obd_ioobj *)tmp1,
-                 niocount, (struct niobuf *)tmp2, (struct niobuf *)res);
+                 niocount, (struct niobuf *)tmp2, res);
 
         if (req->rq_rep.ost->result)
                 GOTO(out, 0);
@@ -356,10 +355,9 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                         GOTO(out, rc);
                 }
 
-                src = &((struct niobuf *)res)[i];
                 dst = &((struct niobuf *)tmp2)[i];
                 bulk->b_xid = dst->xid;
-                bulk->b_buf = (void *)(unsigned long)src->addr;
+                bulk->b_buf = (void *)(unsigned long)res[i].addr;
                 bulk->b_buflen = PAGE_SIZE;
                 rc = ptlrpc_send_bulk(bulk, OST_BULK_PORTAL);
                 if (rc)
@@ -387,12 +385,12 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         tmp2 = ost_req_buf2(r);
         req->rq_rep.ost->result = obd_commitrw
                 (cmd, &conn, objcount, (struct obd_ioobj *)tmp1,
-                 niocount, (struct niobuf *)res);
+                 niocount, res);
 
         EXIT;
  out:
         if (res != NULL)
-                OBD_FREE(res, sizeof(struct niobuf) * niocount);
+                OBD_FREE(res, sizeof(*res) * niocount);
         if (bulk != NULL)
                 OBD_FREE(bulk, sizeof(*bulk));
         if (bulk_vec != NULL) {
@@ -400,8 +398,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                         if (bulk_vec[i] != NULL)
                                 OBD_FREE(bulk_vec[i], sizeof(*bulk));
                 }
-                OBD_FREE(bulk_vec,
-                         niocount * sizeof(struct ptlrpc_bulk_desc *));
+                OBD_FREE(bulk_vec, niocount * sizeof(*bulk_vec));
         }
 
         return 0;
