@@ -357,10 +357,21 @@ static int ost_commit_page(struct obd_conn *conn, struct page *page)
 
 static int ost_brw_write_cb(struct ptlrpc_bulk_page *bulk)
 {
+        void *journal_save;
         int rc;
         ENTRY;
 
+        /* Restore the filesystem journal context when we do the commit.
+         * This is needed for ext3 and reiserfs, but can't really hurt
+         * other filesystems.
+         */
+        journal_save = current->journal_info;
+        current->journal_info = bulk->b_desc->b_journal_info;
+        CERROR("journal_info: saved %p->%p, restored %p\n", current,
+               journal_save, bulk->b_desc->b_journal_info);
         rc = ost_commit_page(&bulk->b_desc->b_conn, bulk->b_page);
+        current->journal_info = journal_save;
+        CERROR("journal_info: restored %p->%p\n", current, journal_save);
         if (rc)
                 CERROR("ost_commit_page failed: %d\n", rc);
 
@@ -432,6 +443,10 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         desc->b_portal = OSC_BULK_PORTAL;
         memcpy(&(desc->b_conn), &conn, sizeof(conn));
 
+        /* Save journal context for commit callbacks */
+        CERROR("journal_info: saved %p->%p\n", current, current->journal_info);
+        desc->b_journal_info = current->journal_info;
+
         for (i = 0, lnb = local_nb; i < niocount; i++, lnb++) {
                 struct ptlrpc_service *srv = req->rq_obd->u.ost.ost_service;
                 struct ptlrpc_bulk_page *bulk;
@@ -455,6 +470,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         }
 
         rc = ptlrpc_register_bulk(desc);
+        current->journal_info = NULL; /* kind of scary */
         if (rc)
                 GOTO(fail_bulk, rc);
 
