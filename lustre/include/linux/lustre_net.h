@@ -89,7 +89,7 @@ struct ptlrpc_connection {
         struct list_head        c_imports;
         struct list_head        c_exports;
         struct list_head        c_sb_chain;
-        __u32                   c_flags; /* can we indicate INVALID elsewhere? */
+        __u32                   c_flags; // can we indicate INVALID elsewhere?
 };
 
 struct ptlrpc_client {
@@ -99,8 +99,6 @@ struct ptlrpc_client {
         __u32                     cli_target_devno;
 
         void                     *cli_data;
-        // struct semaphore          cli_rpc_sem; /* limits outstanding requests */
-
         char                     *cli_name;
 };
 
@@ -127,8 +125,8 @@ struct ptlrpc_request {
         int rq_flags;
         atomic_t rq_refcount;
 
-        int rq_request_portal; /* XXX FIXME bug 625069 */
-        int rq_reply_portal; /* XXX FIXME bug 625069 */
+        int rq_request_portal; /* XXX FIXME bug 249 */
+        int rq_reply_portal; /* XXX FIXME bug 249 */
 
         int rq_reqlen;
         struct lustre_msg *rq_reqmsg;

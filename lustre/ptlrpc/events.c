@@ -39,7 +39,8 @@ static int request_out_callback(ptl_event_t *ev)
         struct ptlrpc_request *req = ev->mem_desc.user_ptr;
         ENTRY;
 
-        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* requests always contiguous */
+        /* requests always contiguous */
+        LASSERT((ev->mem_desc.options & PTL_MD_IOV) == 0);
 
         if (ev->type != PTL_EVENT_SENT) {
                 // XXX make sure we understand all events, including ACK's
@@ -60,7 +61,8 @@ static int reply_out_callback(ptl_event_t *ev)
 {
         ENTRY;
 
-        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* replies always contiguous */
+        /* replies always contiguous */
+        LASSERT((ev->mem_desc.options & PTL_MD_IOV) == 0);
 
         if (ev->type == PTL_EVENT_SENT) {
                 OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);
@@ -81,7 +83,8 @@ static int reply_in_callback(ptl_event_t *ev)
         struct ptlrpc_request *req = ev->mem_desc.user_ptr;
         ENTRY;
 
-        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* replies always contiguous */
+        /* replies always contiguous */
+        LASSERT((ev->mem_desc.options & PTL_MD_IOV) == 0);
 
         if (req->rq_xid == 0x5a5a5a5a5a5a5a5a) {
                 CERROR("Reply received for freed request!  Probably a missing "
@@ -113,30 +116,29 @@ int request_in_callback(ptl_event_t *ev)
         struct ptlrpc_service *service = rqbd->rqbd_service;
 
         /* requests always contiguous */
-        LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0);
+        LASSERT((ev->mem_desc.options & PTL_MD_IOV) == 0);
         /* we only enable puts */
-        LASSERT (ev->type == PTL_EVENT_PUT);
-        LASSERT (atomic_read (&service->srv_nrqbds_receiving) > 0);
-        LASSERT (atomic_read (&rqbd->rqbd_refcount) > 0);
+        LASSERT(ev->type == PTL_EVENT_PUT);
+        LASSERT(atomic_read(&service->srv_nrqbds_receiving) > 0);
+        LASSERT(atomic_read(&rqbd->rqbd_refcount) > 0);
 
         if (ev->rlength != ev->mlength)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
 
-        if (ptl_is_valid_handle (&ev->unlinked_me)) {
+        if (ptl_is_valid_handle(&ev->unlinked_me)) {
                 /* This is the last request to be received into this
                  * request buffer.  We don't bump the refcount, since the
                  * thread servicing this event is effectively taking over
                  * portals' reference.
                  */
 #warning ev->unlinked_me.nal_idx is not set properly in a callback
-                LASSERT (ev->unlinked_me.handle_idx == rqbd->rqbd_me_h.handle_idx);
+                LASSERT(ev->unlinked_me.handle_idx==rqbd->rqbd_me_h.handle_idx);
 
                 /* we're off the air */
-                if (atomic_dec_and_test (&service->srv_nrqbds_receiving)) {
-                        CERROR ("All request buffers busy\n");
-                        /* we'll probably start dropping packets in portals soon */
-                }
+                /* we'll probably start dropping packets in portals soon */
+                if (atomic_dec_and_test(&service->srv_nrqbds_receiving))
+                        CERROR("All request buffers busy\n");
         } else {
                 /* +1 ref for service thread */
                 atomic_inc(&rqbd->rqbd_refcount);
@@ -159,15 +161,15 @@ static int bulk_source_callback(ptl_event_t *ev)
                (ev->type == PTL_EVENT_SENT) ? "SENT" :
                (ev->type == PTL_EVENT_ACK)  ? "ACK"  : "UNEXPECTED", ev->type);
 
-        LASSERT (ev->type == PTL_EVENT_SENT || ev->type == PTL_EVENT_ACK);
+        LASSERT(ev->type == PTL_EVENT_SENT || ev->type == PTL_EVENT_ACK);
 
-        LASSERT (atomic_read (&desc->bd_source_callback_count) > 0 &&
-                 atomic_read (&desc->bd_source_callback_count) <= 2);
+        LASSERT(atomic_read(&desc->bd_source_callback_count) > 0 &&
+                atomic_read(&desc->bd_source_callback_count) <= 2);
 
         /* 1 fragment for each page always */
-        LASSERT (ev->mem_desc.niov == desc->bd_page_count);
+        LASSERT(ev->mem_desc.niov == desc->bd_page_count);
 
-        if (atomic_dec_and_test (&desc->bd_source_callback_count)) {
+        if (atomic_dec_and_test(&desc->bd_source_callback_count)) {
                 list_for_each_safe(tmp, next, &desc->bd_page_list) {
                         bulk = list_entry(tmp, struct ptlrpc_bulk_page,
                                           bp_link);
@@ -195,11 +197,11 @@ static int bulk_sink_callback(ptl_event_t *ev)
 
         if (ev->type == PTL_EVENT_PUT) {
                 /* put with zero offset */
-                LASSERT (ev->offset == 0);
+                LASSERT(ev->offset == 0);
                 /* used iovs */
-                LASSERT ((ev->mem_desc.options & PTL_MD_IOV) != 0);
+                LASSERT((ev->mem_desc.options & PTL_MD_IOV) != 0);
                 /* 1 fragment for each page always */
-                LASSERT (ev->mem_desc.niov == desc->bd_page_count);
+                LASSERT(ev->mem_desc.niov == desc->bd_page_count);
 
                 list_for_each_safe (tmp, next, &desc->bd_page_list) {
                         bulk = list_entry(tmp, struct ptlrpc_bulk_page,
@@ -211,7 +213,7 @@ static int bulk_sink_callback(ptl_event_t *ev)
                                 bulk->bp_cb(bulk);
                 }
 
-                LASSERT (ev->mem_desc.length == total);
+                LASSERT(ev->mem_desc.length == total);
 
                 desc->bd_flags |= PTL_BULK_FL_RCVD;
                 wake_up(&desc->bd_waitq);

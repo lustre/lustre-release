@@ -281,7 +281,7 @@ fail:
         LBUG();
 }
 
-static struct page * ext2_get_page(struct inode *dir, unsigned long n)
+static struct page * ll_get_page(struct inode *dir, unsigned long n)
 {
         struct address_space *mapping = dir->i_mapping;
         struct page *page = read_cache_page(mapping, n,
@@ -396,7 +396,9 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
         for ( ; n < npages; n++, offset = 0) {
                 char *kaddr, *limit;
                 ext2_dirent *de;
-                struct page *page = ext2_get_page(inode, n);
+                struct page *page;
+                
+                page = ll_get_page(inode, n);
 
                 /* size might have been updated by mdc_readpage */
                 npages = dir_pages(inode);
@@ -466,7 +468,7 @@ struct ext2_dir_entry_2 * ext2_find_entry (struct inode * dir,
         n = start;
         do {
                 char *kaddr;
-                page = ext2_get_page(dir, n);
+                page = ll_get_page(dir, n);
                 if (!IS_ERR(page)) {
                         kaddr = page_address(page);
                         de = (ext2_dirent *) kaddr;
@@ -491,7 +493,7 @@ found:
 
 struct ext2_dir_entry_2 * ext2_dotdot (struct inode *dir, struct page **p)
 {
-        struct page *page = ext2_get_page(dir, 0);
+        struct page *page = ll_get_page(dir, 0);
         ext2_dirent *de = NULL;
 
         if (!IS_ERR(page)) {
@@ -557,7 +559,7 @@ int ll_add_link (struct dentry *dentry, struct inode *inode)
 
         /* We take care of directory expansion in the same loop */
         for (n = 0; n <= npages; n++) {
-                page = ext2_get_page(dir, n);
+                page = ll_get_page(dir, n);
                 err = PTR_ERR(page);
                 if (IS_ERR(page))
                         goto out;
@@ -709,7 +711,7 @@ int ext2_empty_dir (struct inode * inode)
         for (i = 0; i < npages; i++) {
                 char *kaddr;
                 ext2_dirent * de;
-                page = ext2_get_page(inode, i);
+                page = ll_get_page(inode, i);
 
                 if (IS_ERR(page))
                         continue;

@@ -1,10 +1,13 @@
 #!/usr/bin/perl
+use Getopt::Long;
+
+GetOptions("silent!"=> \$silent);
 
 my $mtpt = shift || usage();
 my $mount_count = shift || usage();
 my $i = shift || usage();
 my $files = 5;
-my $mcreate = 1; # should we use mcreate or open?
+my $mcreate = 0; # should we use mcreate or open?
 
 sub usage () {
     print "Usage: $0 <mount point prefix> <mount count> <iterations>\n";
@@ -21,16 +24,16 @@ sub do_open($) {
     if ($mcreate) {
         my $tmp = `./mcreate $path`;
         if ($tmp) {
-            print  "Creating [" . $$."]...\n";
+            print  "Creating $path [" . $$."]...\n" if !$silent;
             $tmp =~ /.*error: (.*)\n/;
-            print  "Create done [$$] $path: $!\n";
+            print  "Create done [$$] $path: $!\n" if !$silent;
         } else {
-            print  "Create done [$$] $path: Success\n";
+            print  "Create done [$$] $path: Success\n"if !$silent;
         }
     } else {
-        print  "Opening [" . $$."]...\n";
+        print  "Opening $path [" . $$."]...\n"if !$silent;
         open(FH, ">$path") || die "open($PATH): $!";
-        print  "Open done [$$] $path: Success\n";
+        print  "Open done [$$] $path: Success\n"if !$silent;
         close(FH) || die;
     }
 }
@@ -48,11 +51,11 @@ while ($i--) {
     }
     $d = int(rand() * $files);
     $path = "$mtpt$which/$d";
-    print  "Unlink start [" . $$."]...\n";
+    print  "Unlink $path start [" . $$."]...\n"if !$silent;
     if (unlink($path)) {
-        print  "Unlink done [$$] $path: Success\n";
+        print  "Unlink done [$$] $path: Success\n"if !$silent;
     } else {
-        print  "Unlink done [$$] $path: $!\n";
+        print  "Unlink done [$$] $path: $!\n"if !$silent;
     }
 }
 print "Done.\n";

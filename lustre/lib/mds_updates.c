@@ -121,12 +121,12 @@ void mds_getattr_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
-void mds_readdir_pack(struct ptlrpc_request *req, int offset,
+void mds_readdir_pack(struct ptlrpc_request *req, __u64 offset,
                       obd_id ino, int type)
 {
         struct mds_body *b;
 
-        b = lustre_msg_buf(req->rq_reqmsg, offset);
+        b = lustre_msg_buf(req->rq_reqmsg, 0);
         b->fsuid = HTON__u32(current->fsuid);
         b->fsgid = HTON__u32(current->fsgid);
         b->capability = HTON__u32(current->cap_effective);

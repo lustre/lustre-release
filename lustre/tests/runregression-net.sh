@@ -4,7 +4,7 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-COUNT=${COUNT:-10000000}
+COUNT=${COUNT:-1000000}
 COUNT_10=`expr $COUNT / 10`
 COUNT_100=`expr $COUNT / 100`
 COUNT_1000=`expr $COUNT / 1000`
@@ -28,6 +28,7 @@ runthreads() {
 	case $DO in
 	test_getattr)
 		RW=
+		;;
 
 	test_brw_write)
 		DO=test_brw
@@ -64,13 +65,9 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 		PG=1
 		PGV=16
 		;;
-
 	test_brw_read)
 		PG=1
-		case $OSTNODE in
-		ba*) PGV= ;; # disabled until the BA OST code is updated
-		*) PGV=16 ;;
-		esac
+		PGV=16
 		;;
 	esac
 
@@ -86,8 +83,6 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 
 	runthreads 1 $CMD $COUNT -30 $PG
 	[ "$PGV" ] && runthreads 1 $CMD $COUNT_10 -30 $PGV
-
-	runthreads 1 $CMD 100 -10 $PG
 
 	runthreads 2 $CMD $COUNT_100 -30 $PG
 	[ "$PGV" ] && runthreads 2 $CMD $COUNT_1000 -30 $PGV

@@ -20,8 +20,6 @@
  *
  */
 
-
-
 #include <linux/config.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -61,14 +59,15 @@ void l_lock_init(struct lustre_lock *lock)
 void l_lock(struct lustre_lock *lock)
 {
         int owner = 0;
+
         spin_lock(&lock->l_spin);
-        if (lock->l_owner == current) { 
+        if (lock->l_owner == current)
                 owner = 1;
-        }
         spin_unlock(&lock->l_spin);
-        if (owner)
-                 ++lock->l_depth;
-        else { 
+
+        if (owner) {
+                ++lock->l_depth;
+        } else {
                 down(&lock->l_sem);
                 spin_lock(&lock->l_spin);
                 lock->l_owner = current;
@@ -79,17 +78,31 @@ void l_lock(struct lustre_lock *lock)
 
 void l_unlock(struct lustre_lock *lock)
 {
-        if (lock->l_owner != current)
-                LBUG();
-        if (lock->l_depth < 0)
-                LBUG();
+        LASSERT(lock->l_owner == current);
+        LASSERT(lock->l_depth >= 0);
 
-        spin_lock(&lock->l_spin); 
-        if (--lock->l_depth < 0) { 
+        spin_lock(&lock->l_spin);
+        if (--lock->l_depth < 0) {
                 lock->l_owner = NULL;
                 spin_unlock(&lock->l_spin);
                 up(&lock->l_sem);
-                return ;
+                return;
         }
         spin_unlock(&lock->l_spin);
+}
+
+int l_has_lock(struct lustre_lock *lock)
+{
+        int depth = -1, owner = 0;
+
+        spin_lock(&lock->l_spin);
+        if (lock->l_owner == current) {
+                depth = lock->l_depth;
+                owner = 1;
+        }
+        spin_unlock(&lock->l_spin);
+
+        if (depth >= 0)
+                CDEBUG(D_INFO, "lock_depth: %d\n", depth);
+        return owner;
 }

@@ -178,6 +178,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 lock->l_random = DEAD_HANDLE_MAGIC;
                 if (lock->l_export && lock->l_export->exp_connection)
                         ptlrpc_put_connection(lock->l_export->exp_connection);
+                memset(lock, 0x5a, sizeof(*lock));
                 kmem_cache_free(ldlm_lock_slab, lock);
                 //spin_unlock(&ldlm_handle_lock);
                 CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 0).\n",
@@ -346,7 +347,9 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
         struct ldlm_lock *lock = NULL, *retval = NULL;
         ENTRY;
 
-        if (!handle || !handle->addr)
+        LASSERT(handle);
+
+        if (!handle->addr)
                 RETURN(NULL);
 
         //spin_lock(&ldlm_handle_lock);
@@ -379,7 +382,7 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
                 GOTO(out, NULL);
         }
 
-        if (flags && (lock->l_flags & flags)) 
+        if (flags && (lock->l_flags & flags))
                 GOTO(out, NULL);
 
         if (flags)
@@ -699,11 +702,13 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    ldlm_mode_t mode, void *data, __u32 data_len)
 {
         struct ldlm_resource *res, *parent_res = NULL;
-        struct ldlm_lock *lock, *parent_lock;
+        struct ldlm_lock *lock, *parent_lock = NULL;
 
-        parent_lock = ldlm_handle2lock(parent_lock_handle);
-        if (parent_lock)
-                parent_res = parent_lock->l_resource;
+        if (parent_lock_handle) {
+                parent_lock = ldlm_handle2lock(parent_lock_handle);
+                if (parent_lock)
+                        parent_res = parent_lock->l_resource;
+        }
 
         res = ldlm_resource_get(ns, parent_res, res_id, type, 1);
         if (res == NULL)

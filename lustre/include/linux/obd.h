@@ -9,30 +9,6 @@
 
 #ifndef __OBD_H
 #define __OBD_H
-#include <linux/fs.h>
-#include <linux/list.h>
-#include <linux/smp_lock.h>
-#include <linux/proc_fs.h>
-
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_export.h>
-
-struct obd_type {
-        struct list_head typ_chain;
-        struct obd_ops *typ_ops;
-        struct proc_dir_entry *typ_procroot;
-        char *typ_name;
-        int  typ_refcnt;
-};
-
-struct brw_page {
-        struct page *pg;
-        obd_size count;
-        obd_off  off;
-        obd_flag flag;
-};
 
 struct lov_oinfo { /* per-child structure */
         __u64 loi_id;              /* object ID on the target OST */
@@ -48,6 +24,32 @@ struct lov_stripe_md {
         int   lsm_stripe_offset;   /* offset of first stripe in lmd_objects */
         int   lsm_stripe_count;    /* how many objects are being striped on */
         struct lov_oinfo lsm_oinfo[0];
+};
+
+#ifdef __KERNEL__
+# include <linux/fs.h>
+# include <linux/list.h>
+# include <linux/smp_lock.h>
+# include <linux/proc_fs.h>
+
+# include <linux/lustre_lib.h>
+# include <linux/lustre_idl.h>
+# include <linux/lustre_mds.h>
+# include <linux/lustre_export.h>
+
+struct obd_type {
+        struct list_head typ_chain;
+        struct obd_ops *typ_ops;
+        struct proc_dir_entry *typ_procroot;
+        char *typ_name;
+        int  typ_refcnt;
+};
+
+struct brw_page {
+        struct page *pg;
+        obd_size count;
+        obd_off  off;
+        obd_flag flag;
 };
 
 /* Individual type definitions */
@@ -414,5 +416,5 @@ static inline int mds_fs_statfs(struct mds_obd *mds, struct statfs *sfs)
 
         return vfs_statfs(mds->mds_sb, sfs);
 }
-
-#endif
+#endif /* __KERNEL */
+#endif /* __OBD_H */

@@ -50,8 +50,6 @@ struct mds_cb_data {
 #define EXT3_XATTR_INDEX_LUSTRE         5
 #define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
 
-#define XATTR_MDS_MO_MAGIC              0xEA0BD047
-
 /*
  * We don't currently need any additional blocks for rmdir and
  * unlink transactions because we are storing the OST oa_id inside
@@ -160,13 +158,13 @@ static int mds_ext3_get_md(struct inode *inode, struct lov_mds_md *lmm,int size)
 
         /* This gives us the MD size */
         if (lmm == NULL)
-                return rc;
+                return (rc == -ENODATA) ? 0 : rc;
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "
                        "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
                 memset(lmm, 0, size);
-                return rc;
+                return (rc == -ENODATA) ? 0 : rc;
         }
 
         /* This field is byteswapped because it appears in the
@@ -213,7 +211,7 @@ static void mds_ext3_delete_inode(struct inode *inode)
                         EXIT;
                         return;
                 }
-                if (mds_ext3_set_md(inode, handle, NULL))
+                if (mds_ext3_set_md(inode, handle, NULL, 0))
                         CERROR("error clearing objid on %ld\n", inode->i_ino);
 
                 if (mds_ext3_fs_ops.cl_delete_inode)

@@ -67,6 +67,10 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 } else
                         ldlm_lock_decref(handle, it->it_lock_mode);
+
+                /* intent_release may be called multiple times, and we don't
+                 * want to double-decref this lock (see bug 494) */
+                it->it_lock_mode = 0;
         }
 
         if (!de->d_it || it->it_op == IT_RELEASED_MAGIC) {
@@ -137,8 +141,8 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
-        if (it == NULL && ll_have_lock(de))
-                RETURN(1);
+//        if (it == NULL && ll_have_lock(de))
+//                RETURN(1);
 
         rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
         if (rc < 0) {

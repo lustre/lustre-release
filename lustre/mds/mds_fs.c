@@ -82,12 +82,12 @@ int mds_client_add(struct mds_obd *mds, struct mds_export_data *med, int cl_off)
                 struct obd_run_ctxt saved;
                 loff_t off = MDS_LR_CLIENT + (cl_off * MDS_LR_SIZE);
                 ssize_t written;
-                
+
                 push_ctxt(&saved, &mds->mds_ctxt, NULL);
                 written = lustre_fwrite(mds->mds_rcvd_filp,
                                                 (char *)med->med_mcd,
                                                 sizeof(*med->med_mcd), &off);
-                pop_ctxt(&saved);
+                pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
                 if (written != sizeof(*med->med_mcd)) {
                         if (written < 0)
@@ -125,7 +125,7 @@ int mds_client_free(struct obd_export *exp)
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
         written = lustre_fwrite(mds->mds_rcvd_filp, (const char *)&zero_mcd,
                                 sizeof zero_mcd, &off);
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
         if (written != sizeof zero_mcd) {
                 CERROR("error zeroing out client %s off %d in %s: %d\n",
@@ -136,7 +136,7 @@ int mds_client_free(struct obd_export *exp)
                 CDEBUG(D_INFO, "zeroed out disconnecting client %s at off %d\n",
                        med->med_mcd->mcd_uuid, med->med_off);
         }
-        
+
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
 
         return 0;
@@ -334,7 +334,7 @@ static int mds_fs_prep(struct obd_device *obddev)
         }
         mds->mds_rcvd_filp = f;
 err_pop:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
         return rc;
 

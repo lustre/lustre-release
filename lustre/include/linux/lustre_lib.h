@@ -75,6 +75,7 @@ struct lustre_lock {
 void l_lock_init(struct lustre_lock *);
 void l_lock(struct lustre_lock *);
 void l_unlock(struct lustre_lock *);
+int l_has_lock(struct lustre_lock *);
 
 #define CB_PHASE_START   12
 #define CB_PHASE_FINISH  13
@@ -93,9 +94,10 @@ struct obd_brw_set {
 /* simple.c */
 struct obd_run_ctxt;
 struct obd_ucred;
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new, 
+void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                struct obd_ucred *cred);
-void pop_ctxt(struct obd_run_ctxt *saved);
+void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
+              struct obd_ucred *cred);
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
 struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, char *str, int len, loff_t *off);
@@ -457,6 +459,8 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 #define OBD_IOC_RECOVD_FAILCONN        _IOWR('f', 136, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
+
+#define OBD_GET_VERSION                _IOWR ('f', 144, long)
 
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller

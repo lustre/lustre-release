@@ -246,6 +246,7 @@ int obd_init_caches(void)
 struct obd_export *class_conn2export(struct lustre_handle *conn)
 {
         struct obd_export *export;
+        ENTRY;
 
         if (!conn) {
                 CDEBUG(D_CACHE, "looking for null handle\n");

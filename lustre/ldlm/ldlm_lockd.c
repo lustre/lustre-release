@@ -633,7 +633,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 char name[32];
-                sprintf(name, "ldlm_%02d", i);
+                sprintf(name, "ldlm_cn_%02d", i);
                 rc = ptlrpc_start_thread(obddev, ldlm->ldlm_cancel_service,
                                          name);
                 if (rc) {
@@ -645,7 +645,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 char name[32];
-                sprintf(name, "ldlm_%02d", i);
+                sprintf(name, "ldlm_cb_%02d", i);
                 rc = ptlrpc_start_thread(obddev, ldlm->ldlm_cb_service, name);
                 if (rc) {
                         CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);

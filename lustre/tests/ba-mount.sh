@@ -16,7 +16,7 @@ LMC_REAL="${LMC:-../utils/lmc} -m $config"
 LMC="save_cmd"
 
 TCPBUF=1048576
-OST=ba-ost-1
+OST=${OST:-ba-ost-1}
 MDS=`hostname`
  
 UUIDLIST=${UUIDLIST:-/usr/local/admin/ba-ost/UUID.txt}

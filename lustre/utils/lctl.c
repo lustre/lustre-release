@@ -4,7 +4,7 @@
  *  Copyright (C) 2002 Cluster File Systems, Inc.
  *   Author: Peter J. Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
- *   Author: Robert Read <rread@clusterfs.com> 
+ *   Author: Robert Read <rread@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -62,7 +62,7 @@ command_t cmdlist[] = {
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
-         "usage: network <tcp/elan/myrinet>"},       
+         "usage: network <tcp/elan/myrinet>"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
          "usage: connect [[<hostname> <port>] | <elan id>]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
@@ -92,9 +92,9 @@ command_t cmdlist[] = {
          "if size is omited the current size is reported.\n"
          "usage: send_mem [size]"},
         {"nagle", jt_ptl_nagle, 0, "enable/disable nagle, omiting the "
-         "argument will cause the current nagle setting to be reported.\n" 
-         "usage: nagle [on/off]"},       
-                
+         "argument will cause the current nagle setting to be reported.\n"
+         "usage: nagle [on/off]"},
+
         /* Device selection commands */
         {"=== device selection ===", jt_noop, 0, "device selection"},
         {"newdev", jt_obd_newdev, 0, "create a new device\n"
@@ -111,7 +111,10 @@ command_t cmdlist[] = {
          "usage: device <devno>"},
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
-         
+        {"lustre_build_version", jt_get_version, 0,
+         "print the build version of lustre\n"
+         "usage: lustre_build_version"},
+
         /* Device configuration commands */
         {"==== device config =====", jt_noop, 0, "device config"},
         {"attach", jt_obd_attach, 0,
@@ -222,7 +225,7 @@ int main(int argc, char **argv)
                 exit(2);
         if (dbg_initialize(argc, argv) < 0)
                 exit(3);
-        
+
         if (argc > 1) {
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
         } else {

@@ -48,10 +48,10 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
         case PTL_OK:
                 thread->t_flags |= SVC_EVENT;
                 GOTO(out, rc = 1);
-                
+
         case PTL_EQ_EMPTY:
                 GOTO(out, rc = 0);
-                
+
         default:
                 CERROR("BUG: PtlEQGet returned %d\n", rc);
                 LBUG();
@@ -172,8 +172,8 @@ static int handle_incoming_request(struct obd_device *obddev,
         }
 
         CDEBUG(D_RPCTRACE, "Handling RPC pid:xid:nid:opc %d:"
-               LPX64":%x:%d\n", 
-               NTOH__u32(request->rq_reqmsg->status), 
+               LPX64":%x:%d\n",
+               NTOH__u32(request->rq_reqmsg->status),
                request->rq_xid,
                event->initiator.nid,
                NTOH__u32(request->rq_reqmsg->opc));
@@ -232,6 +232,18 @@ static int handle_incoming_request(struct obd_device *obddev,
         return rc;
 }
 
+/* Don't use daemonize, it removes fs struct from new thread  (bug 418) */
+static void ptlrpc_daemonize(void)
+{
+        exit_mm(current);
+
+        current->session = 1;
+        current->pgrp = 1;
+        current->tty = NULL;
+
+        exit_files(current);
+}
+
 static int ptlrpc_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
@@ -245,7 +257,8 @@ static int ptlrpc_main(void *arg)
         ENTRY;
 
         lock_kernel();
-        daemonize();
+        ptlrpc_daemonize();
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
         sigfillset(&current->blocked);
         recalc_sigpending();
@@ -257,8 +270,7 @@ static int ptlrpc_main(void *arg)
 #endif
 
 #ifdef __arch_um__
-        sprintf(current->comm, "%s|%d", 
-                data->name, current->thread.extern_pid);
+        sprintf(current->comm, "%s|%d", data->name,current->thread.extern_pid);
 #else
         strcpy(current->comm, data->name);
 #endif
@@ -370,9 +382,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         list_add(&thread->t_link, &svc->srv_threads);
         spin_unlock(&svc->srv_lock);
 
-        /* XXX should we really be cloning open file handles here? */
-        rc = kernel_thread(ptlrpc_main, (void *) &d,
-                           CLONE_VM | CLONE_FS | CLONE_FILES);
+        rc = kernel_thread(ptlrpc_main, (void *) &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread\n");
                 OBD_FREE(thread, sizeof(*thread));

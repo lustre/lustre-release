@@ -32,7 +32,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
         char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid };
         struct ptlrpc_connection *conn = imp->imp_connection;
         struct lustre_handle old_hdl;
-        struct ptlrpc_request *request; 
+        struct ptlrpc_request *request;
         struct obd_export *ldlmexp;
         int rc;
 
@@ -79,7 +79,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
                         imp->imp_handle.cookie = request->rq_repmsg->cookie;
                         GOTO(out_disc, rc = EALREADY);
                 }
-                
+
                 CERROR("reconnected to %s@%s after partition\n",
                        cli->cl_target_uuid, conn->c_remote_uuid);
                 GOTO(out_disc, rc = EALREADY);
@@ -147,9 +147,9 @@ int ptlrpc_replay(struct obd_import *imp, int send_last_flag)
         /* It might have committed some after we last spoke, so make sure we
          * get rid of them now.
          */
-        ptlrpc_free_committed(imp);
-
         spin_lock(&imp->imp_lock);
+
+        ptlrpc_free_committed(imp);
 
         CDEBUG(D_HA, "import %p from %s has committed "LPD64"\n",
                imp, imp->imp_obd->u.cli.cl_target_uuid, committed);
@@ -159,7 +159,7 @@ int ptlrpc_replay(struct obd_import *imp, int send_last_flag)
                 DEBUG_REQ(D_HA, req, "RETAINED: ");
         }
 
-        list_for_each_safe(tmp, pos, &imp->imp_replay_list) { 
+        list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
                 if (req->rq_transno == imp->imp_max_transno &&
@@ -258,6 +258,7 @@ int ptlrpc_resend(struct obd_import *imp)
                         LBUG();
                 }
         }
+
         RETURN(rc);
 }
 

@@ -114,6 +114,9 @@ int mdc_getattr(struct lustre_handle *conn,
         int rc, size[2] = {sizeof(*body), 0}, bufcount = 1;
         ENTRY;
 
+        /* XXX do we need to make another request here?  We just did a getattr
+         *     to do the lookup in the first place.
+         */
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_GETATTR, 1, size,
                               NULL);
         if (!req)
@@ -245,8 +248,8 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         struct ldlm_request *lockreq;
         ENTRY;
 
-        LDLM_DEBUG_NOLOCK("mdsintent %s dir %ld", ldlm_it2str(it->it_op),
-                          dir->i_ino);
+        LDLM_DEBUG_NOLOCK("mdsintent %s parent dir %ld",
+                          ldlm_it2str(it->it_op), dir->i_ino);
 
         if (it->it_op & (IT_MKDIR | IT_CREAT | IT_SYMLINK | IT_MKNOD)) {
                 switch (it->it_op) {
@@ -485,7 +488,7 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         memcpy(&body->handle, fh, sizeof(body->handle));
 
         if (lmm && lmm_size) {
-                CDEBUG(D_INODE, "sending %u bytes MD for ino LPU64\n",
+                CDEBUG(D_INODE, "sending %u bytes MD for ino "LPU64"\n",
                        lmm_size, ino);
                 lustre_msg_set_op_flags(req->rq_reqmsg, MDS_OPEN_HAS_EA);
                 memcpy(lustre_msg_buf(req->rq_reqmsg, 1), lmm, lmm_size);
@@ -573,7 +576,7 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
                 GOTO(out2, rc);
         }
 
-        mds_readdir_pack(req, 0, ino, type);
+        mds_readdir_pack(req, offset, ino, type);
 
         req->rq_replen = lustre_msg_size(1, &size);
         rc = ptlrpc_queue_wait(req);

@@ -234,7 +234,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
                 if (S_ISREG(inode->i_mode))
-                        rc = mds_pack_md(mds, req, offset + 1, body, inode);
+                        mds_pack_md(mds, req, offset + 1, body, inode);
 
                 /* This isn't an error for RECREATE. */
                 if (rec->ur_opcode & REINT_REPLAYING) {
@@ -474,7 +474,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         case S_IFREG:
                 /* get OBD EA data first so client can also destroy object */
                 if ((inode->i_mode & S_IFMT) == S_IFREG && offset)
-                        rc = mds_pack_md(mds, req, offset + 1, body, inode);
+                        mds_pack_md(mds, req, offset + 1, body, inode);
                 /* no break */
         case S_IFLNK:
         case S_IFCHR:
@@ -606,7 +606,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                         mds_pack_inode2fid(&body->fid1, inode);
                         mds_pack_inode2body(body, inode);
                         if (S_ISREG(inode->i_mode))
-                                rc = mds_pack_md(mds, req, 2, body, inode);
+                                mds_pack_md(mds, req, 2, body, inode);
                 }
                 if (rec->ur_opcode & REINT_REPLAYING) {
                         /* XXX verify that the link is to the the right file? */
@@ -752,7 +752,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         mds_pack_inode2fid(&body->fid1, inode);
                         mds_pack_inode2body(body, inode);
                         if (S_ISREG(inode->i_mode))
-                                rc = mds_pack_md(mds, req, 2, body, inode);
+                                mds_pack_md(mds, req, 2, body, inode);
                 }
         }
 
@@ -861,7 +861,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
 
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
         rc = reinters[realop] (rec, offset, req);
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, &uc);
 
         return rc;
 }

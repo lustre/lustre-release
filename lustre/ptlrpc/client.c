@@ -376,11 +376,13 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         }
 
         if (req->rq_flags & PTL_RPC_FL_RESEND) {
+                ENTRY;
                 DEBUG_REQ(D_ERROR, req, "RESEND:");
                 GOTO(out, rc = 1);
         }
 
         if (req->rq_flags & PTL_RPC_FL_ERR) {
+                ENTRY;
                 DEBUG_REQ(D_ERROR, req, "ABORTED:");
                 GOTO(out, rc = 1);
         }
@@ -401,15 +403,15 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 
         err = req->rq_repmsg->status;
         if (req->rq_repmsg->type == NTOH__u32(PTL_RPC_MSG_ERR)) {
-                CERROR("req->rq_repmsg->type == PTL_RPC_MSG_ERR\n");
+                DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR");
                 RETURN(err ? err : -EINVAL);
         }
 
-        if (err != 0) {
-                if (err < 0)
-                        CDEBUG(D_INFO, "req->rq_repmsg->status is %d\n", err);
-                else
-                        CDEBUG(D_INFO, "req->rq_repmsg->status is %d\n", err);
+        if (err < 0) {
+                DEBUG_REQ(D_ERROR, req, "status is %d", err);
+        } else if (err > 0) {
+                /* XXX: translate this error from net to host */
+                DEBUG_REQ(D_INFO, req, "status is %d", err);
         }
 
         RETURN(err);
@@ -439,6 +441,10 @@ void ptlrpc_free_committed(struct obd_import *imp)
 {
         struct list_head *tmp, *saved;
         struct ptlrpc_request *req;
+        ENTRY;
+
+        CDEBUG(D_HA, "committing for xid "LPU64", last_committed "LPU64"\n",
+               imp->imp_peer_last_xid, imp->imp_peer_committed_transno);
 
         list_for_each_safe(tmp, saved, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
@@ -721,8 +727,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 imp->imp_peer_last_xid = req->rq_repmsg->last_xid;
                 imp->imp_peer_committed_transno =
                         req->rq_repmsg->last_committed;
-                spin_unlock(&imp->imp_lock);
                 ptlrpc_free_committed(imp);
+                spin_unlock(&imp->imp_lock);
         }
 
         rc = ptlrpc_check_status(req);

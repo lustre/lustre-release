@@ -152,27 +152,36 @@ static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
 
 #define OBD_ALLOC(ptr, size)                                            \
 do {                                                                    \
+        void *lptr;                                                     \
         long s = (size);                                                \
-        (ptr) = kmalloc(s, GFP_KERNEL);                                 \
-        if ((ptr) == NULL) {                                            \
+        (ptr) = lptr = kmalloc(s, GFP_KERNEL);                          \
+        if (lptr == NULL) {                                             \
                 CERROR("kmalloc of '" #ptr "' (%ld bytes) failed "      \
                        "at %s:%d\n", s, __FILE__, __LINE__);            \
         } else {                                                        \
-                memset((ptr), 0, s);                                    \
+                memset(lptr, 0, s);                                     \
                 obd_memory += s;                                        \
                 CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %ld at "        \
-                       "%p (tot %ld).\n", s, (ptr), obd_memory);        \
+                       "%p (tot %ld).\n", s, lptr, obd_memory);         \
         }                                                               \
 } while (0)
 
+#ifdef CONFIG_DEBUG_SLAB
+#define POISON(lptr, s) do {} while (0)
+#else
+#define POISON(lptr, s) memset(lptr, 0xb6, s)
+#endif
+
 #define OBD_FREE(ptr, size)                                             \
 do {                                                                    \
+        void *lptr = (ptr);                                             \
         int s = (size);                                                 \
-        LASSERT(ptr);                                                   \
-        kfree((ptr));                                                   \
+        LASSERT(lptr);                                                  \
+        POISON(lptr, s);                                                \
+        kfree(lptr);                                                    \
         obd_memory -= s;                                                \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %ld).\n",    \
-               s, (ptr), obd_memory);                                   \
+               s, lptr, obd_memory);                                    \
         (ptr) = (void *)0xdeadbeef;                                     \
 } while (0)
 

@@ -221,10 +221,11 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                  *
                  * For everything else, we want to lookup to succeed. */
 
-                /* One additional note: we add an extra reference to
-                 * the request because we need to keep it around until
-                 * ll_create gets called.  For anything else which
-                 * results in LL_LOOKUP_POSITIVE, we can do the iget()
+                /* One additional note: if CREATE/MKDIR/etc succeeded,
+                 * we add an extra reference to the request because we
+                 * need to keep it around until ll_create gets called.
+                 * For anything else which results in
+                 * LL_LOOKUP_POSITIVE, we can do the iget()
                  * immediately with the contents of the reply (in the
                  * intent_finish callback).  In the create case,
                  * however, we need to wait until ll_create_node to do
@@ -241,10 +242,10 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                         /* For create ops, we want the lookup to be negative,
                          * unless the create failed in a way that indicates
                          * that the file is already there */
-                        if (it->it_status != -EEXIST) {
+                        if (it->it_status == 0)
                                 atomic_inc(&request->rq_refcount);
+                        if (it->it_status != -EEXIST)
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
-                        }
                         /*
                          * Fall through to update attibutes: it may already
                          * have appeared in the namespace of another client

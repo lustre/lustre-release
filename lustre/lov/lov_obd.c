@@ -1195,6 +1195,7 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                  */
                 submd.lsm_stripe_count = 0;
                 /* XXX submd is not fully initialized here */
+                *flags = 0;
                 rc = obd_enqueue(&(lov->tgts[loi->loi_ost_idx].conn), &submd,
                                  parent_lock, type, &sub_ext, sizeof(sub_ext),
                                  mode, flags, cb, data, datalen, &(lockhs[i]));

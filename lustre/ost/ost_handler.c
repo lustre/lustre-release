@@ -303,13 +303,9 @@ out_bulk:
 out_local:
         OBD_FREE(local_nb, sizeof(*local_nb) * niocount);
 out:
-        if (rc) {
-                /* It's a lot of work to delay allocating the reply, and a lot
-                 * less work to just free it here. */
-                OBD_FREE(req->rq_repmsg, req->rq_replen);
-                req->rq_repmsg = NULL;
+        if (rc)
                 ptlrpc_error(req->rq_svc, req);
-        } else
+        else
                 ptlrpc_reply(req->rq_svc, req);
         RETURN(rc);
 }

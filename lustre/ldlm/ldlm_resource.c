@@ -65,8 +65,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
-
-       
+        ENTRY;
 
         OBD_ALLOC(ns, sizeof(*ns));
         if (!ns) {
@@ -112,6 +111,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
  out:
         if (ns && ns->ns_hash) {
+                memset(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
                 vfree(ns->ns_hash);
                 obd_memory -= sizeof(*ns->ns_hash) * RES_HASH_SIZE;
         }
@@ -178,11 +178,10 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
                         cleanup_resource(res, &res->lr_converting, local_only);
                         cleanup_resource(res, &res->lr_waiting, local_only);
 
-                        /* XXX this is a bit counter-intuitive and should
-                         * probably be cleaner: don't force cleanup if we're
-                         * local_only (which is only used by recovery).  We
-                         * probably still have outstanding lock refs which
-                         * reference these resources. -phil */
+                        /* XXX what a mess: don't force cleanup if we're
+                         * local_only (which is only used by recovery).  In that
+                         * case, we probably still have outstanding lock refs
+                         * which reference these resources. -phil */
                         if (!ldlm_resource_put(res) && !local_only) {
                                 CERROR("Resource refcount nonzero (%d) after "
                                        "lock cleanup; forcing cleanup.\n",
@@ -211,6 +210,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         ldlm_namespace_cleanup(ns, 0);
 
+        memset(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         vfree(ns->ns_hash /* , sizeof(*ns->ns_hash) * RES_HASH_SIZE */);
         obd_memory -= sizeof(*ns->ns_hash) * RES_HASH_SIZE;
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
@@ -333,12 +333,12 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                 if (memcmp(chk->lr_name, name, sizeof(chk->lr_name)) == 0) {
                         res = chk;
                         atomic_inc(&res->lr_refcount);
-                        EXIT;
-                        break;
+                        l_unlock(&ns->ns_lock);
+                        RETURN(res);
                 }
         }
 
-        if (res == NULL && create)
+        if (create)
                 res = ldlm_resource_add(ns, parent, name, type);
         l_unlock(&ns->ns_lock);
 
@@ -384,6 +384,7 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 list_del(&res->lr_hash);
                 list_del(&res->lr_childof);
 
+                memset(res, 0x5a, sizeof(*res));
                 kmem_cache_free(ldlm_resource_slab, res);
                 l_unlock(&ns->ns_lock);
 

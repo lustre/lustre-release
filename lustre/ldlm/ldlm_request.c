@@ -434,9 +434,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
         /* concurrent cancels on the same handle can happen */
         lock = __ldlm_handle2lock(lockh, 0, LDLM_FL_CANCELING);
-        if (!lock) {
+        if (lock == NULL)
                 RETURN(0);
-        }
 
         if (lock->l_connh) {
                 LDLM_DEBUG(lock, "client-side cancel");
@@ -477,6 +476,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 ldlm_reprocess_all(lock->l_resource);
                 LDLM_DEBUG(lock, "client-side local cancel handler END");
         }
+
+        lock->l_flags |= LDLM_FL_CANCELING;
 
         EXIT;
  out:
@@ -550,10 +551,6 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
         struct ldlm_ast_work *w;
         ENTRY;
 
-        if ((flags & LDLM_FL_REDUCE) && 
-            ns->ns_max_unused > ns->ns_nr_unused)
-                RETURN(0);
-
         res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         if (res == NULL) {
                 /* This is not a problem. */
@@ -577,9 +574,6 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 
                 w->w_lock = LDLM_LOCK_GET(lock);
                 list_add(&w->w_list, &list);
-                if ((flags & LDLM_FL_REDUCE) && 
-                    ns->ns_max_unused > ns->ns_nr_unused)
-                        break;
         }
         l_unlock(&ns->ns_lock);
 

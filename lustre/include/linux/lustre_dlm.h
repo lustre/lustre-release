@@ -31,23 +31,33 @@ typedef enum {
 #define LDLM_NAMESPACE_SERVER 0
 #define LDLM_NAMESPACE_CLIENT 1
 
-#define LDLM_FL_LOCK_CHANGED   (1 << 0)
+#define LDLM_FL_LOCK_CHANGED   (1 << 0) /* extent, mode, or resource changed */
+
+/* If the server returns one of these flags, then the lock was put on that list.
+ * If the client sends one of these flags (during recovery ONLY!), it wants the
+ * lock added to the specified list, no questions asked. -p */
 #define LDLM_FL_BLOCK_GRANTED  (1 << 1)
 #define LDLM_FL_BLOCK_CONV     (1 << 2)
 #define LDLM_FL_BLOCK_WAIT     (1 << 3)
-#define LDLM_FL_CBPENDING      (1 << 4)
-#define LDLM_FL_AST_SENT       (1 << 5)
-#define LDLM_FL_DESTROYED      (1 << 6)
-#define LDLM_FL_WAIT_NOREPROC  (1 << 7)
-#define LDLM_FL_CANCEL         (1 << 8)
+
+#define LDLM_FL_CBPENDING      (1 << 4) // this lock is being destroyed
+#define LDLM_FL_AST_SENT       (1 << 5) // blocking or cancel packet was sent
+#define LDLM_FL_DESTROYED      (1 << 6) // this lock is destroyed
+#define LDLM_FL_WAIT_NOREPROC  (1 << 7)// not a real lock flag,not saved in lock
+#define LDLM_FL_CANCEL         (1 << 8) // cancellation callback already run
+
+/* Lock is being replayed.  This could probably be implied by the fact that one
+ * of BLOCK_{GRANTED,CONV,WAIT} is set, but that is pretty dangerous. */
 #define LDLM_FL_REPLAY         (1 << 9)
+
 #define LDLM_FL_INTENT_ONLY    (1 << 10) /* don't grant lock, just do intent */
 #define LDLM_FL_LOCAL_ONLY     (1 << 11) /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_NO_CALLBACK    (1 << 12) /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_HAS_INTENT     (1 << 13) /* lock request has intent */
-#define LDLM_FL_REDUCE         (1 << 14) /* throw away unused locks */
-#define LDLM_FL_CANCELING      (1 << 15) /* lock is being canceled */
+#define LDLM_FL_CANCELING      (1 << 14) /* lock cancel has already been sent */
 
+/* The blocking callback is overloaded to perform two functions.  These flags
+ * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
 
@@ -312,8 +322,8 @@ void ldlm_register_intent(int (*arg)(struct ldlm_lock *lock, void *req_cookie,
                                      ldlm_mode_t mode, int flags, void *data));
 void ldlm_unregister_intent(void);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
-struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict, int flags);
-void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
+struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict,
+                                     int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_set_data(struct lustre_handle *, void *data, int datalen);
 

@@ -73,7 +73,7 @@ config.xml          Lustre configuration in xml format.
                             40 - mds, ost
                             50 - mdc, osc
                             60 - lov, lovconfig
-                            70 - mountpoint
+                            70 - mountpoint, echo_client
 """
     TODO = """
 --ldap server       LDAP server with lustre config database
@@ -424,6 +424,11 @@ class LCTLInterface:
     # get list of devices
     def device_list(self):
         rc, out = self.runcmd('device_list')
+        return out
+
+    # get lustre version
+    def lustre_version(self):
+        rc, out = self.runcmd('version')
         return out
 
 # ============================================================
@@ -1137,22 +1142,31 @@ class OSC(Module):
 class ECHO_CLIENT(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'ECHO_CLIENT', dom_node)
-        self.obd_uuid = get_first_ref(dom_node, 'osc')
-        debug("HERE",self.obd_uuid)
         self.add_module('lustre/obdecho', 'obdecho')
+        self.lov_uuid = get_first_ref(dom_node, 'osc')
+        l = lookup(self.dom_node.parentNode, self.lov_uuid)
+        self.osc = VOSC(l)
 
     def prepare(self):
         if is_prepared(self.uuid):
             return
-        self.info(self.obd_uuid)
+        self.osc.prepare() # XXX This is so cheating. -p
+        self.info(self.lov_uuid)
             
         lctl.newdev(attach="echo_client %s %s" % (self.name, self.uuid),
-                    setup = self.obd_uuid)
+                    setup = self.lov_uuid)
 
     def cleanup(self):
         if not is_prepared(self.uuid):
             return
-        Module.cleanup(self)
+        self.osc.cleanup()
+
+    def load_module(self):
+        self.osc.load_module()
+        Module.load_module(self)
+    def cleanup_module(self):
+        Module.cleanup_module(self)
+        self.osc.cleanup_module()
 
 
 class Mountpoint(Module):
@@ -1494,12 +1508,12 @@ def startService(dom_node, module_flag):
         n = MDS(dom_node)
     elif type == 'osc':
         n = VOSC(dom_node)
-    elif type == 'echo_client':
-        n = ECHO_CLIENT(dom_node)
     elif type == 'mdc':
         n = MDC(dom_node)
     elif type == 'mountpoint':
         n = Mountpoint(dom_node)
+    elif type == 'echo_client':
+        n = ECHO_CLIENT(dom_node)
     else:
         panic ("unknown service type:", type)
 

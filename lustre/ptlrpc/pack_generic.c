@@ -76,6 +76,7 @@ int lustre_msg_size(int count, int *lengths)
 int lustre_unpack_msg(struct lustre_msg *m, int len)
 {
         int required_len, i;
+        ENTRY;
 
         required_len = size_round(sizeof(*m));
         if (len < required_len)

@@ -8,7 +8,7 @@ EXTRA_DIST = $(pkgexample_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
 	common.sh lustre.cfg \
 	client-echo.cfg    elan-server.cfg  net-client.cfg  obdecho.cfg \
 	client-mount.cfg   ldlm.cfg         net-local.cfg   obdfilter.cfg \
-	client-mount2.cfg  lustre.cfg       net-server.cfg  sanity.sh	\
+	client-mount2.cfg  lustre.cfg       net-server.cfg  sanity.sh \
 	rundbench \
 	elan-client.cfg    mds.cfg 	trivial.sh
 pkgexampledir = '${exec_prefix}/usr/lib/$(PACKAGE)/examples'
@@ -24,7 +24,7 @@ noinst_SCRIPTS += fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 	runtests runvmstat snaprun.sh tbox.sh  common.sh
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme mcreate
 noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += lovstripe stat createmany mkdirmany # ldaptest 
+noinst_PROGRAMS += lovstripe stat createmany mkdirmany setuid # ldaptest 
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
@@ -45,5 +45,6 @@ lovstripe_SOURCES = lovstripe.c
 stat_SOURCES = stat.c
 createmany_SOURCES = createmany.c
 mkdirmany_SOURCES = mkdirmany.c
+setuid_SOURCES = setuid.c
 
 include $(top_srcdir)/Rules

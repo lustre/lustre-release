@@ -4,7 +4,7 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-COUNT=${COUNT:-10000000}
+COUNT=${COUNT:-1000000}
 COUNT_10=`expr $COUNT / 10`
 COUNT_100=`expr $COUNT / 100`
 
@@ -36,7 +36,6 @@ runthreads() {
 		DO=test_brw
 		RW=w
 		;;
-
 	test_brw_read)
 		DO=test_brw
 		RW=r

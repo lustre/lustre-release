@@ -10,3 +10,5 @@ Makefile.in
 tags
 TAGS
 lustre*.tar.gz
+cscope.files
+cscope.out

@@ -253,11 +253,6 @@ class GenConfig:
         osc.appendChild(self.ref("obd", obd_uuid))
         return osc
 
-    def echo_client(self, name, uuid, osc_uuid):
-        ec = self.newService("echo_client", name, uuid)
-        ec.appendChild(self.ref("osc", osc_uuid))
-        return ec
-
     def ost(self, name, uuid, obd_uuid, net_uuid):
         ost = self.newService("ost", name, uuid)
         ost.appendChild(self.ref("network", net_uuid))
@@ -298,6 +293,11 @@ class GenConfig:
         mtpt.appendChild(self.ref("osc", osc_uuid))
         self.addElement(mtpt, "path", path)
         return mtpt
+
+    def echo_client(self, name, uuid, osc_uuid):
+        ec = self.newService("echo_client", name, uuid)
+        ec.appendChild(self.ref("osc", osc_uuid))
+        return ec
 
 ############################################################
 # Utilities to query a DOM tree
@@ -602,7 +602,7 @@ def add_echo_client(gen, lustre, options, args):
     """ add an echo client to the profile for this node. """
     if len(args) < 1:
         usage()
-    osc_name = args[0]
+    lov_name = args[0]
     if options.has_key('node'):
         node_name = options['node']
     else:
@@ -612,8 +612,12 @@ def add_echo_client(gen, lustre, options, args):
     echoname = new_name('ECHO_'+ node_name)
     echo_uuid = new_uuid(echoname)
     node_add_profile(gen, node, 'echo_client', echo_uuid)
-    osc_uuid = name2uuid(lustre, osc_name) # either 'osc' or 'lov'
-    echo = gen.echo_client(echoname, echo_uuid, osc_uuid)
+
+    lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
+    if not lov_uuid:
+        lov_uuid = name2uuid(lustre, lov_name, tag='osc', fatal=1)
+
+    echo = gen.echo_client(echoname, echo_uuid, lov_uuid)
     lustre.appendChild(echo)
 
 

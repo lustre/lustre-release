@@ -83,8 +83,10 @@ static int osc_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
                 if (!*lmmp)
                         RETURN(-ENOMEM);
         }
-        if (lsm)
+        if (lsm) {
+                LASSERT(lsm->lsm_object_id);
                 (*lmmp)->lmm_object_id = (lsm->lsm_object_id);
+        }
 
         return lmm_size;
 }
@@ -111,8 +113,10 @@ static int osc_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         }
 
         /* XXX endianness */
-        if (lmm)
+        if (lmm) {
                 (*lsmp)->lsm_object_id = (lmm->lmm_object_id);
+                LASSERT((*lsmp)->lsm_object_id);
+        }
 
         return lsm_size;
 }

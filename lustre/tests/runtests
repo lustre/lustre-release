@@ -13,13 +13,6 @@ fail() {
 
 export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
-cleanup() {
-	sync
-	$LCONF --cleanup --dump /tmp/debug $OPTS
-	sync
-	#trap 0
-}
-
 ERROR=
 SRC=/etc
 [ "$COUNT" ] || COUNT=1000
@@ -28,24 +21,20 @@ SRC=/etc
 
 [ "$MCREATE" ] || MCREATE=$SRCDIR/../tests/mcreate
 
+while [ "$1" ]; do
+	case $1 in
+	*.xml) export NAME=`echo $1 | sed "s/.xml//"` ;;
+	esac
+	shift
+done
+
 OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 if [ -z "$OSCMT" ]; then
-	[ -z "$*" ] && fail "usage: $0 [--reformat] <conf>.xml" 1
-	$LCONF --gdb $@ || exit 1
-	#trap cleanup 0
+	sh llmount.sh
 	OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 	[ -z "$OSCMT" ] && fail "no lustre filesystem mounted" 1
 	I_MOUNTED="yes"
 fi
-
-while [ "$1" ]; do
-	case $1 in
-	-v|--verbose) V=-v;;
-	--reformat) : ;;
-	*) OPTS="$OPTS $1" ;;
-	esac
-	shift
-done
 
 OSCTMP=`echo $OSCMT | tr "/" "."`
 USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
@@ -57,8 +46,8 @@ touch $OSCMT || fail "can't touch $OSCMT" 2
 HOSTS=$OSCMT/hosts.$$
 
 # this will cause the following cp to trigger bug #620096
-#echo "create an empty file $HOSTS"
-#$MCREATE $HOSTS
+echo "create an empty file $HOSTS"
+$MCREATE $HOSTS
 
 echo "copying /etc/hosts to $HOSTS"
 cp /etc/hosts $HOSTS || fail "can't cp /etc/hosts to $HOSTS" 3
@@ -78,8 +67,9 @@ DST=$OSCMT/runtest.$$
 echo "creating $DST"
 mkdir $DST || fail "can't mkdir $DST" 10
 
-# ok, that hopefully worked, so let's do a little more
-FILES=`find $SRC -type f | grep -v mtab | head -$COUNT`
+# ok, that hopefully worked, so let's do a little more, with files that
+# haven't changed in the last day (hopefully they don't change during test)
+FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -$COUNT`
 echo "copying files from $SRC to $DST$SRC"
 tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
 
@@ -91,8 +81,8 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
 
-cleanup || exit 19
-$LCONF $OPTS || exit 20
+sh llmountcleanup.sh || exit 19
+sh llrmount.sh || exit 20
 
 echo "comparing previously copied files"
 for f in $FILES; do
@@ -102,8 +92,8 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
-cleanup || exit 29
-$LCONF $OPTS || exit 30
+sh llmountcleanup.sh || exit 19
+sh llrmount.sh || exit 20
 
 echo "renaming $HOSTS.ren to $HOSTS"
 mv $HOSTS.ren $HOSTS || fail "can't rename $HOSTS.ren to $HOSTS" 32
@@ -120,4 +110,6 @@ if [ $NOWUSED -gt $USED ]; then
 	echo "This is normal on BA OSTs, because of subdirectories." 1>&2
 fi
 
-[ "$I_MOUNTED" = "yes" ] && cleanup $OPTS || exit 29
+if [ "$I_MOUNTED" = "yes" ]; then
+	sh llmountcleanup.sh || exit 29
+fi

@@ -206,7 +206,7 @@ static int filter_prep(struct obd_device *obd)
 
         rc = 0;
  out:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &filter->fo_ctxt, NULL);
 
         return(rc);
 
@@ -261,7 +261,7 @@ static void filter_post(struct obd_device *obd)
         }
         f_dput(filter->fo_dentry_O);
 out:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &filter->fo_ctxt, NULL);
 }
 
 
@@ -281,7 +281,7 @@ static __u64 filter_next_id(struct obd_device *obd)
 /* parent i_sem is already held if needed for exclusivity */
 static struct dentry *filter_fid2dentry(struct obd_device *obd,
                                         struct dentry *dparent,
-                                        __u64 id, __u32 type)
+                                        __u64 id, __u32 type, int locked)
 {
         struct super_block *sb = obd->u.filter.fo_sb;
         struct dentry *dchild;
@@ -309,7 +309,11 @@ static struct dentry *filter_fid2dentry(struct obd_device *obd,
         len = sprintf(name, LPU64, id);
         CDEBUG(D_INODE, "opening object O/%s/%s\n", obd_mode_to_type(type),
                name);
+        if (!locked)
+                down(&dparent->d_inode->i_sem);
         dchild = lookup_one_len(name, dparent, len);
+        if (!locked)
+                up(&dparent->d_inode->i_sem);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 RETURN(dchild);
@@ -377,11 +381,13 @@ static struct file *filter_obj_open(struct obd_export *export,
 
         filter_id(name, id, type);
         push_ctxt(&saved, &filter->fo_ctxt, NULL);
-        file = filp_open(name, O_RDONLY | O_LARGEFILE, 0 /* type? */);
-        pop_ctxt(&saved);
+        file = filp_open(name, O_RDWR | O_LARGEFILE, 0 /* type? */);
+        pop_ctxt(&saved, &filter->fo_ctxt, NULL);
 
-        if (IS_ERR(file))
+        if (IS_ERR(file)) {
+                CERROR("error opening %s: rc %d\n", name, PTR_ERR(file));
                 GOTO(out_fdd, file);
+        }
 
         dentry = file->f_dentry;
         spin_lock(&filter->fo_fddlock);
@@ -415,7 +421,7 @@ static struct file *filter_obj_open(struct obd_export *export,
         list_add(&ffd->ffd_export_list, &fed->fed_open_head);
         spin_unlock(&fed->fed_lock);
 
-        CDEBUG(D_INODE, "opening objid "LPX64": rc = %p\n", id, file);
+        CDEBUG(D_INODE, "opened objid "LPX64": rc = %p\n", id, file);
 
 out:
         RETURN(file);
@@ -448,7 +454,7 @@ static int filter_destroy_internal(struct obd_device *obd,
         push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         rc = vfs_unlink(dir_dentry->d_inode, object_dentry);
         /* XXX unlink from PENDING directory now too */
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
 
         if (rc)
                 CERROR("error unlinking objid %*s: rc %d\n",
@@ -689,7 +695,7 @@ static struct filter_file_data *filter_handle2ffd(struct lustre_handle *handle)
 }
 
 static struct dentry *__filter_oa2dentry(struct lustre_handle *conn,
-                                         struct obdo *oa, char *what)
+                                         struct obdo *oa, int locked,char *what)
 {
         struct dentry *dentry = NULL;
 
@@ -708,7 +714,7 @@ static struct dentry *__filter_oa2dentry(struct lustre_handle *conn,
                         RETURN(ERR_PTR(-EINVAL));
                 }
                 dentry = filter_fid2dentry(obd, filter_parent(obd, oa->o_mode),
-                                           oa->o_id, oa->o_mode);
+                                           oa->o_id, oa->o_mode, locked);
         }
 
         if (IS_ERR(dentry)) {
@@ -725,7 +731,8 @@ static struct dentry *__filter_oa2dentry(struct lustre_handle *conn,
         return dentry;
 }
 
-#define filter_oa2dentry(conn, oa) __filter_oa2dentry(conn, oa, __FUNCTION__)
+#define filter_oa2dentry(conn, oa, locked) __filter_oa2dentry(conn, oa, locked,\
+                                                              __FUNCTION__)
 
 static int filter_getattr(struct lustre_handle *conn, struct obdo *oa,
                           struct lov_stripe_md *md)
@@ -734,7 +741,7 @@ static int filter_getattr(struct lustre_handle *conn, struct obdo *oa,
         int rc = 0;
         ENTRY;
 
-        dentry = filter_oa2dentry(conn, oa);
+        dentry = filter_oa2dentry(conn, oa, 0);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
@@ -755,7 +762,7 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
         int rc;
         ENTRY;
 
-        dentry = filter_oa2dentry(conn, oa);
+        dentry = filter_oa2dentry(conn, oa, 0);
 
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
@@ -772,7 +779,7 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
                 rc = inode->i_op->setattr(dentry, &iattr);
         else
                 rc = inode_setattr(inode, &iattr);
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         if (iattr.ia_valid & ATTR_SIZE) {
                 up(&inode->i_sem);
                 oa->o_valid = OBD_MD_FLBLOCKS | OBD_MD_FLCTIME | OBD_MD_FLMTIME;
@@ -811,8 +818,9 @@ static int filter_open(struct lustre_handle *conn, struct obdo *oa,
         handle->addr = (__u64)(unsigned long)ffd;
         handle->cookie = ffd->ffd_servercookie;
         oa->o_valid |= OBD_MD_FLHANDLE;
+        EXIT;
 out:
-        RETURN(rc);
+        return rc;
 } /* filter_open */
 
 static int filter_close(struct lustre_handle *conn, struct obdo *oa,
@@ -880,7 +888,7 @@ static int filter_create(struct lustre_handle *conn, struct obdo *oa,
         sprintf(name, LPU64, oa->o_id);
         push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         new = simple_mknod(filter_parent(obd, oa->o_mode), name, oa->o_mode);
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         if (IS_ERR(new)) {
                 CERROR("Error mknod obj %s, err %ld\n", name, PTR_ERR(new));
                 return -ENOENT;
@@ -914,7 +922,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
         dir_dentry = filter_parent(obd, oa->o_mode);
         down(&dir_dentry->d_inode->i_sem);
 
-        object_dentry = filter_oa2dentry(conn, oa);
+        object_dentry = filter_oa2dentry(conn, oa, 1);
         if (IS_ERR(object_dentry))
                 GOTO(out, rc = -ENOENT);
 
@@ -1034,7 +1042,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
 
         EXIT;
 out:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &export->exp_obd->u.filter.fo_ctxt, NULL);
         error = (retval >= 0) ? 0 : retval;
         return error;
 }
@@ -1467,7 +1475,7 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
                 int j;
 
                 dentry = filter_fid2dentry(obd, filter_parent(obd, S_IFREG),
-                                           o->ioo_id, S_IFREG);
+                                           o->ioo_id, S_IFREG, 0);
                 if (IS_ERR(dentry))
                         GOTO(out_clean, rc = PTR_ERR(dentry));
                 inode = dentry->d_inode;
@@ -1512,7 +1520,7 @@ out_stop:
                         rc = err;
         }
 out_ctxt:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         RETURN(rc);
 out_clean:
         while (lnb-- > res) {
@@ -1637,7 +1645,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
         }
 
 out_ctxt:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         RETURN(rc);
 }
 

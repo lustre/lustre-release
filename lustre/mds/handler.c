@@ -138,8 +138,8 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
  *
  * If we do not need an exclusive or write lock on this entry (e.g.
  * a read lock for attribute lookup only) then we do not hold the
- * directory on return.  It is up to the caller to know what type
- * of lock it is getting, and clean up appropriately.
+ * directory semaphore on return.  It is up to the caller to know what
+ * type of lock it is getting, and clean up appropriately.
  */
 struct dentry *mds_name2locked_dentry(struct obd_device *obd,
                                       struct dentry *dir, struct vfsmount **mnt,
@@ -513,7 +513,6 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
         desc = lustre_msg_buf(req->rq_repmsg, 0);
         rc = mds_get_lovdesc(mds, desc);
         if (rc) {
-                CERROR("mds_get_lovdesc error %d", rc);
                 req->rq_status = rc;
                 RETURN(0);
         }
@@ -720,7 +719,7 @@ out_create_de:
         l_dput(de);
 out_pre_de:
         req->rq_status = rc;
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, &uc);
         return 0;
 }
 
@@ -789,7 +788,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
 out:
         l_dput(de);
 out_pop:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, &uc);
         RETURN(rc);
 }
 
@@ -880,7 +879,7 @@ static int mds_store_md(struct mds_obd *mds, struct ptlrpc_request *req,
         if (rc2 && !rc)
                 rc = rc2;
 out_ea:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, &uc);
 
         RETURN(rc);
 }
@@ -1068,7 +1067,7 @@ static int mds_readpage(struct ptlrpc_request *req)
 
         filp_close(file, 0);
 out_pop:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, &uc);
 out:
         req->rq_status = rc;
         RETURN(0);
@@ -1467,7 +1466,7 @@ static int mds_recovery_complete(struct obd_device *obddev)
         ++mds->mds_mount_count;
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
         rc = mds_update_server_data(mds);
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
         return rc;
 }
@@ -1562,7 +1561,7 @@ static int mds_cleanup(struct obd_device *obddev)
                 if (rc)
                         CERROR("last_rcvd file won't close, rc=%d\n", rc);
         }
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
         unlock_kernel();
         mntput(mds->mds_vfsmnt);
@@ -1685,8 +1684,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
                 /* If the client is about to open a file that doesn't have an MD
                  * stripe record, it's going to need a write lock. */
-                if (it->opc & IT_OPEN &&
-                    !(lustre_msg_get_op_flags(req->rq_reqmsg)&MDS_OPEN_HAS_EA)){
+                if (it->opc & IT_OPEN && !(mds_rep->valid & OBD_MD_FLEASIZE)) {
                         LDLM_DEBUG(lock, "open with no EA; returning PW lock");
                         lock->l_req_mode = LCK_PW;
                 }
@@ -1749,7 +1747,7 @@ static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
                                            "self", mds_handle, "mds");
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
-                GOTO(err_dec, rc = -EINVAL);
+                GOTO(err_dec, rc = -ENOMEM);
         }
 
         for (i = 0; i < MDT_NUM_THREADS; i++) {

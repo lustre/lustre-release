@@ -41,41 +41,67 @@
 #endif
 
 /* push / pop to root of obd store */
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new, 
+void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                struct obd_ucred *uc)
 {
         //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
-        ASSERT_CTXT_MAGIC(new->magic);
+        ASSERT_CTXT_MAGIC(new_ctx->magic);
         OBD_SET_CTXT_MAGIC(save);
+
+        /*
+        CDEBUG(D_INFO, "== push %p->%p == cur fs %p pwd %p (%*s), pwdmnt %p\n",
+               save, current, current->fs, current->fs->pwd,
+               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
+               current->fs->pwdmnt);
+        */
+
         save->fs = get_fs();
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
-        LASSERT(new->pwd);
-        LASSERT(new->pwdmnt);
+        LASSERT(new_ctx->pwd);
+        LASSERT(new_ctx->pwdmnt);
 
-        save->fsuid = current->fsuid;
-        save->fsgid = current->fsgid;
-        save->cap = current->cap_effective;
-        if (uc) { 
+        if (uc) {
+                save->fsuid = current->fsuid;
+                save->fsgid = current->fsgid;
+                save->cap = current->cap_effective;
+
                 current->fsuid = uc->ouc_fsuid;
                 current->fsgid = uc->ouc_fsgid;
                 current->cap_effective = uc->ouc_cap;
         }
-        set_fs(new->fs);
-        set_fs_pwd(current->fs, new->pwdmnt, new->pwd);
-        //if (save->override)
-        //        cap_lower(current->cap_effective, CAP_DAC_OVERRIDE);
+        set_fs(new_ctx->fs);
+        set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
+
+        /*
+        CDEBUG(D_INFO, "== push %p==%p == cur fs %p pwd %p (%*s), pwdmnt %p\n",
+               new_ctx, current, current->fs, current->fs->pwd,
+               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
+               current->fs->pwdmnt);
+        */
 }
 
-void pop_ctxt(struct obd_run_ctxt *saved)
+void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
+              struct obd_ucred *uc)
 {
         //printk("pc0");
         ASSERT_CTXT_MAGIC(saved->magic);
         //printk("pc1");
         ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
+
+        /*
+        CDEBUG(D_INFO, " == pop  %p==%p == cur %p pwd %p (%*s), pwdmnt %p\n",
+               new_ctx, current, current->fs, current->fs->pwd,
+               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
+               current->fs->pwdmnt);
+        */
+
+        LASSERT(current->fs->pwd == new_ctx->pwd);
+        LASSERT(current->fs->pwdmnt == new_ctx->pwdmnt);
+
         //printk("pc2");
         set_fs(saved->fs);
         //printk("pc3\n");
@@ -86,12 +112,18 @@ void pop_ctxt(struct obd_run_ctxt *saved)
         //printk("pc5");
         mntput(saved->pwdmnt);
         //printk("pc6\n");
-        current->fsuid = saved->fsuid;
-        current->fsgid = saved->fsgid;
-        current->cap_effective = saved->cap;
+        if (uc) {
+                current->fsuid = saved->fsuid;
+                current->fsgid = saved->fsgid;
+                current->cap_effective = saved->cap;
+        }
 
-        //        if (saved->override)
-        //       cap_raise(current->cap_effective, CAP_DAC_OVERRIDE);
+        /*
+        CDEBUG(D_INFO, "== pop  %p->%p == cur fs %p pwd %p (%*s), pwdmnt %p\n",
+               saved, current, current->fs, current->fs->pwd,
+               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
+               current->fs->pwdmnt);
+        */
 }
 
 /* utility to make a file */

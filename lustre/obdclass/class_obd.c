@@ -46,6 +46,7 @@
 #include <linux/smp_lock.h>
 #include <linux/lprocfs_status.h>
 #include <portals/lib-types.h> /* for PTL_MD_MAX_IOV */
+#include <linux/lustre_build_version.h>
 
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -137,7 +138,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         down(&obd_conf_sem);
 
         if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS &&
-            cmd != OBD_IOC_LIST &&
+            cmd != OBD_IOC_LIST && cmd != OBD_GET_VERSION &&
             cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_NEWDEV) {
                 CERROR("OBD ioctl: No device\n");
                 GOTO(out, err = -EINVAL);
@@ -203,6 +204,24 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 GOTO(out, err);
         }
 
+        case OBD_GET_VERSION:
+                if (!data->ioc_inlbuf1) {
+                        CERROR("No buffer passed in ioctl\n");
+                        GOTO(out, err = -EINVAL);
+                }
+
+                if (strlen(BUILD_VERSION) + 1 > data->ioc_inllen1) {
+                        CERROR("ioctl buffer too small to hold version\n");
+                        GOTO(out, err = -EINVAL);
+                }
+
+                memcpy(data->ioc_bulk, BUILD_VERSION,
+                       strlen(BUILD_VERSION) + 1);
+
+                err = copy_to_user((void *)arg, data, len);
+                if (err)
+                        err = -EFAULT;
+                GOTO(out, err);
 
         case OBD_IOC_NAME2DEV: {
                 /* Resolve a device name.  This does not change the
@@ -450,7 +469,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         obd->obd_flags &= ~OBD_SET_UP;
                         obd->obd_type->typ_refcnt--;
                 }
-                GOTO(out, err);
+                      GOTO(out, err);
         }
 
         case OBD_IOC_CONNECT: {
@@ -621,7 +640,8 @@ static int __init init_obdclass(void)
         int err;
         int i;
 
-        printk(KERN_INFO "OBD class driver  v0.9, info@clusterfs.com\n");
+        printk(KERN_INFO "OBD class driver Build Version: " BUILD_VERSION
+                      ", info@clusterfs.com\n");
 
         sema_init(&obd_conf_sem, 1);
         INIT_LIST_HEAD(&obd_types);
@@ -673,12 +693,12 @@ static void __exit cleanup_obdclass(void)
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */
 #include <linux/lustre_version.h>
-#if (LUSTRE_KERNEL_VERSION != 2)
+#if (LUSTRE_KERNEL_VERSION != 3)
 # error Cannot continue: Your Lustre kernel patch is out of date
 #endif
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Class Driver v1.0");
+MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");
 
 module_init(init_obdclass);

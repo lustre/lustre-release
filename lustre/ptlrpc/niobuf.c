@@ -134,17 +134,17 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
         desc->bd_md.user_ptr = desc;
 
-        atomic_set (&desc->bd_source_callback_count, 2);
+        atomic_set(&desc->bd_source_callback_count, 2);
 
         list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
 
-                LASSERT (desc->bd_md.niov < desc->bd_page_count);
+                LASSERT(desc->bd_md.niov < desc->bd_page_count);
 
                 if (desc->bd_md.niov == 0)
                         xid = bulk->bp_xid;
-                LASSERT (xid == bulk->bp_xid);   /* should all be the same */
+                LASSERT(xid == bulk->bp_xid);   /* should all be the same */
 
                 iov[desc->bd_md.niov].iov_base = bulk->bp_buf;
                 iov[desc->bd_md.niov].iov_len = bulk->bp_buflen;
@@ -152,8 +152,8 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
                 desc->bd_md.length += bulk->bp_buflen;
         }
 
-        LASSERT (desc->bd_md.niov == desc->bd_page_count);
-        LASSERT (desc->bd_md.niov != 0);
+        LASSERT(desc->bd_md.niov == desc->bd_page_count);
+        LASSERT(desc->bd_md.niov != 0);
 
         rc = PtlMDBind(desc->bd_connection->c_peer.peer_ni, desc->bd_md,
                        &desc->bd_md_h);
@@ -217,11 +217,11 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
 
-                LASSERT (desc->bd_md.niov < desc->bd_page_count);
+                LASSERT(desc->bd_md.niov < desc->bd_page_count);
 
                 if (desc->bd_md.niov == 0)
                         xid = bulk->bp_xid;
-                LASSERT (xid == bulk->bp_xid);   /* should all be the same */
+                LASSERT(xid == bulk->bp_xid);   /* should all be the same */
 
                 iov[desc->bd_md.niov].iov_base = bulk->bp_buf;
                 iov[desc->bd_md.niov].iov_len = bulk->bp_buflen;
@@ -229,8 +229,8 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
                 desc->bd_md.length += bulk->bp_buflen;
         }
 
-        LASSERT (desc->bd_md.niov == desc->bd_page_count);
-        LASSERT (desc->bd_md.niov != 0);
+        LASSERT(desc->bd_md.niov == desc->bd_page_count);
+        LASSERT(desc->bd_md.niov != 0);
 
         source_id.nid = desc->bd_connection->c_peer.peer_nid;
         source_id.pid = PTL_PID_ANY;
@@ -454,7 +454,7 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
         ptl_md_t dummy;
         ptl_handle_md_t md_h;
 
-        LASSERT (atomic_read (&rqbd->rqbd_refcount) == 0);
+        LASSERT(atomic_read(&rqbd->rqbd_refcount) == 0);
 
         /* Attach the leading ME on which we build the ring */
         rc = PtlMEAttach(service->srv_self.peer_ni, service->srv_req_portal,
@@ -473,8 +473,8 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
         dummy.user_ptr   = rqbd;
         dummy.eventq     = service->srv_eq_h;
 
-        atomic_inc (&service->srv_nrqbds_receiving);
-        atomic_set (&rqbd->rqbd_refcount, 1);   /* 1 ref for portals */
+        atomic_inc(&service->srv_nrqbds_receiving);
+        atomic_set(&rqbd->rqbd_refcount, 1);   /* 1 ref for portals */
 
         rc = PtlMDAttach(rqbd->rqbd_me_h, dummy, PTL_UNLINK, &md_h);
         if (rc != PTL_OK) {
@@ -482,7 +482,7 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
                 LBUG();
 #warning proper cleanup required
                 PtlMEUnlink (rqbd->rqbd_me_h);
-                atomic_set (&rqbd->rqbd_refcount, 0);
-                atomic_dec (&service->srv_nrqbds_receiving);
+                atomic_set(&rqbd->rqbd_refcount, 0);
+                atomic_dec(&service->srv_nrqbds_receiving);
         }
 }

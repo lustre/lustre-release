@@ -43,6 +43,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
         int tgt_count;
         int rc;
         int i;
+        ENTRY;
 
         tgt_count = desc->ld_tgt_count;
         lov_packdesc(desc);
@@ -85,7 +86,7 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                 CERROR("Error closing LOVTGTS file\n");
 
 out:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
         RETURN(rc);
 }
 
@@ -94,13 +95,13 @@ int mds_get_lovdesc(struct mds_obd *mds, struct lov_desc *desc)
         struct obd_run_ctxt saved;
         struct file *f;
         int rc;
+        ENTRY;
 
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
         f = filp_open("LOVDESC", O_RDONLY, 0644);
-        if (!f || IS_ERR(f)) {
+        if (IS_ERR(f)) {
                 CERROR("Cannot open LOVDESC file\n");
-                pop_ctxt(&saved);
-                RETURN(-EIO);
+                GOTO(out, rc = PTR_ERR(f));
         }
 
         rc = lustre_fread(f, (char *)desc, sizeof(*desc), &f->f_pos);
@@ -108,13 +109,15 @@ int mds_get_lovdesc(struct mds_obd *mds, struct lov_desc *desc)
                 CERROR("Error closing LOVDESC file\n");
 
         if (rc != sizeof(*desc)) {
-                CERROR("Cannot read LOVDESC file\n");
-                pop_ctxt(&saved);
-                RETURN(-EIO);
-        }
-        pop_ctxt(&saved);
+                CERROR("Cannot read LOVDESC file: rc = %d\n", rc);
+                GOTO(out, rc = -EIO);
+        } else
+                rc = 0;
+        EXIT;
+out:
+        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
-        RETURN(0);
+        return rc;
 }
 
 int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,obd_uuid_t *uuidarray)
@@ -142,11 +145,11 @@ int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,obd_uuid_t *uuidarray)
                 if (rc >= 0)
                         rc = -EIO;
                 GOTO(out, rc);
-        } else 
+        } else
                 rc = 0;
         EXIT;
 out:
-        pop_ctxt(&saved);
+        pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
         RETURN(rc);
 }

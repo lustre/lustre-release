@@ -142,6 +142,8 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (cli->cl_conn_count > 1)
                 GOTO(out_sem, rc);
 
+        if (obd->obd_namespace != NULL)
+                CERROR("already have namespace!\n");
         obd->obd_namespace = ldlm_namespace_new(obd->obd_name,
                                                 LDLM_NAMESPACE_CLIENT);
         if (obd->obd_namespace == NULL)
