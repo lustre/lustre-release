@@ -131,9 +131,18 @@ out:
         RETURN(rc);
 }
 
-static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
-                           unsigned long blocknr, int blocksize)
+static int ll_direct_IO_24(int rw,
+#ifdef HAVE_DIO_FILE
+                           struct file *file,
+#else
+                           struct inode *inode,
+#endif
+                           struct kiobuf *iobuf, unsigned long blocknr,
+                           int blocksize)
 {
+#ifdef HAVE_DIO_FILE
+        struct inode *inode = file->f_dentry->d_inode;
+#endif
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct brw_page *pga;

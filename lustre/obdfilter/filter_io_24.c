@@ -249,7 +249,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         cleanup_phase = 2;
 
         down(&inode->i_sem);
-        oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, oti);
+        oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
+                                           oti);
         if (IS_ERR(oti->oti_handle)) {
                 rc = PTR_ERR(oti->oti_handle);
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
