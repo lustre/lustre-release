@@ -34,6 +34,7 @@
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/major.h>
+#include <linux/kmod.h>   /* for request_module() */
 #include <linux/sched.h>
 #include <linux/lp.h>
 #include <linux/malloc.h>
@@ -58,7 +59,7 @@
 
 static int obd_init_magic;
 int           obd_print_entry = 1;
-int           obd_debug_level = 4095;
+int           obd_debug_level = 0;
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 
@@ -177,6 +178,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	case OBD_IOC_ATTACH: {
 		struct obd_type *type;
 		struct oic_generic *input = tmp_buf;
+		char *nm;
 
 		ENTRY;
 		/* have we attached a type to this device */
@@ -203,7 +205,19 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
 		/* find the type */
-		type = obd_nm_to_type(input->att_type);
+		nm = input->att_type;
+		type = obd_nm_to_type(nm);
+#ifdef CONFIG_KMOD
+		if ( !type ) {
+			if ( !request_module(nm) ) {
+				CDEBUG(D_IOCTL, "Loaded module '%s'\n", nm);
+				type = obd_nm_to_type(nm);
+			} else {
+				CDEBUG(D_IOCTL, "Can't load module '%s'\n", nm);
+			}
+		}
+#endif
+
 		OBD_FREE(input->att_type, input->att_typelen + 1);
 		if ( !type ) {
 			printk(__FUNCTION__ ": unknown obd type dev %d\n",
@@ -737,6 +751,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	default: {
 		struct obd_type *type;
 		struct oic_generic input;
+		char *nm;
 		void *karg;
 
 		/* get data structures */
@@ -753,7 +768,18 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
 		/* find the type */
-		type = obd_nm_to_type(input.att_type);
+		nm = input.att_type;
+		type = obd_nm_to_type(nm);
+#ifdef CONFIG_KMOD
+		if ( !type ) {
+			if ( !request_module(nm) ) {
+				CDEBUG(D_IOCTL, "Loaded module '%s'\n", nm);
+				type = obd_nm_to_type(nm);
+			} else {
+				CDEBUG(D_IOCTL, "Can't load module '%s'\n", nm);
+			}
+		}
+#endif
 		OBD_FREE(input.att_type, input.att_typelen + 1);
 		if ( !type ) {
 			printk(__FUNCTION__ ": unknown obd type dev %d\n", dev);
@@ -860,8 +886,6 @@ static struct file_operations obd_psdev_fops = {
 	obd_class_release,     /* release */
 	NULL,                  /* fsync */
 	NULL,                  /* fasync */
-	NULL,                  /* check_media_change */
-	NULL,                  /* revalidate */
 	NULL                   /* lock */
 };
 

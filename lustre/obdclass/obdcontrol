@@ -210,7 +210,7 @@ my $arg;
 my %commands =
     ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
      'create' => {func => "Create", doc => "create [<num> [<mode> [quiet]]]: create new object(s) (files, unless mode is given)"},
-     'attach' => {func => "Attach", doc => "attach { ext2_obd | snap_obd snapdev snapidx tableno | scsi_obd adapter bus tid lun }: attach this minor device to the specified driver" },
+     'attach' => {func => "Attach", doc => "attach { obdext2 | obdsnap snapdev snapidx tableno | obdscsi adapter bus tid lun }: attach this minor device to the specified driver" },
      'detach' => {func => "Detach", doc => "detach this minor device"},
      'testext2iterator' => {func => "TestExt2Iterator", doc => "test ext2 iterator function"},
      'snapset' => {func => "SnapSetTable", doc => "snapset <tableno> <file>: set the table (created with snaptable) as table #tableno" },
@@ -222,7 +222,7 @@ my %commands =
      'migrate' => {func => "Migrate", doc => "migrate <srcid> <tgtid>: migrate data from one object to another"},
      'partition' => {func => "Partition", doc => "partition <type> <adapter> <bus> <tid> <lun> <partition> <size>: create a partition"},
      'format' => {func => "Format", doc => "format <type> <adapter> <bus> <tid> <lun> <size>: format a partition"},
-     'setup' => {func => "Setup", doc => "setup [type]: link this OBD device to the underlying device (default type ext2_obd)"},
+     'setup' => {func => "Setup", doc => "setup [type]: link this OBD device to the underlying device (default type obdext2)"},
      'connect' => {func => "Connect", doc => "connect: allocates client ID for this session"},
      'disconnect' => {func => "Disconnect", doc => "disconnect [id]: frees client resources"},
      'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
@@ -367,11 +367,11 @@ sub Attach {
     if ( ! $type ) {
 	print "error: missing type\n";
 usage:
-	print "usage: attach {ext2_obd | snap_obd | scsi_obd}\n";
+	print "usage: attach {obdext2 | obdsnap | obdscsi}\n";
 	return;
     }
 
-    if ($type eq "scsi_obd" ) {
+    if ($type eq "obdscsi" ) {
 	my $adapter = shift;
 	my $bus = shift;
 	my $tid = shift;
@@ -379,14 +379,14 @@ usage:
 
 	$data = pack("iiii", $adapter, $bus, $tid, $lun);
 	$datalen = 4 * 4;
-    } elsif ($type eq "snap_obd" ) {
+    } elsif ($type eq "obdsnap" ) {
 	my $snapdev = shift;
 	my $snapidx = shift;
 	my $tableno = shift;
 
 	$data = pack("iii", $snapdev, $snapidx, $tableno);
 	$datalen = 3 * 4;
-    } elsif ($type eq "ext2_obd") {
+    } elsif ($type eq "obdext2") {
 	$data = pack("i", 4711);   # bogus data
 	$datalen = 0;
     } else {
@@ -434,7 +434,7 @@ sub TestExt2Iterator {
     }
 
     my $err = 0;
-    my $type = "ext2_obd";
+    my $type = "obdext2";
  
     $data = pack("i", 4711); # bogus data
     $datalen = 4;
@@ -463,7 +463,7 @@ sub SnapDelete {
     }
 
     my $err = 0;
-    my $type = "snap_obd";
+    my $type = "obdsnap";
  
     $data = pack("i", 4711); # bogus data
     $datalen = 4;
@@ -538,7 +538,7 @@ sub SnapRestore {
 
     # ready for the ioctl
     my $err = 0;
-    my $type = "snap_obd";
+    my $type = "obdsnap";
     $data = pack("i", $currentindex); # slot of previous current snapshot 
     $datalen = 4;
 
@@ -581,7 +581,7 @@ sub FindSnapInTable {
 
 sub SnapPrint { 
     my $err = 0;
-    my $type = "snap_obd";
+    my $type = "obdsnap";
     my $snaptableno = shift;
 
     $data = pack("i", $snaptableno);
@@ -605,7 +605,7 @@ sub SnapPrint {
 
 sub SnapSetTable {
     my $err = 0;
-    my $type = "snap_obd";
+    my $type = "obdsnap";
     my $snaptableno = shift;
     my $file = shift;
     my $snapcount;
