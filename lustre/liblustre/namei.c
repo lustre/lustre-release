@@ -176,8 +176,10 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         {
                 struct llu_inode_info *lli = llu_i2info(pb->pb_ino);
                 if (lli->lli_it) {
-                        CERROR("inode %lu still have intent %p(opc 0x%x), release it\n",
-                                        lli->lli_st_ino, lli->lli_it, lli->lli_it->it_op);
+                        CDEBUG(D_INODE, "inode %lu still have intent "
+                                        "%p(opc 0x%x), release it\n",
+                                        lli->lli_st_ino, lli->lli_it,
+                                        lli->lli_it->it_op);
                         ll_intent_release(lli->lli_it);
                         lli->lli_it = NULL;
                 }
