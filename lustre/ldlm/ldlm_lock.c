@@ -588,7 +588,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                      lock->l_policy_data.l_extent.end < policy->l_extent.end))
                         continue;
 
-                if (lock->l_destroyed)
+                if (lock->l_destroyed || (lock->l_flags & LDLM_FL_FAILED))
                         continue;
 
                 if ((flags & LDLM_FL_LOCAL_ONLY) &&
@@ -682,10 +682,15 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                 ldlm_lock2handle(lock, lockh);
                 if (!(lock->l_flags & LDLM_FL_CAN_MATCH)) {
                         struct l_wait_info lwi;
-                        if (lock->l_completion_ast)
-                                lock->l_completion_ast(lock,
-                                                       LDLM_FL_WAIT_NOREPROC,
-                                                       NULL);
+                        if (lock->l_completion_ast) {
+                                int err = lock->l_completion_ast(lock,
+                                                           LDLM_FL_WAIT_NOREPROC,
+                                                                 NULL);
+                                if (err) {
+                                        rc = 0;
+                                        goto out2;
+                                }
+                        }
 
                         lwi = LWI_TIMEOUT_INTR(obd_timeout*HZ, NULL,NULL,NULL);
 
@@ -694,6 +699,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                      (lock->l_flags & LDLM_FL_CAN_MATCH), &lwi);
                 }
         }
+ out2:
         if (rc) {
                 l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "matched ("LPU64" "LPU64")",

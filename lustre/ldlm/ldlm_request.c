@@ -401,10 +401,8 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         int err = lock->l_completion_ast(lock, *flags, NULL);
                         if (!rc)
                                 rc = err;
-                        if (lock->l_destroyed ||
-                            lock->l_flags & LDLM_FL_FAILED)
+                        if (rc)
                                 cleanup_phase = 2;
-
                 }
         }
 
