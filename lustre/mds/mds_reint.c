@@ -73,23 +73,25 @@ static int mds_reint_create(struct mds_update_record *rec,
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE)) {
                 LBUG();
-                GOTO(out_reint_create, (rc = -ESTALE));
+                GOTO(out_reint_de, (rc = -ESTALE));
         }
         dir = de->d_inode;
         CDEBUG(D_INODE, "ino %ld\n", dir->i_ino);
 
+        down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
+                up(&dir->i_sem);
                 LBUG();
-                GOTO(out_reint_create, (rc = -ESTALE));
+                GOTO(out_reint_dchild, (rc = -ESTALE));
         }
 
         if (dchild->d_inode) {
                 CERROR("child exists (dir %ld, name %s)\n",
                        dir->i_ino, rec->ur_name);
                 LBUG();
-                GOTO(out_reint_create, (rc = -EEXIST));
+                GOTO(out_reint_dchild, (rc = -EEXIST));
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb->s_dev);
@@ -98,7 +100,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFREG: {
                 handle = mds_fs_start(mds, dir, MDS_FSOP_CREATE);
                 if (!handle)
-                        GOTO(out_reint_create, PTR_ERR(handle));
+                        GOTO(out_reint_dchild, PTR_ERR(handle));
                 rc = vfs_create(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
@@ -106,7 +108,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFDIR: {
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKDIR);
                 if (!handle)
-                        GOTO(out_reint_create, PTR_ERR(handle));
+                        GOTO(out_reint_dchild, PTR_ERR(handle));
                 rc = vfs_mkdir(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
@@ -114,7 +116,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFLNK: {
                 handle = mds_fs_start(mds, dir, MDS_FSOP_SYMLINK);
                 if (!handle)
-                        GOTO(out_reint_create, PTR_ERR(handle));
+                        GOTO(out_reint_dchild, PTR_ERR(handle));
                 rc = vfs_symlink(dir, dchild, rec->ur_tgt);
                 EXIT;
                 break;
@@ -126,14 +128,14 @@ static int mds_reint_create(struct mds_update_record *rec,
                 int rdev = rec->ur_id;
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKNOD);
                 if (!handle)
-                        GOTO(out_reint_create, PTR_ERR(handle));
+                        GOTO(out_reint_dchild, PTR_ERR(handle));
                 rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
                 EXIT;
                 break;
         }
         default:
                 CERROR("bad file type %d for create of %s\n",type,rec->ur_name);
-                GOTO(out_reint_create, rc = -EINVAL);
+                GOTO(out_reint_dchild, rc = -EINVAL);
         }
 
         if (rc) {
@@ -169,12 +171,13 @@ static int mds_reint_create(struct mds_update_record *rec,
 
 out_reint_commit:
         rc = mds_fs_commit(mds, dir, handle);
-
-out_reint_create:
-        req->rq_status = rc;
+out_reint_dchild:
         l_dput(dchild);
+        up(&dir->i_sem);
+out_reint_de:
         l_dput(de);
-        RETURN(0);
+        req->rq_status = rc;
+        return 0;
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec,
@@ -195,18 +198,19 @@ static int mds_reint_unlink(struct mds_update_record *rec,
         dir = de->d_inode;
         CDEBUG(D_INODE, "ino %ld\n", dir->i_ino);
 
+        down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 LBUG();
-                GOTO(out_unlink, (rc = -ESTALE));
+                GOTO(out_unlink_de, (rc = -ESTALE));
         }
 
         if (!dchild->d_inode) {
                 CERROR("child doesn't exist (dir %ld, name %s\n",
                        dir->i_ino, rec->ur_name);
                 LBUG();
-                GOTO(out_unlink, (rc = -ESTALE));
+                GOTO(out_unlink_dchild, (rc = -ESTALE));
         }
 
         if (dchild->d_inode->i_ino != rec->ur_fid2->id)
@@ -227,11 +231,15 @@ static int mds_reint_unlink(struct mds_update_record *rec,
                 break;
         }
 
+        EXIT;
+out_unlink_dchild:
+        l_dput(dchild);
+out_unlink_de:
+        up(&dir->i_sem);
+        l_dput(de);
 out_unlink:
         req->rq_status = rc;
-        l_dput(dchild);
-        l_dput(de);
-        RETURN(0);
+        return 0;
 }
 
 static int mds_reint_link(struct mds_update_record *rec,
@@ -250,19 +258,20 @@ static int mds_reint_link(struct mds_update_record *rec,
 
         de_tgt_dir = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid2, NULL);
         if (IS_ERR(de_tgt_dir)) {
-                GOTO(out_link, (rc = -ESTALE));
+                GOTO(out_link_de_src, (rc = -ESTALE));
         }
 
+        down(&de_tgt_dir->d_inode->i_sem);
         dchild = lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
-                GOTO(out_link, (rc = -ESTALE));
+                GOTO(out_link_de_tgt_dir, (rc = -ESTALE));
         }
 
         if (dchild->d_inode) {
                 CERROR("child exists (dir %ld, name %s\n",
                        de_tgt_dir->d_inode->i_ino, rec->ur_name);
-                GOTO(out_link, (rc = -EEXIST));
+                GOTO(out_link_dchild, (rc = -EEXIST));
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE,
@@ -271,11 +280,15 @@ static int mds_reint_link(struct mds_update_record *rec,
         rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
         EXIT;
 
- out_link:
-        req->rq_status = rc;
+out_link_dchild:
         l_dput(dchild);
+out_link_de_tgt_dir:
+        up(&de_tgt_dir->d_inode->i_sem);
         l_dput(de_tgt_dir);
+out_link_de_src:
         l_dput(de_src);
+out_link:
+        req->rq_status = rc;
         return 0;
 }
 
