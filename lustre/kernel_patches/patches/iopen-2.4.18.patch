@@ -14,7 +14,7 @@
  
  sb=n				Use alternate superblock at this location.
  
-+iopen				Makes an invisible pseudo-directory called 
++iopen				Makes an invisible pseudo-directory called
 +				__iopen__ available in the root directory
 +				of the filesystem.  Allows open-by-inode-
 +				number.  i.e., inode 3145 can be accessed
@@ -60,20 +60,20 @@
  	
 +	if (ext3_iopen_get_inode(inode))
 +		return;
-+	
++
  	if(ext3_get_inode_loc(inode, &iloc))
  		goto bad_inode;
  	bh = iloc.bh;
 --- /dev/null	2003-01-30 03:24:37.000000000 -0700
 +++ linux-2.4.18-p4smp-braam/fs/ext3/iopen.c	2003-07-09 17:13:02.000000000 -0600
-@@ -0,0 +1,259 @@
+@@ -0,0 +1,258 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
 + * Special support for open by inode number
 + *
 + * Copyright (C) 2001 by Theodore Ts'o (tytso@alum.mit.edu).
-+ * 
++ *
 + * This file may be redistributed under the terms of the GNU General
 + * Public License.
 + *
@@ -122,7 +122,7 @@
 +	struct list_head *lp;
 +	struct dentry *alternate;
 +	char buf[IOPEN_NAME_LEN];
-+	
++
 +	if (dentry->d_name.len >= IOPEN_NAME_LEN)
 +		return ERR_PTR(-ENAMETOOLONG);
 +
@@ -151,6 +151,9 @@
 +		return ERR_PTR(-ENOENT);
 +	}
 +
++	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
++	assert(list_empty(&dentry->d_hash));		/* d_rehash */
++
 +	/* preferrably return a connected dentry */
 +	spin_lock(&dcache_lock);
 +	list_for_each(lp, &inode->i_dentry) {
@@ -159,7 +162,7 @@
 +	}
 +
 +	if (!list_empty(&inode->i_dentry)) {
-+		alternate = list_entry(inode->i_dentry.next, 
++		alternate = list_entry(inode->i_dentry.next,
 +				       struct dentry, d_alias);
 +		dget_locked(alternate);
 +		alternate->d_vfs_flags |= DCACHE_REFERENCED;
@@ -168,9 +171,14 @@
 +		return alternate;
 +	}
 +	dentry->d_flags |= DCACHE_NFSD_DISCONNECTED;
++
++	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
++	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
++	dentry->d_inode = inode;
++
++	__d_rehash(dentry, 0);				/* d_rehash */
 +	spin_unlock(&dcache_lock);
 +
-+	d_add(dentry, inode);
 +	return NULL;
 +}
 +
@@ -182,7 +190,7 @@
 +{
 +	const unsigned char *old_name, *new_name;
 +
-+	memcpy(dentry->d_iname, target->d_iname, DNAME_INLINE_LEN); 
++	memcpy(dentry->d_iname, target->d_iname, DNAME_INLINE_LEN);
 +	old_name = target->d_name.name;
 +	new_name = dentry->d_name.name;
 +	if (old_name == target->d_iname)
@@ -195,6 +203,7 @@
 +
 +/* This function is spliced into ext3_lookup and does the move of a
 + * disconnected dentry (if it exists) to a connected dentry.
++ * Caller must hold dcache_lock.
 + */
 +struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode)
 +{
@@ -202,13 +211,6 @@
 +	struct list_head *lp;
 +
 +	/* preferrably return a connected dentry */
-+	spin_lock(&dcache_lock);
-+	/* verify this dentry is really new */
-+	assert(!de->d_inode);
-+	assert(list_empty(&de->d_subdirs));
-+	assert(list_empty(&de->d_alias));
-+
-+
 +	list_for_each(lp, &inode->i_dentry) {
 +		tmp = list_entry(lp, struct dentry, d_alias);
 +		if (tmp->d_flags & DCACHE_NFSD_DISCONNECTED) {
@@ -220,10 +222,8 @@
 +		}
 +	}
 +
-+	if (!goal) { 
-+		spin_unlock(&dcache_lock);
-+		return NULL; 
-+	}
++	if (!goal)
++		return NULL;
 +
 +	/* Move the goal to the de hash queue - like d_move() */
 +	goal->d_flags &= ~DCACHE_NFSD_DISCONNECTED;
@@ -242,7 +242,6 @@
 +	list_add(&goal->d_child, &goal->d_parent->d_subdirs);
 +	list_add(&de->d_child, &de->d_parent->d_subdirs);
 +	__d_rehash(goal, 0);
-+	spin_unlock(&dcache_lock);
 +
 +	return goal;
 +}
@@ -286,7 +285,7 @@
 +
 +	inode = iget(dir->i_sb, EXT3_BAD_INO);
 +
-+	if (!inode) 
++	if (!inode)
 +		return 0;
 +	d_add(dentry, inode);
 +	return 1;
@@ -315,7 +314,7 @@
 +	inode->u.ext3_i.i_dtime = 0;
 +	inode->i_blksize = PAGE_SIZE;	/* This is the optimal IO size
 +					 * (for stat), not the fs block
-+					 * size */  
++					 * size */
 +	inode->i_blocks = 0;
 +	inode->i_version = 1;
 +	inode->i_generation = 0;
@@ -328,20 +327,22 @@
 +}
 --- /dev/null	2003-01-30 03:24:37.000000000 -0700
 +++ linux-2.4.18-p4smp-braam/fs/ext3/iopen.h	2003-07-09 17:13:02.000000000 -0600
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,15 @@
 +/*
 + * iopen.h
 + *
 + * Special support for opening files by inode number.
-+ * 
++ *
 + * Copyright (C) 2001 by Theodore Ts'o (tytso@alum.mit.edu).
-+ * 
++ *
 + * This file may be redistributed under the terms of the GNU General
 + * Public License.
 + */
 +
 +extern int ext3_check_for_iopen(struct inode *dir, struct dentry *dentry);
 +extern int ext3_iopen_get_inode(struct inode *inode);
++extern struct dentry *iopen_connect_dentry(struct dentry *de,
++					   struct inode *inode);
 --- linux-2.4.18-p4smp/fs/ext3/namei.c~iopen-2.4.18	2003-07-09 13:32:38.000000000 -0600
 +++ linux-2.4.18-p4smp-braam/fs/ext3/namei.c	2003-07-09 17:13:02.000000000 -0600
 @@ -34,6 +34,7 @@
@@ -352,14 +353,7 @@
  
  /*
   * define how far ahead to read directories while searching them.
-@@ -703,16 +704,21 @@ cleanup_and_exit:
- 		brelse (bh_use[ra_ptr]);
- 	return ret;
- }
-+struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode);
- 
- static struct dentry *ext3_lookup(struct inode * dir, struct dentry *dentry)
- {
+@@ -703,10 +704,14 @@ cleanup_and_exit:
  	struct inode * inode;
  	struct ext3_dir_entry_2 * de;
  	struct buffer_head * bh;
@@ -374,29 +368,47 @@
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -723,6 +729,12 @@ static struct dentry *ext3_lookup(struct
+@@ -723,7 +729,28 @@ static struct dentry *ext3_lookup(struct
  		if (!inode)
  			return ERR_PTR(-EACCES);
  	}
+-	d_add(dentry, inode);
 +
++	/* verify this dentry is really new */
++	assert(!dentry->d_inode);
++	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
++	assert(list_empty(&dentry->d_hash));		/* d_rehash */
++	assert(list_empty(&dentry->d_subdirs));
++
++	spin_lock(&dcache_lock);
 +	if (inode && (alternate = iopen_connect_dentry(dentry, inode))) {
++		spin_unlock(&dcache_lock);
 +		iput(inode);
 +		return alternate;
 +	}
 +
- 	d_add(dentry, inode);
++	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
++	if (inode)					/* d_instantiate */
++		list_add(&dentry->d_alias, &inode->i_dentry);
++	dentry->d_inode = inode;
++
++	__d_rehash(dentry, 0);				/* d_rehash */
++	spin_unlock(&dcache_lock);
++
  	return NULL;
  }
+ 
 --- linux-2.4.18-p4smp/fs/ext3/super.c~iopen-2.4.18	2003-07-09 13:32:38.000000000 -0600
 +++ linux-2.4.18-p4smp-braam/fs/ext3/super.c	2003-07-09 17:13:02.000000000 -0600
-@@ -831,6 +831,17 @@ static int parse_options (char * options
+@@ -831,6 +831,18 @@ static int parse_options (char * options
  		         || !strcmp (this_char, "quota")
  		         || !strcmp (this_char, "usrquota"))
  			/* Don't do anything ;-) */ ;
 +		else if (!strcmp (this_char, "iopen")) {
 +			set_opt (sbi->s_mount_opt, IOPEN);
 +			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
-+		} else if (!strcmp (this_char, "noiopen")) {
++		}
++		else if (!strcmp (this_char, "noiopen")) {
 +			clear_opt (sbi->s_mount_opt, IOPEN);
 +			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
 +		}
