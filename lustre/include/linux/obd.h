@@ -138,14 +138,16 @@ struct ldlm_obd {
 
 struct echo_obd {
         char *eo_fstype;
-        struct super_block *eo_sb;
-        struct vfsmount *eo_vfsmnt;
-        struct obd_run_ctxt eo_ctxt;
+        struct obdo oa;
         spinlock_t eo_lock;
         __u64 eo_lastino;
-        struct file_operations *eo_fop;
-        struct inode_operations *eo_iop;
-        struct address_space_operations *eo_aops;
+        atomic_t eo_getattr;
+        atomic_t eo_setattr;
+        atomic_t eo_create;
+        atomic_t eo_destroy;
+        atomic_t eo_prep;
+        atomic_t eo_read;
+        atomic_t eo_write;
 };
 
 struct recovd_obd {
@@ -188,7 +190,7 @@ struct lov_tgt_desc {
 struct lov_obd {
         struct obd_device *mdcobd;
         struct lov_desc desc;
-        int bufsize; 
+        int bufsize;
         struct lov_tgt_desc *tgts;
 };
 

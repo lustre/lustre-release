@@ -1,18 +1,19 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/fs/ext2_obd/ext2_obd.c
+ *  linux/fs/obdecho/echo.c
  *
- * Copyright (C) 2001  Cluster File Systems, Inc.
+ * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  *
  * by Peter Braam <braam@clusterfs.com>
+ * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.29 2002/09/02 21:39:05 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.29 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.30 2002/09/03 20:19:20 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.30 $"
 
 #define EXPORT_SYMTAB
 
@@ -36,44 +37,59 @@ static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.29 2002/09/02 21:3
 #include <linux/lustre_dlm.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
-static struct obdo OA;
-static obd_count GEN;
-static long echo_pages = 0;
-
-static atomic_t echo_page_rws;
-static atomic_t echo_getattrs;
 
 #define ECHO_PROC_STAT "sys/obdecho"
 
-int
-echo_proc_read (char *page, char **start, off_t off, int count, int *eof, void *data)
+int echo_proc_read(char *page, char **start, off_t off, int count, int *eof,
+                   void *data)
 {
-	int                len;
-        int                attrs = atomic_read (&echo_getattrs);
-        int                pages = atomic_read (&echo_page_rws);
+        struct obd_device *obd;
+        long long attrs = 0;
+        long long pages = 0;
+        int len;
+        int i;
 
-	*eof = 1;
-	if (off != 0)
-		return (0);
+        *eof = 1;
+        if (off != 0)
+                return (0);
 
-	len = sprintf (page, "%d %d\n", pages, attrs);
+        for (i = 0, obd = obd_dev; i < MAX_OBD_DEVICES; i++, obd++) {
+                if (strcmp(obd->obd_type->typ_name, OBD_ECHO_DEVICENAME))
+                        continue;
+                attrs += atomic_read(&obd->u.echo.eo_getattr) +
+                         atomic_read(&obd->u.echo.eo_setattr);
+                pages += atomic_read(&obd->u.echo.eo_read) +
+                         atomic_read(&obd->u.echo.eo_write);
+        }
 
-	*start = page;
-	return (len);
+        len = sprintf(page, "%Ld %Ld\n", attrs, pages);
+
+        *start = page;
+        return (len);
 }
 
-int
-echo_proc_write (struct file *file, const char *ubuffer, unsigned long count, void *data)
+int echo_proc_write(struct file *file, const char *ubuffer,
+                    unsigned long count, void *data)
 {
-	/* Ignore what we've been asked to write, and just zero the stats counters */
-        atomic_set (&echo_page_rws, 0);
-        atomic_set (&echo_getattrs, 0);
+        struct obd_device *obd;
+        int i;
 
-	return (count);
+        for (i = 0, obd = obd_dev; i < MAX_OBD_DEVICES; i++, obd++) {
+                if (strcmp(obd->obd_type->typ_name, OBD_ECHO_DEVICENAME))
+                        continue;
+
+                atomic_set(&obd->u.echo.eo_getattr, 0);
+                atomic_set(&obd->u.echo.eo_setattr, 0);
+                atomic_set(&obd->u.echo.eo_read, 0);
+                atomic_set(&obd->u.echo.eo_write, 0);
+        }
+
+        /* Ignore what we've been asked to write, and just zero the counters */
+
+        return (count);
 }
 
-void
-echo_proc_init(void)
+void echo_proc_init(void)
 {
         struct proc_dir_entry *entry;
 
@@ -86,7 +102,7 @@ echo_proc_init(void)
 
         entry->data = NULL;
         entry->read_proc = echo_proc_read;
-	entry->write_proc = echo_proc_write;
+        entry->write_proc = echo_proc_write;
 }
 
 void echo_proc_fini(void)
@@ -119,28 +135,135 @@ static int echo_disconnect(struct lustre_handle *conn)
         return rc;
 }
 
-static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
-                        struct lov_stripe_md *md)
+static __u64 echo_next_id(struct obd_device *obddev)
 {
-        memcpy(oa, &OA, sizeof(*oa));
-        oa->o_mode = ++GEN;
+        obd_id id;
 
-        atomic_inc (&echo_getattrs);
+        spin_lock(&obddev->u.echo.eo_lock);
+        id = ++obddev->u.echo.eo_lastino;
+        spin_unlock(&obddev->u.echo.eo_lock);
+
+        return id;
+}
+
+int echo_create(struct lustre_handle *conn, struct obdo *oa,
+                struct lov_stripe_md **ea)
+{
+        struct obd_device *obd = class_conn2obd(conn);
+
+        if (!obd) {
+                CERROR("invalid client %Lx\n", conn->addr);
+                return -EINVAL;
+        }
+
+        if (!(oa->o_mode && S_IFMT)) {
+                CERROR("filter obd: no type!\n");
+                return -ENOENT;
+        }
+
+        if (!(oa->o_valid & OBD_MD_FLMODE)) {
+                CERROR("invalid o_valid %08x\n", oa->o_valid);
+                return -EINVAL;
+        }
+
+        oa->o_id = echo_next_id(obd);
+        oa->o_valid = OBD_MD_FLID;
+        atomic_inc(&obd->u.echo.eo_create);
 
         return 0;
 }
 
+int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
+                 struct lov_stripe_md *ea)
+{
+        struct obd_device *obd = class_conn2obd(conn);
+
+        if (!obd) {
+                CERROR("invalid client "LPX64"\n", conn->addr);
+                RETURN(-EINVAL);
+        }
+
+        if (!(oa->o_valid & OBD_MD_FLID)) {
+                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                RETURN(-EINVAL);
+        }
+
+        if (oa->o_id > obd->u.echo.eo_lastino) {
+                CERROR("bad destroy objid: %Ld\n", (long long)oa->o_id);
+                RETURN(-EINVAL);
+        }
+
+        atomic_inc(&obd->u.echo.eo_destroy);
+
+        return 0;
+}
+
+static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
+                        struct lov_stripe_md *md)
+{
+        struct obd_device *obd = class_conn2obd(conn);
+        obd_id id = oa->o_id;
+
+        if (!obd) {
+                CERROR("invalid client "LPX64"\n", conn->addr);
+                RETURN(-EINVAL);
+        }
+
+        if (!(oa->o_valid & OBD_MD_FLID)) {
+                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                RETURN(-EINVAL);
+        }
+
+        memcpy(oa, &obd->u.echo.oa, sizeof(*oa));
+        oa->o_id = id;
+        oa->o_valid |= OBD_MD_FLID;
+
+        atomic_inc(&obd->u.echo.eo_getattr);
+
+        return 0;
+}
+
+static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
+                        struct lov_stripe_md *md)
+{
+        struct obd_device *obd = class_conn2obd(conn);
+
+        if (!obd) {
+                CERROR("invalid client "LPX64"\n", conn->addr);
+                RETURN(-EINVAL);
+        }
+
+        if (!(oa->o_valid & OBD_MD_FLID)) {
+                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                RETURN(-EINVAL);
+        }
+
+        memcpy(&obd->u.echo.oa, oa, sizeof(*oa));
+
+        atomic_inc(&obd->u.echo.eo_setattr);
+
+        return 0;
+}
+
+/* This allows us to verify that desc_private is passed unmolested */
 #define DESC_PRIV 0x10293847
 
 int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                 struct obd_ioobj *obj, int niocount, struct niobuf_remote *nb,
                 struct niobuf_local *res, void **desc_private)
 {
+        struct obd_device *obd;
         struct niobuf_local *r = res;
         int rc = 0;
         int i;
 
         ENTRY;
+
+        obd = class_conn2obd(conn);
+        if (!obd) {
+                CERROR("invalid client "LPX64"\n", conn->addr);
+                RETURN(-EINVAL);
+        }
 
         memset(res, 0, sizeof(*res) * niocount);
 
@@ -161,7 +284,7 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                                        j, obj->ioo_bufcnt, obj->ioo_id);
                                 GOTO(preprw_cleanup, rc = -ENOMEM);
                         }
-                        echo_pages++;
+                        atomic_inc(&obd->u.echo.eo_prep);
 
                         r->offset = nb->offset;
                         r->addr = kmap(r->page);
@@ -179,7 +302,8 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                                                  0xecc0ecc0ecc0ecc0);
                 }
         }
-        CDEBUG(D_PAGE, "%ld pages allocated after prep\n", echo_pages);
+        CDEBUG(D_PAGE, "%d pages allocated after prep\n",
+               atomic_read(&obd->u.echo.eo_prep));
 
         RETURN(0);
 
@@ -193,7 +317,7 @@ preprw_cleanup:
         while (r-- > res) {
                 kunmap(r->page);
                 __free_pages(r->page, 0);
-                echo_pages--;
+                atomic_dec(&obd->u.echo.eo_prep);
         }
         memset(res, 0, sizeof(*res) * niocount);
 
@@ -204,13 +328,27 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                   struct obd_ioobj *obj, int niocount, struct niobuf_local *res,
                   void *desc_private)
 {
+        struct obd_device *obd;
         struct niobuf_local *r = res;
         int rc = 0;
         int i;
         ENTRY;
 
-        CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
-               cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
+        obd = class_conn2obd(conn);
+        if (!obd) {
+                CERROR("invalid client "LPX64"\n", conn->addr);
+                RETURN(-EINVAL);
+        }
+
+        if ((cmd & OBD_BRW_RWMASK) == OBD_BRW_READ) {
+                CDEBUG(D_PAGE, "reading %d obdos with %d IOs\n",
+                       objcount, niocount);
+                atomic_inc(&obd->u.echo.eo_read);
+        } else {
+                CDEBUG(D_PAGE, "writing %d obdos with %d IOs\n",
+                       objcount, niocount);
+                atomic_inc(&obd->u.echo.eo_write);
+        }
 
         if (niocount && !r) {
                 CERROR("NULL res niobuf with niocount %d\n", niocount);
@@ -230,12 +368,12 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                         if (!page || !(addr = page_address(page)) ||
                             !kern_addr_valid(addr)) {
 
-                                CERROR("bad page "LPU64":%p, buf %d/%d\n",
+                                CERROR("bad page objid "LPU64":%p, buf %d/%d\n",
                                        obj->ioo_id, page, j, obj->ioo_bufcnt);
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
-                        atomic_inc (&echo_page_rws);
+                        atomic_inc(&obd->u.echo.eo_read);
 
                         CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
                                r->page, addr, r->offset);
@@ -246,10 +384,11 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
 
                         kunmap(page);
                         __free_pages(page, 0);
-                        echo_pages--;
+                        atomic_dec(&obd->u.echo.eo_prep);
                 }
         }
-        CDEBUG(D_PAGE, "%ld pages remain after commit\n", echo_pages);
+        CDEBUG(D_PAGE, "%d pages remain after commit\n",
+               atomic_read(&obd->u.echo.eo_prep));
         RETURN(0);
 
 commitrw_cleanup:
@@ -260,7 +399,7 @@ commitrw_cleanup:
 
                 kunmap(page);
                 __free_pages(page, 0);
-                echo_pages--;
+                atomic_dec(&obd->u.echo.eo_prep);
         }
         return rc;
 }
@@ -284,23 +423,38 @@ static int echo_cleanup(struct obd_device *obddev)
         ENTRY;
 
         ldlm_namespace_free(obddev->obd_namespace);
+        printk(KERN_INFO "%s: %u getattrs, %u setattrs\n", OBD_ECHO_DEVICENAME,
+               atomic_read(&obddev->u.echo.eo_getattr),
+               atomic_read(&obddev->u.echo.eo_setattr));
+        printk(KERN_INFO "%s: %u reads, %u writes (%d leaked)\n",
+               OBD_ECHO_DEVICENAME,
+               atomic_read(&obddev->u.echo.eo_read),
+               atomic_read(&obddev->u.echo.eo_write),
+               atomic_read(&obddev->u.echo.eo_prep));
+        printk(KERN_INFO "%s: %u creates, %u destroys\n", OBD_ECHO_DEVICENAME,
+               atomic_read(&obddev->u.echo.eo_create),
+               atomic_read(&obddev->u.echo.eo_destroy));
 
         RETURN(0);
 }
 
 struct obd_ops echo_obd_ops = {
-        o_connect:     echo_connect,
-        o_disconnect:  echo_disconnect,
-        o_getattr:     echo_getattr,
-        o_preprw:      echo_preprw,
-        o_commitrw:    echo_commitrw,
-        o_setup:       echo_setup,
-        o_cleanup:     echo_cleanup
+        o_connect:      echo_connect,
+        o_disconnect:   echo_disconnect,
+        o_create:       echo_create,
+        o_destroy:      echo_destroy,
+        o_getattr:      echo_getattr,
+        o_setattr:      echo_setattr,
+        o_preprw:       echo_preprw,
+        o_commitrw:     echo_commitrw,
+        o_setup:        echo_setup,
+        o_cleanup:      echo_cleanup
 };
 
 static int __init obdecho_init(void)
 {
-        printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION " info@clusterfs.com\n");
+        printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION
+               " info@clusterfs.com\n");
 
         echo_proc_init();
 
@@ -309,9 +463,8 @@ static int __init obdecho_init(void)
 
 static void __exit obdecho_exit(void)
 {
-        echo_proc_fini ();
+        echo_proc_fini();
 
-        CERROR("%ld prep/commitrw pages leaked\n", echo_pages);
         class_unregister_type(OBD_ECHO_DEVICENAME);
 }
 
