@@ -31,120 +31,129 @@
 #endif
 
 #include <portals/lib-p30.h>
-#include <portals/arg-blocks.h>
 
-static void lib_me_dump(nal_cb_t * nal, lib_me_t * me);
-
-int do_PtlMEAttach(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+int
+lib_api_me_attach(nal_t *apinal,
+                  ptl_pt_index_t portal,
+                  ptl_process_id_t match_id, 
+                  ptl_match_bits_t match_bits, 
+                  ptl_match_bits_t ignore_bits,
+                  ptl_unlink_t unlink, ptl_ins_pos_t pos,
+                  ptl_handle_me_t *handle)
 {
-        PtlMEAttach_in *args = v_args;
-        PtlMEAttach_out *ret = v_ret;
-        lib_ni_t *ni = &nal->ni;
-        lib_ptl_t *tbl = &ni->tbl;
+        lib_nal_t    *nal = apinal->nal_data;
+        lib_ni_t     *ni = &nal->libnal_ni;
+        lib_ptl_t    *tbl = &ni->ni_portals;
+        lib_me_t     *me;
         unsigned long flags;
-        lib_me_t *me;
 
-        if (args->index_in >= tbl->size)
-                return ret->rc = PTL_PT_INDEX_INVALID;
+        if (portal >= tbl->size)
+                return PTL_PT_INDEX_INVALID;
 
         /* Should check for valid matchid, but not yet */
-        if (0)
-                return ret->rc = PTL_PROCESS_INVALID;
 
         me = lib_me_alloc (nal);
         if (me == NULL)
-                return (ret->rc = PTL_NO_SPACE);
+                return PTL_NO_SPACE;
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
-        me->match_id = args->match_id_in;
-        me->match_bits = args->match_bits_in;
-        me->ignore_bits = args->ignore_bits_in;
-        me->unlink = args->unlink_in;
+        me->match_id = match_id;
+        me->match_bits = match_bits;
+        me->ignore_bits = ignore_bits;
+        me->unlink = unlink;
         me->md = NULL;
 
         lib_initialise_handle (nal, &me->me_lh, PTL_COOKIE_TYPE_ME);
 
-        if (args->position_in == PTL_INS_AFTER)
-                list_add_tail(&me->me_list, &(tbl->tbl[args->index_in]));
+        if (pos == PTL_INS_AFTER)
+                list_add_tail(&me->me_list, &(tbl->tbl[portal]));
         else
-                list_add(&me->me_list, &(tbl->tbl[args->index_in]));
+                list_add(&me->me_list, &(tbl->tbl[portal]));
 
-        ptl_me2handle(&ret->handle_out, me);
+        ptl_me2handle(handle, nal, me);
 
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
 
-        return ret->rc = PTL_OK;
+        return PTL_OK;
 }
 
-int do_PtlMEInsert(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+int
+lib_api_me_insert(nal_t *apinal,
+                  ptl_handle_me_t *current_meh,
+                  ptl_process_id_t match_id, 
+                  ptl_match_bits_t match_bits, 
+                  ptl_match_bits_t ignore_bits,
+                  ptl_unlink_t unlink, ptl_ins_pos_t pos,
+                  ptl_handle_me_t *handle)
 {
-        PtlMEInsert_in *args = v_args;
-        PtlMEInsert_out *ret = v_ret;
+        lib_nal_t    *nal = apinal->nal_data;
+        lib_me_t     *current_me;
+        lib_me_t     *new_me;
         unsigned long flags;
-        lib_me_t *me;
-        lib_me_t *new;
 
-        new = lib_me_alloc (nal);
-        if (new == NULL)
-                return (ret->rc = PTL_NO_SPACE);
+        new_me = lib_me_alloc (nal);
+        if (new_me == NULL)
+                return PTL_NO_SPACE;
 
         /* Should check for valid matchid, but not yet */
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
-        me = ptl_handle2me(&args->current_in, nal);
-        if (me == NULL) {
-                lib_me_free (nal, new);
+        current_me = ptl_handle2me(current_meh, nal);
+        if (current_me == NULL) {
+                lib_me_free (nal, new_me);
 
-                state_unlock (nal, &flags);
-                return (ret->rc = PTL_ME_INVALID);
+                LIB_UNLOCK(nal, flags);
+                return PTL_ME_INVALID;
         }
 
-        new->match_id = args->match_id_in;
-        new->match_bits = args->match_bits_in;
-        new->ignore_bits = args->ignore_bits_in;
-        new->unlink = args->unlink_in;
-        new->md = NULL;
+        new_me->match_id = match_id;
+        new_me->match_bits = match_bits;
+        new_me->ignore_bits = ignore_bits;
+        new_me->unlink = unlink;
+        new_me->md = NULL;
 
-        lib_initialise_handle (nal, &new->me_lh, PTL_COOKIE_TYPE_ME);
+        lib_initialise_handle (nal, &new_me->me_lh, PTL_COOKIE_TYPE_ME);
 
-        if (args->position_in == PTL_INS_AFTER)
-                list_add_tail(&new->me_list, &me->me_list);
+        if (pos == PTL_INS_AFTER)
+                list_add_tail(&new_me->me_list, &current_me->me_list);
         else
-                list_add(&new->me_list, &me->me_list);
+                list_add(&new_me->me_list, &current_me->me_list);
 
-        ptl_me2handle(&ret->handle_out, new);
+        ptl_me2handle(handle, nal, new_me);
 
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
 
-        return ret->rc = PTL_OK;
+        return PTL_OK;
 }
 
-int do_PtlMEUnlink(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+int
+lib_api_me_unlink (nal_t *apinal, ptl_handle_me_t *meh)
 {
-        PtlMEUnlink_in *args = v_args;
-        PtlMEUnlink_out *ret = v_ret;
+        lib_nal_t    *nal = apinal->nal_data;
         unsigned long flags;
-        lib_me_t *me;
+        lib_me_t     *me;
+        int           rc;
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
-        me = ptl_handle2me(&args->current_in, nal);
+        me = ptl_handle2me(meh, nal);
         if (me == NULL) {
-                ret->rc = PTL_ME_INVALID;
+                rc = PTL_ME_INVALID;
         } else {
                 lib_me_unlink(nal, me);
-                ret->rc = PTL_OK;
+                rc = PTL_OK;
         }
 
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
 
-        return (ret->rc);
+        return (rc);
 }
 
 /* call with state_lock please */
-void lib_me_unlink(nal_cb_t *nal, lib_me_t *me)
+void 
+lib_me_unlink(lib_nal_t *nal, lib_me_t *me)
 {
         list_del (&me->me_list);
 
@@ -157,64 +166,20 @@ void lib_me_unlink(nal_cb_t *nal, lib_me_t *me)
         lib_me_free(nal, me);
 }
 
-int do_PtlTblDump(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+#if 0
+static void 
+lib_me_dump(lib_nal_t *nal, lib_me_t * me)
 {
-        PtlTblDump_in *args = v_args;
-        PtlTblDump_out *ret = v_ret;
-        lib_ptl_t *tbl = &nal->ni.tbl;
-        ptl_handle_any_t handle;
-        struct list_head *tmp;
-        unsigned long flags;
+        CWARN("Match Entry %p ("LPX64")\n", me, 
+              me->me_lh.lh_cookie);
 
-        if (args->index_in < 0 || args->index_in >= tbl->size)
-                return ret->rc = PTL_PT_INDEX_INVALID;
+        CWARN("\tMatch/Ignore\t= %016lx / %016lx\n",
+              me->match_bits, me->ignore_bits);
 
-        nal->cb_printf(nal, "Portal table index %d\n", args->index_in);
-
-        state_lock(nal, &flags);
-        list_for_each(tmp, &(tbl->tbl[args->index_in])) {
-                lib_me_t *me = list_entry(tmp, lib_me_t, me_list);
-                ptl_me2handle(&handle, me);
-                lib_me_dump(nal, me);
-        }
-        state_unlock(nal, &flags);
-
-        return ret->rc = PTL_OK;
+        CWARN("\tMD\t= %p\n", me->md);
+        CWARN("\tprev\t= %p\n",
+              list_entry(me->me_list.prev, lib_me_t, me_list));
+        CWARN("\tnext\t= %p\n",
+              list_entry(me->me_list.next, lib_me_t, me_list));
 }
-
-int do_PtlMEDump(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
-{
-        PtlMEDump_in *args = v_args;
-        PtlMEDump_out *ret = v_ret;
-        lib_me_t *me;
-        unsigned long flags;
-
-        state_lock(nal, &flags);
-
-        me = ptl_handle2me(&args->current_in, nal);
-        if (me == NULL) {
-                ret->rc = PTL_ME_INVALID;
-        } else {
-                lib_me_dump(nal, me);
-                ret->rc = PTL_OK;
-        }
-
-        state_unlock(nal, &flags);
-
-        return ret->rc;
-}
-
-static void lib_me_dump(nal_cb_t * nal, lib_me_t * me)
-{
-        nal->cb_printf(nal, "Match Entry %p ("LPX64")\n", me, 
-                       me->me_lh.lh_cookie);
-
-        nal->cb_printf(nal, "\tMatch/Ignore\t= %016lx / %016lx\n",
-                       me->match_bits, me->ignore_bits);
-
-        nal->cb_printf(nal, "\tMD\t= %p\n", me->md);
-        nal->cb_printf(nal, "\tprev\t= %p\n",
-                       list_entry(me->me_list.prev, lib_me_t, me_list));
-        nal->cb_printf(nal, "\tnext\t= %p\n",
-                       list_entry(me->me_list.next, lib_me_t, me_list));
-}
+#endif
