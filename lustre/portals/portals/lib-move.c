@@ -871,7 +871,7 @@ static int parse_ack(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
         /* NB handles only looked up by creator (no flips) */
         md = ptl_wire_handle2md(&hdr->msg.ack.dst_wmd, nal);
         if (md == NULL || md->threshold == 0) {
-                CERROR(LPU64": Dropping ACK from "LPU64" to %s MD "
+                CDEBUG(D_INFO, LPU64": Dropping ACK from "LPU64" to %s MD "
                        LPX64"."LPX64"\n", ni->nid, hdr->src_nid, 
                        (md == NULL) ? "invalid" : "inactive",
                        hdr->msg.ack.dst_wmd.wh_interface_cookie,
