@@ -71,13 +71,17 @@ u_getgmnid(char *name, int get_local_id)
         gm_status = gm_open(&gm_port, GM_UNIT, gm_port_id, "gmnalnid",
                             GM_API_VERSION);
         if (gm_status != GM_SUCCESS) {
-                /* Couldn't open port 2, try 4 5 6 7 */
-                for (gm_port_id = 4; gm_port_id < 8; gm_port_id++) {
+                int num_ports = gm_num_ports(gm_port);
+
+                /* Couldn't open port 2, try 4 ... num_ports */
+                for (gm_port_id = 4; gm_port_id < num_ports; gm_port_id++) {
                         gm_status = gm_open(&gm_port, GM_UNIT, gm_port_id,
                                             "gmnalnid", GM_API_VERSION);
                         if (gm_status == GM_SUCCESS)
                                 break;
+                }
 
+                if (gm_status != GM_SUCCESS) {
                         fprintf(stderr, "gm_open: %s\n",gm_strerror(gm_status));
                         gm_finalize();
                         return(0);
