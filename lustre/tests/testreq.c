@@ -111,7 +111,6 @@ int main(int argc, char **argv)
                         arg = strtoul(optarg, NULL, 0);
                         break;
                 case '?':
-                default:
                         usage(argv[0], 1);
                 }
         } while (c != -1);
