@@ -789,23 +789,10 @@ int mds_pin(struct ptlrpc_request *req, int offset)
 int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
                        struct lustre_handle *child_lockh)
 {
-        struct ldlm_res_id child_res_id = { .name = { 0, 0, 0, 0 } };
+        struct ldlm_res_id child_res_id = { .name = { inode->i_ino, 0, 1, 0 } };
         struct lustre_handle lockh;
-        struct lustre_id sid;
         int lock_flags = 0;
         int rc;
-
-        down(&inode->i_sem);
-        rc = mds_read_inode_sid(obd, inode, &sid);
-        up(&inode->i_sem);
-        if (rc) {
-                CERROR("Can't read inode self id, err = %d\n", rc);
-                RETURN(rc);
-        }
-
-        child_res_id.name[0] = id_fid(&sid);
-        child_res_id.name[1] = id_group(&sid);
-        child_res_id.name[2] = 1;
 
         if (child_lockh == NULL)
                 child_lockh = &lockh;
