@@ -124,7 +124,11 @@ int mds_open(struct mds_update_record *rec, int offset,
                 rep->lock_policy_res1 |= IT_OPEN_NEG;
 
         /* Negative dentry, just create the file */
-        if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
+        if (dchild->d_inode) { 
+                up(&dir->i_sem);
+		if ((rec->ur_flags & (O_CREATE|O_EXCL)) == (O_CREATE|O_EXCL))
+ 			GOTO(out_ldput, rc = -EEXIST);
+        } else if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
                 int err;
                 void *handle;
                 mds_start_transno(mds);
@@ -150,9 +154,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         } else if (!dchild->d_inode) {
                 up(&dir->i_sem);
                 GOTO(out_ldput, rc = -ENOENT);
-        } else {
-                up(&dir->i_sem);
-        }
+        } 
 
         /*
          * It already exists.
