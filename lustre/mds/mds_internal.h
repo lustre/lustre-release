@@ -1,3 +1,5 @@
+#ifndef _MDS_INTERNAL_H
+#define _MDS_INTERNAL_H
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
         return &req->rq_export->exp_obd->u.mds;
@@ -24,3 +26,13 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        fsfilt_cb_t cb_fn, void *cb_data);
 
 
+/* mds/mds_lib.c */
+int mds_update_unpack(struct ptlrpc_request *, int offset,
+                      struct mds_update_record *);
+
+#ifdef __KERNEL__
+void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
+void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
+#endif
+
+#endif /* _MDS_INTERNAL_H */
