@@ -96,25 +96,13 @@ static int line2args(char *line, char **argv, int maxargs)
 }
 
 /* find a command -- return it if unique otherwise print alternatives */
-    
 static command_t *Parser_findargcmd(char *name, command_t cmds[])
 {
         command_t *cmd;
-        int i;
 
-        for (i = 0; cmds[i].pc_name; i++) {
-                cmd = &cmds[i];
-
-                if (strlen(name) != strlen(cmd->pc_name))
-                        continue;
-
-                if (strlen(name) == strlen(cmd->pc_name)) {
-                        if (strcmp(name, cmd->pc_name) == 0) 
-                                return cmd;
-                        else
-                                continue;
-                }
-
+        for (cmd = cmds; cmd->pc_name; cmd++) {
+                if (strcmp(name, cmd->pc_name) == 0)
+                        return cmd;
         }
         return NULL;
 }
@@ -122,18 +110,15 @@ static command_t *Parser_findargcmd(char *name, command_t cmds[])
 int Parser_execarg(int argc, char **argv, command_t cmds[])
 {
         command_t *cmd;
-        int i;
 
         cmd = Parser_findargcmd(argv[0], cmds);
         if ( cmd ) {
                 return (cmd->pc_func)(argc, argv);
         } else {
-                printf("Try interactive use without arguments or use one of: ");
-                for (i=0 ; cmds[i].pc_name ; i++) {
-                        cmd = &cmds[i];
+                printf("Try interactive use without arguments or use one of:\n");
+                for (cmd = cmds; cmd->pc_name; cmd++)
                         printf("\"%s\" ", cmd->pc_name);
-                }
-                printf("as argument.\n");
+                printf("\nas argument.\n");
         }
         return -1;
 }
@@ -281,12 +266,12 @@ int execute_line(char * line)
                 rc = (cmd->pc_func)(i, argv);
                 break;
         }
-    
+
         return rc;
 }
 
 /* this is the command execution machine */
-int Parser_commands(void) 
+int Parser_commands(void)
 {
         char *line, *s;
         int rc = 0;
@@ -294,10 +279,9 @@ int Parser_commands(void)
         using_history();
         stifle_history(HISTORY);
 
-        rl_attempted_completion_function = 
-                (CPPFunction *)command_completion;
+        rl_attempted_completion_function = (CPPFunction *)command_completion;
         rl_completion_entry_function = (void *)command_generator;
-    
+
         while(!done) {
                 line = readline(parser_prompt);
 
@@ -351,11 +335,10 @@ int Parser_int(char *s, int *val)
 }
 
 
-    
 void Parser_qhelp(int argc, char *argv[]) {
 
         printf("Available commands are:\n");
-        
+
         print_commands(NULL, top_level);
         printf("For more help type: help command-name\n");
 }
@@ -575,7 +558,6 @@ long Parser_intarg(const char *inp, const char *prompt, int deft,
 char *Parser_strarg(char *inp, const char *prompt, const char *deft,
                     char *answer, int len)
 {
-    
         if ( inp == NULL || *inp == '\0' ) {
                 return Parser_getstr(prompt, deft, answer, len);
         } else 
@@ -603,6 +585,6 @@ int Parser_quit(int argc, char **argv)
 {
         argc = argc;
         argv = argv;
-        done = 1; 
+        done = 1;
         return 0;
 }
