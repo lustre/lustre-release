@@ -30,7 +30,7 @@ static int interrupted_completion_wait(void *data)
         RETURN(1);
 }
 
-static int expired_completion_wait(void *data)
+int ldlm_expired_completion_wait(void *data)
 {
         struct ldlm_lock *lock = data;
         struct ptlrpc_connection *conn;
@@ -48,6 +48,7 @@ static int expired_completion_wait(void *data)
                 LDLM_DEBUG(lock, "timed out waiting for completion");
                 CERROR("lock %p timed out from %s\n", lock,
                        conn->c_remote_uuid);
+                ldlm_lock_dump(D_ERROR, lock);
                 class_signal_connection_failure(conn);
         }
         RETURN(0);
@@ -56,7 +57,7 @@ static int expired_completion_wait(void *data)
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
 {
         struct l_wait_info lwi =
-                LWI_TIMEOUT_INTR(obd_timeout * HZ, expired_completion_wait,
+                LWI_TIMEOUT_INTR(obd_timeout * HZ, ldlm_expired_completion_wait,
                                  interrupted_completion_wait, lock);
         int rc = 0;
         ENTRY;
@@ -75,7 +76,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
 
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");
-        ldlm_lock_dump(lock);
+        ldlm_lock_dump(D_OTHER, lock);
         ldlm_reprocess_all(lock->l_resource);
 
  noreproc:
@@ -131,7 +132,7 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         ldlm_lock2handle(lock, lockh);
         lock->l_connh = NULL;
 
-        err = ldlm_lock_enqueue(lock, cookie, cookielen, flags, completion,
+        err = ldlm_lock_enqueue(ns, lock, cookie, cookielen, flags, completion,
                                 blocking);
         if (err != ELDLM_OK)
                 GOTO(out, err);
@@ -243,7 +244,7 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                 /* FIXME: if we've already received a completion AST, this will
                  * LBUG! */
                 ldlm_lock_destroy(lock);
-                GOTO(out, rc);
+                GOTO(out_req, rc);
         }
 
         reply = lustre_msg_buf(req->rq_repmsg, 0);
@@ -282,28 +283,28 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                                (long)reply->lock_resource_name[0],
                                (long)lock->l_resource->lr_name[0]);
 
-                        ldlm_lock_change_resource(lock,
+                        ldlm_lock_change_resource(ns, lock,
                                                   reply->lock_resource_name);
                         if (lock->l_resource == NULL) {
                                 LBUG();
-                                RETURN(-ENOMEM);
+                                GOTO(out_req, rc = -ENOMEM);
                         }
                         LDLM_DEBUG(lock, "client-side enqueue, new resource");
                 }
         }
 
         if (!is_replay) {
-                rc = ldlm_lock_enqueue(lock, cookie, cookielen, flags,
+                rc = ldlm_lock_enqueue(ns, lock, cookie, cookielen, flags,
                                        completion, blocking);
                 if (lock->l_completion_ast)
                         lock->l_completion_ast(lock, *flags);
         }
 
-        if (!req_passed_in)
-                ptlrpc_req_finished(req);
-
         LDLM_DEBUG(lock, "client-side enqueue END");
         EXIT;
+ out_req:
+        if (!req_passed_in)
+                ptlrpc_req_finished(req);
  out:
         LDLM_LOCK_PUT(lock);
  out_nolock:
@@ -437,7 +438,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         ENTRY;
 
         /* concurrent cancels on the same handle can happen */
-        lock = __ldlm_handle2lock(lockh, 0, LDLM_FL_CANCELING);
+        lock = __ldlm_handle2lock(lockh, LDLM_FL_CANCELING);
         if (lock == NULL)
                 RETURN(0);
 
@@ -620,6 +621,9 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
         int i;
         ENTRY;
 
+        if (ns == NULL)
+                RETURN(ELDLM_OK);
+
         if (res_id)
                 RETURN(ldlm_cli_cancel_unused_resource(ns, res_id, flags));
 
@@ -698,11 +702,22 @@ static int ldlm_iter_helper(struct ldlm_lock *lock, void *closure)
         return helper->iter(lock, helper->closure);
 }
 
+static int ldlm_res_iter_helper(struct ldlm_resource *res, void *closure)
+{
+        return ldlm_resource_foreach(res, ldlm_iter_helper, closure);
+}
+
 int ldlm_namespace_foreach(struct ldlm_namespace *ns, ldlm_iterator_t iter,
                            void *closure)
 {
-        int i, rc = LDLM_ITER_CONTINUE;
         struct iter_helper_data helper = { iter: iter, closure: closure };
+        return ldlm_namespace_foreach_res(ns, ldlm_res_iter_helper, &helper);
+}
+
+int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
+                               ldlm_res_iterator_t iter, void *closure)
+{
+        int i, rc = LDLM_ITER_CONTINUE;
         
         l_lock(&ns->ns_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
@@ -712,8 +727,7 @@ int ldlm_namespace_foreach(struct ldlm_namespace *ns, ldlm_iterator_t iter,
                                 list_entry(tmp, struct ldlm_resource, lr_hash);
 
                         ldlm_resource_getref(res);
-                        rc = ldlm_resource_foreach(res, ldlm_iter_helper,
-                                                   &helper);
+                        rc = iter(res, closure);
                         ldlm_resource_putref(res);
                         if (rc == LDLM_ITER_STOP)
                                 GOTO(out, rc);
@@ -735,22 +749,44 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
         return LDLM_ITER_CONTINUE;
 }
 
-static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock,
-                           int last)
+static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 {
         struct ptlrpc_request *req;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
         int rc, size;
-        int flags = LDLM_FL_REPLAY;
+        int flags;
 
-        flags |= lock->l_flags & 
-                (LDLM_FL_BLOCK_GRANTED|LDLM_FL_BLOCK_CONV|LDLM_FL_BLOCK_WAIT);
-
+        /*
+         * If granted mode matches the requested mode, this lock is granted.
+         *
+         * If they differ, but we have a granted mode, then we were granted
+         * one mode and now want another: ergo, converting.
+         *
+         * If we haven't been granted anything and are on a resource list,
+         * then we're blocked/waiting.
+         *
+         * If we haven't been granted anything and we're NOT on a resource list,
+         * then we haven't got a reply yet and don't have a known disposition.
+         * This happens whenever a lock enqueue is the request that triggers
+         * recovery.
+         */
+        if (lock->l_granted_mode == lock->l_req_mode)
+                flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_GRANTED;
+        else if (lock->l_granted_mode)
+                flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_CONV;
+        else if (!list_empty(&lock->l_res_link))
+                flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_WAIT;
+        else
+                flags = LDLM_FL_REPLAY;
+                
         size = sizeof(*body);
         req = ptlrpc_prep_req(imp, LDLM_ENQUEUE, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
+
+        /* We're part of recovery, so don't wait for it. */
+        req->rq_level = LUSTRE_CONN_RECOVD;
         
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ldlm_lock2desc(lock, &body->lock_desc);
@@ -759,9 +795,6 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock,
         ldlm_lock2handle(lock, &body->lock_handle1);
         size = sizeof(*reply);
         req->rq_replen = lustre_msg_size(1, &size);
-
-        if (last)
-                req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
 
         LDLM_DEBUG(lock, "replaying lock:");
         rc = ptlrpc_queue_wait(req);
@@ -792,7 +825,7 @@ int ldlm_replay_locks(struct obd_import *imp)
 
         list_for_each_safe(pos, next, &list) {
                 lock = list_entry(pos, struct ldlm_lock, l_pending_chain);
-                rc = replay_one_lock(imp, lock, (next == &list));
+                rc = replay_one_lock(imp, lock);
                 if (rc)
                         break; /* or try to do the rest? */
         }
