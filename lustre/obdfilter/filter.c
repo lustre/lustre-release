@@ -510,7 +510,7 @@ static int filter_getattr(struct obd_conn *conn, struct obdo *oa)
         ENTRY;
 
         if (!gen_client(conn)) {
-                CDEBUG(D_IOCTL, "fatal: invalid client %u\n", conn->oc_id);
+                CDEBUG(D_IOCTL, "fatal: invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -575,7 +575,7 @@ static int filter_open(struct obd_conn *conn, struct obdo *oa)
         /* ENTRY; */
 
         if (!gen_client(conn)) {
-                CDEBUG(D_IOCTL, "fatal: invalid client %u\n", conn->oc_id);
+                CDEBUG(D_IOCTL, "fatal: invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -595,7 +595,7 @@ static int filter_close(struct obd_conn *conn, struct obdo *oa)
         /* ENTRY; */
 
         if (!gen_client(conn)) {
-                CDEBUG(D_IOCTL, "fatal: invalid client %u\n", conn->oc_id);
+                CDEBUG(D_IOCTL, "fatal: invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -625,7 +625,7 @@ static int filter_create(struct obd_conn* conn, struct obdo *oa)
         ENTRY;
 
         if (!gen_client(conn)) {
-                CERROR("invalid client %u\n", conn->oc_id);
+                CERROR("invalid client %Lx\n", conn->addr);
                 return -EINVAL;
         }
 
@@ -666,7 +666,7 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         ENTRY;
 
         if (!(export = gen_client(conn))) {
-                CERROR("invalid client %u\n", conn->oc_id);
+                CERROR("invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -732,7 +732,7 @@ static int filter_pgcache_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
         ENTRY;
 
         if (!gen_client(conn)) {
-                CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
+                CDEBUG(D_IOCTL, "invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -1291,7 +1291,7 @@ static int filter_statfs(struct obd_conn *conn, struct statfs * statfs)
         ENTRY;
 
         if (!gen_client(conn)) {
-                CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
+                CDEBUG(D_IOCTL, "invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
@@ -1310,7 +1310,7 @@ static int filter_get_info(struct obd_conn *conn, obd_count keylen,
         ENTRY;
 
         if (!(export = gen_client(conn))) {
-                CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
+                CDEBUG(D_IOCTL, "invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 

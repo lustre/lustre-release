@@ -84,7 +84,6 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         req->rq_export = export;
         export->export_connection = req->rq_connection;
-        CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repmsg, conn.oc_id);
         RETURN(0);
 }
 

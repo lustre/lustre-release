@@ -170,7 +170,9 @@ static int ldlm_test_network(struct obd_device *obddev,
         int flags = 0;
         ldlm_error_t err;
 
-        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, NULL,
+        /* FIXME: this needs a connh as 3rd paramter, before it will work */
+
+        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, NULL, NULL,
                                obddev->obd_namespace, NULL, res_id, LDLM_EXTENT,
                                &ext, sizeof(ext), LCK_PR, &flags, NULL, NULL, 0,
                                &lockh1);
@@ -219,7 +221,7 @@ static int ldlm_test_main(void *data)
                 get_random_bytes(&random, sizeof(random));
                 lock_mode = random % LCK_NL + 1;
 
-                rc = ldlm_cli_enqueue(&ctl_client, ctl_conn, NULL, ns, NULL,
+                rc = ldlm_cli_enqueue(&ctl_client, ctl_conn, NULL, NULL, ns, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                       &flags, ldlm_test_callback, NULL, 0,
                                       &lockh);

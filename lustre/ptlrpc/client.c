@@ -177,11 +177,8 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         request->rq_type = PTL_RPC_TYPE_REQUEST;
         request->rq_connection = ptlrpc_connection_addref(conn);
 
-        request->rq_reqmsg->conn2 = (__u64)(unsigned long)conn->c_remote_conn;
-        //request->rq_reqmsg->token = conn->c_remote_token;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->type = HTON__u32(PTL_RPC_MSG_REQUEST);
-        request->rq_reqmsg->target_id = HTON__u32(cl->cli_target_devno);
 
         INIT_LIST_HEAD(&request->rq_list);
         INIT_LIST_HEAD(&request->rq_multi);

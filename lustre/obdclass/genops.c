@@ -137,7 +137,6 @@ int gen_connect (struct obd_conn *conn, struct obd_device *obd)
         list_add(&(export->export_chain), export->export_obd->obd_exports.prev);
 
         CDEBUG(D_INFO, "connect: new ID %u\n", export->export_id);
-        conn->oc_id = export->export_id;
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->export_cookie;
         return 0;
@@ -152,13 +151,11 @@ int gen_disconnect(struct obd_conn *conn)
         if (!(export = gen_client(conn))) {
                 fixme();
                 CDEBUG(D_IOCTL, "disconnect: attempting to free "
-                       "nonexistent client %u\n", conn->oc_id);
+                       "nonexistent client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
         list_del(&export->export_chain);
         kmem_cache_free(export_cachep, export);
-
-        CDEBUG(D_INFO, "disconnect: ID %u\n", conn->oc_id);
 
         RETURN(0);
 } /* gen_obd_disconnect */

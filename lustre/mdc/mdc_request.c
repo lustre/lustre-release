@@ -151,7 +151,7 @@ static int mdc_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc 
                 invalidate_inode_pages(inode);
         }
 
-        rc = ldlm_cli_cancel(lockh);
+        rc = ldlm_cli_cancel(lockh, NULL);
         if (rc < 0) {
                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 LBUG();
@@ -332,7 +332,8 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 RETURN(-1);
         }
 #warning FIXME: the data here needs to be different if a lock was granted for a different inode
-        rc = ldlm_cli_enqueue(mdc->mdc_ldlm_client, mdc->mdc_conn, req,
+        rc = ldlm_cli_enqueue(mdc->mdc_ldlm_client, mdc->mdc_conn, 
+                              NULL, req,
                               obddev->obd_namespace, NULL, res_id, lock_type,
                               NULL, 0, lock_mode, &flags,
                               (void *)mdc_lock_callback, data, datalen, lockh);
@@ -785,7 +786,11 @@ static int mdc_disconnect(struct obd_conn *conn)
         request->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(request);
-        GOTO(out, rc);
+        if (rc) 
+                GOTO(out, rc);
+        rc = gen_disconnect(conn);
+        if (!rc)
+                MOD_DEC_USE_COUNT;
  out:
         ptlrpc_free_req(request);
         return rc;

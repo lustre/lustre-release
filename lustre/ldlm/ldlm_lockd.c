@@ -21,10 +21,9 @@ extern kmem_cache_t *ldlm_lock_slab;
 extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
 extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
-static int ldlm_handle_enqueue(struct obd_device *obddev,
-                               struct ptlrpc_service *svc,
-                               struct ptlrpc_request *req)
+static int ldlm_handle_enqueue(struct ptlrpc_request *req)
 {
+        struct obd_device *obddev = req->rq_export->export_obd;
         struct ldlm_reply *dlm_rep;
         struct ldlm_request *dlm_req;
         int rc, size = sizeof(*dlm_rep), cookielen = 0;
@@ -92,7 +91,7 @@ static int ldlm_handle_enqueue(struct obd_device *obddev,
         req->rq_status = err;
         CDEBUG(D_INFO, "err = %d\n", err);
 
-        if (ptlrpc_reply(svc, req))
+        if (ptlrpc_reply(req->rq_svc, req))
                 LBUG();
 
         if (err)
@@ -105,8 +104,7 @@ static int ldlm_handle_enqueue(struct obd_device *obddev,
         return 0;
 }
 
-static int ldlm_handle_convert(struct ptlrpc_service *svc,
-                               struct ptlrpc_request *req)
+static int ldlm_handle_convert(struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
         struct ldlm_reply *dlm_rep;
@@ -132,7 +130,7 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc,
                                   &dlm_rep->lock_flags);
                 req->rq_status = 0;
         }
-        if (ptlrpc_reply(svc, req) != 0)
+        if (ptlrpc_reply(req->rq_svc, req) != 0)
                 LBUG();
 
         ldlm_reprocess_all(lock->l_resource);
@@ -142,8 +140,7 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc,
         RETURN(0);
 }
 
-static int ldlm_handle_cancel(struct ptlrpc_service *svc,
-                              struct ptlrpc_request *req)
+static int ldlm_handle_cancel(struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
         struct ldlm_lock *lock;
@@ -166,7 +163,7 @@ static int ldlm_handle_cancel(struct ptlrpc_service *svc,
                 req->rq_status = 0;
         }
 
-        if (ptlrpc_reply(svc, req) != 0)
+        if (ptlrpc_reply(req->rq_svc, req) != 0)
                 LBUG();
 
         ldlm_reprocess_all(lock->l_resource);
@@ -176,8 +173,7 @@ static int ldlm_handle_cancel(struct ptlrpc_service *svc,
         RETURN(0);
 }
 
-static int ldlm_handle_callback(struct ptlrpc_service *svc,
-                                struct ptlrpc_request *req)
+static int ldlm_handle_callback(struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
         struct ldlm_lock_desc *descp = NULL; 
@@ -195,7 +191,7 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
 
         /* We must send the reply first, so that the thread is free to handle
          * any requests made in common_callback() */
-        rc = ptlrpc_reply(svc, req);
+        rc = ptlrpc_reply(req->rq_svc, req);
         if (rc != 0)
                 RETURN(rc);
         
@@ -269,11 +265,9 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
         RETURN(0);
 }
 
-static int lustre_handle(struct ptlrpc_request *req)
+static int ldlm_handle(struct ptlrpc_request *req)
 {
-        struct ptlrpc_service *svc = req->rq_svc;
-        struct obd_device *req_dev;
-        int id, rc;
+        int rc;
         ENTRY;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
@@ -288,45 +282,45 @@ static int lustre_handle(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 
-        id = req->rq_reqmsg->target_id;
-        if (id < 0 || id > MAX_OBD_DEVICES)
-                GOTO(out, rc = -ENODEV);
-        req_dev = req->rq_obd = &obd_dev[id];
-
+        if (!req->rq_export && 
+            req->rq_reqmsg->opc == LDLM_ENQUEUE) { 
+                CERROR("No export handle for enqueue request.\n");
+                GOTO(out, rc = -ENOTCONN);
+        }
         switch (req->rq_reqmsg->opc) {
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
-                rc = ldlm_handle_enqueue(req_dev, svc, req);
+                rc = ldlm_handle_enqueue(req);
                 break;
 
         case LDLM_CONVERT:
                 CDEBUG(D_INODE, "convert\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
-                rc = ldlm_handle_convert(svc, req);
+                rc = ldlm_handle_convert(req);
                 break;
 
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
-                rc = ldlm_handle_cancel(svc, req);
+                rc = ldlm_handle_cancel(req);
                 break;
 
         case LDLM_CALLBACK:
                 CDEBUG(D_INODE, "callback\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
-                rc = ldlm_handle_callback(svc, req);
+                rc = ldlm_handle_callback(req);
                 break;
 
         default:
-                rc = ptlrpc_error(svc, req);
+                rc = ptlrpc_error(req->rq_svc, req);
                 RETURN(rc);
         }
 
         EXIT;
 out:
         if (rc)
-                RETURN(ptlrpc_error(svc, req));
+                RETURN(ptlrpc_error(req->rq_svc, req));
         return 0;
 }
 
@@ -384,7 +378,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         MOD_INC_USE_COUNT;
         ldlm->ldlm_service =
                 ptlrpc_init_svc(64 * 1024, LDLM_REQUEST_PORTAL,
-                                LDLM_REPLY_PORTAL, "self", lustre_handle);
+                                LDLM_REPLY_PORTAL, "self", ldlm_handle);
         if (!ldlm->ldlm_service) {
                 LBUG();
                 GOTO(out_dec, rc = -ENOMEM);
@@ -393,9 +387,6 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 rc = ptlrpc_start_thread(obddev, ldlm->ldlm_service,
                                          "lustre_dlm");
-                /* XXX We could just continue if we had started at least
-                 *     a few threads here.
-                 */
                 if (rc) {
                         CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);
                         LBUG();

@@ -27,6 +27,8 @@
 #include <linux/lustre_dlm.h>
 #include <linux/obd_class.h>
 
+extern inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req);
+
 struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid)
 {
         struct list_head *p;
@@ -95,7 +97,7 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
 static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                              struct ptlrpc_request *req)
 {
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct dentry *de;
         void *handle;
         int rc = 0;
@@ -137,7 +139,7 @@ static int mds_reint_recreate(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
         struct dentry *de = NULL;
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct dentry *dchild = NULL;
         struct inode *dir;
         int rc = 0;
@@ -186,7 +188,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
         struct dentry *de = NULL;
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct dentry *dchild = NULL;
         struct inode *dir;
         void *handle;
@@ -199,7 +201,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (offset)
                 offset = 1;
 
-        if (strcmp(req->rq_obd->obd_type->typ_name, "mds") != 0)
+        if (strcmp(req->rq_export->export_obd->obd_type->typ_name, "mds") != 0)
                 LBUG();
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -219,6 +221,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                      (struct lustre_handle *)&mds->mds_connh,
                                       NULL, mds->mds_local_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                       &flags, (void *)mds_lock_callback, NULL,
@@ -397,7 +400,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 {
         struct dentry *de = NULL;
         struct dentry *dchild = NULL;
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct obdo *obdo;
         struct inode *dir, *inode;
         int lock_mode, flags;
@@ -424,6 +427,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                      (struct lustre_handle *)&mds->mds_connh,
                                       NULL, mds->mds_local_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                       &flags, (void *)mds_lock_callback, NULL,
@@ -515,6 +519,7 @@ out_unlink_de:
                  * locks. */
                 LDLM_DEBUG_NOLOCK("getting EX lock res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                      (struct lustre_handle *)&mds->mds_connh,
                                       NULL, mds->mds_local_namespace, NULL, 
                                       res_id,
                                       LDLM_PLAIN, NULL, 0, LCK_EX, &flags,
@@ -530,7 +535,7 @@ out_unlink_de:
 
         if (!rc) { 
                 ldlm_lock_decref(&lockh, LCK_EX);
-                rc = ldlm_cli_cancel(&lockh);
+                rc = ldlm_cli_cancel(&lockh, NULL);
                 if (rc < 0)
                         CERROR("failed to cancel child inode lock ino "
                                "%Ld: %d\n", res_id[0], rc);
@@ -547,7 +552,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         struct dentry *de_src = NULL;
         struct dentry *de_tgt_dir = NULL;
         struct dentry *dchild = NULL;
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         void *handle;
         int rc = 0;
         int err;
@@ -615,7 +620,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct dentry *de_tgtdir = NULL;
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         void *handle;
         int rc = 0;
         int err;
@@ -693,7 +698,7 @@ static mds_reinter reinters[REINT_MAX+1] = {
 int mds_reint_rec(struct mds_update_record *rec, int offset,
                   struct ptlrpc_request *req)
 {
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct obd_run_ctxt saved;
 
         int rc;

@@ -39,7 +39,6 @@ struct obd_conn {
         __u64 addr;
         __u64 cookie;
         struct obd_device *oc_dev;
-        uint32_t oc_id;
 };
 
 /* Individual type definitions */
@@ -87,6 +86,7 @@ struct mds_obd {
         struct ptlrpc_service *mds_service;
         struct ptlrpc_client *mds_ldlm_client; /* to be an LDLM client */
         struct ptlrpc_connection *mds_ldlm_conn; /* to be an LDLM client */
+        struct obd_conn mds_connh; /* to be one's on DLM client */
 
         char *mds_fstype;
         struct super_block *mds_sb;

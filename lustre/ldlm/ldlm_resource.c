@@ -78,7 +78,8 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                 if (client) {
                         struct lustre_handle lockh;
                         ldlm_lock2handle(lock, &lockh);
-                        rc = ldlm_cli_cancel(&lockh);
+                        /* can we get away without a connh here? */
+                        rc = ldlm_cli_cancel(&lockh, NULL);
                         if (rc < 0) {
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                                 LBUG();

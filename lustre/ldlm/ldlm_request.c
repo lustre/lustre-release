@@ -13,7 +13,7 @@
 
 #include <linux/lustre_dlm.h>
 
-int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn, struct lustre_handle *connh, 
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
                      struct lustre_handle *parent_lock_handle,
@@ -45,7 +45,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         LDLM_DEBUG(lock, "client-side enqueue START");
 
         if (req == NULL) {
-                req = ptlrpc_prep_req(cl, conn, LDLM_ENQUEUE, 1, &size, NULL);
+                req = ptlrpc_prep_req2(cl, conn, connh, 
+                                       LDLM_ENQUEUE, 1, &size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
                 req_passed_in = 0;
@@ -187,6 +188,7 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
 }
 
 int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
+                     struct lustre_handle *connh, 
                      int new_mode, int *flags)
 {
         struct ldlm_request *body;
@@ -204,8 +206,8 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
 
         LDLM_DEBUG(lock, "client-side convert");
 
-        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CONVERT, 1, &size,
-                              NULL);
+        req = ptlrpc_prep_req(cl, lock->l_connection,
+                               LDLM_CONVERT, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -244,7 +246,8 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
         return rc;
 }
 
-int ldlm_cli_cancel(struct lustre_handle *lockh)
+int ldlm_cli_cancel(struct lustre_handle *lockh, 
+                    struct lustre_handle *connh)
 {
         struct ptlrpc_request *req;
         struct ldlm_lock *lock;
@@ -257,8 +260,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 LBUG();
 
         LDLM_DEBUG(lock, "client-side cancel");
-        req = ptlrpc_prep_req(lock->l_client, lock->l_connection, LDLM_CANCEL,
-                              1, &size, NULL);
+        req = ptlrpc_prep_req(lock->l_client, lock->l_connection,
+                              LDLM_CANCEL, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 

@@ -27,9 +27,9 @@ extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                                 struct ptlrpc_request *req);
 static int mds_cleanup(struct obd_device * obddev);
 
-static struct mds_obd *mds_export2mds(struct obd_export *export)
+inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
-        return &export->export_obd->u.mds;
+        return &req->rq_export->export_obd->u.mds;
 }
 
 /* Assumes caller has already pushed into the kernel filesystem context */
@@ -37,7 +37,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         __u64 offset)
 {
         int rc = 0;
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req); 
         struct ptlrpc_bulk_desc *desc;
         struct ptlrpc_bulk_page *bulk;
         char *buf;
@@ -178,7 +178,7 @@ static int mds_disconnect(struct obd_conn *conn)
 /* FIXME: the error cases need fixing to avoid leaks */
 static int mds_getstatus(struct ptlrpc_request *req)
 {
-        struct mds_obd *mds = mds_export2mds(req->rq_export); 
+        struct mds_obd *mds = mds_req2mds(req);
         struct mds_body *body;
         struct mds_client_info *mci;
         struct mds_client_data *mcd;
@@ -243,14 +243,14 @@ int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                 RETURN(0);
         }
 
-        if (ldlm_cli_cancel(lockh) < 0)
+        if (ldlm_cli_cancel(lockh, NULL) < 0)
                 LBUG();
         RETURN(0);
 }
 
 static int mds_getattr_name(int offset, struct ptlrpc_request *req)
 {
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct obd_run_ctxt saved;
         struct mds_body *body;
         struct dentry *de = NULL, *dchild = NULL;
@@ -294,6 +294,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         if (rc == 0) {
                 LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
                 rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                      (struct lustre_handle *)&mds->mds_connh, 
                                       NULL, mds->mds_local_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                       &flags, (void *)mds_lock_callback,
@@ -350,7 +351,7 @@ out_pre_de:
 
 static int mds_getattr(int offset, struct ptlrpc_request *req)
 {
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct obd_run_ctxt saved;
         struct dentry *de;
         struct inode *inode;
@@ -423,7 +424,7 @@ out_pop:
 
 static int mds_statfs(struct ptlrpc_request *req)
 {
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct obd_statfs *osfs;
         struct statfs sfs;
         int rc, size = sizeof(*osfs);
@@ -460,7 +461,7 @@ static int mds_open(struct ptlrpc_request *req)
         struct mds_body *body;
         struct file *file;
         struct vfsmount *mnt;
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct mds_client_info *mci;
         __u32 flags;
         struct list_head *tmp;
@@ -572,7 +573,7 @@ static int mds_close(struct ptlrpc_request *req)
         struct dentry *de;
         struct mds_body *body;
         struct file *file;
-        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct mds_obd *mds = mds_req2mds(req);
         struct vfsmount *mnt;
         struct mds_file_data *mfd;
         int rc;
@@ -608,7 +609,7 @@ static int mds_close(struct ptlrpc_request *req)
 
 static int mds_readpage(struct ptlrpc_request *req)
 {
-        struct mds_obd *mds = mds_export2mds(req->rq_export);
+        struct mds_obd *mds = mds_req2mds(req);
         struct vfsmount *mnt;
         struct dentry *de;
         struct file *file;
@@ -773,7 +774,7 @@ out:
                 CERROR("mds: processing error %d\n", rc);
                 ptlrpc_error(req->rq_svc, req);
         } else {
-                struct mds_obd *mds = &req->rq_obd->u.mds;
+                struct mds_obd *mds = mds_req2mds(req);
                 req->rq_repmsg->last_rcvd = HTON__u64(mds->mds_last_rcvd);
                 req->rq_repmsg->last_committed =
                         HTON__u64(mds->mds_last_committed);
@@ -841,6 +842,7 @@ static int mds_recover(struct obd_device *obddev)
 static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct obd_ioctl_data* data = buf;
+        struct obd_export *export;
         struct mds_obd *mds = &obddev->u.mds;
         struct vfsmount *mnt;
         int rc = 0;
@@ -923,7 +925,17 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc)
                 GOTO(err_thread, rc);
 
+        rc = gen_connect(&mds->mds_connh, obddev);
+        if (rc)
+                GOTO(err_thread, rc);
+        export = gen_client(&mds->mds_connh);
+        if (!export)
+                LBUG();
+        export->export_connection = mds->mds_ldlm_conn;
+
         RETURN(0);
+
+        
 
 err_thread:
         ptlrpc_stop_all_threads(mds->mds_service);
@@ -949,6 +961,8 @@ static int mds_cleanup(struct obd_device * obddev)
         struct mds_obd *mds = &obddev->u.mds;
 
         ENTRY;
+        gen_disconnect(&mds->mds_connh);
+
 
         if ( !list_empty(&obddev->obd_exports) ) {
                 CERROR("still has exports!\n");

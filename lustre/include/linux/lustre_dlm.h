@@ -268,6 +268,7 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3]);
 /* ldlm_request.c */
 int ldlm_cli_enqueue(struct ptlrpc_client *cl, 
                      struct ptlrpc_connection *peer,
+                     struct lustre_handle *connh,
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
                      struct lustre_handle *parent_lock_handle,
@@ -282,9 +283,9 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl,
                      struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
-int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *,
+int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *, struct lustre_handle *connh, 
                      int new_mode, int *flags);
-int ldlm_cli_cancel(struct lustre_handle *);
+int ldlm_cli_cancel(struct lustre_handle *lockh, struct lustre_handle *connh);
 
 #endif /* __KERNEL__ */
 

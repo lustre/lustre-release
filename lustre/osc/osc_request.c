@@ -142,7 +142,6 @@ static int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->connid = conn->oc_id;
         body->oa.o_valid = ~0;
 
         request->rq_replen = lustre_msg_size(1, &size);
@@ -183,7 +182,6 @@ static int osc_open(struct obd_conn *conn, struct obdo *oa)
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->connid = conn->oc_id;
         body->oa.o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
 
         request->rq_replen = lustre_msg_size(1, &size);
@@ -222,7 +220,6 @@ static int osc_close(struct obd_conn *conn, struct obdo *oa)
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->connid = conn->oc_id;
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -260,7 +257,6 @@ static int osc_setattr(struct obd_conn *conn, struct obdo *oa)
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->connid = conn->oc_id;
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -297,7 +293,6 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->connid = conn->oc_id;
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -346,7 +341,6 @@ static int osc_punch(struct obd_conn *conn, struct obdo *oa, obd_size count,
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->connid = conn->oc_id;
         body->oa.o_blocks = count;
         body->oa.o_valid |= OBD_MD_FLBLOCKS;
 
@@ -388,7 +382,6 @@ static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->connid = conn->oc_id;
         body->oa.o_valid = ~0;
 
         request->rq_replen = lustre_msg_size(1, &size);
@@ -684,8 +677,8 @@ static int osc_enqueue(struct obd_conn *oconn,
                        struct lustre_handle *lockh)
 {
         struct obd_device *obddev = gen_conn2obd(oconn);
+        struct osc_obd *osc = &obddev->u.osc;
         struct ptlrpc_connection *conn;
-        struct osc_obd *osc = &gen_conn2obd(oconn)->u.osc;
         struct ptlrpc_client *cl;
         struct ldlm_extent *extent = extentp;
         int rc;
@@ -727,14 +720,16 @@ static int osc_enqueue(struct obd_conn *oconn,
                 if (mode == LCK_PR)
                         return 0;
 
-                rc = ldlm_cli_convert(cl, lockh, mode, &flags);
+                rc = ldlm_cli_convert(cl, lockh, &osc->osc_connh, 
+                                      mode, &flags);
                 if (rc)
                         LBUG();
 
                 return rc;
         }
 
-        rc = ldlm_cli_enqueue(cl, conn, NULL, obddev->obd_namespace,
+        rc = ldlm_cli_enqueue(cl, conn, &osc->osc_connh, 
+                              NULL, obddev->obd_namespace,
                               parent_lock, res_id, type, extent, sizeof(extent),
                               mode, flags, callback, data, datalen, lockh);
         return rc;
