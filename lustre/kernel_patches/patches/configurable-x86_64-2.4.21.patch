@@ -80,18 +80,6 @@ Index: linux-2.4.21-drop2/arch/x86_64/vmlinux.lds
    .data.init_task : { *(.data.init_task) }
  
    . = ALIGN(4096); 
-Index: linux-2.4.21-drop2/include/linux/sched.h
-===================================================================
---- linux-2.4.21-drop2.orig/include/linux/sched.h	2003-11-10 16:44:28.000000000 -0800
-+++ linux-2.4.21-drop2/include/linux/sched.h	2004-08-06 06:24:37.000000000 -0700
-@@ -2,6 +2,7 @@
- #define _LINUX_SCHED_H
- 
- #include <asm/param.h>	/* for HZ */
-+#include <asm/current.h>	/* maybe for INIT_TASK_SIZE */
- 
- extern unsigned long event;
- 
 Index: linux-2.4.21-drop2/include/asm-x86_64/current.h
 ===================================================================
 --- linux-2.4.21-drop2.orig/include/asm-x86_64/current.h	2003-11-10 16:44:28.000000000 -0800
