@@ -6,7 +6,7 @@ SRCDIR="`dirname $0`"
 NETWORK=tcp
 LOCALHOST=localhost
 SERVER=localhost
-PORT=1234
+PORT=2432
 
 setup_portals
 setup_lustre
