@@ -248,7 +248,8 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
 
 
         if (CURRENT_TIME - req->rq_time >= req->rq_timeout) {
-                CERROR("-- REQ TIMEOUT --\n");
+                CERROR("-- REQ TIMEOUT ON CONNID %d XID %Ld --\n",
+                       req->rq_connid, (unsigned long long)req->rq_xid);
                 /* clear the timeout */
                 req->rq_timeout = 0;
                 req->rq_connection->c_level = LUSTRE_CONN_RECOVD;
