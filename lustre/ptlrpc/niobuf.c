@@ -264,11 +264,18 @@ int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 {
         ptl_process_id_t local_id;
+	struct ptlreq_hdr *hdr;
         int rc;
         char *repbuf;
 
         ENTRY;
 
+        hdr = (struct ptlreq_hdr *)request->rq_reqbuf;
+        if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {
+                CERROR("lustre_ost: wrong packet type sent %d\n",
+                       NTOH__u32(hdr->type));
+                BUG();
+        }
         if (request->rq_replen == 0) {
                 CERROR("request->rq_replen is 0!\n");
                 EXIT;
@@ -332,9 +339,11 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
  * it finishes processing an event.  This ensures the ref count is
  * decremented and that the rpc ring buffer cycles properly.
  */ 
-int ptl_received_rpc(struct ptlrpc_service *service) {
+int ptl_received_rpc(struct ptlrpc_service *service) 
+{
         int rc, index;
 
+        spin_lock(&service->srv_lock);
         index = service->srv_md_active;
         CDEBUG(D_INFO, "MD index=%d Ref Count=%d\n", index,
                service->srv_ref_count[index]);
@@ -354,6 +363,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                 if (rc != PTL_OK) {
                         CERROR("PtlMEInsert failed: %d\n", rc);
                         BUG();
+                        spin_unlock(&service->srv_lock);
                         return rc;
                 }
 
@@ -373,6 +383,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                         /* XXX cleanup */
                         CERROR("PtlMDAttach failed: %d\n", rc);
                         BUG();
+                        spin_unlock(&service->srv_lock);
                         return rc;
                 }
 
@@ -380,5 +391,6 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                         NEXT_INDEX(index, service->srv_ring_length);
         } 
         
+        spin_unlock(&service->srv_lock);
         return 0;
 }

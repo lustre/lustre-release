@@ -36,48 +36,60 @@ extern int server_request_callback(ptl_event_t *ev, void *data);
 
 static int ptlrpc_check_event(struct ptlrpc_service *svc)
 {
+        int rc = 0;
+
+        spin_lock(&svc->srv_lock); 
         if (sigismember(&(current->pending.signal), SIGKILL) ||
+            sigismember(&(current->pending.signal), SIGSTOP) ||
+            sigismember(&(current->pending.signal), SIGCONT) ||
             sigismember(&(current->pending.signal), SIGINT)) { 
                 svc->srv_flags |= SVC_KILLED;
                 EXIT;
-                return 1;
+                rc = 1;
+                goto out;
         }
 
         if ( svc->srv_flags & SVC_STOPPING ) {
                 EXIT;
-                return 1;
+                rc = 1;
+                goto out;
         }
 
         if (svc->srv_flags & SVC_EVENT)
                 BUG();
 
         if ( svc->srv_eq_h ) { 
-                int rc;
-                rc = PtlEQGet(svc->srv_eq_h, &svc->srv_ev);
+                int err;
+                err = PtlEQGet(svc->srv_eq_h, &svc->srv_ev);
 
-                if (rc == PTL_OK) { 
+                if (err == PTL_OK) { 
                         svc->srv_flags |= SVC_EVENT;
                         EXIT;
-                        return 1;
+                        rc = 1;
+                        goto out;
                 }
 
-                if (rc != PTL_EQ_EMPTY) {
+                if (err != PTL_EQ_EMPTY) {
                         CDEBUG(D_NET, "BUG: PtlEQGet returned %d\n", rc);
                         BUG();
                 }
 
                 EXIT;
-                return 0;
+                rc = 0;
+                goto out;
         }
 
         if (!list_empty(&svc->srv_reqs)) {
                 svc->srv_flags |= SVC_LIST;
                 EXIT;
-                return 1;
+                rc = 1;
+                goto out;
         }
 
         EXIT;
-        return 0;
+ out:
+        spin_unlock(&svc->srv_lock); 
+        return rc;
 }
 
 struct ptlrpc_service *
@@ -147,13 +159,16 @@ static int ptlrpc_main(void *arg)
         while (1) {
                 wait_event(svc->srv_waitq, ptlrpc_check_event(svc));
                 
+                spin_lock(&svc->srv_lock);
                 if (svc->srv_flags & SVC_SIGNAL) {
                         EXIT;
+                        spin_unlock(&svc->srv_lock);
                         break;
                 }
 
                 if (svc->srv_flags & SVC_STOPPING) {
                         EXIT;
+                        spin_unlock(&svc->srv_lock);
                         break;
                 }
 
@@ -176,9 +191,11 @@ static int ptlrpc_main(void *arg)
                         /* FIXME: this NI should be the incoming NI.
                          * We don't know how to find that from here. */
                         request.rq_peer.peer_ni = svc->srv_self.peer_ni;
+                        svc->srv_flags &= ~SVC_EVENT;
+
+                        spin_unlock(&svc->srv_lock);
                         rc = svc->srv_handler(obddev, svc, &request);
                         ptl_received_rpc(svc);
-                        svc->srv_flags &= ~SVC_EVENT;
                         continue;
                 }
 
@@ -186,7 +203,6 @@ static int ptlrpc_main(void *arg)
                         struct ptlrpc_request *request;
                         svc->srv_flags = SVC_RUNNING; 
 
-                        spin_lock(&svc->srv_lock);
                         request = list_entry(svc->srv_reqs.next,
                                              struct ptlrpc_request,
                                              rq_list);
@@ -196,6 +212,7 @@ static int ptlrpc_main(void *arg)
                         continue;
                 }
                 CERROR("unknown break in service"); 
+                spin_unlock(&svc->srv_lock);
                 break; 
         }
 
@@ -289,6 +306,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
                         CERROR("no memory\n");
                         return -ENOMEM;
                 }
+
 
                 /* Insert additional ME's to the ring */
                 if (i > 0) {

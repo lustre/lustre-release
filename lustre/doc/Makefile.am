@@ -4,7 +4,7 @@
 # See the file COPYING in this distribution
 
 DOCS = OBD-HOWTO.sgml OLVM.txt figs notes.txt obdtrace_demo.txt
-doc_DATA = $(DOCS) OBD-HOWTO.html OBD-HOWTO.txt
+# doc_DATA = $(DOCS) OBD-HOWTO.html OBD-HOWTO.txt
 CLEANFILES = OBD-HOWTO.html OBD-HOWTO.txt
 EXTRA_DIST = $(DOCS)
 

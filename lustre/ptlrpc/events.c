@@ -98,6 +98,7 @@ int server_request_callback(ptl_event_t *ev, void *data)
          *       kmalloc()'ed memory and inserted at the ring tail.
          */
 
+        spin_lock(&service->srv_lock); 
         service->srv_ref_count[service->srv_md_active]++;
 
         CDEBUG(D_INODE, "event offset %d buf size %d\n", 
@@ -111,6 +112,7 @@ int server_request_callback(ptl_event_t *ev, void *data)
                 if (rc != PTL_OK) {
                         CERROR("PtlMEUnlink failed - DROPPING soon: %d\n", rc);
                         BUG();
+                        spin_unlock(&service->srv_lock); 
                         return rc;
                 }
 
@@ -122,6 +124,7 @@ int server_request_callback(ptl_event_t *ev, void *data)
                                service->srv_ring_length);
         }
 
+        spin_unlock(&service->srv_lock); 
         if (ev->type == PTL_EVENT_PUT) {
                 wake_up(&service->srv_waitq);
         } else {

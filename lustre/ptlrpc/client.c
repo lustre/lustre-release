@@ -174,6 +174,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         }
 
         if (sigismember(&(current->pending.signal), SIGKILL) ||
+            sigismember(&(current->pending.signal), SIGSTOP) ||
             sigismember(&(current->pending.signal), SIGINT)) { 
                 req->rq_flags = PTL_RPC_INTR;
                 EXIT;
@@ -267,7 +268,9 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 
         if (req->rq_flags != PTL_RPC_REPLY) { 
                 CERROR("Unknown reason for wakeup\n");
-                BUG();
+                /* XXX Phil - I end up here when I kill obdctl */
+                ptlrpc_abort(req); 
+                //BUG();
                 EXIT;
                 return -EINTR;
         }

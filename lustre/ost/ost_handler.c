@@ -585,6 +585,7 @@ static int ost_handle(struct obd_device *obddev,
 	if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {
 		CERROR("lustre_ost: wrong packet type sent %d\n",
 		       NTOH__u32(hdr->type));
+                BUG();
 		rc = -EINVAL;
 		goto out;
 	}

@@ -14,7 +14,7 @@ add_uuid ost
 quit
 EOF
 
-echo 8191 > /proc/sys/portals/debug
+echo 0xffffffff > /proc/sys/portals/debug
 
 $OBDCTL <<EOF
 device 0
