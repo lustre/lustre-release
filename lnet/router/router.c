@@ -24,6 +24,7 @@
 #include "router.h"
 
 LIST_HEAD(kpr_routes);
+LIST_HEAD(kpr_gateways);
 LIST_HEAD(kpr_nals);
 
 unsigned long long kpr_fwd_bytes;
@@ -144,27 +145,27 @@ kpr_deregister_nal (void *arg)
 }
 
 int
-kpr_re_isbetter (kpr_route_entry_t *re1, kpr_route_entry_t *re2)
+kpr_ge_isbetter (kpr_gateway_entry_t *ge1, kpr_gateway_entry_t *ge2)
 {
         const int significant_bits = 0x0fffffff;
         /* We use atomic_t to record/compare route weights for
          * load-balancing.  Here we limit ourselves to only using
          * 'significant_bits' when we do an 'after' comparison */
 
-        int    diff = (atomic_read (&re1->kpre_weight) -
-                       atomic_read (&re2->kpre_weight)) & significant_bits;
+        int    diff = (atomic_read (&ge1->kpge_weight) -
+                       atomic_read (&ge2->kpge_weight)) & significant_bits;
         int    rc = (diff > (significant_bits >> 1));
 
         CDEBUG(D_NET, "[%p]"LPX64"=%d %s [%p]"LPX64"=%d\n",
-               re1, re1->kpre_gateway_nid, atomic_read (&re1->kpre_weight),
+               ge1, ge1->kpge_nid, atomic_read (&ge1->kpge_weight),
                rc ? ">" : "<",
-               re2, re2->kpre_gateway_nid, atomic_read (&re2->kpre_weight));
+               ge2, ge2->kpge_nid, atomic_read (&ge2->kpge_weight));
 
         return (rc);
 }
 
 void
-kpr_update_weight (kpr_route_entry_t *re, int nob)
+kpr_update_weight (kpr_gateway_entry_t *ge, int nob)
 {
         int weight = 1 + (nob + sizeof (ptl_hdr_t)/2)/sizeof (ptl_hdr_t);
 
@@ -172,22 +173,23 @@ kpr_update_weight (kpr_route_entry_t *re, int nob)
          * of length 'nob'; update the route's weight to make it less
          * favoured.  Note that the weight is 1 plus the payload size
          * rounded and scaled to the portals header size, so we get better
-         * use of the significant bits in kpre_weight. */
+         * use of the significant bits in kpge_weight. */
 
-        CDEBUG(D_NET, "gateway [%p]"LPX64" += %d\n", re,
-               re->kpre_gateway_nid, weight);
+        CDEBUG(D_NET, "gateway [%p]"LPX64" += %d\n", ge,
+               ge->kpge_nid, weight);
         
-        atomic_add (weight, &re->kpre_weight);
+        atomic_add (weight, &ge->kpge_weight);
 }
 
 int
 kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob,
                    ptl_nid_t *gateway_nidp)
 {
-	kpr_nal_entry_t   *ne = (kpr_nal_entry_t *)arg;
-	struct list_head  *e;
-        kpr_route_entry_t *re = NULL;
-	int                rc = -ENOENT;
+	kpr_nal_entry_t     *ne = (kpr_nal_entry_t *)arg;
+	struct list_head    *e;
+        kpr_route_entry_t   *re;
+        kpr_gateway_entry_t *ge = NULL;
+	int                  rc = -ENOENT;
 
         /* Caller wants to know if 'target_nid' can be reached via a gateway
          * ON HER OWN NETWORK */
@@ -203,29 +205,29 @@ kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob,
 	/* Search routes for one that has a gateway to target_nid on the callers network */
 
         list_for_each (e, &kpr_routes) {
-		kpr_route_entry_t *thisre = list_entry (e, kpr_route_entry_t, kpre_list);
+		re = list_entry (e, kpr_route_entry_t, kpre_list);
 
-		if (thisre->kpre_lo_nid > target_nid ||
-                    thisre->kpre_hi_nid < target_nid)
+		if (re->kpre_lo_nid > target_nid ||
+                    re->kpre_hi_nid < target_nid)
 			continue;
 
 		/* found table entry */
 
-		if (thisre->kpre_gateway_nalid != ne->kpne_interface.kprni_nalid ||
-                    !thisre->kpre_gateway_alive) {
+		if (re->kpre_gateway->kpge_nalid != ne->kpne_interface.kprni_nalid ||
+                    !re->kpre_gateway->kpge_alive) {
                         /* different NAL or gateway down */
                         rc = -EHOSTUNREACH;
                         continue;
                 }
                 
-                if (re == NULL ||
-                    kpr_re_isbetter (thisre, re))
-                    re = thisre;
+                if (ge == NULL ||
+                    kpr_ge_isbetter (re->kpre_gateway, ge))
+                    ge = re->kpre_gateway;
 	}
 
-        if (re != NULL) {
-                kpr_update_weight (re, nob);
-                *gateway_nidp = re->kpre_gateway_nid;
+        if (ge != NULL) {
+                kpr_update_weight (ge, nob);
+                *gateway_nidp = ge->kpge_nid;
                 rc = 0;
         }
         
@@ -261,13 +263,14 @@ kpr_find_nal_entry_locked (int nal_id)
 void
 kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
 {
-	kpr_nal_entry_t   *src_ne = (kpr_nal_entry_t *)arg;
-	ptl_nid_t          target_nid = fwd->kprfd_target_nid;
-        kpr_route_entry_t *re = NULL;
-        kpr_nal_entry_t   *dst_ne = NULL;
-        int                nob = fwd->kprfd_nob;
-	struct list_head  *e;
-        kpr_nal_entry_t   *this_dst_ne;
+	kpr_nal_entry_t     *src_ne = (kpr_nal_entry_t *)arg;
+	ptl_nid_t            target_nid = fwd->kprfd_target_nid;
+        int                  nob = fwd->kprfd_nob;
+        kpr_gateway_entry_t *ge = NULL;
+        kpr_nal_entry_t     *dst_ne = NULL;
+	struct list_head    *e;
+        kpr_route_entry_t   *re;
+        kpr_nal_entry_t     *tmp_ne;
 
         CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %d\n", fwd,
                 target_nid, src_ne->kpne_interface.kprni_nalid);
@@ -291,40 +294,39 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
 	/* Search routes for one that has a gateway to target_nid NOT on the caller's network */
 
         list_for_each (e, &kpr_routes) {
-		kpr_route_entry_t *thisre = list_entry (e, kpr_route_entry_t, kpre_list);
+		re = list_entry (e, kpr_route_entry_t, kpre_list);
 
-		if (thisre->kpre_lo_nid > target_nid || /* no match */
-                    thisre->kpre_hi_nid < target_nid)
+		if (re->kpre_lo_nid > target_nid || /* no match */
+                    re->kpre_hi_nid < target_nid)
 			continue;
 
-		if (thisre->kpre_gateway_nalid == src_ne->kpne_interface.kprni_nalid)
+		if (re->kpre_gateway->kpge_nalid == src_ne->kpne_interface.kprni_nalid)
 			continue;               /* don't route to same NAL */
 
-                if (!thisre->kpre_gateway_alive)
+                if (!re->kpre_gateway->kpge_alive)
                         continue;               /* gateway is dead */
                 
-                this_dst_ne = kpr_find_nal_entry_locked (thisre->kpre_gateway_nalid);
+                tmp_ne = kpr_find_nal_entry_locked (re->kpre_gateway->kpge_nalid);
 
-                if (this_dst_ne == NULL ||
-                    this_dst_ne->kpne_shutdown) {
+                if (tmp_ne == NULL ||
+                    tmp_ne->kpne_shutdown) {
                         /* NAL must be registered and not shutting down */
                         continue;
                 }
 
-                if (re == NULL ||
-                    kpr_re_isbetter (thisre, re)) {
-                        re = thisre;
-                        dst_ne = this_dst_ne;
+                if (ge == NULL ||
+                    kpr_ge_isbetter (re->kpre_gateway, ge)) {
+                        ge = re->kpre_gateway;
+                        dst_ne = tmp_ne;
                 }
-                
         }
         
-        if (re != NULL) {
+        if (ge != NULL) {
                 LASSERT (dst_ne != NULL);
                 
-                kpr_update_weight (re, fwd->kprfd_nob);
+                kpr_update_weight (ge, nob);
 
-                fwd->kprfd_gateway_nid = re->kpre_gateway_nid;
+                fwd->kprfd_gateway_nid = ge->kpge_nid;
                 atomic_inc (&dst_ne->kpne_refcount); /* dest nal is busy until fwd completes */
 
                 read_unlock (&kpr_rwlock);
@@ -376,11 +378,12 @@ int
 kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
                ptl_nid_t hi_nid)
 {
-	unsigned long	   flags;
-	struct list_head  *e;
-	kpr_route_entry_t *re;
-        int                dup = 0;
-        
+	unsigned long	     flags;
+	struct list_head    *e;
+	kpr_route_entry_t   *re;
+        kpr_gateway_entry_t *ge;
+        int                  dup = 0;
+
         CDEBUG(D_NET, "Add route: %d "LPX64" : "LPX64" - "LPX64"\n",
                gateway_nalid, gateway_nid, lo_nid, hi_nid);
 
@@ -390,58 +393,66 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
             lo_nid > hi_nid)
                 return (-EINVAL);
 
+        PORTAL_ALLOC (ge, sizeof (*ge));
+        if (ge == NULL)
+                return (-ENOMEM);
+        
+        ge->kpge_nalid = gateway_nalid;
+        ge->kpge_nid   = gateway_nid;
+        ge->kpge_alive = 1;
+        do_gettimeofday (&ge->kpge_timestamp);
+        ge->kpge_refcount = 0;
+        atomic_set (&ge->kpge_weight, 0);
+
         PORTAL_ALLOC (re, sizeof (*re));
         if (re == NULL)
                 return (-ENOMEM);
 
-        re->kpre_gateway_nalid = gateway_nalid;
-        re->kpre_gateway_nid = gateway_nid;
         re->kpre_lo_nid = lo_nid;
         re->kpre_hi_nid = hi_nid;
-        re->kpre_gateway_alive = 1;
-        re->kpre_refcount = 1;
-        atomic_set (&re->kpre_weight, 0);
 
         LASSERT(!in_interrupt());
 	write_lock_irqsave (&kpr_rwlock, flags);
 
-        list_for_each (e, &kpr_routes) {
-                kpr_route_entry_t *re2 = list_entry(e, kpr_route_entry_t,
-                                                    kpre_list);
-
-                if (re2->kpre_gateway_nalid == gateway_nalid &&
-                    re2->kpre_gateway_nid == gateway_nid &&
-                    re2->kpre_lo_nid == lo_nid &&
-                    re2->kpre_hi_nid == hi_nid) {
-                        dup++;
-                        re2->kpre_refcount++;
-                }
+        list_for_each (e, &kpr_gateways) {
+                kpr_gateway_entry_t *ge2 = list_entry(e, kpr_gateway_entry_t,
+                                                      kpge_list);
                 
-                /* NB check for exact duplicate routes and bump the route's
-                 * refcount if we find one.  Also, zero all route weights
-                 * so newly added routes don't have to play 'catch up'.
-                 *
-                 * Note that for gateway loadbalancing to work properly, we
-                 * should really maintain per-gateway weights rather than
-                 * per-route weights.  However until we're sure trying to
-                 * spread the traffic over all the gateways is on the right
-                 * track (rather than random selection say), we'll keep
-                 * things simple... */
-                atomic_set (&re2->kpre_weight, 0);
+                if (ge2->kpge_nalid == gateway_nalid &&
+                    ge2->kpge_nid == gateway_nid) {
+                        PORTAL_FREE (ge, sizeof (*ge));
+                        ge = ge2;
+                        dup = 1;
+                        break;
+                }
         }
 
-        LASSERT (dup == 0 || dup == 1);
-        if (dup)
-                PORTAL_FREE (re, sizeof (*re));
-        else
-                list_add (&re->kpre_list, &kpr_routes);
+        if (!dup) {
+                /* Adding a new gateway... */
+ 
+                list_add (&ge->kpge_list, &kpr_gateways);
+
+                /* ...zero all gateway weights so this one doesn't have to
+                 * play catch-up */
+
+                list_for_each (e, &kpr_gateways) {
+                        kpr_gateway_entry_t *ge2 = list_entry(e, kpr_gateway_entry_t,
+                                                              kpge_list);
+                        atomic_set (&ge2->kpge_weight, 0);
+                }
+                
+        }
+
+        re->kpre_gateway = ge;
+        ge->kpge_refcount++;
+        list_add (&re->kpre_list, &kpr_routes);
 
         write_unlock_irqrestore (&kpr_rwlock, flags);
         return (0);
 }
 
 int
-kpr_set_route (ptl_nid_t gateway_nid, int alive)
+kpr_set_route (ptl_nid_t gateway_nid, int alive, struct timeval when)
 {
 	unsigned long	   flags;
         int                rc = -ENOENT;
@@ -456,21 +467,35 @@ kpr_set_route (ptl_nid_t gateway_nid, int alive)
         /* Serialise with lookups (i.e. write lock) */
 	write_lock_irqsave(&kpr_rwlock, flags);
 
-        list_for_each_safe (e, n, &kpr_routes) {
-                kpr_route_entry_t *re = list_entry(e, kpr_route_entry_t,
-                                                   kpre_list);
-
-                /* Reset weight so newly-enabled routes don't have to play
-                 * catch-up */
-                if (alive)
-                        atomic_set (&re->kpre_weight, 0);
-
-                if (re->kpre_gateway_nid != gateway_nid) 
+        list_for_each_safe (e, n, &kpr_gateways) {
+                kpr_gateway_entry_t *ge = list_entry(e, kpr_gateway_entry_t,
+                                                     kpge_list);
+                if (ge->kpge_nid != gateway_nid) 
                         continue;
 
+                if (when.tv_sec < ge->kpge_timestamp.tv_sec ||
+                    (when.tv_sec == ge->kpge_timestamp.tv_sec &&
+                     when.tv_usec < ge->kpge_timestamp.tv_usec)) {
+                        /* Old information */
+                        write_unlock_irqrestore (&kpr_rwlock, flags);
+                        return (0);
+                }
+
                 rc = 0;
-                re->kpre_gateway_alive = alive;
-                CDEBUG(D_NET, "set "LPX64" [%p] %d\n", gateway_nid, re, alive);
+                ge->kpge_alive = alive;
+                ge->kpge_timestamp = when;
+                CDEBUG(D_NET, "set "LPX64" [%p] %d\n", gateway_nid, ge, alive);
+        }
+
+        if (rc == 0 && alive) {
+                /* Reset all gateway weights so the newly-enabled gateway
+                 * doesn't have to play catch-up */
+                list_for_each_safe (e, n, &kpr_gateways) {
+                        kpr_gateway_entry_t *ge = list_entry(e, kpr_gateway_entry_t,
+                                                             kpge_list);
+
+                        atomic_set (&ge->kpge_weight, 0);
+                }
         }
 
         write_unlock_irqrestore(&kpr_rwlock, flags);
@@ -504,17 +529,19 @@ kpr_del_route (ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi)
                 kpr_route_entry_t *re = list_entry(e, kpr_route_entry_t,
                                                    kpre_list);
 
-                if (re->kpre_gateway_nid != gw ||
+                if (re->kpre_gateway->kpge_nid != gw ||
                     (specific && (lo != re->kpre_lo_nid || hi != re->kpre_hi_nid)))
                         continue;
 
                 rc = 0;
 
-                if (!specific ||                 /* all routes via gw being deleted */
-                    --re->kpre_refcount == 0) {  /* last ref on specific route */
-                        list_del (&re->kpre_list);
-                        PORTAL_FREE(re, sizeof (*re));
+                if (--re->kpre_gateway->kpge_refcount == 0) {
+                        list_del (&re->kpre_gateway->kpge_list);
+                        PORTAL_FREE (re->kpre_gateway, sizeof (*re->kpre_gateway));
                 }
+
+                list_del (&re->kpre_list);
+                PORTAL_FREE(re, sizeof (*re));
 
                 if (specific)
                         break;
@@ -537,11 +564,11 @@ kpr_get_route(int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
                                                    kpre_list);
 
                 if (idx-- == 0) {
-                        *gateway_nalid = re->kpre_gateway_nalid;
-                        *gateway_nid = re->kpre_gateway_nid;
+                        *gateway_nalid = re->kpre_gateway->kpge_nalid;
+                        *gateway_nid = re->kpre_gateway->kpge_nid;
+                        *alive = re->kpre_gateway->kpge_alive;
                         *lo_nid = re->kpre_lo_nid;
                         *hi_nid = re->kpre_hi_nid;
-                        *alive = re->kpre_gateway_alive;
 
                         read_unlock(&kpr_rwlock);
                         return (0);
