@@ -367,6 +367,7 @@ int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
                 rc = ptlrpc_send_bulk(bulk, OSC_BULK_PORTAL);
                 if (rc != 0) {
                         CERROR("send_bulk failed: %d\n", rc);
+                        ptlrpc_free_bulk(bulk);
                         LBUG();
                         return rc;
                 }
@@ -374,12 +375,11 @@ int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
                                          ptlrpc_check_bulk_sent(bulk));
 
                 if (bulk->b_flags == PTL_RPC_INTR) {
-                        EXIT;
-                        /* FIXME: hey hey, we leak here. */
-                        return -EINTR;
+                        ptlrpc_free_bulk(bulk);
+                        RETURN(-EINTR);
                 }
 
-                OBD_FREE(bulk, sizeof(*bulk));
+                ptlrpc_free_bulk(bulk);
         }
 
         return 0;

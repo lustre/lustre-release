@@ -51,8 +51,8 @@ int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
         RETURN(0);
 }
 
-int ptl_send_buf(struct ptlrpc_request *request, struct ptlrpc_connection *conn,
-                 int portal)
+static int ptl_send_buf(struct ptlrpc_request *request,
+                        struct ptlrpc_connection *conn, int portal)
 {
         int rc;
         ptl_process_id_t remote_id;
@@ -295,7 +295,10 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                request->rq_replen, request->rq_reqmsg->xid,
                request->rq_client->cli_request_portal);
 
+        spin_lock(&request->rq_client->cli_ha_mgr->mgr_lock);
         list_add(&request->rq_list, &request->rq_client->cli_sending_head);
+        spin_unlock(&request->rq_client->cli_ha_mgr->mgr_lock);
+
         rc = ptl_send_buf(request, request->rq_connection,
                           request->rq_client->cli_request_portal);
         RETURN(rc);

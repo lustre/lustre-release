@@ -215,8 +215,7 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
  out:
         *request = req;
-        if (bulk != NULL)
-                OBD_FREE(bulk, sizeof(*bulk));
+        ptlrpc_free_bulk(bulk);
         return rc;
 }
 

@@ -87,7 +87,7 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
  cleanup_buf:
         OBD_FREE(buf, PAGE_SIZE);
  cleanup_bulk:
-        OBD_FREE(bulk, sizeof(*bulk));
+        ptlrpc_free_bulk(bulk);
  out:
         return rc;
 }

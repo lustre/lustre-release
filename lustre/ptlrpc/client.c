@@ -73,6 +73,16 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
         return bulk;
 }
 
+void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk)
+{
+        if (bulk == NULL)
+                return;
+
+        ptlrpc_put_connection(bulk->b_connection);
+
+        OBD_FREE(bulk, sizeof(*bulk));
+}
+
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                                        struct ptlrpc_connection *conn,
                                        int opcode, int count, int *lengths,
@@ -103,6 +113,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         request->rq_reqmsg->token = conn->c_remote_token;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->type = HTON__u32(request->rq_type);
+        INIT_LIST_HEAD(&request->rq_list);
 
         spin_lock(&conn->c_lock);
         request->rq_reqmsg->xid = HTON__u32(++conn->c_xid_out);
@@ -121,6 +132,10 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
         if (request->rq_repmsg != NULL)
                 OBD_FREE(request->rq_repmsg, request->rq_replen);
 
+        spin_lock(&request->rq_client->cli_ha_mgr->mgr_lock);
+        list_del(&request->rq_list);
+        spin_unlock(&request->rq_client->cli_ha_mgr->mgr_lock);
+
         ptlrpc_put_connection(request->rq_connection);
 
         OBD_FREE(request, sizeof(*request));
@@ -136,10 +151,10 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 GOTO(out, rc = 1);
         }
 
-        if (CURRENT_TIME - req->rq_time >= 3) { 
-                CERROR("-- REQ TIMEOUT --\n"); 
+        if (CURRENT_TIME - req->rq_time >= 3) {
+                CERROR("-- REQ TIMEOUT --\n");
                 if (req->rq_client && req->rq_client->cli_ha_mgr)
-                        connmgr_cli_fail(req->rq_client); 
+                        connmgr_cli_fail(req->rq_client);
                 return 0;
         }
 

@@ -87,10 +87,12 @@ struct ptlrpc_client {
         __u32 cli_request_portal;
         __u32 cli_reply_portal;
 
-        struct semaphore cli_rpc_sem;
-        struct list_head cli_sending_head;
+        struct semaphore cli_rpc_sem; /* limits outstanding requests */
+
+        struct list_head cli_sending_head; /* lists protected by ha_mgr lock */
         struct list_head cli_sent_head;
         struct list_head cli_ha_item; 
+
         struct connmgr_obd *cli_ha_mgr;
 };
 
@@ -206,8 +208,6 @@ void ptlrpc_cleanup_connection(void);
 /* rpc/niobuf.c */
 int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *);
 int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *, int portal);
-int ptl_send_buf(struct ptlrpc_request *, struct ptlrpc_connection *,
-                 int portal);
 int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);
 int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req);
@@ -223,6 +223,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req);
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                                        struct ptlrpc_connection *u, int opcode,
                                        int count, int *lengths, char **bufs);
+void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *);
 int ptlrpc_check_status(struct ptlrpc_request *req, int err);

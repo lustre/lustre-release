@@ -202,9 +202,9 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct ldlm_handle *lockh,
         struct ldlm_request *body;
         struct ldlm_reply *reply;
         struct ldlm_lock *lock;
-        struct ptlrpc_request *req;
-        int rc, size[2] = {sizeof(*body), lock->l_data_len};
-        char *bufs[2] = {NULL, lock->l_data};
+        struct ptlrpc_request *req = NULL;
+        int rc, size[2] = {sizeof(*body), 0};
+        char *bufs[2] = {NULL, NULL};
         ENTRY;
 
         lock = ldlm_handle2object(lockh);
@@ -212,6 +212,8 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct ldlm_handle *lockh,
         if (is_local_conn(lock->l_connection))
                 GOTO(local, 0);
 
+        size[1] = lock->l_data_len;
+        bufs[1] = lock->l_data;
         req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CONVERT, 2, size,
                               bufs);
         if (!req)
@@ -247,9 +249,9 @@ int ldlm_cli_cancel(struct ptlrpc_client *cl, struct ldlm_handle *lockh,
 {
         struct ldlm_request *body;
         struct ldlm_lock *lock;
-        struct ptlrpc_request *req;
-        int rc, size[2] = {sizeof(*body), lock->l_data_len};
-        char *bufs[2] = {NULL, lock->l_data};
+        struct ptlrpc_request *req = NULL;
+        int rc, size[2] = {sizeof(*body), 0};
+        char *bufs[2] = {NULL, NULL};
         ENTRY;
 
         lock = ldlm_handle2object(lockh);
@@ -257,6 +259,8 @@ int ldlm_cli_cancel(struct ptlrpc_client *cl, struct ldlm_handle *lockh,
         if (is_local_conn(lock->l_connection))
                 GOTO(local, 0);
 
+        size[1] = lock->l_data_len;
+        bufs[1] = lock->l_data;
         req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CANCEL, 2, size,
                               bufs);
         if (!req)

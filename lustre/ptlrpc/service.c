@@ -168,8 +168,17 @@ static int handle_incoming_request(struct obd_device *obddev,
         if (request.rq_reqmsg->conn) {
                 request.rq_connection =
                         (void *)(unsigned long)request.rq_reqmsg->conn;
-                if (request.rq_reqmsg->token != request.rq_connection->c_token)
+                if (request.rq_reqmsg->token !=
+                    request.rq_connection->c_token) {
+                        struct ptlrpc_connection *tmp;
+                        tmp = ptlrpc_get_connection(&peer);
+                        CERROR("rq_reqmsg->conn: %p\n", request.rq_connection);
+                        CERROR("real connection: %p\n", tmp);
+                        CERROR("rq_reqmsg->token: %Lu\n",
+                               request.rq_reqmsg->token);
+                        CERROR("real token      : %Lu\n", tmp->c_token);
                         LBUG();
+                }
                 ptlrpc_connection_addref(request.rq_connection);
         } else {
                 request.rq_connection = ptlrpc_get_connection(&peer);
