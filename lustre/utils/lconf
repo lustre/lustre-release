@@ -2,7 +2,6 @@
 #
 #  Copyright (C) 2002 Cluster File Systems, Inc.
 #   Author: Robert Read <rread@clusterfs.com>
-
 #   This file is part of Lustre, http://www.lustre.org.
 #
 #   Lustre is free software; you can redistribute it and/or
@@ -38,6 +37,12 @@ DEFAULT_TCPBUF = 1048576
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
 MAX_LOOP_DEVICES = 256
+
+first_cleanup_error = 0
+def cleanup_error(rc):
+    global first_cleanup_error
+    if not first_cleanup_error:
+        first_cleanup_error = rc
 
 
 def usage():
@@ -625,11 +630,13 @@ class Module:
             except CommandError, e:
                 log(self.module_name, "disconnect failed: ", self.name)
                 e.dump()
+                cleanup_error(e.rc)
         try:
             lctl.cleanup(self.name, self.uuid)
         except CommandError, e:
             log(self.module_name, "cleanup failed: ", self.name)
             e.dump()
+            cleanup_error(e.rc)
 
     def add_module(self, dev_dir, modname):
         """Append a module to list of modules to load."""
@@ -723,7 +730,7 @@ class Network(Module):
                 lo = get_attr(r, 'lo')
                 hi = get_attr(r,'hi', '')
                 lctl.add_route(net_type, gw, lo, hi)
-                if self.net_type == 'tcp' and hi == '':
+                if net_type == 'tcp' and net_type == self.net_type and hi == '':
                     srv = nid2server(self.dom_node.parentNode.parentNode, lo)
                     if not srv:
                         panic("no server for nid", lo)
@@ -751,22 +758,26 @@ class Network(Module):
                         except CommandError, e:
                             print "disconnect failed: ", self.name
                             e.dump()
+                            cleanup_error(e.rc)
                 try:
                     lctl.del_route(self.net_type, self.nid, lo, hi)
                 except CommandError, e:
                     print "del_route failed: ", self.name
                     e.dump()
+                    cleanup_error(e.rc)
               
         try:
             lctl.cleanup("RPCDEV", "")
         except CommandError, e:
             print "cleanup failed: ", self.name
             e.dump()
+            cleanup_error(e.rc)
         try:
             lctl.disconnectAll(self.net_type)
         except CommandError, e:
             print "disconnectAll failed: ", self.name
             e.dump()
+            cleanup_error(e.rc)
         if self.net_type == 'tcp':
             # yikes, this ugly! need to save pid in /var/something
             run("killall acceptor")
@@ -821,6 +832,8 @@ class LOV(Module):
                 panic('osc not found:', osc_uuid)
         Module.cleanup(self)
         cleanup_mdc(self.dom_node.parentNode, self.mds_uuid)
+
+
     def load_module(self):
         for osc_uuid in self.devlist:
             osc = lookup(self.dom_node.parentNode, osc_uuid)
@@ -831,6 +844,8 @@ class LOV(Module):
             else:
                 panic('osc not found:', osc_uuid)
         Module.load_module(self)
+
+
     def cleanup_module(self):
         Module.cleanup_module(self)
         for osc_uuid in self.devlist:
@@ -995,7 +1010,12 @@ class OSC(Module):
             self.info(self.obd_uuid, self.ost_uuid)
             r =  find_route(srv)
             if r:
-                lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
+                try:
+                    lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
+                except CommandError, e:
+                    print "del_route failed: ", self.name
+                    e.dump()
+                    cleanup_error(e.rc)
             Module.cleanup(self)
             
 
@@ -1421,7 +1441,7 @@ def parse_cmdline(argv):
     short_opts = "hdnv"
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
                  "portals=", "makeldiff", "cleanup", "noexec",
-                 "help", "node=", "get=", "nomod", "nosetup",
+                 "help", "node=", "nomod", "nosetup",
                  "dump="]
     opts = []
     args = []
@@ -1449,8 +1469,6 @@ def parse_cmdline(argv):
             config.reformat(1)
         if o  == "--node":
             config.node(a)
-        if o  == "--get":
-            config.url(a)
         if o  == "--gdb":
             config.gdb(1)
         if o  == "--nomod":
@@ -1566,3 +1584,8 @@ if __name__ == "__main__":
         print e
     except CommandError, e:
         e.dump()
+        sys.exit(e.rc)
+
+    if first_cleanup_error:
+        sys.exit(first_cleanup_error)
+2        
