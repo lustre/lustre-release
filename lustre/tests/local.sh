@@ -2,7 +2,7 @@
 
 config=${1:-local.xml}
 
-LMC=../utils/lmc
+LMC=${LMC-../utils/lmc}
 
 # create nodes
 ${LMC} -o $config --node localhost --net localhost tcp || exit 1
