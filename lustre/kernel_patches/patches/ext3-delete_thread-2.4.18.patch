@@ -9,9 +9,11 @@ long latency while truncating very large files.
  include/linux/ext3_fs_sb.h |   10 +
  4 files changed, 362 insertions(+)
 
---- linux-2.4.18-18.8.0-l15/fs/ext3/super.c~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:21 2003
-+++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/super.c	Wed Jul  2 23:49:40 2003
-@@ -396,6 +396,220 @@ static void dump_orphan_list(struct supe
+Index: linux-2.4.18-chaos/fs/ext3/super.c
+===================================================================
+--- linux-2.4.18-chaos.orig/fs/ext3/super.c	2004-01-13 15:39:03.000000000 +0300
++++ linux-2.4.18-chaos/fs/ext3/super.c	2004-01-13 16:35:05.000000000 +0300
+@@ -398,6 +398,221 @@
  	}
  }
  
@@ -125,7 +127,8 @@ long latency while truncating very large files.
 +
 +	clear_opt(sbi->s_mount_opt, ASYNCDEL);
 +	wake_up(&sbi->s_delete_thread_queue);
-+	wait_event(sbi->s_delete_waiter_queue, list_empty(&sbi->s_delete_list));
++	wait_event(sbi->s_delete_waiter_queue,
++			sbi->s_delete_list.next == 0 && sbi->s_delete_inodes == 0);
 +}
 +
 +/* Instead of playing games with the inode flags, destruction, etc we just
@@ -232,15 +235,16 @@ long latency while truncating very large files.
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -403,6 +617,7 @@ void ext3_put_super (struct super_block 
+@@ -405,6 +620,8 @@
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
-+	ext3_stop_delete_thread(sbi);
++	J_ASSERT(sbi->s_delete_inodes == 0);
++
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -451,7 +666,11 @@ static struct super_operations ext3_sops
+@@ -453,7 +670,11 @@
  	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
  	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
  	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
@@ -251,8 +255,8 @@ long latency while truncating very large files.
 +#endif
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
- 	write_super_lockfs: ext3_write_super_lockfs, /* BKL not held. Take it */
-@@ -511,6 +730,14 @@ static int parse_options (char * options
+ 	sync_fs:	ext3_sync_fs,
+@@ -514,6 +735,14 @@
  	     this_char = strtok (NULL, ",")) {
  		if ((value = strchr (this_char, '=')) != NULL)
  			*value++ = 0;
@@ -267,7 +271,7 @@ long latency while truncating very large files.
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -1206,6 +1433,7 @@ struct super_block * ext3_read_super (st
+@@ -1209,6 +1438,7 @@
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -275,7 +279,21 @@ long latency while truncating very large files.
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
-@@ -1648,6 +1876,9 @@ int ext3_remount (struct super_block * s
+@@ -1585,7 +1815,12 @@
+ static int ext3_sync_fs(struct super_block *sb)
+ {
+ 	tid_t target;
+-	
++
++	if (atomic_read(&sb->s_active) == 0) {
++		/* fs is being umounted: time to stop delete thread */
++		ext3_stop_delete_thread(EXT3_SB(sb));
++	}
++
+ 	sb->s_dirt = 0;
+ 	target = log_start_commit(EXT3_SB(sb)->s_journal, NULL);
+ 	log_wait_commit(EXT3_SB(sb)->s_journal, target);
+@@ -1649,6 +1884,9 @@
  	if (!parse_options(data, &tmp, sbi, &tmp, 1))
  		return -EINVAL;
  
@@ -285,9 +303,11 @@ long latency while truncating very large files.
  	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
  		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
  
---- linux/fs/ext3/file.c.orig	Fri Jan 17 10:57:31 2003
-+++ linux/fs/ext3/file.c	Mon Jun 30 13:28:52 2003
-@@ -121,7 +121,11 @@ struct file_operations ext3_file_operati
+Index: linux-2.4.18-chaos/fs/ext3/file.c
+===================================================================
+--- linux-2.4.18-chaos.orig/fs/ext3/file.c	2003-07-28 17:52:04.000000000 +0400
++++ linux-2.4.18-chaos/fs/ext3/file.c	2004-01-13 16:26:01.000000000 +0300
+@@ -121,7 +121,11 @@
  };
  
  struct inode_operations ext3_file_inode_operations = {
@@ -299,10 +319,12 @@ long latency while truncating very large files.
  	setattr:	ext3_setattr,		/* BKL held */
  };
  
---- linux-2.4.18-18.8.0-l15/fs/ext3/inode.c~ext3-delete_thread-2.4.18	Wed Jul  2 23:13:58 2003
-+++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/inode.c	Wed Jul  2 23:50:29 2003
-@@ -2004,6 +2004,118 @@ out_stop:
- 	ext3_journal_stop(handle, inode);
+Index: linux-2.4.18-chaos/fs/ext3/inode.c
+===================================================================
+--- linux-2.4.18-chaos.orig/fs/ext3/inode.c	2004-01-13 15:39:03.000000000 +0300
++++ linux-2.4.18-chaos/fs/ext3/inode.c	2004-01-13 16:26:01.000000000 +0300
+@@ -2041,6 +2041,118 @@
+ 	return;		/* AKPM: return what? */
  }
  
 +#ifdef EXT3_DELETE_THREAD
@@ -420,9 +442,26 @@ long latency while truncating very large files.
  /* 
   * ext3_get_inode_loc returns with an extra refcount against the
   * inode's underlying buffer_head on success. 
---- linux-2.4.18-18.8.0-l15/include/linux/ext3_fs.h~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:20 2003
-+++ linux-2.4.18-18.8.0-l15-adilger/include/linux/ext3_fs.h	Wed Jul  2 23:19:09 2003
-@@ -190,6 +190,7 @@ struct ext3_group_desc
+Index: linux-2.4.18-chaos/fs/buffer.c
+===================================================================
+--- linux-2.4.18-chaos.orig/fs/buffer.c	2003-07-28 17:52:03.000000000 +0400
++++ linux-2.4.18-chaos/fs/buffer.c	2004-01-13 16:34:43.000000000 +0300
+@@ -352,9 +352,9 @@
+ 	lock_super(sb);
+ 	if (sb->s_dirt && sb->s_op && sb->s_op->write_super)
+ 		sb->s_op->write_super(sb);
++	unlock_super(sb);
+ 	if (sb->s_op && sb->s_op->sync_fs)
+ 		sb->s_op->sync_fs(sb);
+-	unlock_super(sb);
+ 	unlock_kernel();
+ 
+ 	return sync_buffers(dev, 1);
+Index: linux-2.4.18-chaos/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.4.18-chaos.orig/include/linux/ext3_fs.h	2004-01-13 15:39:03.000000000 +0300
++++ linux-2.4.18-chaos/include/linux/ext3_fs.h	2004-01-13 16:26:01.000000000 +0300
+@@ -190,6 +190,7 @@
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
  #define EXT3_STATE_NEW			0x00000002 /* inode is newly created */
@@ -430,7 +469,7 @@ long latency while truncating very large files.
  
  /*
   * ioctl commands
-@@ -317,6 +318,7 @@ struct ext3_inode {
+@@ -317,6 +318,7 @@
  #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_INDEX		0x4000  /* Enable directory index */
@@ -438,7 +477,7 @@ long latency while truncating very large files.
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -651,6 +653,9 @@ extern void ext3_discard_prealloc (struc
+@@ -651,6 +653,9 @@
  extern void ext3_dirty_inode(struct inode *);
  extern int ext3_change_inode_journal_flag(struct inode *, int);
  extern void ext3_truncate (struct inode *);
@@ -448,8 +487,10 @@ long latency while truncating very large files.
  
  /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
---- linux-2.4.18-18.8.0-l15/include/linux/ext3_fs_sb.h~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:21 2003
-+++ linux-2.4.18-18.8.0-l15-adilger/include/linux/ext3_fs_sb.h	Wed Jul  2 23:19:09 2003
+Index: linux-2.4.18-chaos/include/linux/ext3_fs_sb.h
+===================================================================
+--- linux-2.4.18-chaos.orig/include/linux/ext3_fs_sb.h	2004-01-13 15:39:03.000000000 +0300
++++ linux-2.4.18-chaos/include/linux/ext3_fs_sb.h	2004-01-13 16:26:01.000000000 +0300
 @@ -29,6 +29,8 @@
  
  #define EXT3_MAX_GROUP_LOADED	32
@@ -459,7 +500,7 @@ long latency while truncating very large files.
  /*
   * third extended-fs super-block data in memory
   */
-@@ -74,6 +76,14 @@ struct ext3_sb_info {
+@@ -74,6 +76,14 @@
  	struct timer_list turn_ro_timer;	/* For turning read-only (crash simulation) */
  	wait_queue_head_t ro_wait_queue;	/* For people waiting for the fs to go read-only */
  #endif
@@ -474,5 +515,3 @@ long latency while truncating very large files.
  };
  
  #endif	/* _LINUX_EXT3_FS_SB */
-
-_
