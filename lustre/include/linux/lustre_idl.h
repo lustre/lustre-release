@@ -229,7 +229,7 @@ struct lov_mds_md {
         __u32 lmm_stripe_offset;   /* starting stripe offset in lmd_objects */
         __u32 lmm_stripe_count;    /* number of stipes in use for this object */
         __u64 lmm_stripe_size;     /* size of the stripe */
-        __u32 lmm_ost_count;       /* how many OSTs are in this LOV */
+        __u32 lmm_ost_count;       /* how many OST idx are in this LOV md */
         __u32 lmm_stripe_pattern;  /* per-lov object stripe pattern */
         struct lov_object_id lmm_objects[0];
 };
