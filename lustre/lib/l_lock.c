@@ -50,7 +50,7 @@
 
 /* invariants:
  - only the owner of the lock changes l_owner/l_depth
- - before changing or checking the variables a spin lock is taken
+ - if a non-owner changes or checks the variables a spin lock is taken
 */
 
 void l_lock_init(struct lustre_lock *lock)
