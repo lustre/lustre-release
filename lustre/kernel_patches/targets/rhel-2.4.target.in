@@ -1,5 +1,5 @@
 lnxmaj="2.4.21"
-lnxrel="27.EL"
+lnxrel="27.0.2.EL"
 
 KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
 SERIES=rhel-2.4.21
@@ -15,7 +15,7 @@ SMP_ARCHS="i686 x86_64 ia64"
 UP_ARCHS=""
 
 # the modules in this kernel do not build with gcc 3.3 or 2.96
-for cc in gcc33 ; do
+for cc in gcc32 gcc33 ; do
     if which $cc >/dev/null 2>/dev/null ; then
         export CC=$cc
         break
