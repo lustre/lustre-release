@@ -182,7 +182,7 @@ static int sm_mount_cache(struct super_block *sb, char *devstr,
                 sprintf((char *)page + n, ",%s", opts);
         }
         
-        printk("smfs: mounting %s at %s\n", typestr, devstr);
+        printk(KERN_INFO "smfs: mounting %s at %s\n", typestr, devstr);
 
         mnt = do_kern_mount(typestr, 0, devstr, (void *)page);
         free_page(page);
