@@ -49,6 +49,7 @@ kpr_router_interface_t kpr_router_interface = {
 kpr_control_interface_t kpr_control_interface = {
 	kprci_add_route:	kpr_add_route,
 	kprci_del_route:        kpr_del_route,
+	kprci_set_route:        kpr_set_route,
 	kprci_get_route:        kpr_get_route,
 };
 
@@ -59,7 +60,7 @@ kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 	struct list_head  *e;
 	kpr_nal_entry_t   *ne;
 
-        CDEBUG (D_OTHER, "Registering NAL %d\n", nalif->kprni_nalid);
+        CDEBUG (D_NET, "Registering NAL %d\n", nalif->kprni_nalid);
 
 	PORTAL_ALLOC (ne, sizeof (*ne));
 	if (ne == NULL)
@@ -101,7 +102,7 @@ kpr_shutdown_nal (void *arg)
 	unsigned long    flags;
 	kpr_nal_entry_t *ne = (kpr_nal_entry_t *)arg;
 
-        CDEBUG (D_OTHER, "Shutting down NAL %d\n", ne->kpne_interface.kprni_nalid);
+        CDEBUG (D_NET, "Shutting down NAL %d\n", ne->kpne_interface.kprni_nalid);
 
 	LASSERT (!ne->kpne_shutdown);
 	LASSERT (!in_interrupt());
@@ -126,7 +127,7 @@ kpr_deregister_nal (void *arg)
 	unsigned long     flags;
 	kpr_nal_entry_t  *ne = (kpr_nal_entry_t *)arg;
 
-        CDEBUG (D_OTHER, "Deregister NAL %d\n", ne->kpne_interface.kprni_nalid);
+        CDEBUG (D_NET, "Deregister NAL %d\n", ne->kpne_interface.kprni_nalid);
 
 	LASSERT (ne->kpne_shutdown);		/* caller must have issued shutdown already */
 	LASSERT (atomic_read (&ne->kpne_refcount) == 0); /* can't be busy */
@@ -142,15 +143,57 @@ kpr_deregister_nal (void *arg)
         PORTAL_MODULE_UNUSE;
 }
 
+int
+kpr_re_isbetter (kpr_route_entry_t *re1, kpr_route_entry_t *re2)
+{
+        const int significant_bits = 0x0fffffff;
+        /* We use atomic_t to record/compare route weights for
+         * load-balancing.  Here we limit ourselves to only using
+         * 'significant_bits' when we do an 'after' comparison */
+
+        int    diff = (atomic_read (&re1->kpre_weight) -
+                       atomic_read (&re2->kpre_weight)) & significant_bits;
+        int    rc = (diff > (significant_bits >> 1));
+
+        CDEBUG(D_NET, "[%p]"LPX64"=%d %s [%p]"LPX64"=%d\n",
+               re1, re1->kpre_gateway_nid, atomic_read (&re1->kpre_weight),
+               rc ? ">" : "<",
+               re2, re2->kpre_gateway_nid, atomic_read (&re2->kpre_weight));
+
+        return (rc);
+}
+
+void
+kpr_update_weight (kpr_route_entry_t *re, int nob)
+{
+        int weight = 1 + (nob + sizeof (ptl_hdr_t)/2)/sizeof (ptl_hdr_t);
+
+        /* We've chosen this route entry (i.e. gateway) to forward payload
+         * of length 'nob'; update the route's weight to make it less
+         * favoured.  Note that the weight is 1 plus the payload size
+         * rounded and scaled to the portals header size, so we get better
+         * use of the significant bits in kpre_weight. */
+
+        CDEBUG(D_NET, "gateway [%p]"LPX64" += %d\n", re,
+               re->kpre_gateway_nid, weight);
+        
+        atomic_add (weight, &re->kpre_weight);
+}
 
 int
-kpr_lookup_target (void *arg, ptl_nid_t target_nid, ptl_nid_t *gateway_nidp)
+kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob,
+                   ptl_nid_t *gateway_nidp)
 {
-	kpr_nal_entry_t  *ne = (kpr_nal_entry_t *)arg;
-	struct list_head *e;
-	int               rc = -ENOENT;
+	kpr_nal_entry_t   *ne = (kpr_nal_entry_t *)arg;
+	struct list_head  *e;
+        kpr_route_entry_t *re = NULL;
+	int                rc = -ENOENT;
 
-        CDEBUG (D_OTHER, "lookup "LPX64" from NAL %d\n", target_nid, ne->kpne_interface.kprni_nalid);
+        /* Caller wants to know if 'target_nid' can be reached via a gateway
+         * ON HER OWN NETWORK */
+
+        CDEBUG (D_NET, "lookup "LPX64" from NAL %d\n", target_nid, 
+                ne->kpne_interface.kprni_nalid);
 
 	if (ne->kpne_shutdown)		/* caller is shutting down */
 		return (-ENOENT);
@@ -159,43 +202,74 @@ kpr_lookup_target (void *arg, ptl_nid_t target_nid, ptl_nid_t *gateway_nidp)
 
 	/* Search routes for one that has a gateway to target_nid on the callers network */
 
-	for (e = kpr_routes.next; e != &kpr_routes; e = e->next)
-	{
-		kpr_route_entry_t *re = list_entry (e, kpr_route_entry_t, kpre_list);
+        list_for_each (e, &kpr_routes) {
+		kpr_route_entry_t *thisre = list_entry (e, kpr_route_entry_t, kpre_list);
 
-		if (re->kpre_lo_nid > target_nid ||
-                    re->kpre_hi_nid < target_nid)
+		if (thisre->kpre_lo_nid > target_nid ||
+                    thisre->kpre_hi_nid < target_nid)
 			continue;
 
 		/* found table entry */
 
-		if (re->kpre_gateway_nalid != ne->kpne_interface.kprni_nalid) /* different NAL */
-			rc = -EHOSTUNREACH;
-		else
-		{
-			rc = 0;
-			*gateway_nidp = re->kpre_gateway_nid;
-		}
-		break;
+		if (thisre->kpre_gateway_nalid != ne->kpne_interface.kprni_nalid ||
+                    !thisre->kpre_gateway_alive) {
+                        /* different NAL or gateway down */
+                        rc = -EHOSTUNREACH;
+                        continue;
+                }
+                
+                if (re == NULL ||
+                    kpr_re_isbetter (thisre, re))
+                    re = thisre;
 	}
 
+        if (re != NULL) {
+                kpr_update_weight (re, nob);
+                *gateway_nidp = re->kpre_gateway_nid;
+                rc = 0;
+        }
+        
 	read_unlock (&kpr_rwlock);
 
-        CDEBUG (D_OTHER, "lookup "LPX64" from NAL %d: %d ("LPX64")\n",
+        /* NB can't deref 're' now; it might have been removed! */
+
+        CDEBUG (D_NET, "lookup "LPX64" from NAL %d: %d ("LPX64")\n",
                 target_nid, ne->kpne_interface.kprni_nalid, rc,
                 (rc == 0) ? *gateway_nidp : (ptl_nid_t)0);
 	return (rc);
 }
 
+kpr_nal_entry_t *
+kpr_find_nal_entry_locked (int nal_id)
+{
+        struct list_head    *e;
+        
+        /* Called with kpr_rwlock held */
+
+        list_for_each (e, &kpr_nals) {
+                kpr_nal_entry_t *ne = list_entry (e, kpr_nal_entry_t, kpne_list);
+
+                if (nal_id != ne->kpne_interface.kprni_nalid) /* no match */
+                        continue;
+
+                return (ne);
+        }
+        
+        return (NULL);
+}
+
 void
 kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
 {
-	kpr_nal_entry_t  *src_ne = (kpr_nal_entry_t *)arg;
-	ptl_nid_t         target_nid = fwd->kprfd_target_nid;
-        int               nob = fwd->kprfd_nob;
-	struct list_head *e;
+	kpr_nal_entry_t   *src_ne = (kpr_nal_entry_t *)arg;
+	ptl_nid_t          target_nid = fwd->kprfd_target_nid;
+        kpr_route_entry_t *re = NULL;
+        kpr_nal_entry_t   *dst_ne = NULL;
+        int                nob = fwd->kprfd_nob;
+	struct list_head  *e;
+        kpr_nal_entry_t   *this_dst_ne;
 
-        CDEBUG (D_OTHER, "forward [%p] "LPX64" from NAL %d\n", fwd,
+        CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %d\n", fwd,
                 target_nid, src_ne->kpne_interface.kprni_nalid);
 
         LASSERT (nob >= sizeof (ptl_hdr_t)); /* at least got a packet header */
@@ -216,53 +290,58 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
 
 	/* Search routes for one that has a gateway to target_nid NOT on the caller's network */
 
-	for (e = kpr_routes.next; e != &kpr_routes; e = e->next)
-	{
-		kpr_route_entry_t *re = list_entry (e, kpr_route_entry_t, kpre_list);
+        list_for_each (e, &kpr_routes) {
+		kpr_route_entry_t *thisre = list_entry (e, kpr_route_entry_t, kpre_list);
 
-		if (re->kpre_lo_nid > target_nid || /* no match */
-                    re->kpre_hi_nid < target_nid)
+		if (thisre->kpre_lo_nid > target_nid || /* no match */
+                    thisre->kpre_hi_nid < target_nid)
 			continue;
 
-                CDEBUG (D_OTHER, "forward [%p] "LPX64" from NAL %d: match "LPX64" on NAL %d\n", fwd,
-                        target_nid, src_ne->kpne_interface.kprni_nalid,
-                        re->kpre_gateway_nid, re->kpre_gateway_nalid);
+		if (thisre->kpre_gateway_nalid == src_ne->kpne_interface.kprni_nalid)
+			continue;               /* don't route to same NAL */
 
-		if (re->kpre_gateway_nalid == src_ne->kpne_interface.kprni_nalid)
-			break;			/* don't route to same NAL */
+                if (!thisre->kpre_gateway_alive)
+                        continue;               /* gateway is dead */
+                
+                this_dst_ne = kpr_find_nal_entry_locked (thisre->kpre_gateway_nalid);
 
-		/* Search for gateway's NAL's entry */
+                if (this_dst_ne == NULL ||
+                    this_dst_ne->kpne_shutdown) {
+                        /* NAL must be registered and not shutting down */
+                        continue;
+                }
 
-		for (e = kpr_nals.next; e != &kpr_nals; e = e->next)
-		{
-			kpr_nal_entry_t *dst_ne = list_entry (e, kpr_nal_entry_t, kpne_list);
+                if (re == NULL ||
+                    kpr_re_isbetter (thisre, re)) {
+                        re = thisre;
+                        dst_ne = this_dst_ne;
+                }
+                
+        }
+        
+        if (re != NULL) {
+                LASSERT (dst_ne != NULL);
+                
+                kpr_update_weight (re, fwd->kprfd_nob);
 
-			if (re->kpre_gateway_nalid != dst_ne->kpne_interface.kprni_nalid) /* no match */
-				continue;
+                fwd->kprfd_gateway_nid = re->kpre_gateway_nid;
+                atomic_inc (&dst_ne->kpne_refcount); /* dest nal is busy until fwd completes */
 
-			if (dst_ne->kpne_shutdown) /* don't route if NAL is shutting down */
-				break;
+                read_unlock (&kpr_rwlock);
 
-			fwd->kprfd_gateway_nid = re->kpre_gateway_nid;
-			atomic_inc (&dst_ne->kpne_refcount); /* dest nal is busy until fwd completes */
+                CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %d: "
+                        "to "LPX64" on NAL %d\n", 
+                        fwd, target_nid, src_ne->kpne_interface.kprni_nalid,
+                        fwd->kprfd_gateway_nid, dst_ne->kpne_interface.kprni_nalid);
 
-			read_unlock (&kpr_rwlock);
-
-                        CDEBUG (D_OTHER, "forward [%p] "LPX64" from NAL %d: "LPX64" on NAL %d\n", fwd,
-                                target_nid, src_ne->kpne_interface.kprni_nalid,
-                                fwd->kprfd_gateway_nid, dst_ne->kpne_interface.kprni_nalid);
-
-			dst_ne->kpne_interface.kprni_fwd (dst_ne->kpne_interface.kprni_arg, fwd);
-			return;
-		}
-		break;
+                dst_ne->kpne_interface.kprni_fwd (dst_ne->kpne_interface.kprni_arg, fwd);
+                return;
 	}
 
-	read_unlock (&kpr_rwlock);
  out:
         kpr_fwd_errors++;
 
-        CDEBUG (D_OTHER, "Failed to forward [%p] "LPX64" from NAL %d\n", fwd,
+        CDEBUG (D_NET, "Failed to forward [%p] "LPX64" from NAL %d\n", fwd,
                 target_nid, src_ne->kpne_interface.kprni_nalid);
 
 	/* Can't find anywhere to forward to */
@@ -278,14 +357,14 @@ kpr_complete_packet (void *arg, kpr_fwd_desc_t *fwd, int error)
 	kpr_nal_entry_t *dst_ne = (kpr_nal_entry_t *)arg;
 	kpr_nal_entry_t *src_ne = (kpr_nal_entry_t *)fwd->kprfd_router_arg;
 
-        CDEBUG (D_OTHER, "complete(1) [%p] from NAL %d to NAL %d: %d\n", fwd,
+        CDEBUG (D_NET, "complete(1) [%p] from NAL %d to NAL %d: %d\n", fwd,
                 src_ne->kpne_interface.kprni_nalid, dst_ne->kpne_interface.kprni_nalid, error);
 
 	atomic_dec (&dst_ne->kpne_refcount);    /* CAVEAT EMPTOR dst_ne can disappear now!!! */
 
 	(fwd->kprfd_callback)(fwd->kprfd_callback_arg, error);
 
-        CDEBUG (D_OTHER, "complete(2) [%p] from NAL %d: %d\n", fwd,
+        CDEBUG (D_NET, "complete(2) [%p] from NAL %d: %d\n", fwd,
                 src_ne->kpne_interface.kprni_nalid, error);
 
         atomic_dec (&kpr_queue_depth);
@@ -300,7 +379,7 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
 	struct list_head  *e;
 	kpr_route_entry_t *re;
 
-        CDEBUG(D_OTHER, "Add route: %d "LPX64" : "LPX64" - "LPX64"\n",
+        CDEBUG(D_NET, "Add route: %d "LPX64" : "LPX64" - "LPX64"\n",
                gateway_nalid, gateway_nid, lo_nid, hi_nid);
 
         LASSERT(lo_nid <= hi_nid);
@@ -313,27 +392,21 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
         re->kpre_gateway_nid = gateway_nid;
         re->kpre_lo_nid = lo_nid;
         re->kpre_hi_nid = hi_nid;
+        re->kpre_gateway_alive = 1;
+        atomic_set (&re->kpre_weight, 0);
 
         LASSERT(!in_interrupt());
 	write_lock_irqsave (&kpr_rwlock, flags);
 
-        for (e = kpr_routes.next; e != &kpr_routes; e = e->next) {
+        list_for_each (e, &kpr_routes) {
                 kpr_route_entry_t *re2 = list_entry(e, kpr_route_entry_t,
                                                     kpre_list);
 
-                if (re->kpre_lo_nid > re2->kpre_hi_nid ||
-                    re->kpre_hi_nid < re2->kpre_lo_nid)
-                        continue;
-
-                CERROR ("Attempt to add duplicate routes ["LPX64" - "LPX64"]"
-                        "to ["LPX64" - "LPX64"]\n",
-                        re->kpre_lo_nid, re->kpre_hi_nid,
-                        re2->kpre_lo_nid, re2->kpre_hi_nid);
-
-                write_unlock_irqrestore (&kpr_rwlock, flags);
-
-                PORTAL_FREE (re, sizeof (*re));
-                return (-EINVAL);
+                /* NB no check for duplicate routes; we expect them when we
+                 * do gateway load balancing and failover.  However we _do_
+                 * zero all route weights so newly added gateways don't
+                 * have to 'catch up'. */
+                atomic_set (&re2->kpre_weight, 0);
         }
 
         list_add (&re->kpre_list, &kpr_routes);
@@ -343,37 +416,66 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
 }
 
 int
-kpr_del_route (ptl_nid_t nid)
+kpr_set_route (ptl_nid_t gateway_nid, int alive)
 {
 	unsigned long	   flags;
+        int                rc = -ENOENT;
 	struct list_head  *e;
+	struct list_head  *n;
 
-        CDEBUG(D_OTHER, "Del route "LPX64"\n", nid);
+        LASSERT(!in_interrupt());
+
+        /* Serialise with lookups (i.e. write lock) */
+	write_lock_irqsave(&kpr_rwlock, flags);
+
+        list_for_each_safe (e, n, &kpr_routes) {
+                kpr_route_entry_t *re = list_entry(e, kpr_route_entry_t,
+                                                   kpre_list);
+
+                if (re->kpre_gateway_nid != gateway_nid) 
+                        continue;
+
+                rc = 0;
+                re->kpre_gateway_alive = alive;
+                CDEBUG(D_NET, "set "LPX64" [%p] %d\n", gateway_nid, re, alive);
+        }
+
+        write_unlock_irqrestore(&kpr_rwlock, flags);
+        return (rc);
+}
+
+int
+kpr_del_route (ptl_nid_t gateway_nid)
+{
+	unsigned long	   flags;
+        int                rc = -ENOENT;
+	struct list_head  *e;
+	struct list_head  *n;
+
+        CDEBUG(D_NET, "Del route "LPX64"\n", gateway_nid);
 
         LASSERT(!in_interrupt());
 	write_lock_irqsave(&kpr_rwlock, flags);
 
-        for (e = kpr_routes.next; e != &kpr_routes; e = e->next) {
+        list_for_each_safe (e, n, &kpr_routes) {
                 kpr_route_entry_t *re = list_entry(e, kpr_route_entry_t,
                                                    kpre_list);
 
-                if (re->kpre_lo_nid > nid || re->kpre_hi_nid < nid)
+                if (re->kpre_gateway_nid != gateway_nid) 
                         continue;
 
+                rc = 0;
                 list_del (&re->kpre_list);
-                write_unlock_irqrestore(&kpr_rwlock, flags);
-
                 PORTAL_FREE(re, sizeof (*re));
-                return (0);
         }
 
         write_unlock_irqrestore(&kpr_rwlock, flags);
-        return (-ENOENT);
+        return (rc);
 }
 
 int
 kpr_get_route(int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
-              ptl_nid_t *lo_nid, ptl_nid_t *hi_nid)
+              ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive)
 {
 	struct list_head  *e;
 
@@ -388,6 +490,7 @@ kpr_get_route(int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
                         *gateway_nid = re->kpre_gateway_nid;
                         *lo_nid = re->kpre_lo_nid;
                         *hi_nid = re->kpre_hi_nid;
+                        *alive = re->kpre_gateway_alive;
 
                         read_unlock(&kpr_rwlock);
                         return (0);
