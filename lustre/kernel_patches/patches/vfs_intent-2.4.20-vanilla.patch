@@ -1308,7 +1308,7 @@
  	}
  	return error;
 --- linux-2.4.20/include/linux/dcache.h~vfs_intent-2.4.20-vanilla	2002-11-28 16:53:15.000000000 -0700
-+++ linux-2.4.20-braam/include/linux/dcache.h	2003-04-22 13:50:56.000000000 -0600
++++ linux-2.4.20-braam/include/linux/dcache.h	2003-04-22 14:20:23.000000000 -0600
 @@ -7,6 +7,25 @@
  #include <linux/mount.h>
  #include <linux/kernel.h>
