@@ -46,7 +46,9 @@ def usage():
 config.xml          Lustre configuration in xml format.
 -v | --verbose      Print system commands as they are run
 -d | --debug        Print system commands, but does not run them
+--host <hostname>   Load config for <hostname>
 --cleanup	    Cleans up config. (Shutdown)
+-h | --help         Print this help 
 """
     TODO = """
 --ldap server	    LDAP server with lustre config database
@@ -313,9 +315,11 @@ def prepare_ldlm(node):
                 setup ="")
     
 def prepare_lov(node):
-    (name, uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist) = getLOVInfo(node)
+    (name, uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist, mdsname) = getLOVInfo(node)
     print 'LOV:', name, uuid
-    lctl.lovconfig(uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist)
+    lctl.lovconfig(uuid, mdsname, stripe_cnt, strip_sz, pattern, devlist)
+    lctl.newdev(attach="lov %s %s" % (name, uuid),
+                setup ="%s" % (mdcuuid))
 
 def prepare_network(node):
     (name, uuid, type, nid, port) = getNetworkInfo(node)
@@ -486,14 +490,17 @@ def getLOVInfo(node):
     mdcref =  node.getElementsByTagName('mdc_ref')[0]
     mdcuuid = mdcref.getAttribute('uuidref')
     mdc= lookup(node.parentNode, mdcuuid)
-    mdcname = getName(mdc)
+    mdsref =  mdc.getElementsByTagName('mds_ref')[0]
+    mdsuuid = mdsref.getAttribute('uuidref')
+    mds= lookup(node.parentNode, mdsuuid)
+    mdsname = getName(mds)
     devlist = ""
     stripe_cnt = 0
     for child in devs.childNodes:
-        if child.nodeName == 'obd_ref':
+        if child.nodeName == 'osc_ref':
             devlist = devlist +  child.getAttribute('uuidref') + " "
             strip_cnt = stripe_cnt + 1
-    return (name, uuid, mdcname, stripe_cnt, stripe_sz, pattern, devlist)
+    return (name, uuid, mdcuuid, stripe_cnt, stripe_sz, pattern, devlist, mdsname)
     
 # extract device attributes for an obd
 def getMDSInfo(node):
@@ -697,12 +704,14 @@ def cleanupProfile(lustreNode, profileNode):
         stopService(s[1])
 
 
-def doHost(lustreNode, hostname, cleanFlag):
-    node = getByName(lustreNode, 'node', hostname)
-    if not node:
-        node = getByName(lustreNode, 'node', 'localhost')
-        if not node:
-            panic("no node for ", hostname)
+#
+# Load profile for 
+def doHost(lustreNode, hosts, cleanFlag):
+    for h in hosts:
+        node = getByName(lustreNode, 'node', h)
+        if node:
+            break
+        
     reflist = node.getElementsByTagName('profile_ref')
     for r in reflist:
         if cleanFlag:
@@ -717,7 +726,7 @@ def parse_cmdline(argv):
     short_opts = "hdv"
     long_opts = ["ldap", "reformat", "lustre=",
                  "portals=", "makeldiff", "cleanup", "iam=",
-                 "help", "debug"]
+                 "help", "debug", "host="]
     opts = []
     args = []
     global options
@@ -743,6 +752,8 @@ def parse_cmdline(argv):
             options['lustre'] = a
         if o  == "--reformat":
             options['reformat'] = 1
+        if o  == "--host":
+            options['hostname'] = [a]
     return args
 
 #
@@ -763,10 +774,13 @@ def main():
     if not options.has_key('hostname'):
         ret, host = run('hostname')
         if ret:
-            panic("unable to determine hostname")
-        options['hostname'] = host
+            print "unable to determine hostname"
+        else:
+            options['hostname'] = [host]
+        options['hostname'].append('localhost')
     doHost(dom.childNodes[0], options['hostname'], options.has_key('cleanup') )
 
 if __name__ == "__main__":
     main()
+
 

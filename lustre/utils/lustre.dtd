@@ -36,7 +36,7 @@
 <!ATTLIST mdc %tag.attr;>
 <!ELEMENT lov (devices | mdc_ref)*>
 <!ATTLIST lov %tag.attr;>
-<!ELEMENT devices (obd_ref)+>
+<!ELEMENT devices (osc_ref)+>
 <!ATTLIST devices stripesize CDATA #REQUIRED
                   pattern    CDATA #REQUIRED>
 <!ELEMENT router (misc)*>

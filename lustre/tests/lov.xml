@@ -26,14 +26,14 @@
   <lov name="lov1" uuid="lov1-UUID">
     <mdc_ref uuidref="mdc1-UUID"/>
     <devices stripesize="4096" pattern="0">
-      <obd_ref uuidref="obd1-UUID"/>
-      <obd_ref uuidref="obd2-UUID"/>
+      <osc_ref uuidref="osc1-UUID"/>
+      <osc_ref uuidref="osc2-UUID"/>
     </devices>
   </lov>
 
   <mdc name="mdc1" uuid="mdc1-UUID">
     <network_ref name='net' uuidref='net-UUID'/>
-    <mds_ref uuidref="mds-UUID"/>
+    <mds_ref uuidref="mds1-UUID"/>
   </mdc>
 
   <mds name="mds1" uuid="mds1-UUID">
