@@ -69,7 +69,7 @@ static inline int lustre_cfg_packlen(struct lustre_cfg *lcfg)
         len += size_round(lcfg->lcfg_inllen2);
         len += size_round(lcfg->lcfg_inllen3);
         len += size_round(lcfg->lcfg_inllen4);
-        return len;
+        return size_round16(len);
 
 }
 
