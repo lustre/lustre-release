@@ -2,8 +2,8 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Compile with:
- * cc -I../../portals/include -o mkdirdeep mkdirdeep.c 
- *    -L../../portals/linux/utils -lptlctl 
+ * cc -I../../portals/include -o mkdirdeep mkdirdeep.c
+ *    -L../../portals/linux/utils -lptlctl
  */
 
 #include <stdio.h>
@@ -19,7 +19,7 @@
 #include <portals/lltrace.h>
 
 static int opt_depth = 1;
-static int opt_mknod = 0; 
+static int opt_mknod = 0;
 static int opt_verbose = 0;
 static int opt_trace = 1;
 static char* basepathname = 0;
@@ -37,7 +37,7 @@ void usage()
 int do_mkdir(char* path)
 {
         int rc = mkdir(path, 0755);
-        if (rc!=0) 
+        if (rc!=0)
                 fprintf(stderr, "mkdir(%s) failed: %s\n",
                         path, strerror(errno));
         if (opt_verbose)
@@ -49,7 +49,7 @@ int do_mkdir(char* path)
 int do_mknod(char* path)
 {
         int rc = mknod(path, 0755, S_IFIFO);
-        if (rc!=0) 
+        if (rc!=0)
                 fprintf(stderr, "mkdir(%s) failed: %s\n",
                         path, strerror(errno));
         if (opt_verbose)
@@ -60,7 +60,7 @@ int do_mknod(char* path)
 int do_chdir(char* path)
 {
         int rc = chdir(path);
-        if (rc!=0) 
+        if (rc!=0)
                 fprintf(stderr, "chdir(%s) failed: %s\n",
                         path, strerror(errno));
         if (opt_verbose)
@@ -75,14 +75,14 @@ int do_stat(char* path)
         char mark_buf[PATH_MAX];
         struct stat mystat;
         int rc = stat(path, &mystat);
-        if (rc!=0) 
+        if (rc!=0)
                 fprintf(stderr, "stat(%s) failed: %s\n",
                         path, strerror(errno));
         if (opt_verbose)
                 printf("stat %s = inode %lu\n", path, mystat.st_ino);
 
         if (opt_trace) {
-                snprintf(mark_buf, PATH_MAX, "stat %s = inode %lu", 
+                snprintf(mark_buf, PATH_MAX, "stat %s = inode %lu",
                          path, mystat.st_ino);
                 ltrace_mark(0, mark_buf);
         }
@@ -97,10 +97,10 @@ int main(int argc, char** argv)
         static struct option long_options[] = {
                 {"depth", 1, 0, 0 },
                 {"help", 0, 0, 0 },
-                {"mknod", 0, 0, 0 },  
-                {"verbose", 0, 0, 0 },  
-                {"notrace", 0, 0, 0 },  
-                {"output", 1, 0, 0 },  
+                {"mknod", 0, 0, 0 },
+                {"verbose", 0, 0, 0 },
+                {"notrace", 0, 0, 0 },
+                {"output", 1, 0, 0 },
                 {0,0,0,0}
         };
 
@@ -109,7 +109,7 @@ int main(int argc, char** argv)
         char mark_buf[PATH_MAX];
 
         pname = strdup(argv[0]);
-        
+
         while (1) {
                 c = getopt_long(argc, argv, "d:mhv", long_options, &opt_index);
                 if (c == -1)
@@ -122,7 +122,7 @@ int main(int argc, char** argv)
                         c = long_options[opt_index].name[0];
                 }
                 switch (c) {
-                case 'd': 
+                case 'd':
                         opt_depth = atoi(optarg);
                         if ((opt_depth == 0) || (opt_depth > 100))
                                 usage();
@@ -137,15 +137,15 @@ int main(int argc, char** argv)
                         outputfilename = optarg;
                         break;
                 case 'h':
-                case '?': 
-                case ':': 
+                case '?':
+                case ':':
                 default:
                         usage();
                         break;
                 }
         }
-                
-        if (optind != (argc-1)) 
+
+        if (optind != (argc-1))
                 usage();
 
         if (outputfilename == NULL)
@@ -153,10 +153,10 @@ int main(int argc, char** argv)
 
         basepathname = argv[optind];
         mypid = getpid();
-        
+
         printf("%s(pid=%d) depth=%d mknod=%d, basepathname=%s, "
                "trace=%d, outputfilename=%s\n",
-               pname, mypid, opt_depth, opt_mknod, basepathname, opt_trace, 
+               pname, mypid, opt_depth, opt_mknod, basepathname, opt_trace,
                outputfilename);
 
         if (!getcwd(&mycwd[0], sizeof(mycwd))) {
@@ -167,7 +167,7 @@ int main(int argc, char** argv)
         if (opt_trace) {
                 ltrace_start();
                 ltrace_clear();
-                snprintf(mark_buf, PATH_MAX, 
+                snprintf(mark_buf, PATH_MAX,
                          "Initialize - mkdir %s; chdir %s",
                          basepathname, basepathname);
                 ltrace_mark(2, mark_buf);
@@ -181,25 +181,25 @@ int main(int argc, char** argv)
         /* Create directory tree with depth level of subdirectories */
 
         if (opt_trace) {
-                snprintf(mark_buf, PATH_MAX, 
+                snprintf(mark_buf, PATH_MAX,
                          "Create Directory Tree (depth %d)", opt_depth);
                 ltrace_mark(2, mark_buf);
         }
 
         for (i=0; i<opt_depth; i++) {
-                
+
                 snprintf(rel_pathname, sizeof(rel_pathname),"%d", i+1);
-                
+
                  if (i == (opt_depth-1)) {
                          /* Last Iteration */
-                         
+
                          if (opt_trace) {
-                                 snprintf(mark_buf, PATH_MAX, 
+                                 snprintf(mark_buf, PATH_MAX,
                                           "Tree Leaf (%d) %s/stat", i,
                                           (opt_mknod ? "mknod" : "mkdir"));
                                  ltrace_mark(3, mark_buf);
                          }
-                         
+
                          if (opt_mknod)
                                  do_mknod(rel_pathname);
                          else
@@ -211,18 +211,18 @@ int main(int argc, char** argv)
                         /* Not Leaf */
 
                         if (opt_trace) {
-                                snprintf(mark_buf, PATH_MAX, 
+                                snprintf(mark_buf, PATH_MAX,
                                          "Tree Level (%d) mkdir/stat/chdir",
                                          i);
                                 ltrace_mark(3, mark_buf);
                         }
-                        
+
                         do_mkdir(rel_pathname);
                         do_stat(rel_pathname);
                         do_chdir(rel_pathname);
                 }
         }
-        
+
         /* Stat through directory tree with fullpaths */
 
         if (opt_trace) {
@@ -240,7 +240,7 @@ int main(int argc, char** argv)
                 strcat(full_pathname, rel_pathname);
 
                 if (opt_trace) {
-                        snprintf(mark_buf, PATH_MAX, "stat %s", 
+                        snprintf(mark_buf, PATH_MAX, "stat %s",
                                  full_pathname);
                         ltrace_mark(2, mark_buf);
                 }
@@ -261,11 +261,11 @@ int main(int argc, char** argv)
                     ltrace_stop();
         }
 
-        do_chdir(basepathname);        
-        
-        snprintf(full_pathname, sizeof(full_pathname), 
+        do_chdir(basepathname);
+
+        snprintf(full_pathname, sizeof(full_pathname),
                  "rm -rf %s\n", basepathname);
-        if (opt_verbose) 
+        if (opt_verbose)
                 printf("Cleanup: %s", full_pathname);
 
         system(full_pathname);
