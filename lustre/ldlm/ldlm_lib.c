@@ -352,8 +352,6 @@ out:
 
 int target_handle_disconnect(struct ptlrpc_request *req)
 {
-        struct obd_export *export;
-        struct obd_import *dlmimp;
         int rc;
         ENTRY;
 
@@ -361,17 +359,17 @@ int target_handle_disconnect(struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        /* Create an export reference to disconnect, so the rq_export
-         * ref is not destroyed. See class_disconnect() for more info. */
-        export = class_export_get(req->rq_export);
-        req->rq_status = obd_disconnect(export, 0);
-
-        dlmimp = req->rq_export->exp_ldlm_data.led_import;
-        class_destroy_import(dlmimp);
-
-        class_export_put(req->rq_export);
+        req->rq_status = obd_disconnect(req->rq_export, 0);
         req->rq_export = NULL;
         RETURN(0);
+}
+
+void target_destroy_export(struct obd_export *exp)
+{
+        /* exports created from last_rcvd data, and "fake"
+           exports created by lctl don't have an import */
+        if (exp->exp_ldlm_data.led_import != NULL)
+                class_destroy_import(exp->exp_ldlm_data.led_import);
 }
 
 /*
