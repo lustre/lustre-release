@@ -20,6 +20,7 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
+#include <linux/obd_support.h>
 #include <linux/obd.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lib.h>
@@ -60,15 +61,20 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
 
 void pop_ctxt(struct obd_run_ctxt *saved)
 {
+        //printk("pc0");
         ASSERT_CTXT_MAGIC(saved->magic);
+        //printk("pc1");
         ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
+        //printk("pc2");
         set_fs(saved->fs);
-        LASSERT(saved->pwd);
-        LASSERT(saved->pwdmnt);
+        //printk("pc3\n");
         set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
+        //printk("pc4");
 
         dput(saved->pwd);
+        //printk("pc5");
         mntput(saved->pwdmnt);
+        //printk("pc6\n");
 }
 
 /* utility to make a directory */
