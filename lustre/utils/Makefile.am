@@ -24,7 +24,7 @@ lfs_LDADD := $(LIBREADLINE) parser.o liblustreapi.a -lptlctl obd.o
 lload_LDADD := $(LIBREADLINE) -lptlctl
 liblustreapi_a_SOURCES = liblustreapi.c
 wirecheck_SOURCES = wirecheck.c
-wirecheck_CPPFLAGS = -DCC=\"$(CC)\"
+wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
 wiretest_SOURCES = wiretest.c
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h
 lload_SOURCES = lload.c 
