@@ -477,7 +477,7 @@ static int llu_file_release(struct inode *inode)
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_mode = S_IFREG;
                 oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLID;
-                
+
                 memcpy(&oa.o_inline, &fd->fd_ost_och, FD_OSTDATA_SIZE);
                 oa.o_valid |= OBD_MD_FLHANDLE;
 

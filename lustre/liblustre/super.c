@@ -765,9 +765,9 @@ out_inode:
 out_request:
         ptlrpc_req_finished(request);
 out_osc:
-        obd_disconnect(&sbi->ll_osc_conn);
+        obd_disconnect(&sbi->ll_osc_conn, 0);
 out_mdc:
-        obd_disconnect(&sbi->ll_mdc_conn);
+        obd_disconnect(&sbi->ll_mdc_conn, 0);
 out_free:
         OBD_FREE(sbi, sizeof(*sbi));
         return err;

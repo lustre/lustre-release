@@ -33,19 +33,22 @@ struct ptlrpc_request_set;
 /* ldlm hooks that we need, managed via inter_module_{get,put} */
 extern int (*ptlrpc_ldlm_namespace_cleanup)(struct ldlm_namespace *, int);
 extern int (*ptlrpc_ldlm_cli_cancel_unused)(struct ldlm_namespace *,
-                                     struct ldlm_res_id *, int);
+                                            struct ldlm_res_id *, int);
 extern int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
 
 int ptlrpc_get_ldlm_hooks(void);
 void ptlrpc_daemonize(void);
 
 void ptlrpc_request_handle_eviction(struct ptlrpc_request *);
-void lustre_assert_wire_constants (void);
+void lustre_assert_wire_constants(void);
 
 void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                                      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
 
+/* recovd_thread.c */
+int llog_init_commit_master(void);
+int llog_cleanup_commit_master(void);
 
 static inline int opcode_offset(__u32 opc) {
         if (opc < OST_LAST_OPC) {
@@ -66,9 +69,9 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc == OBD_PING) {
+        } else if (opc < OBD_LAST_OPC) {
                 /* OBD Ping */
-                return (opc - OBD_PING +
+                return (opc - OBD_FIRST_OPC +
                         (PTLBD_LAST_OPC - PTLBD_FIRST_OPC) +
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
@@ -79,10 +82,11 @@ static inline int opcode_offset(__u32 opc) {
         }
 }
 
-#define LUSTRE_MAX_OPCODES (1 + (PTLBD_LAST_OPC - PTLBD_FIRST_OPC) \
-                              + (LDLM_LAST_OPC - LDLM_FIRST_OPC)   \
-                              + (MDS_LAST_OPC - MDS_FIRST_OPC)     \
-                              + (OST_LAST_OPC - OST_FIRST_OPC))
+#define LUSTRE_MAX_OPCODES ((PTLBD_LAST_OPC - PTLBD_FIRST_OPC) + \
+                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+                            (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
+                            (OST_LAST_OPC - OST_FIRST_OPC)     + \
+                            (OBD_LAST_OPC - OBD_FIRST_OPC))
 
 enum {
         PTLRPC_REQWAIT_CNTR     = 0,

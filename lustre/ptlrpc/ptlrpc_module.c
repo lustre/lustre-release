@@ -100,13 +100,14 @@ __init int ptlrpc_init(void)
         int rc;
         ENTRY;
 
-        lustre_assert_wire_constants ();
-        
+        lustre_assert_wire_constants();
+
         rc = ptlrpc_init_portals();
         if (rc)
                 RETURN(rc);
 
         ptlrpc_init_connection();
+        llog_init_commit_master();
 
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
         ptlrpc_abort_inflight_superhack = ptlrpc_abort_inflight;
@@ -117,6 +118,7 @@ static void __exit ptlrpc_exit(void)
 {
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
+        llog_cleanup_commit_master();
 }
 
 /* connection.c */
