@@ -12,9 +12,6 @@
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
-typedef int cluster_host;
-typedef int cluster_pid;
-
 typedef enum {
         ELDLM_OK = 0,
 
@@ -76,12 +73,12 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
 */
 
 struct ldlm_namespace {
-        struct ptlrpc_client  ns_client;
-        __u32                 ns_local;     /* is this a local lock tree? */
-        struct list_head     *ns_hash;      /* hash table for ns */
-        __u32                 ns_refcount;  /* count of resources in the hash */
-        struct list_head      ns_root_list; /* all root resources in ns */
-        spinlock_t            ns_lock;      /* protects hash, refcount, list */
+        struct ptlrpc_client ns_client; /* used for revocation callbacks */
+        __u32                 ns_local; /* is this a local lock tree? */
+        struct list_head     *ns_hash; /* hash table for ns */
+        __u32                 ns_refcount; /* count of resources in the hash */
+        struct list_head     ns_root_list; /* all root resources in ns */
+        spinlock_t            ns_lock; /* protects hash, refcount, list */
 };
 
 /* 
@@ -121,8 +118,6 @@ struct ldlm_lock {
         void                 *l_cookie;
         int                   l_cookie_len;
         struct ldlm_extent    l_extent;
-        //void                 *l_event;
-        //XXX cluster_host    l_holder;
         __u32                 l_version[RES_VERSION_SIZE];
 
         __u32                 l_readers;
@@ -162,7 +157,6 @@ struct ldlm_resource {
         ldlm_mode_t            lr_most_restr;
         __u32                  lr_type; /* PLAIN, EXTENT, or MDSINTENT */
         struct ldlm_resource  *lr_root;
-        //XXX cluster_host          lr_master;
         __u64                  lr_name[RES_NAME_SIZE];
         __u32                  lr_version[RES_VERSION_SIZE];
         __u32                  lr_refcount;
@@ -225,6 +219,8 @@ int ldlm_test(struct obd_device *device, struct ptlrpc_connection *conn);
 /* resource.c */
 struct ldlm_namespace *ldlm_namespace_new(__u32 local);
 int ldlm_namespace_free(struct ldlm_namespace *ns);
+
+/* resourc.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u64 *name, __u32 type, int create);
@@ -236,7 +232,8 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
 void ldlm_resource_dump(struct ldlm_resource *res);
 
 /* ldlm_request.c */
-int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *peer,
+int ldlm_cli_enqueue(struct ptlrpc_client *cl, 
+                     struct ptlrpc_connection *peer,
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
                      struct ldlm_handle *parent_lock_handle,

@@ -107,6 +107,13 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
                    inode->i_mode & S_IFMT);
 }
 
+/* namei.c */
+int ll_lock(struct inode *dir, struct dentry *dentry,
+            struct lookup_intent *it, struct ldlm_handle *lockh);
+int ll_unlock(__u32 mode, struct ldlm_handle *lockh);
+
+
+
 /* dir.c */
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
