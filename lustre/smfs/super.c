@@ -45,21 +45,6 @@ static char *smfs_options(char *options, char **devstr, char **namestr)
 	}
 	return pos;
 }
-static int get_fd(struct file *filp)
-{
-	struct files_struct *files = current->files;	
-	int fd = 0;
-	
-	write_lock(&files->file_lock);
-	for (fd = 0; fd < files->max_fds; fd++) {
-		if(files->fd[fd] == filp) {
-			write_unlock(&files->file_lock);
-			return fd;	
-		}	
-	}
-	write_unlock(&files->file_lock);
-	RETURN(-1);
-}
 static int close_fd(int fd)
 {
 	struct files_struct *files = current->files;	
@@ -72,65 +57,137 @@ static int close_fd(int fd)
 	write_unlock(&files->file_lock);
 	return 0;
 }
+static int set_loop_fd(char *dev_path, char *loop_dev)
+{
+        struct loop_info loopinfo;
+	struct nameidata nd;
+	struct dentry *dentry;
+	struct block_device_operations *bd_ops;
+	struct file   *filp;
+	int    fd = 0, error = 0;
+	
+	fd = get_unused_fd();
+
+	if (!fd) RETURN(-EINVAL);
+	
+	filp = filp_open(dev_path, 0, 0);
+	if (!filp || !S_ISREG(filp->f_dentry->d_inode->i_mode)) 
+		RETURN(-EINVAL);
+	
+	fd_install(fd, filp);		
+
+	if (path_init(loop_dev, LOOKUP_FOLLOW, &nd)) {
+       		error = path_walk(loop_dev, &nd);
+       		if (error) {
+			path_release(&nd);
+			filp_close(filp, current->files); 
+			RETURN(-EINVAL);
+		}
+       	} else {
+		path_release(&nd);
+		filp_close(filp, current->files); 
+		RETURN(-EINVAL);
+	}                                                                                                                                                                    
+	dentry = nd.dentry;
+	bd_ops = get_blkfops(LOOP_MAJOR); 
+	
+	error = bd_ops->ioctl(dentry->d_inode, filp, LOOP_SET_FD,
+                              (unsigned long)fd);
+	if (error) {
+		path_release(&nd);
+		filp_close(filp, current->files); 
+		RETURN(-EINVAL);
+	}
+	memset(&loopinfo, 0, sizeof(struct loop_info));
+
+	error = bd_ops->ioctl(dentry->d_inode, filp, LOOP_SET_STATUS,
+                              (unsigned long)(&loopinfo));
+	path_release(&nd);
+	RETURN(error);	
+}
+
+#define SIZE(a) (sizeof(a)/sizeof(a[0]))
+static char *find_unused_and_set_loop_device(char *dev_path)
+{
+        char *loop_formats[] = { "/dev/loop%d", "/dev/loop/%d" };
+        struct loop_info loopinfo;
+	struct nameidata nd;
+	struct dentry *dentry;
+      	char *dev = NULL;
+        int i, j, error;
+                                                                                                                                                                                             
+        for (j = 0; j < SIZE(loop_formats); j++) {
+		SM_ALLOC(dev, strlen(loop_formats[i]) + 1);
+		for(i = 0; i < 256; i++) {
+			struct block_device_operations *bd_ops;
+
+			sprintf(dev, loop_formats[j], i);
+                       	
+			if (path_init(dev, LOOKUP_FOLLOW, &nd)) {
+                		error = path_walk(dev, &nd);
+                		if (error) {
+					path_release(&nd);
+                        		SM_FREE(dev, strlen(loop_formats[i]) + 1); 
+					RETURN(NULL);
+				}
+        		} else {
+                       		SM_FREE(dev, strlen(loop_formats[i]) + 1); 
+                		RETURN(NULL);
+                        }      
+			dentry = nd.dentry;
+			bd_ops = get_blkfops(LOOP_MAJOR); 
+			error = bd_ops->ioctl(dentry->d_inode, NULL, LOOP_GET_STATUS, 
+					      (unsigned long)&loopinfo);
+			path_release(&nd);
+                        
+			if (error == ENXIO) {
+				/*find unused loop and set dev_path to loopdev*/
+				error = set_loop_fd(dev_path, dev);
+				if (error) {
+					SM_FREE(dev, strlen(loop_formats[i]) + 1);
+					dev = NULL;		
+				}
+				return dev;/* probably free */
+			}
+        	}
+        	SM_FREE(dev, strlen(loop_formats[i]) + 1);
+	}
+	RETURN(NULL);
+}
 
 #define MAX_LOOP_DEVICES	256
 static char *parse_path2dev(struct super_block *sb, char *dev_path)
 {
-	struct file   *filp;
-	int i = 0, fd = 0, error = 0;
+	struct dentry *dentry;
+	struct nameidata nd;
 	char *name = NULL;
-		
-	filp = filp_open(dev_path, 0, 0);
-	if (!filp) 
-		RETURN(NULL);
-	if (S_ISREG(filp->f_dentry->d_inode->i_mode)) {
-		/*here we must walk through all the snap cache to 
-		 *find the loop device */
-		
-		fd = get_unused_fd();
-		if (!fd) RETURN(NULL);
+	int  error = 0;
 
-		fd_install(fd, filp);		
-		SM_ALLOC(name, strlen("/dev/loop/") + 2);
-	
-		for (i = 0; i < MAX_LOOP_DEVICES; i++) {
-			fd = get_fd(filp);
-			if (fd > 0) {
-				struct block_device_operations *bd_ops;
-				struct dentry *dentry;
-				struct nameidata nd;
-                                /*FIXME later, the loop file should 
-			         *be different for different system*/
-                                                                                                                                                             
-				sprintf(name, "/dev/loop/%d", i);
-        		
-				if (path_init(name, LOOKUP_FOLLOW, &nd)) {
-                			error = path_walk(name, &nd);
-                			if (error) {
-						path_release(&nd);
-                        			SM_FREE(name, sizeof(name) + 1); 
-						RETURN(NULL);
-					}
-        			} else {
-                        		SM_FREE(name, sizeof(name) + 1); 
-                			RETURN(NULL);
-                                }                                                                                                                                                                    
-				dentry = nd.dentry;
-				bd_ops = get_blkfops(LOOP_MAJOR); 
-				error = bd_ops->ioctl(dentry->d_inode, 
-						      filp, LOOP_SET_FD,
-                                                      (unsigned long)fd);
-				path_release(&nd);
-				if (!error) {
-					filp_close(filp, current->files); 
-					RETURN(name);	 				
-				}
-			}
+	if (path_init(name, LOOKUP_FOLLOW, &nd)) {
+     		error = path_walk(name, &nd);
+     		if (error) {
+			path_release(&nd);
+			RETURN(NULL);
 		}
+       	} else {
+               	RETURN(NULL);
+	}      
+	dentry = nd.dentry;
+
+	if (!dentry->d_inode || is_bad_inode(dentry->d_inode) || 
+	    (!S_ISBLK(dentry->d_inode->i_mode) && 
+             !S_ISREG(dentry->d_inode->i_mode))){
+		path_release(&nd);
+		RETURN(NULL);
+	}
+		
+	if (S_ISREG(dentry->d_inode->i_mode)) {
+		name = find_unused_and_set_loop_device(dev_path);
+		path_release(&nd);
+		RETURN(name); 			
 	}
 	SM_ALLOC(name, strlen(dev_path) + 1);
 	memcpy(name, dev_path, strlen(dev_path) + 1);
-	filp_close(filp, current->files); 
 	RETURN(name);
 }
 extern struct super_operations smfs_super_ops;
