@@ -36,9 +36,10 @@
 
 static int ptlbd_sv_already_setup = 1;
 
-static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
+static int ptlbd_sv_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
+        struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
+        struct lprocfs_static_vars lvars;
         int rc;
         ENTRY;
 
@@ -52,16 +53,19 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
                 ptlrpc_init_svc(PTLBD_NBUFS, PTLBD_BUFSIZE, PTLBD_MAXREQSIZE,
                                 PTLBD_REQUEST_PORTAL, PTLBD_REPLY_PORTAL,
                                 ptlbd_handle, "ptlbd_sv",
-                                obddev->obd_proc_entry);
+                                obd->obd_proc_entry);
 
-        if (ptlbd->ptlbd_service == NULL) 
+        if (ptlbd->ptlbd_service == NULL)
                 GOTO(out_filp, rc = -ENOMEM);
 
-        rc = ptlrpc_start_n_threads(obddev, ptlbd->ptlbd_service, 1, "ptldb");
-        if (rc != 0) 
+        rc = ptlrpc_start_n_threads(obd, ptlbd->ptlbd_service, 1, "ptldb");
+        if (rc != 0)
                 GOTO(out_thread, rc);
 
         ptlbd_sv_already_setup = 1;
+
+        lprocfs_init_vars(ptlbd_sv, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
 
         RETURN(0);
 
@@ -73,12 +77,14 @@ out_filp:
         RETURN(rc);
 }
 
-static int ptlbd_sv_cleanup(struct obd_device *obddev, int flags)
+static int ptlbd_sv_cleanup(struct obd_device *obd, int flags)
 {
-        struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
+        struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
         ENTRY;
 
         /* XXX check for state */
+
+        lprocfs_obd_cleanup(obd);
 
         ptlrpc_stop_all_threads(ptlbd->ptlbd_service);
         ptlrpc_unregister_service(ptlbd->ptlbd_service);

@@ -602,6 +602,7 @@ static int llite_dump_pgcache_seq_release(struct inode *inode,
 }
 
 struct file_operations llite_dump_pgcache_fops = {
+        .owner   = THIS_MODULE,
         .open    = llite_dump_pgcache_seq_open,
         .read    = seq_read,
         .release = llite_dump_pgcache_seq_release,

@@ -1118,9 +1118,10 @@ out:
         return 0;
 }
 
-static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
+static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct ost_obd *ost = &obddev->u.ost;
+        struct ost_obd *ost = &obd->u.ost;
+        struct lprocfs_static_vars lvars;
         int rc;
         ENTRY;
 
@@ -1132,18 +1133,18 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc < 0)
                 RETURN(rc);
 
-        ost->ost_service = 
+        ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
                                 ost_handle, "ost",
-                                obddev->obd_proc_entry);
+                                obd->obd_proc_entry);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
                 RETURN(-ENOMEM);
         }
-        
-        rc = ptlrpc_start_n_threads(obddev, ost->ost_service, OST_NUM_THREADS, 
-                                 "ll_ost");
+
+        rc = ptlrpc_start_n_threads(obd, ost->ost_service, OST_NUM_THREADS,
+                                    "ll_ost");
         if (rc)
                 GOTO(out, rc = -EINVAL);
 
@@ -1151,16 +1152,19 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_CREATE_PORTAL, OSC_REPLY_PORTAL,
                                 ost_handle, "ost_create",
-                                obddev->obd_proc_entry);
+                                obd->obd_proc_entry);
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
                 GOTO(out, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obddev, ost->ost_create_service, 1,
+        rc = ptlrpc_start_n_threads(obd, ost->ost_create_service, 1,
                                     "ll_ost_create");
-        if (rc) 
+        if (rc)
                 GOTO(out_create, rc = -EINVAL);
+
+        lprocfs_init_vars(ost, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
 
         RETURN(0);
 
@@ -1171,18 +1175,20 @@ out:
         RETURN(rc);
 }
 
-static int ost_cleanup(struct obd_device *obddev, int flags)
+static int ost_cleanup(struct obd_device *obd, int flags)
 {
-        struct ost_obd *ost = &obddev->u.ost;
+        struct ost_obd *ost = &obd->u.ost;
         int err = 0;
         ENTRY;
 
-        spin_lock_bh(&obddev->obd_processing_task_lock);
-        if (obddev->obd_recovering) {
-                target_cancel_recovery_timer(obddev);
-                obddev->obd_recovering = 0;
+        lprocfs_obd_cleanup(obd);
+
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        if (obd->obd_recovering) {
+                target_cancel_recovery_timer(obd);
+                obd->obd_recovering = 0;
         }
-        spin_unlock_bh(&obddev->obd_processing_task_lock);
+        spin_unlock_bh(&obd->obd_processing_task_lock);
 
         ptlrpc_stop_all_threads(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_service);
@@ -1193,24 +1199,9 @@ static int ost_cleanup(struct obd_device *obddev, int flags)
         RETURN(err);
 }
 
-int ost_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-
-        lprocfs_init_vars(ost,&lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
-}
-
-int ost_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
-}
-
 /* use obd ops to offer management infrastructure */
 static struct obd_ops ost_obd_ops = {
         o_owner:        THIS_MODULE,
-        o_attach:       ost_attach,
-        o_detach:       ost_detach,
         o_setup:        ost_setup,
         o_cleanup:      ost_cleanup,
 };

@@ -114,35 +114,6 @@ static void lov_llh_destroy(struct lov_lock_handles *llh)
 }
 
 /* obd methods */
-int lov_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-        int rc;
-
-        lprocfs_init_vars(lov, &lvars);
-        rc = lprocfs_obd_attach(dev, lvars.obd_vars);
-        if (rc == 0) {
-#ifdef __KERNEL__
-                struct proc_dir_entry *entry;
-
-                entry = create_proc_entry("target_obd", 0444, 
-                                          dev->obd_proc_entry);
-                if (entry == NULL) {
-                        rc = -ENOMEM;
-                } else {
-                        entry->proc_fops = &lov_proc_target_fops;
-                        entry->data = dev;
-                }
-#endif
-        }
-        return rc;
-}
-
-int lov_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
-}
-
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid)
 {
@@ -390,6 +361,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 
 static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct lprocfs_static_vars lvars;
         struct lustre_cfg *lcfg = buf;
         struct lov_desc *desc;
         struct lov_obd *lov = &obd->u.lov;
@@ -397,7 +369,6 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lov_tgt_desc *tgts;
         int i;
         int count;
-        int rc = 0;
         ENTRY;
 
         if (lcfg->lcfg_inllen1 < 1) {
@@ -456,15 +427,31 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 *uuid = uuids[i];
         }
 
+        lprocfs_init_vars(lov, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
+#ifdef __KERNEL__
+        {
+                struct proc_dir_entry *entry;
 
-        RETURN(rc);
+                entry = create_proc_entry("target_obd", 0444,
+                                          obd->obd_proc_entry);
+                if (entry != NULL) {
+                        entry->proc_fops = &lov_proc_target_fops;
+                        entry->data = obd;
+                }
+        }
+#endif
+
+        RETURN(0);
 }
 
-static int lov_cleanup(struct obd_device *obd, int flags) 
+static int lov_cleanup(struct obd_device *obd, int flags)
 {
         struct lov_obd *lov = &obd->u.lov;
 
+        lprocfs_obd_cleanup(obd);
         OBD_FREE(lov->tgts, lov->bufsize);
+
         RETURN(0);
 }
 
@@ -2837,8 +2824,6 @@ EXPORT_SYMBOL(lov_increase_kms);
 
 struct obd_ops lov_obd_ops = {
         o_owner:       THIS_MODULE,
-        o_attach:      lov_attach,
-        o_detach:      lov_detach,
         o_setup:       lov_setup,
         o_cleanup:     lov_cleanup,
         o_connect:     lov_connect,

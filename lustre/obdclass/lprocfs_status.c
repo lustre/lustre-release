@@ -315,20 +315,13 @@ int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int lprocfs_rd_filegroups(char *page, char **start, off_t off, int count,
-                          int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "unimplemented\n");
-}
-
 int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         struct obd_import *imp;
         char *imp_state_name = NULL;
-        
+
         LASSERT(obd != NULL);
         imp = obd->u.cli.cl_import;
         imp_state_name = ptlrpc_import_state_name(imp->imp_state);
@@ -350,6 +343,16 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", conn->c_remote_uuid.uuid);
 }
 
+int lprocfs_rd_num_exports(char *page, char **start, off_t off, int count,
+                           int *eof,  void *data)
+{
+        struct obd_device *obd = (struct obd_device*)data;
+
+        LASSERT(obd != NULL);
+        *eof = 1;
+        return snprintf(page, count, "%u\n", obd->obd_num_exports);
+}
+
 int lprocfs_rd_numrefs(char *page, char **start, off_t off, int count,
                        int *eof, void *data)
 {
@@ -360,29 +363,30 @@ int lprocfs_rd_numrefs(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%d\n", class->typ_refcnt);
 }
 
-int lprocfs_obd_attach(struct obd_device *dev, struct lprocfs_vars *list)
+int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list)
 {
         int rc = 0;
 
-        LASSERT(dev != NULL);
-        LASSERT(dev->obd_type != NULL);
-        LASSERT(dev->obd_type->typ_procroot != NULL);
+        LASSERT(obd != NULL);
+        LASSERT(obd->obd_type != NULL);
+        LASSERT(obd->obd_type->typ_procroot != NULL);
 
-        dev->obd_proc_entry = lprocfs_register(dev->obd_name,
-                                               dev->obd_type->typ_procroot,
-                                               list, dev);
-        if (IS_ERR(dev->obd_proc_entry)) {
-                rc = PTR_ERR(dev->obd_proc_entry);
-                dev->obd_proc_entry = NULL;
+        obd->obd_proc_entry = lprocfs_register(obd->obd_name,
+                                               obd->obd_type->typ_procroot,
+                                               list, obd);
+        if (IS_ERR(obd->obd_proc_entry)) {
+                rc = PTR_ERR(obd->obd_proc_entry);
+                CERROR("error %d setting up lprocfs for %s\n",rc,obd->obd_name);
+                obd->obd_proc_entry = NULL;
         }
         return rc;
 }
 
-int lprocfs_obd_detach(struct obd_device *dev)
+int lprocfs_obd_cleanup(struct obd_device *obd)
 {
-        if (dev && dev->obd_proc_entry) {
-                lprocfs_remove(dev->obd_proc_entry);
-                dev->obd_proc_entry = NULL;
+        if (obd && obd->obd_proc_entry) {
+                lprocfs_remove(obd->obd_proc_entry);
+                obd->obd_proc_entry = NULL;
         }
         return 0;
 }
@@ -538,6 +542,7 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 }
 
 struct file_operations lprocfs_stats_seq_fops = {
+        owner:   THIS_MODULE,
         open:    lprocfs_stats_seq_open,
         read:    seq_read,
         llseek:  seq_lseek,
@@ -788,8 +793,8 @@ EXPORT_SYMBOL(lprocfs_register);
 EXPORT_SYMBOL(lprocfs_srch);
 EXPORT_SYMBOL(lprocfs_remove);
 EXPORT_SYMBOL(lprocfs_add_vars);
-EXPORT_SYMBOL(lprocfs_obd_attach);
-EXPORT_SYMBOL(lprocfs_obd_detach);
+EXPORT_SYMBOL(lprocfs_obd_setup);
+EXPORT_SYMBOL(lprocfs_obd_cleanup);
 EXPORT_SYMBOL(lprocfs_alloc_stats);
 EXPORT_SYMBOL(lprocfs_free_stats);
 EXPORT_SYMBOL(lprocfs_register_stats);
@@ -802,6 +807,7 @@ EXPORT_SYMBOL(lprocfs_rd_name);
 EXPORT_SYMBOL(lprocfs_rd_fstype);
 EXPORT_SYMBOL(lprocfs_rd_server_uuid);
 EXPORT_SYMBOL(lprocfs_rd_conn_uuid);
+EXPORT_SYMBOL(lprocfs_rd_num_exports);
 EXPORT_SYMBOL(lprocfs_rd_numrefs);
 
 EXPORT_SYMBOL(lprocfs_rd_blksize);
@@ -810,7 +816,6 @@ EXPORT_SYMBOL(lprocfs_rd_kbytesfree);
 EXPORT_SYMBOL(lprocfs_rd_kbytesavail);
 EXPORT_SYMBOL(lprocfs_rd_filestotal);
 EXPORT_SYMBOL(lprocfs_rd_filesfree);
-EXPORT_SYMBOL(lprocfs_rd_filegroups);
 
 EXPORT_SYMBOL(lprocfs_write_helper);
 EXPORT_SYMBOL(lprocfs_write_u64_helper);

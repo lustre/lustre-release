@@ -106,6 +106,9 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 {
         struct filter_export_data *fed;
         struct obd_device *obd = exp->exp_obd;
+        static unsigned long last_msg;
+        static int last_count;
+        int mask = D_CACHE;
         ENTRY;
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
@@ -119,11 +122,20 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 
         fed = &exp->exp_filter_data;
 
+        /* Don't print this to the console the first time it happens, since
+         * it can happen legitimately on occasion, but only rarely. */
+        if (time_after(jiffies, last_msg + 60 * HZ)) {
+                last_count = 0;
+                last_msg = jiffies;
+        }
+        if ((last_count & (-last_count)) == last_count)
+                mask = D_WARNING;
+        last_count++;
+
         /* Add some margin, since there is a small race if other RPCs arrive
          * out-or-order and have already consumed some grant.  We want to
          * leave this here in case there is a large error in accounting. */
-        CDEBUG(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ?
-               D_WARNING : D_CACHE,
+        CDEBUG(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ? mask:D_CACHE,
                "%s: cli %s/%p reports grant: "LPU64" dropped: %u, local: %lu\n",
                obd->obd_name, exp->exp_client_uuid.uuid, exp, oa->o_grant,
                oa->o_dropped, fed->fed_grant);

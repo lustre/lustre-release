@@ -64,35 +64,6 @@
 #include <linux/lustre_log.h>
 #include "osc_internal.h"
 
-
-static int osc_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-        int rc;
-        ENTRY;
-
-        lprocfs_init_vars(osc,&lvars);
-        rc = lprocfs_obd_attach(dev, lvars.obd_vars);
-        if (rc < 0)
-                RETURN(rc);
-
-        rc = lproc_osc_attach_seqstat(dev);
-        if (rc < 0) {
-                lprocfs_obd_detach(dev);
-                RETURN(rc);
-        }
-
-        ptlrpc_lprocfs_register_obd(dev);
-        RETURN(0);
-}
-
-static int osc_detach(struct obd_device *dev)
-{
-        ptlrpc_lprocfs_unregister_obd(dev);
-        return lprocfs_obd_detach(dev);
-}
-
-
 /* Pack OSC object metadata for disk storage (LE byte order). */
 static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                       struct lov_stripe_md *lsm)
@@ -2919,10 +2890,19 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
                 return rc;
 
         rc = client_obd_setup(obd, len, buf);
-        if (rc)
+        if (rc) {
                 ptlrpcd_decref();
-        else
+        } else {
+                struct lprocfs_static_vars lvars;
+
+                lprocfs_init_vars(osc, &lvars);
+                if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
+                        lproc_osc_attach_seqstat(obd);
+                        ptlrpc_lprocfs_register_obd(obd);
+                }
+
                 oscc_init(obd);
+        }
 
         RETURN(rc);
 }
@@ -2930,6 +2910,9 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 int osc_cleanup(struct obd_device *obd, int flags)
 {
         int rc;
+
+        ptlrpc_lprocfs_unregister_obd(obd);
+        lprocfs_obd_cleanup(obd);
 
         rc = client_obd_cleanup(obd, flags);
         ptlrpcd_decref();
@@ -2939,8 +2922,6 @@ int osc_cleanup(struct obd_device *obd, int flags)
 
 struct obd_ops osc_obd_ops = {
         o_owner:        THIS_MODULE,
-        o_attach:       osc_attach,
-        o_detach:       osc_detach,
         o_setup:        osc_setup,
         o_cleanup:      osc_cleanup,
         o_connect:      osc_connect,
@@ -2979,8 +2960,6 @@ struct obd_ops osc_obd_ops = {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 struct obd_ops sanosc_obd_ops = {
         o_owner:        THIS_MODULE,
-        o_attach:       osc_attach,
-        o_detach:       osc_detach,
         o_cleanup:      client_obd_cleanup,
         o_connect:      osc_connect,
         o_disconnect:   client_disconnect_export,

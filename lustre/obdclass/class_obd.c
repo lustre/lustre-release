@@ -359,16 +359,17 @@ static int obd_class_ioctl(struct inode *inode, struct file *filp,
 
 /* declare character device */
 static struct file_operations obd_psdev_fops = {
-        ioctl:   obd_class_ioctl,       /* ioctl */
-        open:    obd_class_open,        /* open */
-        release: obd_class_release,     /* release */
+        .owner   = THIS_MODULE,
+        .ioctl   = obd_class_ioctl,     /* ioctl */
+        .open    = obd_class_open,      /* open */
+        .release = obd_class_release,   /* release */
 };
 
 /* modules setup */
 static struct miscdevice obd_psdev = {
-        OBD_MINOR,
-        "obd_psdev",
-        &obd_psdev_fops
+        .minor = OBD_MINOR,
+        .name  = "obd_psdev",
+        .fops  = &obd_psdev_fops,
 };
 #else
 void *obd_psdev = NULL;
@@ -530,9 +531,10 @@ static int obd_device_list_open(struct inode *inode, struct file *file)
 }
 
 struct file_operations obd_device_list_fops = {
-        .open = obd_device_list_open,
-        .read = seq_read,
-        .llseek = seq_lseek,
+        .owner   = THIS_MODULE,
+        .open    = obd_device_list_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
         .release = seq_release,
 };
 #endif
