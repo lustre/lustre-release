@@ -104,6 +104,8 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         RETURN(rc);
 }
 
+__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
+
 /* this isn't where truncate starts.   roughly:
  * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
  * we grab the lock back in setattr_raw to avoid races. */
@@ -124,39 +126,44 @@ void ll_truncate(struct inode *inode)
                 return;
         }
 
-        oa = obdo_alloc();
-        if (oa == NULL) {
-                CERROR("cannot alloc oa, error %d\n",
-                        -ENOMEM);
-                EXIT;
-                return;
-        }
+        if (lov_merge_size(lsm, 0) == inode->i_size) {
+                CDEBUG(D_VFSTRACE, "skipping punch for "LPX64" (size = %llu)\n",
+                       lsm->lsm_object_id, inode->i_size);
+        } else {
+                CDEBUG(D_INFO, "calling punch for "LPX64" (new size %llu)\n",
+                       lsm->lsm_object_id, inode->i_size);
+    		
+		oa = obdo_alloc();
+    		if (oa == NULL) {
+            		CERROR("cannot alloc oa, error %d\n",
+                    		-ENOMEM);
+            		EXIT;
+            		return;
+    		}
 
-        oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                        OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+    		oa->o_id = lsm->lsm_object_id;
+    		oa->o_gr = lsm->lsm_object_gr;
+    		oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+    		obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                    		OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
-        CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
-               oa->o_id, inode->i_size);
+    		/* truncate == punch from new size to absolute end of file */
+    		/* NB: obd_punch must be called with i_sem held!  It updates the kms! */
+    		rc = obd_punch(ll_i2dtexp(inode), oa, lsm, inode->i_size,
+                    	       OBD_OBJECT_EOF, NULL);
+    		if (rc)
+            		CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
+    		else
+            		obdo_to_inode(inode, oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                            	      OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
-        /* truncate == punch from new size to absolute end of file */
-        /* NB: obd_punch must be called with i_sem held!  It updates the kms! */
-        rc = obd_punch(ll_i2dtexp(inode), oa, lsm, inode->i_size,
-                       OBD_OBJECT_EOF, NULL);
-        if (rc)
-                CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
-        else
-                obdo_to_inode(inode, oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                              OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
-        obdo_free(oa);
+    		obdo_free(oa);
+	}
+	
         EXIT;
         return;
 } /* ll_truncate */
 
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                      unsigned to)
 {

@@ -2079,20 +2079,17 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
                         rc = rc2;
         }
 
-        if (iattr.ia_valid & ATTR_SIZE) {
-                res = ldlm_resource_get(exp->exp_obd->obd_namespace, NULL,
-                                        res_id, LDLM_EXTENT, 0);
-                if (res == NULL) {
-                        CERROR("!!! resource_get failed for object "LPU64" -- "
-                               "filter_setattr with no lock?\n", oa->o_id);
-                } else {
-                        if (res->lr_namespace->ns_lvbo &&
-                            res->lr_namespace->ns_lvbo->lvbo_update) {
-                                rc = res->lr_namespace->ns_lvbo->lvbo_update
-                                        (res, NULL, 0, 0);
-                        }
-                        ldlm_resource_putref(res);
-                }
+        res = ldlm_resource_get(exp->exp_obd->obd_namespace, NULL,
+                                res_id, LDLM_EXTENT, 0);
+        if (res != NULL) {
+                if (res->lr_namespace->ns_lvbo &&
+                    res->lr_namespace->ns_lvbo->lvbo_update)
+                        rc = res->lr_namespace->ns_lvbo->lvbo_update(res, NULL,
+                                                                     0, 0);
+                ldlm_resource_putref(res);
+        } else if (iattr.ia_valid & ATTR_SIZE) {
+                CERROR("!!! resource_get failed for object "LPU64" -- "
+                       "filter_setattr with no lock?\n", oa->o_id);
         }
 
         oa->o_valid = OBD_MD_FLID;
