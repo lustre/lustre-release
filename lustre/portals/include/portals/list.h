@@ -1,5 +1,4 @@
 #ifndef _LINUX_LIST_H
-
 /*
  * Simple doubly linked list implementation.
  *
