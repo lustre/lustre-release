@@ -36,10 +36,9 @@
 #include <bridge.h>
 #include <ipmap.h>
 #include <connection.h>
+#include <pthread.h>
 #ifndef __CYGWIN__
 #include <syscall.h>
-#else
-#include <pthread.h>
 #endif
 
 /* Function:  tcpnal_send
@@ -69,8 +68,8 @@ int tcpnal_send(nal_cb_t *n,
     connection c;
     bridge b=(bridge)n->nal_data;
     struct iovec tiov[257];
-#ifdef __CYGWIN__
     static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
+#ifdef __CYGWIN__
     int i;
 #endif
 
@@ -98,14 +97,14 @@ int tcpnal_send(nal_cb_t *n,
     if (niov > 0)
             memcpy(&tiov[1], iov, niov * sizeof(struct iovec));
 
+    pthread_mutex_lock(&send_lock);
 #ifndef __CYGWIN__
     syscall(SYS_writev, c->fd, tiov, niov+1);
 #else
-    pthread_mutex_lock(&send_lock);
     for (i = 0; i <= niov; i++)
         send(c->fd, tiov[i].iov_base, tiov[i].iov_len, 0);
-    pthread_mutex_unlock(&send_lock);
 #endif
+    pthread_mutex_unlock(&send_lock);
 #endif
     lib_finalize(n, private, cookie);
         
