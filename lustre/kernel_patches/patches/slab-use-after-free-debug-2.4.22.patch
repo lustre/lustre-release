@@ -1,8 +1,8 @@
 %patch
 Index: linux-2.4.22-vanilla/mm/slab.c
 ===================================================================
---- linux-2.4.22-vanilla.orig/mm/slab.c	2003-11-13 17:39:29.000000000 +0300
-+++ linux-2.4.22-vanilla/mm/slab.c	2003-11-16 18:44:32.000000000 +0300
+--- linux-2.4.22-vanilla.orig/mm/slab.c	2003-11-17 15:42:13.000000000 +0300
++++ linux-2.4.22-vanilla/mm/slab.c	2003-11-18 01:15:35.000000000 +0300
 @@ -97,6 +97,8 @@
  #define	FORCED_DEBUG	0
  #endif
@@ -46,7 +46,7 @@ Index: linux-2.4.22-vanilla/mm/slab.c
  	kmem_cache_alloc_head(cachep, flags);
  try_again:
  	local_irq_save(save_flags);
-@@ -1576,12 +1598,15 @@
+@@ -1576,6 +1598,10 @@
  void kmem_cache_free (kmem_cache_t *cachep, void *objp)
  {
  	unsigned long flags;
@@ -57,13 +57,7 @@ Index: linux-2.4.22-vanilla/mm/slab.c
  #if DEBUG
  	CHECK_PAGE(virt_to_page(objp));
  	if (cachep != GET_PAGE_CACHE(virt_to_page(objp)))
- 		BUG();
- #endif
--
- 	local_irq_save(flags);
- 	__kmem_cache_free(cachep, objp);
- 	local_irq_restore(flags);
-@@ -1601,6 +1626,10 @@
+@@ -1601,6 +1627,10 @@
  
  	if (!objp)
  		return;
@@ -74,7 +68,7 @@ Index: linux-2.4.22-vanilla/mm/slab.c
  	local_irq_save(flags);
  	CHECK_PAGE(virt_to_page(objp));
  	c = GET_PAGE_CACHE(virt_to_page(objp));
-@@ -2075,3 +2104,455 @@
+@@ -2075,3 +2105,460 @@
  #endif
  }
  #endif
@@ -194,7 +188,9 @@ Index: linux-2.4.22-vanilla/mm/slab.c
 +
 +	/* found! */
 +	if (new_last_found == -1)
-+		uaf_last_found = i;
++		uaf_last_found = i + 1;
++	if (uaf_last_found >= uaf_max)
++		uaf_last_found = 0;
 +	return i;
 +}
 +
@@ -274,6 +270,8 @@ Index: linux-2.4.22-vanilla/mm/slab.c
 +			flush_tlb_all();
 +		else
 +			local_flush_tlb();
++		//printk("UAF: found %d/%d, base 0x%p, map at 0x%lx\n",
++		//		i, cachep->objsize, uaf_area->addr, addr);
 +		return (void *) addr;
 +	}
 +
@@ -383,6 +381,7 @@ Index: linux-2.4.22-vanilla/mm/slab.c
 +	atomic_dec(&uaf_stats[size].uaf_allocated);
 +	
 +	uaf_printk("UAF: freed %d/%d at 0x%p\n", i, size, addr);
++	//printk("UAF: freed %d/%d at 0x%p\n", i, size, addr);
 +
 +	return 1;
 +}
@@ -533,7 +532,7 @@ Index: linux-2.4.22-vanilla/mm/slab.c
 Index: linux-2.4.22-vanilla/init/main.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/init/main.c	2003-11-03 23:22:13.000000000 +0300
-+++ linux-2.4.22-vanilla/init/main.c	2003-11-16 16:17:34.000000000 +0300
++++ linux-2.4.22-vanilla/init/main.c	2003-11-18 01:06:45.000000000 +0300
 @@ -436,6 +436,9 @@
  	 *	make syscalls (and thus be locked).
  	 */
@@ -547,7 +546,7 @@ Index: linux-2.4.22-vanilla/init/main.c
 Index: linux-2.4.22-vanilla/fs/proc/proc_misc.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/proc/proc_misc.c	2003-11-03 23:22:11.000000000 +0300
-+++ linux-2.4.22-vanilla/fs/proc/proc_misc.c	2003-11-16 16:48:33.000000000 +0300
++++ linux-2.4.22-vanilla/fs/proc/proc_misc.c	2003-11-18 01:06:45.000000000 +0300
 @@ -301,6 +301,22 @@
  	release:	seq_release,
  };
@@ -583,9 +582,9 @@ Index: linux-2.4.22-vanilla/fs/proc/proc_misc.c
  #endif
 Index: linux-2.4.22-vanilla/include/linux/slab.h
 ===================================================================
---- linux-2.4.22-vanilla.orig/include/linux/slab.h	2003-11-13 18:27:04.000000000 +0300
-+++ linux-2.4.22-vanilla/include/linux/slab.h	2003-11-16 16:19:55.000000000 +0300
-@@ -39,6 +39,7 @@
+--- linux-2.4.22-vanilla.orig/include/linux/slab.h	2003-11-17 15:42:13.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/slab.h	2003-11-18 02:14:40.000000000 +0300
+@@ -40,6 +40,7 @@
  #define	SLAB_HWCACHE_ALIGN	0x00002000UL	/* align objs on a h/w cache lines */
  #define SLAB_CACHE_DMA		0x00004000UL	/* use GFP_DMA memory */
  #define SLAB_MUST_HWCACHE_ALIGN	0x00008000UL	/* force alignment */
@@ -596,7 +595,7 @@ Index: linux-2.4.22-vanilla/include/linux/slab.h
 Index: linux-2.4.22-vanilla/arch/i386/config.in
 ===================================================================
 --- linux-2.4.22-vanilla.orig/arch/i386/config.in	2003-11-03 23:22:06.000000000 +0300
-+++ linux-2.4.22-vanilla/arch/i386/config.in	2003-11-16 16:25:48.000000000 +0300
++++ linux-2.4.22-vanilla/arch/i386/config.in	2003-11-18 01:06:45.000000000 +0300
 @@ -470,6 +470,9 @@
     bool '  Check for stack overflows' CONFIG_DEBUG_STACKOVERFLOW
     bool '  Debug high memory support' CONFIG_DEBUG_HIGHMEM
@@ -610,7 +609,7 @@ Index: linux-2.4.22-vanilla/arch/i386/config.in
 Index: linux-2.4.22-vanilla/mm/vmalloc.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/mm/vmalloc.c	2003-11-03 23:22:13.000000000 +0300
-+++ linux-2.4.22-vanilla/mm/vmalloc.c	2003-11-16 16:52:02.000000000 +0300
++++ linux-2.4.22-vanilla/mm/vmalloc.c	2003-11-18 01:06:45.000000000 +0300
 @@ -53,7 +53,7 @@
  	} while (address < end);
  }
@@ -629,13 +628,90 @@ Index: linux-2.4.22-vanilla/mm/vmalloc.c
  					unsigned long size,
  					int gfp_mask,
  					pgprot_t prot,
+Index: linux-2.4.22-vanilla/include/asm-i386/io.h
+===================================================================
+--- linux-2.4.22-vanilla.orig/include/asm-i386/io.h	2003-11-17 14:58:37.000000000 +0300
++++ linux-2.4.22-vanilla/include/asm-i386/io.h	2003-11-18 02:26:42.000000000 +0300
+@@ -75,6 +75,16 @@
+  
+ static inline unsigned long virt_to_phys(volatile void * address)
+ {
++#ifdef CONFIG_DEBUG_UAF
++	unsigned long addr = (unsigned long) address;
++	if (vmlist && addr >= VMALLOC_START && addr < VMALLOC_END) {
++		struct page *page = vmalloc_to_page((void *) address);
++		if (page) {
++			unsigned long offset = addr & ~PAGE_MASK;
++			address = page_address(page) + offset;
++		}
++	}
++#endif
+ 	return __pa(address);
+ }
+ 
+Index: linux-2.4.22-vanilla/include/asm-i386/page.h
+===================================================================
+--- linux-2.4.22-vanilla.orig/include/asm-i386/page.h	2003-11-03 23:51:46.000000000 +0300
++++ linux-2.4.22-vanilla/include/asm-i386/page.h	2003-11-18 02:14:38.000000000 +0300
+@@ -129,9 +129,49 @@
+ #define VMALLOC_RESERVE		((unsigned long)__VMALLOC_RESERVE)
+ #define __MAXMEM		(-__PAGE_OFFSET-__VMALLOC_RESERVE)
+ #define MAXMEM			((unsigned long)(-PAGE_OFFSET-VMALLOC_RESERVE))
++
++#ifndef CONFIG_DEBUG_UAF
+ #define __pa(x)			((unsigned long)(x)-PAGE_OFFSET)
+ #define __va(x)			((void *)((unsigned long)(x)+PAGE_OFFSET))
+ #define virt_to_page(kaddr)	(mem_map + (__pa(kaddr) >> PAGE_SHIFT))
++#else
++#define __pa(x)		({							\
++				unsigned long __pn, __fr;			\
++				__pn = (unsigned long)(x)-PAGE_OFFSET;		\
++				__fr = __pn >> PAGE_SHIFT;			\
++				if (jiffies > HZ*3 && __fr >= max_mapnr) {	\
++					printk("invalid arg __pa(0x%x)"		\
++						" at %s:%d\n", (unsigned) (x),	\
++						__FILE__, __LINE__);		\
++					dump_stack();				\
++				}						\
++				__pn;						\
++			})
++
++#define __va(x)		({							\
++				unsigned long __pn;				\
++				__pn = (unsigned long) (x) >> PAGE_SHIFT;	\
++				if (jiffies > HZ*3 && __pn >= max_mapnr) {	\
++					printk("invalid arg __va(0x%x)"		\
++						" at %s:%d\n", (unsigned) (x),	\
++						__FILE__, __LINE__);		\
++					dump_stack();				\
++				}						\
++				((void *)((unsigned long)(x) + PAGE_OFFSET));	\
++			})
++
++#define virt_to_page(ka) ({							\
++				struct page *_p;				\
++				if ((unsigned long)(ka) >= VMALLOC_START) {	\
++					_p = vmalloc_to_page((void *)(ka));	\
++					BUG_ON(!_p);				\
++				} else 						\
++					_p = mem_map+(__pa(ka) >> PAGE_SHIFT);	\
++				(_p);						\
++			})
++#endif
++
++
+ #define VALID_PAGE(page)	((page - mem_map) < max_mapnr)
+ 
+ #define VM_DATA_DEFAULT_FLAGS	(VM_READ | VM_WRITE | VM_EXEC | \
 
 %diffstat
- arch/i386/config.in  |    3 
- fs/proc/proc_misc.c  |   19 ++
- include/linux/slab.h |    1 
- init/main.c          |    3 
- mm/slab.c            |  483 ++++++++++++++++++++++++++++++++++++++++++++++++++-
- mm/vmalloc.c         |    4 
- 6 files changed, 510 insertions(+), 3 deletions(-)
+ arch/i386/config.in     |    3 
+ fs/proc/proc_misc.c     |   19 +
+ include/asm-i386/io.h   |   10 
+ include/asm-i386/page.h |   40 +++
+ include/linux/slab.h    |    1 
+ init/main.c             |    3 
+ mm/slab.c               |  487 ++++++++++++++++++++++++++++++++++++++++++++++++
+ mm/vmalloc.c            |    4 
+ 8 files changed, 565 insertions(+), 2 deletions(-)
 
