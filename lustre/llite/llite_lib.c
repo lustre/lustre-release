@@ -353,13 +353,7 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        spin_lock(&inode_lock);
-        inode = lock->l_data;
-        if (inode && inode->i_state & I_FREEING)
-                inode = NULL;
-        else if (inode)
-                __iget(inode);
-        spin_unlock(&inode_lock);
+        inode = igrab(lock->l_data);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return inode;
 }
