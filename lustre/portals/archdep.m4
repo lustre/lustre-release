@@ -198,7 +198,7 @@ if test $host_cpu != "lib" ; then
   dnl Get release from version.h
   RELEASE="`sed -ne 's/-/_/g' -e 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_]*\).*/\1/p' $LINUX/include/linux/version.h`_`date +%Y%m%d%H%M`"
   changequote([, ])
-  
+
   AC_MSG_RESULT($RELEASE)
   AC_SUBST(RELEASE)
 
@@ -338,5 +338,5 @@ if test $RH_2_4_20 = 1; then
 	AC_MSG_RESULT(redhat-2.4.20)
 	CPPFLAGS="$CPPFLAGS -DCONFIG_RH_2_4_20"
 else
-	AC_MSG_RESULT($RELEASE)
+	AC_MSG_RESULT($LINUXRELEASE)
 fi 

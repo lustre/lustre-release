@@ -53,17 +53,18 @@ static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = 8192;
 //static int g_pfd = -1;
-static int subsystem_array[1 << 8];
+static int subsystem_mask = ~0;
 static int debug_mask = ~0;
 
 static const char *portal_debug_subsystems[] =
-        {"undefined", "mdc", "mds", "osc", "ost", "class", "obdfs", "llite",
-         "rpc", "ext2obd", "portals", "socknal", "qswnal", "pinger", "filter",
-         "obdtrace", "echo", "ldlm", "lov", "gmnal", "router", "ptldb", NULL};
+        {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
+         "rpc", "mgmt", "portals", "socknal", "qswnal", "pinger", "filter",
+         "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd", NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
-         "page", "dlmtrace", "error", "emerg", "ha", "rpctrace", "vfstrace", NULL};
+         "page", "dlmtrace", "error", "emerg", "ha", "rpctrace", "vfstrace",
+         NULL};
 
 struct debug_daemon_cmd {
         char *cmd;
@@ -88,7 +89,10 @@ static int do_debug_mask(char *name, int enable)
                         printf("%s output from subsystem \"%s\"\n",
                                 enable ? "Enabling" : "Disabling",
                                 portal_debug_subsystems[i]);
-                        subsystem_array[i] = enable;
+                        if (enable)
+                                subsystem_mask |= (1 << i);
+                        else
+                                subsystem_mask &= ~(1 << i);
                         found = 1;
                 }
         }
@@ -111,7 +115,6 @@ static int do_debug_mask(char *name, int enable)
 
 int dbg_initialize(int argc, char **argv)
 {
-        memset(subsystem_array, 1, sizeof(subsystem_array));
         return 0;
 }
 
@@ -213,12 +216,7 @@ int jt_dbg_list(int argc, char **argv)
                 for (i = 0; portal_debug_masks[i] != NULL; i++)
                         printf(", %s", portal_debug_masks[i]);
                 printf("\n");
-        }
-        else if (strcasecmp(argv[1], "applymasks") == 0) {
-                unsigned int subsystem_mask = 0;
-                for (i = 0; portal_debug_subsystems[i] != NULL; i++) {
-                        if (subsystem_array[i]) subsystem_mask |= (1 << i);
-                }
+        } else if (strcasecmp(argv[1], "applymasks") == 0) {
                 applymask_all(subsystem_mask, debug_mask);
         }
         return 0;
@@ -230,12 +228,6 @@ static void dump_buffer(FILE *fd, char *buf, int size, int raw)
 {
         char *p, *z;
         unsigned long subsystem, debug, dropped = 0, kept = 0;
-        int max_sub, max_type;
-
-        for (max_sub = 0; portal_debug_subsystems[max_sub] != NULL; max_sub++)
-                ;
-        for (max_type = 0; portal_debug_masks[max_type] != NULL; max_type++)
-                ;
 
         while (size) {
                 p = memchr(buf, '\n', size);
@@ -247,8 +239,7 @@ static void dump_buffer(FILE *fd, char *buf, int size, int raw)
                 z++;
                 /* for some reason %*s isn't working. */
                 *p = '\0';
-                if (subsystem < max_sub &&
-                    subsystem_array[subsystem] &&
+                if ((subsystem_mask & subsystem) &&
                     (!debug || (debug_mask & debug))) {
                         if (raw)
                                 fprintf(fd, "%s\n", buf);

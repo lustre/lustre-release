@@ -61,11 +61,7 @@
 
 #define SOCKNAL_N_SCHED num_online_cpus()       /* # socknal schedulers */
 
-#if PTL_LARGE_MTU
-# define SOCKNAL_MAX_FWD_PAYLOAD (256<<10)      /* biggest payload I can forward */
-#else
-# define SOCKNAL_MAX_FWD_PAYLOAD (64<<10)       /* biggest payload I can forward */
-#endif
+#define SOCKNAL_MAX_FWD_PAYLOAD PTL_MTU         /* biggest payload I can forward */
 
 #define SOCKNAL_NLTXS           128             /* # normal transmit messages */
 #define SOCKNAL_NNBLK_LTXS	128             /* # transmit messages reserved if can't block */
@@ -80,7 +76,16 @@
 
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
 
-#define SOCKNAL_TX_LOW_WATER(sk) (((sk)->sndbuf*8)/10)
+#define SOCKNAL_TX_LOW_WATER(sk) (((sk)->sk_sndbuf*8)/10)
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
+# define sk_data_ready	data_ready
+# define sk_write_space write_space
+# define sk_user_data   user_data
+# define sk_prot        prot
+# define sk_sndbuf      sndbuf
+# define sk_socket      socket
+#endif
 
 typedef struct                                  /* pool of forwarding buffers */
 {
@@ -242,7 +247,7 @@ typedef struct
         
         /* READER */
         struct list_head    ksnc_rx_list;       /* where I enq waiting input or a forwarding descriptor */
-        volatile int        ksnc_rx_ready;      /* data ready to read */
+        int                 ksnc_rx_ready;      /* data ready to read */
         int                 ksnc_rx_scheduled;  /* being progressed */
         int                 ksnc_rx_state;      /* what is being read */
         int                 ksnc_rx_nob_left;   /* # bytes to next hdr/body  */
@@ -258,7 +263,7 @@ typedef struct
         /* WRITER */
         struct list_head    ksnc_tx_list;       /* where I enq waiting for output space */
         struct list_head    ksnc_tx_queue;      /* packets waiting to be sent */
-        volatile int        ksnc_tx_ready;      /* write space */
+        int                 ksnc_tx_ready;      /* write space */
         int                 ksnc_tx_scheduled;  /* being progressed */
 
 } ksock_conn_t;

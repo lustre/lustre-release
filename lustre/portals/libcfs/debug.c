@@ -50,6 +50,7 @@
 # define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/kp30.h>
+#include <linux/portals_compat25.h>
 
 #define DEBUG_OVERFLOW 1024
 static char *debug_buf = NULL;
@@ -235,7 +236,7 @@ int portals_do_debug_dumplog(void *arg)
         reparent_to_init();
         journal_info = current->journal_info;
         current->journal_info = NULL;
-        sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_TIME);
+        sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_SECONDS);
         file = filp_open(debug_file_name, O_CREAT|O_TRUNC|O_RDWR, 0644);
 
         if (!file || IS_ERR(file)) {
@@ -730,8 +731,8 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         do_gettimeofday(&tv);
 
         prefix_nob = snprintf(debug_buf + debug_off, max_nob,
-                              "%02x:%06x:%d:%lu.%06lu ",
-                              subsys >> 24, mask, smp_processor_id(),
+                              "%06x:%06x:%d:%lu.%06lu ",
+                              subsys, mask, smp_processor_id(),
                               tv.tv_sec, tv.tv_usec);
         max_nob -= prefix_nob;
 
@@ -754,7 +755,7 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
 
         va_start(ap, format);
         msg_nob += vsnprintf(debug_buf + debug_off + prefix_nob + msg_nob,
-                            max_nob, format, ap);
+                             max_nob, format, ap);
         max_nob -= msg_nob;
         va_end(ap);
 
@@ -813,7 +814,7 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
         envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
         envp[2] = NULL;
 
-        rc = call_usermodehelper(argv[0], argv, envp);
+        rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
                 CERROR("Error invoking lbug upcall %s %s %s %s %s: %d; check "
                        "/proc/sys/portals/upcall\n",                

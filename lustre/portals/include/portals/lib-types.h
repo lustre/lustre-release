@@ -137,11 +137,8 @@ typedef struct {
 } lib_counters_t;
 
 /* temporary expedient: limit number of entries in discontiguous MDs */
-#if PTL_LARGE_MTU
-# define PTL_MD_MAX_IOV	64
-#else
-# define PTL_MD_MAX_IOV 16
-#endif
+# define PTL_MTU        (512<<10)
+# define PTL_MD_MAX_IOV 128
 
 struct lib_msg_t {
         struct list_head  msg_list;
