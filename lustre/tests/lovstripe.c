@@ -9,10 +9,11 @@
 
 /****************** Custom includes ********************/
 #include <linux/lustre_lite.h>
+#include <linux/lustre_idl.h>
 
 
 /******************  Functions ******************/
-int write_file(char *name, struct lov_user_md *striping, int bufsize,
+int write_file(char *name, struct lov_mds_md *striping, int bufsize,
 	       char *buf1, char *buf2);
 
 
@@ -22,7 +23,7 @@ int write_file(char *name, struct lov_user_md *striping, int bufsize,
 
 int main(int argc, char *argv[])
 {
-	struct lov_user_md a_striping;
+	struct lov_mds_md a_striping;
 	long bufsize = sizeof(long) * STRIPE_SIZE;
 	char *rbuf, *wbuf;
 	int data, *dp;
@@ -40,13 +41,14 @@ int main(int argc, char *argv[])
 		*dp = data;
 
 	/*  Init defaults on striping info  */
-	a_striping.lum_stripe_size = STRIPE_SIZE;
-	a_striping.lum_stripe_pattern = 0;
+	a_striping.lmm_magic = LOV_MAGIC;
+	a_striping.lmm_stripe_size = STRIPE_SIZE;
+	a_striping.lmm_stripe_pattern = 0;
 
 	/*  Write file for OST1 only  */
 	/*       Start at OST 0, and use only 1 OST  */
-	a_striping.lum_stripe_offset = 0;
-	a_striping.lum_stripe_count = 1;
+	a_striping.lmm_stripe_offset = 0;
+	a_striping.lmm_stripe_count = 1;
 
 	result = write_file("/mnt/lustre/ost1", &a_striping, bufsize,
 			    wbuf, rbuf);
@@ -56,8 +58,8 @@ int main(int argc, char *argv[])
 
 	/*  Write file for OST2 only  */
 	/*       Start at OST 1, and use only 1 OST  */
-	a_striping.lum_stripe_offset = 1;
-	a_striping.lum_stripe_count = 1;
+	a_striping.lmm_stripe_offset = 1;
+	a_striping.lmm_stripe_count = 1;
 
 	result = write_file("/mnt/lustre/ost2", &a_striping, bufsize,
 			    wbuf, rbuf);
@@ -67,8 +69,8 @@ int main(int argc, char *argv[])
 
 	/*  Write file across both OST1 and OST2  */
 	/*       Start at OST 0, and use only 2 OSTs  */
-	a_striping.lum_stripe_offset = 0;
-	a_striping.lum_stripe_count = 2;
+	a_striping.lmm_stripe_offset = 0;
+	a_striping.lmm_stripe_count = 2;
 
 	result = write_file("/mnt/lustre/ost1and2", &a_striping, bufsize,
 			    wbuf, rbuf);
@@ -83,7 +85,7 @@ out:
 }
 
 
-int write_file(char *name, struct lov_user_md *striping, int bufsize,
+int write_file(char *name, struct lov_mds_md *striping, int bufsize,
 	       char *wbuf, char *rbuf)
 {
 	int fd, result;
