@@ -43,3 +43,4 @@ kernel_text_address-2.4.20-rh.patch
 gfp_memalloc-2.4.20-rh.patch
 ext3-xattr-ptr-arith-fix.patch
 procfs-ndynamic-2.4.patch
+ext3-truncate-buffer-head.patch
