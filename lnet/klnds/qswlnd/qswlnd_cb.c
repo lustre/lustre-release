@@ -157,7 +157,6 @@ kqswnal_unmap_tx (kqswnal_tx_t *ktx)
         elan3_dvma_unload(kqswnal_data.kqn_ep->DmaState,
                           kqswnal_data.kqn_eptxdmahandle,
                           ktx->ktx_basepage, ktx->ktx_nmappedpages);
-
 #endif
         ktx->ktx_nmappedpages = 0;
 }
@@ -340,7 +339,7 @@ kqswnal_map_tx_iov (kqswnal_tx_t *ktx, int offset, int nob,
 
 #if MULTIRAIL_EKC
                 ep_dvma_load(kqswnal_data.kqn_ep, NULL,
-                             iov->iov_base, fraglen,
+                             iov->iov_base + offset, fraglen,
                              kqswnal_data.kqn_ep_tx_nmh, basepage,
                              &railmask, &ktx->ktx_frags[nfrags]);
 
