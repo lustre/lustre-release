@@ -290,9 +290,10 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
  negative:
         dentry->d_op = &ll_d_ops;
         if (ll_d2d(dentry) == NULL) {
-                CERROR("allocating fsdata\n");
                 ll_set_dd(dentry);
-        }
+        } else
+                CERROR("NOT allocating fsdata - already set\n");
+
         d_add(dentry, inode);
 
         if (it->it_status == 0) {
@@ -607,9 +608,6 @@ static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
                 goto out;
 
         ext2_inc_count(dir);
-
-        it = dentry->d_it;
-
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, S_IFDIR | mode, 0, it, NULL);
         err = PTR_ERR(inode);

@@ -325,7 +325,7 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         struct mds_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, offset);
         ENTRY;
 
-        if (req->rq_reqmsg->bufcount != offset + 3 ||
+        if (req->rq_reqmsg->bufcount < offset + 2 ||
             req->rq_reqmsg->buflens[offset] != sizeof(*rec))
                 RETURN(-EFAULT);
 
@@ -341,8 +341,13 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
 
-        r->ur_tgt = lustre_msg_buf(req->rq_reqmsg, offset + 2);
-        r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
+        if (req->rq_reqmsg->bufcount == offset + 3) { 
+                r->ur_tgt = lustre_msg_buf(req->rq_reqmsg, offset + 2);
+                r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
+        } else { 
+                r->ur_tgt = NULL;
+                r->ur_tgtlen = 0;
+        }
         RETURN(0);
 }
 
