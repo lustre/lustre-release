@@ -51,35 +51,15 @@
  	spin_unlock(&inode_lock);
  
  	dispose_list(&throw_away);
-@@ -672,7 +625,7 @@ int invalidate_inodes(struct super_block
- 	return busy;
- }
-  
--int invalidate_device(kdev_t dev, int do_sync)
-+int invalidate_device(kdev_t dev, int do_sync, int show)
- {
- 	struct super_block *sb;
- 	int res;
 @@ -690,7 +643,7 @@ int invalidate_device(kdev_t dev, int do
  		 * hold).
  		 */
  		shrink_dcache_sb(sb);
 -		res = invalidate_inodes(sb);
-+		res = invalidate_inodes(sb, show);
++		res = invalidate_inodes(sb, 0);
  		drop_super(sb);
  	}
  	invalidate_buffers(dev);
---- lum/fs/devfs/base.c.orig	Sat Oct 19 11:42:16 2002
-+++ lum/fs/devfs/base.c	Wed Oct 30 17:12:33 2002
-@@ -2448,7 +2448,7 @@
-     retval = 1;
-     printk (KERN_DEBUG "VFS: Disk change detected on device %s\n",
- 	     kdevname (dev) );
--    if ( invalidate_device (dev, 0) )
-+    if ( invalidate_device (dev, 0, 1) )
- 	printk (KERN_WARNING "VFS: busy inodes on changed media..\n");
-     /*  Ugly hack to disable messages about unable to read partition table  */
-     tmp = warn_no_part;
 --- lum/fs/super.c.orig	Sat Oct 19 11:42:42 2002
 +++ lum/fs/super.c	Wed Oct 30 17:16:55 2002
 @@ -936,7 +936,7 @@
@@ -100,27 +80,14 @@
  		printk(KERN_ERR "VFS: Busy inodes after unmount. "
  			"Self-destruct in 5 seconds.  Have a nice day...\n");
  	}
---- lum/fs/block_dev.c.orig	Sat Oct 19 11:42:16 2002
-+++ lum/fs/block_dev.c	Wed Oct 30 17:18:15 2002
-@@ -533,7 +533,7 @@
- 	if (!bdops->check_media_change(dev))
- 		return 0;
- 
--	if (invalidate_device(dev, 0))
-+	if (invalidate_device(dev, 0, 1))
- 		printk("VFS: busy inodes on changed media.\n");
- 
- 	if (bdops->revalidate)
 --- lum/include/linux/fs.h	Wed Oct 30 17:10:42 2002
 +++ lum/include/linux/fs.h.orig	Tue Oct 22 23:15:00 2002
-@@ -1261,8 +1261,8 @@
+@@ -1261,7 +1261,7 @@
  extern void set_buffer_flushtime(struct buffer_head *);
  extern void balance_dirty(void);
  extern int check_disk_change(kdev_t);
 -extern int invalidate_inodes(struct super_block *);
--extern int invalidate_device(kdev_t, int);
 +extern int invalidate_inodes(struct super_block *, int);
-+extern int invalidate_device(kdev_t, int, int);
+ extern int invalidate_device(kdev_t, int);
  extern void invalidate_inode_pages(struct inode *);
  extern void invalidate_inode_pages2(struct address_space *);
- extern void invalidate_inode_buffers(struct inode *);
