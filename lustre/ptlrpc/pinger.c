@@ -140,7 +140,8 @@ static int ptlrpc_pinger_main(void *arg)
                 down(&pinger_sem);
                 list_for_each(iter, &pinger_imports) {
                         struct obd_import *imp =
-                                list_entry(iter, struct obd_import, imp_pinger_chain);
+                                list_entry(iter, struct obd_import,
+                                           imp_pinger_chain);
                         int generation, level;
                         unsigned long flags;
 
@@ -152,16 +153,19 @@ static int ptlrpc_pinger_main(void *arg)
                                 spin_unlock_irqrestore(&imp->imp_lock, flags);
 
                                 if (level != LUSTRE_CONN_FULL) {
-                                        CDEBUG(D_HA, "not pinging %s (in recovery)\n",
+                                        CDEBUG(D_HA,
+                                               "not pinging %s (in recovery)\n",
                                                imp->imp_target_uuid.uuid);
                                         continue;
                                 }
 
-                                req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL, NULL);
+                                req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
+                                                      NULL);
                                 if (!req) {
                                         CERROR("OOM trying to ping\n");
                                         break;
                                 }
+                                req->rq_no_resend = 1;
                                 req->rq_replen = lustre_msg_size(0, NULL);
                                 req->rq_level = LUSTRE_CONN_FULL;
                                 req->rq_phase = RQ_PHASE_RPC;
