@@ -31,6 +31,7 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
 #endif
+#include <linux/seq_file.h>
 
 #else
 #include <liblustre.h>
@@ -319,6 +320,252 @@ int lprocfs_obd_detach(struct obd_device *dev)
         return 0;
 }
 
+struct lprocfs_counters* lprocfs_alloc_counters(unsigned int num)
+{
+        struct lprocfs_counters* cntrs;
+        int csize;
+        if (num == 0)
+                return NULL;
+
+        csize = offsetof(struct lprocfs_counters, cntr[num]);
+        OBD_ALLOC(cntrs, csize);
+        if (cntrs != NULL) {
+                cntrs->num = num;
+        }
+        return cntrs;
+}
+
+void lprocfs_free_counters(struct lprocfs_counters* cntrs)
+{
+        if (cntrs != NULL) {
+                int csize = offsetof(struct lprocfs_counters, cntr[cntrs->num]);                OBD_FREE(cntrs, csize);
+        }
+}
+
+int lprocfs_counter_write(struct file *file, const char *buffer,
+                          unsigned long count, void *data)
+{
+        /* Reset counter under lock */
+        struct lprocfs_counters *cntrs = (struct lprocfs_counters*) data;
+        unsigned int i;
+        LASSERT(cntrs != NULL);
+
+        for (i=0; i<cntrs->num; i++) {
+                struct lprocfs_counter  *cntr = &(cntrs->cntr[i]);             
+                spinlock_t *lock
+                        = (cntr->config & LPROCFS_CNTR_EXTERNALLOCK)
+                        ? cntr->lockp : &cntr->lock;
+                
+                spin_lock(lock);
+                cntr->count     = 0;
+                cntr->sum       = 0;
+                cntr->min       = (~(__u64)0);
+                cntr->max       = 0;
+                cntr->sumsquare = 0;
+                spin_unlock(lock);
+        }
+        return 0;
+}
+
+static void *lprocfs_counters_seq_start(struct seq_file *p, loff_t *pos)
+{
+        struct lprocfs_counters *cntrs = p->private;
+        return (*pos >= cntrs->num) ? NULL : (void*) &cntrs->cntr[*pos];
+}
+
+static void lprocfs_counters_seq_stop(struct seq_file *p, void *v)
+{
+}
+
+static void *lprocfs_counters_seq_next(struct seq_file *p, void *v,
+                                       loff_t *pos)
+{
+        struct lprocfs_counters *cntrs = p->private;
+        ++*pos;
+        return (*pos >= cntrs->num) ? NULL : (void*) &(cntrs->cntr[*pos]);
+}
+ 
+/* seq file export of one lprocfs counter */
+static int lprocfs_counters_seq_show(struct seq_file *p, void *v)
+{
+       struct lprocfs_counters *cntrs = p->private;
+       struct lprocfs_counter  *cntr = v;
+       spinlock_t              *lock;
+       struct lprocfs_counter  c;
+       int rc = 0;  
+
+       if (cntr == &(cntrs->cntr[0])) {
+               struct timeval now;
+               do_gettimeofday(&now);
+               rc = seq_printf(p, "%-25s %lu.%lu secs.usecs\n", 
+                               "snapshot_time", now.tv_sec, now.tv_usec);
+               if (rc<0) 
+                       return rc;
+       }
+
+       /* Take a snapshot of the counter under lock */
+       lock = (cntr->config & LPROCFS_CNTR_EXTERNALLOCK)
+               ? cntr->lockp : &cntr->lock;
+       spin_lock(lock);
+    
+       c.count = cntr->count;
+       c.sum = cntr->sum;
+       c.min = cntr->min;
+       c.max = cntr->max;
+       c.sumsquare = cntr->sumsquare;
+
+       spin_unlock(lock);
+
+       rc = seq_printf(p, "%-25s "LPU64" samples [%s]", cntr->name, c.count,
+                       cntr->units);
+       if (rc<0)
+               goto out;
+
+       if ((cntr->config & LPROCFS_CNTR_AVGMINMAX) && (c.count>0)) {     
+               rc = seq_printf(p, " "LPU64" "LPU64" "LPU64, c.min, c.max, c.sum);
+               if (rc<0)
+                       goto out;
+               if (cntr->config & LPROCFS_CNTR_STDDEV) 
+                       rc = seq_printf(p, " "LPU64, c.sumsquare);
+               if (rc<0)
+                       goto out;
+       }
+       rc = seq_printf(p, "\n");
+ out:
+       return (rc<0) ? rc : 0; 
+}
+
+struct seq_operations lprocfs_counters_seq_sops = {
+        .start = lprocfs_counters_seq_start,
+        .stop = lprocfs_counters_seq_stop,
+        .next = lprocfs_counters_seq_next,
+        .show = lprocfs_counters_seq_show,
+};
+
+static int lprocfs_counters_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct seq_file *seq;
+        int rc;
+
+        rc = seq_open(file, &lprocfs_counters_seq_sops);
+        if (rc)
+                return rc;
+        seq = file->private_data;
+        seq->private = dp->data;
+        return 0;
+}
+
+struct file_operations lprocfs_counters_seq_fops = {
+        .open    = lprocfs_counters_seq_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
+        .release = seq_release,
+};
+
+int lprocfs_register_counters(struct proc_dir_entry *root,
+                              const char* name, 
+                              struct lprocfs_counters *cntrs)
+{
+        struct proc_dir_entry *entry;
+        LASSERT(root != NULL);
+
+        entry = create_proc_entry(name, 0444, root);
+        if (entry == NULL)
+                return -ENOMEM;
+        entry->proc_fops = &lprocfs_counters_seq_fops;
+        entry->data = (void*) cntrs;
+        entry->write_proc = lprocfs_counter_write;
+        return 0;
+}
+
+#define LPROCFS_OBD_OP_INIT(base, cntrs, op)                               \
+do {                                                                       \
+        unsigned int coffset = base + OBD_COUNTER_OFFSET(op);              \
+        LASSERT(coffset < cntrs->num);                                     \
+        LPROCFS_COUNTER_INIT(&cntrs->cntr[coffset], 0, NULL, #op, "reqs"); \
+} while (0)
+
+
+int lprocfs_alloc_obd_counters(struct obd_device *obddev, 
+                               unsigned int num_private_counters)
+{
+        struct lprocfs_counters* obdops_cntrs;
+        unsigned int num_counters;
+        int rc, i;
+
+        LASSERT(obddev->counters == NULL);
+        LASSERT(obddev->obd_proc_entry != NULL);
+        LASSERT(obddev->cntr_base == 0);
+
+        num_counters = 1 + OBD_COUNTER_OFFSET(san_preprw) + num_private_counters;
+        obdops_cntrs = lprocfs_alloc_counters(num_counters);
+        if (!obdops_cntrs)
+                return -ENOMEM;
+                 
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, iocontrol);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, get_info);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, set_info);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, attach);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, detach);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, setup);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, cleanup);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, connect);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, disconnect);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, statfs);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, syncfs);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, packmd);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, unpackmd);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, preallocate);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, create);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, destroy);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, setattr);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, getattr);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, open);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, close);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, brw);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, brw_async);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, punch);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, sync);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, migrate);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, copy);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, iterate);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, preprw);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, commitrw);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, enqueue);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, match);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, cancel);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, cancel_unused);
+        LPROCFS_OBD_OP_INIT(num_private_counters, obdops_cntrs, san_preprw);
+
+        for (i=num_private_counters; i<num_counters; i++) {
+                /* If this assertion failed, it is likely that an obd
+                 * operation was added to struct obd_ops in
+                 * <linux/obd.h>, and that the corresponding line item
+                 * LPROCFS_OBD_OP_INIT(.., .., opname) 
+                 * is missing from the list above. */
+                LASSERT(obdops_cntrs->cntr[i].name != NULL);
+        }
+        rc = lprocfs_register_counters(obddev->obd_proc_entry, "obd_stats", 
+                                       obdops_cntrs);
+        if (rc < 0) {
+                lprocfs_free_counters(obdops_cntrs);
+        } else {
+                obddev->counters  = obdops_cntrs;
+                obddev->cntr_base = num_private_counters;
+        }
+        return rc;
+}
+
+void lprocfs_free_obd_counters(struct obd_device *obddev)
+{
+        struct lprocfs_counters* obdops_cntrs = obddev->counters;
+        if (obdops_cntrs != NULL) {
+                obddev->counters = NULL;
+                lprocfs_free_counters(obdops_cntrs);
+        }
+}
+
 #endif /* LPROCFS*/
 
 EXPORT_SYMBOL(lprocfs_register);
@@ -326,6 +573,11 @@ EXPORT_SYMBOL(lprocfs_remove);
 EXPORT_SYMBOL(lprocfs_add_vars);
 EXPORT_SYMBOL(lprocfs_obd_attach);
 EXPORT_SYMBOL(lprocfs_obd_detach);
+EXPORT_SYMBOL(lprocfs_alloc_counters);
+EXPORT_SYMBOL(lprocfs_free_counters);
+EXPORT_SYMBOL(lprocfs_register_counters);
+EXPORT_SYMBOL(lprocfs_alloc_obd_counters);
+EXPORT_SYMBOL(lprocfs_free_obd_counters);
 
 EXPORT_SYMBOL(lprocfs_rd_u64);
 EXPORT_SYMBOL(lprocfs_rd_uuid);
