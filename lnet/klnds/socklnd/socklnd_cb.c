@@ -1513,7 +1513,7 @@ int ksocknal_scheduler (void *arg)
                 CERROR ("Can't set CPU affinity for %s to %d\n", name, id);
         }
 #endif /* CONFIG_SMP && CPU_AFFINITY */
-        
+
         spin_lock_irqsave (&sched->kss_lock, flags);
 
         while (!ksocknal_data.ksnd_shuttingdown) {
@@ -1535,9 +1535,9 @@ int ksocknal_scheduler (void *arg)
                          * kss_lock. */
                         conn->ksnc_rx_ready = 0;
                         spin_unlock_irqrestore(&sched->kss_lock, flags);
-                        
+
                         rc = ksocknal_process_receive(conn);
-                        
+
                         spin_lock_irqsave(&sched->kss_lock, flags);
 
                         /* I'm the only one that can clear this flag */
@@ -1546,7 +1546,7 @@ int ksocknal_scheduler (void *arg)
                         /* Did process_receive get everything it wanted? */
                         if (rc == 0)
                                 conn->ksnc_rx_ready = 1;
-                        
+
                         if (conn->ksnc_rx_state == SOCKNAL_RX_FMB_SLEEP ||
                             conn->ksnc_rx_state == SOCKNAL_RX_GET_FMB) {
                                 /* Conn blocked for a forwarding buffer.
@@ -1977,7 +1977,6 @@ ksocknal_autoconnect (ksock_route_t *route)
         ksock_peer_t     *peer;
         unsigned long     flags;
         int               type;
-        int               mask;
         int               rc = 0;
 
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
@@ -1987,7 +1986,7 @@ ksocknal_autoconnect (ksock_route_t *route)
                         if ((route->ksnr_connected & (1<<SOCKNAL_CONN_ANY)) == 0)
                                 type = SOCKNAL_CONN_ANY;
                         else
-                                break;         /* got connected while route queued */
+                                break;  /* got connected while route queued */
                 } else {
                         if ((route->ksnr_connected & (1<<SOCKNAL_CONN_CONTROL)) == 0)
                                 type = SOCKNAL_CONN_CONTROL;
@@ -1996,10 +1995,10 @@ ksocknal_autoconnect (ksock_route_t *route)
                         else if ((route->ksnr_connected & (1<<SOCKNAL_CONN_BULK_OUT)) == 0)
                                 type = SOCKNAL_CONN_BULK_OUT;
                         else
-                                break;         /* got connected while route queued */
+                                break;  /* got connected while route queued */
                 }
 
-                write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
+                write_unlock_irqrestore(&ksocknal_data.ksnd_global_lock, flags);
 
                 rc = ksocknal_connect_peer (route, type);
                 if (rc != 0)
@@ -2012,7 +2011,7 @@ ksocknal_autoconnect (ksock_route_t *route)
         route->ksnr_connecting = 0;
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
         return;
-        
+
  failed:
         switch (rc) {
         /* "normal" errors */
@@ -2087,7 +2086,7 @@ ksocknal_autoconnect (ksock_route_t *route)
                 list_del(&route->ksnr_list);
                 list_add_tail(&route->ksnr_list, &peer->ksnp_routes);
         }
-#endif        
+#endif
         write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
 
         while (!list_empty (&zombies)) {
@@ -2294,7 +2293,7 @@ ksocknal_reaper (void *arg)
         int                i;
         int                peer_index = 0;
         cfs_time_t         deadline = cfs_time_current();
-        
+
         kportal_daemonize ("ksocknal_reaper");
         kportal_blockallsigs ();
 
@@ -2352,20 +2351,20 @@ ksocknal_reaper (void *arg)
 
                         LASSERT (conn->ksnc_tx_scheduled);
                         conn->ksnc_tx_ready = 1;
-                        list_add_tail (&conn->ksnc_tx_list, &sched->kss_tx_conns);
+                        list_add_tail(&conn->ksnc_tx_list,&sched->kss_tx_conns);
                         cfs_waitq_signal (&sched->kss_waitq);
 
                         spin_unlock_irqrestore (&sched->kss_lock, flags);
                         nenomem_conns++;
                 }
-                
+
                 /* careful with the jiffy wrap... */
-                while ((timeout = cfs_time_sub(deadline, 
+                while ((timeout = cfs_time_sub(deadline,
                                                cfs_time_current())) <= 0) {
                         const int n = 4;
                         const int p = 1;
                         int       chunk = ksocknal_data.ksnd_peer_hash_size;
-                        
+
                         /* Time to check for timeouts on a few more peers: I do
                          * checks every 'p' seconds on a proportion of the peer
                          * table and I need to check every connection 'n' times
@@ -2374,14 +2373,14 @@ ksocknal_reaper (void *arg)
                          * timeout interval. */
 
                         if (ksocknal_tunables.ksnd_io_timeout > n * p)
-                                chunk = (chunk * n * p) / 
+                                chunk = (chunk * n * p) /
                                         ksocknal_tunables.ksnd_io_timeout;
                         if (chunk == 0)
                                 chunk = 1;
 
                         for (i = 0; i < chunk; i++) {
                                 ksocknal_check_peer_timeouts (peer_index);
-                                peer_index = (peer_index + 1) % 
+                                peer_index = (peer_index + 1) %
                                              ksocknal_data.ksnd_peer_hash_size;
                         }
 
@@ -2394,7 +2393,7 @@ ksocknal_reaper (void *arg)
                          * if any go back on my enomem list. */
                         timeout = SOCKNAL_ENOMEM_RETRY;
                 }
-                ksocknal_data.ksnd_reaper_waketime = 
+                ksocknal_data.ksnd_reaper_waketime =
                         cfs_time_add(cfs_time_current(), timeout);
 
                 set_current_state (TASK_INTERRUPTIBLE);

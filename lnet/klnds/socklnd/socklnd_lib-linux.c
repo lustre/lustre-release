@@ -894,6 +894,10 @@ ksocknal_data_ready (struct sock *sk, int n)
         EXIT;
 }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,7))
+#define tcp_wspace(sk) sk_stream_wspace(sk)
+#endif
+
 static void
 ksocknal_write_space (struct sock *sk)
 {
