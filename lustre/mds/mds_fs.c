@@ -125,7 +125,7 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                                (int)written);
                 } else {
                         written = fsfilt_write_record(obd, mds->mds_rcvd_filp,
-                                                      (char *)med->med_mcd,
+                                                      med->med_mcd,
                                                       sizeof(*med->med_mcd),
                                                       &off);
                         fsfilt_commit(obd,mds->mds_rcvd_filp->f_dentry->d_inode,
@@ -174,9 +174,8 @@ int mds_client_free(struct obd_export *exp)
 
         memset(&zero_mcd, 0, sizeof zero_mcd);
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
-        written = fsfilt_write_record(obd, mds->mds_rcvd_filp,
-                                      (char *)&zero_mcd, sizeof(zero_mcd),
-                                      &med->med_off);
+        written = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_mcd,
+                                      sizeof(zero_mcd), &med->med_off);
         pop_ctxt(&saved, &mds->mds_ctxt, NULL);
 
         if (written != sizeof(zero_mcd)) {
@@ -233,16 +232,23 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
         mds->mds_server_data = msd;
 
         if (last_rcvd_size == 0) {
+                int written;
                 CWARN("%s: initializing new %s\n", obd->obd_name, LAST_RCVD);
                 memcpy(msd->msd_uuid, obd->obd_uuid.uuid,sizeof(msd->msd_uuid));
                 msd->msd_server_size = cpu_to_le32(MDS_LR_SERVER_SIZE);
                 msd->msd_client_start = cpu_to_le32(MDS_LR_CLIENT_START);
                 msd->msd_client_size = cpu_to_le16(MDS_LR_CLIENT_SIZE);
+                written = fsfilt_write_record(obd, file, msd, sizeof(*msd),
+                                              &off);
 
-                RETURN(0);
+                if (written == sizeof(*msd))
+                        RETURN(0);
+                CERROR("%s: error writing new MSD: %d\n", obd->obd_name,
+                       written);
+                GOTO(err_msd, rc = (written < 0 ? written : -EIO));
         }
 
-        rc = fsfilt_read_record(obd, file, (char *)msd, sizeof(*msd), &off);
+        rc = fsfilt_read_record(obd, file, msd, sizeof(*msd), &off);
 
         if (rc != sizeof(*msd)) {
                 CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD,rc);
@@ -308,8 +314,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                  */
                 off = le32_to_cpu(msd->msd_client_start) +
                         cl_idx * le16_to_cpu(msd->msd_client_size);
-                rc = fsfilt_read_record(obd, file, (char *)mcd,
-                                        sizeof(*mcd), &off);
+                rc = fsfilt_read_record(obd, file, mcd, sizeof(*mcd), &off);
                 if (rc != sizeof(*mcd)) {
                         CERROR("error reading MDS %s offset %d: rc = %d\n",
                                LAST_RCVD, cl_idx, rc);

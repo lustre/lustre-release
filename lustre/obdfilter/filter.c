@@ -228,7 +228,7 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                 fsfilt_set_last_rcvd(exp->exp_obd, last_rcvd, oti->oti_handle,
                                      filter_commit_cb, NULL);
                 written = fsfilt_write_record(exp->exp_obd,
-                                              filter->fo_rcvd_filp, (char *)fcd,
+                                              filter->fo_rcvd_filp, fcd,
                                               sizeof(*fcd), &off);
                 CDEBUG(D_HA, "wrote trans #"LPD64" for client %s at #%d: "
                        "written = "LPSZ"\n", last_rcvd, fcd->fcd_uuid,
@@ -337,8 +337,9 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
                                (int)written);
                 } else {
                         written = fsfilt_write_record(obd, filter->fo_rcvd_filp,
-                                                (char *)fed->fed_fcd,
-                                                sizeof(*fed->fed_fcd), &off);
+                                                      fed->fed_fcd,
+                                                      sizeof(*fed->fed_fcd),
+                                                      &off);
                         fsfilt_commit(obd,
                                       filter->fo_rcvd_filp->f_dentry->d_inode,
                                       handle, 0);
@@ -393,8 +394,7 @@ static int filter_client_free(struct obd_export *exp, int flags)
         memset(&zero_fcd, 0, sizeof zero_fcd);
         push_ctxt(&saved, &filter->fo_ctxt, NULL);
         written = fsfilt_write_record(obd, filter->fo_rcvd_filp,
-                                      (char *)&zero_fcd, sizeof(zero_fcd),
-                                      &off);
+                                      &zero_fcd, sizeof(zero_fcd), &off);
 
         /* XXX: this write gets lost sometimes, unless this sync is here. */
         if (written > 0)
@@ -444,7 +444,7 @@ int filter_update_server_data(struct obd_device *obd,
         CDEBUG(D_INODE, "server last_mount: "LPU64"\n",
                le64_to_cpu(fsd->fsd_mount_count));
 
-        rc = fsfilt_write_record(obd, filp, (char *)fsd, sizeof(*fsd), &off);
+        rc = fsfilt_write_record(obd, filp, fsd, sizeof(*fsd), &off);
         if (rc == sizeof(*fsd))
                 RETURN(0);
 
@@ -499,7 +499,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp,
                 fsd->fsd_subdir_count = cpu_to_le16(FILTER_SUBDIR_COUNT);
                 filter->fo_subdir_count = FILTER_SUBDIR_COUNT;
         } else {
-                int retval = fsfilt_read_record(obd, filp, (char *)fsd,
+                int retval = fsfilt_read_record(obd, filp, fsd,
                                                 sizeof(*fsd), &off);
                 if (retval != sizeof(*fsd)) {
                         CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
@@ -560,8 +560,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp,
                  */
                 off = le32_to_cpu(fsd->fsd_client_start) +
                         cl_idx * le16_to_cpu(fsd->fsd_client_size);
-                rc = fsfilt_read_record(obd, filp, (char *)fcd, sizeof(*fcd),
-                                        &off);
+                rc = fsfilt_read_record(obd, filp, fcd, sizeof(*fcd), &off);
                 if (rc != sizeof(*fcd)) {
                         CERROR("error reading FILTER %s offset %d: rc = %d\n",
                                LAST_RCVD, cl_idx, rc);

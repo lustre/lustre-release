@@ -1539,7 +1539,7 @@ int mds_update_server_data(struct obd_device *obd)
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
                mds->mds_mount_count, mds->mds_last_transno);
-        rc = fsfilt_write_record(obd, filp, (char *)msd, sizeof(*msd), &off);
+        rc = fsfilt_write_record(obd, filp, msd, sizeof(*msd), &off);
         if (rc != sizeof(*msd)) {
                 CERROR("error writing MDS server data: rc = %d\n", rc);
                 if (rc > 0)

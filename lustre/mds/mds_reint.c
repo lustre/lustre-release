@@ -170,7 +170,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         fsfilt_set_last_rcvd(req->rq_export->exp_obd, transno, handle,
                              mds_commit_cb, NULL);
         written = fsfilt_write_record(obd, mds->mds_rcvd_filp,
-                                      (char *)mcd, sizeof(*mcd), &off);
+                                      mcd, sizeof(*mcd), &off);
         CDEBUG(D_INODE, "wrote trans "LPU64" client %s at idx %u: written = "
                LPSZ"\n", transno, mcd->mcd_uuid, med->med_idx, written);
 

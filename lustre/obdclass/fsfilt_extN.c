@@ -509,7 +509,7 @@ static int fsfilt_extN_prep_san_write(struct inode *inode, long *blocks,
         return extN_prep_san_write(inode, blocks, nblocks, newsize);
 }
 
-static int fsfilt_extN_read_record(struct file * file, char *buf,
+static int fsfilt_extN_read_record(struct file * file, void *buf,
                                    int size, loff_t *offs)
 {
         struct buffer_head *bh;
@@ -544,7 +544,7 @@ static int fsfilt_extN_read_record(struct file * file, char *buf,
         return size;
 }
 
-static int fsfilt_extN_write_record(struct file * file, char *buf,
+static int fsfilt_extN_write_record(struct file * file, void *buf,
                                     int size, loff_t *offs)
 {
         struct buffer_head *bh;
