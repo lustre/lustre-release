@@ -219,7 +219,6 @@ load_target()
     else
 	EXTRA_VERSION="${EXTRA_VERSION}_lustre.$(get_lustre_version)"
     fi
-    EXTRA_VERSION=${EXTRA_VERSION//-/_}
 }
 
 tarflags()
@@ -359,8 +358,8 @@ install_kernel()
 	    mkdir -p "$DESTDIR/boot/efi/redhat"
 	    install -m 755 vmlinux "$DESTDIR/boot/efi/redhat/vmlinux-${FULL_VERSION}"
 	    install -m 755 vmlinuz "$DESTDIR/boot/efi/redhat/vmlinuz-${FULL_VERSION}"
-	    ln -sf "efi/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
-	    ln -sf "efi/vmlinuz-${FULL_VERSION}" "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    ln -sf "efi/redhat/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ln -sf "efi/redhat/vmlinuz-${FULL_VERSION}" "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
 	    ;;
 	*)
 	    cp vmlinuz "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
