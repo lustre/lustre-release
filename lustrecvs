@@ -51,6 +51,10 @@ case "$lustretag" in
         libsysiotag="head_0809"
 	;;
 
+    b_port_step)
+        portalstag="b_port_step"
+	;;
+
 esac
 
 cvs_cmd ()
