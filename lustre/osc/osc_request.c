@@ -680,8 +680,8 @@ static int osc_enqueue(struct obd_conn *oconn,
         else
                 mode2 = LCK_PW;
 
-        rc = ldlm_local_lock_match(obddev->obd_namespace, res_id, type, extent,
-                                   sizeof(extent), mode2, lockh);
+        rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
+                             sizeof(extent), mode2, lockh);
         if (rc == 1) {
                 int flags;
                 struct ldlm_lock *lock = lustre_handle2object(lockh);
