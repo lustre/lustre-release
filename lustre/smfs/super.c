@@ -17,8 +17,6 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/loop.h>
-//#include <linux/jbd.h>
-//#include <linux/ext3_fs.h>
 #include <linux/errno.h>
 #include "smfs_internal.h" 
 
@@ -43,13 +41,92 @@ static char *smfs_options(char *options, char **devstr, char **namestr)
 	}
 	return pos;
 }
+static int get_fd(struct file *filp)
+{
+	struct files_struct *files = current->files;	
+	int fd = 0;
+	
+	write_lock(&files->file_lock);
+	for (fd = 0; fd < files->max_fds; fd++) {
+		if(files->fd[fd] == filp) {
+			write_unlock(&files->file_lock);
+			return fd;	
+		}	
+	}
+	write_unlock(&files->file_lock);
+	RETURN(-1);
+}
+#define MAX_LOOP_DEVICES	256
+static char *parse_path2dev(struct super_block *sb, char *dev_path)
+{
+	struct file   *filp;
+	int i = 0, fd = 0, error = 0;
+	char *name = NULL;
+		
+	filp = filp_open(dev_path, 0, 0);
+	if (!filp) 
+		RETURN(NULL);
+
+	if (S_ISREG(filp->f_dentry->d_inode->i_mode)) {
+		/*here we must walk through all the snap cache to 
+		 *find the loop device */
+		for (i = 0; i < MAX_LOOP_DEVICES; i++) {
+			fd = get_fd(filp);
+			error = sb->s_bdev->bd_op->ioctl(filp->f_dentry->d_inode, 
+						 filp, LOOP_SET_FD,
+                                                 (unsigned long)&fd);
+			if (!error) {
+				filp_close(filp, current->files); 
+				/*FIXME later, the loop file should 
+			         *be different for different system*/
+				SM_ALLOC(name, strlen("/dev/loop/") + 2);
+				sprintf(name, "dev/loop/%d", i);
+				RETURN(name);	 				
+			}
+		}
+	}
+	SM_ALLOC(name, strlen(dev_path) + 1);
+	memcpy(name, dev_path, strlen(dev_path) + 1);
+	filp_close(filp, current->files); 
+	RETURN(name);
+}
 extern struct super_operations smfs_super_ops;
 
-static struct super_block *sm_mount_cache(struct super_block *sb, 
-				          char *devstr,
-					  char *typestr)
+static int sm_mount_cache(struct super_block *sb, 
+			  char *devstr,
+			  char *typestr)
 {
-	return NULL;	
+	struct vfsmount *mnt;	
+	struct smfs_super_info *smb;
+	char *dev_name = NULL;
+	unsigned long page;
+	int 	err = 0;
+	
+	dev_name = parse_path2dev(sb, devstr);
+	if (!dev_name) {
+        	GOTO(err_out, err = -ENOMEM);
+	}
+	if (!(page = __get_free_page(GFP_KERNEL))) {
+        	GOTO(err_out, err = -ENOMEM);
+	}                                                                                                                                                   
+        memset((void *)page, 0, PAGE_SIZE);
+        sprintf((char *)page, "iopen_nopriv");
+                                                                                                                                                                                                     
+        mnt = do_kern_mount(typestr, 0, dev_name, (void *)page);
+        free_page(page);
+	
+	if (IS_ERR(mnt)) {
+                CERROR("do_kern_mount failed: rc = %d\n", err);
+                GOTO(err_out, 0);
+        }
+	smb = S2SMI(sb); 
+	smb->smsi_sb = mnt->mnt_sb;
+	smb->smsi_mnt = mnt;
+err_out:
+	if (dev_name) 
+		SM_FREE(dev_name, strlen(dev_name) + 2);
+		
+	return err;	
 }
 
 struct super_block *
@@ -59,10 +136,8 @@ smfs_read_super(
         int silent)
 {
 	struct smfs_inode_info *smi;
-	struct smfs_super_info *smb;
 	struct dentry *bottom_root;
 	struct inode *root_inode = NULL;
-	struct super_block *cache_sb;
 	char *devstr = NULL, *typestr = NULL;
 	char *cache_data;
 	ino_t root_ino;
@@ -84,17 +159,15 @@ smfs_read_super(
 		GOTO(out_err, err=-EINVAL);
 	}
 	
-	cache_sb = sm_mount_cache(sb, devstr, typestr);
-	if (!cache_sb) {
+	err = sm_mount_cache(sb, devstr, typestr);
+	if (err) {
 		CERROR("Can not mount %s as %s\n", devstr, typestr);
-		GOTO(out_err, err=-EINVAL);
+		GOTO(out_err, 0);
 	}
 	/* set up the super block */
-	smb = S2SMI(sb); 
-	smb->smsi_sb = cache_sb;
 	sb->s_op = &smfs_super_ops;
 
-	bottom_root = dget(cache_sb->s_root);
+	bottom_root = dget(S2SMI(sb)->smsi_sb->s_root);
 	if (!bottom_root) {
 		CERROR("bottom not mounted\n");
 		GOTO(out_err, err=-ENOENT);
