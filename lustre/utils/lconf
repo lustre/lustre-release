@@ -1575,8 +1575,8 @@ def main():
 
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
-        if not os.access(args[0], os.R_OK | os.W_OK):
-            print 'File not found:', args[0]
+        if not os.access(args[0], os.R_OK):
+            print 'File not found or readable:', args[0]
             sys.exit(1)
         dom = xml.dom.minidom.parse(args[0])
     elif config.url():
