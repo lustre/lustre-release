@@ -2,8 +2,8 @@
 
 Index: linux-2.4.20-rh/fs/dcache.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/dcache.c	2003-07-29 11:36:40.000000000 +0800
-+++ linux-2.4.20-rh/fs/dcache.c	2003-07-30 17:56:16.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/dcache.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/dcache.c	2003-08-08 17:12:59.000000000 +0800
 @@ -186,6 +186,13 @@
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -43,8 +43,8 @@ Index: linux-2.4.20-rh/fs/dcache.c
  #define do_switch(x,y) do { \
 Index: linux-2.4.20-rh/fs/namei.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/namei.c	2003-07-29 11:36:22.000000000 +0800
-+++ linux-2.4.20-rh/fs/namei.c	2003-07-30 18:00:29.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/namei.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/namei.c	2003-08-08 17:12:59.000000000 +0800
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -848,8 +848,8 @@ Index: linux-2.4.20-rh/fs/namei.c
  		page_cache_release(page);
 Index: linux-2.4.20-rh/fs/open.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/open.c	2003-07-29 11:36:22.000000000 +0800
-+++ linux-2.4.20-rh/fs/open.c	2003-07-30 17:56:16.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/open.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/open.c	2003-08-08 17:12:59.000000000 +0800
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1061,7 +1061,7 @@ Index: linux-2.4.20-rh/fs/open.c
  	if (error)
  		goto out;
  
-@@ -454,6 +502,7 @@
+@@ -454,39 +502,56 @@
  	set_fs_altroot();
  	error = 0;
  dput_and_out:
@@ -1069,26 +1069,102 @@ Index: linux-2.4.20-rh/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -508,6 +557,18 @@
- 	if (IS_RDONLY(inode))
- 		goto dput_and_out;
+ }
  
+-asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++int chmod_common(struct dentry *dentry, mode_t mode)
+ {
+-	struct inode * inode;
+-	struct dentry * dentry;
+-	struct file * file;
+-	int err = -EBADF;
++	struct inode *inode = dentry->d_inode;
+ 	struct iattr newattrs;
++	int err = -EROFS;
+ 
+-	file = fget(fd);
+-	if (!file)
++	if (IS_RDONLY(inode))
+ 		goto out;
+ 
+-	dentry = file->f_dentry;
+-	inode = dentry->d_inode;
 +	if (inode->i_op->setattr_raw) {
-+		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+
 +		newattrs.ia_mode = mode;
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
-+		error = op->setattr_raw(inode, &newattrs);
++		err = inode->i_op->setattr_raw(inode, &newattrs);
 +		/* the file system wants to use normal vfs path now */
-+		if (error != -EOPNOTSUPP)
-+			goto dput_and_out;
++		if (err != -EOPNOTSUPP)
++			goto out;
 +	}
-+
- 	error = -EPERM;
+ 
+-	err = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto out_putf;
+ 	err = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
- 		goto dput_and_out;
-@@ -538,6 +599,20 @@
+-		goto out_putf;
++		goto out;
++
+ 	if (mode == (mode_t) -1)
+ 		mode = inode->i_mode;
+ 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+ 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+ 	err = notify_change(dentry, &newattrs);
+ 
+-out_putf:
++out:
++	return err;
++}
++
++asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++{
++	struct file * file;
++	int err = -EBADF;
++
++	file = fget(fd);
++	if (!file)
++		goto out;
++
++	err = chmod_common(file->f_dentry, mode);
++
+ 	fput(file);
+ out:
+ 	return err;
+@@ -495,30 +560,14 @@
+ asmlinkage long sys_chmod(const char * filename, mode_t mode)
+ {
+ 	struct nameidata nd;
+-	struct inode * inode;
+ 	int error;
+-	struct iattr newattrs;
+ 
+ 	error = user_path_walk(filename, &nd);
+ 	if (error)
+ 		goto out;
+-	inode = nd.dentry->d_inode;
+-
+-	error = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto dput_and_out;
+-
+-	error = -EPERM;
+-	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+-		goto dput_and_out;
+ 
+-	if (mode == (mode_t) -1)
+-		mode = inode->i_mode;
+-	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+-	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+-	error = notify_change(nd.dentry, &newattrs);
++	error = chmod_common(nd.dentry, mode);
+ 
+-dput_and_out:
+ 	path_release(&nd);
+ out:
+ 	return error;
+@@ -538,6 +587,20 @@
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto out;
@@ -1109,7 +1185,7 @@ Index: linux-2.4.20-rh/fs/open.c
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
-@@ -642,8 +717,9 @@
+@@ -642,8 +705,9 @@
  {
  	int namei_flags, error;
  	struct nameidata nd;
@@ -1121,7 +1197,7 @@ Index: linux-2.4.20-rh/fs/open.c
  
  	namei_flags = flags;
  	if ((namei_flags+1) & O_ACCMODE)
-@@ -651,14 +727,15 @@
+@@ -651,14 +715,15 @@
  	if (namei_flags & O_TRUNC)
  		namei_flags |= 2;
  
@@ -1142,7 +1218,7 @@ Index: linux-2.4.20-rh/fs/open.c
  {
  	struct file * f;
  	struct inode *inode;
-@@ -695,12 +772,15 @@
+@@ -695,12 +760,15 @@
  	}
  
  	if (f->f_op && f->f_op->open) {
@@ -1158,7 +1234,7 @@ Index: linux-2.4.20-rh/fs/open.c
  	return f;
  
  cleanup_all:
-@@ -715,11 +795,17 @@
+@@ -715,11 +783,17 @@
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -1178,8 +1254,8 @@ Index: linux-2.4.20-rh/fs/open.c
   */
 Index: linux-2.4.20-rh/fs/stat.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/stat.c	2003-07-29 11:36:40.000000000 +0800
-+++ linux-2.4.20-rh/fs/stat.c	2003-07-30 17:56:16.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/stat.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/stat.c	2003-08-08 17:12:59.000000000 +0800
 @@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1261,8 +1337,8 @@ Index: linux-2.4.20-rh/fs/stat.c
  		}
 Index: linux-2.4.20-rh/include/linux/dcache.h
 ===================================================================
---- linux-2.4.20-rh.orig/include/linux/dcache.h	2003-07-29 11:36:22.000000000 +0800
-+++ linux-2.4.20-rh/include/linux/dcache.h	2003-07-30 17:58:24.000000000 +0800
+--- linux-2.4.20-rh.orig/include/linux/dcache.h	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/include/linux/dcache.h	2003-08-08 17:12:59.000000000 +0800
 @@ -6,6 +6,52 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1349,9 +1425,17 @@ Index: linux-2.4.20-rh/include/linux/dcache.h
  
 Index: linux-2.4.20-rh/include/linux/fs.h
 ===================================================================
---- linux-2.4.20-rh.orig/include/linux/fs.h	2003-07-30 17:56:12.000000000 +0800
-+++ linux-2.4.20-rh/include/linux/fs.h	2003-07-30 17:57:05.000000000 +0800
-@@ -338,6 +338,9 @@
+--- linux-2.4.20-rh.orig/include/linux/fs.h	2003-08-08 16:55:31.000000000 +0800
++++ linux-2.4.20-rh/include/linux/fs.h	2003-08-08 17:14:21.000000000 +0800
+@@ -73,6 +73,7 @@
+ 
+ #define FMODE_READ 1
+ #define FMODE_WRITE 2
++#define FMODE_EXEC 4
+ 
+ #define READ 0
+ #define WRITE 1
+@@ -338,6 +339,9 @@
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
  #define ATTR_ATTR_FLAG	1024
@@ -1361,7 +1445,7 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -575,6 +578,7 @@
+@@ -575,6 +579,7 @@
  
  	/* needed for tty driver, and maybe others */
  	void			*private_data;
@@ -1369,7 +1453,7 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  
  	/* preallocated helper kiobuf to speedup O_DIRECT */
  	struct kiobuf		*f_iobuf;
-@@ -702,6 +706,7 @@
+@@ -702,6 +707,7 @@
  	struct qstr last;
  	unsigned int flags;
  	int last_type;
@@ -1377,7 +1461,7 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  };
  
  /*
-@@ -822,7 +827,8 @@
+@@ -822,7 +828,8 @@
  extern int vfs_link(struct dentry *, struct inode *, struct dentry *);
  extern int vfs_rmdir(struct inode *, struct dentry *);
  extern int vfs_unlink(struct inode *, struct dentry *);
@@ -1387,7 +1471,7 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  
  /*
   * File types
-@@ -882,21 +888,32 @@
+@@ -882,21 +889,32 @@
  
  struct inode_operations {
  	int (*create) (struct inode *,struct dentry *,int);
@@ -1420,7 +1504,7 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  	int (*getattr) (struct dentry *, struct iattr *);
  	int (*setxattr) (struct dentry *, const char *, void *, size_t, int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-@@ -1092,10 +1109,14 @@
+@@ -1092,10 +1110,14 @@
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
@@ -1436,7 +1520,7 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
-@@ -1386,6 +1407,7 @@
+@@ -1386,6 +1408,7 @@
  extern loff_t default_llseek(struct file *file, loff_t offset, int origin);
  
  extern int FASTCALL(__user_walk(const char *, unsigned, struct nameidata *));
@@ -1444,7 +1528,7 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  extern int FASTCALL(path_init(const char *, unsigned, struct nameidata *));
  extern int FASTCALL(path_walk(const char *, struct nameidata *));
  extern int FASTCALL(path_lookup(const char *, unsigned, struct nameidata *));
-@@ -1397,6 +1419,8 @@
+@@ -1397,6 +1420,8 @@
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
@@ -1453,7 +1537,7 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  
  extern void inode_init_once(struct inode *);
  extern void iput(struct inode *);
-@@ -1504,6 +1528,8 @@
+@@ -1504,6 +1529,8 @@
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
@@ -1464,8 +1548,8 @@ Index: linux-2.4.20-rh/include/linux/fs.h
  extern struct inode_operations page_symlink_inode_operations;
 Index: linux-2.4.20-rh/kernel/ksyms.c
 ===================================================================
---- linux-2.4.20-rh.orig/kernel/ksyms.c	2003-07-30 17:56:14.000000000 +0800
-+++ linux-2.4.20-rh/kernel/ksyms.c	2003-07-30 17:56:17.000000000 +0800
+--- linux-2.4.20-rh.orig/kernel/ksyms.c	2003-08-08 16:55:33.000000000 +0800
++++ linux-2.4.20-rh/kernel/ksyms.c	2003-08-08 17:13:00.000000000 +0800
 @@ -298,6 +298,7 @@
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1476,15 +1560,16 @@ Index: linux-2.4.20-rh/kernel/ksyms.c
  EXPORT_SYMBOL(page_symlink_inode_operations);
 Index: linux-2.4.20-rh/fs/exec.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/exec.c	2003-07-29 11:36:40.000000000 +0800
-+++ linux-2.4.20-rh/fs/exec.c	2003-07-30 17:56:17.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/exec.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/exec.c	2003-08-08 17:13:00.000000000 +0800
 @@ -114,8 +114,9 @@
  	struct file * file;
  	struct nameidata nd;
  	int error;
-+	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
- 
+-
 -	error = user_path_walk(library, &nd);
++	struct lookup_intent it = { .it_op = IT_OPEN, 
++				    .it_flags = FMODE_READ|FMODE_EXEC };
 +	error = user_path_walk_it(library, &nd, &it);
  	if (error)
  		goto out;
@@ -1503,9 +1588,10 @@ Index: linux-2.4.20-rh/fs/exec.c
  	struct inode *inode;
  	struct file *file;
  	int err = 0;
-+	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
- 
+-
 -	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd);
++	struct lookup_intent it = { .it_op = IT_OPEN, 
++				    .it_flags = FMODE_READ|FMODE_EXEC };
 +	err = path_lookup_it(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd, &it);
  	file = ERR_PTR(err);
  	if (!err) {
@@ -1539,8 +1625,8 @@ Index: linux-2.4.20-rh/fs/exec.c
  	retval = binfmt->core_dump(signr, regs, file);
 Index: linux-2.4.20-rh/fs/proc/base.c
 ===================================================================
---- linux-2.4.20-rh.orig/fs/proc/base.c	2003-07-29 11:36:40.000000000 +0800
-+++ linux-2.4.20-rh/fs/proc/base.c	2003-07-30 17:56:17.000000000 +0800
+--- linux-2.4.20-rh.orig/fs/proc/base.c	2003-08-08 13:50:29.000000000 +0800
++++ linux-2.4.20-rh/fs/proc/base.c	2003-08-08 17:13:00.000000000 +0800
 @@ -494,6 +494,9 @@
  
  	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);

@@ -34,24 +34,16 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_net.h>
 
-int client_import_connect(struct lustre_handle *dlm_handle,
+int client_connect_import(struct lustre_handle *dlm_handle,
                           struct obd_device *obd,
                           struct obd_uuid *cluuid)
 {
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
         struct obd_export *exp;
-        struct ptlrpc_request *request;
-        /* XXX maybe this is a good time to create a connect struct? */
-        int rc, size[] = {sizeof(imp->imp_target_uuid),
-                          sizeof(obd->obd_uuid),
-                          sizeof(*dlm_handle)};
-        char *tmp[] = {imp->imp_target_uuid.uuid,
-                       obd->obd_uuid.uuid,
-                       (char *)dlm_handle};
-        int msg_flags;
-
+        int rc;
         ENTRY;
+
         down(&cli->cl_sem);
         rc = class_connect(dlm_handle, obd, cluuid);
         if (rc)
@@ -68,43 +60,32 @@ int client_import_connect(struct lustre_handle *dlm_handle,
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
-        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 3, size, tmp);
-        if (!request)
-                GOTO(out_ldlm, rc = -ENOMEM);
-
-        request->rq_level = LUSTRE_CONN_NEW;
-        request->rq_replen = lustre_msg_size(0, NULL);
-
-        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_PEER);
-
         imp->imp_dlm_handle = *dlm_handle;
-
-        imp->imp_level = LUSTRE_CONN_CON;
-        rc = ptlrpc_queue_wait(request);
-        if (rc) {
-                class_disconnect(dlm_handle, 0);
-                GOTO(out_req, rc);
+        imp->imp_state = LUSTRE_IMP_DISCON;
+        
+        rc = ptlrpc_connect_import(imp);
+        if (rc != 0) {
+                LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
+                GOTO(out_ldlm, rc);
         }
 
+        LASSERT (imp->imp_state == LUSTRE_IMP_FULL);
+
         exp = class_conn2export(dlm_handle);
-        exp->exp_connection = ptlrpc_connection_addref(request->rq_connection);
+        exp->exp_connection = ptlrpc_connection_addref(imp->imp_connection);
         class_export_put(exp);
 
-        msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
-        if (msg_flags & MSG_CONNECT_REPLAYABLE) {
-                imp->imp_replayable = 1;
+        if (imp->imp_replayable) {
                 CDEBUG(D_HA, "connected to replayable target: %s\n",
                        imp->imp_target_uuid.uuid);
                 ptlrpc_pinger_add_import(imp);
         }
-        imp->imp_level = LUSTRE_CONN_FULL;
-        imp->imp_remote_handle = request->rq_repmsg->handle;
+
         CDEBUG(D_HA, "local import: %p, remote handle: "LPX64"\n", imp,
                imp->imp_remote_handle.cookie);
 
         EXIT;
-out_req:
-        ptlrpc_req_finished(request);
+
         if (rc) {
 out_ldlm:
                 ldlm_namespace_free(obd->obd_namespace);
@@ -118,28 +99,17 @@ out_sem:
         return rc;
 }
 
-int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
+int client_disconnect_import(struct lustre_handle *dlm_handle, int failover)
 {
         struct obd_device *obd = class_conn2obd(dlm_handle);
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
-        struct ptlrpc_request *request = NULL;
-        int rc = 0, err, rq_opc;
+        int rc = 0, err;
         ENTRY;
 
         if (!obd) {
                 CERROR("invalid connection for disconnect: cookie "LPX64"\n",
                        dlm_handle ? dlm_handle->cookie : -1UL);
-                RETURN(-EINVAL);
-        }
-
-        switch (imp->imp_connect_op) {
-        case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
-        case MDS_CONNECT: rq_opc = MDS_DISCONNECT; break;
-        case MGMT_CONNECT:rq_opc = MGMT_DISCONNECT;break;
-        default:
-                CERROR("don't know how to disconnect from %s (connect_op %d)\n",
-                       imp->imp_target_uuid.uuid, imp->imp_connect_op);
                 RETURN(-EINVAL);
         }
 
@@ -154,6 +124,9 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
         if (cli->cl_conn_count)
                 GOTO(out_no_disconnect, rc = 0);
 
+        if (imp->imp_replayable)
+                ptlrpc_pinger_del_import(imp);
+
         if (obd->obd_namespace != NULL) {
                 /* obd_no_recov == local only */
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
@@ -166,23 +139,14 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
         if (obd->obd_no_recov) {
                 ptlrpc_set_import_active(imp, 0);
         } else {
-                request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
-                if (!request)
-                        GOTO(out_req, rc = -ENOMEM);
-
-                request->rq_replen = lustre_msg_size(0, NULL);
-
-                rc = ptlrpc_queue_wait(request);
-                if (rc)
-                        GOTO(out_req, rc);
+                rc = ptlrpc_disconnect_import(imp);
         }
-        if (imp->imp_replayable)
-                ptlrpc_pinger_del_import(imp);
+        
+        imp->imp_state = LUSTRE_IMP_NEW;
+
 
         EXIT;
- out_req:
-        if (request)
-                ptlrpc_req_finished(request);
+
  out_no_disconnect:
         err = class_disconnect(dlm_handle, 0);
         if (!rc && err)
@@ -359,6 +323,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                                                        &remote_uuid);
         req->rq_connection = ptlrpc_connection_addref(export->exp_connection);
 
+        LASSERT(export->exp_conn_cnt < req->rq_reqmsg->conn_cnt);
+        export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
+
         if (rc == EALREADY) {
                 /* We indicate the reconnection in a flag, not an error code. */
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
@@ -376,7 +343,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         dlmimp->imp_remote_handle = conn;
         dlmimp->imp_obd = target;
         dlmimp->imp_dlm_fake = 1;
-        dlmimp->imp_level = LUSTRE_CONN_FULL;
+        dlmimp->imp_state = LUSTRE_IMP_FULL;
         class_import_put(dlmimp);
 out:
         if (rc)

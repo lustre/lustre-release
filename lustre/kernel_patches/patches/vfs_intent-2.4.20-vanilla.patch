@@ -12,20 +12,23 @@
  kernel/ksyms.c            |    1 
  12 files changed, 527 insertions(+), 97 deletions(-)
 
---- linux-2.4.20-l18/fs/exec.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-l18-phil/fs/exec.c	Fri Jul 25 14:36:12 2003
-@@ -107,8 +107,9 @@ asmlinkage long sys_uselib(const char * 
+Index: lum/fs/exec.c
+===================================================================
+--- lum.orig/fs/exec.c	2003-08-07 05:11:15.000000000 -0600
++++ lum/fs/exec.c	2003-08-07 05:14:57.000000000 -0600
+@@ -107,8 +107,10 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
  	int error;
-+	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
++	struct lookup_intent it = { .it_op = IT_OPEN, 
++				    .it_flags = FMODE_READ|FMODE_EXEC };
  
 -	error = user_path_walk(library, &nd);
 +	error = user_path_walk_it(library, &nd, &it);
  	if (error)
  		goto out;
  
-@@ -120,7 +121,8 @@ asmlinkage long sys_uselib(const char * 
+@@ -120,7 +122,8 @@ asmlinkage long sys_uselib(const char * 
  	if (error)
  		goto exit;
  
@@ -35,18 +38,19 @@
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -363,8 +365,9 @@ struct file *open_exec(const char *name)
+@@ -363,8 +366,10 @@ struct file *open_exec(const char *name)
  	struct inode *inode;
  	struct file *file;
  	int err = 0;
-+	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
++	struct lookup_intent it = { .it_op = IT_OPEN, 
++				    .it_flags = FMODE_EXEC|FMODE_READ };
  
 -	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd);
 +	err = path_lookup_it(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd, &it);
  	file = ERR_PTR(err);
  	if (!err) {
  		inode = nd.dentry->d_inode;
-@@ -376,7 +379,8 @@ struct file *open_exec(const char *name)
+@@ -376,7 +381,8 @@ struct file *open_exec(const char *name)
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -56,7 +60,7 @@
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
-@@ -388,6 +392,7 @@ out:
+@@ -388,6 +394,7 @@ out:
  				return file;
  			}
  		}
@@ -64,7 +68,7 @@
  		path_release(&nd);
  	}
  	goto out;
-@@ -989,7 +994,7 @@ int do_coredump(long signr, struct pt_re
+@@ -989,7 +996,7 @@ int do_coredump(long signr, struct pt_re
  		goto close_fail;
  	if (!file->f_op->write)
  		goto close_fail;
@@ -73,8 +77,10 @@
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
---- linux-2.4.20-l18/fs/dcache.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-l18-phil/fs/dcache.c	Fri Jul 25 14:36:12 2003
+Index: lum/fs/dcache.c
+===================================================================
+--- lum.orig/fs/dcache.c	2003-08-07 05:11:15.000000000 -0600
++++ lum/fs/dcache.c	2003-08-07 05:11:20.000000000 -0600
 @@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -112,8 +118,10 @@
  }
  
  #define do_switch(x,y) do { \
---- linux-2.4.20-l18/fs/namespace.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-l18-phil/fs/namespace.c	Fri Jul 25 14:36:12 2003
+Index: lum/fs/namespace.c
+===================================================================
+--- lum.orig/fs/namespace.c	2003-08-07 05:11:15.000000000 -0600
++++ lum/fs/namespace.c	2003-08-07 05:11:20.000000000 -0600
 @@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
@@ -227,8 +235,10 @@
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
---- linux-2.4.20-l18/fs/namei.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-l18-phil/fs/namei.c	Fri Jul 25 19:28:06 2003
+Index: lum/fs/namei.c
+===================================================================
+--- lum.orig/fs/namei.c	2003-08-07 05:11:15.000000000 -0600
++++ lum/fs/namei.c	2003-08-07 05:11:20.000000000 -0600
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -951,8 +961,10 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- linux-2.4.20-l18/fs/open.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-l18-phil/fs/open.c	Fri Jul 25 14:36:12 2003
+Index: lum/fs/open.c
+===================================================================
+--- lum.orig/fs/open.c	2003-08-07 05:11:15.000000000 -0600
++++ lum/fs/open.c	2003-08-08 05:30:13.000000000 -0600
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1164,7 +1176,7 @@
  	if (error)
  		goto out;
  
-@@ -454,6 +502,7 @@ asmlinkage long sys_chroot(const char * 
+@@ -454,39 +502,56 @@ asmlinkage long sys_chroot(const char * 
  	set_fs_altroot();
  	error = 0;
  dput_and_out:
@@ -1172,26 +1184,102 @@
  	path_release(&nd);
  out:
  	return error;
-@@ -508,6 +557,18 @@ asmlinkage long sys_chmod(const char * f
- 	if (IS_RDONLY(inode))
- 		goto dput_and_out;
+ }
  
+-asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++int chmod_common(struct dentry *dentry, mode_t mode)
+ {
+-	struct inode * inode;
+-	struct dentry * dentry;
+-	struct file * file;
+-	int err = -EBADF;
++	struct inode *inode = dentry->d_inode;
+ 	struct iattr newattrs;
++	int err = -EROFS;
+ 
+-	file = fget(fd);
+-	if (!file)
++	if (IS_RDONLY(inode))
+ 		goto out;
+ 
+-	dentry = file->f_dentry;
+-	inode = dentry->d_inode;
 +	if (inode->i_op->setattr_raw) {
-+		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+
 +		newattrs.ia_mode = mode;
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
-+		error = op->setattr_raw(inode, &newattrs);
++		err = inode->i_op->setattr_raw(inode, &newattrs);
 +		/* the file system wants to use normal vfs path now */
-+		if (error != -EOPNOTSUPP)
-+			goto dput_and_out;
++		if (err != -EOPNOTSUPP)
++			goto out;
 +	}
-+
- 	error = -EPERM;
+ 
+-	err = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto out_putf;
+ 	err = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
- 		goto dput_and_out;
-@@ -538,6 +599,20 @@ static int chown_common(struct dentry * 
+-		goto out_putf;
++		goto out;
++
+ 	if (mode == (mode_t) -1)
+ 		mode = inode->i_mode;
+ 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+ 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+ 	err = notify_change(dentry, &newattrs);
+ 
+-out_putf:
++out:
++	return err;
++}
++
++asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++{
++	struct file * file;
++	int err = -EBADF;
++
++	file = fget(fd);
++	if (!file)
++		goto out;
++
++	err = chmod_common(file->f_dentry, mode);
++
+ 	fput(file);
+ out:
+ 	return err;
+@@ -495,30 +560,14 @@ out:
+ asmlinkage long sys_chmod(const char * filename, mode_t mode)
+ {
+ 	struct nameidata nd;
+-	struct inode * inode;
+ 	int error;
+-	struct iattr newattrs;
+ 
+ 	error = user_path_walk(filename, &nd);
+ 	if (error)
+ 		goto out;
+-	inode = nd.dentry->d_inode;
+-
+-	error = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto dput_and_out;
+-
+-	error = -EPERM;
+-	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+-		goto dput_and_out;
+ 
+-	if (mode == (mode_t) -1)
+-		mode = inode->i_mode;
+-	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+-	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+-	error = notify_change(nd.dentry, &newattrs);
++	error = chmod_common(nd.dentry, mode);
+ 
+-dput_and_out:
+ 	path_release(&nd);
+ out:
+ 	return error;
+@@ -538,6 +587,20 @@ static int chown_common(struct dentry * 
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto out;
@@ -1212,7 +1300,7 @@
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
-@@ -638,10 +713,12 @@ asmlinkage long sys_fchown(unsigned int 
+@@ -638,10 +701,12 @@ asmlinkage long sys_fchown(unsigned int 
   * for the internal routines (ie open_namei()/follow_link() etc). 00 is
   * used by symlinks.
   */
@@ -1225,7 +1313,7 @@
  
  	namei_flags = flags;
  	if ((namei_flags+1) & O_ACCMODE)
-@@ -649,14 +726,15 @@ struct file *filp_open(const char * file
+@@ -649,14 +714,15 @@ struct file *filp_open(const char * file
  	if (namei_flags & O_TRUNC)
  		namei_flags |= 2;
  
@@ -1246,7 +1334,7 @@
  {
  	struct file * f;
  	struct inode *inode;
-@@ -693,12 +771,15 @@ struct file *dentry_open(struct dentry *
+@@ -693,12 +759,15 @@ struct file *dentry_open(struct dentry *
  	}
  
  	if (f->f_op && f->f_op->open) {
@@ -1262,7 +1350,7 @@
  	return f;
  
  cleanup_all:
-@@ -713,11 +794,17 @@ cleanup_all:
+@@ -713,11 +782,17 @@ cleanup_all:
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -1280,8 +1368,10 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.4.20-l18/fs/stat.c~vfs_intent-2.4.20-vanilla	Thu Sep 13 19:04:43 2001
-+++ linux-2.4.20-l18-phil/fs/stat.c	Fri Jul 25 14:36:12 2003
+Index: lum/fs/stat.c
+===================================================================
+--- lum.orig/fs/stat.c	2003-08-07 05:11:15.000000000 -0600
++++ lum/fs/stat.c	2003-08-07 05:11:20.000000000 -0600
 @@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1439,8 +1529,10 @@
  		if (!err)
  			err = cp_new_stat64(dentry->d_inode, statbuf);
  		fput(f);
---- linux-2.4.20-l18/include/linux/dcache.h~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-l18-phil/include/linux/dcache.h	Fri Jul 25 14:37:38 2003
+Index: lum/include/linux/dcache.h
+===================================================================
+--- lum.orig/include/linux/dcache.h	2003-08-07 05:11:15.000000000 -0600
++++ lum/include/linux/dcache.h	2003-08-07 05:16:55.000000000 -0600
 @@ -7,6 +7,50 @@
  #include <linux/mount.h>
  #include <linux/kernel.h>
@@ -1523,9 +1615,19 @@
  
  extern spinlock_t dcache_lock;
  
---- linux-2.4.20-l18/include/linux/fs.h~vfs_intent-2.4.20-vanilla	Fri Jul 25 14:36:11 2003
-+++ linux-2.4.20-l18-phil/include/linux/fs.h	Fri Jul 25 14:36:12 2003
-@@ -338,6 +338,9 @@ extern void set_bh_page(struct buffer_he
+Index: lum/include/linux/fs.h
+===================================================================
+--- lum.orig/include/linux/fs.h	2003-08-07 05:11:20.000000000 -0600
++++ lum/include/linux/fs.h	2003-08-07 05:13:52.000000000 -0600
+@@ -73,6 +73,7 @@ extern int leases_enable, dir_notify_ena
+ 
+ #define FMODE_READ 1
+ #define FMODE_WRITE 2
++#define FMODE_EXEC 4
+ 
+ #define READ 0
+ #define WRITE 1
+@@ -338,6 +339,9 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
  #define ATTR_ATTR_FLAG	1024
@@ -1535,7 +1637,7 @@
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -542,6 +545,7 @@ struct file {
+@@ -542,6 +546,7 @@ struct file {
  
  	/* needed for tty driver, and maybe others */
  	void			*private_data;
@@ -1543,7 +1645,7 @@
  
  	/* preallocated helper kiobuf to speedup O_DIRECT */
  	struct kiobuf		*f_iobuf;
-@@ -661,6 +665,7 @@ struct nameidata {
+@@ -661,6 +666,7 @@ struct nameidata {
  	struct qstr last;
  	unsigned int flags;
  	int last_type;
@@ -1551,7 +1653,7 @@
  };
  
  #define DQUOT_USR_ENABLED	0x01		/* User diskquotas enabled */
-@@ -794,7 +799,8 @@ extern int vfs_symlink(struct inode *, s
+@@ -794,7 +800,8 @@ extern int vfs_symlink(struct inode *, s
  extern int vfs_link(struct dentry *, struct inode *, struct dentry *);
  extern int vfs_rmdir(struct inode *, struct dentry *);
  extern int vfs_unlink(struct inode *, struct dentry *);
@@ -1561,7 +1663,7 @@
  
  /*
   * File types
-@@ -854,21 +860,32 @@ struct file_operations {
+@@ -854,21 +861,32 @@ struct file_operations {
  
  struct inode_operations {
  	int (*create) (struct inode *,struct dentry *,int);
@@ -1594,7 +1696,7 @@
  	int (*getattr) (struct dentry *, struct iattr *);
  	int (*setxattr) (struct dentry *, const char *, void *, size_t, int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-@@ -1070,10 +1087,14 @@ static inline int get_lease(struct inode
+@@ -1070,10 +1088,14 @@ static inline int get_lease(struct inode
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
@@ -1610,7 +1712,7 @@
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
-@@ -1335,6 +1356,7 @@ typedef int (*read_actor_t)(read_descrip
+@@ -1335,6 +1357,7 @@ typedef int (*read_actor_t)(read_descrip
  extern loff_t default_llseek(struct file *file, loff_t offset, int origin);
  
  extern int FASTCALL(__user_walk(const char *, unsigned, struct nameidata *));
@@ -1618,7 +1720,7 @@
  extern int FASTCALL(path_init(const char *, unsigned, struct nameidata *));
  extern int FASTCALL(path_walk(const char *, struct nameidata *));
  extern int FASTCALL(path_lookup(const char *, unsigned, struct nameidata *));
-@@ -1346,6 +1368,8 @@ extern struct dentry * lookup_one_len(co
+@@ -1346,6 +1369,8 @@ extern struct dentry * lookup_one_len(co
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
@@ -1627,7 +1729,7 @@
  
  extern void iput(struct inode *);
  extern void force_delete(struct inode *);
-@@ -1455,6 +1479,8 @@ extern struct file_operations generic_ro
+@@ -1455,6 +1480,8 @@ extern struct file_operations generic_ro
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
@@ -1636,8 +1738,10 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- linux-2.4.20-l18/include/linux/fs_struct.h~vfs_intent-2.4.20-vanilla	Fri Jul 13 18:10:44 2001
-+++ linux-2.4.20-l18-phil/include/linux/fs_struct.h	Fri Jul 25 14:36:12 2003
+Index: lum/include/linux/fs_struct.h
+===================================================================
+--- lum.orig/include/linux/fs_struct.h	2003-08-07 05:11:15.000000000 -0600
++++ lum/include/linux/fs_struct.h	2003-08-07 05:11:20.000000000 -0600
 @@ -34,10 +34,12 @@ static inline void set_fs_root(struct fs
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1664,8 +1768,10 @@
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
---- linux-2.4.20-l18/kernel/ksyms.c~vfs_intent-2.4.20-vanilla	Fri Jul 25 14:36:11 2003
-+++ linux-2.4.20-l18-phil/kernel/ksyms.c	Fri Jul 25 14:36:12 2003
+Index: lum/kernel/ksyms.c
+===================================================================
+--- lum.orig/kernel/ksyms.c	2003-08-07 05:11:20.000000000 -0600
++++ lum/kernel/ksyms.c	2003-08-07 05:11:20.000000000 -0600
 @@ -269,6 +269,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1674,8 +1780,10 @@
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
---- linux-2.4.20-l18/kernel/fork.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-l18-phil/kernel/fork.c	Fri Jul 25 14:36:12 2003
+Index: lum/kernel/fork.c
+===================================================================
+--- lum.orig/kernel/fork.c	2003-08-07 05:11:15.000000000 -0600
++++ lum/kernel/fork.c	2003-08-07 05:11:20.000000000 -0600
 @@ -384,10 +384,13 @@ static inline struct fs_struct *__copy_f
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1690,8 +1798,10 @@
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
---- linux-2.4.20-l18/kernel/exit.c~vfs_intent-2.4.20-vanilla	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-l18-phil/kernel/exit.c	Fri Jul 25 14:36:12 2003
+Index: lum/kernel/exit.c
+===================================================================
+--- lum.orig/kernel/exit.c	2003-08-07 05:11:15.000000000 -0600
++++ lum/kernel/exit.c	2003-08-07 05:11:20.000000000 -0600
 @@ -238,11 +238,14 @@ static inline void __put_fs_struct(struc
  {
  	/* No need to hold fs->lock if we are killing it */
@@ -1707,5 +1817,3 @@
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
-
-_
