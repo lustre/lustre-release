@@ -953,25 +953,7 @@ extern int is_kernel_text_address(unsigned long addr);
 
 char *portals_debug_dumpstack(void)
 {
-        int size;
-        unsigned long addr;
-        char *buf = stack_backtrace;
-        char *pbuf = buf;
-        unsigned long *stack = (unsigned long *)&buf;
-
-        size = sprintf(pbuf, " Call Trace: ");
-        pbuf += size;
-        while (((long) stack & (THREAD_SIZE-1)) != 0) {
-                addr = *stack++;
-                if (is_kernel_text_address(addr)) {
-                        size = sprintf(pbuf, "[<%08lx>] ", addr);
-                        pbuf += size;
-                        if (buf + LUSTRE_TRACE_SIZE <= pbuf + 12)
-                                break;
-                }
-        }
-
-        return buf;
+        panic("LBUG");
 }
 
 #elif defined(__i386__)
