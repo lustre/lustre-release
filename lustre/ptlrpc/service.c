@@ -129,6 +129,14 @@ ptlrpc_save_llog_lock (struct ptlrpc_request *req,
 }
 
 void
+ptlrpc_require_repack(struct ptlrpc_request *req)
+{
+        struct ptlrpc_reply_state *rs = req->rq_reply_state;
+        LASSERT (rs != NULL);
+        rs->rs_difficult = 1;
+}
+
+void
 ptlrpc_save_lock (struct ptlrpc_request *req, 
                   struct lustre_handle *lock, int mode)
 {
@@ -577,12 +585,15 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         if (nlocks == 0 && !been_handled) {
                 /* If we see this, we should already have seen the warning
                  * in mds_steal_ack_locks()  */
+#if 0   
+                /* CMD may ask to save request with no DLM locks -bzzz */
                 CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",
                       rs, 
                       rs->rs_xid, rs->rs_transno,
                       rs->rs_msg.opc, 
                       ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
+#endif
         }
 
         if ((!been_handled && rs->rs_on_net) || 

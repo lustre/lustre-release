@@ -133,6 +133,7 @@ EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_disconnect_import);
 
 /* service.c */
+EXPORT_SYMBOL(ptlrpc_require_repack);
 EXPORT_SYMBOL(ptlrpc_save_lock);
 EXPORT_SYMBOL(ptlrpc_save_llog_lock);
 EXPORT_SYMBOL(ptlrpc_schedule_difficult_reply);

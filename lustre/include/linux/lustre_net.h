@@ -639,6 +639,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 __u64 ptlrpc_next_xid(void);
 
 /* ptlrpc/service.c */
+void ptlrpc_require_repack (struct ptlrpc_request *req);
 void ptlrpc_save_lock (struct ptlrpc_request *req, 
                        struct lustre_handle *lock, int mode);
 void ptlrpc_save_llog_lock (struct ptlrpc_request *req, 

@@ -1338,14 +1338,11 @@ static void reconstruct_create(struct ptlrpc_request *req)
 static int mdt_obj_create(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct ldlm_res_id res_id = { .name = {0} };
         struct mds_obd *mds = &obd->u.mds;
         struct ost_body *body, *repbody;
         char fidname[LL_FID_NAMELEN];
         struct inode *parent_inode;
-        struct lustre_handle lockh;
         struct lvfs_run_ctxt saved;
-        ldlm_policy_data_t policy;
         struct dentry *new = NULL;
         struct dentry_params dp;
         int mealen, flags = 0, rc, size = sizeof(*repbody), cleanup_phase = 0;
@@ -1465,18 +1462,6 @@ repeat:
                         GOTO(cleanup, rc);
                 }
                         
-                /* this lock should be taken to serialize MDS modifications
-                 * in failure case */
-                res_id.name[0] = new->d_inode->i_ino;
-                res_id.name[1] = new->d_inode->i_generation;
-                policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                res_id, LDLM_IBITS, &policy,
-                                LCK_EX, &flags, mds_blocking_ast,
-                                ldlm_completion_ast, NULL, NULL,
-                                NULL, 0, NULL, &lockh);
-                if (rc != ELDLM_OK)
-                        GOTO(cleanup, rc);
                 cleanup_phase = 2; /* valid lockh */
 
                 CDEBUG(D_OTHER, "created dirobj: %lu/%lu mode %o\n",
@@ -1515,11 +1500,9 @@ repeat:
 
 cleanup:
         switch (cleanup_phase) {
-        case 2: /* valid lockh */
+        case 2: /* object has been created, but we'll may want to replay it later */
                 if (rc == 0)
-                        ptlrpc_save_lock(req, &lockh, LCK_EX);
-                else
-                        ldlm_lock_decref(&lockh, LCK_EX);
+                        ptlrpc_require_repack(req);
         case 1: /* transaction */
                 rc = mds_finish_transno(mds, parent_inode, handle, req, rc, 0);
         }
