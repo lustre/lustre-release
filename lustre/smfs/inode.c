@@ -74,13 +74,20 @@ static void smfs_clear_inode(struct inode *inode)
 	cache_sb = S2CSB(inode->i_sb);
 	cache_inode = I2CI(inode);
 
-	duplicate_inode(inode, cache_inode); 
-	
-	if (cache_sb->s_op->clear_inode)
-		cache_sb->s_op->clear_inode(cache_inode);
+	/*FIXME: because i_count of cache_inode may not 
+         * be 0 or 1 in before smfs_delete inode, So we 
+         * need to dec it to 1 before we call delete_inode
+         * of the bellow cache filesystem Check again latter*/
 
-	duplicate_inode(inode, cache_inode);
+	if (atomic_read(&cache_inode->i_count) < 1)
+		BUG();
 	
+	while (atomic_read(&cache_inode->i_count) != 1) {
+		atomic_dec(&cache_inode->i_count);
+	}
+	iput(cache_inode);
+	
+	I2CI(inode) = NULL;
 	return;	
 }
 static void smfs_delete_inode(struct inode *inode)
@@ -92,11 +99,21 @@ static void smfs_delete_inode(struct inode *inode)
 	cache_inode = I2CI(inode);
 	cache_sb = S2CSB(inode->i_sb);
 
-	if (!cache_inode || !cache_sb || 
-	    !cache_inode->i_nlink) {
-		clear_inode(inode);	
+	if (!cache_inode || !cache_sb)  
 		return;
-	}	
+
+	/*FIXME: because i_count of cache_inode may not 
+         * be 0 or 1 in before smfs_delete inode, So we 
+         * need to dec it to 1 before we call delete_inode
+         * of the bellow cache filesystem Check again latter*/
+
+	if (atomic_read(&cache_inode->i_count) < 1)
+		BUG();
+	
+	while (atomic_read(&cache_inode->i_count) != 1) {
+		atomic_dec(&cache_inode->i_count);
+	}
+	
 	duplicate_inode(inode, cache_inode); 
 	
 	list_del(&cache_inode->i_hash);
@@ -112,6 +129,7 @@ static void smfs_delete_inode(struct inode *inode)
 
 	duplicate_inode(cache_inode, inode); 
 	
+	I2CI(inode) = NULL;
 	return;
 }
 static void smfs_write_inode(struct inode *inode, int wait)
@@ -163,7 +181,8 @@ static void smfs_put_inode(struct inode *inode)
 
 	if (!cache_inode || !cache_sb)
 		return;
-	iput(cache_inode);
+	if (cache_sb->s_op->put_inode)
+		cache_sb->s_op->put_inode(cache_inode);
 
 	return;
 }
@@ -255,7 +274,7 @@ static int smfs_remount(struct super_block * sb, int * flags, char * data)
 }
 struct super_operations smfs_super_ops = {
 	read_inode:	smfs_read_inode,
-	//clear_inode:	smfs_clear_inode,
+	clear_inode:	smfs_clear_inode,
 	put_super:	smfs_put_super,
 	delete_inode:	smfs_delete_inode,
         write_inode:	smfs_write_inode,
