@@ -329,16 +329,14 @@ void lproc_osc_hist_pow2(struct osc_histogram *oh, unsigned int value)
         lproc_osc_hist(oh, pow);
 }
 
-static void lproc_dump_oh(struct seq_file *seq, struct osc_histogram *oh)
+static unsigned long lproc_oh_sum(struct osc_histogram *oh)
 {
-        unsigned long flags;
+        unsigned long ret = 0;
         int i;
-        spin_lock_irqsave(&oh->oh_lock, flags);
 
         for (i = 0; i < OSC_HIST_MAX; i++)
-                seq_printf(seq, "%d:\t\t"LPU64"\n", i, oh->oh_buckets[i]);
-
-        spin_unlock_irqrestore(&oh->oh_lock, flags);
+                ret +=  oh->oh_buckets[i];
+        return ret;
 }
 
 static void lproc_clear_oh(struct osc_histogram *oh)
@@ -349,24 +347,24 @@ static void lproc_clear_oh(struct osc_histogram *oh)
         spin_unlock_irqrestore(&oh->oh_lock, flags);
 }
 
+#define pct(a,b) (b ? a * 100 / b : 0)
 
-/* related stats that we want in coherent snapshots instead of sprayed 
- * across N files each with a single stat. */
 static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {
         struct timeval now;
         struct obd_device *dev = seq->private;
         struct client_obd *cli = &dev->u.cli;
         unsigned long flags;
-        int rpcs, r, w;
+        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
+        int i, rpcs, r, w;
 
         do_gettimeofday(&now);
 
         spin_lock_irqsave(&cli->cl_loi_list_lock, flags);
+
         rpcs = cli->cl_brw_in_flight;
         r = cli->cl_pending_r_pages;
         w = cli->cl_pending_w_pages;
-        spin_unlock_irqrestore(&cli->cl_loi_list_lock, flags);
                                                                                 
         seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
                    now.tv_sec, now.tv_usec);
@@ -374,13 +372,57 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         seq_printf(seq, "pending write pages:   %d\n", w);
         seq_printf(seq, "pending read pages:   %d\n", r);
 
-        seq_printf(seq, "\nother RPCs in flight when a new RPC is sent:\n");
-        lproc_dump_oh(seq, &cli->cl_rpc_concurrency_oh);
-        seq_printf(seq, "\npages in each RPC:\n"); 
-        lproc_dump_oh(seq, &cli->cl_pages_per_rpc_oh);
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "pages per rpc         rpcs   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lproc_oh_sum(&cli->cl_read_page_hist);
+        write_tot = lproc_oh_sum(&cli->cl_write_page_hist);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OSC_HIST_MAX; i++) {
+                unsigned long r = cli->cl_read_page_hist.oh_buckets[i];
+                unsigned long w = cli->cl_write_page_hist.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 1 << i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
+                                 pct(w, write_tot),
+                                 pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "rpcs in flight        rpcs   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lproc_oh_sum(&cli->cl_read_rpc_hist);
+        write_tot = lproc_oh_sum(&cli->cl_write_rpc_hist);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OSC_HIST_MAX; i++) {
+                unsigned long r = cli->cl_read_rpc_hist.oh_buckets[i];
+                unsigned long w = cli->cl_write_rpc_hist.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n", 
+                                 i, r, pct(r, read_tot), 
+                                 pct(read_cum, read_tot), w, 
+                                 pct(w, write_tot),
+                                 pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
+        spin_unlock_irqrestore(&cli->cl_loi_list_lock, flags);
 
         return 0;
 }
+#undef pct
 
 static void *osc_rpc_stats_seq_start(struct seq_file *p, loff_t *pos)
 {
@@ -424,8 +466,10 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
         struct obd_device *dev = seq->private;
         struct client_obd *cli = &dev->u.cli;
 
-        lproc_clear_oh(&cli->cl_rpc_concurrency_oh);
-        lproc_clear_oh(&cli->cl_pages_per_rpc_oh);
+        lproc_clear_oh(&cli->cl_read_rpc_hist);
+        lproc_clear_oh(&cli->cl_write_rpc_hist);
+        lproc_clear_oh(&cli->cl_read_page_hist);
+        lproc_clear_oh(&cli->cl_write_page_hist);
 
         return len;
 }
