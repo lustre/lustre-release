@@ -16,6 +16,9 @@ bindir='${exec_prefix}/usr/bin'
 sbindir='${exec_prefix}/usr/sbin'
 includedir='${prefix}/usr/include'
 
+rootsbindir='${exec_prefix}/sbin'
+AC_SUBST(rootsbindir)
+
 # Directories for documentation and demos.
 docdir='${prefix}/usr/share/doc/$(PACKAGE)'
 AC_SUBST(docdir)
