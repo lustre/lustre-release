@@ -32,3 +32,14 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 /* ldlm_flock.c */
 int ldlm_process_flock_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
+
+extern struct proc_dir_entry *ldlm_svc_proc_dir;
+
+struct ldlm_state {
+        struct ptlrpc_service *ldlm_cb_service;
+        struct ptlrpc_service *ldlm_cancel_service;
+        struct ptlrpc_client *ldlm_client;
+        struct ptlrpc_connection *ldlm_server_conn;
+        struct ldlm_bl_pool *ldlm_bl_pool;
+};
+

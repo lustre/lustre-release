@@ -63,7 +63,6 @@ void lustre_assert_wire_constants(void)
         LASSERT(MDS_DISCONNECT == 39);
         LASSERT(MDS_GETSTATUS == 40);
         LASSERT(MDS_STATFS == 41);
-        LASSERT(MDS_GETLOVINFO == 42);
         LASSERT(MDS_LAST_OPC == 46);
         LASSERT(MDS_FIRST_OPC == 33);
         LASSERT(REINT_SETATTR == 1);
@@ -664,10 +663,10 @@ void lustre_assert_wire_constants(void)
         LASSERT((int)sizeof(((struct llogd_body *)0)->lgd_saved_index) == 4);
         LASSERT(offsetof(struct llogd_body, lgd_cur_offset) == 32);
         LASSERT((int)sizeof(((struct llogd_body *)0)->lgd_cur_offset) == 8);
-        LASSERT(LLOGD_CREATE == 501);
-        LASSERT(LLOGD_NEXT_BLOCK == 502);
-        LASSERT(LLOGD_READ_HEADER == 503);
-        LASSERT(LLOGD_WRITE_REC == 504);
-        LASSERT(LLOGD_CLOSE == 505);
+        LASSERT(LLOG_ORIGIN_HANDLE_CREATE == 501);
+        LASSERT(LLOG_ORIGIN_HANDLE_NEXT_BLOCK == 502);
+        LASSERT(LLOG_ORIGIN_HANDLE_READ_HEADER == 503);
+        LASSERT(LLOG_ORIGIN_HANDLE_WRITE_REC == 504);
+        LASSERT(LLOG_ORIGIN_HANDLE_CLOSE == 505);
 }
 

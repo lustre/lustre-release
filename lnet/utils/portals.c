@@ -1224,7 +1224,7 @@ jt_ptl_nagle (int argc, char **argv)
 int
 jt_ptl_add_route (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg       pcfg;
         ptl_nid_t                nid1;
         ptl_nid_t                nid2;
         ptl_nid_t                gateway_nid;
@@ -1259,13 +1259,13 @@ jt_ptl_add_route (int argc, char **argv)
                 return (-1);
         }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_nid = gateway_nid;
-        data.ioc_nal = g_nal;
-        data.ioc_nid2 = MIN (nid1, nid2);
-        data.ioc_nid3 = MAX (nid1, nid2);
+        PCFG_INIT(pcfg, IOC_PORTAL_ADD_ROUTE);
+        pcfg.pcfg_nid = gateway_nid;
+        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nid2 = MIN (nid1, nid2);
+        pcfg.pcfg_nid3 = MAX (nid1, nid2);
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_ADD_ROUTE, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
                 fprintf (stderr, "IOC_PORTAL_ADD_ROUTE failed: %s\n", strerror (errno));
@@ -1278,7 +1278,7 @@ jt_ptl_add_route (int argc, char **argv)
 int
 jt_ptl_del_route (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg       pcfg;
         ptl_nid_t                nid;
         ptl_nid_t                nid1 = PTL_NID_ANY;
         ptl_nid_t                nid2 = PTL_NID_ANY;
@@ -1322,13 +1322,13 @@ jt_ptl_del_route (int argc, char **argv)
                 }
         }
         
-        PORTAL_IOC_INIT(data);
-        data.ioc_nal = g_nal;
-        data.ioc_nid = nid;
-        data.ioc_nid2 = nid1;
-        data.ioc_nid3 = nid2;
+        PCFG_INIT(pcfg, IOC_PORTAL_DEL_ROUTE);
+        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nid = nid;
+        pcfg.pcfg_nid2 = nid1;
+        pcfg.pcfg_nid3 = nid2;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_DEL_ROUTE, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
                 fprintf (stderr, "IOC_PORTAL_DEL_ROUTE ("LPX64") failed: %s\n", nid, strerror (errno));
@@ -1341,7 +1341,7 @@ jt_ptl_del_route (int argc, char **argv)
 int
 jt_ptl_notify_router (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg       pcfg;
         int                      enable;
         ptl_nid_t                nid;
         int                      rc;
@@ -1381,14 +1381,14 @@ jt_ptl_notify_router (int argc, char **argv)
                 return (-1);
         }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_nal = g_nal;
-        data.ioc_nid = nid;
-        data.ioc_flags = enable;
+        PCFG_INIT(pcfg, IOC_PORTAL_NOTIFY_ROUTER);
+        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nid = nid;
+        pcfg.pcfg_flags = enable;
         /* Yeuch; 'cept I need a __u64 on 64 bit machines... */
-        data.ioc_nid3 = (__u64)when;
+        pcfg.pcfg_nid3 = (__u64)when;
         
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NOTIFY_ROUTER, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
                 fprintf (stderr, "IOC_PORTAL_NOTIFY_ROUTER ("LPX64") failed: %s\n",
@@ -1403,7 +1403,7 @@ int
 jt_ptl_print_routes (int argc, char **argv)
 {
         char                      buffer[3][128];
-        struct portal_ioctl_data  data;
+        struct portals_cfg        pcfg;
         int                       rc;
         int                       index;
         int			  gateway_nal;
@@ -1414,18 +1414,18 @@ jt_ptl_print_routes (int argc, char **argv)
 
         for (index = 0;;index++)
         {
-                PORTAL_IOC_INIT(data);
-                data.ioc_count = index;
+                PCFG_INIT(pcfg, IOC_PORTAL_GET_ROUTE);
+                pcfg.pcfg_count = index;
                 
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_ROUTE, &data);
+                rc = pcfg_ioctl(&pcfg);
                 if (rc != 0)
                         break;
 
-                gateway_nal = data.ioc_nal;
-                gateway_nid = data.ioc_nid;
-                nid1 = data.ioc_nid2;
-                nid2 = data.ioc_nid3;
-                alive = data.ioc_flags;
+                gateway_nal = pcfg.pcfg_nal;
+                gateway_nid = pcfg.pcfg_nid;
+                nid1 = pcfg.pcfg_nid2;
+                nid2 = pcfg.pcfg_nid3;
+                alive = pcfg.pcfg_flags;
 
                 printf ("%8s %18s : %s - %s, %s\n", 
                         nal2name (gateway_nal), 

@@ -22,7 +22,7 @@ FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-5}
 
 STRIPE_BYTES=65536
-STRIPES_PER_OBJ=1
+STRIPES_PER_OBJ=0
 
 gen_config() {
     rm -f replay-single.xml
@@ -30,18 +30,21 @@ gen_config() {
     add_facet ost
     add_facet client --lustre_upcall $UPCALL
     do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
+
     do_lmc --add lov --mds mds1 --lov lov1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     do_lmc --add ost --lov lov1 --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
     do_lmc --add ost --lov lov1 --node ost_facet --ost ost2 --dev ${OSTDEV}-2 --size $OSTSIZE
     do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost lov1
+
+#    do_lmc --add ost --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
+#    do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost ost1
 }
 
 build_test_filter
 
 cleanup() {
-    [ "$DAEMONFILE" ] && lctl debug_daemon stop
-    umount $MOUNT || true
-    rmmod llite || true
+    lconf --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid localhost \
+       --local_nid localhost --profile client_facet --mount $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost ${FORCE} --dump cleanup.log
 }
@@ -54,15 +57,14 @@ fi
 
 gen_config
 
+start mds --write_conf --reformat $MDSLCONFARGS -v
 start ost --reformat $OSTLCONFARGS
 [ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
-start mds --write_conf --reformat $MDSLCONFARGS
+start mds $MDSLCONFARGS --gdb
 
 # 0-conf client
-insmod ../llite/llite.o || true
-[ -d /r ] && lctl modules > /r/tmp/ogdb-`hostname`
-[ -d $MOUNT ] || mkdir $MOUNT 
-mount -t lustre_lite -o mds_uuid=mds1_UUID,profile=client_facet replay-single $MOUNT
+lconf --zeroconf --mds_uuid mds1_UUID --mds_nid localhost \
+    --local_nid localhost --profile client_facet --mount $MOUNT
 
 if [ "$ONLY" == "setup" ]; then
     exit 0

@@ -1033,6 +1033,7 @@ enum {
         TOENAL,
         TCPNAL,
         SCIMACNAL,
+        ROUTER,
         NAL_ENUM_END_MARKER
 };
 

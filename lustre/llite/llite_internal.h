@@ -152,7 +152,7 @@ extern struct super_operations ll_super_operations;
 char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
 void ll_options(char *options, char **ost, char **mds, char **zconf, 
-                char **mds_uuid, int *flags);
+                char **mds_uuid, char **mds_peer, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
 void ll_put_super(struct super_block *sb);

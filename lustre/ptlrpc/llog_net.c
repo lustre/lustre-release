@@ -39,48 +39,16 @@
 #include <linux/lvfs.h>
 
 
-/* This is a callback from the llog_* functions.
- * Assumes caller has already pushed us into the kernel context. */
-static int llog_net_create(struct obd_device *obd, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
-{
-        struct llog_handle *handle;
-        ENTRY;
-
-        handle = llog_alloc_handle();
-        if (handle == NULL)
-                RETURN(-ENOMEM);
-        *res = handle;
-
-        if (!logid) {
-                CERROR("llog_net_create: must pass logid\n");
-                llog_free_handle(handle);
-                RETURN(-EINVAL);
-        }
-
-        handle->lgh_file = NULL;
-        handle->lgh_obd = obd;
-        handle->lgh_id.lgl_ogr = 1;
-        handle->lgh_id.lgl_oid =
-                handle->lgh_file->f_dentry->d_inode->i_ino;
-        handle->lgh_id.lgl_ogen =
-                handle->lgh_file->f_dentry->d_inode->i_generation;
-
-        RETURN(0);
-}
-
 #ifdef ENABLE_ORPHANS
-int llog_origin_handle_cancel(struct obd_device *obd, 
+int llog_origin_handle_cancel(struct llog_obd_ctxt *ctxt, 
                               struct ptlrpc_request *req)
 {
+        struct obd_device *obd = ctxt->loc_exp->exp_obd;
         struct llog_cookie *logcookies;
         int num_cookies, rc = 0;
         struct obd_run_ctxt saved;
         struct llog_handle *cathandle;
-        int i;
         ENTRY;
-
-        LASSERT(obd->obd_llog_ctxt);
 
         logcookies = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*logcookies));
         num_cookies = req->rq_reqmsg->buflens[0]/sizeof(*logcookies);
@@ -88,20 +56,8 @@ int llog_origin_handle_cancel(struct obd_device *obd,
                 DEBUG_REQ(D_HA, req, "no cookies sent");
                 RETURN(-EFAULT);
         }
-#if 0
-        /* workaround until we don't need to send replies */
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        req->rq_repmsg->status = rc;
-        if (rc)
-                RETURN(rc);
-        /* end workaround */
-#endif
-        i = logcookies->lgc_subsys;
-        if (i < 0 || i > LLOG_OBD_MAX_HANDLES) {
-                LBUG();
-                RETURN(-EINVAL);
-        }
-        cathandle = obd->obd_llog_ctxt->loc_handles[i];
+
+        cathandle = ctxt->loc_handle;
         LASSERT(cathandle);
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL); 
@@ -110,34 +66,26 @@ int llog_origin_handle_cancel(struct obd_device *obd,
                 CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
-        //req->rq_repmsg->status = rc;
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_origin_handle_cancel);
 #endif
 
-int llog_receptor_accept(struct obd_device *obd, struct obd_import *imp)
+int llog_receptor_accept(struct llog_obd_ctxt *ctxt, struct obd_import *imp)
 {
         ENTRY;
-        LASSERT(obd->obd_llog_ctxt);
-        obd->obd_llog_ctxt->loc_imp = imp;
+        LASSERT(ctxt);
+        ctxt->loc_imp = imp;
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_receptor_accept);
 
-int llog_initiator_connect(struct obd_device *obd)
+int llog_initiator_connect(struct llog_obd_ctxt *ctxt)
 {
         ENTRY;
-        LASSERT(obd->obd_llog_ctxt);
-        obd->obd_llog_ctxt->loc_imp = obd->u.cli.cl_import;
+        LASSERT(ctxt);
+        ctxt->loc_imp = ctxt->loc_obd->u.cli.cl_import;
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initiator_connect);
 
-struct llog_operations llog_net_ops = {
-        //lop_next_block:  llog_lvfs_next_block,
-        //lop_read_header: llog_lvfs_read_header,
-        lop_create:      llog_net_create,
-};
-
-EXPORT_SYMBOL(llog_lvfs_ops);

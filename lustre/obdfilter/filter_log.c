@@ -97,6 +97,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                                      void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
-        llog_obd_repl_cancel(obd, NULL, 1, cookie, OBD_LLOG_FL_SENDNOW);
+        llog_obd_repl_cancel(obd->obd_llog_ctxt[LLOG_UNLINK_REPL_CTXT],
+                             NULL, 1, cookie, OBD_LLOG_FL_SENDNOW);
         OBD_FREE(cb_data, sizeof(struct llog_cookie));
 }

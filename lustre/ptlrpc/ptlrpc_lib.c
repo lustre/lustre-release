@@ -135,9 +135,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
         cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
         cli->cl_sandev = to_kdev_t(0);
-
-        obddev->obd_logops = &llogd_client_ops;
-
+     
         if (lcfg->lcfg_inllen3 == 0)
                 RETURN(0);
 
