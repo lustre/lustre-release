@@ -12,7 +12,7 @@ export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
 ERROR=
 SRC=/etc
-COUNT=100
+COUNT=1000
 
 setup_opts $@
 
@@ -27,7 +27,7 @@ echo "comparing /etc/hosts and $OSCMT/hosts"
 diff -u /etc/hosts $OSCMT/hosts || fail "$OSCMT/hosts different" 4
 
 # ok, that hopefully worked, so let's do a little more
-FILES=`find $SRC -type f | head -100`
+FILES=`find $SRC -type f | head -$COUNT`
 echo "copying files from $SRC to $OSCMT$SRC"
 tar cf - $FILES | tar xvf - -C $OSCMT || fail "copying $SRC" 10
 
