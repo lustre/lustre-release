@@ -347,7 +347,7 @@ int class_add_profile(int proflen, char *prof,
         struct lustre_profile *lprof;
         int err = 0;
 
-        OBD_ALLOC(lprof, sizeof(*prof));
+        OBD_ALLOC(lprof, sizeof(*lprof));
         if (lprof == NULL)
                 GOTO(out, err = -ENOMEM);
         INIT_LIST_HEAD(&lprof->lp_list);
