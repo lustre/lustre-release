@@ -104,6 +104,12 @@ static int procbridge_validate(nal_t *nal, void *base, size_t extent)
 }
 
 
+/* FIXME cfs temporary workaround! FIXME
+ * global time out value
+ */
+int __tcpnal_eqwait_timeout_value = 0;
+int __tcpnal_eqwait_timedout = 0;
+
 /* Function: yield
  * Arguments:  pid:
  *
@@ -118,7 +124,19 @@ static void procbridge_yield(nal_t *n)
     procbridge p=(procbridge)b->local;
 
     pthread_mutex_lock(&p->mutex);
-    pthread_cond_wait(&p->cond,&p->mutex);
+    if (!__tcpnal_eqwait_timeout_value) {
+        pthread_cond_wait(&p->cond,&p->mutex);
+    } else {
+        struct timeval now;
+        struct timespec timeout;
+
+        gettimeofday(&now, NULL);
+        timeout.tv_sec = now.tv_sec + __tcpnal_eqwait_timeout_value;
+        timeout.tv_nsec = now.tv_usec * 1000;
+
+        __tcpnal_eqwait_timedout =
+                pthread_cond_timedwait(&p->cond, &p->mutex, &timeout);
+    }
     pthread_mutex_unlock(&p->mutex);
 }
 
