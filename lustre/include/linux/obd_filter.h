@@ -91,11 +91,13 @@ struct filter_file_data {
 };
 
 struct filter_dentry_data {
-        obd_id           fdd_objid;
-        atomic_t         fdd_open_count;
-        int              fdd_flags;
+        obd_id                  fdd_objid;
+        __u32                   fdd_magic;
+        atomic_t                fdd_open_count;
+        int                     fdd_flags;
 };
 
+#define FILTER_DENTRY_MAGIC 0x9efba101
 #define FILTER_FLAG_DESTROY 0x0001      /* destroy dentry on last file close */
 
 
