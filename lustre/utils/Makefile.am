@@ -1,8 +1,7 @@
 # Administration utilities Makefile
 DEFS=
 
-CFLAGS:=-g -O2 -I. -I$(PORTALS)/include  -I$(srcdir)/../include -Wall\
- -L$(PORTALS)/linux/utils
+CFLAGS:=-g -O2 -I$(top_srcdir)/utils -I$(PORTALS)/include  -I$(srcdir)/../include -Wall -L$(PORTALSLIB)
 KFLAGS:=
 CPPFLAGS = $(HAVE_LIBREADLINE)
 obdctl_LDADD := $(LIBREADLINE)
