@@ -87,9 +87,9 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         if (rc)
                 GOTO(out_destroy, rc);
 
-        CWARN("new recovery log "LPX64":%x for index %u of catalog "LPX64"\n",
-               loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen, index,
-               cathandle->lgh_id.lgl_oid);
+        CDEBUG(D_HA, "new recovery log "LPX64":%x for index %u of catalog "
+               LPX64"\n", loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen,
+               index, cathandle->lgh_id.lgl_oid);
         /* build the record for this log in the catalog */
         rec.lid_hdr.lrh_len = cpu_to_le32(sizeof(rec));
         rec.lid_hdr.lrh_index = cpu_to_le32(index);

@@ -249,9 +249,9 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
                                 llog_cat_set_first_idx(cathandle, index);
                                 rc = llog_cancel_rec(cathandle, index);
                                 if (rc == 0)
-                                        CWARN("cancel plain log at index %u "
-                                              "of catalog "LPX64"\n",
-                                              index, cathandle->lgh_id.lgl_oid);
+                                        CDEBUG(D_HA, "cancel plain log at index"
+                                               " %u of catalog "LPX64"\n",
+                                               index,cathandle->lgh_id.lgl_oid);
                         }
                 }
                 llog_cat_put(ctxt->loc_handle);
@@ -259,7 +259,6 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
         return 0;
 }
 EXPORT_SYMBOL(llog_obd_origin_cleanup);
-
 
 /* add for obdfilter/sz and mds/unlink */
 int llog_obd_origin_add(struct llog_ctxt *ctxt,
