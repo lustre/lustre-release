@@ -1815,12 +1815,12 @@ ksocknal_sock_write (struct socket *sock, void *buffer, int nob)
 {
         int           rc;
         mm_segment_t  oldmm = get_fs();
-        struct iovec  iov = {
-                .iov_base = buffer,
-                .iov_len  = nob
-        };
 
         while (nob > 0) {
+                struct iovec  iov = {
+                        .iov_base = buffer,
+                        .iov_len  = nob
+                };
                 struct msghdr msg = {
                         .msg_name       = NULL,
                         .msg_namelen    = 0,
@@ -1843,8 +1843,8 @@ ksocknal_sock_write (struct socket *sock, void *buffer, int nob)
                         return (-ECONNABORTED);
                 }
 
-                iov.iov_len -= rc;
-                iov.iov_base = ((char *)iov.iov_base) + rc;
+                buffer = ((char *)buffer) + rc;
+                nob -= rc;
         }
         
         return (0);
@@ -1855,12 +1855,12 @@ ksocknal_sock_read (struct socket *sock, void *buffer, int nob)
 {
         int           rc;
         mm_segment_t  oldmm = get_fs();
-        struct iovec  iov = {
-                .iov_base = buffer,
-                .iov_len  = nob
-        };
         
         while (nob > 0) {
+                struct iovec  iov = {
+                        .iov_base = buffer,
+                        .iov_len  = nob
+                };
                 struct msghdr msg = {
                         .msg_name       = NULL,
                         .msg_namelen    = 0,
@@ -1881,8 +1881,8 @@ ksocknal_sock_read (struct socket *sock, void *buffer, int nob)
                 if (rc == 0)
                         return (-ECONNABORTED);
 
-                iov.iov_len -= rc;
-                iov.iov_base = ((char *)iov.iov_base) + rc;
+                buffer = ((char *)buffer) + rc;
+                nob -= rc;
         }
         
         return (0);
