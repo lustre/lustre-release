@@ -56,17 +56,17 @@ static int __init smfs_init(void)
         int err;
 
         if ( (err = init_smfs_psdev()) ) {
-                printk("Error initializing smfs_psdev, %d\n", err);
+                CERROR("Error initializing smfs_psdev, %d\n", err);
                 return -EINVAL;
         }
 
         if ( (err = init_smfs()) ) {
-                printk("Error initializing smfs, %d\n", err);
+                CERROR("Error initializing smfs, %d\n", err);
                 return -EINVAL;
         }
 
         if ( (err = init_smfs_proc_sys()) ) {
-                printk("Error initializing smfs proc sys, %d\n", err);
+                CERROR("Error initializing smfs proc sys, %d\n", err);
                 return -EINVAL;
         }
 
