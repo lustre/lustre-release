@@ -461,9 +461,13 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 CDEBUG (D_IOCTL, "nal command nal %d cmd %d\n", pcfg.pcfg_nal,
                         pcfg.pcfg_command);
                 err = kportal_nal_cmd(&pcfg);
-                if (err == 0)
+                if (err == 0) {
+                        if (copy_to_user((char *)data->ioc_pbuf1, &pcfg, 
+                                         sizeof (pcfg)))
+                                err = -EFAULT;
                         if (copy_to_user((char *)arg, data, sizeof (*data)))
                                 err = -EFAULT;
+                }
                 break;
         }
         case IOC_PORTAL_FAIL_NID: {
