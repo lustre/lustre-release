@@ -31,6 +31,8 @@
 #include <liblustre.h>
 #endif
 
+#include "ldlm_internal.h"
+
 static inline int
 ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         int first_enq)
@@ -104,6 +106,6 @@ ldlm_plain_enqueue(struct ldlm_lock *lock, int *flags, int first_enq,
         }
 
         list_del_init(&lock->l_res_link);
-        ldlm_grant_lock(lock, NULL, 0);
+        ldlm_grant_lock(lock, NULL, 0, 1);
         RETURN(LDLM_ITER_CONTINUE);
 }

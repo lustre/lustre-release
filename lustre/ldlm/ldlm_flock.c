@@ -32,6 +32,8 @@
 #include <liblustre.h>
 #endif
 
+#include "ldlm_internal.h"
+
 #define l_flock_waitq   l_lru
 #define l_flock_blocker l_parent
 
