@@ -1481,16 +1481,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 GOTO(out, rc);
         }
 
-        if (dentry->d_iname[0] != '/') { /* Do not rehash root of the tree
-                                            dentries */
-                spin_lock(&dcache_lock);
-                hlist_del_init(&dentry->d_hash);
-                __d_rehash(dentry, 0);
-                spin_unlock(&dcache_lock);
-        }
         ll_lookup_finish_locks(&oit, dentry);
-        dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-
 
         lsm = lli->lli_smd;
         if (lsm == NULL) /* object not yet allocated, don't validate size */
