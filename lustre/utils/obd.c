@@ -810,7 +810,8 @@ int jt_obd_setup(int argc, char **argv)
 
 /* The ioctl API has been extended to provide the LOV stripe metadata to the
  * caller when applicable.  This utility, however, only saves the LSM for the
- * latest CREATE. */
+ * latest CREATE.   It only saves the LSM when the ioctl indicates that it
+ * is valid by overloading 'ioc_conn2' as a boolean. */
 int jt_obd_create(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -880,7 +881,7 @@ int jt_obd_create(int argc, char **argv)
                         break;
                 }
 
-                lsm_valid = 1;
+                lsm_valid = data.ioc_conn2;
 
                 if (be_verbose(verbose, &next_time, i, &next_count, count))
                         printf("%s: #%d is object id "LPX64"\n",
