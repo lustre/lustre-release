@@ -12,20 +12,33 @@
 
 <!-- main elements -->
 <!ELEMENT lustre (node | mountpoint | ldlm |
-                  mds | mdc | obd | ost | osc | lov | router)*>
+                  mds | mdc | obd | ost | osc | lov | lovconfig)*>
+
+<!ELEMENT node (network | profile)*>
+<!ATTLIST node router CDATA #IMPLIED
+               %tag.attr;>
+<!ELEMENT network (server | port | route_tbl | send_mem | recv_mem)*>
+<!ATTLIST network type (tcp | elan | gm) 'tcp'
+                  %tag.attr;>
+
+<!ELEMENT route_tbl (route)*>
+<!ELEMENT route %tag.content;>
+<!ATTLIST route type (elan | tcp | gm) #REQUIRED
+                gw CDATA #REQUIRED
+                lo CDATA #REQUIRED
+                hi CDATA #IMPLIED >
 
 <!ELEMENT profile (ldlm_ref | network_ref | obd_ref | ost_ref | osc_ref |
-                   mds_ref | mdc_ref | lov_ref | mountpoint_ref)*>
+                   mds_ref | mdc_ref | lov_ref | lovconfig_ref| mountpoint_ref)*>
 <!ATTLIST profile >
-<!ELEMENT mountpoint (path | fileset | mdc_ref | osc_ref)*>
+
+<!ELEMENT mountpoint (path | fileset | mds_ref | osc_ref)*>
 <!ATTLIST mountpoint %tag.attr;>
-<!ELEMENT node (network | profile)*>
-<!ATTLIST node %tag.attr;>
 <!ELEMENT ldlm EMPTY>
 <!ATTLIST ldlm %tag.attr;>
 
 <!ELEMENT obd (fstype | device | autoformat)*>
-<!ATTLIST obd %tag.attr; type (obdfilter | obdext2 | obdecho) 'obdfilter'>
+<!ATTLIST obd %tag.attr; type (obdfilter | obdecho) 'obdfilter'>
 <!ELEMENT ost (network_ref | obd_ref | failover_ref)*>
 <!ATTLIST ost %tag.attr;>
 <!ELEMENT mds (network_ref | fstype | device | autoformat | 
@@ -38,23 +51,23 @@
 <!ATTLIST mdc %tag.attr;>
 <!ELEMENT lov (devices | mds_ref)*>
 <!ATTLIST lov %tag.attr;>
+<!ELEMENT lovconfig (lov_ref)>
+<!ATTLIST lovconfig %tag.attr;>
 <!ELEMENT devices (osc_ref)+>
 <!ATTLIST devices stripesize CDATA #REQUIRED
-                  stripeoffset CDATA #REQUIRED
+                  stripecount CDATA #REQUIRED
+                  stripeoffset CDATA #IMPLIED
                   pattern    CDATA #REQUIRED>
-<!ELEMENT router (misc)*>
-<!ATTLIST router %tag.attr;>
 
 <!-- basic elements -->
-<!ELEMENT network (server | port)*>
-<!ATTLIST network type (tcp | elan | myrinet) 'tcp'
-                  %tag.attr;>
 
 <!ELEMENT fstype        %tag.content;>
 <!ELEMENT device        %tag.content;>
 <!ATTLIST device        size CDATA #IMPLIED>
 <!ELEMENT server        %tag.content;>
 <!ELEMENT port          %tag.content;>
+<!ELEMENT send_mem      %tag.content;>
+<!ELEMENT recv_mem      %tag.content;>
 <!ELEMENT autoformat    %tag.content;>
 <!ELEMENT path          %tag.content;>
 <!ELEMENT fileset       %tag.content;>
@@ -76,6 +89,8 @@
 <!ATTLIST ost_ref        %tag.ref;>
 <!ELEMENT lov_ref        %tag.content;>
 <!ATTLIST lov_ref        %tag.ref;>
+<!ELEMENT lovconfig_ref        %tag.content;>
+<!ATTLIST lovconfig_ref        %tag.ref;>
 <!ELEMENT mdc_ref        %tag.content;>
 <!ATTLIST mdc_ref        %tag.ref;>
 <!ELEMENT mountpoint_ref %tag.content;>
@@ -86,3 +101,5 @@
 <!ATTLIST failover_ref   %tag.ref;>
 <!ELEMENT ldlm_ref   %tag.content;>
 <!ATTLIST ldlm_ref   %tag.ref;>
+
+
