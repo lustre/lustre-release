@@ -320,7 +320,7 @@ typedef struct kib_connreq
         struct kib_conn                    *cr_conn;
         kib_wire_connreq_t                  cr_wcr;
         __u64                               cr_tid;
-        tTS_IB_COMMON_ATTRIB_SERVICE_STRUCT cr_service;
+        struct ib_common_attrib_service     cr_service;
         tTS_IB_GID                          cr_gid;
         struct ib_path_record               cr_path;
         struct ib_cm_active_param           cr_connparam;
@@ -413,7 +413,7 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
                                   IB_SA_SERVICE_COMP_MASK_DATA8_8)
 
 static inline __u64*
-kibnal_service_nid_field(tTS_IB_COMMON_ATTRIB_SERVICE srv)
+kibnal_service_nid_field(struct ib_common_attrib_service *srv)
 {
         /* must be consistent with KIBNAL_SERVICE_KEY_MASK */
         return (__u64 *)srv->service_data8;
@@ -421,7 +421,7 @@ kibnal_service_nid_field(tTS_IB_COMMON_ATTRIB_SERVICE srv)
 
 
 static inline void
-kibnal_set_service_keys(tTS_IB_COMMON_ATTRIB_SERVICE srv, ptl_nid_t nid)
+kibnal_set_service_keys(struct ib_common_attrib_service *srv, ptl_nid_t nid)
 {
         LASSERT (strlen (IBNAL_SERVICE_NAME) < sizeof(srv->service_name));
         memset (srv->service_name, 0, sizeof(srv->service_name));
