@@ -811,7 +811,7 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                 tmp.o_id = loi->loi_id;
 
                 err = obd_punch(&lov->tgts[loi->loi_ost_idx].conn, &tmp, NULL,
-                               starti, endi);
+                                starti, endi);
                 if (err) {
                         CERROR("Error punch objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n",
@@ -1135,23 +1135,22 @@ static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
 {
         struct obd_device *obddev = class_conn2obd(conn);
         struct obd_ioctl_data *data = karg;
-        int rc;
+        struct lov_obd *lov = &obddev->u.lov;
+        int rc, i;
         ENTRY;
-
-        if (_IOC_TYPE(cmd) != IOC_LOV_TYPE ||
-            _IOC_NR(cmd) < IOC_LOV_MIN_NR || _IOC_NR(cmd) > IOC_LOV_MAX_NR) {
-                CDEBUG(D_IOCTL, "invalid ioctl (type %ld, nr %ld, size %ld)\n",
-                       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
-                RETURN(-ENOTTY);
-        }
 
         switch (cmd) {
         case IOC_LOV_SET_OSC_ACTIVE:
-                rc = lov_set_osc_active(&obddev->u.lov, data->ioc_inlbuf1,
-                                        data->ioc_offset);
+                rc = lov_set_osc_active(lov,data->ioc_inlbuf1,data->ioc_offset);
                 break;
         default:
-                RETURN(-ENOTTY);
+                rc = -ENOTTY;
+                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        int err = obd_iocontrol(cmd, &lov->tgts[i].conn,
+                                                len, data, NULL);
+                        if (err && !rc)
+                                rc = err;
+                }
         }
 
         RETURN(rc);
