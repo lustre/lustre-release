@@ -31,6 +31,7 @@ init_test_env() {
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=/r
+    export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LLMOUNT=${LLMOUNT:-"llmount"}
@@ -125,7 +126,6 @@ reboot_facet() {
 wait_for_host() {
    HOST=$1
    check_network  $HOST 900
-   while ! do_node $HOST "$CHECKSTAT -t dir $LUSTRE"; do sleep 5; done
    while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
 }
 
@@ -404,6 +404,15 @@ drop_reply() {
     return $RC
 }
 
+drop_reint_reply() {
+# OBD_FAIL_MDS_REINT_NET_REP
+    RC=0
+    do_facet mds "echo 0x119 > /proc/sys/lustre/fail_loc"
+    do_facet client "$@" || RC=$?
+    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
+    return $RC
+}
+
 pause_bulk() {
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
     RC=0
@@ -450,10 +459,23 @@ cancel_lru_locks() {
     done
 }
 
+
+pgcache_empty() {
+    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
+        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
+                echo there is still data in page cache $a ?
+                cat $a;
+                return 1;
+        fi
+    done
+    return 0
+}
+
 ##################################
 # Test interface 
 error() {
     echo "${TESTSUITE}: **** FAIL:" $@
+    log "FAIL: $@"
     exit 1
 }
 
@@ -514,6 +536,11 @@ equals_msg() {
    printf '===== %s %.*s\n' "$msg" $suffixlen $EQUALS
 }
 
+log() {
+	echo "$*"
+	lctl mark "$*" 2> /dev/null || true
+}
+
 run_one() {
     testnum=$1
     message=$2
@@ -523,6 +550,7 @@ run_one() {
     # Pretty tests run faster.
     equals_msg $testnum: $message
 
+    log "== test $1: $2"
     test_${testnum} || error "test_$testnum failed with $?"
 }
 
