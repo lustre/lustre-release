@@ -80,21 +80,17 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
                 GOTO(out, c);
 
         c->c_level = LUSTRE_CONN_NEW;
-        c->c_xid_in = 1;
-        c->c_xid_out = 1;
         c->c_generation = 1;
         c->c_epoch = 1;
         c->c_bootcount = 0;
         c->c_flags = 0;
         if (uuid)
                 strcpy(c->c_remote_uuid, uuid);
-        INIT_LIST_HEAD(&c->c_delayed_head);
-        INIT_LIST_HEAD(&c->c_sending_head);
-        INIT_LIST_HEAD(&c->c_dying_head);
         INIT_LIST_HEAD(&c->c_imports);
         INIT_LIST_HEAD(&c->c_exports);
         INIT_LIST_HEAD(&c->c_sb_chain);
         INIT_LIST_HEAD(&c->c_recovd_data.rd_managed_chain);
+        INIT_LIST_HEAD(&c->c_delayed_head);
         atomic_set(&c->c_refcount, 0);
         ptlrpc_connection_addref(c);
         spin_lock_init(&c->c_lock);
@@ -164,8 +160,8 @@ void ptlrpc_cleanup_connection(void)
         }
         list_for_each_safe(tmp, pos, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p has refcount %d at cleanup (nid=%lu)!\n",
-                       c, atomic_read(&c->c_refcount),
+                CERROR("Connection %p/%s has refcount %d (nid=%lu)\n",
+                       c, c->c_remote_uuid, atomic_read(&c->c_refcount),
                        (unsigned long)c->c_peer.peer_nid);
                 list_del(&c->c_link);
                 OBD_FREE(c, sizeof(*c));

@@ -215,7 +215,7 @@ static int ost_bulk_timeout(void *data)
         struct ptlrpc_bulk_desc *desc = data;
 
         ENTRY;
-        CERROR("(not yet) starting recovery of client %p\n", desc->bd_client);
+        recovd_conn_fail(desc->bd_connection);
         RETURN(1);
 }
 

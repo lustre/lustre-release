@@ -119,25 +119,34 @@ struct client_obd {
 #define IOC_OSC_MAX_NR       50
 
 struct mds_obd {
-        struct ptlrpc_service *mds_service;
+        struct ptlrpc_service           *mds_service;
 
-        char *mds_fstype;
-        struct super_block *mds_sb;
-        struct super_operations *mds_sop;
-        struct vfsmount *mds_vfsmnt;
-        struct obd_run_ctxt mds_ctxt;
-        struct file_operations *mds_fop;
-        struct inode_operations *mds_iop;
+        char                            *mds_fstype;
+        struct super_block              *mds_sb;
+        struct super_operations         *mds_sop;
+        struct vfsmount                 *mds_vfsmnt;
+        struct obd_run_ctxt              mds_ctxt;
+        struct file_operations          *mds_fop;
+        struct inode_operations         *mds_iop;
         struct address_space_operations *mds_aops;
-        struct mds_fs_operations *mds_fsops;
-        int mds_max_mdsize;
-        struct file *mds_rcvd_filp;
-        spinlock_t mds_last_lock;
-        __u64 mds_last_committed;
-        __u64 mds_last_rcvd;
-        __u64 mds_mount_count;
-        struct ll_fid mds_rootfid;
-        struct mds_server_data *mds_server_data;
+        struct mds_fs_operations        *mds_fsops;
+
+        int                              mds_max_mdsize;
+        struct file                     *mds_rcvd_filp;
+        struct semaphore                 mds_transno_sem;
+        __u64                            mds_last_committed;
+        __u64                            mds_last_rcvd;
+        __u64                            mds_mount_count;
+        struct ll_fid                    mds_rootfid;
+        struct mds_server_data          *mds_server_data;
+
+        wait_queue_head_t                mds_next_transno_waitq;
+        __u64                            mds_next_recovery_transno;
+        int                              mds_recoverable_clients;
+        struct list_head                 mds_recovery_queue;
+        struct list_head                 mds_delayed_reply_queue;
+        spinlock_t                       mds_processing_task_lock;
+        pid_t                            mds_processing_task;
 };
 
 struct ldlm_obd {

@@ -56,7 +56,6 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid)
 
         mds_pack_req_body(req);
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
                 body = lustre_msg_buf(req->rq_repmsg, 0);
@@ -100,7 +99,6 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
         req->rq_replen = lustre_msg_size(2, size);
 
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
 
  out:
         RETURN(rc);
@@ -136,7 +134,6 @@ int mdc_getattr(struct lustre_handle *conn,
         mds_pack_req_body(req);
 
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
                 body = lustre_msg_buf(req->rq_repmsg, 0);
@@ -225,6 +222,8 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
         struct mds_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, reqoff);
         struct mds_body *body = lustre_msg_buf(req->rq_repmsg, repoff);
 
+        DEBUG_REQ(D_HA, req, "storing generation %x for ino "LPD64,
+                  body->fid1.generation, body->fid1.id);
         memcpy(&rec->cr_replayfid, &body->fid1, sizeof rec->cr_replayfid);
 }
 
@@ -496,7 +495,6 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         req->rq_replen = lustre_msg_size(1, size);
 
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
         if (!rc) {
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 mds_unpack_body(body);
@@ -533,7 +531,6 @@ int mdc_close(struct lustre_handle *conn, obd_id ino, int type,
         req->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
 
         EXIT;
  out:
@@ -580,7 +577,6 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
 
         req->rq_replen = lustre_msg_size(1, &size);
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
         if (rc) {
                 ptlrpc_abort_bulk(desc);
                 GOTO(out2, rc);
@@ -611,7 +607,6 @@ static int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         req->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
 
         if (rc)
                 GOTO(out, rc);

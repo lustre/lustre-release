@@ -78,19 +78,13 @@ struct ptlrpc_connection {
         __u32                   c_bootcount;   /* peer's boot count */
 
         spinlock_t              c_lock;        /* also protects req->rq_list */
-        __u32                   c_xid_in;
-        __u32                   c_xid_out;
 
         atomic_t                c_refcount;
         __u64                   c_token;
         __u64                   c_remote_conn;
         __u64                   c_remote_token;
 
-        __u64                   c_last_xid;    /* protected by c_lock */
-        __u64                   c_last_committed;/* protected by c_lock */
-        struct list_head        c_delayed_head;/* delayed until post-recovery */
-        struct list_head        c_sending_head;/* protected by c_lock */
-        struct list_head        c_dying_head;  /* protected by c_lock */
+        struct list_head        c_delayed_head;/* delayed until post-recovery XXX imp? */
         struct recovd_data      c_recovd_data;
 
         struct list_head        c_imports;
@@ -120,7 +114,7 @@ struct ptlrpc_client {
 #define PTL_RPC_FL_ERR       (1 << 5)
 #define PTL_RPC_FL_TIMEOUT   (1 << 6)
 #define PTL_RPC_FL_RESEND    (1 << 7)
-#define PTL_RPC_FL_RECOVERY  (1 << 8)  /* retransmission for recovery */
+#define PTL_RPC_FL_RESTART   (1 << 8)  /* operation must be restarted */
 #define PTL_RPC_FL_FINISHED  (1 << 9)
 #define PTL_RPC_FL_RETAIN    (1 << 10) /* retain for replay after reply */
 #define PTL_RPC_FL_REPLAY    (1 << 11) /* replay upon recovery */
@@ -169,13 +163,13 @@ struct ptlrpc_request {
 #define DEBUG_REQ(level, req, fmt, args...)                                    \
 do {                                                                           \
 CDEBUG(level,                                                                  \
-       "@@@ " fmt " req x"LPD64"/t"LPD64" o%d->%s:%d lens %d/%d fl "           \
+       "@@@ " fmt " req x"LPD64"/t"LPD64" o%d->%s:%d lens %d/%d ref %d fl "    \
        "%x\n" ,  ## args, req->rq_xid, req->rq_transno,                        \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
        req->rq_connection ? (char *)req->rq_connection->c_remote_uuid : "<?>", \
        (req->rq_import && req->rq_import->imp_client) ?                        \
            req->rq_import->imp_client->cli_request_portal : -1,                \
-       req->rq_reqlen, req->rq_replen, req->rq_flags);                         \
+       req->rq_reqlen, req->rq_replen, req->rq_refcount, req->rq_flags);       \
 } while (0)
 
 struct ptlrpc_bulk_page {
@@ -326,7 +320,6 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *);
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk);
 struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc);
 void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *page);
-int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 
 /* rpc/service.c */
 struct ptlrpc_service *

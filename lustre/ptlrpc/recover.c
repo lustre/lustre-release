@@ -6,11 +6,11 @@
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  *
- * Copryright (C) 1996 Peter J. Braam <braam@stelias.com>
- * Copryright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
- * Copryright (C) 1999 Seagate Technology Inc.
- * Copryright (C) 2001 Mountain View Data, Inc.
- * Copryright (C) 2002 Cluster File Systems, Inc.
+ * Copyright (C) 1996 Peter J. Braam <braam@stelias.com>
+ * Copyright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
+ * Copyright (C) 1999 Seagate Technology Inc.
+ * Copyright (C) 2001 Mountain View Data, Inc.
+ * Copyright (C) 2002 Cluster File Systems, Inc.
  *
  */
 
@@ -40,7 +40,6 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
         /*
-
          * This address is the export that represents our client-side LDLM
          * service (for ASTs).  We should only have one on this list, so we
          * just grab the first one.
@@ -52,24 +51,55 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
         request->rq_reqmsg->addr = (__u64)(unsigned long)ldlmexp;
         request->rq_reqmsg->cookie = ldlmexp->exp_cookie;
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
-        if (rc) {
+        switch (rc) {
+            case EALREADY:
+            case -EALREADY:
+                /* already connected! */
+                memset(&old_hdl, 0, sizeof(old_hdl));
+                if (!memcmp(&old_hdl.addr, &request->rq_repmsg->addr,
+                            sizeof (old_hdl.addr)) &&
+                    !memcmp(&old_hdl.cookie, &request->rq_repmsg->cookie,
+                            sizeof (old_hdl.cookie))) {
+                        CERROR("%s@%s didn't like our handle %Lx/%Lx, failed\n",
+                               cli->cl_target_uuid, conn->c_remote_uuid,
+                               (__u64)(unsigned long)ldlmexp,
+                               ldlmexp->exp_cookie);
+                        GOTO(out_disc, rc = -ENOTCONN);
+                }
+
+                old_hdl.addr = request->rq_repmsg->addr;
+                old_hdl.cookie = request->rq_repmsg->cookie;
+                if (memcmp(&imp->imp_handle, &old_hdl, sizeof(old_hdl))) {
+                        CERROR("%s@%s changed handle from %Lx/%Lx to %Lx/%Lx; "
+                               "copying, but this may foreshadow disaster\n",
+                               cli->cl_target_uuid, conn->c_remote_uuid,
+                               old_hdl.addr, old_hdl.cookie,
+                               imp->imp_handle.addr, imp->imp_handle.cookie);
+                        imp->imp_handle.addr = request->rq_repmsg->addr;
+                        imp->imp_handle.cookie = request->rq_repmsg->cookie;
+                        GOTO(out_disc, rc = EALREADY);
+                }
+                
+                CERROR("reconnected to %s@%s after partition\n",
+                       cli->cl_target_uuid, conn->c_remote_uuid);
+                GOTO(out_disc, rc = EALREADY);
+            case 0:
+                old_hdl = imp->imp_handle;
+                imp->imp_handle.addr = request->rq_repmsg->addr;
+                imp->imp_handle.cookie = request->rq_repmsg->cookie;
+                CERROR("now connected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
+                       cli->cl_target_uuid, conn->c_remote_uuid,
+                       imp->imp_handle.addr, imp->imp_handle.cookie,
+                       old_hdl.addr, old_hdl.cookie);
+                GOTO(out_disc, rc = 0);
+            default:
                 CERROR("cannot connect to %s@%s: rc = %d\n",
                        cli->cl_target_uuid, conn->c_remote_uuid, rc);
-                ptlrpc_free_req(request);
-                GOTO(out_disc, rc = -ENOTCONN);
+                GOTO(out_disc, rc = -ENOTCONN); /* XXX preserve rc? */
         }
-        
-        old_hdl = imp->imp_handle;
-        imp->imp_handle.addr = request->rq_repmsg->addr;
-        imp->imp_handle.cookie = request->rq_repmsg->cookie;
-        CERROR("reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
-               cli->cl_target_uuid, conn->c_remote_uuid,
-               imp->imp_handle.addr, imp->imp_handle.cookie,
-               old_hdl.addr, old_hdl.cookie);
-        ptlrpc_req_finished(request);
 
  out_disc:
+        ptlrpc_req_finished(request);
         return rc;
 }
 
@@ -113,23 +143,16 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
 #define REPLAY_RESEND        2 /* Resend required. */
 #define REPLAY_RESEND_IGNORE 3 /* Resend, ignore the reply (already saw it). */
 #define REPLAY_RESTART       4 /* Have to restart the call, sorry! */
-#define REPLAY_NO_STATE      5 /* Request doesn't change MDS state: skip. */
 
-static int replay_state(struct ptlrpc_request *req, __u64 last_xid)
+static int replay_state(struct ptlrpc_request *req, __u64 committed)
 {
         /* This request must always be replayed. */
         if (req->rq_flags & PTL_RPC_FL_REPLAY)
                 return REPLAY_REPLAY;
 
         /* Uncommitted request */
-        if (req->rq_xid > last_xid) {
+        if (req->rq_transno > committed) {
                 if (req->rq_flags & PTL_RPC_FL_REPLIED) {
-                        if (req->rq_transno == 0) {
-                                /* If no transno was returned, no state was
-                                   altered on the MDS. */
-                                return REPLAY_NO_STATE;
-                        }
-
                         /* Saw reply, so resend and ignore new reply. */
                         return REPLAY_RESEND_IGNORE;
                 }
@@ -149,7 +172,6 @@ static int replay_state(struct ptlrpc_request *req, __u64 last_xid)
 static char *replay_state2str(int state) {
         static char *state_strings[] = {
                 "COMMITTED", "REPLAY", "RESEND", "RESEND_IGNORE", "RESTART",
-                "NO_STATE"
         };
         static char *unknown_state = "UNKNOWN";
 
@@ -161,36 +183,52 @@ static char *replay_state2str(int state) {
         return state_strings[state];
 }
 
-int ptlrpc_replay(struct ptlrpc_connection *conn)
+int ptlrpc_replay(struct obd_import *imp, int unreplied_only)
 {
-        int rc = 0;
+        int rc = 0, state;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
+        struct ptlrpc_connection *conn = imp->imp_connection;
+        __u64 committed = imp->imp_peer_committed_transno;
         ENTRY;
 
-        spin_lock(&conn->c_lock);
+        spin_lock(&imp->imp_lock);
 
-        CDEBUG(D_HA, "connection %p to %s has last_xid "LPD64"\n",
-               conn, conn->c_remote_uuid, conn->c_last_xid);
+        CDEBUG(D_HA, "import %p from %s has committed "LPD64"\n",
+               imp, imp->imp_obd->u.cli.cl_target_uuid, committed);
 
-        list_for_each(tmp, &conn->c_sending_head) {
-                int state;
+        list_for_each(tmp, &imp->imp_request_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                state = replay_state(req, conn->c_last_xid);
+                state = replay_state(req, committed);
                 DEBUG_REQ(D_HA, req, "SENDING: %s: ", replay_state2str(state));
         }
 
         list_for_each(tmp, &conn->c_delayed_head) {
-                int state;
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                state = replay_state(req, conn->c_last_xid);
-                DEBUG_REQ(D_HA, req, "DELAYED: ");
+                state = replay_state(req, committed);
+                DEBUG_REQ(D_HA, req, "DELAYED: %s: ", replay_state2str(state));
         }
 
-        list_for_each_safe(tmp, pos, &conn->c_sending_head) { 
+        list_for_each_safe(tmp, pos, &imp->imp_request_list) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                
-                switch (replay_state(req, conn->c_last_xid)) {
+
+                if (unreplied_only) {
+                        if (!(req->rq_flags & PTL_RPC_FL_REPLIED)) {
+                                DEBUG_REQ(D_HA, req, "UNREPLIED:");
+                                ptlrpc_restart_req(req);
+                        }
+                        continue;
+                }
+
+                state = replay_state(req, committed);
+
+                if (req->rq_transno == imp->imp_max_transno) {
+                        req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
+                        DEBUG_REQ(D_HA, req, "last for replay");
+                        LASSERT(state != REPLAY_COMMITTED);
+                }
+
+                switch (state) {
                     case REPLAY_REPLAY:
                         DEBUG_REQ(D_HA, req, "REPLAY:");
                         rc = ptlrpc_replay_req(req);
@@ -208,14 +246,8 @@ int ptlrpc_replay(struct ptlrpc_connection *conn)
                         }
                         break;
 
-
                     case REPLAY_COMMITTED:
-                        DEBUG_REQ(D_HA, req, "COMMITTED:");
-                        /* XXX commit now? */
-                        break;
-
-                    case REPLAY_NO_STATE:
-                        DEBUG_REQ(D_HA, req, "NO_STATE:");
+                        DEBUG_REQ(D_ERROR, req, "COMMITTED:");
                         /* XXX commit now? */
                         break;
 

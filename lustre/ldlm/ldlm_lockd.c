@@ -77,7 +77,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         LASSERT(list_empty(&lock->l_pending_chain));
 
         spin_lock_bh(&waiting_locks_spinlock);
-        lock->l_callback_timeout = jiffies + (obd_timeout * HZ);
+        lock->l_callback_timeout = jiffies + (obd_timeout * HZ / 2);
 
         timeout_rounded = round_timeout(lock->l_callback_timeout);
 

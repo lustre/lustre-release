@@ -548,7 +548,6 @@ do {                                                                           \
             if (condition)                                                     \
                     break;                                                     \
             if (__state == TASK_INTERRUPTIBLE && l_killable_pending(current)) {\
-                CERROR("lwe: interrupt\n");                                    \
                 if (info->lwi_on_signal)                                       \
                         info->lwi_on_signal(info->lwi_cb_data);                \
                 ret = -EINTR;                                                  \
@@ -556,7 +555,6 @@ do {                                                                           \
             }                                                                  \
             if (info->lwi_timeout && !__timed_out) {                           \
                 if (schedule_timeout(info->lwi_timeout) == 0) {                \
-                    CERROR("lwe: timeout\n");                                  \
                     __timed_out = 1;                                           \
                     if (!info->lwi_on_timeout ||                               \
                         info->lwi_on_timeout(info->lwi_cb_data)) {             \
@@ -568,7 +566,6 @@ do {                                                                           \
                         __state = TASK_INTERRUPTIBLE;                          \
                         /* Check for a pending interrupt. */                   \
                         if (info->lwi_signals && l_killable_pending(current)) {\
-                            CERROR("lwe: pending interrupt\n");                \
                             if (info->lwi_on_signal)                           \
                                 info->lwi_on_signal(info->lwi_cb_data);        \
                             ret = -EINTR;                                      \

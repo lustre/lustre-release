@@ -194,8 +194,9 @@ int mdc_create_client(obd_uuid_t uuid, struct ptlrpc_client *cl);
 void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
                                 int repoff);
 
-extern int mds_client_add(struct mds_export_data *med, int cl_off);
-extern int mds_client_free(struct obd_export *exp);
+int mds_client_add(struct mds_obd *mds, struct mds_export_data *med,
+                   int cl_off);
+int mds_client_free(struct obd_export *exp);
 
 /* mds/mds_fs.c */
 struct mds_fs_operations {

@@ -136,7 +136,6 @@ static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc) {
                 CERROR("%s failed: rc = %d\n", __FUNCTION__, rc);
                 GOTO(out, rc);
@@ -173,7 +172,6 @@ static int osc_open(struct lustre_handle *conn, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -208,7 +206,6 @@ static int osc_close(struct lustre_handle *conn, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -242,7 +239,6 @@ static int osc_setattr(struct lustre_handle *conn, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
 
         ptlrpc_req_finished(request);
         return rc;
@@ -278,7 +274,6 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out_req, rc);
 
@@ -328,7 +323,6 @@ static int osc_punch(struct lustre_handle *conn, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -365,7 +359,6 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -422,8 +415,8 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                         obd_count page_count, struct brw_page *pga,
                         struct obd_brw_set *set)
 {
-        struct ptlrpc_connection *connection =
-                client_conn2cli(conn)->cl_import.imp_connection;
+        struct obd_import *imp = class_conn2cliimp(conn);
+        struct ptlrpc_connection *connection = imp->imp_connection;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ost_body *body;
@@ -435,8 +428,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(struct niobuf_remote);
 
-        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_READ, 3, size,
-                                  NULL);
+        request = ptlrpc_prep_req(imp, OST_READ, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -454,9 +446,9 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         ost_pack_ioo(&iooptr, lsm, page_count);
         /* end almost identical to brw_write case */
 
-        spin_lock(&connection->c_lock);
-        xid = ++connection->c_xid_out;       /* single xid for all pages */
-        spin_unlock(&connection->c_lock);
+        spin_lock(&imp->imp_lock);
+        xid = ++imp->imp_last_xid;       /* single xid for all pages */
+        spin_unlock(&imp->imp_lock);
 
         obd_kmap_get(page_count, 0);
 
@@ -495,7 +487,6 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
 
         request->rq_replen = lustre_msg_size(1, size);
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
 
         /*
          * XXX: If there is an error during the processing of the callback,
@@ -584,7 +575,6 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         size[1] = page_count * sizeof(*remote);
         request->rq_replen = lustre_msg_size(2, size);
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out_unmap, rc);
 
@@ -766,7 +756,6 @@ static int osc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc) {
                 CERROR("%s failed: rc = %d\n", __FUNCTION__, rc);
                 GOTO(out, rc);

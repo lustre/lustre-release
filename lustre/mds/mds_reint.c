@@ -39,43 +39,57 @@
 
 extern inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req);
 
+void mds_start_transno(struct mds_obd *mds)
+{
+        ENTRY;
+        down(&mds->mds_transno_sem);
+}
+
 /* Assumes caller has already pushed us into the kernel context. */
-int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
-                         struct ptlrpc_request *req)
+int mds_finish_transno(struct mds_obd *mds, void *handle,
+                       struct ptlrpc_request *req, int rc)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         struct mds_client_data *mcd = med->med_mcd;
         __u64 last_rcvd;
         loff_t off;
-        int rc;
+        ssize_t written;
+
+        /* Propagate error code. */
+        if (rc)
+                goto out;
 
         /* we don't allocate new transnos for replayed requests */
-        if (req->rq_level == LUSTRE_CONN_RECOVD)
-                RETURN(0);
+        if (req->rq_level == LUSTRE_CONN_RECOVD) {
+                rc = 0;
+                goto out;
+        }
 
         off = MDS_LR_CLIENT + med->med_off * MDS_LR_SIZE;
 
-        spin_lock(&mds->mds_last_lock);
         last_rcvd = ++mds->mds_last_rcvd;
-        spin_unlock(&mds->mds_last_lock);
         req->rq_repmsg->transno = HTON__u64(last_rcvd);
         mcd->mcd_last_rcvd = cpu_to_le64(last_rcvd);
         mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
         mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
 
         mds_fs_set_last_rcvd(mds, handle);
-        rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd), &off);
-        CDEBUG(D_INODE, "wrote trans #"LPD64" for client '%s' at #%d: rc = "
-               "%d\n", last_rcvd, mcd->mcd_uuid, med->med_off, rc);
+        written = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd),
+                                &off);
+        CDEBUG(D_INODE, "wrote trans #"LPD64" for client %s at #%d: written = "
+               "%d\n", last_rcvd, mcd->mcd_uuid, med->med_off, written);
 
-        if (rc == sizeof(*mcd))
-                rc = 0;
-        else {
-                CERROR("error writing to last_rcvd file: rc = %d\n", rc);
-                if (rc >= 0)
-                        rc = -EIO;
-        }
+        if (written == sizeof(*mcd))
+                GOTO(out, rc = 0);
+        CERROR("error writing to last_rcvd file: rc = %d\n", rc);
+        if (written >= 0)
+                GOTO(out, rc = -EIO);
 
+        rc = 0;
+
+ out:
+        EXIT;
+        up(&mds->mds_transno_sem);
         return rc;
 }
 
@@ -129,9 +143,13 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
                        to_kdev_t(inode->i_sb->s_dev));
 
+        mds_start_transno(mds);
         handle = mds_fs_start(mds, inode, MDS_FSOP_SETATTR);
-        if (!handle)
-                GOTO(out_setattr_de, rc = PTR_ERR(handle));
+        if (IS_ERR(handle)) {
+                rc = PTR_ERR(handle);
+                (void)mds_finish_transno(mds, handle, req, rc);
+                GOTO(out_setattr_de, rc);
+        }
 
         rc = mds_fs_setattr(mds, de, handle, &rec->ur_iattr);
 
@@ -141,8 +159,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 mds_pack_inode2body(body, inode);
         }
 
-        if (!rc)
-                rc = mds_update_last_rcvd(mds, handle, req);
+        rc = mds_finish_transno(mds, handle, req, rc);
 
         err = mds_fs_commit(mds, de->d_inode, handle);
         if (err) {
@@ -238,27 +255,34 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         rec->ur_mode |= S_ISGID;
         }
 
+        /* From here on, we must exit via a path that calls mds_finish_transno,
+         * so that we release the mds_transno_sem (and, in the case of success,
+         * update the transno correctly).  out_create_commit and
+         * out_transno_dchild are good candidates.
+         */
+        mds_start_transno(mds);
+
         switch (type) {
         case S_IFREG:{
                 handle = mds_fs_start(mds, dir, MDS_FSOP_CREATE);
-                if (!handle)
-                        GOTO(out_create_dchild, PTR_ERR(handle));
+                if (IS_ERR(handle))
+                        GOTO(out_transno_dchild, rc = PTR_ERR(handle));
                 rc = vfs_create(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
         }
         case S_IFDIR:{
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKDIR);
-                if (!handle)
-                        GOTO(out_create_dchild, PTR_ERR(handle));
+                if (IS_ERR(handle))
+                        GOTO(out_transno_dchild, rc = PTR_ERR(handle));
                 rc = vfs_mkdir(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
         }
         case S_IFLNK:{
                 handle = mds_fs_start(mds, dir, MDS_FSOP_SYMLINK);
-                if (!handle)
-                        GOTO(out_create_dchild, PTR_ERR(handle));
+                if (IS_ERR(handle))
+                        GOTO(out_transno_dchild, rc = PTR_ERR(handle));
                 rc = vfs_symlink(dir, dchild, rec->ur_name);
                 EXIT;
                 break;
@@ -269,15 +293,16 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         case S_IFSOCK:{
                 int rdev = rec->ur_rdev;
                 handle = mds_fs_start(mds, dir, MDS_FSOP_MKNOD);
-                if (!handle)
-                        GOTO(out_create_dchild, PTR_ERR(handle));
+                if (IS_ERR(handle))
+                        GOTO(out_transno_dchild, rc = PTR_ERR(handle));
                 rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
                 EXIT;
                 break;
         }
         default:
                 CERROR("bad file type %o creating %s\n", type, rec->ur_name);
-                GOTO(out_create_dchild, rc = -EINVAL);
+                handle = NULL; /* quell uninitialized warning */
+                GOTO(out_transno_dchild, rc = -EINVAL);
         }
 
         if (rc) {
@@ -299,7 +324,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (rec->ur_fid2->id) {
                         LASSERT(rec->ur_opcode & REINT_REPLAYING);
                         inode->i_generation = rec->ur_fid2->generation;
-                        /* Dirtied and committed by this setattr: */
+                        /* Dirtied and committed by the upcoming setattr. */
                         CDEBUG(D_INODE, "recreated ino %ld with gen %ld\n",
                                inode->i_ino, inode->i_generation);
                 } else {
@@ -312,18 +337,19 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         /* XXX should we abort here in case of error? */
                 }
 
-                rc = mds_update_last_rcvd(mds, handle, req);
-                if (rc) {
-                        CERROR("error on mds_update_last_rcvd: rc = %d\n", rc);
-                        GOTO(out_create_unlink, rc);
-                }
-
                 body = lustre_msg_buf(req->rq_repmsg, offset);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
         }
         EXIT;
 out_create_commit:
+        if (rc) {
+                rc = mds_finish_transno(mds, handle, req, rc);
+        } else {
+                rc = mds_finish_transno(mds, handle, req, rc);
+                if (rc)
+                        GOTO(out_create_unlink, rc);
+        }
         err = mds_fs_commit(mds, dir, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
@@ -339,6 +365,12 @@ out_create_de:
 out_create:
         req->rq_status = rc;
         return 0;
+
+out_transno_dchild:
+        /* Need to release the transno lock, and then put the dchild. */
+        LASSERT(rc);
+        mds_finish_transno(mds, handle, req, rc);
+        goto out_create_dchild;
 
 out_create_unlink:
         /* Destroy the file we just created.  This should not need extra
@@ -431,11 +463,12 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE,
                        to_kdev_t(dir->i_sb->s_dev));
 
+        mds_start_transno(mds);
         switch (rec->ur_mode /* & S_IFMT ? */) {
         case S_IFDIR:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_RMDIR);
-                if (!handle)
-                        GOTO(out_unlink_cancel, rc = PTR_ERR(handle));
+                if (IS_ERR(handle))
+                        GOTO(out_unlink_cancel_transno, rc = PTR_ERR(handle));
                 rc = vfs_rmdir(dir, dchild);
                 break;
         case S_IFREG:
@@ -449,19 +482,18 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         case S_IFIFO:
         case S_IFSOCK:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_UNLINK);
-                if (!handle)
-                        GOTO(out_unlink_cancel, rc = PTR_ERR(handle));
+                if (IS_ERR(handle))
+                        GOTO(out_unlink_cancel_transno, rc = PTR_ERR(handle));
                 rc = vfs_unlink(dir, dchild);
                 break;
         default:
                 CERROR("bad file type %o unlinking %s\n", rec->ur_mode, name);
                 handle = NULL;
                 LBUG();
-                GOTO(out_unlink_cancel, rc = -EINVAL);
+                GOTO(out_unlink_cancel_transno, rc = -EINVAL);
         }
 
-        if (!rc)
-                rc = mds_update_last_rcvd(mds, handle, req);
+        rc = mds_finish_transno(mds, handle, req, rc);
         err = mds_fs_commit(mds, dir, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
@@ -487,6 +519,10 @@ out_unlink:
         l_dput(de);
         req->rq_status = rc;
         return 0;
+
+out_unlink_cancel_transno:
+        rc = mds_finish_transno(mds, handle, req, rc);
+        goto out_unlink_cancel;
 }
 
 static int mds_reint_link(struct mds_update_record *rec, int offset,
@@ -589,15 +625,18 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE,
                        to_kdev_t(de_src->d_inode->i_sb->s_dev));
 
+        mds_start_transno(mds);
         handle = mds_fs_start(mds, de_tgt_dir->d_inode, MDS_FSOP_LINK);
-        if (!handle)
-                GOTO(out_link_dchild, rc = PTR_ERR(handle));
+        if (IS_ERR(handle)) {
+                rc = PTR_ERR(handle);
+                mds_finish_transno(mds, handle, req, rc);
+                GOTO(out_link_dchild, rc);
+        }
 
         rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
         if (rc)
                 CERROR("link error %d\n", rc);
-        if (!rc)
-                rc = mds_update_last_rcvd(mds, handle, req);
+        rc = mds_finish_transno(mds, handle, req, rc);
 
         err = mds_fs_commit(mds, de_tgt_dir->d_inode, handle);
         if (err) {
@@ -720,16 +759,20 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        to_kdev_t(de_srcdir->d_inode->i_sb->s_dev));
 
+        mds_start_transno(mds);
         handle = mds_fs_start(mds, de_tgtdir->d_inode, MDS_FSOP_RENAME);
-        if (!handle)
-                GOTO(out_rename_denew, rc = PTR_ERR(handle));
+        if (IS_ERR(handle)) {
+                rc = PTR_ERR(handle);
+                mds_finish_transno(mds, handle, req, rc);
+                GOTO(out_rename_denew, rc);
+        }
+
         lock_kernel();
         rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new,
                         NULL);
         unlock_kernel();
 
-        if (!rc)
-                rc = mds_update_last_rcvd(mds, handle, req);
+        rc = mds_finish_transno(mds, handle, req, rc);
 
         err = mds_fs_commit(mds, de_tgtdir->d_inode, handle);
         if (err) {

@@ -37,7 +37,6 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
         request->rq_level = level;
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
 
         if (rc) {
                 CERROR("error in handling %d\n", rc);

@@ -37,17 +37,21 @@ struct mds_fs_type {
 
 static unsigned long last_rcvd_slots[MDS_MAX_CLIENT_WORDS];
 
+#define LAST_RCVD "last_rcvd"
+
 /* Add client data to the MDS.  We use a bitmap to locate a free space
  * in the last_rcvd file if cl_off is -1 (i.e. a new client).
  * Otherwise, we have just read the data from the last_rcvd file and
  * we know its offset.
  */
-int mds_client_add(struct mds_export_data *med, int cl_off)
+int mds_client_add(struct mds_obd *mds, struct mds_export_data *med, int cl_off)
 {
+        int new_client = (cl_off == -1);
+
         /* the bitmap operations can handle cl_off > sizeof(long) * 8, so
          * there's no need for extra complication here
          */
-        if (cl_off == -1) {
+        if (new_client) {
                 cl_off = find_first_zero_bit(last_rcvd_slots, MDS_MAX_CLIENTS);
         repeat:
                 if (cl_off >= MDS_MAX_CLIENTS) {
@@ -73,12 +77,35 @@ int mds_client_add(struct mds_export_data *med, int cl_off)
                cl_off, med->med_mcd->mcd_uuid);
 
         med->med_off = cl_off;
+
+        if (new_client) {
+                struct obd_run_ctxt saved;
+                loff_t off = MDS_LR_CLIENT + (cl_off * MDS_LR_SIZE);
+                ssize_t written;
+                
+                push_ctxt(&saved, &mds->mds_ctxt, NULL);
+                written = lustre_fwrite(mds->mds_rcvd_filp,
+                                                (char *)med->med_mcd,
+                                                sizeof(*med->med_mcd), &off);
+                pop_ctxt(&saved);
+
+                if (written != sizeof(*med->med_mcd)) {
+                        if (written < 0)
+                                RETURN(written);
+                        RETURN(-EIO);
+                }
+        }
         return 0;
 }
 
 int mds_client_free(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
+        struct mds_obd *mds = &exp->exp_obd->u.mds;
+        struct mds_client_data zero_mcd;
+        struct obd_run_ctxt saved;
+        int written;
+        loff_t off;
 
         if (!med->med_mcd)
                 RETURN(0);
@@ -92,6 +119,24 @@ int mds_client_free(struct obd_export *exp)
                 LBUG();
         }
 
+        off = med->med_off;
+
+        memset(&zero_mcd, 0, sizeof zero_mcd);
+        push_ctxt(&saved, &mds->mds_ctxt, NULL);
+        written = lustre_fwrite(mds->mds_rcvd_filp, (const char *)&zero_mcd,
+                                sizeof zero_mcd, &off);
+        pop_ctxt(&saved);
+
+        if (written != sizeof zero_mcd) {
+                CERROR("error zeroing out client %s off %d in %s: %d\n",
+                       med->med_mcd->mcd_uuid, med->med_off, LAST_RCVD,
+                       written);
+                LBUG();
+        } else {
+                CDEBUG(D_INFO, "zeroed out disconnecting client %s at off %d\n",
+                       med->med_mcd->mcd_uuid, med->med_off);
+        }
+        
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
 
         return 0;
@@ -105,19 +150,16 @@ static int mds_server_free_data(struct mds_obd *mds)
         return 0;
 }
 
-#define LAST_RCVD "last_rcvd"
-
 static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
 {
         struct mds_obd *mds = &obddev->u.mds;
         struct mds_server_data *msd;
         struct mds_client_data *mcd = NULL;
-        loff_t fsize = f->f_dentry->d_inode->i_size;
         loff_t off = 0;
         int cl_off;
+        int max_off = f->f_dentry->d_inode->i_size / sizeof(*mcd);
         __u64 last_rcvd = 0;
         __u64 last_mount;
-        int clients = 0;
         int rc = 0;
 
         OBD_ALLOC(msd, sizeof(*msd));
@@ -154,9 +196,11 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
         CDEBUG(D_INODE, "got %Lu for server last_mount value\n",
                (unsigned long long)last_mount);
 
-        for (off = MDS_LR_CLIENT, cl_off = 0, rc = sizeof(*mcd);
-             off <= fsize - sizeof(*mcd) && rc == sizeof(*mcd);
-             off = MDS_LR_CLIENT + ++cl_off * MDS_LR_SIZE) {
+        for (off = MDS_LR_CLIENT, cl_off = 0;
+             off < max_off;
+             off += MDS_LR_SIZE, cl_off++) {
+                int mount_age;
+
                 if (!mcd) {
                         OBD_ALLOC(mcd, sizeof(*mcd));
                         if (!mcd)
@@ -172,13 +216,19 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                         break;
                 }
 
+                if (mcd->mcd_uuid[0] == '\0') {
+                        CDEBUG(D_INFO, "skipping zeroed client at offset %d\n",
+                               cl_off);
+                        continue;
+                }
+
                 last_rcvd = le64_to_cpu(mcd->mcd_last_rcvd);
 
                 /* The exports are cleaned up by mds_disconnect, so they
                  * need to be set up like real exports also.
                  */
-                if (last_rcvd && (last_mount - le64_to_cpu(mcd->mcd_mount_count)
-                                  < MDS_MOUNT_RECOV)) {
+                mount_age = last_mount - le64_to_cpu(mcd->mcd_mount_count);
+                if (last_rcvd && mount_age < MDS_MOUNT_RECOV) {
                         struct obd_export *exp = class_new_export(obddev);
                         struct mds_export_data *med;
 
@@ -189,17 +239,17 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
 
                         med = &exp->exp_mds_data;
                         med->med_mcd = mcd;
-                        mds_client_add(med, cl_off);
+                        mds_client_add(mds, med, cl_off);
                         /* XXX put this in a helper if it gets more complex */
                         INIT_LIST_HEAD(&med->med_open_head);
                         spin_lock_init(&med->med_open_lock);
 
                         mcd = NULL;
-                        clients++;
+                        mds->mds_recoverable_clients++;
                         MOD_INC_USE_COUNT;
                 } else {
                         CDEBUG(D_INFO,
-                               "ignored client %d, UUID '%s', last_mount %Ld\n",
+                               "discarded client %d, UUID '%s', count %Ld\n",
                                cl_off, mcd->mcd_uuid,
                                (long long)le64_to_cpu(mcd->mcd_mount_count));
                 }
@@ -211,14 +261,15 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                         mds->mds_last_rcvd = last_rcvd;
                 }
         }
-        CDEBUG(D_INODE, "got %Lu for highest last_rcvd value, %d/%d clients\n",
-               (unsigned long long)mds->mds_last_rcvd, clients, cl_off);
+
+        mds->mds_last_committed = mds->mds_last_rcvd;
+        if (mds->mds_recoverable_clients) {
+                CERROR("need recovery: %d recoverable clients, last_rcvd %Lu\n",
+                       mds->mds_recoverable_clients, mds->mds_last_rcvd);
+        }
 
         if (mcd)
                 OBD_FREE(mcd, sizeof(*mcd));
-
-        /* After recovery, there can be no local uncommitted transactions */
-        mds->mds_last_committed = mds->mds_last_rcvd;
 
         return 0;
 

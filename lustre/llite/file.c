@@ -158,7 +158,8 @@ out_mdc:
         mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
                   S_IFREG, &fd->fd_mdshandle, &req);
 out_req:
-        ptlrpc_free_req(req);
+        ptlrpc_req_finished(req); /* once for reply */
+        ptlrpc_req_finished(req); /* once for an early "commit" */
 //out_fd:
         fd->fd_mdshandle.cookie = DEAD_HANDLE_MAGIC;
         kmem_cache_free(ll_file_data_slab, fd);
@@ -344,11 +345,7 @@ out_mdc:
                         rc = -abs(rc2);
                 GOTO(out_fd, rc);
         }
-        CDEBUG(D_HA, "matched req %p xid "LPD64" transno "LPD64" op "
-               "%d->%s:%d\n", fd->fd_req, fd->fd_req->rq_xid,
-               fd->fd_req->rq_repmsg->transno, fd->fd_req->rq_reqmsg->opc,
-               fd->fd_req->rq_import->imp_connection->c_remote_uuid,
-               fd->fd_req->rq_import->imp_client->cli_request_portal);
+        DEBUG_REQ(D_HA, fd->fd_req, "matched open for this close: ");
         ptlrpc_req_finished(fd->fd_req);
 
         if (atomic_dec_and_test(&lli->lli_open_count)) {

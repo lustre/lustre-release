@@ -22,21 +22,16 @@ struct lov_export_data {
 
 struct obd_export {
         __u64                     exp_cookie;
-        struct lustre_handle      exp_impconnh;
         struct list_head          exp_obd_chain;
         struct list_head          exp_conn_chain;
         struct obd_device        *exp_obd;
         struct ptlrpc_connection *exp_connection;
-        struct ldlm_export_data   exp_ldlm_data;  /* can this go inside u? */
+        struct ldlm_export_data   exp_ldlm_data;
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
                 struct lov_export_data    eu_lov_data;
         } u;
-        void                     *exp_data; /* device specific data */
-        int                       exp_desclen;
-        char                     *exp_desc;
-        obd_uuid_t                exp_uuid;
 };
 
 #define exp_mds_data    u.eu_mds_data

@@ -574,7 +574,7 @@ void ll_umount_begin(struct super_block *sb)
                 /* XXX should just be dealing with imports, probably through
                  * XXX iocontrol, need next-gen recovery! */
                 conn->c_flags |= CONN_INVALID;
-                invalidate_request_list(&conn->c_sending_head);
+                /* invalidate_request_list(&conn->c_sending_head); */
                 invalidate_request_list(&conn->c_delayed_head);
                 spin_unlock(&conn->c_lock);
         }

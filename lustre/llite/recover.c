@@ -33,26 +33,16 @@ static void abort_inflight_for_import(struct obd_import *imp)
         imp->imp_flags |= IMP_INVALID;
         spin_unlock(&imp->imp_connection->c_lock);
 
-        list_for_each_safe(tmp, n, &imp->imp_connection->c_sending_head) {
+        list_for_each_safe(tmp, n, &imp->imp_request_list) {
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                if (req->rq_import != imp)
-                        continue;
-
                 if (req->rq_flags & PTL_RPC_FL_REPLIED) {
                         /* no need to replay, just discard */
-                        CERROR("uncommitted req xid "LPD64" op %d to OST %s\n",
-                               (unsigned long long)req->rq_xid,
-                               req->rq_reqmsg->opc,
-                               imp->imp_obd->u.cli.cl_target_uuid);
+                        DEBUG_REQ(D_ERROR, req, "uncommitted");
                         ptlrpc_req_finished(req);
                 } else {
-                        CERROR("inflight req xid "LPD64" op %d to OST %s\n",
-                               (unsigned long long)req->rq_xid,
-                               req->rq_reqmsg->opc,
-                               imp->imp_obd->u.cli.cl_target_uuid);
-
+                        DEBUG_REQ(D_ERROR, req, "inflight");
                         req->rq_flags |= PTL_RPC_FL_ERR;
                         wake_up(&req->rq_wait_for_rep);
                 }
@@ -61,9 +51,11 @@ static void abort_inflight_for_import(struct obd_import *imp)
         list_for_each_safe(tmp, n, &imp->imp_connection->c_delayed_head) {
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
-                CERROR("aborting waiting req xid "LPD64" op %d to OST %s\n",
-                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
-                       imp->imp_obd->u.cli.cl_target_uuid);
+
+                if (req->rq_import != imp)
+                        continue;
+
+                DEBUG_REQ(D_ERROR, req, "aborting waiting req");
                 req->rq_flags |= PTL_RPC_FL_ERR;
                 wake_up(&req->rq_wait_for_rep);
         }
@@ -149,53 +141,32 @@ static void reconnect_osc(struct obd_import *imp)
                        imp->imp_obd->obd_uuid);
 }
 
-static int reconnect_mdc(struct obd_import *imp)
+static void reconnect_mdc(struct obd_import *imp)
 {
-        return ptlrpc_reconnect_import(imp, MDS_CONNECT);
+        int rc = ptlrpc_reconnect_import(imp, MDS_CONNECT);
+        if (!rc)
+                ptlrpc_replay(imp, 0 /* all reqs */);
+        else if (rc == EALREADY)
+                ptlrpc_replay(imp, 1 /* only unreplied reqs */);
 }
 
 static int ll_reconnect(struct ptlrpc_connection *conn)
 {
         struct list_head *tmp;
-        int need_replay = 0;
 
         ENTRY;
-
-        /* XXX c_lock semantics! */
-        conn->c_level = LUSTRE_CONN_CON;
-
-        /* XXX this code MUST be shared with class_obd_connect! */
         list_for_each(tmp, &conn->c_imports) {
                 struct obd_import *imp = list_entry(tmp, struct obd_import,
                                                     imp_chain);
                 if (imp->imp_obd->obd_type->typ_ops->o_brw) {
-                        /* XXX what to do if we fail? */
                         reconnect_osc(imp);
                 } else {
-                        int rc = reconnect_mdc(imp);
-                        if (!rc) {
-                                need_replay = 1;
-                        }
-                        /* make sure we don't try to replay for dead imps?
-                         *
-                         * else imp->imp_connection = NULL;
-                         *
-                         */
-
+                        reconnect_mdc(imp);
                 }
         }
 
-        if (!need_replay) {
-                /* all done! */
-                conn->c_level = LUSTRE_CONN_FULL;
-                RETURN(0);
-        }
-
-        conn->c_level = LUSTRE_CONN_RECOVD;
-        /* this will replay, up the c_level, recovd_conn_fixed and continue
-         * reqs. also, makes a mean cup of coffee.
-         */
-        RETURN(ptlrpc_replay(conn));
+        conn->c_level = LUSTRE_CONN_FULL;
+        RETURN(0);
 }
 
 int ll_recover(struct recovd_data *rd, int phase)

@@ -124,8 +124,8 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
                 return;
         }
 
-        CERROR("connection %p to %s failed\n", conn, conn->c_remote_uuid);
-        CERROR("peer is %08x %08lx %08lx\n", conn->c_peer.peer_nid,
+        CERROR("connection %p to %s (%08x %08lx %08lx) failed\n", conn,
+               conn->c_remote_uuid, conn->c_peer.peer_nid,
                conn->c_peer.peer_ni.nal_idx, conn->c_peer.peer_ni.handle_idx);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);

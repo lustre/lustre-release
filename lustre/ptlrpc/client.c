@@ -299,9 +299,9 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
          */
         atomic_set(&request->rq_refcount, 2);
 
-        spin_lock(&conn->c_lock);
-        request->rq_xid = HTON__u32(++conn->c_xid_out);
-        spin_unlock(&conn->c_lock);
+        spin_lock(&imp->imp_lock);
+        request->rq_xid = HTON__u32(++imp->imp_last_xid);
+        spin_unlock(&imp->imp_lock);
 
         request->rq_reqmsg->magic = PTLRPC_MSG_MAGIC;
         request->rq_reqmsg->version = PTLRPC_MSG_VERSION;
@@ -312,19 +312,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         RETURN(request);
 }
 
-void ptlrpc_req_finished(struct ptlrpc_request *request)
-{
-        if (request == NULL)
-                return;
-
-        if (atomic_dec_and_test(&request->rq_refcount))
-                ptlrpc_free_req(request);
-        else
-                DEBUG_REQ(D_INFO, request, "refcount now %u",
-                          atomic_read(&request->rq_refcount));
-}
-
-void ptlrpc_free_req(struct ptlrpc_request *request)
+static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 {
         ENTRY;
         if (request == NULL) {
@@ -351,10 +339,12 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
                 request->rq_reqmsg = NULL;
         }
 
-        if (request->rq_connection) {
-                spin_lock(&request->rq_connection->c_lock);
+        if (request->rq_import) {
+                if (!locked)
+                        spin_lock(&request->rq_import->imp_lock);
                 list_del_init(&request->rq_list);
-                spin_unlock(&request->rq_connection->c_lock);
+                if (!locked)
+                        spin_unlock(&request->rq_import->imp_lock);
         }
 
         ptlrpc_put_connection(request->rq_connection);
@@ -362,61 +352,86 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
         EXIT;
 }
 
+void ptlrpc_free_req(struct ptlrpc_request *request)
+{
+        __ptlrpc_free_req(request, 0);
+}
+
+static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked)
+{
+        ENTRY;
+        if (request == NULL)
+                RETURN(1);
+
+        if (atomic_dec_and_test(&request->rq_refcount)) {
+                __ptlrpc_free_req(request, locked);
+                RETURN(1);
+        }
+
+        DEBUG_REQ(D_INFO, request, "refcount now %u",
+                  atomic_read(&request->rq_refcount));
+        RETURN(0);
+}
+
+void ptlrpc_req_finished(struct ptlrpc_request *request)
+{
+        __ptlrpc_req_finished(request, 0);
+}
+
 static int ptlrpc_check_reply(struct ptlrpc_request *req)
 {
         int rc = 0;
 
         if (req->rq_repmsg != NULL) {
-                struct ptlrpc_connection *conn = req->rq_import->imp_connection;
+                struct obd_import *imp = req->rq_import;
+                struct ptlrpc_connection *conn = imp->imp_connection;
+                ENTRY;
                 if (req->rq_level > conn->c_level) {
-                        CDEBUG(D_HA,
-                               "rep to xid "LPD64" op %d to %s:%d: "
-                               "recovery started, ignoring (%d > %d)\n",
-                               (unsigned long long)req->rq_xid,
-                               req->rq_reqmsg->opc, conn->c_remote_uuid,
-                               req->rq_import->imp_client->cli_request_portal,
+                        DEBUG_REQ(D_HA, req,
+                               "recovery started, ignoring (%d > %d)",
                                req->rq_level, conn->c_level);
                         req->rq_repmsg = NULL;
                         GOTO(out, rc = 0);
                 }
                 req->rq_transno = NTOH__u64(req->rq_repmsg->transno);
+                spin_lock(&imp->imp_lock);
+                if (req->rq_transno > imp->imp_max_transno) {
+                        imp->imp_max_transno = req->rq_transno;
+                } else if (req->rq_transno != 0) {
+                        if (conn->c_level == LUSTRE_CONN_FULL) {
+                                CERROR("got transno "LPD64" after "
+                                       LPD64": recovery may not work\n",
+                                       req->rq_transno, imp->imp_max_transno);
+                        }
+                }
+                spin_unlock(&imp->imp_lock);
                 req->rq_flags |= PTL_RPC_FL_REPLIED;
                 GOTO(out, rc = 1);
         }
 
         if (req->rq_flags & PTL_RPC_FL_RESEND) {
-                CERROR("-- RESTART --\n");
+                DEBUG_REQ(D_ERROR, req, "RESEND:");
                 GOTO(out, rc = 1);
         }
 
         if (req->rq_flags & PTL_RPC_FL_ERR) {
-                CERROR("-- ABORTED --\n");
+                DEBUG_REQ(D_ERROR, req, "ABORTED:");
                 GOTO(out, rc = 1);
         }
 
+        if (req->rq_flags & PTL_RPC_FL_RESTART) {
+                DEBUG_REQ(D_ERROR, req, "RESTART:");
+                GOTO(out, rc = 1);
+        }
  out:
-        CDEBUG(D_NET, "req = %p, rc = %d\n", req, rc);
+        DEBUG_REQ(D_NET, req, "rc = %d for", rc);
         return rc;
 }
 
-int ptlrpc_check_status(struct ptlrpc_request *req, int err)
+static int ptlrpc_check_status(struct ptlrpc_request *req)
 {
+        int err;
         ENTRY;
-
-        if (err != 0) {
-                CERROR("err is %d\n", err);
-                RETURN(err);
-        }
-
-        if (req == NULL) {
-                CERROR("req == NULL\n");
-                RETURN(-ENOMEM);
-        }
-
-        if (req->rq_repmsg == NULL) {
-                CERROR("req->rq_repmsg == NULL\n");
-                RETURN(-ENOMEM);
-        }
 
         err = req->rq_repmsg->status;
         if (req->rq_repmsg->type == NTOH__u32(PTL_RPC_MSG_ERR)) {
@@ -426,14 +441,12 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err)
 
         if (err != 0) {
                 if (err < 0)
-                        CERROR("req->rq_repmsg->status is %d\n", err);
+                        CDEBUG(D_INFO, "req->rq_repmsg->status is %d\n", err);
                 else
                         CDEBUG(D_INFO, "req->rq_repmsg->status is %d\n", err);
-                /* XXX: translate this error from net to host */
-                RETURN(err);
         }
 
-        RETURN(0);
+        RETURN(err);
 }
 
 static void ptlrpc_cleanup_request_buf(struct ptlrpc_request *request)
@@ -455,14 +468,13 @@ static int ptlrpc_abort(struct ptlrpc_request *request)
         return 0;
 }
 
-/* caller must hold conn->c_lock */
-void ptlrpc_free_committed(struct ptlrpc_connection *conn)
+/* caller must hold imp->imp_lock */
+void ptlrpc_free_committed(struct obd_import *imp)
 {
         struct list_head *tmp, *saved;
         struct ptlrpc_request *req;
 
-restart:
-        list_for_each_safe(tmp, saved, &conn->c_sending_head) {
+        list_for_each_safe(tmp, saved, &imp->imp_request_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
@@ -470,33 +482,27 @@ restart:
                         continue;
                 }
 
-                if (!(req->rq_flags & PTL_RPC_FL_REPLIED)) {
+                /* If neither replied-to nor restarted, keep it. */
+                if (!(req->rq_flags &
+                      (PTL_RPC_FL_REPLIED | PTL_RPC_FL_RESTART))) {
                         DEBUG_REQ(D_HA, req, "keeping (in-flight)");
                         continue;
                 }
 
+                /* This needs to match the commit test in ptlrpc_queue_wait() */
+                if (!(req->rq_import->imp_flags & IMP_REPLAYABLE) ||
+                    req->rq_transno == 0) {
+                        DEBUG_REQ(D_HA, req, "keeping (queue_wait will free)");
+                        continue;
+                }
+
                 /* not yet committed */
-                if (req->rq_transno > conn->c_last_committed)
+                if (req->rq_transno > imp->imp_peer_committed_transno)
                         break;
 
                 DEBUG_REQ(D_HA, req, "committing (last_committed %Lu)",
-                          (long long)conn->c_last_committed);
-                if (atomic_dec_and_test(&req->rq_refcount)) {
-                        /* We do this to prevent free_req deadlock.  Restarting
-                         * after each removal is not so bad, as we are almost
-                         * always deleting the first item in the list.
-                         *
-                         * If we use a recursive lock here, we can skip the
-                         * unlock/lock/restart sequence.
-                         */
-                        spin_unlock(&conn->c_lock);
-                        ptlrpc_free_req(req);
-                        spin_lock(&conn->c_lock);
-                        goto restart;
-                } else {
-                        list_del(&req->rq_list);
-                        list_add(&req->rq_list, &conn->c_dying_head);
-                }
+                          imp->imp_peer_committed_transno);
+                __ptlrpc_req_finished(req, 1);
         }
 
         EXIT;
@@ -512,35 +518,18 @@ void ptlrpc_cleanup_client(struct obd_import *imp)
 
         LASSERT(conn);
 
-restart1:
-        spin_lock(&conn->c_lock);
-        list_for_each_safe(tmp, saved, &conn->c_sending_head) {
+        spin_lock(&imp->imp_lock);
+        list_for_each_safe(tmp, saved, &imp->imp_request_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                if (req->rq_import != imp)
-                        continue;
+
                 /* XXX we should make sure that nobody's sleeping on these! */
                 DEBUG_REQ(D_HA, req, "cleaning up from sending list");
                 list_del_init(&req->rq_list);
                 req->rq_import = NULL;
-                spin_unlock(&conn->c_lock);
-                ptlrpc_req_finished(req);
-                goto restart1;
+                __ptlrpc_req_finished(req, 0);
         }
-restart2:
-        list_for_each_safe(tmp, saved, &conn->c_dying_head) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                if (req->rq_import != imp)
-                        continue;
-                DEBUG_REQ(D_ERROR, req, "on dying list at cleanup");
-                list_del_init(&req->rq_list);
-                req->rq_import = NULL;
-                spin_unlock(&conn->c_lock);
-                ptlrpc_req_finished(req);
-                spin_lock(&conn->c_lock);
-                goto restart2;
-        }
-        spin_unlock(&conn->c_lock);
-
+        spin_unlock(&imp->imp_lock);
+        
         EXIT;
         return;
 }
@@ -548,8 +537,7 @@ restart2:
 void ptlrpc_continue_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_HA, "continue delayed request "LPD64" opc %d\n",
-               req->rq_xid, req->rq_reqmsg->opc);
+        DEBUG_REQ(D_HA, req, "continuing delayed request");
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
         wake_up(&req->rq_wait_for_rep);
@@ -559,8 +547,7 @@ void ptlrpc_continue_req(struct ptlrpc_request *req)
 void ptlrpc_resend_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_HA, "resend request "LPD64", opc %d\n",
-               req->rq_xid, req->rq_reqmsg->opc);
+        DEBUG_REQ(D_HA, req, "resending");
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
         req->rq_status = -EAGAIN;
@@ -574,10 +561,9 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
 void ptlrpc_restart_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_HA, "restart completed request "LPD64", opc %d\n",
-               req->rq_xid, req->rq_reqmsg->opc);
+        DEBUG_REQ(D_HA, req, "restarting (possibly-)completed request");
         req->rq_status = -ERESTARTSYS;
-        req->rq_flags |= PTL_RPC_FL_RECOVERY;
+        req->rq_flags |= PTL_RPC_FL_RESTART;
         req->rq_flags &= ~PTL_RPC_FL_TIMEOUT;
         wake_up(&req->rq_wait_for_rep);
         EXIT;
@@ -654,21 +640,16 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
         int rc = 0;
         struct l_wait_info lwi;
-        //struct ptlrpc_client *cli = req->rq_import->imp_client;
-        struct ptlrpc_connection *conn = req->rq_import->imp_connection;
+        struct obd_import *imp = req->rq_import;
+        struct ptlrpc_connection *conn = imp->imp_connection;
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
         req->rq_reqmsg->status = HTON__u32(current->pid); /* for distributed debugging */
-        CDEBUG(D_RPCTRACE, "Sending RPC pid:xid:nid:opc %d:"
-               LPX64":%x:%d\n", 
-               NTOH__u32(req->rq_reqmsg->status), 
-               req->rq_xid,
-               conn->c_peer.peer_nid,
-               NTOH__u32(req->rq_reqmsg->opc)
-               );
+        CDEBUG(D_RPCTRACE, "Sending RPC pid:xid:nid:opc %d:"LPU64":%x:%d\n",
+               NTOH__u32(req->rq_reqmsg->status), req->rq_xid,
+               conn->c_peer.peer_nid, NTOH__u32(req->rq_reqmsg->opc));
 
-        //DEBUG_REQ(D_HA, req, "subsys: %s:", cli->cli_name);
 
         /* XXX probably both an import and connection level are needed */
         if (req->rq_level > conn->c_level) {
@@ -703,18 +684,20 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         EIO_IF_INVALID(conn, req);
 
         list_del(&req->rq_list);
-        list_add_tail(&req->rq_list, &conn->c_sending_head);
+        list_add_tail(&req->rq_list, &imp->imp_request_list);
         spin_unlock(&conn->c_lock);
         rc = ptl_send_rpc(req);
         if (rc) {
                 CDEBUG(D_HA, "error %d, opcode %d, need recovery\n", rc,
                        req->rq_reqmsg->opc);
-                /* the sleep below will time out, triggering recovery */
+                /* sleep for a jiffy, then trigger recovery */
+                lwi = LWI_TIMEOUT_INTR(1, expired_request,
+                                       interrupted_request, req);
+        } else {
+                DEBUG_REQ(D_NET, req, "-- sleeping");
+                lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
+                                       interrupted_request, req);
         }
-
-        DEBUG_REQ(D_NET, req, "-- sleeping");
-        lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
-                               interrupted_request, req);
         l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
         DEBUG_REQ(D_NET, req, "-- done sleeping");
 
@@ -761,7 +744,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 #endif
-        CDEBUG(D_NET, "got rep "LPD64"\n", req->rq_xid);
+        CDEBUG(D_NET, "got rep "LPU64"\n", req->rq_xid);
         if (req->rq_repmsg->status == 0)
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
                        req->rq_replen, req->rq_repmsg->status);
@@ -773,8 +756,10 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
          *
          * But don't commit anything that's kept indefinitely for replay (has
          * the PTL_RPC_FL_REPLAY flag set), such as open requests.
+         *
+         * This needs to match the commit test in ptlrpc_free_committed().
          */
-        if ((req->rq_import->imp_flags & IMP_REPLAYABLE) == 0 ||
+        if (!(req->rq_import->imp_flags & IMP_REPLAYABLE) ||
             (req->rq_repmsg->transno == 0 &&
              (req->rq_flags & PTL_RPC_FL_REPLAY) == 0)) {
                 /* This import doesn't support replay, so we can just "commit"
@@ -782,20 +767,17 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                  */
                 DEBUG_REQ(D_HA, req, "not replayable, committing:");
                 list_del_init(&req->rq_list);
-                spin_unlock(&conn->c_lock);
-                ptlrpc_req_finished(req); /* Must be called unlocked. */
-                spin_lock(&conn->c_lock);
-        } else /* if (req->rq_import->imp_flags & IMP_REPLAYABLE) */ {
+                __ptlrpc_req_finished(req, 1);
+        }
+        if (req->rq_import->imp_flags & IMP_REPLAYABLE) {
                 /* Replay-enabled imports return commit-status information. */
-                /* XXX this needs to be per-import, or multiple MDS services on
-                 * XXX the same system are going to interfere messily with each
-                 * XXX others' transno spaces.
-                 */
-                conn->c_last_xid = req->rq_repmsg->last_xid;
-                conn->c_last_committed = req->rq_repmsg->last_committed;
-                ptlrpc_free_committed(conn);
+                imp->imp_peer_last_xid = req->rq_repmsg->last_xid;
+                imp->imp_peer_committed_transno = 
+                        req->rq_repmsg->last_committed;
+                ptlrpc_free_committed(imp);
         }
 
+        rc = ptlrpc_check_status(req);
         spin_unlock(&conn->c_lock);
 
         EXIT;

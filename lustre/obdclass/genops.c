@@ -408,7 +408,7 @@ void class_disconnect_all(struct obd_device *obddev)
                         spin_unlock(&obddev->obd_dev_lock);
                         CERROR("force disconnecting %s:%s export %p\n",
                                export->exp_obd->obd_type->typ_name,
-                               export->exp_uuid, export);
+                               export->exp_connection->c_remote_uuid, export);
                         rc = obd_disconnect(&conn);
                         if (rc < 0) {
                                 /* AED: not so sure about this...  We can't

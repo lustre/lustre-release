@@ -888,7 +888,12 @@ class LOV(Module):
             osc = lookup(self.dom_node.parentNode, osc_uuid)
             if osc:
                 n = OSC(osc)
-                n.prepare()
+                try:
+                    # Ignore connection failures, because the LOV will DTRT with
+                    # an unconnected OSC.
+                    n.prepare(ignore_connect_failure=1)
+                except CommandError:
+                    print "Error preparing OSC %s (inactive)\n" % osc_uuid
             else:
                 panic('osc not found:', osc_uuid)
         mdc_uuid = prepare_mdc(self.dom_node.parentNode, self.mds_uuid)
@@ -1089,19 +1094,23 @@ class OSC(Module):
         self.lookup_server(self.ost_uuid)
         self.add_module('lustre/osc', 'osc')
 
-    def prepare(self):
+    def prepare(self, ignore_connect_failure = 0):
         if is_prepared(self.uuid):
             return
         self.info(self.obd_uuid, self.ost_uuid)
         srv = self.get_server()
-        if local_net(srv):
-            lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
-        else:
-            r =  find_route(srv)
-            if r:
-                lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
+        try:
+            if local_net(srv):
+                lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
             else:
-                panic ("no route to",  srv.nid)
+                r =  find_route(srv)
+                if r:
+                    lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
+                else:
+                    panic ("no route to",  srv.nid)
+        except CommandError:
+            if (ignore_connect_failure == 0):
+                pass
             
         lctl.newdev(attach="osc %s %s" % (self.name, self.uuid),
                     setup ="%s %s" %(self.obd_uuid, srv.uuid))

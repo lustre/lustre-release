@@ -230,7 +230,6 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
 
         LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
 
         if (rc != ELDLM_OK) {
                 LASSERT(!is_replay);
@@ -407,7 +406,6 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
         req->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
 
@@ -464,7 +462,6 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 req->rq_replen = lustre_msg_size(0, NULL);
 
                 rc = ptlrpc_queue_wait(req);
-                rc = ptlrpc_check_status(req, rc);
                 ptlrpc_req_finished(req);
                 if (rc != ELDLM_OK)
                         GOTO(out, rc);

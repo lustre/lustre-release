@@ -21,9 +21,17 @@ struct obd_import {
         struct ptlrpc_client     *imp_client;
         struct lustre_handle      imp_handle;
         struct list_head          imp_chain;
+        struct list_head          imp_request_list;
         struct obd_device        *imp_obd;
         int                       imp_flags;
-        /* XXX need a UUID here, I think, unless we just use the OBD's UUID */
+        int                       imp_level;
+        __u64                     imp_last_xid;
+        __u64                     imp_max_transno;
+        __u64                     imp_peer_last_xid;
+        __u64                     imp_peer_committed_transno;
+
+        /* Protects flags, level, *_xid, request_list */
+        spinlock_t                imp_lock;
 };
 
 extern struct obd_import *class_conn2cliimp(struct lustre_handle *);

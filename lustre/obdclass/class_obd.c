@@ -332,29 +332,29 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 INIT_LIST_HEAD(&obd->obd_imports);
                 spin_lock_init(&obd->obd_dev_lock);
 
-                        if (data->ioc_inlbuf2) {
-                                int len = strlen(data->ioc_inlbuf2) + 1;
-                                OBD_ALLOC(obd->obd_name, len);
-                                if (!obd->obd_name) {
-                                        CERROR("no memory\n");
-                                        LBUG();
-                                }
-                                memcpy(obd->obd_name, data->ioc_inlbuf2, len);
-                        } else {
-                                CERROR("WARNING: unnamed obd device\n");
+                if (data->ioc_inlbuf2) {
+                        int len = strlen(data->ioc_inlbuf2) + 1;
+                        OBD_ALLOC(obd->obd_name, len);
+                        if (!obd->obd_name) {
+                                CERROR("no memory\n");
+                                LBUG();
                         }
-                        if (data->ioc_inlbuf3) {
-                                int len = strlen(data->ioc_inlbuf3);
-                                if (len >= sizeof(obd->obd_uuid)) {
-                                        CERROR("uuid must be < %d bytes long\n",
-                                               sizeof(obd->obd_uuid));
-                                        if (obd->obd_name)
-                                                OBD_FREE(obd->obd_name,
-                                                         strlen(obd->obd_name) + 1);
-                                        GOTO(out, err=-EINVAL);
-                                }
-                                memcpy(obd->obd_uuid, data->ioc_inlbuf3, len);
+                        memcpy(obd->obd_name, data->ioc_inlbuf2, len);
+                } else {
+                        CERROR("WARNING: unnamed obd device\n");
+                }
+                if (data->ioc_inlbuf3) {
+                        int len = strlen(data->ioc_inlbuf3);
+                        if (len >= sizeof(obd->obd_uuid)) {
+                                CERROR("uuid must be < %d bytes long\n",
+                                       sizeof(obd->obd_uuid));
+                                if (obd->obd_name)
+                                        OBD_FREE(obd->obd_name,
+                                                 strlen(obd->obd_name) + 1);
+                                GOTO(out, err=-EINVAL);
                         }
+                        memcpy(obd->obd_uuid, data->ioc_inlbuf3, len);
+                }
                 /* do the attach */
                 if (OBP(obd, attach))
                         err = OBP(obd,attach)(obd, sizeof(*data), data);
