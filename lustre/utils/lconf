@@ -850,8 +850,8 @@ class LOVConfig(Module):
         
     def prepare(self):
         lov = self.lov
-        self.info(lov.mds_uuid, lov.stripe_cnt, lov.stripe_sz, lov.stripe_off, lov.pattern,
-        lov.devlist, lov.mds_name)
+        self.info(lov.mds_uuid, lov.stripe_cnt, lov.stripe_sz, lov.stripe_off,
+                  lov.pattern, lov.devlist, lov.mds_name)
         lctl.lovconfig(lov.uuid, lov.mds_name, lov.stripe_cnt,
                        lov.stripe_sz, lov.stripe_off, lov.pattern,
                        string.join(lov.devlist))

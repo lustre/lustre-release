@@ -1100,8 +1100,7 @@ int jt_obd_test_brw(int argc, char **argv)
                                 cmdname(argv[0]), i, strerror(rc = errno),
                                 write ? "write" : "read");
                         break;
-                } else if (be_verbose
-                           (verbose, &next_time, i, &next_count, count))
+                } else if (be_verbose(verbose, &next_time,i, &next_count,count))
                         printf("%s: %s number %dx%d\n", cmdname(argv[0]),
                                write ? "write" : "read", i, pages);
 
@@ -1168,11 +1167,9 @@ int jt_obd_lov_config(int argc, char **argv)
                         desc.ld_tgt_count);
                 return -EINVAL;
         }
-        if (desc.ld_default_stripe_count == 0) {
-                fprintf(stderr, "error: %s: stripe count is zero\n",
-                        cmdname(argv[0]));
-                return -EINVAL;
-        }
+        if (desc.ld_default_stripe_count == 0)
+                desc.ld_default_stripe_count = desc.ld_tgt_count;
+
         desc.ld_default_stripe_size = strtoul(argv[3], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad default stripe size '%s'\n",
