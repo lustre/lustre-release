@@ -128,7 +128,7 @@ void vibnal_assert_wire_constants (void)
         CLASSERT ((int)sizeof(((kib_get_msg_t *)0)->ibgm_rd) == 8);
 
         /* Checks for struct kib_completion_msg_t */
-        CLASSERT ((int)sizeof(kib_completion_msg_t) == 16);
+        CLASSERT ((int)sizeof(kib_completion_msg_t) == 12);
         CLASSERT ((int)offsetof(kib_completion_msg_t, ibcm_cookie) == 0);
         CLASSERT ((int)sizeof(((kib_completion_msg_t *)0)->ibcm_cookie) == 8);
         CLASSERT ((int)offsetof(kib_completion_msg_t, ibcm_status) == 8);
@@ -169,7 +169,7 @@ void vibnal_assert_wire_constants (void)
         CLASSERT ((int)offsetof(kib_msg_t, ibm_u.get) == 56);
         CLASSERT ((int)sizeof(((kib_msg_t *)0)->ibm_u.get) == 88);
         CLASSERT ((int)offsetof(kib_msg_t, ibm_u.completion) == 56);
-        CLASSERT ((int)sizeof(((kib_msg_t *)0)->ibm_u.completion) == 16);
+        CLASSERT ((int)sizeof(((kib_msg_t *)0)->ibm_u.completion) == 12);
 }
 
 void

@@ -12,4 +12,4 @@ endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(kvibnal-objs:%.o=%.c) vibnal.h
+DIST_SOURCES = $(kvibnal-objs:%.o=%.c) vibnal.h vibnal_wire.h
