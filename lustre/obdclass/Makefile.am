@@ -8,6 +8,7 @@ obdclass_SOURCES = debug.c genops.c class_obd.c sysctl.c uuid.c lprocfs_status.c
 include $(top_srcdir)/Rules
 lustre_build_version:
 	perl $(top_srcdir)/scripts/version_tag.pl $(top_srcdir) > tmpver
-	diff -u $(top_builddir)/include/linux/lustre_build_version.h tmpver &&\
+	diff -u $(top_builddir)/include/linux/lustre_build_version.h tmpver \
+			2> /dev/null &&\
 		$(RM) tmpver || \
 		mv tmpver $(top_builddir)/include/linux/lustre_build_version.h
