@@ -24,7 +24,9 @@
  *  extent tree.  
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #include <linux/version.h>
 #include <linux/config.h>
 #include <linux/module.h>

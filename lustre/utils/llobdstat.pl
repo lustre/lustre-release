@@ -9,7 +9,7 @@ sub usage()
 {
     print STDERR "Usage: $pname <stats_file> [<interval>]\n";
     print STDERR "example: $pname help (to get help message)\n";
-    print STDERR "example: $pname ost1 1 (monitor /proc/fs/lustre/ost1/obd_stats once per second\n";
+    print STDERR "example: $pname ost1 1 (monitor /proc/fs/lustre/obdfilter/ost1/stats\n";
     exit 1;
 }
 
