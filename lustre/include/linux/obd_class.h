@@ -1074,17 +1074,6 @@ static inline void obdo_free(struct obdo *oa)
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 extern void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
 
-struct obd_class_user_state {
-        struct obd_device     *ocus_current_obd;
-        struct list_head       ocus_conns;
-};
-
-struct obd_class_user_conn {
-        struct list_head       ocuc_chain;
-        struct obd_export     *ocuc_exp;
-};
-
-
 /* sysctl.c */
 extern void obd_sysctl_init (void);
 extern void obd_sysctl_clean (void);

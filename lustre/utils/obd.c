@@ -54,6 +54,7 @@
 #include <linux/list.h>
 #undef __KERNEL__
 
+#include <linux/obd_class.h>
 #include <portals/ptlctl.h>
 #include "parser.h"
 #include <stdio.h>
@@ -70,12 +71,13 @@ struct timeval prev_time;
 #endif
 
 static int jt_recording;
-static uint64_t conn_cookie = -1;
 static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = sizeof(rawbuf);
 
 static int thread;
+
+static uint32_t cur_device = MAX_OBD_DEVICES;
 
 union lsm_buffer {
         char                 space [4096];
@@ -84,18 +86,13 @@ union lsm_buffer {
 
 static int l2_ioctl(int dev_id, int opc, void *buf)
 {
-//        if (jt_recording) {
-//                struct obd_ioctl_data *data = buf;
-//                data->ioc_command = opc;
-//                opc = OBD_IOC_DORECORD;
-//        }
         return l_ioctl(dev_id, opc, buf);
 }
 
 #define IOC_INIT(data)                                                  \
 do {                                                                    \
         memset(&data, 0, sizeof(data));                                 \
-        data.ioc_cookie = conn_cookie;                                  \
+        data.ioc_dev = cur_device;                                      \
 } while (0)
 
 #define IOC_PACK(func, data)                                            \
@@ -422,6 +419,7 @@ static int get_verbose(char *func, const char *arg)
 
 int do_disconnect(char *func, int verbose)
 {
+        cur_device = MAX_OBD_DEVICES;
         return 0;
 }
 
@@ -522,60 +520,36 @@ static void shmem_snap(int n)
 
 extern command_t cmdlist[];
 
-static int do_device(char *func, int dev)
+static int do_device(char *func, char *devname)
 {
         struct obd_ioctl_data data;
+        int dev;
 
         memset(&data, 0, sizeof(data));
 
-        data.ioc_dev = dev;
+        dev = parse_devname(func, devname);
+        if (dev < 0)
+                return -1;
 
-        IOC_PACK(func, data);
-        return l2_ioctl(OBD_DEV_ID, OBD_IOC_DEVICE, buf);
+        cur_device = dev;
+        return 0;
 }
 
 int jt_obd_device(int argc, char **argv)
 {
-        int rc, dev;
+        int rc;
         do_disconnect(argv[0], 1);
 
         if (argc != 2)
                 return CMD_HELP;
 
-        dev = parse_devname(argv[0], argv[1]);
-        if (dev < 0)
-                return -1;
-
-        rc = do_device(argv[0], dev);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-
+        rc = do_device(argv[0], argv[1]);
         return rc;
 }
 
 int jt_obd_connect(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        int rc;
-
-        IOC_INIT(data);
-
-        do_disconnect(argv[0], 1);
-
-        /* XXX TODO: implement timeout per lctl usage for probe */
-        if (argc != 1)
-                return CMD_HELP;
-
-        IOC_PACK(argv[0], data);
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CONNECT, buf);
-        IOC_UNPACK(argv[0], data);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: OBD_IOC_CONNECT %s\n",
-                        jt_cmdname(argv[0]), strerror(rc = errno));
-        else
-                conn_cookie = data.ioc_cookie;
-        return rc;
+        return 0;
 }
 
 int jt_obd_disconnect(int argc, char **argv)
@@ -583,28 +557,18 @@ int jt_obd_disconnect(int argc, char **argv)
         if (argc != 1)
                 return CMD_HELP;
 
-        if (conn_cookie == -1)
-                return 0;
-
         return do_disconnect(argv[0], 0);
 }
 
 int jt_opt_device(int argc, char **argv)
 {
-        char *arg2[3];
         int ret;
         int rc;
 
         if (argc < 3)
                 return CMD_HELP;
 
-        rc = do_device("device", parse_devname(argv[0], argv[1]));
-
-        if (!rc) {
-                arg2[0] = "connect";
-                arg2[1] = NULL;
-                rc = jt_obd_connect(1, arg2);
-        }
+        rc = do_device("device", argv[1]);
 
         if (!rc)
                 rc = Parser_execarg(argc - 2, argv + 2, cmdlist);
@@ -792,7 +756,6 @@ int jt_get_version(int argc, char **argv)
 
         memset(buf, 0, sizeof(buf));
         data->ioc_version = OBD_IOCTL_VERSION;
-        data->ioc_cookie = conn_cookie;
         data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
         data->ioc_len = obd_ioctl_packlen(data);
 
@@ -819,7 +782,6 @@ int jt_obd_list(int argc, char **argv)
 
         memset(buf, 0, sizeof(buf));
         data->ioc_version = OBD_IOCTL_VERSION;
-        data->ioc_cookie = conn_cookie;
         data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
         data->ioc_len = obd_ioctl_packlen(data);
 

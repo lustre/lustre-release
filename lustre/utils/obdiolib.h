@@ -34,7 +34,7 @@
 
 struct obdio_conn {
         int                    oc_fd;
-        uint64_t               oc_conn_cookie;
+        uint32_t               oc_device;
         struct obd_ioctl_data  oc_data;
         char                   oc_buffer[8192];
 };

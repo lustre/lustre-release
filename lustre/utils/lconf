@@ -348,7 +348,6 @@ class LCTLInterface:
         elif self.record_device:
             cmds = """
     device $%s
-    probe
     record %s
     %s""" % (self.record_device, self.record_log, cmds)
             
@@ -443,7 +442,6 @@ class LCTLInterface:
     def recover(self, dev_name, new_conn):
         cmds = """
     device $%s
-    probe
     recover %s""" %(dev_name, new_conn)
         self.run(cmds)
                 

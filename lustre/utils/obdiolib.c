@@ -38,7 +38,7 @@ obdio_iocinit (struct obdio_conn *conn)
 {
         memset (&conn->oc_data, 0, sizeof (conn->oc_data));
         conn->oc_data.ioc_version = OBD_IOCTL_VERSION;
-        conn->oc_data.ioc_cookie = conn->oc_conn_cookie;
+        conn->oc_data.ioc_dev = conn->oc_device;
         conn->oc_data.ioc_len = sizeof (conn->oc_data);
 }
 
@@ -74,7 +74,6 @@ struct obdio_conn *
 obdio_connect (int device)
 {
         struct obdio_conn  *conn;
-        int                 rc;
 
         conn = malloc (sizeof (*conn));
         if (conn == NULL) {
@@ -90,24 +89,7 @@ obdio_connect (int device)
                 goto failed;
         }
 
-        obdio_iocinit (conn);
-        conn->oc_data.ioc_dev = device;
-        rc = obdio_ioctl (conn, OBD_IOC_DEVICE);
-        if (rc != 0) {
-                fprintf (stderr, "obdio_connect: Can't set device %d: %s\n",
-                         device, strerror (errno));
-                goto failed;
-        }
-
-        obdio_iocinit (conn);
-        rc = obdio_ioctl (conn, OBD_IOC_CONNECT);
-        if (rc != 0) {
-                fprintf(stderr, "obdio_connect: Can't connect to device "
-                        "%d: %s\n", device, strerror (errno));
-                goto failed;
-        }
-
-        conn->oc_conn_cookie = conn->oc_data.ioc_cookie;
+        conn->oc_device = device;
         return (conn);
 
  failed:

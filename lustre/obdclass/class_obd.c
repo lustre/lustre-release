@@ -85,15 +85,7 @@ unsigned int obd_sync_filter; /* = 0, don't sync by default */
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
 {
-        struct obd_class_user_state *ocus;
         ENTRY;
-
-        OBD_ALLOC(ocus, sizeof(*ocus));
-        if (ocus == NULL)
-                return (-ENOMEM);
-
-        INIT_LIST_HEAD(&ocus->ocus_conns);
-        file->private_data = ocus;
 
         PORTAL_MODULE_USE;
         RETURN(0);
@@ -102,66 +94,12 @@ static int obd_class_open(struct inode * inode, struct file * file)
 /*  closing /dev/obd */
 static int obd_class_release(struct inode * inode, struct file * file)
 {
-        struct obd_class_user_state *ocus = file->private_data;
-        struct obd_class_user_conn  *c;
         ENTRY;
-
-        while (!list_empty (&ocus->ocus_conns)) {
-                c = list_entry (ocus->ocus_conns.next,
-                                struct obd_class_user_conn, ocuc_chain);
-                list_del (&c->ocuc_chain);
-
-                CDEBUG (D_IOCTL, "Auto-disconnect exp %p\n", c->ocuc_exp);
-
-                down (&obd_conf_sem);
-                obd_disconnect (c->ocuc_exp, 0);
-                up (&obd_conf_sem);
-
-                OBD_FREE (c, sizeof (*c));
-        }
-
-        OBD_FREE (ocus, sizeof (*ocus));
 
         PORTAL_MODULE_UNUSE;
         RETURN(0);
 }
 #endif
-
-static int obd_class_add_user_exp(struct obd_class_user_state *ocus,
-                                  struct obd_export *exp)
-{
-        struct obd_class_user_conn *c;
-        ENTRY;
-        /* NB holding obd_conf_sem */
-
-        OBD_ALLOC (c, sizeof (*c));
-        if (c == NULL)
-                RETURN(-ENOMEM);
-
-        c->ocuc_exp = class_export_get(exp);
-        list_add (&c->ocuc_chain, &ocus->ocus_conns);
-        RETURN(0);
-}
-
-static void obd_class_remove_user_exp(struct obd_class_user_state *ocus,
-                                      struct obd_export *exp)
-{
-        struct obd_class_user_conn *c;
-        ENTRY;
-
-        /* NB holding obd_conf_sem or last reference */
-
-        list_for_each_entry(c, &ocus->ocus_conns, ocuc_chain) {
-                if (exp == c->ocuc_exp) {
-                        list_del (&c->ocuc_chain);
-                        OBD_FREE (c, sizeof (*c));
-                        class_export_put(exp);
-                        EXIT;
-                        return;
-                }
-        }
-        EXIT;
-}
 
 static inline void obd_data2conn(struct lustre_handle *conn,
                                  struct obd_ioctl_data *data)
@@ -204,14 +142,12 @@ out:
         RETURN(rc);
 }
 
-int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
-                       unsigned long arg)
+int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 {
         char *buf = NULL;
         struct obd_ioctl_data *data;
         struct portals_debug_ioctl_data *debug_data;
-        struct obd_device *obd = ocus->ocus_current_obd;
-        struct lustre_handle conn;
+        struct obd_device *obd = NULL;
         int err = 0, len = 0, serialised = 0;
         ENTRY;
 
@@ -250,13 +186,6 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         }
 
         CDEBUG(D_IOCTL, "cmd = %x, obd = %p\n", cmd, obd);
-        if (!obd && cmd != OBD_IOC_DEVICE &&
-            cmd != OBD_IOC_LIST && cmd != OBD_GET_VERSION &&
-            cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_UUID2DEV &&
-            cmd != OBD_IOC_PROCESS_CFG) {
-                CERROR("OBD ioctl: No device\n");
-                GOTO(out, err = -EINVAL);
-        }
         if (obd_ioctl_getdata(&buf, &len, (void *)arg)) {
                 CERROR("OBD ioctl: data error\n");
                 GOTO(out, err = -EINVAL);
@@ -264,19 +193,6 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         data = (struct obd_ioctl_data *)buf;
 
         switch (cmd) {
-        case OBD_IOC_DEVICE: {
-                CDEBUG(D_IOCTL, "\n");
-                if (data->ioc_dev >= MAX_OBD_DEVICES) {
-                        CERROR("OBD ioctl: DEVICE invalid device %d\n",
-                               data->ioc_dev);
-                        ocus->ocus_current_obd = &obd_dev[data->ioc_dev];
-                        GOTO(out, err = -EINVAL);
-                }
-                CDEBUG(D_IOCTL, "device %d\n", data->ioc_dev);
-                ocus->ocus_current_obd = &obd_dev[data->ioc_dev];
-                GOTO(out, err = 0);
-        }
-
         case OBD_IOC_PROCESS_CFG: {
                 char *buf;
                 struct lustre_cfg *lcfg;
@@ -418,50 +334,27 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         }
 
 
-
-        case OBD_IOC_CONNECT: {
-                struct obd_export *exp;
-                obd_data2conn(&conn, data);
-
-                err = obd_connect(&conn, obd, &obd->obd_uuid);
-
-                CDEBUG(D_IOCTL, "assigned export "LPX64"\n", conn.cookie);
-                obd_conn2data(data, &conn);
-                if (err)
-                        GOTO(out, err);
-
-                exp = class_conn2export(&conn);
-                if (exp == NULL)
-                        GOTO(out, err = -EINVAL);
-
-                err = obd_class_add_user_exp(ocus, exp);
-                if (err != 0) {
-                        obd_disconnect(exp, 0);
-                        GOTO (out, err);
-                }
-
-                err = copy_to_user((void *)arg, data, sizeof(*data));
-                if (err != 0) {
-                        obd_class_remove_user_exp(ocus, exp);
-                        obd_disconnect(exp, 0);
-                        GOTO (out, err = -EFAULT);
-                }
-                class_export_put(exp);
-                GOTO(out, err);
+        case OBD_IOC_CLOSE_UUID: {
+                struct lustre_peer peer;
+                CDEBUG(D_IOCTL, "closing all connections to uuid %s\n",
+                       data->ioc_inlbuf1);
+                lustre_uuid_to_peer(data->ioc_inlbuf1, &peer);
+                GOTO(out, err = 0);
         }
 
-        case OBD_IOC_DISCONNECT: {
-                struct obd_export *exp;
-                obd_data2conn(&conn, data);
-                exp = class_conn2export(&conn);
-                if (exp == NULL)
-                        GOTO(out, err = -EINVAL);
-
-                obd_class_remove_user_exp(ocus, exp);
-                err = obd_disconnect(exp, 0);
-                GOTO(out, err);
         }
 
+        if (data->ioc_dev >= MAX_OBD_DEVICES) {
+                CERROR("OBD ioctl: No device\n");
+                GOTO(out, err = -EINVAL);
+        } 
+        obd = &obd_dev[data->ioc_dev];
+        if (!(obd && obd->obd_set_up) || obd->obd_stopping) {
+                CERROR("OBD ioctl: device not setup %d \n", data->ioc_dev);
+                GOTO(out, err = -EINVAL);
+        }
+
+        switch(cmd) {
         case OBD_IOC_NO_TRANSNO: {
                 if (!obd->obd_attached) {
                         CERROR("Device %d not attached\n", obd->obd_minor);
@@ -474,23 +367,8 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                 GOTO(out, err = 0);
         }
 
-        case OBD_IOC_CLOSE_UUID: {
-                struct lustre_peer peer;
-                CDEBUG(D_IOCTL, "closing all connections to uuid %s\n",
-                       data->ioc_inlbuf1);
-                lustre_uuid_to_peer(data->ioc_inlbuf1, &peer);
-                GOTO(out, err = 0);
-        }
-
         default: {
-                // obd_data2conn(&conn, data);
-                struct obd_class_user_conn *oconn;
-
-                if (list_empty(&ocus->ocus_conns)) 
-                        GOTO(out, err = -ENOTCONN);
-                        
-                oconn = list_entry(ocus->ocus_conns.next, struct obd_class_user_conn, ocuc_chain);
-                err = obd_iocontrol(cmd, oconn->ocuc_exp, len, data, NULL);
+                err = obd_iocontrol(cmd, obd->obd_self_export, len, data, NULL);
                 if (err)
                         GOTO(out, err);
 
@@ -517,7 +395,7 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
 static int obd_class_ioctl(struct inode *inode, struct file *filp,
                            unsigned int cmd, unsigned long arg)
 {
-        return class_handle_ioctl(filp->private_data, cmd, arg);
+        return class_handle_ioctl(cmd, arg);
 }
 
 /* declare character device */
