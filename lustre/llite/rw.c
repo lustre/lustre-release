@@ -259,8 +259,6 @@ static int ll_writepage(struct page *page)
         int err;
         ENTRY;
 
-        LBUG();
-
         if (!PageLocked(page))
                 LBUG();
 
