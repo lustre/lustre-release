@@ -7,3 +7,4 @@ include/linux/dcache.h
 include/linux/fs.h
 kernel/ksyms.c
 fs/exec.c
+fs/proc/base.c

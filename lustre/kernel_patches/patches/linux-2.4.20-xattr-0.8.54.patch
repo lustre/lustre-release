@@ -701,7 +701,7 @@
  
 +# Meta block cache for Extended Attributes (ext2/ext3)
 +#tristate 'Meta block cache' CONFIG_FS_MBCACHE
-+define_tristate CONFIG_FS_MBCACHE m 
++define_tristate CONFIG_FS_MBCACHE y 
 +
  mainmenu_option next_comment
  comment 'Partition Types'
