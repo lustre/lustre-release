@@ -172,7 +172,7 @@ __lmv_create_obj(struct obd_device *obd, struct ll_fid *fid,
         if (obj)
                 RETURN(obj);
 
-        /* no such object yet, allocate and initialize them. */
+        /* no such object yet, allocate and initialize it. */
         obj = __lmv_alloc_obj(obd, fid, mea);
         if (!obj)
                 RETURN(NULL);
@@ -261,6 +261,28 @@ cleanup:
         if (req)       
                 ptlrpc_req_finished(req);
         RETURN(rc); 
+}
+
+int
+lmv_destroy_obj(struct obd_export *exp, struct ll_fid *fid)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obj *obj;
+        int rc = 0;
+        ENTRY;
+
+        spin_lock(&lmv_obj_list_lock);
+        
+        obj = __lmv_grab_obj(obd, fid);
+        if (obj) {
+                list_del(&obj->list);
+                lmv_put_obj(obj);
+                lmv_put_obj(obj);
+                rc = 1;
+        }
+        
+        spin_unlock(&lmv_obj_list_lock);
+        RETURN(rc);
 }
 
 int
