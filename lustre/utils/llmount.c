@@ -287,6 +287,11 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
                         *opteq = '\0';
                         if (!strcmp(opt, "nettype")) {
                                 lmd->lmd_nal = ptl_name2nal(opteq + 1);
+                                if (lmd->lmd_nal < 0) {
+                                        fprintf(stderr, "%s: can't parse NET "
+                                                "%s\n", progname, opteq + 1);
+                                        return (1);
+                                }
                         } else if(!strcmp(opt, "cluster_id")) {
                                 if (ptl_parse_nid(&cluster_id, opteq+1) != 0) {
                                         fprintf(stderr, "%s: can't parse NID "
