@@ -29,7 +29,7 @@ h2gm () {
 }
 
 h2elan () {
-    echo $1 | sed 's/[^0-9]*//g'
+	echo $1 | sed 's/[^0-9]*//g'
 }
         
 # FIXME: make LMC not require MDS for obdecho LOV
@@ -37,7 +37,7 @@ MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 MDSSIZE=10000
 FSTYPE=${FSTYPE:-ext3}
 
-STRIPE_BYTES=65536
+STRIPE_BYTES=1048576
 STRIPES_PER_OBJ=2	# 0 means stripe over all OSTs
 
 rm -f $config

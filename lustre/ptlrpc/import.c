@@ -100,10 +100,10 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
         spin_lock_irqsave(&imp->imp_lock, flags);
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
-                CERROR("%s: connection lost to %s@%s\n",
-                       imp->imp_obd->obd_name, 
-                       imp->imp_target_uuid.uuid,
-                       imp->imp_connection->c_remote_uuid.uuid);
+                CWARN("%s: connection lost to %s@%s\n",
+                      imp->imp_obd->obd_name,
+                      imp->imp_target_uuid.uuid,
+                      imp->imp_connection->c_remote_uuid.uuid);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
@@ -142,11 +142,6 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
  * for all the RPC completions, and finally notify the obd to
  * invalidate its state (ie cancel locks, clear pending requests,
  * etc).
- *
- * in_rpc: true if this is called while processing an rpc, like
- *    CONNECT. It will allow for one RPC to be inflight while
- *    waiting for requests to complete. Ugly, yes, but I don't see an
- *    cleaner way right now.
  */
 void ptlrpc_invalidate_import(struct obd_import *imp)
 {
@@ -577,10 +572,10 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                         GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 ptlrpc_activate_import(imp);
-                CERROR("%s: connection restored to %s@%s\n",
-                       imp->imp_obd->obd_name, 
-                       imp->imp_target_uuid.uuid,
-                       imp->imp_connection->c_remote_uuid.uuid);
+                CWARN("%s: connection restored to %s@%s\n",
+                      imp->imp_obd->obd_name,
+                      imp->imp_target_uuid.uuid,
+                      imp->imp_connection->c_remote_uuid.uuid);
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {

@@ -35,6 +35,7 @@
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
 #include <linux/version.h>
+#include <linux/bitops.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/ext3_xattr.h>
 #else
@@ -52,7 +53,7 @@
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #include <linux/ext3_extents.h>
 #endif
-                                                                                                                             
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
 # define lock_24kernel() lock_kernel()
 # define unlock_24kernel() unlock_kernel()
@@ -76,9 +77,6 @@ struct fsfilt_cb_data {
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
 #define XATTR_LUSTRE_MDS_LOV_EA         "lov"
-
-#define EXT3_XATTR_INDEX_LUSTRE         5                         /* old */
-#define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid" /* old */
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -144,7 +142,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                         EXT3_DELETE_TRANS_BLOCKS * logs;
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
-                 LBUG();
+                LBUG();
         }
 
         LASSERT(current->journal_info == desc_private);
@@ -241,7 +239,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
         /* last_rcvd update */
         needed += EXT3_DATA_TRANS_BLOCKS;
 
-#if defined(CONFIG_QUOTA) && !defined(__x86_64__) /* XXX */
+#if defined(CONFIG_QUOTA)
         /* We assume that there will be 1 bit set in s_dquot.flags for each
          * quota file that is active.  This is at least true for now.
          */
@@ -372,7 +370,7 @@ static int fsfilt_ext3_commit_wait(struct inode *inode, void *h)
         tid_t tid = (tid_t)(long)h;
 
         CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
-	if (is_journal_aborted(EXT3_JOURNAL(inode)))
+        if (is_journal_aborted(EXT3_JOURNAL(inode)))
                 return -EIO;
 
         log_wait_commit(EXT3_JOURNAL(inode), tid);
@@ -440,73 +438,21 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
         RETURN(rc);
 }
 
-#undef INLINE_EA
-#undef OLD_EA
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size)
 {
-        int rc, old_ea = 0;
+        int rc;
 
         LASSERT(down_trylock(&inode->i_sem) != 0);
 
-#ifdef INLINE_EA  /* can go away before 1.0 - just for testing bug 2097 now */
-        /* Nasty hack city - store stripe MD data in the block pointers if
-         * it will fit, because putting it in an EA currently kills the MDS
-         * performance.  We'll fix this with "fast EAs" in the future.
-         */
-        if (inode->i_blocks == 0 && lmm_size <= sizeof(EXT3_I(inode)->i_data) -
-                                            sizeof(EXT3_I(inode)->i_data[0])) {
-                unsigned old_size = EXT3_I(inode)->i_data[0];
-                if (old_size != 0) {
-                        LASSERT(old_size < sizeof(EXT3_I(inode)->i_data));
-                        CERROR("setting EA on %lu/%u again... interesting\n",
-                               inode->i_ino, inode->i_generation);
-                }
-
-                EXT3_I(inode)->i_data[0] = cpu_to_le32(lmm_size);
-                memcpy(&EXT3_I(inode)->i_data[1], lmm, lmm_size);
-                mark_inode_dirty(inode);
-                return 0;
-        }
-#endif
-#ifdef OLD_EA
-        /* keep this when we get rid of OLD_EA (too noisy during conversion) */
-        if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */) {
+        if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
                 CWARN("setting EA on %lu/%u again... interesting\n",
                        inode->i_ino, inode->i_generation);
-                old_ea = 1;
-        }
 
-        lock_kernel();
-        /* this can go away before 1.0.  For bug 2097 testing only. */
-        rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
-                                   XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
-#else
         lock_kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
                                    XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size, 0);
 
-        /* This tries to delete the old-format LOV EA, but only as long as we
-         * have successfully saved the new-format LOV EA (we can always try
-         * the conversion again the next time the file is accessed).  It is
-         * possible (although unlikely) that the new-format LOV EA couldn't be
-         * saved because it ran out of space but we would need a file striped
-         * over least 123 OSTs before the two EAs filled a 4kB block.
-         *
-         * This can be removed when all filesystems have converted to the
-         * new EA format, but otherwise adds little if any overhead.  If we
-         * wanted backward compatibility for existing files, we could keep
-         * the old EA around for a while but we'd have to clean it up later. */
-        if (rc >= 0 && old_ea) {
-                int err = ext3_xattr_set_handle(handle, inode,
-                                                EXT3_XATTR_INDEX_LUSTRE,
-                                                XATTR_LUSTRE_MDS_OBJID,
-                                                NULL, 0, 0);
-                if (err)
-                        CERROR("error deleting old LOV EA on %lu/%u: rc %d\n",
-                               inode->i_ino, inode->i_generation, err);
-        }
-#endif
         unlock_kernel();
 
         if (rc)
@@ -522,61 +468,9 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 
         LASSERT(down_trylock(&inode->i_sem) != 0);
         lock_kernel();
-        /* Keep support for reading "inline EAs" until we convert
-         * users over to new format entirely.  See bug 841/2097. */
-        if (inode->i_blocks == 0 && EXT3_I(inode)->i_data[0]) {
-                unsigned size = le32_to_cpu(EXT3_I(inode)->i_data[0]);
-                void *handle;
-
-                LASSERT(size < sizeof(EXT3_I(inode)->i_data));
-                if (lmm) {
-                        if (size > lmm_size) {
-                                CERROR("inline EA on %lu/%u bad size %u > %u\n",
-                                       inode->i_ino, inode->i_generation,
-                                       size, lmm_size);
-                                return -ERANGE;
-                        }
-                        memcpy(lmm, &EXT3_I(inode)->i_data[1], size);
-                }
-
-#ifndef INLINE_EA
-                /* migrate LOV EA data to external block - keep same format */
-                CWARN("DEBUG: migrate inline EA for inode %lu/%u to block\n",
-                      inode->i_ino, inode->i_generation);
-
-                handle = journal_start(EXT3_JOURNAL(inode),
-                                       EXT3_XATTR_TRANS_BLOCKS);
-                if (!IS_ERR(handle)) {
-                        int err;
-                        rc = fsfilt_ext3_set_md(inode, handle,
-                                                &EXT3_I(inode)->i_data[1],size);
-                        if (rc == 0) {
-                                memset(EXT3_I(inode)->i_data, 0,
-                                       sizeof(EXT3_I(inode)->i_data));
-                                mark_inode_dirty(inode);
-                        }
-                        err = journal_stop(handle);
-                        if (err && rc == 0)
-                                rc = err;
-                } else {
-                        rc = PTR_ERR(handle);
-                }
-#endif
-                unlock_kernel();
-                return size;
-        }
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
                             XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size);
-        /* try old EA type if new one failed - MDS will convert it for us */
-        if (rc == -ENODATA) {
-                CDEBUG(D_INFO,"failed new LOV EA %d/%s from inode %lu: rc %d\n",
-                       EXT3_XATTR_INDEX_TRUSTED, XATTR_LUSTRE_MDS_LOV_EA,
-                       inode->i_ino, rc);
-
-                rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size);
-        }
         unlock_kernel();
 
         /* This gives us the MD size */
@@ -585,7 +479,7 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
-                       EXT3_XATTR_INDEX_LUSTRE, XATTR_LUSTRE_MDS_OBJID,
+                       EXT3_XATTR_INDEX_TRUSTED, XATTR_LUSTRE_MDS_LOV_EA,
                        inode->i_ino, rc);
                 memset(lmm, 0, lmm_size);
                 return (rc == -ENODATA) ? 0 : rc;
@@ -749,7 +643,7 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #define ext3_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
 #define ext3_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
 #endif
-                                                                                                                             
+
 #include <linux/lustre_version.h>
 #if EXT3_EXT_MAGIC == 0xf301
 #define ee_start e_start
@@ -771,17 +665,17 @@ struct bpointers {
 };
 
 static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
-                                unsigned long block, int *aflags)
+                              unsigned long block, int *aflags)
 {
         struct ext3_inode_info *ei = EXT3_I(inode);
         unsigned long bg_start;
         unsigned long colour;
         int depth;
-                                                                                                                             
+
         if (path) {
                 struct ext3_extent *ex;
                 depth = path->p_depth;
-                                                                                                                             
+
                 /* try to predict block placement */
                 if ((ex = path[depth].p_ext)) {
 #if 0
@@ -795,18 +689,18 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
 #endif
                         return ex->ee_start + (block - ex->ee_block);
                 }
-                                                                                                                             
+
                 /* it looks index is empty
                  * try to find starting from index itself */
                 if (path[depth].p_bh)
                         return path[depth].p_bh->b_blocknr;
         }
-        
+
         /* OK. use inode's group */
         bg_start = (ei->i_block_group * EXT3_BLOCKS_PER_GROUP(inode->i_sb)) +
                 le32_to_cpu(EXT3_SB(inode->i_sb)->s_es->s_first_data_block);
         colour = (current->pid % 16) *
-                        (EXT3_BLOCKS_PER_GROUP(inode->i_sb) / 16);
+                (EXT3_BLOCKS_PER_GROUP(inode->i_sb) / 16);
         return bg_start + colour + block;
 }
 
@@ -822,16 +716,16 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         loff_t new_i_size;
         handle_t *handle;
         int i, aflags = 0;
-                                                                                                                             
+
         i = EXT_DEPTH(tree);
         EXT_ASSERT(i == path->p_depth);
         EXT_ASSERT(path[i].p_hdr);
-                                                                                                                             
+
         if (exist) {
                 err = EXT_CONTINUE;
                 goto map;
         }
-                                                                                                                             
+
         if (bp->create == 0) {
                 i = 0;
                 if (newex->ee_block < bp->start)
@@ -841,21 +735,20 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                                         i, newex->ee_len);
                 for (; i < newex->ee_len && bp->num; i++) {
                         *(bp->created) = 0;
-                        *(bp->created) = 0;
                         bp->created++;
                         *(bp->blocks) = 0;
                         bp->blocks++;
                         bp->num--;
                         bp->start++;
                 }
-                                                                                                                             
+
                 return EXT_CONTINUE;
         }
-                                                                                                                             
+
         tgen = EXT_GENERATION(tree);
         count = ext3_ext_calc_credits_for_insert(tree, path);
         ext3_up_truncate_sem(inode);
-                                                                                                                             
+
         lock_24kernel();
         handle = journal_start(EXT3_JOURNAL(inode), count + EXT3_ALLOC_NEEDED + 1);
         unlock_24kernel();
@@ -863,7 +756,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 ext3_down_truncate_sem(inode);
                 return PTR_ERR(handle);
         }
-        
+
         if (tgen != EXT_GENERATION(tree)) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
@@ -872,7 +765,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 ext3_down_truncate_sem(inode);
                 return EXT_REPEAT;
         }
-                                                                                                                             
+
         ext3_down_truncate_sem(inode);
         count = newex->ee_len;
         goal = ext3_ext_find_goal(inode, path, newex->ee_block, &aflags);
@@ -881,7 +774,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         if (!pblock)
                 goto out;
         EXT_ASSERT(count <= newex->ee_len);
-                                                                                                                             
+
         /* insert new extent */
         newex->ee_start = pblock;
         newex->ee_len = count;
@@ -898,7 +791,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                         err = ext3_mark_inode_dirty(handle, inode);
                 }
         }
-                                                                                                                             
+
 out:
         lock_24kernel();
         journal_stop(handle);
@@ -939,10 +832,10 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         struct ext3_extents_tree tree;
         struct bpointers bp;
         int err;
-                                                                                                                             
+
         CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
                 block, block + num, (unsigned) inode->i_ino);
-                                                                                                                             
+
         ext3_init_tree_desc(&tree, inode);
         tree.private = &bp;
         bp.blocks = blocks;
@@ -950,12 +843,12 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.start = block;
         bp.init_num = bp.num = num;
         bp.create = create;
-                                                                                                                             
+
         ext3_down_truncate_sem(inode);
         err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
         ext3_ext_invalidate_cache(&tree);
         ext3_up_truncate_sem(inode);
-                                                                                                                             
+
         return err;
 }
 
@@ -967,10 +860,10 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
         int rc = 0, i = 0;
         struct page *fp = NULL;
         int clen = 0;
-                                                                                                                             
+
         CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
                 inode->i_ino, pages, (*page)->index);
-                                                                                                                             
+
         /* pages are sorted already. so, we just have to find
          * contig. space and process them properly */
         while (i < pages) {
@@ -987,20 +880,20 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
                         i++;
                         continue;
                 }
-                
+
                 /* process found extent */
                 rc = fsfilt_map_nblocks(inode, fp->index * blocks_per_page,
                                         clen * blocks_per_page, blocks,
                                         created, create);
                 if (rc)
                         GOTO(cleanup, rc);
-                                                                                                                             
+
                 /* look for next extent */
                 fp = NULL;
                 blocks += blocks_per_page * clen;
                 created += blocks_per_page * clen;
         }
-                                                                                                                             
+
         if (fp)
                 rc = fsfilt_map_nblocks(inode, fp->index * blocks_per_page,
                                         clen * blocks_per_page, blocks,
@@ -1019,7 +912,7 @@ int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
         unsigned long *b;
         int rc = 0, i, *cr;
-                                                                                                                             
+
         for (i = 0, cr = created, b = blocks; i < pages; i++, page++) {
                 rc = ext3_map_inode_page(inode, *page, b, cr, create);
                 if (rc) {

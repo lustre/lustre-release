@@ -27,8 +27,8 @@ int main(int argc, char ** argv)
                 return 1;
         }
 
-        if (strcmp(argv[1], "-d") == 0) {
-                do_rmdir = 1;
+	if (strcmp(argv[1], "-d") == 0) {
+		do_rmdir = 1;
 		argv++;
 		argc--;
 	}

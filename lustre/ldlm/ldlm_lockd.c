@@ -146,7 +146,7 @@ static int expired_lock_main(void *arg)
                                 CERROR("lock with free export on elt list %p\n",
                                        export);
                                 lock->l_export = NULL;
-                                LDLM_ERROR(lock, "free export\n");
+                                LDLM_ERROR(lock, "free export");
                                 continue;
                         }
                         export = class_export_get(lock->l_export);
@@ -174,7 +174,6 @@ static void waiting_locks_callback(unsigned long unused)
 
         spin_lock_bh(&waiting_locks_spinlock);
         while (!list_empty(&waiting_locks_list)) {
-
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
 
@@ -623,7 +622,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (req->rq_export->exp_failed) {
-                LDLM_ERROR(lock,"lock on destroyed export %p\n",req->rq_export);
+                LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 GOTO(out, rc = -ENOTCONN);
         }

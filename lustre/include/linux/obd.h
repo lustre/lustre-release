@@ -394,7 +394,7 @@ struct lov_obd {
         struct lov_desc desc;
         int bufsize;
         int refcount;
-        int lo_catalog_loaded:1;
+        unsigned int lo_catalog_loaded:1;
         struct lov_tgt_desc *tgts;
 };
 

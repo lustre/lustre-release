@@ -982,7 +982,7 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         /* if we are following a symlink, don't open */
         if (S_ISLNK(dchild->d_inode->i_mode))
-                GOTO(cleanup, rc = 0);
+                GOTO(cleanup_no_trans, rc = 0);
 
         if ((rec->ur_flags & MDS_OPEN_DIRECTORY) &&
             !S_ISDIR(dchild->d_inode->i_mode))
@@ -991,7 +991,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         if (S_ISDIR(dchild->d_inode->i_mode)) {
                 if (rec->ur_flags & MDS_OPEN_CREAT ||
                     rec->ur_flags & FMODE_WRITE) {
-                        /*we are tryying to create or write a exist dir*/
+                        /* we are trying to create or write a exist dir */
                         GOTO(cleanup, rc = -EISDIR);
                 }
                 if (ll_permission(dchild->d_inode, acc_mode, NULL)) {
@@ -1013,7 +1013,7 @@ int mds_open(struct mds_update_record *rec, int offset,
  cleanup:
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
-
+ cleanup_no_trans:
         switch (cleanup_phase) {
         case 2:
                 if (rc && created) {

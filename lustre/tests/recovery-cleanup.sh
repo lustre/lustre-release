@@ -27,6 +27,7 @@ MDSSIZE=${MDSSIZE:-100000}
 FSTYPE=${FSTYPE:-ext3}
 OSTDEV=${OSTDEV:-/tmp/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-100000}
+STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 
 do_mds() {
     $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@" || exit $?
@@ -54,7 +55,7 @@ make_config() {
     done
     lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --fstype $FSTYPE \
     	--dev $MDSDEV --size $MDSSIZE || exit 5
-    lmc -m $CONFIG --add lov --lov lov1 --mds mds1 --stripe_sz 65536 \
+    lmc -m $CONFIG --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
         --stripe_cnt 0 --stripe_pattern 0 || exit 6
     lmc -m $CONFIG --add ost --nspath /mnt/ost_ns --node $OSTNODE \
         --lov lov1 --dev $OSTDEV --size $OSTSIZE --fstype $FSTYPE || exit 7
@@ -108,7 +109,7 @@ wait_for_timeout() {
 
 try_to_cleanup() {
     kill -INT $!
-    unmount_client --force --dump /tmp/client-cleanup-`date +%s`.log
+    unmount_client --force --dump $TMP/recovery-cleanup-`hostname`.log
     mount_client --timeout=${TIMEOUT:-5} --lustre_upcall=/bin/true
 }
 
@@ -141,4 +142,4 @@ try_to_cleanup
 drop_request "munlink /mnt/lustre/link1" & wait_for_timeout
 try_to_cleanup
 
-$CLEANUP '--dump /tmp/`hostname`-cleanup.log'
+$CLEANUP '--dump $TMP/recovery-cleanup-`hostname`.log'

@@ -42,8 +42,8 @@ cleanup() {
     fi
     zconf_umount `hostname` $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
-    stop ost2 ${FORCE} --dump cleanup.log
-    stop ost ${FORCE} --dump cleanup.log
+    stop ost2 ${FORCE}
+    stop ost ${FORCE} --dump $TMP/replay-single-`hostname`.log
 }
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -857,8 +857,7 @@ test_43() {
 
     # OBD_FAIL_OST_CREATE_NET 0x204
     do_facet ost "sysctl -w lustre.fail_loc=0x80000204"
-    facet_failover mds
-    df $MOUNT || return 1
+    fail mds
     sleep 10
     do_facet ost "sysctl -w lustre.fail_loc=0"
 
@@ -978,8 +977,11 @@ test_52() {
 }
 run_test 52 "time out lock replay (3764)"
 
+#b_cray 53 "|X| open request and close reply while two MDC requests in flight"
+#b_cray 54 "|X| open request and close reply while two MDC requests in flight"
+
 #b3761 ASSERTION(hash != 0) failed
-test_53() {
+test_55() {
 # OBD_FAIL_MDS_OPEN_CREATE | OBD_FAIL_ONCE
     do_facet mds "sysctl -w lustre.fail_loc=0x8000012b"
     touch $DIR/$tfile &
@@ -989,7 +991,17 @@ test_53() {
     rm $DIR/$tfile
     return 0
 }
-run_test 53 "let MDS_CHECK_RESENT return the original return code instead of 0"
+run_test 55 "let MDS_CHECK_RESENT return the original return code instead of 0"
+
+#b3440 ASSERTION(rec->ur_fid2->id) failed
+test_56() {
+    ln -s foo $DIR/$tfile
+    replay_barrier mds
+    #drop_reply "cat $DIR/$tfile"
+    fail mds
+    sleep 10
+}
+run_test 56 "don't replay a symlink open request (3440)"
 
 equals_msg test complete, cleaning up
 $CLEANUP

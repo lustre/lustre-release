@@ -36,7 +36,7 @@ cleanup() {
     fi
     zconf_umount `hostname` $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
-    stop ost ${FORCE} --dump cleanup.log
+    stop ost ${FORCE} --dump $TMP/replay-ost-single-`hostname`.log
 }
 
 if [ "$ONLY" == "cleanup" ]; then

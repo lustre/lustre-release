@@ -565,7 +565,7 @@ int ldlm_regression_start(struct obd_device *obddev,
         num_extents = num_extents_in;
 
         LDLM_DEBUG_NOLOCK("regression test started: threads: %d, max_locks: "
-                          "%d, num_res: %d, num_ext: %d\n",
+                          "%d, num_res: %d, num_ext: %d",
                           threads, max_locks_in, num_resources_in,
                           num_extents_in);
 

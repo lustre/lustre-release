@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/lib/fsfilt_ext3.c
+ *  lustre/lib/lvfs_linux.c
  *  Lustre filesystem abstraction routines
  *
  *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
@@ -32,7 +32,6 @@
 #include <linux/version.h>
 #include <linux/fs.h>
 #include <asm/unistd.h>
-#include <linux/jbd.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
@@ -122,10 +121,10 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                 if (uc->ouc_suppgid2 != -1)
                         current_groups[current_ngroups++] = uc->ouc_suppgid2;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
-                if (uc->ouc_suppgid1 != -1 && uc->ouc_suppgid2 != -1
-                    && (uc->ouc_suppgid1 > uc->ouc_suppgid2)) {
-                                current_groups[0] = uc->ouc_suppgid2;
-                                current_groups[1] = uc->ouc_suppgid1;
+                if (uc->ouc_suppgid1 != -1 && uc->ouc_suppgid2 != -1 &&
+                    (uc->ouc_suppgid1 > uc->ouc_suppgid2)) {
+                        current_groups[0] = uc->ouc_suppgid2;
+                        current_groups[1] = uc->ouc_suppgid1;
                 }
 #endif
         }

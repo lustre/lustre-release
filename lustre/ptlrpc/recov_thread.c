@@ -197,7 +197,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
                         llcd_put(ctxt->loc_llcd);
                         ctxt->loc_llcd = NULL;
                 }
-                CWARN("import will be destroyed, put "
+                CWARN("reverse import disconnected, put "
                       "llcd %p:%p\n", ctxt->loc_llcd, ctxt);
                 ctxt->loc_imp = NULL;
                 up(&ctxt->loc_sem);

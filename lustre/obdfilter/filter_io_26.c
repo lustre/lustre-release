@@ -315,8 +315,8 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
          * checked elsewhere */
         LASSERT(dreq->dr_npages <= OBDFILTER_CREATED_SCRATCHPAD_ENTRIES);
         if (dreq->dr_npages == 0)
-                GOTO(out, rc=0);
-        
+                RETURN(0);
+
         rc = fsfilt_map_inode_pages(obd, inode,
                                     dreq->dr_pages, dreq->dr_npages,
                                     dreq->dr_blocks,
@@ -326,7 +326,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
 #if 0
-                        filter_tally_write(&obd->u.filter, 
+                        filter_tally_write(&obd->u.filter,
                                            dreq->dr_pages,
                                            dreq->dr_page_idx,
                                            dreq->dr_blocks,
@@ -334,10 +334,10 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
 #endif
                         if (attr->ia_size > inode->i_size)
                                 attr->ia_valid |= ATTR_SIZE;
-                        rc = fsfilt_setattr(obd, dchild, 
+                        rc = fsfilt_setattr(obd, dchild,
                                             oti->oti_handle, attr, 0);
                 }
-                
+
                 up(&inode->i_sem);
 
                 rc2 = filter_finish_transno(exp, oti, 0);
@@ -370,8 +370,6 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         filter_clear_page_cache(inode, iobuf);
 
         RETURN(filter_do_bio(obd, inode, dreq, rw));
-out:
-        RETURN(rc);
 }
 
 /* See if there are unallocated parts in given file region */

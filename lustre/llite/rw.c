@@ -429,7 +429,7 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                                        "%s%s%s%s origin %s\n",
                                        llap->llap_write_queued ? "wq " : "",
                                        PageDirty(page) ? "pd " : "",
-                                       PageUptodate(page) ? "" : "!pu",
+                                       PageUptodate(page) ? "" : "!pu ",
                                        llap->llap_defer_uptodate ? "" : "!du",
                                        llap_origins[llap->llap_origin]);
                         continue;
@@ -457,6 +457,14 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                count, want, total);
 
         return count;
+}
+
+void ll_shrink_cache(int priority, unsigned int gfp_mask)
+{
+        struct ll_sb_info *sbi;
+
+        list_for_each_entry(sbi, &ll_super_blocks, ll_list)
+                llap_shrink_cache(sbi, priority);
 }
 
 struct ll_async_page *llap_from_page(struct page *page, unsigned origin)

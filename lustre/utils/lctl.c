@@ -272,10 +272,10 @@ command_t cmdlist[] = {
          "usage: dk [file] [raw]"},
         {"debug_file", jt_dbg_debug_file, 0,
          "convert a binary debug file dumped by the kernel to ASCII text\n"
-         "usage: debug_file <input> [output] [raw]"},
+         "usage: debug_file <input> [output]"},
         {"df", jt_dbg_debug_file, 0,
          "read debug buffer from input and dump to output, same as debug_file\n"
-         "usage: df <input> [output] [raw]"},
+         "usage: df <input> [output]"},
         {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
          "usage: clear"},
         {"mark", jt_dbg_mark_debug_buf, 0,"insert marker text in kernel debug buffer\n"

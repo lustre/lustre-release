@@ -40,6 +40,7 @@
 
 #define LOG_NAME_LIMIT(logname, name)                   \
         snprintf(logname, sizeof(logname), "LOGS/%s", name)
+#define LLOG_EEMPTY 4711
 
 struct plain_handle_data {
         struct list_head    phd_entry;
@@ -67,8 +68,6 @@ struct llog_handle {
         } u;
 };
 
-#define LLOG_EEMPTY 4711
-
 /* llog.c  -  general API */
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
 int llog_init_handle(struct llog_handle *handle, int flags,
@@ -89,7 +88,7 @@ struct llog_process_data {
 struct llog_process_cat_data {
         int     first_idx;
         int     last_idx;
-        /* to process catlog across zero record */
+        /* to process catalog across zero record */
 };
 
 int llog_cat_put(struct llog_handle *cathandle);

@@ -68,7 +68,6 @@ static void filter_commit_cb(struct obd_device *obd, __u64 transno,
         obd_transno_commit_cb(obd, transno, error);
 }
 
-
 /* Assumes caller has already pushed us into the kernel context. */
 int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                           int rc)

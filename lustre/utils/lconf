@@ -249,12 +249,12 @@ class DaemonHandler:
             pid = int(fp.read())
             fp.close()
             return pid
-        except IOError:
-            return 0
         except ValueError:
             print "WARNING: invalid pid in %s, removed" % self.pidfile()
-            print "WARNING: You may need to stop acceptor by yourself and then unload the module libcfs"
+            print "WARNING: You may need to stop acceptor by yourself"
             os.unlink(self.pidfile())
+            return 0
+        except IOError:
             return 0
         
     def clean_pidfile(self):
@@ -858,7 +858,7 @@ def loop_base():
     if not os.access(loop + str(0), os.R_OK):
         loop = loop + '/'
         if not os.access(loop + str(0), os.R_OK):
-            panic ("can't access loop devices")
+            panic("can't access loop devices")
     return loop
     
 # find loop device assigned to thefile
@@ -989,7 +989,7 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
         # awk '/NodeId/ { print $2 }' 'sys_get_elan_position_file()'
         f = sys_get_elan_position_file()
         if not f:
-            panic ("unable to determine local Elan ID")
+            panic("unable to determine local Elan ID")
         try:
             fp = open(f, 'r')
             lines = fp.readlines()
@@ -1895,7 +1895,7 @@ class Client(Module):
         """ Lookup a server's network information """
         self._server_nets = get_ost_net(self.db, srv_uuid)
         if len(self._server_nets) == 0:
-            panic ("Unable to find a server for:", srv_uuid)
+            panic("Unable to find a server for:", srv_uuid)
 
     def get_servers(self):
         return self._server_nets
@@ -1911,7 +1911,7 @@ class Client(Module):
             else:
                 routes = find_route(self.get_servers())
                 if len(routes) == 0:
-                    panic ("no route to",  self.target_uuid)
+                    panic("no route to",  self.target_uuid)
                 for (srv, r) in routes:
                     lctl.add_route_host(r[0], srv.nid_uuid, r[1], r[3])
         except CommandError, e:
@@ -2378,7 +2378,7 @@ def newService(db):
     elif type == 'mgmt':
         n = Management(db)
     else:
-        panic ("unknown service type:", type)
+        panic("unknown service type:", type)
     return n
 
 #

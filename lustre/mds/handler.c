@@ -953,10 +953,13 @@ static int mds_readpage(struct ptlrpc_request *req)
         struct obd_ucred uc;
         ENTRY;
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
+                RETURN(-ENOMEM);
+
         rc = lustre_pack_reply(req, 1, &size, NULL);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK)) {
-                CERROR("mds: out of memory\n");
-                GOTO(out, rc = -ENOMEM);
+        if (rc) {
+                CERROR("mds: out of memory while packing readpage reply\n");
+                RETURN(-ENOMEM);
         }
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
@@ -1319,8 +1322,6 @@ int mds_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
 
-        EXIT;
-
         /* If we're DISCONNECTing, the mds_export_data is already freed */
         if (!rc && req->rq_reqmsg->opc != MDS_DISCONNECT) {
                 struct mds_export_data *med = &req->rq_export->exp_mds_data;
@@ -1329,6 +1330,8 @@ int mds_handle(struct ptlrpc_request *req)
 
                 target_committed_to_req(req);
         }
+
+        EXIT;
  out:
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
@@ -1408,7 +1411,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
          * and the rest of options are passed by mount options. Probably this
          * should be moved to somewhere else like startup scripts or lconf. */
         sprintf(options, "iopen_nopriv");
-                                                                                                                             
+
         if (lcfg->lcfg_inllen4 > 0 && lcfg->lcfg_inlbuf4)
                 sprintf(options + strlen(options), ",%s",
                         lcfg->lcfg_inlbuf4);

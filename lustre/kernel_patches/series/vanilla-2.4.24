@@ -24,7 +24,7 @@ tcp-zero-copy-2.4.22-rh.patch
 jbd-dont-account-blocks-twice.patch
 jbd-commit-tricks.patch
 ext3-no-write-super-chaos.patch
-add_page_private.patch
+add_page_private-2.4.24-vanilla.patch
 nfs_export_kernel-2.4.22.patch 
 ext3-raw-lookup.patch
 ext3-ea-in-inode-2.4.22-rh.patch

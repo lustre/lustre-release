@@ -136,15 +136,15 @@ int lov_update_enqueue_set(struct lov_request_set *set,
                 if (tmp > lock->l_policy_data.l_extent.end)
                         tmp = lock->l_policy_data.l_extent.end + 1;
                 if (tmp >= loi->loi_kms) {
-                        CDEBUG(D_INODE, "lock acquired, setting rss="
-                               LPU64", kms="LPU64"\n", loi->loi_rss, tmp);
+                        LDLM_DEBUG(lock, "lock acquired, setting rss="
+                                   LPU64", kms="LPU64, loi->loi_rss, tmp);
                         loi->loi_kms = tmp;
                         loi->loi_kms_valid = 1;
                 } else {
-                        CDEBUG(D_INODE, "lock acquired, setting rss="
-                               LPU64"; leaving kms="LPU64", end="LPU64
-                               "\n", loi->loi_rss, loi->loi_kms,
-                               lock->l_policy_data.l_extent.end);
+                        LDLM_DEBUG(lock, "lock acquired, setting rss="
+                                   LPU64"; leaving kms="LPU64", end="LPU64,
+                                   loi->loi_rss, loi->loi_kms,
+                                   lock->l_policy_data.l_extent.end);
                 }
                 ldlm_lock_allow_match(lock);
                 LDLM_LOCK_PUT(lock);

@@ -374,8 +374,8 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
                 list_del(&rqbd->rqbd_list);
                 list_add_tail(&rqbd->rqbd_list, &svc->srv_history_rqbds);
                 svc->srv_n_history_rqbds++;
-                
-                /* cull some history? 
+
+                /* cull some history?
                  * I expect only about 1 or 2 rqbds need to be recycled here */
                 while (svc->srv_n_history_rqbds > svc->srv_max_history_rqbds) {
                         rqbd = list_entry(svc->srv_history_rqbds.next,
@@ -574,7 +574,7 @@ put_conn:
         }
 
         ptlrpc_server_free_request(request);
-        
+
         RETURN(1);
 }
 
@@ -956,7 +956,11 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
          */
         rc = kernel_thread(ptlrpc_main, &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
-                CERROR("cannot start thread: %d\n", rc);
+                CERROR("cannot start thread '%s': rc %d\n", name, rc);
+
+                spin_lock_irqsave(&svc->srv_lock, flags);
+                list_del(&thread->t_link);
+                spin_unlock_irqrestore(&svc->srv_lock, flags);
                 OBD_FREE(thread, sizeof(*thread));
                 RETURN(rc);
         }

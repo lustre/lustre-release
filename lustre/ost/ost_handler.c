@@ -528,6 +528,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 req->rq_status = rc;
                 ptlrpc_error(req);
         } else {
+                if (req->rq_reply_state != NULL) {
+                        /* reply out callback would free */
+                        ptlrpc_rs_decref(req->rq_reply_state);
+                        req->rq_reply_state = NULL;
+                }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
                                "evicting %s@%s id %s\n",
@@ -537,7 +542,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s id %s\n",  
+                               "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
                                req->rq_peerstr);
@@ -727,6 +732,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 req->rq_status = rc;
                 ptlrpc_error(req);
         } else {
+                if (req->rq_reply_state != NULL) {
+                        /* reply out callback would free */
+                        ptlrpc_rs_decref(req->rq_reply_state);
+                        req->rq_reply_state = NULL;
+                }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("%s: bulk IO comm error evicting %s@%s id %s\n",
                                req->rq_export->exp_obd->obd_name,
@@ -791,7 +801,7 @@ static int ost_san_brw(struct ptlrpc_request *req, int cmd)
         npages = get_per_page_niobufs(ioo, objcount,remote_nb,niocount,&pp_rnb);
         if (npages < 0)
                 GOTO (out, rc = npages);
- 
+
         size[1] = npages * sizeof(*pp_rnb);
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
@@ -903,8 +913,6 @@ static int ost_filter_recovery_request(struct ptlrpc_request *req,
         }
 }
 
-
-
 static int ost_handle(struct ptlrpc_request *req)
 {
         struct obd_trans_info trans_info = { 0, };
@@ -919,8 +927,8 @@ static int ost_handle(struct ptlrpc_request *req)
                 int abort_recovery, recovering;
 
                 if (req->rq_export == NULL) {
-                        CDEBUG(D_HA, "operation %d on unconnected OST\n",
-                               req->rq_reqmsg->opc);
+                        CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
+                               req->rq_reqmsg->opc, req->rq_peerstr);
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }
@@ -993,14 +1001,14 @@ static int ost_handle(struct ptlrpc_request *req)
                         GOTO(out, rc = -EROFS);
                 rc = ost_brw_write(req, oti);
                 LASSERT(current->journal_info == NULL);
-                /* ost_brw sends its own replies */
+                /* ost_brw_write sends its own replies */
                 RETURN(rc);
         case OST_READ:
                 CDEBUG(D_INODE, "read\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 rc = ost_brw_read(req, oti);
                 LASSERT(current->journal_info == NULL);
-                /* ost_brw sends its own replies */
+                /* ost_brw_read sends its own replies */
                 RETURN(rc);
         case OST_SAN_READ:
                 CDEBUG(D_INODE, "san read\n");
@@ -1135,10 +1143,9 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL, 30000,
-                                ost_handle, "ost",
-                                obd->obd_proc_entry,
-                                ost_print_req);
+                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                                obd_timeout * 1000, ost_handle, "ost",
+                                obd->obd_proc_entry, ost_print_req);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
                 GOTO(out_lprocfs, rc = -ENOMEM);
@@ -1151,10 +1158,9 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_create_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL, 30000,
-                                ost_handle, "ost_create",
-                                obd->obd_proc_entry,
-                                ost_print_req);
+                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL,
+                                obd_timeout * 1000, ost_handle, "ost_create",
+                                obd->obd_proc_entry, ost_print_req);
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
                 GOTO(out_service, rc = -ENOMEM);

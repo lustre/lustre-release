@@ -14,7 +14,7 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45"}
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
 SRCDIR=`dirname $0`
-export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
 
 TMP=${TMP:-/tmp}
 FSTYPE=${FSTYPE:-ext3}
@@ -113,11 +113,11 @@ build_test_filter() {
 }
 
 _basetest() {
-    echo $*
+	echo $*
 }
 
 basetest() {
-    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+	IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
 run_test() {
@@ -444,7 +444,7 @@ test_16() {
 run_test 16 "touch .../d16/f; rm -rf .../d16/f ================="
 
 test_17a() {
-	mkdir $DIR/d17
+	mkdir -p $DIR/d17
 	touch $DIR/d17/f
 	ln -s $DIR/d17/f $DIR/d17/l-exist
 	ls -l $DIR/d17
@@ -456,9 +456,7 @@ test_17a() {
 run_test 17a "symlinks: create, remove (real) =================="
 
 test_17b() {
-	if [ ! -d $DIR/d17 ]; then
-		mkdir $DIR/d17
-	fi
+	mkdir -p $DIR/d17
 	ln -s no-such-file $DIR/d17/l-dangle
 	ls -l $DIR/d17
 	$CHECKSTAT -l no-such-file $DIR/d17/l-dangle || error
@@ -467,6 +465,20 @@ test_17b() {
 	$CHECKSTAT -a $DIR/l-dangle || error
 }
 run_test 17b "symlinks: create, remove (dangling) =============="
+
+test_17c() { # bug 3440 - don't save failed open RPC for replay
+	mkdir -p $DIR/d17
+	ln -s foo $DIR/d17/f17c
+	cat $DIR/d17/f17c && error "opened non-existent symlink" || true
+}
+run_test 17c "symlinks: open dangling (should return error) ===="
+
+test_17d() {
+	mkdir -p $DIR/d17
+	ln -s foo $DIR/d17/f17d
+	touch $DIR/d17/f17d || error "creating to new symlink"
+}
+run_test 17d "symlinks: create dangling ========================"
 
 test_18() {
 	touch $DIR/f
@@ -889,7 +901,7 @@ test_27m() {
         dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
                 error "dd should fill OST0"
         i=2
-        while $LSTRIPE $DIR/d27/f27m_$i  0 0 1 ; do
+        while $LSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
                 i=`expr $i + 1`
                 [ $i -gt 256 ] && break
         done
@@ -1008,7 +1020,7 @@ test_31f() { # bug 4554
 	lfs getstripe $DIR/d31f/hosts
 	multiop $DIR/d31f D_c &
 	MULTIPID2=$!
-	
+
 	sleep 6
 
 	kill -USR1 $MULTIPID || error "first opendir $MULTIPID not running"
@@ -1737,7 +1749,7 @@ test_48d() { # bug 2350
 run_test 48d "Access removed parent subdir (should return errors)"
 
 test_48e() { # bug 4134
-#	check_kernel_version 36 || return 0
+	check_kernel_version 41 || return 0
 	#sysctl -w portals.debug=-1
 	#set -vx
 	mkdir -p $DIR/d48e/dir
@@ -1752,7 +1764,7 @@ test_48e() { # bug 4134
 	$TRACE wait $cdpid && error "'cd ..' worked after recreate parent"
 	$TRACE rm $DIR/d48e || error "'$DIR/d48e' failed"
 }
-run_test 48e "Access to removed and recreated parent subdir (should return errors)"
+run_test 48e "Access to recreated parent subdir (should return errors)"
 
 test_50() {
 	# bug 1485
@@ -2310,13 +2322,12 @@ test_99f() {
 run_test 99f "cvs commit ======================================="
 
 test_100() {
-	netstat -ta | while read PROT SND RCV LOCAL REMOTE STAT; do
-		LPORT=`echo $LOCAL | cut -d: -f2`
+	netstat -tna | while read PROT SND RCV LOCAL REMOTE STAT; do
+		[ "$PROT" != "tcp" ] && continue
 		RPORT=`echo $REMOTE | cut -d: -f2`
-		if [ "$PROT" = "tcp" ] && [ "$LPORT" != "*" ] && [ "$RPORT" != "*" ] && [ $RPORT -eq 988 ] && [ $LPORT -gt 1024 ]; then
-			echo "local port: $LPORT > 1024"
-			error
-		fi
+		[ "$RPORT" != "988" ] && continue
+		LPORT=`echo $LOCAL | cut -d: -f2`
+		[ $LPORT -ge 1024 ] && error "local port: $LPORT > 1024" || true
 	done
 }
 run_test 100 "check local port using privileged port ==========="

@@ -28,10 +28,9 @@ enum lustre_imp_state {
 
 static inline char * ptlrpc_import_state_name(enum lustre_imp_state state)
 {
-        
         static char* import_state_names[] = {
-                "<UNKNOWN>", "CLOSED",  "NEW", "DISCONN", 
-                "CONNECTING", "REPLAY", "REPLAY_LOCKS", "REPLAY_WAIT", 
+                "<UNKNOWN>", "CLOSED",  "NEW", "DISCONN",
+                "CONNECTING", "REPLAY", "REPLAY_LOCKS", "REPLAY_WAIT",
                 "RECOVER", "FULL", "EVICTED",
         };
 
@@ -80,7 +79,7 @@ struct obd_import {
         spinlock_t                imp_lock;
 
         /* flags */
-        int                       imp_invalid:1, imp_replayable:1,
+        unsigned int              imp_invalid:1, imp_replayable:1,
                                   imp_dlm_fake:1, imp_server_timeout:1,
                                   imp_initial_recov:1, imp_force_verify:1,
                                   imp_pingable:1, imp_resend_replay:1,

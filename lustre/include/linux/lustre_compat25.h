@@ -114,6 +114,7 @@ static inline int cleanup_group_info(void)
                 page->private = 0; \
         } while(0)
 
+#define kiobuf bio
 #define smp_num_cpus    num_online_cpus()
 
 #include <linux/proc_fs.h>

@@ -7,7 +7,7 @@
 
 #include <linux/lustre_mds.h>
 
-#define MDS_SERVICE_WATCHDOG_TIMEOUT 30000
+#define MDS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
 #define MAX_ATIME_DIFF 60
 

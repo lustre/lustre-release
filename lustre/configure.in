@@ -5,7 +5,7 @@
 
 AC_INIT
 AC_CANONICAL_SYSTEM
-AM_INIT_AUTOMAKE(lustre, 1.4.0.1)
+AM_INIT_AUTOMAKE(lustre, 1.4.0.3)
 # AM_MAINTAINER_MODE
 
 # Four main targets: lustre kernel modules, utilities, tests, and liblustre
@@ -60,15 +60,6 @@ AC_SUBST(ENABLE_DOC)
 
 # default backing fs is ext3
 BACKINGFS='ext3'
-
-# LLNL patches their ext3 and calls it extN
-AC_MSG_CHECKING([whether to use extN])
-AC_ARG_ENABLE([extN],
-	AC_HELP_STRING([--enable-extN],
-			[use extN instead of ext3 for lustre backend]),
-	[BACKINGFS='extN'],[enable_extN='no'])
-AC_MSG_RESULT([$enable_extN])
-AM_CONDITIONAL(EXTN, test x$enable_extN = xyes)
 
 # SuSE gets ldiskfs
 AC_MSG_CHECKING([whether to enable ldiskfs])

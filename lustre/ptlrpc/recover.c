@@ -69,7 +69,7 @@ void ptlrpc_run_recovery_over_upcall(struct obd_device *obd)
                        argv[0], argv[1], argv[2], rc);
 
         } else {
-                CERROR("Invoked upcall %s %s %s\n",
+                CWARN("Invoked upcall %s %s %s\n",
                        argv[0], argv[1], argv[2]);
         }
 }
@@ -110,7 +110,7 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
                        argv[0], argv[1], argv[2], argv[3], argv[4],rc);
 
         } else {
-                CERROR("Invoked upcall %s %s %s %s %s\n",
+                CWARN("Invoked upcall %s %s %s %s %s\n",
                        argv[0], argv[1], argv[2], argv[3], argv[4]);
         }
 #else
@@ -279,7 +279,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                imp->imp_obd->obd_name,
                imp->imp_target_uuid.uuid,
                imp->imp_connection->c_remote_uuid.uuid);
-        
+
         if (ptlrpc_set_import_discon(imp)) {
                 if (!imp->imp_replayable) {
                         CDEBUG(D_HA, "import %s@%s for %s not replayable, "
@@ -293,14 +293,13 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                 rc = ptlrpc_connect_import(imp, NULL);
         }
 
-        
         /* Wait for recovery to complete and resend. If evicted, then
            this request will be errored out later.*/
         spin_lock_irqsave(&failed_req->rq_lock, flags);
         if (!failed_req->rq_no_resend)
                 failed_req->rq_resend = 1;
         spin_unlock_irqrestore(&failed_req->rq_lock, flags);
-        
+
         EXIT;
 }
 
@@ -308,7 +307,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
  * This should only be called by the ioctl interface, currently
  * with the lctl deactivate and activate commands.
  */
-int  ptlrpc_set_import_active(struct obd_import *imp, int active)
+int ptlrpc_set_import_active(struct obd_import *imp, int active)
 {
         struct obd_device *obd = imp->imp_obd;
         int rc = 0;
@@ -337,10 +336,10 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 {
         int rc;
         ENTRY;
-        
+
         /* force import to be disconnected. */
         ptlrpc_set_import_discon(imp);
-        
+
         rc = ptlrpc_recover_import_no_retry(imp, new_uuid);
 
         RETURN(rc);

@@ -602,10 +602,12 @@ void target_destroy_export(struct obd_export *exp)
  */
 
 
-static void target_release_saved_req(struct ptlrpc_request *req) 
+static void target_release_saved_req(struct ptlrpc_request *req)
 {
-        if (req->rq_reply_state != NULL)
+        if (req->rq_reply_state != NULL) {
                 ptlrpc_rs_decref(req->rq_reply_state);
+                /* req->rq_reply_state = NULL; */
+        }
 
         class_export_put(req->rq_export);
         OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
@@ -636,7 +638,7 @@ static void target_finish_recovery(struct obd_device *obd)
                 struct ptlrpc_request *req;
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 list_del(&req->rq_list);
-                DEBUG_REQ(D_ERROR, req, "delayed:");
+                DEBUG_REQ(D_WARNING, req, "delayed:");
                 ptlrpc_reply(req);
                 target_release_saved_req(req);
         }
@@ -862,6 +864,10 @@ static void process_recovery_queue(struct obd_device *obd)
                 /* bug 1580: decide how to properly sync() in recovery */
                 //mds_fsync_super(mds->mds_sb);
                 class_export_put(req->rq_export);
+                if (req->rq_reply_state != NULL) {
+                        ptlrpc_rs_decref(req->rq_reply_state);
+                        /* req->rq_reply_state = NULL; */
+                }
                 OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
                 OBD_FREE(req, sizeof *req);
                 spin_lock_bh(&obd->obd_processing_task_lock);

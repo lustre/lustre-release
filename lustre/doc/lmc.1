@@ -40,16 +40,16 @@ The arguements required are:
 This will create a new node with the given name if not already present.
 .TP
 --timeout <num>
-Timeout before going into recovery
+Timeout before going into recovery.
 .TP
 --lustre_upcall <path> 
-Set the location of the Lustre upcall scripts used by the client for recovery
+Set the location of the Lustre upcall scripts used by the client for recovery.
 .TP
 --portals_upcall <path> 
-Specify the location of the Portals upcall scripts used by the client for recovery
+Specify the location of the Portals upcall scripts used by the client for recovery.
 .TP
 --upcall <path> 
-Specify the location of both (Lustre and Portals) upcall scripts used by the client for recovery
+Specify the location of both (Lustre and Portals) upcall scripts used by the client for recovery.
 .PP
 .B --add net 
 Adds a network device descriptor for the given node, with parameters as indicated.
@@ -59,7 +59,7 @@ The arguments required are:
 This will create a new node with the given name if not already present. This is also used to specify a specific node for other elements.
 .TP
 --nettype <type> 
-This can be tcp, elan, gm, scimac.
+This can be tcp, elan, or gm.
 .TP
 --nid nid 
 The network id, e.g. ElanID or IP address as used by Portals. If nid is '*', then the local address of the interface with specified nettype is will be substituted when the node is configured with lconf. An nid of '*' should be used only for the generic client configuration.
@@ -67,7 +67,7 @@ The network id, e.g. ElanID or IP address as used by Portals. If nid is '*', the
 --hostaddr addr
 .TP
 --router 
-Optional flag to mark this node as a router
+Optional flag to mark this node as a router.
 .TP
 --port [port] 
 Optional arguement to indicate the tcp port. The default is 988. 
@@ -82,13 +82,16 @@ Optional arguement. Default is 0.
 Optional arguement since some OSTs might not have the required support. This is turned off by default, value of 1 will turn it ON. 
 .PP
 .B --add mds
-Specify the MDS configuration
+Specify the MDS configuration:
 .TP
 --node <node name> 
-Name of the node on which the MDS resides
+Name of the node on which the MDS resides.
 .TP
 --mds <mds_name> 
-Common name of the MDS
+Common name of the MDS.
+.TP
+--mdsuuid <uuid>
+Specify MDS uuid.
 .TP 
 --dev <pathname> 
 Path of device on local system. If the is a file, then a loop device is created and used as the block device.
@@ -132,6 +135,9 @@ Assign a name to the OST device.
 --node <nodename> 
 Node on which the OST service is run, can not be a profile node.
 .TP
+--failover
+Enable failover support on OST.
+.TP
 --dev <pathname> 
 Path of device on local system. If this is a file, then a loop device is created and used as the block device.
 .TP
@@ -173,6 +179,9 @@ Creates a static route through a gateway to a specific nid or a range of nid's.
 .TP
 --node node 
 Node to add the route to.
+.TP
+--router
+Optional flag to mark a node as router.
 .TP
 --gw nid 
 The nid of the gateway (must be a local interface or a peer).

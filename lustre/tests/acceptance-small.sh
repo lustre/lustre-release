@@ -169,5 +169,9 @@ if [ "$REPLAY_DUAL" != "no" ]; then
         sh replay-dual.sh
 fi
 
+if [ "$INSANITY" != "no" ]; then
+        sh insanity.sh -r
+fi
+
 RC=$?
 echo "completed with rc $RC" && exit $RC

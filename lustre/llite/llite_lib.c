@@ -69,6 +69,10 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
 
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
+
+        spin_lock(&ll_sb_lock);
+        list_add_tail(&sbi->ll_list, &ll_super_blocks);
+        spin_unlock(&ll_sb_lock);
         RETURN(sbi);
 }
 
@@ -77,8 +81,12 @@ void lustre_free_sbi(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
 
-        if (sbi != NULL)
+        if (sbi != NULL) {
+                spin_lock(&ll_sb_lock);
+                list_del(&sbi->ll_list);
+                spin_unlock(&ll_sb_lock);
                 OBD_FREE(sbi, sizeof(*sbi));
+        }
         ll_s2sbi(sb) = NULL;
         EXIT;
 }
@@ -236,6 +244,49 @@ out:
         RETURN(err);
 }
 
+void lustre_dump_inode(struct inode *inode)
+{
+        struct list_head *tmp;
+        int dentry_count = 0;
+
+        LASSERT(inode != NULL);
+
+        list_for_each(tmp, &inode->i_dentry)
+                dentry_count++;
+
+        CERROR("inode %p dump: dev=%s:%lu, mode=%o, count=%u, %d dentries\n",
+               inode, kdevname(inode->i_sb->s_dev), inode->i_ino,
+               inode->i_mode, atomic_read(&inode->i_count), dentry_count);
+}
+
+void lustre_dump_dentry(struct dentry *dentry, int recur)
+{
+        struct list_head *tmp;
+        int subdirs = 0;
+
+        LASSERT(dentry != NULL);
+
+        list_for_each(tmp, &dentry->d_subdirs)
+                subdirs++;
+
+        CERROR("dentry %p dump: name=%.*s parent=%.*s (%p), inode=%p, count=%u,"
+               " flags=0x%x, vfs_flags=0x%lx, fsdata=%p, %d subdirs\n", dentry,
+               dentry->d_name.len, dentry->d_name.name,
+               dentry->d_parent->d_name.len, dentry->d_parent->d_name.name,
+               dentry->d_parent, dentry->d_inode, atomic_read(&dentry->d_count),
+               dentry->d_flags, dentry->d_vfs_flags, dentry->d_fsdata, subdirs);
+        if (dentry->d_inode != NULL)
+                lustre_dump_inode(dentry->d_inode);
+
+        if (recur == 0)
+                return;
+
+        list_for_each(tmp, &dentry->d_subdirs) {
+                struct dentry *d = list_entry(tmp, struct dentry, d_child);
+                lustre_dump_dentry(d, recur - 1);
+        }
+}
+
 void lustre_common_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -258,9 +309,12 @@ void lustre_common_put_super(struct super_block *sb)
         // We do this to get rid of orphaned dentries. That is not really trw.
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
-                CWARN("orphan dentry %.*s (%p->%p) at unmount\n",
+                CWARN("found orphan dentry %.*s (%p->%p) at unmount, dumping "
+                      "before and after shrink_dcache_parent\n",
                       dentry->d_name.len, dentry->d_name.name, dentry, next);
+                lustre_dump_dentry(dentry, 1);
                 shrink_dcache_parent(dentry);
+                lustre_dump_dentry(dentry, 1);
         }
         EXIT;
 }
@@ -742,7 +796,7 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
                         inode = lock->l_ast_data;
                         __LDLM_DEBUG(inode->i_state & I_FREEING ?
                                      D_INFO : D_WARNING, lock,
-                                     "l_ast_data %p is bogus: magic %08x\n",
+                                     "l_ast_data %p is bogus: magic %08x",
                                      lock->l_ast_data, lli->lli_inode_magic);
                         inode = NULL;
                 }
@@ -757,7 +811,7 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
                 lock->l_ast_data = NULL;
 
                 if (lock->l_req_mode != lock->l_granted_mode)
-                        LDLM_ERROR(lock,"clearing inode with ungranted lock\n");
+                        LDLM_ERROR(lock,"clearing inode with ungranted lock");
         }
 
         return LDLM_ITER_CONTINUE;

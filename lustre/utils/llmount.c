@@ -35,9 +35,9 @@
 #include "obdctl.h"
 #include <portals/ptlctl.h>
 
-int debug;
 int verbose;
 int nomtab;
+int fake;
 int force;
 static char *progname = NULL;
 
@@ -51,6 +51,29 @@ typedef struct {
 int route_index;
 ptl_nid_t lmd_cluster_id = 0;
 llmount_route_t routes[MAX_ROUTES];
+
+void usage(FILE *out)
+{
+        fprintf(out, "usage: %s <mdsnode>:/<mdsname>/<cfgname> <mountpt> "
+                "[-fhnv] [-o mntopt]\n", progname);
+        fprintf(out, "\t<mdsnode>: hostname or nid of MDS (config) node\n"
+                "\t<mdsname>: name of MDS service (e.g. mds1)\n"
+                "\t<cfgname>: name of client config (e.g. client)\n"
+                "\t<mountpt>: filesystem mountpoint (e.g. /mnt/lustre)\n"
+                "\t-f|--fake: fake mount (updates /etc/mtab)\n"
+                "\t--force: force mount even if already in /etc/mtab\n"
+                "\t-h|--help: print this usage message\n"
+                "\t-n|--nomtab: do not update /etc/mtab after mount\n"
+                "\t-v|--verbose: print verbose config settings\n"
+                "\t-o: filesystem mount options:\n"
+                "\t\tnettype={tcp,elan,iibnal,lonal}: network type\n"
+                "\t\tcluster_id=0xNNNN: cluster this node is part of\n"
+                "\t\tlocal_nid=0xNNNN: client ID (default ipaddr or nodenum)\n"
+                "\t\tserver_nid=0xNNNN: server node ID (default mdsnode)\n"
+                "\t\tport=NNN: server port (default 988 for tcp)\n"
+                "\t\troute=<gw>[-<gw>]:<low>[-<high>]: portal route to MDS\n");
+        exit(out != stdout);
+}
 
 static int check_mtab_entry(char *spec, char *mtpt, char *type)
 {
@@ -77,12 +100,13 @@ static int check_mtab_entry(char *spec, char *mtpt, char *type)
         return(0);
 }
 
-static void
+static int
 update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
                   int flags, int freq, int pass)
 {
         FILE *fp;
         struct mntent mnt;
+        int rc = 0;
 
         mnt.mnt_fsname = spec;
         mnt.mnt_dir = mtpt;
@@ -96,14 +120,17 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
                 if (fp == NULL) {
                         fprintf(stderr, "%s: setmntent(%s): %s:",
                                 progname, MOUNTED, strerror (errno));
+                        rc = 16;
                 } else {
-                        if ((addmntent (fp, &mnt)) == 1) {
+                        if ((addmntent(fp, &mnt)) == 1) {
                                 fprintf(stderr, "%s: addmntent: %s:",
                                         progname, strerror (errno));
+                                rc = 16;
                         }
                         endmntent(fp);
                 }
         }
+        return rc;
 }
 
 int
@@ -154,12 +181,12 @@ static int parse_route(char *opteq, char *opttgts)
 
         if (ptl_parse_nid(&gw_lo, gw_lo_ptr) != 0) {
                 fprintf(stderr, "%s: can't parse NID %s\n", progname,gw_lo_ptr);
-                return(-1);
+                return(1);
         }
 
         if (ptl_parse_nid(&gw_hi, gw_hi_ptr) != 0) {
                 fprintf(stderr, "%s: can't parse NID %s\n", progname,gw_hi_ptr);
-                return(-1);
+                return(1);
         }
 
         tgt_lo_ptr = opttgts + 1;
@@ -172,12 +199,12 @@ static int parse_route(char *opteq, char *opttgts)
 
         if (ptl_parse_nid(&tgt_lo, tgt_lo_ptr) != 0) {
                 fprintf(stderr, "%s: can't parse NID %s\n",progname,tgt_lo_ptr);
-                return(-1);
+                return(1);
         }
 
         if (ptl_parse_nid(&tgt_hi, tgt_hi_ptr) != 0) {
                 fprintf(stderr, "%s: can't parse NID %s\n",progname,tgt_hi_ptr);
-                return(-1);
+                return(1);
         }
 
         while (gw_lo <= gw_hi) {
@@ -197,7 +224,21 @@ static int parse_route(char *opteq, char *opttgts)
         return(0);
 }
 
-int parse_options(char * options, struct lustre_mount_data *lmd)
+static int ignored_option(const char *check)
+{
+        char *ignore[] = { "noatime", "async", "rw", "suid", "dev",
+                           "exec", "nouser", NULL };
+        char **which = ignore;
+
+        while (*which != NULL) {
+                if (strcmp(check, *which) == 0)
+                        return 1;
+                which++;
+        }
+        return 0;
+}
+
+int parse_options(char *options, struct lustre_mount_data *lmd)
 {
         ptl_nid_t nid = 0, cluster_id = 0;
         int val;
@@ -214,7 +255,7 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                 if (ptl_parse_nid(&cluster_id, opteq+1) != 0) {
                                         fprintf(stderr, "%s: can't parse NID "
                                                 "%s\n", progname, opteq+1);
-                                        return (-1);
+                                        return (1);
                                 }
                                 lmd_cluster_id = cluster_id;
                         } else if(!strcmp(opt, "route")) {
@@ -223,7 +264,7 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                                 "of the form: route="
                                                 "<gw>[-<gw>]:<low>[-<high>]\n",
                                                 progname);
-                                        return(-1);
+                                        return(1);
                                 }
                                 parse_route(opteq, opttgts);
                         } else if (!strcmp(opt, "local_nid")) {
@@ -232,7 +273,7 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                                 "can't parse NID %s\n",
                                                 progname,
                                                 opteq+1);
-                                        return (-1);
+                                        return (1);
                                 }
                                 lmd->lmd_local_nid = nid;
                         } else if (!strcmp(opt, "server_nid")) {
@@ -240,7 +281,7 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                         fprintf(stderr, "%s: "
                                                 "can't parse NID %s\n",
                                                 progname, opteq + 1);
-                                        return (-1);
+                                        return (1);
                                 }
                                 lmd->lmd_server_nid = nid;
                         } else if (!strcmp(opt, "port")) {
@@ -248,16 +289,23 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                         } else {
                                 fprintf(stderr, "%s: unknown option '%s'\n",
                                         progname, opt);
-                                return (-1);
+                                usage(stderr);
                         }
                 } else {
+                        if (ignored_option(opt))
+                                continue;
+
                         val = 1;
                         if (!strncmp(opt, "no", 2)) {
                                 val = 0;
                                 opt += 2;
                         }
-                        if (!strcmp(opt, "debug")) {
-                                debug = val;
+                        if (!strcmp(opt, "debug")) { /* deprecated */
+                                fake = val;
+                        } else {
+                                fprintf(stderr, "%s: unknown option '%s'\n",
+                                        progname, opt);
+                                usage(stderr);
                         }
                 }
         }
@@ -271,7 +319,7 @@ get_local_elan_id(char *fname, char *buf)
         int   rc;
 
         if (fp == NULL)
-                return -1;
+                return 1;
 
         rc = fscanf(fp, "NodeId %255s", buf);
 
@@ -325,14 +373,14 @@ set_local(struct lustre_mount_data *lmd)
                                 fprintf(stderr,
                                         "%s: can't read Elan ID from /proc\n",
                                         progname);
-                                return -1;
+                                return 1;
                         }
                 }
         }
 
         if (ptl_parse_nid (&nid, ptr) != 0) {
                 fprintf (stderr, "%s: can't parse NID %s\n", progname, buf);
-                return (-1);
+                return (1);
         }
 
         lmd->lmd_local_nid = nid + lmd_cluster_id;
@@ -350,7 +398,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                         if (ptl_parse_nid (&nid, hostname) != 0) {
                                 fprintf (stderr, "%s: can't parse NID %s\n",
                                          progname, hostname);
-                                return (-1);
+                                return (1);
                         }
                         lmd->lmd_server_nid = nid;
                 }
@@ -358,7 +406,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                 if (ptl_parse_ipaddr(&lmd->lmd_server_ipaddr, hostname) != 0) {
                         fprintf (stderr, "%s: can't parse host %s\n",
                                  progname, hostname);
-                        return (-1);
+                        return (1);
                 }
         } else if (lmd->lmd_nal == QSWNAL &&lmd->lmd_server_nid == PTL_NID_ANY){
                 char buf[64];
@@ -366,12 +414,12 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                 if (rc != 1) {
                         fprintf (stderr, "%s: can't get elan id from host %s\n",
                                  progname, hostname);
-                        return -1;
+                        return 1;
                 }
                 if (ptl_parse_nid (&nid, buf) != 0) {
                         fprintf (stderr, "%s: can't parse NID %s\n",
                                  progname, hostname);
-                        return (-1);
+                        return (1);
                 }
                 lmd->lmd_server_nid = nid;
         }
@@ -410,13 +458,13 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                         fprintf(stderr, "%s: directory to mount not in "
                                 "host:/mds/profile format\n",
                                 progname);
-                        return(-1);
+                        return(1);
                 }
         } else {
                 fprintf(stderr, "%s: "
                         "directory to mount not in host:/mds/profile format\n",
                         progname);
-                return(-1);
+                return(1);
         }
 
         rc = parse_options(options, lmd);
@@ -432,13 +480,13 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                 return rc;
         if (strlen(mds) > sizeof(lmd->lmd_mds) + 1) {
                 fprintf(stderr, "%s: mds name too long\n", progname);
-                return(-1);
+                return(1);
         }
         strcpy(lmd->lmd_mds, mds);
 
         if (strlen(profile) > sizeof(lmd->lmd_profile) + 1) {
                 fprintf(stderr, "%s: profile name too long\n", progname);
-                return(-1);
+                return(1);
         }
         strcpy(lmd->lmd_profile, profile);
 
@@ -503,7 +551,7 @@ static int set_routes(struct lustre_mount_data *lmd) {
                               LPX64" : "LPX64" - "LPX64"\n[%d] %s\n",
                               progname, routes[i].gw, routes[i].lo,
                               routes[i].hi, errno, strerror(errno));
-                      err = -1;
+                      err = 2;
                       break;
               }
        }
@@ -512,20 +560,14 @@ static int set_routes(struct lustre_mount_data *lmd) {
        return err;
 }
 
-void usage(FILE *out)
-{
-        fprintf(out, "usage: %s <source> <target> [-f] [-v] [-n] [-o mntopt]\n",
-                progname);
-        exit(out != stdout);
-}
-
 int main(int argc, char *const argv[])
 {
         char *source, *target, *options = "";
         int i, nargs = 3, opt, rc;
         struct lustre_mount_data lmd;
         static struct option long_opt[] = {
-                {"force", 0, 0, 'f'},
+                {"fake", 0, 0, 'f'},
+                {"force", 0, 0, 1},
                 {"help", 0, 0, 'h'},
                 {"nomtab", 0, 0, 'n'},
                 {"options", 1, 0, 'o'},
@@ -538,9 +580,14 @@ int main(int argc, char *const argv[])
 
         while ((opt = getopt_long(argc, argv, "fno:v", long_opt, NULL)) != EOF){
                 switch (opt) {
-                case 'f':
+                case 1:
                         ++force;
                         printf("force: %d\n", force);
+                        nargs++;
+                        break;
+                case 'f':
+                        ++fake;
+                        printf("fake: %d\n", fake);
                         nargs++;
                         break;
                 case 'h':
@@ -591,14 +638,10 @@ int main(int argc, char *const argv[])
                 exit(1);
         }
 
-        rc = set_routes(&lmd);
-        if (rc) {
-                exit(1);
-        }
-
-        if (debug) {
-                printf("%s: debug mode, not mounting\n", progname);
-                exit(0);
+        if (!fake) {
+                rc = set_routes(&lmd);
+                if (rc)
+                        exit(2);
         }
 
         rc = access(target, F_OK);
@@ -606,19 +649,20 @@ int main(int argc, char *const argv[])
                 rc = errno;
                 fprintf(stderr, "%s: %s inaccessible: %s\n", progname, target,
                         strerror(errno));
-                return rc;
+                return 1;
         }
 
-        rc = mount(source, target, "lustre", 0, (void *)&lmd);
+        if (!fake)
+                rc = mount(source, target, "lustre", 0, (void *)&lmd);
         if (rc) {
-                rc = errno;
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", source,
                         target, progname, strerror(errno));
-                if (rc == ENODEV)
+                if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");
+                rc = 32;
         } else {
-                update_mtab_entry(source, target, "lustre", options, 0, 0, 0);
+                rc = update_mtab_entry(source, target, "lustre", options,0,0,0);
         }
         return rc;
 }

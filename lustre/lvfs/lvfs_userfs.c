@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/lib/fsfilt_ext3.c
+ *  lustre/lib/lvfs_userfs.c
  *  Lustre filesystem abstraction routines
  *
  *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.

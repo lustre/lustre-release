@@ -83,7 +83,7 @@ int main(int argc, char ** argv)
                                 break;
                         }
                         close(fd);
-               } else if (do_link) {
+                } else if (do_link) {
                         rc = link(tgt, filename);
                         if (rc) {
                                 printf("link(%s, %s) error: %s\n",

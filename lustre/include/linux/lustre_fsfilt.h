@@ -59,11 +59,7 @@ struct fsfilt_operations {
                               int size);
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
         /* this method is needed to make IO operation fsfilt nature depend. */
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        int     (* fs_send_bio)(int rw, struct inode *inode, struct bio *bio);
-#else
         int     (* fs_send_bio)(int rw, struct inode *inode,struct kiobuf *bio);
-#endif
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         int     (* fs_add_journal_cb)(struct obd_device *obd, __u64 last_rcvd,

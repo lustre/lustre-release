@@ -10,5 +10,5 @@ ldapschemadir = $(sysconfdir)/openldap/schema
 if UTILS
 ldapconf_SCRIPTS = slapd-lustre.conf
 ldapschema_SCRIPTS = lustre.schema
-pkglib_DATA = top.ldif lustre2ldif.xsl
+pkgdata_DATA = top.ldif lustre2ldif.xsl
 endif

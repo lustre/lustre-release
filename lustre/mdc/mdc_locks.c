@@ -171,7 +171,20 @@ int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
         return 0;
 }
 
-
+static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
+{
+        /* Don't hold error requests for replay. */
+        if (req->rq_replay) {
+                unsigned long irqflags;
+                spin_lock_irqsave(&req->rq_lock, irqflags);
+                req->rq_replay = 0;
+                spin_unlock_irqrestore(&req->rq_lock, irqflags);
+        }
+        if (rc && req->rq_transno != 0) {
+                DEBUG_REQ(D_ERROR, req, "transno returned on error rc %d", rc);
+                LBUG();
+        }
+}
 
 /* We always reserve enough space in the reply packet for a stripe MD, because
  * we don't know in advance the file type. */
@@ -306,7 +319,8 @@ int mdc_enqueue(struct obd_export *exp,
                 rc = 0;
         } else if (rc != 0) {
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
-                LASSERT (rc < 0);
+                LASSERTF(rc < 0, "rc %d\n", rc);
+                mdc_clear_replay_flag(req, rc);
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         } else { /* rc = 0 */
@@ -334,13 +348,8 @@ int mdc_enqueue(struct obd_export *exp,
         it->d.lustre.it_lock_mode = lock_mode;
         it->d.lustre.it_data = req;
 
-        if (it->d.lustre.it_status < 0 && req->rq_replay) {
-                LASSERT(req->rq_transno == 0);
-                /* Don't hold error requests for replay. */
-                spin_lock(&req->rq_lock);
-                req->rq_replay = 0;
-                spin_unlock(&req->rq_lock);
-        }
+        if (it->d.lustre.it_status < 0 && req->rq_replay)
+                mdc_clear_replay_flag(req, it->d.lustre.it_status);
 
         DEBUG_REQ(D_RPCTRACE, req, "disposition: %x, status: %d",
                   it->d.lustre.it_disposition, it->d.lustre.it_status);
@@ -351,7 +360,7 @@ int mdc_enqueue(struct obd_export *exp,
                 struct mds_body *body;
 
                 body = lustre_swab_repbuf(req, 1, sizeof (*body),
-                                           lustre_swab_mds_body);
+                                          lustre_swab_mds_body);
                 if (body == NULL) {
                         CERROR ("Can't swab mds_body\n");
                         RETURN (-EPROTO);
@@ -424,7 +433,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         ENTRY;
         LASSERT(it);
 
-        CDEBUG(D_DLMTRACE, "name: %.*s in inode "LPU64", intent: %s flags %#o\n",
+        CDEBUG(D_DLMTRACE,"name: %.*s in inode "LPU64", intent: %s flags %#o\n",
                len, name, pfid->id, ldlm_it2str(it->it_op), it->it_flags);
 
         if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
@@ -482,16 +491,9 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
          * It's important that we do this first!  Otherwise we might exit the
          * function without doing so, and try to replay a failed create
          * (bug 3440) */
-        if (it->it_op & IT_OPEN) {
-                if (!it_disposition(it, DISP_OPEN_OPEN) ||
-                    it->d.lustre.it_status != 0) {
-                        unsigned long irqflags;
-
-                        spin_lock_irqsave(&request->rq_lock, irqflags);
-                        request->rq_replay = 0;
-                        spin_unlock_irqrestore(&request->rq_lock, irqflags);
-                }
-        }
+        if (it->it_op & IT_OPEN && request->rq_replay &&
+            (!it_disposition(it, DISP_OPEN_OPEN) ||it->d.lustre.it_status != 0))
+                mdc_clear_replay_flag(request, it->d.lustre.it_status);
 
         if (!it_disposition(it, DISP_IT_EXECD)) {
                 /* The server failed before it even started executing the

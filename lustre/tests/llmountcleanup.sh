@@ -28,7 +28,6 @@ fi
 
 [ "$NODE" ] && node_opt="--node $NODE"
 
-sync; sleep 2; sync
 [ "$MOUNT2" ] && umount $MOUNT2
 
 ${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt --cleanup $@ \

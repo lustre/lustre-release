@@ -502,7 +502,7 @@ static int after_reply(struct ptlrpc_request *req)
 
         if (req->rq_import->imp_replayable) {
                 spin_lock_irqsave(&imp->imp_lock, flags);
-                if (req->rq_replay || req->rq_transno != 0)
+                if (req->rq_transno != 0)
                         ptlrpc_retain_replayable_request(req, imp);
                 else if (req->rq_commit_cb != NULL)
                         req->rq_commit_cb(req);

@@ -84,9 +84,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_DONE_WRITING_NET    0x126
 #define OBD_FAIL_MDS_DONE_WRITING_PACK   0x127
 #define OBD_FAIL_MDS_ALLOC_OBDO          0x128
-#if 0 /* added on b_cray */
 #define OBD_FAIL_MDS_PAUSE_OPEN          0x129
-#endif
 #define OBD_FAIL_MDS_STATFS_LCW_SLEEP    0x12a
 #define OBD_FAIL_MDS_OPEN_CREATE         0x12b
 

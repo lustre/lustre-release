@@ -87,7 +87,8 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 	--with-linux='%{linuxdir}' \
 	%{disable_doc} --disable-liblustre \
 	--sysconfdir=%{_sysconfdir} \
-	--mandir=%{_mandir}
+	--mandir=%{_mandir} \
+	--libdir=%{_libdir}
 make -j $RPM_BUILD_NCPUS -s
 
 %install
@@ -144,13 +145,14 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/bin/lstripe
 %attr(-, root, root) /usr/bin/mcreate
 %attr(-, root, root) /usr/bin/munlink
-%attr(-, root, root) /usr/lib/lustre/python
+%attr(-, root, root) %{_libdir}/lustre/python
 %attr(-, root, root) /usr/share/lustre/examples
 
 %attr(-, root, root) /etc/init.d/lustre
 %attr(-, root, root) /etc/init.d/lustrefs
-%attr(-, root, root) /usr/lib/libptlctl.a
-%attr(-, root, root) /usr/lib/liblustreapi.a
+
+%attr(-, root, root) %{_libdir}/libptlctl.a
+%attr(-, root, root) %{_libdir}/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre
 %attr(-, root, root) /usr/include/portals
 %attr(-, root, root) /usr/include/linux/lustre_idl.h
@@ -202,8 +204,8 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %files -n lustre-ldap
 %attr(-, root, root) /etc/openldap/slapd-lustre.conf
 %attr(-, root, root) /etc/openldap/schema/lustre.schema
-%attr(-, root, root) /usr/lib/lustre/lustre2ldif.xsl
-%attr(-, root, root) /usr/lib/lustre/top.ldif
+%attr(-, root, root) /usr/share/lustre/lustre2ldif.xsl
+%attr(-, root, root) /usr/share/lustre/top.ldif
 #%dir /var/lib/ldap/lustre
 %attr(700, ldap, ldap) /var/lib/ldap/lustre
 

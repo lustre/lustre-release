@@ -115,22 +115,22 @@ static int ptlrpc_pinger_main(void *arg)
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
                         if (imp->imp_next_ping <= this_ping || force) {
-                                if (level == LUSTRE_IMP_DISCON && 
+                                if (level == LUSTRE_IMP_DISCON &&
                                     !imp->imp_deactive) {
-                                        /* wait at least a timeout before 
+                                        /* wait at least a timeout before
                                            trying recovery again. */
-                                        imp->imp_next_ping = jiffies + 
+                                        imp->imp_next_ping = jiffies +
                                                 (obd_timeout * HZ);
                                         ptlrpc_initiate_recovery(imp);
-                                } 
+                                }
                                 else if (level != LUSTRE_IMP_FULL ||
                                          imp->imp_obd->obd_no_recov) {
-                                        CDEBUG(D_HA, 
+                                        CDEBUG(D_HA,
                                                "not pinging %s (in recovery "
-                                               " or recovery disabled: %s)\n",
+                                               "or recovery disabled: %s)\n",
                                                imp->imp_target_uuid.uuid,
                                                ptlrpc_import_state_name(level));
-                                } 
+                                }
                                 else if (imp->imp_pingable || force) {
                                         ptlrpc_ping(imp);
                                 }
@@ -138,7 +138,7 @@ static int ptlrpc_pinger_main(void *arg)
                         } else {
                                 if (imp->imp_pingable)
                                         CDEBUG(D_HA, "don't need to ping %s "
-                                               "(%lu > %lu)\n", 
+                                               "(%lu > %lu)\n",
                                                imp->imp_target_uuid.uuid,
                                                imp->imp_next_ping, this_ping);
                         }

@@ -131,7 +131,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PW, &data,
                          &lockh, lmm, lmmsize, ldlm_completion_ast,
-                         ll_mdc_blocking_ast, parent->d_inode);
+                         ll_mdc_blocking_ast, NULL);
         if (rc < 0)
                 CERROR("lock enqueue: err: %d\n", rc);
         RETURN(rc);
@@ -611,7 +611,7 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         lvb->lvb_ctime = LTIME_S(inode->i_ctime);
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64
-                   "atime "LPU64", mtime "LPU64", ctime "LPU64,
+                   " atime "LPU64", mtime "LPU64", ctime "LPU64,
                    inode->i_size, stripe, lvb->lvb_size, lvb->lvb_mtime,
                    lvb->lvb_atime, lvb->lvb_ctime);
         GOTO(iput, 0);
@@ -1084,11 +1084,12 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
                 RETURN( ll_iocontrol(inode, file, cmd, arg) );
+        case EXT3_IOC_GETVERSION_OLD:
+        case EXT3_IOC_GETVERSION:
+                return put_user(inode->i_generation, (int *) arg);
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.
-        case EXT2_IOC_GETVERSION_OLD:
-        case EXT2_IOC_GETVERSION_NEW:
         case EXT2_IOC_SETVERSION_OLD:
         case EXT2_IOC_SETVERSION_NEW:
         */

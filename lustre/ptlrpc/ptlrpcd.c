@@ -35,19 +35,15 @@
 # else
 #  include <linux/locks.h>
 # endif
+# include <linux/ctype.h>
+# include <linux/init.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
+# include <ctype.h>
 #endif
 
 #include <linux/kp30.h>
 #include <linux/lustre_net.h>
-
-#ifdef __KERNEL__
-# include <linux/ctype.h>
-# include <linux/init.h>
-#else
-# include <ctype.h>
-#endif
 
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h> /* for OBD_FAIL_CHECK */

@@ -12,9 +12,12 @@
 
 #include <linux/lustre_debug.h>
 
+extern struct list_head ll_super_blocks;
+extern spinlock_t ll_sb_lock;
+
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
-#define SBI_DEFAULT_READAHEAD_MAX ((40UL << 20) >> PAGE_CACHE_SHIFT)
+#define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - PAGE_CACHE_SHIFT))
 enum ra_stat {
         RA_STAT_HIT = 0,
         RA_STAT_MISS,
@@ -36,6 +39,7 @@ struct ll_ra_info {
 };
 
 struct ll_sb_info {
+        struct list_head          ll_list;
         /* this protects pglist and ra_info.  It isn't safe to
          * grab from interrupt contexts */
         spinlock_t                ll_lock;
@@ -137,7 +141,7 @@ struct ll_async_page {
         struct page     *llap_page;
         struct list_head llap_pending_write;
          /* only trust these if the page lock is providing exclusion */
-        unsigned         llap_write_queued:1,
+        unsigned int     llap_write_queued:1,
                          llap_defer_uptodate:1,
                          llap_origin:3,
                          llap_ra_used:1;
@@ -183,6 +187,7 @@ int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction);
+void ll_shrink_cache(int priority, unsigned int gfp_mask);
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
@@ -247,6 +252,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 void ll_umount_begin(struct super_block *sb);
 int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset, struct super_block *);
+void lustre_dump_dentry(struct dentry *, int recur);
+void lustre_dump_inode(struct inode *);
 struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
                                              struct list_head *list);
 

@@ -157,6 +157,19 @@ restart:
         tmp = head;
         while ((tmp = tmp->next) != head) {
                 struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
+
+                if (dentry->d_name.len == 1 && dentry->d_name.name[0] == '/') {
+                        CERROR("called on root (?) dentry=%p, inode=%p "
+                               "ino=%lu\n", dentry, inode, inode->i_ino);
+                        lustre_dump_dentry(dentry, 1);
+                        portals_debug_dumpstack(NULL);
+                } else if (d_mountpoint(dentry)) {
+                        CERROR("called on mountpoint (?) dentry=%p, inode=%p "
+                               "ino=%lu\n", dentry, inode, inode->i_ino);
+                        lustre_dump_dentry(dentry, 1);
+                        portals_debug_dumpstack(NULL);
+                }
+
                 if (atomic_read(&dentry->d_count) == 0) {
                         CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
                                "inode %p\n", dentry->d_name.len,

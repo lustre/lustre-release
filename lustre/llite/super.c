@@ -32,12 +32,21 @@
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
+#include <linux/cache_def.h>
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
 #include <lustre/lustre_user.h>
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
+
+LIST_HEAD(ll_super_blocks);
+spinlock_t ll_sb_lock = SPIN_LOCK_UNLOCKED;
+
+static struct cache_definition llap_cache_definition = {
+        "llap_cache",
+        ll_shrink_cache
+};
 
 static struct super_block *ll_read_super(struct super_block *sb,
                                          void *data, int silent)
@@ -102,6 +111,8 @@ static int __init init_lustre_lite(void)
 
         proc_lustre_fs_root = proc_lustre_root ? proc_mkdir("llite", proc_lustre_root) : NULL;
 
+        register_cache(&llap_cache_definition);
+
         rc = register_filesystem(&lustre_lite_fs_type);
         if (rc == 0)
                 rc = register_filesystem(&lustre_fs_type);
@@ -114,6 +125,8 @@ static void __exit exit_lustre_lite(void)
 {
         unregister_filesystem(&lustre_lite_fs_type);
         unregister_filesystem(&lustre_fs_type);
+
+        unregister_cache(&llap_cache_definition);
 
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
                  "couldn't destroy ll_file_data slab\n");

@@ -43,7 +43,7 @@ cleanup() {
     rmmod llite
     stop mds ${FORCE}
     stop ost2 ${FORCE}
-    stop ost ${FORCE}  --dump cleanup-dual.log
+    stop ost ${FORCE}  --dump $TMP/replay-dual-`hostname`.log
 }
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -362,7 +362,7 @@ run_test 17 "fail OST during recovery (3571)"
 export NOW=0
 
 test_18() {	# bug 3822 - evicting client with enqueued lock
-	set -vx
+	#set -vx
 	mkdir -p $MOUNT1/$tdir
 	touch $MOUNT1/$tdir/f0
 #define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b

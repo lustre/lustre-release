@@ -475,13 +475,14 @@ clear_failloc() {
 }
 
 cancel_lru_locks() {
-    $LCTL mark cancel_lru_locks
+    $LCTL mark "cancel_lru_locks start"
     for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
 	if [ -f $d/lru_size ]; then
 	    echo clear > $d/lru_size
 	    grep [0-9] $d/lock_unused_count
 	fi
     done
+    $LCTL mark "cancel_lru_locks stop"
 }
 
 

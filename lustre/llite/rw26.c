@@ -93,6 +93,8 @@ out:
         if (rc) {
                 if (!lli->lli_async_rc)
                         lli->lli_async_rc = rc;
+                /* re-dirty page on error so it retries write */
+                SetPageDirty(page);
                 unlock_page(page);
         } else {
                 set_page_writeback(page);

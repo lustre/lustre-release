@@ -12,7 +12,7 @@ MDSSIZE=${MDSSIZE:-400000}
 FSTYPE=${FSTYPE:-ext3}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
-NETWORKTYPE=${NETWORKTYPE:-tcp}
+NETTYPE=${NETTYPE:-tcp}
 
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-400000}
@@ -23,15 +23,15 @@ JSIZE=${JSIZE:-0}
 MDSISIZE=${MDSISIZE:-0}
 [ "$MDSISIZE" -gt 0 ] && IARG="--inode_size $MDSISIZE"
 
-STRIPE_BYTES=65536
+STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=0	# 0 means stripe over all OSTs
 
 rm -f $config
 
 # create nodes
 ${LMC} --add node --node localhost || exit 10
-${LMC} --add net --node  localhost --nid `hostname` --nettype $NETWORKTYPE || exit 11
-${LMC} --add net --node client --nid '*' --nettype $NETWORKTYPE || exit 12
+${LMC} --add net --node  localhost --nid `hostname` --nettype $NETTYPE || exit 11
+${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
 # configure mds server
 ${LMC} --add mds --nspath /mnt/mds_ns  --node localhost --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE $JARG $IARG || exit 20

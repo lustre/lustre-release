@@ -587,7 +587,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 ldlm_lock_cancel(lock);
         } else {
                 if (lock->l_resource->lr_namespace->ns_client) {
-                        LDLM_ERROR(lock, "Trying to cancel local lock\n");
+                        LDLM_ERROR(lock, "Trying to cancel local lock");
                         LBUG();
                 }
                 LDLM_DEBUG(lock, "client-side local cancel");

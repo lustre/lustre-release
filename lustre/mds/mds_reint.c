@@ -106,7 +106,8 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         /* if the export has already been failed, we have no last_rcvd slot */
         if (req->rq_export->exp_failed) {
-                CERROR("committing transaction for disconnected client\n");
+                CWARN("committing transaction for disconnected client %s\n",
+                      req->rq_export->exp_client_uuid.uuid);
                 if (handle)
                         GOTO(commit, rc);
                 RETURN(rc);
@@ -158,8 +159,8 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         }
 
         DEBUG_REQ(log_pri, req,
-                  "wrote trans #"LPU64" client %s at idx %u: err = %d",
-                  transno, mcd->mcd_uuid, med->med_idx, err);
+                  "wrote trans #"LPU64" rc %d client %s at idx %u: err = %d",
+                  transno, rc, mcd->mcd_uuid, med->med_idx, err);
 
         err = mds_lov_write_objids(obd);
         if (err) {

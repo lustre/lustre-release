@@ -1,3 +1,13 @@
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.1
+       * bug fixes
+	- add per-fs limit of Lustre pages in page cache, avoid OOM (4699)
+	- no transno return for symlink open, don't save no-trasno open (3440)
+	- don't try to complete elan receive that already failed (4012)
+	- free RPC server reply state on error (5406)
+       * miscellania
+        - fix ppc64/x86_64 spec to use %{_libdir} instead of /usr/lib (5389)
+
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0
        * bug fixes
@@ -6,10 +16,6 @@
 	- don't use EXT3 constants in llite code (5094)
 	- memory shortage at startup could cause assertion (5176)
 	- don't keep a lock reference when lock is not granted (4238)
-	- unsafe list practices (rarely) led to infinite eviction loop (4908)
-	- add per-fs limit of Lustre pages in page cache, avoid OOM (4699)
-	- drop import inflight refcount on signal_completed_replay error (5255)
-	- unlock page after async write error during send (3677)
        * miscellania
 	- reorganization of lov code
 	- single portals codebase
@@ -28,8 +34,15 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- lock /proc/sys/portals/routes internal state, avoiding oops (4827)
 	- the watchdog thread now runs as interruptible (5246)
 	- handle missing objects in filter_preprw_read properly (5265)
+	- unsafe list practices (rarely) led to infinite eviction loop (4908)
+	- drop import inflight refcount on signal_completed_replay error (5255)
+	- unlock page after async write error during send (3677)
+	- return original error code on reconstructed replies (3761)
+	- no transno return for symlink open, don't save no-trasno open (3440)
        * miscellania
 	- add pid to ldlm debugging output (4922)
+	- bump the watchdog timeouts -- we can't handle 30sec yet
+	- extra debugging for orphan dentry/inode bug (5259)
 
 2004-11-16  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.8

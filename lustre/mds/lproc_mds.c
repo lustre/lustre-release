@@ -60,7 +60,6 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "fstype",       lprocfs_rd_fstype,      0, 0 },
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
-        { "num_exports",  lprocfs_rd_num_exports,   0, 0 },
         { "evict_client", 0, lprocfs_wr_evict_client, 0 },
         { "num_exports",  lprocfs_rd_num_exports, 0, 0 },
         { 0 }

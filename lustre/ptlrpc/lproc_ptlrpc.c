@@ -440,6 +440,7 @@ void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
                 svc->srv_stats = NULL;
         }
 }
+
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 {
         if (obd->obd_svc_procroot) {
