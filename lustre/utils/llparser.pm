@@ -26,7 +26,7 @@ require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(parse_file print_rpcrelations parse_foptions
 	     %ll_subsystems %subsysnum %trace_masks $e_subsys $e_mask
-	     $e_processor $e_time $e_file $e_line $e_function $e_pid
+	     $e_time $e_displaystr $e_function $e_pid
 	     $e_stack $e_fmtstr $e_backref $e_marked $e_treeparent
 	     $e_numchildren $e_youngestchild $e_next $e_pidhead
 	     $e_rpcsndrcv $e_rpcpid $e_rpcxid $e_rpcnid $e_rpcopc
@@ -34,10 +34,8 @@ require Exporter;
 
 ($e_subsys,
  $e_mask,
- $e_processor,
  $e_time,
- $e_file,
- $e_line,
+ $e_displaystr,
  $e_function,
  $e_pid,
  $e_stack,
@@ -49,7 +47,7 @@ require Exporter;
  $e_next,
  $e_backref,
  $e_marked,
- $e_rpcref) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17);
+ $e_rpcref) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
 ($e_rpcuuid,
  $e_rpcxid,
@@ -91,7 +89,7 @@ $SENDING = "Sending";
 $COMPLETED = "Completed";
 $HANDLING = "Handling";
 $HANDLED = "Handled";
-$RPCREGEX = qr/^\s*($SENDING|$HANDLING|$HANDLED|$COMPLETED)\sRPC\scluuid:pid:xid:ni:nid:opc\s([-\w]+):(\d+):(?:0x)?(\w+):(?:\w+):(?:0x)?(\w+):(\d+)\s*$/;
+$RPCREGEX = qr/($SENDING|$HANDLING|$HANDLED|$COMPLETED)\sRPC\scluuid:pid:xid:ni:nid:opc\s([-\w]+):(\d+):(?:0x)?(\w+):(?:\w+):(?:0x)?(\w+):(\d+)/;
 
 
 #VFS REGEX BELOW
@@ -226,6 +224,7 @@ sub setup_relations
     my $lineref = shift;
     my $pidprevious = shift;
 
+
     if ($lineref->[$e_stack] < $pidprevious->[$e_stack]) {
 	# lineref is not a child of pidprevious, find its parent
 	while($lineref->[$e_stack] < $pidprevious->[$e_stack]) {
@@ -250,6 +249,7 @@ sub setup_relations
     }
     $pidprevious->[$e_youngestchild] = $lineref;
     $lineref->[$e_pidhead] = $pidprevious;
+
 }
 
 
@@ -282,8 +282,7 @@ sub handle_ldlm
 	$ldlmref->{$newkey} = $ldlmref->{$lineref->[$e_pid]};
 	$ldlmcontent = $ldlmref->{$newkey};
 	delete $ldlmref->{$lineref->[$e_pid]};
-	#print "$newkey, CONTENT: $ldlmcontent->[$e_resname], $ldlmcontent->[$e_ltype],",
-	#"$ldlmcontent->[$e_mreq], $ldlmcontent->[$e_mgranted]\n";
+
     }
 
 }
@@ -347,8 +346,9 @@ sub update_RPC
     my $rpcref = shift;
     my $ldlmref = shift;
     my $lineref = shift;
-    my $filename = shift;
+
     my $tmpfmtref;
+    
 
     if ($lineref->[$e_fmtstr] =~ $RPCREGEX) {
 	my $rpcuuid =$2;
@@ -419,6 +419,7 @@ sub update_RPC
     } elsif ($lineref->[$e_fmtstr] =~ qr/### /) {
 	update_ldlm($ldlmref, $lineref);
     }
+    
 }
 
 sub update_debugreqs
@@ -456,7 +457,7 @@ sub sort_by_number_descending
 }
 
 
-sub process_array 
+sub process_array
 {
     my $newarrayref = shift @_;
     my $pidhashref = shift @_;
@@ -467,15 +468,16 @@ sub process_array
 
     my %lastline; # Hash of last line by pid
     print STDERR "Building PID/RPC list.....\n";
-    $debugreq = 0;
-    $filearrayidx = 0;
+    
+    my $filearrayidx = 0;
 
     while ($filearrayidx <= $#$newarrayref) {
-	$arrayref = $newarrayref->[$filearrayidx];
-	$arrayindex = 0;
+	my $arrayref = $newarrayref->[$filearrayidx];
+	my $arrayindex = 0;
+	my $start = times();
 	while ($arrayindex <= $#$arrayref) {
-	    $actualidx = ($arrayindex+$start_idx[$filearrayidx])%($#$arrayref+1);
-	    $lineref = $arrayref->[$actualidx];
+	    my $actualidx = ($arrayindex+$start_idx[$filearrayidx])%($#$arrayref+1);
+	    my $lineref = $arrayref->[$actualidx];
 	    $arrayindex++;
 	    next if ($lineref->[$e_time] == 0); #Ignoring all filemarker lines
 	    next if ($lineref->[$e_fmtstr] eq $INVALID);  
@@ -501,12 +503,16 @@ sub process_array
 		$marker_ref->{$lineref->[$e_time]} = [$1, $2, $lineref];
 	    }
 	    # Match DEBUGREQ Lines
-	    elsif ($lineref->[$e_fmtstr] =~ qr/@@@ /) {
-		$debugreq++;
-		update_debugreqs($rpc_ref, $lineref);
-	    }
+	    #elsif ($lineref->[$e_fmtstr] =~ qr/@@@ /) {
+		#$debugreq++;
+		#update_debugreqs($rpc_ref, $lineref);
+	    #}
 	    # Is this a process name ?
-	    else {
+	    elsif (($lineref->[$e_fmtstr] =~ qr/($SENDING|$HANDLING|$HANDLED|$COMPLETED)/) || 
+		   (($lineref->[$e_fmtstr] =~ $LDLM_REGEX))
+		  ) {
+		update_RPC($rpc_ref, $ldlm_ref, $lineref);
+	    } else {
 		my $tagged_pid = $lineref->[$e_pid];
 		$tagged_pid =~ /(\d+):(.+)/;
 		my $numericpid = $1;
@@ -524,16 +530,16 @@ sub process_array
 			}
 		    }
 		}
-		# Match RPCs
-		else {
-		    update_RPC($rpc_ref, $ldlm_ref, $lineref);
-		}
 	    }
 	    # For all lines create parent/child relations
 	    setup_relations($lineref, $pidprevious);
 	    # Remember last line for this pid
 	    $lastline{$lineref->[$e_pid]} = $lineref;
 	}
+	my $end = times();
+	my $tottime = $end-$start;
+	my $fileline = $arrayref->[0]->[$e_fmtstr];
+	print STDERR "Processed $fileline, time: $tottime\n"; 
 	$filearrayidx++;
     }
 
@@ -550,49 +556,51 @@ sub print_hash
 
 }
 
-sub process_HTMLtext
+sub HTML_leftpane
 {
     my $htmfile = shift;
-    my $pidhashref = shift;
-     if ($htmfile ne "") {
-	my $previous_pidfilename = "";
-	my $htmlfilename = sprintf "%s_left.html", $htmfile;
-	open (HTML, ">$htmlfilename");
-	print HTML "<HTML>";
-	print HTML "<HEAD>";
-	print HTML "<TITLE> llhtml view </TITLE>";
-	print HTML "</HEAD>";
-	print HTML "<BODY>\n";
-	foreach $pid (sort (sort_by_number_descending keys %$pidhashref)) {
-	    # print STDERR "pid: $pid \[$pidhashref->{$pid}->[$e_pidcmd]\]\n";
-	    my $linecnt = 0;
-	    my $pidlines_ref = $pidhashref->{$pid}->[$e_lineref];
-	    my $next = 0;
-		do {
-		    $next = $pidlines_ref->[$e_next];
-		    $linecnt++;
-		    $pidlines_prev = $pidlines_ref;
-		    $pidlines_ref = $next;
-		} until ($next == 0);
-	    $pid =~ /(\d+):(.+)/;
-	    my $numericpid = $1;
-	    my $pidfname = $2;
-	    my $graphhtmfile = join('_', split (/[\/, \.]/, $pidfname));
-	    if ($numericpid) { # Skip pid 0 which are the lines listing all PIDs
-		#print STDERR "pid=$numericpid \[$pidhashref->{$pid}->[$e_pidcmd]\] lines=$linecnt ($pidfname)\n";
-		# Generate HTML Index Pane
-		if ($previous_pidfilename ne $pidfname) {
-		    print HTML "<H3><A HREF = \"${htmfile}_${graphhtmfile}.html\" target=\"right\">$pidfname</A></H3>\n";
-		    $previous_pidfilename = $pidfname;
-		}
-		my $anchorlinkpid = join('_', split(/[\/,:, \.]/, $pid));
-		print HTML "<a href = \"${htmfile}_right.html#$anchorlinkpid\" target=\"right\">$numericpid</a> \[$pidhashref->{$pid}->[$e_pidcmd]\]<br>\n";
-	    }
+    my $arrayref = shift;
+    my $pidref = shift;
+    my $nograph = shift;
+    my $arrayindex = 0;
+
+    # Create the left pane HTML file
+    $htmlfilename = sprintf "%s_left.html", $htmfile;
+    open (LEFTHTML, ">$htmlfilename");
+    print LEFTHTML "<HTML>";
+    print LEFTHTML "<HEAD>";
+    print LEFTHTML "<TITLE> llhtml view </TITLE>";
+    print LEFTHTML "</HEAD>";
+    print LEFTHTML "<BODY>\n";
+
+    while ($arrayindex <= $#$arrayref) {
+	my $fileline = $arrayref->[$arrayindex]->[0];
+	my $graphhtmfile = $fileline->[$e_fmtstr];
+	my $fmtline = $fileline->[$e_pid];
+	my @pidlist = split(/,/, $fmtline);
+	my $element = $pidlist[0];
+	$element =~ /(\d+):(.*)/;
+	my $numericpid = $1;
+	if (!$nograph) {
+	    print LEFTHTML "<H3><A HREF = \"${htmfile}_${graphhtmfile}.html\" target=\"right\">$2</A></H3>\n";
+	} else {
+	    print LEFTHTML "<H3>$2</H3>\n";
 	}
-	print HTML "</BODY>";
-	print HTML "</HTML>\n";
-	close(HTML);
+	for($idx = 1; $idx <= $#pidlist; $idx++) {
+	    if ($numericpid) {
+		my $anchorlinkpid = sprintf "%s_%s", ${numericpid}, ${graphhtmfile};
+		print LEFTHTML "<a href = \"${htmfile}_right.html#$anchorlinkpid\" target=\"right\">$numericpid</a>";
+		print LEFTHTML "\[$pidref->{$element}->[$e_pidcmd]\]<br>\n";
+	    }
+	    $element = $pidlist[$idx];
+	    $element =~ /(\d+):.*/;
+	    $numericpid = $1;
+	}
+	$arrayindex++;
     }
+    print LEFTHTML "</BODY>";
+    print LEFTHTML "</HTML>\n";
+    close(LEFTHTML);
 
 
 }
@@ -605,7 +613,7 @@ $timebase = 1000;
 
 %gblstarttime;
 
-sub parse_file 
+sub parse_file
 {
     # File names that need to be slurped
     my $input_files = shift;
@@ -636,6 +644,7 @@ sub parse_file
     my $numfiles = 0;
     foreach $file (@$input_files) {
 	my $linecnt = 0;
+	my $curridx = 0;
 	my $prev_time = 0;
 	# Initialize the starting index for this file to be zero
 	$start_idx[$numfiles] = 0;
@@ -645,6 +654,7 @@ sub parse_file
 	$fileline = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 	$new_file = join('_', split(/[\/, \.]/, $file)); 
 	$fileline->[$e_fmtstr] = $new_file;
+	$start = times();
 	push @{$array_parsed->[$numfiles]}, $fileline;
 	while(<FILEHANDLE>) {
 	    $linecnt++;
@@ -656,7 +666,7 @@ sub parse_file
 	    if (!exists($gblstarttime{$new_file})) {
 		$gblstarttime{$new_file} = $parsed_line[$e_time];
 	    }
-
+	    $curridx++;
 	    if ($prev_time > $parsed_line[$e_time]) {
 		# Wrapped log
 		if ($start_idx[$numfiles] != 0) {
@@ -665,7 +675,7 @@ sub parse_file
 		    exit;
 		}
 		print STDERR "Wrapped log at $linecnt in file $file\n";
-		$start_idx[$numfiles] = $linecnt; # Accounting for the dummy file line
+		$start_idx[$numfiles] = $curridx; # Accounting for the dummy file line
 		$gblstarttime{$new_file} = $parsed_line[$e_time];
 		# Invalidate all the pid marker lines for this file, until now
 		@pids_file = split(/,/, $fileline->[$e_pid]);
@@ -684,10 +694,8 @@ sub parse_file
 		    my @marker_line;
 		    $marker_line[$e_subsys] = 0;
 		    $marker_line[$e_mask] = 0;
-		    $marker_line[$e_processor] = 0;
 		    $marker_line[$e_time] = $parsed_line[$e_time];
-		    $marker_line[$e_file] = 0;
-		    $marker_line[$e_line] = 0;
+		    $marker_line[$e_displaystr] = 0;
 		    $marker_line[$e_function] = 0;
 		    $marker_line[$e_pid] = $parsed_line[$e_pid];
                    # marker lines are everyone's parent, so stack value zero
@@ -697,7 +705,7 @@ sub parse_file
 		    $marker_line[$e_numchildren] = 0;
 		    $marker_line[$e_youngestchild] = 0;
 		    $marker_line[$e_pidhead] = 0;
-		    $marker_line[$e_next]= 0; # No, no, no:  \@parsed_line;
+		    $marker_line[$e_next]= 0; 
 		    $marker_line[$e_backref] = 0;
 		    $marker_line[$e_marked] = 0;
 		    $pid_ref->{$parsed_line[$e_pid]}->[$e_lineref] = $marker_line;
@@ -728,18 +736,21 @@ sub parse_file
 	    }
 	}
 	close(FILEHANDLE);
+	$end = times();
+	$tottime = $end - $start;
+	print STDERR "Parsed $file in $tottime\n";
 	$numfiles++;
     }
     return $array_parsed;
 }
 
-sub process_HTMLgraph
+sub HTML_graph
 {
     my $gbl_array_parsed = shift;
     my $htmfile = shift;
     my $pid_ref = shift;
 
-
+    my $start = times();
     my $file_idx = 0;
     while ($file_idx <= $#$gbl_array_parsed) {
 	$array_parsed = $gbl_array_parsed->[$file_idx];
@@ -807,7 +818,6 @@ sub process_HTMLgraph
 		    $newtime = $newtime + $more;
 		} else {
 		    #Find if the current timebase will exceed the end of this RPC
-		    
 		    print GRAPHHTML "<td valign=\"top\" width=\"$colwidth\%\"><font size=\"-2\">$newtime</font></td>";
 		    $newtime += $timebase;
 		}
@@ -875,7 +885,6 @@ sub process_HTMLgraph
 		    }
 		}
 		print GRAPHHTML "</tr>";
-		
 	    }
 	    #$currtime = $newtime;
 	    $rpc_line = $lineref->[$e_rpcref];
@@ -912,6 +921,9 @@ sub process_HTMLgraph
 	close (GRAPHHTML);
 	$file_idx ++;
     }
+    my $end = times();
+    my $time = $end-$start;
+    print STDERR "HTML: Graphing $time secs\n";
 }
 
 # Parse out the file names given on the command line
@@ -997,13 +1009,13 @@ sub get_parsed_line()
     my $in_line = shift;
     if ($in_line =~ /$REGEX/) {
 	my $tagged_pid = "${8}:${file}";
-	@parsed_line = ($1, $2, $3, $4, $5, $6, $7, $tagged_pid, $9, $10, 
+	my $display_str = "${5}:{6}";
+	@parsed_line = ($1, $2, $4, $display_str, $7, $tagged_pid, $9, $10, 
 			0, 0, 0, 0, 0, 0, 0, 0); 
 	#print "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10\n";
     } else {
 	chop $in_line;
-	print "Mismatch in the host file (file:$file, line:$linecnt)\n", 
-	"\tOffending line: <$in_line>\n";
+	print "MALFORMED LINE :$in_line IN FILE :$file @ $linecnt\n";
 	return 0;
 	return @parsed_line;
     }
@@ -1085,11 +1097,11 @@ sub print_RPCfields
 }
 
 my $summary_indent = 0;
-my $summary_indent_string = "    ";
+my $summary_indent_string = "  ";
 
 $BREAK_LDLM_REGEXP=qr/(LDLM.+\) => \([^\(]+\))(.+)/;
 
-sub printHTML
+sub HTML_rightpane
 {
     my $text = shift;
     my $HTMHANDLE = shift;
@@ -1101,15 +1113,16 @@ sub printHTML
 	$newtag = join('_', split(/[\/, \.]/, $tmp[0]));
 	$anchortag = sprintf "%s_%s", $1, $newtag;
 	print $HTMHANDLE "<A NAME = \"$anchortag\">";
-	for ($i=0; $i < $summary_indent; $i++) {
-	    $htmlspacing = sprintf "%s", $summary_indent_string;
-	    print $HTMHANDLE "$htmlspacing";
-	}
+	print $HTMHANDLE $summary_indent_string x $summary_indent;
 	print $HTMHANDLE "$text\n</A>";
     } elsif ($text =~ /rpcxid #(\d+)(.*)/) {
 	if ($text =~ /link=/) {
 	    $tmprpc = shift;
 	    $pidhashref = shift;
+	    my $allexist = ($tmprpc->[$e_srvRPCent] &&
+			    $tmprpc->[$e_srvRPCexit] &&
+			    $tmprpc->[$e_cliRPCent] &&
+			    $tmprpc->[$e_cliRPCexit]);
 	    if ($tmprpc->[$e_rpcopc] < 104) {
 		$anchortag = sprintf "%s_%s_%s_%s", 
 		$tmprpc->[$e_rpcopc], $tmprpc->[$e_rpcxid],
@@ -1121,28 +1134,29 @@ sub printHTML
  	    }
 	    my $rpcpidname = ($tmprpc->[$e_cliRPCent])->[$e_pid];
 	    my $clipidcmdname = ($pidhashref->{$rpcpidname})->[$e_pidcmd];
-	    print $HTMHANDLE "<A NAME = \"$anchortag\">";
-	    for ($i=0; $i < $summary_indent; $i++) {
-		$htmlspacing = sprintf "%s", $summary_indent_string;
-		print $HTMHANDLE "$htmlspacing";
+	    if ($allexist) {
+		print $HTMHANDLE "<A NAME = \"$anchortag\">";
 	    }
+	    print $HTMHANDLE $summary_indent_string x $summary_indent;
 	    # Creating back reference to the client
 	    $text =~ qr/(rpcxid\s)(#\d+)(.+)\(link=.+\)/;
-	    print $HTMHANDLE "</A>[${clipidcmdname}]:<A HREF = \"#cli_$anchortag\">xid $2</A>";
+	    print $HTMHANDLE "[${clipidcmdname}]:";
+	    if ($allexist) {
+		print $HTMHANDLE "</A><A HREF = \"#cli_$anchortag\">";
+	    }
+	    print $HTMHANDLE "xid $2";
+	    if ($allexist) {
+		print $HTMHANDLE "</A>";
+	    }
 	    my $rpctext = $3;
 	    if ($rpctext =~ /LDLM_.+/) {
 		$rpctext =~ $BREAK_LDLM_REGEXP;
 		print $HTMHANDLE " $1\n";
-		for ($i=0; $i < $summary_indent; $i++) {
-		    $htmlspacing = sprintf "%s", $summary_indent_string;
-		    print $HTMHANDLE "$htmlspacing";
-		     }
+		print $HTMHANDLE $summary_indent_string x $summary_indent;
 		print $HTMHANDLE "                      $2\n";
 	    } else {
 		print $HTMHANDLE "$rpctext\n";
 	    }
-	    #@newtext = split(qr/link=/, $text);
-	    # print $HTMHANDLE "$newtext[0]</A><A HREF = \"#cli_$anchortag\">link=$newtext[1]\n</A>";
 	} else {
 	    $tmprpc = shift;
 	    if ($tmprpc->[$e_rpcopc] < 104) {
@@ -1152,43 +1166,37 @@ sub printHTML
 		$anchorref = sprintf "%s_%s_%s",
 		$tmprpc->[$e_rpcopc], $tmprpc->[$e_rpcxid], $tmprpc->[$e_rpcpid];
 	    }
-	    print $HTMHANDLE "<A NAME = \"cli_$anchorref\">";
-	    for ($i=0; $i < $summary_indent; $i++) {
-		$htmlspacing = sprintf "%s", $summary_indent_string;
-		print $HTMHANDLE "$htmlspacing";
+	    # Only true if the server entry is not zero
+	    if ($allexist) {
+		print $HTMHANDLE "<A NAME = \"cli_$anchorref\">";
 	    }
-	    print $HTMHANDLE "</A><A HREF = \"#$anchorref\">rpcxid #$1</A>";
+	    print $HTMHANDLE $summary_indent_string x $summary_indent;
+	    if ($allexist) {
+		print $HTMHANDLE "</A><A HREF = \"#$anchorref\">";
+	    }
+	    print $HTMHANDLE "rpcxid #$1";
+	    if ($allexist) {
+		print $HTMHANDLE "</A>";
+	    }
 	    my $rpctext = $2;
 	    if ($rpctext =~ /LDLM_.+/) {
 		$rpctext =~ $BREAK_LDLM_REGEXP;
 		print $HTMHANDLE " $1\n";
-		for ($i=0; $i < $summary_indent; $i++) {
-		    $htmlspacing = sprintf "%s", $summary_indent_string;
-		    print $HTMHANDLE "$htmlspacing";
-		}
+		print $HTMHANDLE $summary_indent_string x $summary_indent;
 		print $HTMHANDLE "                      $2\n";
 	    } else {
 		print $HTMHANDLE "$rpctext\n";
 	    }
 	}
     } elsif ($text =~ qr/\+\+\+marker\[([^\]]*)\](.*)/) { 
-	for ($i=0; $i < $summary_indent; $i++) {
-	    $htmlspacing = sprintf "%s", $summary_indent_string;
-	    print $HTMHANDLE "$htmlspacing";
-	}
+	print $HTMHANDLE $summary_indent_string x $summary_indent;
 	print $HTMHANDLE "+++marker\[<A HREF = \"#$1\">$1</A>\]$2\n";
     } elsif ($text =~ qr/\+\+\+marker summary\[([^\]]*)\](.*)/ ){
 	print $HTMHANDLE "<A NAME = \"$1\">";
-	for ($i=0; $i < $summary_indent; $i++) {
-	    $htmlspacing = sprintf "%s", $summary_indent_string;
-	    print $HTMHANDLE "$htmlspacing";
-	}
+	print $HTMHANDLE $summary_indent_string x $summary_indent;
 	print $HTMHANDLE "+++marker summary\[$1\]$2</A>";
     }else{
-	for ($i=0; $i < $summary_indent; $i++) {
-	    $htmlspacing = sprintf "%s", $summary_indent_string;
-	    print $HTMHANDLE "$htmlspacing";
-	}
+	print $HTMHANDLE $summary_indent_string x $summary_indent;
 	print $HTMHANDLE "$text\n";
     }
     print $HTMHANDLE "</PRE>";
@@ -1203,14 +1211,11 @@ sub indent_print {
     my $i;
 
     # Print the regular stuff
-    for ($i=0; $i < $summary_indent; $i++) {
-	printf "%s", $summary_indent_string;
-    }
+    print $summary_indent_string x $summary_indent;
     print "$text\n";
-
     # Print HTML
     if ($HTMHANDLE) {
-	printHTML($text, $HTMHANDLE, $temprpc, $pidhashref);
+	HTML_rightpane($text, $HTMHANDLE, $temprpc, $pidhashref);
     }
 }
 
@@ -1277,6 +1282,7 @@ sub print_summary_terse
     my $ldlmdebug = shift;
     my $htmfile = shift;
 
+    my $start = times();
     # HTML stuff
     if ($htmfile ne "") {
 	my $htmfilename = sprintf "%s_right.html", $htmfile;
@@ -1331,6 +1337,11 @@ sub print_summary_terse
 	    }
 	    # $lineref = getnextchild($vfs_line, $lineref);
 	    my $next = $lineref->[$e_next];
+
+	    if ($lineref->[$e_fmtstr] = "") {
+		$lineref = $next;
+		next;
+	    }
 	    # LDLM ?
 	    if (($ldlmdebug) && (exists($ldlm_ref->{$lineref->[$e_time]}))) {
 		# Needs to get better
@@ -1497,6 +1508,10 @@ sub print_summary_terse
 	print HTMLOG "</BODY></HTML>";
 	close(HTMLOG);
     }
+
+    my $end = times();
+    my $tottime = $end-$start;
+    print STDERR "ASCII generation: $tottime\n";
 }
 
 sub print_rpc {
@@ -1506,7 +1521,8 @@ sub print_rpc {
     }
 }
 
-sub gen_webpage {
+sub gen_HTML 
+{
     my $htmname = shift;
     if ($htmname ne "") {
 	my $mainhtml = sprintf "%s.html", $htmname;
@@ -1515,8 +1531,11 @@ sub gen_webpage {
 	print HTMHANDLE "<FRAMESET COLS=\"20%, 80%\">";
 	print HTMHANDLE "<FRAME NAME=\"left\" SRC=\"${htmname}_left.html\">";
 	print HTMHANDLE "<FRAME NAME=\"right\" SRC=\"${htmname}_right.html\">";	
-	print HTMLHANDEL "</FRAMESET></HTML>";
+	print HTMHANDLE "</FRAMESET></HTML>";
     }
 }
-1;
 
+
+
+
+1;
