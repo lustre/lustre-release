@@ -71,7 +71,7 @@ EXTRAVERSION="`sed -ne 's/^EXTRAVERSION[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
 changequote([, ])
 
 RELEASE="$LVERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
-moduledir='$(libdir)/modules/'$RELEASE
+moduledir='$(libdir)/modules/'$RELEASE/kernel
 AC_SUBST(moduledir)
 AC_SUBST(EXTRAVERSION)
 

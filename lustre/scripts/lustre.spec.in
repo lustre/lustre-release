@@ -11,7 +11,7 @@ Version: %{version}
 Copyright: GPL
 Group: Utilities/System
 Requires: lustre-modules, libxml2
-BuildRoot: /var/tmp/obd-%{version}-root
+BuildRoot: /var/tmp/lustre-%{version}-root
 Source: ftp://ftp.lustre.com/pub/lustre/lustre-%{version}.tar.gz
 
 %description
@@ -49,8 +49,8 @@ make install prefix=$RPM_BUILD_ROOT
 
 # Create the pristine source directory.
 make distclean
-mkdir -p $RPM_BUILD_ROOT/usr/src/obd-%{version}
-find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/obd-%{version}
+mkdir -p $RPM_BUILD_ROOT/usr/src/lustre-%{version}
+find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 
 
 %files
@@ -66,22 +66,22 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/obd-%{version}
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) /lib/modules/%{kversion}/fs/extN.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/ldlm.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/llite.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/mdc.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/mds.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/mds_extN.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/obdclass.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/obdecho.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/obdfilter.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/obdfs.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/osc.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/ost.o
-%attr(-, root, root) /lib/modules/%{kversion}/fs/ptlrpc.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/extN.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/ldlm.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/llite.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/mdc.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/mds.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/mds_extN.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdclass.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdecho.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdfilter.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdfs.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/osc.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/ost.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/ptlrpc.o
 
 %files -n lustre-source
-%attr(-, root, root) /usr/src/obd-%{version}
+%attr(-, root, root) /usr/src/lustre-%{version}
 
 %post
 if [ ! -e /dev/obd ]; then

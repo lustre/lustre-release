@@ -114,7 +114,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
         obd = class_uuid2obd(mds); 
-        obd->u.mdc.mdc_max_mdsize = sizeof(struct lov_stripe_md); 
         if (!obd) {
                 CERROR("MDS %s: not setup or attached\n", mds);
                 GOTO(out_free, sb = NULL);

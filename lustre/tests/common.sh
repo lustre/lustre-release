@@ -3,14 +3,28 @@ export PATH=$PATH:/sbin:/usr/sbin
 
 [ -d /r ] && R=/r
 
-PORTALS=$SRCDIR/../../portals
-LUSTRE=$SRCDIR/..
+# check if running in source directory
+# will probably need to create variable for each module.
+if [ -f $SRCDIR/Makefile.am ]; then
+    PORTALS=$SRCDIR/../../portals
+    LUSTRE=$SRCDIR/..
 
-PTLCTL=$PORTALS/linux/utils/ptlctl
-DBGCTL=$PORTALS/linux/utils/debugctl
-ACCEPTOR=$PORTALS/linux/utils/acceptor
+    PTLCTL=$PORTALS/linux/utils/ptlctl
+    DBGCTL=$PORTALS/linux/utils/debugctl
+    ACCEPTOR=$PORTALS/linux/utils/acceptor
 
-OBDCTL=$LUSTRE/utils/obdctl
+    OBDCTL=$LUSTRE/utils/obdctl
+else
+    # should have configure set the paths here
+    BINDIR=/usr/sbin
+    PORTALS=/lib/modules
+    LUSTRE=/lib/modules
+
+    PTLCTL=$BINDIR/ptlctl
+    DBGCTL=$BINDIR/debugctl
+    ACCEPTOR=$BINDIR/acceptor
+    OBDCTL=$BINDIR/obdctl
+fi
 
 LOOPNUM=0; export LOOPNUM
 if [ -b /dev/loop0 ]; then
