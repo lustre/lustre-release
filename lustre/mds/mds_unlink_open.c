@@ -139,7 +139,6 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         oa->o_mode = body->mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
-#ifdef ENABLE_ORPHANS
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = 
@@ -150,7 +149,6 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                         oa->o_valid &= ~OBD_MD_FLCOOKIE;
                         body->valid &= ~OBD_MD_FLCOOKIE;
         }
-#endif
 
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
         obdo_free(oa);
@@ -209,12 +207,11 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 CERROR("error %d unlinking orphan %*s from PENDING directory\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
 
-#ifdef ENABLE_ORPHANS
         if ((body->valid & OBD_MD_FLEASIZE)) {
                 if (mds_log_op_unlink(obd, inode, req->rq_repmsg, 1) > 0)
                         body->valid |= OBD_MD_FLCOOKIE;
         }
-#endif
+
         if (handle) {
                 int err = fsfilt_commit(obd, pending_dir, handle, 0);
                 if (err) {
