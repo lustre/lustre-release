@@ -1025,6 +1025,7 @@ kranal_reaper_check (int idx, unsigned long *min_timeoutp)
 int
 kranal_connd (void *arg)
 {
+        long               id = (long)arg;
         char               name[16];
         wait_queue_t       wait;
         unsigned long      flags;
@@ -1032,7 +1033,7 @@ kranal_connd (void *arg)
         kra_acceptsock_t  *ras;
         int                did_something;
 
-        snprintf(name, sizeof(name), "kranal_connd_%02ld", (long)arg);
+        snprintf(name, sizeof(name), "kranal_connd_%02ld", id);
         kportal_daemonize(name);
         kportal_blockallsigs();
 
@@ -1042,20 +1043,25 @@ kranal_connd (void *arg)
 
         while (!kranal_data.kra_shutdown) {
                 did_something = 0;
-                
+
                 if (!list_empty(&kranal_data.kra_connd_acceptq)) {
                         ras = list_entry(kranal_data.kra_connd_acceptq.next,
                                          kra_acceptsock_t, ras_list);
                         list_del(&ras->ras_list);
+                        
                         spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+
+                        CDEBUG(D_WARNING,"About to handshake someone\n");
 
                         kranal_conn_handshake(ras->ras_sock, NULL);
                         kranal_free_acceptsock(ras);
 
+                        CDEBUG(D_WARNING,"Finished handshaking someone\n");
+
                         spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
                         did_something = 1;
                 }
-                
+                        
                 if (!list_empty(&kranal_data.kra_connd_peers)) {
                         peer = list_entry(kranal_data.kra_connd_peers.next,
                                           kra_peer_t, rap_connd_list);

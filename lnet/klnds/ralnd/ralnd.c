@@ -102,6 +102,7 @@ kranal_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
         int            rc;
         mm_segment_t   oldmm = get_fs();
         long           ticks = timeout * HZ;
+        int            wanted = nob;
         unsigned long  then;
         struct timeval tv;
 
@@ -143,6 +144,9 @@ kranal_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
                 rc = sock_recvmsg(sock, &msg, iov.iov_len, 0);
                 ticks -= jiffies - then;
                 set_fs(oldmm);
+
+                CDEBUG(D_WARNING, "rc %d at %d/%d bytes %d/%d secs\n",
+                       rc, wanted - nob, wanted, timeout - (int)(ticks/HZ), timeout);
 
                 if (rc < 0)
                         return rc;
@@ -212,7 +216,7 @@ kranal_pause(int ticks)
 }
 
 void
-kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn)
+kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, ptl_nid_t dstnid)
 {
         RAP_RETURN   rrc;
 
@@ -222,13 +226,20 @@ kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn)
         connreq->racr_version   = RANAL_MSG_VERSION;
         connreq->racr_devid     = conn->rac_device->rad_id;
         connreq->racr_srcnid    = kranal_lib.libnal_ni.ni_pid.nid;
-        connreq->racr_dstnid    = conn->rac_peer->rap_nid;
+        connreq->racr_dstnid    = dstnid;
         connreq->racr_peerstamp = kranal_data.kra_peerstamp;
         connreq->racr_connstamp = conn->rac_my_connstamp;
         connreq->racr_timeout   = conn->rac_timeout;
 
         rrc = RapkGetRiParams(conn->rac_rihandle, &connreq->racr_riparams);
         LASSERT(rrc == RAP_SUCCESS);
+
+        CDEBUG(D_WARNING,"devid %d, riparams: HID %08x FDH %08x PT %08x CC %08x\n",
+               connreq->racr_devid,
+               connreq->racr_riparams.HostId,
+               connreq->racr_riparams.FmaDomainHndl,
+               connreq->racr_riparams.PTag,
+               connreq->racr_riparams.CompletionCookie);
 }
 
 int
@@ -392,7 +403,6 @@ kranal_set_conn_uniqueness (kra_conn_t *conn)
                 conn->rac_cqid = kranal_data.kra_next_cqid++;
         } while (kranal_cqid2conn_locked(conn->rac_cqid) != NULL);
         
-
         write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 }
 
@@ -420,6 +430,7 @@ kranal_create_conn(kra_conn_t **connp, kra_device_t *dev)
 
         kranal_set_conn_uniqueness(conn);
 
+        conn->rac_device = dev;
         conn->rac_timeout = MAX(kranal_tunables.kra_timeout, RANAL_MIN_TIMEOUT);
         kranal_update_reaper_timeout(conn->rac_timeout);
 
@@ -532,6 +543,13 @@ kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
                        __u32 peer_ip, int peer_port)
 {
         RAP_RETURN    rrc;
+
+        CDEBUG(D_WARNING,"devid %d, riparams: HID %08x FDH %08x PT %08x CC %08x\n",
+               conn->rac_device->rad_id,
+               connreq->racr_riparams.HostId,
+               connreq->racr_riparams.FmaDomainHndl,
+               connreq->racr_riparams.PTag,
+               connreq->racr_riparams.CompletionCookie);
         
         rrc = RapkSetRiParams(conn->rac_rihandle, &connreq->racr_riparams);
         if (rrc != RAP_SUCCESS) {
@@ -554,14 +572,15 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
         struct sockaddr_in   addr;
         __u32                peer_ip;
         unsigned int         peer_port;
-        kra_connreq_t        connreq;
-        ptl_nid_t            src_nid;
-        ptl_nid_t            dst_nid;
+        kra_connreq_t        rx_connreq;
+        kra_connreq_t        tx_connreq;
         kra_conn_t          *conn;
         kra_device_t        *dev;
         int                  rc;
         int                  len;
         int                  i;
+
+        CDEBUG(D_WARNING,"!!\n");
 
         len = sizeof(addr);
         rc = sock->ops->getname(sock, (struct sockaddr *)&addr, &len, 2);
@@ -573,13 +592,17 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
         peer_ip = ntohl(addr.sin_addr.s_addr);
         peer_port = ntohs(addr.sin_port);
 
+        CDEBUG(D_WARNING,"%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+
         if (peer_port >= 1024) {
                 CERROR("Refusing unprivileged connection from %u.%u.%u.%u/%d\n",
                        HIPQUAD(peer_ip), peer_port);
                 return -ECONNREFUSED;
         }
 
-        rc = kranal_recv_connreq(sock, &connreq, 
+        CDEBUG(D_WARNING,"%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+
+        rc = kranal_recv_connreq(sock, &rx_connreq, 
                                  kranal_tunables.kra_listener_timeout);
         if (rc != 0) {
                 CERROR("Can't rx connreq from %u.%u.%u.%u/%d: %d\n", 
@@ -587,33 +610,30 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
                 return rc;
         }
 
-        src_nid = connreq.racr_srcnid;
-        dst_nid = connreq.racr_dstnid;
+        CDEBUG(D_WARNING,"%u.%u.%u.%u\n", HIPQUAD(peer_ip));
 
         for (i = 0;;i++) {
                 if (i == kranal_data.kra_ndevs) {
                         CERROR("Can't match dev %d from %u.%u.%u.%u/%d\n",
-                               connreq.racr_devid, HIPQUAD(peer_ip), peer_port);
+                               rx_connreq.racr_devid, HIPQUAD(peer_ip), peer_port);
                         return -ENODEV;
                 }
                 dev = &kranal_data.kra_devices[i];
-                if (dev->rad_id == connreq.racr_devid)
+                if (dev->rad_id == rx_connreq.racr_devid)
                         break;
         }
+
+        CDEBUG(D_WARNING,"%u.%u.%u.%u\n", HIPQUAD(peer_ip));
 
         rc = kranal_create_conn(&conn, dev);
         if (rc != 0)
                 return rc;
 
-        rc = kranal_set_conn_params(conn, &connreq, peer_ip, peer_port);
-        if (rc != 0) {
-                kranal_conn_decref(conn);
-                return rc;
-        }
+        CDEBUG(D_WARNING,"%u.%u.%u.%u\n", HIPQUAD(peer_ip));
 
-        kranal_pack_connreq(&connreq, conn);
+        kranal_pack_connreq(&tx_connreq, conn, rx_connreq.racr_srcnid);
 
-        rc = kranal_sock_write(sock, &connreq, sizeof(connreq));
+        rc = kranal_sock_write(sock, &tx_connreq, sizeof(tx_connreq));
         if (rc != 0) {
                 CERROR("Can't tx connreq to %u.%u.%u.%u/%d: %d\n", 
                        HIPQUAD(peer_ip), peer_port, rc);
@@ -621,9 +641,19 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
                 return rc;
         }
 
+        CDEBUG(D_WARNING,"%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+
+        rc = kranal_set_conn_params(conn, &rx_connreq, peer_ip, peer_port);
+        if (rc != 0) {
+                kranal_conn_decref(conn);
+                return rc;
+        }
+
+        CDEBUG(D_WARNING,"%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+
         *connp = conn;
-        *src_nidp = src_nid;
-        *dst_nidp = dst_nid;
+        *src_nidp = rx_connreq.racr_srcnid;
+        *dst_nidp = rx_connreq.racr_dstnid;
         return 0;
 }
 
@@ -702,6 +732,8 @@ kranal_active_conn_handshake(kra_peer_t *peer,
         int                 rc;
         unsigned int        idx;
 
+        CDEBUG(D_WARNING,LPX64"\n", peer->rap_nid);
+
         /* spread connections over all devices using both peer NIDs to ensure
          * all nids use all devices */
         idx = peer->rap_nid + kranal_lib.libnal_ni.ni_pid.nid;
@@ -711,11 +743,15 @@ kranal_active_conn_handshake(kra_peer_t *peer,
         if (rc != 0)
                 return rc;
 
-        kranal_pack_connreq(&connreq, conn);
+        CDEBUG(D_WARNING,LPX64"\n", peer->rap_nid);
+
+        kranal_pack_connreq(&connreq, conn, peer->rap_nid);
         
         rc = ranal_connect_sock(peer, &sock);
         if (rc != 0)
                 goto failed_0;
+
+        CDEBUG(D_WARNING,LPX64"\n", peer->rap_nid);
 
         /* CAVEAT EMPTOR: the passive side receives with a SHORT rx timeout
          * immediately after accepting a connection, so we connect and then
@@ -728,12 +764,16 @@ kranal_active_conn_handshake(kra_peer_t *peer,
                 goto failed_1;
         }
 
+        CDEBUG(D_WARNING,LPX64"\n", peer->rap_nid);
+
         rc = kranal_recv_connreq(sock, &connreq, kranal_tunables.kra_timeout);
         if (rc != 0) {
                 CERROR("Can't rx connreq from %u.%u.%u.%u/%d: %d\n", 
                        HIPQUAD(peer->rap_ip), peer->rap_port, rc);
                 goto failed_1;
         }
+
+        CDEBUG(D_WARNING,LPX64"\n", peer->rap_nid);
 
         sock_release(sock);
         rc = -EPROTO;
@@ -754,6 +794,8 @@ kranal_active_conn_handshake(kra_peer_t *peer,
                 goto failed_0;
         }
 
+        CDEBUG(D_WARNING,LPX64"\n", peer->rap_nid);
+
         rc = kranal_set_conn_params(conn, &connreq, 
                                     peer->rap_ip, peer->rap_port);
         if (rc != 0)
@@ -761,12 +803,14 @@ kranal_active_conn_handshake(kra_peer_t *peer,
 
         *connp = conn;
         *dst_nidp = connreq.racr_dstnid;
+        CDEBUG(D_WARNING,LPX64"\n", peer->rap_nid);
         return 0;
 
  failed_1:
         sock_release(sock);
  failed_0:
         kranal_conn_decref(conn);
+        CDEBUG(D_WARNING,LPX64": %d\n", peer->rap_nid, rc);
         return rc;
 }
 
@@ -915,7 +959,11 @@ kranal_connect (kra_peer_t *peer)
 
         LASSERT (peer->rap_connecting);
 
+        CDEBUG(D_WARNING,"About to handshake "LPX64"\n", peer->rap_nid);
+
         rc = kranal_conn_handshake(NULL, peer);
+
+        CDEBUG(D_WARNING,"Done handshake "LPX64":%d \n", peer->rap_nid, rc);
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
@@ -1939,6 +1987,7 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         init_waitqueue_head(&kranal_data.kra_reaper_waitq);
         spin_lock_init(&kranal_data.kra_reaper_lock);
 
+        INIT_LIST_HEAD(&kranal_data.kra_connd_acceptq);
         INIT_LIST_HEAD(&kranal_data.kra_connd_peers);
         init_waitqueue_head(&kranal_data.kra_connd_waitq);
         spin_lock_init(&kranal_data.kra_connd_lock);
