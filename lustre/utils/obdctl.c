@@ -58,6 +58,7 @@ char rawbuf[8192];
 char *buf = rawbuf;
 int max = 8192;
 int thread;
+int rc = 0;
 
 #define IOCINIT(data)                                                   \
 do {                                                                    \
@@ -200,7 +201,12 @@ static int get_verbose(const char *arg)
         else
                 verbose = (int) strtoul(arg, NULL, 0);
 
-	printf("Verbose = %d\n",verbose);
+        if (verbose < 0)
+                printf("Print status every %d seconds\n", -verbose);
+        else if (verbose == 1)
+                printf("Print status every operation\n");
+        else if (verbose > 1)
+                printf("Print status every %d operations\n", verbose);
 
         return verbose;
 }
@@ -208,7 +214,6 @@ static int get_verbose(const char *arg)
 static int do_disconnect(char *func, int verbose)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         if (connid == -1)
                 return 0;
@@ -252,8 +257,6 @@ static int do_device(char *func, int dev)
 
 static int jt_device(int argc, char **argv)
 {
-        int rc;
-
         do_disconnect(argv[0], 1);
 
         if (argc != 2) {
@@ -273,7 +276,6 @@ static int jt_device(int argc, char **argv)
 static int jt_connect(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
 
@@ -307,7 +309,7 @@ static int jt_disconnect(int argc, char **argv)
 static int jt__device(int argc, char **argv)
 {
         char *arg2[3];
-        int rc, ret;
+        int ret;
 
         if (argc < 3) {
                 fprintf(stderr, "usage: %s devno <command [args ...]>\n",
@@ -338,7 +340,6 @@ static int jt__threads(int argc, char **argv)
         int threads, next_thread;
         int verbose;
         int i, j;
-        int rc;
 
         if (argc < 5) {
                 fprintf(stderr,
@@ -409,7 +410,6 @@ static int jt__threads(int argc, char **argv)
 static int jt_detach(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
 
@@ -434,7 +434,6 @@ static int jt_detach(int argc, char **argv)
 static int jt_cleanup(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
 
@@ -454,7 +453,6 @@ static int jt_cleanup(int argc, char **argv)
 static int jt_newdev(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         if (getfd(argv[0]))
                 return -1;
@@ -480,7 +478,6 @@ static int jt_newdev(int argc, char **argv)
 static int jt_attach(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
 
@@ -527,7 +524,6 @@ static int jt_attach(int argc, char **argv)
 static int do_name2dev(char *func, char *name)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         if (getfd(func))
                 return -1;
@@ -555,8 +551,6 @@ static int do_name2dev(char *func, char *name)
 
 static int jt_name2dev(int argc, char **argv)
 {
-        int rc;
-
         if (argc != 2) {
                 fprintf(stderr, "usage: %s name\n", cmdname(argv[0]));
                 return -1;
@@ -575,7 +569,6 @@ static int jt_name2dev(int argc, char **argv)
 static int jt_setup(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
 
@@ -624,7 +617,6 @@ static int jt_create(int argc, char **argv)
         int count = 1, next_count;
         int verbose;
         int i;
-        int rc;
 
         IOCINIT(data);
         if (argc < 2 || argc > 4) {
@@ -663,7 +655,6 @@ static int jt_create(int argc, char **argv)
 static int jt_setattr(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
         if (argc != 2) {
@@ -686,7 +677,6 @@ static int jt_setattr(int argc, char **argv)
 static int jt_destroy(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
         if (argc != 2) {
@@ -708,7 +698,6 @@ static int jt_destroy(int argc, char **argv)
 static int jt_getattr(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         if (argc != 2) {
                 fprintf(stderr, "usage: %s id\n", cmdname(argv[0]));
@@ -739,7 +728,6 @@ static int jt_test_getattr(int argc, char **argv)
         struct timeval start, next_time;
         int i, count, next_count;
         int verbose;
-        int rc;
 
         if (argc != 2 && argc != 3) {
                 fprintf(stderr, "usage: %s count [verbose]\n",cmdname(argv[0]));
@@ -799,7 +787,6 @@ static int jt_test_brw(int argc, char **argv)
         int verbose = 1, write = 0, rw;
         int i, o, p;
         int len;
-        int rc;
 
         if (argc < 2 || argc > 6) {
                 fprintf(stderr,
@@ -846,7 +833,7 @@ static int jt_test_brw(int argc, char **argv)
         data.ioc_plen1 = len;
         data.ioc_pbuf1 = bulk;
         if (obdos > 1) {
-                data.ioc_obdo2.o_id = 2;
+                data.ioc_obdo2.o_id = 3;
                 data.ioc_plen2 = len;
                 data.ioc_pbuf2 = bulk + len;
         }
@@ -863,6 +850,10 @@ static int jt_test_brw(int argc, char **argv)
          * We will put in the start time (and loop count inside the loop)
          * at the beginning of each page so that we will be able to validate
          * (at some later time) whether the data actually made it or not.
+         *
+         * XXX we do not currently use any of this memory in OBD_IOC_BRW_*
+         *     just to avoid the overhead of the copy_{to,from}_user.  It
+         *     can be fixed if we ever need to send real data around.
          */
         for (o = 0, b = bulk; o < obdos; o++)
                 for (p = 0; p < pages; p++, b += PAGE_SIZE)
@@ -910,7 +901,6 @@ static int jt_test_brw(int argc, char **argv)
 static int jt_test_ldlm(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
         if (argc != 1) {
@@ -928,7 +918,6 @@ static int jt_test_ldlm(int argc, char **argv)
 static int jt_newconn(int argc, char **argv)
 {
         struct obd_ioctl_data data;
-        int rc;
 
         IOCINIT(data);
         if (argc != 1) {
@@ -940,6 +929,13 @@ static int jt_newconn(int argc, char **argv)
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
+
+        return rc;
+}
+
+static int jt_quit(int argc, char **argv)
+{
+        Parser_quit(argc, argv);
 
         return rc;
 }
@@ -976,8 +972,8 @@ command_t cmdlist[] = {
 
         /* User interface commands */
         {"help", Parser_help, 0, "help"},
-        {"exit", Parser_quit, 0, "quit"},
-        {"quit", Parser_quit, 0, "quit"},
+        {"exit", jt_quit, 0, "quit"},
+        {"quit", jt_quit, 0, "quit"},
         { 0, 0, 0, NULL }
 };
 
@@ -995,7 +991,6 @@ static void signal_server(int sig)
 int main(int argc, char **argv)
 {
         struct sigaction sigact;
-        int rc = 0;
 
         sigact.sa_handler = signal_server;
         sigfillset(&sigact.sa_mask);
@@ -1007,7 +1002,7 @@ int main(int argc, char **argv)
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
         } else {
                 Parser_init("obdctl > ", cmdlist);
-                Parser_commands();
+                rc = Parser_commands();
         }
 
         do_disconnect(argv[0], 1);

@@ -245,13 +245,14 @@ static char **command_completion(char * text, int start, int end)
 }
 
 /* take a string and execute the function or print help */
-void execute_line(char * line) 
+int execute_line(char * line)
 {
         command_t         *cmd, *ambig;
         char *prev;
         char *next, *tmp;
         char *argv[MAXARGS];
         int         i;
+        int rc = 0;
 
         switch( process(line, &next, top_level, &cmd, &prev) ) {
         case CMD_AMBIG:
@@ -277,18 +278,18 @@ void execute_line(char * line)
                 break;
         case CMD_COMPLETE:
                 i = line2args(line, argv, MAXARGS);
-                (cmd->pc_func)(i, argv);
+                rc = (cmd->pc_func)(i, argv);
                 break;
         }
     
-        return;
+        return rc;
 }
 
 /* this is the command execution machine */
-void Parser_commands(void) 
+int Parser_commands(void) 
 {
-        char *line,
-                *s;
+        char *line, *s;
+        int rc = 0;
 
         using_history();
         stifle_history(HISTORY);
@@ -306,11 +307,12 @@ void Parser_commands(void)
 
                 if (*s) {
                         add_history(s);
-                        execute_line(s);
+                        rc = execute_line(s);
                 }
 
                 free(line);
         }
+        return rc;
 }
 
 
