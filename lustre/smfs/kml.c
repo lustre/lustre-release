@@ -241,6 +241,12 @@ int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size)
 }
 EXPORT_SYMBOL(smfs_rec_md);
 
+int smfs_rec_precreate(struct dentry *dentry, int *num, struct obdo *oa)
+{
+       return smfs_post_rec_create(dentry->d_inode, dentry, num, oa);
+}
+EXPORT_SYMBOL(smfs_rec_precreate);
+
 int smfs_process_rec(struct super_block *sb,
                      int count, char *dir, int flags)
 {

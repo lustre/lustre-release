@@ -439,7 +439,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 LASSERT(handle);
-                rc = fsfilt_commit(obd, inode, handle, 1);
+                rc = fsfilt_commit(obd, obd->u.mds.mds_sb, inode, handle, 1);
 
                 dev_set_rdonly(ll_sbdev(obd->u.mds.mds_sb), 2);
                 RETURN(0);
@@ -649,7 +649,7 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
 
         rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size);
 
-        err = fsfilt_commit(obd, inode, handle, 0);
+        err = fsfilt_commit(obd, obd->u.mds.mds_sb, inode, handle, 0);
         if (!rc)
                 rc = err ? err : lmm_size;
         GOTO(conv_free, rc);

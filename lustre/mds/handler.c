@@ -1369,7 +1369,7 @@ repeat:
         if (IS_ERR(new)) {
                 CERROR("%s: can't lookup new inode (%s) for mkdir: %d\n",
                        obd->obd_name, fidname, (int) PTR_ERR(new));
-                fsfilt_commit(obd, new->d_inode, handle, 0);
+                fsfilt_commit(obd, mds->mds_sb, new->d_inode, handle, 0);
                 up(&parent_inode->i_sem);
                 RETURN(PTR_ERR(new));
         } else if (new->d_inode) {

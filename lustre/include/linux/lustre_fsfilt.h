@@ -48,7 +48,8 @@ struct fsfilt_operations {
         void   *(* fs_brw_start)(int objcount, struct fsfilt_objinfo *fso,
                                  int niocount, struct niobuf_local *nb,
                                  void *desc_private, int logs);
-        int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
+        int     (* fs_commit)(struct super_block *sb, struct inode *inode, 
+                              void *handle,int force_sync);
         int     (* fs_commit_async)(struct inode *inode, void *handle,
                                         void **wait_handle);
         int     (* fs_commit_wait)(struct inode *inode, void *handle);
@@ -95,9 +96,11 @@ struct fsfilt_operations {
         int     (* fs_get_reint_log_ctxt)(struct super_block *sb, 
                                           struct llog_ctxt **ctxt);
         int     (* fs_set_kml_flags)(struct inode *inode);
+        int     (* fs_clear_kml_flags)(struct inode *inode);
         int     (* fs_set_ost_flags)(struct super_block *sb);
         int     (* fs_set_mds_flags)(struct super_block *sb);
-
+        int     (* fs_precreate_rec)(struct dentry *dentry, int *num, 
+                                     struct obdo *oa);
         int     (* fs_set_xattr)(struct inode *inode, void *handle, char *name,
                                  void *buffer, int buffer_size);
         int     (* fs_get_xattr)(struct inode *inode, char *name,
@@ -217,11 +220,11 @@ llog_fsfilt_start(struct llog_ctxt *ctxt, struct inode *inode,
 }
 
 static inline int
-fsfilt_commit_ops(struct fsfilt_operations *ops, struct inode *inode,
-                  void *handle, int force_sync)
+fsfilt_commit_ops(struct fsfilt_operations *ops, struct super_block *sb,
+                  struct inode *inode, void *handle, int force_sync)
 {
         unsigned long now = jiffies;
-        int rc = ops->fs_commit(inode, handle, force_sync);
+        int rc = ops->fs_commit(sb, inode, handle, force_sync);
         CDEBUG(D_HA, "committing handle %p\n", handle);
 
         if (time_after(jiffies, now + 15 * HZ))
@@ -231,17 +234,18 @@ fsfilt_commit_ops(struct fsfilt_operations *ops, struct inode *inode,
 }
 
 static inline int
-fsfilt_commit(struct obd_device *obd, struct inode *inode,
-              void *handle, int force_sync)
+fsfilt_commit(struct obd_device *obd, struct super_block *sb, 
+              struct inode *inode, void *handle, int force_sync)
 {
-        return fsfilt_commit_ops(obd->obd_fsops, inode, handle, force_sync);
+        return fsfilt_commit_ops(obd->obd_fsops, sb, inode, handle, force_sync);
 }
 
 static inline int
 llog_fsfilt_commit(struct llog_ctxt *ctxt, struct inode *inode,
                    void *handle, int force_sync)
 {
-        return fsfilt_commit_ops(ctxt->loc_fsops, inode, handle, force_sync);
+        return fsfilt_commit_ops(ctxt->loc_fsops, inode->i_sb, inode, handle, 
+                                 force_sync);
 }
 
 static inline void *
@@ -514,6 +518,22 @@ fsfilt_set_kml_flags(struct obd_device *obd, struct inode *inode)
 {
         if (obd->obd_fsops->fs_set_kml_flags)
                 return obd->obd_fsops->fs_set_kml_flags(inode);
+        return 0;
+}
+
+static inline int 
+fsfilt_clear_kml_flags(struct obd_device *obd, struct inode *inode)
+{
+        if (obd->obd_fsops->fs_clear_kml_flags)
+                return obd->obd_fsops->fs_clear_kml_flags(inode);
+        return 0;
+}
+static inline int 
+fsfilt_precreate_rec(struct obd_device *obd, struct dentry *dentry,
+                     int *num, struct obdo *oa)
+{
+        if (obd->obd_fsops->fs_precreate_rec)
+                return obd->obd_fsops->fs_precreate_rec(dentry, num, oa);
         return 0;
 }
 

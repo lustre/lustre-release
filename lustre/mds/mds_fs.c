@@ -653,8 +653,8 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                 CERROR("error renaming new object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);
 
-        err = fsfilt_commit(exp->exp_obd, mds->mds_objects_dir->d_inode,
-                            handle, 0);
+        err = fsfilt_commit(exp->exp_obd, mds->mds_sb, 
+                            mds->mds_objects_dir->d_inode, handle, 0);
         if (!err) {
                 oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
                 oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLGROUP;
@@ -714,7 +714,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);
         
-        err = fsfilt_commit(obd, mds->mds_objects_dir->d_inode, handle, 0);
+        err = fsfilt_commit(obd, mds->mds_sb, mds->mds_objects_dir->d_inode, 
+                            handle, 0);
         if (err && !rc)
                 rc = err;
 out_dput:

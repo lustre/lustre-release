@@ -174,7 +174,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         CDEBUG(log_pri, "wrote objids: err = %d\n", err);
 
 commit:
-        err = fsfilt_commit(obd, inode, handle, 0);
+        err = fsfilt_commit(obd, mds->mds_sb, inode, handle, 0);
         if (err) {
                 CERROR("error committing transaction: %d\n", err);
                 if (!rc)
@@ -1395,7 +1395,7 @@ int mds_create_local_dentry(struct mds_update_record *rec,
                 }
                 mark_inode_dirty(child->d_inode);
         }
-        fsfilt_commit(obd, fids_dir, handle, 0);
+        fsfilt_commit(obd, mds->mds_sb, fids_dir, handle, 0);
 
         rec->ur_fid1->id = fids_dir->i_ino;
         rec->ur_fid1->generation = fids_dir->i_generation;

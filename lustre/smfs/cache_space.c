@@ -334,7 +334,7 @@ insert:
 
         if (op & CACHE_SPACE_COMMIT) {
                 if (handle) {
-                        err = fsops->fs_commit(inode, handle, 0);
+                        err = fsops->fs_commit(inode->i_sb, inode, handle, 0);
                         if (err) {
                                 CERROR("error committing transaction: %d\n", err);
                                 if (!rc)

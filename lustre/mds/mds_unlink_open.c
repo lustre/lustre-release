@@ -228,7 +228,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                                            mds->mds_max_cookiesize) > 0)
                         log_unlink = 1;
         }
-        err = fsfilt_commit(obd, pending_dir, handle, 0);
+        err = fsfilt_commit(obd, mds->mds_sb, pending_dir, handle, 0);
         if (err) {
                 CERROR("error committing orphan unlink: %d\n", err);
                 if (!rc)

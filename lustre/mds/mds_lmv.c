@@ -516,7 +516,7 @@ int mds_try_to_split_dir(struct obd_device *obd,
         LASSERT(!IS_ERR(handle));
 	rc = fsfilt_set_md(obd, dir, handle, *mea, mea_size);
         LASSERT(rc == 0);
-        fsfilt_commit(obd, dir, handle, 0);
+        fsfilt_commit(obd, mds->mds_sb, dir, handle, 0);
         LASSERT(rc == 0);
 	up(&dir->i_sem);
 	obdo_free(oa);

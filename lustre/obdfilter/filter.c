@@ -207,7 +207,7 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
                                                   fed->fed_fcd,
                                                   sizeof(*fed->fed_fcd),
                                                   &off, 1);
-                        fsfilt_commit(obd,
+                        fsfilt_commit(obd, filter->fo_sb,
                                       filter->fo_rcvd_filp->f_dentry->d_inode,
                                       handle, 1);
                 }
@@ -1867,7 +1867,7 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
         else
                 rc = fsfilt_setattr(exp->exp_obd, dentry, handle, &iattr, 1);
         rc = filter_finish_transno(exp, oti, rc);
-        rc2 = fsfilt_commit(exp->exp_obd, dentry->d_inode, handle, 0);
+        rc2 = fsfilt_commit(exp->exp_obd, filter->fo_sb, dentry->d_inode, handle, 0);
         if (rc2) {
                 CERROR("error on commit, err = %d\n", rc2);
                 if (!rc)
@@ -2043,7 +2043,16 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
                 RETURN(diff);
         }
 }
-
+static int filter_precreate_rec(struct obd_device *obd, struct dentry *dentry, 
+                                int *number, struct obdo *oa)
+{
+        int    rc = 0;
+        ENTRY;       
+         
+        rc = fsfilt_precreate_rec(obd, dentry, number, oa);
+  
+        RETURN(rc);
+}
 /* We rely on the fact that only one thread will be creating files in a given
  * group at a time, which is why we don't need an atomic filter_get_new_id.
  * Even if we had that atomic function, the following race would exist:
@@ -2104,6 +2113,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         GOTO(cleanup, rc = PTR_ERR(dparent));
                 cleanup_phase = 1;
 
+                /*only do precreate rec record. so clean kml flags here*/
+                fsfilt_clear_kml_flags(obd, dparent->d_inode);
+                
                 dchild = filter_fid2dentry(obd, dparent, group, next_id);
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
@@ -2149,11 +2161,12 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                 CERROR("unable to write lastobjid "
                                        "but file created\n");
                 }
-
+                fsfilt_set_kml_flags(obd, dparent->d_inode);
+        
         cleanup:
                 switch(cleanup_phase) {
                 case 3:
-                        err = fsfilt_commit(obd, dparent->d_inode, handle, 0);
+                        err = fsfilt_commit(obd, filter->fo_sb, dparent->d_inode, handle, 0);
                         if (err) {
                                 CERROR("error on commit, err = %d\n", err);
                                 if (!rc)
@@ -2172,8 +2185,10 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         }
         *num = i;
 
+        rc = filter_precreate_rec(obd, dparent, num, oa);
+        
         up(&filter->fo_create_lock);
-
+        
         CDEBUG(D_HA, "%s: server last_objid for group "LPU64": "LPU64"\n",
                obd->obd_name, group, filter->fo_last_objids[group]);
 
@@ -2232,8 +2247,11 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         obd = exp->exp_obd;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
-            (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
+        if (oa->o_valid & OBD_MD_REINT) {
+                int num = *((int*)oa->o_inline);  
+                rc = filter_precreate(obd, oa, oa->o_gr, &num);
+        } else if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+                   (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                 if (oa->o_id > filter_last_id(&obd->u.filter, group)) {
                         CERROR("recreate objid "LPU64" > last id "LPU64"\n",
                                oa->o_id, filter_last_id(&obd->u.filter, group));
@@ -2356,7 +2374,8 @@ cleanup:
                                                       fcc);
                 }
                 rc = filter_finish_transno(exp, oti, rc);
-                rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
+                rc2 = fsfilt_commit(obd, filter->fo_sb, dparent->d_inode, 
+                                    handle, 0);
                 if (rc2) {
                         CERROR("error on commit, err = %d\n", rc2);
                         if (!rc)
@@ -2674,7 +2693,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 LASSERT(handle);
-                (void)fsfilt_commit(obd, inode, handle, 1);
+                (void)fsfilt_commit(obd, sb, inode, handle, 1);
 
                 dev_set_rdonly(ll_sbdev(obd->u.filter.fo_sb), 2);
                 RETURN(0);

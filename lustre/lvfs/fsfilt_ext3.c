@@ -310,7 +310,8 @@ static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
         RETURN(handle);
 }
 
-static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
+static int fsfilt_ext3_commit(struct super_block *sb, struct inode *inode, 
+                              void *h, int force_sync)
 {
         int rc;
         handle_t *handle = h;

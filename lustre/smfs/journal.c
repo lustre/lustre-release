@@ -75,7 +75,7 @@ void smfs_trans_commit(struct inode *inode, void *handle, int force_sync)
         CDEBUG(D_INFO, "trans commit %p\n", fsfilt->fs_commit);
 
         if (fsfilt->fs_commit)
-                fsfilt->fs_commit(inode, handle, force_sync);
+                fsfilt->fs_commit(inode->i_sb, inode, handle, force_sync);
 }
 
 /*smfs_path is gotten from intermezzo*/
@@ -159,10 +159,8 @@ static int smfs_pack_rec (char *buffer, struct dentry *dentry,
         return rc;
 }
 
-static int smfs_post_rec_create(struct inode *dir, 
-                                struct dentry *dentry,
-                                 void   *data1,
-                                void   *data2)
+int smfs_post_rec_create(struct inode *dir, struct dentry *dentry,
+                         void   *data1, void   *data2)
 {
         struct smfs_super_info *sinfo;
         char   *buffer = NULL, *pbuf;

@@ -1321,7 +1321,7 @@ out:
         if (req != NULL && reply_body != NULL) {
                 rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0);
         } else if (handle) {
-                int err = fsfilt_commit(obd, pending_dir, handle, 0);
+                int err = fsfilt_commit(obd, mds->mds_sb, pending_dir, handle, 0);
                 if (err) {
                         CERROR("error committing close: %d\n", err);
                         if (!rc)

@@ -80,27 +80,35 @@ static int ost_rec_create_pack(char *buffer, struct dentry *dentry,
 {
         struct obdo *oa = NULL;
         int    rc = 0;
-
+       
         PACK_KML_REC_INIT(buffer, OST_CREATE);
         oa = (struct obdo*)buffer;
-        oa->o_uid = 0; /* must have 0 uid / gid on OST */
-        oa->o_gid = 0;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLTYPE |
-                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
-        oa->o_size = 0;
-        obdo_from_inode(oa, dentry->d_inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|
-                        OBD_MD_FLMTIME| OBD_MD_FLCTIME);
-        rc = smfs_ost_get_id(&oa->o_id, (char*)dentry->d_name.name,
-                             dentry->d_name.len);
-        if (rc) {
-                CERROR("Can not find id of node %lu\n", dentry->d_inode->i_ino);
-                GOTO(out, rc = -ENOMEM);
-        }
-        
-        rc = smfs_ost_get_group(dentry, oa);
-        if (rc) {
-                CERROR("Can not find group node %lu\n", dentry->d_inode->i_ino);
-                GOTO(out, rc = -ENOMEM); 
+        if (data1 && data2) {
+                struct obdo *create_oa = (struct obdo *)data2;  
+                int    num = *((int *)data1);
+                
+                memcpy(oa, create_oa, sizeof(*oa));
+                memcpy(oa->o_inline, &num, sizeof(int));
+                oa->o_valid |= OBD_MD_REINT; 
+        } else { 
+                oa->o_uid = 0; /* must have 0 uid / gid on OST */
+                oa->o_gid = 0;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLTYPE |
+                        OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
+                oa->o_size = 0;
+                obdo_from_inode(oa, dentry->d_inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|
+                                OBD_MD_FLMTIME| OBD_MD_FLCTIME);
+                rc = smfs_ost_get_id(&oa->o_id, (char*)dentry->d_name.name,
+                                     dentry->d_name.len);
+                if (rc) {
+                        CERROR("Can not find id of node %lu\n", dentry->d_inode->i_ino);
+                        GOTO(out, rc = -ENOMEM);
+                }
+                rc = smfs_ost_get_group(dentry, oa);
+                if (rc) {
+                        CERROR("Can not find group node %lu\n", dentry->d_inode->i_ino);
+                        GOTO(out, rc = -ENOMEM); 
+                }
         } 
         rc = sizeof(*oa) + sizeof(int);
 out:
@@ -133,11 +141,12 @@ static int ost_rec_setattr_pack(char *buffer, struct dentry *dentry,
 out:
         RETURN(rc);
 }
+
 static int ost_rec_write_pack(char *buffer, struct dentry *dentry,
                               struct inode *dir, void *data1, void *data2)
 {
         struct obdo *oa = NULL;
-         int        rc = 0;
+        int          rc = 0;
 
         PACK_KML_REC_INIT(buffer, OST_WRITE);
         oa = (struct obdo*)buffer;

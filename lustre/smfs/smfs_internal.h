@@ -171,6 +171,8 @@ extern int smfs_post_rec_write(struct inode *dir, struct dentry *dentry,
                                void   *data1, void *data2);
 extern int smfs_post_rec_setattr(struct inode *dir, struct dentry *dentry,
                                  void   *data1, void *data2);
+extern int smfs_post_rec_create(struct inode *dir, struct dentry *dentry,
+                                void   *data1, void   *data2);
 /*kml.c*/
 extern int smfs_kml_init(struct super_block *sb);
 extern int smfs_do_rec(struct inode *inode);

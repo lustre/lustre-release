@@ -96,13 +96,16 @@ exit:
    mds_open() behavior. It passes NULL inode to mds_finish_transno()
    sometimes. Probably we should have spare way to get cache fsfilt
    operations. */
-static int fsfilt_smfs_commit(struct inode *inode, void *h, int force_sync)
+static int fsfilt_smfs_commit(struct super_block *sb, struct inode *inode, 
+                              void *h, int force_sync)
 {
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
+        struct fsfilt_operations *cache_fsfilt = S2SMI(sb)->sm_cache_fsfilt;
+        struct super_block *csb = S2CSB(sb); 
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
 
-        cache_inode = I2CI(inode);
+        if (inode)
+                cache_inode = I2CI(inode);
 
         if (cache_fsfilt == NULL)
                 RETURN(rc);
@@ -110,7 +113,7 @@ static int fsfilt_smfs_commit(struct inode *inode, void *h, int force_sync)
         if (!cache_fsfilt->fs_commit)
                 RETURN(-ENOSYS);
 
-        rc = cache_fsfilt->fs_commit(cache_inode, h, force_sync);
+        rc = cache_fsfilt->fs_commit(csb, cache_inode, h, force_sync);
 
         RETURN(rc);
 }
@@ -621,6 +624,14 @@ static int fsfilt_smfs_set_kml_flags(struct inode *inode)
         RETURN(rc);
 }
 
+static int fsfilt_smfs_clear_kml_flags(struct inode *inode)
+{
+        int rc = 0;
+        if (SMFS_DO_REC(S2SMI(inode->i_sb)))
+                SMFS_CLEAN_INODE_REC(inode);
+        RETURN(rc);
+}
+
 static int fsfilt_smfs_set_ost_flags(struct super_block *sb)
 {
         int rc = 0;
@@ -787,6 +798,7 @@ static int fsfilt_smfs_free_extents(struct super_block *sb, ino_t ino,
         OBD_FREE(pbuf, size * (sizeof(struct ldlm_extent)));
         return 0;
 }
+
 static int fsfilt_smfs_write_extents(struct dentry *dentry,
                                      unsigned long from, unsigned long num)
 {
@@ -794,6 +806,17 @@ static int fsfilt_smfs_write_extents(struct dentry *dentry,
 
         if (SMFS_DO_REC(S2SMI(dentry->d_inode->i_sb)))
                 rc = smfs_write_extents(dentry->d_inode, dentry, from, num);
+
+        return rc;
+}
+
+static int fsfilt_smfs_precreate_rec(struct dentry *dentry, int *count, 
+                                     struct obdo *oa)
+{
+        int rc = 0;
+
+        if (SMFS_DO_REC(S2SMI(dentry->d_inode->i_sb)))
+                rc = smfs_rec_precreate(dentry, count, oa);
 
         return rc;
 }
@@ -901,8 +924,10 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_post_setup          = fsfilt_smfs_post_setup,
         .fs_post_cleanup        = fsfilt_smfs_post_cleanup,
         .fs_set_kml_flags       = fsfilt_smfs_set_kml_flags,
+        .fs_clear_kml_flags     = fsfilt_smfs_clear_kml_flags,
         .fs_set_ost_flags       = fsfilt_smfs_set_ost_flags,
         .fs_set_mds_flags       = fsfilt_smfs_set_mds_flags,
+        .fs_precreate_rec       = fsfilt_smfs_precreate_rec,
         .fs_get_reint_log_ctxt  = fsfilt_smfs_get_reint_log_ctxt,
         .fs_send_bio            = fsfilt_smfs_send_bio,
         .fs_set_xattr           = fsfilt_smfs_set_xattr,
