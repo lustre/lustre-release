@@ -154,6 +154,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         LASSERT (rqbd->rqbd_buffer == event->mem_desc.start);
         LASSERT (event->offset == 0);
 
+        memset(request, 0, sizeof(*request));
         request->rq_svc = svc;
         request->rq_obd = obddev;
         request->rq_xid = event->match_bits;
