@@ -23,24 +23,20 @@ struct ec_object {
 };
 
 struct ec_open_object {
-        struct portals_handle    ecoo_handle;
-        atomic_t                 ecoo_refcount;
         struct list_head         ecoo_exp_chain;
         struct ec_object        *ecoo_object;
-        struct obdo              ecoo_oa;
         __u64                    ecoo_cookie;
+        struct obdo              ecoo_oa;
         struct obd_client_handle ecoo_och;
 };
 
 struct ec_lock {
-        struct portals_handle  ecl_handle;
-        atomic_t               ecl_refcount;
         struct list_head       ecl_exp_chain;
+        struct ec_object      *ecl_object;
+        __u64                  ecl_cookie;
         struct lustre_handle   ecl_lock_handle;
         struct ldlm_extent     ecl_extent;
         __u32                  ecl_mode;
-        struct ec_object      *ecl_object;
-        __u64                  ecl_cookie;
 };
 
 #endif
