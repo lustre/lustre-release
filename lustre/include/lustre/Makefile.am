@@ -3,7 +3,8 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-
+if UTILS
 pkginclude_HEADERS = lustre_user.h liblustreapi.h
+endif
 
-EXTRA_DIST = $(pkginclude_HEADERS)
+EXTRA_DIST = lustre_user.h liblustreapi.h
