@@ -290,7 +290,7 @@ llu_lookup2_finish(int flag, struct ptlrpc_request *request,
                 if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
                     llu_i2info(inode)->lli_smd != NULL) {
                         struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                        struct lustre_handle lockh = {0, 0};
+                        struct lustre_handle lockh = {0};
                         struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
                         ldlm_error_t rc;
 
