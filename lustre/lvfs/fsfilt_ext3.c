@@ -72,7 +72,10 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
         int nblocks = EXT3_DATA_TRANS_BLOCKS;
         void *handle;
 
-        LASSERT(current->journal_info == NULL);
+        if (current->journal_info) {
+                CDEBUG(D_INODE, "increasing refcount on %p\n", current->journal_info);
+                goto journal_start;
+        }
 
         switch(op) {
         case FSFILT_OP_CREATE_LOG:
@@ -117,6 +120,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
         }
 
         LASSERT(current->journal_info == desc_private);
+
+ journal_start:
         lock_kernel();
         handle = journal_start(EXT3_JOURNAL(inode), nblocks);
         unlock_kernel();
@@ -262,7 +267,7 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
         rc = journal_stop(handle);
         unlock_kernel();
 
-        LASSERT(current->journal_info == NULL);
+        // LASSERT(current->journal_info == NULL);
         return rc;
 }
 

@@ -353,20 +353,8 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
         *res = handle;
 
         if (logid != NULL) {
-                if (!strcmp(OBT(obd->obd_log_exp->exp_obd)->typ_name,
-                    LUSTRE_MDS_NAME))
-                        dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
-                                             logid->lgl_ogen);
-                else {
-                        oa = obdo_alloc();
-                        if (oa == NULL) 
-                                GOTO(cleanup, rc = -ENOMEM);
-
-                        oa->o_gr = logid->lgl_ogr;
-                        oa->o_id = logid->lgl_oid;
-                        dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
-                                             logid->lgl_ogr);
-                } 
+                dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
+                                             logid->lgl_ogen, logid->lgl_ogr);
 
                 if (IS_ERR(dchild)) {
                         rc = PTR_ERR(dchild);
@@ -412,14 +400,8 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                 if (rc)
                         GOTO(cleanup, rc);
 
-                /* should differentiate mds and ost to choose gen or gr */
-                if (!strcmp(OBT(obd->obd_log_exp->exp_obd)->typ_name,
-                    LUSTRE_MDS_NAME))
-                        dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id,
-                                             oa->o_generation);
-                else 
-                        dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id,
-                                             oa->o_gr);
+                dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id,
+                                             oa->o_generation, oa->o_gr);
 
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
@@ -430,20 +412,10 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
         }
 
-        if (!strcmp(OBT(obd->obd_log_exp->exp_obd)->typ_name, 
-            LUSTRE_MDS_NAME)) {
-                handle->lgh_obd = obd;
-                handle->lgh_id.lgl_ogr = 1;
-                handle->lgh_id.lgl_oid =
-                        handle->lgh_file->f_dentry->d_inode->i_ino;
-                handle->lgh_id.lgl_ogen =
-                        handle->lgh_file->f_dentry->d_inode->i_generation;
-        } else {
-                handle->lgh_obd = obd;
-                handle->lgh_id.lgl_ogr = oa->o_gr;
-                handle->lgh_id.lgl_oid = oa->o_id;
-                handle->lgh_id.lgl_ogen = 0;
-        }
+        handle->lgh_obd = obd;
+        handle->lgh_id.lgl_ogr = 1;
+        handle->lgh_id.lgl_oid = handle->lgh_file->f_dentry->d_inode->i_ino;
+        handle->lgh_id.lgl_ogen = handle->lgh_file->f_dentry->d_inode->i_generation;
  finish:
         if (oa)
                 obdo_free(oa);

@@ -21,7 +21,7 @@ struct obd_ucred {
 };
 
 struct lvfs_callback_ops {
-        struct dentry *(*l_fid2dentry)(__u64 id_ino, __u32 gr_gen, void *data);
+        struct dentry *(*l_fid2dentry)(__u64 id_ino, __u32 gen, __u64 gr, void *data);
 };
 
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
@@ -45,7 +45,7 @@ struct obd_run_ctxt {
 #endif
 
 /* lvfs_common.c */
-struct dentry *lvfs_fid2dentry(struct obd_run_ctxt *, __u64, __u32, void *data);
+struct dentry *lvfs_fid2dentry(struct obd_run_ctxt *, __u64, __u32, __u64 ,void *data);
 
 #ifdef __KERNEL__
 

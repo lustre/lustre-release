@@ -262,7 +262,7 @@ static int log_commit_thread(void *arg)
                         spin_lock(&lcm->lcm_llcd_lock);
                         list_splice(&lcd->lcd_llcd_list, &lcm->lcm_llcd_resend);
                         if (++llcd->llcd_tries < 5) {
-                                CERROR("commit %p failed %dx: rc %d\n",
+                                CERROR("commit %p failed on attempt %d: rc %d\n",
                                        llcd, llcd->llcd_tries, rc);
 
                                 list_add_tail(&llcd->llcd_list,
