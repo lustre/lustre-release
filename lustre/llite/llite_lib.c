@@ -180,6 +180,13 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_free, err = -EINVAL);
         }
 
+        if (proc_lustre_fs_root) {
+                err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
+                                                  osc, mdc);
+                if (err < 0)
+                        CERROR("could not register mount in /proc/lustre");
+        }
+
         err = obd_connect(&sbi->ll_mdc_conn, obd, &sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
@@ -275,13 +282,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
 #endif
         sb->s_root = d_alloc_root(root);
-
-        if (proc_lustre_fs_root) {
-                err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
-                                                  osc, mdc);
-                if (err < 0)
-                        CERROR("could not register mount in /proc/lustre");
-        }
 
 out_dev:
         if (mdc)
