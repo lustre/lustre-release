@@ -673,7 +673,12 @@ int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         fid.id = obj->ioo_id;
         fid.generation = obj->ioo_gr;
         dentry = mds_fid2dentry(mds, &fid, NULL);
-        LASSERT(!IS_ERR(dentry));
+        if (IS_ERR(dentry)) {
+                CERROR("can't get dentry for %lu/%lu: %d\n",
+                       (unsigned long) fid.id,
+                       (unsigned long) fid.generation, (int) PTR_ERR(dentry));
+                GOTO(cleanup, rc = (int) PTR_ERR(dentry));
+        }
 
         if (dentry->d_inode == NULL) {
                 CERROR("trying to BRW to non-existent file "LPU64"\n",
