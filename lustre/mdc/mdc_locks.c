@@ -390,10 +390,8 @@ int mdc_enqueue(struct obd_export *exp,
                 }
 
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
-                        void *replayea;
-                        /* The eadata is opaque; just check that it is
-                         * there.  Eventually, obd_unpackmd() will check
-                         * the contents */
+                        /* The eadata is opaque; just check that it is there.
+                         * Eventually, obd_unpackmd() will check the contents */
                         eadata = lustre_swab_repbuf(req, 2, body->eadatasize,
                                                     NULL);
                         if (eadata == NULL) {
@@ -401,10 +399,17 @@ int mdc_enqueue(struct obd_export *exp,
                                 RETURN (-EPROTO);
                         }
                         if (it->it_op & IT_OPEN) {
-                                replayea = lustre_msg_buf(req->rq_reqmsg, 4, 
-                                                          obddev->u.cli.cl_max_mds_easize);
+                                void *replayea;
+
+                                replayea = lustre_msg_buf(req->rq_reqmsg, 4,
+                                                          body->eadatasize);
                                 LASSERT(replayea);
                                 memcpy(replayea, eadata, body->eadatasize);
+
+                                LASSERT(req->rq_reqmsg->bufcount == 5);
+                                req->rq_reqmsg->buflens[4] = body->eadatasize;
+                                /* If this isn't the last buffer, we might
+                                 * have to shift other data around. */
                         }
                 }
         }
