@@ -85,6 +85,11 @@ void ptlrpc_put_ldlm_hooks(void)
 
 #undef PUT_HOOK
 
+int ptlrpc_ldlm_hooks_referenced(void)
+{
+        return ldlm_hooks_referenced;
+}
+
 __init int ptlrpc_init(void)
 {
         int rc;
@@ -204,6 +209,7 @@ EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
 
 /* ptlrpc_module.c */
 EXPORT_SYMBOL(ptlrpc_put_ldlm_hooks);
+EXPORT_SYMBOL(ptlrpc_ldlm_hooks_referenced);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_upcall);
