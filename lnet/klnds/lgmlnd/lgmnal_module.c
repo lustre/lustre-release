@@ -117,7 +117,6 @@ init_module()
 void cleanup_module()
 {
 
-	CDEBUG(D_INFO, "Interface [%d] Calling shutdown\n", interface);
 	kportal_nal_unregister(LGMNAL);
 	PORTAL_SYMBOL_UNREGISTER(lgmnal_ni);
 	lgmnal_fini();
