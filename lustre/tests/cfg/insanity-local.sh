@@ -14,7 +14,7 @@ PTLDEBUG=${PTLDEBUG:-0x3f0400}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 MOUNT=${MOUNT:-"/mnt/lustre"}
 #CLIENT_UPCALL=${CLIENT_UPCALL:-`pwd`/client-upcall-mdev.sh}
-UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
+UPCALL=${CLIENT_UPCALL:-"DEFAULT"}
 
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 MDSSIZE=${MDSSIZE:-10000} #50000000
