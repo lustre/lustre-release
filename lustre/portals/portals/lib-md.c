@@ -7,19 +7,19 @@
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *  Copyright (c) 2001-2002 Sandia National Laboratories
  *
- *   This file is part of Portals, http://www.sf.net/projects/sandiaportals/
+ *   This file is part of Lustre, http://www.sf.net/projects/lustre/
  *
- *   Portals is free software; you can redistribute it and/or
- *   modify it under the terms of version 2.1 of the GNU Lesser General
- *   Public License as published by the Free Software Foundation.
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
- *   Portals is distributed in the hope that it will be useful,
+ *   Lustre is distributed in the hope that it will be useful,
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Lesser General Public License for more details.
+ *   GNU General Public License for more details.
  *
- *   You should have received a copy of the GNU Lesser General Public
- *   License along with Portals; if not, write to the Free Software
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
@@ -197,7 +197,7 @@ static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
                 eq->eq_refcount++;
 
         /* It's good; let handle2md succeed and add to active mds */
-        lib_initialise_handle (nal, &new->md_lh);
+        lib_initialise_handle (nal, &new->md_lh, PTL_COOKIE_TYPE_MD);
         list_add (&new->md_list, &nal->ni.ni_active_mds);
 
         return PTL_OK;
