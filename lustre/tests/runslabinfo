@@ -1,4 +1,0 @@
-#!/bin/sh
-while sleep 1 ; do
-	egrep "ll_|ldlm|filp|dentry|inode|portals|size-[0-9]* " /proc/slabinfo
-done
