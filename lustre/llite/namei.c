@@ -643,7 +643,7 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,__u32 mode)
         if (rc)
                 GOTO(out, rc);
 
-        err = ext2_delete_entry(de, page);
+        rc = ext2_delete_entry(de, page);
         if (err)
                 goto out;
 
