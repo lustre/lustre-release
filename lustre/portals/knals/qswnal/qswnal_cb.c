@@ -895,6 +895,11 @@ kqswnal_rxhandler(EP_RXD *rxd)
                 return;
         }
 
+        if (!in_interrupt()) {
+                kqswnal_rx (krx);
+                return;
+        }
+
         atomic_inc (&kqswnal_packets_received);
 
         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
