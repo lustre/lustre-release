@@ -36,6 +36,13 @@ int console_loglevel;
 
 /* VFS super_block ops */
 
+#if 0
+int obdfs_brw(struct inode *dir, int rw, struct page *page, int create)
+{
+	return iops(dir)->o_brw(rw, iid(dir), dir, page, create);
+}
+#endif
+
 /* returns the page unlocked, but with a reference */
 int obdfs_readpage(struct file *file, struct page *page)
 {

@@ -44,7 +44,7 @@ int obdfs_check_dir_entry (const char * function, struct inode * dir,
 			   unsigned long offset);
 
 struct obdfs_sb_info {
-	struct obd_conn_info osi_conn_info;
+	struct obd_conn osi_conn;
 	struct super_block *osi_super;
 	struct obd_device *osi_obd;
 	struct obd_ops *osi_ops;     
@@ -66,10 +66,10 @@ static inline struct obd_ops *iops(struct inode *i)
 	return sbi->osi_ops;
 }
 
-static inline int iid(struct inode *i)
+static inline struct obd_conn *iid(struct inode *i)
 {
 	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *) &i->i_sb->u.generic_sbp;
-	return sbi->osi_conn_info.conn_id;
+	return &sbi->osi_conn;
 }
 
 #define NOLOCK 0
@@ -85,8 +85,8 @@ static inline int iid(struct inode *i)
 #ifdef ID
 #warning "*** WARNING redefining ID"
 #else
-#define ID(sb) (((struct obdfs_sb_info *)( & ## sb ## ->u.generic_sbp))->osi_conn_info.conn_id)
-#define IID(inode) (((struct obdfs_sb_info *)( & ## inode->i_sb ## ->u.generic_sbp))->osi_conn_info.conn_id)
+#define ID(sb) (&((struct obdfs_sb_info *)( & ## sb ## ->u.generic_sbp))->osi_conn)
+#define IID(inode) (&((struct obdfs_sb_info *)( & ## inode->i_sb ## ->u.generic_sbp))->osi_conn)
 #endif
 
 #define OBDFS_SUPER_MAGIC 0x4711

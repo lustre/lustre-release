@@ -84,21 +84,16 @@ void obdfs_options(char *options, char **dev, char **vers)
 	char *this_char;
 
 	if (!options)
-		goto out;
+		return;
 
 	for (this_char = strtok (options, ",");
 	     this_char != NULL;
 	     this_char = strtok (NULL, ",")) {
 		CDEBUG(D_SUPER, "this_char %s\n", this_char);
-		if ( (!*dev && (*dev = obdfs_read_opt("device", this_char))) ||
+		if ( (!*dev && (*dev = obdfs_read_opt("device", this_char)))||
 		     (!*vers && (*vers = obdfs_read_opt("version", this_char))) )
 			continue;
 		
-	}
-
- out:
-	if (!*dev) {
-		*dev = "/dev/obd0";
 	}
 }
 
@@ -183,7 +178,8 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	sbi->osi_obd = obddev;
 	sbi->osi_ops = sbi->osi_obd->obd_type->typ_ops;
 	
-        error  = sbi->osi_ops->o_connect(sbi->osi_obd, &sbi->osi_conn_info);
+	sbi->osi_conn.oc_dev = obddev;
+        error  = sbi->osi_ops->o_connect(&sbi->osi_conn);
 	if ( error ) {
 		printk("OBDFS: cannot connect to %s\n", device);
 		goto error;
@@ -193,7 +189,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 
 	sbi->osi_super = sb;
 
-	error = sbi->osi_ops->o_get_info(sbi->osi_conn_info.conn_id, 
+	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
 					 strlen("blocksize"), 
 					 "blocksize", 
 					 &scratch, (void *)&blocksize);
@@ -202,7 +198,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 		goto error;
 	}
 
-	error = sbi->osi_ops->o_get_info(sbi->osi_conn_info.conn_id, 
+	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
 					 strlen("blocksize_bits"), 
 					 "blocksize_bits", 
 					 &scratch, (void *)&blocksize_bits);
@@ -211,7 +207,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 		goto error;
 	}
 
-	error = sbi->osi_ops->o_get_info(sbi->osi_conn_info.conn_id, 
+	error = sbi->osi_ops->o_get_info(&sbi->osi_conn,
 					 strlen("root_ino"), 
 					 "root_ino", 
 					 &scratch, (void *)&root_ino);
@@ -292,12 +288,12 @@ void obdfs_read_inode(struct inode *inode)
 	int error;
 	ENTRY;
 
-	error = IOPS(inode, getattr)(IID(inode), inode->i_ino, inode);
+	error = IOPS(inode, getattr)(IID(inode), inode);
 	if (error) {
 		printk("obdfs_read_inode: obd_getattr fails (%d)\n", error);
 		return;
 	}
-
+	CDEBUG(D_INODE, "ino %ld, COWFL %x\n", inode->i_ino, inode->i_flags & 0x0010000);
 	IDEBUG(inode);
 	inode->i_op = &obdfs_inode_ops;
 	return;
@@ -307,12 +303,12 @@ static void obdfs_write_inode(struct inode *inode)
 {
 	int error;
 	
-	error = IOPS(inode, setattr)(IID(inode), inode->i_ino, inode);
+	error = IOPS(inode, setattr)(IID(inode), inode);
 	if (error) {
 		printk("obdfs_write_inode: obd_setattr fails (%d)\n", error);
 		return;
 	}
-
+	
 	return;
 }
 
@@ -321,7 +317,7 @@ static void obdfs_delete_inode(struct inode *inode)
 	int error;
         ENTRY;
 
-	error = IOPS(inode, destroy)(IID(inode), inode->i_ino);
+	error = IOPS(inode, destroy)(IID(inode), inode);
 	if (error) {
 		printk("obdfs_delete_node: ibd_destroy fails (%d)\n", error);
 		return;
@@ -340,12 +336,14 @@ static int  obdfs_notify_change(struct dentry *de, struct iattr *iattr)
 	inode_to_iattr(inode, &saved_copy);
 
 	inode_setattr(inode, iattr);
-        error = IOPS(inode, setattr)(IID(inode), inode->i_ino, inode);
+        error = IOPS(inode, setattr)(IID(inode), inode);
 	if ( error ) {
 		inode_setattr(inode, &saved_copy);
 		printk("obdfs_notify_change: obd_setattr fails (%d)\n", error);
 		return error;
 	}
+
+	CDEBUG(D_INODE, "inode blocks now %ld\n", inode->i_blocks);
 	EXIT;
         return error;
 }

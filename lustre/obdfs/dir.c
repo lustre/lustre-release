@@ -38,8 +38,8 @@
 #include <linux/locks.h>
 #include <linux/quotaops.h>
 #include <linux/iobuf.h>
-#include <linux/obdfs.h>
 #include <linux/obd_support.h>
+#include <linux/obdfs.h>
 
 #if 0
 static ssize_t obdfs_dir_read (struct file * filp, char * buf,

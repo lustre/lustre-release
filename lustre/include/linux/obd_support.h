@@ -21,7 +21,7 @@ extern int obd_print_entry;
 #define D_PSDEV       1 /* debug information from psdev.c */
 #define D_INODE       2
 #define D_SUPER       4
-#define D_UNUSED3     8
+#define D_SNAP        8
 #define D_UNUSED4    16
 #define D_WARNING    32 /* misc warnings */
 #define D_EXT2       64 /* anything from ext2_debug */
@@ -77,7 +77,7 @@ extern int obd_print_entry;
 		\
 		CDEBUG(D_IOCTL, " ** %s, cmd: %s, off %ld, uptodate: %s, "\
 		       "locked: %s, cnt %d page %p pages %ld** \n", __FUNCTION__,\
-		       cmd, offset, uptodate, locked, count, page, page->mapping->nrpages);\
+		       cmd, offset, uptodate, locked, count, page, (!page->mapping) ? -1 : page->mapping->nrpages);\
 	} else { CDEBUG(D_IOCTL, "** %s, no page\n", __FUNCTION__); }}
 
 
@@ -140,17 +140,12 @@ static inline void inode_cpy(struct inode *dest, struct inode *src)
 	dest->i_flags = src->i_flags;
 	/* allocation of space */
 	dest->i_blocks = src->i_blocks;
-
-	if ( !dest->i_blocks) 
-		memcpy(&dest->u, &src->u, sizeof(src->u));
+	if ( !dest->i_blocks) {
+		CDEBUG(D_IOCTL, "copying inline data: ino %ld\n", dest->i_ino);
+		memcpy(&dest->u.ext2_i.i_data, &src->u.ext2_i.i_data, 
+		       sizeof(src->u.ext2_i.i_data));
+	}
 }
-
-
-
-
-
-
-
 
 
 
