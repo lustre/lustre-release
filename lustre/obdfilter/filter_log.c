@@ -186,7 +186,7 @@ static struct llog_handle *filter_log_create(struct obd_device *obd)
                 goto retry;
         }
 
-        rc = vfs_create(dparent->d_inode, dchild, S_IFREG);
+        rc = vfs_create(dparent->d_inode, dchild, S_IFREG, NULL);
         if (rc) {
                 CERROR("log create failed rc = %d\n", rc);
                 GOTO(out_child, rc);
