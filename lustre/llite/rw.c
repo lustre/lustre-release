@@ -75,12 +75,12 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct io_cb_data *cbd = ll_init_cb();
+        struct brw_cb_data *brw_cbd = ll_init_brw_cb_data();
         struct brw_page pg;
         int err;
         ENTRY;
 
-        if (!cbd)
+        if (!brw_cbd)
                 RETURN(-ENOMEM);
 
         pg.pg = page;
@@ -93,7 +93,7 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
-        err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_io_cb, cbd);
+        err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_brw_cb, brw_cbd);
 
         RETURN(err);
 } /* ll_brw */
@@ -247,7 +247,7 @@ static int ll_commit_write(struct file *file, struct page *page,
         struct brw_page pg;
         int err;
         loff_t size;
-        struct io_cb_data *cbd = ll_init_cb();
+        struct brw_cb_data *cbd = ll_init_brw_cb_data();
         ENTRY;
 
         pg.pg = page;
@@ -267,7 +267,7 @@ static int ll_commit_write(struct file *file, struct page *page,
                pg.off, pg.count);
 
         err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md,
-                      1, &pg, ll_sync_io_cb, cbd);
+                      1, &pg, ll_sync_brw_cb, cbd);
         kunmap(page);
 
         size = pg.off + pg.count;
@@ -287,7 +287,7 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct brw_page *pga;
         int i, rc = 0;
-        struct io_cb_data *cbd;
+        struct brw_cb_data *cbd;
 
         ENTRY;
         if (!lsm || !lsm->lsm_object_id)
@@ -298,7 +298,7 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 RETURN(-EINVAL);
         }
 
-        cbd = ll_init_cb();
+        cbd = ll_init_brw_cb_data();
         if (!cbd)
                 RETURN(-ENOMEM);
 
@@ -320,7 +320,7 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
 
         rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                      ll_i2obdconn(inode), lsm, bufs_per_obdo, pga,
-                     ll_sync_io_cb, cbd);
+                     ll_sync_brw_cb, cbd);
         if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;
 
