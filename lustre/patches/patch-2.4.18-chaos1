@@ -294,7 +294,7 @@ diff -ur kernel-2.4.18/include/linux/blkdev.h kernel-2.4.18.patched/include/linu
 +
 +#define CONFIG_DEV_RDONLY
 +void dev_set_rdonly(kdev_t, int);
-+int dev_Check_rdonly(kdev_t);
++int dev_check_rdonly(kdev_t);
 +void dev_clear_rdonly(int);
  #endif
 diff -ur kernel-2.4.18/include/linux/fs.h kernel-2.4.18.patched/include/linux/fs.h
