@@ -572,7 +572,9 @@ out_del_uuid:
 out_del_conn:
         if (lmd->lmd_nal == SOCKNAL ||
             lmd->lmd_nal == OPENIBNAL ||
-            lmd->lmd_nal == IIBNAL) {
+            lmd->lmd_nal == IIBNAL ||
+            lmd->lmd_nal == VIBNAL ||
+            lmd->lmd_nal == RANAL) {
                 PCFG_INIT(pcfg, NAL_CMD_DEL_PEER);
                 pcfg.pcfg_nal     = lmd->lmd_nal;
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
