@@ -87,7 +87,7 @@ struct mds_client_data {
 struct mds_client_info {
         struct list_head mci_list;
         struct mds_client_data *mci_mcd;
-        int mci_off;
+        loff_t mci_off;
 };
 
 /* mds/mds_reint.c  */

@@ -427,7 +427,151 @@ out:
         return 0;
 }
 
+/* This will be a hash table at some point. */
+int mds_init_client_data(struct mds_obd *mds)
+{
+        if (mds->mds_client_info)
+                LBUG();
+
+        OBD_ALLOC(mds->mds_client_info,
+                  MDS_CLIENT_SLOTS * sizeof(struct mds_client_info));
+
+        if (!mds->mds_client_info)
+                return -ENOMEM;
+
+        return 0;
+}
+
+/* Add client data to the MDS.  This will be a hash at some point. */
+int mds_add_client(struct mds_obd *mds, struct mds_client_data *mcd, loff_t off)
+{
+        int num = mds->mds_client_count;
+
+        if (num >= MDS_CLIENT_SLOTS) {
+                CERROR("too many clients for current MDS config - fix code\n");
+                return -ENOMEM;
+        }
+
+        /* For now we cop-out and just put the clients in a list */
+        mds->mds_client_info[num].mci_mcd = mcd;
+        mds->mds_client_info[num].mci_off = off; /* in last_rcvd on disk */
+
+        mds->mds_client_count++;
+
+        return 0;
+}
+
+int mds_free_client_data(struct mds_obd *mds)
+{
+        struct mds_client_info *mci = mds->mds_client_info;
+        int i;
+
+        if (!mci)
+                RETURN(0);
+
+        for (i = 0; i < mds->mds_client_count; i++, mci++) {
+                OBD_FREE(mci->mci_mcd, sizeof(*mci->mci_mcd));
+                mci->mci_mcd = NULL;
+        }
+
+        OBD_FREE(mds->mds_client_info, MDS_CLIENT_SLOTS * sizeof(*mci));
+        mds->mds_client_info = NULL;
+
+        return 0;
+}
+
+int mds_free_server_data(struct mds_obd *mds)
+{
+        OBD_FREE(mds->mds_server_data, sizeof(*mds->mds_server_data));
+        mds->mds_server_data = NULL;
+
+        return 0;
+}
+
 #define LAST_RCVD "last_rcvd"
+
+int mds_read_last_rcvd(struct mds_obd *mds, struct file *f)
+{
+        struct mds_server_data *msd;
+        struct mds_client_data *mcd = NULL;
+        loff_t fsize = f->f_dentry->d_inode->i_size;
+        loff_t off = 0;
+        __u64 last_rcvd = 0;
+        __u64 last_mount;
+        int cl_off;
+        int rc = 0;
+
+        OBD_ALLOC(msd, sizeof(*msd));
+        if (!msd)
+                RETURN(-ENOMEM);
+        rc = lustre_fread(f, (char *)msd, sizeof(*msd), &off);
+
+        mds->mds_server_data = msd;
+        if (rc == 0) {
+                CERROR("empty MDS %s, new MDS?\n", LAST_RCVD);
+                RETURN(0);
+        } else if (rc != sizeof(*msd)) {
+                CERROR("error reading MDS %s: rc = %d\n", LAST_RCVD, rc);
+                if (rc > 0) {
+                        rc = -EIO;
+                }
+                GOTO(err_msd, rc);
+        }
+
+        last_rcvd = le64_to_cpu(msd->msd_last_rcvd);
+        mds->mds_last_rcvd = last_rcvd;
+        CDEBUG(D_INODE, "got %Ld for server last_rcvd value\n", last_rcvd);
+
+        last_mount = le64_to_cpu(msd->msd_mount_count);
+        mds->mds_mount_count = last_mount;
+        CDEBUG(D_INODE, "got %Ld for server last_mount value\n", last_rcvd);
+
+        for (off = MDS_LR_CLIENT, rc = sizeof(*mcd), cl_off = 0;
+             off <= fsize - sizeof(*mcd) && rc == sizeof(*mcd);
+             cl_off++, off = MDS_LR_CLIENT + cl_off * MDS_LR_SIZE) {
+                if (!mcd)
+                        OBD_ALLOC(mcd, sizeof(*mcd));
+                if (!mcd)
+                        GOTO(err_msd, rc = -ENOMEM);
+
+                rc = lustre_fread(f, (char *)mcd, sizeof(*mcd), &off);
+                if (rc != sizeof(*mcd)) {
+                        CERROR("error reading MDS %s client %d: rc = %d\n",
+                               LAST_RCVD, cl_off, rc);
+                        if (rc > 0)
+                                rc = -EIO;
+                        break;
+                }
+
+                last_rcvd = le64_to_cpu(mcd->mcd_last_rcvd);
+                last_mount = le64_to_cpu(mcd->mcd_mount_count);
+
+                if (last_rcvd &&
+                    last_mount - mcd->mcd_mount_count < MDS_MOUNT_RECOV) {
+                        rc = mds_add_client(mds, mcd, cl_off);
+                        if (rc) {
+                                rc = 0;
+                                break;
+                        }
+                        mcd = NULL;
+                }
+
+                if (last_rcvd > mds->mds_last_rcvd) {
+                        CDEBUG(D_OTHER,
+                               "client at offset %d has last_rcvd = %Ld\n",
+                               cl_off, last_rcvd);
+                        mds->mds_last_rcvd = last_rcvd;
+                }
+        }
+        CDEBUG(D_INODE, "got %Ld for highest last_rcvd value, %d clients\n",
+               mds->mds_last_rcvd, mds->mds_client_count);
+
+        return 0;
+
+err_msd:
+        mds_free_server_data(mds);
+        return rc;
+}
 
 static int mds_prep(struct obd_device *obddev)
 {
@@ -435,8 +579,6 @@ static int mds_prep(struct obd_device *obddev)
         struct mds_obd *mds = &obddev->u.mds;
         struct super_operations *s_ops;
         struct file *f;
-        loff_t off = 0;
-        __u64 mount_count;
         int rc;
 
         push_ctxt(&saved, &mds->mds_ctxt);
@@ -469,42 +611,32 @@ static int mds_prep(struct obd_device *obddev)
                 GOTO(err_pop, rc);
         }
 
-        f = filp_open("mount_count", O_RDWR | O_CREAT, 0644);
-        if (IS_ERR(f)) {
-                rc = PTR_ERR(f);
-                CERROR("cannot open/create mount_count file, rc = %d\n", rc);
-                GOTO(err_pop, rc = PTR_ERR(f));
-        }
-        rc = lustre_fread(f, (char *)&mount_count, sizeof(mount_count), &off);
-        if (rc == 0) {
-                CERROR("empty MDS mount_count, new MDS?\n");
-                /* XXX maybe this should just be a random number? */
-                mds->mds_mount_count = 0;
-        } else if (rc != sizeof(mount_count)) {
-                CERROR("error reading mount_count: rc = %d\n", rc);
-                /* XXX maybe this should just be a random number? */
-                mds->mds_mount_count = 0;
-        } else {
-                mds->mds_mount_count = le64_to_cpu(mount_count);
-        }
-
-        mds->mds_mount_count++;
-        CDEBUG(D_SUPER, "MDS mount_count is %Ld\n",
-               (unsigned long long)mds->mds_mount_count);
-        off = 0;
-        mount_count = cpu_to_le64(mds->mds_mount_count);
-        rc = lustre_fwrite(f, (char *)&mount_count, sizeof(mount_count), &off);
-        if (rc != sizeof(mount_count))
-                CERROR("error writing mount_count: rc = %d\n", rc);
-        rc = filp_close(f, 0);
+        rc = mds_init_client_data(mds);
         if (rc)
-                CERROR("error closing mount_count: rc = %d\n", rc);
+                GOTO(err_pop, rc);
 
-        f = filp_open("last_rcvd", O_RDWR | O_CREAT, 0644);
+        f = filp_open(LAST_RCVD, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(f)) {
                 rc = PTR_ERR(f);
                 CERROR("cannot open/create %s file: rc = %d\n", LAST_RCVD, rc);
-                GOTO(err_pop, rc);
+                GOTO(err_pop, rc = PTR_ERR(f));
+        }
+        if (!S_ISREG(f->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n", LAST_RCVD,
+                       f->f_dentry->d_inode->i_mode);
+                GOTO(err_pop, rc = -ENOENT);
+        }
+
+        rc = mds_fs_journal_data(mds, f->f_dentry->d_inode, f);
+        if (rc) {
+                CERROR("cannot journal data on %s: rc = %d\n", LAST_RCVD, rc);
+                GOTO(err_filp, rc);
+        }
+
+        rc = mds_read_last_rcvd(mds, f);
+        if (rc) {
+                CERROR("cannot read %s: rc = %d\n", LAST_RCVD, rc);
+                GOTO(err_client, rc);
         }
         mds->mds_rcvd_filp = f;
         pop_ctxt(&saved);
@@ -552,6 +684,8 @@ static int mds_prep(struct obd_device *obddev)
 err_svc:
         rpc_unregister_service(mds->mds_service);
         OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
+err_client:
+        mds_free_client_data(mds);
 err_filp:
         if (filp_close(f, 0))
                 CERROR("can't close %s after error\n", LAST_RCVD);
@@ -560,6 +694,47 @@ err_pop:
 
         return rc;
 }
+
+/* Update the server data on disk. */
+int mds_update_server_data(struct mds_obd *mds)
+{
+        struct obd_run_ctxt saved;
+        struct mds_server_data *msd = mds->mds_server_data;
+        loff_t off = 0;
+        int rc;
+
+        msd->msd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
+        msd->msd_mount_count = cpu_to_le64(mds->mds_mount_count);
+
+        CDEBUG(D_SUPER, "MDS mount_count is %Ld\n",
+               (unsigned long long)mds->mds_mount_count);
+        push_ctxt(&saved, &mds->mds_ctxt);
+        rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)msd, sizeof(*msd), &off);
+        pop_ctxt(&saved);
+        if (rc != sizeof(*msd)) {
+                CERROR("error writing MDS server data: rc = %d\n", rc);
+                if (rc > 0)
+                        RETURN(-EIO);
+                RETURN(rc);
+        }
+
+        return 0;
+}
+
+/* Do recovery actions for the MDS */
+static int mds_recover(struct obd_device *obddev)
+{
+        struct mds_obd *mds = &obddev->u.mds;
+        int rc;
+
+        /* This happens at the end when recovery is complete */
+        ++mds->mds_mount_count;
+        rc = mds_update_server_data(mds);
+
+        return rc;
+}
+
+static int mds_cleanup(struct obd_device * obddev);
 
 /* mount the file system (secretly) */
 static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
@@ -608,6 +783,12 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc)
                 GOTO(err_put, rc);
 
+        rc = mds_recover(obddev);
+        if (rc) {
+                mds_cleanup(obddev);
+                RETURN(rc);
+        }
+
         RETURN(0);
 
 err_put:
@@ -646,6 +827,10 @@ static int mds_cleanup(struct obd_device * obddev)
         sb = mds->mds_sb;
         if (!mds->mds_sb)
                 RETURN(0);
+
+        mds_free_client_data(mds);
+        mds_update_server_data(mds);
+        mds_free_server_data(mds);
 
         if (mds->mds_rcvd_filp) {
                 int rc = filp_close(mds->mds_rcvd_filp, 0);
