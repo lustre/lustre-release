@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1979
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42b"}
+# bug number for skipped test: 
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -72,7 +72,7 @@ run_one() {
 	fi
 	log "== test $1: $2"
 	export TESTNAME=test_$1
-	test_$1 || error "test_$1: $?"
+	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
 	pass
 	cd $SAVE_PWD
