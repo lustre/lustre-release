@@ -82,12 +82,12 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
         return (0);
 
  fail_0:
-        obd_disconnect (&cobd->cobd_target);
+        obd_disconnect (&cobd->cobd_target, 0 );
         return (rc);
 }
 
 static int
-cobd_cleanup (struct obd_device *dev, int force)
+cobd_cleanup (struct obd_device *dev, int force, int failover)
 {
         struct cache_obd  *cobd = &dev->u.cobd;
         int                rc;
@@ -95,11 +95,11 @@ cobd_cleanup (struct obd_device *dev, int force)
         if (!list_empty (&dev->obd_exports))
                 return (-EBUSY);
 
-        rc = obd_disconnect (&cobd->cobd_cache);
+        rc = obd_disconnect (&cobd->cobd_cache, failover);
         if (rc != 0)
                 CERROR ("error %d disconnecting cache\n", rc);
 
-        rc = obd_disconnect (&cobd->cobd_target);
+        rc = obd_disconnect (&cobd->cobd_target, failover);
         if (rc != 0)
                 CERROR ("error %d disconnecting target\n", rc);
 
@@ -117,9 +117,9 @@ cobd_connect (struct lustre_handle *conn, struct obd_device *obd,
 }
 
 static int
-cobd_disconnect (struct lustre_handle *conn)
+cobd_disconnect (struct lustre_handle *conn, int failover)
 {
-	int rc = class_disconnect (conn);
+	int rc = class_disconnect (conn, failover);
 
         CERROR ("rc %d\n", rc);
 	return (rc);
