@@ -481,9 +481,6 @@ static int after_reply(struct ptlrpc_request *req)
                 RETURN(-EPROTO);
         }
 
-        /* Store transno in reqmsg for replay. */
-        req->rq_reqmsg->transno = req->rq_transno = req->rq_repmsg->transno;
-
         rc = ptlrpc_check_status(req);
 
         /* Either we've been evicted, or the server has failed for
@@ -499,6 +496,9 @@ static int after_reply(struct ptlrpc_request *req)
 
                 RETURN(rc);
         }
+
+        /* Store transno in reqmsg for replay. */
+        req->rq_reqmsg->transno = req->rq_transno = req->rq_repmsg->transno;
 
         if (req->rq_import->imp_replayable) {
                 spin_lock_irqsave(&imp->imp_lock, flags);
