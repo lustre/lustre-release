@@ -41,6 +41,8 @@ command_t cmdlist[] = {
           "dev <device> open available snap device\n"},
         {"add", snap_snap_add, 0, 
           "add [table_no] <snap_name> add snapshot to the device\n"},
+        {"del", snap_snap_del, 0,
+          "del [table_no] <snap_name> del snapshot to the device\n"},
         {"snap_list", snap_snap_list, 0, 
           "snap_list [table_no] list all the snapshots on the device\n"},
         

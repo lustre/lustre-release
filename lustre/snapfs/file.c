@@ -48,11 +48,11 @@ static int copy_back_page(struct inode *dst,
 	int    err = 0;
 	ENTRY;
 
-	index = start >> PAGE_CACHE_SHIFT;
+	offset = (start & (PAGE_CACHE_SIZE -1)); /* Within page */
 	bytes = end - start;
-	offset = start & PAGE_CACHE_MASK;
+        index = start >> PAGE_CACHE_SHIFT;
 
-	if (!has_pages(src, index)) 
+	if (!has_pages(src, index) || bytes > 4096) 
 		RETURN(0);
 
 	cache = snap_find_cache(src->i_dev);
@@ -89,13 +89,13 @@ static int copy_back_page(struct inode *dst,
 	}	
 	kaddr_dst = kmap(dst_page);
 
-	err = c_aops->prepare_write(NULL, dst_page, offset, bytes);
+	err = c_aops->prepare_write(NULL, dst_page, offset, offset + bytes);
 	if (err) 
 		goto unlock_dst_page; 
 	memcpy(kaddr_dst, kaddr_src, PAGE_CACHE_SIZE);
 	flush_dcache_page(dst_page);
 
-	err = c_aops->commit_write(NULL, dst_page, offset, bytes);
+	err = c_aops->commit_write(NULL, dst_page, offset, offset + bytes);
 	if (err) 
 		goto unlock_dst_page; 
 	err = 1;
@@ -221,7 +221,7 @@ static int currentfs_readpage(struct file *file, struct page *page)
 	
 	c_aops = filter_c2cfaops(cache->cache_filter);
 
-	block = page->index >> inode->i_sb->s_blocksize_bits;
+	block = (page->index << PAGE_CACHE_SHIFT) >> inode->i_sb->s_blocksize_bits;
 
 	/* if there is a block in the cache, return the cache readpage */
 	if(c_aops->bmap(inode->i_mapping, block) ) {
