@@ -395,11 +395,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		if (!obddev->obd_type)
 			return -ENODEV;
 
-		if (!obddev->u.sim.sim_sb || !obddev->u.sim.sim_sb->s_dev) {
+		if (!obddev->u.ext2.ext2_sb || !obddev->u.ext2.ext2_sb->s_dev) {
 			CDEBUG(D_IOCTL, "fatal: device not initialized.\n");
 			err = -EINVAL;
 		} else {
-			if ((err = fsync_dev(obddev->u.sim.sim_sb->s_dev)))
+			if ((err = fsync_dev(obddev->u.ext2.ext2_sb->s_dev)))
 				CDEBUG(D_IOCTL, "sync: fsync_dev failure\n");
 			else
 				CDEBUG(D_IOCTL, "sync: success\n");
@@ -420,7 +420,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return -ENODEV;
 
 
-		if (!obddev->u.sim.sim_sb) {
+		if (!obddev->u.ext2.ext2_sb) {
 			CDEBUG(D_IOCTL, "fatal: device not initialized.\n");
 			return put_user(-EINVAL, (int *) arg);
 		}
@@ -596,7 +596,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		copy_from_user(&prealloc, (int *)arg,
 			       sizeof(struct oic_prealloc_s));
 
-		if (!obddev->u.sim.sim_sb || !obddev->u.sim.sim_sb->s_dev) {
+		if (!obddev->u.ext2.ext2_sb || !obddev->u.ext2.ext2_sb->s_dev) {
 			CDEBUG(D_IOCTL, "fatal: device not initialized.\n");
 			return -EINVAL;
 		}

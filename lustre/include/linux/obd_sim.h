@@ -1,8 +1,8 @@
 #ifndef _OBD_SIM
 #define _OBD_SIM
 
-struct sim_obd {
-	struct super_block * sim_sb;
+struct ext2_obd {
+	struct super_block * ext2_sb;
 };
 
 
@@ -11,7 +11,7 @@ extern struct obdfs_sb_info *obd_sbi;
 extern struct file_operations *obd_fso;
 
 /* obd_sim.c */
-extern struct obd_ops sim_obd_ops;
+extern struct obd_ops ext2_obd_ops;
 inline long ext2_block_map (struct inode * inode, long block);
 
 /* balloc.c */

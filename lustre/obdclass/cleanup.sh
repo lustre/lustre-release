@@ -8,6 +8,6 @@ cleanup
 quit
 EOF
 
-rmmod obdsim
+rmmod obdext2
 rmmod obdclass
 

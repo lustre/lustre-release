@@ -6,8 +6,8 @@
 #define SNAP_MAX  8 /* must fit in "u" area of struct inode */
 struct snap_obd_data {
 	int snap_dev;             /* which device contains the data */
-	unsigned int snap_no;    /* which snapshot are we accessing */
-	unsigned int snap_count; /* how many snapshots exist */
+	unsigned int snap_no;     /* which snapshot are we accessing */
+	unsigned int snap_count;  /* how many snapshots exist */
 	time_t snap_times[SNAP_MAX];
 };
 

@@ -39,17 +39,14 @@ int console_loglevel;
 /* returns the page unlocked, but with a reference */
 int obdfs_readpage(struct file *file, struct page *page)
 {
-        struct obdfs_sb_info *sbi;
-	struct super_block *sb = file->f_dentry->d_inode->i_sb;
+	struct inode *inode = file->f_dentry->d_inode;
 	int rc;
 
         ENTRY;
 
 	/* XXX flush stuff */
-	sbi = sb->u.generic_sbp;
 	PDEBUG(page, "READ");
-	rc =  sbi->osi_ops->o_brw(READ, sbi->osi_conn_info.conn_id, 
-		      file->f_dentry->d_inode, page, 0);
+	rc =  iops(inode)->o_brw(READ, iid(inode),inode, page, 0);
 	if (rc == PAGE_SIZE ) {
 		SetPageUptodate(page);
 		UnlockPage(page);
@@ -73,14 +70,11 @@ int obdfs_readpage(struct file *file, struct page *page)
 int obdfs_write_one_page(struct file *file, struct page *page, unsigned long offset, unsigned long bytes, const char * buf)
 {
 	long status;
-        struct obdfs_sb_info *sbi = file->f_dentry->d_inode->i_sb->u.generic_sbp;
+        struct inode *inode = file->f_dentry->d_inode;
 
 	ENTRY;
 	if ( !Page_Uptodate(page) ) {
-		status =  sbi->osi_ops->o_brw(READ, 
-					      sbi->osi_conn_info.conn_id, 
-					      file->f_dentry->d_inode, 
-					      page, 1);
+		status =  iops(inode)->o_brw(READ, iid(inode), inode, page, 1);
 		if (status == PAGE_SIZE ) {
 			SetPageUptodate(page);
 		} else { 
@@ -109,15 +103,14 @@ int obdfs_write_one_page(struct file *file, struct page *page, unsigned long off
 /* returns the page unlocked, but with a reference */
 int obdfs_writepage(struct file *file, struct page *page)
 {
-        struct obdfs_sb_info *sbi = file->f_dentry->d_inode->i_sb->u.generic_sbp;
+        struct inode *inode = file->f_dentry->d_inode;
 	int rc;
 
         ENTRY;
 	PDEBUG(page, "WRITEPAGE");
 	/* XXX flush stuff */
 
-	rc = sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-		      file->f_dentry->d_inode, page, 1);
+	rc = iops(inode)->o_brw(WRITE, iid(inode), inode, page, 1);
 
 	SetPageUptodate(page);
 	PDEBUG(page,"WRITEPAGE");
@@ -146,14 +139,11 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	struct page *page_cache;
 	struct page ** hash;
 	struct page * page;
-	struct obdfs_sb_info *sbi;
-	struct super_block *sb = inode->i_sb;
 	int rc;
 
         ENTRY;
 
 	offset = offset & PAGE_CACHE_MASK;
-	sbi = sb->u.generic_sbp;
 	CDEBUG(D_INODE, "\n");
 	
 	page = NULL;
@@ -202,8 +192,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 
 
 
-	rc = sbi->osi_ops->o_brw(READ, sbi->osi_conn_info.conn_id, 
-				    inode, page, create);
+	rc = iops(inode)->o_brw(READ, iid(inode), inode, page, create);
 	if ( rc != PAGE_SIZE ) {
 		SetPageError(page);
 		UnlockPage(page);
@@ -222,7 +211,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 struct file_operations obdfs_file_ops = {
 	NULL,			/* lseek - default */
 	generic_file_read,	/* read */
-	obdfs_file_write,     /* write - bad */
+	obdfs_file_write,       /* write - bad */
         obdfs_readdir,	        /* readdir */
 	NULL,			/* poll - default */
 	NULL,	                /* ioctl */

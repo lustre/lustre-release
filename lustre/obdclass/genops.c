@@ -1,5 +1,5 @@
 /*
- *  linux/fs/sim_obd/sim_obd.c
+ *  linux/fs/ext2_obd/sim_obd.c
  *
  * These are the only exported functions; they provide the simulated object-
  * oriented disk.

@@ -47,7 +47,9 @@ struct obdfs_sb_info {
 	struct obd_conn_info osi_conn_info;
 	struct super_block *osi_super;
 	struct obd_device *osi_obd;
-	struct obd_ops *osi_ops;
+	struct obd_ops *osi_ops;     
+	ino_t           osi_rootino; /* which root inode */
+	int             osi_minor;   /* minor of /dev/obdX */
 };
 
 void obdfs_sysctl_init(void);
@@ -60,13 +62,32 @@ extern struct inode_operations obdfs_inode_ops;
 
 static inline struct obd_ops *iops(struct inode *i)
 {
-	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *) i->i_sb->u.generic_sbp;
+	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *) &i->i_sb->u.generic_sbp;
 	return sbi->osi_ops;
+}
+
+static inline int iid(struct inode *i)
+{
+	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *) &i->i_sb->u.generic_sbp;
+	return sbi->osi_conn_info.conn_id;
 }
 
 #define NOLOCK 0
 #define LOCKED 1
 
+#ifdef OPS
+#warning "*** WARNING redefining OPS"
+#else
+#define OPS(sb,op) ((struct obdfs_sb_info *)(& ## sb ## ->u.generic_sbp))->osi_ops->o_ ## op
+#define IOPS(inode,op) ((struct obdfs_sb_info *)(& ## inode->i_sb ## ->u.generic_sbp))->osi_ops->o_ ## op
+#endif
+
+#ifdef ID
+#warning "*** WARNING redefining ID"
+#else
+#define ID(sb) (((struct obdfs_sb_info *)( & ## sb ## ->u.generic_sbp))->osi_conn_info.conn_id)
+#define IID(inode) (((struct obdfs_sb_info *)( & ## inode->i_sb ## ->u.generic_sbp))->osi_conn_info.conn_id)
+#endif
 
 #define OBDFS_SUPER_MAGIC 0x4711
 

@@ -40,7 +40,7 @@ struct obd_device {
 	unsigned long obd_gen_prealloc_quota;
 	struct list_head obd_gen_clients;
 	union {
-		struct sim_obd sim;
+		struct ext2_obd ext2;
 		struct raid1_obd raid1;
 		struct snap_obd snap;
 		struct rpc_obd rpc;

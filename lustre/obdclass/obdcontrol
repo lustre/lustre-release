@@ -72,15 +72,9 @@ use Term::ReadLine;
 use IO::Handle;
 
 
-my ($device, $filesystem, $file);
-# startup options (I'll replace these when I have some to replace with)
-GetOptions("f!" => \$file, "device=s" => \$device, "fs=s" => $filesystem) || die "Getoptions";
+my ($file);
 
-# genuine new simulated OBD device
-$device = "/dev/obd0" unless $device;
-# object store in the ext2 formatted block device
-$filesystem = "/dev/loop0" unless $filesystem;
-
+GetOptions("f!" => \$file, "device=s" => \$::device, "fs=s" => $::filesystem) || die "Getoptions";
 
 
 # get a console for the app
@@ -90,7 +84,9 @@ my $command;
 my $arg;
 
 my %commands =
-    ('create' => {func => "Create", doc => "create: creates a new inode"},
+    ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
+     'filesystem' => {func => "Filesystem", doc => "filesystem <dev>: partition for direct OBD device"},
+     'create' => {func => "Create", doc => "create: creates a new inode"},
      'attach' => {func => "Attach", doc => "format type [adapter bus tid lun]"},
      'format' => {func => "Format", doc => "format type adapter bus tid lun size"},
      'partition' => {func => "Partition", doc => "partition type adapter bus tid lun partition size"},
@@ -118,16 +114,13 @@ my %commands =
 #
 my @jcm_cmd_list = keys %commands;
 
-#------------------------------------------------------------------------------
-# Open the device, as we need an FD for the ioctl
-sysopen(DEV_OBD, $device, 0) || die "Cannot open $device";
-
-if (!defined($::st = stat($filesystem))) {
-    die "Unable to stat $filesystem.\n";
-}
-
 my $term, $attribs;
 
+
+# Get going....
+
+Device($::device);
+Filesystem($::filesystem);
 if ( $file ) {
 	while ( <STDIN> ) {
 	    print $_;
@@ -142,6 +135,7 @@ if ( $file ) {
     
     # make sure stdout is not buffered
     STDOUT->autoflush(1);
+
 
     # Get on with the show
     process_line();
@@ -200,6 +194,31 @@ sub execute_line {
     # Call the function.
     return (&{$commands{$cmd}->{func}}(@arg));
 }
+
+# set the object store in the ext2 formatted block device
+sub Filesystem {
+    my $filesystem = shift;
+    $filesystem = "/dev/loop0" unless $filesystem;
+    
+    $::filesystem = $filesystem;
+    if (!defined($::st = stat($filesystem))) {
+	die "Unable to stat $filesystem.\n";
+    }
+}
+
+# select the OBD device we talk to
+sub Device {
+    my $device = shift;
+
+    if (! $device ) {
+	$device = "/dev/obd0";
+    }
+    $::device = $device;
+    # Open the device, as we need an FD for the ioctl
+    sysopen(DEV_OBD, $device, 0) || die "Cannot open $device";
+
+}
+
 
 
 sub Attach {
@@ -273,9 +292,9 @@ sub Setup {
     my $data;
     my $datalen = 0;
     
-    $type = "sim_obd" unless $type;
+    $type = "ext2_obd" unless $type;
 
-    if ( $type eq "sim_obd" ) {
+    if ( $type eq "ext2_obd" ) {
 	my $dev = shift;
 	$dev = $::st->rdev() unless $dev;
 	$data = pack("i", $dev);

@@ -455,16 +455,14 @@ int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
 	int err = -EIO;
-	struct obdfs_sb_info *sbi;
 	ino_t ino;
 
         ENTRY;
 
-	sbi = dir->i_sb->u.generic_sbp;
 	/*
 	 * N.B. Several error exits in ext2_new_inode don't set err.
 	 */
-	ino = sbi->osi_ops->o_create(sbi->osi_conn_info.conn_id, 0, &err);
+	ino = iops(dir)->o_create(iid(dir), 0, &err);
 	if ( err ) 
 		return err;
 	err = -EIO;
@@ -489,8 +487,7 @@ int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 	de->inode = cpu_to_le32(inode->i_ino);
 	ext2_set_de_type(dir->i_sb, de, S_IFREG);
 	dir->i_version = ++event;
-	sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-			    dir, page, 0);
+	iops(dir)->o_brw(WRITE, iid(dir), dir, page, 0);
 	UnlockPage(page);
 #if 0
 	if (IS_SYNC(dir)) {
@@ -510,17 +507,15 @@ int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
 	int err = -EIO;
-	struct obdfs_sb_info *sbi;
 
 	ino_t ino;
 
         ENTRY;
 
-	sbi = dir->i_sb->u.generic_sbp;
 	/*
 	 * N.B. Several error exits in ext2_new_inode don't set err.
 	 */
-	ino = sbi->osi_ops->o_create(sbi->osi_conn_info.conn_id, 0, &err);
+	ino = iops(dir)->o_create(iid(dir), 0, &err);
 	if ( ino == -1 ) 
 		return -1;
 	inode =  iget(dir->i_sb, ino);
@@ -536,8 +531,7 @@ int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 	dir->i_version = ++event;
 	ext2_set_de_type(dir->i_sb, de, inode->i_mode);
 	mark_inode_dirty(inode);
-	sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-			    dir, page, 0);
+	iops(dir)->o_brw(WRITE, iid(dir), dir, page, 0);
 	UnlockPage(page);
 
 #if 0
@@ -564,19 +558,17 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	struct inode * child;
 	struct page *page, *child_page;
 	struct ext2_dir_entry_2 * de;
-	struct obdfs_sb_info *sbi;
 	int err;
 	ino_t ino;
 
 	ENTRY;
-	sbi = dir->i_sb->u.generic_sbp;
 
 	err = -EMLINK;
 	if (dir->i_nlink >= EXT2_LINK_MAX)
 		goto out;
 
 	err = -EIO;
-	ino = iops(dir)->o_create(sbi->osi_conn_info.conn_id, 0, &err);
+	ino = iops(dir)->o_create(iid(dir), 0, &err);
 	if ( ino == -1 ) 
 		return -1;
 	child =  iget(dir->i_sb, ino);
@@ -611,7 +603,7 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	strcpy (de->name, "..");
 	ext2_set_de_type(dir->i_sb, de, S_IFDIR);
 	
-	iops(dir)->o_brw(WRITE, sbi->osi_conn_info.conn_id, child, child_page, 1);
+	iops(dir)->o_brw(WRITE, iid(dir), child, child_page, 1);
 	UnlockPage(child_page);
 	page_cache_release(child_page);
 
@@ -640,7 +632,7 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	dir->i_nlink++;
 	dir->u.ext2_i.i_flags &= ~EXT2_BTREE_FL;
 	mark_inode_dirty(dir);
-	iops(dir)->o_brw(WRITE, sbi->osi_conn_info.conn_id, dir, page, 1);
+	iops(dir)->o_brw(WRITE, iid(dir), dir, page, 1);
 	UnlockPage(page);
 	page_cache_release(page);
 	d_instantiate(dentry, child);
@@ -731,10 +723,8 @@ int obdfs_rmdir (struct inode * dir, struct dentry *dentry)
 	struct inode * inode;
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
-	struct obdfs_sb_info *sbi;
 
         ENTRY;
-	sbi = dir->i_sb->u.generic_sbp;
 
 	retval = -ENOENT;
 	page = obdfs_find_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, LOCKED);
@@ -756,7 +746,7 @@ int obdfs_rmdir (struct inode * dir, struct dentry *dentry)
 	dir->i_version = ++event;
 	if (retval)
 		goto end_rmdir;
-	sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, dir, page, 0);
+	iops(dir)->o_brw(WRITE, iid(dir), dir, page, 0);
 	UnlockPage(page);
 #if 0
 	if (IS_SYNC(dir)) {
@@ -791,10 +781,8 @@ int obdfs_unlink(struct inode * dir, struct dentry *dentry)
 	struct inode * inode;
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
-	struct obdfs_sb_info *sbi;
 
         ENTRY;
-	sbi = dir->i_sb->u.generic_sbp;
 
 	retval = -ENOENT;
 	page = obdfs_find_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, LOCKED);
@@ -818,7 +806,7 @@ int obdfs_unlink(struct inode * dir, struct dentry *dentry)
 	if (retval)
 		goto end_unlink;
 	dir->i_version = ++event;
-	sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, dir, page, 0);
+	iops(dir)->o_brw(WRITE, iid(dir), dir, page, 0);
 	UnlockPage(page);
 #if 0
 	if (IS_SYNC(dir)) {
@@ -850,16 +838,14 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	char * link;
 	int i, l, err = -EIO;
 	char c;
-	struct obdfs_sb_info *sbi;
 	ino_t ino;
 
         ENTRY;
 
-	sbi = dir->i_sb->u.generic_sbp;
 	/*
 	 * N.B. Several error exits in ext2_new_inode don't set err.
 	 */
-	ino = sbi->osi_ops->o_create(sbi->osi_conn_info.conn_id, 0, &err);
+	ino = iops(dir)->o_create(iid(dir), 0, &err);
 	if ( ino == -1 ) 
 		return -1;
 	inode =  iget(dir->i_sb, ino);
@@ -894,8 +880,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 		link[i++] = c;
 	link[i] = 0;
 	if (name_page) {
-		sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-				    inode, name_page, 1);
+		iops(inode)->o_brw(WRITE, iid(inode), inode, name_page, 1);
 		PDEBUG(name_page, "symlink");
 		UnlockPage(name_page);
 		page_cache_release(name_page);
@@ -909,8 +894,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	de->inode = cpu_to_le32(inode->i_ino);
 	ext2_set_de_type(dir->i_sb, de, S_IFLNK);
 	dir->i_version = ++event;
-	sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-			    dir, page, 1);
+	iops(dir)->o_brw(WRITE, iid(dir), dir, page, 1);
 	UnlockPage(page);
 #if 0
 	if (IS_SYNC(dir)) {
@@ -937,10 +921,8 @@ int obdfs_link (struct dentry * old_dentry,
 	struct ext2_dir_entry_2 * de;
 	struct page *page;
 	int err;
-	struct obdfs_sb_info *sbi;
 
         ENTRY;
-	sbi = dir->i_sb->u.generic_sbp;
 
 	if (S_ISDIR(inode->i_mode))
 		return -EPERM;
@@ -955,8 +937,7 @@ int obdfs_link (struct dentry * old_dentry,
 	de->inode = cpu_to_le32(inode->i_ino);
 	ext2_set_de_type(dir->i_sb, de, inode->i_mode);
 	dir->i_version = ++event;
-	sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-			    dir, page, 0);
+	iops(dir)->o_brw(WRITE, iid(dir), dir, page, 0);
 	UnlockPage(page);
 
 #if 0
@@ -989,10 +970,8 @@ int obdfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 	struct page * old_page, * new_page, * dir_page;
 	struct ext2_dir_entry_2 * old_de, * new_de;
 	int retval;
-	struct obdfs_sb_info *sbi;
 
         ENTRY;
-	sbi = old_dir->i_sb->u.generic_sbp;
 
 	new_page = dir_page = NULL;
 
@@ -1076,8 +1055,7 @@ int obdfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 	mark_inode_dirty(old_dir);
 	if (dir_page) {
 		PARENT_INO(page_address(dir_page)) = le32_to_cpu(new_dir->i_ino);
-		sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-			    old_inode, dir_page, 0);
+		iops(old_inode)->o_brw(WRITE, iid(old_inode), old_inode, dir_page, 0);
 		old_dir->i_nlink--;
 		mark_inode_dirty(old_dir);
 		if (new_inode) {
@@ -1096,8 +1074,7 @@ int obdfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 		page_cache_release(old_page);
 		old_page = obdfs_getpage(old_dir, offset, 0, LOCKED);
 		CDEBUG(D_INODE, "old_page at %p\n", old_page);
-		sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-				    old_dir, old_page, 0);
+		iops(old_dir)->o_brw(WRITE, iid(old_dir), old_dir, old_page,0);
 	}
 #if 0
 	if (IS_SYNC(old_dir)) {
@@ -1105,8 +1082,7 @@ int obdfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 		wait_on_buffer (old_bh);
 	}
 #endif
-	sbi->osi_ops->o_brw(WRITE, sbi->osi_conn_info.conn_id, 
-			    new_dir, new_page, 0);
+	iops(new_dir)->o_brw(WRITE, iid(new_dir), new_dir, new_page, 0);
 #if 0
 	if (IS_SYNC(new_dir)) {
 		ll_rw_block (WRITE, 1, &new_bh);

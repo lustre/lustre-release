@@ -4,7 +4,7 @@
 #include <linux/malloc.h>
 #include <linux/vmalloc.h>
 
-#define SIM_OBD_DEBUG
+#define EXT2_OBD_DEBUG
 
 
 #define MIN(a,b) (((a)<(b)) ? (a): (b))
@@ -20,7 +20,7 @@ extern int obd_print_entry;
 /* debugging masks */
 #define D_PSDEV       1 /* debug information from psdev.c */
 #define D_INODE       2
-#define D_UNUSED2     4
+#define D_SUPER       4
 #define D_UNUSED3     8
 #define D_UNUSED4    16
 #define D_WARNING    32 /* misc warnings */
@@ -32,7 +32,7 @@ extern int obd_print_entry;
 #define D_BLOCKS   2048 /* ext2 block allocation */
 #define D_RPC      4096 /* ext2 block allocation */
  
-#ifdef SIM_OBD_DEBUG
+#ifdef EXT2_OBD_DEBUG
 #define CDEBUG(mask, format, a...)					\
         do {								\
 	if (obd_debug_level & mask) {					\
@@ -48,13 +48,13 @@ extern int obd_print_entry;
         if (obd_print_entry)						      \
                 printk("Process %d leaving %s [%d]\n", current->pid, __FUNCTION__, __LINE__)
 
-#else /* SIM_OBD_DEBUG */
+#else /* EXT2_OBD_DEBUG */
 
 #       define CDEBUG ;
 #       define ENTRY ;
 #       define EXIT ;
 
-#endif /* SIM_OBD_DEBUG */
+#endif /* EXT2_OBD_DEBUG */
 
 
 #define CMD(cmd) (( cmd == READ ) ? "read" : "write")
