@@ -294,7 +294,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
         req->rq_status = obd_preprw(cmd, &conn, objcount,
-                                    tmp1, niocount, tmp2, local_nb);
+                                    tmp1, niocount, tmp2, local_nb, NULL);
 
         if (req->rq_status)
                 GOTO(out_local, 0);
@@ -323,7 +323,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
         req->rq_status = obd_commitrw(cmd, &conn, objcount,
-                                      tmp1, niocount, local_nb);
+                                      tmp1, niocount, local_nb, NULL);
 
 out_bulk:
         ptlrpc_free_bulk(desc);
@@ -333,41 +333,23 @@ out:
         RETURN(rc);
 }
 
-static int ost_commit_page(struct obd_conn *conn, struct page *page)
-{
-        struct obd_ioobj obj;
-        struct niobuf_local buf;
-        int rc;
-        ENTRY;
-
-        memset(&buf, 0, sizeof(buf));
-        memset(&obj, 0, sizeof(obj));
-
-        buf.page = page;
-        obj.ioo_bufcnt = 1;
-
-        rc = obd_commitrw(OBD_BRW_WRITE, conn, 1, &obj, 1, &buf);
-        RETURN(rc);
-}
-
 static int ost_brw_write_cb(struct ptlrpc_bulk_page *bulk)
 {
-        void *journal_save;
+        struct obd_ioobj obj;
+        struct niobuf_local lnb;
         int rc;
         ENTRY;
 
-        /* Restore the filesystem journal context when we do the commit.
-         * This is needed for ext3 and reiserfs, but can't really hurt
-         * other filesystems.
-         */
-        journal_save = current->journal_info;
-        current->journal_info = bulk->b_desc->b_journal_info;
-        CDEBUG(D_BUFFS, "journal_info: saved %p->%p, restored %p\n", current,
-               journal_save, bulk->b_desc->b_journal_info);
-        rc = ost_commit_page(&bulk->b_desc->b_conn, bulk->b_page);
-        current->journal_info = journal_save;
-        CDEBUG(D_BUFFS, "journal_info: restored %p->%p\n", current,
-               journal_save);
+        memset(&lnb, 0, sizeof(lnb));
+        memset(&obj, 0, sizeof(obj));
+
+        lnb.page = bulk->b_page;
+        lnb.dentry = bulk->b_dentry;
+        lnb.flags = bulk->b_flags;
+        obj.ioo_bufcnt = 1;
+
+        rc = obd_commitrw(OBD_BRW_WRITE, &bulk->b_desc->b_conn, 1, &obj, 1,
+                          &lnb, bulk->b_desc->b_desc_private);
         if (rc)
                 CERROR("ost_commit_page failed: %d\n", rc);
 
@@ -391,6 +373,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         struct ost_body *body;
         int cmd, rc, i, j, objcount, niocount, size[2] = {sizeof(*body)};
         void *tmp1, *tmp2, *end2;
+        void *desc_priv = NULL;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -428,7 +411,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
         req->rq_status = obd_preprw(cmd, &conn, objcount,
-                                    tmp1, niocount, tmp2, local_nb);
+                                    tmp1, niocount, tmp2, local_nb, &desc_priv);
         if (req->rq_status)
                 GOTO(out_free, rc = 0); /* XXX is this correct? */
 
@@ -437,12 +420,8 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 GOTO(fail_preprw, rc = -ENOMEM);
         desc->b_cb = ost_brw_write_finished_cb;
         desc->b_portal = OSC_BULK_PORTAL;
+        desc->b_desc_private = desc_priv;
         memcpy(&(desc->b_conn), &conn, sizeof(conn));
-
-        /* Save journal context for commit callbacks */
-        CDEBUG(D_BUFFS, "journal_info: saved %p->%p\n", current,
-               current->journal_info);
-        desc->b_journal_info = current->journal_info;
 
         for (i = 0, lnb = local_nb; i < niocount; i++, lnb++) {
                 struct ptlrpc_service *srv = req->rq_obd->u.ost.ost_service;
@@ -456,8 +435,10 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 bulk->b_xid = srv->srv_xid++;
                 spin_unlock(&srv->srv_lock);
 
-                bulk->b_buf = (void *)(unsigned long)lnb->addr;
+                bulk->b_buf = lnb->addr;
                 bulk->b_page = lnb->page;
+                bulk->b_flags = lnb->flags;
+                bulk->b_dentry = lnb->dentry;
                 bulk->b_buflen = PAGE_SIZE;
                 bulk->b_cb = ost_brw_write_cb;
 
@@ -467,7 +448,6 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         }
 
         rc = ptlrpc_register_bulk(desc);
-        current->journal_info = NULL; /* kind of scary */
         if (rc)
                 GOTO(fail_bulk, rc);
 
@@ -479,8 +459,8 @@ out:
 
 fail_bulk:
         ptlrpc_free_bulk(desc);
-        /* FIXME: how do we undo the preprw? */
 fail_preprw:
+        /* FIXME: how do we undo the preprw? */
         goto out_free;
 }
 
@@ -569,6 +549,13 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
                 OBD_FAIL_RETURN(OBD_FAIL_OST_PUNCH_NET, 0);
                 rc = ost_punch(ost, req);
                 break;
+#if 0
+        case OST_STATFS:
+                CDEBUG(D_INODE, "statfs\n");
+                OBD_FAIL_RETURN(OBD_FAIL_OST_STATFS_NET, 0);
+                rc = ost_statfs(ost, req);
+                break;
+#endif
         default:
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(svc, req);

@@ -246,10 +246,11 @@ struct obd_ops {
         int (*o_preprw)(int cmd, struct obd_conn *conn,
                         int objcount, struct obd_ioobj *obj,
                         int niocount, struct niobuf_remote *remote,
-                        struct niobuf_local *local);
+                        struct niobuf_local *local, void **desc_private);
         int (*o_commitrw)(int cmd, struct obd_conn *conn,
                           int objcount, struct obd_ioobj *obj,
-                          int niocount, struct niobuf_local *local);
+                          int niocount, struct niobuf_local *local,
+                          void *desc_private);
         int (*o_enqueue)(struct obd_conn *conn, struct ldlm_namespace *ns,
                          struct ldlm_handle *parent_lock, __u64 *res_id,
                          __u32 type, struct ldlm_extent *, __u32 mode,

@@ -54,7 +54,7 @@ patch-stamp: $(EXTNP)
 		patch -p0 < $(srcdir)/extN.patch-$(RELEASE); \
 	else \
 		list='$(EXTNP)'; for p in $$list; do                        \
-		sed $(SUB) $(srcdir)/$$p | (cd $(top_srcdir); patch -p1);   \
+		sed $(SUB) $(srcdir)/$$p|(cd $(top_srcdir);patch -p1)||exit -1;\
 		done;  \
 		echo "It is OK if the following patch fails";		    \
 		(cd $(top_srcdir); patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff; \

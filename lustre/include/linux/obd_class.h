@@ -309,27 +309,28 @@ static inline int obd_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 static inline int obd_preprw(int cmd, struct obd_conn *conn,
                              int objcount, struct obd_ioobj *obj,
                              int niocount, struct niobuf_remote *remote,
-                             struct niobuf_local *local)
+                             struct niobuf_local *local, void **desc_private)
 {
         int rc;
         OBD_CHECK_SETUP(conn);
         OBD_CHECK_OP(conn, preprw);
 
         rc = OBP(conn->oc_dev, preprw)(cmd, conn, objcount, obj, niocount,
-                                       remote, local);
+                                       remote, local, desc_private);
         RETURN(rc);
 }
 
 static inline int obd_commitrw(int cmd, struct obd_conn *conn,
                                int objcount, struct obd_ioobj *obj,
-                               int niocount, struct niobuf_local *local)
+                               int niocount, struct niobuf_local *local,
+                               void *desc_private)
 {
         int rc;
         OBD_CHECK_SETUP(conn);
         OBD_CHECK_OP(conn, commitrw);
 
         rc = OBP(conn->oc_dev, commitrw)(cmd, conn, objcount, obj, niocount,
-                                         local);
+                                         local, desc_private);
         RETURN(rc);
 }
 
@@ -409,7 +410,7 @@ static __inline__ struct obdo *obdo_alloc(void)
 
 static __inline__ void obdo_free(struct obdo *oa)
 {
-        if ( !oa ) 
+        if (!oa)
                 return;
         kmem_cache_free(obdo_cachep, oa);
 }

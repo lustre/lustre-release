@@ -497,7 +497,7 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
         for (pages = 0, i = 0; i < num_oa; i++) {
                 ost_pack_ioo(&ptr1, oa[i], oa_bufs[i]);
                 for (j = 0; j < oa_bufs[i]; j++, pages++) {
-                        local[pages].addr = (__u64)(long)kmap(pagearray[pages]);
+                        local[pages].addr = kmap(pagearray[pages]);
                         local[pages].offset = offset[pages];
                         local[pages].len = count[pages];
                         ost_pack_niobuf(&ptr2, offset[pages], count[pages],

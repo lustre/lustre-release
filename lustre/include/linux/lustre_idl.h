@@ -69,12 +69,17 @@ struct niobuf_remote {
 };
 
 struct niobuf_local {
-        __u64 addr;
         __u64 offset;
         __u32 len;
         __u32 xid;
-        void *page;
+        __u32 flags;
+        void *addr;
+        struct page *page;
+        void *target_private;
+        struct dentry *dentry;
 };
+
+#define N_LOCAL_TEMP_PAGE 0x00000001
 
 /*
  *   OST requests: OBDO & OBD request records
@@ -92,6 +97,7 @@ struct niobuf_local {
 #define OST_PUNCH      9
 #define OST_OPEN      10
 #define OST_CLOSE     11
+#define OST_STATFS    12
 
 
 typedef uint64_t        obd_id;
@@ -188,6 +194,7 @@ struct obd_ioobj {
 #define MDS_REINT      4
 #define MDS_READPAGE   6
 #define MDS_CONNECT    7
+#define MDS_STATFS     8
 
 #define REINT_SETATTR  1
 #define REINT_CREATE   2

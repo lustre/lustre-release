@@ -16,6 +16,8 @@
 
 #include <linux/module.h>
 #include <linux/obd_filter.h>
+#include <linux/ext3_jbd.h>
+#include <linux/quotaops.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 long filter_memory;
@@ -896,73 +898,377 @@ struct inode *ioobj_to_inode(struct obd_conn *conn, struct obd_ioobj *o)
         RETURN(inode);
 }
 
+/*
+ * Calculate the number of buffer credits needed to write multiple pages in
+ * a single ext3/extN transaction.  No, this shouldn't be here, but as yet
+ * ext3 doesn't have a nice API for calculating this sort of thing in advance.
+ *
+ * See comment above ext3_writepage_trans_blocks for details.  We assume
+ * no data journaling is being done, but it does allow for all of the pages
+ * being non-contiguous.  If we are guaranteed contiguous pages we could
+ * reduce the number of (d)indirect blocks a lot.
+ *
+ * With N blocks per page and P pages, for each inode we have at most:
+ * N*P indirect
+ * min(N*P, blocksize/4 + 1) dindirect blocks
+ * 1 tindirect
+ *
+ * For the entire filesystem, we have at most:
+ * min(sum(nindir + P), ngroups) bitmap blocks (from the above)
+ * min(sum(nindir + P), gdblocks) group descriptor blocks (from the above)
+ * 1 inode block
+ * 1 superblock
+ * 2 * EXT3_SINGLEDATA_TRANS_BLOCKS for the quota files
+ */
+static int ext3_credits_needed(struct super_block *sb, int objcount,
+                               struct obd_ioobj *obj)
+{
+        struct obd_ioobj *o = obj;
+        int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
+        int addrpp = EXT3_ADDR_PER_BLOCK(sb) * blockpp;
+        int nbitmaps = 0;
+        int ngdblocks = 0;
+        int needed = objcount + 1;
+        int i;
+
+        for (i = 0; i < objcount; i++, o++) {
+                int nblocks = o->ioo_bufcnt * blockpp;
+                int ndindirect = min(nblocks, addrpp + 1);
+                int nindir = nblocks + ndindirect + 1;
+
+                nbitmaps += nindir + nblocks;
+                ngdblocks += nindir + nblocks;
+
+                needed += nindir;
+        }
+
+        if (nbitmaps > EXT3_SB(sb)->s_groups_count)
+                nbitmaps = EXT3_SB(sb)->s_groups_count;
+        if (ngdblocks > EXT3_SB(sb)->s_gdb_count)
+                ngdblocks = EXT3_SB(sb)->s_gdb_count;
+
+        needed += nbitmaps + ngdblocks;
+
+#ifdef CONFIG_QUOTA
+        /* We assume that there will be 1 bit set in s_dquot.flags for each
+         * quota file that is active.  This is at least true for now.
+         */
+        needed += hweight32(sb_any_quota_enabled(sb)) *
+                EXT3_SINGLEDATA_TRANS_BLOCKS;
+#endif
+
+        return needed;
+}
+
+/* We have to start a huge journal transaction here to hold all of the
+ * metadata for the pages being written here.  This is necessitated by
+ * the fact that we do lots of prepare_write operations before we do
+ * any of the matching commit_write operations, so even if we split
+ * up to use "smaller" transactions none of them could complete until
+ * all of them were opened.  By having a single journal transaction,
+ * we eliminate duplicate reservations for common blocks like the
+ * superblock and group descriptors or bitmaps.
+ *
+ * We will start the transaction here, but each prepare_write will
+ * add a refcount to the transaction, and each commit_write will
+ * remove a refcount.  The transaction will be closed when all of
+ * the pages have been written.
+ */
+static void *ext3_filter_journal_start(struct filter_obd *filter,
+                                       int objcount, struct obd_ioobj *obj,
+                                       int niocount, struct niobuf_remote *nb)
+{
+        journal_t *journal = NULL;
+        handle_t *handle = NULL;
+        int needed;
+
+        /* Assumes ext3 and extN have same sb_info layout, but avoids issues
+         * with having extN built properly before filterobd for now.
+         */
+        journal = EXT3_SB(filter->fo_sb)->s_journal;
+        needed = ext3_credits_needed(filter->fo_sb, objcount, obj);
+
+        /* The number of blocks we could _possibly_ dirty can very large.
+         * We reduce our request if it is absurd (and we couldn't get that
+         * many credits for a single handle anyways).
+         *
+         * At some point we have to limit the size of I/Os sent at one time,
+         * increase the size of the journal, or we have to calculate the
+         * actual journal requirements more carefully by checking all of
+         * the blocks instead of being maximally pessimistic.  It remains to
+         * be seen if this is a real problem or not.
+         */
+        if (needed > journal->j_max_transaction_buffers) {
+                CERROR("want too many journal credits (%d) using %d instead\n",
+                       needed, journal->j_max_transaction_buffers);
+                needed = journal->j_max_transaction_buffers;
+        }
+
+        handle = journal_start(journal, needed);
+        if (IS_ERR(handle))
+                CERROR("can't get handle for %d credits: rc = %ld\n", needed,
+                       PTR_ERR(handle));
+
+        return(handle);
+}
+
+static void *filter_journal_start(void **journal_save,
+                                  struct filter_obd *filter,
+                                  int objcount, struct obd_ioobj *obj,
+                                  int niocount, struct niobuf_remote *nb)
+{
+        void *handle = NULL;
+
+        /* This may not be necessary - we probably never have a
+         * transaction started when we enter here, so we can
+         * remove the saving of the journal state entirely.
+         * For now leave it in just to see if it ever happens.
+         */
+        *journal_save = current->journal_info;
+        if (*journal_save) {
+                CERROR("Already have handle %p???\n", *journal_save);
+                LBUG();
+                current->journal_info = NULL;
+        }
+
+        if (!strcmp(filter->fo_fstype, "ext3") ||
+            !strcmp(filter->fo_fstype, "extN"))
+                handle = ext3_filter_journal_start(filter, objcount, obj,
+                                                   niocount, nb);
+        return handle;
+}
+
+static int ext3_filter_journal_stop(void *handle)
+{
+        int rc;
+
+        /* We got a refcount on the handle for each call to prepare_write,
+         * so we can drop the "parent" handle here to avoid the need for
+         * osc to call back into filterobd to close the handle.  The
+         * remaining references will be dropped in commit_write.
+         */
+        rc = journal_stop((handle_t *)handle);
+
+        return rc;
+}
+
+static int filter_journal_stop(void *journal_save, struct filter_obd *filter,
+                               void *handle)
+{
+        int rc = 0;
+
+        if (!strcmp(filter->fo_fstype, "ext3") ||
+            !strcmp(filter->fo_fstype, "extN"))
+                rc = ext3_filter_journal_stop(handle);
+
+        current->journal_info = journal_save;
+
+        return rc;
+}
+
+struct page *filter_get_page_write(struct inode *inode, unsigned long index,
+                                   struct niobuf_local *lnb)
+{
+        struct address_space *mapping = inode->i_mapping;
+        struct page *page;
+        int rc;
+
+        //ASSERT_PAGE_INDEX(index, GOTO(err, rc = -EINVAL));
+        page = grab_cache_page_nowait(mapping, index); /* locked page */
+
+        /* This page is currently locked, so we grab a new one temporarily */
+        if (!page) {
+                unsigned long addr;
+                addr = __get_free_pages(GFP_KERNEL, 0);
+                if (!addr) {
+                        CERROR("no memory for a temp page\n");
+                        LBUG();
+                        GOTO(err, rc = -ENOMEM);
+                }
+                page = virt_to_page(addr);
+                kmap(page);
+                page->index = index;
+                lnb->flags |= N_LOCAL_TEMP_PAGE;
+        } else if (!IS_ERR(page)) {
+                /* Note: Called with "O" and "PAGE_SIZE" this is essentially
+                 * a no-op for most filesystems, because we write the whole
+                 * page.  For partial-page I/O this will read in the page.
+                 */
+                rc = mapping->a_ops->prepare_write(NULL, page, 0, PAGE_SIZE);
+                if (rc) {
+                        CERROR("page index %lu, rc = %d\n", index, rc);
+                        if (rc != -ENOSPC)
+                                LBUG();
+                        GOTO(err_unlock, rc);
+                }
+                /* XXX not sure if we need this if we are overwriting page */
+                if (PageError(page)) {
+                        CERROR("error on page index %lu, rc = %d\n", index, rc);
+                        LBUG();
+                        GOTO(err_unlock, rc = -EIO);
+                }
+
+                kmap(page);
+        }
+        return page;
+
+err_unlock:
+        unlock_page(page);
+        lustre_put_page(page);
+err:
+        return ERR_PTR(rc);
+}
+
 static int filter_preprw(int cmd, struct obd_conn *conn,
                          int objcount, struct obd_ioobj *obj,
                          int niocount, struct niobuf_remote *nb,
-                         struct niobuf_local *res)
+                         struct niobuf_local *res, void **desc_private)
 {
         struct obd_run_ctxt saved;
+        struct obd_device *obddev;
         struct obd_ioobj *o = obj;
         struct niobuf_remote *b = nb;
         struct niobuf_local *r = res;
+        void *journal_save = NULL;
+        int rc = 0;
         int i;
         ENTRY;
 
         memset(res, 0, sizeof(*res) * niocount);
+        obddev = conn->oc_dev;
 
-        // if (cmd == OBD_BRW_WRITE)
-        push_ctxt(&saved, &conn->oc_dev->u.filter.fo_ctxt);
+        push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
+
+        if (cmd == OBD_BRW_WRITE) {
+                *desc_private = filter_journal_start(&journal_save,
+                                                     &obddev->u.filter,
+                                                     objcount, obj, niocount,
+                                                     nb);
+                if (IS_ERR(*desc_private))
+                        GOTO(out_ctxt, rc = PTR_ERR(*desc_private));
+        }
+
         for (i = 0; i < objcount; i++, o++) {
+                struct dentry *dentry;
+                struct inode *inode;
                 int j;
+
+                dentry = filter_fid2dentry(obddev,
+                                           filter_parent(obddev, S_IFREG),
+                                           o->ioo_id, S_IFREG);
+                inode = dentry->d_inode;
+
                 for (j = 0; j < o->ioo_bufcnt; j++, b++, r++) {
                         unsigned long index = b->offset >> PAGE_SHIFT;
-                        struct inode *inode = ioobj_to_inode(conn, o);
                         struct page *page;
+
+                        /* XXX  We _might_ change this to a dcount if we
+                         * wanted to pass a dentry pointer in the niobuf
+                         * to avoid doing so many igets on an inode we
+                         * already have.  It appears to be solely for the
+                         * purpose of having a refcount that we can drop
+                         * in commitrw where we get one call per page.
+                         */
+                        if (j > 0)
+                                r->dentry = dget(dentry);
+                        else
+                                r->dentry = dentry;
 
                         /* FIXME: we need to iput all inodes on error */
                         if (!inode)
                                 RETURN(-EINVAL);
 
-                        if (cmd == OBD_BRW_WRITE)
-                                page = lustre_get_page_write(inode, index);
-                        else
+                        if (cmd == OBD_BRW_WRITE) {
+                                page = filter_get_page_write(inode, index, r);
+
+                                /* We unlock the page to avoid deadlocks with
+                                 * the page I/O because we are preparing
+                                 * multiple pages at one time and we have lock
+                                 * ordering problems.  Lustre I/O and disk I/O
+                                 * on this page can happen concurrently.
+                                 */
+                        } else
                                 page = lustre_get_page_read(inode, index);
+
+                        /* FIXME: we need to clean up here... */
                         if (IS_ERR(page))
                                 RETURN(PTR_ERR(page));
 
-                        r->addr = (__u64)(unsigned long)page_address(page);
+                        r->addr = page_address(page);
                         r->offset = b->offset;
                         r->page = page;
                         r->len = PAGE_SIZE;
                 }
         }
-        // if (cmd == OBD_BRW_WRITE)
+
+        if (cmd == OBD_BRW_WRITE) {
+                /* FIXME: need to clean up here */
+                rc = filter_journal_stop(journal_save, &obddev->u.filter,
+                                         *desc_private);
+        }
+out_ctxt:
         pop_ctxt(&saved);
-        return(0);
+        RETURN(rc);
+}
+
+static int filter_write_locked_page(struct niobuf_local *lnb)
+{
+        struct page *lpage;
+        int rc;
+
+        lpage = lustre_get_page_write(lnb->dentry->d_inode, lnb->page->index);
+        /* XXX */
+
+        memcpy(page_address(lpage), kmap(lnb->page), PAGE_SIZE);
+        kunmap(lnb->page);
+        __free_pages(lnb->page, 0);
+
+        rc = lustre_commit_page(lpage, 0, PAGE_SIZE);
+        dput(lnb->dentry);
+
+        return rc;
 }
 
 static int filter_commitrw(int cmd, struct obd_conn *conn,
                            int objcount, struct obd_ioobj *obj,
-                           int niocount, struct niobuf_local *res)
+                           int niocount, struct niobuf_local *res,
+                           void *private)
 {
         struct obd_run_ctxt saved;
         struct obd_ioobj *o = obj;
         struct niobuf_local *r = res;
+        void *journal_save;
+        int found_locked = 0;
         int i;
         ENTRY;
 
         // if (cmd == OBD_BRW_WRITE)
         push_ctxt(&saved, &conn->oc_dev->u.filter.fo_ctxt);
+        journal_save = current->journal_info;
+        if (journal_save)
+                CERROR("Existing handle %p???\n", journal_save);
+        current->journal_info = private;
         for (i = 0; i < objcount; i++, obj++) {
                 int j;
                 for (j = 0 ; j < o->ioo_bufcnt ; j++, r++) {
                         struct page *page = r->page;
 
-                        if (!r->page)
+                        /* If there was an error setting up a particular page
+                         * for I/O we still need to continue with the rest of
+                         * the pages in order to balance prepate/commit_write
+                         * calls, and to complete as much I/O as possible.
+                         */
+                        if (!page)
                                 LBUG();
 
+                        if (r->flags & N_LOCAL_TEMP_PAGE) {
+                                found_locked = 1;
+                                continue;
+                        }
+
                         if (cmd == OBD_BRW_WRITE) {
-                                int rc = lustre_commit_page(page, 0, PAGE_SIZE);
+                                int rc;
+                                rc = lustre_commit_page(page, 0, PAGE_SIZE);
 
                                 /* FIXME: still need to iput the other inodes */
                                 if (rc)
@@ -970,15 +1276,32 @@ static int filter_commitrw(int cmd, struct obd_conn *conn,
                         } else
                                 lustre_put_page(page);
 
-                        CDEBUG(D_INODE, "put inode %p (%ld), count = %d, nlink = %d\n",
+                        CDEBUG(D_INODE,
+                               "put inode %p (%ld), count = %d, nlink = %d\n",
                                page->mapping->host,
                                page->mapping->host->i_ino,
                                atomic_read(&page->mapping->host->i_count) - 1,
                                page->mapping->host->i_nlink);
-                        iput(page->mapping->host);
+                        dput(r->dentry);
                 }
         }
-        // if (cmd == OBD_BRW_WRITE)
+        if (!found_locked)
+                goto out;
+
+        for (i = 0; i < objcount; i++, obj++) {
+                int j;
+                for (j = 0 ; j < o->ioo_bufcnt ; j++, r++) {
+                        int rc;
+                        if (!(r->flags & N_LOCAL_TEMP_PAGE))
+                                continue;
+
+                        rc = filter_write_locked_page(r);
+                        /* XXX */
+                }
+        }
+
+out:
+        current->journal_info = journal_save;
         pop_ctxt(&saved);
         RETURN(0);
 }
@@ -1041,8 +1364,7 @@ static int filter_get_info(struct obd_conn *conn, obd_count keylen,
 }
 
 
-struct obd_ops filter_obd_ops = {
-        o_iocontrol:   NULL,
+static struct obd_ops filter_obd_ops = {
         o_get_info:    filter_get_info,
         o_setup:       filter_setup,
         o_cleanup:     filter_cleanup,

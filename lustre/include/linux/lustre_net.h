@@ -183,6 +183,8 @@ struct ptlrpc_bulk_page {
         int b_buflen;
         struct page *b_page;
         __u32 b_xid;
+        __u32 b_flags;
+        struct dentry *b_dentry;
         int (*b_cb)(struct ptlrpc_bulk_page *);
 
         ptl_md_t b_md;
@@ -193,6 +195,7 @@ struct ptlrpc_bulk_page {
 struct ptlrpc_bulk_desc {
         int b_flags;
         struct ptlrpc_connection *b_connection;
+        struct ptlrpc_client *b_client;
         __u32 b_portal;
         int (*b_cb)(struct ptlrpc_bulk_desc *);
         struct obd_conn b_conn;
@@ -201,7 +204,7 @@ struct ptlrpc_bulk_desc {
         struct list_head b_page_list;
         __u32 b_page_count;
         __u32 b_finished_count;
-        void *b_journal_info;
+        void *b_desc_private;
 };
 
 struct ptlrpc_thread {

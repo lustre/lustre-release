@@ -37,6 +37,8 @@ inline void lustre_put_page(struct page *page);
 struct page *lustre_get_page_read(struct inode *dir, unsigned long index);
 struct page *lustre_get_page_write(struct inode *dir, unsigned long index);
 int lustre_commit_page(struct page *page, unsigned from, unsigned to);
+void set_page_clean(struct page *page);
+void set_page_dirty(struct page *page);
 
 /* simple.c */
 struct obd_run_ctxt;

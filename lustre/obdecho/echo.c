@@ -67,7 +67,7 @@ static int echo_getattr(struct obd_conn *conn, struct obdo *oa)
 
 int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
                 struct obd_ioobj *obj, int niocount, struct niobuf_remote *nb,
-                struct niobuf_local *res)
+                struct niobuf_local *res, void **desc_private)
 {
         struct niobuf_local *r = res;
         int rc = 0;
@@ -106,9 +106,9 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
                         }
                         */
 
-                        r->addr = address;
                         r->offset = nb->offset;
                         r->page = virt_to_page(address);
+                        r->addr = kmap(r->page);
                         r->len = nb->len;
                         // r->flags
                 }
@@ -125,9 +125,9 @@ preprw_cleanup:
          */
         CERROR("cleaning up %ld pages (%d obdos)\n", (long)(r - res), objcount);
         while (r-- > res) {
-                unsigned long addr = r->addr;
+                kunmap(r->page);
 
-                free_pages(addr, 0);
+                __free_pages(r->page, 0);
                 echo_pages--;
         }
         memset(res, 0, sizeof(*res) * niocount);
@@ -136,7 +136,8 @@ preprw_cleanup:
 }
 
 int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
-                  struct obd_ioobj *obj, int niocount, struct niobuf_local *res)
+                  struct obd_ioobj *obj, int niocount, struct niobuf_local *res,
+                  void *desc_private)
 {
         struct niobuf_local *r = res;
         int rc = 0;
@@ -207,7 +208,7 @@ static void __exit obdecho_exit(void)
         obd_unregister_type(OBD_ECHO_DEVICENAME);
 }
 
-MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
+MODULE_AUTHOR("Cluster Filesystems Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Testing Echo OBD driver v1.0");
 MODULE_LICENSE("GPL"); 
 
