@@ -368,9 +368,9 @@ else
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 if test -n "$VIBNAL"; then
-	AC_MSG_CHECKING([if Voltaire still uses void * sg addresses])
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
+	AC_MSG_CHECKING([if Voltaire still uses void * sg addresses])
 	LB_LINUX_TRY_COMPILE([
         	#include <linux/list.h>
 		#include <asm/byteorder.h>
@@ -394,6 +394,27 @@ if test -n "$VIBNAL"; then
 	        VIBCPPFLAGS="$VIBCPPFLAGS -DIBNAL_VOIDSTAR_SGADDR=1"
 	],[
 	        AC_MSG_RESULT([no])
+	])
+	AC_MSG_CHECKING([if page_to_phys() must avoid sign extension])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/kernel.h>
+		#include <linux/mm.h>
+		#include <linux/unistd.h>
+		#include <asm/system.h>
+		#include <asm/io.h>
+	],[
+	        struct page p;
+
+		switch (42) {
+		case 0:
+		case (sizeof(typeof(page_to_phys(&p))) < 8):
+			break;
+		}
+	],[
+		AC_MSG_RESULT([yes])
+		VIBCPPFLAGS="$VIBCPPFLAGS -DIBNAL_32BIT_PAGE2PHYS=1"
+	],[
+		AC_MSG_RESULT([no])
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi

@@ -516,7 +516,6 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
         vv_r_key_t       r_key;
         __u64            addr;
         __u64            frag_addr;
-        void            *ptr;
         vv_mem_reg_h_t   mem_h;
         vv_return_t      vvrc;
 
@@ -569,18 +568,22 @@ kibnal_kvaddr_to_page (unsigned long vaddr)
         struct page *page;
 
         if (vaddr >= VMALLOC_START &&
-            vaddr < VMALLOC_END)
+            vaddr < VMALLOC_END) {
                 page = vmalloc_to_page ((void *)vaddr);
+                LASSERT (page != NULL);
+                return page;
+        }
 #if CONFIG_HIGHMEM
-        else if (vaddr >= PKMAP_BASE &&
-                 vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE))
-                page = vmalloc_to_page ((void *)vaddr);
-        /* in 2.4 ^ just walks the page tables */
+        if (vaddr >= PKMAP_BASE &&
+            vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE)) {
+                /* No highmem pages only used for bulk (kiov) I/O */
+                CERROR("find page for address in highmem\n");
+                LBUG();
+        }
 #endif
-        else
-                page = virt_to_page (vaddr);
-
-        return VALID_PAGE(page) ? page : NULL;
+        page = virt_to_page (vaddr);
+        LASSERT (page != NULL);
+        return page;
 }
 
 int
@@ -872,7 +875,6 @@ kibnal_check_sends (kib_conn_t *conn)
         kib_tx_t       *tx;
         vv_return_t     vvrc;                        
         int             rc;
-        int             i;
         int             done;
 
         /* Don't send anything until after the connection is established */
