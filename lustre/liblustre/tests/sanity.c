@@ -201,8 +201,8 @@ void t10()
         snprintf(path1, MAX_PATH_LENGTH, "%s/test_t10_reg1", lustre_path);
         snprintf(path2, MAX_PATH_LENGTH, "%s/test_t10_reg2", lustre_path);
         snprintf(rename1, MAX_PATH_LENGTH, "%s/test_t10_dir1/rename1", lustre_path);
-        snprintf(rename2, MAX_PATH_LENGTH, "%s/test_t10_dir1/rename2", lustre_path);
-        snprintf(rename3, MAX_PATH_LENGTH, "%s/test_t10_dir1/rename3", lustre_path);
+        snprintf(rename2, MAX_PATH_LENGTH, "%s/test_t10_dir2/rename2", lustre_path);
+        snprintf(rename3, MAX_PATH_LENGTH, "%s/test_t10_dir2/rename3", lustre_path);
 
         t_mkdir(dir1);
         t_mkdir(dir2);
