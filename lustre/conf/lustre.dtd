@@ -10,10 +10,10 @@
 <!ENTITY % objref.attr    "uuidref CDATA #REQUIRED">
 
 <!-- main elements -->
-<!ELEMENT lustre (node | profile | mountpoint | ldlm | echoclient |
-                  mds | obd | ost | lov | lovconfig)*>
+<!ELEMENT lustre (node | profile | mountpoint | ldlm | ptlrpc |echoclient |
+                  mds | mdsdev| ost | osd | lov | lovconfig)*>
 
-<!ELEMENT node (network | profile_ref)*>
+<!ELEMENT node (network | routetbl | profile_ref)*>
 <!ATTLIST node %object.attr;
                router CDATA #IMPLIED>
                
@@ -29,9 +29,9 @@
                 lo CDATA #REQUIRED
                 hi CDATA #IMPLIED >
 
-<!ELEMENT profile (ldlm_ref | network_ref | obd_ref | ost_ref |
-                   echoclient_ref | mdsdev_ref | lov_ref |
-                   lovconfig_ref| mountpoint_ref)*>
+<!ELEMENT profile (ldlm_ref | ptlrpc_ref | network_ref | routetbl_ref |
+                   osd_ref | mdsdev_ref | lovconfig_ref|
+                   echoclient_ref | mountpoint_ref)*>
 <!ATTLIST profile %object.attr;>
 
 <!ELEMENT mountpoint (path | fileset | mds_ref | obd_ref)*>
@@ -43,18 +43,22 @@
 <!ELEMENT ldlm EMPTY>
 <!ATTLIST ldlm %object.attr;>
 
-<!ELEMENT obd (fstype | devpath | devsize | autoformat | active_ref)*>
-<!ATTLIST obd %object.attr; 
-              obdtype (obdfilter | obdecho) 'obdfilter'>
+<!ELEMENT ptlrpc EMPTY>
+<!ATTLIST ptlrpc %object.attr;>
 
-<!ELEMENT ost (network_ref | obd_ref | failover_ref)*>
+<!ELEMENT osd (fstype | devpath | devsize | autoformat | 
+               target_ref | node_ref)*>
+<!ATTLIST osd %object.attr; 
+              osdtype (obdfilter | obdecho) 'obdfilter'>
+
+<!ELEMENT ost (active_ref)*>
 <!ATTLIST ost %object.attr;>
 
-<!ELEMENT mds (active_ref)*>
+<!ELEMENT mds (active_ref | lovconfig_ref)*>
 <!ATTLIST mds %object.attr;>
 
 <!ELEMENT mdsdev (fstype | devpath | devsize | autoformat | 
-                  mds_ref | network_ref )*>
+                  target_ref | node_ref )*>
 <!ATTLIST mdsdev %object.attr;>
 
 <!ELEMENT lov (mds_ref |(obd_ref)+)*>
@@ -71,8 +75,8 @@
 <!ELEMENT fstype        %object.content;>
 <!ELEMENT nid           %object.content;>
 <!ELEMENT port          %object.content;>
-<!ELEMENT send_mem      %object.content;>
-<!ELEMENT recv_mem      %object.content;>
+<!ELEMENT sendmem      %object.content;>
+<!ELEMENT recvmem      %object.content;>
 <!ELEMENT autoformat    %object.content;>
 <!ELEMENT activetarget  %object.content;>
 <!ELEMENT devpath       %object.content;>
@@ -83,29 +87,39 @@
 <!-- object reference tag elements -->
 <!ELEMENT network_ref     %objref.content;>
 <!ATTLIST network_ref     %objref.attr;>
+<!ELEMENT routetbl_ref    %objref.content;>
+<!ATTLIST routetbl_ref    %objref.attr;>
 <!ELEMENT node_ref        %objref.content;>
 <!ATTLIST node_ref        %objref.attr;>
 <!ELEMENT profile_ref     %objref.content;>
 <!ATTLIST profile_ref     %objref.attr;>
-<!ELEMENT obd_ref         %objref.content;>
-<!ATTLIST obd_ref         %objref.attr;>
+<!ELEMENT osd_ref         %objref.content;>
+<!ATTLIST osd_ref         %objref.attr;>
 <!ELEMENT mds_ref         %objref.content;>
 <!ATTLIST mds_ref         %objref.attr;>
 <!ELEMENT mdsdev_ref      %objref.content;>
 <!ATTLIST mdsdev_ref      %objref.attr;>
+<!ELEMENT obd_ref         %objref.content;>
+<!ATTLIST obd_ref         %objref.attr;>
 <!ELEMENT ost_ref         %objref.content;>
 <!ATTLIST ost_ref         %objref.attr;>
+<!ELEMENT active_ref         %objref.content;>
+<!ATTLIST active_ref         %objref.attr;>
+<!ELEMENT target_ref         %objref.content;>
+<!ATTLIST target_ref         %objref.attr;>
 <!ELEMENT lov_ref         %objref.content;>
 <!ATTLIST lov_ref         %objref.attr;>
 <!ELEMENT lovconfig_ref   %objref.content;>
 <!ATTLIST lovconfig_ref   %objref.attr;>
 <!ELEMENT mountpoint_ref  %objref.content;>
 <!ATTLIST mountpoint_ref  %objref.attr;>
-<!ELEMENT echoclient_ref %objref.content;>
-<!ATTLIST echoclient_ref %objref.attr;>
+<!ELEMENT echoclient_ref  %objref.content;>
+<!ATTLIST echoclient_ref  %objref.attr;>
 <!ELEMENT failover_ref    %objref.content;>
 <!ATTLIST failover_ref    %objref.attr;>
 <!ELEMENT ldlm_ref        %objref.content;>
 <!ATTLIST ldlm_ref        %objref.attr;>
+<!ELEMENT ptlrpc_ref      %objref.content;>
+<!ATTLIST ptlrpc_ref      %objref.attr;>
 
 

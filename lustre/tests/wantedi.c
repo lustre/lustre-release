@@ -10,8 +10,9 @@
 #include <time.h>
 #include <limits.h>
 #include <sys/ioctl.h>
-#include <linux/lustre_lib.h>
+#include <liblustre.h>
 #include <linux/obd.h>
+#include <linux/lustre_lib.h>
 
 static int usage(char *prog, FILE *out)
 {
