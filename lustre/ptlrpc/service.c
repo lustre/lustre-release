@@ -64,8 +64,8 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
 }
 
 struct ptlrpc_service *
-ptlrpc_init_svc(__u32 nevents, __u32 nbufs, 
-                __u32 bufsize, __u32 max_req_size, 
+ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
+                __u32 bufsize, __u32 max_req_size,
                 int req_portal, int rep_portal,
                 obd_uuid_t uuid, svc_handler_t handler, char *name)
 {
@@ -115,8 +115,7 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                 struct ptlrpc_request_buffer_desc *rqbd;
 
                 OBD_ALLOC (rqbd, sizeof (*rqbd));
-                if (rqbd == NULL)
-                {
+                if (rqbd == NULL) {
                         CERROR ("no memory\n");
                         GOTO (failed, NULL);
                 }
@@ -132,7 +131,7 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                 }
                 list_add (&rqbd->rqbd_list, &service->srv_rqbds);
                 service->srv_nrqbds++;
-                
+
                 ptlrpc_link_svc_me(rqbd);
         }
 
@@ -172,7 +171,8 @@ static int handle_incoming_request(struct obd_device *obddev,
         rc = -EINVAL;
 
         if (request->rq_reqlen < sizeof(struct lustre_msg)) {
-                CERROR("incomplete request (%d): ptl %d from "LPX64" xid "LPD64"\n",
+                CERROR("incomplete request (%d): ptl %d from "LPX64" xid "
+                       LPD64"\n",
                        request->rq_reqlen, svc->srv_req_portal,
                        event->initiator.nid, request->rq_xid);
                 goto out;
@@ -185,14 +185,16 @@ static int handle_incoming_request(struct obd_device *obddev,
         }
 
         if (request->rq_reqmsg->magic != PTLRPC_MSG_MAGIC) {
-                CERROR("wrong lustre_msg magic %d: ptl %d from "LPX64" xid "LPD64"\n",
+                CERROR("wrong lustre_msg magic %d: ptl %d from "LPX64" xid "
+                       LPD64"\n",
                        request->rq_reqmsg->magic, svc->srv_req_portal,
                        event->initiator.nid, request->rq_xid);
                 goto out;
         }
 
         if (request->rq_reqmsg->version != PTLRPC_MSG_VERSION) {
-                CERROR("wrong lustre_msg version %d: ptl %d from "LPX64" xid "LPD64"\n",
+                CERROR("wrong lustre_msg version %d: ptl %d from "LPX64" xid "
+                       LPD64"\n",
                        request->rq_reqmsg->version, svc->srv_req_portal,
                        event->initiator.nid, request->rq_xid);
                 goto out;
@@ -211,6 +213,12 @@ static int handle_incoming_request(struct obd_device *obddev,
         if (request->rq_export) {
                 request->rq_connection = request->rq_export->exp_connection;
                 ptlrpc_connection_addref(request->rq_connection);
+        } else {
+                /* create a (hopefully temporary) connection that will be used
+                 * to send the reply if this call doesn't create an export.
+                 * XXX revisit this when we revamp ptlrpc */
+                request->rq_connection =
+                        ptlrpc_get_connection(&request->rq_peer, NULL);
         }
 
         rc = svc->srv_handler(request);
@@ -219,7 +227,7 @@ static int handle_incoming_request(struct obd_device *obddev,
  out:
         if (atomic_dec_and_test (&rqbd->rqbd_refcount)) /* last reference? */
                 ptlrpc_link_svc_me (rqbd);
-        
+
         return rc;
 }
 
@@ -374,10 +382,9 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
          * _after_ unlinking _all_ the request buffers, but _before_
          * freeing them.
          */
-        
-        while (!list_empty (&service->srv_rqbds))
-        {
-                struct ptlrpc_request_buffer_desc *rqbd = 
+
+        while (!list_empty (&service->srv_rqbds)) {
+                struct ptlrpc_request_buffer_desc *rqbd =
                         list_entry (service->srv_rqbds.next,
                                     struct ptlrpc_request_buffer_desc,
                                     rqbd_list);
@@ -402,7 +409,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         }
 
         LASSERT (service->srv_nrqbds == 0);
-        
+
         rc = PtlEQFree(service->srv_eq_h);
         if (rc)
                 CERROR("PtlEQFree failed: %d\n", rc);

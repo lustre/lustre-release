@@ -29,6 +29,18 @@ static spinlock_t conn_lock;
 static struct list_head conn_list;
 static struct list_head conn_unused_list;
 
+/* If UUID is NULL, c->c_remote_uuid must be all zeroes
+ * If UUID is non-NULL, c->c_remote_uuid must match. */
+static int match_connection_uuid(struct ptlrpc_connection *c, obd_uuid_t uuid)
+{
+        obd_uuid_t zero_uuid = {0};
+
+        if (uuid)
+                return memcmp(c->c_remote_uuid, uuid, sizeof(uuid));
+
+        return memcmp(c->c_remote_uuid, zero_uuid, sizeof(zero_uuid));
+}
+
 struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
                                                 obd_uuid_t uuid)
 {
@@ -43,7 +55,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
-                    (!uuid || !memcmp(c->c_remote_uuid, uuid, sizeof(uuid)))) {
+                    !match_connection_uuid(c, uuid)) {
                         ptlrpc_connection_addref(c);
                         GOTO(out, c);
                 }
@@ -52,7 +64,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         list_for_each_safe(tmp, pos, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
-                    (!uuid || strcmp(c->c_remote_uuid, uuid) == 0)) {
+                    !match_connection_uuid(c, uuid)) {
                         ptlrpc_connection_addref(c);
                         list_del(&c->c_link);
                         list_add(&c->c_link, &conn_list);
@@ -72,7 +84,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         c->c_generation = 1;
         c->c_epoch = 1;
         c->c_bootcount = 0;
-        strcpy(c->c_remote_uuid, uuid);
+        if (uuid)
+                strcpy(c->c_remote_uuid, uuid);
         INIT_LIST_HEAD(&c->c_delayed_head);
         INIT_LIST_HEAD(&c->c_sending_head);
         INIT_LIST_HEAD(&c->c_dying_head);

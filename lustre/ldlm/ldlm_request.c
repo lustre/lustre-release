@@ -1,12 +1,22 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2002 Cluster File Systems, Inc.
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * by Cluster File Systems, Inc.
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -59,7 +69,7 @@ static int expired_completion_wait(void *data)
 
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
 {
-        struct l_wait_info lwi = 
+        struct l_wait_info lwi =
                 LWI_TIMEOUT_INTR(obd_timeout * HZ, expired_completion_wait,
                                  interrupted_completion_wait, lock);
         int rc = 0;
@@ -81,7 +91,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
                                    "client-side enqueue waking up: failed (%d)",
                                    rc);
                 } else {
-                        LDLM_DEBUG(lock, 
+                        LDLM_DEBUG(lock,
                                    "client-side enqueue waking up: granted");
                 }
         } else if (flags == LDLM_FL_WAIT_NOREPROC) {
@@ -336,6 +346,8 @@ static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
         RETURN(0);
 }
 
+/* FIXME: one of ldlm_cli_convert or the server side should reject attempted
+ * conversion of locks which are on the waiting or converting queue */
 int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
 {
         struct ldlm_request *body;
@@ -422,7 +434,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 ldlm_cancel_callback(lock);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
-                req = ptlrpc_prep_req(class_conn2cliimp(lock->l_connh), 
+                req = ptlrpc_prep_req(class_conn2cliimp(lock->l_connh),
                                       LDLM_CANCEL, 1, &size, NULL);
                 if (!req)
                         GOTO(out, rc = -ENOMEM);

@@ -3,14 +3,25 @@
  *
  * Copyright (C) 2002 Intel Corporation
  *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 /*
  * Author: Hariharan Thantry
  * File Name: lprocfs.c
- *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
  *
  * During initialization (of lustre), the following directory materializes
  *          /proc/lustre
@@ -612,20 +623,17 @@ int lprocfs_get_idx(struct namespace_index* class, const char* dir_name)
         return -1;
 }
 
-
-
-
 struct proc_dir_entry* lprocfs_mkdir(const char* dname,
                                      struct proc_dir_entry *parent)
 {
-	struct proc_dir_entry *child_dir_entry;
+        struct proc_dir_entry *child_dir_entry;
 
-	child_dir_entry = proc_mkdir(dname, parent);
+        child_dir_entry = proc_mkdir(dname, parent);
 
-	if (!child_dir_entry)
+        if (!child_dir_entry)
                 CERROR("lustre: failed to create /proc entry %s\n", dname);
 
-	return child_dir_entry;
+        return child_dir_entry;
 }
 
 /*
@@ -836,7 +844,7 @@ int lprocfs_ll_rd(char *page, char **start, off_t off,
         int len;
         __u64 *temp = (__u64 *)data;
 
-        len = snprintf(page, count, "%Lu\n", *temp);
+        len = snprintf(page, count, LPU64"\n", *temp);
 
         return len;
 }
