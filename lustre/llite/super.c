@@ -554,7 +554,7 @@ void ll_umount_begin(struct super_block *sb)
                 conn->c_flags |= CONN_INVALID;
                 invalidate_request_list(&conn->c_sending_head);
                 invalidate_request_list(&conn->c_delayed_head);
-                spin_unlock(&conn->c_unlock);
+                spin_unlock(&conn->c_lock);
         }
 
         EXIT;
