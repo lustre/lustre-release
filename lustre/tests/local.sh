@@ -15,7 +15,7 @@ OSTSIZE=100000
 ${LMC} -o $config --node localhost --net localhost tcp || exit 1
 
 # configure mds server
-${LMC} -m $config --format  --node localhost --mds mds1 $OSTDEV $OSTSIZE || exit 2
+${LMC} -m $config --format  --node localhost --mds mds1 $MDSDEV $MDSSIZE || exit 2
 
 # configure ost
 ${LMC} -m $config --format --node localhost --ost $OSTDEV $OSTSIZE || exit 3
