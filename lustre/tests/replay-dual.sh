@@ -2,10 +2,6 @@
 
 set -e
 
-LCONF=${LCONF:-"../utils/lconf"}
-LMC=${LMC:-"../utils/lmc"}
-LCTL=${LCTL:-"../utils/lctl"}
-
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
@@ -50,7 +46,7 @@ gen_config() {
 build_test_filter
 
 cleanup() {
-    [ "$DAEMONFILE" ] && lctl debug_daemon stop
+    [ "$DAEMONFILE" ] && $LCTL debug_daemon stop
     # make sure we are using the primary MDS, so the config log will
     # be able to clean up properly.
     activemds=`facet_active mds`
@@ -58,9 +54,9 @@ cleanup() {
         fail mds
     fi
 
-    lconf  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
+    $LCONF  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
        --local_nid $client_HOST --profile client_facet --mount $MOUNT
-    lconf  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
+    $LCONF  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
        --local_nid $client_HOST --profile client_facet --mount $MOUNT2
     stop mds ${FORCE} --dump cleanup-dual.log
     stop ost ${FORCE}
@@ -85,15 +81,15 @@ if [ "$PINGER" != "on" ]; then
 fi
 
 # 0-conf client
-lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
+$LCONF --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
     --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT
-lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
+$LCONF --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
     --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT2
 
 echo $TIMEOUT > /proc/sys/lustre/timeout
 echo $UPCALL > /proc/sys/lustre/upcall
 
-[ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
+[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 test_1() {
     touch $MOUNT1/a
