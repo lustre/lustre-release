@@ -412,7 +412,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct dentry *dchild = NULL;
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct mds_body *body;
         char *name;
         struct inode *dir, *inode;
         struct lustre_handle lockh, child_lockh;
@@ -454,12 +453,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 GOTO(out_unlink_dchild, rc = -ENOENT);
         }
 
-        if (offset) {
-                body = lustre_msg_buf(req->rq_repmsg, 1);
-                mds_pack_inode2fid(&body->fid1, inode);
-                mds_pack_inode2body(body, inode);
-        }
-
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
 
         switch (rec->ur_mode /* & S_IFMT ? */) {
@@ -472,7 +465,12 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         case S_IFREG:
                 /* get OBD EA data first so client can also destroy object */
                 if ((inode->i_mode & S_IFMT) == S_IFREG && offset) {
+                        struct mds_body *body;
                         struct lov_mds_md *lmm;
+
+                        body = lustre_msg_buf(req->rq_repmsg, 1);
+                        mds_pack_inode2fid(&body->fid1, inode);
+                        mds_pack_inode2body(body, inode);
 
                         lmm = lustre_msg_buf(req->rq_repmsg, 2);
                         lmm->lmm_easize = mds->mds_max_mdsize;
