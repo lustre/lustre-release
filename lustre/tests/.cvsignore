@@ -22,5 +22,8 @@ newfile
 openclose
 createdestroy
 lovstripe
+lov.xml
+uml.xml
 echo.xml
 local.xml
+stat
