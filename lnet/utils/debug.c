@@ -532,8 +532,8 @@ int jt_dbg_modules(int argc, char **argv)
         struct mod_paths {
                 char *name, *path;
         } *mp, mod_paths[] = {
-                {"portals", "portals/linux/oslib"},
-                {"ksocknal", "portals/linux/socknal"},
+                {"portals", "lustre/portals/libcfs"},
+                {"ksocknal", "lustre/portals/knals/socknal"},
                 {"obdclass", "lustre/obdclass"},
                 {"ptlrpc", "lustre/ptlrpc"},
                 {"obdext2", "lustre/obdext2"},
