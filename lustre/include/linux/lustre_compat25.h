@@ -87,6 +87,18 @@ static inline void clear_page_dirty(struct page *page)
                 ClearPageDirty(page); 
 }
 
+/* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
+ * as 2.5 and let macros drop back.. */
+#ifndef HLIST_HEAD /* until we get a kernel newer than l28 */
+#define hlist_entry                     list_entry
+#define hlist_head                      list_head
+#define hlist_node                      list_head
+#define HLIST_HEAD                      LIST_HEAD
+#define INIT_HLIST_HEAD                 INIT_LIST_HEAD
+#define hlist_del_init                  list_del_init
+#define hlist_add_head                  list_add
+#define hlist_for_each_safe             list_for_each_safe
+#endif
 #define KDEVT_INIT(val)                 (val)
 #define ext3_xattr_set_handle           ext3_xattr_set
 #define try_module_get                  __MOD_INC_USE_COUNT
