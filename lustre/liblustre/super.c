@@ -1236,12 +1236,15 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 
         inode = _sysio_i_find(fs, &fileid);
         if (inode) {
-                if (llu_i2info(inode)->lli_st_generation ==
-                    md->body->generation) {
+                struct llu_inode_info *lli = llu_i2info(inode);
+
+                if (lli->lli_stale_flag ||
+                    lli->lli_st_generation == md->body->generation)
+                        I_RELE(inode);
+                else {
                         llu_update_inode(inode, md->body, md->lsm);
                         return inode;
-                } else
-                        I_RELE(inode);
+                }
         }
 
         inode = llu_new_inode(fs, &fid);
@@ -1494,3 +1497,4 @@ static struct inode_ops llu_inode_ops = {
         inop_gone:      llu_iop_gone,
 };
 
+#warning "time_after() defined in liblustre.h need to be rewrite in userspace"
