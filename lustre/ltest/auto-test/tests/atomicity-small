@@ -1,0 +1,29 @@
+#!/bin/sh
+
+MAIL=$BASEDIR/tmp/$TESTUSER.name
+OUT=$BASEDIR/tmp/$TESTUSER.atomicity
+DATE=`date +"%Y%m%d %H:%M:%S"`
+TESTNAME=atomicity-small
+TESTDESC="atomicity"
+
+COMMAND="atomicity -v -s65536 -i15 -p2 -r2 -w2"
+timed_run 300 pdsh -E -S -s -w $SINGLECLIENT \
+"cd $MOUNT/$TESTUSER && $COMMAND" &> $OUT
+
+rc=$?
+
+if [ $rc -eq 0 ]
+	then RESULT="pass"
+        else RESULT="fail"
+fi
+
+. $BASEDIR/tests/begin_buffalo_email
+echo "Log: $TESTNAME" >> $MAIL
+echo "Command line: $COMMAND" >> $MAIL
+/bin/cat $OUT >> $MAIL
+echo "LogEnd: $TESTNAME" >> $MAIL
+/bin/rm $OUT
+$SENDMAIL < $MAIL
+/bin/rm $MAIL
+
+exit $rc

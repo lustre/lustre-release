@@ -1,0 +1,15 @@
+start_lustre() {
+    lconf=$BASEDIR/lustre_src/lustre/utils/lconf
+    xmlfile=$BASEDIR/configs/`echo $LUSTRE_CONFIG | sed -e 's/\.sh/\.xml/'`
+    LMC=$BASEDIR/lustre_src/lustre/utils/lmc
+    export LMC
+
+    echo "*** Starting Lustre ***"
+    cd $BASEDIR/configs; ./$LUSTRE_CONFIG; cd $BASEDIR
+    pdsh -w $CLIENTS mkdir -p $MOUNT
+    pdsh -f 1 -w $SERVERS $lconf $LCONF_OPS $xmlfile
+    pdsh -f 1 -w $CLIENTS $lconf $LCONF_OPS $xmlfile
+    pdsh -w $ALLNODES 'echo 0 > /proc/sys/portals/debug'
+    pdsh -w $SINGLECLIENT mkdir $MOUNT/$TESTUSER
+    pdsh -w $SINGLECLIENT chown $TESTUSER $MOUNT/$TESTUSER
+}
