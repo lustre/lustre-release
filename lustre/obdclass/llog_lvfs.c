@@ -145,7 +145,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
 
         if (handle->lgh_file->f_dentry->d_inode->i_size == 0) {
                 CERROR("not reading header from 0-byte log\n");
-                RETURN(0);
+                RETURN(LLOG_EEMPTY);
         }
 
         rc = llog_lvfs_read_blob(handle->lgh_file, handle->lgh_hdr,

@@ -56,6 +56,11 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
         if (rc)
                 RETURN(ERR_PTR(rc));
 
+        rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY, 
+                         &cathandle->lgh_hdr->llh_tgtuuid);
+        if (rc)
+                GOTO(out_destroy, rc);
+
 
         llh = cathandle->lgh_hdr;
         bitmap_size = sizeof(llh->llh_bitmap) * 8;
@@ -75,26 +80,27 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
                 GOTO(out_destroy, rc = -ENOSPC);
         }
 
+
         CDEBUG(D_HA, "new recovery log "LPX64": catalog index %u\n",
                loghandle->lgh_id.lgl_oid, index);
 
+        /* build the record for this log in the catalog */
         rec.lid_hdr.lrh_len = sizeof(rec);
         rec.lid_hdr.lrh_index = index;
-        rec.lid_hdr.lrh_type = LLOG_OBJECT_MAGIC;
+        rec.lid_hdr.lrh_type = LLOG_HDR_MAGIC;
         rec.lid_id = loghandle->lgh_id;
         rec.lid_tail.lrt_len = sizeof(rec);
         rec.lid_tail.lrt_index = index;
 
         /* update the catalog: header and record */
         rc = llog_write_rec(cathandle, &rec.lid_hdr, 
-                            &loghandle->lgh_log_cat_cookie, 1,
-                            NULL, index);
+                            &loghandle->u.phd.phd_cookie, 1, NULL, index);
         if (rc < 0) {
                 GOTO(out_destroy, rc);
         }
 
-        cathandle->lgh_cat_current_log = loghandle;
-        list_add_tail(&loghandle->lgh_list, &cathandle->lgh_list);
+        cathandle->u.chd.chd_current_log = loghandle;
+        list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
 
  out_destroy:
         llog_destroy(loghandle);
@@ -116,7 +122,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
         if (cathandle == NULL)
                 RETURN(-EBADF);
 
-        list_for_each_entry(loghandle, &cathandle->lgh_list, lgh_list) {
+        list_for_each_entry(loghandle, &cathandle->u.chd.chd_head, u.phd.phd_entry) {
                 struct llog_logid *cgl = &loghandle->lgh_id;
                 if (cgl->lgl_oid == logid->lgl_oid) {
                         if (cgl->lgl_ogen != logid->lgl_ogen) {
@@ -134,7 +140,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                 CERROR("error opening log id "LPX64":%x: rc %d\n",
                        logid->lgl_oid, logid->lgl_ogen, rc);
         } else {
-                list_add(&loghandle->lgh_list, &cathandle->lgh_list);
+                list_add(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
         }
 
 out:
@@ -160,12 +166,8 @@ int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
         if (cathandle->lgh_file->f_dentry->d_inode->i_size == 0) {
                 llog_write_rec(cathandle, &llh->llh_hdr, NULL, 0, NULL, 0);
 
-write_hdr:      llh->llh_hdr.lrh_type = LLOG_CATALOG_MAGIC;
-                llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
-                llh->llh_timestamp = LTIME_S(CURRENT_TIME);
-                llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
-                memcpy(&llh->llh_tgtuuid, tgtuuid, sizeof(llh->llh_tgtuuid));
-                rc = lustre_fwrite(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
+write_hdr:    
+  rc = lustre_fwrite(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
                                    &offset);
                 if (rc != LLOG_CHUNK_SIZE) {
                         CERROR("error writing catalog header: rc %d\n", rc);

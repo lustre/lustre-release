@@ -52,8 +52,6 @@ struct llog_handle *llog_alloc_handle(void)
                 OBD_FREE(loghandle, sizeof(*loghandle));
                 RETURN(ERR_PTR(-ENOMEM));
         }
-
-        INIT_LIST_HEAD(&loghandle->lgh_list);
         sema_init(&loghandle->lgh_lock, 1);
 
         RETURN(loghandle);
@@ -66,7 +64,11 @@ void llog_free_handle(struct llog_handle *loghandle)
         if (!loghandle)
                 return;
 
-        list_del_init(&loghandle->lgh_list);
+        if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)
+                list_del_init(&loghandle->u.phd.phd_entry);
+        if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
+                LASSERT(list_empty(&loghandle->u.chd.chd_head));
+
         OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
         OBD_FREE(loghandle, sizeof(*loghandle));
 }
@@ -108,25 +110,47 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
 }
 EXPORT_SYMBOL(llog_cancel_rec);
 
-#if 0
-int filter_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
-                      int num_cookies, struct llog_cookie *logcookies,
-                      int flags)
+int llog_init_handle(struct llog_handle *handle, int flags, struct obd_uuid *uuid)
 {
-        struct obd_device *obd = exp->exp_obd;
-        struct obd_run_ctxt saved;
-        int rc;
-        ENTRY;
+        int rc; 
+        struct llog_log_hdr *llh;
 
-        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
-        rc = llog_cancel_records(obd->u.filter.fo_catalog, num_cookies,
-                                 logcookies);
-        pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
+        LASSERT(handle->lgh_hdr == NULL);
 
-        RETURN(rc);
+        OBD_ALLOC(llh, sizeof(*llh));
+        if (!llh)
+                RETURN(-ENOMEM);
+
+        handle->lgh_hdr = llh;
+        rc = llog_lvfs_read_hdr(handle);
+        if (rc == 0) { 
+                LASSERT(llh->llh_flags == flags);
+                LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
+                RETURN(0);
+        } else if (rc != LLOG_EEMPTY) { 
+                GOTO(out, rc);
+        }
+        
+        llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
+        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
+        llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
+        llh->llh_timestamp = LTIME_S(CURRENT_TIME);
+        llh->llh_flags = flags;
+        memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
+        llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
+
+        if (llh->llh_flags & LLOG_F_IS_CAT)
+                INIT_LIST_HEAD(&handle->u.chd.chd_head);
+        if (llh->llh_flags & LLOG_F_IS_PLAIN) {
+                INIT_LIST_HEAD(&handle->u.phd.phd_entry);
+                handle->lgh_last_idx = 1;
+        }
+ out:
+        if (rc)
+                OBD_FREE(llh, sizeof(*llh));
+        return(rc);
+
 }
-#endif
-
 
 int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 {
@@ -181,6 +205,24 @@ int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 }
 EXPORT_SYMBOL(llog_process_log);
 
+#if 0
+int filter_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
+                      int num_cookies, struct llog_cookie *logcookies,
+                      int flags)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct obd_run_ctxt saved;
+        int rc;
+        ENTRY;
+
+        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
+        rc = llog_cancel_records(obd->u.filter.fo_catalog, num_cookies,
+                                 logcookies);
+        pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
+
+        RETURN(rc);
+}
+
 int llog_write_header(struct llog_handle *loghandle, int size)
 {
         struct llog_log_hdr *llh;
@@ -204,3 +246,4 @@ int llog_write_header(struct llog_handle *loghandle, int size)
                 rc = 0;
         RETURN(rc);
 }
+#endif
