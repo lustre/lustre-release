@@ -357,6 +357,7 @@ ptlrpc_server_free_request(struct ptlrpc_service *svc, struct ptlrpc_request *re
 static int 
 ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 {
+        struct obd_export     *export = NULL;
         struct ptlrpc_request *request;
         unsigned long          flags;
         struct timeval         work_start;
@@ -440,7 +441,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                                   request->rq_export->exp_conn_cnt);
                         goto put_conn;
                 }
-
+                
+                export = class_export_rpc_get(request->rq_export);
                 request->rq_export->exp_last_request_time =
                         LTIME_S(CURRENT_TIME);
         }
@@ -467,6 +469,9 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                request->rq_peer.peer_ni->pni_name,
                ptlrpc_peernid2str(&request->rq_peer, str),
                request->rq_reqmsg->opc);
+
+        if (export != NULL)
+                class_export_rpc_put(export);
 
 put_conn:
         if (request->rq_export != NULL)

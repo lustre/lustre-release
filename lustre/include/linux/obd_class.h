@@ -103,6 +103,22 @@ struct lustre_profile {
 struct lustre_profile *class_get_profile(char * prof);
 void class_del_profile(char *prof);
 
+#define class_export_rpc_get(exp)                                       \
+({                                                                      \
+        atomic_inc(&(exp)->exp_rpc_count);                              \
+        CDEBUG(D_INFO, "RPC GETting export %p : new rpc_count %d\n",    \
+               (exp), atomic_read(&(exp)->exp_rpc_count));              \
+        class_export_get(exp);                                          \
+})
+
+#define class_export_rpc_put(exp)                                       \
+({                                                                      \
+        atomic_dec(&(exp)->exp_rpc_count);                              \
+        CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
+               (exp), atomic_read(&(exp)->exp_rpc_count));              \
+        class_export_put(exp);                                          \
+})
+
 #define class_export_get(exp)                                                  \
 ({                                                                             \
         struct obd_export *exp_ = exp;                                         \

@@ -462,6 +462,7 @@ struct obd_export *class_new_export(struct obd_device *obd)
 
         export->exp_conn_cnt = 0;
         atomic_set(&export->exp_refcount, 2);
+        atomic_set(&export->exp_rpc_count, 0);
         export->exp_obd = obd;
         INIT_LIST_HEAD(&export->exp_outstanding_replies);
         /* XXX this should be in LDLM init */

@@ -64,6 +64,7 @@ struct filter_export_data {
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
+        atomic_t                  exp_rpc_count;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
         struct obd_device        *exp_obd;
