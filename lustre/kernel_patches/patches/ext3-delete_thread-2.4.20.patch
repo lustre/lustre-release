@@ -1,7 +1,7 @@
 diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 --- origin/fs/ext3/super.c	2003-05-04 17:23:52.000000000 +0400
 +++ linux/fs/ext3/super.c	2003-05-04 17:09:20.000000000 +0400
-@@ -398,6 +398,210 @@ static void dump_orphan_list(struct supe
+@@ -398,6 +398,218 @@ static void dump_orphan_list(struct supe
  	}
  }
  
@@ -35,22 +35,24 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +
 +	INIT_LIST_HEAD(&sbi->s_delete_list);
 +	wake_up(&sbi->s_delete_waiter_queue);
-+	ext3_debug("EXT3-fs: delete thread on %s started\n",
-+	       kdevname(sb->s_dev));
++	ext3_debug("delete thread on %s started\n", kdevname(sb->s_dev));
 +
 +	/* main loop */
 +	for (;;) {
-+		sleep_on(&sbi->s_delete_thread_queue);
++		wait_event_interruptible(&sbi->s_delete_thread_queue,
++					 !list_empty(&sbi->s_delete_list) ||
++					 !test_opt(sb, ASYNCDEL));
 +		ext3_debug("%s woken up: %lu inodes, %lu blocks\n",
 +			   tsk->comm,sbi->s_delete_inodes,sbi->s_delete_blocks);
 +
 +		spin_lock(&sbi->s_delete_lock);
 +		if (list_empty(&sbi->s_delete_list)) {
++			clear_opt(sbi->s_mount_opt, ASYNCDEL);
 +			memset(&sbi->s_delete_list, 0,
 +			       sizeof(sbi->s_delete_list));
 +			spin_unlock(&sbi->s_delete_lock);
-+			ext3_debug("ext3 delete thread on %s exiting\n",
-+			       kdevname(sb->s_dev));
++			ext3_debug("delete thread on %s exiting\n",
++				   kdevname(sb->s_dev));
 +			wake_up(&sbi->s_delete_waiter_queue);
 +			break;
 +		}
@@ -72,12 +74,13 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +			sbi->s_delete_blocks -= blocks;
 +			sbi->s_delete_inodes--;
 +		}
-+		if (sbi->s_delete_blocks != 0 || sbi->s_delete_inodes != 0)
++		if (sbi->s_delete_blocks != 0 || sbi->s_delete_inodes != 0) {
 +			ext3_warning(sb, __FUNCTION__,
 +				     "%lu blocks, %lu inodes on list?\n",
 +				     sbi->s_delete_blocks,sbi->s_delete_inodes);
-+		sbi->s_delete_blocks = 0;
-+		sbi->s_delete_inodes = 0;
++			sbi->s_delete_blocks = 0;
++			sbi->s_delete_inodes = 0;
++		}
 +		spin_unlock(&sbi->s_delete_lock);
 +		wake_up(&sbi->s_delete_waiter_queue);
 +	}
@@ -91,11 +94,11 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +	int rc;
 +
 +	spin_lock_init(&sbi->s_delete_lock);
-+	memset(&sbi->s_delete_list, 0, sizeof(sbi->s_delete_list));
 +	init_waitqueue_head(&sbi->s_delete_thread_queue);
 +	init_waitqueue_head(&sbi->s_delete_waiter_queue);
-+	sbi->s_delete_blocks = 0;
-+	sbi->s_delete_inodes = 0;
++
++	if (!test_opt(sb, ASYNCDEL))
++		return;
 +
 +	rc = kernel_thread(ext3_delete_thread, sb, CLONE_VM | CLONE_FILES);
 +	if (rc < 0)
@@ -107,6 +110,10 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +
 +static void ext3_stop_delete_thread(struct ext3_sb_info *sbi)
 +{
++	if (sbi->s_delete_list.next == 0)	/* thread never started */
++		return;
++
++	clear_opt(sbi->s_mount_flags, ASYNCDEL);
 +	wake_up(&sbi->s_delete_thread_queue);
 +	wait_event(sbi->s_delete_waiter_queue, list_empty(&sbi->s_delete_list));
 +}
@@ -134,8 +141,8 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +		clear_inode(old_inode);
 +		return;
 +	}
-+	
-+	if (!test_opt (old_inode->i_sb, ASYNCDEL)) {
++
++	if (!test_opt(old_inode->i_sb, ASYNCDEL)) {
 +		ext3_delete_inode(old_inode);
 +		return;
 +	}
@@ -173,7 +180,7 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +	}
 +	if (!new_inode) {
 +		up(&sbi->s_orphan_lock);
-+		ext3_debug(KERN_DEBUG "delete inode %lu directly (bad read)\n",
++		ext3_debug("delete inode %lu directly (bad read)\n",
 +			   old_inode->i_ino);
 +		ext3_delete_inode(old_inode);
 +		return;
@@ -193,14 +200,15 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +
 +	clear_inode(old_inode);
 +
-+	ext3_debug("delete inode %lu (%lu blocks) by thread\n",
-+		   new_inode->i_ino, blocks);
 +	spin_lock(&sbi->s_delete_lock);
 +	J_ASSERT(list_empty(&new_inode->i_dentry));
 +	list_add_tail(&new_inode->i_dentry, &sbi->s_delete_list);
 +	sbi->s_delete_blocks += blocks;
 +	sbi->s_delete_inodes++;
 +	spin_unlock(&sbi->s_delete_lock);
++
++	ext3_debug("delete inode %lu (%lu blocks) by thread\n",
++		   new_inode->i_ino, blocks);
 +
 +	wake_up(&sbi->s_delete_thread_queue);
 +}
@@ -232,13 +240,18 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
  	write_super_lockfs: ext3_write_super_lockfs, /* BKL not held. Take it */
-@@ -514,6 +725,11 @@ static int parse_options (char * options
+@@ -514,6 +725,16 @@ static int parse_options (char * options
  	     this_char = strtok (NULL, ",")) {
  		if ((value = strchr (this_char, '=')) != NULL)
  			*value++ = 0;
 +#ifdef EXT3_DELETE_THREAD
 +		if (!strcmp(this_char, "asyncdel"))
 +			set_opt(*mount_options, ASYNCDEL);
++		else if (!strcmp(this_char, "noasyncdel"))
++			if (is_remount)
++				ext3_stop_delete_thread(sbi);
++			else
++				clear_opt(*mount_options, ASYNCDEL);
 +		else
 +#endif
  #ifdef CONFIG_EXT3_FS_XATTR_USER
