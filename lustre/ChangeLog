@@ -3,6 +3,9 @@ TBD
 	* bug fixes:
 	  - in-use dentries weren't being reused properly (617851)
 	  - prevent multiple LDLM setup (599178)
+	  - fix LOV size caclulations for truncate (617853)
+	  - fix client handling of MDS intent errors (POSIX)
+	  - fix permission bug in lovstripe.c test (624321)
 
 2002-10-10  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_14
