@@ -64,7 +64,7 @@ int tcpnal_send(nal_cb_t *n,
 {
     connection c;
     bridge b=(bridge)n->nal_data;
-    struct iovec tiov[65];
+    struct iovec tiov[257];
 
     if (!(c=force_tcp_connection((manager)b->lower,
                                  PNAL_IP(nid,b),
@@ -82,7 +82,7 @@ int tcpnal_send(nal_cb_t *n,
     LASSERT (niov <= 1);
     if (len) syscall(SYS_write, c->fd,iov[0].iov_base,len);
 #else
-    LASSERT (niov <= 64);
+    LASSERT (niov <= 256);
 
     tiov[0].iov_base = hdr;
     tiov[0].iov_len = sizeof(ptl_hdr_t);
