@@ -46,7 +46,7 @@ import xml.dom.minidom
 from xml.dom.ext import PrettyPrint
 
 
-DEFAULT_PORT = 888 # XXX What is the right default acceptor port to use?
+DEFAULT_PORT = 988 # XXX What is the right default acceptor port to use?
 
 def usage():
     print """usage: lmc [--node --ost | --mtpt | --lov] args
