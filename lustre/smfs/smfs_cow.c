@@ -173,13 +173,14 @@ int smfs_cow_cleanup(struct super_block *sb)
 * should be recorgnized here*/
 int smfs_init_snap_inode_info(struct inode *inode, int flags)
 {
-        struct snap_inode_info *sni_info = I2SNAPI(inode);
-        struct fsfilt_operations *snapops = I2SNAPOPS(inode);
         int vallen, rc = 0;
         ENTRY;
 
         if (SMFS_DO_COW(S2SMI(inode->i_sb)) &&
             (flags & SM_DO_COW)) {
+                struct snap_inode_info *sni_info = I2SNAPI(inode);
+                struct fsfilt_operations *snapops = I2SNAPOPS(inode);
+                
                 sni_info->sn_flags = flags;
                 vallen = sizeof(sni_info->sn_gen);
 
