@@ -1,0 +1,50 @@
+#! /bin/sh
+# patch-if-change - Copy FILES to the current directory, apply PATCH,
+# and restore timestamps on files that weren't changed.
+# Gordon Matzigkeit <gord@fig.org>, 2001-09-25
+
+# Usage: patch-if-change [PATCHFLAGS]... PATCH FILES...
+PATCHFLAGS=
+PATCH=
+FILES=
+
+# Arguments beginning with a dash are interpreted as options for
+# patch.
+# The first non-option is the patch file, and the rest are files to be
+# preserved.
+for arg
+do
+ case "$arg" in
+ -*) PATCHFLAGS="$PATCHFLAGS $arg" ;;
+ *)
+  if test -z "$PATCH"; then
+   PATCH="$arg"
+  else
+   FILES="$FILES $arg"
+  fi
+  ;;
+ esac
+done
+
+# Make backups of all the affected files.
+for file in $FILES; do
+ oldfile=`echo "$file" | sed -e 'sX.*/XX'`
+ test -f $oldfile && { cp -p $oldfile $oldfile.backup || exit $?; }
+ cp $file . || exit $?
+done
+
+# Apply the patch.
+patch $PATCHFLAGS < $PATCH
+
+# Revert the files that didn't change.
+for file in $FILES; do
+ oldfile=`echo "$file" | sed -e 'sX.*/XX'`
+ test -f $oldfile.backup || continue
+ if cmp -s $oldfile $oldfile.backup; then
+  mv -f $oldfile.backup $oldfile
+ else
+  rm -f $oldfile.backup
+ fi
+done
+
+exit 0
