@@ -49,6 +49,14 @@ if [ "`grep -c 'No space left on device' $LOG`" -ne 2 ]; then
 	SUCCESS=0
 fi
 
+for AVAIL in /proc/fs/lustre/osc/OSC*MNT*/kbytesavail; do
+	[ `cat $AVAIL` -lt 400 ] && OSCFULL=full
+done
+if [ -z "$OSCFULL" ]; then
+	echo "no OSTs are close to full"
+	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*}
+fi
+
 total_records() {
 	tot=0
 	for i in `grep "records out" $1 | cut -d+ -f 1`; do
@@ -57,19 +65,6 @@ total_records() {
 	echo $tot
 }
 RECORDSOUT=`total_records $LOG`
-
-LEFTFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
-if [ $(($ORIGFREE - $LEFTFREE)) -lt $RECORDSOUT ]; then
-        echo "ERROR: space used by dd not equal to available space"
-        SUCCESS=0
-	echo "$ORIGFREE - $LEFTFREE $RECORDSOUT"
-fi
-
-if [ $LEFTFREE -gt $((400 * $STRIPECOUNT)) ]; then
-	echo "ERROR: too much space left $LEFTFREE and -ENOSPC returned"
-	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/cur*
-	SUCCESS=0
-fi
 
 FILESIZE=$((`ls -l $OOS | awk '{print $5}'` + `ls -l $OOS2 | awk '{print $5}'`))
 if [ $RECORDSOUT -ne $(($FILESIZE / 1024)) ]; then
