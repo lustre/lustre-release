@@ -324,14 +324,17 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 #if 0
         if (LTIME_S(CURRENT_TIME) - lock->l_export->exp_last_request_time > 30){
                 ldlm_failed_ast(lock, -ETIMEDOUT, "Not-attempted blocking");
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 RETURN(-ETIMEDOUT);
         }
 #endif
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LDLM_BL_CALLBACK, 1, &size, NULL);
-        if (!req)
+        if (req == NULL) {
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 RETURN(-ENOMEM);
+        }
 
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
         memcpy(&body->lock_handle1, &lock->l_remote_handle,

@@ -604,12 +604,13 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 
         if (lock->l_destroyed) {
                 CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
-                return;
+                goto out;
         }
 
         LASSERT(list_empty(&lock->l_res_link));
 
         list_add_tail(&lock->l_res_link, head);
+ out:
         l_unlock(&res->lr_namespace->ns_lock);
 }
 
