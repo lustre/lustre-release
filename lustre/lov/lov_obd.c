@@ -566,7 +566,7 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
 
                 if (ost_uuid && !obd_uuid_equals(ost_uuid, &lov->tgts[i].uuid))
                         continue;
-                
+
                 memcpy(tmp_oa, src_oa, sizeof(*tmp_oa));
 
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
@@ -603,7 +603,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
 
         LASSERT(ea != NULL);
 
-        if ((src_oa->o_valid & OBD_MD_FLFLAGS) && 
+        if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
             src_oa->o_flags == OBD_FL_DELORPHAN) {
                 rc = lov_clear_orphans(exp, src_oa, ea, oti);
                 RETURN(rc);
@@ -617,7 +617,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
 
-        /* Recreate a specific object id at the given OST index */ 
+        /* Recreate a specific object id at the given OST index */
         if (src_oa->o_valid & OBD_MD_FLFLAGS && src_oa->o_flags &
                                                 OBD_FL_RECREATE_OBJS) {
                  struct lov_stripe_md obj_md;
@@ -639,7 +639,8 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                  if (i == lsm->lsm_stripe_count)
                          RETURN(-EINVAL);
 
-                 rc = obd_create(lov->tgts[ost_idx].ltd_exp, src_oa, &obj_mdp, oti);
+                 rc = obd_create(lov->tgts[ost_idx].ltd_exp, src_oa,
+                                 &obj_mdp, oti);
                  RETURN(rc);
         }
 
@@ -690,14 +691,14 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         }
 
         if (*ea == NULL || lsm->lsm_oinfo[0].loi_ost_idx >= ost_count) {
-                if (ost_start_count <= 0) {
+                if (--ost_start_count <= 0) {
                         ost_start_idx = ll_insecure_random_int();
                         ost_start_count = LOV_CREATE_RESEED_INTERVAL;
-                } else {
-                        --ost_start_count;
-                        ost_start_idx += lsm->lsm_stripe_count;
-                        if (lsm->lsm_stripe_count == ost_count)
-                                ++ost_start_idx;
+                } else if (lsm->lsm_stripe_count >=
+                           lov->desc.ld_active_tgt_count) {
+                        /* If we allocate from all of the stripes, make the
+                         * next file start on the next OST. */
+                        ++ost_start_idx;
                 }
                 ost_idx = ost_start_idx % ost_count;
         } else {
@@ -721,6 +722,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                 struct lov_stripe_md *obj_mdp = &obj_md;
                 int err;
 
+                ++ost_start_idx;
                 if (lov->tgts[ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
                         continue;
