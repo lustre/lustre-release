@@ -265,7 +265,7 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         if (rc)
                 RETURN(-EFAULT);
 
-#warning FIXME: struct lov_mds_md is little-endian everywhere else
+        /* Bug 1185 FIXME: struct lov_mds_md is little-endian everywhere else */
 
         if (lmm.lmm_magic != LOV_MAGIC) {
                 CERROR("bad userland LOV MAGIC: %#08x != %#08x\n",
@@ -340,11 +340,7 @@ int lov_getstripe(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         rc = lov_packmd(conn, &lmmk, lsm);
         if (rc < 0)
                 RETURN(rc);
-#ifdef __KERNEL__
-#if __BIG_ENDIAN
-#error FIXME: convert lmmk to big-endian before copy to userspace
-#endif
-#endif
+        /* Bug 1185 FIXME: convert lmmk to big-endian before copy to userspace */
         lmm_size = rc;
         rc = 0;
 
