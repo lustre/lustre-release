@@ -38,8 +38,10 @@
  * initialization routines must be called after device
  * driver initialization
  */
+#ifndef MODULE
 #undef module_init
 #define module_init(a)     late_initcall(a)
+#endif
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
 #define TryLockPage(page)                TestSetPageLocked(page)
@@ -54,6 +56,12 @@
 
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
+#define ll_call_writepage(inode, page)  \
+                                (inode)->i_mapping->a_ops->writepage(page, NULL)
+#define ll_invalidate_inode_pages(inode) \
+                                invalidate_inode_pages((inode)->i_mapping)
+#define ll_truncate_complete_page(page) \
+                                truncate_complete_page(page->mapping, page)
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
 
@@ -76,11 +84,6 @@ static inline void lustre_daemonize_helper(void)
                 CERROR("we aren't group leader\n");
         current->tty = NULL;
 }
-
-#define  rb_node_s rb_node
-#define  rb_root_s rb_root
-typedef struct rb_root_s rb_root_t;
-typedef struct rb_node_s rb_node_t;
 
 #define smp_num_cpus    NR_CPUS
 
@@ -139,6 +142,10 @@ typedef long sector_t;
 
 #define ll_pgcache_lock(mapping)        spin_lock(&pagecache_lock)
 #define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
+#define ll_call_writepage(inode, page)  \
+                               (inode)->i_mapping->a_ops->writepage(page)
+#define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
+#define ll_truncate_complete_page(page) truncate_complete_page(page)
 
 static inline void __d_drop(struct dentry *dentry)
 {
