@@ -1462,7 +1462,7 @@ repeat:
                         GOTO(cleanup, rc);
                 }
                         
-                cleanup_phase = 2; /* valid lockh */
+                cleanup_phase = 2; /* created directory object */
 
                 CDEBUG(D_OTHER, "created dirobj: %lu/%lu mode %o\n",
                                 (unsigned long) new->d_inode->i_ino,
