@@ -16,7 +16,7 @@
 
 <!ELEMENT profile (service_ref)*>
 <!ATTLIST profile %tag.attr;>
-<!ELEMENT mountpoint (path | fileset | mdc_ref | lov_ref)*>
+<!ELEMENT mountpoint (path | fileset | mdc_ref | osc_ref)*>
 <!ATTLIST mountpoint %tag.attr;>
 <!ELEMENT node (network*, profile_ref)>
 <!ATTLIST node %tag.attr;>
