@@ -252,7 +252,7 @@ static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
 
 static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
-        struct ptlrpc_bulk_desc **bulk_vec = NULL, *bulk = NULL;
+        struct ptlrpc_bulk_desc *bulk = NULL;
         struct obd_conn conn;
         void *tmp1, *tmp2, *end2;
         struct niobuf *nb, *dst, *res = NULL;
@@ -279,8 +279,9 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                         rc = -EFAULT;
                         break;
                 }
-                for (j = 0; j < ioo->ioo_bufcnt; j++)
+                for (j = 0; j < ioo->ioo_bufcnt; j++) {
                         ost_unpack_niobuf(&tmp2, &nb);
+                }
         }
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
@@ -297,13 +298,13 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                                     tmp1, niocount, tmp2, res);
 
         if (req->rq_status)
-                GOTO(out, 0);
+                GOTO(out_res, 0);
 
         for (i = 0; i < niocount; i++) {
                 bulk = ptlrpc_prep_bulk(req->rq_connection);
                 if (bulk == NULL) {
                         CERROR("cannot alloc bulk desc\n");
-                        GOTO(out, rc = -ENOMEM);
+                        GOTO(out_res, rc = -ENOMEM);
                 }
 
                 dst = &(((struct niobuf *)tmp2)[i]);
@@ -312,12 +313,12 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                 bulk->b_buflen = PAGE_SIZE;
                 rc = ptlrpc_send_bulk(bulk, OST_BULK_PORTAL);
                 if (rc)
-                        GOTO(out, rc);
+                        GOTO(out_bulk, rc);
                 wait_event_interruptible(bulk->b_waitq,
                                          ptlrpc_check_bulk_sent(bulk));
 
                 if (bulk->b_flags & PTL_RPC_FL_INTR)
-                        GOTO(out, 0);
+                        GOTO(out_bulk, 0);
 
                 ptlrpc_free_bulk(bulk);
         }
@@ -330,17 +331,12 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                                       tmp1, niocount, res);
 
         EXIT;
- out:
-        if (res != NULL)
-                OBD_FREE(res, sizeof(*res) * niocount);
+out_bulk:
         if (bulk != NULL)
                 ptlrpc_free_bulk(bulk);
-        if (bulk_vec != NULL) {
-                for (i = 0; i < niocount; i++)
-                        if (bulk_vec[i] != NULL)
-                                ptlrpc_free_bulk(bulk_vec[i]);
-                OBD_FREE(bulk_vec, niocount * sizeof(*bulk_vec));
-        }
+out_res:
+        if (res != NULL)
+                OBD_FREE(res, sizeof(*res) * niocount);
 
         return 0;
 }
@@ -402,8 +398,9 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                         rc = -EFAULT;
                         break;
                 }
-                for (j = 0; j < ioo->ioo_bufcnt; j++)
+                for (j = 0; j < ioo->ioo_bufcnt; j++) {
                         ost_unpack_niobuf((void *)&tmp2, &nb);
+                }
         }
 
         size[1] = niocount * sizeof(*nb);
