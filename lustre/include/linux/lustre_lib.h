@@ -98,7 +98,7 @@ struct brw_cb_data {
         void *brw_data;
 };
 
-int ll_sync_brw_cb(struct brw_cb_data *data, int err, int phase);
+int ll_sync_brw_cb(struct brw_cb_data *brw_cbd, int err, int phase);
 struct  brw_cb_data *ll_init_brw_cb_data(void);
 
 /* simple.c */

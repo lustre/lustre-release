@@ -332,6 +332,10 @@ static void unmap_and_decref_bulk_desc(void *data)
         EXIT;
 }
 
+/*  this is the callback function which is invoked by the Portals
+ *  event handler associated with the bulk_sink queue and bulk_source queue. 
+ */
+
 static void osc_ptl_ev_hdlr(struct ptlrpc_bulk_desc *desc, void *data)
 {
         struct osc_brw_cb_data *cb_data = data;

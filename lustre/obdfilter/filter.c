@@ -948,7 +948,7 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
 static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
                               struct lov_stripe_md *lsm, obd_count oa_bufs,
                               struct brw_page *pga, brw_cb_t callback,
-                              struct brw_cb_data *data)
+                              struct brw_cb_data *brw_cbd)
 {
         struct obd_export       *export = class_conn2export(conn);
         struct obd_run_ctxt      saved;

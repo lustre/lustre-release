@@ -9,7 +9,7 @@ MDSDEV=$TMP/mds1
 MDSSIZE=50000
 
 OSTDEV=$TMP/ost1
-OSTSIZE=100000
+OSTSIZE=50000
 
 kver=`uname -r | cut -d "." -f 1,2`
 

@@ -23,7 +23,7 @@ noinst_SCRIPTS += fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 	runtests runvmstat snaprun.sh tbox.sh  common.sh
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme mcreate
 noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += lovstripe # ldaptest 
+noinst_PROGRAMS += lovstripe stat # ldaptest 
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
@@ -41,5 +41,6 @@ test_brw_SOURCES = test_brw.c
 openclose_SOURCES = openclose.c
 createdestroy_SOURCES = createdestroy.c
 lovstripe_SOURCES = lovstripe.c
+stat_SOURCES = stat.c
 
 include $(top_srcdir)/Rules
