@@ -41,8 +41,9 @@ replay_barrier() {
 }
 
 fail() {
-    stop mds
-    start mds
+    local facet=$1
+    stop $facet -f --failover --nomod
+    start $facet --nomod
     df $MOUNTPT
 }
 
@@ -67,15 +68,132 @@ gen_config() {
     do_lmc --add mtpt --node client_facet --path $MOUNTPT --mds mds1 --ost ost1
 }
 
+error() {
+    echo '**** FAIL:' $@
+    exit 1
+}
+
+build_test_filter() {
+        for O in $ONLY; do
+            eval ONLY_${O}=true
+        done
+        for E in $EXCEPT $ALWAYS_EXCEPT; do
+            eval EXCEPT_${E}=true
+        done
+}
+
+_basetest() {
+    echo $*
+}
+
+basetest() {
+    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+}
+
+run_test() {
+         base=`basetest $1`
+         if [ ! -z $ONLY ]; then
+                 testname=ONLY_$1
+                 if [ ${!testname}x != x ]; then
+ 			run_one $1 "$2"
+ 			return $?
+                 fi
+                 testname=ONLY_$base
+                 if [ ${!testname}x != x ]; then
+                         run_one $1 "$2"
+                         return $?
+                 fi
+                 echo -n "."
+                 return 0
+ 	fi
+        testname=EXCEPT_$1
+        if [ ${!testname}x != x ]; then
+                 echo "skipping excluded test $1"
+                 return 0
+        fi
+        testname=EXCEPT_$base
+        if [ ${!testname}x != x ]; then
+                 echo "skipping excluded test $1 (base $base)"
+                 return 0
+        fi
+        run_one $1 "$2"
+ 	return $?
+}
+
+EQUALS="======================================================================"
+
+run_one() {
+    testnum=$1
+    message=$2
+    
+    # Pretty tests run faster.
+    echo -n '=====' $testnum: $message
+    local suffixlen=$((65 - `echo -n $2 | wc -c | awk '{print $1}'`))
+    printf ' %.*s\n' $suffixlen $EQUALS
+
+    test_${testnum} || error "test_$testnum failed with $?"
+}
+
+build_test_filter
+
 gen_config
-start mds
-start ost
-start client
+start mds --reformat $MDSLCONFARGS
+start ost --reformat $OSTLCONFARGS
+start client --gdb $CLIENTLCONFARGS
 
-touch $MOUNTPT/lustre-works
-replay_barrier mds
-touch $MOUNTPT/lustre-does-not-work
+test_1() {
+    replay_barrier mds
+    mcreate $MOUNTPT/f1
+    fail mds
+    ls $MOUNTPT/f1
+    rm $MOUNTPT/f1
+}
+run_test 1 "simple create"
 
-stop client
+test_2() {
+    replay_barrier mds
+    mkdir $MOUNTPT/d2
+    mcreate $MOUNTPT/d2/f2
+    fail mds
+    ls $MOUNTPT/d2/f2
+    rm -fr $MOUNTPT/d2
+}
+run_test 2 "mkdir + contained create"
+
+test_3() {
+    mkdir $MOUNTPT/d3
+    replay_barrier mds
+    mcreate $MOUNTPT/d3/f3
+    fail mds
+    ls $MOUNTPT/d3/f3
+    rm -fr $MOUNTPT/d3
+}
+run_test 3 "mkdir |X| contained create"
+
+test_4() {
+    replay_barrier mds
+    multiop $MOUNTPT/f4 mo_c &
+    MULTIPID=$!
+    sleep 1
+    fail mds
+    ls $MOUNTPT/f4
+    kill -USR1 $MULTIPID
+    wait
+    rm $MOUNTPT/f4
+}
+run_test 4 "open |X| close"
+
+test_5() {
+}
+run_test 5 "|X| create (same inum/gen)"
+
+test_6() {
+}
+run_test 6 "create |X| rename unlink"
+
+test_7() {
+run_test 7 "create open write rename |X| create-old-name read"
+
+stop client $CLIENTLCONFARGS
 stop ost
-stop mds
+stop mds $MDSLCONFARGS
