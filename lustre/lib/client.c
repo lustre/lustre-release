@@ -44,12 +44,12 @@ struct obd_device *client_tgtuuid2obd(char *tgtuuid)
 {
         int i;
 
-        for (i=0; i < MAX_OBD_DEVICES; i++) {
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if ((strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0) ||
                     (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)) {
                         struct client_obd *cli = &obd->u.cli;
-                        if (strncmp(tgtuuid, cli->cl_target_uuid, 
+                        if (strncmp(tgtuuid, cli->cl_target_uuid,
                                     sizeof(cli->cl_target_uuid)) == 0)
                                 return obd;
                 }
@@ -107,7 +107,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_connection = ptlrpc_uuid_to_connection(server_uuid);
         if (!imp->imp_connection)
                 RETURN(-ENOENT);
-        
+
         INIT_LIST_HEAD(&imp->imp_replay_list);
         INIT_LIST_HEAD(&imp->imp_sending_list);
         INIT_LIST_HEAD(&imp->imp_delayed_list);
@@ -259,12 +259,12 @@ int client_obd_disconnect(struct lustre_handle *conn)
                                   NULL);
         if (!request)
                 GOTO(out_disco, rc = -ENOMEM);
-        
+
         request->rq_replen = lustre_msg_size(0, NULL);
 
         /* Process disconnects even if we're waiting for recovery. */
         request->rq_level = LUSTRE_CONN_RECOVD;
-        
+
         rc = ptlrpc_queue_wait(request);
         if (rc)
                 GOTO(out_req, rc);
