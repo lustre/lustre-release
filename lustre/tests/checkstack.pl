@@ -26,37 +26,46 @@
 #
 # use anything else and feel the pain ;)
 {
-	my $arch = `uname -m`;
-	$x	= "[0-9a-f]";	# hex character
-	$xs	= "[0-9a-f ]";	# hex character or space
+	my $arch = shift;
+	$x	= "[0-9a-f]{3,5}";		# hex number     >= 256
+	$d	= "([0-9]{2}|[2-9])[0-9]{2}";	# decimal number >= 200
 	if ($arch eq "") {
-		print "Usage:  objdump -d vmlinux | checkstack.pl\n";
-		print "where arch is i386, ia64, ppc, or s390\n";
-		print "Each output line gives a function's stack usage and name\n";
-		print "Lines are output in order of decreasing stack usage\n";
-		die "Error: must specify architecture on commandline";
+		$arch = `uname -m`;
 	}
 	if ($arch =~ /^i[3456]86$/) {
 		#c0105234:       81 ec ac 05 00 00       sub    $0x5ac,%esp
-		$re = qr/^.*(sub    \$(0x$x{3,6}),\%esp)$/o;
+		$re = qr/^.*(sub    \$(0x$x),\%esp)$/o;
 		$todec = sub { return hex($_[0]); };
 	} elsif ($arch =~ /^ia64$/) {
-		#                                        adds r12=-384,r12
-		$re = qr/.*(adds.*r12=-($x{3,5}),r12)/o;
+		#e0000000044011fc:       01 0f fc 8c     adds r12=-384,r12
+		$re = qr/.*(adds.*r12=-($d),r12)/o;
+		$todec = sub { return $_[0]; };
+	} elsif ($arch =~ /^mips64$/) {
+		#8800402c:       67bdfff0        daddiu  sp,sp,-16
+		$re = qr/.*(daddiu.*sp,sp,-($d))/o;
+		$todec = sub { return $_[0]; };
+	} elsif ($arch =~ /^mips$/) {
+		#88003254:       27bdffe0        addiu   sp,sp,-32
+		$re = qr/.*(addiu.*sp,sp,-($d))/o;
+		$todec = sub { return $_[0]; };
 	} elsif ($arch =~ /^ppc$/) {
 		#c00029f4:       94 21 ff 30     stwu    r1,-208(r1)
-		$re = qr/.*(stwu.*r1,-($x{3,6})\(r1\))/o;
+		$re = qr/.*(stwu.*r1,-($x)\(r1\))/o;
 		$todec = sub { return hex($_[0]); };
 	} elsif ($arch =~ /^s390x?$/) {
 		#   11160:       a7 fb ff 60             aghi   %r15,-160
-		$re = qr/.*(ag?hi.*\%r15,-(([0-9]{2}|[3-9])[0-9]{2}))/o;
+		$re = qr/.*(ag?hi.*\%r15,-($d))/o;
 		$todec = sub { return $_[0]; };
 	} else {
+		print "Usage:  objdump -d vmlinux | checkstack.pl [arch]\n";
+		print "where arch is i386, ia64, mips, mips64, ppc, or s390\n";
+		print "Each output line gives a function's stack usage, name\n";
+		print "Lines are output in order of decreasing stack usage\n";
 		die("wrong or unknown architecture\n");
 	}
 }
 
-$funcre = qr/^$x* \<(.*)\>:$/;
+$funcre = qr/^[0-9a-f]* \<(.*)\>:$/;
 while ($line = <STDIN>) {
 	if ($line =~ m/$funcre/) {
 		($func = $line) =~ s/$funcre/\1/;
