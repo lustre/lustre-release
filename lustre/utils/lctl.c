@@ -50,7 +50,7 @@ command_t cmdlist[] = {
 
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
-        {"network", jt_ptl_setup, 0, "commands that follow apply to net\n"
+        {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
          "usage: network <tcp/elan/myrinet>"},       
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
          "usage: connect [[<hostname> <port>] | <elan id>]"},
