@@ -98,7 +98,7 @@ int main(int argc, char **argv)
         pfd = open("/dev/portals", O_RDWR);
         if ( pfd < 0 ) {
                 perror("opening portals device");
-		free(data.ioc_pbuf1);
+		free(pcfg.pcfg_pbuf1);
                 exit(-1);
         }
 
@@ -112,7 +112,7 @@ int main(int argc, char **argv)
         	perror ("Can't get my NID");
         }
                         
-	free(data.ioc_pbuf1);
+	free(pcfg.pcfg_pbuf1);
 	close(pfd);
 	printf("%u\n", nid);
         exit(nid);
