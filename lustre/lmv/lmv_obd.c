@@ -80,6 +80,7 @@ static int lmv_connect_fake(struct lustre_handle *conn,
                             struct obd_uuid *cluuid)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
+        struct obd_export *exp;
         int rc;
         ENTRY;
 
@@ -89,11 +90,18 @@ static int lmv_connect_fake(struct lustre_handle *conn,
                 RETURN(rc);
         }
 
-        lmv->exp = class_conn2export(conn);
-        LASSERT(lmv->exp != NULL);
+        exp = class_conn2export(conn);
+        /* We don't want to actually do the underlying connections more than
+         * once, so keep track. */
+        lmv->refcount++;
+        if (lmv->refcount > 1) {
+                class_export_put(exp);
+                RETURN(0);
+        }
 
         lmv->cluuid = *cluuid;
         lmv->connected = 0;
+        lmv->exp = exp;
 
         RETURN(0);
 }
@@ -115,14 +123,6 @@ int lmv_connect(struct obd_device *obd)
         exp = lmv->exp;
         CDEBUG(D_OTHER, "time to connect %s to %s\n",
                         cluuid->uuid, obd->obd_name);
-
-        /* We don't want to actually do the underlying connections more than
-         * once, so keep track. */
-        lmv->refcount++;
-        if (lmv->refcount > 1) {
-                class_export_put(exp);
-                RETURN(0);
-        }
 
         for (i = 0, tgts = lmv->tgts; i < lmv->count; i++, tgts++) {
                 struct obd_device *tgt_obd;

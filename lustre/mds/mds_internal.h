@@ -119,5 +119,6 @@ int mds_try_to_split_dir(struct obd_device *, struct dentry *, struct mea **,
                          int);
 int mds_get_lmv_attr(struct obd_device *, struct inode *, struct mea **, int *);
 int mds_choose_mdsnum(struct obd_device *, const char *, int);
+int mds_lmv_postsetup(struct obd_device *);
 
 #endif /* _MDS_INTERNAL_H */

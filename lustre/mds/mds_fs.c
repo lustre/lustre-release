@@ -513,11 +513,9 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
         struct obd_run_ctxt saved;
         int rc = 0;
 
-        if (flags & OBD_OPT_FAILOVER) {
+        if (flags & OBD_OPT_FAILOVER)
                 CERROR("%s: shutting down for failover; client state will"
                        " be preserved.\n", obd->obd_name);
-                mds_lmv_disconnect(obd, flags);
-        }
 
         class_disconnect_exports(obd, flags); /* cleans up client info too */
         mds_server_free_data(mds);

@@ -226,6 +226,7 @@ static int dc_new_page_to_cache(struct dir_cache * dirc)
 
 static int retrieve_generation_numbers(struct dirsplit_control *dc, void *buf)
 {
+        struct mds_obd *mds = &dc->obd->u.mds;
         struct dir_entry *de;
         struct dentry *dentry;
         char * end;
@@ -233,20 +234,29 @@ static int retrieve_generation_numbers(struct dirsplit_control *dc, void *buf)
         end = buf + PAGE_SIZE;
         de = (struct dir_entry *) buf;
         while ((char *) de < end && de->namelen) {
-                LASSERT(de->namelen <= 255);
                 /* lookup an inode */
+                LASSERT(de->namelen <= 255);
                 dentry = ll_lookup_one_len(de->name, dc->dentry, de->namelen);
                 if (IS_ERR(dentry)) {
-                        CERROR("can't lookup '%*s'/%u in %lu: %d\n",
-                                (int) de->namelen, de->name,
-                                (unsigned) de->namelen,
-                                (unsigned long) dc->dentry->d_inode->i_ino,
-                                (int) PTR_ERR(dentry));
+                        CERROR("can't lookup %*s: %d\n", de->namelen,
+                               de->name, (int) PTR_ERR(dentry));
+                        goto next;
                 }
-                LASSERT(!IS_ERR(dentry));
-                LASSERT(dentry->d_inode != NULL);
-                de->generation = dentry->d_inode->i_generation;
+                if (dentry->d_inode != NULL) {
+                        de->mds = mds->mds_num;
+                        de->ino = dentry->d_inode->i_ino;
+                        de->generation = dentry->d_inode->i_generation;
+                } else if (dentry->d_flags & DCACHE_CROSS_REF) {
+                        de->mds = dentry->d_mdsnum;
+                        de->ino = dentry->d_inum;
+                        de->generation = dentry->d_generation;
+                } else {
+                        CERROR("can't lookup %*s\n", de->namelen, de->name);
+                        goto next;
+                }
                 l_dput(dentry);
+
+next:
                 de = (struct dir_entry *)
                         ((char *) de + DIR_REC_LEN(de->namelen));
         }
@@ -428,8 +438,9 @@ int mds_try_to_split_dir(struct obd_device *obd,
         if (mea && *mea)
                 RETURN(0);
 
-        CDEBUG(D_OTHER, "%s: split directory %lu/%lu\n",
-               obd->obd_name, dir->i_ino, (unsigned long) dir->i_generation);
+        CDEBUG(D_OTHER, "%s: split directory %u/%lu/%lu\n",
+               obd->obd_name, mds->mds_num, dir->i_ino,
+               (unsigned long) dir->i_generation);
 
         if (mea == NULL)
                 mea = &tmea;
