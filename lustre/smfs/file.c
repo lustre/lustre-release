@@ -417,6 +417,8 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->setattr(&open_dentry, attr);
 
+	duplicate_inode(inode, cache_inode);		
+	
 	RETURN(rc);
 } 
   
@@ -437,6 +439,7 @@ int smfs_setxattr(struct dentry *dentry, const char *name,
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->setxattr(&open_dentry, name, value, size, flags);
 
+	duplicate_inode(inode, cache_inode);		
 	RETURN(rc);
 } 
                         
@@ -457,6 +460,7 @@ int smfs_getxattr(struct dentry *dentry, const char *name,
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->getxattr(&open_dentry, name, buffer, size);
 
+	duplicate_inode(inode, cache_inode);		
 	RETURN(rc);
 }
 
@@ -495,6 +499,7 @@ int smfs_removexattr(struct dentry *dentry, const char *name)
 	if (cache_inode->i_op->removexattr)
 		rc = cache_inode->i_op->removexattr(&open_dentry, name);
 
+	duplicate_inode(inode, cache_inode);		
 	RETURN(rc);
 }
 
