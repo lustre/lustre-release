@@ -38,7 +38,7 @@ int obd_init_obdo_cache(void)
 {
 	ENTRY;
 	if (obdo_cachep == NULL) {
-		CDEBUG(D_INODE, "allocating obdo_cache\n");
+		CDEBUG(D_CACHE, "allocating obdo_cache\n");
 		obdo_cachep = kmem_cache_create("obdo_cache",
 						sizeof(struct obdo),
 						0, SLAB_HWCACHE_ALIGN,
@@ -47,10 +47,10 @@ int obd_init_obdo_cache(void)
 			EXIT;
 			return -ENOMEM;
 		} else {
-			CDEBUG(D_INODE, "allocated cache at %p\n", obdo_cachep);
+			CDEBUG(D_CACHE, "allocated cache at %p\n", obdo_cachep);
 		}
 	} else {
-		CDEBUG(D_INODE, "using existing cache at %p\n", obdo_cachep);
+		CDEBUG(D_CACHE, "using existing cache at %p\n", obdo_cachep);
 	}
 	EXIT;
 	return 0;
@@ -60,7 +60,7 @@ void obd_cleanup_obdo_cache(void)
 {
 	ENTRY;
 	if (obdo_cachep != NULL) {
-		CDEBUG(D_INODE, "destroying obdo_cache at %p\n", obdo_cachep);
+		CDEBUG(D_CACHE, "destroying obdo_cache at %p\n", obdo_cachep);
 		if (kmem_cache_destroy(obdo_cachep))
 			printk(KERN_WARNING __FUNCTION__
 			       ": unable to free cache\n");
@@ -111,7 +111,7 @@ int gen_connect (struct obd_conn *conn)
 	cli->cli_obd = conn->oc_dev;
 	list_add(&(cli->cli_chain), conn->oc_dev->obd_gen_clients.prev);
 
-	CDEBUG(D_IOCTL, "connect: new ID %u\n", cli->cli_id);
+	CDEBUG(D_INFO, "connect: new ID %u\n", cli->cli_id);
 	conn->oc_id = cli->cli_id;
 	return 0;
 } /* gen_obd_connect */
@@ -132,7 +132,7 @@ int gen_disconnect(struct obd_conn *conn)
 	list_del(&(cli->cli_chain));
 	OBD_FREE(cli, sizeof(struct obd_client));
 
-	CDEBUG(D_IOCTL, "disconnect: ID %u\n", conn->oc_id);
+	CDEBUG(D_INFO, "disconnect: ID %u\n", conn->oc_id);
 
 	EXIT;
 	return 0;
@@ -154,7 +154,12 @@ int gen_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
 		rc  = OBP(ch_conn->oc_dev, connect)(ch_conn);
 
 		if ( rc != 0 ) {
-			/* XXX disconnect others */
+			int j;
+
+			for (j = --i; j >= 0; --j) {
+				ch_conn = &obddev->obd_multi_conn[i];
+				OBP(ch_conn->oc_dev, disconnect)(ch_conn);
+			}
 			return -EINVAL;
 		}
 	}		
@@ -174,7 +179,7 @@ int gen_multi_attach(struct obd_device *obddev, int len, void *data)
 	for (i=0 ; i<count ; i++) {
 		rdev = &obd_dev[*((int *)data + i)];
 		rdev = rdev + 1;
-		CDEBUG(D_IOCTL, "OBD RAID1: replicator %d is of type %s\n", i,
+		CDEBUG(D_INFO, "OBD RAID1: replicator %d is of type %s\n", i,
 		       (rdev + i)->obd_type->typ_name);
 	}
 	return 0;
@@ -221,7 +226,7 @@ int gen_cleanup(struct obd_device * obddev)
 	lh = tmp = &obddev->obd_gen_clients;
 	while ((tmp = tmp->next) != lh) {
 		cli = list_entry(tmp, struct obd_client, cli_chain);
-		CDEBUG(D_IOCTL, "Disconnecting obd_connection %d, at %p\n",
+		CDEBUG(D_INFO, "Disconnecting obd_connection %d, at %p\n",
 		       cli->cli_id, cli);
 	}
 	return 0;
@@ -259,7 +264,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 	int err = 0;
 
 	ENTRY;
-	CDEBUG(D_INODE, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n", 
+	CDEBUG(D_INFO, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n", 
 	       src->o_id, src->o_blocks, src->o_size, dst->o_id);
 	page = alloc_page(GFP_USER);
 	if ( !page ) {
@@ -292,7 +297,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 			EXIT;
 			break;
 		}
-		CDEBUG(D_INODE, "Read page %ld ...\n", page->index);
+		CDEBUG(D_INFO, "Read page %ld ...\n", page->index);
 
 		err = OBP(dst_conn->oc_dev, brw)(WRITE, dst_conn, num_oa, &dst,
 						 &num_buf, &buf, &brw_count,
@@ -304,7 +309,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 			break;
 		}
 
-		CDEBUG(D_INODE, "Wrote page %ld ...\n", page->index);
+		CDEBUG(D_INFO, "Wrote page %ld ...\n", page->index);
 		
 		index++;
 	}

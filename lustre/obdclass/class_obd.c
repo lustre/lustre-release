@@ -58,8 +58,8 @@
 #include <linux/obd_class.h>
 
 static int obd_init_magic;
-int           obd_print_entry = 1;
-int           obd_debug_level = 0;
+int obd_print_entry = 0;
+int obd_debug_level = D_IOCTL|D_INODE|D_SUPER|D_WARNING;
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 
@@ -113,12 +113,12 @@ static struct obd_type *obd_nm_to_type(char *nm)
 {
 	struct list_head *tmp;
 	struct obd_type *type;
-	CDEBUG(D_IOCTL, "SEARCH %s\n", nm);
+	CDEBUG(D_INFO, "SEARCH %s\n", nm);
 	
 	tmp = &obd_types;
 	while ( (tmp = tmp->next) != &obd_types ) {
 		type = list_entry(tmp, struct obd_type, typ_chain);
-		CDEBUG(D_IOCTL, "TYP %s\n", type->typ_name);
+		CDEBUG(D_INFO, "TYP %s\n", type->typ_name);
 		if (strlen(type->typ_name) == strlen(nm) &&
 		    strcmp(type->typ_name, nm) == 0 ) {
 			return type;
@@ -135,7 +135,7 @@ static int getdata(int len, void **data)
 	if (!len) 
 		return 0;
 
-	CDEBUG(D_IOCTL, "getdata: len %d, add %p\n", len, *data);
+	CDEBUG(D_INFO, "getdata: len %d, add %p\n", len, *data);
 
 	OBD_ALLOC(tmp, void *, len);
 	if ( !tmp )
@@ -163,8 +163,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	int err, dev;
 	long int cli_id; /* connect, disconnect */
 
-	if (!inode)
+	if (!inode) {
+		CDEBUG(D_IOCTL, "invalid inode\n");
 		return -EINVAL;
+	}
 
 	dev = MINOR(inode->i_rdev);
 	if (dev > MAX_OBD_DEVICES)
@@ -210,10 +212,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 #ifdef CONFIG_KMOD
 		if ( !type ) {
 			if ( !request_module(nm) ) {
-				CDEBUG(D_IOCTL, "Loaded module '%s'\n", nm);
+				CDEBUG(D_PSDEV, "Loaded module '%s'\n", nm);
 				type = obd_nm_to_type(nm);
 			} else {
-				CDEBUG(D_IOCTL, "Can't load module '%s'\n", nm);
+				CDEBUG(D_PSDEV, "Can't load module '%s'\n", nm);
 			}
 		}
 #endif
@@ -237,13 +239,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		INIT_LIST_HEAD(&obddev->obd_gen_clients);
 		obddev->obd_multi_count = 0;
 
-		CDEBUG(D_IOCTL, "Attach %d, datalen %d, type %s\n", 
+		CDEBUG(D_INFO, "Attach %d, datalen %d, type %s\n", 
 		       dev, input->att_datalen, obddev->obd_type->typ_name);
 		/* maybe we are done */
 		if ( !OBT(obddev) || !OBP(obddev, attach) ) {
 			obddev->obd_flags |=  OBD_ATTACHED;
 			type->typ_refcnt++;
-			CDEBUG(D_IOCTL, "Dev %d refcount now %d\n", dev,
+			CDEBUG(D_PSDEV, "Dev %d refcount now %d\n", dev,
 			       type->typ_refcnt);
 			MOD_INC_USE_COUNT;
 			EXIT;
@@ -262,7 +264,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		} else {
 			obddev->obd_flags |=  OBD_ATTACHED;
 			type->typ_refcnt++;
-			CDEBUG(D_IOCTL, "Dev %d refcount now %d\n", dev,
+			CDEBUG(D_PSDEV, "Dev %d refcount now %d\n", dev,
 			       type->typ_refcnt);
 			MOD_INC_USE_COUNT;
 			EXIT;
@@ -288,11 +290,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return -EBUSY;
 		}
 
-		CDEBUG(D_IOCTL, "Detach %d, type %s\n", dev,
+		CDEBUG(D_PSDEV, "Detach %d, type %s\n", dev,
 		       obddev->obd_type->typ_name);
 		obddev->obd_flags &= ~OBD_ATTACHED;
 		obddev->obd_type->typ_refcnt--;
-		CDEBUG(D_IOCTL, "Dev %d refcount now %d\n", dev,
+		CDEBUG(D_PSDEV, "Dev %d refcount now %d\n", dev,
 		       obddev->obd_type->typ_refcnt);
 		obddev->obd_type = NULL;
 		MOD_DEC_USE_COUNT;
@@ -337,11 +339,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
 		/* do the setup */
-		CDEBUG(D_IOCTL, "Setup %d, type %s\n", dev, 
+		CDEBUG(D_PSDEV, "Setup %d, type %s\n", dev, 
 		       obddev->obd_type->typ_name);
 		if ( !OBT(obddev) || !OBP(obddev, setup) ) {
 			obddev->obd_type->typ_refcnt++;
-			CDEBUG(D_IOCTL, "Dev %d refcount now %d\n",
+			CDEBUG(D_PSDEV, "Dev %d refcount now %d\n",
 			       dev, obddev->obd_type->typ_refcnt);
 			obddev->obd_flags |= OBD_SET_UP;
 			EXIT;
@@ -356,7 +358,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			EXIT;
 		} else {
 			obddev->obd_type->typ_refcnt++;
-			CDEBUG(D_IOCTL, "Dev %d refcount now %d\n",
+			CDEBUG(D_PSDEV, "Dev %d refcount now %d\n",
 			       dev, obddev->obd_type->typ_refcnt);
 			obddev->obd_flags |= OBD_SET_UP;
 			EXIT;
@@ -399,7 +401,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	cleanup_out: 
 		obddev->obd_flags &= ~OBD_SET_UP;
 		obddev->obd_type->typ_refcnt--;
-		CDEBUG(D_IOCTL, "Dev %d refcount now %d\n", dev,
+		CDEBUG(D_PSDEV, "Dev %d refcount now %d\n", dev,
 		       obddev->obd_type->typ_refcnt);
 		EXIT;
 		return 0;
@@ -583,7 +585,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 					&rw_s->count, rw_s->offset);
 		
 		ODEBUG(&rw_s->obdo);
-		CDEBUG(D_INODE, "READ: conn %d, count %Ld, offset %Ld, '%s'\n",
+		CDEBUG(D_INFO, "READ: conn %d, count %Ld, offset %Ld, '%s'\n",
 		       rw_s->conn_id, rw_s->count, rw_s->offset, rw_s->buf);
 		if ( err ) {
 			EXIT;
@@ -611,7 +613,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return err;
 		}
 
-		CDEBUG(D_INODE, "WRITE: conn %d, count %Ld, offset %Ld, '%s'\n",
+		CDEBUG(D_INFO, "WRITE: conn %d, count %Ld, offset %Ld, '%s'\n",
 		       rw_s->conn_id, rw_s->count, rw_s->offset, rw_s->buf);
 		err = OBP(obddev, write)(&conn, &rw_s->obdo, rw_s->buf, 
 					 &rw_s->count, rw_s->offset);
@@ -704,7 +706,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return -EOPNOTSUPP;
 
 		/* do the partition */
-		CDEBUG(D_IOCTL, "Copy %d, type %s dst %Ld src %Ld\n", dev, 
+		CDEBUG(D_INFO, "Copy %d, type %s dst %Ld src %Ld\n", dev, 
 		       obddev->obd_type->typ_name, mvdata->dst.o_id, 
 		       mvdata->src.o_id);
 
@@ -731,13 +733,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return err;
 		}
 
-		CDEBUG(D_IOCTL, "Migrate copying %d bytes\n", sizeof(*mvdata));
+		CDEBUG(D_INFO, "Migrate copying %d bytes\n", sizeof(*mvdata));
 
 		if ( !OBT(obddev) || !OBP(obddev, migrate) )
 			return -EOPNOTSUPP;
 
 		/* do the partition */
-		CDEBUG(D_IOCTL, "Migrate %d, type %s conn %d src %Ld dst %Ld\n",
+		CDEBUG(D_INFO, "Migrate %d, type %s conn %d src %Ld dst %Ld\n",
 		       dev, obddev->obd_type->typ_name, mvdata->src_conn_id,
 		       mvdata->src.o_id, mvdata->dst.o_id);
 
@@ -773,10 +775,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 #ifdef CONFIG_KMOD
 		if ( !type ) {
 			if ( !request_module(nm) ) {
-				CDEBUG(D_IOCTL, "Loaded module '%s'\n", nm);
+				CDEBUG(D_PSDEV, "Loaded module '%s'\n", nm);
 				type = obd_nm_to_type(nm);
 			} else {
-				CDEBUG(D_IOCTL, "Can't load module '%s'\n", nm);
+				CDEBUG(D_PSDEV, "Can't load module '%s'\n", nm);
 			}
 		}
 #endif
@@ -793,7 +795,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 		conn.oc_id = input.att_connid;
 		
-		CDEBUG(D_IOCTL, "Calling ioctl %x for type %s, len %d\n",
+		CDEBUG(D_INFO, "Calling ioctl %x for type %s, len %d\n",
 		       cmd, type->typ_name, input.att_datalen);
 
 		/* get the generic data */
@@ -822,6 +824,7 @@ int obd_register_type(struct obd_ops *ops, char *nm)
 
 
 	if (obd_init_magic != 0x11223344) {
+		printk(__FUNCTION__ ": bad magic for type\n");
 		EXIT;
 		return -EINVAL;
 	}
