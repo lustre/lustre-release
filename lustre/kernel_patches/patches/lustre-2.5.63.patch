@@ -1,20 +1,21 @@
- arch/um/kernel/mem.c   |   18 +++++++++++-
- fs/dcache.c            |   12 ++++++--
- fs/namei.c             |   71 +++++++++++++++++++++++++++++++++++--------------
+ arch/um/kernel/mem.c   |   18 +++++++++++
+ fs/dcache.c            |   12 +++++--
+ fs/namei.c             |   74 +++++++++++++++++++++++++++++++++++--------------
  fs/namespace.c         |    1 
  fs/nfsd/vfs.c          |    2 -
+ fs/open.c              |   12 +++++++
  fs/sysfs/inode.c       |    2 -
- include/linux/dcache.h |   28 +++++++++++++++++++
- include/linux/fs.h     |   20 +++++++++++++
- include/linux/namei.h  |    3 +-
+ include/linux/dcache.h |   28 ++++++++++++++++++
+ include/linux/fs.h     |   20 ++++++++++++-
+ include/linux/namei.h  |    3 +
  include/linux/slab.h   |    1 
  kernel/ksyms.c         |    7 ++++
  mm/slab.c              |    5 +++
  net/unix/af_unix.c     |    2 -
- 13 files changed, 143 insertions(+), 29 deletions(-)
+ 14 files changed, 157 insertions(+), 30 deletions(-)
 
---- linux-2.5.63/arch/um/kernel/mem.c~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/arch/um/kernel/mem.c	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/arch/um/kernel/mem.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/arch/um/kernel/mem.c	Tue Mar 18 15:02:10 2003
 @@ -660,6 +660,22 @@ struct page *pte_mem_map(pte_t pte)
  	return(phys_mem_map(pte_val(pte)));
  }
@@ -47,8 +48,8 @@
  	return(0);
  }
  
---- linux-2.5.63/fs/namei.c~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/fs/namei.c	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/fs/namei.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/fs/namei.c	Thu Mar 20 13:54:03 2003
 @@ -265,6 +265,9 @@ int deny_write_access(struct file * file
  
  void path_release(struct nameidata *nd)
@@ -197,7 +198,17 @@
  /*
   *	namei()
   *
-@@ -1239,7 +1269,7 @@ int open_namei(const char * pathname, in
+@@ -1224,6 +1254,9 @@ int open_namei(const char * pathname, in
+ 	/*
+ 	 * Create - we need to know the parent.
+ 	 */
++	nd->it.it_mode = mode;
++	nd->it.it_op |= IT_CREAT;
++		
+ 	error = path_lookup(pathname, LOOKUP_PARENT, nd);
+ 	if (error)
+ 		return error;
+@@ -1239,7 +1272,7 @@ int open_namei(const char * pathname, in
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -206,7 +217,7 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1342,7 +1372,7 @@ do_link:
+@@ -1342,7 +1375,7 @@ do_link:
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -215,7 +226,7 @@
  	putname(nd->last.name);
  	goto do_last;
  }
-@@ -1356,7 +1386,7 @@ static struct dentry *lookup_create(stru
+@@ -1356,7 +1389,7 @@ static struct dentry *lookup_create(stru
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -224,7 +235,7 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1588,7 +1618,7 @@ asmlinkage long sys_rmdir(const char * p
+@@ -1588,7 +1621,7 @@ asmlinkage long sys_rmdir(const char * p
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -233,7 +244,7 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-@@ -1655,7 +1685,7 @@ asmlinkage long sys_unlink(const char * 
+@@ -1655,7 +1688,7 @@ asmlinkage long sys_unlink(const char * 
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
  	down(&nd.dentry->d_inode->i_sem);
@@ -242,7 +253,7 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1934,7 +1964,8 @@ int vfs_rename_other(struct inode *old_d
+@@ -1934,7 +1967,8 @@ int vfs_rename_other(struct inode *old_d
  }
  
  int vfs_rename(struct inode *old_dir, struct dentry *old_dentry,
@@ -252,7 +263,7 @@
  {
  	int error;
  	int is_dir = S_ISDIR(old_dentry->d_inode->i_mode);
-@@ -2005,7 +2036,7 @@ static inline int do_rename(const char *
+@@ -2005,7 +2039,7 @@ static inline int do_rename(const char *
  
  	trap = lock_rename(new_dir, old_dir);
  
@@ -261,7 +272,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -2025,7 +2056,7 @@ static inline int do_rename(const char *
+@@ -2025,7 +2059,7 @@ static inline int do_rename(const char *
  	error = -EINVAL;
  	if (old_dentry == trap)
  		goto exit4;
@@ -270,7 +281,7 @@
  	error = PTR_ERR(new_dentry);
  	if (IS_ERR(new_dentry))
  		goto exit4;
-@@ -2035,7 +2066,7 @@ static inline int do_rename(const char *
+@@ -2035,7 +2069,7 @@ static inline int do_rename(const char *
  		goto exit5;
  
  	error = vfs_rename(old_dir->d_inode, old_dentry,
@@ -279,8 +290,8 @@
  exit5:
  	dput(new_dentry);
  exit4:
---- linux-2.5.63/fs/nfsd/vfs.c~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/fs/nfsd/vfs.c	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/fs/nfsd/vfs.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/fs/nfsd/vfs.c	Tue Mar 18 15:02:10 2003
 @@ -1337,7 +1337,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
@@ -290,8 +301,8 @@
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
---- linux-2.5.63/fs/sysfs/inode.c~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/fs/sysfs/inode.c	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/fs/sysfs/inode.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/fs/sysfs/inode.c	Tue Mar 18 15:02:10 2003
 @@ -540,7 +540,7 @@ static struct dentry * get_dentry(struct
  	qstr.name = name;
  	qstr.len = strlen(name);
@@ -301,8 +312,8 @@
  }
  
  
---- linux-2.5.63/include/linux/dcache.h~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/include/linux/dcache.h	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/include/linux/dcache.h~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/include/linux/dcache.h	Tue Mar 18 15:02:10 2003
 @@ -12,6 +12,27 @@
  
  struct vfsmount;
@@ -366,8 +377,8 @@
  
  extern spinlock_t dcache_lock;
  extern rwlock_t dparent_lock;
---- linux-2.5.63/include/linux/fs.h~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/include/linux/fs.h	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/include/linux/fs.h~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/include/linux/fs.h	Tue Mar 18 15:02:10 2003
 @@ -234,6 +234,9 @@ typedef int (get_blocks_t)(struct inode 
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
@@ -429,8 +440,8 @@
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
  extern int vfs_statfs(struct super_block *, struct statfs *);
---- linux-2.5.63/include/linux/namei.h~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/include/linux/namei.h	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/include/linux/namei.h~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/include/linux/namei.h	Tue Mar 18 15:02:10 2003
 @@ -11,6 +11,7 @@ struct nameidata {
  	struct qstr	last;
  	unsigned int	flags;
@@ -448,8 +459,8 @@
  
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
---- linux-2.5.63/include/linux/slab.h~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/include/linux/slab.h	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/include/linux/slab.h~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/include/linux/slab.h	Tue Mar 18 15:02:10 2003
 @@ -55,6 +55,7 @@ extern int kmem_cache_destroy(kmem_cache
  extern int kmem_cache_shrink(kmem_cache_t *);
  extern void *kmem_cache_alloc(kmem_cache_t *, int);
@@ -458,8 +469,8 @@
  extern unsigned int kmem_cache_size(kmem_cache_t *);
  
  extern void *kmalloc(size_t, int);
---- linux-2.5.63/kernel/ksyms.c~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/kernel/ksyms.c	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/kernel/ksyms.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/kernel/ksyms.c	Tue Mar 18 15:02:10 2003
 @@ -377,6 +377,7 @@ EXPORT_SYMBOL(unregister_filesystem);
  EXPORT_SYMBOL(kern_mount);
  EXPORT_SYMBOL(__mntput);
@@ -481,8 +492,8 @@
  /* waitqueue handling */
  EXPORT_SYMBOL(add_wait_queue);
  EXPORT_SYMBOL(add_wait_queue_exclusive);
---- linux-2.5.63/mm/slab.c~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/mm/slab.c	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/mm/slab.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/mm/slab.c	Tue Mar 18 15:02:10 2003
 @@ -1792,6 +1792,11 @@ static inline void __cache_free (kmem_ca
  	}
  }
@@ -495,8 +506,8 @@
  /**
   * kmem_cache_alloc - Allocate an object
   * @cachep: The cache to allocate from.
---- linux-2.5.63/net/unix/af_unix.c~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/net/unix/af_unix.c	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/net/unix/af_unix.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/net/unix/af_unix.c	Tue Mar 18 15:02:10 2003
 @@ -720,7 +720,7 @@ static int unix_bind(struct socket *sock
  		/*
  		 * Do the final lookup.
@@ -506,8 +517,8 @@
  		err = PTR_ERR(dentry);
  		if (IS_ERR(dentry))
  			goto out_mknod_unlock;
---- linux-2.5.63/fs/dcache.c~lustre-2.5.63	Thu Mar 13 20:57:08 2003
-+++ linux-2.5.63-kedar/fs/dcache.c	Thu Mar 13 20:57:08 2003
+--- linux-2.5.63-nointent/fs/dcache.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/fs/dcache.c	Tue Mar 18 15:02:10 2003
 @@ -1111,15 +1111,21 @@ void d_delete(struct dentry * dentry)
   * Adds a dentry to the hash according to its name.
   */
@@ -533,8 +544,8 @@
  }
  
  #define do_switch(x,y) do { \
---- linux-2.5.63/fs/namespace.c~lustre-2.5.63	Thu Mar 13 20:58:54 2003
-+++ linux-2.5.63-kedar/fs/namespace.c	Thu Mar 13 20:59:22 2003
+--- linux-2.5.63-nointent/fs/namespace.c~lustre-2.5.63	Tue Mar 18 15:02:10 2003
++++ linux-2.5.63-nointent-root/fs/namespace.c	Tue Mar 18 15:02:10 2003
 @@ -925,6 +925,7 @@ void set_fs_pwd(struct fs_struct *fs, st
  		mntput(old_pwdmnt);
  	}
@@ -543,5 +554,55 @@
  
  static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
  {
+--- linux-2.5.63-nointent/fs/open.c~lustre-2.5.63	Thu Mar 20 12:43:39 2003
++++ linux-2.5.63-nointent-root/fs/open.c	Fri Mar 21 18:41:48 2003
+@@ -96,8 +96,10 @@ static inline long do_sys_truncate(const
+ {
+ 	struct nameidata nd;
+ 	struct inode * inode;
++	
+ 	int error;
+-
++        struct lookup_intent it = { .it_op = IT_GETATTR };
++	nd.it=it;
+ 	error = -EINVAL;
+ 	if (length < 0)	/* sorry, but loff_t says... */
+ 		goto out;
+@@ -340,6 +342,8 @@ asmlinkage long sys_access(const char * 
+ 	int old_fsuid, old_fsgid;
+ 	kernel_cap_t old_cap;
+ 	int res;
++	struct lookup_intent it = { .it_op = IT_GETATTR };
++	nd.it=it;	
+ 
+ 	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
+ 		return -EINVAL;
+@@ -385,6 +389,8 @@ asmlinkage long sys_chdir(const char * f
+ {
+ 	struct nameidata nd;
+ 	int error;
++	struct lookup_intent it = { .it_op = IT_GETATTR };
++	nd.it=it;	
+ 
+ 	error = __user_walk(filename, LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &nd);
+ 	if (error)
+@@ -436,6 +442,8 @@ asmlinkage long sys_chroot(const char * 
+ {
+ 	struct nameidata nd;
+ 	int error;
++        struct lookup_intent it = { .it_op = IT_GETATTR };
++	nd.it=it;
+ 
+ 	error = __user_walk(filename, LOOKUP_FOLLOW | LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
+ 	if (error)
+@@ -620,6 +628,8 @@ struct file *filp_open(const char * file
+ {
+ 	int namei_flags, error;
+ 	struct nameidata nd;
++	struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = flags };
++	nd.it=it;	
+ 
+ 	namei_flags = flags;
+ 	if ((namei_flags+1) & O_ACCMODE)
 
 _
