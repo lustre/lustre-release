@@ -88,6 +88,11 @@ int main(int argc, char ** argv)
 		}
 	}
 
+	if (mode == 0) {
+		fprintf(stderr, "one of '-l', '-e', or '-s' must be supplied.\n");
+		usage(prog, stderr);
+	}
+
 	if (optind + 2 + (length == LONG_MAX) != argc) {
 		fprintf(stderr, "missing filenamebase, total_files, or iterations\n");
 		usage(prog, stderr);
