@@ -62,7 +62,6 @@ static uint64_t conn_cookie;
 static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = 8192;
-static int rc = 0;
 
 #if 0
 static int thread;
@@ -75,6 +74,7 @@ int device_setup(int argc, char **argv) {
 /* Misc support functions */
 static int do_name2dev(char *func, char *name) {
         struct obd_ioctl_data data;
+        int rc;
 
         LUSTRE_CONNECT(func);
         IOCINIT(data);
@@ -105,6 +105,7 @@ static int do_name2dev(char *func, char *name) {
  */
 static int parse_devname(char * func, char *name) 
 {
+        int rc;
         int ret = -1;
 
         if (!name) 
@@ -155,7 +156,9 @@ static char * obdo_print(struct obdo *obd)
 #endif
 
 /* Device selection commands */
-int jt_dev_newdev(int argc, char **argv) {
+int jt_dev_newdev(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         LUSTRE_CONNECT(argv[0]);
@@ -190,8 +193,9 @@ static int do_device(char *func, int dev) {
         return ioctl(fd, OBD_IOC_DEVICE , buf);
 }
 
-int jt_dev_device(int argc, char **argv) {
-        int dev;
+int jt_dev_device(int argc, char **argv) 
+{
+        int rc, dev;
         do_disconnect(argv[0], 1);
 
         if (argc != 2)
@@ -212,13 +216,15 @@ static int do_uuid2dev(char *func, char *name) {
         return 0;
 }
 
-int jt_dev_uuid2dev(int argc, char **argv) {
+int jt_dev_uuid2dev(int argc, char **argv) 
+{
         do_uuid2dev(NULL, NULL);
         return 0;
 }
 
-int jt_dev_name2dev(int argc, char **argv) {
-
+int jt_dev_name2dev(int argc, char **argv) 
+{
+        int rc;
         if (argc != 2)
                 return CMD_HELP;
 
@@ -232,7 +238,9 @@ int jt_dev_name2dev(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_list(int argc, char **argv) {
+int jt_dev_list(int argc, char **argv) 
+{
+        int rc;
         char buf[1024];
         struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
 
@@ -259,7 +267,9 @@ int jt_dev_list(int argc, char **argv) {
 }
 
 /* Device configuration commands */
-int do_disconnect(char *func, int verbose) {
+int do_disconnect(char *func, int verbose) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         if (conn_addr == -1) 
@@ -284,6 +294,7 @@ int do_disconnect(char *func, int verbose) {
 #if 0
 static int jt_dev_newconn(int argc, char **argv)
 {
+        int rc;a
         struct obd_ioctl_data data;
 
         IOCINIT(data);
@@ -301,7 +312,9 @@ static int jt_dev_newconn(int argc, char **argv)
 }
 #endif
 
-int jt_dev_probe(int argc, char **argv) {
+int jt_dev_probe(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         IOCINIT(data);
@@ -320,7 +333,8 @@ int jt_dev_probe(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_close(int argc, char **argv) {
+int jt_dev_close(int argc, char **argv) 
+{
         if (argc != 1)
                 return CMD_HELP;
 
@@ -334,6 +348,7 @@ int jt_opt_device(int argc, char **argv)
 {
         char *arg2[3];
         int ret;
+        int rc;
 
         if (argc < 3) {
                 fprintf(stderr, "usage: %s devno <command [args ...]>\n",
@@ -351,7 +366,6 @@ int jt_opt_device(int argc, char **argv)
 
         if (!rc)
                 rc = Parser_execarg(argc - 2, argv + 2, cmdlist);
-
         ret = do_disconnect(argv[0], 0);
         if (!rc)
                 rc = ret;
@@ -360,7 +374,9 @@ int jt_opt_device(int argc, char **argv)
 }
 
 
-int jt_dev_attach(int argc, char **argv) {
+int jt_dev_attach(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         IOCINIT(data);
@@ -404,7 +420,9 @@ int jt_dev_attach(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_setup(int argc, char **argv) {
+int jt_dev_setup(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         IOCINIT(data);
@@ -437,7 +455,9 @@ int jt_dev_setup(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_detach(int argc, char **argv) {
+int jt_dev_detach(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         IOCINIT(data);
@@ -457,7 +477,9 @@ int jt_dev_detach(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_cleanup(int argc, char **argv) {
+int jt_dev_cleanup(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         IOCINIT(data);
@@ -466,17 +488,17 @@ int jt_dev_cleanup(int argc, char **argv) {
 
         rc = ioctl(fd, OBD_IOC_CLEANUP , &data);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                CERROR("error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc=errno));
-
         return rc;
 }
 
-int jt_dev_lov_config(int argc, char **argv) {
+int jt_dev_lov_config(int argc, char **argv) 
+{
         struct obd_ioctl_data data;
         struct lov_desc desc; 
         uuid_t *uuidarray;
-        int size, i;
+        int rc, size, i;
 
         IOCINIT(data);
         if (argc <= 5)
@@ -595,7 +617,9 @@ int jt_dev_destroy(int argc, char **argv) {
 #endif
 
 /* Device configuration commands */
-int jt_dev_setattr(int argc, char **argv) {
+int jt_dev_setattr(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         IOCINIT(data);
@@ -614,7 +638,9 @@ int jt_dev_setattr(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_getattr(int argc, char **argv) {
+int jt_dev_getattr(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         if (argc != 2)
@@ -638,7 +664,9 @@ int jt_dev_getattr(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_test_getattr(int argc, char **argv) {
+int jt_dev_test_getattr(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
         struct timeval start, next_time;
         int i, count, next_count;
@@ -691,7 +719,9 @@ int jt_dev_test_getattr(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_test_brw(int argc, char **argv) {
+int jt_dev_test_brw(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
         struct timeval start, next_time;
         char *bulk, *b;
@@ -805,7 +835,9 @@ int jt_dev_test_brw(int argc, char **argv) {
         return rc;
 }
 
-int jt_dev_test_ldlm(int argc, char **argv) {
+int jt_dev_test_ldlm(int argc, char **argv) 
+{
+        int rc;
         struct obd_ioctl_data data;
 
         IOCINIT(data);
