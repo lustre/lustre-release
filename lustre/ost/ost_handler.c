@@ -213,7 +213,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         end2 = (char *)tmp2 + req->rq_reqmsg->buflens[2];
         objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);
         niocount = req->rq_reqmsg->buflens[2] / sizeof(*remote_nb);
-        cmd = body->data;
+        cmd = OBD_BRW_READ;
 
         for (i = 0; i < objcount; i++) {
                 ost_unpack_ioo(&tmp1, &ioo);
@@ -304,7 +304,7 @@ static int ost_brw_write(struct ptlrpc_request *req)
         end2 = (char *)tmp2 + req->rq_reqmsg->buflens[2];
         objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);
         niocount = req->rq_reqmsg->buflens[2] / sizeof(*remote_nb);
-        cmd = body->data;
+        cmd = OBD_BRW_WRITE;
 
         for (i = 0; i < objcount; i++) {
                 ost_unpack_ioo((void *)&tmp1, &ioo);
@@ -398,17 +398,6 @@ fail_preprw:
         goto out_free;
 }
 
-static int ost_brw(struct ptlrpc_request *req)
-{
-        struct ost_body *body = lustre_msg_buf(req->rq_reqmsg, 0);
-
-        if (body->data & OBD_BRW_WRITE)
-                return ost_brw_write(req);
-        else
-                return ost_brw_read(req);
-}
-
-
 static int ost_handle(struct ptlrpc_request *req)
 {
         int rc;
@@ -477,10 +466,16 @@ static int ost_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CLOSE_NET, 0);
                 rc = ost_close(req);
                 break;
-        case OST_BRW:
-                CDEBUG(D_INODE, "brw\n");
+        case OST_WRITE:
+                CDEBUG(D_INODE, "write\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
-                rc = ost_brw(req);
+                rc = ost_brw_write(req);
+                /* ost_brw sends its own replies */
+                RETURN(rc);
+        case OST_READ:
+                CDEBUG(D_INODE, "read\n");
+                OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
+                rc = ost_brw_read(req);
                 /* ost_brw sends its own replies */
                 RETURN(rc);
         case OST_PUNCH:

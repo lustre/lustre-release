@@ -492,12 +492,11 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         osc_con2cl(conn, &cl, &connection, &rconn);
         request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_BRW, 3, size, NULL);
+                                   OST_READ, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
-        body->data = OBD_BRW_READ;
 
         desc = ptlrpc_prep_bulk(connection);
         if (!desc)
@@ -622,12 +621,11 @@ static int osc_brw_write(struct lustre_handle *conn,
 
         osc_con2cl(conn, &cl, &connection, &rconn);
         request = ptlrpc_prep_req2(cl, connection, rconn,
-                                   OST_BRW, 3, size, NULL);
+                                   OST_WRITE, 3, size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
-        body->data = OBD_BRW_WRITE;
 
         desc = ptlrpc_prep_bulk(connection);
         if (!desc)

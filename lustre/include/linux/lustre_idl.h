@@ -114,10 +114,10 @@ struct lustre_msg {
         __u64 cookie; /* security token */
         __u32 magic;
         __u32 version;
+        __u32 opc;
         __u64 last_rcvd;
         __u64 last_committed;
         __u64 transno;
-        __u32 opc;
         __u32 status;
         __u32 type;
         __u32   bufcount;
@@ -135,16 +135,17 @@ struct lustre_msg {
 #define OST_REPLY      0	/* reply ? */
 #define OST_GETATTR    1
 #define OST_SETATTR    2
-#define OST_BRW        3
-#define OST_CREATE     4
-#define OST_DESTROY    5
-#define OST_GET_INFO   6
-#define OST_CONNECT    7
-#define OST_DISCONNECT 8
-#define OST_PUNCH      9
-#define OST_OPEN      10
-#define OST_CLOSE     11
-#define OST_STATFS    12
+#define OST_READ       3
+#define OST_WRITE      4
+#define OST_CREATE     5 
+#define OST_DESTROY    6 
+#define OST_GET_INFO   7 
+#define OST_CONNECT    8 
+#define OST_DISCONNECT 9 
+#define OST_PUNCH      10
+#define OST_OPEN       11
+#define OST_CLOSE      12
+#define OST_STATFS     13
 
 
 typedef uint64_t        obd_id;
@@ -275,8 +276,6 @@ struct connmgr_body {
 #define OST_REQ_HAS_OA1  0x1
 
 struct ost_body {
-        __u32   connid;
-        __u32   data;
         struct  obdo oa;
 };
 
