@@ -69,6 +69,12 @@ void lov_unpackmd(struct lov_stripe_md *md, struct lov_mds_md *mdsmd)
         md->lmd_stripe_size = mdsmd->lmd_stripe_size;
         md->lmd_stripe_pattern = mdsmd->lmd_stripe_pattern;
         
-        for (i=0; i<md->lmd_stripe_count; i++) 
+        for (i=0; i<md->lmd_stripe_count; i++) {
                 md->lmd_oinfo[i].loi_id = mdsmd->lmd_objects[i].l_object_id; 
+                md->lmd_oinfo[i].loi_size = 0;
+        }
 }
+
+
+
+

@@ -313,17 +313,22 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-ENODEV); 
 
         lov = &export->exp_obd->u.lov;
+        oa->o_size = 0;
         for (i = 0; i < md->lmd_stripe_count; i++) {
+                if (md->lmd_oinfo[i].loi_id == 0)
+                        continue;
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_oinfo[i].loi_id; 
+                tmp.o_id = md->lmd_oinfo[i].loi_id; 
 
                 rc = obd_getattr(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
                         CERROR("Error getattr object %Ld on %d\n",
-                               oa->o_id, i); 
+                               tmp.o_id, i); 
                 }
                 /* XXX can do something more sophisticated here... */
+                /* This some completely wrong. We only need the size from 
+                   the individual slices. */
                 if (i == 0 ) {
                         obd_id id = oa->o_id;
                         memcpy(oa, &tmp, sizeof(tmp));
@@ -331,7 +336,6 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                 } else {
                         oa->o_size += tmp.o_size;
                 }
-
         }
         RETURN(rc);
 }
@@ -687,7 +691,7 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md, __u3
                         continue;
 
                 submd.lmd_object_id = md->lmd_oinfo[i].loi_id;
-                submd.lmd_easize = sizeof(submd);
+                submd.lmd_easize = sizeof(struct lov_mds_md);
                 rc = obd_cancel(&lov->tgts[i].conn, &submd, mode, &lockhs[i]);
                 if (rc) { 
                         CERROR("Error cancel object %Ld subobj %Ld\n", 
