@@ -530,7 +530,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (extent.start == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
                 /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
-                LASSERT(atomic_read(&inode->i_sem.count) == 0);
+                LASSERT(atomic_read(&inode->i_sem.count) <= 0);
                 up(&inode->i_sem);
                 rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
                                                 &extent, &lockh, ast_flags);
