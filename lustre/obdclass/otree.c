@@ -70,7 +70,7 @@ static struct offset_extent * ot_find_oe(rb_root_t *root,
 /* do the rbtree mechanics to insert a node, callers are responsible
  * for making sure that this new node doesn't overlap with existing
  * nodes */
-static void ot_indert_oe(rb_root_t *root, struct offset_extent *new_oe)
+static void ot_insert_oe(rb_root_t *root, struct offset_extent *new_oe)
 {
         rb_node_t ** p = &root->rb_node;
         rb_node_t * parent = NULL;
@@ -113,7 +113,7 @@ int ot_mark_offset(struct otree *ot, unsigned long offset)
         if ( oe == NULL ) {
                 new_oe->oe_start = offset;
                 new_oe->oe_end = offset;
-                ot_indert_oe(&ot->ot_root, new_oe);
+                ot_insert_oe(&ot->ot_root, new_oe);
                 ot->ot_num_marked++;
                 new_oe = NULL;
                 GOTO(out, rc);
@@ -169,7 +169,7 @@ int ot_clear_extent(struct otree *ot, unsigned long start, unsigned long end)
                         new_oe->oe_start = end + 1;
                         new_oe->oe_end = oe->oe_end;
                         oe->oe_end = start - 1;
-                        ot_indert_oe(&ot->ot_root, new_oe);
+                        ot_insert_oe(&ot->ot_root, new_oe);
                         new_oe = NULL;
                         ot->ot_num_marked -= end - start + 1;
                         break;
