@@ -17,6 +17,12 @@ typedef struct argcmd {
 	char     *ac_help;
 } argcmd_t;
 
+typedef struct network {
+	char	*type;
+	char	*server;
+	int	port;
+} network_t;
+
 int  Parser_quit(int argc, char **argv);
 void Parser_init(char *, command_t *);	/* Set prompt and load command list */
 int Parser_commands(void);			/* Start the command parser */

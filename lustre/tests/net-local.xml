@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<!DOCTYPE lustre SYSTEM "lustre.dtd">
+
+<lustre>
+  <node id="local" uuid="local-UUID">
+    <profile_id num="1" id="local-profile" uuid="local-profile-UUID"></profile_id>
+  </node>
+
+  <profile id="local-profile" uuid="local-profile-UUID">
+    <service_id num="1" id="ldlm-srv" uuid="ldlm-srv-UUID"></service_id>
+    <service_id num="2" id="mds-srv" uuid="mds-srv-UUID"></service_id>
+    <service_id num="3" id="obd-srv" uuid="obd-srv-UUID"></service_id>
+    <service_id num="4" id="ost-srv" uuid="ost-srv-UUID"></service_id>
+    <service_id num="5" id="osc-srv" uuid="osc-srv-UUID"></service_id>
+    <service_id num="6" id="mdc-srv" uuid="mdc-srv-UUID"></service_id>
+    <mountpoint_id num="1" id="lustre-mnt" uuid="lustre-mnt-UUID"></mountpoint_id>
+  </profile>
+
+  <ldlm id="ldlm-srv" uuid="ldlm-srv-UUID"></ldlm>
+
+  <mds id="mds-srv" uuid="mds-srv-UUID">
+    <fstype>extN</fstype>
+    <device>/dev/loop0</device>
+    <server_id num="1" id="local" uuid="local-UUID"></server_id>
+    <failover_id num="1" id="local" uuid="local-UUID"></failover_id>
+  </mds>
+
+  <obd id="obd-srv" uuid="obd-srv-UUID" type="obdfilter">
+    <fstype>extN</fstype>
+    <device>/dev/loop1</device>
+    <autoformat>no</autoformat>
+  </obd>
+
+  <ost id="ost-srv" uuid="ost-srv-UUID">
+    <server_id num="1" id="local" uuid="local-UUID"></server_id>
+    <failover_id num="1" id="local" uuid="local-UUID"></failover_id>
+  </ost>
+
+  <osc id="osc-srv" uuid="osc-srv-UUID">
+    <network type="tcp">
+      <server>localhost</server>
+      <port>1234</port>
+    </network>
+  </osc>
+
+  <mdc id="mdc-srv" uuid="mdc-srv-UUID">
+    <network type="tcp">
+      <server>localhost</server>
+      <port>1234</port>
+    </network>
+  </mdc>
+
+  <mountpoint id="lustre-mnt" uuid="lustre-mnt-UUID">
+    <path>/mnt/lustre</path>
+    <fileset>dev</fileset>
+    <mds_id num="1" id="mds-srv" uuid="mds-srv-UUID"></mds_id>
+  </mountpoint>
+</lustre>
