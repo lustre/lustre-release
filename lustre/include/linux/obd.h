@@ -75,6 +75,8 @@ struct mds_obd {
         struct inode_operations *mds_iop;
         struct address_space_operations *mds_aops;
         struct mds_fs_operations *mds_fsops;
+        struct file *mds_last_rcvd;
+        __u64 mds_mount_count;
 };
 
 struct ldlm_obd {

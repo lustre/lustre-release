@@ -403,7 +403,9 @@ static int mds_prep(struct obd_device *obddev)
         struct mds_obd *mds = &obddev->u.mds;
         struct super_operations *s_ops;
         struct file *f;
-        int err;
+        loff_t off = 0;
+        __u64 mount_count;
+        int rc;
 
         mds->mds_service = ptlrpc_init_svc(128 * 1024,
                                            MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
@@ -414,29 +416,60 @@ static int mds_prep(struct obd_device *obddev)
                 RETURN(-EINVAL);
         }
 
-        err = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
-        if (err) {
+        rc = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
+        if (rc) {
                 CERROR("cannot start thread\n");
-                GOTO(err_svc, err);
+                GOTO(err_svc, rc);
         }
 
         push_ctxt(&saved, &mds->mds_ctxt);
-        err = simple_mkdir(current->fs->pwd, "ROOT", 0700);
-        if (err && err != -EEXIST) {
+        rc = simple_mkdir(current->fs->pwd, "ROOT", 0700);
+        if (rc && rc != -EEXIST) {
                 CERROR("cannot create ROOT directory\n");
-                GOTO(err_svc, err);
+                GOTO(err_svc, rc);
         }
-        err = simple_mkdir(current->fs->pwd, "FH", 0700);
-        if (err && err != -EEXIST) {
+        rc = simple_mkdir(current->fs->pwd, "FH", 0700);
+        if (rc && rc != -EEXIST) {
                 CERROR("cannot create FH directory\n");
-                GOTO(err_svc, err);
+                GOTO(err_svc, rc);
         }
+
+        f = filp_open("mount_count", O_RDWR | O_CREAT, 0644);
+        if (IS_ERR(f)) {
+                CERROR("cannot open/create mount_count file, rc = %ld\n",
+                       PTR_ERR(f));
+                GOTO(err_svc, rc = PTR_ERR(f));
+        }
+        rc = lustre_fread(f, (char *)&mount_count, sizeof(mount_count), &off);
+        if (rc == 0) {
+                CERROR("empty MDS mount_count, new MDS?\n");
+                /* XXX maybe this should just be a random number? */
+                mds->mds_mount_count = 0;
+        } else if (rc != sizeof(mount_count)) {
+                CERROR("error reading mount_count: rc = %d\n", rc);
+                /* XXX maybe this should just be a random number? */
+                mds->mds_mount_count = 0;
+        } else {
+                mds->mds_mount_count = le64_to_cpu(mount_count);
+        }
+
+        mds->mds_mount_count++;
+        CDEBUG(D_SUPER, "MDS mount_count is %Ld\n", mds->mds_mount_count);
+        off = 0;
+        mount_count = cpu_to_le64(mds->mds_mount_count);
+        rc = lustre_fwrite(f, (char *)&mount_count, sizeof(mount_count), &off);
+        if (rc != sizeof(mount_count))
+                CERROR("error writing mount_count: rc = %d\n", rc);
+        rc = filp_close(f, 0);
+        if (rc)
+                CERROR("error closing mount_count: rc = %d\n", rc);
+
         f = filp_open("last_rcvd", O_RDWR | O_CREAT, 0644);
         if (IS_ERR(f)) {
                 CERROR("cannot open/create last_rcvd file\n");
-                GOTO(err_svc, err = PTR_ERR(f));
+                GOTO(err_svc, rc = PTR_ERR(f));
         }
-        mds->last_rcvd = f;
+        mds->mds_last_rcvd = f;
         pop_ctxt(&saved);
 
         /*
@@ -462,7 +495,7 @@ err_svc:
         rpc_unregister_service(mds->mds_service);
         OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
 
-        return(err);
+        return rc;
 }
 
 /* mount the file system (secretly) */
@@ -547,9 +580,9 @@ static int mds_cleanup(struct obd_device * obddev)
         if (!mds->mds_sb)
                 RETURN(0);
 
-        if (mds->last_rcvd) {
-                int rc = filp_close(mds->last_rcvd, 0);
-                mds->last_rcvd = NULL;
+        if (mds->mds_last_rcvd) {
+                int rc = filp_close(mds->mds_last_rcvd, 0);
+                mds->mds_last_rcvd = NULL;
 
                 if (rc)
                         CERROR("last_rcvd file won't close, rc=%d\n", rc);
