@@ -143,7 +143,7 @@ int PtlEQWait_timeout(ptl_handle_eq_t eventq_in, ptl_event_t * event_out,
         left_over = alarm(timeout);
         prev = signal(SIGALRM, eq_timeout);
         time_at_start = time(NULL);
-        if (left_over < timeout)
+        if (left_over && left_over < timeout)
                 alarm(left_over);
 
         rc = PtlEQWait(eventq_in, event_out);
