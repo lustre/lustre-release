@@ -60,6 +60,15 @@ struct it_cb_data {
 	obd_id hash;
 };
 
+#define LLAP_MAGIC 98764321
+
+struct ll_async_page {
+        int             llap_magic;
+        void            *llap_cookie;
+        int             llap_queued;
+        struct page     *llap_page;
+};
+
 /* llite/lproc_llite.c */
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc);
@@ -88,18 +97,19 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 int ll_commit_write(struct file *file, struct page *page, unsigned from,
                     unsigned to);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define ll_complete_writeback ll_complete_writepage_24
-void ll_complete_writepage_24(struct obd_client_page *ocp, int rc);
+#define ll_ap_completion ll_ap_completion_24
+void ll_ap_completion_24(void *data, int cmd, int rc);
 #else 
-#define ll_complete_writeback ll_complete_writepage_26
-void ll_complete_writepage_26(struct obd_client_page *ocp, int rc);
+#define ll_ap_completion ll_ap_completion_26
+void ll_ap_completion_26(void *data, int cmd, int rc);
 #endif
-int ll_sync_page(struct page *page);
 int ll_ocp_update_obdo(struct obd_client_page *ocp, int cmd, struct obdo *oa);
 int ll_ocp_set_io_ready(struct obd_client_page *ocp, int cmd);
 int ll_ocp_update_io_args(struct obd_client_page *ocp, int cmd);
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
+struct ll_async_page *llap_from_cookie(void *cookie);
+struct ll_async_page *llap_from_page(struct page *page);
 
 void ll_truncate(struct inode *inode);
 
