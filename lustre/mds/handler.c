@@ -161,6 +161,7 @@ struct dentry *mds_name2locked_dentry(struct obd_device *obd,
                 RETURN(dchild);
 
         res_id[0] = dchild->d_inode->i_ino;
+        res_id[1] = dchild->d_inode->i_generation;
         rc = ldlm_match_or_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                    res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                    &flags, ldlm_completion_ast,
@@ -188,6 +189,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                 RETURN(de);
 
         res_id[0] = de->d_inode->i_ino;
+        res_id[1] = de->d_inode->i_generation;
         rc = ldlm_match_or_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                    res_id, LDLM_PLAIN, NULL, 0, lock_mode,
                                    &flags, ldlm_completion_ast,
@@ -614,6 +616,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
 
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = dir->i_ino;
+        res_id[1] = dir->i_generation;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &lockh);

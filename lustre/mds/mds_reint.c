@@ -526,6 +526,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         /* plan to change the link count on this inode: write lock */
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
         res_id[0] = de_src->d_inode->i_ino;
+        res_id[1] = de_src->d_inode->i_generation;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &srclockh);
@@ -549,6 +550,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
         res_id[0] = de_tgt_dir->d_inode->i_ino;
+        res_id[1] = de_tgt_dir->d_inode->i_generation;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &tgtlockh);
@@ -666,6 +668,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
         res_id[0] = de_srcdir->d_inode->i_ino;
+        res_id[1] = de_srcdir->d_inode->i_generation;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &srclockh);
@@ -688,6 +691,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
         res_id[0] = de_tgtdir->d_inode->i_ino;
+        res_id[1] = de_tgtdir->d_inode->i_generation;
 
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &tgtlockh);
@@ -774,6 +778,7 @@ out_rename_denew:
 out_rename_deold:
         if (!rc) {
                 res_id[0] = de_old->d_inode->i_ino;
+                res_id[1] = de_old->d_inode->i_generation;
                 flags = 0;
                 /* Take an exclusive lock on the resource that we're
                  * about to free, to force everyone to drop their
