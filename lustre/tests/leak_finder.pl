@@ -6,7 +6,7 @@ my $debug_line = 0;
 while ($line = <>) {
     $debug_line++;
     my ($file, $func, $lno, $name, $size, $addr, $type);
-    if ($line =~ m/^.*\(@\d+ (.*):(.*)\,l\. (\d+) .* k(.*) '(.*)': (\d+) at (.*) \(tot .*$/) {
+    if ($line =~ m/^.*\((.*):(.*)\,l\. (\d+) .* k(.*) '(.*)': (\d+) at (.*) \(tot .*$/) {
         $file = $1;
         $func = $2;
         $lno = $3;
