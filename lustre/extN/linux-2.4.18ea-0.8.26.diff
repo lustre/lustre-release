@@ -133,24 +133,14 @@ diff -Nur linux-2.4.18/fs/ext3/namei.c linux-2.4.18ea/fs/ext3/namei.c
  #include <linux/fcntl.h>
  #include <linux/stat.h>
  #include <linux/string.h>
-@@ -465,6 +466,8 @@
-		inode->i_fop = &extN_file_operations;
- 		inode->i_mapping->a_ops = &ext3_aops;
- 		err = ext3_add_nondir(handle, dentry, inode);
-+		if (err)
-+			ext3_xattr_drop_inode(handle, inode);
- 		ext3_mark_inode_dirty(handle, inode);
+@@ -435,6 +435,7 @@ static int ext3_add_nondir(handle_t *han
+ 			return 0;
+ 		}
  	}
- 	ext3_journal_stop(handle, dir);
-@@ -490,6 +493,8 @@
-	if (!IS_ERR(inode)) {
- 		init_special_inode(inode, mode, rdev);
- 		err = ext3_add_nondir(handle, dentry, inode);
-+		if (err)
-+			ext3_xattr_drop_inode(handle, inode);
- 		ext3_mark_inode_dirty(handle, inode);
- 	}
- 	ext3_journal_stop(handle, dir);
++	ext3_xattr_drop_inode(handle, inode);
+ 	ext3_dec_count(handle, inode);
+ 	iput(inode);
+ 	return err;
 @@ -514,7 +519,7 @@
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
@@ -179,14 +169,6 @@ diff -Nur linux-2.4.18/fs/ext3/namei.c linux-2.4.18ea/fs/ext3/namei.c
  	ext3_mark_inode_dirty(handle, inode);
  	err = ext3_add_entry (handle, dentry, inode);
  	if (err)
-@@ -565,6 +566,7 @@
- 	return err;
- 
- out_no_entry:
-+	ext3_xattr_drop_inode(handle, inode);
- 	inode->i_nlink = 0;
- 	ext3_mark_inode_dirty(handle, inode);
- 	iput (inode);
 @@ -917,5 +919,5 @@
  		goto out_stop;
  
