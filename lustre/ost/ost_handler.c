@@ -490,7 +490,7 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
                       struct ptlrpc_request *req)
 {
         int rc;
-        struct ost_obd *ost;
+        struct ost_obd *ost = NULL;
         ENTRY;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);

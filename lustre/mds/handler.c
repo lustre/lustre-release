@@ -662,7 +662,7 @@ int mds_reint(int offset, struct ptlrpc_request *req)
 int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                struct ptlrpc_request *req)
 {
-        struct mds_obd *mds;
+        struct mds_obd *mds = NULL;
         int rc;
         ENTRY;
 

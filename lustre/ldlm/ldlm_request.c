@@ -147,7 +147,7 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         struct ptlrpc_request *req;
         struct ptlrpc_client *cl =
                 &lock->l_resource->lr_namespace->ns_rpc_client;
-        int rc, size = sizeof(*body);
+        int rc = 0, size = sizeof(*body);
         ENTRY;
 
         req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CALLBACK, 1,
@@ -177,9 +177,8 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                 rc = ptlrpc_queue_wait(req);
                 rc = ptlrpc_check_status(req, rc);
                 ptlrpc_free_req(req);
-        } else {
+        } else
                 *reqp = req;
-        }
 
         EXIT;
  out:

@@ -80,13 +80,13 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
 {
         struct ldlm_reply *dlm_rep;
         struct ldlm_request *dlm_req;
-        int rc, size = sizeof(*dlm_rep), cookielen;
+        int rc, size = sizeof(*dlm_rep), cookielen = 0;
         __u32 flags;
         ldlm_error_t err;
         struct ldlm_lock *lock = NULL;
         ldlm_lock_callback callback;
         struct lustre_handle lockh;
-        void *cookie;
+        void *cookie = NULL;
         ENTRY;
 
         callback = ldlm_cli_callback;

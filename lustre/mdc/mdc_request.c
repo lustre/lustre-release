@@ -310,6 +310,7 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 req->rq_replen = lustre_msg_size(1, size);
         } else {
                 LBUG();
+                RETURN(-1);
         }
 #warning FIXME: the data here needs to be different if a lock was granted for a different inode
         rc = ldlm_cli_enqueue(mdc->mdc_ldlm_client, mdc->mdc_conn, req,
