@@ -197,7 +197,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 dev = obd_class_name2dev(data->ioc_inlbuf1);
                 data->ioc_dev = dev;
                 if (dev == -1) {
-                        CERROR("No device for name %s!\n", data->ioc_inlbuf1);
+                        CDEBUG(D_IOCTL, "No device for name %s!\n",
+                               data->ioc_inlbuf1);
                         RETURN(-EINVAL);
                 }
 
@@ -464,10 +465,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 CDEBUG(D_INODE, "BRW %s with %dx%d pages\n",
                        rw == OBD_BRW_READ ? "read" : "write",
                        num, oa_bufs[0]);
-                bufs = kmalloc(pages * sizeof(*bufs), GFP_KERNEL);
-                counts = kmalloc(pages * sizeof(*counts), GFP_KERNEL);
-                offsets = kmalloc(pages * sizeof(*offsets), GFP_KERNEL);
-                flags = kmalloc(pages * sizeof(*flags), GFP_KERNEL);
+                OBD_ALLOC(bufs, pages * sizeof(*bufs));
+                OBD_ALLOC(counts, pages * sizeof(*counts));
+                OBD_ALLOC(offsets, pages * sizeof(*offsets));
+                OBD_ALLOC(flags, pages * sizeof(*flags));
                 if (!bufs || !counts || !offsets || !flags) {
                         CERROR("no memory for %d BRW per-page data\n", pages);
                         err = -ENOMEM;
@@ -515,12 +516,12 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 EXIT;
         brw_cleanup:
                 while (pages-- > 0)
-                        free_pages((unsigned long)page_address(bufs[pages]), 0);
+                        __free_pages(bufs[pages], 0);
         brw_free:
-                kfree(flags);
-                kfree(offsets);
-                kfree(counts);
-                kfree(bufs);
+                OBD_FREE(bufs, pages * sizeof(*bufs));
+                OBD_FREE(counts, pages * sizeof(*counts));
+                OBD_FREE(offsets, pages * sizeof(*offsets));
+                OBD_FREE(flags, pages * sizeof(*flags));
                 return err;
         }
         default: {
