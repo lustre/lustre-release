@@ -8,8 +8,17 @@ MODULE = ldlm
 modulefs_DATA = ldlm.o
 EXTRA_PROGRAMS = ldlm
 
-ldlm_SOURCES = ldlm_lock.c ldlm_resource.c ldlm_test.c ldlm_lockd.c \
+l_lock.c: 
+	test -e l_lock.c || ln -sf $(top_srcdir)/lib/l_lock.c
+
+LINX=l_lock.c
+
+ldlm_SOURCES = l_lock.c ldlm_lock.c ldlm_resource.c ldlm_test.c ldlm_lockd.c \
 ldlm_extent.c ldlm_request.c
+
+dist-hook:
+	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
+
 
 include $(top_srcdir)/Rules
 

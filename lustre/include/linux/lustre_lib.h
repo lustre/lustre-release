@@ -32,9 +32,23 @@
 #endif
 
 #include <linux/portals_lib.h>
+#include <asm/semaphore.h>
 #include <linux/lustre_idl.h>
 
 #ifdef __KERNEL__
+/* l_lock.c */
+struct lustre_lock { 
+        int l_depth;
+        struct task_struct *l_owner;
+        struct semaphore l_sem;
+        spinlock_t l_spin;
+};
+
+void l_lock_init(struct lustre_lock *);
+void l_lock(struct lustre_lock *);
+void l_unlock(struct lustre_lock *);
+
+
 /* page.c */
 inline void lustre_put_page(struct page *page);
 struct page *lustre_get_page_read(struct inode *dir, unsigned long index);
