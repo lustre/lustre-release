@@ -230,6 +230,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
 
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
+        if (rc == 0) {
+                oa->o_size = inode->i_size;
+                oa->o_blocks = inode->i_blocks;
+                oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        }
+
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
 
