@@ -1,11 +1,27 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ */
+
 #ifndef __LINUX_CLASS_OBD_H
 #define __LINUX_CLASS_OBD_H
-/*
- * Copyright (C) 2001  Cluster File Systems, Inc.
- *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
- */
 
 #ifndef __KERNEL__
 #include <stdint.h>
@@ -54,6 +70,7 @@ typedef struct {
 /* #include <linux/obd_fc.h> */
 #include <linux/obd_raid1.h>
 #include <linux/obd_ost.h>
+#include <linux/obd_osc.h>
 
 #ifdef __KERNEL__
 /* corresponds to one of the obdx */
@@ -186,12 +203,18 @@ static inline int obd_check_conn(struct obd_conn *conn)
 #define OBT(dev)        dev->obd_type->typ_ops
 #define OBP(dev,op)     dev->obd_type->typ_ops->o_ ## op
 
-#define OBD_CHECK_OP(conn,op) do { \
-        int rc = obd_check_conn(conn);\
-        if (rc) { printk("obd: error in operation: " #op "\n"); return rc; }\
-        if (!OBP(conn->oc_dev,op)) { printk("obd_" #op ": dev %d no operation\n", conn->oc_dev->obd_minor); \
-		return -EOPNOTSUPP;\
-	}\
+#define OBD_CHECK_OP(conn,op)					\
+do {								\
+        int rc = obd_check_conn(conn);				\
+        if (rc) {						\
+		printk("obd: error in operation: " #op "\n");	\
+		return rc;					\
+	}							\
+        if (!OBP(conn->oc_dev,op)) {				\
+		printk("obd_" #op ": dev %d no operation\n",	\
+		       conn->oc_dev->obd_minor);		\
+		return -EOPNOTSUPP;				\
+	}							\
 } while (0)
 
 static inline int obd_get_info(struct obd_conn *conn, obd_count keylen, void *key,

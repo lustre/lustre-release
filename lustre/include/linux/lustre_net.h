@@ -47,15 +47,14 @@ struct ptlrpc_service {
         struct lustre_peer srv_self;
 
         /* FIXME: perhaps a list of EQs, if multiple NIs are used? */
-        ptl_handle_eq_t srv_eq;
+        ptl_handle_eq_t srv_eq_h;
 
-        ptl_handle_me_t srv_me;
+        ptl_handle_me_t srv_me_h;
         ptl_process_id_t srv_id;
         ptl_md_t srv_md;
         ptl_handle_md_t srv_md_h;
         wait_queue_head_t *srv_wait_queue;
 };
-
 
 struct ptlrpc_request { 
 	struct list_head rq_list;
@@ -99,9 +98,10 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
                  int portal, int is_request);
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
 int rpc_register_service(struct ptlrpc_service *service, char *uuid);
+int rpc_unregister_service(struct ptlrpc_service *service);
 
 /* FIXME */
-#if 0
+#if 1
 # define LUSTRE_NAL "ksocknal"
 #else
 # define LUSTRE_NAL "kqswnal"

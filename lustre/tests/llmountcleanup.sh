@@ -36,6 +36,7 @@ setup tcp
 disconnect localhost
 del_uuid self
 del_uuid mds
+del_uuid ost
 EOF
 
 rmmod ksocknal

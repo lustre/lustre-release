@@ -174,7 +174,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 ENTRY;
                 /* have we attached a type to this device */
-                if ( obd->obd_type ||  (obd->obd_flags & OBD_ATTACHED) ){
+                if ( obd->obd_flags & OBD_ATTACHED ) {
                         printk("OBD: Device %d already typed as  %s.\n",
                                obd->obd_minor, MKSTR(obd->obd_type->typ_name));
                         return -EBUSY;
@@ -200,7 +200,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
                 if ( err ) {
-                        obd->obd_flags &= ~OBD_ATTACHED;
                         obd->obd_type = NULL;
                         EXIT;
                 } else {
@@ -271,6 +270,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
         case OBD_IOC_CLEANUP: {
                 ENTRY;
+
+		if ( !(obd->obd_flags & OBD_SET_UP) ) {
+			EXIT;
+			return -EINVAL;
+		}
 
                 err = obd_cleanup(obd);
                 if ( err ) {

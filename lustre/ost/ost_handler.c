@@ -4,17 +4,18 @@
  *  
  *  Lustre Object Server Module (OST)
  * 
- *  Copyright (C) 2001  Cluster File Systems, Inc.
+ *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
  *  This code is issued under the GNU General Public License.
  *  See the file COPYING in this distribution
  *
  *  by Peter Braam <braam@clusterfs.com>
  * 
- *  This server is single threaded at present (but can easily be multi threaded). 
- *  For testing and management it is treated as an obd_device, although it does
- *  not export a full OBD method table (the requests are coming in over the wire, 
- *  so object target modules do not have a full method table.)
+ *  This server is single threaded at present (but can easily be multi
+ *  threaded). For testing and management it is treated as an
+ *  obd_device, although it does not export a full OBD method table
+ *  (the requests are coming in over the wire, so object target
+ *  modules do not have a full method table.)
  * 
  */
 
@@ -72,34 +73,34 @@ static int ost_queue_req(struct obd_device *obddev, struct ptlrpc_request *req)
 	return 0;
 }
 
-
-/* XXX replace with networking code */
 int ost_reply(struct obd_device *obddev, struct ptlrpc_request *req)
 {
 	struct ptlrpc_request *clnt_req = req->rq_reply_handle;
 
 	ENTRY;
-	printk("ost_reply: req %p clnt_req at %p\n", req, clnt_req); 
 
-	/* free the request buffer */
-	kfree(req->rq_reqbuf);
-	req->rq_reqbuf = NULL; 
-	
-	/* move the reply to the client */ 
-	clnt_req->rq_replen = req->rq_replen;
-	clnt_req->rq_repbuf = req->rq_repbuf;
+	if (req->rq_ost->ost_service != NULL) {
+		/* This is a request that came from the network via portals. */
 
-	printk("---> client req %p repbuf %p len %d status %d\n", 
-	       clnt_req, clnt_req->rq_repbuf, clnt_req->rq_replen, 
-	       req->rq_rephdr->status); 
+		/* FIXME: we need to increment the count of handled events */
+		ptl_send_buf(req, &req->rq_peer, OST_REPLY_PORTAL, 0);
+	} else {
+		/* This is a local request that came from another thread. */
 
-	req->rq_repbuf = NULL;
-	req->rq_replen = 0;
-	
-	/* free the server request */
-	kfree(req); 
-	/* wake up the client */ 
-	wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
+		/* move the reply to the client */ 
+		clnt_req->rq_replen = req->rq_replen;
+		clnt_req->rq_repbuf = req->rq_repbuf;
+		req->rq_repbuf = NULL;
+		req->rq_replen = 0;
+
+		/* free the request buffer */
+		kfree(req->rq_reqbuf);
+		req->rq_reqbuf = NULL;
+
+		/* wake up the client */ 
+		wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
+	}
+
 	EXIT;
 	return 0;
 }
@@ -109,6 +110,7 @@ int ost_error(struct obd_device *obddev, struct ptlrpc_request *req)
 	struct ptlrep_hdr *hdr;
 
 	ENTRY;
+
 	hdr = kmalloc(sizeof(*hdr), GFP_KERNEL);
 	if (!hdr) { 
 		EXIT;
@@ -223,7 +225,8 @@ static int ost_setattr(struct ost_obd *ost, struct ptlrpc_request *req)
 		return rc;
 	}
 
-	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa, sizeof(req->rq_req.ost->oa));
+	memcpy(&req->rq_rep.ost->oa, &req->rq_req.ost->oa,
+	       sizeof(req->rq_req.ost->oa));
 
 	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_setattr
 		(&conn, &req->rq_rep.ost->oa); 
@@ -532,12 +535,10 @@ int ost_main(void *arg)
 
 	/* And now, wait forever for commit wakeup events. */
 	while (1) {
-		struct ptlrpc_request *request;
 		int rc; 
 
 		if (ost->ost_flags & OST_EXIT)
 			break;
-
 
 		wake_up(&ost->ost_done_waitq);
 		interruptible_sleep_on(&ost->ost_waitq);
@@ -545,22 +546,51 @@ int ost_main(void *arg)
 		CDEBUG(D_INODE, "lustre_ost wakes\n");
 		CDEBUG(D_INODE, "pick up req here and continue\n"); 
 
-		if (list_empty(&ost->ost_reqs)) { 
-			CDEBUG(D_INODE, "woke because of timer\n"); 
-		} else { 
-			printk("---> %d\n", __LINE__);
-			request = list_entry(ost->ost_reqs.next, 
-					     struct ptlrpc_request, rq_list);
-			printk("---> %d\n", __LINE__);
-			list_del(&request->rq_list);
-			rc = ost_handle(obddev, request); 
+
+		if (ost->ost_service != NULL) {
+			ptl_event_t ev;
+
+			while (1) {
+				struct ptlrpc_request request;
+
+				rc = PtlEQGet(ost->ost_service->srv_eq_h, &ev);
+				if (rc != PTL_OK && rc != PTL_EQ_DROPPED)
+					break;
+				/* FIXME: If we move to an event-driven model,
+				 * we should put the request on the stack of
+				 * mds_handle instead. */
+				memset(&request, 0, sizeof(request));
+				request.rq_reqbuf = ev.mem_desc.start +
+					ev.offset;
+				request.rq_reqlen = ev.mem_desc.length;
+				request.rq_ost = ost;
+				request.rq_xid = ev.match_bits;
+
+				request.rq_peer.peer_nid = ev.initiator.nid;
+				/* FIXME: this NI should be the incoming NI.
+				 * We don't know how to find that from here. */
+				request.rq_peer.peer_ni =
+					ost->ost_service->srv_self.peer_ni;
+				rc = ost_handle(obddev, &request);
+			}
+		} else {
+			struct ptlrpc_request *request;
+
+			if (list_empty(&ost->ost_reqs)) { 
+				CDEBUG(D_INODE, "woke because of timer\n"); 
+			} else { 
+				request = list_entry(ost->ost_reqs.next,
+						     struct ptlrpc_request,
+						     rq_list);
+				list_del(&request->rq_list);
+				rc = ost_handle(obddev, request); 
+			}
 		}
 	}
 
 	/* XXX maintain a list of all managed devices: cleanup here */
-	printk("---> %d\n", __LINE__);
+
 	ost->ost_thread = NULL;
-	printk("---> %d\n", __LINE__);
 	wake_up(&ost->ost_done_waitq);
 	printk("lustre_ost: exiting\n");
 	return 0;
@@ -602,6 +632,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 	struct obd_ioctl_data* data = buf;
 	struct ost_obd *ost = &obddev->u.ost;
 	struct obd_device *tgt;
+	struct lustre_peer peer;
 	int err; 
         ENTRY;
 
@@ -634,6 +665,20 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 
 	spin_lock_init(&obddev->u.ost.ost_lock);
 
+	err = kportal_uuid_to_peer("self", &peer);
+	if (err == 0) {
+		ost->ost_service = kmalloc(sizeof(*ost->ost_service),
+					   GFP_KERNEL);
+		if (ost->ost_service == NULL)
+			return -ENOMEM;
+		ost->ost_service->srv_buf_size = 64 * 1024;
+		ost->ost_service->srv_portal = OST_REQUEST_PORTAL;
+		memcpy(&ost->ost_service->srv_self, &peer, sizeof(peer));
+		ost->ost_service->srv_wait_queue = &ost->ost_waitq;
+
+		rpc_register_service(ost->ost_service, "self");
+	}
+
 	ost_start_srv_thread(obddev);
 
         MOD_INC_USE_COUNT;
@@ -659,6 +704,8 @@ static int ost_cleanup(struct obd_device * obddev)
                 EXIT;
                 return -EBUSY;
         }
+
+	rpc_unregister_service(ost->ost_service);
 
 	ost_stop_srv_thread(ost);
 

@@ -42,10 +42,27 @@ struct ost_obd {
 	int ost_flags;
 	spinlock_t ost_lock;
 	struct list_head ost_reqs;
+
+        struct ptlrpc_service *ost_service;
 };
 
-struct osc_obd {
-	struct obd_device *osc_tgt;
+struct ost_request { 
+	struct list_head rq_list;
+	struct ost_obd *rq_obd;
+	int rq_status;
+
+	char *rq_reqbuf;
+	int rq_reqlen;
+	struct ost_req_hdr *rq_reqhdr;
+	struct ost_req *rq_req;
+
+	char *rq_repbuf;
+	int rq_replen;
+	struct ost_rep_hdr *rq_rephdr;
+	struct ost_rep *rq_rep;
+
+        void *rq_reply_handle;
+	wait_queue_head_t rq_wait_for_rep;
 };
 
 /* ost/ost_pack.c */

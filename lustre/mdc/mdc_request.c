@@ -69,9 +69,6 @@ struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name, int tgt
 	return request;
 }
 
-
-
-
 static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 {
 	int rc;
@@ -114,7 +111,7 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 	return 0;
 }
 
-void mds_free_req(struct ptlrpc_request *request)
+void mdc_free_req(struct ptlrpc_request *request)
 {
 	kfree(request);
 }
@@ -153,7 +150,7 @@ int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid,
 	}
 
  out: 
-	mds_free_req(request);
+	mdc_free_req(request);
 	return rc;
 }
 
@@ -200,7 +197,7 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 	}
 
  out: 
-	mds_free_req(request);
+	mdc_free_req(request);
 	return rc;
 }
 

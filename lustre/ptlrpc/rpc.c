@@ -31,6 +31,11 @@
 
 static ptl_handle_eq_t req_eq, bulk_source_eq, bulk_sink_eq;
 
+/* This callback performs two functions:
+ *
+ * 1. Free the request buffer after it has gone out on the wire
+ * 2. Wake up the thread waiting for the reply once it comes in.
+ */
 static int request_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_request *rpc = ev->mem_desc.user_ptr;
@@ -239,14 +244,14 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
         service->srv_id.rid = PTL_ID_ANY;
 
 	rc = PtlMEAttach(peer.peer_ni, service->srv_portal, service->srv_id,
-                         0, ~0, PTL_RETAIN, &service->srv_me);
+                         0, ~0, PTL_RETAIN, &service->srv_me_h);
         if (rc != PTL_OK) {
                 printk("PtlMEAttach failed: %d\n", rc);
                 return rc;
         }
 
         rc = PtlEQAlloc(peer.peer_ni, 128, incoming_callback, service,
-                        &service->srv_eq);
+                        &service->srv_eq_h);
         if (rc != PTL_OK) {
                 printk("PtlEQAlloc failed: %d\n", rc);
                 return rc;
@@ -260,9 +265,9 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
 	service->srv_md.threshold	= PTL_MD_THRESH_INF;
 	service->srv_md.options		= PTL_MD_OP_PUT;
 	service->srv_md.user_ptr	= service;
-	service->srv_md.eventq		= service->srv_eq;
+	service->srv_md.eventq		= service->srv_eq_h;
 
-	rc = PtlMDAttach(service->srv_me, service->srv_md,
+	rc = PtlMDAttach(service->srv_me_h, service->srv_md,
                          PTL_RETAIN, &service->srv_md_h);
         if (rc != PTL_OK) {
                 printk("PtlMDAttach failed: %d\n", rc);
@@ -271,6 +276,23 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
         }
 
         return 0;
+}
+
+int rpc_unregister_service(struct ptlrpc_service *service)
+{
+        int rc;
+
+        rc = PtlMDUnlink(service->srv_md_h);
+        if (rc)
+                printk(__FUNCTION__ ": PtlMDUnlink failed: %d\n", rc);
+        rc = PtlEQFree(service->srv_eq_h);
+        if (rc)
+                printk(__FUNCTION__ ": PtlEQFree failed: %d\n", rc);
+        rc = PtlMEUnlink(service->srv_me_h);
+        if (rc)
+                printk(__FUNCTION__ ": PtlMEUnlink failed: %d\n", rc);
+
+        kfree(service->srv_buf);
 }
 
 static int req_init_portals(void)

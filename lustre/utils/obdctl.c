@@ -250,14 +250,18 @@ static int jt_setup(int argc, char **argv)
 
 	IOCINIT(data);
 
-	if ( argc != 2 && argc != 3  ) {
-		fprintf(stderr, "Usage: %s device [fstype]\n", argv[0]);
+	if ( argc > 3  ) {
+		fprintf(stderr, "Usage: %s [device] [fstype]\n", argv[0]);
 		return 1;
 	}
 
-	data.ioc_inllen1 =  strlen(argv[1]) + 1;
-	data.ioc_inlbuf1 = argv[1];
-	data.ioc_dev = strtoul(argv[1], NULL, 0); 
+	if (argc > 1) {
+		data.ioc_inllen1 =  strlen(argv[1]) + 1;
+		data.ioc_inlbuf1 = argv[1];
+		data.ioc_dev = strtoul(argv[1], NULL, 0);
+	} else {
+		data.ioc_dev = -1;
+	}
 	if ( argc == 3 ) { 
 		data.ioc_inllen2 = strlen(argv[2]) + 1;
 		data.ioc_inlbuf2 = argv[2];
@@ -330,7 +334,8 @@ static int jt_setattr(int argc, char **argv)
 
 	IOCINIT(data);
 	if (argc < 2) { 
-		printf("usage %s id mode\n", argv[0]); 
+		printf("usage: %s id mode\n", argv[0]); 
+		return -1;
 	}
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
@@ -358,7 +363,7 @@ static int jt_destroy(int argc, char **argv)
 
 	rc = ioctl(fd, OBD_IOC_DESTROY , &data);
 	if (rc < 0) {
-		printf("setattr: %x %s\n", OBD_IOC_SETATTR, strerror(errno));
+		printf("setattr: %x %s\n", OBD_IOC_DESTROY, strerror(errno));
 	}
 	return rc;
 }

@@ -123,5 +123,3 @@ int mdc_create(struct lustre_peer *peer, struct inode *dir, const char *name,
 #define IOC_REQUEST_MAX_NR               33
 
 #endif
-
-

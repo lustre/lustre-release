@@ -71,7 +71,6 @@ static int mds_queue_req(struct ptlrpc_request *req)
 	return 0;
 }
 
-/* XXX do this over the net */
 int mds_sendpage(struct ptlrpc_request *req, struct file *file, 
 		    __u64 offset, struct niobuf *dst)
 {
@@ -114,7 +113,6 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 	return 0;
 }
 
-/* XXX replace with networking code */
 int mds_reply(struct ptlrpc_request *req)
 {
 	struct ptlrpc_request *clnt_req = req->rq_reply_handle;
@@ -468,7 +466,7 @@ int mds_main(void *arg)
 			while (1) {
 				struct ptlrpc_request request;
 
-				rc = PtlEQGet(mds->mds_service->srv_eq, &ev);
+				rc = PtlEQGet(mds->mds_service->srv_eq_h, &ev);
 				if (rc != PTL_OK && rc != PTL_EQ_DROPPED)
 					break;
 				/* FIXME: If we move to an event-driven model,
@@ -632,7 +630,6 @@ static int mds_cleanup(struct obd_device * obddev)
         mds->mds_sb = 0;
 	kfree(mds->mds_fstype);
 	lock_kernel();
-	
 
         MOD_DEC_USE_COUNT;
         EXIT;
