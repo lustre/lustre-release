@@ -335,17 +335,16 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                         if (data->ioc_inlbuf3) {
                                 int len = strlen(data->ioc_inlbuf3);
-                                if (len > 37) {
-                                        CERROR("uuid should be shorter than 37 bytes\n");
+                                if (len >= sizeof(obd->obd_uuid)) {
+                                        CERROR("uuid must be < %d bytes long\n",
+                                               sizeof(obd->obd_uuid));
                                         if (obd->obd_name)
                                                 OBD_FREE(obd->obd_name,
                                                          strlen(obd->obd_name) + 1);
                                         GOTO(out, err=-EINVAL);
                                 }
-                                memcpy(obd->obd_uuid, data->ioc_inlbuf3,
-                                       sizeof(obd->obd_uuid));
+                                memcpy(obd->obd_uuid, data->ioc_inlbuf3, len);
                         }
-
                         MOD_INC_USE_COUNT;
                 }
 
