@@ -673,7 +673,8 @@ unsigned int lprocfs_add_var(struct obd_device* device,
                 }
                 break;
         case e_specific:
-                break;
+                 new_proc_entry->data = device;
+                 break;
         }
 
         return LPROCFS_SUCCESS;
@@ -805,7 +806,8 @@ int lprocfs_dereg_dev(struct obd_device* device)
 
         CDEBUG(D_OTHER, "SEARCH: Device = %s\n", device->obd_name);
 
-        temp = lprocfs_bfs_srch(proc_lustre_dev_root->subdir, device->obd_name);
+        temp = lprocfs_bfs_srch(proc_lustre_dev_root->subdir, \
+                                device->obd_name);
         if (temp == 0) {
                 CERROR("!! No root obtained, device does not exist !!\n");
                 return LPROCFS_FAILURE;
@@ -838,8 +840,69 @@ void lprocfs_remove_all(struct proc_dir_entry* root)
 }
 
 
+
+int rd_uuid(char* page, char **start, off_t off,
+		 int count, int *eof, void *data)
+{
+        int len;
+        struct obd_device* temp=(struct obd_device *)data;
+        len = sprintf(page, "%s\n", temp->obd_uuid);
+        return len;
+}
+int wr_uuid(struct file* file, const char *buffer, 
+            unsigned long count,void *data)
+{
+
+        return 0;
+}
+
+int rd_blksize(char* page, char **start, off_t off,
+             int count, int *eof, void *data)
+{
+        int len=0;
+        struct obd_device* temp=(struct obd_device *)data;
+        
+        return 0;
+
+}
+int rd_blktotal(char* page, char **start, off_t off,
+             int count, int *eof, void *data)
+{
+        return 0;
+}
+int rd_blkfree(char* page, char **start, off_t off,
+             int count, int *eof, void *data)
+{
+        return 0;
+}
+int rd_kbfree(char* page, char **start, off_t off,
+             int count, int *eof, void *data)
+{
+        return 0;
+}
+
+int rd_numobjects(char* page, char **start, off_t off,
+             int count, int *eof, void *data)
+{
+        return 0;
+}
+int rd_objfree(char* page, char **start, off_t off,
+             int count, int *eof, void *data)
+{
+        return 0;
+}
+
+int rd_objgroups(char* page, char **start, off_t off,
+             int count, int *eof, void *data)
+{
+
+        return 0;
+}
+
+
 int lprocfs_ll_rd(char *page, char **start, off_t off,
                   int count, int *eof, void *data)
+
 {
         int len;
         __u64 *temp = (__u64 *)data;
@@ -849,10 +912,17 @@ int lprocfs_ll_rd(char *page, char **start, off_t off,
         return len;
 }
 
+int rd_fs_type(char* page, char **start, off_t off,
+               int count, int *eof, void *data)
+{
+
+        return 0;
+}
+
 int rd_other(char* page, char **start, off_t off, int count, int *eof,
              void *data)
 {
-        printk("Hello other");
+        
         return 0;
 }
 
@@ -866,21 +936,21 @@ int rd_string(char* page, char **start, off_t off, int count, int *eof,
 int lprocfs_ll_wr(struct file* file, const char *buffer, unsigned long count,
                   void *data)
 {
-        printk("Write default");
+        
         return 0;
 }
 
 int wr_other(struct file* file, const char *buffer, unsigned long count,
              void *data)
 {
-        printk("Write other");
+        
         return 0;
 }
 
 int wr_string(struct file* file, const char *buffer, unsigned long count,
               void *data)
 {
-        printk("Write string");
+        
         return 0;
 }
 
