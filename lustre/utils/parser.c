@@ -339,6 +339,9 @@ int Parser_commands(void)
                         add_history(s);
                         rc = execute_line(s);
                 }
+                /* stop on error if not-interactive */
+                if (rc != 0 && !interactive)
+                        done = 1;
 
                 free(line);
         }
