@@ -329,7 +329,7 @@ diff -Nur linux-2.4.18/fs/ext3/symlink.c linux-2.4.18ea/fs/ext3/symlink.c
 diff -Nur linux-2.4.18/fs/ext3/xattr.c linux-2.4.18ea/fs/ext3/xattr.c
 --- linux-2.4.18/fs/ext3/xattr.c	Thu Jan  1 01:00:00 1970
 +++ linux-2.4.18ea/fs/ext3/xattr.c	Wed Apr  3 13:19:05 2002
-@@ -0,0 +1,1241 @@
+@@ -0,0 +1,1247 @@
 +/*
 + * linux/fs/ext3/xattr.c
 + *
@@ -400,8 +400,14 @@ diff -Nur linux-2.4.18/fs/ext3/xattr.c linux-2.4.18ea/fs/ext3/xattr.c
 +#include <linux/quotaops.h>
 +#include <asm/semaphore.h>
 +#include <linux/compatmac.h>
++#include <linux/module.h>
 +
-+#define EXT3_EA_USER "user."
++/* These symbols may be needed by a module. */
++EXPORT_SYMBOL(extN_xattr_register);
++EXPORT_SYMBOL(extN_xattr_unregister);
++EXPORT_SYMBOL(extN_xattr_get);
++EXPORT_SYMBOL(extN_xattr_list);
++EXPORT_SYMBOL(extN_xattr_set);
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
 +# define mark_buffer_dirty(bh) mark_buffer_dirty(bh, 1)
