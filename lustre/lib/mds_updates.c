@@ -72,15 +72,9 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
                 b->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
 
         b->ino = HTON__u32(inode->i_ino);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        b->atime = HTON__u32(inode->i_atime);
-        b->mtime = HTON__u32(inode->i_mtime);
-        b->ctime = HTON__u32(inode->i_ctime);
-#else
-        b->atime = HTON__u32(inode->i_atime.tv_sec);
-        b->mtime = HTON__u32(inode->i_mtime.tv_sec);
-        b->ctime = HTON__u32(inode->i_ctime.tv_sec);
-#endif
+        b->atime = HTON__u32(LTIME_S(inode->i_atime));
+        b->mtime = HTON__u32(LTIME_S(inode->i_mtime));
+        b->ctime = HTON__u32(LTIME_S(inode->i_ctime));
         b->mode = HTON__u32(inode->i_mode);
         b->size = HTON__u64(inode->i_size);
         b->blocks = HTON__u64(inode->i_blocks);
@@ -273,15 +267,9 @@ void mds_setattr_pack(struct ptlrpc_request *req,
                 rec->sa_uid = HTON__u32(iattr->ia_uid);
                 rec->sa_gid = HTON__u32(iattr->ia_gid);
                 rec->sa_size = HTON__u64(iattr->ia_size);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                rec->sa_atime = HTON__u64(iattr->ia_atime);
-                rec->sa_mtime = HTON__u64(iattr->ia_mtime);
-                rec->sa_ctime = HTON__u64(iattr->ia_ctime);
-#else
-                rec->sa_atime = HTON__u64(iattr->ia_atime.tv_sec);
-                rec->sa_mtime = HTON__u64(iattr->ia_mtime.tv_sec);
-                rec->sa_ctime = HTON__u64(iattr->ia_ctime.tv_sec);
-#endif
+                rec->sa_atime = HTON__u64(LTIME_S(iattr->ia_atime));
+                rec->sa_mtime = HTON__u64(LTIME_S(iattr->ia_mtime));
+                rec->sa_ctime = HTON__u64(LTIME_S(iattr->ia_ctime));
                 rec->sa_attr_flags = HTON__u32(iattr->ia_attr_flags);
 
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
@@ -438,15 +426,9 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         attr->ia_uid = NTOH__u32(rec->sa_uid);
         attr->ia_gid = NTOH__u32(rec->sa_gid);
         attr->ia_size = NTOH__u64(rec->sa_size);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        attr->ia_atime = NTOH__u64(rec->sa_atime);
-        attr->ia_mtime = NTOH__u64(rec->sa_mtime);
-        attr->ia_ctime = NTOH__u64(rec->sa_ctime);
-#else
-        attr->ia_atime.tv_sec = NTOH__u64(rec->sa_atime);
-        attr->ia_mtime.tv_sec = NTOH__u64(rec->sa_mtime);
-        attr->ia_ctime.tv_sec = NTOH__u64(rec->sa_ctime);
-#endif
+        LTIME_S(attr->ia_atime) = NTOH__u64(rec->sa_atime);
+        LTIME_S(attr->ia_mtime) = NTOH__u64(rec->sa_mtime);
+        LTIME_S(attr->ia_ctime) = NTOH__u64(rec->sa_ctime);
         attr->ia_attr_flags = NTOH__u32(rec->sa_attr_flags);
 
         if (req->rq_reqmsg->bufcount == offset + 2) {
