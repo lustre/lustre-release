@@ -47,9 +47,6 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 void oscc_init(struct obd_export *exp);
-
-extern atomic_t osc_max_rpcs_in_flight;
-extern atomic_t osc_max_pages_per_rpc;
 void osc_adjust_cache(struct client_obd *cli);
 
 #ifdef __KERNEL__
