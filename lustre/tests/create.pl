@@ -1,17 +1,21 @@
 #!/usr/bin/perl
 use Getopt::Long;
 
-GetOptions("silent!"=> \$silent);
+my $silent = 0;
+my $mcreate = 1; # should we use mcreate or open?
+my $files = 5;
+
+GetOptions("silent!" => \$silent,
+           "mcreate=i" => \$mcreate,
+           "files=i" => \$files);
 
 my $mtpt = shift || usage();
 my $mount_count = shift || usage();
 my $i = shift || usage();
 my $count = $i;
-my $files = 5;
-my $mcreate = 1; # should we use mcreate or open?
 
 sub usage () {
-    print "Usage: $0 <mount point prefix> <mount count> <iterations>\n";
+    print "Usage: $0 [--silent] [--mcreate=n] [--files=n] <mnt prefix> <mnt count> <iterations>\n";
     print "example: $0 /mnt/lustre 2 50\n";
     print "         will test in /mnt/lustre1 and /mnt/lustre2\n";
     print "         $0 /mnt/lustre -1 50\n";
