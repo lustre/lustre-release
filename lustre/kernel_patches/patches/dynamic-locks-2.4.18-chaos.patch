@@ -1,0 +1,212 @@
+ include/linux/dynlocks.h |   33 ++++++++++
+ lib/Makefile             |    4 -
+ lib/dynlocks.c           |  152 +++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 187 insertions(+), 2 deletions(-)
+
+--- /dev/null	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.18-alexey/include/linux/dynlocks.h	2003-09-01 16:33:25.000000000 +0400
+@@ -0,0 +1,33 @@
++#ifndef _LINUX_DYNLOCKS_H
++#define _LINUX_DYNLOCKS_H
++
++#include <linux/list.h>
++#include <linux/wait.h>
++
++struct dynlock_member {
++	struct list_head	dl_list;
++	unsigned long		dl_value;	/* lock value */
++	int			dl_refcount;	/* number of users */
++	int			dl_readers;
++	int			dl_writers;
++	int			dl_pid;		/* holder of the lock */
++	wait_queue_head_t	dl_wait;
++};
++
++/*
++ * lock's namespace:
++ *   - list of locks
++ *   - lock to protect this list
++ */
++struct dynlock {
++	struct list_head dl_list;
++	spinlock_t dl_list_lock;
++};
++
++void dynlock_init(struct dynlock *dl);
++void *dynlock_lock(struct dynlock *dl, unsigned long value, int rw, int gfp);
++void dynlock_unlock(struct dynlock *dl, void *lock);
++
++
++#endif
++
+--- /dev/null	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.18-alexey/lib/dynlocks.c	2003-09-01 16:36:00.000000000 +0400
+@@ -0,0 +1,152 @@
++/*
++ * Dynamic Locks
++ *
++ * struct dynlock is lockspace
++ * one may request lock (exclusive or shared) for some value
++ * in that lockspace
++ *
++ */
++
++#include <linux/dynlocks.h>
++#include <linux/module.h>
++#include <linux/slab.h>
++#include <linux/sched.h>
++
++/*
++ * dynlock_init
++ *
++ * initialize lockspace
++ *
++ */
++void dynlock_init(struct dynlock *dl)
++{
++	spin_lock_init(&dl->dl_list_lock);
++	INIT_LIST_HEAD(&dl->dl_list);
++}
++
++/*
++ * dynlock_lock
++ *
++ * acquires lock (exclusive or shared) in specified lockspace
++ * each lock in lockspace is allocated separately, so user have
++ * to specify GFP flags.
++ * routine returns pointer to lock. this pointer is intended to
++ * be passed to dynlock_unlock
++ *
++ */
++void *dynlock_lock(struct dynlock *dl, unsigned long value, int rw, int gfp)
++{
++	struct dynlock_member *nhl = NULL; 
++	struct dynlock_member *hl; 
++	struct list_head *cur;
++
++repeat:
++	/* find requested lock in lockspace */
++	spin_lock(&dl->dl_list_lock);
++	list_for_each(cur, &dl->dl_list) {
++		hl = list_entry(cur, struct dynlock_member, dl_list);
++		if (hl->dl_value == value) {
++			/* lock is found */
++			if (nhl) {
++				/* someone else just allocated
++				 * lock we didn't find and just created
++				 * so, we drop our lock
++				 */
++				kfree(nhl);
++				nhl = NULL;
++			}
++			hl->dl_refcount++;
++			goto found;
++		}
++	}
++	/* lock not found */
++	if (nhl) {
++		/* we already have allocated lock. use it */
++		hl = nhl;
++		nhl = NULL;
++		list_add(&hl->dl_list, &dl->dl_list);
++		goto found;
++	}
++	spin_unlock(&dl->dl_list_lock);
++	
++	/* lock not found and we haven't allocated lock yet. allocate it */
++	nhl = kmalloc(sizeof(struct dynlock_member), gfp);
++	if (nhl == NULL)
++		return NULL;
++	nhl->dl_refcount = 1;
++	nhl->dl_value = value;
++	nhl->dl_readers = 0;
++	nhl->dl_writers = 0;
++	init_waitqueue_head(&nhl->dl_wait);
++
++	/* while lock is being allocated, someone else may allocate it
++	 * and put onto to list. check this situation
++	 */
++	goto repeat;
++
++found:
++	if (rw) {
++		/* exclusive lock: user don't want to share lock at all
++		 * NOTE: one process may take the same lock several times
++		 * this functionaly is useful for rename operations */
++		while ((hl->dl_writers && hl->dl_pid != current->pid) ||
++				hl->dl_readers) {
++			spin_unlock(&dl->dl_list_lock);
++			wait_event(hl->dl_wait,
++				hl->dl_writers == 0 && hl->dl_readers == 0);
++			spin_lock(&dl->dl_list_lock);
++		}
++		hl->dl_writers++;
++	} else {
++		/* shared lock: user do not want to share lock with writer */
++		while (hl->dl_writers) {
++			spin_unlock(&dl->dl_list_lock);
++			wait_event(hl->dl_wait, hl->dl_writers == 0);
++			spin_lock(&dl->dl_list_lock);
++		}
++		hl->dl_readers++;
++	}
++	hl->dl_pid = current->pid;
++	spin_unlock(&dl->dl_list_lock);
++
++	return hl;
++}
++
++
++/*
++ * dynlock_unlock
++ *
++ * user have to specify lockspace (dl) and pointer to lock structure
++ * returned by dynlock_lock()
++ *
++ */
++void dynlock_unlock(struct dynlock *dl, void *lock)
++{
++	struct dynlock_member *hl = lock;
++	int wakeup = 0;
++	
++	spin_lock(&dl->dl_list_lock);
++	if (hl->dl_writers) {
++		hl->dl_writers--;
++		if (hl->dl_writers == 0)
++			wakeup = 1;
++	} else {
++		hl->dl_readers--;
++		if (hl->dl_readers == 0)
++			wakeup = 1;
++	}
++	if (wakeup) {
++		hl->dl_pid = 0;
++		wake_up(&hl->dl_wait);
++	}
++	if (--(hl->dl_refcount) == 0) 
++		list_del(&hl->dl_list);
++	spin_unlock(&dl->dl_list_lock);
++	if (hl->dl_refcount == 0)
++		kfree(hl);
++}
++
++EXPORT_SYMBOL(dynlock_init);
++EXPORT_SYMBOL(dynlock_lock);
++EXPORT_SYMBOL(dynlock_unlock);
++
+--- linux-2.4.18/lib/Makefile~dynamic-locks-2.4.18-chaos	2003-08-29 11:57:40.000000000 +0400
++++ linux-2.4.18-alexey/lib/Makefile	2003-09-01 16:35:23.000000000 +0400
+@@ -8,9 +8,9 @@
+ 
+ L_TARGET := lib.a
+ 
+-export-objs := cmdline.o dec_and_lock.o rwsem-spinlock.o rwsem.o rbtree.o
++export-objs := cmdline.o dec_and_lock.o rwsem-spinlock.o rwsem.o rbtree.o dynlocks.o
+ 
+-obj-y := errno.o ctype.o string.o vsprintf.o brlock.o cmdline.o bust_spinlocks.o rbtree.o
++obj-y := errno.o ctype.o string.o vsprintf.o brlock.o cmdline.o bust_spinlocks.o rbtree.o dynlocks.o
+ 
+ obj-$(CONFIG_RWSEM_GENERIC_SPINLOCK) += rwsem-spinlock.o
+ obj-$(CONFIG_RWSEM_XCHGADD_ALGORITHM) += rwsem.o
+
+_
