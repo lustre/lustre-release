@@ -3,6 +3,7 @@
 %define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
 %define enable_doc @ENABLE_DOC@
+%define enable_init_scripts @ENABLE_INIT_SCRIPTS@
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -61,6 +62,7 @@ Configures openldap server for LDAP Lustre config database
 %prep
 %setup -qn lustre-%{version}
 #%setup -c -n lustre-%{version}-lib
+
 %if %{enable_doc}
   %define disable_doc ''
 %else
@@ -88,12 +90,15 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 	--with-linux-obj='@LINUX_OBJ@' \
 	%{disable_doc} --disable-liblustre \
 	--sysconfdir=%{_sysconfdir} \
-	--mandir=%{_mandir}
+	--mandir=%{_mandir} \
+	--libdir=%{_libdir}
 make -j $RPM_BUILD_NCPUS -s
 
 %install
 cd $RPM_BUILD_DIR/lustre-%{version}
 make install DESTDIR=$RPM_BUILD_ROOT
+# hack to avoid changing the libsysio code for "make install"
+rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
 
 %ifarch alpha
 # this hurts me
@@ -145,13 +150,16 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/bin/lstripe
 %attr(-, root, root) /usr/bin/mcreate
 %attr(-, root, root) /usr/bin/munlink
-%attr(-, root, root) /usr/lib/lustre/python
+%attr(-, root, root) %{_libdir}/lustre/python
 %attr(-, root, root) /usr/share/lustre/examples
 
+%if %{enable_init_scripts}
 %attr(-, root, root) /etc/init.d/lustre
 %attr(-, root, root) /etc/init.d/lustrefs
-%attr(-, root, root) /usr/lib/libptlctl.a
-%attr(-, root, root) /usr/lib/liblustreapi.a
+%endif
+
+%attr(-, root, root) %{_libdir}/libptlctl.a
+%attr(-, root, root) %{_libdir}/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre
 %attr(-, root, root) /usr/include/portals
 %attr(-, root, root) /usr/include/linux/lustre_idl.h
@@ -163,7 +171,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %endif
 
 %files -n lustre-doc
-%attr(-, root, root) %doc COPYING FDL
+%attr(-, root, root) %doc COPYING lustre/FDL
 %if %{enable_doc}
 %attr(-, root, root) %doc doc/lustre.pdf doc/lustre-HOWTO.txt
 %endif
@@ -209,13 +217,15 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(700, ldap, ldap) /var/lib/ldap/lustre
 
 %post
-/sbin/chkconfig --add lustre
-/sbin/chkconfig --add lustrefs
+if [ -f /etc/init.d/lustre ] ; then
+	/sbin/chkconfig --add lustre
+	/sbin/chkconfig --add lustrefs
+fi
 
 %preun
-if [ $1 = 0 ]; then
-  /sbin/chkconfig --del lustre
-  /sbin/chkconfig --del lustrefs
+if [ $1 = 0 -a -f /etc/init.d/lustre ] ; then
+	/sbin/chkconfig --del lustre
+	/sbin/chkconfig --del lustrefs
 fi
 
 %post -n lustre-modules
