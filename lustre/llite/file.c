@@ -93,7 +93,6 @@ static int ll_file_release(struct inode *inode, struct file *file)
         struct ll_file_data *fd;
         struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct iattr iattr;
 
         ENTRY;
 
@@ -117,9 +116,10 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 attr.ia_mtime = inode->i_mtime;
                 attr.ia_ctime = inode->i_ctime;
                 attr.ia_atime = inode->i_atime;
-                iattr.ia_size = inode->i_size;
+                attr.ia_size = inode->i_size;
 
-                rc = ll_inode_setattr(inode, &iattr, 0);
+                /* XXX: this introduces a small race that we should evaluate */
+                rc = ll_inode_setattr(inode, &attr, 0);
                 if (rc) {
                         CERROR("failed - %d.\n", rc);
                         rc = -EIO; /* XXX - GOTO(out)? -phil */
