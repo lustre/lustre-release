@@ -51,6 +51,13 @@ int ldlm_expired_completion_wait(void *data)
         if (lock->l_conn_export == NULL) {
                 LDLM_ERROR(lock, "lock timed out; not entering recovery in "
                            "server code, just going back to sleep");
+                if (time_after(jiffies, next_dump)) {
+                        unsigned int debug = portal_debug;
+                        next_dump = jiffies + 300 * HZ;
+                        portal_debug |= D_OTHER;
+                        ldlm_namespace_dump(lock->l_resource->lr_namespace);
+                        portal_debug = debug;
+                }
                 RETURN(0);
         }
 
@@ -60,13 +67,6 @@ int ldlm_expired_completion_wait(void *data)
         LDLM_ERROR(lock, "lock timed out, entering recovery for %s@%s",
                    imp->imp_target_uuid.uuid,
                    imp->imp_connection->c_remote_uuid.uuid);
-        if (time_after(jiffies, next_dump)) {
-                unsigned int debug = portal_debug;
-                next_dump = jiffies + 300 * HZ;
-                portal_debug |= D_OTHER;
-                ldlm_namespace_dump(lock->l_resource->lr_namespace);
-                portal_debug = debug;
-        }
 
         RETURN(0);
 }
