@@ -1,7 +1,7 @@
 #!/bin/sh
 # suggested boilerplate for test script
 
-LCONF=../utils/lconf
+LCONF=${LCONF:-../utils/lconf}
 NAME=${NAME:-local}
 
 config=$NAME.xml

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-LCONF=../utils/lconf
+LCONF=${LCONF:-../utils/lconf}
 
 if [ ! -f local.xml ]; then
    ./local.sh

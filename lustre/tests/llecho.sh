@@ -1,20 +1,20 @@
 #!/bin/sh
 
 config=echo.xml
-lmc=../utils/lmc
-lconf=../utils/lconf
+LCONF=${LCONF:-../utils/lconf}
+LMC=${LMC:-../utils/lmc}
 
 SERVER=localhost
 CLIENT=localhost
 
 # create nodes
-$lmc -o $config --node $SERVER --net $SERVER tcp || exit 1
-$lmc -m $config --node $SERVER --obdtype=obdecho --ost || exit 2
+$LMC -o $config --node $SERVER --net $SERVER tcp || exit 1
+$LMC -m $config --node $SERVER --obdtype=obdecho --ost || exit 2
 
 # force the osc to be configured (this is normally done when it is mounted)
-$lmc -m $config --node $CLIENT --osc OSC_$SERVER || exit 3
+$LMC -m $config --node $CLIENT --osc OSC_$SERVER || exit 3
 
-$lconf --gdb $config || exit 4
+$LCONF --gdb $config || exit 4
 
 cat <<EOF
 
