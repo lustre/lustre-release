@@ -1,4 +1,4 @@
-MODULES := obdclass llog_test
+MODULES := obdclass llog_test confobd
 
 obdclass-objs := llog_obd.o class_obd.o
 obdclass-objs += debug.o genops.o sysctl.o uuid.o llog_ioctl.o
@@ -6,6 +6,12 @@ obdclass-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
 obdclass-objs += statfs_pack.o obdo.o obd_config.o
 
 ifeq ($(PATCHLEVEL),6)
+
+confobd-objs := conf_obd.o
+
+$(obj)/conf_obd.c: $(obj)/confobd.c
+	ln -sf $< $@
+
 llog_test-objs := llog-test.o
 
 $(obj)/llog-test.c: $(obj)/llog_test.c
