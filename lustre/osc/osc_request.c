@@ -868,7 +868,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         struct ost_body *body;
         ENTRY;
 
-        if (rc < 0)
+        if (rc < 0 && rc != -EDQUOT)
                 RETURN(rc);
 
         body = lustre_swab_repbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
@@ -882,6 +882,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
             body->oa.o_valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA))
                 osc_set_quota_flag(cli, body->oa.o_uid, body->oa.o_gid, 
                                    body->oa.o_valid, body->oa.o_flags);
+
+        if (rc < 0)
+                RETURN(rc);
 
         osc_update_grant(cli, body);
         memcpy(oa, &body->oa, sizeof(*oa));
