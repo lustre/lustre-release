@@ -197,6 +197,7 @@ def getText(node, tag):
 
 # Recusively search for a particular node by uuid
 def getByUUID(node, uuid):
+    fixme()
     for n in node.childNodes:
         if n.nodeType == n.ELEMENT_NODE:
             if getUUID(n) == uuid:
@@ -206,9 +207,15 @@ def getByUUID(node, uuid):
 # Recusively search for a particular node by name
 def getByName(node, name):
     for n in node.childNodes:
-        if n.nodeType == n.ELEMENT_NODE:
+        # this service_id check is ugly. need some other way to
+        # differentiate between definitions and references
+        if n.nodeType == n.ELEMENT_NODE and n.nodeName != 'service_id':
             if getName(n) == name:
                 return n
+            else:
+                n = getByName(n, name)
+                if n: return n
+                    
     return None
 
 # Get name attribute of node
