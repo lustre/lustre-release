@@ -104,8 +104,8 @@ int page_debug_setup(void *addr, int len, __u64 off, __u64 id)
 {
         LASSERT(addr);
 
-        off = HTON__u64(off);
-        id = HTON__u64(id);
+        off = cpu_to_le64 (off);
+        id = cpu_to_le64 (id);
         memcpy(addr, (char *)&off, LPDS);
         memcpy(addr + LPDS, (char *)&id, LPDS);
 
@@ -123,8 +123,8 @@ int page_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
 
         LASSERT(addr);
 
-        ne_off = HTON__u64(off);
-        id = HTON__u64(id);
+        ne_off = le64_to_cpu (off);
+        id = le64_to_cpu (id);
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
                 CERROR("%s: id "LPU64" offset "LPU64" off: "LPX64" != "LPX64"\n",
                        who, id, off, *(__u64 *)addr, ne_off);
