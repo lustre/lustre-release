@@ -160,7 +160,6 @@ EXPORT_SYMBOL(ptl_register_nal);
 EXPORT_SYMBOL(ptl_unregister_nal);
 
 EXPORT_SYMBOL(ptl_err_str);
-EXPORT_SYMBOL(lib_dispatch);
 EXPORT_SYMBOL(PtlMEAttach);
 EXPORT_SYMBOL(PtlMEInsert);
 EXPORT_SYMBOL(PtlMEUnlink);
@@ -192,7 +191,6 @@ EXPORT_SYMBOL(lib_parse);
 EXPORT_SYMBOL(lib_create_reply_msg);
 EXPORT_SYMBOL(lib_init);
 EXPORT_SYMBOL(lib_fini);
-EXPORT_SYMBOL(dispatch_name);
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
