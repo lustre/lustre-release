@@ -1,13 +1,23 @@
-/*
- * This program was prepared by the Regents of the University of
- * California at Los Alamos National Laboratory (the University) under 
- * contract number W-7405-ENG-36 with the U.S. Department of Energy
- * (DoE). Neither the U.S. Government nor the
- * University makes any warranty, express or implied, or assumes any
- * liability or responsibility for the use of this software.
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (c) 2003 Los Alamos National Laboratory (LANL)
+ *
+ *   This file is part of Lustre, http://www.lustre.org/
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
-
 #include "lgmnal.h"
 
 
