@@ -486,18 +486,12 @@ static int log_process_thread(void *args)
                 GOTO(out, rc);
         }
                                                                                                                              
-        rc = llog_process(llh, cathandle_print_cb, NULL);
-        if (rc) {
-                CERROR("llog_process with cathandle_print_cb failed %d\n", rc);
-                GOTO(out, rc);
-        }
-                                                                                                                             
         if (cb) {
                 rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
                 if (rc)
                         CERROR("llog_cat_process failed %d\n", rc);
         } else
-                CERROR("no cb func for recovery\n");
+                CWARN("no callback function for recovery\n");
 
         CDEBUG(D_HA, "send to llcd :%p forcibly\n", ctxt->loc_llcd);
         llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);

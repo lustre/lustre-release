@@ -124,7 +124,6 @@ int llog_catlog_list(struct obd_device *obd, int count,
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);
 int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp);
-int llog_origin_handle_cancel(struct ptlrpc_request *req);
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
                         struct llog_logid *logid, struct llog_ctxt_gen *gen);
 int llog_handle_connect(struct ptlrpc_request *req);
@@ -381,18 +380,4 @@ static inline int llog_connect(struct llog_ctxt *ctxt, int count,
         RETURN(rc);
 }
 
-static inline int cathandle_print_cb(struct llog_handle *llh, 
-                                     struct llog_rec_hdr *rec, void *data)
-{
-        struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
-
-        if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
-                CERROR("invalid record in catalog\n");
-                RETURN(-EINVAL);
-        }
-
-        CDEBUG(D_HA, "seeing record at index %d in log "LPX64"\n", 
-               le32_to_cpu(rec->lrh_index), lir->lid_id.lgl_oid);
-        RETURN(0);
-}
 #endif
