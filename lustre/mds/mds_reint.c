@@ -430,8 +430,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (!inode) {
                 CERROR("child doesn't exist (dir %ld, name %s\n",
                        dir->i_ino, rec->ur_name);
-                LBUG();
-                GOTO(out_unlink_dchild, rc = -ESTALE);
+                GOTO(out_unlink_dchild, rc = -ENOENT);
         }
 
 #if 0 /* in intent case the client doesn't have the inode */
@@ -485,7 +484,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         EXIT;
 out_unlink_dchild:
-        res_id[0] = inode->i_ino;
+        if (!rc)
+                res_id[0] = inode->i_ino;
         l_dput(dchild);
 out_unlink_de:
         up(&dir->i_sem);

@@ -388,6 +388,26 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
                 CERROR("cannot start thread\n");
                 LBUG();
         }
+        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
+        if (err) {
+                CERROR("cannot start thread\n");
+                LBUG();
+        }
+        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
+        if (err) {
+                CERROR("cannot start thread\n");
+                LBUG();
+        }
+        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
+        if (err) {
+                CERROR("cannot start thread\n");
+                LBUG();
+        }
+        err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
+        if (err) {
+                CERROR("cannot start thread\n");
+                LBUG();
+        }
 
         MOD_INC_USE_COUNT;
         RETURN(0);

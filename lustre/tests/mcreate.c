@@ -17,7 +17,7 @@ int main(int argc, char ** argv)
 
         rc = mknod(argv[1], S_IFREG| 0444, 0);
         if (rc) { 
-                printf("error: %s\n", strerror(errno));
+                printf("mknod(%s) error: %s\n", argv[1], strerror(errno));
         }
         return rc;
 } 
