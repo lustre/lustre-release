@@ -1599,7 +1599,6 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct dentry *dchild = NULL;
         struct filter_obd *filter;
         struct dentry *dparent;
-        struct iattr attr;
         int err = 0, rc = 0, i;
         __u64 next_id;
         void *handle;
@@ -1608,66 +1607,65 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         filter = &obd->u.filter;
 
         for (i = 0; i < *num && err == 0; i++) {
-                next_id = filter_last_id(filter, NULL) + 1;
+                int cleanup_phase = 0;
+
+                next_id = filter_last_id(filter, oa) + 1;
                 CDEBUG(D_INFO, "precreate objid "LPU64"\n", next_id);
 
                 dparent = filter_parent_lock(obd, group, next_id, LCK_PW,
                                              &parent_lockh);
-                if (IS_ERR(dparent)) {
-                        rc = PTR_ERR(dparent);
-                        break;
-                }
+                if (IS_ERR(dparent))
+                        GOTO(cleanup,  PTR_ERR(dparent));
+                cleanup_phase = 1;
 
                 dchild = filter_fid2dentry(obd, dparent, group, next_id);
                 if (IS_ERR(dchild))
-                        GOTO(cleanup_lock, rc = PTR_ERR(dchild));
+                        GOTO(cleanup, rc = PTR_ERR(dchild));
+                cleanup_phase = 2;
 
                 if (dchild->d_inode != NULL) {
                         /* This would only happen if lastobjid was bad on disk*/
                         CERROR("Serious error: objid %*s already exists; is "
                                "this filesystem corrupt?\n",
                                dchild->d_name.len, dchild->d_name.name);
-                        GOTO(cleanup_dchild, rc = -EEXIST);
+                        GOTO(cleanup, rc = -EEXIST);
                 }
 
                 handle = fsfilt_start(obd, dparent->d_inode,
                                       FSFILT_OP_CREATE_LOG, NULL);
                 if (IS_ERR(handle))
-                        GOTO(cleanup_dchild, rc = PTR_ERR(handle));
+                        GOTO(cleanup, rc = PTR_ERR(handle));
+                cleanup_phase = 3;
 
                 rc = ll_vfs_create(dparent->d_inode, dchild, S_IFREG, NULL);
                 if (rc) {
                         CERROR("create failed rc = %d\n", rc);
-                        GOTO(cleanup_commit, rc);
-                } else if (oa != NULL &&
-                           (oa->o_valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME |
-                                           OBD_MD_FLSIZE))) {
-                        iattr_from_obdo(&attr, oa, oa->o_valid);
-                        rc = fsfilt_setattr(obd, dchild, handle, &attr, 1);
-                        if (rc)
-                                CERROR("create setattr failed rc = %d\n", rc);
-                }
-                filter_set_last_id(filter, NULL, next_id);
+                        GOTO(cleanup, rc);
+                } 
+
+                filter_set_last_id(filter, oa, next_id);
                 err = filter_update_last_objid(obd, group, 0);
                 if (err)
                         CERROR("unable to write lastobjid but file created\n");
-        cleanup_commit:
-                err = fsfilt_commit(obd, dparent->d_inode, handle, 0);
-                if (err) {
-                        CERROR("error on commit, err = %d\n", err);
-                        if (!rc)
-                                rc = err;
+
+        cleanup:
+                switch(cleanup_phase) {
+                case 3:
+                        err = fsfilt_commit(obd, dparent->d_inode, handle, 0);
+                        if (err) {
+                                CERROR("error on commit, err = %d\n", err);
+                                if (!rc)
+                                        rc = err;
+                        }
+                case 2:
+                        f_dput(dchild);
+                case 1:
+                        filter_parent_unlock(dparent, &parent_lockh, LCK_PW);
+                case 0:
                 }
-                if (dchild->d_inode != NULL && oa != NULL)
-                        obdo_from_inode(oa, dchild->d_inode,
-                                        FILTER_VALID_FLAGS);
-        cleanup_dchild:
-                f_dput(dchild);
-        cleanup_lock:
-                filter_parent_unlock(dparent, &parent_lockh, LCK_PW);
+                
                 if (rc)
                         break;
-                oa = NULL; /* oa applies for first iteration only */
         }
         *num = i;
 
