@@ -122,9 +122,7 @@ void l_check_no_ns_lock(struct ldlm_namespace *ns)
         if (l_has_lock(&ns->ns_lock) && time_after(jiffies, next_msg)) {
                 CERROR("namespace %s lock held during RPCs; tell phil\n",
                        ns->ns_name);
-#if (LUSTRE_KERNEL_VERSION < 30)
-                show_stack(NULL);
-#else
+#if (LUSTRE_KERNEL_VERSION >= 30)
                 CERROR(portals_debug_dumpstack());
 #endif
                 next_msg = jiffies + 60 * HZ;
