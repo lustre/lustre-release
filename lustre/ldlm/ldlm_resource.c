@@ -52,6 +52,7 @@ static int ldlm_proc_ll_rd(char *page, char **start, off_t off,
         return len;
 }
 
+#define LDLM_MAX_UNUSED 20
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
@@ -89,6 +90,10 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
                 INIT_LIST_HEAD(bucket);
+
+        INIT_LIST_HEAD(&ns->ns_unused_list);
+        ns->ns_nr_unused = 0;
+        ns->ns_max_unused = LDLM_MAX_UNUSED;
 
         spin_lock(&ldlm_namespace_lock);
         list_add(&ns->ns_list_chain, &ldlm_namespace_list);

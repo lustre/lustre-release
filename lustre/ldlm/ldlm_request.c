@@ -492,13 +492,17 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         return rc;
 }
 
-static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
-                                           __u64 *res_id, int flags)
+int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
+                                    __u64 *res_id, int flags)
 {
         struct ldlm_resource *res;
         struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
         struct ldlm_ast_work *w;
         ENTRY;
+
+        if ((flags & LDLM_FL_REDUCE) && 
+            ns->ns_max_unused > ns->ns_nr_unused)
+                RETURN(0);
 
         res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         if (res == NULL) {
@@ -522,11 +526,14 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                  * won't see this flag and call l_blocking_ast */
                 lock->l_flags |= LDLM_FL_CBPENDING;
 
-                OBD_ALLOC(w, sizeof(*w));
+                 OBD_ALLOC(w, sizeof(*w));
                 LASSERT(w);
 
                 w->w_lock = LDLM_LOCK_GET(lock);
                 list_add(&w->w_list, &list);
+                if ((flags & LDLM_FL_REDUCE) && 
+                    ns->ns_max_unused > ns->ns_nr_unused)
+                        break;
         }
         l_unlock(&ns->ns_lock);
 

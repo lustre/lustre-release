@@ -44,6 +44,7 @@ typedef enum {
 #define LDLM_FL_LOCAL_ONLY     (1 << 11) /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_NO_CALLBACK    (1 << 12) /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_HAS_INTENT     (1 << 13) /* lock request has intent */
+#define LDLM_FL_REDUCE         (1 << 14) /* throw away unused locks */
 
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
@@ -102,6 +103,10 @@ struct ldlm_namespace {
         struct list_head       ns_list_chain; /* position in global NS list */
         struct proc_dir_entry *ns_proc_dir;
 
+        struct list_head       ns_unused_list; /* all root resources in ns */
+        unsigned int           ns_nr_unused;
+        unsigned int           ns_max_unused;
+
         spinlock_t             ns_counter_lock;
         __u64                  ns_locks;
         __u64                  ns_resources;
@@ -132,6 +137,7 @@ struct ldlm_lock {
         struct ldlm_lock     *l_parent;
         struct list_head      l_children;
         struct list_head      l_childof;
+        struct list_head      l_lru;
         struct list_head      l_res_link; /*position in one of three res lists*/
         struct list_head      l_export_chain; /* per-export chain of locks */
         struct list_head      l_pending_chain; /* locks with callbacks pending*/

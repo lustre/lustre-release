@@ -215,6 +215,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
                 return;
         }
 
+        list_del_init(&lock->l_lru);
         list_del(&lock->l_export_chain);
         lock->l_export = NULL;
         lock->l_flags |= LDLM_FL_DESTROYED;
@@ -258,6 +259,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         lock->l_refc = 1;
         INIT_LIST_HEAD(&lock->l_children);
         INIT_LIST_HEAD(&lock->l_res_link);
+        INIT_LIST_HEAD(&lock->l_lru);
         INIT_LIST_HEAD(&lock->l_export_chain);
         INIT_LIST_HEAD(&lock->l_pending_chain);
         init_waitqueue_head(&lock->l_waitq);
@@ -435,6 +437,13 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode)
 void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
 {
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
+
+        if (!list_empty(&lock->l_lru)) { 
+                list_del_init(&lock->l_lru);
+                lock->l_resource->lr_namespace->ns_nr_unused--;
+                LASSERT(lock->l_resource->lr_namespace->ns_nr_unused >= 0);
+        }
+
         if (mode == LCK_NL || mode == LCK_CR || mode == LCK_PR)
                 lock->l_readers++;
         else
@@ -445,15 +454,20 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
 }
 
 /* Args: unlocked lock */
+int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
+                                    __u64 *res_id, int flags);
+
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
 {
         struct ldlm_lock *lock = __ldlm_handle2lock(lockh, 0);
+        struct ldlm_namespace *ns;
         ENTRY;
 
         if (lock == NULL)
                 LBUG();
 
         LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
+        ns = lock->l_resource->lr_namespace;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (mode == LCK_NL || mode == LCK_CR || mode == LCK_PR)
                 lock->l_readers--;
@@ -475,6 +489,18 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
                 /* FIXME: need a real 'desc' here */
                 lock->l_blocking_ast(lock, NULL, lock->l_data,
                                      lock->l_data_len, LDLM_CB_BLOCKING);
+        } else if (!lock->l_readers && !lock->l_writers) {
+                LASSERT(list_empty(&lock->l_lru));
+                LASSERT(ns->ns_nr_unused >= 0);
+                list_add_tail(&lock->l_lru, &ns->ns_unused_list);
+                ns->ns_nr_unused++;
+                if (ns->ns_client && ns->ns_nr_unused >= ns->ns_max_unused) {
+                        CDEBUG(D_DLMTRACE, "%d unused (max %d), cancelling "
+                               "LRU\n", ns->ns_nr_unused, ns->ns_max_unused);
+                        ldlm_cli_cancel_unused_resource
+                                (ns, lock->l_resource->lr_name, LDLM_FL_REDUCE);
+                }
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         } else
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 

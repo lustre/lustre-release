@@ -89,6 +89,8 @@ done
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
 
 cleanup || exit 19
+sync
+
 $LCONF $OPTS || exit 20
 
 echo "comparing previously copied files"
@@ -100,6 +102,7 @@ done
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
 cleanup || exit 29
+sync
 $LCONF $OPTS || exit 30
 
 echo "renaming $HOSTS.ren to $HOSTS"
@@ -118,3 +121,4 @@ if [ $NOWUSED -gt $USED ]; then
 fi
 
 cleanup $OPTS || exit 29
+sync
