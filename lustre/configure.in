@@ -67,7 +67,15 @@ AC_SUBST(PORTALS)
 portalslib_def=$enable_portalsdir
 AC_ARG_WITH(portalslib, [  --with-portalslib=[path] set path to Portals library (default=../portals/linux/utils)], enable_portalslib=$withval)
 AC_ARG_ENABLE(portalslib, [  --enable-portalslib=[path] (deprecated) set path to Portals lib (default=../portals/linux/utils)],, enable_portalslib=$portalslib_def)
-PORTALSLIB=$enable_portalslib/linux/utils
+
+
+if test -z "$enable_portalslib"; then
+	PORTALSLIB=$enable_portalslib/linux/utils
+else
+	PORTALSLIB=${enable_portalslib}
+fi
+
+
 AC_SUBST(PORTALSLIB)
 
 AC_MSG_CHECKING(if make dep has been run in kernel source)
