@@ -20,12 +20,17 @@ init_test_env() {
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=/r
+
+    export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
+    export LCONF=${LCONF:-"lconf"}
+    export LMC=${LMC:-"lmc"}
+    export LCTL=${LCTL:-"lctl"}
+    export CHECKSTAT="${CHECKSTAT:-checkstat} -v"
+
+    # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
-    export PATH=$PATH:$RLUSTRE/utils:$RLUSTRE/tests
-    export PATH=$RLUSTRE/utils:$RLUSTRE/tests:$PATH
-    
-    export CHECKSTAT="${CHECKSTAT:-checkstat} -v"
+
 }
 
 start() {
@@ -62,6 +67,16 @@ fail() {
     stop $facet --force --failover --nomod
     change_active $facet
     start $facet
+    df $MOUNT || error "post-failover df: $?"
+}
+
+fail_abort() {
+    local facet=$1
+    stop $facet --force --failover --nomod
+    change_active $facet
+    start $facet
+    do_facet $facet lctl --device %${facet}1 abort_recovery
+    df $MOUNT || echo "first df failed: $?"
     df $MOUNT || error "post-failover df: $?"
 }
 
@@ -132,7 +147,7 @@ do_facet() {
     shift
     active=`facet_active $facet`
     HOST=`facet_host $active`
-    $PDSH $HOST "(PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; sh -c \"$@\")"
+    $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
 
 add_facet() {

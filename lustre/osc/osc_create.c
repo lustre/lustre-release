@@ -263,8 +263,8 @@ void oscc_init(struct obd_export *exp)
         spin_lock_init(&oed->oed_oscc.oscc_lock);
         oed->oed_oscc.oscc_exp = exp;
         oed->oed_oscc.oscc_kick_barrier = 100;
-        oed->oed_oscc.oscc_grow_count = 2000;
-        oed->oed_oscc.oscc_initial_create_count = 2000;
+        oed->oed_oscc.oscc_grow_count = 20;
+        oed->oed_oscc.oscc_initial_create_count = 20;
 
         oed->oed_oscc.oscc_next_id = 2;
         oed->oed_oscc.oscc_last_id = 1;

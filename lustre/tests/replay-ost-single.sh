@@ -2,27 +2,20 @@
 
 set -e
 
-# Skip these tests
-# 3 - bug 1852
-ALWAYS_EXCEPT="3"
-
-LCONF=${LCONF:-"../utils/lconf"}
-LMC=${LMC:-"../utils/lmc"}
-LCTL=${LCTL:-"../utils/lctl"}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
-LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
-PATH=$LUSTRE/utils:$LUSTRE/tests:$PATH
-
-RLUSTRE=${RLUSTRE:-$LUSTRE}
-RPWD=${RPWD:-$PWD}
-
-XMLCONFIG="`basename $0 .sh`.xml"
-
 . $LUSTRE/tests/test-framework.sh
 
-CHECKSTAT="${CHECKSTAT:-checkstat} -v"
+init_test_env
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
+mds_HOST=${mds_HOST:-`hostname`}
+ost_HOST=${ost_HOST:-`hostname`}
+ostfailover_HOST=${ostfailover_HOST:-`hostname`}
+client_HOST=${client_HOST:-`hostname`}
+
+NETTYPE=${NETTYPE:-tcp}
+
+PDSH=${PDSH:-no_dsh}
 MOUNT=${MOUNT:-/mnt/lustre}
 DIR=${DIR:-$MOUNT}
 MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
