@@ -59,6 +59,8 @@ int
 lwt_lookup_string (int *size, char *knl_ptr,
                    char *user_ptr, int user_size)
 {
+        int   maxsize = 128;
+        
         /* knl_ptr was retrieved from an LWT snapshot and the caller wants to
          * turn it into a string.  NB we can crash with an access violation
          * trying to determine the string length, so we're trusting our
@@ -67,12 +69,24 @@ lwt_lookup_string (int *size, char *knl_ptr,
         if (!capable(CAP_SYS_ADMIN))
                 return (-EPERM);
 
-        *size = strlen (knl_ptr) + 1;
+        if (user_size > 0 && 
+            maxsize > user_size)
+                maxsize = user_size;
+
+        *size = strnlen (knl_ptr, maxsize - 1) + 1;
         
-        if (user_ptr != NULL &&
-            copy_to_user (user_ptr, knl_ptr, *size))
-                return (-EFAULT);
-        
+        if (user_ptr != NULL) {
+                if (user_size < 4)
+                        return (-EINVAL);
+                
+                if (copy_to_user (user_ptr, knl_ptr, *size))
+                        return (-EFAULT);
+
+                /* Did I truncate the string?  */
+                if (knl_ptr[*size - 1] != 0)
+                        copy_to_user (user_ptr + *size - 4, "...", 4);
+        }
+
         return (0);
 }
 
