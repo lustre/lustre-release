@@ -154,6 +154,7 @@ do_stat (void)
 		printf ("\n");
 	}
 
+	fflush(stdout);	
 	last = timenow();
 }
 

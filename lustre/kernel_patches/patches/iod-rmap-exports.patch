@@ -1,6 +1,14 @@
---- linux-chaos/fs/inode.c.b_io_export	Wed Jan 29 16:56:15 2003
-+++ linux-chaos/fs/inode.c	Wed Jan 29 16:56:27 2003
-@@ -66,7 +66,8 @@
+--- linux/fs/inode.c.b_io	2003-02-18 16:39:16.000000000 -0800
++++ linux/fs/inode.c	2003-02-18 16:39:45.000000000 -0800
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/config.h>
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/string.h>
+ #include <linux/mm.h>
+@@ -66,7 +67,8 @@
   * NOTE! You also have to own the lock if you change
   * the i_state of an inode while it is in use..
   */
@@ -10,8 +18,8 @@
  
  /*
   * Statistics gathering..
---- linux-chaos/fs/Makefile.b_io_export	Wed Jan 29 16:56:45 2003
-+++ linux-chaos/fs/Makefile	Wed Jan 29 16:56:53 2003
+--- linux/fs/Makefile.b_io	2003-02-18 16:39:16.000000000 -0800
++++ linux/fs/Makefile	2003-02-18 16:39:37.000000000 -0800
 @@ -7,7 +7,7 @@
  
  O_TARGET := fs.o
@@ -21,19 +29,18 @@
  mod-subdirs :=	nls
  
  obj-y :=	open.o read_write.o devices.o file_table.o buffer.o \
---- linux-chaos/mm/filemap.c.b_io_export	Wed Jan 29 16:50:39 2003
-+++ linux-chaos/mm/filemap.c	Wed Jan 29 16:51:11 2003
-@@ -65,6 +65,7 @@
-  *			pagecache_lock
+--- linux/mm/vmscan.c.b_io	2003-02-18 16:39:16.000000000 -0800
++++ linux/mm/vmscan.c	2003-02-18 16:40:01.000000000 -0800
+@@ -14,6 +14,8 @@
+  *  Multiqueue VM started 5.8.00, Rik van Riel.
   */
- spinlock_cacheline_t pagemap_lru_lock_cacheline = {SPIN_LOCK_UNLOCKED};
-+EXPORT_SYMBOL(pagemap_lru_lock_cacheline);
  
- #define CLUSTER_PAGES		(1 << page_cluster)
- #define CLUSTER_OFFSET(x)	(((x) >> page_cluster) << page_cluster)
---- linux-chaos/mm/vmscan.c.b_io_export	Wed Jan 29 16:51:58 2003
-+++ linux-chaos/mm/vmscan.c	Wed Jan 29 16:55:16 2003
-@@ -839,6 +839,7 @@
++#include <linux/config.h>
++#include <linux/module.h>
+ #include <linux/slab.h>
+ #include <linux/kernel_stat.h>
+ #include <linux/swap.h>
+@@ -837,6 +839,7 @@
  	set_current_state(TASK_RUNNING);
  	remove_wait_queue(&kswapd_done, &wait);
  }
@@ -41,14 +48,14 @@
  
  static void wakeup_memwaiters(void)
  {
---- linux-chaos/mm/Makefile.b_io_export	Wed Jan 29 16:52:46 2003
-+++ linux-chaos/mm/Makefile	Wed Jan 29 16:54:23 2003
+--- linux/mm/Makefile.b_io	2003-02-18 16:39:16.000000000 -0800
++++ linux/mm/Makefile	2003-02-18 16:39:37.000000000 -0800
 @@ -9,7 +9,7 @@
  
  O_TARGET := mm.o
  
 -export-objs := shmem.o filemap.o memory.o page_alloc.o mempool.o
-+export-objs := shmem.o filemap.o memory.o page_alloc.o mempool.o vmscan.c
++export-objs := shmem.o filemap.o memory.o page_alloc.o mempool.o vmscan.o
  
  obj-y	 := memory.o mmap.o filemap.o mprotect.o mlock.o mremap.o \
  	    vmalloc.o slab.o bootmem.o swap.o vmscan.o page_io.o \
