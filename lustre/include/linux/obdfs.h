@@ -52,10 +52,6 @@ struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int)
 
 /* list of all OBDFS super blocks  */
 struct list_head obdfs_super_list;
-struct obdfs_super_entry {
-	struct list_head	 sl_chain;
-	struct obdfs_sb_info	*sl_sbi;
-};
 
 struct obdfs_pgrq {
 	struct list_head	 rq_ilist;	/* linked list of req's */
@@ -88,6 +84,7 @@ struct obdfs_inode_info {
 	char 		 oi_inline[OBD_INLINESZ];
 };
 
+#define MAX_IOVEC	16
 
 static inline struct list_head *obdfs_ilist(struct inode *inode) 
 {

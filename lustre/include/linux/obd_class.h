@@ -170,8 +170,6 @@ struct obd_ops {
 #define OBT(dev)	dev->obd_type->typ_ops
 #define OBP(dev,op)	dev->obd_type->typ_ops->o_ ## op
 
-#define MAX_IOVEC	16
-
 
 /*
  *  ======== OBD Metadata Support  ===========

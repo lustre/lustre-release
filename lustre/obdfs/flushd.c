@@ -57,6 +57,7 @@ int obdfs_flush_reqs(struct list_head *page_list,
 {
 	struct list_head *tmp = page_list;
 	obd_count	  num_io = 0;
+	struct inode	 *inode = NULL;
 	struct obdo	 *oa = NULL;
 	struct obdo	 *obdos[MAX_IOVEC];
 	struct page	 *pages[MAX_IOVEC];
@@ -66,9 +67,14 @@ int obdfs_flush_reqs(struct list_head *page_list,
 	obd_flag	  flags[MAX_IOVEC];
 	int		  err = 0;
 	int i;
-	struct inode *inode = NULL;
 
 	ENTRY;
+
+	if (!page_list) {
+		CDEBUG(D_INODE, "no list\n");
+		EXIT;
+		return 0;
+	}
 
 	if ( list_empty(page_list)) {
 		CDEBUG(D_INODE, "list empty\n");
@@ -82,12 +88,25 @@ int obdfs_flush_reqs(struct list_head *page_list,
 		struct obdfs_pgrq *pgrq;
 		struct page	  *page;
 
-		if ( flush_inode ) 
+		if ( flush_inode )
 			pgrq = list_entry(tmp, struct obdfs_pgrq, rq_ilist);
-		else 
+		else
 			pgrq = list_entry(tmp, struct obdfs_pgrq, rq_slist);
 		page = pgrq->rq_page;
 		inode = pgrq->rq_inode;
+
+		if ( !inode ) {
+			CDEBUG(D_INODE, "no inode\n");
+			EXIT;
+			return 0;
+		}
+
+		if ( !page  ) {
+			CDEBUG(D_INODE, "no page \n");
+			EXIT;
+			return 0;
+		}
+
 
 		if (check_time && 
 		    pgrq->rq_jiffies > (jiffies - pupd_prm.age_buffer))
@@ -116,7 +135,7 @@ int obdfs_flush_reqs(struct list_head *page_list,
 			err = obdfs_do_vec_wr(inode->i_sb, &num_io, obdos, 
 					      pages,
 					      bufs, counts, offsets, flags);
-			for (i=0 ; i<MAX_IOVEC ; i++) {
+			for (i = 0 ; i < MAX_IOVEC ; i++) {
 				obdo_free(obdos[i]);
 			if ( err ) {
 				/* XXX Probably should handle error here -
@@ -150,28 +169,27 @@ ERR:
 static void obdfs_flush_dirty_pages(int check_time)
 {
 	struct list_head *sl;
-	struct obdfs_sb_info *sbi;
 
 	sl = &obdfs_super_list;
 	while ( (sl = sl->next) != &obdfs_super_list ) {
-		struct obdfs_super_entry *entry = 
-			list_entry(sl, struct obdfs_super_entry, sl_chain);
-		sbi = entry->sl_sbi;
+		struct obdfs_sb_info *sbi = 
+			list_entry(sl, struct obdfs_sb_info, osi_list);
 
 		/* walk write requests here, use the sb, check the time */
 		obdfs_flush_reqs(&sbi->osi_pages, 0, 1);
 	}
 
+#if 0
 	/* again, but now we wait for completion */
 	sl = &obdfs_super_list;
 	while ( (sl = sl->next) != &obdfs_super_list ) {
-		struct obdfs_super_entry *entry = 
-			list_entry(sl, struct obdfs_super_entry, sl_chain);
-		sbi = entry->sl_sbi;
+		struct obdfs_sb_info *sbi = 
+			list_entry(sl, struct obdfs_sb_info, sl_chain);
 
 		/* walk write requests here */
 		obdfs_flush_reqs(&sbi->osi_pages, 0, check_time);
 	}
+#endif
 }
 
 
@@ -213,7 +231,7 @@ static int pupdate(void *unused)
 		{
 		stop_pupdate:
 			tsk->state = TASK_STOPPED;
-			MOD_DEC_USE_COUNT;
+			/* MOD_DEC_USE_COUNT; */
 			printk("pupdated stopped...\n");
 			return 0;
 		}
@@ -243,8 +261,10 @@ static int pupdate(void *unused)
 
 int flushd_init(void)
 {
-	/*	kernel_thread(bdflush, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND); */
-	MOD_INC_USE_COUNT;
+	/*
+	kernel_thread(bdflush, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND);
+	 */
+	/* MOD_INC_USE_COUNT; */
 	kernel_thread(pupdate, NULL, 0);
 	printk("flushd inited\n");
 	return 0;
@@ -256,12 +276,14 @@ int flushd_cleanup(void)
 	
 
 	/* XXX Andreas, we will do this later, for now, you must kill
-	   pupdated with a SIGSTOP from userland, before unloading obdfs.o
+	   pupdated with a SIGTERM from userland, before unloading obdfs.o
 	*/
 	if (pupdated) {
-		/* send updated a STOP signal */
 		/* then let it run at least once, before continuing */
 
+		/* XXX need to do something like this here:
+		send_sig(SIGTERM, current, 0);
+		 */
 		1;
 	}
 
