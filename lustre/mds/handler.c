@@ -210,7 +210,7 @@ int mds_getattr(struct ptlrpc_request *req)
         rep->nlink = inode->i_nlink;
         rep->valid = ~0;
         mds_fs_get_objid(mds, inode, &rep->objid);
-        dput(de);
+        l_dput(de);
         return 0;
 }
 
@@ -278,7 +278,7 @@ int mds_close(struct ptlrpc_request *req)
         file = (struct file *)(unsigned long) req->rq_req.mds->objid;
 
         req->rq_rephdr->status = filp_close(file, 0);
-        dput(de);
+        l_dput(de);
         mntput(mnt);
         return 0;
 }
@@ -560,7 +560,6 @@ static int mds_cleanup(struct obd_device * obddev)
 #ifdef CONFIG_DEV_RDONLY
         dev_clear_rdonly(2);
 #endif
-
         OBD_FREE(s_ops, sizeof(*s_ops));
 
         MOD_DEC_USE_COUNT;
