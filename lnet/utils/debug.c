@@ -543,6 +543,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                         close(fd);
                         return 1;
                 }
+                goto out;
         }
         if (strcasecmp(argv[1], "stop") == 0) {
                 rc = dbg_write_cmd(fd, "stop");
