@@ -15,7 +15,7 @@ int main(int argc, char **argv)
         int fd, rc;
 
         if (argc != 2) {
-                fprintf(stderr, "usage: %s filename\n", argv[1]); 
+                fprintf(stderr, "usage: %s filename\n", argv[0]); 
                 exit(1);
         } else { 
                 fprintf(stderr, "congratulations - program starting\n"); 
