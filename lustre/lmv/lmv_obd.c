@@ -227,10 +227,9 @@ int lmv_check_connect(struct obd_device *obd) {
         struct lmv_tgt_desc *tgts;
         struct obd_export *exp;
         int rc, rc2, i;
-        ENTRY;
 
         if (lmv->connected)
-                RETURN(0);
+                return 0;
       
         lmv->connected = 1;
         cluuid = &lmv->cluuid;
@@ -300,7 +299,7 @@ int lmv_check_connect(struct obd_device *obd) {
         lmv_set_timeouts(obd);
 
         class_export_put(exp);
-        RETURN (0);
+        return 0;
 
  out_disc:
         while (i-- > 0) {
@@ -708,7 +707,61 @@ int lmv_done_writing(struct obd_export *exp, struct obdo *obdo)
                 RETURN(rc);
 
         /* FIXME: choose right MDC here */
+        CWARN("this method isn't implemented yet\n");
         rc = md_done_writing(lmv->tgts[0].ltd_exp, obdo);
+        RETURN(rc);
+}
+
+int lmv_enqueue_slaves(struct obd_export *exp, int locktype,
+                         struct lookup_intent *it, int lockmode,
+                         struct mdc_op_data *data, struct lustre_handle *lockh,
+                         void *lmm, int lmmsize,
+                         ldlm_completion_callback cb_completion,
+                         ldlm_blocking_callback cb_blocking, void *cb_data)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct mea *mea = data->mea1;
+        struct mdc_op_data data2;
+        int i, rc, mds;
+        ENTRY;
+
+        LASSERT(mea != NULL);
+        for (i = 0; i < mea->mea_count; i++) {
+                if (lmv->tgts[i].ltd_exp == NULL)
+                        continue;
+
+                memset(&data2, 0, sizeof(data2));
+                data2.fid1 = mea->mea_fids[i];
+                mds = data2.fid1.mds;
+                rc = md_enqueue(lmv->tgts[mds].ltd_exp, locktype, it, lockmode,
+                                &data2, lockh + i, lmm, lmmsize, cb_completion,
+                                cb_blocking, cb_data);
+                CDEBUG(D_OTHER, "take lock on slave %lu/%lu/%lu -> %d/%d\n",
+                       (unsigned long) mea->mea_fids[i].mds,
+                       (unsigned long) mea->mea_fids[i].id,
+                       (unsigned long) mea->mea_fids[i].generation,
+                       rc, it->d.lustre.it_status);
+                if (rc)
+                        GOTO(cleanup, rc);
+                if (it->d.lustre.it_data) {
+                        struct ptlrpc_request *req;
+                        req = (struct ptlrpc_request *) it->d.lustre.it_data;
+                        ptlrpc_req_finished(req);
+                }
+                
+                if (it->d.lustre.it_status)
+                        GOTO(cleanup, rc = it->d.lustre.it_status);
+        }
+        RETURN(0);
+        
+cleanup:
+        /* drop all taken locks */
+        while (--i >= 0) {
+                if (lockh[i].cookie)
+                        ldlm_lock_decref(lockh + i, lockmode);
+                lockh[i].cookie = 0;
+        }
         RETURN(rc);
 }
 
@@ -728,6 +781,13 @@ int lmv_enqueue(struct obd_export *exp, int lock_type,
         rc = lmv_check_connect(obd);
         if (rc)
                 RETURN(rc);
+
+        if (it->it_op == IT_UNLINK) {
+                rc = lmv_enqueue_slaves(exp, lock_type, it, lock_mode,
+                                        data, lockh, lmm, lmmsize,
+                                        cb_completion, cb_blocking, cb_data);
+                RETURN(rc);
+        }
 
         if (data->namelen) {
                 obj = lmv_grab_obj(obd, &data->fid1, 0);
@@ -1103,6 +1163,40 @@ int lmv_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
         RETURN(rc);
 }
 
+int lmv_unlink_slaves(struct obd_export *exp,
+                         struct mdc_op_data *data, struct ptlrpc_request **req)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct mea *mea = data->mea1;
+        struct mdc_op_data data2;
+        int i, rc = 0, mds;
+        ENTRY;
+
+        LASSERT(mea != NULL);
+        for (i = 0; i < mea->mea_count; i++) {
+                if (lmv->tgts[i].ltd_exp == NULL)
+                        continue;
+
+                memset(&data2, 0, sizeof(data2));
+                data2.fid1 = mea->mea_fids[i];
+                data2.create_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
+                mds = data2.fid1.mds;
+                rc = md_unlink(lmv->tgts[mds].ltd_exp, &data2, req);
+                CDEBUG(D_OTHER, "unlink slave %lu/%lu/%lu -> %d\n",
+                       (unsigned long) mea->mea_fids[i].mds,
+                       (unsigned long) mea->mea_fids[i].id,
+                       (unsigned long) mea->mea_fids[i].generation, rc);
+                if (*req) {
+                        ptlrpc_req_finished(*req);
+                        *req = NULL;
+                }
+                if (rc)
+                        break;
+        }
+        RETURN(rc);
+}
+
 int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request)
 {
@@ -1110,12 +1204,15 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
         struct lmv_obd *lmv = &obd->u.lmv;
         int rc, i = 0;
         ENTRY;
-
 	rc = lmv_check_connect(obd);
 	if (rc)
 		RETURN(rc);
 
-        if (data->namelen != 0) {
+        if (data->namelen == 0 && data->mea1 != NULL) {
+                /* mds asks to remove slave objects */
+                rc = lmv_unlink_slaves(exp, data, request);
+                RETURN(rc);
+        } else if (data->namelen != 0) {
                 struct lmv_obj *obj;
                 obj = lmv_grab_obj(obd, &data->fid1, 0);
                 if (obj) {

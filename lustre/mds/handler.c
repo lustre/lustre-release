@@ -182,7 +182,7 @@ int mds_lock_mode_for_dir(struct obd_device *obd,
                 ret_mode = LCK_CW;
                 if (mds_splitting_expected(obd, dentry)) {
                         /* splitting possible. serialize any access */
-                        CERROR("%s: gonna split %lu/%lu\n",
+                        CDEBUG(D_OTHER, "%s: gonna split %lu/%lu\n",
                                obd->obd_name,
                                (unsigned long) dentry->d_inode->i_ino,
                                (unsigned long) dentry->d_inode->i_generation);
@@ -2355,8 +2355,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
 
-        rc = lustre_pack_reply(req, it->opc == IT_UNLINK ? 4 : 3, repsize,
-                               NULL);
+        rc = lustre_pack_reply(req, 3, repsize, NULL);
         if (rc)
                 RETURN(req->rq_status = rc);
 
@@ -2409,6 +2408,14 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                 if (req->rq_status != 0) {
                         LBUG();
                         rep->lock_policy_res2 = req->rq_status;
+                        RETURN(ELDLM_LOCK_ABORTED);
+                }
+                break;
+        case IT_UNLINK:
+                rc = mds_lock_and_check_slave(offset, req, &lockh);
+                if ((rep->lock_policy_res2 = rc)) {
+                        if (rc == ENOLCK)
+                                rep->lock_policy_res2 = 0;
                         RETURN(ELDLM_LOCK_ABORTED);
                 }
                 break;

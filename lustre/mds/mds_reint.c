@@ -1368,9 +1368,14 @@ int mds_create_local_dentry(struct mds_update_record *rec,
         /* new, local dentry will be added soon. we need no aliases here */
         d_drop(new_child);
 
-        child = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_EX,
-                                      lockh, NULL, NULL, 0,
-                                      MDS_INODELOCK_UPDATE);
+        if (rec->ur_mode & MDS_MODE_DONT_LOCK) {
+                child = mds_fid2dentry(mds, rec->ur_fid1, NULL);
+        } else {
+                child = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL,
+                                              LCK_EX, lockh, NULL, NULL, 0,
+                                              MDS_INODELOCK_UPDATE);
+        }
+
         if (IS_ERR(child)) {
                 CERROR("can't get victim\n");
                 GOTO(cleanup, rc = PTR_ERR(child));
@@ -1404,7 +1409,8 @@ int mds_create_local_dentry(struct mds_update_record *rec,
 cleanup:
         switch(cleanup_phase) {
                 case 2:
-                        ldlm_lock_decref(lockh, LCK_EX);
+                        if (!(rec->ur_mode & MDS_MODE_DONT_LOCK))
+                                ldlm_lock_decref(lockh, LCK_EX);
                         dput(child);
                 case 1:
                         dput(new_child);
@@ -1479,10 +1485,12 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec, int offset,
                                    struct lustre_handle *child_lockh,
                                    struct dentry *dchild)
 {
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = mds_req2mds(req);
         struct mdc_op_data op_data;
         int rc = 0, cleanup_phase = 0;
         struct ptlrpc_request *request = NULL;
+        void *handle;
         ENTRY;
 
         LASSERT(offset == 0 || offset == 2);
@@ -1490,12 +1498,20 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec, int offset,
         DEBUG_REQ(D_INODE, req, "unlink %*s (remote inode %u/%u/%u)",
                   rec->ur_namelen - 1, rec->ur_name, (unsigned)dchild->d_mdsnum,
                   (unsigned) dchild->d_inum, (unsigned) dchild->d_generation);
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                DEBUG_REQ(D_HA, req, "unlink %*s (remote inode %u/%u/%u)",
+                          rec->ur_namelen - 1, rec->ur_name,
+                          (unsigned)dchild->d_mdsnum,
+                          (unsigned) dchild->d_inum,
+                          (unsigned) dchild->d_generation);
 
         /* time to drop i_nlink on remote MDS */ 
         op_data.fid1.mds = dchild->d_mdsnum;
         op_data.fid1.id = dchild->d_inum;
         op_data.fid1.generation = dchild->d_generation;
         op_data.create_mode = rec->ur_mode;
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                op_data.create_mode |= MDS_MODE_REPLAY;
         op_data.namelen = 0;
         op_data.name = NULL;
         rc = md_unlink(mds->mds_lmv_exp, &op_data, &request);
@@ -1504,8 +1520,16 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec, int offset,
                 mds_copy_unlink_reply(req, request);
                 ptlrpc_req_finished(request);
         }
-        if (rc == 0)
+        if (rc == 0) {
+                handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_RMDIR,
+                                      NULL);
+                if (IS_ERR(handle))
+                        GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = fsfilt_del_dir_entry(req->rq_export->exp_obd, dchild);
+                rc = mds_finish_transno(mds, dparent->d_inode, handle, req,
+                                        rc, 0);
+        }
+cleanup:
         req->rq_status = rc;
 
 #ifdef S_PDIROPS
@@ -1534,6 +1558,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct inode *child_inode;
         struct lustre_handle parent_lockh[2] = {{0}, {0}}; 
         struct lustre_handle child_lockh = {0}, child_reuse_lockh = {0};
+        struct lustre_handle * slave_lockh = NULL;
         char fidname[LL_FID_NAMELEN];
         void *handle = NULL;
         int rc = 0, log_unlink = 0, cleanup_phase = 0;
@@ -1556,14 +1581,45 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 unlink_by_fid = 1;
                 rec->ur_name = fidname;
                 rc = mds_create_local_dentry(rec, obd);
-                LASSERT(rc == 0);
+                if (rc == -ENOENT || (rec->ur_mode & MDS_MODE_REPLAY)) {
+                        DEBUG_REQ(D_HA, req,
+                                  "drop nlink on inode %u/%u/%u (replay)",
+                                  (unsigned) rec->ur_fid1->mds,
+                                  (unsigned) rec->ur_fid1->id,
+                                  (unsigned) rec->ur_fid1->generation);
+                        req->rq_status = 0;
+                        RETURN(0);
+                }
         }
-        rc = mds_get_parent_child_locked(obd, mds, rec->ur_fid1,
-                                         parent_lockh, &dparent, LCK_PW,
-                                         MDS_INODELOCK_UPDATE, &update_mode,
-                                         rec->ur_name, rec->ur_namelen,
-                                         &child_lockh, &dchild, LCK_EX,
-                                         MDS_INODELOCK_LOOKUP|MDS_INODELOCK_UPDATE);
+
+        if (rec->ur_mode & MDS_MODE_DONT_LOCK) {
+                /* master mds for directory asks slave removing
+                 * inode is already locked */
+                dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL,
+                                               LCK_PW, parent_lockh,
+                                               &update_mode, rec->ur_name,
+                                               rec->ur_namelen,
+                                               MDS_INODELOCK_UPDATE);
+                if (IS_ERR(dparent))
+                        GOTO(cleanup, rc = PTR_ERR(dparent));
+                dchild = ll_lookup_one_len(rec->ur_name, dparent,
+                                           rec->ur_namelen - 1);
+                if (IS_ERR(dchild))
+                        GOTO(cleanup, rc = PTR_ERR(dchild));
+                child_lockh.cookie = 0;
+                LASSERT(!(dchild->d_flags & DCACHE_CROSS_REF));
+                LASSERT(dchild->d_inode != NULL);
+                LASSERT(S_ISDIR(dchild->d_inode->i_mode));
+        } else {
+                rc = mds_get_parent_child_locked(obd, mds, rec->ur_fid1,
+                                                 parent_lockh, &dparent,
+                                                 LCK_PW, MDS_INODELOCK_UPDATE,
+                                                 &update_mode, rec->ur_name,
+                                                 rec->ur_namelen, &child_lockh,
+                                                 &dchild, LCK_EX,
+                                                 MDS_INODELOCK_LOOKUP |
+                                                        MDS_INODELOCK_UPDATE);
+        }
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1587,6 +1643,25 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         cleanup_phase = 2; /* dchild has a lock */
+
+        /* We have to do these checks ourselves, in case we are making an
+         * orphan.  The client tells us whether rmdir() or unlink() was called,
+         * so we need to return appropriate errors (bug 72).
+         *
+         * We don't have to check permissions, because vfs_rename (called from
+         * mds_open_unlink_rename) also calls may_delete. */
+        if ((rec->ur_mode & S_IFMT) == S_IFDIR) {
+                if (!S_ISDIR(child_inode->i_mode))
+                        GOTO(cleanup, rc = -ENOTDIR);
+        } else {
+                if (S_ISDIR(child_inode->i_mode))
+                        GOTO(cleanup, rc = -EISDIR);
+        }
+
+        /* handle splitted dir */
+        rc = mds_lock_slave_objs(obd, dchild, &slave_lockh);
+        if (rc)
+                GOTO(cleanup, rc);
 
         /* Step 4: Get a lock on the ino to sync with creation WRT inode
          * reuse (see bug 2029). */
@@ -1622,20 +1697,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 } else {
                         log_unlink = 1;
                 }
-        }
-
-        /* We have to do these checks ourselves, in case we are making an
-         * orphan.  The client tells us whether rmdir() or unlink() was called,
-         * so we need to return appropriate errors (bug 72).
-         *
-         * We don't have to check permissions, because vfs_rename (called from
-         * mds_open_unlink_rename) also calls may_delete. */
-        if ((rec->ur_mode & S_IFMT) == S_IFDIR) {
-                if (!S_ISDIR(child_inode->i_mode))
-                        GOTO(cleanup, rc = -ENOTDIR);
-        } else {
-                if (S_ISDIR(child_inode->i_mode))
-                        GOTO(cleanup, rc = -EISDIR);
         }
 
         /* Step 4: Do the unlink: we already verified ur_mode above (bug 72) */
@@ -1713,10 +1774,13 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 LASSERT(atomic_read(&dchild->d_inode->i_count) > 0);
                 if (rc == 0 && dchild->d_inode->i_nlink == 0 &&
                                 mds_open_orphan_count(dchild->d_inode) > 0) {
+
                         /* filesystem is really going to destroy an inode
                          * we have to delay this till inode is opened -bzzz */
                         mds_open_unlink_rename(rec, obd, dparent, dchild, NULL);
                 }
+                /* handle splitted dir */
+                mds_unlink_slave_objs(obd, dchild);
                 rc = mds_finish_transno(mds, dparent->d_inode, handle, req,
                                         rc, 0);
                 if (!rc)
@@ -1732,7 +1796,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 else
                         ptlrpc_save_lock(req, &child_reuse_lockh, LCK_EX);
         case 2: /* child lock */
-                ldlm_lock_decref(&child_lockh, LCK_EX);
+                mds_unlock_slave_objs(obd, dchild, slave_lockh);
+                if (child_lockh.cookie)
+                        ldlm_lock_decref(&child_lockh, LCK_EX);
         case 1: /* child and parent dentry, parent lock */
 #ifdef S_PDIROPS
                 if (parent_lockh[1].cookie != 0)

@@ -237,23 +237,6 @@ int mdc_enqueue(struct obd_export *exp,
                 /* get ready for the reply */
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
-        } else if (it->it_op & IT_UNLINK) {
-                size[2] = sizeof(struct mds_rec_unlink);
-                size[3] = data->namelen + 1;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 4,
-                                      size, NULL);
-                if (!req)
-                        RETURN(-ENOMEM);
-
-                /* pack the intent */
-                lit = lustre_msg_buf(req->rq_reqmsg, 1, sizeof (*lit));
-                lit->opc = (__u64)it->it_op;
-
-                /* pack the intended request */
-                mdc_unlink_pack(req->rq_reqmsg, 2, data);
-                /* get ready for the reply */
-                reply_buffers = 4;
-                req->rq_replen = lustre_msg_size(4, repsize);
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR)) {
                 int valid = OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
                 size[2] = sizeof(struct mds_body);
@@ -277,7 +260,7 @@ int mdc_enqueue(struct obd_export *exp,
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_READDIR) {
-               policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+                policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
                                       size, NULL);
                 if (!req)
@@ -286,7 +269,25 @@ int mdc_enqueue(struct obd_export *exp,
                 /* get ready for the reply */
                 reply_buffers = 1;
                 req->rq_replen = lustre_msg_size(1, repsize);
-        }  else {
+        } else if (it->it_op == IT_UNLINK) {
+                size[2] = sizeof(struct mds_body);
+                policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 3,
+                                      size, NULL);
+                if (!req)
+                        RETURN(-ENOMEM);
+
+                /* pack the intended request */
+                mdc_getattr_pack(req->rq_reqmsg, 0,  2, 0, data);
+
+                /* pack the intent */
+                lit = lustre_msg_buf(req->rq_reqmsg, 1, sizeof (*lit));
+                lit->opc = (__u64)it->it_op;
+
+                /* get ready for the reply */
+                reply_buffers = 3;
+                req->rq_replen = lustre_msg_size(3, repsize);
+        } else {
                 LBUG();
                 RETURN(-EINVAL);
         }

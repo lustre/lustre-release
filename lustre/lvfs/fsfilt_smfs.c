@@ -825,7 +825,7 @@ static int fsfilt_smfs_get_ino_write_extents(struct super_block *sb, ino_t ino,
                                              char **pbuf, int *size)
 {
         struct fs_extent *fs_extents;
-        struct ldlm_extent *extents;
+        struct ldlm_extent *extents = NULL;
         struct inode *inode;
         struct inode *cache_inode;
         struct fsfilt_operations *cache_fsfilt = NULL;

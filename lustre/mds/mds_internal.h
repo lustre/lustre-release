@@ -130,5 +130,12 @@ int mds_get_lmv_attr(struct obd_device *, struct inode *, struct mea **, int *);
 int mds_choose_mdsnum(struct obd_device *, const char *, int, int);
 int mds_lmv_postsetup(struct obd_device *);
 int mds_splitting_expected(struct obd_device *, struct dentry *);
+int mds_lock_slave_objs(struct obd_device *, struct dentry *,
+                        struct lustre_handle **);
+int mds_unlink_slave_objs(struct obd_device *, struct dentry *);
+void mds_unlock_slave_objs(struct obd_device *, struct dentry *,
+                           struct lustre_handle *);
+int mds_lock_and_check_slave(int, struct ptlrpc_request *, struct lustre_handle *);
+
 
 #endif /* _MDS_INTERNAL_H */

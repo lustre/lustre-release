@@ -589,6 +589,9 @@ struct mdc_op_data {
         struct mea *mea2;       /* mea of inode2 */
 };
 
+#define MDS_MODE_DONT_LOCK      (1 << 30)
+#define MDS_MODE_REPLAY         (1 << 31)
+
 struct mds_rec_setattr {
         __u32           sa_opcode;
         __u32           sa_fsuid;

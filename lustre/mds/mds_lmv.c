@@ -176,6 +176,7 @@ int mds_get_lmv_attr(struct obd_device *obd, struct inode *inode,
 	}
         if (rc > 0)
                 rc = 0;
+                        
 	RETURN(rc);
 }
 
@@ -270,8 +271,9 @@ next:
 static int flush_buffer_onto_mds(struct dirsplit_control *dc, int mdsnum)
 {
         struct mds_obd *mds = &dc->obd->u.mds;
-        struct dir_cache *ca;
         struct list_head *cur, *tmp;
+        struct dir_cache *ca;
+        int rc;
         ENTRY; 
         ca = dc->cache + mdsnum;
 
@@ -294,12 +296,52 @@ static int flush_buffer_onto_mds(struct dirsplit_control *dc, int mdsnum)
                 ca->brwc.count = PAGE_SIZE;
                 ca->brwc.flag = 0;
                 ca->oa.o_mds = mdsnum;
-                obd_brw(OBD_BRW_WRITE, mds->mds_lmv_exp, &ca->oa,
-                                (struct lov_stripe_md *) dc->mea,
-                                1, &ca->brwc, NULL);
+                rc = obd_brw(OBD_BRW_WRITE, mds->mds_lmv_exp, &ca->oa,
+                             (struct lov_stripe_md *) dc->mea,
+                             1, &ca->brwc, NULL);
+                if (rc)
+                        RETURN(rc);
 
-                list_del(&page->list);
-                __free_page(page);
+        }
+        RETURN(0);
+}
+
+static int remove_entries_from_orig_dir(struct dirsplit_control *dc, int mdsnum)
+{
+        struct list_head *cur, *tmp;
+        struct dentry *dentry;
+        struct dir_cache *ca;
+        struct dir_entry *de;
+        struct page *page;
+        char *buf, *end;
+        int rc;
+        ENTRY; 
+
+        ca = dc->cache + mdsnum;
+        list_for_each_safe(cur, tmp, &ca->list) {
+                page = list_entry(cur, struct page, list);
+                buf = page_address(page);
+                end = buf + PAGE_SIZE;
+
+                de = (struct dir_entry *) buf;
+                while ((char *) de < end && de->namelen) {
+                        /* lookup an inode */
+                        LASSERT(de->namelen <= 255);
+
+                        dentry = ll_lookup_one_len(de->name, dc->dentry,
+                                                   de->namelen);
+                        if (IS_ERR(dentry)) {
+                                CERROR("can't lookup %*s: %d\n", de->namelen,
+                                                de->name, (int) PTR_ERR(dentry));
+                                goto next;
+                        }
+                        LASSERT(dentry->d_inode != NULL);
+                        rc = fsfilt_del_dir_entry(dc->obd, dentry);
+                        l_dput(dentry);
+next:
+                        de = (struct dir_entry *)
+                                ((char *) de + DIR_REC_LEN(de->namelen));
+                }
         }
         RETURN(0);
 }
@@ -395,18 +437,42 @@ int scan_and_distribute(struct obd_device *obd, struct dentry *dentry,
         }
 
         err = vfs_readdir(file, filldir, &dc);
-        
         filp_close(file, 0);
+        if (err)
+                GOTO(cleanup, err);
 
         for (i = 0; i < mea->mea_count; i++) {
-                if (dc.cache[i].cached)
-                        flush_buffer_onto_mds(&dc, i);
+                if (!dc.cache[i].cached)
+                        continue;
+                err = flush_buffer_onto_mds(&dc, i);
+                if (err)
+                        GOTO(cleanup, err);
         }
 
+        for (i = 0; i < mea->mea_count; i++) {
+                if (!dc.cache[i].cached)
+                        continue;
+                err = remove_entries_from_orig_dir(&dc, i);
+                if (err)
+                        GOTO(cleanup, err);
+        }
+
+cleanup:
+        for (i = 0; i < mea->mea_count; i++) {
+                struct list_head *cur, *tmp;
+                if (!dc.cache[i].cached)
+                        continue;
+                list_for_each_safe(cur, tmp, &dc.cache[i].list) {
+                        struct page *page;
+                        page = list_entry(cur, struct page, list);
+                        list_del(&page->list);
+                        __free_page(page);
+                }
+        }
         OBD_FREE(dc.cache, sizeof(struct dir_cache) * mea->mea_count);
         OBD_FREE(file_name, nlen);
 
-        return 0;
+        RETURN(err);
 }
 
 #define MAX_DIR_SIZE    (64 * 1024)
@@ -646,8 +712,6 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                         err = fsfilt_add_dir_entry(obd, res->dentry, de->name,
                                                    de->namelen, de->ino,
                                                    de->generation, de->mds);
-                        /* FIXME: remove entries from the original dir */
-#warning "removing entries from the original dir"
                         LASSERT(err == 0);
                         de = (struct dir_entry *)
                                 ((char *) de + DIR_REC_LEN(de->namelen));
@@ -676,5 +740,250 @@ int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int fla
                 i = raw_name2idx(lmv->desc.ld_tgt_count, name, len);
         }
         RETURN(i);
+}
+
+int mds_lock_slave_objs(struct obd_device *obd, struct dentry *dentry,
+                        struct lustre_handle **rlockh)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct mdc_op_data op_data;
+        struct lookup_intent it;
+        struct mea *mea = NULL;
+        int mea_size, rc;
+
+        LASSERT(rlockh != NULL);
+        LASSERT(dentry != NULL);
+        LASSERT(dentry->d_inode != NULL);
+
+	/* clustered MD ? */
+	if (!mds->mds_lmv_obd)
+	        return 0;
+
+        /* a dir can be splitted only */
+        if (!S_ISDIR(dentry->d_inode->i_mode))
+                return 0;
+
+        rc = mds_get_lmv_attr(obd, dentry->d_inode, &mea, &mea_size);
+        if (rc)
+                return rc;
+
+        if (mea == NULL)
+                return 0;
+        if (mea->mea_count == 0) {
+                /* this is slave object */
+                GOTO(cleanup, rc = 0);
+        }
+                
+        CDEBUG(D_OTHER, "%s: lock slaves for %lu/%lu\n", obd->obd_name,
+               (unsigned long) dentry->d_inode->i_ino,
+               (unsigned long) dentry->d_inode->i_generation);
+
+        OBD_ALLOC(*rlockh, sizeof(struct lustre_handle) * mea->mea_count);
+        if (*rlockh == NULL)
+                GOTO(cleanup, rc = -ENOMEM);
+        memset(*rlockh, 0, sizeof(struct lustre_handle) * mea->mea_count);
+
+        memset(&op_data, 0, sizeof(op_data));
+        op_data.mea1 = mea;
+        it.it_op = IT_UNLINK;
+        rc = md_enqueue(mds->mds_lmv_exp, LDLM_IBITS, &it, LCK_EX, &op_data,
+                        *rlockh, NULL, 0, ldlm_completion_ast, mds_blocking_ast,
+                        NULL);
+cleanup:
+        OBD_FREE(mea, mea_size);
+        RETURN(rc);
+}
+
+void mds_unlock_slave_objs(struct obd_device *obd, struct dentry *dentry,
+                        struct lustre_handle *lockh)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct mea *mea = NULL;
+        int mea_size, rc, i;
+
+        if (lockh == NULL)
+                return;
+
+	LASSERT(mds->mds_lmv_obd != NULL);
+        LASSERT(S_ISDIR(dentry->d_inode->i_mode));
+
+        rc = mds_get_lmv_attr(obd, dentry->d_inode, &mea, &mea_size);
+        if (rc) {
+                CERROR("locks are leaked\n");
+                return;
+        }
+        LASSERT(mea_size != 0);
+        LASSERT(mea != NULL);
+        LASSERT(mea->mea_count != 0);
+
+        CDEBUG(D_OTHER, "%s: unlock slaves for %lu/%lu\n", obd->obd_name,
+               (unsigned long) dentry->d_inode->i_ino,
+               (unsigned long) dentry->d_inode->i_generation);
+
+        for (i = 0; i < mea->mea_count; i++) {
+                if (lockh[i].cookie != 0)
+                        ldlm_lock_decref(lockh + i, LCK_EX);
+        }
+
+        OBD_FREE(lockh, sizeof(struct lustre_handle) * mea->mea_count);
+        OBD_FREE(mea, mea_size);
+        return;
+}
+
+int mds_unlink_slave_objs(struct obd_device *obd, struct dentry *dentry)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct ptlrpc_request *req = NULL;
+        struct mdc_op_data op_data;
+        struct mea *mea = NULL;
+        int mea_size, rc;
+
+	/* clustered MD ? */
+	if (!mds->mds_lmv_obd)
+	        return 0;
+
+        /* a dir can be splitted only */
+        if (!S_ISDIR(dentry->d_inode->i_mode))
+                RETURN(0);
+
+        rc = mds_get_lmv_attr(obd, dentry->d_inode, &mea, &mea_size);
+        if (rc)
+                RETURN(rc);
+
+        if (mea == NULL)
+                return 0;
+        if (mea->mea_count == 0)
+                GOTO(cleanup, rc = 0);
+
+        CDEBUG(D_OTHER, "%s: unlink slaves for %lu/%lu\n", obd->obd_name,
+               (unsigned long) dentry->d_inode->i_ino,
+               (unsigned long) dentry->d_inode->i_generation);
+
+        memset(&op_data, 0, sizeof(op_data));
+        op_data.mea1 = mea;
+        rc = md_unlink(mds->mds_lmv_exp, &op_data, &req);
+        LASSERT(req == NULL);
+cleanup:
+        OBD_FREE(mea, mea_size);
+        RETURN(rc);
+}
+
+struct ide_tracking {
+        int entries;
+        int empty;
+};
+
+int mds_ide_filldir(void *__buf, const char *name, int namelen,
+                    loff_t offset, ino_t ino, unsigned int d_type)
+{
+        struct ide_tracking *it = __buf;
+
+        if (ino == 0)
+                return 0;
+
+        it->entries++;
+        if (it->entries > 2)
+                goto noempty;
+        if (namelen > 2)
+                goto noempty;
+        if (name[0] == '.' && namelen == 1)
+                return 0;
+        if (name[0] == '.' && name[1] == '.' && namelen == 2)
+                return 0;
+noempty:
+        it->empty = 0;
+        return -ENOTEMPTY;
+}
+
+int mds_is_dir_empty(struct obd_device *obd, struct dentry *dentry)
+{
+        struct ide_tracking it;
+        struct file * file;
+        char *file_name;
+        int nlen, i, rc;
+        
+        it.entries = 0;
+        it.empty = 1;
+
+        nlen = strlen("__iopen__/") + 10 + 1;
+        OBD_ALLOC(file_name, nlen);
+        if (!file_name)
+                RETURN(-ENOMEM);
+        i = sprintf(file_name, "__iopen__/0x%lx", dentry->d_inode->i_ino);
+
+        file = filp_open(file_name, O_RDONLY, 0);
+        if (IS_ERR(file)) {
+                CERROR("can't open directory %s: %d\n",
+                       file_name, (int) PTR_ERR(file));
+                GOTO(cleanup, rc = PTR_ERR(file));
+        }
+
+        rc = vfs_readdir(file, mds_ide_filldir, &it);
+        filp_close(file, 0);
+
+        if (it.empty && rc == 0)
+                rc = 1;
+        else
+                rc = 0;
+
+cleanup:
+        OBD_FREE(file_name, nlen);
+        return rc;
+}
+
+int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
+                             struct lustre_handle *lockh)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        struct dentry *dentry = NULL;
+        struct lvfs_run_ctxt saved;
+        int cleanup_phase = 0;
+        struct mds_body *body;
+        struct lvfs_ucred uc;
+        int rc, update_mode;
+        ENTRY;
+
+        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
+                                  lustre_swab_mds_body);
+        if (body == NULL) {
+                CERROR("Can't swab mds_body\n");
+                GOTO(cleanup, rc = -EFAULT);
+        }
+        CDEBUG(D_OTHER, "%s: check slave %lu/%lu\n", obd->obd_name,
+               (unsigned long) body->fid1.id,
+               (unsigned long) body->fid1.generation);
+        dentry = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX, lockh,
+                                       &update_mode, NULL, 0,
+                                       MDS_INODELOCK_UPDATE);
+        if (IS_ERR(dentry)) {
+                CERROR("can't find inode: %d\n", (int) PTR_ERR(dentry));
+                GOTO(cleanup, rc = PTR_ERR(dentry));
+        }
+        cleanup_phase = 1;
+
+        LASSERT(S_ISDIR(dentry->d_inode->i_mode));
+
+        uc.luc_fsuid = body->fsuid;
+        uc.luc_fsgid = body->fsgid;
+        uc.luc_cap = body->capability;
+        uc.luc_suppgid1 = body->suppgid;
+        uc.luc_suppgid2 = -1;
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
+
+        rc = 0;
+        if (!mds_is_dir_empty(obd, dentry))
+                rc = -ENOTEMPTY;
+
+cleanup:
+        switch(cleanup_phase) {
+        case 1:
+                if (rc)
+                        ldlm_lock_decref(lockh, LCK_EX);
+                l_dput(dentry);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
+        default:
+                break;
+        }
+        RETURN(rc);
 }
 
