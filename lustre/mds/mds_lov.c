@@ -279,6 +279,13 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
          * it can use the obd_recovering flag to determine when the
          * the OBD is full available. */
         if (!obd->obd_recovering) {
+#ifdef ENABLE_ORPHANS
+                rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
+                                  obd->u.mds.mds_lov_desc.ld_tgt_count, NULL, NULL);
+                if (rc != 0) {
+                        CERROR("faild at llog_origin_connect: %d\n", rc);
+                }
+#endif
                 rc = mds_cleanup_orphans(obd);
                 if (rc > 0)
                         CERROR("Cleanup %d orphans while MDS isn't recovering\n", rc);
@@ -291,10 +298,10 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 
 err_llog:
 #ifdef ENABLE_ORPHANS
-                /* cleanup all llogging subsystems */
-                rc = obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
-                if (rc) 
-                        CERROR("failed to cleanup llogging subsystems\n");
+        /* cleanup all llogging subsystems */
+        rc = obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
+        if (rc) 
+                CERROR("failed to cleanup llogging subsystems\n");
 #endif
 err_reg:
         obd_register_observer(mds->mds_osc_obd, NULL);
