@@ -9,9 +9,17 @@
 # 1) create an unbalanced situation on SERVER
 # 2) perform opertion on CLIENT to trigger QOS information update
 # 3) verify usage of new QOS information on CLIENT
+#
+# The QOS trigger must be applied on the server and the client
+# node, since LOV operations can be executed on the MDS
+# or on the client.
+#
 SERVER=${SERVER:-`hostname`}
 # must change client to a valid hostname
 CLIENT=${CLIENT:-""}
+#
+# number of files created
+ALOT=100
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -209,8 +217,7 @@ test_2() {
 }
 run_test 2 "set min/max in ${QOSPROC}/QoS_*"
 
-# check whether create updates QOS information on remove node
-test_3() {
+imbalance_setup() {
     # set statfs caching to 1 jiffie on server
     qos_setval QoS_statfs_interval 0 || error
     # make QOS updates immediate (1 jiffie) on MDS and client
@@ -232,32 +239,38 @@ test_3() {
     df $MOUNT > /dev/null
     ${RSH} ${CLIENT} df $MOUNT > /dev/null
     # create imbalance on local mount
-    for ((i=0; $i<100; i=$i+1)); do
-	${LSTRIPE} $DIR/d3/imbalance$i 0 0 1 || error
+    for ((i=0; $i<$ALOT; i=$i+1)); do
+	${LSTRIPE} $DIR/d3/imbalance$i 0 $1 1 || error
 	echo "hello, world" > $DIR/d3/imbalance$i
     done
+}
+
+imbalance_check_and_clean() {
+    # create a lot of files on the remote node
+    for ((i=0; $i<$ALOT; i=$i+1)); do
+	${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; PATH=$FULL_SRCDIR/../utils:\$PATH ${LSTRIPE} $DIR/d3/test$i 0 -1 1" || error
+    done
+    for ((i=0; $i<$ALOT; i=$i+1)); do
+	# get the OST number for each new file
+	obd=`${LFIND} $DIR/d3/test$i | tail -2 | head -1 | awk '{ print $1 }'`
+        # the file must not be on OST $1, since we are still imbalanced
+	if [ $obd -eq $1 ]; then
+	    echo "$DIR/d3/test$i OST $obd"
+	    error
+	fi
+    done
+    rm -rf $DIR/d3
+}
+
+# check whether create updates QOS information on remove node
+test_3() {
+    imbalance_setup 0
     # create a file on the MDS and the remote node (this is the QOS update trigger)
-    # BUG: we actually need to update the MDS
     ${LSTRIPE} $DIR/d3/trigger1 0 0 1 || error
     ${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; PATH=$FULL_SRCDIR/../utils:\$PATH ${LSTRIPE} $DIR/d3/trigger2 0 0 1" || error
     # sleep a while to make QOS propagate
     usleep 500
-    # create a lot of files on the remote node
-    for ((i=0; $i<80; i=$i+1)); do
-	${RSH} ${CLIENT} "cd ${FULL_SRCDIR}; PATH=$FULL_SRCDIR/../utils:\$PATH ${LSTRIPE} $DIR/d3/test$i 0 -1 1" || error
-    done
-    for ((i=0; $i<80; i=$i+1)); do
-	# get the OST number for each new file
-	obd=`${LFIND} $DIR/d3/test$i | tail -2 | head -1 | awk '{ print $1 }'`
-        # the file must not be on OST 0, since we are still imbalanced
-	if [ $obd -eq 0 ]; then
-	    echo "$DIR/d3/test$i OST $obd"
-	    error
-	else
-	    echo $obd
-	fi
-    done
-    rm -rf $DIR/d3
+    imbalance_check_and_clean 0
 }
 run_test 3 "check QOS propagation on create"
 
