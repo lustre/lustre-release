@@ -40,6 +40,19 @@
 #include "filter_internal.h"
 
 
+/* We should only change the file mtime (and not the ctime, like
+ * update_inode_times() in generic_file_write()) when we only change data. */
+void inode_update_time(struct inode *inode, int ctime_too)
+{
+        time_t now = CURRENT_TIME;
+        if (inode->i_mtime == now && (!ctime_too || inode->i_ctime == now))
+                return;
+        inode->i_mtime = now;
+        if (ctime_too)
+                inode->i_ctime = now;
+        mark_inode_dirty_sync(inode);
+}
+
 int ext3_map_inode_page(struct inode *inode, struct page *page,
                         unsigned long *blocks, int *created, int create);
 int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf)
