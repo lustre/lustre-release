@@ -37,7 +37,7 @@ Lustre Lite Source for further development
 Summary: Documentation and sample configuration files
 Group: Documentation
 # FIXME: BuildArch overrides all the packages in rpm 4.0.4-7x
-BuildArch: noarch
+#BuildArch: noarch
 
 %description -n lustre-doc
 Documentation and sample configuration files for Lustre
