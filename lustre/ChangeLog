@@ -1,3 +1,9 @@
+TBD
+	* version v0_5_15
+	* bug fixes:
+	  - in-use dentries weren't being reused properly (617851)
+	  - prevent multiple LDLM setup (599178)
+
 2002-10-10  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_14
 	* bug fixes:
