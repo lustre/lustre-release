@@ -39,7 +39,6 @@
 static int local_handle(struct ptlrpc_request *req, svc_handler_t handler)
 {
         int rc = 0;
-        unsigned long flags;
         ENTRY;
 
         req->rq_export = class_conn2export(&req->rq_reqmsg->handle);
@@ -70,7 +69,6 @@ static int local_handle(struct ptlrpc_request *req, svc_handler_t handler)
 
         rc = handler(req);
 
-        spin_lock_irqsave(&req->rq_lock, flags);
         memset(req->rq_ack_locks, 0, sizeof(req->rq_ack_locks));
         if (req->rq_bulk)
                 req->rq_bulk->bd_complete = 1;
@@ -80,7 +78,6 @@ static int local_handle(struct ptlrpc_request *req, svc_handler_t handler)
         req->rq_repmsg->opc = req->rq_reqmsg->opc;
         req->rq_receiving_reply = 0;
         req->rq_replied = 1;
-        spin_unlock_irqrestore(&req->rq_lock, flags);
 
 out_putconn:
         ptlrpc_put_connection(req->rq_connection);
@@ -111,7 +108,6 @@ int local_svc_available(struct ptlrpc_request *req)
 int local_send_rpc(struct ptlrpc_request *req)
 {
         int rc;
-        unsigned long flags;
         struct obd_ucred ucred;
         void *journal_info;
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
@@ -121,14 +117,12 @@ int local_send_rpc(struct ptlrpc_request *req)
         req->rq_reqmsg->handle = req->rq_import->imp_remote_handle;
         req->rq_reqmsg->conn_cnt = req->rq_import->imp_conn_cnt;
                 
-        spin_lock_irqsave (&req->rq_lock, flags);
         req->rq_receiving_reply = 1;
         req->rq_replied = 0;
         req->rq_err = 0;
         req->rq_timedout = 0;
         req->rq_resend = 0;
         req->rq_restart = 0;
-        spin_unlock_irqrestore (&req->rq_lock, flags);
                 
         req->rq_sent = LTIME_S(CURRENT_TIME);
         ptlrpc_pinger_sending_on_import(req->rq_import);
@@ -158,7 +152,6 @@ int local_send_rpc(struct ptlrpc_request *req)
 
 int local_reply(struct ptlrpc_request *req)
 {
-        unsigned long flags;
         ENTRY;
         
         switch (req->rq_type) {
@@ -166,9 +159,7 @@ int local_reply(struct ptlrpc_request *req)
                 req->rq_type = PTL_LOCAL_MSG_REPLY;
         case PTL_LOCAL_MSG_REPLY:
         case PTL_LOCAL_MSG_ERR:
-                spin_lock_irqsave(&req->rq_lock, flags);
                 req->rq_want_ack = 0;
-                spin_unlock_irqrestore(&req->rq_lock, flags);
                 break;
         default:
                 LBUG();
@@ -203,7 +194,6 @@ int local_bulk_move(struct ptlrpc_bulk_desc *desc)
         struct list_head *src, *dst;
         char *src_addr, *dst_addr;
         int len, i;
-        unsigned long flags;
         ENTRY;
 
         if (desc->bd_type == BULK_GET_SINK) {
@@ -239,10 +229,8 @@ int local_bulk_move(struct ptlrpc_bulk_desc *desc)
                 dst = dst->next;
         }
 done:
-        spin_lock_irqsave(&desc->bd_lock, flags);
         desc->bd_network_rw = 0;
         desc->bd_complete = 1;
-        spin_unlock_irqrestore(&desc->bd_lock, flags);
 
         RETURN(0);
         
