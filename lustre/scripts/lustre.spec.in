@@ -10,7 +10,7 @@ Name: lustre-lite
 Version: %{version}
 Copyright: GPL
 Group: Utilities/System
-Requires: lustre-modules, libxml2
+Requires: lustre-modules
 BuildRoot: /var/tmp/lustre-%{version}-root
 Source: ftp://ftp.lustre.com/pub/lustre/lustre-%{version}.tar.gz
 
