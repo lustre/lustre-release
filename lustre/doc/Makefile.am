@@ -7,7 +7,8 @@ SUFFIXES = .lyx .pdf .sgml .html .txt .fig .eps
 
 DOCS = master.pdf
 # doc_DATA = $(DOCS) OBD-HOWTO.html OBD-HOWTO.txt
-CLEANFILES = OBD-HOWTO.html OBD-HOWTO.txt
+CLEANFILES = bigpicture.eps intermezzo.eps mds.eps portals-lib.eps client.eps layering.eps metadata.eps sb.eps cow.eps lockacq.eps obdfs.eps snapsetup.eps dirbodyapi.eps loraid.eps ost.eps updates.eps hotmigrate.eps lustreclusters.eps osthw.eps portals-lib.eps master.pdf master.html
+
 EXTRA_DIST = $(DOCS)
 
 all: master.pdf
@@ -19,7 +20,6 @@ all: master.pdf
 	fig2dev -L eps $< > $@
 
 master.pdf: master.lyx bigpicture.eps intermezzo.eps mds.eps portals-lib.eps client.eps layering.eps metadata.eps sb.eps cow.eps lockacq.eps obdfs.eps snapsetup.eps dirbodyapi.eps loraid.eps ost.eps updates.eps hotmigrate.eps lustreclusters.eps osthw.eps
-
 
 dist-hook:
 	rm -rf $(distdir)/figs/CVS
