@@ -81,7 +81,6 @@ static DECLARE_WAIT_QUEUE_HEAD(debug_ctlwq);
 
 char debug_file_path[1024] = "/tmp/lustre-log";
 static char debug_file_name[1024];
-static int handled_panic; /* to avoid recursive calls to notifiers */
 char portals_upcall[1024] = "/usr/lib/lustre/portals_upcall";
 
 void portals_debug_dumplog_internal(void *arg)
@@ -132,9 +131,12 @@ void portals_debug_dumplog(void)
         set_current_state(TASK_RUNNING);
 }
 
+#ifdef PORTALS_DUMP_ON_PANIC
 static int panic_dumplog(struct notifier_block *self, unsigned long unused1,
                          void *unused2)
 {
+        static int handled_panic; /* to avoid recursive calls to notifiers */
+
         if (handled_panic)
                 return 0;
         else
@@ -156,17 +158,34 @@ static struct notifier_block lustre_panic_notifier = {
         next :              NULL,
         priority :          10000
 };
+#endif
+
+#ifdef CRAY_PORTALS
+extern void *lus_portals_debug;
+#endif
 
 int portals_debug_init(unsigned long bufsize)
 {
+#ifdef CRAY_PORTALS
+        lus_portals_debug = &portals_debug_msg;
+#endif
+#ifdef PORTALS_DUMP_ON_PANIC
+        /* This is currently disabled because it spews far too much to the
+         * console on the rare cases it is ever triggered. */
         notifier_chain_register(&panic_notifier_list, &lustre_panic_notifier);
+#endif
         return tracefile_init();
 }
 
 int portals_debug_cleanup(void)
 {
         tracefile_exit();
+#ifdef PORTALS_DUMP_ON_PANIC
         notifier_chain_unregister(&panic_notifier_list, &lustre_panic_notifier);
+#endif
+#ifdef CRAY_PORTALS
+        lus_portals_debug = NULL;
+#endif
         return 0;
 }
 

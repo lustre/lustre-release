@@ -207,6 +207,10 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         unsigned long flags;
         struct timeval tv;
 
+#ifdef CRAY_PORTALS
+        if (mask == D_PORTALS && !(portal_debug & D_PORTALS))
+                return;
+#endif
         if (strchr(file, '/'))
                 file = strrchr(file, '/') + 1;
 

@@ -238,8 +238,8 @@ ptl_gethostbyname(char * hname) {
                                 hname);
                         break;
                 default:
-                        fprintf(stderr, "gethostbyname error: %s\n",
-                                strerror(errno));
+                        fprintf(stderr, "gethostbyname error for %s: %s\n",
+                                hname, strerror(h_errno));
                         break;
                 }
                 return NULL;
