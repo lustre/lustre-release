@@ -160,10 +160,6 @@ typedef struct {
         struct list_head *ksnd_peers;           /* hash table of all my known peers */
         int               ksnd_peer_hash_size;  /* size of ksnd_peers */
 
-        nal_cb_t         *ksnd_nal_cb;
-        spinlock_t        ksnd_nal_cb_lock;     /* lib cli/sti lock */
-        wait_queue_head_t ksnd_yield_waitq;     /* where yield waits */
-
         atomic_t          ksnd_nthreads;        /* # live threads */
         int               ksnd_shuttingdown;    /* tell threads to exit */
         ksock_sched_t    *ksnd_schedulers;      /* scheduler state */
@@ -364,7 +360,7 @@ typedef struct ksock_peer
 } ksock_peer_t;
 
 
-extern nal_cb_t         ksocknal_lib;
+extern lib_nal_t        ksocknal_lib;
 extern ksock_nal_data_t ksocknal_data;
 extern ksock_tunables_t ksocknal_tunables;
 
