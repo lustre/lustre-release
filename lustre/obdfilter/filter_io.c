@@ -455,8 +455,9 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
          * that space before we have actually allocated our blocks.  That
          * happens in filter_grant_commit() after the writes are done. */
         *left -= ungranted;
-        fed->fed_grant -= used;
+        exp->exp_obd->u.filter.fo_tot_dirty -= used;
         fed->fed_dirty -= used;
+        fed->fed_grant -= used;
         fed->fed_pending += used;
 
         CDEBUG(D_CACHE, "used: %ld ungranted: %ld grant: %ld dirty: %ld\n",
