@@ -34,7 +34,7 @@ do
       echo "server: $server"
       OST=ba$server
       # server node
-      ${LMC} --node $ba --tcpbuf $TCPBUF --net $OST tcp || exit 1
+      ${LMC} --node $OST --tcpbuf $TCPBUF --net $OST tcp || exit 1
       # the device on the server
       ${LMC} --node $OST --obdtype=obdecho --ost || exit 3
       # osc on client
