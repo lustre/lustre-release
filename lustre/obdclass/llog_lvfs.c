@@ -120,17 +120,15 @@ static int llog_vfs_write_blob(struct l_file *file, struct llog_rec_hdr *rec,
 
 /* returns negative in on error; 0 if success && reccookie == 0; 1 otherwise */
 /* appends if idx == -1, otherwise overwrites record idx. */
-int llog_lvfs_write_record(struct llog_handle *loghandle, struct llog_rec_hdr *rec,
-                      struct llog_cookie *reccookie, void *buf, int idx)
+int llog_lvfs_write_record(struct llog_handle *loghandle,
+                           struct llog_rec_hdr *rec,
+                           struct llog_cookie *reccookie, void *buf, int idx)
 {
         struct llog_log_hdr *llh;
-        int reclen = rec->lrh_len;
+        int reclen = rec->lrh_len, index, rc, buflen;
         struct file *file;
         loff_t offset;
         size_t left;
-        int index;
-        int rc;
-        int buflen;
         ENTRY;
 
         llh = loghandle->lgh_hdr;
@@ -141,7 +139,7 @@ int llog_lvfs_write_record(struct llog_handle *loghandle, struct llog_rec_hdr *r
 
                 /* no header: only allowed to insert record 0 */
                 if (idx != 0 && !file->f_dentry->d_inode->i_size) {
-                        CERROR("idx != -1 in empty log ",  );
+                        CERROR("idx != -1 in empty log ");
                         LBUG();
                 }
 
@@ -149,12 +147,12 @@ int llog_lvfs_write_record(struct llog_handle *loghandle, struct llog_rec_hdr *r
                         RETURN(-EINVAL);
 
                 rc = llog_lvfs_write_blob(file, llh, NULL, 0);
-                if (rc) 
+                if (rc)
                         RETURN(rc);
 
                 saved_offset = sizeof(*llh) + idx * rec->lrh_len;
                 rc = llog_lvfs_write_blob(file, rec, buf, saved_offset);
-                if (rc) 
+                if (rc)
                         RETURN(rc);
         }
 
@@ -182,21 +180,20 @@ int llog_lvfs_write_record(struct llog_handle *loghandle, struct llog_rec_hdr *r
         }
         llh->llh_count++;
 
-
         offset = 0;
         rc = llog_lvfs_write_blob(file, llh, NULL, 0);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
 
         rc = llog_lvfs_write_blob(file, rec, buf, file->f_pos);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
-        
+
  out:
         CDEBUG(D_HA, "added record "LPX64":%x+%u, %u bytes\n",
                loghandle->lgh_cookie.lgc_lgl.lgl_oid,
                loghandle->lgh_cookie.lgc_lgl.lgl_ogen, index, rec->lrh_len);
-        if (rc == 0 && reccookie) { 
+        if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
                 rc = 1;
@@ -205,8 +202,8 @@ int llog_lvfs_write_record(struct llog_handle *loghandle, struct llog_rec_hdr *r
 }
 EXPORT_SYMBOL(llog_vfs_write_record);
 
-int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx, int next_idx,
-                    __u64 *cur_offset, void *buf, int len)
+int llog_lvfs_next_block(struct llog_handle *loghandle, int cur_idx,
+                         int next_idx, __u64 *cur_offset, void *buf, int len)
 {
         int rc;
         ENTRY;

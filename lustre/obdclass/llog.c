@@ -79,15 +79,12 @@ int llog_buf2reclen(int len)
         return size;
 }
 
-
-
-
 /* Remove a log entry from the catalog.
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
 int llog_delete_log(struct llog_handle *cathandle,struct llog_handle *loghandle)
 {
-        struct llog_cookie *lgc = &loghandle->lgh_cookie;
+        struct llog_cookie *lgc = &loghandle->lgh_log_cat_cookie;
         int catindex = lgc->lgc_index;
         struct llog_log_hdr *llh = cathandle->lgh_hdr;
         loff_t offset = 0;
@@ -168,11 +165,11 @@ int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 }
 EXPORT_SYMBOL(llog_process_log);
 
-
 int llog_write_header(struct llog_handle *loghandle, int size)
 {
         struct llog_log_hdr *llh;
-
+        int rc;
+        ENTRY;
         LASSERT(sizeof(*llh) == LLOG_CHUNK_SIZE);
 
         if (loghandle->lgh_file->f_dentry->d_inode->i_size)
@@ -184,12 +181,10 @@ int llog_write_header(struct llog_handle *loghandle, int size)
         llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = sizeof(*llh);
         llh->llh_timestamp = LTIME_S(CURRENT_TIME);
         llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
-        memcpy(&llh->llh_tgtuuid, tgtuuid, sizeof(llh->llh_tgtuuid));
-        loghandle->lgh_tgtuuid = &llh->llh_tgtuuid;
 
         /* write the header record in the log */
         rc = llog_write_record(loghandle, &llh, NULL, NULL, 0);
-        if (rc > 0) 
+        if (rc > 0)
                 rc = 0;
         RETURN(rc);
 }
