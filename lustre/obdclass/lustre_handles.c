@@ -4,32 +4,31 @@
  * Copyright (C) 2002 Cluster File Systems, Inc.
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Portals, http://www.sf.net/projects/sandiaportals/
+ *   This file is part of Lustre, http://www.lustre.org/
  *
- *   Portals is free software; you can redistribute it and/or
- *   modify it under the terms of version 2.1 of the GNU Lesser General
- *   Public License as published by the Free Software Foundation.
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
- *   Portals is distributed in the hope that it will be useful,
+ *   Lustre is distributed in the hope that it will be useful,
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Lesser General Public License for more details.
+ *   GNU General Public License for more details.
  *
- *   You should have received a copy of the GNU Lesser General Public
- *   License along with Portals; if not, write to the Free Software
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
 #ifdef __KERNEL__
-#include <linux/types.h>
-#include <linux/random.h>
+# include <linux/types.h>
+# include <linux/random.h>
 #else 
-#include <liblustre.h>
+# include <liblustre.h>
 #endif 
 
-
-#include <linux/kp30.h>
+#include <linux/obd_support.h>
 #include <linux/lustre_handles.h>
 
 static spinlock_t handle_lock = SPIN_LOCK_UNLOCKED;
@@ -118,7 +117,7 @@ int class_handle_init(void)
 
         LASSERT(handle_hash == NULL);
 
-        PORTAL_ALLOC(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
+        OBD_ALLOC(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         if (handle_hash == NULL)
                 return -ENOMEM;
 
@@ -158,7 +157,7 @@ void class_handle_cleanup(void)
                 cleanup_all_handles();
         }
 
-        PORTAL_FREE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
+        OBD_FREE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         handle_hash = NULL;
 
         if (handle_count)
