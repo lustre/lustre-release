@@ -1233,7 +1233,7 @@ static int mds_statfs(struct ptlrpc_request *req)
         EXIT;
 out:
         req->rq_status = rc;
-        return 0;
+        return rc;
 }
 
 static int mds_sync(struct ptlrpc_request *req, int offset)
@@ -1280,7 +1280,7 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
         EXIT;
 out:
         req->rq_status = rc;
-        return 0;
+        return rc;
 }
 
 /* mds_readpage does not take a DLM lock on the inode, because the client must
