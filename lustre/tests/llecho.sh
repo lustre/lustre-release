@@ -13,7 +13,7 @@ setup_lustre
 
 $OBDCTL <<EOF
 device 0
-attach obdecho ECHODEV
+attach obdecho OBDDEV
 setup
 device 1
 attach ost OSTDEV
@@ -25,6 +25,7 @@ quit
 EOF
 
 cat <<EOF
+
 run getattr tests as:
 obdctl --device 2 test_getattr 1000000
 EOF
