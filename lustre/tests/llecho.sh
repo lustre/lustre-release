@@ -26,8 +26,5 @@ EOF
 
 cat <<EOF
 run getattr tests as:
-obdctl 
-device 2 
-connect
-test_getattr 1000000
+obdctl --device 2 test_getattr 1000000
 EOF
