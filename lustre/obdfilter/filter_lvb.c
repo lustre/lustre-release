@@ -69,6 +69,9 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         if (IS_ERR(dentry))
                 GOTO(out, rc = PTR_ERR(dentry));
 
+        if (dentry->d_inode == NULL)
+                GOTO(out, rc = -ENOENT);
+
         lvb->lvb_size = dentry->d_inode->i_size;
         lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
         lvb->lvb_blocks = dentry->d_inode->i_blocks;
