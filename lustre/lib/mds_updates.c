@@ -305,9 +305,13 @@ void mds_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_fsgid = current->fsgid;
         rec->lk_cap = current->cap_effective;
         if (in_group_p(data->gid1))
-                rec->lk_suppgid = data->gid1;
+                rec->lk_suppgid1 = data->gid1;
         else
-                rec->lk_suppgid = -1;
+                rec->lk_suppgid1 = -1;
+        if (in_group_p(data->gid2))
+                rec->lk_suppgid2 = data->gid2;
+        else
+                rec->lk_suppgid2 = -1;
         ll_ino2fid(&rec->lk_fid1, data->ino1, data->gen1, data->typ1);
         ll_ino2fid(&rec->lk_fid2, data->ino2, data->gen2, data->typ2);
 
@@ -459,8 +463,8 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fsuid = rec->lk_fsuid;
         r->ur_fsgid = rec->lk_fsgid;
         r->ur_cap = rec->lk_cap;
-        r->ur_suppgid1 = rec->lk_suppgid;
-        r->ur_suppgid2 = -1;
+        r->ur_suppgid1 = rec->lk_suppgid1;
+        r->ur_suppgid2 = rec->lk_suppgid2;
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
 
