@@ -47,7 +47,7 @@ struct mds_cb_data {
 #define EXTN_XATTR_INDEX_LUSTRE         5
 #define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
 
-#define XATTR_MDS_MO_MAGIC              0x4711
+#define XATTR_MDS_MO_MAGIC              0xEA0BD047
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -230,13 +230,6 @@ static void mds_extN_callback_status(void *jcb, int error)
         --jcb_cache_count;
 }
 
-#ifdef HAVE_JOURNAL_CALLBACK
-static void mds_extN_callback_func(void *cb_data)
-{
-        mds_extN_callback_status(cb_data, 0);
-}
-#endif
-
 static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
 {
         struct mds_cb_data *mcb;
@@ -254,12 +247,6 @@ static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
                (unsigned long long)mcb->cb_last_rcvd);
         journal_callback_set(handle, mds_extN_callback_status,
                              (void *)mcb);
-#elif defined(HAVE_JOURNAL_CALLBACK)
-        /* XXX original patch version - remove soon */
-#warning "using old journal callback kernel patch, please update"
-        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
-               (unsigned long long)mcb->cb_last_rcvd);
-        journal_callback_set(handle, mds_extN_callback_func, mcb);
 #else
 #warning "no journal callback kernel patch, faking it..."
         {
