@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.28 2002/08/29 01:18:26 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.28 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.29 2002/09/02 21:39:05 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.29 $"
 
 #define EXPORT_SYMTAB
 
@@ -100,7 +100,7 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
         int rc;
 
         MOD_INC_USE_COUNT;
-        rc = class_connect(conn, obd, NULL);
+        rc = class_connect(conn, obd, cluuid);
 
         if (rc)
                 MOD_DEC_USE_COUNT;
