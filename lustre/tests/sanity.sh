@@ -1,13 +1,13 @@
 !/bin/sh
 
-echo '===============================' test 1
+echo '=============================== test 1'
 mkdir /mnt/lustre/d1
 mkdir /mnt/lustre/d1/d2
 sh llmountcleanup.sh
-dmesg |' grep -i destruct
+dmesg | grep -i destruct
 sh llmount.sh
 
-echo '===============================' test 2
+echo '=============================== test 2'
 mkdir /mnt/lustre/d1
 touch /mnt/lustre/d1/f
 sh llmountcleanup.sh
@@ -26,7 +26,7 @@ sh llmount.sh
 echo '===============================' test 4
 mkdir /mnt/lustre/d1
 umount /mnt/lustre
-sh ../utils/lconf --start 70 local.xml
+../utils/lconf --start 70 local.xml
 mkdir /mnt/lustre/d1/d2
 sh llmountcleanup.sh
 dmesg | grep -i destruct
