@@ -57,8 +57,10 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn, int l
         case OBD_IOC_CREATE: {
                 struct lov_stripe_md *tmp_lsm = NULL;
                 rc = obd_create(&ec->conn, &data->ioc_obdo1, &tmp_lsm);
-                if (lsm)
+                if (lsm && tmp_lsm ) {
                         memcpy(lsm, tmp_lsm, sizeof(*tmp_lsm));
+                        data->ioc_conn2 = 1;
+                }
 
                 GOTO(out, rc);
         }
