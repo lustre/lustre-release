@@ -1,5 +1,7 @@
 #need to get the functions defined in the cluster's .sh configuration
 . $LTESTDIR/harness/config/$MACHINENAME/config.sh
+# comma_list and friends
+. $LTESTDIR/harness/config/common/utility_functions.sh
 
 all_but_one_clients() {
     local n=0
@@ -24,9 +26,7 @@ mdsfailover_HOST=${mdsfailover_HOST:-${MDSNODE2}}
 ost1_HOST=${ost1_HOST:-${OSTNODE1}}
 ost2_HOST=${ost2_HOST:-${OSTNODE2}}
 EXTRA_OSTS=${EXTRA_OSTS:-""}
-# XXX what is "client" on mdev?
-#client_HOST=${CLIENT1}
-client_HOST=client
+client_HOST=${CLIENT1}
 LIVE_CLIENT=${LIVE_CLIENT:-${CLIENT1}}
 # This should always be a list, not a regexp
 FAIL_CLIENTS=${FAIL_CLIENTS:-"`all_but_one_clients`"}
@@ -39,14 +39,26 @@ SUBSYSTEM=${SUBSYSTEM:-0}
 MOUNT=${MOUNT:-${MOUNTPT}}
 UPCALL=${CLIENT_UPCALL:-"${LUSTRE_TESTS}/replay-single-upcall.sh"}
 
-mdsdev1=${MDSDEV[1]}
+mdsdev1=${MDSDEV[1]:-$MDSDEVBASE}
 MDSDEV=${MDSDEV:-${mdsdev1}}
-MDSSIZE=${MDSSIZE:-100000}
+
+# need to pull off the --size 
+if [ -n "$MDSSIZE" ]; then
+    MDSSIZE=`echo $MDSSIZE | awk '{print $2}'`
+else
+    MDSSIZE=100000
+fi
 MDSJOURNALSIZE=${MDSJOURNALSIZE:-0}
 
-ostdev1=${OSTDEV[1]}
+ostdev1=${OSTDEV[1]:-$OSTDEVBASE}
 OSTDEV=${OSTDEV:-${ostdev1}}
-OSTSIZE=${OSTSIZE:-100000}
+
+# need to pull off the --size 
+if [ -n "$OSTSIZE" ]; then
+    OSTSIZE=`echo $OSTSIZE | awk '{print $2}'`
+else
+    OSTSIZE=100000
+fi
 OSTJOURNALSIZE=${OSTJOURNALSIZE:-0}
 
 FSTYPE=${FSTYPE:-ext3}
