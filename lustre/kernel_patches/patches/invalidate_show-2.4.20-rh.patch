@@ -1,15 +1,8 @@
+ 0 files changed
 
-
-
- fs/inode.c         |   23 +++++++++++++++--------
- fs/smbfs/inode.c   |    2 +-
- fs/super.c         |    4 ++--
- include/linux/fs.h |    2 +-
- 4 files changed, 19 insertions(+), 12 deletions(-)
-
---- linux-2.4.20-9-l18/fs/inode.c~invalidate_show	Wed May 28 01:07:01 2003
-+++ linux-2.4.20-9-l18-phil/fs/inode.c	Wed May 28 01:16:37 2003
-@@ -628,7 +628,8 @@ static void dispose_list(struct list_hea
+--- linux-2.4.20-rh/fs/inode.c~invalidate_show-2.4.20-rh	2003-05-29 22:03:23.000000000 +0800
++++ linux-2.4.20-rh-root/fs/inode.c	2003-05-29 22:03:46.000000000 +0800
+@@ -604,7 +604,8 @@ static void dispose_list(struct list_hea
  /*
   * Invalidate all inodes for a device.
   */
@@ -19,7 +12,7 @@
  {
  	struct list_head *next;
  	int busy = 0, count = 0;
-@@ -653,6 +654,11 @@ static int invalidate_list(struct list_h
+@@ -629,6 +630,11 @@ static int invalidate_list(struct list_h
  			count++;
  			continue;
  		}
@@ -31,7 +24,7 @@
  		busy = 1;
  	}
  	/* only unused inodes may be cached with i_count zero */
-@@ -671,23 +677,24 @@ static int invalidate_list(struct list_h
+@@ -647,24 +653,25 @@ static int invalidate_list(struct list_h
  /**
   *	invalidate_inodes	- discard the inodes on a device
   *	@sb: superblock
@@ -51,18 +44,20 @@
  	spin_lock(&inode_lock);
 -	busy = invalidate_list(&inode_in_use, sb, &throw_away);
 -	busy |= invalidate_list(&inode_unused, sb, &throw_away);
--	busy |= invalidate_list(&inode_unused_pagecache, sb, &throw_away);
 -	busy |= invalidate_list(&sb->s_dirty, sb, &throw_away);
 -	busy |= invalidate_list(&sb->s_locked_inodes, sb, &throw_away);
-+	busy = invalidate_list(&inode_in_use, sb, &throw_away, show);
-+	busy |= invalidate_list(&inode_unused, sb, &throw_away, show);
-+	busy |= invalidate_list(&inode_unused_pagecache, sb, &throw_away, show);
-+	busy |= invalidate_list(&sb->s_dirty, sb, &throw_away, show);
-+	busy |= invalidate_list(&sb->s_locked_inodes, sb, &throw_away, show);
- 	spin_unlock(&inode_lock);
- 
+-	spin_unlock(&inode_lock);
+-
++ 	busy = invalidate_list(&inode_in_use, sb, &throw_away, show);
++ 	busy |= invalidate_list(&inode_unused, sb, &throw_away, show);
++ 	busy |= invalidate_list(&inode_unused_pagecache, sb, &throw_away, show);
++ 	busy |= invalidate_list(&sb->s_dirty, sb, &throw_away, show);
++ 	busy |= invalidate_list(&sb->s_locked_inodes, sb, &throw_away, show);
++	spin_unlock(&inode_lock);	
  	dispose_list(&throw_away);
-@@ -713,7 +720,7 @@ int invalidate_device(kdev_t dev, int do
+ 
+ 	return busy;
+@@ -688,7 +695,7 @@ int invalidate_device(kdev_t dev, int do
  		 * hold).
  		 */
  		shrink_dcache_sb(sb);
@@ -71,8 +66,8 @@
  		drop_super(sb);
  	}
  	invalidate_buffers(dev);
---- linux-2.4.20-9-l18/fs/super.c~invalidate_show	Wed May 28 01:06:28 2003
-+++ linux-2.4.20-9-l18-phil/fs/super.c	Wed May 28 01:15:45 2003
+--- linux-2.4.20-rh/fs/super.c~invalidate_show-2.4.20-rh	2003-04-11 14:04:57.000000000 +0800
++++ linux-2.4.20-rh-root/fs/super.c	2003-05-29 22:03:27.000000000 +0800
 @@ -943,7 +943,7 @@ void kill_super(struct super_block *sb)
  	lock_super(sb);
  	lock_kernel();
@@ -91,9 +86,9 @@
  		printk(KERN_ERR "VFS: Busy inodes after unmount. "
  			"Self-destruct in 5 seconds.  Have a nice day...\n");
  	}
---- linux-2.4.20-9-l18/include/linux/fs.h~invalidate_show	Wed May 28 01:15:40 2003
-+++ linux-2.4.20-9-l18-phil/include/linux/fs.h	Wed May 28 01:15:45 2003
-@@ -1287,7 +1287,7 @@ static inline void mark_buffer_dirty_ino
+--- linux-2.4.20-rh/include/linux/fs.h~invalidate_show-2.4.20-rh	2003-05-29 21:50:30.000000000 +0800
++++ linux-2.4.20-rh-root/include/linux/fs.h	2003-05-29 22:03:27.000000000 +0800
+@@ -1283,7 +1283,7 @@ static inline void mark_buffer_dirty_ino
  extern void set_buffer_flushtime(struct buffer_head *);
  extern void balance_dirty(void);
  extern int check_disk_change(kdev_t);
@@ -102,8 +97,8 @@
  extern int invalidate_device(kdev_t, int);
  extern void invalidate_inode_pages(struct inode *);
  extern void invalidate_inode_pages2(struct address_space *);
---- linux-2.4.20-9-l18/fs/smbfs/inode.c~invalidate_show	Thu Nov 28 18:53:15 2002
-+++ linux-2.4.20-9-l18-phil/fs/smbfs/inode.c	Wed May 28 01:15:45 2003
+--- linux-2.4.20-rh/fs/smbfs/inode.c~invalidate_show-2.4.20-rh	2003-04-16 20:59:48.000000000 +0800
++++ linux-2.4.20-rh-root/fs/smbfs/inode.c	2003-05-29 22:03:27.000000000 +0800
 @@ -167,7 +167,7 @@ smb_invalidate_inodes(struct smb_sb_info
  {
  	VERBOSE("\n");
