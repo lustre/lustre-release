@@ -35,7 +35,7 @@ VERSIONED = lustre.lyx doc.old/lustre.lyx
 GENERATED = $(VERSIONED) lustre-full.tex lustre-chbar.tex
 
 EXTRA_DIST = chbar.sh postbar tex2pdf $(DOCS) $(man_MANS) $(IMAGES)     \
-        $(LYXFILES) lustre.bib lfs.1 lmc.1 lwizard.1 lconf.8 lctl.8
+        $(LYXFILES) lfs.1 lmc.1 lwizard.1 lconf.8 lctl.8
 
 all:
 docs: $(DOCS)
