@@ -290,10 +290,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 LASSERT(pb->pb_ino);
-                if (S_ISDIR(llu_i2info(pb->pb_ino)->lli_st_mode))
-                        llu_invalidate_inode_pages(pb->pb_ino);
-                llu_i2info(pb->pb_ino)->lli_stale_flag = 1;
-                unhook_stale_inode(pnode);
+                I_RELE(pb->pb_ino);
+                pb->pb_ino = NULL;
         } else {
                 llu_lookup_finish_locks(it, pnode);
                 llu_i2info(pb->pb_ino)->lli_stale_flag = 0;
@@ -342,9 +340,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 /* If this is a stat, get the authoritative file size */
                 if (it->it_op == IT_GETATTR && S_ISREG(lli->lli_st_mode) &&
                     lli->lli_smd != NULL) {
-                        struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                        struct lustre_handle lockh = {0};
                         struct lov_stripe_md *lsm = lli->lli_smd;
+                        struct ost_lvb lvb;
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
@@ -352,13 +349,12 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
-                                            &lockh);
-                        if (rc != ELDLM_OK) {
+                        rc = llu_glimpse_size(inode, &lvb);
+                        if (rc) {
                                 I_RELE(inode);
                                 RETURN(-EIO);
                         }
-                        llu_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
+                        lli->lli_st_size = lvb.lvb_size;
                 }
         } else {
                 ENTRY;
