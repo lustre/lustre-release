@@ -329,11 +329,11 @@ def mds2node(lustre, mds_name):
     mds = findByName(lustre, mds_name, 'mds')
     ref = mds.getElementsByTagName('node_ref')
     if not ref:
-        error("no node found for:", mds_name)
+        error("mds2node:", "no node_ref found for", '"'+mds_name+'"')
     node_uuid = ref[0].getAttribute('uuidref')
     node = lookup(lustre, node_uuid)
     if not node:
-        error("no node found for :", mds_name)
+        error('mds2node:', "no node found for :", '"'+mds_name+'"')
     return node
 
 
@@ -341,7 +341,7 @@ def name2uuid(lustre, name, tag="",  fatal=1):
     ret = findByName(lustre, name, tag)
     if not ret:
         if fatal:
-            error('name2uuid:', name, "not found.")
+            error('name2uuid:', '"'+name+'"', tag, 'element not found.')
         else:
             return ""
     return getUUID(ret)
@@ -353,7 +353,7 @@ def get_net_uuid(lustre, node_name):
     """ get a network uuid for a node_name """
     node = findByName(lustre, node_name, "node")
     if not node:
-        error ("node not found:", node_name)
+        error ('get_net_uuid:', '"'+node_name+'"', "node element not found.")
     net = node.getElementsByTagName('network')
     if net:
         return getUUID(net[0])
@@ -488,7 +488,7 @@ def add_mds(gen, lustre, options, args):
 
     mds_uuid = new_uuid(mds_name)
 
-    node_uuid = name2uuid(lustre, node_name)
+    node_uuid = name2uuid(lustre, node_name, 'node')
 
     node = findByName(lustre, node_name, "node")
     node_add_profile(gen, node, "mds", mds_uuid)
@@ -547,7 +547,7 @@ def add_ost(gen, lustre, options, args):
     if lovname:
         lov = findByName(lustre, lovname, "lov")
         if not lov:
-            error("LOV:", lovname, "not found.")
+            error('add_ost:', '"'+lovname+'"', "lov element not found.")
         lov_add_osc(gen, lov, osc_uuid)
 
     node = findByName(lustre, node_name, "node")
@@ -569,7 +569,7 @@ def add_osc(gen, lustre, options, args):
         node_name = options['node']
     else:
         error("--osc requires a --node argument")
-    osc_uuid = name2uuid(lustre, osc_name)
+    osc_uuid = name2uuid(lustre, osc_name) # either 'osc' or 'lov'
     node = findByName(lustre, node_name, "node")
     node_add_profile(gen, node, 'osc', osc_uuid)
 
@@ -590,7 +590,7 @@ def add_lov(gen, lustre, options, args):
     if ret:
         error("LOV: ", name, " already exists.")
 
-    mds_uuid = name2uuid(lustre, mds_name)
+    mds_uuid = name2uuid(lustre, mds_name, 'mds')
     lov = gen.lov(name, uuid, mds_uuid, stripe_sz, stripe_count, pattern)
     lustre.appendChild(lov)
     
@@ -624,7 +624,7 @@ def add_mtpt(gen, lustre, options, args):
     if ret:
         error("MOUNTPOINT: ", name, " already exists.")
 
-    mds_uuid = name2uuid(lustre, mds_name)
+    mds_uuid = name2uuid(lustre, mds_name, tag='mds')
     lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
     if not lov_uuid:
         lov_uuid = name2uuid(lustre, lov_name, tag='osc', fatal=1)
