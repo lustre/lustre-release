@@ -1177,7 +1177,6 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         if (obd->obd_recovery_data.trd_processing_task == current->pid ||
             transno < obd->obd_next_recovery_transno) {
                 /* Processing the queue right now, don't re-add. */
-                lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
                 LASSERT(list_empty(&req->rq_list));
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return 1;
