@@ -1169,11 +1169,10 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
         }
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
+	rc = mds_is_dir_empty(obd, dentry) ? 0 : -ENOTEMPTY;
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 
-        rc = 0;
-        if (!mds_is_dir_empty(obd, dentry))
-                rc = -ENOTEMPTY;
-
+        mds_exit_ucred(&uc);
         EXIT;
 cleanup:
         switch(cleanup_phase) {
@@ -1181,8 +1180,6 @@ cleanup:
                 if (rc)
                         ldlm_lock_decref(lockh, LCK_EX);
                 l_dput(dentry);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
-                mds_exit_ucred(&uc);
         default:
                 break;
         }
