@@ -32,7 +32,7 @@ ${LMC} --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp
 ${LMC} --add ost --node $OST --obd obd1 --obdtype=obdecho -obduuid $OBD_UUID 
 
 # osc on client
-${LMC} --add oscref --node $CLIENT --echo_client obd1
+${LMC} --add echo_client --node $CLIENT --obd obd1
 
 $LMC_REAL --batch $BATCH
 rm -f $BATCH
