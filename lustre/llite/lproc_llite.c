@@ -163,7 +163,6 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         char name[MAX_STRING_SIZE + 1];
-        struct obd_uuid uuid;
         int err, id;
         struct lprocfs_stats *svc_stats = NULL;
         ENTRY;
@@ -224,8 +223,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 goto out;
 
         /* MDC info */
-        strncpy(uuid.uuid, mdc, sizeof(uuid.uuid));
-        obd = class_uuid2obd(&uuid);
+        obd = class_name2obd(mdc);
 
         LASSERT(obd != NULL);
         LASSERT(obd->obd_type != NULL);
@@ -245,8 +243,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 goto out;
 
         /* OSC */
-        strncpy(uuid.uuid, osc, sizeof(uuid.uuid));
-        obd = class_uuid2obd(&uuid);
+        obd = class_name2obd(osc);
 
         LASSERT(obd != NULL);
         LASSERT(obd->obd_type != NULL);
