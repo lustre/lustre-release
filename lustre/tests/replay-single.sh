@@ -14,7 +14,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-ALWAYS_EXCEPT=""
+ALWAYS_EXCEPT="45"
 
 
 gen_config() {
@@ -863,6 +863,24 @@ test_44() {
     return 0
 }
 run_test 44 "race in target handle connect"
+
+test_45() {
+    d=$MOUNT/$tdir
+
+    mkdir $d
+    ls -l $d
+    cp /etc/termcap $d
+    cat $d/termcap > /dev/null
+
+    zconf_umount client $MOUNT -f
+    zconf_mount `hostname` $MOUNT
+
+    rm -rf $d || return 1
+    $CHECKSTAT -t dir $d && return 1 || true
+
+    sleep 10
+}
+run_test 45 "test client eviction after client crash"
 
 equals_msg test complete, cleaning up
 $CLEANUP

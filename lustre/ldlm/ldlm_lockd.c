@@ -126,7 +126,6 @@ static int expired_lock_main(void *arg)
         wake_up(&expired_lock_thread.elt_waitq);
 
         while (1) {
-                struct list_head *tmp, *n, work_list;
                 l_wait_event(expired_lock_thread.elt_waitq,
                              have_expired_locks() ||
                              expired_lock_thread.elt_state == ELT_TERMINATE,
@@ -134,33 +133,30 @@ static int expired_lock_main(void *arg)
 
                 spin_lock_bh(&expired_lock_thread.elt_lock);
                 while (!list_empty(expired)) {
+                        struct obd_export *export;
                         struct ldlm_lock *lock;
 
-                        list_add(&work_list, expired);
-                        list_del_init(expired);
-
-                        list_for_each_entry(lock, &work_list, l_pending_chain) {
-                                LDLM_DEBUG(lock, "moving to work list");
+                        lock = list_entry(expired->next, struct ldlm_lock,
+                                          l_pending_chain);
+                        if ((void *)lock < LP_POISON + PAGE_SIZE &&
+                            (void *)lock >= LP_POISON) {
+                                CERROR("free lock on elt list %p\n", lock);
+                                LBUG();
                         }
-
+                        list_del_init(&lock->l_pending_chain);
+                        if ((void *)lock->l_export < LP_POISON + PAGE_SIZE &&
+                            (void *)lock->l_export >= LP_POISON + PAGE_SIZE) {
+                                CERROR("lock with free export on elt list %p\n",
+                                       export);
+                                lock->l_export = NULL;
+                                LDLM_ERROR(lock, "free export\n");
+                                continue;
+                        }
+                        export = class_export_get(lock->l_export);
                         spin_unlock_bh(&expired_lock_thread.elt_lock);
 
-
-                        list_for_each_safe(tmp, n, &work_list) {
-                                 lock = list_entry(tmp, struct ldlm_lock,
-                                                   l_pending_chain);
-                                 ptlrpc_fail_export(lock->l_export);
-                        }
-
-
-                        if (!list_empty(&work_list)) {
-                                list_for_each_entry(lock, &work_list, l_pending_chain) {
-                                        LDLM_ERROR(lock, "still on work list!");
-                                }
-                        }
-                        LASSERTF (list_empty(&work_list),
-                                  "some exports not failed properly\n");
-
+                        ptlrpc_fail_export(export);
+                        class_export_put(export);
                         spin_lock_bh(&expired_lock_thread.elt_lock);
                 }
                 spin_unlock_bh(&expired_lock_thread.elt_lock);

@@ -1115,18 +1115,21 @@ void kportal_put_ni (int nal);
 # define LPX64 "%#Lx"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
+# define LP_POISON ((void *)0x5a5a5a5a5a5a5a5a)
 #elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
+# define LP_POISON ((void *)0x5a5a5a5a)
 #elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
+# define LP_POISON ((void *)0x5a5a5a5a5a5a5a5a)
 #endif
 #ifndef LPU64
 # error "No word size defined"

@@ -1070,8 +1070,8 @@ static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked)
         if (request == NULL)
                 RETURN(1);
 
-        if (request == (void *)(unsigned long)(0x5a5a5a5a5a5a5a5a) ||
-            request->rq_reqmsg == (void *)(unsigned long)(0x5a5a5a5a5a5a5a5a)) {
+        if (request == LP_POISON ||
+            request->rq_reqmsg == LP_POISON) {
                 CERROR("dereferencing freed request (bug 575)\n");
                 LBUG();
                 RETURN(1);

@@ -199,4 +199,29 @@ test_15() {
 }
 run_test 15 "failed open (-ENOMEM)"
 
+test_19a() {
+    f=$MOUNT/$tfile
+    do_facet client mcreate $f        || return 1
+    drop_ldlm_cancel "chmod 0777 $f"  || echo evicted
+
+    do_facet client checkstat -v -p 0777 $f  || echo evicted
+    do_facet client "munlink $f"
+}
+run_test 19a "test expired_lock_main on mds (2867)"
+
+test_19b() {
+    f=$MOUNT/$tfile
+    do_facet client multiop $f Ow  || return 1
+    do_facet client multiop $f or  || return 2
+
+    cancel_lru_locks OSC
+
+    do_facet client multiop $f or  || return 3
+    drop_ldlm_cancel multiop $f Ow  || echo "client evicted, as expected"
+
+    do_facet client munlink $f  || return 4
+
+}
+run_test 19b "test expired_lock_main on ost (2867)"
+
 $CLEANUP
