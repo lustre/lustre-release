@@ -949,15 +949,17 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         cleanup_phase = 2; /* dchild, dparent, locks */
 
 fill_inode:
+        if (dparent) {
+                rc = mds_check_mds_num(obd, dparent->d_cache_inode, name,
+                                       namesize);
+                if (rc)
+                        GOTO(cleanup, rc); 
+        }
         if (!DENTRY_VALID(dchild)) {
                 intent_set_disposition(rep, DISP_LOOKUP_NEG);
                 /* in the intent case, the policy clears this error:
                    the disposition is enough */
                 rc = -ENOENT;
-                if (dparent) {
-                        rc = mds_check_mds_num(obd, dparent->d_inode, name,
-                                               namesize);
-                }
                 GOTO(cleanup, rc);
         } else {
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
