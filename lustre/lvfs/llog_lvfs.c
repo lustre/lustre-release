@@ -636,7 +636,7 @@ llog_object_create_alone(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
 static struct file *
 llog_object_create_generic(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
 {
-        struct file *filp;
+        struct file *filp = NULL;
         struct dentry *dchild;
         struct obd_device *obd;
         struct obdo *oa = NULL;
