@@ -33,9 +33,9 @@ STRIPES_PER_OBJ=1
 
 gen_config() {
     rm -f $XMLCONFIG
-    add_facet mds
-    add_facet ost
-    add_facet client --lustre_upcall $UPCALL
+    add_facet mds --timeout ${TIMEOUT}
+    add_facet ost --timeout ${TIMEOUT}
+    add_facet client --timeout ${TIMEOUT} --lustre_upcall $UPCALL
     do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
     do_lmc --add lov --mds mds1 --lov lov1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     do_lmc --add ost --lov lov1 --failover --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
@@ -78,6 +78,7 @@ if [ "$PINGER" != "on" ]; then
     stop ost
     exit 1
 fi
+[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 start mds --reformat $MDSLCONFARGS
 zconf_mount $MOUNT
 
@@ -86,12 +87,15 @@ mkdir -p $DIR
 test_0() {
     replay_barrier ost
     fail ost
+    cp /etc/profile  $DIR/$tfile
+    sync
+    diff /etc/profile $DIR/$tfile
 }
 run_test 0 "empty replay"
 
 test_1() {
     replay_barrier ost
-    touch $DIR/$tfile
+    date > $DIR/$tfile
     fail ost
     $CHECKSTAT -t file $DIR/$tfile || return 1
 }
@@ -109,10 +113,6 @@ test_2() {
 }
 run_test 2 "|x| 10 open(O_CREAT)s"
 
-exit 0
-
 equals_msg test complete, cleaning up
-stop client ${FORCE:=--force} $CLIENTLCONFARGS
-stop ost ${FORCE}
-stop mds ${FORCE} $MDSLCONFARGS --dump cleanup.log
+cleanup
 
