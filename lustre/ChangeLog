@@ -1,4 +1,4 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2004-09-16  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.6
        * bug fixes
 	- avoid crash during MDS cleanup with OST shut down (2775)
