@@ -1,0 +1,83 @@
+ fs/dcache.c            |   24 ++++++++++++++++++++----
+ fs/namei.c             |    4 +++-
+ include/linux/dcache.h |    2 ++
+ 3 files changed, 25 insertions(+), 5 deletions(-)
+
+--- linux-2.5.72/fs/dcache.c~vfs_races_2.5.72_rev1	2003-06-16 22:19:41.000000000 -0600
++++ linux-2.5.72-braam/fs/dcache.c	2003-06-25 08:33:08.000000000 -0600
+@@ -212,7 +212,14 @@ int d_invalidate(struct dentry * dentry)
+ 		spin_unlock(&dcache_lock);
+ 		return 0;
+ 	}
+-	/*
++
++        /* network invalidation by Lustre */
++	if (dentry->d_flags & DCACHE_LUSTRE_INVALID) {
++		spin_unlock(&dcache_lock);
++		return 0;
++	}
++
++        /*
+ 	 * Check whether to do a partial shrink_dcache
+ 	 * to get rid of unused child entries.
+ 	 */
+@@ -1132,14 +1139,23 @@ void d_delete(struct dentry * dentry)
+  * Adds a dentry to the hash according to its name.
+  */
+  
+-void d_rehash(struct dentry * entry)
++void __d_rehash(struct dentry * entry, int lock)
+ {
+ 	struct hlist_head *list = d_hash(entry->d_parent, entry->d_name.hash);
+-	spin_lock(&dcache_lock);
++	if (lock)
++		spin_lock(&dcache_lock);
+  	entry->d_vfs_flags &= ~DCACHE_UNHASHED;
+ 	entry->d_bucket = list;
+  	hlist_add_head_rcu(&entry->d_hash, list);
+-	spin_unlock(&dcache_lock);
++	if (lock)
++		spin_unlock(&dcache_lock);
++}
++
++EXPORT_SYMBOL(__d_rehash);
++
++void d_rehash(struct dentry * entry)
++{
++	__d_rehash(entry, 1);
+ }
+ 
+ #define do_switch(x,y) do { \
+--- linux-2.5.72/fs/namei.c~vfs_races_2.5.72_rev1	2003-06-25 08:33:06.000000000 -0600
++++ linux-2.5.72-braam/fs/namei.c	2003-06-25 08:50:18.000000000 -0600
+@@ -368,6 +368,8 @@ static struct dentry * real_lookup(struc
+ 	struct dentry * result;
+ 	struct inode *dir = parent->d_inode;
+ 
++ again: 
++
+ 	down(&dir->i_sem);
+ 	/*
+ 	 * First re-do the cached lookup just in case it was created
+@@ -415,7 +417,7 @@ static struct dentry * real_lookup(struc
+ 		if (!result->d_op->d_revalidate_it(result, flags, nd) &&
+ 		    !d_invalidate(result)) {
+ 			dput(result);
+-			result = ERR_PTR(-ENOENT);
++			goto again;
+ 		}
+ 	}
+ 	return result;
+--- linux-2.5.72/include/linux/dcache.h~vfs_races_2.5.72_rev1	2003-06-25 08:25:04.000000000 -0600
++++ linux-2.5.72-braam/include/linux/dcache.h	2003-06-25 08:33:08.000000000 -0600
+@@ -180,6 +180,8 @@ d_iput:		no		no		yes
+ 
+ #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
+ #define DCACHE_UNHASHED		0x0010	
++#define DCACHE_LUSTRE_INVALID     0x0020  /* Lustre invalidated */
++
+ 
+ extern spinlock_t dcache_lock;
+ 
+
+_
