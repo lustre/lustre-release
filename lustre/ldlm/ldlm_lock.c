@@ -358,19 +358,19 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
         }
         if (!lock->l_resource) {
                 CERROR("trying to lock bogus resource: lock %p\n", lock);
-                LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
+                //LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
                 GOTO(out2, retval);
         }
         if (!lock->l_resource->lr_namespace) {
                 CERROR("trying to lock bogus namespace: lock %p\n", lock);
-                LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
+                //LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
                 GOTO(out2, retval);
         }
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (strict && lock->l_flags & LDLM_FL_DESTROYED) {
                 CERROR("lock already destroyed: lock %p\n", lock);
-                LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
+                //LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
                 GOTO(out, NULL);
         }
 
