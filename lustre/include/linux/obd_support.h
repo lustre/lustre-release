@@ -70,6 +70,7 @@ extern unsigned long obd_fail_loc;
 #define OBD_FAIL_OST_CLOSE_NET           0x209
 #define OBD_FAIL_OST_BRW_NET             0x20a
 #define OBD_FAIL_OST_PUNCH_NET           0x20b
+#define OBD_FAIL_OST_STATFS_NET          0x20c
 
 #define OBB_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -139,9 +140,9 @@ do {                                                                    \
 do {                                                                    \
         int s = (size);                                                 \
         kfree((ptr));                                                   \
+        obd_memory -= s;                                                \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %ld).\n",    \
                s, (ptr), obd_memory);                                   \
-        obd_memory -= s;                                                \
 } while (0)
 
 #endif
