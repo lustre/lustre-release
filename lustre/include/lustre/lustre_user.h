@@ -9,6 +9,7 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 #include <asm/types.h>
+#include <linux/quota.h>
 #ifdef __KERNEL__
 #include <linux/string.h>
 #else
@@ -37,6 +38,9 @@
 #define LL_IOC_RECREATE_OBJ             _IOW ('f', 157, long)
 #define LL_IOC_GROUP_LOCK               _IOW ('f', 158, long)
 #define LL_IOC_GROUP_UNLOCK             _IOW ('f', 159, long)
+#define LL_IOC_QUOTACHECK               _IOW ('f', 160, int)
+#define LL_IOC_POLL_QUOTACHECK          _IOR ('f', 161, struct if_quotacheck *)
+#define LL_IOC_QUOTACTL                 _IOWR('f', 162, struct if_quotactl *)
 
 #define IOC_MDC_TYPE            'i'
 #define IOC_MDC_GETSTRIPE       _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
@@ -117,5 +121,48 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
         strncpy((char *)uuid->uuid, tmp, sizeof(*uuid));
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
+
+#define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
+
+#define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
+
+struct if_quotacheck {
+        char                    obd_type[10];
+        struct obd_uuid         obd_uuid;
+        int                     stat;
+};
+
+#ifndef __KERNEL__
+/* XXX: these two structs should be in /usr/include/linux/quota.h */
+struct if_dqinfo {
+        __u64 dqi_bgrace;
+        __u64 dqi_igrace;
+        __u32 dqi_flags;
+        __u32 dqi_valid;
+};
+
+struct if_dqblk {
+        __u64 dqb_bhardlimit;
+        __u64 dqb_bsoftlimit;
+        __u64 dqb_curspace;
+        __u64 dqb_ihardlimit;
+        __u64 dqb_isoftlimit;
+        __u64 dqb_curinodes;
+        __u64 dqb_btime;
+        __u64 dqb_itime;
+        __u32 dqb_valid;
+};
+#endif
+
+struct if_quotactl {
+        int                     qc_cmd;
+        int                     qc_type;
+        int                     qc_id;
+        int                     qc_stat;
+        struct if_dqinfo        qc_dqinfo;
+        struct if_dqblk         qc_dqblk;
+        char                    obd_type[10];
+        struct obd_uuid         obd_uuid;
+};
 
 #endif /* _LUSTRE_USER_H */

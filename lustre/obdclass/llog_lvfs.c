@@ -304,8 +304,9 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
-                if (rec->lrh_type == MDS_UNLINK_REC)
-                        reccookie->lgc_subsys = LLOG_UNLINK_ORIG_CTXT;
+                if ((rec->lrh_type == MDS_UNLINK_REC) || 
+                                (rec->lrh_type == MDS_SETATTR_REC))
+                        reccookie->lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
                 else if (rec->lrh_type == OST_SZ_REC)
                         reccookie->lgc_subsys = LLOG_SIZE_ORIG_CTXT;
                 else if (rec->lrh_type == OST_RAID1_REC)

@@ -221,7 +221,7 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         OBD_ALLOC(new_msg, new_size);
         if (new_msg != NULL) {
                 struct lustre_msg *old_msg = req->rq_reqmsg;
-                long irqflags;
+                unsigned long irqflags;
 
                 DEBUG_REQ(D_INFO, req, "replace reqmsg for larger EA %u\n",
                           body->eadatasize);

@@ -83,6 +83,10 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
 int target_handle_ping(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 
+/* quotacheck callback, dqacq/dqrel callback handler */
+int target_handle_qc_callback(struct ptlrpc_request *req);
+int target_handle_dqacq_callback(struct ptlrpc_request *req);
+
 void target_cancel_recovery_timer(struct obd_device *obd);
 
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
@@ -438,9 +442,13 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, long)
 
-#define OBD_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
-#define OBD_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
-#define OBD_IOC_LOV_SETEA                _IOW ('f', 156, long)
+#define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, long)
+#define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, long)
+#define OBD_IOC_LOV_SETEA              _IOW ('f', 156, long)
+
+#define OBD_IOC_QUOTACHECK             _IOW ('f', 160, int)
+#define OBD_IOC_POLL_QUOTACHECK        _IOR ('f', 161, struct if_quotacheck *)
+#define OBD_IOC_QUOTACTL               _IOWR('f', 162, struct if_quotactl *)
 
 #define OBD_IOC_MOUNTOPT               _IOWR('f', 170, long)
 

@@ -39,6 +39,7 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/syscall.h>
 #include <linux/types.h>
 #include <linux/unistd.h>
 
@@ -165,9 +166,12 @@ struct find_param {
         int     quiet;
         struct  obd_uuid        *obduuid;
         int     lumlen;
-        struct  lov_user_md     *lum;
+        struct  lov_user_mds_data *lmd;
+/*        struct  lov_user_md     *lum;*/
         int     got_uuids;
         int     obdindex;
+        int     (* process_file)(DIR *dir, char *dname, char *fname,
+                        struct find_param *param);
 };
 
 /* XXX Max obds per lov currently hardcoded to 1000 in lov/lov_obd.c */
@@ -177,9 +181,9 @@ struct find_param {
 static int prepare_find(struct find_param *param)
 {
         param->lumlen = lov_mds_md_size(MAX_LOV_UUID_COUNT);
-        if ((param->lum = malloc(param->lumlen)) == NULL) {
+        if ((param->lmd = malloc(sizeof(lstat_t) + param->lumlen)) == NULL) {
                 err_msg("unable to allocate %d bytes of memory for ioctl",
-                        param->lumlen);
+                        sizeof(lstat_t) + param->lumlen);
                 return ENOMEM;
         }
 
@@ -193,8 +197,8 @@ static void cleanup_find(struct find_param *param)
 {
         if (param->obduuid)
                 free(param->obduuid);
-        if (param->lum)
-                free(param->lum);
+        if (param->lmd)
+                free(param->lmd);
 }
 
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
@@ -349,15 +353,15 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
 
 void llapi_lov_dump_user_lmm(struct find_param *param, char *dname, char *fname)
 {
-        switch(*(__u32 *)param->lum) { /* lum->lmm_magic */
+        switch(*(__u32 *)&param->lmd->lmd_lmm) { /* lum->lmm_magic */
         case LOV_USER_MAGIC_V1:
-                lov_dump_user_lmm_v1(param->lum, dname, fname, param->obdindex,
+                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, dname, fname, param->obdindex,
                                      param->quiet, param->verbose,
                                      (param->verbose || !param->obduuid));
                 break;
         default:
                 printf("unknown lmm_magic:  %#x (expecting %#x)\n",
-                       *(__u32 *)param->lum, LOV_USER_MAGIC_V1);
+                       *(__u32 *)&param->lmd->lmd_lmm, LOV_USER_MAGIC_V1);
                 return;
         }
 }
@@ -411,14 +415,14 @@ int op_get_file_stripe(char *path, struct lov_user_md *lum)
         return llapi_file_get_stripe(path, lum);
 }
 
-static int process_file(DIR *dir, char *dname, char *fname,
+static int find_process_file(DIR *dir, char *dname, char *fname,
                         struct find_param *param)
 {
         int rc;
 
-        strncpy((char *)param->lum, fname, param->lumlen);
+        strncpy((char *)&param->lmd->lmd_lmm, fname, param->lumlen);
 
-        rc = ioctl(dirfd(dir), IOC_MDC_GETSTRIPE, (void *)param->lum);
+        rc = ioctl(dirfd(dir), IOC_MDC_GETSTRIPE, (void *)&param->lmd->lmd_lmm);
         if (rc) {
                 if (errno == ENODATA) {
                         if (!param->obduuid && !param->quiet)
@@ -478,8 +482,8 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
         }
 
         /* retrieve dir's stripe info */
-        strncpy((char *)param->lum, dname, param->lumlen);
-        rc = ioctl(dirfd(dir), LL_IOC_LOV_GETSTRIPE, (void *)param->lum);
+        strncpy((char *)&param->lmd->lmd_lmm, dname, param->lumlen);
+        rc = ioctl(dirfd(dir), LL_IOC_LOV_GETSTRIPE, (void *)&param->lmd->lmd_lmm);
         if (rc) {
                 if (errno == ENODATA) {
                         if (!param->obduuid && param->verbose)
@@ -528,7 +532,7 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
                                 return rc;
                         break;
                 case DT_REG:
-                        rc = process_file(dir, dname, dirp->d_name, param);
+                        rc = param->process_file(dir, dname, dirp->d_name, param);
                         if (rc)
                                 return rc;
                         break;
@@ -580,7 +584,7 @@ static int process_path(char *path, struct find_param *param)
                         if (!param->got_uuids)
                                 rc = setup_obd_uuids(dir, dname, param);
                         if (rc == 0)
-                                rc = process_file(dir, dname, fname, param);
+                                rc = param->process_file(dir, dname, fname, param);
                         closedir(dir);
                 }
         }
@@ -598,6 +602,7 @@ int llapi_find(char *path, struct obd_uuid *obduuid, int recursive,
         param.recursive = recursive;
         param.verbose = verbose;
         param.quiet = quiet;
+        param.process_file = find_process_file;
         if (obduuid) {
                 param.obduuid = malloc(sizeof(*obduuid));
                 if (param.obduuid == NULL) {
@@ -742,3 +747,117 @@ int llapi_is_lustre_mnttype(char *type)
 {
         return (strcmp(type,"lustre") == 0 || strcmp(type,"lustre_lite") == 0);
 }
+
+int llapi_quotacheck(char *mnt, int check_type)
+{
+        DIR *root;
+        int rc;
+
+        root = opendir(mnt);
+        if (!root) {
+                err_msg("open %s failed", mnt);
+                return -1;
+        }
+
+        rc = ioctl(dirfd(root), LL_IOC_QUOTACHECK, check_type);
+
+        closedir(root);
+        return rc;
+}
+
+int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk)
+{
+        DIR *root;
+        int poll_intvl = 2;
+        int rc;
+
+        root = opendir(mnt);
+        if (!root) {
+                err_msg("open %s failed", mnt);
+                return -1;
+        }
+
+        while (1) {
+                rc = ioctl(dirfd(root), LL_IOC_POLL_QUOTACHECK, qchk);
+                if (!rc || errno != ENODATA)
+                        break;
+                sleep(poll_intvl);
+                if (poll_intvl < 30)
+                        poll_intvl *= 2;
+        }
+
+        closedir(root);
+        return rc;
+}
+
+int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
+{
+        DIR *root;
+        int rc;
+
+        root = opendir(mnt);
+        if (!root) {
+                err_msg("open %s failed", mnt);
+                return -1;
+        }
+
+        rc = ioctl(dirfd(root), LL_IOC_QUOTACTL, qctl);
+
+        closedir(root);
+        return rc;
+}
+
+static int quotachog_process_file(DIR *dir, char *dname, char *fname,
+                        struct find_param *param)
+{
+        lstat_t *st;
+        char pathname[PATH_MAX + 1] = "";
+        int rc;
+
+        strncpy((char *)param->lmd, fname, param->lumlen);
+
+        rc = ioctl(dirfd(dir), IOC_MDC_GETFILEINFO, (void *)param->lmd);
+        if (rc) {
+                if (errno == ENODATA) {
+                        if (!param->obduuid && !param->quiet)
+                                fprintf(stderr,
+                                        "%s/%s has no stripe info\n",
+                                        dname, fname);
+                        rc = 0;
+                } else if (errno != EISDIR) {
+                        err_msg("IOC_MDC_GETFILEINFO ioctl failed");
+                        rc = errno;
+                }
+                return rc;
+        }
+
+        st = &param->lmd->lmd_st;
+        snprintf(pathname, sizeof(pathname), "%s/%s", dname, fname);
+        rc = syscall(SYS_chown, pathname, st->st_uid, st->st_gid);
+        if (rc)
+                fprintf(stderr, "chown %s (%u,%u) fail: %s\n",
+                        pathname, st->st_uid, st->st_gid, strerror(errno));
+        return rc;
+}
+
+int llapi_quotachog(char *path, int flag)
+{
+        struct find_param param;
+        int ret = 0;
+
+        memset(&param, 0, sizeof(param));
+        param.recursive = 1;
+        param.verbose = 0;
+        param.quiet = 1;
+        param.process_file = quotachog_process_file;
+
+        ret = prepare_find(&param);
+        if (ret)
+                goto out;
+
+        process_path(path, &param);
+out:
+        cleanup_find(&param);
+        return ret;
+}
+

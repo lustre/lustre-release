@@ -1002,5 +1002,33 @@ test_56() {
 }
 run_test 56 "don't replay a symlink open request (3440)"
 
+#recovery one mds-ost setattr from llog
+test_57() {
+#define OBD_FAIL_MDS_OST_SETATTR       0x12c
+    do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
+    touch $DIR/$tfile
+    replay_barrier mds
+    fail mds
+    sleep 1
+    $CHECKSTAT -t file $DIR/$tfile || return 1
+    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    rm $DIR/$tfile
+}
+run_test 57 "test recovery from llog for setattr op"
+
+#recovery many mds-ost setattr from llog
+test_58() {
+#define OBD_FAIL_MDS_OST_SETATTR       0x12c
+    do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
+    createmany -o $DIR/$tfile-%d 30000
+    replay_barrier mds
+    fail mds
+    sleep 2
+    $CHECKSTAT -t file $DIR/$tfile-* || return 1
+    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    rm -f $DIR/$tfile-*
+}
+run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
+
 equals_msg test complete, cleaning up
 $CLEANUP

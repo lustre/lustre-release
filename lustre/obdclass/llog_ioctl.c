@@ -110,6 +110,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 case OST_SZ_REC:
                 case OST_RAID1_REC:
                 case MDS_UNLINK_REC:
+                case MDS_SETATTR_REC:
                 case OBD_CFG_REC:
                 case PTL_CFG_REC:
                 case LLOG_HDR_MAGIC: {

@@ -48,10 +48,10 @@
 
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_quota.h>
 
 atomic_t obd_memory;
 int obd_memmax;
-
 
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG

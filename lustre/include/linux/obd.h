@@ -30,6 +30,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_export.h>
+#include <linux/lustre_quota.h>
 
 /* this is really local to the OSC */
 struct loi_oap_pages {
@@ -129,6 +130,7 @@ struct obd_async_page_ops {
         int  (*ap_refresh_count)(void *data, int cmd);
         void (*ap_fill_obdo)(void *data, int cmd, struct obdo *oa);
         void (*ap_completion)(void *data, int cmd, struct obdo *oa, int rc);
+        void (*ap_get_ucred)(void *data, struct obd_ucred *ouc);
 };
 
 /* the `oig' is passed down from a caller of obd rw methods.  the callee
@@ -222,6 +224,10 @@ struct filter_obd {
         struct obd_histogram     fo_w_discont_blocks;
         struct obd_histogram     fo_r_disk_iosize;
         struct obd_histogram     fo_w_disk_iosize;
+
+        struct lustre_quota_ctxt fo_quota_ctxt;
+        spinlock_t               fo_quotacheck_lock;
+        atomic_t                 fo_quotachecking;
 };
 
 struct mds_server_data;
@@ -230,6 +236,11 @@ struct mds_server_data;
 #define OSC_MAX_RIF_MAX          64
 #define OSC_MAX_DIRTY_DEFAULT    32
 #define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
+
+enum {
+        CL_QUOTACHECKING = 1,
+        CL_NO_QUOTACHECK
+};
 
 struct mdc_rpc_lock;
 struct client_obd {
@@ -282,6 +293,10 @@ struct client_obd {
 
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;
+
+        /* used by quotacheck */
+        spinlock_t               cl_qchk_lock;
+        int                      cl_qchk_stat; /* quotacheck stat of the peer */
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
@@ -330,6 +345,9 @@ struct mds_obd {
         struct file                     *mds_lov_objid_filp;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
+        struct lustre_quota_info         mds_quota_info;
+        struct lustre_quota_ctxt         mds_quota_ctxt;
+        atomic_t                         mds_quotachecking;
 };
 
 struct echo_obd {
@@ -460,18 +478,18 @@ static inline void oti_free_cookies(struct obd_trans_info *oti)
 
 /* llog contexts */
 enum llog_ctxt_id {
-        LLOG_CONFIG_ORIG_CTXT =  0,
-        LLOG_CONFIG_REPL_CTXT =  1,
-        LLOG_UNLINK_ORIG_CTXT =  2,
-        LLOG_UNLINK_REPL_CTXT =  3,
-        LLOG_SIZE_ORIG_CTXT   =  4,
-        LLOG_SIZE_REPL_CTXT   =  5,
-        LLOG_MD_ORIG_CTXT     =  6,
-        LLOG_MD_REPL_CTXT     =  7,
-        LLOG_RD1_ORIG_CTXT    =  8,
-        LLOG_RD1_REPL_CTXT    =  9,
-        LLOG_TEST_ORIG_CTXT   = 10,
-        LLOG_TEST_REPL_CTXT   = 11,
+        LLOG_CONFIG_ORIG_CTXT  =  0,
+        LLOG_CONFIG_REPL_CTXT  =  1,
+        LLOG_MDS_OST_ORIG_CTXT =  2,
+        LLOG_MDS_OST_REPL_CTXT =  3,
+        LLOG_SIZE_ORIG_CTXT    =  4,
+        LLOG_SIZE_REPL_CTXT    =  5,
+        LLOG_MD_ORIG_CTXT      =  6,
+        LLOG_MD_REPL_CTXT      =  7,
+        LLOG_RD1_ORIG_CTXT     =  8,
+        LLOG_RD1_REPL_CTXT     =  9,
+        LLOG_TEST_ORIG_CTXT    = 10,
+        LLOG_TEST_REPL_CTXT    = 11,
         LLOG_MAX_CTXTS
 };
 
@@ -589,6 +607,8 @@ struct obd_ops {
                          struct lov_stripe_md *ea, struct obd_trans_info *oti);
         int (*o_setattr)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti);
+        int (*o_setattr_async)(struct obd_export *exp, struct obdo *oa,
+                         struct lov_stripe_md *ea, struct obd_trans_info *oti);
         int (*o_getattr)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea);
         int (*o_getattr_async)(struct obd_export *exp, struct obdo *oa,
@@ -691,6 +711,11 @@ struct obd_ops {
 
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
                         int active);
+
+        /* quota methods */
+        int (*o_quotacheck)(struct obd_export *, struct obd_quotactl *);
+        int (*o_quotactl)(struct obd_export *, struct obd_quotactl *);
+
         /* 
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.

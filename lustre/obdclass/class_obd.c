@@ -395,6 +395,9 @@ void *obd_psdev = NULL;
 
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
+EXPORT_SYMBOL(qunit_cachep);
+EXPORT_SYMBOL(qunit_hash_lock);
+EXPORT_SYMBOL(qunit_hash);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(ll_set_rdonly);
 EXPORT_SYMBOL(ll_clear_rdonly);
@@ -418,6 +421,7 @@ EXPORT_SYMBOL(class_name2obd);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_find_client_obd);
+EXPORT_SYMBOL(class_find_client_notype);
 EXPORT_SYMBOL(class_devices_in_group);
 EXPORT_SYMBOL(__class_export_put);
 EXPORT_SYMBOL(class_new_export);

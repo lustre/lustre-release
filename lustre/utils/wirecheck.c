@@ -201,6 +201,38 @@ check_obd_ioobj(void)
 }
 
 void
+check_obd_quotactl(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(obd_quotactl);
+        CHECK_MEMBER(obd_quotactl, qc_cmd);
+        CHECK_MEMBER(obd_quotactl, qc_type);
+        CHECK_MEMBER(obd_quotactl, qc_id);
+        CHECK_MEMBER(obd_quotactl, qc_stat);
+        CHECK_MEMBER(obd_quotactl, qc_dqinfo);
+        CHECK_MEMBER(obd_quotactl, qc_dqblk);
+
+        BLANK_LINE();
+        CHECK_STRUCT(obd_dqinfo);
+        CHECK_MEMBER(obd_dqinfo, dqi_bgrace);
+        CHECK_MEMBER(obd_dqinfo, dqi_igrace);
+        CHECK_MEMBER(obd_dqinfo, dqi_flags);
+        CHECK_MEMBER(obd_dqinfo, dqi_valid);
+
+        BLANK_LINE();
+        CHECK_STRUCT(obd_dqblk);
+        CHECK_MEMBER(obd_dqblk, dqb_bhardlimit);
+        CHECK_MEMBER(obd_dqblk, dqb_bsoftlimit);
+        CHECK_MEMBER(obd_dqblk, dqb_curspace);
+        CHECK_MEMBER(obd_dqblk, dqb_ihardlimit);
+        CHECK_MEMBER(obd_dqblk, dqb_isoftlimit);
+        CHECK_MEMBER(obd_dqblk, dqb_curinodes);
+        CHECK_MEMBER(obd_dqblk, dqb_btime);
+        CHECK_MEMBER(obd_dqblk, dqb_itime);
+        CHECK_MEMBER(obd_dqblk, dqb_valid);
+}
+
+void
 check_niobuf_remote(void)
 {
         BLANK_LINE();
@@ -522,6 +554,7 @@ check_llog_logid(void)
         CHECK_VALUE(OST_SZ_REC);
         CHECK_VALUE(OST_RAID1_REC);
         CHECK_VALUE(MDS_UNLINK_REC);
+        CHECK_VALUE(MDS_SETATTR_REC);
         CHECK_VALUE(OBD_CFG_REC);
         CHECK_VALUE(PTL_CFG_REC);
         CHECK_VALUE(LLOG_GEN_REC);
@@ -690,6 +723,17 @@ check_llogd_conn_body(void)
 }
 
 void
+check_qunit_data(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(qunit_data);
+        CHECK_MEMBER(qunit_data, qd_id);
+        CHECK_MEMBER(qunit_data, qd_type);
+        CHECK_MEMBER(qunit_data, qd_count);
+        CHECK_MEMBER(qunit_data, qd_isblk);
+}
+
+void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -791,6 +835,8 @@ main(int argc, char **argv)
         CHECK_VALUE(OST_SAN_READ);
         CHECK_VALUE(OST_SAN_WRITE);
         CHECK_VALUE(OST_SYNC);
+        CHECK_VALUE(OST_QUOTACHECK);
+        CHECK_VALUE(OST_QUOTACTL);
         CHECK_VALUE(OST_LAST_OPC);
 
         CHECK_DEFINE(OBD_OBJECT_EOF);
@@ -811,6 +857,8 @@ main(int argc, char **argv)
         CHECK_VALUE(MDS_SYNC);
         CHECK_VALUE(MDS_DONE_WRITING);
         CHECK_VALUE(MDS_SET_INFO);
+        CHECK_VALUE(MDS_QUOTACHECK);
+        CHECK_VALUE(MDS_QUOTACTL);
         CHECK_VALUE(MDS_LAST_OPC);
 
         CHECK_VALUE(REINT_SETATTR);
@@ -861,7 +909,11 @@ main(int argc, char **argv)
 
         CHECK_VALUE(OBD_PING);
         CHECK_VALUE(OBD_LOG_CANCEL);
+        CHECK_VALUE(OBD_QC_CALLBACK);
         CHECK_VALUE(OBD_LAST_OPC);
+
+        CHECK_VALUE(QUOTA_DQACQ);
+        CHECK_VALUE(QUOTA_DQREL);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
@@ -871,6 +923,7 @@ main(int argc, char **argv)
         check_lov_mds_md_v1();
         check_obd_statfs();
         check_obd_ioobj();
+        check_obd_quotactl();
         check_niobuf_remote();
         check_ost_body();
         check_ll_fid();
@@ -909,6 +962,7 @@ main(int argc, char **argv)
         check_llog_cookie();
         check_llogd_body();
         check_llogd_conn_body();
+        check_qunit_data();
 
         printf("}\n\n");
 

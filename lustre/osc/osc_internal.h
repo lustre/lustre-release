@@ -52,6 +52,14 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 void oscc_init(struct obd_device *obd);
 void osc_wake_cache_waiters(struct client_obd *cli);
+int osc_get_quota_flag(struct client_obd *cli, unsigned int uid,
+                       unsigned int gid);
+int osc_set_quota_flag(struct client_obd *cli,
+                       unsigned int uid, unsigned int gid,
+                       obd_flag valid, obd_flag flags);
+int osc_qinfo_cleanup(struct client_obd *cli);
+int osc_qinfo_init(void);
+void osc_qinfo_exit(void);
 
 #ifdef __KERNEL__
 int lproc_osc_attach_seqstat(struct obd_device *dev);

@@ -34,12 +34,38 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_commit_confd.h>
+#include <linux/lustre_log.h>
 
 #include "mds_internal.h"
 
+/* callback function of lov to fill unlink log record */
+static int mds_log_fill_unlink_rec(struct llog_rec_hdr *rec, void *data)
+{
+        struct llog_fill_rec_data *lfd = (struct llog_fill_rec_data *)data;
+        struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
+                                                                                                                             
+        lur->lur_oid = lfd->lfd_id;
+        lur->lur_ogen = lfd->lfd_ogen;
+                                                                                                                             
+        RETURN(0);
+}
+
+/* callback function of lov to fill setattr log record */
+static int mds_log_fill_setattr_rec(struct llog_rec_hdr *rec, void *data)
+{
+        struct llog_fill_rec_data *lfd = (struct llog_fill_rec_data *)data;
+        struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
+                                                                                                                             
+        lsr->lsr_oid = lfd->lfd_id;
+        lsr->lsr_ogen = lfd->lfd_ogen;
+                                                                                                                             
+        RETURN(0);
+}
+
 static int mds_llog_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
+                        struct llog_cookie *logcookies, int numcookies,
+                        llog_fill_rec_cb_t fill_cb)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -48,7 +74,7 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_add(lctxt, rec, lsm, logcookies, numcookies);
+        rc = llog_add(lctxt, rec, lsm, logcookies, numcookies, fill_cb);
         RETURN(rc);
 }
 
@@ -89,6 +115,7 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
         struct llog_ctxt *ctxt;
+        struct llog_unlink_rec *lur;
         int rc;
         ENTRY;
 
@@ -100,16 +127,66 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
         if (rc < 0)
                 RETURN(rc);
 
-        ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
-        rc = llog_add(ctxt, NULL, lsm, logcookies,
-                      cookies_size / sizeof(struct llog_cookie));
+        /* first prepare unlink log record */
+        OBD_ALLOC(lur, sizeof(*lur));
+        if (!lur)
+                RETURN(-ENOMEM);
+        lur->lur_hdr.lrh_len = lur->lur_tail.lrt_len = sizeof(*lur);
+        lur->lur_hdr.lrh_type = MDS_UNLINK_REC;
+
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookies,
+                      cookies_size / sizeof(struct llog_cookie),
+                      mds_log_fill_unlink_rec);
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
+        OBD_FREE(lur, sizeof(*lur));
 
         RETURN(rc);
 }
 
-static struct llog_operations mds_unlink_orig_logops = {
+int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies, int cookies_size)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_stripe_md *lsm = NULL;
+        struct llog_ctxt *ctxt;
+        struct llog_setattr_rec *lsr;
+        int rc;
+        ENTRY;
+                                                                                                                             
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
+                                                                                                                             
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm,
+                          lmm, lmm_size);
+        if (rc < 0)
+                RETURN(rc);
+
+        OBD_ALLOC(lsr, sizeof(*lsr));
+        if (!lsr)
+                RETURN(-ENOMEM);
+                                                                                                                             
+        /* prepare setattr log record */
+        lsr->lsr_hdr.lrh_len = lsr->lsr_tail.lrt_len = sizeof(*lsr);
+        lsr->lsr_hdr.lrh_type = MDS_SETATTR_REC;
+        lsr->lsr_uid = inode->i_uid;
+        lsr->lsr_gid = inode->i_gid;
+                                                                                                                             
+        /* write setattr log */
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        rc = llog_add(ctxt, &lsr->lsr_hdr, lsm, logcookies,
+                      cookies_size / sizeof(struct llog_cookie),
+                      mds_log_fill_setattr_rec);
+
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
+        OBD_FREE(lsr, sizeof(*lsr));
+
+        RETURN(rc);
+}
+
+static struct llog_operations mds_ost_orig_logops = {
         lop_add:        mds_llog_origin_add,
         lop_connect:    mds_llog_origin_connect,
 };
@@ -125,8 +202,8 @@ int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
-                        &mds_unlink_orig_logops);
+        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+                        &mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
@@ -148,7 +225,7 @@ int mds_llog_finish(struct obd_device *obd, int count)
         int rc = 0, rc2 = 0;
         ENTRY;
 
-        ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         if (ctxt) 
                 rc = llog_cleanup(ctxt);
 

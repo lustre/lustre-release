@@ -215,6 +215,8 @@ struct ll_async_page {
                          llap_origin:3,
                          llap_ra_used:1;
         struct list_head llap_pglist_item;
+        /* user credit information for oss enforcement quota */
+        struct obd_ucred llap_ouc;
 };
 
 enum {

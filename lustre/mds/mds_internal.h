@@ -118,6 +118,9 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 struct dentry **dchildp, int child_mode);
 int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
                        struct lustre_handle *child_lockh);
+int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
+                          struct lov_mds_md *lmm, int lmm_size,
+                          struct llog_cookie *logcookies);
 
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
@@ -129,6 +132,9 @@ int mds_cleanup_orphans(struct obd_device *obd);
 
 /* mds/mds_log.c */
 int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies, int cookies_size);
+int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
 int mds_llog_init(struct obd_device *obd, struct obd_device *tgt, int count,
@@ -185,5 +191,43 @@ int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
+
+/* mds/quota_master.c */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+int lustre_dquot_init(void);
+void lustre_dquot_exit(void);
+int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc);
+void mds_adjust_qunit(struct obd_device *obd, uid_t cuid, gid_t cgid, 
+		      uid_t puid, gid_t pgid, int rc);
+int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_get_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl);
+#else
+static inline int lustre_dquot_init(void) { return 0; }
+static inline void lustre_dquot_exit(void) { return; }
+static inline int dqacq_handler(struct obd_device *obd, 
+                                struct qunit_data *qdata, int opc) {return 0;}
+static inline void mds_adjust_qunit(struct obd_device *obd, uid_t cuid, 
+                                    gid_t cgid, uid_t puid, 
+                                    gid_t pgid, int rc) { return; }
+static inline int init_admin_quotafiles(struct obd_device *obd, 
+                                        struct obd_quotactl *oqctl) {return 0;}
+static inline int mds_quota_on(struct obd_device *obd, 
+                               struct obd_quotactl *oqctl) { return 0; }
+static inline int mds_quota_off(struct obd_device *obd, 
+                                struct obd_quotactl *oqctl) { return 0; }
+static inline int mds_set_dqinfo(struct obd_device *obd, 
+                                 struct obd_quotactl *oqctl) { return 0; }
+static inline int mds_get_dqinfo(struct obd_device *obd, 
+                                 struct obd_quotactl *oqctl) { return 0; }
+static inline int mds_set_dqblk(struct obd_device *obd, 
+                                struct obd_quotactl *oqctl) { return 0; }
+static inline int mds_get_dqblk(struct obd_device *obd, 
+                                struct obd_quotactl *oqctl) { return 0; }
+#endif /* KERNEL_VERSION(2,5,0) */
 
 #endif /* _MDS_INTERNAL_H */

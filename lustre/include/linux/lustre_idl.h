@@ -234,6 +234,8 @@ typedef enum {
         OST_SAN_WRITE  = 15,
         OST_SYNC       = 16,
         OST_SET_INFO   = 17,
+        OST_QUOTACHECK = 18,
+        OST_QUOTACTL   = 19,
         OST_LAST_OPC
 } ost_cmd_t;
 #define OST_FIRST_OPC  OST_REPLY
@@ -251,9 +253,11 @@ typedef uint32_t        obd_gid;
 typedef uint32_t        obd_flag;
 typedef uint32_t        obd_count;
 
-#define OBD_FL_DELORPHAN    (0x00000004) /* if set in o_flags delete orphans */
-#define OBD_FL_RECREATE_OBJS (0x00000020) // recreate missing obj
-#define OBD_FL_DEBUG_CHECK  (0x00000040) /* echo client/server debug check */
+#define OBD_FL_DELORPHAN     (0x00000004) /* if set in o_flags delete orphans */
+#define OBD_FL_RECREATE_OBJS (0x00000020) /* recreate missing obj */
+#define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
+#define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
+#define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
 
 #define OBD_INLINESZ    64
 
@@ -342,9 +346,12 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLEPOCH  (0x04000000)    /* ->ost write easize is epoch */
 #define OBD_MD_FLGRANT  (0x08000000)    /* ost preallocation space grant */
 #define OBD_MD_FLDIREA  (0x10000000)    /* dir's extended attribute data */
+#define OBD_MD_FLUSRQUOTA  (0x20000000)  
+#define OBD_MD_FLGRPQUOTA  (0x40000000) /* over quota flags sent back by ost */
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM|\
-                           OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE))
+                           OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE|\
+                           OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA))
 
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
@@ -378,14 +385,14 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 
 /* ost_body.data values for OST_BRW */
 
-#define OBD_BRW_READ       0x01
-#define OBD_BRW_WRITE      0x02
-#define OBD_BRW_RWMASK     (OBD_BRW_READ | OBD_BRW_WRITE)
-#define OBD_BRW_SYNC       0x08
-#define OBD_BRW_CHECK      0x10
-#define OBD_BRW_FROM_GRANT 0x20 /* the osc manages this under llite */
-#define OBD_BRW_GRANTED    0x40 /* the ost manages this */
-#define OBD_BRW_DROP       0x80 /* drop the page after IO */
+#define OBD_BRW_READ            0x01
+#define OBD_BRW_WRITE           0x02
+#define OBD_BRW_RWMASK          (OBD_BRW_READ | OBD_BRW_WRITE)
+#define OBD_BRW_SYNC            0x08
+#define OBD_BRW_CHECK           0x10
+#define OBD_BRW_FROM_GRANT      0x20 /* the osc manages this under llite */
+#define OBD_BRW_GRANTED         0x40 /* the ost manages this */
+#define OBD_BRW_DROP            0x80 /* drop the page after IO */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -453,6 +460,8 @@ typedef enum {
         MDS_SYNC         = 44,
         MDS_DONE_WRITING = 45,
         MDS_SET_INFO     = 46,
+        MDS_QUOTACHECK   = 47,
+        MDS_QUOTACTL     = 48,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -528,6 +537,49 @@ struct mds_body {
 
 extern void lustre_swab_mds_body (struct mds_body *b);
 
+/* XXX: same as if_dqinfo struct in kernel */
+struct obd_dqinfo {
+        __u64 dqi_bgrace;
+        __u64 dqi_igrace;
+        __u32 dqi_flags;
+        __u32 dqi_valid;
+};
+
+/* XXX: same as if_dqblk struct in kernel, plus one padding */
+struct obd_dqblk {
+        __u64 dqb_bhardlimit;
+        __u64 dqb_bsoftlimit;
+        __u64 dqb_curspace;
+        __u64 dqb_ihardlimit;
+        __u64 dqb_isoftlimit;
+        __u64 dqb_curinodes;
+        __u64 dqb_btime;
+        __u64 dqb_itime;
+        __u32 dqb_valid;
+        __u32 padding;
+};
+
+#define Q_QUOTACHECK    0x800100
+#define Q_INITQUOTA     0x800101        /* init slave limits */
+#define Q_GETOINFO      0x800102        /* get obd quota info */
+#define Q_GETOQUOTA     0x800103        /* get obd quotas */
+
+#define Q_TYPESET(oqc, type) \
+        ((oqc)->qc_type == type || (oqc)->qc_type == UGQUOTA)
+
+#define Q_GETOCMD(oqc) \
+        ((oqc)->qc_cmd == Q_GETOINFO || (oqc)->qc_cmd == Q_GETOQUOTA)
+
+struct obd_quotactl {
+        __u32                   qc_cmd;
+        __u32                   qc_type;
+        __u32                   qc_id;
+        __u32                   qc_stat;
+        struct obd_dqinfo       qc_dqinfo;
+        struct obd_dqblk        qc_dqblk;
+};
+
+extern void lustre_swab_obd_quotactl(struct obd_quotactl *q);
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
@@ -826,6 +878,7 @@ typedef enum {
 typedef enum {
         OBD_PING = 400,
         OBD_LOG_CANCEL,
+        OBD_QC_CALLBACK,
         OBD_LAST_OPC
 } obd_cmd_t;
 #define OBD_FIRST_OPC OBD_PING
@@ -857,6 +910,7 @@ typedef enum {
         OST_SZ_REC       = LLOG_OP_MAGIC | (OST_SAN_WRITE << 8),
         OST_RAID1_REC    = LLOG_OP_MAGIC | ((OST_SAN_WRITE + 1) << 8),
         MDS_UNLINK_REC   = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
+        MDS_SETATTR_REC  = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_SETATTR,
         OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
         PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000,
         LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
@@ -919,6 +973,16 @@ struct llog_unlink_rec {
         obd_count               lur_ogen;
         __u32                   padding;
         struct llog_rec_tail    lur_tail;
+} __attribute__((packed));
+
+struct llog_setattr_rec {
+        struct llog_rec_hdr     lsr_hdr;
+        obd_id                  lsr_oid;
+        obd_count               lsr_ogen;
+        __u32                   lsr_uid;
+        __u32                   lsr_gid;
+        __u32                   padding;
+        struct llog_rec_tail    lsr_tail;
 } __attribute__((packed));
 
 struct llog_size_change_rec {
@@ -1026,5 +1090,19 @@ static inline struct ll_fid *obdo_fid(struct obdo *oa)
         return (struct ll_fid *)(oa->o_inline + sizeof(struct lustre_handle) +
                                  sizeof(struct llog_cookie));
 }
+
+/* qutoa */
+struct qunit_data {
+	__u32 qd_id;
+	__u32 qd_type;
+	__u32 qd_count;
+	__u32 qd_isblk;	/* indicating if it's block quota */
+};
+extern void lustre_swab_qdata(struct qunit_data *d);
+
+typedef enum {
+        QUOTA_DQACQ     = 601,
+        QUOTA_DQREL     = 602,
+} quota_cmd_t;
 
 #endif

@@ -347,7 +347,8 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
                 mdc_pack_fid(obdo_fid(oa), inode->i_ino, 0, inode->i_mode);
                 oa->o_easize = ll_i2info(inode)->lli_io_epoch;
 
-                valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+                valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                               OBD_MD_FLUID | OBD_MD_FLGID;
         }
 
         obdo_from_inode(oa, inode, valid_flags);
@@ -368,11 +369,26 @@ static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         EXIT;
 }
 
+static void ll_ap_get_ucred(void *data, struct obd_ucred *ouc)
+{
+        struct ll_async_page *llap;
+
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) {
+                EXIT;
+                return;
+        }
+
+        memcpy(ouc, &llap->llap_ouc, sizeof(*ouc));
+        EXIT;
+}
+
 static struct obd_async_page_ops ll_async_page_ops = {
         .ap_make_ready =        ll_ap_make_ready,
         .ap_refresh_count =     ll_ap_refresh_count,
         .ap_fill_obdo =         ll_ap_fill_obdo,
         .ap_completion =        ll_ap_completion,
+        .ap_get_ucred =         ll_ap_get_ucred,
 };
 
 struct ll_async_page *llap_cast_private(struct page *page)
@@ -520,6 +536,7 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
                 RETURN(ERR_PTR(-ENOMEM));
         llap->llap_magic = LLAP_MAGIC;
         llap->llap_cookie = (void *)llap + size_round(sizeof(*llap));
+
         rc = obd_prep_async_page(exp, ll_i2info(inode)->lli_smd, NULL, page,
                                  (obd_off)page->index << PAGE_SHIFT,
                                  &ll_async_page_ops, llap, &llap->llap_cookie);
@@ -624,6 +641,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct obd_export *exp;
         struct ll_async_page *llap;
+        struct ll_uctxt ctxt;
         loff_t size;
         int rc = 0;
         ENTRY;
@@ -642,6 +660,13 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
                 RETURN(-EINVAL);
+
+        /* set user credit information for this page */
+        llap->llap_ouc.ouc_fsuid = current->fsuid;
+        llap->llap_ouc.ouc_fsgid = current->fsgid;
+        llap->llap_ouc.ouc_cap = current->cap_effective;
+        ll_i2uctxt(&ctxt, inode, NULL);
+        llap->llap_ouc.ouc_suppgid1 = ctxt.gid1;
 
         /* queue a write for some time in the future the first time we
          * dirty the page */

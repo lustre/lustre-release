@@ -27,20 +27,28 @@
 #include <linux/kmod.h>   /* for request_module() */
 #include <linux/module.h>
 #include <linux/obd_class.h>
+#include <linux/lustre_mds.h>
+#include <linux/obd_ost.h>
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
+#include <linux/quota.h>
 #else
 #include <liblustre.h>
 #include <linux/obd_class.h>
 #include <linux/obd.h>
 #endif
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_quota.h>
 
 extern struct list_head obd_types;
 static spinlock_t obd_types_lock = SPIN_LOCK_UNLOCKED;
 kmem_cache_t *obdo_cachep = NULL;
 kmem_cache_t *import_cachep = NULL;
+
+kmem_cache_t *qunit_cachep = NULL;
+struct list_head qunit_hash[NR_DQHASH];
+spinlock_t qunit_hash_lock = SPIN_LOCK_UNLOCKED;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
@@ -309,6 +317,18 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
         return NULL;
 }
 
+struct obd_device *class_find_client_notype(struct obd_uuid *tgt_uuid,
+                                            struct obd_uuid *grp_uuid)
+{
+        struct obd_device *obd;
+
+        obd = class_find_client_obd(tgt_uuid, LUSTRE_MDC_NAME, NULL);
+        if (!obd)
+                obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME,
+                                            grp_uuid);
+        return obd;
+}
+
 /* Iterate the obd_device list looking devices have grp_uuid. Start
    searching at *next, and if a device is found, the next index to look
    at is saved in *next. If next is NULL, then the first matching device
@@ -341,6 +361,23 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
         return NULL;
 }
 
+static void obd_cleanup_qunit_cache(void)
+{
+        int i;
+        ENTRY;
+
+        spin_lock(&qunit_hash_lock);
+        for (i = 0; i < NR_DQHASH; i++)
+                LASSERT(list_empty(qunit_hash + i));
+        spin_unlock(&qunit_hash_lock);
+        
+        if (qunit_cachep) {
+                LASSERTF(kmem_cache_destroy(qunit_cachep) == 0,
+                         "Cannot destroy ll_qunit_cache\n");
+                qunit_cachep = NULL;
+        }
+        EXIT;
+}
 
 void obd_cleanup_caches(void)
 {
@@ -355,12 +392,34 @@ void obd_cleanup_caches(void)
                          "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
+        obd_cleanup_qunit_cache();
         EXIT;
+}
+
+static int obd_init_qunit_cache(void)
+{
+        int i;
+        ENTRY;
+        
+        LASSERT(qunit_cachep == NULL);
+        qunit_cachep = kmem_cache_create("ll_qunit_cache", 
+                                         sizeof(struct lustre_qunit),
+                                         0, 0, NULL, NULL);
+        if (!qunit_cachep)
+                RETURN(-ENOMEM);
+
+        spin_lock(&qunit_hash_lock);
+        for (i = 0; i < NR_DQHASH; i++)
+                INIT_LIST_HEAD(qunit_hash + i);
+        spin_unlock(&qunit_hash_lock);
+        RETURN(0);
 }
 
 int obd_init_caches(void)
 {
+        int rc = 0;
         ENTRY;
+
         LASSERT(obdo_cachep == NULL);
         obdo_cachep = kmem_cache_create("ll_obdo_cache", sizeof(struct obdo),
                                         0, 0, NULL, NULL);
@@ -373,6 +432,10 @@ int obd_init_caches(void)
                                           0, 0, NULL, NULL);
         if (!import_cachep)
                 GOTO(out, -ENOMEM);
+
+        rc = obd_init_qunit_cache();
+        if (rc)
+                GOTO(out, rc);
 
         RETURN(0);
  out:

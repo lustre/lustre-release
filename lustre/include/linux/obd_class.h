@@ -67,6 +67,8 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid, 
                                           char * typ_name,
                                           struct obd_uuid *grp_uuid);
+struct obd_device * class_find_client_notype(struct obd_uuid *tgt_uuid,
+                                             struct obd_uuid *grp_uuid);
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, 
                                            int *next);
 
@@ -464,6 +466,21 @@ static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
         OBD_COUNTER_INCREMENT(exp->exp_obd, setattr);
 
         rc = OBP(exp->exp_obd, setattr)(exp, obdo, ea, oti);
+        RETURN(rc);
+}
+
+static inline int obd_setattr_async(struct obd_export *exp, 
+                                    struct obdo *obdo,
+                                    struct lov_stripe_md *ea,
+                                    struct obd_trans_info *oti)
+{
+        int rc;
+        ENTRY;
+                                                                                                                             
+        EXP_CHECK_OP(exp, setattr_async);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, setattr_async);
+                                                                                                                             
+        rc = OBP(exp->exp_obd, setattr_async)(exp, obdo, ea, oti);
         RETURN(rc);
 }
 
@@ -983,6 +1000,33 @@ static inline int obd_notify(struct obd_device *obd,
         return OBP(obd, notify)(obd, watched, active);
 }
 
+static inline int obd_quotacheck(struct obd_export *exp,
+                                 struct obd_quotactl *oqctl)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, quotacheck);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, quotacheck);
+
+        rc = OBP(exp->exp_obd, quotacheck)(exp, oqctl);
+        RETURN(rc);
+} 
+
+static inline int obd_quotactl(struct obd_export *exp,
+                               struct obd_quotactl *oqctl)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, quotactl);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, quotactl);
+
+        rc = OBP(exp->exp_obd, quotactl)(exp, oqctl);
+        RETURN(rc);
+} 
+
+
 static inline int obd_register_observer(struct obd_device *obd,
                                         struct obd_device *observer)
 {
@@ -1009,6 +1053,11 @@ static inline struct obdo *obdo_alloc(void)
 
         return oa;
 }
+
+/* qunit hash stuff */
+extern kmem_cache_t *qunit_cachep;
+extern struct list_head qunit_hash[];
+extern spinlock_t qunit_hash_lock;
 
 static inline void obdo_free(struct obdo *oa)
 {
@@ -1042,4 +1091,5 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal);
 int class_del_uuid (char *uuid);
 void class_init_uuidlist(void);
 void class_exit_uuidlist(void);
+
 #endif /* __LINUX_OBD_CLASS_H */

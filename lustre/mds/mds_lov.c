@@ -529,7 +529,7 @@ int mds_lov_synchronize(void *data)
         if (rc != 0)
                 RETURN(rc);
 
-        rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
+        rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
                           obd->u.mds.mds_lov_desc.ld_tgt_count,
                           NULL, NULL, uuid);
         if (rc != 0) {
@@ -597,8 +597,8 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
                 CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
                       obd->obd_name, uuid->uuid);
         } else {
-                LASSERT(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT) != NULL);
-
+                LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
+                
                 rc = mds_lov_start_synchronize(obd, uuid);
         }
         RETURN(rc);

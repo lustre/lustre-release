@@ -792,7 +792,8 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
 
 int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                     int objcount, struct obd_ioobj *obj, int niocount,
-                    struct niobuf_local *res, struct obd_trans_info *oti,int rc)
+                    struct niobuf_local *res, struct obd_trans_info *oti,
+                    int rc)
 {
         if (cmd == OBD_BRW_WRITE)
                 return filter_commitrw_write(exp, oa, objcount, obj, niocount,

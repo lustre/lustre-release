@@ -363,6 +363,64 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
         l_dput(de);
 }
 
+int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
+                          struct lov_mds_md *lmm, int lmm_size,
+                          struct llog_cookie *logcookies)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_stripe_md *lsm = NULL;
+        struct obd_trans_info oti = { 0 };
+        struct obdo *oa = NULL;
+        int  cleanup_phase = 0, rc = 0;
+        ENTRY;
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OST_SETATTR))
+                GOTO(cleanup, rc);
+
+        /* first get memory EA */
+        oa = obdo_alloc();
+        if (!oa)
+                RETURN(-ENOMEM);
+
+        LASSERT(lmm);
+
+        cleanup_phase = 1;
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
+        if (rc < 0) {
+                CERROR("Error unpack md %p\n", lmm);
+                GOTO(cleanup, rc);
+        }
+        
+        cleanup_phase = 2;
+        /* then fill oa */
+        oa->o_id = lsm->lsm_object_id;
+        oa->o_uid = inode->i_uid;
+        oa->o_gid = inode->i_gid;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
+        if (logcookies) {
+                oa->o_valid |= OBD_MD_FLCOOKIE;
+                oti.oti_logcookies = logcookies;
+        }
+                                                                                                                             
+        /* do setattr from mds to ost asynchronously */
+        rc = obd_setattr_async(mds->mds_osc_exp, oa, lsm, &oti);
+        if (rc)
+                CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64" on ost error "
+                       "%d\n", lsm->lsm_object_id, rc);
+cleanup:
+        switch(cleanup_phase) {
+        case 2:
+                obd_free_memmd(mds->mds_osc_exp, &lsm);
+        case 1:
+                obdo_free(oa);
+        case 0:
+                if (logcookies)
+                        OBD_FREE(logcookies, mds->mds_max_cookiesize);
+        }
+                                                                                                                             
+        RETURN(rc);
+}
+
 /* In the raw-setattr case, we lock the child inode.
  * In the write-back case or if being called from open, the client holds a lock
  * already.
@@ -380,7 +438,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         struct lustre_handle lockh;
         void *handle = NULL;
         struct mds_logcancel_data *mlcd = NULL;
+        struct lov_mds_md *lmm = NULL;
+        struct llog_cookie *logcookies = NULL;
+        int lmm_size = 0, need_lock = 1;
         int rc = 0, cleanup_phase = 0, err, locked = 0;
+        uid_t child_uid = 0;
+        gid_t child_gid = 0;
         ENTRY;
 
         LASSERT(offset == 0);
@@ -408,13 +471,37 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         cleanup_phase = 1;
         inode = de->d_inode;
         LASSERT(inode);
+
+        /* save uid/gid for quota acq/rel */
+        child_uid = inode->i_uid;
+        child_gid = inode->i_gid;
+
         if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
-            rec->ur_eadata != NULL)
+            rec->ur_eadata != NULL) {
                 down(&inode->i_sem);
+                need_lock = 0;
+        }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb);
 
-        handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
+        /* start a log jounal handle if needed*/
+        if (S_ISREG(inode->i_mode) &&
+            rec->ur_iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
+                lmm_size = mds->mds_max_mdsize;
+                OBD_ALLOC(lmm, lmm_size);
+                if (lmm == NULL)
+                        GOTO(cleanup, rc = -ENOMEM);
+                
+                cleanup_phase = 2;
+                rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock);
+                if (rc < 0) 
+                        GOTO(cleanup, rc);
+
+                handle = fsfilt_start_log(obd, inode, FSFILT_OP_SETATTR, NULL,
+                                          le32_to_cpu(lmm->lmm_stripe_count));
+        } else {
+                handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
+        }
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
@@ -429,8 +516,22 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (rec->ur_iattr.ia_valid & ATTR_ATTR_FLAG)    /* ioctl */
                 rc = fsfilt_iocontrol(obd, inode, NULL, EXT3_IOC_SETFLAGS,
                                       (long)&rec->ur_iattr.ia_attr_flags);
-        else                                            /* setattr */
+        else {                                            /* setattr */
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
+                /* journal chown/chgrp in llog, just like unlink */
+                if (rc == 0 && S_ISREG(inode->i_mode) &&
+                    rec->ur_iattr.ia_valid & (ATTR_UID | ATTR_GID) && lmm_size){
+                        OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
+                        if (logcookies == NULL)
+                                GOTO(cleanup, rc = -ENOMEM);
+                        if (mds_log_op_setattr(obd, inode, lmm, lmm_size,
+                                               logcookies,
+                                               mds->mds_max_cookiesize) <= 0) {
+                                OBD_FREE(logcookies, mds->mds_max_cookiesize);
+                                logcookies = NULL;
+                        }
+                }
+        }
 
         if (rc == 0 && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
             rec->ur_eadata != NULL) {
@@ -501,7 +602,13 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 fsfilt_add_journal_cb(req->rq_export->exp_obd, 0, handle,
                                       mds_cancel_cookies_cb, mlcd);
         err = mds_finish_transno(mds, inode, handle, req, rc, 0);
+        /* do mds to ost setattr if needed */
+        if (!rc && !err && lmm_size) 
+                mds_osc_setattr_async(obd, inode, lmm, lmm_size, logcookies);
+
         switch (cleanup_phase) {
+        case 2:
+                OBD_FREE(lmm, mds->mds_max_mdsize);
         case 1:
                 if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
                     rec->ur_eadata != NULL)
@@ -523,6 +630,13 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 rc = err;
 
         req->rq_status = rc;
+
+        /* trigger dqrel/dqacq for original owner and new owner */
+        if (rec->ur_iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
+                mds_adjust_qunit(obd, rec->ur_iattr.ia_uid, 
+                                 rec->ur_iattr.ia_gid, 0, 0, rc);
+                mds_adjust_qunit(obd, child_uid, child_gid, 0, 0, rc);
+        }
         return 0;
 }
 
@@ -563,6 +677,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct lustre_handle lockh;
         int rc = 0, err, type = rec->ur_mode & S_IFMT, cleanup_phase = 0;
         int created = 0;
+        uid_t parent_uid = 0;
+        gid_t parent_gid = 0;
         struct dentry_params dp;
         ENTRY;
 
@@ -766,9 +882,14 @@ cleanup:
                                 CERROR("unlink in error path: %d\n", err);
                         break;
                 }
+        } else if (created) {
+                /* save uid/gid of create inode and parent */
+                parent_uid = dir->i_uid;
+                parent_gid = dir->i_gid;
         } else {
                 rc = err;
         }
+
         switch (cleanup_phase) {
         case 2: /* child dentry */
                 l_dput(dchild);
@@ -786,6 +907,10 @@ cleanup:
                 LBUG();
         }
         req->rq_status = rc;
+        
+        /* trigger dqacq on the owner of child and parent */
+        mds_adjust_qunit(obd, current->fsuid, current->fsgid, 
+                         parent_uid, parent_gid, rc);
         return 0;
 }
 
@@ -1241,6 +1366,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct lustre_handle parent_lockh, child_lockh, child_reuse_lockh;
         void *handle = NULL;
         int rc = 0, cleanup_phase = 0;
+        uid_t child_uid = 0, parent_uid = 0;
+        gid_t child_gid = 0, parent_gid = 0;
         ENTRY;
 
         LASSERT(offset == 0 || offset == 2);
@@ -1270,6 +1397,12 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -ENOENT);
         }
 
+        /* save uid/gid for quota acquire/release */
+        child_uid = child_inode->i_uid;
+        child_gid = child_inode->i_gid;
+        parent_uid = dparent->d_inode->i_uid;
+        parent_gid = dparent->d_inode->i_gid;
+        
         cleanup_phase = 2; /* dchild has a lock */
 
         /* We have to do these checks ourselves, in case we are making an
@@ -1440,6 +1573,9 @@ cleanup:
                 LBUG();
         }
         req->rq_status = rc;
+
+        /* trigger dqrel on the owner of child and parent */
+        mds_adjust_qunit(obd, child_uid, child_gid, parent_uid, parent_gid, rc);
         return 0;
 }
 

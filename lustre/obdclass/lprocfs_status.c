@@ -607,7 +607,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LASSERT(obd->obd_proc_entry != NULL);
         LASSERT(obd->obd_cntr_base == 0);
 
-        num_stats = 1 + OBD_COUNTER_OFFSET(notify) +
+        num_stats = 1 + OBD_COUNTER_OFFSET(quotactl) +
                 num_private_stats;
         stats = lprocfs_alloc_stats(num_stats);
         if (stats == NULL)
@@ -634,6 +634,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, create);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setattr);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, setattr_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, brw);
@@ -667,6 +668,8 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, import_event);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, notify);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotacheck);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
 
         for (i = num_private_stats; i < num_stats; i++) {
                 /* If this LBUGs, it is likely that an obd

@@ -31,6 +31,8 @@
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/version.h>
+#include <linux/sched.h>
+#include <linux/quotaops.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
 #endif
@@ -510,7 +512,7 @@ int mds_fs_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
-        int rc = 0;
+        int i, rc = 0;
 
         if (obd->obd_fail)
                 CERROR("%s: shutting down for failover; client state will"
@@ -544,9 +546,21 @@ int mds_fs_cleanup(struct obd_device *obd)
                 l_dput(mds->mds_pending_dir);
                 mds->mds_pending_dir = NULL;
         }
+        
+        /* close admin quota files */
+        down(&mds->mds_quota_info.qi_sem);
+        for (i = 0; i < MAXQUOTAS; i++) {
+		if (mds->mds_quota_info.qi_files[i]) {
+                        filp_close(mds->mds_quota_info.qi_files[i], 0);
+                        mds->mds_quota_info.qi_files[i] = NULL;
+                }
+	}
+        up(&mds->mds_quota_info.qi_sem);
+
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
+        DQUOT_OFF(mds->mds_sb);
 
         return rc;
 }
@@ -565,13 +579,18 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         struct obd_run_ctxt saved;
         char fidname[LL_FID_NAMELEN];
         void *handle;
+        struct obd_ucred ucred;
         int rc = 0, err, namelen;
         ENTRY;
 
-        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+        /* the owner of object file should always be root */
+        memset(&ucred, 0, sizeof(ucred));
+        ucred.ouc_cap = current->cap_effective | CAP_SYS_RESOURCE;
+        
+        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
-        filp = filp_open(fidname, O_CREAT | O_EXCL, 0644);
+        filp = filp_open(fidname, O_CREAT | O_EXCL, 0666);
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);
                 if (rc == -EEXIST) {
@@ -632,7 +651,7 @@ out_close:
                         rc = err;
         }
 out_pop:
-        pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, &ucred);
         RETURN(rc);
 }
 
@@ -643,13 +662,16 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         struct obd_device *obd = exp->exp_obd;
         struct obd_run_ctxt saved;
+        struct obd_ucred ucred;
         char fidname[LL_FID_NAMELEN];
         struct dentry *de;
         void *handle;
         int err, namelen, rc = 0;
         ENTRY;
-
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        
+        memset(&ucred, 0, sizeof(ucred));
+        ucred.ouc_cap = current->cap_effective | CAP_SYS_RESOURCE;
+        push_ctxt(&saved, &obd->obd_ctxt, &ucred);
 
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
@@ -688,6 +710,7 @@ out_dput:
         if (de != NULL)
                 l_dput(de);
         up(&parent_inode->i_sem);
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+
+        pop_ctxt(&saved, &obd->obd_ctxt, &ucred);
         RETURN(rc);
 }

@@ -1142,6 +1142,16 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 rc = llog_origin_handle_cancel(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
+        case OBD_QC_CALLBACK:
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_QC_CALLBACK_NET, 0);
+                rc = target_handle_qc_callback(req);
+                ldlm_callback_reply(req, rc);
+                RETURN(0);
+        case QUOTA_DQACQ:
+        case QUOTA_DQREL:
+                /* reply in handler */
+                rc = target_handle_dqacq_callback(req);
+                RETURN(0);
         case LLOG_ORIGIN_HANDLE_CREATE:
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_create(req);

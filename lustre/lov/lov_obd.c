@@ -1001,6 +1001,55 @@ static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
         RETURN(rc);
 }
 
+static int lov_setattr_async(struct obd_export *exp, struct obdo *src_oa,
+                       struct lov_stripe_md *lsm, struct obd_trans_info *oti)
+{
+        struct lov_obd *lov;
+        struct lov_oinfo *loi = NULL;
+        int rc = 0, err;
+        obd_id objid = src_oa->o_id;
+        int i;
+        ENTRY;
+                                                                                                                             
+        ASSERT_LSM_MAGIC(lsm);
+        LASSERT(oti);
+        if (src_oa->o_valid & OBD_MD_FLCOOKIE)
+                LASSERT(oti->oti_logcookies);
+                                                                                                                             
+        if (!exp || !exp->exp_obd)
+                RETURN(-ENODEV);
+
+        /* support OBD_MD_FLUID, OBD_MD_FLGID and OBD_MD_FLCOOKIE now */
+        LASSERT(!(src_oa->o_valid &  ~(OBD_MD_FLID | OBD_MD_FLUID |
+                                       OBD_MD_FLGID| OBD_MD_FLCOOKIE)));
+        lov = &exp->exp_obd->u.lov;
+
+        loi = lsm->lsm_oinfo;
+        for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
+                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+                        goto next;
+                }
+
+                src_oa->o_id = loi->loi_id;
+                /* do chown/chgrp on OST asynchronously */
+                err = obd_setattr_async(lov->tgts[loi->loi_ost_idx].ltd_exp,
+                                        src_oa, NULL, oti);
+                if (err) {
+                        CERROR("error: setattr objid "LPX64" subobj "
+                               LPX64" on OST idx %d: rc = %d\n",
+                               objid, src_oa->o_id, i, err);
+                        if (!rc)
+                                rc = err;
+                }
+        next:
+                if (src_oa->o_valid & OBD_MD_FLCOOKIE)
+                        oti->oti_logcookies++;
+        }
+
+        RETURN(rc);
+}
+
 /* FIXME: maybe we'll just make one node the authoritative attribute node, then
  * we can send this 'punch' to just the authoritative node and the nodes
  * that the punch will affect. */
@@ -1253,11 +1302,19 @@ static void lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         lap->lap_caller_ops->ap_completion(lap->lap_caller_data, cmd, oa, rc);
 }
 
+static void lov_ap_get_ucred(void *data, struct obd_ucred *ouc)
+{
+        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+
+        lap->lap_caller_ops->ap_get_ucred(lap->lap_caller_data, ouc);
+}
+
 static struct obd_async_page_ops lov_async_page_ops = {
         .ap_make_ready =        lov_ap_make_ready,
         .ap_refresh_count =     lov_ap_refresh_count,
         .ap_fill_obdo =         lov_ap_fill_obdo,
         .ap_completion =        lov_ap_completion,
+        .ap_get_ucred =         lov_ap_get_ucred,
 };
 
 int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -2093,6 +2150,64 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 #endif
 
+static int lov_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct lov_obd *lov = &obd->u.lov;
+        int i, rc = 0;
+        ENTRY;
+
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                int err;
+
+                if (!lov->tgts[i].active) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", i);
+                        continue;
+                }
+
+                err = obd_quotacheck(lov->tgts[i].ltd_exp, oqctl);
+                if (err) {
+                        if (lov->tgts[i].active && !rc)
+                                rc = err;
+                        continue;
+                }
+        }
+
+        RETURN(rc);
+}
+
+static int lov_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct lov_obd *lov = &obd->u.lov;
+        __u64 curspace = oqctl->qc_dqblk.dqb_curspace;
+        int i, rc = 0;
+        ENTRY;
+
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                int err;
+
+                if (!lov->tgts[i].active) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", i);
+                        continue;
+                }
+
+                err = obd_quotactl(lov->tgts[i].ltd_exp, oqctl);
+                if (err) {
+                        if (lov->tgts[i].active && !rc)
+                                rc = err;
+                        continue;
+                }
+
+                if (oqctl->qc_cmd == Q_GETQUOTA)
+                        curspace += oqctl->qc_dqblk.dqb_curspace;
+        }
+
+        if (oqctl->qc_cmd == Q_GETQUOTA)
+                oqctl->qc_dqblk.dqb_curspace = curspace;
+        RETURN(rc);
+}
+
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,
         .o_setup               = lov_setup,
@@ -2108,6 +2223,7 @@ struct obd_ops lov_obd_ops = {
         .o_getattr             = lov_getattr,
         .o_getattr_async       = lov_getattr_async,
         .o_setattr             = lov_setattr,
+        .o_setattr_async       = lov_setattr_async,
         .o_brw                 = lov_brw,
         .o_brw_async           = lov_brw_async,
         .o_prep_async_page     = lov_prep_async_page,
@@ -2131,6 +2247,8 @@ struct obd_ops lov_obd_ops = {
         .o_llog_init           = lov_llog_init,
         .o_llog_finish         = lov_llog_finish,
         .o_notify              = lov_notify,
+        .o_quotacheck          = lov_quotacheck,
+        .o_quotactl            = lov_quotactl,
 };
 
 int __init lov_init(void)

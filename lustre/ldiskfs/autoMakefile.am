@@ -6,7 +6,7 @@ endif
 
 ldiskfs_linux_headers := $(addprefix linux/,$(subst ext3,ldiskfs,$(notdir $(linux_headers))))
 
-$(filter %.c,$(ldiskfs_sources)): sources $(ldiskfs_linux_headers) $(filter %.h,$(ldiskfs_sources))
+$(filter %.c,$(ldiskfs_patched_sources)): sources $(ldiskfs_linux_headers) $(filter %.h,$(ldiskfs_patched_sources))
 
 ldiskfs_sed_flags = \
 	-e "s/dx_hash_info/ext3_dx_hash_info/g" \
@@ -71,7 +71,9 @@ foo-check:
 	@echo "ldiskfs_LDADD: $(ldiskfs_LDADD)"
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-CLEANFILES = sources *.c *.h
+CLEANFILES = sources $(notdir $(linux_headers) $(ext3_headers) $(ext3_sources) $(new_sources) $(new_headers))
+
+EXTRA_DIST := lustre_quota_fmt.c lustre_quota_fmt.h quotafmt_test.c
 
 clean: clean-am
 	rm -rf linux linux-stage

@@ -724,5 +724,4 @@ int liblustre_wait_event(int timeout);
 #include <linux/lustre_export.h>
 #include <linux/lustre_net.h>
 
-
 #endif

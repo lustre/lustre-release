@@ -78,6 +78,13 @@ struct fsfilt_operations {
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
         int     (* fs_setup)(struct super_block *sb);
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
+        int     (* fs_quotacheck)(struct super_block *sb,
+                                  struct obd_quotactl *oqctl);
+        int     (* fs_quotactl)(struct super_block *sb,
+                                struct obd_quotactl *oqctl);
+        int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type, 
+                                 int cmd);
+        int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -288,6 +295,33 @@ static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
 static inline int fsfilt_sync(struct obd_device *obd, struct super_block *sb)
 {
         return obd->obd_fsops->fs_sync(sb);
+}
+
+static inline int fsfilt_quotacheck(struct obd_device *obd,
+                                    struct super_block *sb,
+                                    struct obd_quotactl *oqctl)
+{
+       return obd->obd_fsops->fs_quotacheck(sb, oqctl);
+}
+
+static inline int fsfilt_quotactl(struct obd_device *obd,
+                                  struct super_block *sb,
+                                  struct obd_quotactl *oqctl)
+{
+       return obd->obd_fsops->fs_quotactl(sb, oqctl);
+}
+
+static inline int fsfilt_quotainfo(struct obd_device *obd,
+                                   struct lustre_quota_info *lqi,
+                                   int type, int cmd)
+{
+        return obd->obd_fsops->fs_quotainfo(lqi, type, cmd);
+}
+
+static inline int fsfilt_dquot(struct obd_device *obd,
+                               struct lustre_dquot *dquot, int cmd)
+{
+        return obd->obd_fsops->fs_dquot(dquot, cmd);
 }
 
 static inline int fsfilt_map_inode_pages(struct obd_device *obd,

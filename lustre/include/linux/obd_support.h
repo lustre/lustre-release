@@ -87,6 +87,9 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_PAUSE_OPEN          0x129
 #define OBD_FAIL_MDS_STATFS_LCW_SLEEP    0x12a
 #define OBD_FAIL_MDS_OPEN_CREATE         0x12b
+#define OBD_FAIL_MDS_OST_SETATTR         0x12c
+#define OBD_FAIL_MDS_QUOTACHECK_NET      0x12d
+#define OBD_FAIL_MDS_QUOTACTL_NET        0x12e
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -112,6 +115,8 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_OST_ENOSPC              0x215
 #define OBD_FAIL_OST_EROFS               0x216
 #define OBD_FAIL_OST_ENOENT              0x217
+#define OBD_FAIL_OST_QUOTACHECK_NET      0x218
+#define OBD_FAIL_OST_QUOTACTL_NET        0x219
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -145,6 +150,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
 #define OBD_FAIL_OBD_LOGD_NET            0x602
+#define OBD_FAIL_OBD_QC_CALLBACK_NET     0x603
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701

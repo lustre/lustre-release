@@ -58,34 +58,31 @@
  * Unset cookies should be all-zero (which will never occur naturally). */
 static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
+                        struct llog_cookie *logcookies, int numcookies,
+                        llog_fill_rec_cb_t fill_cb)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
         struct lov_oinfo *loi;
-        struct llog_unlink_rec *lur;
         int i, rc = 0;
         ENTRY;
-
-        OBD_ALLOC(lur, sizeof(*lur));
-        if (!lur)
-                RETURN(-ENOMEM);
-        lur->lur_hdr.lrh_len = lur->lur_tail.lrt_len = sizeof(*lur);
-        lur->lur_hdr.lrh_type = MDS_UNLINK_REC;
 
         LASSERT(logcookies && numcookies >= lsm->lsm_stripe_count);
 
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
                 struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
+                struct llog_fill_rec_data data;
 
-                lur->lur_oid = loi->loi_id;
-                lur->lur_ogen = loi->loi_gr;
-                rc += llog_add(cctxt, &lur->lur_hdr, NULL, logcookies + rc,
-                                numcookies - rc);
+                /* fill mds unlink/setattr log record */
+                data.lfd_id = loi->loi_id;
+                data.lfd_ogen = loi->loi_gr;
+                fill_cb(rec, &data);
+
+                rc += llog_add(cctxt, rec, NULL, logcookies + rc,
+                                numcookies - rc, fill_cb);
 
         }
-        OBD_FREE(lur, sizeof(*lur));
 
         RETURN(rc);
 }
@@ -155,7 +152,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
         RETURN(rc);
 }
 
-static struct llog_operations lov_unlink_orig_logops = {
+static struct llog_operations lov_mds_ost_orig_logops = {
         lop_add: lov_llog_origin_add,
         lop_connect: lov_llog_origin_connect
 };
@@ -172,8 +169,8 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int i, rc = 0;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
-                        &lov_unlink_orig_logops);
+        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+                        &lov_mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
@@ -205,7 +202,7 @@ int lov_llog_finish(struct obd_device *obd, int count)
 
         /* cleanup our llogs only if the ctxts have been setup
          * (client lov doesn't setup, mds lov does). */
-        ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         if (ctxt)
                 rc = llog_cleanup(ctxt);
 

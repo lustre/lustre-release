@@ -157,6 +157,7 @@ EXPORT_SYMBOL(lustre_swab_ost_last_id);
 EXPORT_SYMBOL(lustre_swab_ost_lvb);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
 EXPORT_SYMBOL(lustre_swab_mds_body);
+EXPORT_SYMBOL(lustre_swab_obd_quotactl);
 EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);
 EXPORT_SYMBOL(lustre_swab_mds_rec_link);
@@ -175,6 +176,7 @@ EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
+EXPORT_SYMBOL(lustre_swab_qdata);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);

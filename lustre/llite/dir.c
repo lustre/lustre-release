@@ -367,6 +367,27 @@ done:
         RETURN(rc);
 }
 
+#define Q_CONV(tgt, src, member) (tgt)->member = (src)->member
+
+#define QCTLCONV(tgt, src)                             \
+do {                                                   \
+        Q_CONV(tgt, src, qc_cmd);                      \
+        Q_CONV(tgt, src, qc_type);                     \
+        Q_CONV(tgt, src, qc_id);                       \
+        Q_CONV(tgt, src, qc_stat);                     \
+        Q_CONV(tgt, src, qc_dqinfo.dqi_bgrace);        \
+        Q_CONV(tgt, src, qc_dqinfo.dqi_igrace);        \
+        Q_CONV(tgt, src, qc_dqinfo.dqi_flags);         \
+        Q_CONV(tgt, src, qc_dqblk.dqb_ihardlimit);     \
+        Q_CONV(tgt, src, qc_dqblk.dqb_isoftlimit);     \
+        Q_CONV(tgt, src, qc_dqblk.dqb_curinodes);      \
+        Q_CONV(tgt, src, qc_dqblk.dqb_bhardlimit);     \
+        Q_CONV(tgt, src, qc_dqblk.dqb_bsoftlimit);     \
+        Q_CONV(tgt, src, qc_dqblk.dqb_curspace);       \
+        Q_CONV(tgt, src, qc_dqblk.dqb_btime);          \
+        Q_CONV(tgt, src, qc_dqblk.dqb_itime);          \
+} while (0)
+
 static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         unsigned int cmd, unsigned long arg)
 {
@@ -653,6 +674,171 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         out_catinfo:
                 obd_ioctl_freedata(buf, len);
                 RETURN(rc);
+        }
+        case OBD_IOC_QUOTACHECK: {
+                struct obd_quotactl oqctl = { 0, };
+                int rc, error = 0;
+
+                if (!capable(CAP_SYS_ADMIN))
+                        RETURN(-EPERM);
+
+                oqctl.qc_type = arg;
+                rc = obd_quotacheck(sbi->ll_mdc_exp, &oqctl);
+                if (rc < 0) {
+                        CDEBUG(D_INFO, "mdc_quotacheck failed: rc %d\n", rc);
+                        error = rc;
+                }
+
+                rc = obd_quotacheck(sbi->ll_osc_exp, &oqctl);
+                if (rc < 0)
+                        CDEBUG(D_INFO, "osc_quotacheck failed: rc %d\n", rc);
+
+                if (error)
+                        rc = error;
+                return rc;
+        }
+        case OBD_IOC_POLL_QUOTACHECK: {
+                struct if_quotacheck check;
+                int rc;
+
+                if (!capable(CAP_SYS_ADMIN))
+                        RETURN(-EPERM);
+
+                rc = obd_iocontrol(cmd, sbi->ll_mdc_exp, 0, (void *)&check,
+                                   NULL);
+                if (check.stat == -ENODATA)
+                        rc = check.stat;
+                if (rc) {
+                        CDEBUG(D_QUOTA, "mdc ioctl %d failed: rc %d\n",
+                               cmd, check.stat);
+                        if (copy_to_user((void *)arg, &check, sizeof(check)))
+                                RETURN(-EFAULT);
+                        RETURN(rc);
+                }
+
+                rc = obd_iocontrol(cmd, sbi->ll_osc_exp, 0, (void *)&check,
+                                   NULL);
+                if (check.stat == -ENODATA)
+                        rc = check.stat;
+                if (rc) {
+                        CDEBUG(D_QUOTA, "osc ioctl %d failed: rc %d\n",
+                               cmd, rc);
+                        if (copy_to_user((void *)arg, &check, sizeof(check)))
+                                RETURN(-EFAULT);
+                        RETURN(rc);
+                }
+                 
+                RETURN(0);
+        }
+        case OBD_IOC_QUOTACTL: {
+                struct if_quotactl qctl;
+                struct obd_quotactl oqctl;
+                
+                int cmd, type, id, rc = 0, error = 0;
+
+                if (copy_from_user(&qctl, (void *)arg, sizeof(qctl)))
+                        RETURN(-EFAULT);
+
+                cmd = qctl.qc_cmd;
+                type = qctl.qc_type;
+                id = qctl.qc_id;
+                switch (cmd) {
+                case Q_QUOTAON:
+                case Q_QUOTAOFF:
+                case Q_SETQUOTA:
+                case Q_SETINFO:
+                        if (!capable(CAP_SYS_ADMIN))
+                                RETURN(-EPERM);
+                        break;
+                case Q_GETQUOTA:
+                        if (((type == USRQUOTA && current->euid != id) ||
+                             (type == GRPQUOTA && !in_egroup_p(id))) &&
+                            !capable(CAP_SYS_ADMIN))
+                                RETURN(-EPERM);
+                        break;
+                case Q_GETINFO:
+                        break;
+                default:
+                        RETURN(-EINVAL);
+                }
+
+                QCTLCONV(&oqctl, &qctl);
+
+                if (qctl.obd_uuid.uuid[0]) {
+                        struct obd_device *obd;
+                        struct obd_uuid *uuid = &qctl.obd_uuid;
+
+                        if (cmd == Q_GETINFO)
+                                oqctl.qc_cmd = Q_GETOINFO;
+                        else if (cmd == Q_GETQUOTA)
+                                oqctl.qc_cmd = Q_GETOQUOTA;
+                        else
+                                RETURN(-EINVAL);
+
+                        rc = -ENOENT;
+                        obd = class_find_client_notype(uuid,
+                                         &sbi->ll_osc_exp->exp_obd->obd_uuid);
+                        if (!obd)
+                                RETURN(rc);
+
+                        if (sbi->ll_mdc_exp->exp_obd == obd) {
+                                rc = obd_quotactl(sbi->ll_mdc_exp, &oqctl);
+                        } else {
+                                int i;
+                                struct obd_export *exp;
+                                struct lov_obd *lov = &sbi->ll_osc_exp->
+                                                            exp_obd->u.lov;
+
+                                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                                        exp = lov->tgts[i].ltd_exp;
+
+                                        if (!lov->tgts[i].active)
+                                                continue;
+
+                                        if (exp->exp_obd == obd) {
+                                                rc = obd_quotactl(exp, &oqctl);
+                                                break;
+                                        }
+                                }
+                        }
+
+                        QCTLCONV(&qctl, &oqctl);
+
+                        if (copy_to_user((void *)arg, &qctl, sizeof(qctl)))
+                                RETURN(-EFAULT);
+
+                        RETURN(rc);
+                }
+
+                if (cmd == Q_SETQUOTA)
+                        oqctl.qc_dqblk.dqb_valid = QIF_LIMITS;
+
+                rc = obd_quotactl(sbi->ll_mdc_exp, &oqctl);
+                if (rc) {
+                        if (rc == -EBUSY && cmd == Q_QUOTAON)
+                                error = rc;
+                        else
+                                RETURN(rc);
+                }
+
+                if (cmd == Q_QUOTAON || cmd == Q_QUOTAOFF) {
+                        rc = obd_quotactl(sbi->ll_osc_exp, &oqctl);
+                        if (rc) {
+                                if (rc != -EBUSY && cmd == Q_QUOTAON) {
+                                        oqctl.qc_cmd = Q_QUOTAOFF;
+                                        obd_quotactl(sbi->ll_mdc_exp, &oqctl);
+                                        obd_quotactl(sbi->ll_osc_exp, &oqctl);
+                                }
+                                RETURN(rc);
+                        }
+                }
+
+                QCTLCONV(&qctl, &oqctl);
+
+                if (copy_to_user((void *)arg, &qctl, sizeof(qctl)))
+                        return -EFAULT;
+
+                RETURN(rc?:error);
         }
         default:
                 return obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg);

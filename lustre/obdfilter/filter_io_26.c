@@ -34,6 +34,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_quota.h>
 #include "filter_internal.h"
 
 #warning "implement writeback mode -bzzz"
@@ -47,6 +48,7 @@ struct dio_request {
         int               dr_max_pages;
         int               dr_npages;
         int               dr_error;
+        unsigned long     dr_flag;     /* indicating if there is client cache page in this rpc */
         struct page     **dr_pages;
         unsigned long    *dr_blocks;
         spinlock_t        dr_lock;
@@ -365,6 +367,71 @@ static void filter_clear_page_cache(struct inode *inode, struct bio *iobuf)
 #endif
 }
 
+static int filter_quota_enforcement(struct obd_device *obd,
+                                    unsigned int fsuid, unsigned int fsgid,
+                                    struct obd_ucred **ret_uc)
+{
+        struct filter_obd *filter = &obd->u.filter;
+        struct obd_ucred *uc = NULL;
+        ENTRY;
+
+        if (!sb_any_quota_enabled(filter->fo_sb))
+                RETURN(0);
+
+        OBD_ALLOC(uc, sizeof(*uc));
+        if (!uc)
+                RETURN(-ENOMEM);
+        *ret_uc = uc;
+
+        uc->ouc_fsuid = fsuid;
+        uc->ouc_fsgid = fsgid;
+        uc->ouc_cap = current->cap_effective;
+        if (!fsuid)
+                cap_raise(uc->ouc_cap, CAP_SYS_RESOURCE);
+        else
+                cap_lower(uc->ouc_cap, CAP_SYS_RESOURCE);
+        
+        RETURN(0);
+}
+
+static int filter_get_quota_flag(struct obd_device *obd,
+                                 struct obdo *oa)
+{
+        struct filter_obd *filter = &obd->u.filter;
+        int cnt;
+        int rc = 0, err;
+        ENTRY;
+
+        if (!sb_any_quota_enabled(filter->fo_sb))
+                RETURN(rc);
+
+        oa->o_flags = QUOTA_OK;
+
+        for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+                struct obd_quotactl oqctl;
+
+                oqctl.qc_cmd = Q_GETQUOTA;
+                oqctl.qc_type = cnt;
+                oqctl.qc_id = (cnt == USRQUOTA) ? oa->o_uid : oa->o_gid;
+                err = fsfilt_quotactl(obd, filter->fo_sb, &oqctl);
+                if (err) {
+                        if (!rc)
+                                rc = err;
+                        continue;
+                }
+
+                /* set over quota flags for a uid/gid */
+                oa->o_valid |= (cnt == USRQUOTA) ?
+                               OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA;
+                if (oqctl.qc_dqblk.dqb_bhardlimit &&
+                   (toqb(oqctl.qc_dqblk.dqb_curspace) > oqctl.qc_dqblk.dqb_bhardlimit))
+                        oa->o_flags |= (cnt == USRQUOTA) ? 
+                                       OBD_FL_NO_USRQUOTA : OBD_FL_NO_GRPQUOTA;
+        }
+
+        RETURN(rc);
+}
+
 /* Must be called with i_sem taken for writes; this will drop it */
 int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                      struct obd_export *exp, struct iattr *attr,
@@ -374,6 +441,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         struct dio_request *dreq = iobuf;
         struct inode *inode = dchild->d_inode;
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+        struct lustre_quota_ctxt *qctxt = &obd->u.filter.fo_quota_ctxt;
         int rc, rc2;
         ENTRY;
 
@@ -386,12 +454,33 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         if (dreq->dr_npages == 0)
                 RETURN(0);
 
+        /* If there is any page in this write rpc that comes from client
+         * cache, we write the whole rpc without quota limit */
+        if (dreq->dr_flag & OBD_BRW_FROM_GRANT) {
+                cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+                dreq->dr_flag &= ~OBD_BRW_FROM_GRANT;
+        }
+        
+remap:
         rc = fsfilt_map_inode_pages(obd, inode,
                                     dreq->dr_pages, dreq->dr_npages,
                                     dreq->dr_blocks,
                                     obdfilter_created_scratchpad,
                                     rw == OBD_BRW_WRITE, NULL);
 
+        if (rc == -EDQUOT) {
+                LASSERT(rw == OBD_BRW_WRITE && 
+                        !cap_raised(current->cap_effective, CAP_SYS_RESOURCE));
+
+                /* Unfortunately, if quota master is too busy to handle the 
+                 * pre-dqacq in time or this user has exceeded quota limit, we 
+                 * have to wait for the completion of in flight dqacq/dqrel, 
+                 * then try again */
+                if (qctxt_wait_on_dqacq(obd, qctxt, inode->i_uid, 
+                                        inode->i_gid, 1) == -EAGAIN)
+                        goto remap;
+        }
+        
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
                         filter_tally_write(&obd->u.filter,
@@ -415,7 +504,6 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                         rc = rc2;
                 if (rc != 0)
                         RETURN(rc);
-
         }
 
         /* This is nearly osync_inode, without the waiting
@@ -474,6 +562,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         unsigned long now = jiffies;
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
+        struct filter_obd *filter = &obd->u.filter;
+        struct obd_ucred *uc = NULL;
         int   total_size = 0;
         ENTRY;
 
@@ -517,9 +607,20 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 this_size = lnb->offset + lnb->len;
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
+                /* if one page is a write-back page from client cache,
+                 * then mark that the whole io request can be over quota */
+                if (lnb->flags & OBD_BRW_FROM_GRANT)
+                        dreq->dr_flag |= OBD_BRW_FROM_GRANT;
         }
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        /* The client store the user credit information fsuid and fsgid
+         * in oa->o_uid and oa->o_gid. In case of quota enabled, we use 
+         * them to build the obd_ucred so as to enforce oss quota check */
+        rc = filter_quota_enforcement(obd, oa->o_uid, oa->o_gid, &uc);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        push_ctxt(&saved, &obd->obd_ctxt, uc);
         cleanup_phase = 2;
 
         down(&inode->i_sem);
@@ -542,7 +643,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, dreq, exp, &iattr,
                               oti, NULL);
         if (rc == 0)
-                obdo_from_inode(oa, inode, FILTER_VALID_FLAGS);
+                obdo_from_inode(oa, inode, 
+                                FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
+        else 
+                obdo_from_inode(oa, inode, OBD_MD_FLUID | OBD_MD_FLGID);
+
+        filter_get_quota_flag(obd, oa);
 
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
@@ -560,7 +666,9 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_ctxt, uc);
+                if (uc)
+                        OBD_FREE(uc, sizeof(*uc));
                 LASSERT(current->journal_info == NULL);
         case 1:
                 filter_free_iobuf(dreq);
@@ -569,5 +677,12 @@ cleanup:
                 f_dput(res->dentry);
         }
 
+        /* trigger quota pre-acquire */
+        if (rc == 0) {
+                err = qctxt_adjust_qunit(obd, &filter->fo_quota_ctxt, 
+                                         oa->o_uid, oa->o_gid, 1);
+                if (err)
+                        CERROR("error filter ajust qunit! (rc:%d)\n", err);
+        }
         RETURN(rc);
 }

@@ -68,8 +68,14 @@ struct llog_handle {
         } u;
 };
 
+struct llog_fill_rec_data {
+        obd_id          lfd_id;         /* object id */
+        obd_count       lfd_ogen;       /* object group */
+};
+
 /* llog.c  -  general API */
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
+typedef int (*llog_fill_rec_cb_t)(struct llog_rec_hdr *rec, void *data);
 int llog_init_handle(struct llog_handle *handle, int flags,
                      struct obd_uuid *uuid);
 int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
@@ -106,7 +112,7 @@ int llog_cleanup(struct llog_ctxt *);
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
 int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
              struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
-             int numcookies);
+             int numcookies, llog_fill_rec_cb_t fill_cb);
 int llog_cancel(struct llog_ctxt *, struct lov_stripe_md *lsm,
                 int count, struct llog_cookie *cookies, int flags);
 
@@ -116,7 +122,8 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
 int llog_obd_origin_cleanup(struct llog_ctxt *ctxt);
 int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies);
+                        struct llog_cookie *logcookies, int numcookies,
+                        llog_fill_rec_cb_t fill_cb);
 
 int llog_cat_initialize(struct obd_device *obd, int count);
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
@@ -166,7 +173,8 @@ struct llog_operations {
         int (*lop_cleanup)(struct llog_ctxt *ctxt);
         int (*lop_add)(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                        struct lov_stripe_md *lsm,
-                       struct llog_cookie *logcookies, int numcookies);
+                       struct llog_cookie *logcookies, int numcookies,
+                       llog_fill_rec_cb_t fill_cb);
         int (*lop_cancel)(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags);
         int (*lop_connect)(struct llog_ctxt *ctxt, int count,

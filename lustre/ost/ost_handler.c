@@ -45,7 +45,10 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
 #include <libcfs/list.h>
+#include <linux/lustre_quota.h>
 #include "ost_internal.h"
+
+static struct quotacheck_info qchkinfo;
 
 void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)
 {
@@ -913,6 +916,131 @@ static int ost_filter_recovery_request(struct ptlrpc_request *req,
         }
 }
 
+static int ost_quotacheck_callback(struct obd_export *exp,
+                                   struct obd_quotactl *oqctl)
+{
+        struct ptlrpc_request *req;
+        struct obd_quotactl *body;
+        int rc, size = sizeof(*oqctl);
+
+        req = ptlrpc_prep_req(exp->exp_imp_reverse, OBD_QC_CALLBACK,
+                              1, &size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        memcpy(body, oqctl, sizeof(*oqctl));
+
+        req->rq_replen = lustre_msg_size(0, NULL);
+
+        rc = ptlrpc_queue_wait(req);
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+
+static int ost_quotacheck_thread(void *data)
+{
+        unsigned long flags;
+        struct quotacheck_info *qchki = data;
+        struct obd_export *exp;
+        struct obd_quotactl *oqctl;
+        struct filter_obd *filter;
+        int rc;
+                                                                                                                 
+        lock_kernel();
+        ptlrpc_daemonize();
+                                                                                                                 
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
+
+        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", "quotacheck");
+        unlock_kernel();
+
+        complete(&qchki->qi_starting);
+
+        exp = qchki->qi_exp;
+        filter = &exp->exp_obd->u.filter;
+        oqctl = &qchki->qi_oqctl;
+
+        obd_quotacheck(exp, oqctl);
+        rc = ost_quotacheck_callback(exp, oqctl);
+
+        atomic_inc(&filter->fo_quotachecking);
+
+        return rc;
+}
+
+static int ost_quotacheck(struct ptlrpc_request *req)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        struct filter_obd *filter = &obd->u.filter;
+        struct obd_quotactl *oqctl;
+        int rc;
+        ENTRY;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+        if (oqctl == NULL)
+                GOTO(out, rc = -EPROTO);
+
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
+        if (rc) {
+                CERROR("ost: out of memory while packing quotacheck reply\n");
+                GOTO(out, rc = -ENOMEM);
+        }
+
+        if (!atomic_dec_and_test(&filter->fo_quotachecking)) {
+                atomic_inc(&filter->fo_quotachecking);
+                GOTO(out, rc = -EBUSY);
+        }
+ 
+        init_completion(&qchkinfo.qi_starting);
+        qchkinfo.qi_exp = req->rq_export;
+        memcpy(&qchkinfo.qi_oqctl, oqctl, sizeof(*oqctl));
+
+        rc = kernel_thread(ost_quotacheck_thread, &qchkinfo, CLONE_VM|CLONE_FILES);
+        if (rc < 0) {
+                CERROR("%s: error starting ost_quotacheck_thread: %d\n",
+                       obd->obd_name, rc);
+                atomic_inc(&filter->fo_quotachecking);
+        } else {
+                CDEBUG(D_INFO, "%s: ost_quotacheck_thread: %d\n",
+                       obd->obd_name, rc);
+                wait_for_completion(&qchkinfo.qi_starting);
+                rc = 0;
+        }
+
+        EXIT;
+out:
+        return rc;
+}
+
+static int ost_quotactl(struct ptlrpc_request *req)
+{
+        struct obd_quotactl *oqctl, *repoqc;
+        int rc, size = sizeof(*repoqc);
+        ENTRY;
+
+        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
+                                   lustre_swab_obd_quotactl);
+        if (oqctl == NULL)
+                GOTO(out, rc = -EPROTO);
+
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc)
+                GOTO(out, rc);
+
+        repoqc = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repoqc));
+        memcpy(repoqc, oqctl, sizeof(*repoqc));
+
+        req->rq_status = obd_quotactl(req->rq_export, repoqc);
+out:
+        RETURN(rc);
+}
+
 static int ost_handle(struct ptlrpc_request *req)
 {
         struct obd_trans_info trans_info = { 0, };
@@ -1046,6 +1174,16 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_GET_INFO:
                 DEBUG_REQ(D_INODE, req, "get_info");
                 rc = ost_get_info(req->rq_export, req);
+                break;
+        case OST_QUOTACHECK:
+                CDEBUG(D_INODE, "quotacheck\n");
+                OBD_FAIL_RETURN(OBD_FAIL_OST_QUOTACHECK_NET, 0);
+                rc = ost_quotacheck(req);
+                break;
+        case OST_QUOTACTL:
+                CDEBUG(D_INODE, "quotactl\n");
+                OBD_FAIL_RETURN(OBD_FAIL_OST_QUOTACTL_NET, 0);
+                rc = ost_quotactl(req);
                 break;
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
