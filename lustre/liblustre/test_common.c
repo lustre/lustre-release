@@ -68,7 +68,7 @@ void t_link(const char *src, const char *dst)
 
 	rc = link(src, dst);
 	if (rc) {
-		printf("link(%s -> %s) error: %s\n", src, dst);
+		printf("link(%s -> %s) error: %s\n", src, dst, strerror(errno));
 		EXIT(1);
 	}
 }
@@ -142,6 +142,18 @@ void t_chmod_raw(const char *path, mode_t mode)
 
 void t_chmod(const char *path, const char *format, ...)
 {
+}
+
+void t_rename(const char *oldpath, const char *newpath)
+{
+        int rc;
+
+        rc = rename(oldpath, newpath);
+        if (rc) {
+                printf("rename(%s -> %s) error: %s\n",
+		       oldpath, newpath, strerror(errno));
+                EXIT(1);
+        }
 }
 
 int t_open_readonly(const char *path)

@@ -13,6 +13,7 @@ void t_symlink(const char *src, const char *new);
 void t_mknod(const char *path, mode_t mode, int major, int minor);
 void t_chmod_raw(const char *path, mode_t mode);
 void t_chmod(const char *path, const char *format, ...);
+void t_rename(const char *oldpath, const char *newpath);
 int t_open_readonly(const char *path);
 int t_open(const char *path);
 void t_close(int fd);
