@@ -80,6 +80,9 @@ activeRef: <value-of select="active_ref/@uuidref"/>
 <if test="lovconfig_ref">
 lovconfigRef: <value-of select="lovconfig_ref/@uuidref"/>
 </if>
+<if test="filesystem_ref">
+filesystemRef: <value-of select="filesystem_ref/@uuidref"/>
+</if>
 <if test="@failover">
 failover: <value-of select="@failover"/>
 </if>
@@ -181,6 +184,15 @@ group: <value-of select="group"/>
 </text>
 </template>
 
+<template match="filesystem">
+dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
+objectClass: FILESYSTEM
+lustreName: <value-of select="@name"/>
+uuid: <value-of select="@uuid"/><apply-templates/>
+<text>
+</text>
+</template>
+
 <template match="mountpoint">
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: MOUNTPOINT
@@ -251,6 +263,10 @@ mdsdevRef: <value-of select="@uuidref"/>
 
 <template match="mountpoint_ref">
 mountpointRef: <value-of select="@uuidref"/>
+</template>
+
+<template match="filesystem_ref">
+filesystemRef: <value-of select="@uuidref"/>
 </template>
 
 <template match="echoclient_ref">
