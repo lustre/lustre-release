@@ -2,8 +2,8 @@
 Index: linux-2.4.20-8/fs/ext3/snap.c
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/snap.c	2003-01-30 18:24:37.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/snap.c	2004-01-18 01:48:54.000000000 +0800
-@@ -0,0 +1,2588 @@
++++ linux-2.4.20-8/fs/ext3/snap.c	2004-01-19 23:24:39.000000000 +0800
+@@ -0,0 +1,2583 @@
 +/* fs/ext3/snap.c
 + *
 + * Copyright (c) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
@@ -424,7 +424,7 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +		lock_super(pri->i_sb);
 +		ext3_journal_get_write_access(handle, sbi->s_sbh);
 +		sbi->s_es->s_first_cowed_pri_ino = cpu_to_le32(pri->i_ino);
-+	        SB_LAST_COWED_INO(pri->i_sb) = cpu_to_le32(pri->i_ino);
++	        SB_FIRST_COWED_INO(pri->i_sb) = cpu_to_le32(pri->i_ino);
 +		pri->i_sb->s_dirt = 1;
 +		ext3_journal_dirty_metadata(handle, sbi->s_sbh);
 +		unlock_super(pri->i_sb);
@@ -1898,44 +1898,40 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +		return 0;
 +
 +	if( pri == pri->i_sb->u.ext3_sb.s_journal_inode ){
-+		printk( KERN_EMERG "TRY TO DESTROY JOURNAL'S IND\n");
++		snap_err("TRY TO DESTROY JOURNAL'S IND\n");
 +		return -EINVAL;
 +	}
 +
-+	handle = ext3_journal_start(pri, SNAP_DESTROY_TRANS_BLOCKS);
-+	if( !handle )
-+		return -EINVAL;
-+
 +	err = ext3_xattr_get(pri, EXT3_SNAP_INDEX, EXT3_SNAP_ATTR,
-+	                       			buf, EXT3_MAX_SNAP_DATA);
++	                     buf, EXT3_MAX_SNAP_DATA);
 +	if (err < 0) {
-+		if (err == -ENODATA)
-+			snap_err("inode %lu is not a redirector\n", pri->i_ino);
-+		else
-+			snap_err(EXT3_SNAP_ATTR " attribute read error\n");
-+		goto err_stop;
++		snap_err("inode %lu attribute read error\n", pri->i_ino);
++		return err;
 +	}
 +	
 +	snaps = (struct snap_ea *)buf;
 +	if ( !snaps->ino[index] ) {
 +		snap_err("for pri ino %lu, index %d, redirect ino is 0\n",
 +				pri->i_ino, index);	
-+		err = -EINVAL;
-+		goto err_stop;
++		return -EINVAL;
 +	}
 +
 +	snap_debug("for pri ino %lu, reading inode %lu at index %d\n", 
 +		pri->i_ino, (ulong)le32_to_cpu(snaps->ino[index]), index);
 +
 +	ind = iget(pri->i_sb, le32_to_cpu (snaps->ino[index]) );
++
++	if ( !ind || IS_ERR(ind) || is_bad_inode(ind)) 
++		return  -EINVAL;
++
 +	snap_debug("iget ind %lu, ref count = %d\n", 
 +		   ind->i_ino, atomic_read(&ind->i_count));
 +
-+	if ( !ind || IS_ERR(ind) || is_bad_inode(ind) ) {
-+		err = -EINVAL;
-+		goto err_stop;
++	handle = ext3_journal_start(pri, SNAP_DESTROY_TRANS_BLOCKS);
++	if (!handle) {
++		iput(ind);
++		return -EINVAL;
 +	}
-+
 +	/* if it's block level cow, first copy the blocks back */	
 +  	if (EXT3_HAS_COMPAT_FEATURE(pri->i_sb, EXT3_FEATURE_COMPAT_BLOCKCOW) &&
 +			S_ISREG(pri->i_mode)) {
@@ -1983,13 +1979,13 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +#else
 +		snap_double_lock(next_ind, ind);
 +		for (i = 0; i < blocks; i++) {
-+			if (ext3_bmap (next_ind->i_mapping, i) )	
++			if (ext3_bmap(next_ind->i_mapping, i))	
 +				continue;
-+			if (ext3_copy_block (next_ind, ind, i ) < 0)	break;
++			if (ext3_copy_block(next_ind, ind, i ) < 0)	
++				break;
 +		}
 +		ext3_mark_inode_dirty(handle, next_ind);
 +		double_unlock(next_ind, ind);
-+
 +#endif 
 +	}
 +
@@ -2062,7 +2058,6 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +		pri->i_ctime = ctime;
 +		ext3_mark_inode_dirty(handle, pri);
 +	}
-+err_stop:
 +	ext3_journal_stop(handle, pri);
 +	return err;
 +}
@@ -3059,11 +3054,11 @@ Index: linux-2.4.20-8/include/linux/ext3_jbd.h
  fs/ext3/Makefile           |    2 
  fs/ext3/ialloc.c           |    7 
  fs/ext3/inode.c            |    2 
- fs/ext3/snap.c             | 2588 +++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/snap.c             | 2583 +++++++++++++++++++++++++++++++++++++++++++++
  fs/ext3/super.c            |    7 
  include/linux/ext3_fs.h    |   38 
  include/linux/ext3_fs_sb.h |    7 
  include/linux/ext3_jbd.h   |   27 
  include/linux/snap.h       |  266 ++++
- 9 files changed, 2939 insertions(+), 5 deletions(-)
+ 9 files changed, 2934 insertions(+), 5 deletions(-)
 
