@@ -234,6 +234,7 @@ static void obdfs_flush_dirty_pages(int check_time)
 
 static struct task_struct *pupdated;
 
+
 static int pupdate(void *unused) 
 {
 	struct task_struct * tsk = current;
@@ -292,7 +293,9 @@ static int pupdate(void *unused)
 		/* asynchronous setattr etc for the future ... */
 		/* flush_inodes(); */
 		CDEBUG(D_INODE, "about to flush pages...\n");
+		/*
 		obdfs_flush_dirty_pages(1);
+		*/
 		CDEBUG(D_INODE, "done flushing pages...\n");
 	}
 }
