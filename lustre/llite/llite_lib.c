@@ -797,11 +797,10 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
 
 void dump_lsm(int level, struct lov_stripe_md *lsm)
 {
-        CDEBUG(level, "objid "LPX64", maxbytes "LPX64", magic %#08x, "
-               "stripe_size %#08x, offset %u, stripe_count %u\n",
+        CDEBUG(level, "objid "LPX64", maxbytes "LPX64", magic 0x%08X, "
+               "stripe_size %u, stripe_count %u\n",
                lsm->lsm_object_id, lsm->lsm_maxbytes, lsm->lsm_magic,
-               lsm->lsm_stripe_size, lsm->lsm_stripe_offset,
-               lsm->lsm_stripe_count);
+               lsm->lsm_stripe_size, lsm->lsm_stripe_count);
 }
 
 void ll_update_inode(struct inode *inode, struct mds_body *body,
@@ -929,7 +928,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         struct ptlrpc_request *req = NULL;
         int rc, flags = 0;
         ENTRY;
-        
+
         switch(cmd) {
         case EXT3_IOC_GETFLAGS: {
                 struct ll_fid fid;
@@ -942,57 +941,62 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));
                 }
-                
+
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-                
+
                 if (body->flags & S_APPEND)
                         flags |= EXT3_APPEND_FL;
                 if (body->flags & S_IMMUTABLE)
                         flags |= EXT3_IMMUTABLE_FL;
                 if (body->flags & S_NOATIME)
                         flags |= EXT3_NOATIME_FL;
-                
+
                 ptlrpc_req_finished (req);
-                
-                RETURN( put_user(flags, (int *)arg) );
+
+                RETURN(put_user(flags, (int *)arg));
         }
         case EXT3_IOC_SETFLAGS: {
                 struct mdc_op_data op_data;
                 struct iattr attr;
-                struct obdo oa;
+                struct obdo *oa;
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        
-                if ( get_user( flags, (int *)arg ) )
-                        RETURN( -EFAULT );
-                
+
+                if (get_user(flags, (int *)arg))
+                        RETURN(-EFAULT);
+
+                oa = obdo_alloc();
+                if (!oa)
+                        RETURN(-ENOMEM);
+
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
-                
+
                 memset(&attr, 0x0, sizeof(attr));
                 attr.ia_attr_flags = flags;
                 attr.ia_valid |= ATTR_ATTR_FLAG;
-                
+
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
                                  &attr, NULL, 0, NULL, 0, &req);
                 if (rc) {
                         ptlrpc_req_finished(req);
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("mdc_setattr fails: rc = %d\n", rc);
+                        obdo_free(oa);
                         RETURN(rc);
                 }
                 ptlrpc_req_finished(req);
-                
-                memset(&oa, 0x0, sizeof(oa));
-                oa.o_id = lsm->lsm_object_id;
-                oa.o_flags = flags;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
-                
-                rc = obd_setattr(sbi->ll_osc_exp, &oa, lsm, NULL);
+
+                oa->o_id = lsm->lsm_object_id;
+                oa->o_flags = flags;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+
+                rc = obd_setattr(sbi->ll_osc_exp, oa, lsm, NULL);
+                obdo_free(oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("mdc_setattr fails: rc = %d\n", rc);
                         RETURN(rc);
                 }
-                
+
                 if (flags & EXT3_APPEND_FL)
                         inode->i_flags |= S_APPEND;
                 else
@@ -1005,13 +1009,13 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         inode->i_flags |= S_NOATIME;
                 else
                         inode->i_flags &= ~S_NOATIME;
-                
+
                 RETURN(0);
         }
         default:
                 RETURN(-ENOSYS);
         }
-        
+
         RETURN(0);
 }
 
