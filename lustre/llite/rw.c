@@ -557,7 +557,11 @@ static void ll_start_readahead(struct obd_export *exp, struct inode *inode,
                                     ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                                     &page_extent, sizeof(page_extent), LCK_PR, 
                                     &flags, inode, &match_lockh);
-                if (!matched) {
+                if (matched < 0) {
+                        LL_CDEBUG_PAGE(page, "lock match failed\n");
+                        break;
+                }
+                if (matched == 0) {
                         LL_CDEBUG_PAGE(page, "didn't match a lock\n");
                         unlock_page(page);
                         page_cache_release(page);
@@ -625,8 +629,10 @@ int ll_readpage(struct file *file, struct page *page)
         matched = obd_match(sbi->ll_osc_exp, ll_i2info(inode)->lli_smd, 
                             LDLM_EXTENT, &page_extent, sizeof(page_extent), 
                             LCK_PR, &flags, inode, &match_lockh);
+        if (matched < 0)
+                GOTO(out, rc = matched);
 
-        if (!matched) {
+        if (matched == 0) {
                 static unsigned long next_print;
                 CDEBUG(D_INODE, "didn't match a lock");
                 if (time_after(jiffies, next_print)) {
@@ -640,7 +646,7 @@ int ll_readpage(struct file *file, struct page *page)
         if (rc == 0 && (sbi->ll_flags & LL_SBI_READAHEAD))
                 ll_start_readahead(exp, inode, page->index);
 
-        if (matched)
+        if (matched == 1)
                 obd_cancel(ll_i2sbi(inode)->ll_osc_exp, 
                            ll_i2info(inode)->lli_smd, LCK_PR, &match_lockh);
 out:

@@ -527,6 +527,8 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         matched = obd_match(exp, lsm, LDLM_EXTENT, &size_lock,
                             sizeof(size_lock), LCK_PR, &flags, inode,
                             &match_lockh);
+        if (matched < 0)
+                RETURN(matched);
 
         /* hey, alright, we hold a size lock that covers the size we
          * just found, its not going to change for a while.. */
