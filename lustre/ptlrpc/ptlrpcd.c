@@ -67,12 +67,18 @@ static struct ptlrpcd_ctl {
 static DECLARE_MUTEX(ptlrpcd_sem);
 static int ptlrpcd_users = 0;
 
+void ptlrpcd_wake(void)
+{
+        struct ptlrpcd_ctl *pc = &ptlrpcd_pc;
+        wake_up(&pc->pc_waitq);
+}
+
 void ptlrpcd_add_req(struct ptlrpc_request *req)
 {
         struct ptlrpcd_ctl *pc = &ptlrpcd_pc;
 
         ptlrpc_set_add_new_req(pc->pc_set, req);
-        wake_up(&pc->pc_waitq);
+        ptlrpcd_wake();
 }
 
 static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
