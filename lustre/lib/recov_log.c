@@ -141,6 +141,9 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
                         rc = rc < 0 ? : -ENOSPC;
                 }
         }
+        loghandle->lgh_log_create = cathandle->lgh_log_create;
+        loghandle->lgh_log_open = cathandle->lgh_log_open;
+        loghandle->lgh_log_close = cathandle->lgh_log_close;
         list_add_tail(&loghandle->lgh_list, &cathandle->lgh_list);
 
         RETURN(loghandle);
