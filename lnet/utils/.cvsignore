@@ -6,3 +6,4 @@ ptlctl
 .deps
 routerstat
 wirecheck
+.*.cmd

@@ -285,8 +285,8 @@ long latency while truncating very large files.
  	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
  		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
  
---- fs/ext3/file.c.orig	Fri Jan 17 10:57:31 2003
-+++ fs/ext3/file.c	Mon Jun 30 13:28:52 2003
+--- linux/fs/ext3/file.c.orig	Fri Jan 17 10:57:31 2003
++++ linux/fs/ext3/file.c	Mon Jun 30 13:28:52 2003
 @@ -121,7 +121,11 @@ struct file_operations ext3_file_operati
  };
  

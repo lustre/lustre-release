@@ -164,8 +164,9 @@ static int lustre_commit_write(struct niobuf_local *lnb)
 
         LASSERT(to <= PAGE_SIZE);
         err = page->mapping->a_ops->commit_write(NULL, page, from, to);
+#warning 2.4 folks: wait_on_page_locked does NOT return its error here.
         if (!err && IS_SYNC(inode))
-                err = wait_on_page_locked(page);
+                wait_on_page_locked(page);
         //SetPageUptodate(page); // the client commit_write will do this
 
         SetPageReferenced(page);

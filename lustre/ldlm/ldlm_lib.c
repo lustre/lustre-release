@@ -572,7 +572,8 @@ static void process_recovery_queue(struct obd_device *obd)
                 DEBUG_REQ(D_ERROR, req, "processing: ");
                 (void)obd->obd_recovery_handler(req);
                 reset_recovery_timer(obd);
-#warning FIXME: mds_fsync_super(mds->mds_sb);
+                /* bug 1580: decide how to properly sync() in recovery */
+                //mds_fsync_super(mds->mds_sb);
                 class_export_put(req->rq_export);
                 OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
                 OBD_FREE(req, sizeof *req);

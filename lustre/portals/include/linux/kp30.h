@@ -98,7 +98,7 @@ extern unsigned int portal_printk;
                       /*panic("LBUG");*/                                      \
                 }                                                             \
         } while (0)
-#else /* __KERNEL __ */
+#else /* __KERNEL__ */
 #define CHECK_STACK(stack) do { } while(0)
 #define CDEBUG_STACK (0L)
 #endif /* __KERNEL__ */

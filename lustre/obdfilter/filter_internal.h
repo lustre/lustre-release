@@ -112,8 +112,8 @@ struct dentry *filter_parent_lock(struct obd_device *, obd_mode mode,
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
                                  obd_mode mode, obd_id id);
-struct dentry *__filter_oa2dentry(struct obd_device *obd,struct obdo *oa,
-                                  char *what);
+struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
+                                  const char *what);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
