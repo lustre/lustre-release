@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.27 2002/08/29 00:51:53 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.27 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.28 2002/08/29 01:18:26 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.28 $"
 
 #define EXPORT_SYMTAB
 
@@ -174,7 +174,9 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                                 page_debug_setup(r->addr, r->len, r->offset,
                                                  obj->ioo_id);
                         else if (verify)
-                                memset(r->addr, 0xec, r->len);
+                                page_debug_setup(r->addr, r->len,
+                                                 0xecc0ecc0ecc0ecc0,
+                                                 0xecc0ecc0ecc0ecc0);
                 }
         }
         CDEBUG(D_PAGE, "%ld pages allocated after prep\n", echo_pages);

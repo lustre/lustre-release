@@ -537,7 +537,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                         page_debug_setup(addr, pgp->count,
                                                          pgp->off, id);
                                 else
-                                        memset(addr, 0xba, PAGE_SIZE);
+                                        page_debug_setup(addr, pgp->count,
+                                                         0xdeadbeef00c0ffee,
+                                                         0xdeadbeef00c0ffee);
                                 kunmap(pgp->pg);
                         }
                 }
