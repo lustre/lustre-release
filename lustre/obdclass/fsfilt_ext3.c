@@ -23,6 +23,8 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#error "FIXME: this needs to be updated to match fsfilt_extN.c"
+
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/fs.h>
