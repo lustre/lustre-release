@@ -364,7 +364,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
 	tmp2 = ost_req_buf2(r);
         req->rq_rep.ost->result = obd_commitrw
 		(cmd, &conn, objcount, (struct obd_ioobj *)tmp1, 
-		 niocount, (struct niobuf *)tmp2);
+		 niocount, (struct niobuf *)res);
 
  out:
         if (res != NULL)
@@ -404,16 +404,20 @@ static int ost_commit_page(struct obd_conn *conn, struct page *page)
 
 static int ost_brw_write_cb(struct ptlrpc_bulk_desc *bulk, void *data)
 {
-        int rc = ost_commit_page(&bulk->b_conn, bulk->b_page);
+        int rc;
+
+        ENTRY;
+
+        rc = ost_commit_page(&bulk->b_conn, bulk->b_page);
         if (rc)
                 CERROR("ost_commit_page failed: %d\n", rc);
+
+        EXIT;
         return rc;
 }
 
 int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
-        struct ptlrpc_bulk_desc **bulk_vec = NULL;
-        struct ptlrpc_bulk_desc *bulk = NULL;
 	struct obd_conn conn; 
 	int rc;
 	int i, j;
@@ -469,39 +473,31 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 goto out;
 	}
 
-        /* Setup buffers for the incoming pages, then send the niobufs
-         * describing those buffers to the OSC. */
-        OBD_ALLOC(bulk_vec, niocount * sizeof(struct ptlrpc_bulk_desc *));
-        if (bulk_vec == NULL) {
-                CERROR("cannot alloc bulk desc vector\n");
-                return -ENOMEM;
-        }
-        memset(bulk_vec, 0, niocount * sizeof(struct ptlrpc_bulk_desc *));
-
         for (i = 0; i < niocount; i++) {
+                struct ptlrpc_bulk_desc *bulk;
                 struct ptlrpc_service *srv = req->rq_obd->u.ost.ost_service;
 
-                bulk_vec[i] = ptlrpc_prep_bulk(&req->rq_peer);
-                if (bulk_vec[i] == NULL) {
+                bulk = ptlrpc_prep_bulk(&req->rq_peer);
+                if (bulk == NULL) {
                         CERROR("cannot alloc bulk desc\n");
                         rc = -ENOMEM;
                         goto out;
                 }
 
                 spin_lock(&srv->srv_lock);
-                bulk_vec[i]->b_xid = srv->srv_xid++;
+                bulk->b_xid = srv->srv_xid++;
                 spin_unlock(&srv->srv_lock);
 
                 dst = &((struct niobuf *)res)[i];
-                dst->xid = HTON__u32(bulk_vec[i]->b_xid);
+                dst->xid = HTON__u32(bulk->b_xid);
 
-                bulk_vec[i]->b_buf = (void *)(unsigned long)dst->addr;
-                bulk_vec[i]->b_cb = ost_brw_write_cb;
-                bulk_vec[i]->b_page = dst->page;
-                memcpy(&bulk_vec[i]->b_conn, &conn, sizeof(conn));
-                bulk_vec[i]->b_buflen = PAGE_SIZE;
-                bulk_vec[i]->b_portal = OSC_BULK_PORTAL;
-                rc = ptlrpc_register_bulk(bulk_vec[i]);
+                bulk->b_buf = (void *)(unsigned long)dst->addr;
+                bulk->b_cb = ost_brw_write_cb;
+                bulk->b_page = dst->page;
+                memcpy(&(bulk->b_conn), &conn, sizeof(conn));
+                bulk->b_buflen = PAGE_SIZE;
+                bulk->b_portal = OSC_BULK_PORTAL;
+                rc = ptlrpc_register_bulk(bulk);
                 if (rc)
                         goto out;
 
@@ -515,17 +511,6 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         barrier();
 
  out:
-        if (bulk != NULL)
-                OBD_FREE(bulk, sizeof(*bulk));
-        if (bulk_vec != NULL) {
-                for (i = 0; i < niocount; i++) {
-                        if (bulk_vec[i] != NULL)
-                                OBD_FREE(bulk_vec[i], sizeof(*bulk));
-                }
-                OBD_FREE(bulk_vec,
-                         niocount * sizeof(struct ptlrpc_bulk_desc *));
-        }
-
 	EXIT;
 	return 0;
 }
