@@ -654,7 +654,7 @@ kqswnal_dma_reply (kqswnal_tx_t *ktx, int nfrag,
         if (buffer + krx->krx_nob < (char *)(rmd + 1)) {
                 /* msg too small to discover rmd size */
                 CERROR ("Incoming message [%d] too small for RMD (%d needed)\n",
-                        krx->krx_nob, (int)((char *)(rmd + 1)) - buffer);
+                        krx->krx_nob, (int)(((char *)(rmd + 1)) - buffer));
                 return (-EINVAL);
         }
         
@@ -662,7 +662,7 @@ kqswnal_dma_reply (kqswnal_tx_t *ktx, int nfrag,
                 /* rmd doesn't fit in the incoming message */
                 CERROR ("Incoming message [%d] too small for RMD[%d] (%d needed)\n",
                         krx->krx_nob, rmd->kqrmd_neiov,
-                        (int)((char *)&rmd->kqrmd_eiov[rmd->kqrmd_neiov]) - buffer);
+                        (int)(((char *)&rmd->kqrmd_eiov[rmd->kqrmd_neiov]) - buffer));
                 return (-EINVAL);
         }
 
