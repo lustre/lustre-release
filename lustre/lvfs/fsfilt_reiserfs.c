@@ -146,7 +146,7 @@ static int fsfilt_reiserfs_add_journal_cb(struct obd_device *obd,
                                           __u64 last_rcvd, void *handle,
                                           fsfilt_cb_t cb_func, void *cb_data)
 {
-        static long next = 0;
+        static unsigned long next = 0;
 
         if (time_after(jiffies, next)) {
                 CERROR("no journal callback kernel patch, faking it...\n");

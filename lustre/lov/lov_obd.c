@@ -361,7 +361,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         count = desc->ld_tgt_count;
         uuids = (struct obd_uuid *)lcfg->lcfg_inlbuf2;
         if (sizeof(*uuids) * count != lcfg->lcfg_inllen2) {
-                CERROR("UUID array size wrong: %u * %u != %u\n",
+                CERROR("UUID array size wrong: "LPSZ" * %u != %u\n",
                        sizeof(*uuids), count, lcfg->lcfg_inllen2);
                 RETURN(-EINVAL);
         }
