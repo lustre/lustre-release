@@ -445,7 +445,7 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
                                 struct ptlrpc_request *req,
                                 int request_off, int reply_off)
 {
-        struct mds_body *request_body, *body;
+        struct mds_body *body;
         struct inode *inode = dentry->d_inode;
         int rc;
         ENTRY;
@@ -453,24 +453,11 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
         if (inode == NULL)
                 RETURN(-ENOENT);
 
-        /* Did the client request the link name? */
-        request_body = lustre_msg_buf(req->rq_reqmsg, request_off);
         body = lustre_msg_buf(req->rq_repmsg, reply_off);
-        if ((body->valid & OBD_MD_LINKNAME) && S_ISLNK(inode->i_mode)) {
-                char *tmp = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
-
-                rc = inode->i_op->readlink(dentry, tmp, req->rq_repmsg->
-                                           buflens[reply_off + 1]);
-                if (rc < 0) {
-                        CERROR("readlink failed: %d\n", rc);
-                        RETURN(rc);
-                }
-
-                body->valid |= OBD_MD_LINKNAME;
-        }
 
         mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
+
         if (S_ISREG(inode->i_mode)) {
                 struct lov_mds_md *md;
 
@@ -485,6 +472,18 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
                         RETURN(rc);
                 }
                 body->valid |= OBD_MD_FLEASIZE;
+        } else if ((body->valid & OBD_MD_LINKNAME) && S_ISLNK(inode->i_mode)) {
+                char *symname = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
+                int len = req->rq_repmsg->buflens[reply_off + 1];
+
+                rc = inode->i_op->readlink(dentry, symname, len);
+                if (rc < 0) {
+                        CERROR("readlink failed: %d\n", rc);
+                        RETURN(rc);
+                } else
+                        CDEBUG(D_INODE, "read symlink dest %s\n", symname);
+
+                body->valid |= OBD_MD_LINKNAME;
         }
         RETURN(0);
 }
