@@ -12,6 +12,9 @@ ldlm_lock_create(struct ldlm_namespace *ns,
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *, struct ldlm_lock **,
                                void *cookie, int cookie_len, int *flags);
 
+typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, int *flags,
+                                      int first_enq, ldlm_error_t *err);
+
 /* ldlm_plain.c */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
