@@ -23,11 +23,11 @@
 #ifndef _LPROCFS_SNMP_H
 #define _LPROCFS_SNMP_H
 
-
+/*
 #ifndef LPROC_SNMP
 #define LPROC_SNMP
 #endif
-
+*/
 
 #include <linux/proc_fs.h>
 
