@@ -1,0 +1,82 @@
+<!-- Lustre Management DTD -->
+
+<!-- basic entities -->
+<!ENTITY % tag.content "(#PCDATA)">
+<!ENTITY % tag.ref "
+  num CDATA #IMPLIED
+  name CDATA #IMPLIED
+  uuidref CDATA #REQUIRED">
+<!ENTITY % tag.attr "
+  name CDATA #REQUIRED
+  uuid CDATA #REQUIRED">
+
+<!-- main elements -->
+<!ELEMENT lustre (node | profile | mountpoint | ldlm |
+                  mds | mdc | obd | ost | osc | lov | router)*>
+
+<!ELEMENT profile (service_ref)*>
+<!ATTLIST profile %tag.attr;>
+<!ELEMENT mountpoint (path | fileset | mdc_ref | osc_ref)*>
+<!ATTLIST mountpoint %tag.attr;>
+<!ELEMENT node (network*, profile_ref)>
+<!ATTLIST node %tag.attr;>
+<!ELEMENT ldlm EMPTY>
+<!ATTLIST ldlm %tag.attr;>
+
+<!ELEMENT obd (fstype | device | autoformat)*>
+<!ATTLIST obd %tag.attr; type (obdfilter | obdext2 | obdecho) 'obdfilter'>
+<!ELEMENT ost (network_ref | obd_ref | failover_ref)*>
+<!ATTLIST ost %tag.attr;>
+<!ELEMENT mds (network_ref | fstype | device | autoformat | server_ref | failover_ref)*>
+<!ATTLIST mds %tag.attr;>
+
+<!ELEMENT osc (network_ref | obd_ref)*>
+<!ATTLIST osc %tag.attr;>
+<!ELEMENT mdc (network_ref | mds_ref)*>
+<!ATTLIST mdc %tag.attr;>
+<!ELEMENT lov (devices | mdc_ref)*>
+<!ATTLIST lov %tag.attr;>
+<!ELEMENT devices (osc_ref)+>
+<!ATTLIST devices stripesize CDATA #REQUIRED
+                  pattern    CDATA #REQUIRED>
+<!ELEMENT router (misc)*>
+<!ATTLIST router %tag.attr;>
+
+<!-- basic elements -->
+<!ELEMENT network (server | port)*>
+<!ATTLIST network type (tcp | elan | myrinet) 'tcp'
+                  %tag.attr;>
+
+<!ELEMENT fstype        %tag.content;>
+<!ELEMENT device        %tag.content;>
+<!ATTLIST device        size CDATA #IMPLIED>
+<!ELEMENT server        %tag.content;>
+<!ELEMENT port          %tag.content;>
+<!ELEMENT autoformat    %tag.content;>
+<!ELEMENT path          %tag.content;>
+<!ELEMENT fileset       %tag.content;>
+
+<!-- id tag elements -->
+<!ELEMENT network_ref    %tag.content;>
+<!ATTLIST network_ref    %tag.ref;>
+<!ELEMENT profile_ref    %tag.content;>
+<!ATTLIST profile_ref    %tag.ref;>
+<!ELEMENT obd_ref        %tag.content;>
+<!ATTLIST obd_ref        %tag.ref;>
+<!ELEMENT mds_ref        %tag.content;>
+<!ATTLIST mds_ref        %tag.ref;>
+<!ELEMENT osc_ref        %tag.content;>
+<!ATTLIST osc_ref        %tag.ref;>
+<!ELEMENT lov_ref        %tag.content;>
+<!ATTLIST lov_ref        %tag.ref;>
+<!ELEMENT mdc_ref        %tag.content;>
+<!ATTLIST mdc_ref        %tag.ref;>
+<!ELEMENT mountpoint_ref %tag.content;>
+<!ATTLIST mountpoint_ref %tag.ref;>
+<!ELEMENT service_ref    %tag.content;>
+<!ATTLIST service_ref    %tag.ref;>
+<!ELEMENT server_ref     %tag.content;>
+<!ATTLIST server_ref     %tag.ref;>
+<!ELEMENT failover_ref   %tag.content;>
+<!ATTLIST failover_ref   %tag.ref;>
+
