@@ -30,7 +30,6 @@
 
 command_t list[] = {
         {"network", jt_ptl_network, 0,"setup the NAL (args: nal name)"},
-        {"privileged_only", jt_ptl_privileged_only, 0, "add privileged ports"},
         {"print_interfaces", jt_ptl_print_interfaces, 0, "print interface entries (no args)"},
         {"add_interface", jt_ptl_add_interface, 0, "add interface entry (args: ip [netmask])"},
         {"del_interface", jt_ptl_del_interface, 0, "delete interface entries (args: [ip])"},
