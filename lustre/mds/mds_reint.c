@@ -627,9 +627,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 0))) {
                         if (rc > 0) {
                                 /* dir got splitted */
-                                CERROR("%s: splitted %lu/%u - %d\n",
+                                CERROR("%s: splitted %lu/%u - %d/%d\n",
                                        obd->obd_name, dparent->d_inode->i_ino,
-                                       dparent->d_inode->i_generation, rc);
+                                       dparent->d_inode->i_generation, rc,
+                                       parent_mode);
+                                CERROR("  creation %*s was requested\n",
+                                       rec->ur_namelen - 1, rec->ur_name);
                                 GOTO(cleanup, rc = -ERESTART);
                         } else {
                                 /* error happened during spitting. */

@@ -79,7 +79,10 @@ struct super_operations lustre_super_operations =
 {
         .read_inode2    = ll_read_inode2,
         .clear_inode    = ll_clear_inode,
+#if 0
+        /* should be fixed first */
         .delete_inode   = ll_delete_inode,
+#endif
         .put_super      = lustre_put_super,
         .statfs         = ll_statfs,
         .umount_begin   = ll_umount_begin,
