@@ -9,16 +9,7 @@ LOCALHOST=4
 SERVER=5
 
 setup
-
-$PTLCTL <<EOF
-setup $NETWORK
-mynid $LOCALHOST
-connect $LOCALHOST
-add_uuid self
-connect $SERVER
-add_uuid mds
-add_uuid ost
-EOF
+setup_portals
 
 tmp_fs ext2 /tmp/ost 10000
 OST=${LOOPDEV}
