@@ -46,7 +46,7 @@ struct fsfilt_operations {
                                  int niocount, struct niobuf_remote *nb);
         int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
-                               struct iattr *iattr);
+                               struct iattr *iattr, int do_trunc);
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
                               int size);
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
@@ -79,8 +79,11 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 static inline void *fsfilt_start(struct obd_device *obd,
                                  struct inode *inode, int op)
 {
+        long now = jiffies;
         void *handle = obd->obd_fsops->fs_start(inode, op);
-        CDEBUG(D_HA, "starting handle %p\n", handle);
+        CDEBUG(D_HA, "started handle %p\n", handle);
+        if (time_after(jiffies, now + 15*HZ))
+                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
         return handle;
 }
 
@@ -88,32 +91,33 @@ static inline void *fsfilt_brw_start(struct obd_device *obd, int objcount,
                                      struct fsfilt_objinfo *fso, int niocount,
                                      struct niobuf_remote *nb)
 {
+        long now = jiffies;
         void *handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount,nb);
-        CDEBUG(D_HA, "starting handle %p\n", handle);
+        CDEBUG(D_HA, "started handle %p\n", handle);
+        if (time_after(jiffies, now + 15*HZ))
+                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
         return handle;
 }
 
 static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
                                 void *handle, int force_sync)
 {
+        long now = jiffies;
+        int rc = obd->obd_fsops->fs_commit(inode, handle, force_sync);
         CDEBUG(D_HA, "committing handle %p\n", handle);
-        return obd->obd_fsops->fs_commit(inode, handle, force_sync);
+        if (time_after(jiffies, now + 15*HZ))
+                CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
+        return rc;
 }
 
 static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
-                                 void *handle, struct iattr *iattr)
+                                 void *handle, struct iattr *iattr,int do_trunc)
 {
+        long now = jiffies;
         int rc;
-        /*
-         * NOTE: we probably don't need to take i_sem here when changing
-         *       ATTR_SIZE because the MDS never needs to truncate a file.
-         *       The ext2/ext3 code never truncates a directory, and files
-         *       stored on the MDS are entirely sparse (no data blocks).
-         *       If we do need to get it, we can do it here.
-         */
-        lock_kernel();
-        rc = obd->obd_fsops->fs_setattr(dentry, handle, iattr);
-        unlock_kernel();
+        rc = obd->obd_fsops->fs_setattr(dentry, handle, iattr, do_trunc);
+        if (time_after(jiffies, now + 15*HZ))
+                CERROR("long setattr time %lus\n", (jiffies - now) / HZ);
 
         return rc;
 }
