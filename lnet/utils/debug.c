@@ -41,7 +41,6 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-
 #include <sys/utsname.h>
 
 #include <portals/api-support.h>
@@ -736,8 +735,8 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
         }
 
         return 0;
-#endif /* Headers are 2.6-only */
-#endif /* !HAVE_LINUX_VERSION_H */
+#endif // Headers are 2.6-only
+#endif // !HAVE_LINUX_VERSION_H
         return -EINVAL;
 }
 
