@@ -33,7 +33,7 @@ bin_PROGRAMS = mcreate munlink
 endif # TESTS
 
 stat_SOURCES = stat.c stat_fs.h
-mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
+# mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
 
 if MPITESTS
 LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
