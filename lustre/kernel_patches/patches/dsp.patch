@@ -1,19 +1,21 @@
-Index: linux/kernel/bootimg.c
-===================================================================
-RCS file: /chaos/cvs/kernel-rh/linux/kernel/Attic/bootimg.c,v
-retrieving revision 1.1.6.1
-retrieving revision 1.1.6.2
-diff -u -r1.1.6.1 -r1.1.6.2
---- linux/kernel/bootimg.c	1 Apr 2003 12:17:41 -0000	1.1.6.1
-+++ linux/kernel/bootimg.c	9 Apr 2003 10:12:39 -0000	1.1.6.2
-@@ -238,8 +238,19 @@
+ arch/i386/kernel/crash.c |   24 +++++++++++++++++-------
+ arch/i386/kernel/nmi.c   |    2 +-
+ include/asm-i386/apic.h  |    1 +
+ include/linux/crash.h    |    2 +-
+ kernel/bootimg.c         |   13 ++++++++++++-
+ kernel/bootimg_pic.c     |    6 ++++--
+ 6 files changed, 36 insertions(+), 12 deletions(-)
+
+--- linux-rh-2.4.20-8/kernel/bootimg.c~dsp	2003-05-07 19:30:47.000000000 +0800
++++ linux-rh-2.4.20-8-root/kernel/bootimg.c	2003-05-07 19:31:12.000000000 +0800
+@@ -238,9 +238,20 @@ int boot_image()
  	int error = -ENOMEM;
  
  	if (bootimg_checksum(__va(bootimg_dsc.page_dir),bootimg_dsc.pages) 
 -		!= bootimg_dsc.csum)
 +		!= bootimg_dsc.csum) {
  		printk("Checksum of kernel image failed.  Rebooting via BIOS\n");
-+
+ 
 +		/* Before calling machine_restart(), make sure it will not
 +		 * simply call this function recursively.
 +		 */
@@ -24,18 +26,13 @@ diff -u -r1.1.6.1 -r1.1.6.2
 +		for (; ; )
 +			__asm__ __volatile__ ("hlt");
 +	}
- 
++
  	code_page = get_identity_mapped_page();
  	if (!code_page) goto out3;
-Index: linux/kernel/bootimg_pic.c
-===================================================================
-RCS file: /chaos/cvs/kernel-rh/linux/kernel/Attic/bootimg_pic.c,v
-retrieving revision 1.1.6.1
-retrieving revision 1.1.6.2
-diff -u -r1.1.6.1 -r1.1.6.2
---- linux/kernel/bootimg_pic.c	1 Apr 2003 12:17:41 -0000	1.1.6.1
-+++ linux/kernel/bootimg_pic.c	9 Apr 2003 10:12:39 -0000	1.1.6.2
-@@ -69,7 +69,8 @@
+ 	code = (relocate_and_jump_t) virt_to_phys((void *) code_page);
+--- linux-rh-2.4.20-8/kernel/bootimg_pic.c~dsp	2003-05-07 19:30:47.000000000 +0800
++++ linux-rh-2.4.20-8-root/kernel/bootimg_pic.c	2003-05-07 19:31:12.000000000 +0800
+@@ -69,7 +69,8 @@ void __bootimg relocate_and_jump(void)
  			for (j = i+1; j < dsc.pages; j++) {
  				table = dsc.page_dir+FROM_TABLE(j);
  				if (((unsigned long) *table) == to) {
@@ -45,7 +42,7 @@ diff -u -r1.1.6.1 -r1.1.6.2
  					break;
  				}
  				if ((*table)[PAGE_NR(j)] == to) {
-@@ -79,7 +80,8 @@
+@@ -79,7 +80,8 @@ void __bootimg relocate_and_jump(void)
  				}
  				table = dsc.page_dir+TO_TABLE(j);
  				if (((unsigned long) *table) == to) {
@@ -55,15 +52,9 @@ diff -u -r1.1.6.1 -r1.1.6.2
  					break;
  				}
  			}
-Index: linux/include/asm-i386/apic.h
-===================================================================
-RCS file: /chaos/cvs/kernel-rh/linux/include/asm-i386/apic.h,v
-retrieving revision 1.2.2.1
-retrieving revision 1.2.2.1.2.1
-diff -u -r1.2.2.1 -r1.2.2.1.2.1
---- linux/include/asm-i386/apic.h	12 Mar 2003 19:51:13 -0000	1.2.2.1
-+++ linux/include/asm-i386/apic.h	9 Apr 2003 10:12:39 -0000	1.2.2.1.2.1
-@@ -86,6 +86,7 @@
+--- linux-rh-2.4.20-8/include/asm-i386/apic.h~dsp	2003-05-07 17:00:16.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/asm-i386/apic.h	2003-05-07 19:31:12.000000000 +0800
+@@ -86,6 +86,7 @@ extern struct pm_dev *apic_pm_register(p
  extern void apic_pm_unregister(struct pm_dev*);
  
  extern int check_nmi_watchdog (void);
@@ -71,15 +62,9 @@ diff -u -r1.2.2.1 -r1.2.2.1.2.1
  
  extern unsigned int nmi_watchdog;
  #define NMI_NONE	0
-Index: linux/include/linux/crash.h
-===================================================================
-RCS file: /chaos/cvs/kernel-rh/linux/include/linux/Attic/crash.h,v
-retrieving revision 1.1.6.1
-retrieving revision 1.1.6.2
-diff -u -r1.1.6.1 -r1.1.6.2
---- linux/include/linux/crash.h	1 Apr 2003 12:17:41 -0000	1.1.6.1
-+++ linux/include/linux/crash.h	9 Apr 2003 10:12:39 -0000	1.1.6.2
-@@ -71,7 +71,7 @@
+--- linux-rh-2.4.20-8/include/linux/crash.h~dsp	2003-05-07 19:30:47.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/crash.h	2003-05-07 19:31:12.000000000 +0800
+@@ -71,7 +71,7 @@ extern void stop_this_cpu(void *);
  #define CRASH_ZALLOC_PAGES 16*5*2	/* 2 to handle crash in crash */
  #define CRASH_LOW_WATER_PAGES 100
  
@@ -88,23 +73,18 @@ diff -u -r1.1.6.1 -r1.1.6.2
  
  #define CRASH_MARK_RESERVED(addr) (set_bit(PG_reserved,&mem_map[MAP_NR(addr)].flags))
  #define CRASH_CLEAR_RESERVED(addr) (clear_bit(PG_reserved,&mem_map[MAP_NR(addr)].flags))
-Index: linux/arch/i386/kernel/crash.c
-===================================================================
-RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/Attic/crash.c,v
-retrieving revision 1.1.6.1
-retrieving revision 1.1.6.2
-diff -u -r1.1.6.1 -r1.1.6.2
---- linux/arch/i386/kernel/crash.c	1 Apr 2003 12:17:40 -0000	1.1.6.1
-+++ linux/arch/i386/kernel/crash.c	9 Apr 2003 10:12:38 -0000	1.1.6.2
-@@ -9,6 +9,7 @@
+--- linux-rh-2.4.20-8/arch/i386/kernel/crash.c~dsp	2003-05-07 19:30:47.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/i386/kernel/crash.c	2003-05-07 19:31:39.000000000 +0800
+@@ -9,6 +9,8 @@
  #include <linux/crash.h>
  #include <linux/reboot.h>
  #include <linux/bootimg.h>
++#include <asm/fixmap.h>
 +#include <asm/apic.h>
  
  inline void crash_save_regs(void) {
  	static unsigned long regs[8];
-@@ -30,15 +31,23 @@
+@@ -30,15 +32,23 @@ inline void crash_save_regs(void) {
   */
  void crash_save_current_state(struct task_struct *tp)
  {
@@ -135,15 +115,9 @@ diff -u -r1.1.6.1 -r1.1.6.2
  
  	save_core();
  
-Index: linux/arch/i386/kernel/nmi.c
-===================================================================
-RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/nmi.c,v
-retrieving revision 1.2.2.1.2.3
-retrieving revision 1.2.2.1.2.4
-diff -u -r1.2.2.1.2.3 -r1.2.2.1.2.4
---- linux/arch/i386/kernel/nmi.c	5 Apr 2003 05:51:27 -0000	1.2.2.1.2.3
-+++ linux/arch/i386/kernel/nmi.c	9 Apr 2003 10:12:38 -0000	1.2.2.1.2.4
-@@ -138,7 +138,7 @@
+--- linux-rh-2.4.20-8/arch/i386/kernel/nmi.c~dsp	2003-05-07 19:30:47.000000000 +0800
++++ linux-rh-2.4.20-8-root/arch/i386/kernel/nmi.c	2003-05-07 19:31:12.000000000 +0800
+@@ -138,7 +138,7 @@ __setup("nmi_watchdog=", setup_nmi_watch
  
  struct pm_dev *nmi_pmdev;
  
@@ -152,3 +126,5 @@ diff -u -r1.2.2.1.2.3 -r1.2.2.1.2.4
  {
  	switch (boot_cpu_data.x86_vendor) {
  	case X86_VENDOR_AMD:
+
+_
