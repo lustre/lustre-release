@@ -41,6 +41,7 @@ runas
 openfile
 unlinkmany
 fchdir_test
+*.cmd
 getdents
 o_directory
 mkdirdeep
