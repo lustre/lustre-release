@@ -488,7 +488,7 @@ def init_loop(file, size, fstype):
     if dev:
         print 'WARNING file:', file, 'already mapped to', dev
         return dev
-    if not os.access(file, os.R_OK | os.W_OK):
+    if config.reformat()  or not os.access(file, os.R_OK | os.W_OK):
         run("dd if=/dev/zero bs=1k count=0 seek=%d of=%s" %(size,  file))
     loop = loop_base()
     # find next free loop
