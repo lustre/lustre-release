@@ -55,12 +55,15 @@ struct ll_inode_info {
 #define LL_COMMITCBD_STOPPED   0x2
 #define LL_COMMITCBD_RUNNING   0x4
 
+#define LL_SBI_NOLCK   0x1
+
 struct ll_sb_info {
         unsigned char             ll_sb_uuid[37];
         struct lustre_handle      ll_mdc_conn;
         struct lustre_handle      ll_osc_conn;
         obd_id                    ll_rootino; /* number of root inode */
-
+        
+        int                       ll_flags;
         wait_queue_head_t         ll_commitcbd_waitq;
         wait_queue_head_t         ll_commitcbd_ctl_waitq;
         int                       ll_commitcbd_flags;
