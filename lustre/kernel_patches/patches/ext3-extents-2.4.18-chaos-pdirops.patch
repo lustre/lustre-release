@@ -1823,8 +1823,8 @@
  #define EXT3_MOUNT_ASYNCDEL		0x20000	/* Delayed deletion */
  #define EXT3_MOUNT_IOPEN		0x40000	/* Allow access via iopen */
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
-+#define EXT3_MOUNT_EXTENTS		0x100000	/* Extents support */
-+#define EXT3_MOUNT_EXTDEBUG		0x200000	/* Extents debug */
++#define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
++#define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
