@@ -249,9 +249,11 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
         /* if it's a directory */
         if (*fname == '\0') {
                 if (header && (obdstripe == 1)) {
-                        printf("count: %d, size: %d, offset: %d\n\n",
+                        printf("default lmm_stripe_count:  %u\n"
+                               "default lmm_stripe_size:   %u\n"
+                               "default lmm_stripe_offset: %u\n",
                                lum->lmm_stripe_count, lum->lmm_stripe_size,
-                               (short int)lum->lmm_stripe_offset);
+                               (int)lum->lmm_stripe_offset);
                 }
                 return;
         }
