@@ -40,6 +40,8 @@ DATE=$(date)
 USE_DATESTAMP=1
 RPMBUILD=
 
+export CC=${CC:-gcc}
+
 cleanup()
 {
     true
