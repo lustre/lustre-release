@@ -38,6 +38,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_net.h>
+#include <portals/list.h>
 #include <linux/lustre_fsfilt.h>
 
 #ifdef __KERNEL__
