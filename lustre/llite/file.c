@@ -55,34 +55,38 @@ static int ll_file_open(struct inode *inode, struct file *file)
                       &fd->fd_mdshandle, &req); 
         fd->fd_req = req;
         ptlrpc_req_finished(req);
-        if (rc) {
-                if (rc > 0) 
-                        rc = -rc;
-                GOTO(out, rc);
-        }
-        if (!fd->fd_mdshandle)
+        if (rc)
+                GOTO(out_req, -abs(rc));
+        if (!fd->fd_mdshandle) {
                 CERROR("mdc_open didn't assign fd_mdshandle\n");
-        
+                /* XXX handle this how, abort or is it non-fatal? */
+        }
 
         oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
-        if (oa == NULL)
+        if (oa == NULL) {
                 LBUG();
+                GOTO(out_mdc, rc = -ENOMEM);
+        }
         rc = obd_open(ll_i2obdconn(inode), oa);
         obdo_free(oa);
         if (rc) {
-                /* XXX: Need to do mdc_close here! */
-                GOTO(out, rc = abs(rc));
+                GOTO(out_mdc, rc = -abs(rc));
         }
 
         file->private_data = fd;
 
         EXIT;
- out:
-        if (rc && fd) {
-                kmem_cache_free(ll_file_data_slab, fd);
-                file->private_data = NULL;
-        }
 
+        return 0;
+out_mdc:
+        mdc_close(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
+                  S_IFREG, fd->fd_mdshandle, &req);
+out_req:
+        ptlrpc_free_req(req);
+//out_fd:
+        kmem_cache_free(ll_file_data_slab, fd);
+        file->private_data = NULL;
+out:
         return rc;
 }
 
@@ -103,12 +107,15 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
 
         oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
-        if (oa == NULL)
+        if (oa == NULL) {
                 LBUG();
+                GOTO(out_fd, rc = -ENOENT);
+        }
         rc = obd_close(ll_i2obdconn(inode), oa);
         obdo_free(oa);
-        if (rc)
-                GOTO(out, abs(rc));
+        if (rc) {
+                GOTO(out_fd, abs(rc));
+        }
 
         if (file->f_flags & O_WRONLY) {
                 struct iattr attr;
@@ -136,13 +143,12 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
         ptlrpc_free_req(fd->fd_req);
 
-        EXIT; 
+        EXIT;
 
- out:
-        if (!rc && fd) {
-                kmem_cache_free(ll_file_data_slab, fd);
-                file->private_data = NULL;
-        }
+out_fd:
+        kmem_cache_free(ll_file_data_slab, fd);
+        file->private_data = NULL;
+out:
         return rc;
 }
 
