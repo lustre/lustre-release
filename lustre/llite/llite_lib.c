@@ -670,8 +670,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * nodes through dirtying and writeback of final cached
                  * pages.  This last one is especially bad for racing
                  * o_append users on other nodes. */
+                /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
+                LASSERT(atomic_read(&inode->i_sem.count) == 0);
+                up(&inode->i_sem);
                 rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
                                                  &extent, &lockh);
+                down(&inode->i_sem);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
                                 RETURN(-ENOLCK);
