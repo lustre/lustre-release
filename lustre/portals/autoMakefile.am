@@ -1,0 +1,8 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+EXTRA_DIST = archdep.m4 build.m4 include 
+
+SUBDIRS = portals libcfs knals unals router tests doc utils
