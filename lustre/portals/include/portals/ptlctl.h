@@ -39,9 +39,12 @@ char * ptl_nid2str (char *buffer, ptl_nid_t nid);
 
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
-int jt_ptl_print_autoconnects (int argc, char **argv);
-int jt_ptl_add_autoconnect (int argc, char **argv);
-int jt_ptl_del_autoconnect (int argc, char **argv);
+int jt_ptl_print_interfaces(int argc, char **argv);
+int jt_ptl_add_interface(int argc, char **argv);
+int jt_ptl_del_interface(int argc, char **argv);
+int jt_ptl_print_peers (int argc, char **argv);
+int jt_ptl_add_peer (int argc, char **argv);
+int jt_ptl_del_peer (int argc, char **argv);
 int jt_ptl_print_connections (int argc, char **argv);
 int jt_ptl_connect(int argc, char **argv);
 int jt_ptl_disconnect(int argc, char **argv);
@@ -54,9 +57,6 @@ int jt_ptl_add_uuid(int argc, char **argv);
 int jt_ptl_add_uuid_old(int argc, char **argv); /* backwards compatibility  */
 int jt_ptl_close_uuid(int argc, char **argv);
 int jt_ptl_del_uuid(int argc, char **argv);
-int jt_ptl_rxmem (int argc, char **argv);
-int jt_ptl_txmem (int argc, char **argv);
-int jt_ptl_nagle (int argc, char **argv);
 int jt_ptl_add_route (int argc, char **argv);
 int jt_ptl_del_route (int argc, char **argv);
 int jt_ptl_notify_router (int argc, char **argv);
