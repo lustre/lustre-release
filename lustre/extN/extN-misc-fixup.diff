@@ -1,0 +1,15 @@
+--- linux-2.4.17/fs/extN/super.c.orig	Fri Dec 21 10:41:55 2001
++++ linux-2.4.17/fs/extN/super.c	Fri Mar 22 11:00:41 2002
+@@ -1344,10 +1342,10 @@
+ 		printk(KERN_ERR "EXTN-fs: I/O error on journal device\n");
+ 		goto out_journal;
+ 	}
+-	if (ntohl(journal->j_superblock->s_nr_users) != 1) {
++	if (be32_to_cpu(journal->j_superblock->s_nr_users) != 1) {
+ 		printk(KERN_ERR "EXTN-fs: External journal has more than one "
+ 					"user (unsupported) - %d\n",
+-			ntohl(journal->j_superblock->s_nr_users));
++			be32_to_cpu(journal->j_superblock->s_nr_users));
+ 		goto out_journal;
+ 	}
+ 	EXTN_SB(sb)->journal_bdev = bdev;
