@@ -1019,18 +1019,14 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_CLEAR_DEBUG             _IOWR('e', 32, long)
 #define IOC_PORTAL_MARK_DEBUG              _IOWR('e', 33, long)
 #define IOC_PORTAL_PANIC                   _IOWR('e', 34, long)
-#define IOC_PORTAL_ADD_ROUTE               _IOWR('e', 35, long)
-#define IOC_PORTAL_DEL_ROUTE               _IOWR('e', 36, long)
-#define IOC_PORTAL_GET_ROUTE               _IOWR('e', 37, long)
-#define IOC_PORTAL_NAL_CMD	           _IOWR('e', 38, long)
-#define IOC_PORTAL_GET_NID                 _IOWR('e', 39, long)
-#define IOC_PORTAL_FAIL_NID                _IOWR('e', 40, long)
-#define IOC_PORTAL_SET_DAEMON              _IOWR('e', 41, long)
-#define IOC_PORTAL_NOTIFY_ROUTER           _IOWR('e', 42, long)
-#define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 43, long)
-#define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 44, long)
-#define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 45, long)
-#define IOC_PORTAL_MAX_NR                             45
+#define IOC_PORTAL_NAL_CMD	           _IOWR('e', 35, long)
+#define IOC_PORTAL_GET_NID                 _IOWR('e', 36, long)
+#define IOC_PORTAL_FAIL_NID                _IOWR('e', 37, long)
+#define IOC_PORTAL_SET_DAEMON              _IOWR('e', 38, long)
+#define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, long)
+#define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, long)
+#define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, long)
+#define IOC_PORTAL_MAX_NR                             41
 
 enum {
         QSWNAL  =  1,
@@ -1066,6 +1062,10 @@ extern ptl_handle_ni_t  kscimacnal_ni;
 #define NAL_CMD_ADD_AUTOCONN         106
 #define NAL_CMD_GET_AUTOCONN         107
 #define NAL_CMD_GET_TXDESC           108
+#define NAL_CMD_ADD_ROUTE            109
+#define NAL_CMD_DEL_ROUTE            110
+#define NAL_CMD_GET_ROUTE            111
+#define NAL_CMD_NOTIFY_ROUTER        112
 
 enum {
         DEBUG_DAEMON_START       =  1,
