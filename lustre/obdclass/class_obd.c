@@ -409,7 +409,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		conn.oc_id = mvdata.conn_id;
 
-		err = obddev->obd_type->typ_ops->o_migrate(&conn, srcoa, tgtoa);
+		err = obddev->obd_type->typ_ops->o_migrate(&conn, tgtoa, srcoa);
 
 		obd_free_oa(srcoa);
 		obd_free_oa(tgtoa);

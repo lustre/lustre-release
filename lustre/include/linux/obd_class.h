@@ -238,7 +238,7 @@ static __inline__ obdattr *obd_oa_fromid(struct obd_conn *conn,  objid id)
 	OBD_ALLOC(res, obdattr *, sizeof(*res));
 	if ( !res ) 
 		return NULL;
-
+	memset(res, 0, sizeof(*res));
 	res->i_ino = id;
 	if (conn->oc_dev->obd_type->typ_ops->o_getattr(conn, res)) {
 		OBD_FREE(res, sizeof(*res));

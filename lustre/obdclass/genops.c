@@ -199,16 +199,21 @@ void lck_page(struct page *page)
                 ___wait_on_page(page);
 }
 
-int gen_copy_data(struct obd_conn *conn, obdattr *src, obdattr *tgt)
+/* XXX this should return errors correctly, so should migrate!!! */
+int gen_copy_data(struct obd_conn *conn, obdattr *tgt, obdattr *src)
 {
 	struct page *page;
 	unsigned long index = 0;
 	int rc;
+	ENTRY;
 
+	CDEBUG(D_INODE, "src: blocks %ld, size %Ld\n", 
+	       src->i_blocks, src->i_size);
 	page = alloc_page(GFP_USER);
-	if ( !page ) 
+	if ( !page ) {
+		EXIT;
 		return -ENOMEM;
-
+	}
 	
 	lck_page(page);
 	
@@ -223,6 +228,8 @@ int gen_copy_data(struct obd_conn *conn, obdattr *src, obdattr *tgt)
 		rc = OBP(conn->oc_dev,brw)(WRITE, conn, tgt, page, 1);
 		if ( rc != PAGE_SIZE)
 			break;
+
+		CDEBUG(D_INODE, "Copied 1 page ...\n");
 		
 		index ++;
 	}
@@ -231,5 +238,6 @@ int gen_copy_data(struct obd_conn *conn, obdattr *src, obdattr *tgt)
 	UnlockPage(page);
 	__free_page(page);
 
+	EXIT;
 	return 0;
 }
