@@ -1,7 +1,7 @@
 --- linux-pristine/./include/linux/lustre_version.h	Wed Dec 31 19:00:00 1969
 +++ linux/./include/linux/lustre_version.h	Tue Nov 26 07:02:14 2002
 @@ -0,0 +1 @@
-+#define LUSTRE_KERNEL_VERSION 3
++#define LUSTRE_KERNEL_VERSION 4
 --- linux-pristine/./arch/ia64/mm/init.c	Thu Dec  5 10:47:25 2002
 +++ linux/./arch/ia64/mm/init.c	Fri Nov 29 18:06:20 2002
 @@ -44,6 +44,12 @@
@@ -557,7 +557,7 @@
  
 +void intent_release(struct dentry *de, struct lookup_intent *it)
 +{
-+	if (de->d_op && de->d_op->d_intent_release)
++	if (it && de->d_op && de->d_op->d_intent_release)
 +		de->d_op->d_intent_release(de, it);
 +}
 +
@@ -1167,7 +1167,7 @@
 +				   new_dir->d_inode, new_dentry, &it);
  	unlock_kernel();
  
-+	intent_release(new_dentry, NULL);
++	intent_release(new_dentry, &it);
  	dput(new_dentry);
  exit4:
 +	intent_release(old_dentry, &it);
