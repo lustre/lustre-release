@@ -234,6 +234,31 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
         int rc;
 
         lock_kernel();
+
+        /* A _really_ horrible hack to avoid removing the data stored
+         * in the block pointers; this is really the "small" stripe MD data.
+         * We can avoid further hackery by virtue of the MDS file size being
+         * zero all the time (which doesn't invoke block truncate at unlink
+         * time), so we assert we never change the MDS file size from zero.
+         */
+        if (iattr->ia_valid & ATTR_SIZE) {
+                CERROR("hmm, setting %*s file size to "LPU64"\n",
+                       dentry->d_name.len, dentry->d_name.name, iattr->ia_size);
+                LASSERT(iattr->ia_size == 0);
+#if 0
+                /* ATTR_SIZE would invoke truncate: clear it */
+                iattr->ia_valid &= ~ATTR_SIZE;
+                inode->i_size = iattr->ia_size;
+
+                /* make sure _something_ gets set - so new inode
+                 * goes to disk (probably won't work over XFS
+                 */
+                if (!iattr->ia_valid & ATTR_MODE) {
+                        iattr->ia_valid |= ATTR_MODE;
+                        iattr->ia_mode = inode->i_mode;
+                }
+#endif
+        }
         if (inode->i_op->setattr)
                 rc = inode->i_op->setattr(dentry, iattr);
         else
@@ -249,29 +274,58 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
 {
         int rc;
 
-        down(&inode->i_sem);
-        lock_kernel();
-        rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
-        unlock_kernel();
-        up(&inode->i_sem);
+        /* Nasty hack city - store stripe MD data in the block pointers if
+         * it will fit, because putting it in an EA currently kills the MDS
+         * performance.  We'll fix this with "fast EAs" in the future.
+         */
+        if (lmm_size <= sizeof(EXTN_I(inode)->i_data) -
+                        sizeof(EXTN_I(inode)->i_data[0])) {
+                /* XXX old_size is debugging only */
+                int old_size = EXTN_I(inode)->i_data[0];
+                if (old_size != 0) {
+                        LASSERT(old_size < sizeof(EXTN_I(inode)->i_data));
+                        CERROR("setting EA on %lu again... interesting\n",
+                               inode->i_ino);
+                }
 
-        if (rc) {
+                EXTN_I(inode)->i_data[0] = cpu_to_le32(lmm_size);
+                memcpy(&EXTN_I(inode)->i_data[1], lmm, lmm_size);
+                mark_inode_dirty(inode);
+                return 0;
+        } else {
+                down(&inode->i_sem);
+                lock_kernel();
+                rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
+                                    XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
+                unlock_kernel();
+                up(&inode->i_sem);
+        }
+
+        if (rc)
                 CERROR("error adding MD data to inode %lu: rc = %d\n",
                        inode->i_ino, rc);
-                if (rc != -ENOSPC) LBUG();
-        }
         return rc;
 }
 
-static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int size)
+static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
+
+        if (EXTN_I(inode)->i_data[0]) {
+                int size = le32_to_cpu(EXTN_I(inode)->i_data[0]);
+                LASSERT(size < sizeof(EXTN_I(inode)->i_data));
+                if (lmm) {
+                        if (size > lmm_size)
+                                return -ERANGE;
+                        memcpy(lmm, &EXTN_I(inode)->i_data[1], size);
+                }
+                return size;
+        }
 
         down(&inode->i_sem);
         lock_kernel();
         rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, lmm, size);
+                            XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size);
         unlock_kernel();
         up(&inode->i_sem);
 
@@ -282,7 +336,7 @@ static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int size)
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %s from inode %lu: "
                        "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
-                memset(lmm, 0, size);
+                memset(lmm, 0, lmm_size);
                 return (rc == -ENODATA) ? 0 : rc;
         }
 
