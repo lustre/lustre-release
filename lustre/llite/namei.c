@@ -104,7 +104,7 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                           IT_MKNOD)))
                 lock_mode = LCK_PW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
-                              IT_RMDIR | IT_RENAME | IT_RENAME2))
+                              IT_RMDIR | IT_RENAME | IT_RENAME2 | IT_READLINK))
                 lock_mode = LCK_PR;
         else if (it->it_op & IT_LOOKUP)
                 lock_mode = LCK_CR;
@@ -444,12 +444,17 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
 
         oinfo = ll_i2info(inode);
 
+        if (dentry->d_it->it_disposition) {
+                d_instantiate(dentry, inode);
+                return 0;
+        }
+
         OBD_ALLOC(oinfo->lli_symlink_name, l + 1);
+        if (!oinfo->lli_symlink_name)
+                RETURN(-ENOMEM);
+
         memcpy(oinfo->lli_symlink_name, symname, l + 1);
         inode->i_size = l;
-
-        ext2_inc_count(inode);
-        atomic_inc(&inode->i_count);
 
         return ext2_add_nondir(dentry, inode);
 }

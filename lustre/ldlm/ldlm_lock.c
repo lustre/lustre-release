@@ -283,16 +283,17 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                          * a file and its obdo */
                 case IT_CREAT:
                 case IT_CREAT|IT_OPEN:
-                case IT_MKDIR:
-                case IT_SYMLINK:
-                case IT_MKNOD:
                 case IT_LINK:
-                case IT_OPEN:
-                case IT_RENAME:
-                case IT_SETATTR:
                 case IT_LOOKUP:
-                case IT_UNLINK:
+                case IT_MKDIR:
+                case IT_MKNOD:
+                case IT_OPEN:
+                case IT_READLINK:
+                case IT_RENAME:
                 case IT_RMDIR:
+                case IT_SETATTR:
+                case IT_SYMLINK:
+                case IT_UNLINK:
                         bufcount = 3;
                         break;
                 case IT_RENAME2:
@@ -316,13 +317,13 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 switch (it->opc) {
                 case IT_CREAT:
                 case IT_CREAT|IT_OPEN:
-                case IT_MKDIR:
-                case IT_SYMLINK:
-                case IT_MKNOD:
                 case IT_LINK:
-                case IT_UNLINK:
-                case IT_RMDIR:
+                case IT_MKDIR:
+                case IT_MKNOD:
                 case IT_RENAME2:
+                case IT_RMDIR:
+                case IT_SYMLINK:
+                case IT_UNLINK:
                         rc = mds_reint_p(2, req);
                         if (rc || req->rq_status != 0) {
                                 rep->lock_policy_res2 = req->rq_status;
@@ -330,11 +331,12 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         }
                         break;
                 case IT_GETATTR:
-                case IT_READDIR:
-                case IT_RENAME:
-                case IT_OPEN:
-                case IT_SETATTR:
                 case IT_LOOKUP:
+                case IT_OPEN:
+                case IT_READDIR:
+                case IT_READLINK:
+                case IT_RENAME:
+                case IT_SETATTR:
                         rc = mds_getattr_name_p(2, req);
                         /* FIXME: we need to sit down and decide on who should
                          * set req->rq_status, who should return negative and
@@ -352,7 +354,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         LBUG();
                 }
 
-                if (it->opc == IT_UNLINK || it->opc == IT_RMDIR || 
+                if (it->opc == IT_UNLINK || it->opc == IT_RMDIR ||
                     it->opc == IT_RENAME || it->opc == IT_RENAME2)
                         RETURN(ELDLM_LOCK_ABORTED);
 
