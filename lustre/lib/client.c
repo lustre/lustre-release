@@ -164,7 +164,6 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         recovd_conn_manage(c, recovd, recover);
 
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out_req, rc);
 
