@@ -149,7 +149,6 @@ def fixme(msg = "this feature"):
 
 def panic(*args):
     msg = string.join(map(str,args))
-    print msg
     if not config.noexec():
         raise LconfError(msg)
 
@@ -193,7 +192,7 @@ class CommandError (exceptions.Exception):
 
 class LconfError (exceptions.Exception):
     def __init__(self, args):
-        self.args
+        self.args = args
 
 
 # ============================================================
@@ -473,13 +472,24 @@ def clean_loop(file):
             log('unable to clean loop device:', dev, 'for file:', file)
             logall(out)
 
+# determine if dev is formatted as a <fstype> filesystem
+def need_format(fstype, dev):
+    # FIXME don't know how to implement this    
+    return 0
+
 # initialize a block device if needed
 def block_dev(dev, size, fstype, format):
     if config.noexec(): return dev
     if not is_block(dev):
         dev = init_loop(dev, size, fstype)
-    if (format == 'yes'):
+    if config.reformat() or (need_format(fstype, dev) and format == 'yes'):
         mkfs(fstype, dev)
+
+#    else:
+#        panic("device:", dev,
+#              "not prepared, and autoformat is not set.\n",
+#              "Rerun with --reformat option to format ALL filesystems")
+        
     return dev
 
 def get_local_address(net_type):
@@ -531,7 +541,7 @@ class Module:
         self.info()
         try:
             lctl.cleanup(self.name, self.uuid)
-        except CommandError:
+        except CommandError, e:
             print "cleanup failed: ", self.name
 
     def add_module(self, modname):
@@ -572,6 +582,8 @@ class Module:
         rev = self.kmodule_list
         rev.reverse()
         for mod in rev:
+            if not self.mod_loaded(mod):
+                continue
             log('unloading module:', mod)
             if config.noexec():
                 continue
@@ -617,8 +629,11 @@ class Network(Module):
         self.info(self.net_type, self.nid, self.port)
         try:
             lctl.cleanup("RPCDEV", "")
+        except CommandError, e:
+            print "cleanup failed: ", self.name
+        try:
             lctl.disconnectAll(self.net_type)
-        except CommandError:
+        except CommandError, e:
             print "cleanup failed: ", self.name
         if self.net_type == 'tcp':
             # yikes, this ugly! need to save pid in /var/something
@@ -779,7 +794,7 @@ class OSC(Module):
         try:
             lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
         except CommandError:
-            print "disconnect failed: ", self.name
+            print " failed: ", self.name
         try:
             lctl.cleanup(self.name, self.uuid)
         except CommandError:

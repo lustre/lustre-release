@@ -6,5 +6,5 @@ if [ ! -f local.xml ]; then
    ./local.sh
 fi
 
-${LCONF} --gdb local.xml
+${LCONF} --reformat --gdb local.xml
 
