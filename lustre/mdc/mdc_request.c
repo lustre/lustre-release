@@ -91,6 +91,9 @@ struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name,
 static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 {
 	int rc;
+        DECLARE_WAITQUEUE(wait, current);
+
+	init_waitqueue_head(&req->rq_wait_for_rep);
 
 	/* XXX fix the race here (wait_for_event?)*/
 	if (peer == NULL) {
@@ -109,10 +112,27 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 		return -rc;
 	}
 
-	init_waitqueue_head(&req->rq_wait_for_rep);
         CDEBUG(0, "-- sleeping\n");
-	interruptible_sleep_on(&req->rq_wait_for_rep);
+        add_wait_queue(&req->rq_wait_for_rep, &wait);
+        while (req->rq_repbuf == NULL) {
+                set_current_state(TASK_INTERRUPTIBLE);
+
+                /* if this process really wants to die, let it go */
+                if (sigismember(&(current->pending.signal), SIGKILL) ||
+                    sigismember(&(current->pending.signal), SIGINT))
+                        break;
+
+                schedule();
+        }
+        remove_wait_queue(&req->rq_wait_for_rep, &wait);
+        set_current_state(TASK_RUNNING);
         CDEBUG(0, "-- done\n");
+
+        if (req->rq_repbuf == NULL) {
+                /* We broke out because of a signal */
+                EXIT;
+                return -EINTR;
+        }
 
 	rc = mds_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
 			    &req->rq_rep.mds);
@@ -196,6 +216,8 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 	request->rq_req.mds->size = offset;
 	request->rq_req.mds->tgtlen = sizeof(niobuf); 
 
+        //request->rq_bulklen = PAGE_SIZE;
+        //request->rq_bulkbuf = (void *)(long)niobuf.addr;
 	request->rq_bulk_portal = MDS_BULK_PORTAL;
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
