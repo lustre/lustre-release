@@ -250,7 +250,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
                                     tmp1, niocount, tmp2, local_nb, NULL);
 
         if (req->rq_status)
-                GOTO(out, 0);
+                GOTO(out, rc = 0);
 
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
