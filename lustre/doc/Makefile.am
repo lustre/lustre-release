@@ -17,20 +17,18 @@ LYXFILES= lustre.lin evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) $(GENERATED)
 GENERATED = lustre-HOWTO.lyx lustre.lyx
 
-EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) master.bib
+EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) TAG master.bib
 
 all: $(DOCS)
 
 # update date and version in document
-tag := $(shell sed -e 's/^.//' $(srcdir)/CVS/Tag)
 date := $(shell date +%x)
+tag := $(shell echo '$$Name:  $$' | sed 's/^\$$Na''me: \(.*\)\$$$$/\1/; s/^\$$Name\$$$$/HEAD/')
 addversion = sed -e 's|@T''AG@|$(tag)|g; s|@VER''SION@|$(VERSION)|g; s|@DA''TE@|$(date)|g'
 
-# Regenerate when the $(VERSION) or CVS/Tag changes.
-CVS/Tag:
-	echo NHEAD > CVS/Tag
+# Regenerate when the $(VERSION) or $Name:  $ changes.
 .INTERMEDIATE: $(GENERATED)
-$(GENERATED) : %.lyx: %.lin Makefile CVS/Tag
+$(GENERATED) : %.lyx: %.lin Makefile
 	$(addversion) $< > $@
 
 .lyx.pdf:
