@@ -1,3 +1,6 @@
+
+export PATH=$PATH:/sbin:/usr/sbin
+
 if [ -d /r ]; then
   R=/r
 fi
