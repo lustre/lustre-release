@@ -39,7 +39,7 @@ lustre.lyx: master.lyx $(IMAGES)
 	sed "s/version .*/version $$ver/" < $< > lustre.lyx;\
 	)
 
-master.pdf: master.lyx $(IMAGES)
+master.pdf: $(LYXFILES) $(IMAGES)
 
 syncweb: master.pdf
 	cp master.pdf /usr/src/www/content/lustre/docs/master.pdf
