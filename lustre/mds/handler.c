@@ -257,7 +257,7 @@ static int mds_disconnect(struct mds_obd *mds, struct ptlrpc_request *req)
         RETURN(0);
 }
 
-int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock *new,
+int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                       void *data, int data_len, struct ptlrpc_request **reqp)
 {
         ENTRY;
@@ -267,7 +267,7 @@ int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock *new,
                 RETURN(0);
         }
 
-        if (ldlm_cancel(lockh) < 0)
+        if (ldlm_cli_cancel(lockh) < 0)
                 LBUG();
         RETURN(0);
 }
