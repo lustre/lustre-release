@@ -221,7 +221,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         request = NULL;
         if (!inode || IS_ERR(inode)) {
                 ll_intent_release(dentry);
-                RETURN(ERR_PTR(-ENOMEM));
+                RETURN(inode ? (struct dentry *)inode : ERR_PTR(-ENOMEM));
         }
         EXIT;
  negative:
@@ -507,9 +507,8 @@ static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 
         ext2_inc_count(dir);
 
-        inode = ll_create_node (dir, dentry->d_name.name,
-                                dentry->d_name.len, NULL, 0,
-                                S_IFDIR | mode, 0, dentry->d_it, NULL);
+        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
+                               NULL, 0, S_IFDIR | mode, 0, dentry->d_it, NULL);
         err = PTR_ERR(inode);
         if (IS_ERR(inode))
                 goto out_dir;
