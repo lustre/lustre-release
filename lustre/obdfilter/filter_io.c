@@ -172,8 +172,13 @@ restat:
         if (left >= tot_granted) {
                 left -= tot_granted;
         } else {
+                static long next;
+                if (time_after(jiffies, next)) {
                 CERROR("granted space "LPU64" more than available "LPU64"\n",
                        tot_granted, left);
+                portals_debug_dumplog();
+                next = jiffies + 20 * HZ;
+                }
                 left = 0;
         }
 
