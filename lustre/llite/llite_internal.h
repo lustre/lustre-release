@@ -158,8 +158,6 @@ int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 void ll_read_inode2(struct inode *inode, void *opaque);
 void ll_umount_begin(struct super_block *sb);
-int ll_prep_inode(struct obd_export *exp, struct inode **inode, 
-                struct ptlrpc_request *req, int offset, struct super_block *sb);
 
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
