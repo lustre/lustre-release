@@ -112,7 +112,7 @@ int Parser_execarg(int argc, char **argv, command_t cmds[])
 	if ( cmd ) {
                 int rc = (cmd->pc_func)(argc, argv);
                 if (rc == CMD_HELP)
-                        fprintf(stderr, cmd->pc_help);
+                        fprintf(stderr, "%s\n", cmd->pc_help);
                 return rc;
 	} else {
 		printf("Try interactive use without arguments or use one of:\n");
