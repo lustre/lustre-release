@@ -790,12 +790,12 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
          * so we don't need the {get,put}connsock dance to deref
          * ksnc_sock... */
         LASSERT(!conn->ksnc_closing);
+        LASSERT(tx->tx_resid == tx->tx_nob);
         
         CDEBUG (D_NET, "Sending to "LPX64" on port %d\n", 
                 conn->ksnc_peer->ksnp_nid, conn->ksnc_port);
 
         atomic_add (tx->tx_nob, &conn->ksnc_tx_nob);
-        tx->tx_resid = tx->tx_nob;
         tx->tx_conn = conn;
 
 #if SOCKNAL_ZC
@@ -908,6 +908,8 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
                 tx->tx_nob, tx->tx_niov, tx->tx_nkiov);
 
         tx->tx_conn = NULL;                     /* only set when assigned a conn */
+        tx->tx_resid = tx->tx_nob;
+        tx->tx_hdr = (ptl_hdr_t *)tx->tx_iov[0].iov_base;
 
         g_lock = &ksocknal_data.ksnd_global_lock;
         read_lock (g_lock);
@@ -1113,7 +1115,6 @@ ksocknal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         tx->tx_iov   = fwd->kprfd_iov;
         tx->tx_nkiov = 0;
         tx->tx_kiov  = NULL;
-        tx->tx_hdr   = (ptl_hdr_t *)fwd->kprfd_iov[0].iov_base;
 
         rc = ksocknal_launch_packet (tx, nid);
         if (rc != 0)
