@@ -2,6 +2,11 @@
 
 set -e
 
+# attempt to print a useful error location, but the ERR trap isn't
+# exported to functions, and the $LINENO doesn't work in EXIT.
+
+trap 'echo ERROR $0:$FUNCNAME:$LINENO: rc: $?' ERR EXIT
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
@@ -30,7 +35,7 @@ start() {
 stop() {
     facet=$1
     shift
-    lconf --node ${facet}_facet $@ -d replay-single.xml
+    lconf --node ${facet}_facet $@ --cleanup replay-single.xml
 }
 
 replay_barrier() {
@@ -42,7 +47,7 @@ replay_barrier() {
 
 fail() {
     local facet=$1
-    stop $facet -f --failover --nomod
+    stop $facet --force --failover --nomod
     start $facet --nomod
     df $MOUNTPT
 }
@@ -128,6 +133,7 @@ run_one() {
     
     # Pretty tests run faster.
     echo -n '=====' $testnum: $message
+    local suffixlen=`echo -n $2 | awk '{print 65 - length($0)}'`
     local suffixlen=$((65 - `echo -n $2 | wc -c | awk '{print $1}'`))
     printf ' %.*s\n' $suffixlen $EQUALS
 
@@ -184,16 +190,22 @@ test_4() {
 run_test 4 "open |X| close"
 
 test_5() {
+    :
 }
 run_test 5 "|X| create (same inum/gen)"
 
 test_6() {
+    :
 }
 run_test 6 "create |X| rename unlink"
 
 test_7() {
+    :
+}
 run_test 7 "create open write rename |X| create-old-name read"
 
 stop client $CLIENTLCONFARGS
 stop ost
 stop mds $MDSLCONFARGS
+
+trap - EXIT
