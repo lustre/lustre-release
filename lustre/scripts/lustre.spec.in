@@ -3,7 +3,7 @@
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
-Release: 0208280933uml
+Release: 0208282230chaos
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -62,8 +62,9 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 
 
 %files
-#%attr(-, root, root) /usr/sbin/obdctl
+%attr(-, root, root) /usr/sbin/lmc
 %attr(-, root, root) /usr/sbin/lctl
+%attr(-, root, root) /usr/sbin/lconf
 %attr(-, root, root) /usr/sbin/llsetup.sh
 %attr(-, root, root) /usr/sbin/llrsetup.sh
 %attr(-, root, root) /usr/sbin/llcleanup.sh
@@ -94,7 +95,6 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdecho.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdfilter.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/lov.o
-#%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdfs.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/osc.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ost.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ptlrpc.o
