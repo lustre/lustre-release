@@ -87,7 +87,7 @@ int class_attach(struct lustre_cfg *lcfg)
 
 	CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
 	       MKSTR(lcfg->lcfg_inlbuf1),
-	       MKSTR(lcfg->lcfg_inlbuf2), MKSTR(lcfg->lcfg_inlbuf3));
+	       MKSTR(lcfg->lcfg_dev_name), MKSTR(lcfg->lcfg_inlbuf2));
 
         /* find the type */
         type = class_get_type(typename);
