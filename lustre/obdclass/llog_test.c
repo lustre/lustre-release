@@ -56,9 +56,9 @@ static int verify_handle(char * test, struct llog_handle *llh, int num_recs)
                 RETURN(-ERANGE);
         }
 
-        if (llh->lgh_hdr->llh_count != num_recs) {
+        if (le32_to_cpu(llh->lgh_hdr->llh_count) != num_recs) {
                 CERROR("%s: handle->count is %d, expected %d after write\n",
-                       test, llh->lgh_hdr->llh_count, num_recs);
+                       test, le32_to_cpu(llh->lgh_hdr->llh_count), num_recs);
                 RETURN(-ERANGE);
         }
 
@@ -130,8 +130,8 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         int num_recs = 1;       /* 1 for the header */
         ENTRY;
 
-        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
-        lcr.lcr_hdr.lrh_type = OST_SZ_REC;
+        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = cpu_to_le16(sizeof(lcr));
+        lcr.lcr_hdr.lrh_type = cpu_to_le32(OST_SZ_REC);
 
         CERROR("3a: write one create_rec\n");
         rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
@@ -148,8 +148,8 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         for (i = 0; i < 10; i++) {
                 struct llog_rec_hdr hdr;
                 char buf[16];
-                hdr.lrh_len = 16;
-                hdr.lrh_type = OBD_CFG_REC;
+                hdr.lrh_len = cpu_to_le16(16);
+                hdr.lrh_type = cpu_to_le32(OBD_CFG_REC);
                 memset(buf, 0, sizeof buf);
                 rc = llog_write_rec(llh, &hdr, NULL, 0, buf, -1);
                 if (rc) {
@@ -180,7 +180,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 
         if ((rc = verify_handle("3c", llh, num_recs)))
                 RETURN(rc);
-
+                
         RETURN(rc);
 }
 
@@ -196,8 +196,8 @@ static int llog_test_4(struct obd_device *obd)
 
         ENTRY;
 
-        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
-        lmr.lmr_hdr.lrh_type = 0xf00f00;
+        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = cpu_to_le16(LLOG_MIN_REC_SIZE);
+        lmr.lmr_hdr.lrh_type = cpu_to_le32(0xf00f00);
 
         sprintf(name, "%x", llog_test_rand+1);
         CERROR("4a: create a catalog log with name: %s\n", name);
@@ -238,12 +238,13 @@ static int llog_test_4(struct obd_device *obd)
         for (i = 0; i < 40000; i++) {
                 rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, NULL, NULL);
                 if (rc) {
-                        CERROR("4d: write 1000 records failed at #%d: %d\n",
+                        CERROR("4d: write 40000 records failed at #%d: %d\n",
                                i + 1, rc);
                         GOTO(out, rc);
                 }
                 num_recs++;
-         }
+        }
+        
 
  out:
         CERROR("4e: put newly-created catalog\n");
@@ -257,12 +258,12 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void 
 {
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
 
-        if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+        if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
 
-        CERROR("seeing record at index %d in log "LPX64"\n", rec->lrh_index, 
+        CERROR("seeing record at index %d in log "LPX64"\n", le16_to_cpu(rec->lrh_index), 
                lir->lid_id.lgl_oid);
         RETURN(0);
 }
@@ -272,13 +273,13 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         struct llog_cookie cookie;
         static int i = 0;
 
-        if (!llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) {
+        if (!le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
 
         cookie.lgc_lgl = llh->lgh_id;
-        cookie.lgc_index = rec->lrh_index;
+        cookie.lgc_index = le16_to_cpu(rec->lrh_index);
         
         llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
         i++;
@@ -299,8 +300,8 @@ static int llog_test_5(struct obd_device *obd)
 
         ENTRY;
 
-        rec.lrh_len = LLOG_MIN_REC_SIZE;
-        rec.lrh_type = 0xf00f00;
+        rec.lrh_len = cpu_to_le16(LLOG_MIN_REC_SIZE);
+        rec.lrh_type = cpu_to_le32(0xf00f00);
 
         CERROR("5a: re-open catalog by id\n");
         rc = llog_create(obd, &llh, &cat_logid, NULL);
@@ -323,7 +324,6 @@ static int llog_test_5(struct obd_device *obd)
                 CERROR("5c: process with cat_cancel_cb failed: %d\n", rc);
                 GOTO(out, rc);
         }
-
  out:
         CERROR("5: close re-opened catalog\n");
         if (llh)
@@ -332,7 +332,6 @@ static int llog_test_5(struct obd_device *obd)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
         RETURN(rc);
 }
-
 
 static int llog_test6_process_rec(struct llog_handle *handle,
                                   struct llog_rec_hdr * rec, void * private) 
