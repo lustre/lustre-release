@@ -300,7 +300,7 @@ ktoenal_process_transmit (ksock_conn_t *conn, long *irq_flags)
                         rc = 0;                 /* nothing sent */
                 else
                 {
-#warning FIXME: handle socket errors properly
+                        //warning FIXME: handle socket errors properly
                         CERROR ("Error socknal send(%d) %p: %d\n", tx->tx_nob, conn, rc);
                         rc = tx->tx_nob;        /* kid on for now whole packet went */
                 }
@@ -862,7 +862,7 @@ ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
                 if (len != -EAGAIN &&           /* ! nothing to read now */
                     len != 0)                   /* ! nothing to read ever */
                 {
-#warning FIXME: handle socket errors properly
+                        // warning FIXME: handle socket errors properly
                         CERROR ("Error socknal read(%d) %p: %d\n",
                                 conn->ksnc_rx_nob_wanted, conn, len);
                 }
