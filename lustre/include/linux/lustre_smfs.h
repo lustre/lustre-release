@@ -137,7 +137,9 @@ struct fs_extent{
                         (inode->i_sb->s_fs_info))->sm_cache_fsfilt)
 #endif
 
-#define I2SNAPOPS(inode) ((S2SMI(inode->i_sb))->smsi_snap_info->snap_cache_fsfilt) 
+#define I2SNAPI(inode) (&(I2SMI(inode)->sm_sninfo))
+#define I2SNAPCOPS(inode) ((S2SMI(inode->i_sb))->smsi_snap_info->snap_cache_fsfilt) 
+#define I2SNAPOPS(inode) ((S2SMI(inode->i_sb))->smsi_snap_info->snap_fsfilt) 
 
 #define S2SNAPI(sb) (S2SMI(sb)->smsi_snap_info)
 #define F2SMFI(file) ((struct smfs_file_info *)((file->private_data)))

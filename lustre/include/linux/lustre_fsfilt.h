@@ -58,8 +58,8 @@ struct fsfilt_operations {
         int     (* fs_iocontrol)(struct inode *inode, struct file *file,
                                  unsigned int cmd, unsigned long arg);
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
-                              int size, int flags);
-        int     (* fs_get_md)(struct inode *inode, void *md, int size, int flags);
+                              int size);
+        int     (* fs_get_md)(struct inode *inode, void *md, int size);
 
         /* this method is needed to make IO operation fsfilt nature depend. */
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
@@ -152,6 +152,7 @@ struct fsfilt_operations {
         int     (* fs_get_snap_info)(struct super_block *sb, struct inode *inode,
                                      void* key, __u32 keylen, void *val, 
                                      __u32 *vallen); 
+        int     (* fs_set_snap_item)(struct super_block *sb, char *name);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -367,16 +368,16 @@ static inline int fsfilt_setup(struct obd_device *obd,
 }
 static inline int
 fsfilt_set_md(struct obd_device *obd, struct inode *inode,
-              void *handle, void *md, int size, int flags)
+              void *handle, void *md, int size)
 {
-        return obd->obd_fsops->fs_set_md(inode, handle, md, size, flags);
+        return obd->obd_fsops->fs_set_md(inode, handle, md, size);
 }
 
 static inline int
 fsfilt_get_md(struct obd_device *obd, struct inode *inode,
-              void *md, int size, int flags)
+              void *md, int size)
 {
-        return obd->obd_fsops->fs_get_md(inode, md, size, flags);
+        return obd->obd_fsops->fs_get_md(inode, md, size);
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
@@ -649,6 +650,14 @@ fsfilt_del_dir_entry(struct obd_device *obd, struct dentry *dentry)
         return obd->obd_fsops->fs_del_dir_entry(obd, dentry);
 }
 
+static inline int 
+fsfilt_set_snap_item(struct obd_device *obd, struct super_block *sb,
+                     char *name)
+{
+         if (obd->obd_fsops->fs_set_snap_item)
+                return obd->obd_fsops->fs_set_snap_item(sb, name);
+        return 0;
+} 
 #endif /* __KERNEL__ */
 
 #endif

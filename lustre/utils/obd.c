@@ -2094,7 +2094,26 @@ int jt_obd_cache_off(int argc, char **argv)
                         rc);
         return rc;  
 }
+int jt_obd_snap_add(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc = 0;
+      
+        if (argc != 2)
+               return CMD_HELP; 
+        IOC_INIT(data);
+        
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
 
+        IOC_PACK(argv[0], data);
+       
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_SNAP_ADD, buf);
+        
+        if (rc)
+                fprintf(stderr, "OBD_IOC_SNAP_ADD failed: rc=%d\n", rc);
+        return rc;
+}
 static void signal_server(int sig)
 {
         if (sig == SIGINT) {

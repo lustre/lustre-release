@@ -46,7 +46,7 @@ static struct inode* fsfilt_smfs_create_indirect(struct inode *inode,
                                                  struct inode *parent,
                                                  int del)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
         struct inode *cache_inode = NULL;
         struct inode *cache_parent = NULL;
         struct inode *cache_ind_inode = NULL;
@@ -83,7 +83,7 @@ static struct inode* fsfilt_smfs_create_indirect(struct inode *inode,
 static struct inode*  fsfilt_smfs_get_indirect(struct inode *inode, 
                                                int *table, int slot)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
         struct inode *cache_inode = NULL;
         struct inode *cache_ind_inode = NULL;
         struct inode *ind_inode = NULL;
@@ -113,7 +113,7 @@ static struct inode*  fsfilt_smfs_get_indirect(struct inode *inode,
 static int fsfilt_smfs_set_indirect(struct inode *inode, int index,
                                     ino_t ind_ino, ino_t parent_ino)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
         ENTRY;
@@ -154,7 +154,7 @@ static int fsfilt_smfs_snap_feature(struct super_block *sb, int feature,
 
 static int fsfilt_smfs_is_redirector(struct inode *inode)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
         ENTRY;
@@ -175,7 +175,7 @@ static int fsfilt_smfs_is_redirector(struct inode *inode)
 }
 static int fsfilt_smfs_is_indirect(struct inode *inode)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
         ENTRY;
@@ -196,7 +196,7 @@ static int fsfilt_smfs_is_indirect(struct inode *inode)
 }
 static ino_t fsfilt_smfs_get_indirect_ino(struct inode *inode, int index)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
         ENTRY;
@@ -219,7 +219,7 @@ static ino_t fsfilt_smfs_get_indirect_ino(struct inode *inode, int index)
 static int fsfilt_smfs_destroy_indirect(struct inode *inode, int index,
                                         struct inode *next_ind)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
         struct inode *cache_inode = NULL;
         struct inode *cache_next = NULL;
         int    rc = -EIO;
@@ -249,7 +249,7 @@ static int fsfilt_smfs_destroy_indirect(struct inode *inode, int index,
 }
 static int fsfilt_smfs_restore_indirect(struct inode *inode, int index)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(inode);
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
         ENTRY;
@@ -293,7 +293,7 @@ static int fsfilt_smfs_iterate(struct super_block *sb,
 
 static int fsfilt_smfs_copy_block(struct inode *dst, struct inode *src, int blk)
 {
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(dst);
+        struct fsfilt_operations *snap_fsfilt = I2SNAPCOPS(dst);
         struct inode *cache_dst = NULL;
         struct inode *cache_src = NULL;
         int    rc = -EIO;
@@ -336,7 +336,7 @@ static int fsfilt_smfs_set_snap_info(struct super_block *sb,struct inode *inode,
                 snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
         } else if (inode) {
                 cache_inode = I2CI(inode);
-                snap_fsfilt = I2SNAPOPS(inode);
+                snap_fsfilt = I2SNAPCOPS(inode);
         }
 
         if (snap_fsfilt == NULL)
@@ -363,7 +363,7 @@ static int fsfilt_smfs_get_snap_info(struct super_block *sb, struct inode *inode
                 snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
         } else if (inode) {
                 cache_inode = I2CI(inode);
-                snap_fsfilt = I2SNAPOPS(inode);
+                snap_fsfilt = I2SNAPCOPS(inode);
         }
       
         if (snap_fsfilt == NULL)
@@ -375,7 +375,6 @@ static int fsfilt_smfs_get_snap_info(struct super_block *sb, struct inode *inode
 
         RETURN(rc);
 }
-
 struct fsfilt_operations fsfilt_smfs_snap_ops = {
         .fs_type                = "smfs_snap",
         .fs_owner               = THIS_MODULE,

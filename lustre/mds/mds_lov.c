@@ -426,7 +426,13 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 OBD_FREE(cfg_buf, data->ioc_plen1);
                 RETURN(rc);
         }
-
+        case OBD_IOC_SNAP_ADD: {
+                char *name = data->ioc_inlbuf1;
+                if (name) {
+                        rc = fsfilt_set_snap_item(obd, mds->mds_sb, name);
+                }
+                RETURN(rc);
+        }
         case OBD_IOC_PARSE: {
                 struct llog_ctxt *ctxt =
                         llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);

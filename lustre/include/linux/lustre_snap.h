@@ -142,7 +142,7 @@ struct snap_ea{
 #define SNAP_MAX_NAMELEN	64
 
 #define MAX_SNAPTABLE_COUNT     "MAXSnapCount"
-#define SNAP_TABLE_MAGIC	0x19760218
+#define SNAPTABLE_MAGIC	        0x19760218
 #define SNAPTABLE_INFO          "snaptable"
 #define SNAP_GENERATION         "snap_generation"
 struct snap {
@@ -150,7 +150,7 @@ struct snap {
         unsigned int    sn_index;
         unsigned int    sn_gen;
         unsigned int    sn_flags;
-        char    name[SNAP_MAX_NAMELEN];
+        char    sn_name[SNAP_MAX_NAMELEN];
 };
 
 struct snap_table {
@@ -168,5 +168,5 @@ struct snap_info {
 	spinlock_t               sntbl_lock;
         struct snap_table        *sntbl;
 };
-
+extern int smfs_add_snap_item(struct super_block *sb, char *name);
 #endif /*_LUSTRE_SNAP_H*/

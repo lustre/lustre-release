@@ -239,6 +239,10 @@ void smfs_put_super(struct super_block *sb)
                 cache_space_hook_exit(sb);
         if (SMFS_DO_REC(S2SMI(sb)))
                 smfs_rec_cleanup(sb);
+#if CONFIG_SNAPFS
+        if (SMFS_DO_COW(S2SMI(sb)))
+                smfs_cow_cleanup(sb);
+#endif
         if (sb)
                 sm_umount_cache(sb);
         return;
@@ -297,7 +301,7 @@ static int smfs_fill_super(struct super_block *sb,
                 sm_umount_cache(sb);
                 GOTO(out_err, err=-EINVAL);
         }
-#if CONFIG_SNAP
+#if CONFIG_SNAPFS
         if (do_cow) smfs_cow_init(sb);
 #endif
 

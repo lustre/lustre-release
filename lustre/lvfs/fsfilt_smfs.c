@@ -39,6 +39,8 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
+#include <linux/lustre_snap.h>
+#include <linux/lustre_smfs.h>
 static void *fsfilt_smfs_start(struct inode *inode, int op,
                                void *desc_private, int logs)
 {
@@ -899,6 +901,17 @@ out:
         return rc;
 }
 
+static int fsfilt_smfs_set_snap_item(struct super_block *sb, char *name)
+{
+        int rc = 0;
+
+        ENTRY;
+#if CONFIG_SNAPFS
+        rc = smfs_add_snap_item(sb, name);
+#endif
+        RETURN(rc);        
+}
+
 static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_type                = "smfs",
         .fs_owner               = THIS_MODULE,
@@ -938,6 +951,8 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_get_ino_write_extents = fsfilt_smfs_get_ino_write_extents,
         .fs_free_write_extents  = fsfilt_smfs_free_extents,
         .fs_write_extents       = fsfilt_smfs_write_extents,
+        .fs_set_snap_item       = fsfilt_smfs_set_snap_item,
+        
         /* FIXME-UMKA: probably fsfilt_smfs_get_op_len() should be
          * put here too. */
 };

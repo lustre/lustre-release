@@ -198,7 +198,6 @@ extern int init_smfs_psdev(void);
 extern void smfs_cleanup_psdev(void);
 /*smfs_cow.c */
 
-extern int smfs_cow_init(struct super_block *sb);
 /* cache_space.c */
 extern int do_cache_manage;
 struct cache_purge_queue {
@@ -308,7 +307,7 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
                         GOTO(label, rc);                                \
         }                                                               \
 }
-#if CONFIG_SNAP
+#if CONFIG_SNAPFS
 /*snap macros*/
 #define SMFS_PRE_COW(dir, dentry, op, name, rc, label)                  \
 do {                                                                    \
@@ -320,6 +319,9 @@ do {                                                                    \
                         GOTO(label, rc);                                \
         }                                                               \
 } while(0)
+extern int smfs_cow_init(struct super_block *sb);
+extern int smfs_cow_cleanup(struct super_block *sb);
+extern int smfs_init_snap_inode_info(struct inode *inode, int flags);
 #else
 #define SMFS_PRE_COW(dir, dentry, op, name, rc, label)                 
 #endif 

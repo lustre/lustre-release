@@ -1464,6 +1464,11 @@ static int fsfilt_ext3_get_snap_info(struct super_block *sb,struct inode *inode,
                 
                 rc = ext3_xattr_get(inode, EXT3_SNAP_INDEX,EXT3_SNAP_GENERATION,
                                     (char *)val, *vallen);
+                if (rc == -ENOATTR) {
+                        *((__u32 *)val) = 0; 
+                        *vallen = sizeof(int);
+                        rc = 0;
+                }
                 RETURN(rc);
         } 
         RETURN(-EINVAL);
@@ -1483,19 +1488,20 @@ static int fsfilt_ext3_set_snap_info(struct super_block *sb,struct inode *inode,
 
         if (keylen >= strlen(SNAPTABLE_INFO) 
             && strcmp(key, SNAPTABLE_INFO) == 0) {
-                struct inode *inode = sb->s_root->d_inode;
+                struct inode *root_inode = sb->s_root->d_inode;
                 handle_t *handle;
  
-                handle = ext3_journal_start(inode, EXT3_XATTR_TRANS_BLOCKS);
+                handle = ext3_journal_start(root_inode, EXT3_XATTR_TRANS_BLOCKS);
                 if( !handle )
                         RETURN(-EINVAL);
-                rc = ext3_xattr_set(handle, inode, EXT3_SNAP_INDEX, 
+                rc = ext3_xattr_set(handle, root_inode, EXT3_SNAP_INDEX, 
                                     EXT3_SNAPTABLE_EA, val, *vallen, 0); 
-	        ext3_journal_stop(handle,inode);
+	        ext3_journal_stop(handle,root_inode);
                 
                 RETURN(rc);
         } else if (keylen >= strlen(SNAP_GENERATION) 
                    && strcmp(key, SNAP_GENERATION) == 0) {
+                LASSERT(inode);
                 rc = ext3_set_generation(inode, *(int*)val);
                 
                 RETURN(rc); 
