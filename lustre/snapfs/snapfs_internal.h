@@ -47,7 +47,11 @@ struct ioc_snap_tbl_data {
 	unsigned int 	count;		/* how many snaps */
 	struct snap 	snaps[0];	/* sorted times! */
 };
-
+struct option {
+	char *opt;
+	char *value;
+	struct list_head list;
+};
 /* we have just a single snapshot control device
    it contains a list of all the snap_current info's
 */
@@ -294,7 +298,10 @@ extern struct file_operations currentfs_sym_fops;
 
 extern struct dentry_operations currentfs_dentry_ops;
 
-
+/* options.c */
+extern int init_option(char *data);
+extern void cleanup_option(void);
+extern int get_opt(struct option **opt, char **pos);
 
 #define FILTER_DID_SUPER_OPS 	0x1
 #define FILTER_DID_INODE_OPS 	0x2

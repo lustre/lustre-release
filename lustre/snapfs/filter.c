@@ -127,24 +127,15 @@ struct filter_fs *filter_get_filter_fs(const char *cache_type)
 	struct filter_fs *ops = NULL;
 	ENTRY;
 
-	if ( strlen(cache_type) == strlen("ext2") &&
-	     memcmp(cache_type, "ext2", strlen("ext2")) == 0 ) {
-		ops = &filter_oppar[FILTER_FS_EXT2];
-		CDEBUG(D_SUPER, "ops at %p\n", ops);
-	}
-
-	if ( strlen(cache_type) == strlen("ext3") &&
-	     memcmp(cache_type, "ext3", strlen("ext3")) == 0 ) {
+	if ((strlen(cache_type) == strlen("ext3") &&
+	     memcmp(cache_type, "ext3", strlen("ext3")) == 0)) {
 		ops = &filter_oppar[FILTER_FS_EXT3];
 		CDEBUG(D_SUPER, "ops at %p\n", ops);
-	}
-	if ( strlen(cache_type) == strlen("reiser") &&
+	} else if ( strlen(cache_type) == strlen("reiser") &&
 	     memcmp(cache_type, "reiser", strlen("reiser")) == 0 ) {
 		ops = &filter_oppar[FILTER_FS_REISER];
 		CDEBUG(D_SUPER, "ops at %p\n", ops);
-	}
-
-	if (ops == NULL) {
+	} else {
 		CERROR("prepare to die: unrecognized cache type for Filter\n");
 	}
 	EXIT;
