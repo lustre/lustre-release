@@ -66,8 +66,6 @@ static void *fsfilt_ext3_start(struct inode *inode, int op)
 
         switch(op) {
         case FSFILT_OP_RMDIR:
-                /* The MDS does a compound unlink + truncate */
-                nblocks += EXT3_DELETE_TRANS_BLOCKS;
         case FSFILT_OP_UNLINK:
                 nblocks += EXT3_DELETE_TRANS_BLOCKS;
                 break;
@@ -126,7 +124,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op)
  * objcount inode blocks
  * 1 superblock
  * 2 * EXT3_SINGLEDATA_TRANS_BLOCKS for the quota files
- * 
+ *
  * 1 EXT3_DATA_TRANS_BLOCKS for the last_rcvd update.
  */
 static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso)
@@ -157,7 +155,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso)
                 ngdblocks = EXT3_SB(sb)->s_gdb_count;
 
         needed += nbitmaps + ngdblocks;
-        
+
         /* last_rcvd update */
         needed += EXT3_DATA_TRANS_BLOCKS;
 
