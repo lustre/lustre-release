@@ -163,7 +163,7 @@ static void lustre_dqput(struct lustre_dquot *dquot)
 }
 
 #define DQUOT_DEBUG(dquot, fmt, arg...)                                       \
-        CDEBUG(D_QUOTA, "refcnt(%u) id(%u) type(%u) off("LPX64") flags(%lu) " \
+        CDEBUG(D_QUOTA, "refcnt(%u) id(%u) type(%u) off(%llu) flags(%lu) " \
                "bhardlimit(%u) curspace("LPX64") ihardlimit(%u) "             \
                "curinodes(%u): " fmt, atomic_read(&dquot->dq_refcnt),         \
                dquot->dq_id, dquot->dq_type, dquot->dq_off,  dquot->dq_flags, \
