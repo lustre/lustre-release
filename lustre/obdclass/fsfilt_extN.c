@@ -43,10 +43,11 @@ static kmem_cache_t *fcb_cache;
 static atomic_t fcb_cache_count = ATOMIC_INIT(0);
 
 struct fsfilt_cb_data {
-        struct journal_callback cb_jcb; /* data private to jbd */
+        struct journal_callback cb_jcb; /* jbd private data - MUST BE FIRST */
         fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
         struct obd_device *cb_obd;      /* MDS/OBD completion device */
         __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
+        void *cb_data;                  /* MDS/OST completion function data */
 };
 
 #define EXTN_XATTR_INDEX_LUSTRE         5
@@ -58,11 +59,22 @@ struct fsfilt_cb_data {
  * the inode (which we will be changing anyways as part of this
  * transaction).
  */
-static void *fsfilt_extN_start(struct inode *inode, int op)
+static void *fsfilt_extN_start(struct inode *inode, int op, void *desc_private)
 {
         /* For updates to the last recieved file */
         int nblocks = EXTN_DATA_TRANS_BLOCKS;
         void *handle;
+
+        switch(op) {
+        case FSFILT_OP_CREATE_LOG:
+                nblocks += EXTN_INDEX_EXTRA_TRANS_BLOCKS+EXTN_DATA_TRANS_BLOCKS;
+                op = FSFILT_OP_CREATE;
+                break;
+        case FSFILT_OP_UNLINK_LOG:
+                nblocks += EXTN_INDEX_EXTRA_TRANS_BLOCKS+EXTN_DATA_TRANS_BLOCKS;
+                op = FSFILT_OP_UNLINK;
+                break;
+        }
 
         switch(op) {
         case FSFILT_OP_RMDIR:
@@ -95,7 +107,7 @@ static void *fsfilt_extN_start(struct inode *inode, int op)
                  LBUG();
         }
 
-        LASSERT(!current->journal_info);
+        LASSERT(current->journal_info == desc_private);
         lock_kernel();
         handle = journal_start(EXTN_JOURNAL(inode), nblocks);
         unlock_kernel();
@@ -124,7 +136,7 @@ static void *fsfilt_extN_start(struct inode *inode, int op)
  * objcount inode blocks
  * 1 superblock
  * 2 * EXTN_SINGLEDATA_TRANS_BLOCKS for the quota files
- * 
+ *
  * 1 EXTN_DATA_TRANS_BLOCKS for the last_rcvd update.
  */
 static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
@@ -155,7 +167,7 @@ static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
                 ngdblocks = EXTN_SB(sb)->s_gdb_count;
 
         needed += nbitmaps + ngdblocks;
-        
+
         /* last_rcvd update */
         needed += EXTN_DATA_TRANS_BLOCKS;
 
@@ -185,14 +197,15 @@ static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
  * the pages have been written.
  */
 static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                   int niocount, struct niobuf_remote *nb)
+                                   int niocount, struct niobuf_remote *nb,
+                                   void *desc_private)
 {
         journal_t *journal;
         handle_t *handle;
         int needed;
         ENTRY;
 
-        LASSERT(!current->journal_info);
+        LASSERT(current->journal_info == desc_private);
         journal = EXTN_SB(fso->fso_dentry->d_inode->i_sb)->s_journal;
         needed = fsfilt_extN_credits_needed(objcount, fso);
 
@@ -218,6 +231,8 @@ static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
         if (IS_ERR(handle))
                 CERROR("can't get handle for %d credits: rc = %ld\n", needed,
                        PTR_ERR(handle));
+        else
+                LASSERT(handle->h_buffer_credits >= needed);
 
         RETURN(handle);
 }
@@ -286,8 +301,8 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
          * it will fit, because putting it in an EA currently kills the MDS
          * performance.  We'll fix this with "fast EAs" in the future.
          */
-        if (lmm_size <= sizeof(EXTN_I(inode)->i_data) -
-                        sizeof(EXTN_I(inode)->i_data[0])) {
+        if (inode->i_blocks == 0 && lmm_size <= sizeof(EXTN_I(inode)->i_data) -
+                                            sizeof(EXTN_I(inode)->i_data[0])) {
                 /* XXX old_size is debugging only */
                 int old_size = EXTN_I(inode)->i_data[0];
                 if (old_size != 0) {
@@ -319,7 +334,7 @@ static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
 
-        if (EXTN_I(inode)->i_data[0]) {
+        if (inode->i_blocks == 0 && EXTN_I(inode)->i_data[0]) {
                 int size = le32_to_cpu(EXTN_I(inode)->i_data[0]);
                 LASSERT(size < sizeof(EXTN_I(inode)->i_data));
                 if (lmm) {
@@ -411,14 +426,15 @@ static void fsfilt_extN_cb_func(struct journal_callback *jcb, int error)
 {
         struct fsfilt_cb_data *fcb = (struct fsfilt_cb_data *)jcb;
 
-        fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
+        fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, fcb->cb_data, error);
 
         OBD_SLAB_FREE(fcb, fcb_cache, sizeof *fcb);
         atomic_dec(&fcb_cache_count);
 }
 
 static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
-                                     void *handle, fsfilt_cb_t cb_func)
+                                     void *handle, fsfilt_cb_t cb_func,
+                                     void *cb_data)
 {
         struct fsfilt_cb_data *fcb;
 
@@ -430,10 +446,10 @@ static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
         fcb->cb_func = cb_func;
         fcb->cb_obd = obd;
         fcb->cb_last_rcvd = last_rcvd;
+        fcb->cb_data = cb_data;
 
         CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n", last_rcvd);
         lock_kernel();
-        /* Note that an "incompatible pointer" warning here is OK for now */
         journal_callback_set(handle, fsfilt_extN_cb_func,
                              (struct journal_callback *)fcb);
         unlock_kernel();
