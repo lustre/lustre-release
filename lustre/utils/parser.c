@@ -51,9 +51,8 @@ static int done;                   /* Set to 1 if user types exit or quit   */
 static char *skipwhitespace(char *s);
 static char *skiptowhitespace(char *s);
 static command_t *find_cmd(char *name, command_t cmds[], char **next);
-static int process(char *s, char **next, command_t *lookup, command_t **result, char **prev);
-static char *command_generator(const char *text, int state);
-static char **command_completion(char *text, int start, int end);
+static int process(char *s, char **next, command_t *lookup, command_t **result,
+                   char **prev);
 static void print_commands(char *str, command_t *table);
 
 static char * skipwhitespace(char * s) 
@@ -184,7 +183,6 @@ static int process(char *s, char ** next, command_t *lookup,
 
 #ifdef HAVE_LIBREADLINE
 static command_t * match_tbl;   /* Command completion against this table */
-
 static char * command_generator(const char * text, int state)
 {
         static int index,
