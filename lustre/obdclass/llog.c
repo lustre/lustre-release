@@ -139,19 +139,19 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         handle->lgh_last_idx = 0; /* header is record with index 0 */
         llh->llh_count = cpu_to_le32(1);         /* for the header record */
         llh->llh_hdr.lrh_type = cpu_to_le32(LLOG_HDR_MAGIC);
-        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = cpu_to_le16(LLOG_CHUNK_SIZE);
+        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = cpu_to_le32(LLOG_CHUNK_SIZE);
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
         llh->llh_timestamp = cpu_to_le64(LTIME_S(CURRENT_TIME));
         llh->llh_flags = cpu_to_le32(flags);
         if (uuid)
                 memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
-        llh->llh_bitmap_offset = cpu_to_le16(offsetof(typeof(*llh), llh_bitmap));
+        llh->llh_bitmap_offset = cpu_to_le32(offsetof(typeof(*llh), llh_bitmap));
         ext2_set_bit(0, llh->llh_bitmap);
 
  out:
         if (flags & LLOG_F_IS_CAT) {
                 INIT_LIST_HEAD(&handle->u.chd.chd_head);
-                llh->llh_size = cpu_to_le16(sizeof(struct llog_logid_rec));
+                llh->llh_size = cpu_to_le32(sizeof(struct llog_logid_rec));
         }
         else if (flags & LLOG_F_IS_PLAIN)
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
@@ -214,7 +214,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
                         GOTO(out, rc);
 
                 rec = buf;
-                index = le16_to_cpu(rec->lrh_index);
+                index = le32_to_cpu(rec->lrh_index);
 
                 /* process records in buffer, starting where we found one */
                 while ((void *)rec < buf + LLOG_CHUNK_SIZE) {
@@ -232,7 +232,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
                         ++index;
                         if (index > LLOG_BITMAP_BYTES * 8 - 1)
                                 GOTO(out, rc = 0);
-                        rec = ((void *)rec + le16_to_cpu(rec->lrh_len));
+                        rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
                 }
         }
 

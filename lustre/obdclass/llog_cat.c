@@ -84,12 +84,12 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                loghandle->lgh_id.lgl_oid, index);
 
         /* build the record for this log in the catalog */
-        rec.lid_hdr.lrh_len = cpu_to_le16(sizeof(rec));
-        rec.lid_hdr.lrh_index = cpu_to_le16(index);
+        rec.lid_hdr.lrh_len = cpu_to_le32(sizeof(rec));
+        rec.lid_hdr.lrh_index = cpu_to_le32(index);
         rec.lid_hdr.lrh_type = cpu_to_le32(LLOG_LOGID_MAGIC);
         rec.lid_id = loghandle->lgh_id;
-        rec.lid_tail.lrt_len = cpu_to_le16(sizeof(rec));
-        rec.lid_tail.lrt_index = cpu_to_le16(index);
+        rec.lid_tail.lrt_len = cpu_to_le32(sizeof(rec));
+        rec.lid_tail.lrt_index = cpu_to_le32(index);
 
         /* update the catalog: header and record */
         rc = llog_write_rec(cathandle, &rec.lid_hdr, 
@@ -98,7 +98,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 GOTO(out_destroy, rc);
         }
 
-        loghandle->lgh_hdr->llh_cat_idx = cpu_to_le16(index);
+        loghandle->lgh_hdr->llh_cat_idx = cpu_to_le32(index);
         cathandle->u.chd.chd_current_log = loghandle;
         LASSERT(list_empty(&loghandle->u.phd.phd_entry));
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
@@ -156,7 +156,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                 loghandle->u.phd.phd_cat_handle = cathandle;
                 loghandle->u.phd.phd_cookie.lgc_lgl = cathandle->lgh_id;
                 loghandle->u.phd.phd_cookie.lgc_index = 
-                        le16_to_cpu(loghandle->lgh_hdr->llh_cat_idx);
+                        le32_to_cpu(loghandle->lgh_hdr->llh_cat_idx);
         }
 
 out:
@@ -220,7 +220,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         int rc;
         ENTRY;
 
-        LASSERT(le16_to_cpu(rec->lrh_len) <= LLOG_CHUNK_SIZE);
+        LASSERT(le32_to_cpu(rec->lrh_len) <= LLOG_CHUNK_SIZE);
         down(&cathandle->lgh_lock);
         loghandle = llog_cat_current_log(cathandle, 1);
         if (IS_ERR(loghandle)) {

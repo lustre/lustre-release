@@ -185,7 +185,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                  int numcookies, void *buf, int idx)
 {
         struct llog_operations *lop;
-        int rc;
+        int rc, buflen;
         ENTRY;
         
         rc = llog_handle2ops(handle, &lop);
@@ -193,7 +193,13 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 RETURN(rc);
         if (lop->lop_write_rec == NULL)
                 RETURN(-EOPNOTSUPP);
-        LASSERT((le16_to_cpu(rec->lrh_len) % LLOG_MIN_REC_SIZE) == 0);
+
+        if (buf)
+                buflen = le32_to_cpu(rec->lrh_len) + sizeof(struct llog_rec_hdr)
+                                + sizeof(struct llog_rec_tail);
+        else
+                buflen = le32_to_cpu(rec->lrh_len);
+        LASSERT((buflen % LLOG_MIN_REC_SIZE) == 0);
 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
         RETURN(rc);
