@@ -50,15 +50,15 @@ done
 ${LMC} -m $config --add lmv --lmv lmv1 || exit 12
 
 wanum=1
+senum=1
 
 for nodenum in `seq $NODECOUNT`; do
-        nodename=uml$nodenum
+        nodename="uml$nodenum"
         for mdsnum in `seq $MDSPERNODE`; do
-                mdsid=mds$mdsnum
-                
                 if test $mdsnum -le 2 && test $nodenum -le 2; then
-                        mdsname="$nodename-$mdsid"
-                        mdsdev=$TMP/$nodename-$mdsid
+                        mdsname="settled$senum"
+                        mdsdev="$TMP/settled$senum"
+                        let senum=senum+1
                 else
                         mdsname="wandering$wanum"
                         mdsdev="$TMP/wandering$wanum"
@@ -73,7 +73,9 @@ done
 
 # configuring object storage bits
 ${LMC} -m $config --add lov --lmv lmv1 --lov lov1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 || exit 20
+
 ${LMC} -m $config --add ost --ost ost1 --nspath /mnt/ost_ns --node uml2 --lov lov1 --fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE $JARG || exit 30
 
 # configuring client
 ${LMC} -m $config --add mtpt --node uml3 --path $MOUNT --lmv lmv1 --lov lov1 || exit 40
+
