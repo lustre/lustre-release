@@ -11,7 +11,6 @@ OST_UUID=10400010-5dec-11c2-0b5f-00301700041a
 MDS_DEVICE=/dev/sda3
 MDS_SIZE=500000
 TCPBUF=1048576
-TCPPORT=988
 
 MDSNODES=`$LUSTRE_QUERY -h emcri -s id=mds -f`
 ACTIVEMDS=`$LUSTRE_QUERY -h emcri -s id=mds -a`
@@ -41,7 +40,7 @@ for mds in $MDSNODES; do
 done
 
 # create OST node entry
-$LMC -m $CONFIG --node $OST_BA --tcpbuf $TCPBUF --net $OST_BA tcp $TCPPORT
+$LMC -m $CONFIG --node $OST_BA --tcpbuf $TCPBUF --net $OST_BA tcp
 $LMC -m $CONFIG --node $OST_BA --obduuid $OST_UUID --ost bluearc
 $LMC -m $CONFIG --node $GW_NODE --route tcp `h2ip $GW_NODE` $OST_BA
 

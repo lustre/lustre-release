@@ -21,6 +21,8 @@ test_brw
 newfile
 openclose
 createdestroy
+createmany
+mkdirmany
 lovstripe
 lov.xml
 uml.xml

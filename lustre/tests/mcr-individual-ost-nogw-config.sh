@@ -9,7 +9,6 @@ LMC_REAL="../../lustre/utils/lmc -m $config"
 SERVER_START=0
 SERVER_CNT=62
 
-PORT=988
 TCPBUF=1048576
  
 h2ip () {
@@ -23,7 +22,7 @@ save_cmd() {
 [ -f $config ] && rm $config
 
 # Client node
-${LMC} --node client --tcpbuf $TCPBUF --net '*' tcp $PORT || exit 1
+${LMC} --node client --tcpbuf $TCPBUF --net '*' tcp || exit 1
 
 # this is crude, but effective
 let server_per_gw=($SERVER_CNT / $GW_CNT )
@@ -33,13 +32,13 @@ let server=$SERVER_START
 while (( $server < $SERVER_CNT + SERVER_START ));
 do 
       echo "server: $server"
-      ba=ba$server
+      OST=ba$server
       # server node
-      ${LMC} --node $ba --tcpbuf $TCPBUF --net $ba tcp $PORT || exit 1
+      ${LMC} --node $ba --tcpbuf $TCPBUF --net $OST tcp || exit 1
       # the device on the server
-      ${LMC} --node $ba --obdtype=obdecho --ost || exit 3
+      ${LMC} --node $OST --obdtype=obdecho --ost || exit 3
       # osc on client
-      ${LMC} --node client --osc OSC_$ba
+      ${LMC} --node client --osc OSC_$OST
       let server=$server+1 
 done
 
