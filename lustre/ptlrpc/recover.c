@@ -105,7 +105,7 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
         rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
                 CERROR("Error invoking recovery upcall %s %s %s %s %s: %d; "
-                       "check /proc/sys/lustre/lustre_upcall\n",
+                       "check /proc/sys/lustre/upcall\n",
                        argv[0], argv[1], argv[2], argv[3], argv[4],rc);
 
         } else {

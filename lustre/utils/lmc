@@ -94,7 +94,6 @@ Object creation command summary:
   --journal_size size
   --inode_size size
   --lmv lmv_name
-  --master
   --mkfsoptions options
   --mountfsoptions options
 
@@ -236,7 +235,6 @@ lmc_options = [
 
     # lmv
     ('lmv', "Specify LMV name.", PARAM,""),
-    ('master', "Specify master MDS in LMV"),
     ]
 
 def error(*args):
@@ -469,8 +467,6 @@ class GenConfig:
         mds.appendChild(self.ref("active",mdd_uuid))
         if group:
             self.addElement(mds, "group", group)
-	if lmv:
-	     lmv.appendChild(self.ref("active", uuid))
         return mds
 
     def mdsdev(self, name, uuid, fstype, devname, format, node_uuid,
@@ -598,6 +594,9 @@ def get_net_uuid(lustre, node_name):
 
 def lov_add_obd(gen, lov, osc_uuid):
     lov.appendChild(gen.ref("obd", osc_uuid))
+                            
+def lmv_add_obd(gen, lmv, mdc_uuid):
+    lmv.appendChild(gen.ref("mds", mdc_uuid))
                             
 def ref_exists(profile, uuid):
     elist = profile.childNodes
@@ -759,19 +758,19 @@ def add_mds(gen, lustre, options):
     if lmv_name:
         lmv = findByName(lustre, lmv_name, "lmv")
         if not lmv:
-            error('add_mds:', '"'+lmv_name+'"', "lmv element not found.")
+            error('add_mds:', '"' + lmv_name + '"', "lmv element not found.")
         lmv_uuid = name2uuid(lustre, lmv_name, fatal=0)
 
     mds_uuid = name2uuid(lustre, mds_name, 'mds', fatal=0)
     if not mds_uuid:
         mds_uuid = new_uuid(mds_name)
-	if not lmv_name:
-            mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group)
-	else:
-            mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group, lmv)
+        mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group)
         lustre.appendChild(mds)
+        if lmv_name:
+            lmv_add_obd(gen, lmv, mds_uuid)
     else:
         mds = lookup(lustre, mds_uuid)
+
     if options.failover:
         mds.setAttribute('failover', "1")
 
@@ -795,10 +794,7 @@ def add_mds(gen, lustre, options):
         error("NODE: ", node_name, "not found")
 
     if lmv_name:
-        lmv.appendChild(gen.ref("mds", mds_uuid))
         mds.appendChild(gen.ref("lmv", lmv_uuid))
-        if options.master:
-            mds.setAttribute('master', "1")
 
     mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname,
                      get_format_flag(options), node_uuid, mds_uuid,

@@ -39,10 +39,9 @@ ${LMC} -m $config --add net --node localhost --nid localhost --nettype tcp || ex
 ${LMC} -m $config --add lmv --lmv lmv1 || exit 12
 
 for num in `seq $MDSCOUNT`; do
-    mopt="--master"
     MDSDEV=$TMP/mds${num}-`hostname`
     ${LMC} -m $config --format --add mds --node localhost --mds mds${num} \
-        --lmv lmv1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE $mopt || exit 13
+        --lmv lmv1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE || exit 13
 done
 
 # configure ost
