@@ -30,6 +30,7 @@
 #include <linux/module.h>
 #include <linux/pagemap.h> // XXX kill me soon
 #include <linux/version.h>
+#include <asm/div64.h>
 
 #include <linux/obd_class.h>
 #include <linux/lustre_fsfilt.h>
@@ -99,12 +100,133 @@ err_page:
         return lnb->rc;
 }
 
+/* Grab the dirty and seen grant announcements from the incoming obdo.
+ * We will later calculate the clients new grant and return it. */
+static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
+{
+        struct filter_export_data *fed;
+        struct obd_device *obd = exp->exp_obd;
+        ENTRY;
+
+        if (!oa || (oa->o_valid & (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) !=
+                                  (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) {
+                if (oa)
+                        oa->o_valid &= ~OBD_MD_FLGRANT;
+                EXIT;
+                return;
+        }
+
+        fed = &exp->exp_filter_data;
+
+        if (oa->o_grant > fed->fed_grant)
+                CERROR("client %s claims "LPU64" granted > %lu actual\n",
+                       obd->obd_name, oa->o_grant, fed->fed_grant);
+
+        /* update our accounting now so that statfs takes it into account */
+        spin_lock(&obd->obd_osfs_lock);
+        obd->u.filter.fo_tot_dirty += oa->o_dirty - fed->fed_dirty;
+        fed->fed_dirty = oa->o_dirty;
+        spin_unlock(&obd->obd_osfs_lock);
+        EXIT;
+}
+
+/* Figure out how much space is available between what we've granted
+ * and what remains in the filesystem.  Compensate for ext3 indirect
+ * block overhead when computing how much free space is left ungranted.
+ *
+ * Caller must hold obd_osfs_lock. */
+obd_size filter_grant_space_left(struct obd_export *exp)
+{
+        /* XXX I disabled statfs caching as it only creates extra problems now.
+          -- green*/
+        struct obd_device *obd = exp->exp_obd;
+        int blockbits = obd->u.filter.fo_sb->s_blocksize_bits;
+        unsigned long max_age = jiffies /*- HZ */+1;
+        obd_size left = 0;
+        int rc;
+
+restat:
+        rc = fsfilt_statfs(obd, obd->u.filter.fo_sb, max_age);
+        if (rc) /* N.B. statfs can't really fail, just for correctness */
+                RETURN(0);
+
+        left = obd->obd_osfs.os_bavail << blockbits;
+        left -= (left >> (blockbits - 3));      /* (d)indirect blocks */
+        if (left > PAGE_SIZE * 16)              /* space for llog */
+                left -= PAGE_SIZE * 16;
+        else
+                left = 0;
+
+        if (left < obd->u.filter.fo_tot_granted)
+                CERROR("granted space "LPU64" more than available "LPU64"\n",
+                       obd->u.filter.fo_tot_granted, left);
+
+        if (left > obd->u.filter.fo_tot_granted)
+                left -= obd->u.filter.fo_tot_granted;
+        else
+                left = 0;
+
+        if (left < FILTER_GRANT_CHUNK && time_after(jiffies,obd->obd_osfs_age)){
+                CDEBUG(D_SUPER, "fs has no space left and statfs too old\n");
+                max_age = jiffies;
+                goto restat;
+        }
+
+        CDEBUG(D_SUPER, "free: "LPU64" avail: "LPU64" grant left: "LPU64"\n",
+               obd->obd_osfs.os_bfree << blockbits,
+               obd->obd_osfs.os_bavail << blockbits, left);
+
+        return left;
+}
+
+/* Calculate how much grant space to allocate to this client, based on how
+ * much space is currently free and how much of that is already granted.
+ *
+ * Caller must hold obd_osfs_lock. */
+static void filter_grant(struct obd_export *exp, struct obdo *oa, obd_size left)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct filter_export_data *fed = &exp->exp_filter_data;
+        long blocksize = obd->u.filter.fo_sb->s_blocksize;
+        long grant = 0;
+
+        /* Grant some fraction of the client's remaining cache space so that
+         * they are not always waiting for write credits (not all of it to
+         * avoid overgranting in face of multiple RPCs in flight).  If we do
+         * have a large disparity and multiple RPCs in flight we might grant
+         * "too much" but that's OK because it means we are dirtying a lot
+         * on the client. */
+        if (oa->o_grant < oa->o_undirty) {
+                grant = min_t(obd_size, oa->o_undirty / 4,
+                              (left + 8 * blocksize - 1) / 8);
+                grant &= ~(blocksize - 1);
+
+                if (grant) {
+                        if (grant > FILTER_GRANT_CHUNK)
+                                grant = FILTER_GRANT_CHUNK;
+
+                        obd->u.filter.fo_tot_granted += grant;
+                        fed->fed_grant += grant;
+                        oa->o_valid |= OBD_MD_FLGRANT;
+                }
+        }
+        oa->o_grant = grant;
+
+        CDEBUG(D_SUPER,"cli %s dirty:"LPU64" undirty:%u granting:%lu\n",
+               exp->exp_connection->c_remote_uuid.uuid,
+               oa->o_dirty, oa->o_undirty, grant);
+        CDEBUG(D_SUPER, "tot cached:"LPU64" granted:"LPU64" num_exports: %d\n",
+               obd->u.filter.fo_tot_dirty,
+               obd->u.filter.fo_tot_granted, obd->obd_num_exports);
+}
+
 static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               int objcount, struct obd_ioobj *obj,
                               int niocount, struct niobuf_remote *nb,
                               struct niobuf_local *res,
                               struct obd_trans_info *oti)
 {
+        struct obd_device *obd = exp->exp_obd;
         struct obd_run_ctxt saved;
         struct obd_ioobj *o;
         struct niobuf_remote *rnb;
@@ -130,7 +252,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         for (i = 0, o = obj; i < objcount; i++, o++) {
                 LASSERT(o->ioo_bufcnt);
 
-                dentry = filter_oa2dentry(exp->exp_obd, oa);
+                dentry = filter_oa2dentry(obd, oa);
                 if (IS_ERR(dentry))
                         GOTO(cleanup, rc = PTR_ERR(dentry));
 
@@ -151,6 +273,17 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_INFO, "preprw_read setup: %lu jiffies\n",
                        (jiffies - now));
 
+        if (oa) {
+#if 0
+                spin_lock(&obd->obd_osfs_lock);
+                filter_grant(exp, oa, filter_grant_space_left(exp), 0);
+                spin_unlock(&obd->obd_osfs_lock);
+#endif
+                /* Reads do not increase grants */
+                oa->o_valid |= OBD_MD_FLGRANT;
+                oa->o_grant = 0;
+        }
+
         for (i = 0, o = obj, rnb = nb, lnb = res; i < objcount; i++, o++) {
                 dentry = fso[i].fso_dentry;
                 inode = dentry->d_inode;
@@ -160,7 +293,6 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                         lnb->offset = rnb->offset;
                         lnb->len    = rnb->len;
                         lnb->flags  = rnb->flags;
-                        lnb->start  = jiffies;
 
                         if (inode->i_size <= rnb->offset) {
                                 /* If there's no more data, abort early.
@@ -195,8 +327,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_INFO, "start_page_read: %lu jiffies\n",
                        (jiffies - now));
 
-        lprocfs_counter_add(exp->exp_obd->obd_stats, LPROC_FILTER_READ_BYTES,
-                            tot_bytes);
+        lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_READ_BYTES, tot_bytes);
         while (lnb-- > res) {
                 rc = filter_finish_page_read(lnb);
                 if (rc) {
@@ -235,6 +366,83 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         return rc;
 }
 
+/* When clients have dirtied as much space as they've been granted they
+ * fall through to sync writes.  These sync writes haven't been expressed
+ * in grants and need to error with ENOSPC when there isn't room in the
+ * filesystem for them after grants are taken into account.  However,
+ * writeback of the dirty data that was already granted space can write
+ * right on through.
+ *
+ * Caller must hold obd_osfs_lock. */
+static int filter_check_grant(struct obd_export *exp, int objcount,
+                              struct fsfilt_objinfo *fso, int niocount,
+                              struct niobuf_remote *rnb,
+                              struct niobuf_local *lnb, obd_size *left,
+                              struct inode *inode)
+{
+        struct filter_export_data *fed = &exp->exp_filter_data;
+        int blocksize = exp->exp_obd->u.filter.fo_sb->s_blocksize;
+        unsigned long consumed = 0, ungranted = 0;
+        int i, rc = -ENOSPC, obj, n = 0;
+
+        for (obj = 0; obj < objcount; obj++) {
+                for (i = 0; i < fso[obj].fso_bufcnt; i++, n++) {
+                        int tmp, bytes;
+
+                        /* FIXME: this is calculated with PAGE_SIZE on client */
+                        bytes = rnb[n].len;
+                        bytes += rnb[n].offset & (blocksize - 1);
+                        tmp = (rnb[n].offset + rnb[n].len) & (blocksize - 1);
+                        if (tmp)
+                                bytes += blocksize - tmp;
+
+                        if (rnb[n].flags & OBD_BRW_FROM_GRANT) {
+                                if (fed->fed_grant < consumed + bytes) {
+                                        CERROR("client claims %lu FROM_GRANT, "
+                                               "not enough grant %ld\n",
+                                               consumed+bytes, fed->fed_grant);
+                                } else {
+                                        consumed += bytes;
+                                        rnb[n].flags |= OBD_BRW_GRANTED;
+                                        lnb[n].lnb_grant_used = bytes;
+                                        fed->fed_pending += bytes;
+                                        rc = 0;
+                                        continue;
+                                }
+                        }
+                        if (*left > ungranted) {
+                                /* if enough space, pretend it was granted */
+                                ungranted += bytes;
+                                rnb[n].flags |= OBD_BRW_GRANTED;
+                                rc = 0;
+                                continue;
+                        }
+
+                        /* We can't check for already-mapped blocks here, as
+                         * it requires dropping the osfs lock to do the bmap.
+                         * Instead, we return ENOSPC and in that case we need
+                         * to go through and verify if all of the blocks not
+                         * marked BRW_GRANTED are already mapped and we can
+                         * ignore this error. */
+                        lnb[n].rc = -ENOSPC;
+                        rnb[n].flags &= OBD_BRW_GRANTED;
+                }
+        }
+
+        CDEBUG((consumed != 0 && ungranted != 0) ? D_ERROR : D_SUPER,
+               "consumed: %lu ungranted: %lu left: "LPU64"\n",
+               consumed, ungranted, *left);
+
+        /* Now substract what client have used already.  We don't subtract
+         * this from the tot_granted yet, so that other client's can't grab
+         * that space before we have actually allocated our blocks.  That
+         * happens in filter_commit_grant() after the writes are done. */
+        *left -= ungranted;
+        fed->fed_grant -= consumed;
+
+        return rc;
+}
+
 static int filter_start_page_write(struct inode *inode,
                                    struct niobuf_local *lnb)
 {
@@ -268,19 +476,22 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 {
         struct obd_run_ctxt saved;
         struct niobuf_remote *rnb;
-        struct niobuf_local *lnb = NULL;
+        struct niobuf_local *lnb;
         struct fsfilt_objinfo fso;
         struct dentry *dentry;
+        obd_size left;
         int rc = 0, i, tot_bytes = 0;
         unsigned long now = jiffies;
         ENTRY;
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
+        filter_grant_incoming(exp, oa);
+
         memset(res, 0, niocount * sizeof(*res));
 
         push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr, 
+        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
                                    obj->ioo_id);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
@@ -301,25 +512,44 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_INFO, "preprw_write setup: %lu jiffies\n",
                        (jiffies - now));
 
+        spin_lock(&exp->exp_obd->obd_osfs_lock);
+        left = filter_grant_space_left(exp);
+
+        rc = filter_check_grant(exp, objcount, &fso, niocount, nb, res,
+                                &left, dentry->d_inode);
+        if (oa)
+                filter_grant(exp, oa, left);
+
+        spin_unlock(&exp->exp_obd->obd_osfs_lock);
+
+        if (rc) {
+                f_dput(dentry);
+                GOTO(cleanup, rc);
+        }
+
         for (i = 0, rnb = nb, lnb = res; i < obj->ioo_bufcnt;
              i++, lnb++, rnb++) {
+                /* We still set up for ungranted pages so that granted pages
+                 * can be written to disk as they were promised, and portals
+                 * needs to keep the pages all aligned properly. */
+
                 lnb->dentry = dentry;
                 lnb->offset = rnb->offset;
                 lnb->len    = rnb->len;
                 lnb->flags  = rnb->flags;
-                lnb->start  = jiffies;
 
                 rc = filter_start_page_write(dentry->d_inode, lnb);
                 if (rc) {
-                        CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR, "page err %u@"
-                               LPU64" %u/%u %p: rc %d\n", lnb->len, lnb->offset,
+                        CDEBUG(D_ERROR, "page err %u@"LPU64" %u/%u %p: rc %d\n",
+                               lnb->len, lnb->offset,
                                i, obj->ioo_bufcnt, dentry, rc);
                         while (lnb-- > res)
                                 __free_pages(lnb->page, 0);
                         f_dput(dentry);
                         GOTO(cleanup, rc);
                 }
-                tot_bytes += lnb->len;
+                if (lnb->rc == 0)
+                        tot_bytes += lnb->len;
         }
 
         if (time_after(jiffies, now + 15 * HZ))
@@ -383,7 +613,7 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
                 /* the dlm is protecting us from read/write concurrency, so we
                  * expect this find_lock_page to return quickly.  even if we
                  * race with another writer it won't be doing much work with
-                 * the page locked.  we do this 'cause t_c_p expects a 
+                 * the page locked.  we do this 'cause t_c_p expects a
                  * locked page, and it wants to grab the pagecache lock
                  * as well. */
                 old_page = find_lock_page(inode->i_mapping, new_page->index);
@@ -401,9 +631,9 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
                 /* racing o_directs (no locking ioctl) could race adding
                  * their pages, so we repeat the page invalidation unless
                  * we successfully added our new page */
-                rc = add_to_page_cache_unique(new_page, inode->i_mapping, 
+                rc = add_to_page_cache_unique(new_page, inode->i_mapping,
                                               new_page->index,
-                                              page_hash(inode->i_mapping, 
+                                              page_hash(inode->i_mapping,
                                                         new_page->index));
                 if (rc == 0) {
                         /* add_to_page_cache clears uptodate|dirty and locks
@@ -411,13 +641,34 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
                         SetPageUptodate(new_page);
                         unlock_page(new_page);
                 }
-#else   
+#else
                 rc = 0;
 #endif
         } while (rc != 0);
 }
 
-/* XXX needs to trickle its oa down */
+void filter_commit_grant(struct obd_export *exp, int niocount,
+                         struct niobuf_local *res)
+{
+        struct niobuf_local *lnb = res;
+        long i, pending = 0;
+
+        spin_lock(&exp->exp_obd->obd_osfs_lock);
+        for (i = 0, lnb = res; i < niocount; i++, lnb++)
+                pending += lnb->lnb_grant_used;
+
+        LASSERTF(exp->exp_filter_data.fed_pending >= pending,
+                 "fed_pending: %lu pending: %lu\n",
+                 exp->exp_filter_data.fed_pending, pending);
+        exp->exp_filter_data.fed_pending -= pending;
+        LASSERTF(exp->exp_obd->u.filter.fo_tot_granted >= pending,
+                 "tot_granted: "LPU64" pending: %lu\n",
+                 exp->exp_obd->u.filter.fo_tot_granted, pending);
+        exp->exp_obd->u.filter.fo_tot_granted -= pending;
+
+        spin_unlock(&exp->exp_obd->obd_osfs_lock);
+}
+
 int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                     int objcount, struct obd_ioobj *obj, int niocount,
                     struct niobuf_local *res, struct obd_trans_info *oti)
