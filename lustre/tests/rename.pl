@@ -11,8 +11,9 @@ sub usage () {
     print "         will test in /mnt/lustre only\n";
     exit;
 }
-my ($j, $k, $d, $f1, $f2, $path, $count, $silent);
-my $create = 0;
+my ($j, $k, $d, $f1, $f2, $path, $silent);
+my $count = 0;
+my $create = 10;
 
 GetOptions("silent!"=> \$silent,
            "count=i" => \$count,
@@ -35,13 +36,14 @@ if ($create == 0) {
 }
 while ($k--) {
     $path = "$mtpt$which/$k";
-    mkdir $path, 0755;
+    my $rc = mkdir $path, 0755;
+    print "mkdir $path failed: $!\n" if !$rc;
     $j = $files;
     while ($j--) {
-        `./mcreate $path/$j`
+        `./mcreate $path/$j`;
+        print "mcreate $path/$j failed\n" if $?;
     }
 }
-
 
 while ($i--) {
     my $which = "";
@@ -52,8 +54,7 @@ while ($i--) {
     $f1 = int(rand() * $files);
     $f2 = int(rand() * $files);
     print "[$$] $mtpt$which/$d/$f1 $mtpt$which/$d/$f2 ...\n";
-    rename "$mtpt$which/$d/$f1", "$mtpt$which/$d/$f2";
-    print "[$$] done\n" if !$silent;
-
+    my $rc = rename "$mtpt$which/$d/$f1", "$mtpt$which/$d/$f2";
+    print "[$$] done: $rc\n" if !$silent;
 }
 print "Done.\n";
