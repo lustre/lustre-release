@@ -1,0 +1,122 @@
+#!/bin/bash
+
+######################################################################
+# customize per survey
+
+# the SG device to measure
+dev=/dev/sg6
+
+# result file prefix
+# NB ensure the path exists if it includes subdirs
+rslt=/tmp/sg_dd_rslt
+
+# what to do (read or write)
+action=write
+
+# total size (MBytes)
+# NB bigger than device cache is good
+size=8192
+
+# record size (KBytes)
+rszlo=1024
+rszhi=1024
+
+# Concurrent regions
+crglo=1
+crghi=4
+
+# total numbers of threads to share between concurrent regions
+# NB survey skips over #thr < #regions
+thrlo=1
+thrhi=1024
+
+#####################################################################
+
+# disk block size (Bytes)
+bs=512
+
+if [ $action = read ]; then
+    f1="if=$dev"
+    f2="of=/dev/null"
+    skip=skip
+else
+    f1="if=/dev/zero"
+    f2="of=$dev"
+    skip=seek
+fi
+
+start=`date +%F@%R`
+rsltf=${rslt}_${start}.summary
+echo -n > $rsltf
+workf=${rslt}_${start}.detail
+echo -n > $workf
+
+print_summary () {
+    if [ "$1" = "-n" ]; then
+	minusn=$1; shift
+    else
+	minusn=""
+    fi
+    echo $minusn "$*" >> $rsltf
+    echo $minusn "$*"
+}
+
+for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
+    for ((crg=$crglo;crg<=$crghi;crg*=2)); do 
+	for ((thr=$thrlo;thr<=$thrhi;thr*=2)); do
+	    if ((thr < crg)); then
+		continue
+	    fi
+	    # compute parameters
+	    bpt=$((rsz*1024/bs))
+	    blocks=$((size*((1024*1024)/bs)/crg))
+	    count=$blocks
+	    # show computed parameters
+	    actual_rsz=$((bpt*bs/1024))
+	    actual_size=$((bs*count*crg/1024))
+	    str=`printf 'total_size %8dK rsz %4d thr %5d crg %3d ' \
+		         $actual_size $actual_rsz $thr $crg`
+	    echo "==============> $str" >> $workf
+	    print_summary -n "$str"
+	    freemem=`awk < /proc/meminfo '/^MemTotal:/ {printf "%d\n", $2}'`
+	    if (((actual_rsz * thr /crg + 64) * crg > freemem)); then
+		print_summary "ENOMEM"
+		continue
+	    fi
+	    # start test
+	    t0=`date +%s.%N`
+	    for ((i=0;i<crg;i++)); do 
+		sgp_dd 2> ${rslt}_tmp${i} \
+		    $f1 $f2 ${skip}=$((1024+i*blocks)) \
+		    thr=$((thr/crg)) count=$count bs=$bs bpt=$bpt time=1&
+	    done 
+	    wait
+	    t1=`date +%s.%N`
+	    # collect all results in 1 file
+	    rfile=${rslt}_thr${thr}_crg${crg}_rsz${rsz}
+	    echo > $rfile
+	    ok=0
+	    for ((i=0;i<crg;i++)); do
+		rtmp=${rslt}_tmp${i}
+		if grep 'time to transfer data' $rtmp > /dev/null 2>&1; then
+		    ok=$((ok + 1))
+		fi
+		cat ${rslt}_tmp${i} >> $rfile
+		cat ${rslt}_tmp${i} >> $workf
+		rm ${rslt}_tmp${i}
+	    done
+	    if [ $ok -ne $crg ]; then
+		print_summary `printf "failed %d" $((crg - ok))`
+	    else
+	        # compute MB/sec from elapsed
+		bw=`awk "BEGIN {printf \"%6.2f MB/s\", $actual_size / (( $t1 - $t0 ) * 1024); exit}"`
+	        # compute MB/sec from nregions*slowest
+		check=`awk < $rfile \
+		           '/time to transfer data/ {mb=$8/1.048576; if (n == 0 || mb < min) min = mb; n++}\
+		            END {printf "%3d x %6.2f = %6.2f MB/s", n, min, min * n}'`
+                print_summary "$bw $check"
+	    fi
+	    rm $rfile
+	done
+    done
+done
