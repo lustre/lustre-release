@@ -178,5 +178,23 @@ echo "3 done"
 $CLEAN
 $START
 
+echo '==== write to dangling link ==== test 21'
+mkdir /mnt/lustre/d21
+ln -s dangle /mnt/lustre/d21/link
+echo foo >> /mnt/lustre/d21/link
+cat /mnt/lustre/d21/dangle
+$CLEAN
+$START
+
+# echo '==== unpack tar archive as nonroot user ==== test 22'
+echo please fix test 22
+# mkdir /mnt/lustre/d22
+# chown 4711 /mnt/lustre/d22
+# (./setuid 4711 ; tar cf - /etc/hosts /etc/sysconfig/network | tar xfC - /mnt/lustre/d22 ; ./setuid 0)
+# ls -lR /mnt/lustre/d22/etc
+# $CLEAN
+# $START
+
+
 echo '=========== finished ==========='
 exit
