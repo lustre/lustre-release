@@ -87,6 +87,12 @@ void *inter_module_get(char *arg)
 /* XXX move to proper place */
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
+        if (nid == PTL_NID_ANY) {
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%s",
+                         "PTL_NID_ANY");
+                return str;
+        }
+
         switch(nal){
 #ifndef CRAY_PORTALS
         case TCPNAL:
