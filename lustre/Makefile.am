@@ -4,8 +4,10 @@
 # See the file COPYING in this distribution
 
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = ptlrpc llite lib ldlm obdecho mdc osc mds ost utils tests obdfilter
-SUBDIRS+= obdclass obdext2 obdfs demos doc scripts extN
+
+# NOTE: keep extN before mds
+SUBDIRS = ptlrpc llite lib ldlm obdecho mdc osc extN mds ost 
+SUBDIRS+= obdclass obdext2 obdfs demos doc scripts utils tests obdfilter
 EXTRA_DIST = BUGS FDL Rules include patches
 
 # We get the version from the spec file.
