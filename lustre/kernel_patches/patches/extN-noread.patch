@@ -171,8 +171,8 @@
 +		block_end = block + NUM_INODE_PREREAD;
 +		if (block_end > itable_end)
 +			block_end = itable_end;
-+		block++;
-+		for (; block < block_end; block++) {
++
++		for (++block; block < block_end; block++) {
 +			bh[count] = sb_getblk(sb, block);
 +			if (count && (buffer_uptodate(bh[count]) ||
 +				      buffer_locked(bh[count]))) {
