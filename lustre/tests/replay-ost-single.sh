@@ -66,7 +66,7 @@ fi
 
 build_test_filter
 
-rm ostactive
+rm -f ostactive
 
 gen_config
 
