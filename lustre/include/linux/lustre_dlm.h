@@ -32,6 +32,7 @@ typedef enum {
 #define LDLM_FL_BLOCK_WAIT     (1 << 3)
 #define LDLM_FL_DYING          (1 << 4)
 #define LDLM_FL_AST_SENT       (1 << 5)
+#define LDLM_FL_BLOCKED_PENDING (1 << 6)
 
 #define L2B(c) (1 << c)
 
@@ -84,7 +85,7 @@ struct ldlm_namespace {
         struct list_head     *ns_hash; /* hash table for ns */
         __u32                 ns_refcount; /* count of resources in the hash */
         struct list_head      ns_root_list; /* all root resources in ns */
-        spinlock_t            ns_lock; /* protects hash, refcount, list */
+        struct lustre_lock    ns_lock; /* protects hash, refcount, list */
 };
 
 /* 
@@ -109,6 +110,7 @@ struct ldlm_lock {
         struct list_head      l_children;
         struct list_head      l_childof;
         struct list_head      l_res_link; /*position in one of three res lists*/
+        atomic_t              l_refcount;
 
         ldlm_mode_t           l_req_mode;
         ldlm_mode_t           l_granted_mode;
@@ -134,7 +136,6 @@ struct ldlm_lock {
          * it's no longer in use.  If the lock is not granted, a process sleeps
          * on this waitq to learn when it becomes granted. */
         wait_queue_head_t     l_waitq;
-        spinlock_t            l_lock;
 };
 
 typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
@@ -167,8 +168,7 @@ struct ldlm_resource {
         struct ldlm_resource  *lr_root;
         __u64                  lr_name[RES_NAME_SIZE];
         __u32                  lr_version[RES_VERSION_SIZE];
-        __u32                  lr_refcount;
-        spinlock_t             lr_lock; /* protects lists, refcount */
+        atomic_t               lr_refcount;
         void                  *lr_tmp;
 };
 
@@ -183,11 +183,11 @@ extern struct obd_ops ldlm_obd_ops;
 do {                                                            \
         CDEBUG(D_DLMTRACE, "### " format                        \
                " (%s: lock %p mode %d/%d on res %Lu (rc %d) "   \
-               " type %d remote %Lx)\n" , ## a,                  \
+               " type %d remote %Lx)\n" , ## a,                 \
                lock->l_resource->lr_namespace->ns_name, lock,   \
                lock->l_granted_mode, lock->l_req_mode,          \
                lock->l_resource->lr_name[0],                    \
-               lock->l_resource->lr_refcount,                   \
+               atomic_read(&lock->l_resource->lr_refcount),     \
                lock->l_resource->lr_type,                       \
                lock->l_remote_handle.addr);                     \
 } while (0)
@@ -237,6 +237,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns);
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u64 *name, __u32 type, int create);
+struct ldlm_resource *ldlm_resource_addref(struct ldlm_resource *res);
 int ldlm_resource_put(struct ldlm_resource *res);
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
