@@ -76,10 +76,11 @@ int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
                 export = my_export = class_new_export(obd);
                 if (export == NULL)
                         RETURN(-ENOMEM);
-        } else
+        } else {
                 export = list_entry(obd->obd_exports.next, typeof(*export),
                                     exp_obd_chain);
-        POISON(&conn.addr, 0x69, sizeof conn.addr);
+        }
+        memset(&conn.addr, 0x69, sizeof conn.addr);
         conn.cookie = export->exp_handle.h_cookie;
 
         rc = obd_statfs(&conn, &osfs);
