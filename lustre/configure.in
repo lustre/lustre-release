@@ -37,7 +37,8 @@ bindir='${exec_prefix}/usr/bin'
 sbindir='${exec_prefix}/usr/sbin'
 
 linuxdir_def=/usr/src/linux
-AC_ARG_ENABLE(linuxdir, [  --enable-linuxdir=[path] set path to Linux source (default=/usr/src/linux)],, enable_linuxdir=$linuxdir_def)
+AC_ARG_WITH(linux, [  --with-linux=[path] set path to Linux source (default=/usr/src/linux)], enable_linuxdir=$withval)
+AC_ARG_ENABLE(linuxdir, [  --enable-linuxdir=[path] (deprecated) set path to Linux source (default=/usr/src/linux)],, enable_linuxdir=$linuxdir_def)
 
 LINUX=$enable_linuxdir
 AC_SUBST(LINUX)
