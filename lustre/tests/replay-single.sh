@@ -40,10 +40,10 @@ build_test_filter
 
 cleanup() {
     [ "$DAEMONFILE" ] && lctl debug_daemon stop
-    umount $MOUNT
+    umount $MOUNT || true
     rmmod llite
-    stop mds ${FORCE} $MDSLCONFARGS --dump cleanup.log
-    stop ost ${FORCE}
+    stop mds ${FORCE} $MDSLCONFARGS
+    stop ost ${FORCE} --dump cleanup.log
 }
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -56,10 +56,11 @@ gen_config
 
 start ost --reformat $OSTLCONFARGS
 start mds --write_conf --reformat $MDSLCONFARGS
-# start client --gdb $CLIENTLCONFARGS
-insmod ../llite/llite.o || true
-[ -d $MOUNT ] || mkdir $MOUNT 
 
+# 0-conf client
+insmod ../llite/llite.o || true
+[ -d /r ] && lctl modules > /r/tmp/ogdb-`hostname`
+[ -d $MOUNT ] || mkdir $MOUNT 
 mount -t lustre_lite -o mds_uuid=mds1_UUID,profile=client_facet replay-single $MOUNT
 
 [ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
