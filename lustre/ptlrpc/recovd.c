@@ -42,6 +42,11 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
         struct recovd_obd *recovd = rd->rd_recovd;
         ENTRY;
 
+        if (!recovd) {
+                CERROR("no recovd for connection %p\n", conn);
+                return;
+        }
+
         spin_lock(&recovd->recovd_lock);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
