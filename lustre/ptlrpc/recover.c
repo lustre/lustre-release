@@ -113,23 +113,16 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
 #define REPLAY_RESEND        2 /* Resend required. */
 #define REPLAY_RESEND_IGNORE 3 /* Resend, ignore the reply (already saw it). */
 #define REPLAY_RESTART       4 /* Have to restart the call, sorry! */
-#define REPLAY_NO_STATE      5 /* Request doesn't change MDS state: skip. */
 
-static int replay_state(struct ptlrpc_request *req, __u64 last_xid)
+static int replay_state(struct ptlrpc_request *req, __u64 committed)
 {
         /* This request must always be replayed. */
         if (req->rq_flags & PTL_RPC_FL_REPLAY)
                 return REPLAY_REPLAY;
 
         /* Uncommitted request */
-        if (req->rq_xid > last_xid) {
+        if (req->rq_transno > committed) {
                 if (req->rq_flags & PTL_RPC_FL_REPLIED) {
-                        if (req->rq_transno == 0) {
-                                /* If no transno was returned, no state was
-                                   altered on the MDS. */
-                                return REPLAY_NO_STATE;
-                        }
-
                         /* Saw reply, so resend and ignore new reply. */
                         return REPLAY_RESEND_IGNORE;
                 }
@@ -149,7 +142,6 @@ static int replay_state(struct ptlrpc_request *req, __u64 last_xid)
 static char *replay_state2str(int state) {
         static char *state_strings[] = {
                 "COMMITTED", "REPLAY", "RESEND", "RESEND_IGNORE", "RESTART",
-                "NO_STATE"
         };
         static char *unknown_state = "UNKNOWN";
 
@@ -161,36 +153,43 @@ static char *replay_state2str(int state) {
         return state_strings[state];
 }
 
-int ptlrpc_replay(struct ptlrpc_connection *conn)
+int ptlrpc_replay(struct obd_import *imp)
 {
-        int rc = 0;
+        int rc = 0, state;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
+        struct ptlrpc_connection *conn = imp->imp_connection;
+        int committed = imp->imp_peer_committed_xid;
         ENTRY;
 
-        spin_lock(&conn->c_lock);
+        spin_lock(&imp->imp_lock);
 
-        CDEBUG(D_HA, "connection %p to %s has last_xid "LPD64"\n",
-               conn, conn->c_remote_uuid, conn->c_last_xid);
+        CDEBUG(D_HA, "import %p from %s has committed "LPD64"\n",
+               imp, imp->imp_obd->u.cli.cl_target_uuid, committed);
 
-        list_for_each(tmp, &conn->c_sending_head) {
-                int state;
+        list_for_each(tmp, &imp->imp_request_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                state = replay_state(req, conn->c_last_xid);
+                state = replay_state(req, committed);
                 DEBUG_REQ(D_HA, req, "SENDING: %s: ", replay_state2str(state));
         }
 
         list_for_each(tmp, &conn->c_delayed_head) {
-                int state;
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                state = replay_state(req, conn->c_last_xid);
-                DEBUG_REQ(D_HA, req, "DELAYED: ");
+                state = replay_state(req, committed);
+                DEBUG_REQ(D_HA, req, "DELAYED: %s: ", replay_state2str(state));
         }
 
-        list_for_each_safe(tmp, pos, &conn->c_sending_head) { 
+        list_for_each_safe(tmp, pos, &imp->imp_request_list) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                state = replay_state(req, committed);
+
+                if (req->rq_list.next == &imp->imp_request_list) {
+                        req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
+                        DEBUG_REQ(D_HA, req, "last for replay");
+                        LASSERT(state != REPLAY_COMMITTED);
+                }
                 
-                switch (replay_state(req, conn->c_last_xid)) {
+                switch (state) {
                     case REPLAY_REPLAY:
                         DEBUG_REQ(D_HA, req, "REPLAY:");
                         rc = ptlrpc_replay_req(req);
@@ -208,14 +207,8 @@ int ptlrpc_replay(struct ptlrpc_connection *conn)
                         }
                         break;
 
-
                     case REPLAY_COMMITTED:
-                        DEBUG_REQ(D_HA, req, "COMMITTED:");
-                        /* XXX commit now? */
-                        break;
-
-                    case REPLAY_NO_STATE:
-                        DEBUG_REQ(D_HA, req, "NO_STATE:");
+                        DEBUG_REQ(D_ERROR, req, "COMMITTED:");
                         /* XXX commit now? */
                         break;
 
