@@ -1081,6 +1081,9 @@ def main():
         for cmd in batchCommands:
             try:
                 options, args = cl.parse(string.split(cmd))
+                if options.merge or options.input or options.output:
+                        print "The batchfile should not contain --merge, --input or --output."
+                        sys.exit(1)
                 do_command(gen, lustre, options, args)
             except OptionError, e:
                 panic(cmd, e)
