@@ -67,8 +67,8 @@ new_fs () {
 			zcat "$EFILE" > $2 || exit -1
 			sync
 		else
-			echo "creating new filesystem on $2"
-			dd if=/dev/zero of=$2 bs=1k count=$3 1>&2 || exit -1
+			echo "creating new sparse filesystem on $2"
+			dd if=/dev/zero of=$2 bs=1k seek=$3 count=1 1>&2 || exit -1
 			$MKFS $MKFSOPT -F $2 1>&2 || exit -1
 		fi
 		LOOPDEV=`next_loop_dev`
