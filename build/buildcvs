@@ -27,7 +27,9 @@ case "$lustretag" in
     b_port_step)
         portalstag="b_port_step"
 	;;
-
+    b_port_netid)
+        portalstag="b_port_netid"
+	;;
 esac
 
 cvs_cmd libsysio libsysio "$libsysiotag"
