@@ -81,6 +81,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/lfind
 %attr(-, root, root) /usr/sbin/lstripe
 %attr(-, root, root) /usr/sbin/mcreate
+%attr(-, root, root) /usr/sbin/mkdirmany
 %attr(-, root, root) /usr/lib/lustre/examples/llmount.sh
 %attr(-, root, root) /usr/lib/lustre/examples/llmountcleanup.sh
 %attr(-, root, root) /usr/lib/lustre/examples/llecho.sh
