@@ -57,7 +57,7 @@ out_cl:
         RETURN(ret);
 }
 
-static void __exit ptlbd_exit(void)
+static void /*__exit*/ ptlbd_exit(void)
 {
         ENTRY;
         ptlbd_cl_exit();
