@@ -6,8 +6,7 @@ GetOptions("pid=i" => \$pid,
            "nodlm!" => \$nodlm,
            "nonet!" => \$nonet);
 
-# print "$pid\n";
-
+print "pid: $pid, nodlm $nodlm nonet $nonet trace $trace\n";
 
 $subsys->{UNDEFINED} = 0;
 $subsys->{MDC} = 1;
@@ -78,13 +77,13 @@ sub leaving
 sub getsubsys
 {
     my ($subsys, $mask) = split ":";
-    return $subsys;
+    return hex($subsys);
 }
 
 sub getmask
 {
     my ($subsys, $mask) = split ":";
-    return $mask;
+    return hex($mask);
 }
 
 while (<STDIN>) {
@@ -101,7 +100,7 @@ while (<STDIN>) {
     if ( !$pid || $linepid == $pid) {
         next if ($trace && $linemask != $masks->{TRACE});
         next if ($nodlm && 
-                 (  $linesubsys == $subsys->{DLM}));
+                 (  $linesubsys == $subsys->{LDLM}));
         next if ($nonet && 
                  (  $linesubsys == $subsys->{RPC} ||
                     $linesubsys == $subsys->{NET} ||
