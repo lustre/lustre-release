@@ -876,7 +876,7 @@ def add_lov(gen, lustre, options):
     # add an lovconfig entry to the active mdsdev profile
     lovconfig_name = new_name('LVCFG_' + name)
     lovconfig_uuid = new_uuid(lovconfig_name)
-    mds = findByName(lustre, mds_name)
+    mds = findByName(lustre, mds_name, "mds")
     mds.appendChild(gen.ref("lovconfig", lovconfig_uuid))
     lovconfig = gen.lovconfig(lovconfig_name, lovconfig_uuid, uuid)
     lustre.appendChild(lovconfig)
