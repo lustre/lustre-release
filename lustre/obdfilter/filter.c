@@ -520,48 +520,51 @@ err_fsd:
 static int filter_cleanup_groups(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
+        struct file *filp;
+        struct dentry *dentry;
         int i;
         ENTRY;
 
-        if (filter->fo_dentry_O_groups != NULL &&
-            filter->fo_last_objids != NULL &&
-            filter->fo_last_objid_files != NULL) {
+        if (filter->fo_dentry_O_groups != NULL) {
                 for (i = 0; i < FILTER_GROUPS; i++) {
-                        struct dentry *dentry = filter->fo_dentry_O_groups[i];
-                        struct file *filp = filter->fo_last_objid_files[i];
-                        if (dentry != NULL) {
+                        dentry = filter->fo_dentry_O_groups[i];
+                        if (dentry != NULL)
                                 f_dput(dentry);
-                                filter->fo_dentry_O_groups[i] = NULL;
-                        }
-                        if (filp != NULL) {
-                                filp_close(filp, 0);
-                                filter->fo_last_objid_files[i] = NULL;
-                        }
                 }
+                OBD_FREE(filter->fo_dentry_O_groups,
+                         FILTER_GROUPS * sizeof(struct dentry *));
+                filter->fo_dentry_O_groups = NULL;
+        }
+        if (filter->fo_last_objid_files != NULL) {
+                for (i = 0; i < FILTER_GROUPS; i++) {
+                        filp = filter->fo_last_objid_files[i];
+                        if (filp != NULL)
+                                filp_close(filp, 0);
+                }
+                OBD_FREE(filter->fo_last_objid_files,
+                         FILTER_GROUPS * sizeof(struct file *));
+                filter->fo_last_objid_files = NULL;
         }
         if (filter->fo_dentry_O_sub != NULL && filter->fo_subdir_count) {
                 for (i = 0; i < filter->fo_subdir_count; i++) {
-                        struct dentry *dentry = filter->fo_dentry_O_sub[i];
-                        if (dentry != NULL) {
+                        dentry = filter->fo_dentry_O_sub[i];
+                        if (dentry != NULL)
                                 f_dput(dentry);
-                                filter->fo_dentry_O_sub[i] = NULL;
-                        }
                 }
                 OBD_FREE(filter->fo_dentry_O_sub,
                          filter->fo_subdir_count *
                          sizeof(*filter->fo_dentry_O_sub));
+                filter->fo_dentry_O_sub = NULL;
         }
-        if (filter->fo_dentry_O_groups != NULL)
-                OBD_FREE(filter->fo_dentry_O_groups,
-                         FILTER_GROUPS * sizeof(struct dentry *));
-        if (filter->fo_last_objids != NULL)
+        if (filter->fo_last_objids != NULL) {
                 OBD_FREE(filter->fo_last_objids,
                          FILTER_GROUPS * sizeof(__u64));
-        if (filter->fo_last_objid_files != NULL)
-                OBD_FREE(filter->fo_last_objid_files,
-                         FILTER_GROUPS * sizeof(struct file *));
-        if (filter->fo_dentry_O != NULL)
+                filter->fo_last_objids = NULL;
+        }
+        if (filter->fo_dentry_O != NULL) {
                 f_dput(filter->fo_dentry_O);
+                filter->fo_dentry_O = NULL;
+        }
         RETURN(0);
 }
 
