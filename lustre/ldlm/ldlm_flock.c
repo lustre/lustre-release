@@ -346,17 +346,20 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         }
 
         if (*flags != LDLM_FL_WAIT_NOREPROC) {
-                if (req->l_completion_ast)
+                if (first_enq) {
+                        /* The only problem with doing the reprocessing here
+                         * is that the completion ASTs for newly granted locks
+                         * will * be sent before the unlock completion is sent.
+                         * It shouldn't be an issue. Also note that
+                         * ldlm_process_flock_lock() will recurse, but only
+                         * once because there can't be unlock requests on the
+                         * wait queue. */
+                        if ((mode == LCK_NL) && overlaps)
+                                ldlm_reprocess_all(res);
+                } else {
+                        LASSERT(req->l_completion_ast);
                         ldlm_add_ast_work_item(req, NULL, NULL, 0);
-
-                /* The only problem with doing the reprocessing here is that
-                 * the completion ASTs for newly granted locks will be sent
-                 * before the unlock completion is sent. It shouldn't be an
-                 * issue. Also note that ldlm_process_flock_lock() will
-                 * recurse, but only once because there can't be unlock
-                 * requests on the wait queue. */
-                if ((mode == LCK_NL) && overlaps)
-                        ldlm_reprocess_queue(res, &res->lr_waiting);
+                }
         }
 
         ldlm_resource_dump(res);
