@@ -501,6 +501,10 @@ cleanup_portals() {
 	quit
 	EOF
 
+	do_rmmod ldlm
+	do_rmmod ptlrpc
+	do_rmmod obdclass
+
 	do_rmmod kqswnal
 	do_rmmod ksocknal
 	do_rmmod portals
@@ -509,28 +513,24 @@ cleanup_portals() {
 cleanup_lustre() {
 	killall acceptor
 
-	losetup -d ${LOOP}0
-	losetup -d ${LOOP}1
-	losetup -d ${LOOP}2
-
 	do_rmmod llite
 	do_rmmod lov
 	do_rmmod mdc
+	do_rmmod osc
 
 	do_rmmod mds_extN
 	do_rmmod mds_ext3
 	do_rmmod mds_ext2
 	do_rmmod mds
 	do_rmmod ost
-	do_rmmod osc
 	do_rmmod obdecho
 	do_rmmod obdfilter
 	do_rmmod obdext2
 	do_rmmod extN
 
-	do_rmmod ldlm
-	do_rmmod ptlrpc
-	do_rmmod obdclass
+	losetup -d ${LOOP}0
+	losetup -d ${LOOP}1
+	losetup -d ${LOOP}2
 }
 
 cleanup_ldlm() {
