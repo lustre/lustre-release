@@ -1190,28 +1190,28 @@
 +
 +static void dx_sort_map (struct dx_map_entry *map, unsigned count)
 +{
-+        struct dx_map_entry *p, *q, *top = map + count - 1;
-+        int more;
-+        /* Combsort until bubble sort doesn't suck */
-+        while (count > 2)
++	struct dx_map_entry *p, *q, *top = map + count - 1;
++	int more;
++	/* Combsort until bubble sort doesn't suck */
++	while (count > 2)
 +	{
-+                count = count*10/13;
-+                if (count - 9 < 2) /* 9, 10 -> 11 */
-+                        count = 11;
-+                for (p = top, q = p - count; q >= map; p--, q--)
-+                        if (p->hash < q->hash)
-+                                swap(*p, *q);
-+        }
-+        /* Garden variety bubble sort */
-+        do {
-+                more = 0;
-+                q = top;
-+                while (q-- > map)
++		count = count*10/13;
++		if (count - 9 < 2) /* 9, 10 -> 11 */
++			count = 11;
++		for (p = top, q = p - count; q >= map; p--, q--)
++			if (p->hash < q->hash)
++				swap(*p, *q);
++	}
++	/* Garden variety bubble sort */
++	do {
++		more = 0;
++		q = top;
++		while (q-- > map)
 +		{
-+                        if (q[1].hash >= q[0].hash)
++			if (q[1].hash >= q[0].hash)
 +				continue;
-+                        swap(*(q+1), *q);
-+                        more = 1;
++			swap(*(q+1), *q);
++			more = 1;
 +		}
 +	} while(more);
 +}
@@ -1381,7 +1381,7 @@
  	}
  	d_add(dentry, inode);
  	return NULL;
-@@ -237,6 +951,300 @@ static inline void ext3_set_de_type(stru
+@@ -237,6 +951,301 @@ static inline void ext3_set_de_type(stru
  		de->file_type = ext3_type_by_mode[(mode & S_IFMT)>>S_SHIFT];
  }
  
@@ -1642,7 +1642,8 @@
 +	data1 = bh2->b_data;
 +
 +	/* The 0th block becomes the root, move the dirents out */
-+	de = (struct ext3_dir_entry_2 *) &root->info;
++	de = &root->dotdot;
++	de = (struct ext3_dir_entry_2 *) ((char *)de + de->rec_len);
 +	len = ((char *) root) + blocksize - (char *) de;
 +	memcpy (data1, de, len);
 +	de = (struct ext3_dir_entry_2 *) data1;
