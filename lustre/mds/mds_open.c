@@ -809,8 +809,11 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         /* Step 2: Lookup the child */
         dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
-        if (IS_ERR(dchild))
-                GOTO(cleanup, rc = PTR_ERR(dchild));
+        if (IS_ERR(dchild)) {
+                rc = PTR_ERR(dchild);
+                dchild = NULL; /* don't confuse mds_finish_transno() below */
+                GOTO(cleanup, rc);
+        }
 
         cleanup_phase = 2; /* child dentry */
 
@@ -933,9 +936,6 @@ int mds_open(struct mds_update_record *rec, int offset,
  cleanup:
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
-        /* XXX what do we do here if mds_finish_transno itself failed? */
-        if (created)
-                mds_lock_new_child(obd, dchild->d_inode, NULL);
 
         switch (cleanup_phase) {
         case 2:
@@ -946,6 +946,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                                        dchild->d_name.len, dchild->d_name.name,
                                        err);
                         }
+                } else if (created) {
+                        mds_lock_new_child(obd, dchild->d_inode, NULL);
                 }
                 l_dput(dchild);
         case 1:
