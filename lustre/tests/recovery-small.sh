@@ -6,6 +6,9 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 
+RLUSTRE=${RLUSTRE:-$LUSTRE}
+RPWD=${RPWD:-$PWD}
+
 . $LTESTDIR/functional/llite/common/common.sh
 
 # Allow us to override the setup if we already have a mounted system by
@@ -13,7 +16,7 @@ PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
 
-PDSH='pdsh -S -w'
+PDSH=${PDSH:-'pdsh -S -w'}
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
 MDSNODE=${MDSNODE:-mdev6}
@@ -29,24 +32,26 @@ OSTSIZE=${OSTSIZE:-100000}
 UPCALL=${UPCALL:-$LTESTDIR/functional/llite/09/client-upcall.sh}
 
 do_mds() {
-    $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $MDSNODE "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@" || exit $?
 }
 
 do_client() {
-    $PDSH $CLIENT "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $CLIENT "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@"  || exit $?
 }
 
 do_ost() {
-    $PDSH $OSTNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $OSTNODE "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@" || exit $?
 }
 
 drop_request() {
+# OBD_FAIL_MDS_ALL_REQUEST_NET
     do_mds "echo 0x121 > /proc/sys/lustre/fail_loc"
     do_client "$1"
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
 }
 
 drop_reply() {
+# OBD_FAIL_MDS_ALL_REPLY_NET
     do_mds "echo 0x120 > /proc/sys/lustre/fail_loc"
     do_client "$@"
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
@@ -91,9 +96,8 @@ unmount_client() {
 }
 
 setup() {
-    make_config
-    start_mds ${REFORMAT:---reformat}
-    start_ost ${REFORMAT:---reformat}
+    start_mds ${REFORMAT}
+    start_ost ${REFORMAT}
     # XXX we should write our own upcall, when we move this somewhere better.
     mount_client --timeout=${TIMEOUT:-5} \
         --recovery_upcall=$UPCALL
@@ -121,7 +125,10 @@ if [ ! -z "$ONLY" ]; then
     exit $?
 fi
 
-$SETUP
+make_config
+
+REFORMAT=--reformat $SETUP
+unset REFORMAT
 
 drop_request "mcreate /mnt/lustre/1"
 drop_reply "mcreate /mnt/lustre/2"
