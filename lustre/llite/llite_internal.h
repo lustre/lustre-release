@@ -21,7 +21,7 @@ struct ll_sb_info {
         struct obd_uuid           ll_mds_uuid;
         struct obd_uuid           ll_mds_peer_uuid;
         struct lustre_mount_data *ll_lmd;
-        char                     *ll_instance; 
+        char                     *ll_instance;
 
         int                       ll_flags;
         wait_queue_head_t         ll_commitcbd_waitq;
@@ -38,7 +38,7 @@ struct ll_sb_info {
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
-        spinlock_t                ll_pglist_lock; 
+        spinlock_t                ll_pglist_lock;
         unsigned long             ll_pglist_gen;
         struct list_head          ll_pglist;
 };
@@ -65,7 +65,7 @@ extern struct proc_dir_entry *proc_lustre_fs_root;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 # define hlist_del_init list_del_init
-#endif 
+#endif
 
 static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 {
@@ -92,19 +92,15 @@ static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
                         ctxt->gid2 = i2->i_gid;
                 else
                         ctxt->gid2 = -1;
-        } else 
+        } else
                 ctxt->gid2 = 0;
 }
 
 struct it_cb_data {
-	struct inode *icbd_parent;
-	struct dentry **icbd_childp;
-	obd_id hash;
+        struct inode *icbd_parent;
+        struct dentry **icbd_childp;
+        obd_id hash;
 };
-
-#define LL_PRIVBITS_READ        0
-#define LL_PRIVBITS__LAST       1
-#define LL_PRIVBITS_MASK ((1 << LL_PRIVBITS__LAST) - 1)
 
 #define LLAP_MAGIC 98764321
 
@@ -152,7 +148,7 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define ll_ap_completion ll_ap_completion_24
 void ll_ap_completion_24(void *data, int cmd, int rc);
-#else 
+#else
 #define ll_ap_completion ll_ap_completion_26
 void ll_ap_completion_26(void *data, int cmd, int rc);
 #endif
@@ -161,7 +157,7 @@ int ll_sync_page(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
 struct ll_async_page *llap_from_page(struct page *page);
-void ll_readahead_init(struct ll_readahead_state *ras);
+void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 
 void ll_truncate(struct inode *inode);
 
@@ -224,7 +220,7 @@ void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
-int ll_prep_inode(struct obd_export *exp, struct inode **inode, 
+int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset, struct super_block *);
 __u32 get_uuid2int(const char *name, int len);
 struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
@@ -270,7 +266,7 @@ static inline __u64 ll_ts2u64(time_t *time)
 {
         return *time;
 }
-#endif 
+#endif
 
 /* don't need an addref as the sb_info should be holding one */
 static inline struct obd_export *ll_s2obdexp(struct super_block *sb)
