@@ -1,0 +1,264 @@
+#!/usr/bin/perl
+
+#use strict;
+BEGIN { require "asm/errno.ph" };
+BEGIN { require "asm/ioctl.ph" };
+
+# p2ph generated invalid macros for ioctl stuff, so I override some of it here
+eval 'sub OBD_IOC_CREATE () { &_IOC(2, ord(\'f\'), 3, 4);}' unless
+  defined(&OBD_IOC_CREATE);
+eval 'sub OBD_IOC_SETUP () { &_IOC(1, ord(\'f\'), 4, 4);}' unless
+  defined(&OBD_IOC_SETUP);
+eval 'sub OBD_IOC_SYNC () { &_IOC(2, ord(\'f\'), 5, 4);}' unless
+  defined(&OBD_IOC_SYNC);
+eval 'sub OBD_IOC_DESTROY () { &_IOC(1, ord(\'f\'), 6, 4);}' unless
+  defined(&OBD_IOC_DESTROY);
+eval 'sub OBD_IOC_DEC_USE_COUNT () { &_IOC(0, ord(\'f\'), 8, 0);}' unless
+  defined(&OBD_IOC_DEC_USE_COUNT);
+
+use Getopt::Long;
+use File::stat;
+use Storable;
+use Carp;
+use Term::ReadLine;
+use IO::Handle;
+
+my ($device, $filesystem);
+# startup options (I'll replace these when I have some to replace with)
+GetOptions("device=s" => \$device, "fs=s" => $filesystem) || die "Getoptions";
+
+$device = "/dev/obd" unless $device;
+$filesystem = "/dev/loop0" unless $filesystem;
+
+# get a console for the app
+my $term = new Term::ReadLine 'obdcontrol ';
+my $attribs = $term->Attribs;
+$term->ornaments('md,me,,');	# bold face prompt
+
+# make sure stdout is not buffered
+STDOUT->autoflush(1);
+
+my $line;
+my $command;
+my $arg;
+
+my %commands =
+    ('create' => {func => "Create", doc => "create: creates a new inode"},
+     'setup' => {func => "Setup", doc => "setup: initializes the environment"},
+     'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
+     'destroy' => {func => "Destroy", doc => "setup: destroys an inode"},
+     'dec_use_count' => {func => "Decusecount", doc => "decreases the module use count so that it can be unmounted following an oops"},
+     'help' => {func => \&Help,  doc => "help: this message"},
+     'quit' => {func => \&Quit,  doc => "see \"exit\""},
+     'exit' => {func => \&Quit,  doc => "see \"quit\""}
+    );
+
+#
+#	setup completion function
+#
+my @jcm_cmd_list = keys %commands;
+
+$attribs->{attempted_completion_function} = \&completeme;
+#------------------------------------------------------------------------------
+# Open the device, as we need an FD for the ioctl
+sysopen(DEV_OBD, $device, 0);
+
+if (!defined($::st = stat($filesystem))) {
+    die "Unable to stat $filesystem.\n";
+}
+
+# Get on with the show
+process_line();
+
+#------------------------------------------------------------------------------
+sub completeme {
+    my ($text, $line, $start, $end) = @_;
+    if (substr($line, 0, $start) =~ /^\s*$/) {
+	$attribs->{completion_word} = \@jcm_cmd_list;
+	return $term->completion_matches($text,
+					 $attribs->{'list_completion_function'});
+    }
+}
+
+sub find_command {
+    my $given = shift;
+    my $name;
+    my @completions = completeme($given, $given, 0, length($given));
+    if ($#completions == 0) {
+	$name = shift @completions;
+    }
+
+    return $name;
+}
+
+# start making requests
+sub process_line {
+  foo:
+    $line = $term->readline("obdcontrol > ");
+    execute_line($line);
+    goto foo;
+}
+
+sub execute_line {
+    my $line = shift;
+
+    my @arg = split(' ', $line);
+    my $word = shift @arg;
+
+    my $cmd = find_command($word);
+    unless ($cmd) {
+	printf STDERR "$word: No such command, or not unique.\n";
+	return (-1);
+    }
+
+    if ($cmd eq "help" || $cmd eq "exit" || $cmd eq "quit") {
+	return (&{$commands{$cmd}->{func}}(@arg));
+    }
+
+    # Call the function.
+    return (&{$commands{$cmd}->{func}}(@arg));
+}
+
+sub Setup {
+    my $err = 0;
+    my $packed = pack("L", $::st->rdev());
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Create {
+    my $arg = shift;
+    my $quiet = shift;
+    my $err = "0";
+    my $rc;
+
+    if (defined($quiet) && !($quiet eq "quiet")) {
+	print "syntax: create [number of objects [quiet]]\n";
+	return;
+    }
+
+    if (!defined($arg) || scalar($arg) < 2) {
+	print "Creating 1 object...\n";
+	$rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $err);
+	if (!defined($quiet)) {
+	    my $ino = unpack("L", $err);
+	    print "Created object #$ino.\n";
+	}
+    } else {
+	my $i;
+
+	print "Creating " . scalar($arg) . " objects...\n";
+	for ($i = 0; $i < scalar($arg); $i++) {
+	    $rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $err);
+	    if (!($rc eq "0 but true") || $err < 0) {
+		last;
+	    } elsif (!defined($quiet)) {
+		my $ino = unpack("L", $err);
+		print "Created object #$ino.\n";
+	    }
+	}
+    }
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Sync {
+    my $err = "0";
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_SYNC, $err);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Destroy {
+    my $arg = shift;
+
+    if (!defined($arg) || scalar($arg) < 1) {
+	print "destroy requires the object number to destroy.\n";
+	return;
+    }
+
+    print "Destroying object $arg...\n";
+    my $packed = pack("L", $arg);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_DESTROY, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Preallocate {
+    my $arg = shift;
+
+    if (!defined($arg) || scalar($arg) < 1 || scalar($arg) > 32) {
+	$arg = 32;
+    }
+
+    print "Preallocating $arg inodes...\n";
+    my $packed = pack("Lx128", $arg); # alloc, inodes[32]
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_PREALLOCATE, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	my $alloc = unpack("L", $packed);
+	my @inodes = unpack("L32", $packed);
+	my $i;
+
+	print "Got $alloc inodes: ";
+	for ($i = 1; $i <= $alloc; ++$i) {
+	    print $inodes[$i] . " ";
+	}
+	print "\nFinished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Decusecount {
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_DEC_USE_COUNT, NULL);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Help {
+    my $arg = shift;
+
+    if ( !$arg || !$commands{$arg} ) {
+	print "Comands: ", join( ' ', @jcm_cmd_list), "\n";
+    } else {
+	print "Usage: " .  $commands{$arg}->{doc} . "\n";
+    }
+}
+
+sub Quit {
+    exit;
+}
