@@ -1,16 +1,17 @@
 diff -uprN linux-2.4.20/fs/file_table.c linux-2.4.20c/fs/file_table.c
 --- linux-2.4.20/fs/file_table.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20c/fs/file_table.c	2003-09-03 18:57:54.000000000 +0530
-@@ -82,7 +82,7 @@ struct file * get_empty_filp(void)
++++ linux-2.4.20c/fs/file_table.c	2003-09-04 13:05:05.000000000 +0530
+@@ -82,7 +82,8 @@ struct file * get_empty_filp(void)
   * and call the open function (if any).  The caller must verify that
   * inode->i_fop is not NULL.
   */
 -int init_private_file(struct file *filp, struct dentry *dentry, int mode)
-+int init_private_file_it(struct file *filp, struct dentry *dentry, int mode, struct lookup_intent *it)
++int init_private_file_it(struct file *filp, struct dentry *dentry, int mode,
++                         struct lookup_intent *it)
  {
  	memset(filp, 0, sizeof(*filp));
  	filp->f_mode   = mode;
-@@ -90,6 +90,8 @@ int init_private_file(struct file *filp,
+@@ -90,6 +91,8 @@ int init_private_file(struct file *filp,
  	filp->f_dentry = dentry;
  	filp->f_uid    = current->fsuid;
  	filp->f_gid    = current->fsgid;
@@ -19,7 +20,7 @@ diff -uprN linux-2.4.20/fs/file_table.c linux-2.4.20c/fs/file_table.c
  	filp->f_op     = dentry->d_inode->i_fop;
  	if (filp->f_op->open)
  		return filp->f_op->open(dentry->d_inode, filp);
-@@ -97,6 +99,11 @@ int init_private_file(struct file *filp,
+@@ -97,6 +100,11 @@ int init_private_file(struct file *filp,
  		return 0;
  }
  
@@ -33,33 +34,36 @@ diff -uprN linux-2.4.20/fs/file_table.c linux-2.4.20c/fs/file_table.c
  	struct dentry * dentry = file->f_dentry;
 diff -uprN linux-2.4.20/fs/inode.c linux-2.4.20c/fs/inode.c
 --- linux-2.4.20/fs/inode.c	2003-09-03 19:01:57.000000000 +0530
-+++ linux-2.4.20c/fs/inode.c	2003-09-03 18:57:54.000000000 +0530
-@@ -970,9 +970,9 @@ struct inode *igrab(struct inode *inode)
++++ linux-2.4.20c/fs/inode.c	2003-09-04 13:09:13.000000000 +0530
+@@ -970,9 +970,10 @@ struct inode *igrab(struct inode *inode)
  }
  
  
 -struct inode *iget4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
 +static inline struct inode *ifind(struct super_block *sb, unsigned long ino,
-+		struct list_head *head, find_inode_t find_actor, void *opaque)
++                                  struct list_head *head,
++                                  find_inode_t find_actor, void *opaque)
  {
 -	struct list_head * head = inode_hashtable + hash(sb,ino);
  	struct inode * inode;
  
  	spin_lock(&inode_lock);
-@@ -985,6 +985,22 @@ struct inode *iget4(struct super_block *
+@@ -985,6 +986,24 @@ struct inode *iget4(struct super_block *
  	}
  	spin_unlock(&inode_lock);
  
 +	return NULL;
 +}
 +
-+struct inode *ilookup4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
++struct inode *ilookup4(struct super_block *sb, unsigned long ino,
++                       find_inode_t find_actor, void *opaque)
 +{
 +	struct list_head * head = inode_hashtable + hash(sb,ino);
 +	return ifind(sb, ino, head, find_actor, opaque);
 +}
 +
-+struct inode *iget4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
++struct inode *iget4(struct super_block *sb, unsigned long ino,
++                    find_inode_t find_actor, void *opaque)
 +{
 +	struct list_head * head = inode_hashtable + hash(sb,ino);
 +	struct inode *inode = ifind(sb, ino, head, find_actor, opaque);
@@ -71,17 +75,18 @@ diff -uprN linux-2.4.20/fs/inode.c linux-2.4.20c/fs/inode.c
  	 * in case it had to block at any point.
 diff -uprN linux-2.4.20/fs/namei.c linux-2.4.20c/fs/namei.c
 --- linux-2.4.20/fs/namei.c	2003-09-04 11:57:55.000000000 +0530
-+++ linux-2.4.20c/fs/namei.c	2003-09-03 18:57:54.000000000 +0530
-@@ -894,7 +894,7 @@ struct dentry * lookup_hash(struct qstr 
++++ linux-2.4.20c/fs/namei.c	2003-09-04 13:12:13.000000000 +0530
+@@ -894,7 +894,8 @@ struct dentry * lookup_hash(struct qstr 
  
  
  /* SMP-safe */
 -struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
-+struct dentry * lookup_one_len_it(const char * name, struct dentry * base, int len, struct lookup_intent *it)
++struct dentry * lookup_one_len_it(const char * name, struct dentry * base,
++                                  int len, struct lookup_intent *it)
  {
  	unsigned long hash;
  	struct qstr this;
-@@ -914,11 +914,16 @@ struct dentry * lookup_one_len(const cha
+@@ -914,11 +915,16 @@ struct dentry * lookup_one_len(const cha
  	}
  	this.hash = end_name_hash(hash);
  
@@ -101,7 +106,7 @@ diff -uprN linux-2.4.20/fs/namei.c linux-2.4.20c/fs/namei.c
   *
 diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
 --- linux-2.4.20/fs/nfsd/nfsfh.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20c/fs/nfsd/nfsfh.c	2003-09-03 18:57:55.000000000 +0530
++++ linux-2.4.20c/fs/nfsd/nfsfh.c	2003-09-04 13:02:10.000000000 +0530
 @@ -36,6 +36,15 @@ struct nfsd_getdents_callback {
  	int sequence;		/* sequence counter */
  };
@@ -127,7 +132,7 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
  
  	error = -ENOTDIR;
  	if (!dir || !S_ISDIR(dir->i_mode))
-@@ -85,9 +96,35 @@ static int nfsd_get_name(struct dentry *
+@@ -85,9 +96,37 @@ static int nfsd_get_name(struct dentry *
  	/*
  	 * Open the directory ...
  	 */
@@ -137,9 +142,11 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
 +		if ((dentry->d_flags & DCACHE_NFSD_DISCONNECTED) &&
 +		    (dentry->d_parent == dentry) ) {
 +			it.it_op_release = NULL;
-+			/* XXX Temporary Hack: Simulating init_private_file without f_op->open 
-+			for disconnected dentry Since we don't have actual dentry->d_name to 
-+			revalidate in revalidate_it() */
++			/* 
++			 * XXX Temporary Hack: Simulating init_private_file without
++			 * f_op->open for disconnected dentry Since we don't have actual
++			 * dentry->d_name to revalidate in revalidate_it()
++			 */
 +			filp = &file;
 +			memset(filp, 0, sizeof(*filp));
 +			filp->f_mode   = FMODE_READ;
@@ -165,7 +172,7 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
  	error = -EINVAL;
  	if (!file.f_op->readdir)
  		goto out_close;
-@@ -113,9 +150,13 @@ static int nfsd_get_name(struct dentry *
+@@ -113,9 +152,13 @@ static int nfsd_get_name(struct dentry *
  	}
  
  out_close:
@@ -173,14 +180,14 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
 +	if (file.f_op->release && !filp)
  		file.f_op->release(dir, &file);
  out:
-+	if (dentry->d_op && 
-+	    dentry->d_op->d_revalidate_it && 
++	if (dentry->d_op &&
++	    dentry->d_op->d_revalidate_it &&
 +	    it.it_op_release && !filp)
 +		intent_release(&it);
  	return error;
  }
  
-@@ -274,7 +315,7 @@ struct dentry *nfsd_findparent(struct de
+@@ -274,7 +317,7 @@ struct dentry *nfsd_findparent(struct de
  	 * it is well connected.  But nobody returns different dentrys do they?
  	 */
  	down(&child->d_inode->i_sem);
@@ -189,7 +196,7 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
  	up(&child->d_inode->i_sem);
  	d_drop(tdentry); /* we never want ".." hashed */
  	if (!pdentry && tdentry->d_inode == NULL) {
-@@ -306,6 +347,8 @@ struct dentry *nfsd_findparent(struct de
+@@ -306,6 +349,8 @@ struct dentry *nfsd_findparent(struct de
  				igrab(tdentry->d_inode);
  				pdentry->d_flags |= DCACHE_NFSD_DISCONNECTED;
  			}
@@ -198,7 +205,7 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
  		}
  		if (pdentry == NULL)
  			pdentry = ERR_PTR(-ENOMEM);
-@@ -463,6 +506,8 @@ find_fh_dentry(struct super_block *sb, _
+@@ -463,6 +508,8 @@ find_fh_dentry(struct super_block *sb, _
  		struct dentry *pdentry;
  		struct inode *parent;
  
@@ -207,7 +214,7 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
  		pdentry = nfsd_findparent(dentry);
  		err = PTR_ERR(pdentry);
  		if (IS_ERR(pdentry))
-@@ -662,6 +707,11 @@ fh_verify(struct svc_rqst *rqstp, struct
+@@ -662,6 +709,11 @@ fh_verify(struct svc_rqst *rqstp, struct
  
  	inode = dentry->d_inode;
  
@@ -219,7 +226,7 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
  	/* Type check. The correct error return for type mismatches
  	 * does not seem to be generally agreed upon. SunOS seems to
  	 * use EISDIR if file isn't S_IFREG; a comment in the NFSv3
-@@ -900,8 +950,9 @@ out_negative:
+@@ -900,8 +952,9 @@ out_negative:
  		dentry->d_parent->d_name.name, dentry->d_name.name);
  	goto out;
  out_uptodate:
@@ -233,12 +240,13 @@ diff -uprN linux-2.4.20/fs/nfsd/nfsfh.c linux-2.4.20c/fs/nfsd/nfsfh.c
  
 diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
 --- linux-2.4.20/fs/nfsd/vfs.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20c/fs/nfsd/vfs.c	2003-09-04 11:58:54.000000000 +0530
-@@ -77,6 +77,122 @@ struct raparms {
++++ linux-2.4.20c/fs/nfsd/vfs.c	2003-09-04 12:57:59.000000000 +0530
+@@ -77,6 +77,133 @@ struct raparms {
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
-+static int link_raw(struct dentry *dold, struct dentry *ddir, struct dentry *dnew)
++static int link_raw(struct dentry *dold, struct dentry *ddir,
++                    struct dentry *dnew)
 +{
 +	int err;
 +
@@ -253,11 +261,13 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
 +	return err;
 +}
 +
-+static int unlink_raw(struct dentry *dentry, char *fname, int flen, struct dentry *rdentry)
++static int unlink_raw(struct dentry *dentry, char *fname, int flen,
++                      struct dentry *rdentry)
 +{
 +	int err;
 +
-+	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct nameidata nd = { .dentry = dentry, .last.name = fname,
++				            .last.len = flen };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->unlink_raw(&nd);
 +	if (!err)
@@ -266,11 +276,13 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
 +	return err;
 +}
 +
-+static int rmdir_raw(struct dentry *dentry, char *fname, int flen, struct dentry *rdentry)
++static int rmdir_raw(struct dentry *dentry, char *fname, int flen,
++                     struct dentry *rdentry)
 +{
 +	int err;
 +
-+	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct nameidata nd = { .dentry = dentry, .last.name = fname, 
++		                    .last.len = flen };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->rmdir_raw(&nd);
 +	if(!err) {
@@ -281,11 +293,13 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
 +	return err;
 +}
 +
-+static int symlink_raw(struct dentry *dentry,  char *fname, int flen, char *path)
++static int symlink_raw(struct dentry *dentry,  char *fname, int flen,
++                       char *path)
 +{
 +	int err;
 +
-+	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct nameidata nd = { .dentry = dentry, .last.name = fname,
++					        .last.len = flen };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->symlink_raw(&nd, path);
 +
@@ -296,26 +310,29 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
 +{
 +	int err;
 +
-+	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct nameidata nd = { .dentry = dentry, .last.name = fname,
++						    .last.len = flen };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->mkdir_raw(&nd, mode);
 +
 +	return err;
 +}
 +
-+static int mknod_raw(struct dentry *dentry, char *fname, int flen, int mode, dev_t dev)
++static int mknod_raw(struct dentry *dentry, char *fname, int flen, int mode,
++                     dev_t dev)
 +{
 +	int err;
 +
-+	struct nameidata nd = { .dentry = dentry, .last.name = fname, .last.len = flen };
++	struct nameidata nd = { .dentry = dentry, .last.name = fname,
++							.last.len = flen };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->mknod_raw(&nd, mode, dev);
 +
 +	return err;
 +}	
 +
-+static int rename_raw(struct dentry *fdentry, struct dentry *tdentry, 
-+						struct dentry *odentry, struct dentry *ndentry)
++static int rename_raw(struct dentry *fdentry, struct dentry *tdentry,
++                      struct dentry *odentry, struct dentry *ndentry)
 +{
 +	int err;
 +
@@ -343,7 +360,8 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
 +	int err = 0;
 +
 +	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
-+		if (!dentry->d_op->d_revalidate_it(dentry, 0, it) && !d_invalidate(dentry)) {
++		if (!dentry->d_op->d_revalidate_it(dentry, 0, it) &&
++			!d_invalidate(dentry)) {
 +			dput(dentry);
 +			err = -EINVAL;
 +			dentry = NULL;
@@ -357,7 +375,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  /*
   * Look up one component of a pathname.
   * N.B. After this call _both_ fhp and resfh need an fh_put
-@@ -300,7 +416,10 @@ nfsd_setattr(struct svc_rqst *rqstp, str
+@@ -300,7 +427,10 @@ nfsd_setattr(struct svc_rqst *rqstp, str
  	}
  	err = nfserr_notsync;
  	if (!check_guard || guardtime == inode->i_ctime) {
@@ -369,7 +387,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  		err = nfserrno(err);
  	}
  	if (size_change) {
-@@ -473,6 +592,15 @@ nfsd_open(struct svc_rqst *rqstp, struct
+@@ -473,6 +603,15 @@ nfsd_open(struct svc_rqst *rqstp, struct
  		filp->f_mode  = FMODE_READ;
  	}
  
@@ -385,7 +403,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  	err = 0;
  	if (filp->f_op && filp->f_op->open) {
  		err = filp->f_op->open(inode, filp);
-@@ -487,7 +615,11 @@ nfsd_open(struct svc_rqst *rqstp, struct
+@@ -487,7 +626,11 @@ nfsd_open(struct svc_rqst *rqstp, struct
  			atomic_dec(&filp->f_count);
  		}
  	}
@@ -397,7 +415,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  	if (err)
  		err = nfserrno(err);
  out:
-@@ -818,7 +950,7 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -818,7 +961,7 @@ nfsd_create(struct svc_rqst *rqstp, stru
  {
  	struct dentry	*dentry, *dchild;
  	struct inode	*dirp;
@@ -406,7 +424,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  
  	err = nfserr_perm;
  	if (!flen)
-@@ -834,8 +966,24 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -834,8 +977,24 @@ nfsd_create(struct svc_rqst *rqstp, stru
  	dentry = fhp->fh_dentry;
  	dirp = dentry->d_inode;
  
@@ -432,7 +450,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  		goto out;
  	/*
  	 * Check whether the response file handle has been verified yet.
-@@ -868,10 +1016,12 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -868,10 +1027,12 @@ nfsd_create(struct svc_rqst *rqstp, stru
  	 * Make sure the child dentry is still negative ...
  	 */
  	err = nfserr_exist;
@@ -449,7 +467,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  	}
  
  	if (!(iap->ia_valid & ATTR_MODE))
-@@ -887,13 +1037,15 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -887,13 +1048,15 @@ nfsd_create(struct svc_rqst *rqstp, stru
  		err = vfs_create(dirp, dchild, iap->ia_mode);
  		break;
  	case S_IFDIR:
@@ -467,7 +485,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  		break;
  	default:
  	        printk("nfsd: bad file type %o in nfsd_create\n", type);
-@@ -943,6 +1095,8 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
+@@ -943,6 +1106,8 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
  	int		err;
  	__u32		v_mtime=0, v_atime=0;
  	int		v_mode=0;
@@ -476,7 +494,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  
  	err = nfserr_perm;
  	if (!flen)
-@@ -962,14 +1116,20 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
+@@ -962,14 +1127,20 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
  	/* Get all the sanity checks out of the way before
  	 * we lock the parent. */
  	err = nfserr_notdir;
@@ -499,7 +517,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  	err = PTR_ERR(dchild);
  	if (IS_ERR(dchild))
  		goto out_nfserr;
-@@ -1013,6 +1173,8 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
+@@ -1013,6 +1184,8 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
  		case NFS3_CREATE_GUARDED:
  			err = nfserr_exist;
  		}
@@ -508,7 +526,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  		goto out;
  	}
  
-@@ -1119,7 +1281,7 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+@@ -1119,7 +1292,7 @@ nfsd_symlink(struct svc_rqst *rqstp, str
  				struct iattr *iap)
  {
  	struct dentry	*dentry, *dnew;
@@ -517,7 +535,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  
  	err = nfserr_noent;
  	if (!flen || !plen)
-@@ -1133,12 +1295,18 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+@@ -1133,12 +1306,18 @@ nfsd_symlink(struct svc_rqst *rqstp, str
  		goto out;
  	fh_lock(fhp);
  	dentry = fhp->fh_dentry;
@@ -537,7 +555,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  	if (!err) {
  		if (EX_ISSYNC(fhp->fh_export))
  			nfsd_sync_dir(dentry);
-@@ -1206,7 +1374,10 @@ nfsd_link(struct svc_rqst *rqstp, struct
+@@ -1206,7 +1385,10 @@ nfsd_link(struct svc_rqst *rqstp, struct
  	dold = tfhp->fh_dentry;
  	dest = dold->d_inode;
  
@@ -549,7 +567,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  	if (!err) {
  		if (EX_ISSYNC(ffhp->fh_export)) {
  			nfsd_sync_dir(ddir);
-@@ -1291,7 +1462,10 @@ nfsd_rename(struct svc_rqst *rqstp, stru
+@@ -1291,7 +1473,10 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
  #endif
@@ -561,7 +579,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
-@@ -1312,7 +1486,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
+@@ -1312,7 +1497,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  	fill_post_wcc(tfhp);
  	double_up(&tdir->i_sem, &fdir->i_sem);
  	ffhp->fh_locked = tfhp->fh_locked = 0;
@@ -570,7 +588,7 @@ diff -uprN linux-2.4.20/fs/nfsd/vfs.c linux-2.4.20c/fs/nfsd/vfs.c
  out:
  	return err;
  }
-@@ -1358,9 +1532,15 @@ nfsd_unlink(struct svc_rqst *rqstp, stru
+@@ -1358,9 +1543,15 @@ nfsd_unlink(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  		} else
  #endif
@@ -610,7 +628,7 @@ diff -uprN linux-2.4.20/fs/super.c linux-2.4.20c/fs/super.c
  static void get_filesystem(struct file_system_type *fs)
 diff -uprN linux-2.4.20/include/linux/fs.h linux-2.4.20c/include/linux/fs.h
 --- linux-2.4.20/include/linux/fs.h	2003-09-03 19:01:58.000000000 +0530
-+++ linux-2.4.20c/include/linux/fs.h	2003-09-03 19:18:18.000000000 +0530
++++ linux-2.4.20c/include/linux/fs.h	2003-09-04 13:16:32.000000000 +0530
 @@ -1096,6 +1096,7 @@ extern int open_namei_it(const char *fil
  			 struct nameidata *nd, struct lookup_intent *it);
  extern struct file *dentry_open_it(struct dentry *dentry, struct vfsmount *mnt,
@@ -619,23 +637,25 @@ diff -uprN linux-2.4.20/include/linux/fs.h linux-2.4.20c/include/linux/fs.h
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
-@@ -1366,6 +1367,7 @@ extern void path_release(struct nameidat
+@@ -1366,6 +1367,8 @@ extern void path_release(struct nameidat
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
  extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
-+extern struct dentry * lookup_one_len_it(const char *, struct dentry *, int, struct lookup_intent *);
++extern struct dentry * lookup_one_len_it(const char *, struct dentry *, int,
++                                         struct lookup_intent *);
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
-@@ -1379,6 +1381,7 @@ extern ino_t iunique(struct super_block 
+@@ -1379,6 +1382,8 @@ extern ino_t iunique(struct super_block 
  
  typedef int (*find_inode_t)(struct inode *, unsigned long, void *);
  extern struct inode * iget4(struct super_block *, unsigned long, find_inode_t, void *);
-+extern struct inode * ilookup4(struct super_block *, unsigned long, find_inode_t, void *);
++extern struct inode * ilookup4(struct super_block *, unsigned long,
++                               find_inode_t, void *);
  static inline struct inode *iget(struct super_block *sb, unsigned long ino)
  {
  	return iget4(sb, ino, NULL, NULL);
-@@ -1494,6 +1497,7 @@ extern int dcache_dir_fsync(struct file 
+@@ -1494,6 +1499,7 @@ extern int dcache_dir_fsync(struct file 
  extern int dcache_readdir(struct file *, void *, filldir_t);
  extern struct file_operations dcache_dir_ops;
  
