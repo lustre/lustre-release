@@ -175,6 +175,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa);
         LASSERT(ea);
 
+        if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0))
+                RETURN(osc_real_create(exp, oa, ea, oti));
+
         lsm = *ea;
         if (lsm == NULL) {
                 rc = obd_alloc_memmd(exp, &lsm);
@@ -221,9 +224,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-void oscc_init(struct lustre_handle *exph)
+void oscc_init(struct obd_export *exp)
 {
-        struct obd_export *exp = class_conn2export(exph);
         struct osc_export_data *oed;
 
         if (exp == NULL)
