@@ -12,6 +12,9 @@ init_test_env $@
 
 ALWAYS_EXCEPT="10"
 
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
+
 build_test_filter
 
 assert_env mds_HOST ost1_HOST ost2_HOST client_HOST LIVE_CLIENT 
@@ -128,6 +131,8 @@ gen_config() {
 }
 
 setup() {
+    gen_config
+
     rm -rf logs/*
     for i in `seq $NUMOST`; do
 	wait_for ost$i
@@ -205,19 +210,16 @@ node_to_ost() {
 
 
 if [ "$ONLY" == "cleanup" ]; then
-    cleanup
+    $CLEANUP
     exit
-fi
-
-if [ -z "$NOSETUP" ]; then
-    gen_config
-    setup
 fi
 
 if [ ! -z "$EVAL" ]; then
     eval "$EVAL"
     exit $?
 fi
+
+$SETUP
 
 if [ "$ONLY" == "setup" ]; then
     exit 0
@@ -615,4 +617,4 @@ test_10() {
 run_test 10 "Running Availability for 6 hours..."
 
 equals_msg "Done, cleaning up"
-cleanup
+$CLEANUP
