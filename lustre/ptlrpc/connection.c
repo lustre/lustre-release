@@ -82,6 +82,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
 int ptlrpc_put_connection(struct ptlrpc_connection *c)
 {
         int rc = 0;
+        ENTRY;
 
         if (atomic_dec_and_test(&c->c_refcount)) {
                 spin_lock(&conn_lock);
@@ -91,13 +92,14 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 rc = 1;
         }
 
-        return rc;
+        RETURN(rc);
 }
 
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
 {
+        ENTRY;
         atomic_inc(&c->c_refcount);
-        return c;
+        RETURN(c);
 }
 
 void ptlrpc_init_connection(void)
