@@ -1,6 +1,0 @@
-#!/bin/sh
-while sleep 1 ; do
-        echo '-----------------------'
-	egrep "ll_|ldlm|filp|dentry|inode|portals|size-[0-9]* " /proc/slabinfo
-	cat /proc/meminfo
-done
