@@ -11,7 +11,7 @@ static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 
 
 /* mds/mds_fs.c */
-struct llog_handle *mds_log_create(struct obd_device *obd);
+struct llog_handle *mds_log_create(struct obd_device *obd, char *name);
 int mds_log_close(struct llog_handle *cathandle, struct llog_handle *loghandle);
 struct llog_handle *mds_log_open(struct obd_device *obd,
                                  struct llog_cookie *logcookie);
