@@ -362,7 +362,7 @@
  };
  
  
-@@ -646,6 +663,8 @@
+@@ -646,6 +663,9 @@
  extern int	 journal_try_to_free_buffers(journal_t *, struct page *, int);
  extern int	 journal_stop(handle_t *);
  extern int	 journal_flush (journal_t *);
