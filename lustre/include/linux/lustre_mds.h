@@ -155,6 +155,7 @@ struct mds_fs_operations {
         void    (* fs_delete_inode)(struct inode *inode);
         void    (* cl_delete_inode)(struct inode *inode);
         int     (* fs_journal_data)(struct inode *inode, struct file *file);
+        int     (* fs_set_last_rcvd)(struct mds_obd *mds, void *handle);
 };
 
 #define MDS_FSOP_UNLINK         1
@@ -208,6 +209,11 @@ static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,
                                       char *buf, size_t count, loff_t *offset)
 {
         return mds->mds_fsops->fs_readpage(file, buf, count, offset);
+}
+
+static inline int mds_fs_set_last_rcvd(struct mds_obd *mds, void *handle)
+{
+        return mds->mds_fsops->fs_set_last_rcvd(mds, handle);
 }
 
 static inline ssize_t mds_fs_journal_data(struct mds_obd *mds,

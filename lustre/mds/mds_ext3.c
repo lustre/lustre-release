@@ -140,12 +140,10 @@ static ssize_t mds_ext3_readpage(struct file *file, char *buf, size_t count,
 
 struct mds_fs_operations mds_ext3_fs_ops;
 
-void mds_ext3_delete_inode(struct inode *inode)
+static void mds_ext3_delete_inode(struct inode *inode)
 {
-        void *handle;
-
         if (S_ISREG(inode->i_mode)) {
-                handle = mds_ext3_start(inode, MDS_FSOP_UNLINK);
+                void *handle = mds_ext3_start(inode, MDS_FSOP_UNLINK);
 
                 if (IS_ERR(handle)) {
                         CERROR("unable to start transaction");
@@ -164,7 +162,54 @@ void mds_ext3_delete_inode(struct inode *inode)
                 mds_ext3_fs_ops.cl_delete_inode(inode);
 }
 
-int mds_ext3_journal_data(struct inode *inode, struct file *filp)
+struct mds_cb_data {
+        struct journal_callback cb_jcb;
+        struct mds_obd *cb_mds;
+        __u64 cb_last_rcvd;
+};
+
+static void mds_ext3_callback_func(void *cb_data)
+{
+        struct mds_cb_data *mcb = cb_data;
+
+        CDEBUG(D_EXT2, "got callback for last_rcvd: %Ld\n", mcb->cb_last_rcvd);
+        if (mcb->cb_last_rcvd > mcb->cb_mds->mds_last_committed)
+                mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;
+
+        OBD_FREE(mcb, sizeof(*mcb));
+}
+
+static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
+{
+        struct mds_cb_data *mcb;
+
+        OBD_ALLOC(mcb, sizeof(*mcb));
+        if (!mcb)
+                RETURN(-ENOMEM);
+
+        mcb->cb_mds = mds;
+        mcb->cb_last_rcvd = mds->mds_last_rcvd;
+
+#ifdef HAVE_JOURNAL_CALLBACK
+        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
+               (unsigned long long)mcb->cb_last_rcvd);
+        journal_callback_set(handle, mds_ext3_callback_func, mcb);
+#else
+        {
+        static long next = 0;
+
+        if (time_after(jiffies, next)) {
+                CERROR("no journal callback kernel patch, faking it...\n");
+                next = jiffies + 300 * HZ;
+        }
+        }
+        mds_ext3_callback_func(mcb);
+#endif
+
+        return 0;
+}
+
+static int mds_ext3_journal_data(struct inode *inode, struct file *filp)
 {
         EXT3_I(inode)->i_flags |= EXT3_JOURNAL_DATA_FL;
 
@@ -181,4 +226,5 @@ struct mds_fs_operations mds_ext3_fs_ops = {
         fs_delete_inode:mds_ext3_delete_inode,
         cl_delete_inode:clear_inode,
         fs_journal_data:mds_ext3_journal_data,
+        fs_set_last_rcvd:mds_ext3_set_last_rcvd,
 };

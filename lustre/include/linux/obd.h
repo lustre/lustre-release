@@ -79,6 +79,7 @@ struct mds_obd {
         struct address_space_operations *mds_aops;
         struct mds_fs_operations *mds_fsops;
         struct file *mds_rcvd_filp;
+        __u64 mds_last_committed;
         __u64 mds_last_rcvd;
         __u64 mds_mount_count;
         struct ll_fid mds_rootfid;

@@ -36,7 +36,8 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
-int mds_update_last_rcvd(struct mds_obd *mds, struct ptlrpc_request *req)
+int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
+                         struct ptlrpc_request *req)
 {
         /* get from req->rq_connection-> or req->rq_client */
         struct mds_client_info mci_data, *mci = &mci_data;
@@ -53,6 +54,8 @@ int mds_update_last_rcvd(struct mds_obd *mds, struct ptlrpc_request *req)
         mci->mci_mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
         mci->mci_mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
         mci->mci_mcd->mcd_xid = cpu_to_le32(req->rq_connection->c_xid_in);
+
+        mds_fs_set_last_rcvd(mds, handle);
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mci->mci_mcd,
                            sizeof(*mci->mci_mcd), &off);
         CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at %Ld: rc = %d\n",
@@ -91,7 +94,7 @@ static int mds_reint_setattr(struct mds_update_record *rec,
         rc = mds_fs_setattr(mds, de, handle, &rec->ur_iattr);
 
         if (!rc)
-                rc = mds_update_last_rcvd(mds, req);
+                rc = mds_update_last_rcvd(mds, handle, req);
 
         EXIT;
 
@@ -216,7 +219,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         }
 
         if (!rc)
-                rc = mds_update_last_rcvd(mds, req);
+                rc = mds_update_last_rcvd(mds, handle, req);
 
 out_create_commit:
         /* FIXME: keep rc intact */
@@ -296,7 +299,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
         }
 
         if (!rc)
-                rc = mds_update_last_rcvd(mds, req);
+                rc = mds_update_last_rcvd(mds, handle, req);
         /* FIXME: keep rc intact */
         rc = mds_fs_commit(mds, dir, handle);
 
@@ -355,7 +358,7 @@ static int mds_reint_link(struct mds_update_record *rec,
         rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
 
         if (!rc)
-                rc = mds_update_last_rcvd(mds, req);
+                rc = mds_update_last_rcvd(mds, handle, req);
 
         /* FIXME: keep rc intact */
         rc = mds_fs_commit(mds, de_tgt_dir->d_inode, handle);
@@ -416,7 +419,7 @@ static int mds_reint_rename(struct mds_update_record *rec,
         rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
 
         if (!rc)
-                rc = mds_update_last_rcvd(mds, req);
+                rc = mds_update_last_rcvd(mds, handle, req);
 
         /* FIXME: keep rc intact */
         rc = mds_fs_commit(mds, de_tgtdir->d_inode, handle);

@@ -83,7 +83,7 @@ static ssize_t mds_ext2_readpage(struct file *file, char *buf, size_t count,
 
 struct mds_fs_operations mds_ext2_fs_ops;
 
-void mds_ext2_delete_inode(struct inode *inode)
+static void mds_ext2_delete_inode(struct inode *inode)
 {
         if (S_ISREG(inode->i_mode))
                 mds_ext2_set_objid(inode, NULL, 0);
@@ -91,7 +91,15 @@ void mds_ext2_delete_inode(struct inode *inode)
         mds_ext2_fs_ops.cl_delete_inode(inode);
 }
 
-int mds_ext2_journal_data(struct inode *inode, struct file *filp)
+static int mds_ext2_set_last_rcvd(struct mds_obd *mds, void *handle)
+{
+        /* Bail for ext2 - can't tell when it is on disk anyways, sync? */
+        mds->mds_last_committed = mds->mds_last_rcvd;
+
+        return 0;
+}
+
+static int mds_ext2_journal_data(struct inode *inode, struct file *filp)
 {
         return 0;
 }
@@ -106,4 +114,5 @@ struct mds_fs_operations mds_ext2_fs_ops = {
         fs_delete_inode:mds_ext2_delete_inode,
         cl_delete_inode:clear_inode,
         fs_journal_data:mds_ext2_journal_data,
+        fs_set_last_rcvd:mds_ext2_set_last_rcvd,
 };
