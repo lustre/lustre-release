@@ -119,8 +119,7 @@ inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid)
 
         CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
                inode->i_ino, (long)oa->o_id, oa->o_valid);
-        obdo_from_inode(oa, inode);
-	
+#if 0
 	/* this will transfer metadata for the logical object to 
 	   the oa: that metadata could contain the constituent objects
 	*/
@@ -130,6 +129,7 @@ inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid)
                 oa->o_obdflags |= OBD_FL_INLINEDATA;
                 oa->o_valid |= OBD_MD_FLINLINE;
         }
+#endif
 	return oa;
 } /* ll_oa_from_inode */
 
