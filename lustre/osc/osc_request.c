@@ -416,27 +416,29 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 	struct ptlrpc_client *cl = osc_con2cl(conn);
         struct ptlrpc_request *request;
 	struct obd_ioobj ioo;
-	struct niobuf src;
+	struct niobuf *src;
 	int pages, rc, i, j, n, size1, size2 = 0; 
-	void *ptr1, *ptr2, *reqbuf;
+	void *ptr1, *ptr2;
 
 	size1 = num_oa * sizeof(ioo); 
         pages = 0;
 	for (i = 0; i < num_oa; i++) { 
-		size2 += oa_bufs[i] * sizeof(src);
+		size2 += oa_bufs[i] * sizeof(*src);
                 pages += oa_bufs[i];
 	}
+
+        OBD_ALLOC(src, size2);
+        if (src) { 
+                CERROR("no src memory\n");
+                return -ENOMEM;
+        }
+        memset((char *)src, 0, size2);
 
 	request = ptlrpc_prep_req(cl, OST_BRW, size1, NULL, size2, NULL);
 	if (!request) { 
 		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
-        OBD_ALLOC(reqbuf, request->rq_reqlen);
-        if (reqbuf == NULL) {
-                CERROR("cannot make duplicate buffer\n");
-                return -ENOMEM;
-        }
         request->rq_req.ost->cmd = OBD_BRW_WRITE;
 
 	n = 0;
@@ -450,8 +452,8 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 			n++;
 		}
 	}
+        memcpy((char *)src, (char *)ost_req_buf2(request->rq_req.ost), size2); 
 
-        memcpy(reqbuf, request->rq_reqbuf, request->rq_reqlen);
 	request->rq_replen = sizeof(struct ptlrep_hdr) +
                 sizeof(struct ost_rep) + pages * sizeof(struct niobuf);
 	rc = ptlrpc_queue_wait(cl, request);
@@ -472,10 +474,8 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
         for (i = 0; i < num_oa; i++) {
                 for (j = 0; j < oa_bufs[i]; j++) {
 			struct niobuf *dst;
-			src.addr = (__u64)(unsigned long)buf[n];
-			src.len = count[n];
 			ost_unpack_niobuf(&ptr2, &dst);
-			osc_sendpage(conn, request, dst, &src);
+			osc_sendpage(conn, request, dst, &src[n]);
 			n++;
 		}
 	}
