@@ -254,8 +254,7 @@ static int cobd_commitrw(int cmd, struct obd_export *exp,
 static inline int
 cobd_brw(int cmd, struct lustre_handle *conn,
          struct lov_stripe_md *lsm, obd_count oa_bufs,
-         struct brw_page *pga, struct obd_brw_set *set, 
-         struct obd_trans_info *oti)
+         struct brw_page *pga, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -270,7 +269,7 @@ cobd_brw(int cmd, struct lustre_handle *conn,
 
         cobd = &obd->u.cobd;
         return (obd_brw (cmd, &cobd->cobd_target,
-                         lsm, oa_bufs, pga, set, oti));
+                         lsm, oa_bufs, pga, oti));
 }
 
 static int
