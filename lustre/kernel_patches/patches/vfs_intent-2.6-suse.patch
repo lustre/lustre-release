@@ -10,7 +10,7 @@ Index: linux-2.6.5-12.1/fs/exec.c
 +	intent_init(&nd.intent, IT_OPEN);
  
 -	FSHOOK_BEGIN_USER_WALK(open,
-+	nd.intent.it_flags = FMODE_READ;
++	nd.intent.it_flags = FMODE_READ|FMODE_EXEC;
 +	FSHOOK_BEGIN_USER_WALK_IT(open,
  		error,
  		library,
@@ -31,7 +31,7 @@ Index: linux-2.6.5-12.1/fs/exec.c
 -	nd.intent.open.flags = FMODE_READ;
 -	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
 +	intent_init(&nd.intent, IT_OPEN);
-+	nd.intent.it_flags = FMODE_READ;
++	nd.intent.it_flags = FMODE_READ|FMODE_EXEC;
 +	err = path_lookup(name, LOOKUP_FOLLOW, &nd);
  	file = ERR_PTR(err);
  
@@ -642,6 +642,14 @@ Index: linux-2.6.5-12.1/include/linux/fs.h
 ===================================================================
 --- linux-2.6.5-12.1.orig/include/linux/fs.h	2004-05-10 12:21:56.000000000 -0400
 +++ linux-2.6.5-12.1/include/linux/fs.h	2004-06-03 18:31:28.000000000 -0400
+@@ -76,6 +76,7 @@
+ 
+ #define FMODE_READ 1
+ #define FMODE_WRITE 2
++#define FMODE_EXEC 4
+ 
+ #define RW_MASK		1
+ #define RWA_MASK	2
 @@ -250,6 +250,8 @@
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
