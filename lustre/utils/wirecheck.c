@@ -136,6 +136,12 @@ check_obdo(void)
         CHECK_VALUE(OBD_MD_FLOSCOPQ);
         CHECK_VALUE(OBD_MD_FLCOOKIE);
         CHECK_VALUE(OBD_MD_FLGROUP);
+
+        CHECK_VALUE(OBD_FL_INLINEDATA);
+        CHECK_VALUE(OBD_FL_OBDMDEXISTS);
+        CHECK_VALUE(OBD_FL_DELORPHAN);
+        CHECK_VALUE(OBD_FL_NORPC);
+        CHECK_VALUE(OBD_FL_IDONLY);
 }
 
 void
@@ -268,6 +274,7 @@ check_mds_body(void)
         CHECK_VALUE(FMODE_EXEC);
         CHECK_VALUE(MDS_OPEN_CREAT);
         CHECK_VALUE(MDS_OPEN_EXCL);
+        CHECK_VALUE(MDS_OPEN_TRUNC);
         CHECK_VALUE(MDS_OPEN_APPEND);
         CHECK_VALUE(MDS_OPEN_SYNC);
         CHECK_VALUE(MDS_OPEN_DIRECTORY);
@@ -507,6 +514,7 @@ check_llog_logid(void)
         CHECK_VALUE(MDS_UNLINK_REC);
         CHECK_VALUE(OBD_CFG_REC);
         CHECK_VALUE(PTL_CFG_REC);
+        CHECK_VALUE(LLOG_GEN_REC);
         CHECK_VALUE(LLOG_HDR_MAGIC);
         CHECK_VALUE(LLOG_LOGID_MAGIC);
 }
@@ -528,6 +536,79 @@ check_llog_rec_tail(void)
         CHECK_STRUCT(llog_rec_tail);
         CHECK_MEMBER(llog_rec_tail, lrt_len);
         CHECK_MEMBER(llog_rec_tail, lrt_index);
+}
+
+void
+check_llog_logid_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_logid_rec);
+        CHECK_MEMBER(llog_logid_rec, lid_hdr);
+        CHECK_MEMBER(llog_logid_rec, lid_id);
+        CHECK_MEMBER(llog_logid_rec, lid_tail);
+}
+
+void
+check_llog_create_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_create_rec);
+        CHECK_MEMBER(llog_create_rec, lcr_hdr);
+        CHECK_MEMBER(llog_create_rec, lcr_fid);
+        CHECK_MEMBER(llog_create_rec, lcr_oid);
+        CHECK_MEMBER(llog_create_rec, lcr_ogen);
+}
+
+void
+check_llog_orphan_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_orphan_rec);
+        CHECK_MEMBER(llog_orphan_rec, lor_hdr);
+        CHECK_MEMBER(llog_orphan_rec, lor_oid);
+        CHECK_MEMBER(llog_orphan_rec, lor_ogen);
+        CHECK_MEMBER(llog_orphan_rec, lor_tail);
+}
+
+void
+check_llog_unlink_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_unlink_rec);
+        CHECK_MEMBER(llog_unlink_rec, lur_hdr);
+        CHECK_MEMBER(llog_unlink_rec, lur_oid);
+        CHECK_MEMBER(llog_unlink_rec, lur_ogen);
+        CHECK_MEMBER(llog_unlink_rec, lur_tail);
+}
+
+void
+check_llog_size_change_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_size_change_rec);
+        CHECK_MEMBER(llog_size_change_rec, lsc_hdr);
+        CHECK_MEMBER(llog_size_change_rec, lsc_fid);
+        CHECK_MEMBER(llog_size_change_rec, lsc_io_epoch);
+        CHECK_MEMBER(llog_size_change_rec, lsc_tail);
+}
+
+void
+check_llog_gen(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_gen);
+        CHECK_MEMBER(llog_gen, mnt_cnt);
+        CHECK_MEMBER(llog_gen, conn_cnt);
+}
+
+void
+check_llog_gen_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_gen_rec);
+        CHECK_MEMBER(llog_gen_rec, lgr_hdr);
+        CHECK_MEMBER(llog_gen_rec, lgr_gen);
+        CHECK_MEMBER(llog_gen_rec, lgr_tail);
 }
 
 void
@@ -576,15 +657,8 @@ check_llogd_body(void)
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_READ_HEADER);
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_WRITE_REC);
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_CLOSE);
-}
-
-void
-check_llog_ctxt_gen(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(llog_ctxt_gen);
-        CHECK_MEMBER(llog_ctxt_gen, mnt_cnt);
-        CHECK_MEMBER(llog_ctxt_gen, conn_cnt);
+        CHECK_VALUE(LLOG_ORIGIN_CONNECT);
+        CHECK_VALUE(LLOG_CATINFO);
 }
 
 void
@@ -639,10 +713,6 @@ main(int argc, char **argv)
         CHECK_VALUE(OST_SAN_WRITE);
         CHECK_VALUE(OST_SYNC);
         CHECK_VALUE(OST_LAST_OPC);
-        CHECK_VALUE(OST_FIRST_OPC);
-
-        CHECK_VALUE(OBD_FL_INLINEDATA);
-        CHECK_VALUE(OBD_FL_OBDMDEXISTS);
 
         CHECK_DEFINE(OBD_OBJECT_EOF);
 
@@ -657,8 +727,11 @@ main(int argc, char **argv)
         CHECK_VALUE(MDS_DISCONNECT);
         CHECK_VALUE(MDS_GETSTATUS);
         CHECK_VALUE(MDS_STATFS);
+        CHECK_VALUE(MDS_PIN);
+        CHECK_VALUE(MDS_UNPIN);
+        CHECK_VALUE(MDS_SYNC);
+        CHECK_VALUE(MDS_DONE_WRITING);
         CHECK_VALUE(MDS_LAST_OPC);
-        CHECK_VALUE(MDS_FIRST_OPC);
 
         CHECK_VALUE(REINT_SETATTR);
         CHECK_VALUE(REINT_CREATE);
@@ -686,7 +759,13 @@ main(int argc, char **argv)
         CHECK_VALUE(LDLM_BL_CALLBACK);
         CHECK_VALUE(LDLM_CP_CALLBACK);
         CHECK_VALUE(LDLM_LAST_OPC);
-        CHECK_VALUE(LDLM_FIRST_OPC);
+
+        CHECK_VALUE(LCK_EX);
+        CHECK_VALUE(LCK_PW);
+        CHECK_VALUE(LCK_PR);
+        CHECK_VALUE(LCK_CW);
+        CHECK_VALUE(LCK_CR);
+        CHECK_VALUE(LCK_NL);
 
         CHECK_VALUE(PTLBD_QUERY);
         CHECK_VALUE(PTLBD_READ);
@@ -695,9 +774,14 @@ main(int argc, char **argv)
         CHECK_VALUE(PTLBD_CONNECT);
         CHECK_VALUE(PTLBD_DISCONNECT);
         CHECK_VALUE(PTLBD_LAST_OPC);
-        CHECK_VALUE(PTLBD_FIRST_OPC);
+
+        CHECK_VALUE(MGMT_CONNECT);
+        CHECK_VALUE(MGMT_DISCONNECT);
+        CHECK_VALUE(MGMT_EXCEPTION);
 
         CHECK_VALUE(OBD_PING);
+        CHECK_VALUE(OBD_LOG_CANCEL);
+        CHECK_VALUE(OBD_LAST_OPC);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
