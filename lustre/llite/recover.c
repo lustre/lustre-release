@@ -35,9 +35,10 @@ int ll_recover(struct recovd_data *rd, int phase)
                                 list_entry(tmp, struct obd_import, imp_chain);
 
                         if (phase == PTLRPC_RECOVD_PHASE_PREPARE) {
-                                spin_lock(&imp->imp_lock);
+                                unsigned long flags;
+                                spin_lock_irqsave(&imp->imp_lock, flags);
                                 imp->imp_level = LUSTRE_CONN_RECOVD;
-                                spin_unlock(&imp->imp_lock);
+                                spin_unlock_irqrestore(&imp->imp_lock, flags);
                         }
                         imp->imp_recover(imp, phase);
                 }
