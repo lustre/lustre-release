@@ -70,9 +70,8 @@ void llog_free_handle(struct llog_handle *loghandle)
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
-static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
-                                        struct obd_uuid *tgtuuid,
-                                        struct obd_trans_info *oti)
+struct llog_handle *llog_new_log(struct llog_handle *cathandle,
+                                 struct obd_uuid *tgtuuid)
 {
         struct llog_handle *loghandle;
         struct llog_catalog_hdr *lch;
@@ -83,7 +82,7 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
 
         LASSERT(sizeof(*loh) == LLOG_CHUNK_SIZE);
 
-        loghandle = cathandle->lgh_log_create(cathandle->lgh_obd, oti);
+        loghandle = cathandle->lgh_log_create(cathandle->lgh_obd);
         if (IS_ERR(loghandle))
                 GOTO(out, rc = PTR_ERR(loghandle));
 
@@ -206,8 +205,7 @@ write_hdr:      lch->lch_hdr.lth_type = LLOG_CATALOG_MAGIC;
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
-struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
-                                     struct obd_trans_info *oti)
+struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen)
 {
         struct list_head *loglist = &cathandle->lgh_list;
         struct llog_handle *loghandle = NULL;
@@ -224,7 +222,7 @@ struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
         }
 
         if (reclen) {
-                loghandle = llog_new_log(cathandle, cathandle->lgh_tgtuuid,oti);
+                loghandle = llog_new_log(cathandle, cathandle->lgh_tgtuuid);
                 GOTO(out, loghandle);
         }
 out:
@@ -237,7 +235,6 @@ out:
  * Assumes caller has already pushed us into the kernel context.
  */
 int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
-                    struct lov_stripe_md *lsm, struct obd_trans_info *oti,
                     struct llog_cookie *logcookies)
 {
         struct llog_handle *loghandle;
@@ -252,7 +249,7 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
 
         LASSERT(rec->lth_len <= LLOG_CHUNK_SIZE);
         down(&cathandle->lgh_lock);
-        loghandle = llog_current_log(cathandle, reclen, oti);
+        loghandle = llog_current_log(cathandle, reclen);
         if (IS_ERR(loghandle)) {
                 up(&cathandle->lgh_lock);
                 RETURN(PTR_ERR(loghandle));
@@ -286,7 +283,7 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
                                    &loghandle->lgh_file->f_pos);
                 if (rc != min(sizeof(pad), left)) {
                         CERROR("error writing padding record: rc %d\n", rc);
-                        GOTO(out, rc < 0 ? rc : -EIO);
+                        GOTO(out, rc = rc < 0 ? rc : -EIO);
                 }
 
                 left -= rc;
@@ -299,7 +296,7 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
                         if (rc != sizeof(__u32)) {
                                 CERROR("error writing padding end: rc %d\n",
                                        rc);
-                                GOTO(out, rc < 0 ? rc : -EIO);
+                                GOTO(out, rc < 0 ? rc : -ENOSPC);
                         }
                 }
 
@@ -324,7 +321,7 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
                            &loghandle->lgh_file->f_pos);
         if (rc != reclen) {
                 CERROR("error writing log record: rc %d\n", rc);
-                GOTO(out, rc < 0 ? rc : -EIO);
+                GOTO(out, rc < 0 ? rc : -ENOSPC);
         }
 
         CDEBUG(D_HA, "added cookie "LPX64":%x+%u, %u bytes\n",
@@ -333,9 +330,10 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
         *logcookies = loghandle->lgh_cookie;
         logcookies->lgc_index = index;
 
+        rc = 0;
 out:
         up(&loghandle->lgh_lock);
-        RETURN(sizeof(*logcookies));
+        RETURN(rc);
 }
 
 /* Remove a log entry from the catalog.
@@ -445,7 +443,7 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
                         CERROR("log index %u in "LPX64":%x already clear?\n",
                                cookies->lgc_index, lgl->lgl_oid, lgl->lgl_ogen);
                 } else if (--loh->loh_numrec == 0 &&
-                           loghandle != llog_current_log(cathandle, 0, NULL)) {
+                           loghandle != llog_current_log(cathandle, 0)) {
                         loghandle->lgh_log_close(cathandle, loghandle);
                 } else {
                         loff_t offset = 0;
@@ -465,4 +463,9 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
         up(&cathandle->lgh_lock);
 
         RETURN(rc);
+}
+
+int llog_close_log(struct llog_handle *cathandle, struct llog_handle *loghandle)
+{
+        return loghandle->lgh_log_close(cathandle, loghandle);
 }

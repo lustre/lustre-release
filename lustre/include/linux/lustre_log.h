@@ -50,8 +50,7 @@ struct llog_handle {
         void                   *lgh_hdr;
         struct file            *lgh_file;
         struct obd_uuid        *lgh_tgtuuid;
-        struct llog_handle     *(*lgh_log_create)(struct obd_device *obd,
-                                                  struct obd_trans_info *oti);
+        struct llog_handle     *(*lgh_log_create)(struct obd_device *obd);
         struct llog_handle     *(*lgh_log_open)(struct obd_device *obd,
                                                 struct llog_cookie *logcookie);
         int                     (*lgh_log_close)(struct llog_handle *cathandle,
@@ -62,8 +61,6 @@ struct llog_handle {
 /* exported api prototypes */
 extern int llog_add_record(struct llog_handle *cathandle,
                            struct llog_trans_hdr *rec,
-                           struct lov_stripe_md *lsm,
-                           struct obd_trans_info *oti,
                            struct llog_cookie *logcookies);
 
 extern int llog_cancel_records(struct llog_handle *cathandle, int count,
@@ -78,6 +75,10 @@ extern struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
                                           struct llog_cookie *cookie);
 extern int llog_delete_log(struct llog_handle *cathandle,
                            struct llog_handle *loghandle);
+extern int llog_close_log(struct llog_handle *cathandle,
+                          struct llog_handle *loghandle);
+extern struct llog_handle *llog_new_log(struct llog_handle *cathandle,
+                                        struct obd_uuid *tgtuuid);
 
 #endif
 
