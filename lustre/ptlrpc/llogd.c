@@ -35,7 +35,8 @@ n *
 #include <linux/lustre_net.h>
 #include <portals/list.h>
 
-int llog_origin_handle_create(struct ptlrpc_request *req)
+int llog_origin_handle_create(struct llog_obd_ctxt * lctxt,
+                              struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
@@ -43,7 +44,6 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         struct llogd_body *body;
         struct obd_run_ctxt saved;
         struct llog_logid *logid = NULL;
-        struct llog_obd_ctxt *ctxt;
 	char * name = NULL;
         int size = sizeof (*body);
 	int rc, rc2;
@@ -69,8 +69,7 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
         
-        ctxt = obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
-	rc = llog_create(ctxt, &loghandle, logid, name);
+	rc = llog_create(lctxt, &loghandle, logid, name);
 	if (rc)
 		GOTO(out_pop, rc);
 
@@ -91,14 +90,14 @@ out:
 	RETURN(rc);
 }
 
-int llog_origin_handle_next_block(struct ptlrpc_request *req)
+int llog_origin_handle_next_block(struct llog_obd_ctxt *lctxt,
+                                  struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
 	struct llog_handle  *loghandle;
         struct llogd_body *body;
         struct obd_run_ctxt saved;
-        struct llog_obd_ctxt *ctxt;
         __u8 *buf;
         void * ptr;
         int size[] = {sizeof (*body),
@@ -118,9 +117,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
-
-        ctxt = obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
-	rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+	rc = llog_create(lctxt, &loghandle, &body->lgd_logid, NULL);
 	if (rc)
 		GOTO(out_pop, rc);
 
@@ -158,7 +155,8 @@ out:
 	RETURN(rc);
 }
 
-int llog_origin_handle_read_header(struct ptlrpc_request *req)
+int llog_origin_handle_read_header(struct llog_obd_ctxt *lctxt,
+                                   struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
@@ -166,7 +164,6 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         struct llogd_body *body;
         struct llog_log_hdr *hdr;
         struct obd_run_ctxt saved;
-        struct llog_obd_ctxt *ctxt;
         __u8 *buf;
         int size[] = {sizeof (*hdr)};
 	int rc, rc2;
@@ -184,9 +181,7 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
-
-        ctxt = obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
-	rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+	rc = llog_create(lctxt, &loghandle, &body->lgd_logid, NULL);
 	if (rc)
 		GOTO(out_pop, rc);
 
@@ -216,7 +211,8 @@ out:
 	RETURN(rc);
 }
 
-int llog_origin_handle_close(struct ptlrpc_request *req)
+int llog_origin_handle_close(struct llog_obd_ctxt *lctxt, 
+                             struct ptlrpc_request *req)
 {
 	int rc;
 

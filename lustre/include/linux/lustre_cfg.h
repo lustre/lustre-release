@@ -244,4 +244,17 @@ static inline void lustre_cfg_freedata(char *buf, int len)
         return;
 }
 
+/* Passed by mount */
+struct lustre_mount_data {
+        uint32_t lmd_version;
+        uint64_t lmd_local_nid;
+        uint64_t lmd_server_nid;
+        uint32_t lmd_nal;
+        uint32_t lmd_server_ipaddr;
+        uint32_t lmd_port;
+        char     lmd_mds[64];
+        char     lmd_profile[64];
+};
+
+
 #endif // _LUSTRE_CFG_H

@@ -299,6 +299,11 @@ int jt_lcfg_add_uuid(int argc, char **argv)
         return do_add_uuid(argv[0], argv[1], nid, nal);
 }
 
+int obd_add_uuid(char *uuid, ptl_nid_t nid, int nal)
+{
+        return do_add_uuid("obd_add_uuid", uuid, nid, nal);
+}
+
 int jt_lcfg_del_uuid(int argc, char **argv)
 {
         int rc;
