@@ -75,7 +75,7 @@
 +		}
 +		if (sbi->s_delete_blocks != 0 || sbi->s_delete_inodes != 0)
 +			ext3_warning(sb, __FUNCTION__,
-+				     "%lu blocks, %lu inodes on list?\n", sb,
++				     "%lu blocks, %lu inodes on list?\n",
 +				     sbi->s_delete_blocks,sbi->s_delete_inodes);
 +		sbi->s_delete_blocks = 0;
 +		sbi->s_delete_inodes = 0;
