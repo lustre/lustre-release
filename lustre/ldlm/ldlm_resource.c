@@ -516,7 +516,7 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 
         ldlm_resource_dump(res);
         CDEBUG(D_OTHER, "About to add this lock:\n");
-        ldlm_lock_dump(D_OTHER, lock);
+        ldlm_lock_dump(D_OTHER, lock, 0);
 
         if (lock->l_destroyed) {
                 CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
@@ -581,6 +581,7 @@ void ldlm_resource_dump(struct ldlm_resource *res)
 {
         struct list_head *tmp;
         char name[256];
+        int pos;
 
         if (RES_NAME_SIZE != 3)
                 LBUG();
@@ -597,23 +598,24 @@ void ldlm_resource_dump(struct ldlm_resource *res)
         CDEBUG(D_OTHER, "Parent: %p, root: %p\n", res->lr_parent, res->lr_root);
 
         CDEBUG(D_OTHER, "Granted locks:\n");
+        pos = 0;
         list_for_each(tmp, &res->lr_granted) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(D_OTHER, lock);
+                ldlm_lock_dump(D_OTHER, lock, ++pos);
         }
-
+        pos = 0;
         CDEBUG(D_OTHER, "Converting locks:\n");
         list_for_each(tmp, &res->lr_converting) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(D_OTHER, lock);
+                ldlm_lock_dump(D_OTHER, lock, ++pos);
         }
-
+        pos = 0;
         CDEBUG(D_OTHER, "Waiting locks:\n");
         list_for_each(tmp, &res->lr_waiting) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                ldlm_lock_dump(D_OTHER, lock);
+                ldlm_lock_dump(D_OTHER, lock, ++pos);
         }
 }

@@ -94,7 +94,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");
-        ldlm_lock_dump(D_OTHER, lock);
+        ldlm_lock_dump(D_OTHER, lock, 0);
         ldlm_reprocess_all(lock->l_resource);
 
  noreproc:

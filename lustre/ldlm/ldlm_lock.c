@@ -192,17 +192,17 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         if (!list_empty(&lock->l_children)) {
                 LDLM_ERROR(lock, "still has children (%p)!",
                            lock->l_children.next);
-                ldlm_lock_dump(D_ERROR, lock);
+                ldlm_lock_dump(D_ERROR, lock, 0);
                 LBUG();
         }
         if (lock->l_readers || lock->l_writers) {
                 LDLM_ERROR(lock, "lock still has references");
-                ldlm_lock_dump(D_ERROR, lock);
+                ldlm_lock_dump(D_ERROR, lock, 0);
                 LBUG();
         }
 
         if (!list_empty(&lock->l_res_link)) {
-                ldlm_lock_dump(D_ERROR, lock);
+                ldlm_lock_dump(D_ERROR, lock, 0);
                 LBUG();
         }
 
@@ -1044,7 +1044,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
          * talking to me first. -phik */
         if (lock->l_readers || lock->l_writers) {
                 LDLM_DEBUG(lock, "lock still has references");
-                ldlm_lock_dump(D_OTHER, lock);
+                ldlm_lock_dump(D_OTHER, lock, 0);
                 LBUG();
         }
 
@@ -1139,10 +1139,10 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         RETURN(res);
 }
 
-void ldlm_lock_dump(int level, struct ldlm_lock *lock)
+void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
 {
         char ver[128];
-        struct obd_device *obd;
+        struct obd_device *obd = NULL;
 
         if (!((portal_debug | D_ERROR) & level))
                 return;
@@ -1159,9 +1159,10 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock)
                  lock->l_version[0], lock->l_version[1],
                  lock->l_version[2], lock->l_version[3]);
 
-        CDEBUG(level, "  -- Lock dump: %p (%s) (rc: %d)\n", lock, ver,
-               atomic_read(&lock->l_refc));
-        obd = class_conn2obd(lock->l_connh);
+        CDEBUG(level, "  -- Lock dump: %p (%s) (rc: %d) (pos: %d)\n", lock, ver,
+               atomic_read(&lock->l_refc), pos);
+        if (lock->l_connh != NULL)
+                obd = class_conn2obd(lock->l_connh);
         if (lock->l_export && lock->l_export->exp_connection) {
                 CDEBUG(level, "  Node: NID "LPX64" on %s (rhandle: "LPX64")\n",
                        lock->l_export->exp_connection->c_peer.peer_nid,
@@ -1176,12 +1177,10 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock)
                        imp->imp_connection->c_peer.peer_ni->pni_name,
                        lock->l_remote_handle.cookie);
         }
-        CDEBUG(level, "  Parent: %p\n", lock->l_parent);
         CDEBUG(level, "  Resource: %p ("LPD64")\n", lock->l_resource,
                lock->l_resource->lr_name.name[0]);
-        CDEBUG(level, "  Requested mode: %d, granted mode: %d\n",
-               (int)lock->l_req_mode, (int)lock->l_granted_mode);
-        CDEBUG(level, "  Readers: %u ; Writers; %u\n",
+        CDEBUG(level, "  Req mode: %d, grant mode: %d, readers: %d, writers: "
+               "%d\n", (int)lock->l_req_mode, (int)lock->l_granted_mode,
                lock->l_readers, lock->l_writers);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
                 CDEBUG(level, "  Extent: "LPU64" -> "LPU64"\n",
@@ -1196,7 +1195,7 @@ void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)
         if (lock == NULL)
                 return;
 
-        ldlm_lock_dump(D_OTHER, lock);
+        ldlm_lock_dump(D_OTHER, lock, 0);
 
         LDLM_LOCK_PUT(lock);
 }
