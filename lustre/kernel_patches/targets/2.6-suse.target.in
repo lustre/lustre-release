@@ -1,7 +1,7 @@
 lnxmaj="2.6.5"
-lnxrel="SLES9_SP1_20041111"
+lnxrel="7.141"
 
-KERNEL=linux-$lnxmaj-$lnxrel.tar.gz
+KERNEL=linux-$lnxmaj-$lnxrel.tar.bz2
 # they include our patches
 SERIES=2.6-suse-lnxi.series
 VERSION=$lnxmaj
