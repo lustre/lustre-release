@@ -20,13 +20,13 @@
 
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data { 
-	__u64 fd_mdshandle; 
+        __u64 fd_mdshandle; 
 };
 
 #define LL_INLINESZ      60
 struct ll_inode_info {
         int              lli_flags;
-	__u64            lli_objid; 
+        __u64            lli_objid; 
         char             lli_inline[LL_INLINESZ];
 };
 
@@ -35,13 +35,13 @@ struct ll_sb_info {
         struct list_head         ll_list;      /* list of supers */
         struct obd_conn          ll_conn;
         struct super_block      *ll_super;
-        ino_t                       ll_rootino;   /* number of root inode */
-        int                        ll_minor;     /* minor of /dev/obdX */
+        ino_t                    ll_rootino;   /* number of root inode */
+        int                      ll_minor;     /* minor of /dev/obdX */
         struct list_head         ll_inodes;    /* list of dirty inodes */
-        unsigned long          ll_cache_count;
+        unsigned long            ll_cache_count;
         struct semaphore         ll_list_mutex;
-	struct ptlrpc_client     ll_mds_client;
-	struct ptlrpc_client     ll_ost_client;
+        struct ptlrpc_client     ll_mds_client;
+        struct ptlrpc_client     ll_ost_client;
 };
 
 
@@ -63,7 +63,7 @@ static inline int ll_has_inline(struct inode *inode)
 
 static inline struct obd_conn *ll_i2obdconn(struct inode *inode)
 {
-	return &(ll_i2sbi(inode))->ll_conn;
+        return &(ll_i2sbi(inode))->ll_conn;
 }
 
 /* dir.c */
