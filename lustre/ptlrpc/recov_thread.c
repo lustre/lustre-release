@@ -143,6 +143,11 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         LASSERT(ctxt);
 
+        if (ctxt->loc_imp == NULL) {
+                CWARN("no import for ctxt %p\n", ctxt);
+                RETURN(0);
+        }
+
         if (count == 0 || cookies == NULL) {
                 down(&ctxt->loc_sem);
                 if (ctxt->loc_llcd == NULL || !(flags & OBD_LLOG_FL_SENDNOW))
@@ -561,7 +566,8 @@ static int llog_recovery_generic(struct llog_ctxt *ctxt, void *handle,void *arg)
 }
 
 int llog_repl_connect(struct llog_ctxt *ctxt, int count,
-                      struct llog_logid *logid, struct llog_gen *gen)
+                      struct llog_logid *logid, struct llog_gen *gen,
+                      struct obd_uuid *uuid)
 {
         struct llog_canceld_ctxt *llcd;
         int rc;
