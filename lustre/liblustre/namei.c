@@ -332,10 +332,11 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         if (req)
                 ptlrpc_req_finished(req);
         if (rc == 0) {
-                if (pb->pb_ino &&
-                    S_ISDIR(llu_i2info(pb->pb_ino)->lli_st_mode))
+                LASSERT(pb->pb_ino);
+                if (S_ISDIR(llu_i2info(pb->pb_ino)->lli_st_mode))
                         ll_invalidate_inode_pages(pb->pb_ino);
                 llu_i2info(pb->pb_ino)->lli_stale_flag = 1;
+                unhook_stale_inode(pnode);
         } else {
                 llu_lookup_finish_locks(it, pnode);
                 llu_i2info(pb->pb_ino)->lli_stale_flag = 0;
