@@ -3,11 +3,15 @@
 
 if LINUX25
 
-basename=$(shell echo $< | sed -e 's/\.c//g' | sed -e 's/-//g' | sed -e 's/\.o//g')
+basename=$(shell echo $< | sed -e 's/\.c//g' | sed -e 's/-//g' | sed -e 's/\.o//g' | sed -e 's/^.*\///g')
 AM_CPPFLAGS= -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -mpreferred-stack-boundary=2  -DKBUILD_MODNAME=$(MODULE) -DKBUILD_BASENAME=$(basename)
 
-$(MODULE).o: $($(MODULE)_OBJECTS)
-	$(LD) -m $(MOD_LINK) -r -o $(MODULE).o $($(MODULE)_OBJECTS)
+$(MODULE).o: $($(MODULE)_OBJECTS) $($(MODULE)_DEPENDENCIES)
+	$(LD) -m $(MOD_LINK) -r -o $(MODULE)_tmp.o $($(MODULE)_OBJECTS)
+	rm -f $(MODULE)_tmp.c
+	$(LINUX)/scripts/modpost $(LINUX)/vmlinux $(MODULE)_tmp.o
+	$(COMPILE) -UKBUILD_BASENAME -DKBUILD_BASENAME=$(MODULE) -c $(MODULE)_tmp.mod.c
+	$(LD) -m $(MOD_LINK) -r -o $(MODULE).o $(MODULE)_tmp.o $(MODULE)_tmp.mod.o
 
 else
 
