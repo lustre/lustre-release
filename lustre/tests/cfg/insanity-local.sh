@@ -16,11 +16,11 @@ MOUNT=${MOUNT:-"/mnt/lustre"}
 #CLIENT_UPCALL=${CLIENT_UPCALL:-`pwd`/client-upcall-mdev.sh}
 UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
 
-MDSDEV=${MDSDEV:-$ROOT/tmp/mds1-`hostname`}
+MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 MDSSIZE=${MDSSIZE:-10000} #50000000
 MDSJOURNALSIZE=${MDSJOURNALSIZE:-0}
 
-OSTDEV=${OSTDEV:-"$ROOT/tmp/ost%d-`hostname`"}
+OSTDEV=${OSTDEV:-"$TMP/ost%d-`hostname`"}
 OSTSIZE=${OSTSIZE:=10000} #50000000
 OSTJOURNALSIZE=${OSTJOURNALSIZE:-0}
 

@@ -47,23 +47,28 @@ fi
 
 build_test_filter
 
-rm -f ostactive
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
 
-gen_config
+setup() {
+    gen_config
 
-start ost --reformat $OSTLCONFARGS
-
-[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-start mds --reformat $MDSLCONFARGS
-zconf_mount `hostname` $MOUNT
+    start ost --reformat $OSTLCONFARGS
+    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    start mds --reformat $MDSLCONFARGS
+    zconf_mount `hostname` $MOUNT
+}
 
 mkdir -p $DIR
+
+$SETUP
 
 test_0() {
     fail ost
     cp /etc/profile  $DIR/$tfile
     sync
     diff /etc/profile $DIR/$tfile
+    rm -f $DIR/$tfile
 }
 run_test 0 "empty replay"
 
@@ -71,6 +76,7 @@ test_1() {
     date > $DIR/$tfile
     fail ost
     $CHECKSTAT -t file $DIR/$tfile || return 1
+    rm -f $DIR/$tfile
 }
 run_test 1 "touch"
 
@@ -82,12 +88,13 @@ test_2() {
     for i in `seq 10`; do
       grep -q "tag-$i" $DIR/$tfile-$i || error "f2-$i"
     done 
+    rm -f $DIR/$tfile-*
 }
 run_test 2 "|x| 10 open(O_CREAT)s"
 
 test_3() {
     verify=$ROOT/tmp/verify-$$
-    dd if=/dev/urandom bs=1024 count=5120 | tee $verify > $DIR/$tfile &
+    dd if=/dev/urandom bs=4096 count=1280 | tee $verify > $DIR/$tfile &
     ddpid=$!
     sync &
     fail ost
@@ -99,7 +106,7 @@ run_test 3 "Fail OST during write, with verification"
 
 test_4() {
     verify=$ROOT/tmp/verify-$$
-    dd if=/dev/urandom bs=1024 count=5120 | tee $verify > $DIR/$tfile
+    dd if=/dev/urandom bs=4096 count=1280 | tee $verify > $DIR/$tfile
     # invalidate cache, so that we're reading over the wire
     for i in /proc/fs/lustre/ldlm/namespaces/OSC_*MNT*; do
         echo -n clear > $i/lru_size
@@ -120,8 +127,61 @@ test_5() {
     sleep 10
     fail ost
     wait $PID || return 1
+    rm -f $DIR/$tfile
 }
 run_test 5 "Fail OST during iozone"
 
+kbytesfree() {
+   awk '{total+=$1} END {print total}' /proc/fs/lustre/osc/OSC_*MNT*/kbytesfree
+}
+
+test_6() {
+    f=$DIR/$tfile
+    rm -f $f
+    sync && sleep 2 && sync	# wait for delete thread
+    before=`kbytesfree`
+    dd if=/dev/urandom bs=4096 count=1280 of=$f
+#define OBD_FAIL_MDS_REINT_NET_REP       0x119
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    sync
+    sleep 1					# ensure we have a fresh statfs
+    after_dd=`kbytesfree`
+    log "before: $before after_dd: $after_dd"
+    (( $before > $after_dd )) || return 1
+    rm -f $f
+    fail ost
+    $CHECKSTAT -t file $f && return 2 || true
+    sync
+    # let the delete happen
+    sleep 2
+    after=`kbytesfree`
+    log "before: $before after: $after"
+    (( $before <= $after + 40 )) || return 3	# take OST logs into account
+}
+run_test 6 "Fail OST before obd_destroy"
+
+test_7() {
+    f=$DIR/$tfile
+    rm -f $f
+    sync && sleep 2 && sync	# wait for delete thread
+    before=`kbytesfree`
+    dd if=/dev/urandom bs=4096 count=1280 of=$f
+    sync
+    after_dd=`kbytesfree`
+    log "before: $before after_dd: $after_dd"
+    (( $before > $after_dd )) || return 1
+    replay_barrier ost
+    rm -f $f
+    fail ost
+    $CHECKSTAT -t file $f && return 2 || true
+    sync
+    # let the delete happen
+    sleep 2
+    after=`kbytesfree`
+    log "before: $before after: $after"
+    (( $before <= $after + 40 )) || return 3	# take OST logs into account
+}
+run_test 7 "Fail OST before obd_destroy"
+
 equals_msg test complete, cleaning up
-cleanup
+$CLEANUP
