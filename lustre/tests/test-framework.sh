@@ -58,14 +58,14 @@ start() {
     facet=$1
     shift
     active=`facet_active $facet`
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet --node ${active}_facet $@ $XMLCONFIG
+    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet --node ${active}_facet  --ptldebug $PTLDEBUG $@ $XMLCONFIG
 }
 
 stop() {
     facet=$1
     active=`facet_active $facet`
     shift
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet --node ${active}_facet $@ --cleanup $XMLCONFIG
+    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet --node ${active}_facet  --ptldebug $PTLDEBUG $@ --cleanup $XMLCONFIG
 }
 
 zconf_mount() {
@@ -77,7 +77,8 @@ zconf_mount() {
 	mount -t lustre -o nettype=$NETTYPE \
 	    `facet_host mds`:/mds_svc/client_facet $mnt
     else
-       insmod $LUSTRE/llite/llite.o || :
+       # this is so cheating
+       $LCONF --nosetup --node client_facet $XMLCONFIG
        $LUSTRE/utils/llmount `facet_host mds`:/mds_svc/client_facet $mnt \
             -o nettype=$NETTYPE 
     fi
@@ -89,14 +90,14 @@ zconf_mount() {
 zconf_umount() {
     mnt=$1
     umount  $mnt || :
-    rmmod llite || :
+    $LCONF --cleanup --nosetup --node client_facet $XMLCONFIG || :
 }
 
 shutdown_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
        $POWER_DOWN `facet_active_host $facet`
-    else
+    elif [ "$FAILURE_MODE" = SOFT ]; then
        stop $facet --force --failover --nomod
     fi
 }
@@ -106,6 +107,33 @@ reboot_facet() {
     if [ "$FAILURE_MODE" = HARD ]; then
        $POWER_UP `facet_active_host $facet`
     fi
+}
+
+wait_for_host() {
+   HOST=$1
+   check_network  $HOST 900
+   while ! $PDSH $HOST "ls -ld $LUSTRE"; do sleep 5; done
+}
+
+wait_for() {
+   facet=$1
+   HOST=`facet_active_host $facet`
+   wait_for_host $HOST
+}
+
+facet_failover() {
+    facet=$1
+    echo "Failing $facet node `facet_active_host $facet`"
+    shutdown_facet $facet
+    sleep 2
+    reboot_facet $facet
+    client_df &
+    DFPID=$!
+    change_active $facet
+    TO=`facet_active_host $facet`
+    echo "Failover MDS to $TO"
+    wait_for $facet
+    start $facet
 }
 
 replay_barrier() {
@@ -125,9 +153,7 @@ mds_evict_client() {
 
 fail() {
     local facet=$1
-    stop $facet --force --failover --nomod
-    change_active $facet
-    start $facet
+    facet_failover $facet
     df $MOUNT || error "post-failover df: $?"
 }
 
@@ -283,15 +309,17 @@ add_client() {
 check_network() {
    local NETWORK=0
    local WAIT=0
+   local MAX=$2
    while [ $NETWORK -eq 0 ]; do
-      ping -c 1 -w 3 $1
+      ping -c 1 -w 3 $1 > /dev/null
       if [ $? -eq 0 ]; then
          NETWORK=1
       else
+         WAIT=$((WAIT + 5))
+	 echo "waiting for $1, $((MAX - WAIT)) secs left"
          sleep 5
-         WAIT=`expr $WAIT + 5`
       fi
-      if [ $WAIT -gt $2 ]; then
+      if [ $WAIT -gt $MAX ]; then
          echo "Network not available"
          exit 1
       fi
