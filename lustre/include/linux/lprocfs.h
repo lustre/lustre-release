@@ -286,6 +286,13 @@ enum {
 };
 
 enum {
+        LPROCFS_NAMESPACE_ENUM(mdt, mgmt_setup),
+        LPROCFS_NAMESPACE_ENUM(mdt, mgmt_cleanup),
+        LPROCFS_NAMESPACE_ENUM(mdt, mgmt_connect),
+        LPROCFS_NAMESPACE_ENUM(mdt, mgmt_disconnect),
+};
+
+enum {
         LPROCFS_NAMESPACE_ENUM(osc, mgmt_setup),
         LPROCFS_NAMESPACE_ENUM(osc, mgmt_cleanup),
         LPROCFS_NAMESPACE_ENUM(osc, mgmt_connect),
@@ -479,6 +486,7 @@ enum {
 enum {
         LPROCFS_ENUM(mdc),
         LPROCFS_ENUM(mds),
+        LPROCFS_ENUM(mdt),
         LPROCFS_ENUM(osc),
         LPROCFS_ENUM(ost),
         LPROCFS_ENUM(lov),

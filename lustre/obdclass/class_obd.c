@@ -211,6 +211,15 @@ lprocfs_group_t lprocfs_mds_nm[]={
          {0, 0, 0}
 };
 
+lprocfs_group_t lprocfs_mdt_nm[]={
+         {obd_dir_nm_1, obd_var_nm_1, e_generic},
+         /* {mds_dir_nm_1, obd_var_nm_1, e_generic}, */
+         /* {mds_dir_nm_2, mds_var_nm_2, e_specific}, */
+         {snmp_dir_nm, snmp_var_nm, e_specific},
+         {mds_snmp_dir_nm_1, mds_snmp_var_nm_1, e_specific},
+         {0, 0, 0}
+};
+
 /*
  * OSC Namespace
  */
@@ -413,6 +422,7 @@ lprocfs_group_t lprocfs_ptlrpc_nm[]={
 lprocfs_obd_nm_t obd_nm[]={
         {"mdc", lprocfs_mdc_nm, sizeof(struct lprofiler_gen)},
         {"mds", lprocfs_mds_nm, sizeof(struct lprofiler_gen)},
+        {"mdt", lprocfs_mdt_nm, sizeof(struct lprofiler_gen)},
         {"osc", lprocfs_osc_nm, sizeof(struct lprofiler_gen)},
         {"ost", lprocfs_ost_nm, sizeof(struct lprofiler_gen)},
         {"lov", lprocfs_lov_nm, sizeof(struct lprofiler_gen)},

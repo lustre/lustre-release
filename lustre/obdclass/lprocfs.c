@@ -136,6 +136,13 @@ struct namespace_index dir_mds_index[] = {
         LPROCFS_DIR_INDEX(mds, reint_recreate),
 };
 
+struct namespace_index dir_mdt_index[] = {
+        LPROCFS_DIR_INDEX(mdt, mgmt_setup),
+        LPROCFS_DIR_INDEX(mdt, mgmt_cleanup),
+        LPROCFS_DIR_INDEX(mdt, mgmt_connect),
+        LPROCFS_DIR_INDEX(mdt, mgmt_disconnect),
+};
+
 struct namespace_index dir_osc_index[] = {
         LPROCFS_DIR_INDEX(osc, mgmt_setup),
         LPROCFS_DIR_INDEX(osc, mgmt_cleanup),
@@ -240,6 +247,13 @@ struct namespace_index prof_mds_index[]= {
         LPROCFS_CNTR_INDEX(mds, num_ops),
 };
 
+struct namespace_index prof_mdt_index[]= {
+        LPROCFS_CNTR_INDEX(mds, min_time),
+        LPROCFS_CNTR_INDEX(mds, max_time),
+        LPROCFS_CNTR_INDEX(mds, sum_time),
+        LPROCFS_CNTR_INDEX(mds, num_ops),
+};
+
 struct namespace_index prof_osc_index[]= {
         LPROCFS_CNTR_INDEX(osc, min_time),
         LPROCFS_CNTR_INDEX(osc, max_time),
@@ -304,6 +318,7 @@ struct namespace_index prof_ptlrpc_index[] = {
 struct groupspace_index class_index[] = {
         LPROCFS_GROUP_CREATE(mdc),
         LPROCFS_GROUP_CREATE(mds),
+        LPROCFS_GROUP_CREATE(mdt),
         LPROCFS_GROUP_CREATE(osc),
         LPROCFS_GROUP_CREATE(ost),
         LPROCFS_GROUP_CREATE(lov),
@@ -338,13 +353,13 @@ int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
                 return LPROCFS_FAILURE;
         }
 
-
         /* Obtain the class-array index */
         class_array_index = lprocfs_getclass_idx(class_index,
                                                  device->obd_type->typ_name);
 
         if (class_array_index == LPROCFS_FAILURE) {
-                CERROR("!! Could not find class !! \n");
+                CERROR("Could not find class for %s\n",
+                       device->obd_type->typ_name);
                 return LPROCFS_FAILURE;
         }
 
@@ -789,8 +804,7 @@ int lprocfs_dereg_dev(struct obd_device* device)
 {
         struct proc_dir_entry* temp;
 
-        CDEBUG(D_OTHER, "LPROCFS removing device = %s\n", \
-               device->obd_name);
+        CDEBUG(D_OTHER, "LPROCFS removing device = %s\n", device->obd_name);
 
         if (!device) {
                 CDEBUG(D_OTHER, "! LProcfs:  Null pointer !\n");
@@ -802,10 +816,9 @@ int lprocfs_dereg_dev(struct obd_device* device)
                 return LPROCFS_FAILURE;
         }
 
-        temp = lprocfs_bfs_srch(proc_lustre_dev_root->subdir, \
-                                device->obd_name);
+        temp = lprocfs_bfs_srch(proc_lustre_dev_root->subdir, device->obd_name);
         if (temp == 0) {
-                CERROR("!! No root obtained, device does not exist !!\n");
+                CERROR("Device %s not in lprocfs\n", device->obd_name);
                 return LPROCFS_FAILURE;
         }
 
