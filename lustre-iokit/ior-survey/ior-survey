@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# cluster name (expect all node names to be this followed by a number)
+# cluster name (all node names are this followed by the node number)
 cluster=mdev
 
 # client node numbers (individual numbers or inclusive ranges)
@@ -13,8 +13,8 @@ clients_iterator="+=1"
 
 # numbers of tasks per client to survey
 tasks_per_client_lo=1
-tasks_per_client_hi=16
-tasks_per_client_iterator="*=4"
+tasks_per_client_hi=8
+tasks_per_client_iterator="*=2"
 
 # record sizes to survey
 rsize_lo=1M
@@ -26,23 +26,23 @@ rsize_iterator="*=2"
 # *write*)   write
 # *)         read
 #tests=(write rewrite read reread rewrite_again)
-tests=(write rewrite remount read)
+tests=(write rewrite remount read reread)
 
 # total # bytes written/read by any client node
-min_per_client_size=75M
-min_total_size=100M
+min_per_client_size=4G
+min_total_size=8G
 
 # should each task do I/O to its own file?
 file_per_task=1
 
-# the IOR binary
+# the binaries
 IOR="/home/ericb/ior/src/C/IOR"
-
-# the pdsh binary
+llmount=/home/ericb/lustre/utils/llmount
 pdsh=pdsh
 
-# the llmount binary
-llmount=/home/ericb/lustre/utils/llmount
+# the result file prefix (date/time + hostname makes unique)
+#rslt=/home/ericb/ior_survey_`date +%F@%R`_`uname -n`
+rslt=/home/ericb/ior_survey
 
 # where lustre is mounted on the clients
 lustre=/mnt/lustre
@@ -51,17 +51,19 @@ lustre=/mnt/lustre
 testfile=${lustre}/ior_survey_testfile
 
 # how to unmount and remount the F/S on a client (to clear the cache)
+# change this depending on lustre config (network type, MDS etc)
 remount="umount $lustre && $llmount -o nettype=elan mdev6:/ll_mds/client $lustre"
 
-# the result file prefix (date/time + hostname makes unique)
-#rslt=/home/ericb/ior_survey_`date +%F@%R`_`uname -n`
-rslt=/home/ericb/ior_survey
+# pdsh args required to instantiate all instances of IOR in parallel
+# the chosen module must support '-n <procs-per-node>'
+# -R<module>, -f<fanout> etc
+pdsh_mpiargs="-Rmqsh"
 
 #don't spin for MPI completions
 export LIBELAN_WAITTYPE=0
 
 ################################################################################
-# dont change stuff below here
+# dont change stuff below here unless you know what you're doing...
 
 count_range() {
     echo $1 | awk '{ nvals=split($1, vals, "-");\
@@ -74,9 +76,9 @@ base_range() {
 }
 
 idx2nodenum() {
-    n=$1; shift
+    local n=$1; shift
     while ((1)); do
-	range=$1; shift
+	local range=$1; shift
 	if [ -z "$range" ]; then
 	    return
 	fi
@@ -91,18 +93,18 @@ idx2nodenum() {
 }
 
 n2noderange() {
-    n=$1; shift
+    local n=$1; shift
     sep=""
     nodes="["
     while ((n > 0)); do
-	range=$1; shift
+	local range=$1; shift
 	if [ -z "$range" ]; then
             return
 	fi
-	base=`base_range $range`
-	chunk=`count_range $range`
+	local base=`base_range $range`
+	local chunk=`count_range $range`
 	if ((chunk > n)); then chunk=n; fi
-	nodes="${nodes}${sep}${base}"; sep=","
+	local nodes="${nodes}${sep}${base}"; sep=","
 	if ((chunk > 1)); then nodes="${nodes}-$((base+chunk-1))"; fi
 	n=$((n-chunk))
     done
@@ -110,10 +112,10 @@ n2noderange() {
 }
 
 countnodes() {
-    radix=16384
-    n=0
+    local radix=16384
+    local n=0
     while ((radix > 0)); do
-	nodes=`n2noderange $((n+radix)) $@`
+	local nodes=`n2noderange $((n+radix)) $@`
 	if [ -n "$nodes" ]; then
 	    n=$((n+radix))
         fi
@@ -123,7 +125,7 @@ countnodes() {
 }
 
 parse_number() {
-    str=$1
+    local str=$1
     case $str in
 	*G|*g) n=`echo $str | sed 's/[gG]//'`; echo $((n*1024*1024*1024));;
 	*M|*m) n=`echo $str | sed 's/[Mm]//'`; echo $((n*1024*1024));;
@@ -133,10 +135,10 @@ parse_number() {
 }
 
 pp_number() {
-    n=$1
-    G=$((1024*1024*1024))
-    M=$((1024*1024))
-    K=$((1024))
+    local n=$1
+    local G=$((1024*1024*1024))
+    local M=$((1024*1024))
+    local K=$((1024))
     if ((n%G == 0 && n >= G)); then
 	echo "$((n/G))G"
     elif ((n%M == 0 && n >= M)); then
@@ -154,10 +156,7 @@ if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
 fi
 
 rsltf="${rslt}.summary"
-iorcf="${rslt}.script"
 workf="${rslt}.detail"
-tmpf="${workf}_tmp"
-
 echo -n > $rsltf
 echo -n > $workf
 
@@ -171,14 +170,15 @@ print_summary () {
     echo $minusn "$*"
 }
 
+# convert params to actual numbers
 min_per_client_size=`parse_number $min_per_client_size`
 min_total_size=`parse_number $min_total_size`
 
 rsize_lo=`parse_number $rsize_lo`
 rsize_hi=`parse_number $rsize_hi`
 
+# check on actual numbers of client nodes
 nclients=`countnodes ${clients[@]}`
-
 if ((clients_hi > nclients)); then clients_hi=$nclients; fi
 
 for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
@@ -191,12 +191,16 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
 	if ((per_client_size < min_per_client_size)); then
 	    per_client_size=$min_per_client_size
 	fi
-	total_size=`pp_number $((per_client_size * nclnt))`
 
 	for ((ntask=tasks_per_client_lo; ntask <= tasks_per_client_hi; ntask$tasks_per_client_iterator)); do
 	    per_task_size=$((per_client_size/ntask))
+	    if ((per_task_size%rsize != 0)); then
+		per_task_size=$(((per_task_size/rsize + 1)*rsize))
+	    fi
+	    total_size=`pp_number $((per_task_size*nclnt*ntask))`
 	    
-	    hdrstr=`printf "Total: %5sB rsize: %4s clients: %4d tasks: %3d: " $total_size $rsize $nclnt $ntask`
+	    hdrstr=`printf "Total: %5sB rsize: %4sB clients: %4d tasks: %3d: " \
+		$total_size $pp_rsize $nclnt $ntask`
 	    print_summary -n "$hdrstr"
 
 	    for ((test_idx=0; test_idx < ${#tests[@]}; test_idx++)); do
@@ -204,6 +208,7 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
 		
 		print_summary -n "$test "
 		echo "===========> ${hdrstr} on $test_clients doing $test" >> $workf
+		tmpf=${workf}_tmp
 		echo -n > $tmpf
 
 		if [ "$test" = "remount" ]; then
@@ -219,13 +224,13 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
 			result="OK"
 		    fi
 		else
+		    # check lustre is mounted everywhere it's needed
 		    cmd="(mount -t lustre; mount -t lustre_lite) | grep $lustre"
-		    echo "=> $cmd" >> $tmpf
+		    echo "=> Mount Check: $cmd" >> $tmpf
 		    $pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
 			"$cmd"
 		    status=$?
 		    echo "Completion Status: $status" >> $tmpf
-
 		    if ((status)); then
 			cat $tmpf >> $workf
 			rm $tmpf
@@ -262,7 +267,7 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
 
 		    echo "=> ${cmdline[@]}" >> $tmpf
 	
-		    $pdsh -S -b -Rmqsh -w "$test_clients" -n $ntask >> $tmpf 2>&1 \
+		    $pdsh -S -b $pdsh_mpiargs -w "$test_clients" -n $ntask >> $tmpf 2>&1 \
 			"${cmdline[@]}"
 		    status=$?
 
@@ -287,4 +292,3 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
     done
 done
 
-# rm $iorcf

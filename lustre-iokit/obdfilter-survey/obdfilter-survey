@@ -3,26 +3,30 @@
 ######################################################################
 # customize per survey
 
-# specify obd names (host:name if remote)
-# these can either be the echo_client names (client_names)
-# or the ost names (ost_names)
+# specify obd instances to exercise
+# these can be either...
+# obdfilter instances (set 'ost_names')
+# ...or...
+# echo_client instances (set 'client_names')
+# ... use 'host:name' for obd instances on other nodes.
+ost_names=(ost{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16})
 #client_names=(ns8:ECHO_ns8 ns9:ECHO_ns9)
-ost_names=(ns9:ost{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16})
 
 # result file prefix (date/time + hostname makes unique)
+# NB ensure path to it exists
 rslt=/home_nfs/eeb/obdfilter_survey_`date +%F@%R`_`uname -n`
 
 # lustre root (if running with own source tree)
 lustre_root=/home_nfs/eeb/lustre
 
-# what to do (we always do an initial write)
-#tests="rewrite read reread rewrite_again"
-tests="rewrite read"
+# what tests to run (first must be write)
+#tests=(write rewrite read reread rewrite_again)
+tests=(write rewrite read)
 
-# total size (MBytes) per OST
+# total size (MBytes) per obd instance
 # large enough to avoid cache effects 
 # and to make test startup/shutdown overhead insignificant
-size=8192
+size=16384
 
 # record size (KBytes)
 rszlo=1024
@@ -49,6 +53,8 @@ PAGE_SIZE=64
 max_buffer_mem=$((1024*1024))
 
 # how to run commands on other nodes
+# You need to make this work on your cluster if you have specified
+# non-local obd instances above
 custom_remote_shell () {
     host=$1
     shift
@@ -65,17 +71,25 @@ custom_remote_shell () {
 #####################################################################
 # leave the rest of this alone unless you know what you're doing...
 
+# binaries
 lsmod="/sbin/lsmod"
 modprobe="/sbin/modprobe"
 insmod="/sbin/insmod"
 rmmod="/sbin/rmmod"
 
+# lctl::test_brw bandwidth snapshot interval (seconds)
 snap=1
+# check file contents?
 verify=1
 
+if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
+    echo "First test must be 'write'" 1>&2
+    exit 1
+fi
+
 rsltf="${rslt}.summary"
-cmdsf="${rslt}.script"
 workf="${rslt}.detail"
+cmdsf="${rslt}.script"
 echo -n > $rsltf
 echo -n > $workf
 
@@ -96,7 +110,7 @@ remote_shell () {
     fi
 }
 
-check_obdecho() {
+obdecho_loaded() {
     local host=$1
     remote_shell $host $lsmod | grep obdecho > /dev/null 2>&1
 }
@@ -256,7 +270,7 @@ unique () {
 }
 
 split_hostname () {
-    name=$1
+    local name=$1
     case $name in
     *:*) host=`echo $name | sed 's/:.*$//'`
 	 name=`echo $name | sed 's/[^:]*://'`
@@ -267,6 +281,7 @@ split_hostname () {
     echo "$host $name"
 }
 
+# split out hostnames from client/ost names
 ndevs=${#client_names[@]}
 if ((ndevs != 0)); then
     if ((${#ost_names[@]} != 0)); then
@@ -291,16 +306,16 @@ else
     done
 fi
 
+# disable portals debug and get obdecho loaded on all relevant hosts
 unique_hosts=(`unique ${host_names[@]}`)
-
 for host in ${unique_hosts[@]}; do
     remote_shell $host "echo 0 > /proc/sys/portals/debug"
     do_unload_obdecho[$host]=0
-    if check_obdecho $host; then
+    if obdecho_loaded $host; then
 	continue
     fi
     load_obdecho $host
-    if check_obdecho $host; then
+    if obdecho_loaded $host; then
 	do_unload_obdecho[$host]=1
 	continue
     fi
@@ -308,6 +323,7 @@ for host in ${unique_hosts[@]}; do
     exit 1
 done
 
+# get all the echo_client device numbers and names
 for ((i=0; i<ndevs; i++)); do
     host=${host_names[$i]}
     devno=(`get_ec_devno $host "${client_names[$i]}" "${ost_names[$i]}"`)
@@ -370,8 +386,10 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		fi
 		first_objs[$idx]=$first_obj
 	    done
+	    # run tests
 	    for test in write $tests; do
 		print_summary -n "$test "
+		# create per-host script files
 		for host in ${unique_hosts[@]}; do
 		    echo -n > ${cmdsf}_${host}
 		done
@@ -388,18 +406,22 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		for host in ${unique_hosts[@]}; do
 		    echo "wait" >> ${cmdsf}_${host}
 		done
+		# timed run of all the per-host script files
 		t0=`date +%s.%N`
 		for host in ${unique_hosts[@]}; do
 		    remote_shell $host bash ${cmdsf}_${host}&
 		done
 		wait
 		t1=`date +%s.%N`
+		# clean up per-host script files
 		for host in ${unique_hosts[@]}; do
 		    rm ${cmdsf}_${host}
 		done
+		# compute bandwidth from total data / elapsed time
 		str=`awk "BEGIN {printf \"%7.2f \",\
 		         $total_size / (( $t1 - $t0 ) * 1024)}"`
 		print_summary -n "$str"
+		# collect/check individual OST stats
 		echo -n > $tmpf
 		for ((idx=0; idx < ndevs; idx++)); do
 		    client_name="${host_names[$idx]}:${client_names[$idx]}"
@@ -409,6 +431,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		    get_stats $tmpfi >> $tmpf
 		    rm $tmpfi
 		done
+		# compute/display global min/max stats
 		echo "=============> $test global" >> $workf
 		cat $tmpf >> $workf
 		stats=(`get_global_stats $tmpf`)
@@ -427,6 +450,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		print_summary -n "$str"
 	    done
 	    print_summary ""
+	    # destroy objects we created
 	    for ((idx=0; idx < ndevs; idx++)); do
 		host=${host_names[$idx]}
 		devno=${devnos[$idx]}
@@ -441,6 +465,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
     done
 done
 
+# tear down any echo clients we created
 for ((i=0; i<ndevs; i++)); do
     host=${host_names[$i]}
     if ((${do_teardown_ec[$i]})); then
@@ -448,6 +473,7 @@ for ((i=0; i<ndevs; i++)); do
     fi
 done
 
+# unload any obdecho modules we loaded
 for host in ${unique_hosts[@]}; do
     if ((${do_unload_obdecho[$host]})); then
 	unload_obdecho $host
