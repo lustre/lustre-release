@@ -1,6 +1,6 @@
 diff -urN linux/fs/file_table.c linux-2.4.20/fs/file_table.c
---- linux/fs/file_table.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20/fs/file_table.c	2003-08-14 21:48:52.000000000 +0530
+--- linux/fs/file_table.c	Fri Nov 29 05:23:15 2002
++++ linux-2.4.20/fs/file_table.c	Mon Aug 18 22:05:59 2003
 @@ -82,7 +82,7 @@
   * and call the open function (if any).  The caller must verify that
   * inode->i_fop is not NULL.
@@ -32,36 +32,46 @@ diff -urN linux/fs/file_table.c linux-2.4.20/fs/file_table.c
  {
  	struct dentry * dentry = file->f_dentry;
 diff -urN linux/fs/inode.c linux-2.4.20/fs/inode.c
---- linux/fs/inode.c	2003-08-14 21:46:54.000000000 +0530
-+++ linux-2.4.20/fs/inode.c	2003-08-14 22:09:00.000000000 +0530
-@@ -969,6 +969,24 @@
- 	return inode;
+--- linux/fs/inode.c	Mon Aug 18 21:55:12 2003
++++ linux-2.4.20/fs/inode.c	Mon Aug 18 22:07:46 2003
+@@ -970,9 +970,9 @@
  }
  
-+struct inode *search_icache_for_lustre(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
-+{
-+
-+	struct list_head * head = inode_hashtable + hash(sb,ino);
-+	struct inode * inode;
-+
-+	spin_lock(&inode_lock);
-+	inode = find_inode(sb, ino, head, find_actor, opaque);
-+	if (inode) {
-+		__iget(inode);
-+		spin_unlock(&inode_lock);
-+		wait_on_inode(inode);
-+		return inode;
-+	}
-+	spin_unlock(&inode_lock);
-+	
+ 
+-struct inode *iget4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
++static inline struct inode *ifind(struct super_block *sb, unsigned long ino,
++		struct list_head *head, find_inode_t find_actor, void *opaque)
+ {
+-	struct list_head * head = inode_hashtable + hash(sb,ino);
+ 	struct inode * inode;
+ 
+ 	spin_lock(&inode_lock);
+@@ -985,6 +985,22 @@
+ 	}
+ 	spin_unlock(&inode_lock);
+ 
 +	return NULL;
 +}
- 
- struct inode *iget4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
- {
++
++struct inode *ilookup4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
++{
++	struct list_head * head = inode_hashtable + hash(sb,ino);
++	return ifind(sb, ino, head, find_actor, opaque);
++}
++
++struct inode *iget4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
++{
++	struct list_head * head = inode_hashtable + hash(sb,ino);
++	struct inode *inode = ifind(sb, ino, head, find_actor, opaque);
++	if (inode)
++		return inode;
++
+ 	/*
+ 	 * get_new_inode() will do the right thing, re-trying the search
+ 	 * in case it had to block at any point.
 diff -urN linux/fs/namei.c linux-2.4.20/fs/namei.c
---- linux/fs/namei.c	2003-08-14 21:46:53.000000000 +0530
-+++ linux-2.4.20/fs/namei.c	2003-08-14 21:48:52.000000000 +0530
+--- linux/fs/namei.c	Mon Aug 18 21:55:11 2003
++++ linux-2.4.20/fs/namei.c	Mon Aug 18 22:05:59 2003
 @@ -894,7 +894,7 @@
  
  
@@ -90,8 +100,8 @@ diff -urN linux/fs/namei.c linux-2.4.20/fs/namei.c
   *	namei()
   *
 diff -urN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
---- linux/fs/nfsd/nfsfh.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20/fs/nfsd/nfsfh.c	2003-08-14 22:08:52.000000000 +0530
+--- linux/fs/nfsd/nfsfh.c	Fri Nov 29 05:23:15 2002
++++ linux-2.4.20/fs/nfsd/nfsfh.c	Mon Aug 18 22:05:59 2003
 @@ -36,6 +36,11 @@
  	int sequence;		/* sequence counter */
  };
@@ -104,43 +114,70 @@ diff -urN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  /*
   * A rather strange filldir function to capture
   * the name matching the specified inode number.
-@@ -85,9 +90,24 @@
+@@ -75,6 +80,8 @@
+ 	int error;
+ 	struct file file;
+ 	struct nfsd_getdents_callback buffer;
++	struct lookup_intent it;
++	struct file *filp = NULL;
+ 
+ 	error = -ENOTDIR;
+ 	if (!dir || !S_ISDIR(dir->i_mode))
+@@ -85,9 +92,36 @@
  	/*
  	 * Open the directory ...
  	 */
 -	error = init_private_file(&file, dentry, FMODE_READ);
 -	if (error)
-+
-+	struct lookup_intent it;
-+	intent_init(&it, IT_OPEN, 0);
-+	extern int open2(struct dentry *dentry, struct lookup_intent *it);
-+	error = open2(dentry, &it);
-+	if (error) {
-+	    if (it.it_op_release)
-+		    intent_release(&it);
++	if (dentry->d_op && dentry->d_op->d_revalidate_it) {
++		if ( (dentry->d_flags & DCACHE_NFSD_DISCONNECTED) && 
++		     (dentry->d_parent == dentry) ) {
++			it.it_op_release = NULL;
++			/* XXX Temporary Hack: Simulating init_private_file without f_op->open 
++			for disconnected dentry Since we don't have actual dentry->d_name to revalidate
++			in open_it() */
++			filp = &file;
++			memset(filp, 0, sizeof(*filp));
++			filp->f_mode   = FMODE_READ;
++			atomic_set(&filp->f_count, 1);
++			filp->f_dentry = dentry;
++		    filp->f_uid    = current->fsuid;
++	        filp->f_gid    = current->fsgid;
++	        filp->f_op     = dentry->d_inode->i_fop;
++			error = 0;
++		} else {
++			intent_init(&it, IT_OPEN, 0);
++			extern int open_it(struct dentry *dentry, struct lookup_intent *it);
++			error = open_it(dentry, &it);
++			if (error)
++				goto out;
++			error = init_private_file_it(&file, dentry, FMODE_READ, &it);
++		}
++	} else {
++		error = init_private_file_it(&file, dentry, FMODE_READ, NULL);
++	}
++	if (error) 
  		goto out;
-+	}
-+
-+	error = init_private_file_it(&file, dentry, FMODE_READ, &it);
-+	if (error) {
-+	    if (it.it_op_release)
-+		    intent_release(&it);
-+		goto out;
-+	}
 +
  	error = -EINVAL;
  	if (!file.f_op->readdir)
  		goto out_close;
-@@ -113,6 +133,8 @@
+@@ -113,9 +147,13 @@
  	}
  
  out_close:
-+	if (it.it_op_release)
-+		intent_release(&it);
- 	if (file.f_op->release)
+-	if (file.f_op->release)
++	if (file.f_op->release && !filp)
  		file.f_op->release(dir, &file);
  out:
-@@ -274,7 +296,10 @@
++	if (dentry->d_op && 
++	    dentry->d_op->d_revalidate_it && 
++	    it.it_op_release && !filp)
++		intent_release(&it);
+ 	return error;
+ }
+ 
+@@ -274,7 +312,10 @@
  	 * it is well connected.  But nobody returns different dentrys do they?
  	 */
  	down(&child->d_inode->i_sem);
@@ -152,7 +189,25 @@ diff -urN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  	up(&child->d_inode->i_sem);
  	d_drop(tdentry); /* we never want ".." hashed */
  	if (!pdentry && tdentry->d_inode == NULL) {
-@@ -662,6 +687,11 @@
+@@ -306,6 +347,8 @@
+ 				igrab(tdentry->d_inode);
+ 				pdentry->d_flags |= DCACHE_NFSD_DISCONNECTED;
+ 			}
++			if (child->d_op && child->d_op->d_revalidate_it)
++				pdentry->d_op = child->d_op;
+ 		}
+ 		if (pdentry == NULL)
+ 			pdentry = ERR_PTR(-ENOMEM);
+@@ -463,6 +506,8 @@
+ 		struct dentry *pdentry;
+ 		struct inode *parent;
+ 
++		if (result->d_op && result->d_op->d_revalidate_it)
++			dentry->d_op = result->d_op;
+ 		pdentry = nfsd_findparent(dentry);
+ 		err = PTR_ERR(pdentry);
+ 		if (IS_ERR(pdentry))
+@@ -662,6 +707,11 @@
  
  	inode = dentry->d_inode;
  
@@ -164,7 +219,7 @@ diff -urN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  	/* Type check. The correct error return for type mismatches
  	 * does not seem to be generally agreed upon. SunOS seems to
  	 * use EISDIR if file isn't S_IFREG; a comment in the NFSv3
-@@ -900,8 +930,9 @@
+@@ -900,8 +950,9 @@
  		dentry->d_parent->d_name.name, dentry->d_name.name);
  	goto out;
  out_uptodate:
@@ -177,8 +232,8 @@ diff -urN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  }
  
 diff -urN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
---- linux/fs/nfsd/vfs.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20/fs/nfsd/vfs.c	2003-08-14 22:01:49.000000000 +0530
+--- linux/fs/nfsd/vfs.c	Fri Nov 29 05:23:15 2002
++++ linux-2.4.20/fs/nfsd/vfs.c	Mon Aug 18 22:05:59 2003
 @@ -77,6 +77,122 @@
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
@@ -283,7 +338,7 @@ diff -urN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +	return err;
 +}
 +
-+int open2(struct dentry *dentry, struct lookup_intent *it)
++int open_it(struct dentry *dentry, struct lookup_intent *it)
 +{
 +	int err = 0;
 +
@@ -321,7 +376,7 @@ diff -urN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +	struct lookup_intent it;
 +	intent_init(&it, IT_OPEN, filp->f_flags);
 +
-+	err = open2(dentry, &it);
++	err = open_it(dentry, &it);
 +	if (err)
 +		goto out_nfserr;
 +	
@@ -542,8 +597,8 @@ diff -urN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  
  	dput(rdentry);
 diff -urN linux/fs/super.c linux-2.4.20/fs/super.c
---- linux/fs/super.c	2003-08-14 21:46:54.000000000 +0530
-+++ linux-2.4.20/fs/super.c	2003-08-14 21:48:52.000000000 +0530
+--- linux/fs/super.c	Mon Aug 18 21:55:11 2003
++++ linux-2.4.20/fs/super.c	Mon Aug 18 22:05:59 2003
 @@ -27,6 +27,7 @@
  #include <linux/devfs_fs_kernel.h>
  #include <linux/major.h>
@@ -562,8 +617,8 @@ diff -urN linux/fs/super.c linux-2.4.20/fs/super.c
  /* WARNING: This can be used only if we _already_ own a reference */
  static void get_filesystem(struct file_system_type *fs)
 diff -urN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
---- linux/include/linux/fs.h	2003-08-14 21:46:55.000000000 +0530
-+++ linux-2.4.20/include/linux/fs.h	2003-08-14 21:48:52.000000000 +0530
+--- linux/include/linux/fs.h	Mon Aug 18 21:55:16 2003
++++ linux-2.4.20/include/linux/fs.h	Mon Aug 18 22:10:54 2003
 @@ -1366,6 +1366,7 @@
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
@@ -576,7 +631,7 @@ diff -urN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
  
  typedef int (*find_inode_t)(struct inode *, unsigned long, void *);
  extern struct inode * iget4(struct super_block *, unsigned long, find_inode_t, void *);
-+extern struct inode * search_icache_for_lustre(struct super_block *, unsigned long, find_inode_t, void *);
++extern struct inode * ilookup4(struct super_block *, unsigned long, find_inode_t, void *);
  static inline struct inode *iget(struct super_block *sb, unsigned long ino)
  {
  	return iget4(sb, ino, NULL, NULL);
@@ -589,13 +644,13 @@ diff -urN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
  extern struct super_block *get_super(kdev_t);
  extern void drop_super(struct super_block *sb);
 diff -urN linux/kernel/ksyms.c linux-2.4.20/kernel/ksyms.c
---- linux/kernel/ksyms.c	2003-08-14 21:46:55.000000000 +0530
-+++ linux-2.4.20/kernel/ksyms.c	2003-08-14 21:48:52.000000000 +0530
+--- linux/kernel/ksyms.c	Mon Aug 18 21:55:16 2003
++++ linux-2.4.20/kernel/ksyms.c	Mon Aug 18 22:11:17 2003
 @@ -146,6 +146,7 @@
  EXPORT_SYMBOL(igrab);
  EXPORT_SYMBOL(iunique);
  EXPORT_SYMBOL(iget4);
-+EXPORT_SYMBOL(search_icache_for_lustre);
++EXPORT_SYMBOL(ilookup4);
  EXPORT_SYMBOL(iput);
  EXPORT_SYMBOL(force_delete);
  EXPORT_SYMBOL(follow_up);
