@@ -57,7 +57,6 @@ do {                                                                    \
                 break;                                                  \
                                                                         \
         CDEBUG(D_OTHER, "obd_drop_packet=%d, dropping packet.\n", id);  \
-        ptlrpc_free_req(req);                                           \
         RETURN(0);                                                      \
 } while(0)
 

@@ -236,7 +236,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
         /* XXX complete this to get debugging working again */
         err = -1;
 	if (err) {
-                CERROR("cannot create client"); 
+                CERROR("cannot create client\n");
                 return -EINVAL;
         }
 	
