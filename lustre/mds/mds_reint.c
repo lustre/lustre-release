@@ -299,8 +299,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 break;
         }
         default:
-                CERROR("bad file type %o for create of %s\n", type,
-                       rec->ur_name);
+                CERROR("bad file type %o creating %s\n", type, rec->ur_name);
                 GOTO(out_create_dchild, rc = -EINVAL);
         }
 
@@ -411,12 +410,15 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 RETURN(PTR_ERR(de));
         }
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
+                GOTO(out_unlink, rc = -ENOENT);
+
         name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
         dchild = mds_name2locked_dentry(obd, de, NULL, name, namelen,
                                         LCK_EX, &child_lockh, lock_mode);
 
-        if (IS_ERR(dchild) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
+        if (IS_ERR(dchild)) {
                 LBUG();
                 GOTO(out_unlink, rc = PTR_ERR(dchild));
         }
@@ -428,8 +430,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (!inode) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %ld, name %s\n",
                        dir->i_ino, rec->ur_name);
-                /* XXX should be out_unlink_cancel, or do we keep child_lockh? */
-                GOTO(out_unlink_dchild, rc = -ENOENT);
+                GOTO(out_unlink_cancel, rc = -ENOENT);
         } else if (offset) {
                 struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
                 mds_pack_inode2fid(&body->fid1, inode);
@@ -438,7 +439,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
 
-        switch (rec->ur_mode) {
+        switch (rec->ur_mode /* & S_IFMT ? */) {
         case S_IFDIR:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_RMDIR);
                 if (!handle)
@@ -446,6 +447,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 rc = vfs_rmdir(dir, dchild);
                 break;
         case S_IFREG:
+                /* get OBD EA data first so client can also destroy object */
                 if ((inode->i_mode & S_IFMT) == S_IFREG && offset) {
                         struct lov_mds_md *md;
 
@@ -457,14 +459,22 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                 memset(md, 0, md->lmd_easize);
                         }
                 }
+                /* no break */
+        case S_IFLNK:
+        case S_IFCHR:
+        case S_IFBLK:
+        case S_IFIFO:
+        case S_IFSOCK:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_UNLINK);
                 if (!handle)
                         GOTO(out_unlink_cancel, rc = PTR_ERR(handle));
                 rc = vfs_unlink(dir, dchild);
                 break;
         default:
+                CERROR("bad file type %o unlinking %s\n", rec->ur_mode, name);
                 handle = NULL;
                 LBUG();
+                GOTO(out_unlink_cancel, rc = -EINVAL);
         }
 
         if (!rc)
@@ -486,7 +496,7 @@ out_unlink_cancel:
                 if (!rc)
                         rc = -ENOLCK;   /*XXX translate LDLM lock error */
         }
-out_unlink_dchild:
+//out_unlink_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
 out_unlink:
