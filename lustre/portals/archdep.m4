@@ -11,8 +11,13 @@ AC_ARG_WITH(lib, [  --with-lib compile lustre library], host_cpu="lib")
 
 AC_ARG_WITH(linux, [  --with-linux=[path] set path to Linux source (default=/usr/src/linux)],LINUX=$with_linux,LINUX=/usr/src/linux)
 AC_SUBST(LINUX)
+if test x$enable_inkernel = xyes ; then
+        echo ln -s `pwd` $LINUX/fs/lustre
+        rm $LINUX/fs/lustre
+        ln -s `pwd` $LINUX/fs/lustre
+fi
 
-# --------- UML?  --------------------
+#  --------------------
 AC_MSG_CHECKING(if you are running user mode linux for $host_cpu ...)
 if test $host_cpu = "lib" ; then 
         host_cpu="lib"
@@ -109,6 +114,13 @@ case ${host_cpu} in
         KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
 	KCPPFLAGS='-D__KERNEL__ -DMODULE'
         MOD_LINK=elf64_ia64
+;;
+
+	x86_64 )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fomit-frame-pointer -mno-red-zone -mcmodel=kernel -pipe -fno-reorder-blocks -finline-limit=2000 -fno-strength-reduce -fno-asynchronous-unwind-tables'
+	KCPPFLAGS='-D__KERNEL__ -DMODULE'
+        MOD_LINK=elf_x86_64
 ;;
 
 	sparc64 )
