@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-export PATH=`dirname $0`:$PATH
+export PATH=`dirname $0`:`dirname $0`/../utils:$PATH
 CREATEMANY=${CREATEMANY:-createmany}
 STATMANY=${STATMANY:-statmany}
 UNLINKMANY=${UNLINKMANY:-unlinkmany}
