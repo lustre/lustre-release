@@ -56,7 +56,8 @@ static void *fsfilt_reiserfs_start(struct inode *inode, int op,
 }
 
 static void *fsfilt_reiserfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                       int niocount, void *desc_private)
+                                       int niocount, struct niobuf_local *nb,
+                                       void *desc_private)
 {
         return (void *)0xf00f00be;
 }
