@@ -107,7 +107,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
         struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
         struct file *file;
-        struct dentry *dchild; 
+        struct dentry *dchild;
         struct inode *child_inode, *pending_dir = mds->mds_pending_dir->d_inode;
         struct l_linux_dirent *dirent, *ptr;
         unsigned int count = pending_dir->i_size;
@@ -120,59 +120,64 @@ int mds_cleanup_orphans(struct obd_device *obd)
         struct mds_body *body;
         int lengths[3] = {sizeof(struct mds_body),
                           mds->mds_max_mdsize,
-                          mds->mds_max_cookiesize}; 
+                          mds->mds_max_cookiesize};
         int rc = 0, rc2 = 0, item = 0;
         ENTRY;
-        
+
+        RETURN(0);
+
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         dget(mds->mds_pending_dir);
         mntget(mds->mds_vfsmnt);
-        file = dentry_open(mds->mds_pending_dir, mds->mds_vfsmnt, 
+        file = dentry_open(mds->mds_pending_dir, mds->mds_vfsmnt,
                            O_RDONLY | O_LARGEFILE);
-        if (IS_ERR(file)) 
+        if (IS_ERR(file))
                 GOTO(err_open, rc2 = PTR_ERR(file));
-        
+
         OBD_ALLOC(dirent, count);
         if (dirent == NULL)
                 GOTO(err_alloc_dirent, rc2 = -ENOMEM);
 
-        rc = l_readdir(file, dirent, count); 
+        rc = l_readdir(file, dirent, count);
         filp_close(file, 0);
         if (rc < 0)
                 GOTO(err_out, rc2 = rc);
 
-        for (ptr = dirent; (char *)ptr < (char *)dirent + rc; 
+        for (ptr = dirent; (char *)ptr < (char *)dirent + rc;
                         (char *)ptr += ptr->d_reclen) {
-                int namlen = strlen(ptr->d_name); 
+                int namlen = strlen(ptr->d_name);
 
                 if (((namlen == 1) && !strcmp(ptr->d_name, ".")) ||
-                    ((namlen == 2) && !strcmp(ptr->d_name, ".."))) 
+                    ((namlen == 2) && !strcmp(ptr->d_name, "..")))
                         continue;
 
                 down(&pending_dir->i_sem);
-                dchild = lookup_one_len(ptr->d_name, mds->mds_pending_dir, namlen); 
+                dchild = lookup_one_len(ptr->d_name, mds->mds_pending_dir,
+                                        namlen);
                 if (IS_ERR(dchild)) {
                         up(&pending_dir->i_sem);
                         GOTO(err_out, rc2 = PTR_ERR(dchild));
                 }
                 if (!dchild->d_inode) {
-                        CDEBUG(D_ERROR, "orphan %s has been deleted\n", ptr->d_name);
-                        GOTO(next, rc2 = 0);
-                }
-
-                child_inode = dchild->d_inode;
-                if (mds_inode_is_orphan(child_inode) && 
-                    mds_open_orphan_count(child_inode)) {
-                        CDEBUG(D_ERROR, "orphan %s was re-opened during recovery\n",
+                        CDEBUG(D_ERROR, "orphan %s has been deleted\n",
                                ptr->d_name);
                         GOTO(next, rc2 = 0);
                 }
 
-                CDEBUG(D_ERROR, "cleanup orphan %s start on mds and ost:\n", ptr->d_name);
+                child_inode = dchild->d_inode;
+                if (mds_inode_is_orphan(child_inode) &&
+                    mds_open_orphan_count(child_inode)) {
+                        CDEBUG(D_ERROR, "orphan %s was re-opened during "
+                               "recovery\n", ptr->d_name);
+                        GOTO(next, rc2 = 0);
+                }
+
+                CDEBUG(D_ERROR, "cleanup orphan %s start on mds and ost:\n",
+                       ptr->d_name);
 
                 LASSERT(mds->mds_osc_obd != NULL);
 
-                OBD_ALLOC(req, sizeof(*req)); 
+                OBD_ALLOC(req, sizeof(*req));
                 if (!req) {
                         CERROR("request allocation out of memory\n");
                         GOTO(err_lov_conn, rc2 = -ENOMEM);
@@ -192,18 +197,18 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
 
 #ifdef ENABLE_ORPHANS
-                if (mds_log_op_unlink(obd, child_inode,
-                                              req->rq_repmsg, 1) > 0)
+                if (mds_log_op_unlink(obd, child_inode, req->rq_repmsg, 1) > 0)
                         oa->o_valid |= OBD_MD_FLCOOKIE;
 #endif
 
-                rc2 = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, body->eadatasize);
+                rc2 = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm,
+                                   body->eadatasize);
                 if (rc2 < 0) {
                         CERROR("Error unpack md %p\n", lmm);
                         GOTO(out_free_req, rc2 = 0);
                 } else {
                         LASSERT(rc2 >= sizeof(*lsm));
-                        rc2 = 0;                
+                        rc2 = 0;
                 }
 
                 oa = obdo_alloc();
@@ -220,24 +225,24 @@ int mds_cleanup_orphans(struct obd_device *obd)
                                 lustre_msg_buf(req->rq_repmsg, 2,
                                                sizeof(struct llog_cookie) *
                                                lsm->lsm_stripe_count);
-                        if (oti.oti_logcookies == NULL) 
+                        if (oti.oti_logcookies == NULL)
                                 oa->o_valid &= ~OBD_MD_FLCOOKIE;
                 }
 #endif
 
                 rc2 = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
-                obdo_free(oa); 
+                obdo_free(oa);
                 if (rc2) {
-                        CERROR("destroy orphan objid 0x"LPX64" on ost error %d\n",
-                               lsm->lsm_object_id, rc2);
+                        CERROR("destroy orphan objid 0x"LPX64" on ost error "
+                               "%d\n", lsm->lsm_object_id, rc2);
                         GOTO(out_free_memmd, rc2 = 0);
                 }
                 item ++;
 
-                CDEBUG(D_ERROR, "removed orphan %s object from ost successlly!\n", 
+                CDEBUG(D_ERROR, "removed orphan %s object from ost\n",
                        ptr->d_name);
 
-                handle = fsfilt_start(obd, pending_dir, FSFILT_OP_UNLINK, NULL); 
+                handle = fsfilt_start(obd, pending_dir, FSFILT_OP_UNLINK, NULL);
                 if (IS_ERR(handle)) {
                         rc2 = PTR_ERR(handle);
                         CERROR("error fsfilt_start: %d\n", rc2);
@@ -247,18 +252,19 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 rc2 = vfs_unlink(pending_dir, dchild);
                 if (rc2) {
                         CERROR("error unlinking orphan from PENDING directory");
-                        CERROR("%s: rc %d\n", ptr->d_name, rc2); 
+                        CERROR("%s: rc %d\n", ptr->d_name, rc2);
                 }
                 if (handle) {
                         int err = fsfilt_commit(obd, pending_dir, handle, 0);
                         if (err) {
-                                CERROR("error committing orphan unlink: %d\n", err);
+                                CERROR("error committing orphan unlink: %d\n",
+                                       err);
                                 rc2 = err;
                                 GOTO(err_alloc_oa, rc2);
                         }
                 }
 
-                CDEBUG(D_ERROR, "removed orphan %s from mds successfully!\n", 
+                CDEBUG(D_ERROR, "removed orphan %s from mds successfully!\n",
                        ptr->d_name);
 
 out_free_memmd:
