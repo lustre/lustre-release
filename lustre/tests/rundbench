@@ -9,4 +9,4 @@ if [ ! -e client.txt ]; then
 	fi
 fi
 cd /mnt/lustre
-dbench $@
+dbench -c client.txt $@
