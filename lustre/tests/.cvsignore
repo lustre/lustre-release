@@ -53,3 +53,4 @@ write_append_truncate
 ll_sparseness_verify
 ll_sparseness_write
 mrename
+cmknod
