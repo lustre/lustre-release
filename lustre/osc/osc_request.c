@@ -244,11 +244,10 @@ static int osc_punch(struct lustre_handle *conn, struct obdo *oa,
 #warning FIXME: pack only valid fields instead of memcpy, endianness, valid
         memcpy(&body->oa, oa, sizeof(*oa));
 
-        /* overload the blocks and size fields in the oa with start/end */
-#warning FIXME: endianness, size=start, blocks=end?
-        body->oa.o_blocks = start;
-        body->oa.o_size = end;
-        body->oa.o_valid |= OBD_MD_FLBLOCKS | OBD_MD_FLSIZE;
+        /* overload the size and blocks fields in the oa with start/end */
+        body->oa.o_size = HTON__u64(start);
+        body->oa.o_blocks = HTON__u64(end);
+        body->oa.o_valid |= HTON__u32(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
 
         request->rq_replen = lustre_msg_size(1, &size);
 

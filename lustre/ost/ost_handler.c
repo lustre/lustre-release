@@ -70,6 +70,7 @@ static int ost_getattr(struct ptlrpc_request *req)
                 RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        /* FIXME: unpack only valid fields instead of memcpy, endianness */
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_getattr(conn, &repbody->oa, NULL);
         RETURN(0);
@@ -114,6 +115,7 @@ static int ost_open(struct ptlrpc_request *req)
                 RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        /* FIXME: unpack only valid fields instead of memcpy, endianness */
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_open(conn, &repbody->oa, NULL);
         RETURN(0);
@@ -133,6 +135,7 @@ static int ost_close(struct ptlrpc_request *req)
                 RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        /* FIXME: unpack only valid fields instead of memcpy, endianness */
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_close(conn, &repbody->oa, NULL);
         RETURN(0);
@@ -152,6 +155,7 @@ static int ost_create(struct ptlrpc_request *req)
                 RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        /* FIXME: unpack only valid fields instead of memcpy, endianness */
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_create(conn, &repbody->oa, NULL);
         RETURN(0);
@@ -166,8 +170,8 @@ static int ost_punch(struct ptlrpc_request *req)
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
 
-        if (!(body->oa.o_valid & OBD_MD_FLSIZE) ||
-            !(body->oa.o_valid & OBD_MD_FLBLOCKS))
+        if (NTOH__u32(body->oa.o_valid) & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS) !=
+            (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
                 RETURN(-EINVAL);
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
@@ -175,9 +179,10 @@ static int ost_punch(struct ptlrpc_request *req)
                 RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        /* FIXME: unpack only valid fields instead of memcpy, endianness */
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_punch(conn, &repbody->oa, NULL,
-                                   repbody->oa.o_blocks, repbody->oa.o_size);
+                                   repbody->oa.o_size, repbody->oa.o_blocks);
         RETURN(0);
 }
 
@@ -195,6 +200,7 @@ static int ost_setattr(struct ptlrpc_request *req)
                 RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        /* FIXME: unpack only valid fields instead of memcpy, endianness */
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_setattr(conn, &repbody->oa, NULL);
         RETURN(0);
