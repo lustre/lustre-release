@@ -65,6 +65,8 @@ static void *fsfilt_extN_start(struct inode *inode, int op, void *desc_private)
         int nblocks = EXTN_DATA_TRANS_BLOCKS;
         void *handle;
 
+        LASSERT(current->journal_info == NULL);
+
         switch(op) {
         case FSFILT_OP_CREATE_LOG:
                 nblocks += EXTN_INDEX_EXTRA_TRANS_BLOCKS+EXTN_DATA_TRANS_BLOCKS;
@@ -112,6 +114,8 @@ static void *fsfilt_extN_start(struct inode *inode, int op, void *desc_private)
         handle = journal_start(EXTN_JOURNAL(inode), nblocks);
         unlock_kernel();
 
+        if (!IS_ERR(handle))
+                LASSERT(current->journal_info == handle);
         return handle;
 }
 
@@ -227,11 +231,13 @@ static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
         lock_kernel();
         handle = journal_start(journal, needed);
         unlock_kernel();
-        if (IS_ERR(handle))
+        if (IS_ERR(handle)) {
                 CERROR("can't get handle for %d credits: rc = %ld\n", needed,
                        PTR_ERR(handle));
-        else
+        } else {
                 LASSERT(handle->h_buffer_credits >= needed);
+                LASSERT(current->journal_info == handle);
+        }
 
         RETURN(handle);
 }
@@ -241,6 +247,7 @@ static int fsfilt_extN_commit(struct inode *inode, void *h, int force_sync)
         int rc;
         handle_t *handle = h;
 
+        LASSERT(current->journal_info == handle);
         if (force_sync)
                 handle->h_sync = 1; /* recovery likes this */
 
@@ -248,6 +255,7 @@ static int fsfilt_extN_commit(struct inode *inode, void *h, int force_sync)
         rc = journal_stop(handle);
         unlock_kernel();
 
+        LASSERT(current->journal_info == NULL);
         return rc;
 }
 
