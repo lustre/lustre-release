@@ -78,7 +78,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         void *handle;
 
         if (current->journal_info) {
-                CDEBUG(D_INODE, "increasing refcount on %p\n", current->journal_info);
+                CDEBUG(D_INODE, "increasing refcount on %p\n",
+                       current->journal_info);
                 goto journal_start;
         }
 
@@ -114,6 +115,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 nblocks += 1;
                 break;
         case FSFILT_OP_CANCEL_UNLINK:
+                /* blocks for log header bitmap update OR
+                 * blocks for catalog header bitmap update + unlink of logs */
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
                         EXT3_DELETE_TRANS_BLOCKS * logs;
                 break;

@@ -219,7 +219,6 @@ load_target()
     else
 	EXTRA_VERSION="${EXTRA_VERSION}_lustre.$(get_lustre_version)"
     fi
-    EXTRA_VERSION=${EXTRA_VERSION//-/_}
 }
 
 tarflags()

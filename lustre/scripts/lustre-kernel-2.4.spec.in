@@ -20,6 +20,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 
 %define nptlarchs %{all_x86}
 #define nptlarchs noarch
+%define rhbuild @RHBUILD@
 
 # disable build root strip policy
 %define __spec_install_post /usr/lib/rpm/brp-compress || :
@@ -504,8 +505,11 @@ rm -f $RPM_BUILD_ROOT/usr/include/linux
 
 rm -rf $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/savedheaders
 
+%if %{rhbuild}
 # fix up the tmp_include_depends file wrt the buildroot
 perl -p -i -e "s|$RPM_BUILD_ROOT||g" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/tmp_include_depends
+%endif
+
 popd >/dev/null
 %endif
 
@@ -735,7 +739,9 @@ exit 0
 /usr/src/linux-%{KVERREL}/arch/sparc64
 %endif
 /usr/src/linux-%{KVERREL}/drivers
+%if %{rhbuild}
 /usr/src/linux-%{KVERREL}/crypto
+%endif
 /usr/src/linux-%{KVERREL}/fs
 /usr/src/linux-%{KVERREL}/init
 /usr/src/linux-%{KVERREL}/ipc
@@ -754,12 +760,16 @@ exit 0
 %{?ibcs_1:/usr/src/linux-%{KVERREL}/include/abi}
 %endif
 /usr/src/linux-%{KVERREL}/include/linux
+%if %{rhbuild}
 /usr/src/linux-%{KVERREL}/include/rxrpc
+%endif
 /usr/src/linux-%{KVERREL}/include/net
 /usr/src/linux-%{KVERREL}/include/pcmcia
 /usr/src/linux-%{KVERREL}/include/scsi
 /usr/src/linux-%{KVERREL}/include/video
+%if %{rhbuild}
 /usr/src/linux-%{KVERREL}/tmp_include_depends
+%endif
 %dir /usr/src/linux-%{KVERREL}/include
 %dir /usr/src/linux-%{KVERREL}/arch
 %ifarch alpha sparc

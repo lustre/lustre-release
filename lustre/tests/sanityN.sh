@@ -234,7 +234,6 @@ test_10a() {
 run_test 10a "write of file with sub-page size on multiple mounts "
 
 test_10b() {
-	set -vx
 	yes "R" | dd of=$DIR1/f10b bs=3k count=1 || error "dd $DIR1"
 
 	truncate $DIR1/f10b 4096 || error "truncate 4096"

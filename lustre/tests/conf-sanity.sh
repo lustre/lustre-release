@@ -341,20 +341,36 @@ test_9() {
 run_test 9 "test --ptldebug and --subsystem for lmc and lconf"
 
 test_10() {
+        echo "generate configuration with the same name for node and mds"
         OLDXMLCONFIG=$XMLCONFIG
         XMLCONFIG="broken.xml"
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
-        SAMENAME="mds1"
-        do_lmc --add node --node $SAMENAME
-        do_lmc --add net --node $SAMENAME --nid $SAMENAME --nettype tcp
-        do_lmc --add mds --node $SAMENAME --mds $SAMENAME --nid $SAMENAME \
-               --fstype ext3 --dev /dev/mds1 || return $?
-        do_lmc --add lov --lov lov1 --mds $SAMENAME --stripe_sz 65536 \
-               --stripe_cnt 1 --stripe_pattern 0 || return $?
+        facet="mds"
+        rm -f ${facet}active
+        add_facet $facet
+        echo "the name for node and mds is the same"
+        do_lmc --add mds --node ${facet}_facet --mds ${facet}_facet \
+            --dev $MDSDEV --size $MDSSIZE || return $?
+        do_lmc --add lov --mds ${facet}_facet --lov lov1 --stripe_sz \
+            $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ \
+            --stripe_pattern 0 || return $?
+        add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
+        facet="client"
+        add_facet $facet --lustre_upcall $UPCALL
+        do_lmc --add mtpt --node ${facet}_facet --mds mds_facet \
+            --lov lov1 --path $MOUNT
+
+        echo "mount lustre"
+        start_ost
+        start_mds
+        mount_client $MOUNT
+        check_mount || return 41
+        cleanup || return $?
+
         echo "Success!"
         XMLCONFIG=$OLDXMLCONFIG
 }
-run_test 10 "use lmc with the same name for node and mds"
+run_test 10 "mount lustre with the same name for node and mds"
 
 test_11() {
         OLDXMLCONFIG=$XMLCONFIG
@@ -629,5 +645,30 @@ test_16() {
         fi
 }
 run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
+
+test_17() {
+        TMPMTPT="/mnt/conf17"
+
+        if [ ! -f "$MDSDEV" ]; then
+            echo "no $MDSDEV existing, so mount Lustre to create one"
+            start_ost
+            start_mds
+            mount_client $MOUNT
+            check_mount || return 41
+            cleanup || return $?
+        fi
+
+        echo "Remove mds config log"
+        [ -d $TMPMTPT ] || mkdir -p $TMPMTPT
+        mount -o loop -t ext3 $MDSDEV $TMPMTPT || return $?
+        rm -f $TMPMTPT/LOGS/mds_svc || return $?
+        umount $TMPMTPT || return $?
+
+        start_ost
+	start mds $MDSLCONFARGS && return 42
+        cleanup || return $?
+}
+run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
+
 
 equals_msg "Done"

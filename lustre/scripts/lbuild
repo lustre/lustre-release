@@ -308,6 +308,7 @@ prep_build()
 	-e "s/@JENSEN_ARCHS@/$BOOT_ARCHS/g" \
 	-e "s/@SMP_ARCHS@/$SMP_ARCHS/g" \
 	-e "s/@UP_ARCHS@/$UP_ARCHS/g" \
+	-e "s/@RHBUILD@/$RHBUILD/g" \
 	< $TOPDIR/lustre/scripts/lustre-kernel-2.4.spec.in \
 	> lustre-kernel-2.4.spec
     [ -d SRPMS ] || mkdir SRPMS
@@ -337,11 +338,11 @@ build()
     done
 
     rpmbuild $targets -bb lustre-kernel-2.4.spec \
-	--define "_topdir $TOPDIR" \
+	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building rpms for $arch."
 
     (( $DO_SRC )) && rpmbuild -bs lustre-kernel-2.4.spec \
-	--define "_topdir $TOPDIR" \
+	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building .src.rpm."
 }
 
