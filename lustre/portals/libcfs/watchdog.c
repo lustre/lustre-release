@@ -52,14 +52,14 @@ struct lc_watchdog {
 /*
  * The dispatcher will complete lcw_start_completion when it starts,
  * and lcw_stop_completion when it exits.
- * Complete lcw_event_completion to signal timer callback dispatches.
+ * Wake lcw_event_waitq to signal timer callback dispatches.
  */
-struct completion lcw_start_completion;
-struct completion lcw_event_completion;
-struct completion lcw_stop_completion;
+static struct completion lcw_start_completion;
+static struct completion lcw_stop_completion;
+static wait_queue_head_t lcw_event_waitq;
 
 /*
- * Set this and complete lcw_event_completion to stop the dispatcher.
+ * Set this and wake lcw_event_waitq to stop the dispatcher.
  */
 enum {
         LCW_FLAG_STOP = 0
@@ -128,11 +128,22 @@ static void lcw_cb(unsigned long data)
         spin_lock_irqsave(&lcw_pending_timers_lock, flags);
         if (list_empty(&lcw->lcw_list)) {
                 list_add(&lcw->lcw_list, &lcw_pending_timers);
-                complete(&lcw_event_completion);
+                wake_up(&lcw_event_waitq);
         }
         spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
 
         EXIT;
+}
+
+static int is_watchdog_fired(void)
+{
+        unsigned long flags;
+
+        if (test_bit(LCW_FLAG_STOP, &lcw_flags))
+                return 1;
+
+        spin_lock_irqsave(&lcw_pending_timers_lock, flags);
+        return !list_empty(&lcw_pending_timers);
 }
 
 static int lcw_dispatch_main(void *data)
@@ -154,7 +165,7 @@ static int lcw_dispatch_main(void *data)
         complete(&lcw_start_completion);
 
         while (1) {
-                wait_for_completion(&lcw_event_completion);
+                wait_event_interruptible(lcw_event_waitq, is_watchdog_fired());
                 CDEBUG(D_INFO, "Watchdog got woken up...\n");
                 if (test_bit(LCW_FLAG_STOP, &lcw_flags)) {
                         CDEBUG(D_INFO, "LCW_FLAG_STOP was set, shutting down...\n");
@@ -208,7 +219,7 @@ static void lcw_dispatch_start(void)
 
         init_completion(&lcw_stop_completion);
         init_completion(&lcw_start_completion);
-        init_completion(&lcw_event_completion);
+        init_waitqueue_head(&lcw_event_waitq);
 
         CDEBUG(D_INFO, "starting dispatch thread\n");
         rc = kernel_thread(lcw_dispatch_main, NULL, 0);
@@ -231,7 +242,7 @@ static void lcw_dispatch_stop(void)
         CDEBUG(D_INFO, "trying to stop watchdog dispatcher.\n");
 
         set_bit(LCW_FLAG_STOP, &lcw_flags);
-        complete(&lcw_event_completion);
+        wake_up(&lcw_event_waitq);
 
         wait_for_completion(&lcw_stop_completion);
 

@@ -6,6 +6,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- return async write errors to application if possible (2248)
 	- return last_committed value from OST to avoid OOM (4966)
 	- memory shortage at startup could cause assertion (5176)
+	- the watchdog thread now runs as interruptible (5246)
        * miscellania
 	- reorganization of lov code
 	- single portals codebase
