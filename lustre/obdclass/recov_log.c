@@ -223,6 +223,7 @@ static struct llog_handle *llog_current_log(struct llog_handle *cathandle,
                 loghandle = llog_new_log(cathandle, cathandle->lgh_tgtuuid);
                 GOTO(out, loghandle);
         }
+        GOTO(out, loghandle);
 out:
         return loghandle;
 }
@@ -418,8 +419,7 @@ out:
 int llog_cancel_records(struct llog_handle *cathandle, int count,
                         struct llog_cookie *cookies)
 {
-        int rc = 0;
-        int i;
+        int i, rc = 0;
         ENTRY;
 
         down(&cathandle->lgh_lock);
@@ -439,7 +439,7 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
                 llh = loghandle->lgh_hdr;
                 CDEBUG(D_HA, "cancelling "LPX64" index %u: %u\n",
                        lgl->lgl_oid, cookies->lgc_index,
-                        ext2_test_bit(cookies->lgc_index, llh->llh_bitmap));
+                       ext2_test_bit(cookies->lgc_index, llh->llh_bitmap));
                 if (!ext2_clear_bit(cookies->lgc_index, llh->llh_bitmap)) {
                         CERROR("log index %u in "LPX64":%x already clear?\n",
                                cookies->lgc_index, lgl->lgl_oid, lgl->lgl_ogen);
