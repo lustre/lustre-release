@@ -107,6 +107,17 @@
  	j += i * EXT3_INODES_PER_GROUP(sb) + 1;
  	if (j < EXT3_FIRST_INO(sb) || j > le32_to_cpu(es->s_inodes_count)) {
  		ext3_error (sb, "ext3_new_inode",
+--- linux-2.4.18-18.8.0-l15/fs/ext3/inode.c~extN-wantedi	Thu Jul  3 00:15:41 2003
++++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/inode.c	Thu Jul  3 00:17:28 2003
+@@ -2070,7 +2070,7 @@ void ext3_truncate_thread(struct inode *
+ 	if (IS_ERR(handle))
+ 		goto out_truncate;
+ 
+-	new_inode = ext3_new_inode(handle, old_inode, old_inode->i_mode);
++	new_inode = ext3_new_inode(handle, old_inode, old_inode->i_mode, 0);
+ 	if (IS_ERR(new_inode)) {
+ 		ext3_debug("truncate inode %lu directly (no new inodes)\n",
+ 			   old_inode->i_ino);
 --- linux-2.4.20/fs/ext3/ioctl.c~extN-wantedi	2003-04-08 23:35:55.000000000 -0600
 +++ linux-2.4.20-braam/fs/ext3/ioctl.c	2003-04-08 23:35:55.000000000 -0600
 @@ -23,6 +23,31 @@ int ext3_ioctl (struct inode * inode, st
