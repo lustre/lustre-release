@@ -17,18 +17,13 @@
 static int smfs_readlink(struct dentry * dentry, char * buffer, int buflen)
 {
 	struct inode *cache_inode = I2CI(dentry->d_inode);
-	struct inode *cache_dir = NULL;
 	struct dentry *cache_dentry;
-	struct dentry parent;
 	int    rc = 0;
 
 	if (!cache_inode)
 		RETURN(-ENOENT);
-	if (dentry->d_parent && dentry->d_parent->d_inode){
-		cache_dir = I2CI(dentry->d_parent->d_inode);
-		prepare_parent_dentry(&parent, cache_dir);
-	}	
-	cache_dentry = d_alloc(&parent, &dentry->d_name);
+	
+	cache_dentry = d_alloc(NULL, &dentry->d_name);
 	d_add(cache_dentry, cache_inode);
 	igrab(cache_inode);
 		
@@ -42,28 +37,21 @@ static int smfs_readlink(struct dentry * dentry, char * buffer, int buflen)
 static int smfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	struct inode *cache_inode = I2CI(dentry->d_inode);
-	struct inode *cache_dir = NULL;
 	struct dentry *cache_dentry;
-	struct dentry parent;
 	int rc = 0;
 	if (!cache_inode)
 		RETURN(-ENOENT);
-
-	if (dentry->d_parent && dentry->d_parent->d_inode){
-		cache_dir = I2CI(dentry->d_parent->d_inode);
-		prepare_parent_dentry(&parent, cache_dir);
-	}	
-
-	cache_dentry = d_alloc(&parent, &dentry->d_name);
-
+	
+	cache_dentry = d_alloc(NULL, &dentry->d_name);
 	d_add(cache_dentry, cache_inode);
 	igrab(cache_inode);
-	
+
 	if (cache_inode->i_op && cache_inode->i_op->follow_link) 	
 		rc = cache_inode->i_op->follow_link(cache_dentry, nd);
 	
 	d_unalloc(cache_dentry);
 	return rc;
+
 }
 struct inode_operations smfs_sym_iops = {
 	readlink:	smfs_readlink,
