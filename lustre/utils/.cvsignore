@@ -1,0 +1,14 @@
+.Xrefs
+config.log
+config.status
+configure
+Makefile
+Makefile.in
+.deps
+tags
+TAGS
+obdctl
+lctl
+lfind
+lstripe
+lconf
