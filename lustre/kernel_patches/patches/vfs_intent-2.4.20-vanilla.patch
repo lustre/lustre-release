@@ -12,8 +12,10 @@
  kernel/ksyms.c            |    1 
  12 files changed, 555 insertions(+), 128 deletions(-)
 
---- linux-2.4.20/fs/exec.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:12.000000000 +0400
-+++ linux-2.4.20-alexey/fs/exec.c	2003-09-13 17:01:58.000000000 +0400
+Index: lum/fs/exec.c
+===================================================================
+--- lum.orig/fs/exec.c	2002-11-28 16:53:15.000000000 -0700
++++ lum/fs/exec.c	2003-09-13 23:13:25.000000000 -0600
 @@ -107,8 +107,10 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
@@ -75,8 +77,10 @@
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
---- linux-2.4.20/fs/dcache.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:12.000000000 +0400
-+++ linux-2.4.20-alexey/fs/dcache.c	2003-09-13 17:01:58.000000000 +0400
+Index: lum/fs/dcache.c
+===================================================================
+--- lum.orig/fs/dcache.c	2002-11-28 16:53:15.000000000 -0700
++++ lum/fs/dcache.c	2003-09-13 23:13:25.000000000 -0600
 @@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -114,8 +118,10 @@
  }
  
  #define do_switch(x,y) do { \
---- linux-2.4.20/fs/namespace.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:12.000000000 +0400
-+++ linux-2.4.20-alexey/fs/namespace.c	2003-09-13 17:01:58.000000000 +0400
+Index: lum/fs/namespace.c
+===================================================================
+--- lum.orig/fs/namespace.c	2002-11-28 16:53:15.000000000 -0700
++++ lum/fs/namespace.c	2003-09-13 23:13:25.000000000 -0600
 @@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
@@ -229,8 +235,10 @@
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
---- linux-2.4.20/fs/namei.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:12.000000000 +0400
-+++ linux-2.4.20-alexey/fs/namei.c	2003-09-13 17:01:58.000000000 +0400
+Index: lum/fs/namei.c
+===================================================================
+--- lum.orig/fs/namei.c	2002-11-28 16:53:15.000000000 -0700
++++ lum/fs/namei.c	2003-09-13 23:13:25.000000000 -0600
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -959,8 +967,10 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- linux-2.4.20/fs/open.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:13.000000000 +0400
-+++ linux-2.4.20-alexey/fs/open.c	2003-09-13 17:01:58.000000000 +0400
+Index: lum/fs/open.c
+===================================================================
+--- lum.orig/fs/open.c	2002-11-28 16:53:15.000000000 -0700
++++ lum/fs/open.c	2003-09-13 23:13:25.000000000 -0600
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1359,9 +1369,11 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.4.20/fs/stat.c~vfs_intent-2.4.20-vanilla	2001-09-14 03:04:43.000000000 +0400
-+++ linux-2.4.20-alexey/fs/stat.c	2003-09-13 17:01:58.000000000 +0400
-@@ -17,10 +17,12 @@
+Index: lum/fs/stat.c
+===================================================================
+--- lum.orig/fs/stat.c	2001-09-13 17:04:43.000000000 -0600
++++ lum/fs/stat.c	2003-09-14 01:53:11.000000000 -0600
+@@ -17,10 +17,14 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
  static __inline__ int
@@ -1370,13 +1382,15 @@
  {
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
++        if (!inode)
++                return -ENOENT;
 +	if (inode->i_op && inode->i_op->revalidate_it)
 +		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
  		return inode->i_op->revalidate(dentry);
  	return 0;
  }
-@@ -135,13 +137,15 @@ static int cp_new_stat(struct inode * in
+@@ -135,13 +139,15 @@ static int cp_new_stat(struct inode * in
  asmlinkage long sys_stat(char * filename, struct __old_kernel_stat * statbuf)
  {
  	struct nameidata nd;
@@ -1394,7 +1408,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -151,13 +155,15 @@ asmlinkage long sys_stat(char * filename
+@@ -151,13 +157,15 @@ asmlinkage long sys_stat(char * filename
  asmlinkage long sys_newstat(char * filename, struct stat * statbuf)
  {
  	struct nameidata nd;
@@ -1412,7 +1426,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -172,13 +178,15 @@ asmlinkage long sys_newstat(char * filen
+@@ -172,13 +180,15 @@ asmlinkage long sys_newstat(char * filen
  asmlinkage long sys_lstat(char * filename, struct __old_kernel_stat * statbuf)
  {
  	struct nameidata nd;
@@ -1430,7 +1444,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -189,13 +197,15 @@ asmlinkage long sys_lstat(char * filenam
+@@ -189,13 +199,15 @@ asmlinkage long sys_lstat(char * filenam
  asmlinkage long sys_newlstat(char * filename, struct stat * statbuf)
  {
  	struct nameidata nd;
@@ -1448,7 +1462,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -216,7 +226,7 @@ asmlinkage long sys_fstat(unsigned int f
+@@ -216,7 +228,7 @@ asmlinkage long sys_fstat(unsigned int f
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1457,7 +1471,7 @@
  		if (!err)
  			err = cp_old_stat(dentry->d_inode, statbuf);
  		fput(f);
-@@ -235,7 +245,7 @@ asmlinkage long sys_newfstat(unsigned in
+@@ -235,7 +247,7 @@ asmlinkage long sys_newfstat(unsigned in
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1466,7 +1480,7 @@
  		if (!err)
  			err = cp_new_stat(dentry->d_inode, statbuf);
  		fput(f);
-@@ -257,7 +267,7 @@ asmlinkage long sys_readlink(const char 
+@@ -257,7 +269,7 @@ asmlinkage long sys_readlink(const char 
  
  		error = -EINVAL;
  		if (inode->i_op && inode->i_op->readlink &&
@@ -1475,7 +1489,7 @@
  			UPDATE_ATIME(inode);
  			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
  		}
-@@ -333,12 +343,14 @@ asmlinkage long sys_stat64(char * filena
+@@ -333,12 +345,14 @@ asmlinkage long sys_stat64(char * filena
  {
  	struct nameidata nd;
  	int error;
@@ -1492,7 +1506,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -348,12 +360,14 @@ asmlinkage long sys_lstat64(char * filen
+@@ -348,12 +362,14 @@ asmlinkage long sys_lstat64(char * filen
  {
  	struct nameidata nd;
  	int error;
@@ -1509,7 +1523,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -368,7 +382,7 @@ asmlinkage long sys_fstat64(unsigned lon
+@@ -368,7 +384,7 @@ asmlinkage long sys_fstat64(unsigned lon
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1518,8 +1532,10 @@
  		if (!err)
  			err = cp_new_stat64(dentry->d_inode, statbuf);
  		fput(f);
---- linux-2.4.20/include/linux/dcache.h~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:15.000000000 +0400
-+++ linux-2.4.20-alexey/include/linux/dcache.h	2003-09-13 17:01:58.000000000 +0400
+Index: lum/include/linux/dcache.h
+===================================================================
+--- lum.orig/include/linux/dcache.h	2002-11-28 16:53:15.000000000 -0700
++++ lum/include/linux/dcache.h	2003-09-13 23:13:42.000000000 -0600
 @@ -7,6 +7,50 @@
  #include <linux/mount.h>
  #include <linux/kernel.h>
@@ -1602,8 +1618,10 @@
  
  extern spinlock_t dcache_lock;
  
---- linux-2.4.20/include/linux/fs.h~vfs_intent-2.4.20-vanilla	2003-09-13 17:01:56.000000000 +0400
-+++ linux-2.4.20-alexey/include/linux/fs.h	2003-09-13 17:01:58.000000000 +0400
+Index: lum/include/linux/fs.h
+===================================================================
+--- lum.orig/include/linux/fs.h	2003-09-13 23:13:25.000000000 -0600
++++ lum/include/linux/fs.h	2003-09-13 23:13:25.000000000 -0600
 @@ -73,6 +73,7 @@ extern int leases_enable, dir_notify_ena
  
  #define FMODE_READ 1
@@ -1731,8 +1749,10 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- linux-2.4.20/include/linux/fs_struct.h~vfs_intent-2.4.20-vanilla	2001-07-14 02:10:44.000000000 +0400
-+++ linux-2.4.20-alexey/include/linux/fs_struct.h	2003-09-13 17:01:58.000000000 +0400
+Index: lum/include/linux/fs_struct.h
+===================================================================
+--- lum.orig/include/linux/fs_struct.h	2001-07-13 16:10:44.000000000 -0600
++++ lum/include/linux/fs_struct.h	2003-09-13 23:13:26.000000000 -0600
 @@ -34,10 +34,12 @@ static inline void set_fs_root(struct fs
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1759,8 +1779,10 @@
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
---- linux-2.4.20/kernel/ksyms.c~vfs_intent-2.4.20-vanilla	2003-09-13 17:01:57.000000000 +0400
-+++ linux-2.4.20-alexey/kernel/ksyms.c	2003-09-13 17:01:58.000000000 +0400
+Index: lum/kernel/ksyms.c
+===================================================================
+--- lum.orig/kernel/ksyms.c	2003-09-13 23:13:25.000000000 -0600
++++ lum/kernel/ksyms.c	2003-09-13 23:13:26.000000000 -0600
 @@ -269,6 +269,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1769,8 +1791,10 @@
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
---- linux-2.4.20/kernel/fork.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:15.000000000 +0400
-+++ linux-2.4.20-alexey/kernel/fork.c	2003-09-13 17:01:58.000000000 +0400
+Index: lum/kernel/fork.c
+===================================================================
+--- lum.orig/kernel/fork.c	2002-11-28 16:53:15.000000000 -0700
++++ lum/kernel/fork.c	2003-09-13 23:13:26.000000000 -0600
 @@ -384,10 +384,13 @@ static inline struct fs_struct *__copy_f
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1785,8 +1809,10 @@
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
---- linux-2.4.20/kernel/exit.c~vfs_intent-2.4.20-vanilla	2003-05-16 05:29:15.000000000 +0400
-+++ linux-2.4.20-alexey/kernel/exit.c	2003-09-13 17:01:58.000000000 +0400
+Index: lum/kernel/exit.c
+===================================================================
+--- lum.orig/kernel/exit.c	2002-11-28 16:53:15.000000000 -0700
++++ lum/kernel/exit.c	2003-09-13 23:13:26.000000000 -0600
 @@ -238,11 +238,14 @@ static inline void __put_fs_struct(struc
  {
  	/* No need to hold fs->lock if we are killing it */
@@ -1802,5 +1828,3 @@
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
-
-_
