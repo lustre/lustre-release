@@ -57,7 +57,8 @@ static ssize_t
 obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
 	ssize_t retval;
-	CDEBUG(D_INFO, "Writing inode %ld, %d bytes, offset %ld\n", file->f_dentry->d_inode->i_ino, count, (long)*ppos);
+	CDEBUG(D_INFO, "Writing inode %ld, %d bytes, offset %ld\n",
+	       file->f_dentry->d_inode->i_ino, count, (long)*ppos);
 
 	retval = generic_file_write(file, buf, count,
 				    ppos, obdfs_write_one_page);
@@ -77,13 +78,13 @@ struct file_operations obdfs_file_operations = {
 	generic_file_read,	/* read */
 	obdfs_file_write,       /* write  */
 	NULL,			/* readdir - bad */
-	NULL,			/* poll - default */
+	NULL,			/* poll */
 	NULL,			/* ioctl */
 	generic_file_mmap, 
-	NULL,			/* no special open code */
+	NULL,			/* open */
 	NULL,			/* flush */
-	NULL,			/* no special release code */
-	NULL,			/* fsync */
+	NULL,			/* release */
+	NULL /* XXX add XXX */,	/* fsync */
 	NULL,			/* fasync */
 	NULL			/* lock */
 };
@@ -104,7 +105,7 @@ struct inode_operations obdfs_file_inode_operations = {
 	NULL,			/* get_block */
 	obdfs_readpage,		/* readpage */
 	obdfs_writepage,	/* writepage */
-	NULL,			/* truncate */
+	NULL /* XXX add XXX */,	/* truncate */
 	NULL,			/* permission */
 	NULL			/* revalidate */
 };

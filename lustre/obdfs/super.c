@@ -34,6 +34,8 @@
 
 struct list_head obdfs_super_list;
 struct super_operations obdfs_super_operations;
+long obdfs_cache_count = 0;
+long obd_memory = 0;
 
 static char *obdfs_read_opt(const char *opt, char *data)
 {
@@ -55,7 +57,7 @@ static char *obdfs_read_opt(const char *opt, char *data)
 	}
 	
 	memcpy(retval, value, strlen(value)+1);
-	CDEBUG(D_INFO, "Assigned option: %s, value %s\n", opt, retval);
+	CDEBUG(D_PSDEV, "Assigned option: %s, value %s\n", opt, retval);
 	return retval;
 }
 
@@ -125,31 +127,27 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	obdfs_options(data, &device, &version);
 	if ( !device ) {
 		printk(__FUNCTION__ ": no device\n");
-		MOD_DEC_USE_COUNT;
 		EXIT;
-		return NULL;
+		goto ERR;
 	}
 
 	if ( (err = obdfs_getdev(device, &devno)) ) {
 		printk("Cannot get devno of %s, error %d\n", device, err);
-		MOD_DEC_USE_COUNT;
 		EXIT;
-		return NULL;
+		goto ERR;;
 	}
 
 	if ( MAJOR(devno) != OBD_PSDEV_MAJOR ) {
 		printk(__FUNCTION__ ": wrong major number %d!\n", MAJOR(devno));
-		MOD_DEC_USE_COUNT;
 		EXIT;
-		return NULL;
+		goto ERR;
 	}
 		
 	if ( MINOR(devno) >= MAX_OBD_DEVICES ) {
 		printk(__FUNCTION__ ": minor of %s too high (%d)\n",
 		       device, MINOR(devno));
-		MOD_DEC_USE_COUNT;
 		EXIT;
-		return NULL;
+		goto ERR;
 	} 
 
 	obddev = &obd_dev[MINOR(devno)];
@@ -158,9 +156,8 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	     ! (obddev->obd_flags & OBD_SET_UP) ){
 		printk("device %s not attached or not set up (%d)\n", 
 		       device, MINOR(devno));
-		MOD_DEC_USE_COUNT;
 		EXIT;
-		return NULL;
+		goto ERR;;
 	} 
 
 	sbi->osi_obd = obddev;
@@ -170,6 +167,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         err = sbi->osi_ops->o_connect(&sbi->osi_conn);
 	if ( err ) {
 		printk("OBDFS: cannot connect to %s\n", device);
+		EXIT;
 		goto ERR;
 	}
 
@@ -184,6 +182,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 				       (void *)&blocksize);
 	if ( err ) {
 		printk("getinfo call to drive failed (blocksize)\n");
+		EXIT;
 		goto ERR;
 	}
 
@@ -192,6 +191,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 				       (void *)&blocksize_bits);
 	if ( err ) {
 		printk("getinfo call to drive failed (blocksize_bits)\n");
+		EXIT;
 		goto ERR;
 	}
 
@@ -199,6 +199,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 				       "root_ino", &scratch, (void *)&root_ino);
 	if ( err ) {
 		printk("getinfo call to drive failed (root_ino)\n");
+		EXIT;
 		goto ERR;
 	}
 	
@@ -218,6 +219,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	    sb->s_dev = 0;
 	    err = -ENOENT;
 	    unlock_super(sb);
+	    EXIT;
 	    goto ERR;
 	} 
 	
@@ -228,12 +230,18 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	sb->s_root = d_alloc_root(root);
 	list_add(&sbi->osi_list, &obdfs_super_list);
 	unlock_super(sb);
+	OBD_FREE(device, strlen(device) + 1);
+	if (version)
+		OBD_FREE(version, strlen(version) + 1);
 	EXIT;  
         return sb;
 
 ERR:
-	EXIT;  
 	MOD_DEC_USE_COUNT;
+	if (device)
+		OBD_FREE(device, strlen(device) + 1);
+	if (version)
+		OBD_FREE(version, strlen(version) + 1);
 	if (sbi) {
 		sbi->osi_super = NULL;
 	}
@@ -253,7 +261,7 @@ static void obdfs_put_super(struct super_block *sb)
         sb->s_dev = 0;
 	
 	sbi = (struct obdfs_sb_info *) &sb->u.generic_sbp;
-	obdfs_flush_reqs(&sbi->osi_inodes, 0);
+	obdfs_flush_reqs(&sbi->osi_inodes, ~0UL);
 
 	OPS(sb,disconnect)(ID(sb));
 	list_del(&sbi->osi_list);
@@ -369,7 +377,7 @@ static void obdfs_put_inode(struct inode *inode)
 	INIT_LIST_HEAD(obdfs_islist(inode));
 
 	tmp = obdfs_iplist(inode);
-	while ( (tmp = tmp->next) != obdfs_iplist(inode) ) {
+	while ( (tmp = tmp->prev) != obdfs_iplist(inode) ) {
 		struct obdfs_pgrq *req;
 		struct page *page;
 		
@@ -520,7 +528,8 @@ void cleanup_module(void)
 	obdfs_sysctl_clean();
 	obdfs_cleanup_pgrqcache();
 	unregister_filesystem(&obdfs_fs_type);
-
+	CDEBUG(D_MALLOC, "OBDFS mem used %ld, inodes %d, pages %d\n",
+	       obd_memory, obd_inodes, obd_pages);
 	EXIT;
 }
 

@@ -47,13 +47,13 @@ struct {
 	int interval; /* jiffies delay between pupdate flushes */
 	int age_buffer;  /* Time for normal buffer to age before we flush it */
 	int age_super;  /* Time for superblock to age before we flush it */
-} pupd_prm = {40, 500, 64, 256, 3*HZ, 30*HZ, 5*HZ };
+} pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ };
 
 /* Called with the superblock list lock */
 static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 			       int nr_slots, struct page **pages, char **bufs,
 			       obd_size *counts, obd_off *offsets,
-			       obd_flag *flag, int check_time)
+			       obd_flag *flag, unsigned long check_time)
 {
 	struct list_head *page_list = obdfs_iplist(inode);
 	struct list_head *tmp;
@@ -71,8 +71,7 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 		page = req->rq_page;
 
 		
-		if (check_time && 
-		    (jiffies - req->rq_jiffies) < pupd_prm.age_buffer)
+		if (req->rq_jiffies > check_time)
 			break;		/* pages are in chronological order */
 
 		/* Only allocate the obdo if we will actually do I/O here */
@@ -112,7 +111,7 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 	}
 
 	if (!list_empty(page_list))
-		CDEBUG(D_CACHE, "inode %ld list not empty\n", inode->i_ino);
+		CDEBUG(D_INFO, "inode %ld list not empty\n", inode->i_ino);
 	CDEBUG(D_INFO, "added %d page(s) to vector\n", num);
 
 	EXIT;
@@ -120,7 +119,7 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 } /* obdfs_enqueue_pages */
 
 /* Remove writeback requests for the superblock */
-int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
+int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 {
 	struct list_head *tmp;
 	int		  total_io = 0;
@@ -148,7 +147,8 @@ int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 
 	obd_down(&sbi->osi_list_mutex);
 	if ( list_empty(inode_list) ) {
-		CDEBUG(D_CACHE, "list empty\n");
+		CDEBUG(D_CACHE, "list empty: memory %ld, inodes %d, pages %d\n",
+		       obd_memory, obd_inodes, obd_pages);
 		obd_up(&sbi->osi_list_mutex);
 		EXIT;
 		return 0;
@@ -183,7 +183,7 @@ int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 						  &offsets[num_io],
 						  &flags[num_obdos],
 						  check_time);
-			CDEBUG(D_CACHE, "FLUSH inode %ld, pages flushed: %d\n",
+			CDEBUG(D_INFO, "FLUSH inode %ld, pages flushed: %d\n",
 			       inode->i_ino, res);
 			if ( res < 0 ) {
 				CDEBUG(D_INODE,
@@ -251,7 +251,7 @@ BREAK:
 		inode = list_entry(ii, struct inode, u);
 		CDEBUG(D_INFO, "checking inode %ld empty\n", inode->i_ino);
 		if (list_empty(obdfs_iplist(inode))) {
-			CDEBUG(D_CACHE, "remove inode %ld from dirty list\n",
+			CDEBUG(D_INFO, "remove inode %ld from dirty list\n",
 			       inode->i_ino);
 			tmp = tmp->next;
 			list_del(obdfs_islist(inode));
@@ -265,24 +265,33 @@ BREAK:
 	CDEBUG(D_INFO, "flushed %d pages in total\n", total_io);
 	EXIT;
 ERR:
-	return err;
+	return err ? err : total_io;
 } /* obdfs_flush_reqs */
 
 
-void obdfs_flush_dirty_pages(int check_time)
+/* Walk all of the superblocks and write out blocks which are too old.
+ * Return the maximum number of blocks written for a single filesystem.
+ */
+int obdfs_flush_dirty_pages(unsigned long check_time)
 {
 	struct list_head *sl;
+	int max = 0;
 
 	ENTRY;
 	sl = &obdfs_super_list;
 	while ( (sl = sl->prev) != &obdfs_super_list ) {
 		struct obdfs_sb_info *sbi = 
 			list_entry(sl, struct obdfs_sb_info, osi_list);
+		int ret;
 
 		/* walk write requests here, use the sb, check the time */
-		obdfs_flush_reqs(&sbi->osi_inodes, check_time);
+		ret = obdfs_flush_reqs(&sbi->osi_inodes, check_time);
+		/* XXX handle error?  What to do with it? */
+
+		max = ret > max ? ret : max;
 	}
 	EXIT;
+	return max;
 } /* obdfs_flush_dirty_pages */
 
 
@@ -290,65 +299,83 @@ static struct task_struct *pupdated;
 
 static int pupdate(void *unused) 
 {
-	struct task_struct * tsk = current;
-	int interval;
+	int interval = pupd_prm.interval;
+	long age = pupd_prm.age_buffer;
+	int wrote = 0;
 	
-	pupdated = current;
-
 	exit_files(current);
 	exit_mm(current);
 
-	tsk->session = 1;
-	tsk->pgrp = 1;
-	sprintf(tsk->comm, "pupdated");
 	pupdated = current;
+	pupdated->session = 1;
+	pupdated->pgrp = 1;
+	strcpy(pupdated->comm, "pupdated");
 
-	MOD_INC_USE_COUNT;	/* XXX until send_sig works */
 	printk("pupdated activated...\n");
 
-	/* sigstop and sigcont will stop and wakeup pupdate */
-	spin_lock_irq(&tsk->sigmask_lock);
-	sigfillset(&tsk->blocked);
-	siginitsetinv(&tsk->blocked, sigmask(SIGTERM));
-	recalc_sigpending(tsk);
-	spin_unlock_irq(&tsk->sigmask_lock);
+	spin_lock_irq(&pupdated->sigmask_lock);
+	sigfillset(&pupdated->blocked);
+	siginitsetinv(&pupdated->blocked, sigmask(SIGTERM));
+	recalc_sigpending(pupdated);
+	spin_unlock_irq(&pupdated->sigmask_lock);
 
 	for (;;) {
+		long dirty_limit;
+
 		/* update interval */
-		interval = pupd_prm.interval;
-		if (interval)
-		{
-			tsk->state = TASK_INTERRUPTIBLE;
+		if (interval) {
+			set_task_state(pupdated, TASK_INTERRUPTIBLE);
 			schedule_timeout(interval);
 		}
-		else
-		{
-		stop_pupdate:
-			tsk->state = TASK_STOPPED;
-			MOD_DEC_USE_COUNT; /* XXX until send_sig works */
-			printk("pupdated stopped...\n");
-			return 0;
-		}
-		/* check for sigstop */
-		if (signal_pending(tsk))
+		if (signal_pending(pupdated))
 		{
 			int stopped = 0;
-			spin_lock_irq(&tsk->sigmask_lock);
-			if (sigismember(&tsk->signal, SIGTERM))
+			spin_lock_irq(&pupdated->sigmask_lock);
+			if (sigismember(&pupdated->signal, SIGTERM))
 			{
-				sigdelset(&tsk->signal, SIGTERM);
+				sigdelset(&pupdated->signal, SIGTERM);
 				stopped = 1;
 			}
-			recalc_sigpending(tsk);
-			spin_unlock_irq(&tsk->sigmask_lock);
-			if (stopped)
-				goto stop_pupdate;
+			recalc_sigpending(pupdated);
+			spin_unlock_irq(&pupdated->sigmask_lock);
+			if (stopped) {
+				printk("pupdated stopped...\n");
+				set_task_state(pupdated, TASK_STOPPED);
+				pupdated = NULL;
+				return 0;
+			}
 		}
 		/* asynchronous setattr etc for the future ...
-		flush_inodes();
+		obdfs_flush_dirty_inodes(jiffies - pupd_prm.age_super);
 		 */
-		obdfs_flush_dirty_pages(1); 
+		dirty_limit = nr_free_buffer_pages() * pupd_prm.nfract / 100;
+		CDEBUG(D_CACHE, "dirty_limit %ld, cache_count %ld\n",
+		       dirty_limit, obdfs_cache_count);
+
+		if (obdfs_cache_count > dirty_limit) {
+			interval = 0;
+			if ( wrote < pupd_prm.ndirty )
+				age >>= 1;
+		} else {
+			int isave = interval;
+			int asave = age;
+
+			if ( wrote < pupd_prm.ndirty >> 1 )
+				interval = pupd_prm.interval;
+			else
+				interval = isave >> 1;
+
+			if (obdfs_cache_count > dirty_limit / 3) {
+				age = asave >> 1;
+				interval = isave >> 1;
+			} else
+				age = pupd_prm.age_buffer;
+		}
+
+		CDEBUG(D_CACHE, "age %ld, interval %d\n", age, interval);
+		wrote = obdfs_flush_dirty_pages(jiffies - age);
 	}
+
 }
 
 
@@ -365,12 +392,24 @@ int obdfs_flushd_init(void)
 int obdfs_flushd_cleanup(void)
 {
 	ENTRY;
-	/* deliver a signal to pupdated to shut it down
-	   XXX need to kill it from user space for now XXX
-	if (pupdated) {
-		send_sig_info(SIGTERM, 1, pupdated);
+
+	if (pupdated) /* for debugging purposes only */
+		CDEBUG(D_CACHE, "pupdated->state = %lx\n", pupdated->state);
+
+	/* deliver a signal to pupdated to shut it down */
+	if (pupdated && (pupdated->state == TASK_RUNNING ||
+			 pupdated->state == TASK_INTERRUPTIBLE )) {
+		unsigned long timeout = HZ/20;
+		unsigned long count = 0;
+		send_sig_info(SIGTERM, (struct siginfo *)1, pupdated);
+		while (pupdated) {
+			if ((count % 2*HZ) == timeout)
+				printk(KERN_INFO "wait for pupdated to stop\n");
+			count += timeout;
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule_timeout(timeout);
+		}
 	}
-	 */
 
 	EXIT;
 	/* not reached */

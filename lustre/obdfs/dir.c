@@ -144,7 +144,7 @@ static int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 	OIDEBUG(inode);
 	while (!error && !stored && filp->f_pos < inode->i_size) {
 		page = obdfs_getpage(inode, filp->f_pos, 0, LOCKED);
-		PDEBUG(page, "readdir");
+		/* PDEBUG(page, "readdir"); */
 		if (!page) {
 			ext2_error (sb, "ext2_readdir",
 				    "directory #%lu contains a hole at offset %lu",
