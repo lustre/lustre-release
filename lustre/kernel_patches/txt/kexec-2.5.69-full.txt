@@ -1,0 +1,17 @@
+DESC
+kexec loads a bootable image into kernel space so that the kernel can
+reload itself by jumping to this image rather than going back through
+the bios and boot loader.  lkcd/mcore uses this facility to bring the 
+kernel back to a known state before trying to write a dump to disk.
+
+search for the patch name 'kexec' at 
+
+	http://www.osdl.org/cgi-bin/plm?module=search
+
+for recent versions that andyp may have generated.  also see, 
+	
+	http://lwn.net/Articles/22085/
+
+for how its used by the 'soft reboot' lkcd dump method that is based on the
+2.4 mcore dump method.
+EDESC
