@@ -35,3 +35,4 @@ add_page_private.patch
 jbd-flushtime.patch
 jbd-get_write_access.patch
 nfs_export_kernel-2.4.20-rh.patch
+ext3-ea-in-inode-2.4.20.patch
