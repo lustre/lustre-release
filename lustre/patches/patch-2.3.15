@@ -1,0 +1,43 @@
+--- linux-2.2.10/include/linux/fs.h.org	Tue Aug  3 15:09:33 1999
++++ linux-2.2.10/include/linux/fs.h	Tue Aug  3 15:10:34 1999
+@@ -897,6 +897,9 @@
+ #include <linux/minix_fs.h>
+ #include <linux/minix_fs_sb.h>
+ 
++struct super_block *get_empty_super(void);
++void remove_vfsmnt(kdev_t dev);
++
+ #endif /* __KERNEL__ */
+ 
+ #endif
+--- linux-2.2.10/fs/super.c.org	Tue Aug  3 15:08:09 1999
++++ linux-2.2.10/fs/super.c	Tue Aug  3 15:10:41 1999
+@@ -135,7 +135,7 @@
+ 	return lptr;
+ }
+ 
+-static void remove_vfsmnt(kdev_t dev)
++void remove_vfsmnt(kdev_t dev)
+ {
+ 	struct vfsmount *lptr, *tofree;
+ 
+@@ -508,7 +508,7 @@
+ /*
+  * Find a super_block with no device assigned.
+  */
+-static struct super_block *get_empty_super(void)
++struct super_block *get_empty_super(void)
+ {
+ 	struct super_block *s;
+ 
+--- linux/kernel/ksyms.c.org	Tue Aug 31 05:25:11 1999
++++ linux/kernel/ksyms.c	Tue Aug 31 05:31:31 1999
+@@ -114,6 +114,8 @@
+ EXPORT_SYMBOL(init_mm);
+ 
+ /* filesystem internal functions */
++EXPORT_SYMBOL(get_empty_super);
++EXPORT_SYMBOL(remove_vfsmnt);
+ EXPORT_SYMBOL(in_group_p);
+ EXPORT_SYMBOL(update_atime);
+ EXPORT_SYMBOL(get_super);
