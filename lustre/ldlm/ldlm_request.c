@@ -103,8 +103,9 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
         CERROR("remote handle: %p, flags: %d\n",
                (void *)(unsigned long)reply->lock_handle.addr, *flags);
-        CERROR("extent: %Lu -> %Lu\n", reply->lock_extent.start,
-               reply->lock_extent.end);
+        CERROR("extent: %Lu -> %Lu\n",
+               (unsigned long long)reply->lock_extent.start,
+               (unsigned long long)reply->lock_extent.end);
 
         EXIT;
  local:

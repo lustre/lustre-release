@@ -107,7 +107,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vf
 int mdc_connect(struct ptlrpc_client *, struct ptlrpc_connection *, 
                 struct ll_fid *rootfid, struct ptlrpc_request **);
 int mdc_getattr(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
-                int type, int valid, struct ptlrpc_request **);
+                int type, unsigned long valid, struct ptlrpc_request **);
 int mdc_setattr(struct ptlrpc_client *, struct ptlrpc_connection *,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,

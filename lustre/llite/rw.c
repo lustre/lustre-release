@@ -77,7 +77,7 @@ void set_page_dirty(struct page *page)
 }
 #endif
 
-inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid)
+inline struct obdo * ll_oa_from_inode(struct inode *inode, unsigned long valid)
 {
         struct ll_inode_info *oinfo = ll_i2info(inode);
         struct obdo *oa = obdo_alloc();
@@ -301,7 +301,7 @@ static int ll_commit_write(struct file *file, struct page *page,
                 LBUG();
 
         CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
-               from, to, count);
+               from, to, (unsigned long long)count);
 
         err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), num_obdo, &oa,
                       &bufs_per_obdo, &page, &count, &offset, &flags);
@@ -338,7 +338,7 @@ void ll_truncate(struct inode *inode)
         } 
         
         CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
-               (long)oa->o_id, oa->o_size);
+               (long)oa->o_id, (unsigned long long)oa->o_size);
         err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
         obdo_free(oa);
 

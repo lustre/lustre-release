@@ -57,7 +57,7 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 
         set_fs(KERNEL_DS);
         rc = mds_fs_readpage(&req->rq_obd->u.mds, file, buf, PAGE_SIZE,
-                             &offset);
+                             (loff_t *)&offset);
         set_fs(oldfs);
 
         if (rc != PAGE_SIZE) {
@@ -500,7 +500,8 @@ static int mds_prep(struct obd_device *obddev)
         }
 
         mds->mds_mount_count++;
-        CDEBUG(D_SUPER, "MDS mount_count is %Ld\n", mds->mds_mount_count);
+        CDEBUG(D_SUPER, "MDS mount_count is %Ld\n",
+               (unsigned long long)mds->mds_mount_count);
         off = 0;
         mount_count = cpu_to_le64(mds->mds_mount_count);
         rc = lustre_fwrite(f, (char *)&mount_count, sizeof(mount_count), &off);

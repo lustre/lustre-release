@@ -255,7 +255,8 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 
         ENTRY;
         CDEBUG(D_INFO, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n", 
-               src->o_id, src->o_blocks, src->o_size, dst->o_id);
+               (unsigned long long)src->o_id, (unsigned long long)src->o_blocks,
+               (unsigned long long)src->o_size, (unsigned long long)dst->o_id);
         page = alloc_page(GFP_USER);
         if ( !page ) {
                 EXIT;

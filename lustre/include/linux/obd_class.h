@@ -577,7 +577,8 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 {
 #ifdef __KERNEL__
         CDEBUG(D_INODE, "src obdo %Ld valid 0x%x, dst obdo %Ld\n",
-               src->o_id, src->o_valid, dst->o_id);
+               (unsigned long long)src->o_id, src->o_valid,
+               (unsigned long long)dst->o_id);
 #endif
         if ( src->o_valid & OBD_MD_FLATIME ) 
                 dst->o_atime = src->o_atime;

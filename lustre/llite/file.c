@@ -176,11 +176,11 @@ static ssize_t
 ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
         ssize_t retval;
-        CDEBUG(D_INFO, "Writing inode %ld, %d bytes, offset %Ld\n",
-               file->f_dentry->d_inode->i_ino, count, *ppos);
+        CDEBUG(D_INFO, "Writing inode %ld, %ld bytes, offset %Ld\n",
+               file->f_dentry->d_inode->i_ino, (long)count, *ppos);
 
         retval = generic_file_write(file, buf, count, ppos);
-        CDEBUG(D_INFO, "Wrote %d\n", retval);
+        CDEBUG(D_INFO, "Wrote %ld\n", (long)retval);
 
         /* update mtime/ctime/atime here, NOT size */
         if (retval > 0) {

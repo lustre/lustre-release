@@ -100,7 +100,7 @@ static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
                 goto negative;
 
         oa = obdo_fromid(IID(dir), ino, type, 
-                         OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
+                         (__u32)(OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS));
         if ( IS_ERR(oa) ) {
                 CERROR("obdo_fromid failed\n");
                 EXIT;

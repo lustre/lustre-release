@@ -143,7 +143,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
         sbi->ll_rootino = rootfid.id;
 
-        sb->s_maxbytes = 1LL << 36;
+        sb->s_maxbytes = 1ULL << 36;
         sb->s_blocksize = PAGE_SIZE;
         sb->s_blocksize_bits = (unsigned char)PAGE_SHIFT;
         sb->s_magic = LL_SUPER_MAGIC;
@@ -222,7 +222,7 @@ static void ll_delete_inode(struct inode *inode)
 
                 err = obd_destroy(ll_i2obdconn(inode), oa); 
                 CDEBUG(D_INODE, "obd destroy of %Ld error %d\n",
-                       oa->o_id, err);
+                       (unsigned long long)oa->o_id, err);
                 obdo_free(oa);
         }
 

@@ -165,7 +165,7 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
                 EXIT;
                 return -ENOMEM;
         }
-        oa->o_valid = OBD_MD_FLNOTOBD;
+        oa->o_valid = (__u32)OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
         err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
@@ -198,11 +198,11 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
                 EXIT;
                 return -ENOMEM;
         }
-        oa->o_valid = OBD_MD_FLNOTOBD;
+        oa->o_valid = (__u32)OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
-        CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
-               from, to, count);
+        CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n",
+               from, to, (unsigned long long)count);
 
         err = obd_brw(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
@@ -700,11 +700,11 @@ void obdfs_truncate(struct inode *inode)
                 err = -ENOMEM;
                 CERROR("obdo_alloc failed!\n");
         } else {
-                oa->o_valid = OBD_MD_FLNOTOBD;
+                oa->o_valid = (__u32)OBD_MD_FLNOTOBD;
                 obdfs_from_inode(oa, inode);
 
                 CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
-                       (long)oa->o_id, oa->o_size);
+                       (long)oa->o_id, (unsigned long long)oa->o_size);
                 err = obd_punch(IID(inode), oa, oa->o_size, 0);
 
                 obdo_free(oa);

@@ -175,8 +175,9 @@ static int handle_incoming_request(struct obd_device *obddev,
                         CERROR("rq_reqmsg->conn: %p\n", request.rq_connection);
                         CERROR("real connection: %p\n", tmp);
                         CERROR("rq_reqmsg->token: %Lu\n",
-                               request.rq_reqmsg->token);
-                        CERROR("real token      : %Lu\n", tmp->c_token);
+                               (unsigned long long)request.rq_reqmsg->token);
+                        CERROR("real token      : %Lu\n",
+                               (unsigned long long)tmp->c_token);
                         LBUG();
                 }
                 ptlrpc_connection_addref(request.rq_connection);

@@ -314,5 +314,6 @@ void ldlm_lock_dump(struct ldlm_lock *lock)
                (int)lock->l_req_mode, (int)lock->l_granted_mode);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
                 CDEBUG(D_OTHER, "  Extent: %Lu -> %Lu\n",
-                       lock->l_extent.start, lock->l_extent.end);
+                       (unsigned long long)lock->l_extent.start,
+                       (unsigned long long)lock->l_extent.end);
 }

@@ -110,7 +110,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
         err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_mds_conn, ino, type,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if (err) {
-                CERROR("failure %d inode %ld\n", err, ino);
+                CERROR("failure %d inode %ld\n", err, (long)ino);
                 ptlrpc_free_req(request);
                 RETURN(ERR_PTR(-abs(err)));
         }
@@ -149,14 +149,14 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                 GOTO(out, err);
         }
         body = lustre_msg_buf(request->rq_repmsg, 0);
-        body->valid = OBD_MD_FLNOTOBD;
+        body->valid = (__u32)OBD_MD_FLNOTOBD;
 
         body->objid = id; 
         body->nlink = 1;
         body->atime = body->ctime = body->mtime = time;
         body->mode = mode;
         CDEBUG(D_INODE, "-- new_inode: objid %lld, ino %d, mode %o\n",
-               body->objid, body->ino, body->mode); 
+               (unsigned long long)body->objid, body->ino, body->mode); 
 
         inode = iget4(dir->i_sb, body->ino, ll_find_inode, body);
         if (IS_ERR(inode)) {
@@ -254,13 +254,12 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
         oa.o_mode = S_IFREG | 0600;
         err = obd_create(ll_i2obdconn(dir), &oa);  
         if (err) { 
-                EXIT; 
-                return err;
+                RETURN(err);
         }
 
         mode = mode | S_IFREG;
-        CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n", 
-               dentry->d_name.name, mode, oa.o_id);
+        CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n",
+               dentry->d_name.name, mode, (unsigned long long)oa.o_id);
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len, 
                                NULL, 0, mode, oa.o_id);
         err = PTR_ERR(inode);
@@ -271,8 +270,7 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
                 inode->i_mapping->a_ops = &ll_aops;
                 err = ext2_add_nondir(dentry, inode);
         }
-        EXIT;
-        return err;
+        RETURN(err);
 } /* ll_create */
 
 

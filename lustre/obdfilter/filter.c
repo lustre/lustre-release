@@ -50,7 +50,7 @@ static char * obd_type_by_mode[S_IFMT >> S_SHIFT] = {
 static void filter_id(char *buf, obd_id id, obd_mode mode)
 {
         sprintf(buf, "O/%s/%Ld", obd_type_by_mode[(mode & S_IFMT) >> S_SHIFT],
-                id);
+                (unsigned long long)id);
 }
 
 /* setup the object store with correct subdirectories */
@@ -177,23 +177,23 @@ static struct file *filter_obj_open(struct obd_device *obddev,
         char name[24];
         struct super_block *sb;
         struct file *file;
-        
+        ENTRY;
+
         sb = obddev->u.filter.fo_sb;
         if (!sb || !sb->s_dev) {
                 CDEBUG(D_SUPER, "fatal: device not initialized.\n");
-                EXIT;
-                return NULL;
+                RETURN(NULL);
         }
 
         if ( !id ) {
-                CDEBUG(D_INODE, "fatal: invalid obdo %Lu\n", id);
-                EXIT;
-                return NULL;
+                CDEBUG(D_INODE, "fatal: invalid obdo %Lu\n",
+                       (unsigned long long)id);
+                RETURN(NULL);
         }
 
         if ( ! (type & S_IFMT) ) { 
                 CERROR("OBD filter_obj_open, no type (%Ld), mode %o!\n", 
-                       id, type);
+                       (unsigned long long)id, type);
         }
 
         filter_id(name, id, type); 
@@ -203,7 +203,7 @@ static struct file *filter_obj_open(struct obd_device *obddev,
 
         CDEBUG(D_INODE, "opening obdo %s\n", name);
 
-        return file;
+        RETURN(file);
 }
 
 static struct file *filter_parent(obd_id id, obd_mode mode)
@@ -595,7 +595,7 @@ static int filter_read(struct obd_conn *conn, struct obdo *oa, char *buf,
         }
 
         /* count doubles as retval */
-        retval = file->f_op->read(file, buf, *count, &offset);
+        retval = file->f_op->read(file, buf, *count, (loff_t *)&offset);
         filp_close(file, 0);
 
         if ( retval >= 0 ) {
@@ -632,7 +632,7 @@ static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
         }
 
         /* count doubles as retval */
-        retval = file->f_op->write(file, buf, *count, &offset);
+        retval = file->f_op->write(file, buf, *count, (loff_t *)&offset);
         filp_close(file, 0);
 
         if ( retval >= 0 ) {
@@ -691,10 +691,12 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn,
 
                 /* count doubles as retval */
                 for (pg = 0; pg < oa_bufs[onum]; pg++) {
-                        CDEBUG(D_INODE, "OP %d obdo no/pno: (%d,%d) (%ld,%ld) off count (%Ld,%Ld)\n", 
+                        CDEBUG(D_INODE, "OP %d obdo no/pno: (%d,%d) (%ld,%ld) "
+                               "off count (%Ld,%Ld)\n", 
                                rw, onum, pnum, file->f_dentry->d_inode->i_ino,
                                (unsigned long)offset[pnum] >> PAGE_CACHE_SHIFT,
-                               offset[pnum], count[pnum]);
+                               (unsigned long long)offset[pnum],
+                               (unsigned long long)count[pnum]);
                         if (rw == WRITE) { 
                                 loff_t off; 
                                 char *buffer;

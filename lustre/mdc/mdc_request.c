@@ -70,7 +70,8 @@ int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
 
 int mdc_getattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
-                ino_t ino, int type, int valid, struct ptlrpc_request **request)
+                ino_t ino, int type, unsigned long valid,
+                struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
@@ -174,7 +175,7 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 
         niobuf.addr = (__u64) (long) addr;
 
-        CDEBUG(D_INODE, "inode: %ld\n", ino);
+        CDEBUG(D_INODE, "inode: %ld\n", (long)ino);
 
         bulk = ptlrpc_prep_bulk(conn);
         if (bulk == NULL) {
@@ -311,11 +312,12 @@ static int request_ioctl(struct inode *inode, struct file *file,
         case IOC_REQUEST_OPEN: {
                 __u64 fh, ino;
                 copy_from_user(&ino, (__u64 *)arg, sizeof(ino));
-                CERROR("-- opening ino %llu\n", ino);
+                CERROR("-- opening ino %llu\n", (unsigned long long)ino);
                 err = mdc_open(&cl, conn, ino, S_IFDIR, O_RDONLY, &fh,
                                &request);
                 copy_to_user((__u64 *)arg, &fh, sizeof(fh));
-                CERROR("-- done err %d (fh=%Lu)\n", err, fh);
+                CERROR("-- done err %d (fh=%Lu)\n", err,
+                       (unsigned long long)fh);
 
                 GOTO(out, err);
         }

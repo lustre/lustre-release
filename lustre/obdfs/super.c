@@ -189,7 +189,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         /* make root inode */
         CDEBUG(D_INFO, "\n"); 
         oa = obdo_fromid(&sbi->osi_conn, root_ino, S_IFDIR,
-                         OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
+                         (__u32)(OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS));
         CDEBUG(D_INFO, "mode %o\n", oa->o_mode); 
         if ( IS_ERR(oa) ) {
                 CERROR("obdo_fromid failed\n");

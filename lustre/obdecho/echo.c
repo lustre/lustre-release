@@ -89,7 +89,8 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
                         address = get_zeroed_page(GFP_KERNEL);
                         if (!address) {
                                 CERROR("can't get new page %d/%d for id %Ld\n",
-                                       j, obj->ioo_bufcnt, obj->ioo_id);
+                                       j, obj->ioo_bufcnt,
+                                       (unsigned long long)obj->ioo_id);
                                 rc = -ENOMEM;
                                 EXIT;
                                 goto preprw_cleanup;
@@ -125,7 +126,7 @@ preprw_cleanup:
          * all down again.  I believe that this is what the in-kernel
          * prep/commit operations do.
          */
-        CERROR("cleaning up %d pages (%d obdos)\n", r - res, objcount);
+        CERROR("cleaning up %ld pages (%d obdos)\n", (long)(r - res), objcount);
         while (r-- > res) {
                 unsigned long addr = r->addr;
 
@@ -164,7 +165,8 @@ int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
 
                         if (!addr || !kern_addr_valid(addr)) {
                                 CERROR("bad page %p, id %Ld (%d), buf %d/%d\n",
-                                       page, obj->ioo_id, i, j,obj->ioo_bufcnt);
+                                       page, (unsigned long long)obj->ioo_id, i,
+                                       j, obj->ioo_bufcnt);
                                 rc = -EFAULT;
                                 EXIT;
                                 goto commitrw_cleanup;
@@ -179,8 +181,8 @@ int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
         return 0;
 
 commitrw_cleanup:
-        CERROR("cleaning up %d pages (%d obdos)\n", niocount - (r - res) - 1,
-               objcount);
+        CERROR("cleaning up %ld pages (%d obdos)\n",
+               niocount - (long)(r - res) - 1, objcount);
         while (++r < res + niocount) {
                 struct page *page = r->page;
                 unsigned long addr = (unsigned long)page_address(page);
