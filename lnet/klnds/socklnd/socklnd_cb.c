@@ -458,7 +458,8 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
 
                 counter++;   /* exponential backoff warnings */
                 if ((counter & (-counter)) == counter)
-                        CWARN("%d ENOMEM tx %p\n", counter, conn);
+                        CWARN("%d ENOMEM tx %p (%u allocated)\n",
+                              counter, conn, atomic_read(&portal_kmemory));
 
                 /* Queue on ksnd_enomem_conns for retry after a timeout */
                 spin_lock_irqsave(&ksocknal_data.ksnd_reaper_lock, flags);
