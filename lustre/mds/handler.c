@@ -441,7 +441,9 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         ENTRY;
 
         MOD_INC_USE_COUNT;
+#ifdef CONFIG_DEV_RDONLY
         dev_clear_rdonly(2);
+#endif
         mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL);
         err = PTR_ERR(mnt);
         if (IS_ERR(mnt)) {
@@ -549,7 +551,9 @@ static int mds_cleanup(struct obd_device * obddev)
         mds->mds_sb = 0;
         kfree(mds->mds_fstype);
         lock_kernel();
+#ifdef CONFIG_DEV_RDONLY
         dev_clear_rdonly(2);
+#endif
 
         OBD_FREE(s_ops, sizeof(*s_ops));
 
