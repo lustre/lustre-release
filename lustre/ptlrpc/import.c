@@ -79,6 +79,10 @@ int ptlrpc_connect_import(struct obd_import *imp)
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
+#ifndef __KERNEL__
+        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
+#endif
+
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         request->rq_replen = lustre_msg_size(0, NULL);
 
