@@ -342,9 +342,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 /* If this is a stat, get the authoritative file size */
                 if (it->it_op == IT_GETATTR && S_ISREG(lli->lli_st_mode) &&
                     lli->lli_smd != NULL) {
-                        struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                        struct lustre_handle lockh = {0};
                         struct lov_stripe_md *lsm = lli->lli_smd;
+                        struct ost_lvb lvb;
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
@@ -352,13 +351,12 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
-                                            &lockh);
-                        if (rc != ELDLM_OK) {
+                        rc = llu_glimpse_size(inode, &lvb);
+                        if (rc) {
                                 I_RELE(inode);
                                 RETURN(-EIO);
                         }
-                        llu_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
+                        lli->lli_st_size = lvb.lvb_size;
                 }
         } else {
                 ENTRY;
