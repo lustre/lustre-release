@@ -53,17 +53,16 @@ struct llog_logid {
 #define LLOG_HEADER_SIZE        (4096)     /* <= PAGE_SIZE */
 #define LLOG_HDR_RSVD_U32       (16)
 #define LLOG_HDR_DATA_SIZE      (LLOG_HDR_RSVD_U32 * sizeof(__u32))
-#define LLOG_BITMAP_SIZE        (LLOG_HEADER_SIZE - LLOG_HDR_DATA_SIZE)
+#define LLOG_BITMAP_BYTES       (LLOG_HEADER_SIZE - LLOG_HDR_DATA_SIZE)
 
-#define LLOG_LOGLIST_MAGIC      0x6d50e67d
-struct llog_catalog_header {
+#define LLOG_CATALOG_MAGIC      0x6d50e67d
+struct llog_catalog_hdr {
         __u32                   lch_size;
         __u32                   lch_magic;
         __u32                   lch_numrec;
         __u32                   lch_reserved[LLOG_HDR_RSVD_U32 - 4];
-        __u32                   lch_bitmap[LLOG_BITMAP_SIZE / sizeof(__u32)];
+        __u32                   lch_bitmap[LLOG_BITMAP_BYTES / sizeof(__u32)];
         __u32                   lch_size_end;
-        struct llog_logid       lch_logs[0];
 };
 
 
@@ -109,15 +108,13 @@ struct llog_object_hdr {
         /* This first chunk should be exactly 4096 bytes in size */
         __u32                   loh_size;
         __u32                   loh_magic;
-        __u32                   loh_numrec;
+        __u32                   loh_maxrec;
         __u32                   loh_reserved[LLOG_HDR_RSVD_U32 - 4];
-        __u32                   loh_bitmap[LLOG_BITMAP_SIZE / sizeof(__u32)];
+        __u32                   loh_bitmap[LLOG_BITMAP_BYTES / sizeof(__u32)];
         __u32                   loh_size_end;
-
-        struct llog_trans_rec   loh_records[0];
 };
 
-static inline llog_log_swabbed(struct llog_object_hdr *hdr)
+static inline int llog_log_swabbed(struct llog_object_hdr *hdr)
 {
         if (hdr->loh_magic == __swab32(LLOG_OBJECT_MAGIC))
                 return 1;
@@ -126,11 +123,12 @@ static inline llog_log_swabbed(struct llog_object_hdr *hdr)
         return -EINVAL;
 }
 
-/* In-memory descriptor for a log object */
+/* In-memory descriptor for a log object or log catalog */
 struct llog_handle {
         struct list_head        lgh_list;
         struct llog_logid       lgh_lid;
         struct brw_page         lgh_pga[2];
+        struct obdo            *lgh_oa;
         struct lov_stripe_md   *lgh_lsm;
 };
 
@@ -142,14 +140,18 @@ struct llog_cookie {
 };
 
 /* exported api prototypes */
-int llog_add_record(struct llog_handle **, void *recbuf, int reclen,
-                    struct llog_cookie *cookie);
-int llog_clear_records(int count, struct llog_cookie **cookies);
-int llog_clear_record(struct llog_handle *handle, __u32 recno);
-int llog_delete(struct llog_logid *id);
+extern int llog_add_record(struct lustre_handle *conn,
+                           struct llog_trans_hdr *rec,
+                           struct llog_cookie *logcookie,
+                           struct obd_trans_info *oti);
+extern int llog_clear_records(struct lustre_handle *conn, int count,
+                              struct llog_cookie *cookies);
+extern int llog_clear_record(struct lustre_handle *conn, __u32 recno);
+extern int llog_delete(struct lustre_handle *conn, struct llog_logid *id);
 
 /* internal api */
-int llog_id2handle(struct llog_logid *logid);
+extern struct llog_handle *llog_id2handle(struct lustre_handle *conn,
+                                          struct llog_logid *logid);
 
 #endif
 
