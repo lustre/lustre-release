@@ -20,6 +20,7 @@ struct obd_import {
         struct ptlrpc_connection *imp_connection;
         struct ptlrpc_client     *imp_client;
         struct list_head          imp_observers;
+        struct list_head          imp_pinger_chain;
 
         /* Lists of requests that are retained for replay, waiting for a reply,
          * or waiting for recovery to complete, respectively.
