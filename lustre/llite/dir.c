@@ -1,4 +1,5 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 1992, 1993, 1994, 1995
  * Remy Card (card@masi.ibp.fr)
@@ -64,8 +65,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         ENTRY;
 
-        if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT)
-             <= page->index) {
+        if ((inode->i_size + PAGE_CACHE_SIZE - 1) >> PAGE_SHIFT <= page->index){
                 memset(kmap(page), 0, PAGE_CACHE_SIZE);
                 kunmap(page);
                 EXIT;
@@ -139,10 +139,12 @@ extern void set_page_clean(struct page *page);
 static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
 {
         struct inode *dir = page->mapping->host;
+        loff_t new_size = (page->index << PAGE_CACHE_SHIFT) + to;
         int err = 0;
 
         dir->i_version = ++event;
-        dir->i_size = (page->index << PAGE_CACHE_SHIFT) + to; 
+        if (new_size > dir->i_size)
+                dir->i_size = new_size;
         SetPageUptodate(page);
         set_page_clean(page);
 
@@ -348,7 +350,7 @@ new_ll_readdir (struct file * filp, void * dirent, filldir_t filldir)
         int need_revalidate = (filp->f_version != inode->i_version);
 
         if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
-                goto done;
+                GOTO(done, 0);
 
         types = ext2_filetype_table;
 
@@ -380,7 +382,7 @@ new_ll_readdir (struct file * filp, void * dirent, filldir_t filldir)
                                                 le32_to_cpu(de->inode), d_type);
                                 if (over) {
                                         ext2_put_page(page);
-                                        goto done;
+                                        GOTO(done,0);
                                 }
                         }
                 ext2_put_page(page);
