@@ -20,6 +20,8 @@
  *
  */
 
+
+
 #include <linux/config.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -28,6 +30,7 @@
 #include <linux/errno.h>
 #include <linux/locks.h>
 #include <linux/unistd.h>
+#include <linux/version.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -56,7 +59,10 @@ static void __set_page_clean(struct page *page)
 	if (!mapping)
 		return;
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,9))
 	spin_lock(&pagecache_lock);
+#endif
+
 	list_del(&page->list);
 	list_add(&page->list, &mapping->clean_pages);
 
@@ -65,7 +71,9 @@ static void __set_page_clean(struct page *page)
 		CDEBUG(D_INODE, "inode clean\n");
 		inode->i_state &= ~I_DIRTY_PAGES;
 	}
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,10))
 	spin_unlock(&pagecache_lock);
+#endif
 	EXIT;
 }
 
@@ -110,7 +118,7 @@ int lustre_prepare_page(unsigned from, unsigned to, struct page *page)
 	lock_page(page);
 	err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
         if (err) {
-                unlock_page(page);
+                UnlockPage(page);
                 CERROR("page index %ld from %d to %d err %d\n",
                                 page->index, from, to, err);
                 BUG();
