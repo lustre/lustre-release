@@ -109,11 +109,6 @@ void ll_options(char *options, char **ost, char **mds, int *flags)
                                 ll_set_opt("nolock", this_char,
                                            LL_SBI_NOLCK)))
                         continue;
-                if (!(*flags & LL_SBI_READAHEAD) &&
-                    ((*flags) = (*flags) |
-                                ll_set_opt("readahead", this_char,
-                                           LL_SBI_READAHEAD)))
-                        continue;
         }
         EXIT;
 }
@@ -155,6 +150,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
+        sbi->ll_flags |= LL_SBI_READAHEAD;
         ll_options(data, &osc, &mdc, &sbi->ll_flags);
 
         if (!osc) {
