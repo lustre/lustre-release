@@ -11,6 +11,8 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
@@ -69,7 +71,9 @@ run_one() {
 		$START
 	fi
 	log "== test $1: $2"
+	export TESTNAME=test_$1
 	test_$1 || error "test_$1: $?"
+	unset TESTNAME
 	pass
 	cd $SAVE_PWD
 	$CLEAN
@@ -127,7 +131,7 @@ run_test() {
 error() { 
 	log "FAIL: $@"
 	if [ "$SANITYLOG" ]; then
-		echo "FAIL: $@" >> $SANITYLOG
+		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
 	else
 		exit 1
 	fi
@@ -1310,7 +1314,7 @@ test_43b() {
 run_test 43b "truncate of file being executed should return -ETXTBSY===="
 
 test_43c() {
-	local testdir="$DIR/43a"
+	local testdir="$DIR/d43c"
 	mkdir -p $testdir
 	cp $SHELL $testdir/
 	( cd $(dirname $SHELL) && md5sum $(basename $SHELL) ) |  \
@@ -1337,20 +1341,20 @@ test_44a() {
     OFFSETS="0 $((stride/2)) $((stride-1))"
     for offset in $OFFSETS ; do
       for i in `seq 0 $((nstripe-1))`; do
-        rm -f $DIR/44a
+        rm -f $DIR/d44a
         local GLOBALOFFSETS=""
         local size=$((((i + 2 * $nstripe )*$stride + $offset)))  # Bytes
-        ll_sparseness_write $DIR/44a $size  || error "ll_sparseness_write"
+        ll_sparseness_write $DIR/d44a $size  || error "ll_sparseness_write"
         GLOBALOFFSETS="$GLOBALOFFSETS $size"
-        ll_sparseness_verify $DIR/44a $GLOBALOFFSETS \
+        ll_sparseness_verify $DIR/d44a $GLOBALOFFSETS \
                             || error "ll_sparseness_verify $GLOBALOFFSETS"
 
         for j in `seq 0 $((nstripe-1))`; do
             size=$((((j + $nstripe )*$stride + $offset)))  # Bytes
-            ll_sparseness_write $DIR/44a $size || error "ll_sparseness_write"
+            ll_sparseness_write $DIR/d44a $size || error "ll_sparseness_write"
             GLOBALOFFSETS="$GLOBALOFFSETS $size"
         done
-        ll_sparseness_verify $DIR/44a $GLOBALOFFSETS \
+        ll_sparseness_verify $DIR/d44a $GLOBALOFFSETS \
                             || error "ll_sparseness_verify $GLOBALOFFSETS"
       done
     done
@@ -1372,7 +1376,7 @@ do_dirty_record() {
 	echo before $before, after $after
 }
 test_45() {
-	f="$DIR/45"
+	f="$DIR/f45"
 	stop_kupdated
 	sync
 	do_dirty_record "echo blah > $f"
@@ -1400,7 +1404,7 @@ page_size() {
 # objects offset and an assert hit when an rpc was built with 63's mapped 
 # offset 31 and 31's raw 31 offset. it also found general redirtying bugs.
 test_46() {
-	f="$DIR/46"
+	f="$DIR/f46"
 	stop_kupdated
 	sync
 	dd if=/dev/zero of=$f bs=`page_size` seek=31 count=1
@@ -1468,7 +1472,7 @@ test_52a() {
 
 	rm -fr $DIR/d52a || error
 }
-run_test 52a "append-only flag test ============================"
+run_test 52a "append-only flag test (should return errors) ====="
 
 test_52b() {
 	[ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -1488,7 +1492,7 @@ test_52b() {
 
 	rm -fr $DIR/d52b || error
 }
-run_test 52b "immutable flag test =============================="
+run_test 52b "immutable flag test (should return errors) ======="
 
 test_53() {
         for i in /proc/fs/lustre/osc/OSC*mds1 ; do
@@ -1501,7 +1505,7 @@ test_53() {
                 fi
         done
 }
-run_test 53 "verify that MDS and OSTs agree on pre-creation====="
+run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54() {
      	$SOCKETSERVER $DIR/socket &
@@ -1524,7 +1528,7 @@ test_59() {
 	sleep 2
         # wait for commitment of removal
 }
-run_test 59 "verify cancellation of llog records async=========="
+run_test 59 "verify cancellation of llog records async ========="
 
 test_60() {
 	echo 60 "llog tests run from kernel mode"
@@ -1557,10 +1561,10 @@ run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 test_63() {
 	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -1`
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
-	echo 0 > $i
+		echo 0 > $i
 	done
 	for i in `seq 10` ; do
-		dd if=/dev/zero of=$DIR/syncwrite_testfile bs=8k &
+		dd if=/dev/zero of=$DIR/f63 bs=8k &
 		sleep 5
 		kill $!
 		sleep 1
@@ -1571,7 +1575,7 @@ test_63() {
 	done
 	true
 }
-run_test 63 "Verify osic_wait interruption does not crash"
+run_test 63 "Verify osic_wait interruption does not crash ======"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
@@ -1585,7 +1589,6 @@ OLDHOME=$HOME
 [ $RUNAS_ID -ne $UID ] && HOME=/tmp
 
 test_99a() {
-	echo 99 "cvs operations ===================================="
 	mkdir -p $DIR/d99cvsroot
 	chown $RUNAS_ID $DIR/d99cvsroot
 	$RUNAS cvs -d $DIR/d99cvsroot init || error
@@ -1635,9 +1638,11 @@ TMP=$OLDTMP
 HOME=$OLDHOME
 
 log "cleanup: ======================================================"
-if [ "$I_MOUNTED" = "yes" -a "`mount | grep ^$NAME`" ]; then
+if [ "`mount | grep ^$NAME`" ]; then
 	rm -rf $DIR/[Rdfs][1-9]*
-	sh llmountcleanup.sh || error
+	if [ "$I_MOUNTED" = "yes" ]; then
+		sh llmountcleanup.sh || error
+	fi
 fi
 
 echo '=========================== finished ==============================='
