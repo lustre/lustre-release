@@ -222,6 +222,9 @@ kqswnal_cmd (struct portals_cfg *pcfg, void *private)
 void __exit
 kqswnal_finalise (void)
 {
+	unsigned long flags;
+	int           do_ptl_fini = 0;
+
 	switch (kqswnal_data.kqn_init)
 	{
 	default:
@@ -237,8 +240,7 @@ kqswnal_finalise (void)
 		/* fall through */
 
 	case KQN_INIT_PTL:
-		PtlNIFini (kqswnal_ni);
-		lib_fini (&kqswnal_lib);
+		do_ptl_fini = 1;
 		/* fall through */
 
 	case KQN_INIT_DATA:
@@ -249,18 +251,24 @@ kqswnal_finalise (void)
 	}
 
 	/**********************************************************************/
-	/* Make router stop her calling me and fail any more call-ins */
+	/* Tell router we're shutting down.  Any router calls my threads
+	 * make will now fail immediately and the router will stop calling
+	 * into me. */
 	kpr_shutdown (&kqswnal_data.kqn_router);
+	
+	/**********************************************************************/
+	/* Signal the start of shutdown... */
+	spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
+	kqswnal_data.kqn_shuttingdown = 1;
+	spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
+
+	wake_up_all(&kqswnal_data.kqn_idletxd_waitq);
 
 	/**********************************************************************/
-	/* flag threads we've started to terminate and wait for all to ack */
-
-	kqswnal_data.kqn_shuttingdown = 1;
-	wake_up_all (&kqswnal_data.kqn_sched_waitq);
-
-	while (atomic_read (&kqswnal_data.kqn_nthreads_running) != 0) {
-		CDEBUG(D_NET, "waiting for %d threads to start shutting down\n",
-		       atomic_read (&kqswnal_data.kqn_nthreads_running));
+	/* wait for sends that have allocated a tx desc to launch or give up */
+	while (atomic_read (&kqswnal_data.kqn_pending_txs) != 0) {
+		CDEBUG(D_NET, "waiting for %d pending sends\n",
+		       atomic_read (&kqswnal_data.kqn_pending_txs));
 		set_current_state (TASK_UNINTERRUPTIBLE);
 		schedule_timeout (HZ);
 	}
@@ -268,18 +276,27 @@ kqswnal_finalise (void)
 	/**********************************************************************/
 	/* close elan comms */
 #if MULTIRAIL_EKC
+	/* Shut down receivers first; rx callbacks might try sending... */
 	if (kqswnal_data.kqn_eprx_small != NULL)
 		ep_free_rcvr (kqswnal_data.kqn_eprx_small);
 
 	if (kqswnal_data.kqn_eprx_large != NULL)
 		ep_free_rcvr (kqswnal_data.kqn_eprx_large);
 
+	/* NB ep_free_rcvr() returns only after we've freed off all receive
+	 * buffers (see shutdown handling in kqswnal_requeue_rx()).  This
+	 * means we must have completed any messages we passed to
+	 * lib_parse() or kpr_fwd_start(). */
+
 	if (kqswnal_data.kqn_eptx != NULL)
 		ep_free_xmtr (kqswnal_data.kqn_eptx);
 
-	/* freeing the xmtr completes all txs pdq */
+	/* NB ep_free_xmtr() returns only after all outstanding transmits
+	 * have called their callback... */
 	LASSERT(list_empty(&kqswnal_data.kqn_activetxds));
 #else
+	/* "Old" EKC just pretends to shutdown cleanly but actually
+	 * provides no guarantees */
 	if (kqswnal_data.kqn_eprx_small != NULL)
 		ep_remove_large_rcvr (kqswnal_data.kqn_eprx_small);
 
@@ -298,7 +315,6 @@ kqswnal_finalise (void)
 #endif
 	/**********************************************************************/
 	/* flag threads to terminate, wake them and wait for them to die */
-
 	kqswnal_data.kqn_shuttingdown = 2;
 	wake_up_all (&kqswnal_data.kqn_sched_waitq);
 
@@ -316,10 +332,12 @@ kqswnal_finalise (void)
 
 #if MULTIRAIL_EKC
 	LASSERT (list_empty (&kqswnal_data.kqn_readyrxds));
+	LASSERT (list_empty (&kqswnal_data.kqn_delayedtxds));
+	LASSERT (list_empty (&kqswnal_data.kqn_delayedfwds));
 #endif
 
 	/**********************************************************************/
-	/* Complete any blocked forwarding packets with error
+	/* Complete any blocked forwarding packets, with error
 	 */
 
 	while (!list_empty (&kqswnal_data.kqn_idletxd_fwdq))
@@ -327,23 +345,18 @@ kqswnal_finalise (void)
 		kpr_fwd_desc_t *fwd = list_entry (kqswnal_data.kqn_idletxd_fwdq.next,
 						  kpr_fwd_desc_t, kprfd_list);
 		list_del (&fwd->kprfd_list);
-		kpr_fwd_done (&kqswnal_data.kqn_router, fwd, -EHOSTUNREACH);
-	}
-
-	while (!list_empty (&kqswnal_data.kqn_delayedfwds))
-	{
-		kpr_fwd_desc_t *fwd = list_entry (kqswnal_data.kqn_delayedfwds.next,
-						  kpr_fwd_desc_t, kprfd_list);
-		list_del (&fwd->kprfd_list);
-		kpr_fwd_done (&kqswnal_data.kqn_router, fwd, -EHOSTUNREACH);
+		kpr_fwd_done (&kqswnal_data.kqn_router, fwd, -ESHUTDOWN);
 	}
 
 	/**********************************************************************/
-	/* Wait for router to complete any packets I sent her
-	 */
+	/* finalise router and portals lib */
 
 	kpr_deregister (&kqswnal_data.kqn_router);
 
+	if (do_ptl_fini) {
+		PtlNIFini (kqswnal_ni);
+		lib_fini (&kqswnal_lib);
+	}
 
 	/**********************************************************************/
 	/* Unmap message buffers and free all descriptors and buffers

@@ -289,18 +289,9 @@ kpr_shutdown_nal (void *arg)
 	LASSERT (!ne->kpne_shutdown);
 	LASSERT (!in_interrupt());
 
-	write_lock_irqsave (&kpr_rwlock, flags); /* locking a bit spurious... */
+	write_lock_irqsave (&kpr_rwlock, flags);
 	ne->kpne_shutdown = 1;
-	write_unlock_irqrestore (&kpr_rwlock, flags); /* except it's a memory barrier */
-
-	while (atomic_read (&ne->kpne_refcount) != 0)
-	{
-		CDEBUG (D_NET, "Waiting for refcount on NAL %d to reach zero (%d)\n",
-			ne->kpne_interface.kprni_nalid, atomic_read (&ne->kpne_refcount));
-
-		set_current_state (TASK_UNINTERRUPTIBLE);
-		schedule_timeout (HZ);
-	}
+	write_unlock_irqrestore (&kpr_rwlock, flags);
 }
 
 void
@@ -312,14 +303,21 @@ kpr_deregister_nal (void *arg)
         CDEBUG (D_NET, "Deregister NAL %d\n", ne->kpne_interface.kprni_nalid);
 
 	LASSERT (ne->kpne_shutdown);		/* caller must have issued shutdown already */
-	LASSERT (atomic_read (&ne->kpne_refcount) == 0); /* can't be busy */
 	LASSERT (!in_interrupt());
 
 	write_lock_irqsave (&kpr_rwlock, flags);
-
 	list_del (&ne->kpne_list);
-
 	write_unlock_irqrestore (&kpr_rwlock, flags);
+
+        /* Wait until all outstanding messages/notifications have completed */
+	while (atomic_read (&ne->kpne_refcount) != 0)
+	{
+		CDEBUG (D_NET, "Waiting for refcount on NAL %d to reach zero (%d)\n",
+			ne->kpne_interface.kprni_nalid, atomic_read (&ne->kpne_refcount));
+
+		set_current_state (TASK_UNINTERRUPTIBLE);
+		schedule_timeout (HZ);
+	}
 
 	PORTAL_FREE (ne, sizeof (*ne));
         PORTAL_MODULE_UNUSE;
@@ -377,11 +375,14 @@ kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob,
 
         CDEBUG (D_NET, "lookup "LPX64" from NAL %d\n", target_nid, 
                 ne->kpne_interface.kprni_nalid);
-
-	if (ne->kpne_shutdown)		/* caller is shutting down */
-		return (-ENOENT);
+        LASSERT (!in_interrupt());
 
 	read_lock (&kpr_rwlock);
+
+	if (ne->kpne_shutdown) {	/* caller is shutting down */
+                read_unlock (&kpr_rwlock);
+		return (-ENOENT);
+        }
 
 	/* Search routes for one that has a gateway to target_nid on the callers network */
 
@@ -452,24 +453,25 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
 	struct list_head    *e;
         kpr_route_entry_t   *re;
         kpr_nal_entry_t     *tmp_ne;
+        int                  rc;
 
         CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %d\n", fwd,
                 target_nid, src_ne->kpne_interface.kprni_nalid);
 
         LASSERT (nob == lib_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
-        
-        atomic_inc (&kpr_queue_depth);
-	atomic_inc (&src_ne->kpne_refcount); /* source nal is busy until fwd completes */
+        LASSERT (!in_interrupt());
+
+	read_lock (&kpr_rwlock);
 
         kpr_fwd_packets++;                   /* (loose) stats accounting */
         kpr_fwd_bytes += nob + sizeof(ptl_hdr_t);
 
-	if (src_ne->kpne_shutdown)           /* caller is shutting down */
+	if (src_ne->kpne_shutdown) {         /* caller is shutting down */
+                rc = -ESHUTDOWN;
 		goto out;
+        }
 
 	fwd->kprfd_router_arg = src_ne;      /* stash caller's nal entry */
-
-	read_lock (&kpr_rwlock);
 
 	/* Search routes for one that has a gateway to target_nid NOT on the caller's network */
 
@@ -507,7 +509,9 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
                 kpr_update_weight (ge, nob);
 
                 fwd->kprfd_gateway_nid = ge->kpge_nid;
-                atomic_inc (&dst_ne->kpne_refcount); /* dest nal is busy until fwd completes */
+                atomic_inc (&src_ne->kpne_refcount); /* source and dest nals are */
+                atomic_inc (&dst_ne->kpne_refcount); /* busy until fwd completes */
+                atomic_inc (&kpr_queue_depth);
 
                 read_unlock (&kpr_rwlock);
 
@@ -520,18 +524,16 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
                 return;
 	}
 
-        read_unlock (&kpr_rwlock);
+        rc = -EHOSTUNREACH;
  out:
         kpr_fwd_errors++;
 
-        CDEBUG (D_NET, "Failed to forward [%p] "LPX64" from NAL %d\n", fwd,
-                target_nid, src_ne->kpne_interface.kprni_nalid);
+        CDEBUG (D_NET, "Failed to forward [%p] "LPX64" from NAL %d: %d\n", 
+                fwd, target_nid, src_ne->kpne_interface.kprni_nalid, rc);
 
-	/* Can't find anywhere to forward to */
-	(fwd->kprfd_callback)(fwd->kprfd_callback_arg, -EHOSTUNREACH);
+	(fwd->kprfd_callback)(fwd->kprfd_callback_arg, rc);
 
-        atomic_dec (&kpr_queue_depth);
-	atomic_dec (&src_ne->kpne_refcount);
+        read_unlock (&kpr_rwlock);
 }
 
 void
@@ -699,6 +701,7 @@ kpr_get_route (int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
 {
 	struct list_head  *e;
 
+        LASSERT (!in_interrupt());
 	read_lock(&kpr_rwlock);
 
         for (e = kpr_routes.next; e != &kpr_routes; e = e->next) {

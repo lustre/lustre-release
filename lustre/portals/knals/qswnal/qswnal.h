@@ -196,8 +196,7 @@ typedef struct
 {
         char               kqn_init;            /* what's been initialised */
         char               kqn_shuttingdown;    /* I'm trying to shut down */
-        atomic_t           kqn_nthreads;        /* # threads not terminated */
-        atomic_t           kqn_nthreads_running;/* # threads still running */
+        atomic_t           kqn_nthreads;        /* # threads running */
 
         int                kqn_optimized_gets;  /* optimized GETs? */
         int                kqn_copy_small_fwd;  /* fwd small msgs from pre-allocated buffer? */
@@ -214,6 +213,7 @@ typedef struct
         spinlock_t         kqn_idletxd_lock;    /* serialise idle txd access */
         wait_queue_head_t  kqn_idletxd_waitq;   /* sender blocks here waiting for idle txd */
         struct list_head   kqn_idletxd_fwdq;    /* forwarded packets block here waiting for idle txd */
+        atomic_t           kqn_pending_txs;     /* # transmits being prepped */
         
         spinlock_t         kqn_sched_lock;      /* serialise packet schedulers */
         wait_queue_head_t  kqn_sched_waitq;     /* scheduler blocks here */
