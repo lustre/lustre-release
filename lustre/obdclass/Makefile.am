@@ -2,9 +2,19 @@
 # lustre_build_version, or 'make -j2' breaks!
 DEFS=
 MODULE = obdclass
-modulefs_DATA = lustre_build_version obdclass.o
-EXTRA_PROGRAMS = obdclass
+
+if LINUX25
+FSMOD = fsfilt_ext3
+else
+FSMOD = fsfilt_extN
+endif
+
+modulefs_DATA = lustre_build_version obdclass.o $(FSMOD).o
+EXTRA_PROGRAMS = obdclass $(FSMOD)
+
 obdclass_SOURCES = debug.c genops.c class_obd.c sysctl.c uuid.c lprocfs_status.c
+obdclass_SOURCES += fsfilt.c
+
 include $(top_srcdir)/Rules
 lustre_build_version:
 	perl $(top_srcdir)/scripts/version_tag.pl $(top_srcdir) > tmpver
