@@ -224,7 +224,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 spin_lock(&oscc->oscc_lock);
                 if (rc == -ENOSPC)
                         oscc->oscc_flags |= OSCC_FLAG_NOSPC;
-                oscc->oscc_last_id = oscc->oscc_next_id - 1;
+                oscc->oscc_last_id = oa->o_id;
                 spin_unlock(&oscc->oscc_lock);
 
 		RETURN(rc);
