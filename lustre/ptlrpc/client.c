@@ -1489,6 +1489,11 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         unsigned long flags;
 
         atomic_dec(&imp->imp_replay_inflight);
+        
+        if (!req->rq_replied) {
+                CERROR("request replay timed out, restarting recovery\n");
+                GOTO(out, rc = -ETIMEDOUT);
+        }
 
 #if SWAB_PARANOIA
         /* Clear reply swab mask; this is a new reply in sender's byte order */
