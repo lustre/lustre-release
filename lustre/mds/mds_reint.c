@@ -134,6 +134,9 @@ static int mds_reint_create(struct mds_update_record *rec,
                 EXIT;
                 break;
         }
+        default:
+                CERROR("bad file type %d for create of %s\n",type,rec->ur_name);
+                GOTO(out_reint_create, rc = -EINVAL);
         }
 
         if (rc) {
