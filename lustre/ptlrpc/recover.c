@@ -51,7 +51,6 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
         request->rq_reqmsg->addr = (__u64)(unsigned long)ldlmexp;
         request->rq_reqmsg->cookie = ldlmexp->exp_cookie;
         rc = ptlrpc_queue_wait(request);
-        rc = ptlrpc_check_status(request, rc);
         switch (rc) {
             case EALREADY:
             case -EALREADY:
