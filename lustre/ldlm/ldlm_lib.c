@@ -240,7 +240,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct list_head *p;
         char *str, *tmp;
         int rc = 0, abort_recovery;
-
         ENTRY;
 
         LASSERT_REQSWAB (req, 0);
