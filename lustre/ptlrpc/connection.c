@@ -38,7 +38,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0) {
-                        atomic_inc(&c->c_refcount);
+                        ptlrpc_connection_addref(c);
                         GOTO(out, c);
                 }
         }
@@ -46,7 +46,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
         list_for_each_safe(tmp, pos, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0) {
-                        atomic_inc(&c->c_refcount);
+                        ptlrpc_connection_addref(c);
                         list_del(&c->c_link);
                         list_add(&c->c_link, &conn_list);
                         GOTO(out, c);
@@ -65,7 +65,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
         c->c_generation = 1;
         c->c_epoch = 1;
         c->c_bootcount = 0;
-        atomic_set(&c->c_refcount, 1);
+        atomic_set(&c->c_refcount, 0);
+        ptlrpc_connection_addref(c);
         spin_lock_init(&c->c_lock);
 
         memcpy(&c->c_peer, peer, sizeof(c->c_peer));
@@ -82,6 +83,7 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
         int rc = 0;
         ENTRY;
 
+        CDEBUG(D_INFO, "connection=%p\n", c);
         if (atomic_dec_and_test(&c->c_refcount)) {
                 spin_lock(&conn_lock);
                 list_del(&c->c_link);
@@ -89,6 +91,8 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 spin_unlock(&conn_lock);
                 rc = 1;
         }
+        if (atomic_read(&c->c_refcount) < 0)
+                CDEBUG(D_INFO, "refcount < 0 for connection %p!\n", c);
 
         RETURN(rc);
 }
@@ -96,6 +100,7 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
 {
         ENTRY;
+        CDEBUG(D_INFO, "connection=%p\n", c);
         atomic_inc(&c->c_refcount);
         RETURN(c);
 }
