@@ -40,110 +40,134 @@
 #include <linux/lustre_snap.h>
 
 #include "smfs_internal.h"
-#define SNAPTABLE_SIZE(size) (sizeof(struct snap_table) + size * sizeof(struct snap)) 
-static int smfs_init_snaptabe(struct super_block *sb)
+
+#define SNAPTABLE_SIZE(size) (sizeof(struct snap_table) + \
+                              size * sizeof(struct snap)) 
+static int smfs_init_snap_super_info(struct smfs_super_info *smfs_info)
 {
-        struct snap_info         *snap_info = S2SNAPI(sb);	
-        struct snap_table        *snap_table = NULL;       
-	struct fsfilt_operations *snapops = snap_info->snap_fsfilt;
-        struct dentry            *d_root = snap_info->snap_root;
-        int                      rc = 0, size, table_size, vallen, i;
- 
+        struct snap_super_info  *snap_sinfo;
+        int rc = 0;
+
         ENTRY;
-
-        init_MUTEX(&snap_info->sntbl_sema);
-        /*Initialized table */
-        /*get the maxsize of snaptable*/
-        vallen = sizeof(int);
-        rc = snapops->fs_get_snap_info(d_root->d_inode, MAX_SNAPTABLE_COUNT,
-                                       strlen(MAX_SNAPTABLE_COUNT), &size, 
-                                       &vallen);
-        if (size == 0) {
-                CERROR("the Max snaptable count should not be zero\n");
-                RETURN(-EINVAL);
-        }
         
-        table_size = SNAPTABLE_SIZE(size);
+        OBD_ALLOC(smfs_info->smsi_snap_info, sizeof(struct snap_super_info));
+        if (!smfs_info->smsi_snap_info) 
+                GOTO(exit, rc = -ENOMEM);
 
-        OBD_ALLOC(snap_info->sntbl, table_size);
+        snap_sinfo = smfs_info->smsi_snap_info;
 
-        if (!snap_info->sntbl) {
-                CERROR("No MEM\n");
-                RETURN(-ENOMEM);
-        }
-        snap_table = snap_info->sntbl;
-         
-        snap_table->sntbl_magic = cpu_to_le32((__u32)SNAPTABLE_MAGIC); 
-        snap_table->sntbl_max_count = size;
-        for (i = 0; i < snap_table->sntbl_max_count; i++) {
-                /*init sn_index to -1*/ 
-                snap_table->sntbl_items[i].sn_index = -1;
-        }
-        /*get snaptable info*/
-        rc = snapops->fs_get_snap_info(d_root->d_inode, SNAPTABLE_INFO, 
-                                       strlen(SNAPTABLE_INFO), 
-                                       snap_table, &table_size);       
-        if (rc < 0) {
-                if (rc == -ENODATA) {
-                        snap_table->sntbl_count = 0;
-                        CDEBUG(D_INFO, "No snaptable here\n");
-                        RETURN(0);
-                } else {
-                        CERROR("Can not retrive the snaptable from this filesystem\n");
-                        OBD_FREE(snap_table, table_size);
-                        RETURN(rc); 
+        /*init snap fsfilt operations*/
+        if (!snap_sinfo->snap_cache_fsfilt) {
+                char *snap_cache_ftype = NULL;
+                int   tmp = strlen(smfs_info->smsi_cache_ftype) + strlen("_snap");
+                
+                OBD_ALLOC(snap_cache_ftype, tmp + 1);  
+                sprintf(snap_cache_ftype, "%s_snap", smfs_info->smsi_cache_ftype);
+                snap_sinfo->snap_cache_fsfilt = fsfilt_get_ops(snap_cache_ftype);
+                OBD_FREE(snap_cache_ftype, tmp + 1);
+                if (!snap_sinfo->snap_cache_fsfilt) {
+                        CERROR("Can not get %s fsfilt ops needed by snap\n",
+                               snap_cache_ftype);
+                        GOTO(exit, rc = -EINVAL);
                 }
-        } 
-        if (le32_to_cpu(snap_table->sntbl_magic) != SNAPTABLE_MAGIC) {
-                CERROR("On disk snaptable is not right \n");
-                OBD_FREE(snap_table, table_size);
-                RETURN(-EIO);
         }
+        if (!snap_sinfo->snap_fsfilt) {
+                char *snap_ftype = NULL;
+                int   tmp = strlen(smfs_info->smsi_ftype) + strlen("_snap");
+                
+                OBD_ALLOC(snap_ftype, tmp + 1);  
+                sprintf(snap_ftype, "%s_snap", smfs_info->smsi_ftype);
+                snap_sinfo->snap_fsfilt = fsfilt_get_ops(snap_ftype);
+                OBD_FREE(snap_ftype, tmp + 1);
+                if (!snap_sinfo->snap_fsfilt) {
+                        CERROR("Can not get %s fsfilt ops needed by snap\n",
+                               snap_ftype);
+                        GOTO(exit, rc = -EINVAL);
+                }
+        }
+        INIT_LIST_HEAD(&snap_sinfo->snap_list);
+exit:
+        if (rc && smfs_info->smsi_snap_info)
+                OBD_FREE(snap_sinfo, sizeof(struct snap_super_info));
         RETURN(rc);
 }
-#define COWED_NAME_LEN       (7 + 8 + 1) 
-static int smfs_init_cowed_dir(struct super_block *sb, struct dentry* cowed_dir)  
+/*FIXME-wangdi Should remove it when integrated it with lustre*/
+static struct dentry *smfs_simple_mkdir(struct dentry *dir, char *name, 
+                                        int mode, int fix)
 {
-        struct snap_info *snap_info = S2SNAPI(sb);	
+        struct dentry *dchild;
+        int err = 0;
+        
+        dchild = ll_lookup_one_len(name, dir, strlen(name));
+        if (IS_ERR(dchild))
+                GOTO(out_up, dchild);
+        
+        if (dchild->d_inode) {
+                int old_mode = dchild->d_inode->i_mode;
+                if (!S_ISDIR(old_mode))
+                        GOTO(out_err, err = -ENOTDIR);
+                                                                                                                                                                                                     
+                /* Fixup directory permissions if necessary */
+                if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                        CWARN("fixing permissions on %s from %o to %o\n",
+                              name, old_mode, mode);
+                        dchild->d_inode->i_mode = (mode & S_IALLUGO) |
+                                                  (old_mode & ~S_IALLUGO);
+                        mark_inode_dirty(dchild->d_inode);
+                }
+                GOTO(out_up, dchild);
+        }
+        err = vfs_mkdir(dir->d_inode, dchild, mode);
+        if (err)
+                GOTO(out_err, err);
+        RETURN(dchild);
+out_err:
+        dput(dchild);
+        dchild = ERR_PTR(err);
+out_up:
+        return dchild;
+
+}
+#define COWED_NAME_LEN       (7 + 8 + 1) 
+static int smfs_init_cowed_dir(struct snap_info *snap_info, struct dentry* dir)  
+{
         struct dentry    *dentry = NULL;
-        struct lvfs_run_ctxt saved;
         char   name[COWED_NAME_LEN];
         int    rc = 0;
         ENTRY;
          
-        sprintf(name, ".cowed_%08x", (__u32)cowed_dir->d_inode->i_ino);
-        push_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
-        dentry = simple_mkdir(cowed_dir, name, 0777, 1);
-        pop_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
+        sprintf(name, ".cowed_%08x", (__u32)dir->d_inode->i_ino);
+        /*FIXME-WANGDI: will use simple_mkdir, when integrating snap to lustre*/
+        dentry = smfs_simple_mkdir(dir, name, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("create cowed directory: rc = %d\n", rc);
                 RETURN(rc);
         }
-        snap_info->sn_cowed_dentry = dentry;
+        snap_info->sni_cowed_dentry = dentry;
         RETURN(rc);
 }
-static int smfs_init_dotinfo(struct super_block *sb)
+
+static int smfs_init_dotinfo(struct snap_info *snap_info)
 {
-        struct snap_info *snap_info = S2SNAPI(sb);
         struct snap_dot_info *dot_info = NULL;
         int rc = 0;
         ENTRY;
 
-        if (snap_info->sn_dot_info)
+        if (snap_info->sni_dot_info)
                 RETURN(-EEXIST);
        
-        OBD_ALLOC(snap_info->sn_dot_info, sizeof(struct snap_dot_info));
+        OBD_ALLOC(snap_info->sni_dot_info, sizeof(struct snap_dot_info));
         
-        if (!snap_info->sn_dot_info)
+        if (!snap_info->sni_dot_info)
                 RETURN(-ENOMEM); 
       
-        dot_info = snap_info->sn_dot_info;
+        dot_info = snap_info->sni_dot_info;
  
         OBD_ALLOC(dot_info->dot_name,  strlen(DOT_SNAP_NAME) + 1);
 
         if (!dot_info->dot_name) {
-                OBD_FREE(snap_info->sn_dot_info, sizeof(struct snap_dot_info));
+                OBD_FREE(snap_info->sni_dot_info, sizeof(struct snap_dot_info));
                 RETURN(-ENOMEM); 
         } 
         memcpy(dot_info->dot_name, DOT_SNAP_NAME, strlen(DOT_SNAP_NAME));
@@ -154,103 +178,99 @@ static int smfs_init_dotinfo(struct super_block *sb)
         RETURN(rc);
 }
 
-static int smfs_cleanup_dotinfo(struct super_block *sb)
-{       
-        struct snap_info *snap_info = S2SNAPI(sb);
-        struct snap_dot_info *dot_info = NULL;
-        int rc = 0;
+static int smfs_init_snap_info(struct smfs_super_info *smb, 
+                               struct snap_info *snap_info, struct dentry *de) 
+{
+        struct snap_table        *snap_table = NULL;       
+	struct fsfilt_operations *snapcops;
+        int                      rc = 0, size, table_size, vallen, i;
+        struct inode             *root_inode = NULL;
+ 
         ENTRY;
 
-        if (!snap_info->sn_dot_info)
-                RETURN(rc);
+        root_inode = iget(smb->smsi_sb, de->d_inode->i_ino); 
+        if (!root_inode || is_bad_inode(root_inode))
+                RETURN(-EIO);
+        snapcops = smb->smsi_snap_info->snap_cache_fsfilt;
+        /*Initialized table */
+        /*get the maxsize of snaptable*/
+        vallen = sizeof(int);
+        rc = snapcops->fs_get_snap_info(root_inode, MAX_SNAPTABLE_COUNT,
+                                       strlen(MAX_SNAPTABLE_COUNT), &size, 
+                                       &vallen);
+        if (size == 0) {
+                CERROR("the Max snaptable count should not be zero\n");
+                GOTO(exit, rc);
+        }
+        table_size = SNAPTABLE_SIZE(size);
+
+        OBD_ALLOC(snap_info->sni_table, table_size);
+
+        if (!snap_info->sni_table) {
+                CERROR("No MEM\n");
+                RETURN(-ENOMEM);
+        }
+        snap_table = snap_info->sni_table;
+         
+        snap_table->sntbl_magic = cpu_to_le32((__u32)SNAPTABLE_MAGIC); 
+        snap_table->sntbl_max_count = size;
+        /*init sn_index to -1*/ 
+        for (i = 0; i < snap_table->sntbl_max_count; i++) 
+                snap_table->sntbl_items[i].sn_index = -1;
+        /*get snaptable info*/
+        rc = snapcops->fs_get_snap_info(root_inode, SNAPTABLE_INFO, 
+                                        strlen(SNAPTABLE_INFO), 
+                                        snap_table, &table_size);       
+        if (rc < 0) {
+                if (rc == -ENODATA) {
+                        snap_table->sntbl_count = 0;
+                } else {
+                        CERROR("Can not retrive the snaptable from this filesystem\n");
+                        GOTO(exit, rc);
+                }
+        } else { 
+                if (le32_to_cpu(snap_table->sntbl_magic) != SNAPTABLE_MAGIC) {
+                        CERROR("On disk snaptable is not right \n");
+                        GOTO(exit, rc = -EIO);
+                }
+        }
+        init_MUTEX(&snap_info->sni_sema);
+        snap_info->sni_root_ino = de->d_inode->i_ino;
+        rc = smfs_init_cowed_dir(snap_info, de);
+        if (rc) {
+                CERROR("Init cowed dir error rc=%d\n", rc);
+                GOTO(exit, rc); 
+        }
+        rc = smfs_init_dotinfo(snap_info);
+exit:
+        if (root_inode) 
+                iput(root_inode);
+        if (rc && snap_table)
+                OBD_FREE(snap_table, table_size);
+        RETURN(rc);
+}
+
+static struct snap_info *smfs_create_snap_info(struct smfs_super_info *sinfo, 
+                                               struct dentry *dentry)
+{
+        struct snap_info *snap_info = NULL;
+        int rc = 0;
+        ENTRY;
+ 
+        OBD_ALLOC(snap_info, sizeof(struct snap_info)); 
+        if (!snap_info) 
+                RETURN(ERR_PTR(-ENOMEM));  
+        rc = smfs_init_snap_info(sinfo, snap_info, dentry);  
+        if (rc) 
+                GOTO(exit, snap_info = ERR_PTR(rc));
        
-        dot_info = snap_info->sn_dot_info;
-
-        if (dot_info->dot_name) { 
-                OBD_FREE(dot_info->dot_name, dot_info->dot_name_len + 1);
-        }
-        
-        OBD_FREE(dot_info, sizeof(struct snap_dot_info));
-
-        RETURN(rc);
+        /*set cow flags for the snap root inode*/ 
+        I2SMI(dentry->d_inode)->smi_flags |= SM_DO_COW; 
+exit:
+        if (rc)
+                OBD_FREE(snap_info, sizeof(struct snap_info));
+        RETURN(snap_info);
 }
-
-int smfs_start_cow(struct super_block *sb)
-{
-        int rc = 0;
-
-        ENTRY;
-        
-        /*init snap fsfilt operations*/
-        if (!S2SNAPI(sb)->snap_cache_fsfilt) {
-                char *snap_cache_ftype = NULL;
-                int   tmp = strlen(S2SMI(sb)->smsi_cache_ftype) + strlen("_snap");
-                
-                OBD_ALLOC(snap_cache_ftype, tmp + 1);  
-                sprintf(snap_cache_ftype, "%s_snap", S2SMI(sb)->smsi_cache_ftype);
-                S2SNAPI(sb)->snap_cache_fsfilt = fsfilt_get_ops(snap_cache_ftype);
-                OBD_FREE(snap_cache_ftype, tmp + 1);
-                if (!S2SNAPI(sb)->snap_cache_fsfilt) {
-                        CERROR("Can not get %s fsfilt ops needed by snap\n",
-                               snap_cache_ftype);
-                        RETURN(-EINVAL);
-                }
-        }
-        if (!S2SNAPI(sb)->snap_fsfilt) {
-                char *snap_ftype = NULL;
-                int   tmp = strlen(S2SMI(sb)->smsi_ftype) + strlen("_snap");
-                
-                OBD_ALLOC(snap_ftype, tmp + 1);  
-                sprintf(snap_ftype, "%s_snap", S2SMI(sb)->smsi_ftype);
-                S2SNAPI(sb)->snap_fsfilt = fsfilt_get_ops(snap_ftype);
-                OBD_FREE(snap_ftype, tmp + 1);
-                if (!S2SNAPI(sb)->snap_fsfilt) {
-                        CERROR("Can not get %s fsfilt ops needed by snap\n",
-                               snap_ftype);
-                        RETURN(-EINVAL);
-                }
-        }
-        rc = smfs_init_snaptabe(sb); 
-        if (rc) {
-                CERROR("can not init snaptable rc=%d\n", rc);
-                RETURN(rc);
-        }
-        /*init dot snap info*/
-        rc = smfs_init_dotinfo(sb);
-        if (rc) {
-                CERROR("can not init dot snap info rc=%d\n", rc);
-                RETURN(rc);
-        }
-        /*init cowed dir to put the primary cowed inode
-         *FIXME-WANGDI, later the s_root may not be the 
-         *snap dir, we can indicate any dir to be cowed*/
-        rc = smfs_init_cowed_dir(sb, sb->s_root);
-        RETURN(rc);
-}
-EXPORT_SYMBOL(smfs_start_cow);
-int smfs_stop_cow(struct super_block *sb)
-{
-        struct snap_info       *snap_info = S2SNAPI(sb);	
-        struct snap_table      *snap_table = snap_info->sntbl;	
-        int rc = 0, table_size;
-        ENTRY;
-
-        l_dput(snap_info->sn_cowed_dentry);
-         
-        if (snap_info->snap_fsfilt) 
-                fsfilt_put_ops(snap_info->snap_fsfilt);
-        if (snap_info->snap_cache_fsfilt)
-                fsfilt_put_ops(snap_info->snap_cache_fsfilt);
-
-        if (snap_table) {
-                table_size =  SNAPTABLE_SIZE(snap_table->sntbl_max_count);
-                OBD_FREE(snap_info->sntbl, table_size);
-        }
-        smfs_cleanup_dotinfo(sb);
-         
-        RETURN(rc);
-}
-EXPORT_SYMBOL(smfs_stop_cow);
 
 #define COW_HOOK "cow_hook"
 static int smfs_cow_pre_hook(struct inode *inode, struct dentry *dentry, 
@@ -268,7 +288,9 @@ int smfs_cow_init(struct super_block *sb)
 {
         struct smfs_super_info *smfs_info = S2SMI(sb);
         struct smfs_hook_ops *cow_hops = NULL;
-        int rc = 0;
+        struct fsfilt_operations *sops;
+        struct inode *root_inode = smfs_info->smsi_sb->s_root->d_inode; 
+        int snap_count = 0, rc = 0, vallen;
 
         ENTRY;
 
@@ -279,52 +301,170 @@ int smfs_cow_init(struct super_block *sb)
                 RETURN(-ENOMEM);
         }
  
-        rc = smfs_register_hook_ops(sb, cow_hops);      
-
+        rc = smfs_register_hook_ops(smfs_info, cow_hops);
         if (rc) {
                 smfs_free_hook_ops(cow_hops);
                 RETURN(rc);
         }
- 
-        OBD_ALLOC(smfs_info->smsi_snap_info, sizeof(struct snap_info));
         
-        if (!smfs_info->smsi_snap_info) 
-                GOTO(exit, rc = -ENOMEM);
-exit:
+        rc = smfs_init_snap_super_info(smfs_info);
         if (rc && cow_hops) {
-                smfs_unregister_hook_ops(sb, cow_hops->smh_name);
+                smfs_unregister_hook_ops(smfs_info, cow_hops->smh_name);
                 smfs_free_hook_ops(cow_hops);
-        } 
+                RETURN(rc);
+        }
+        sops = smfs_info->smsi_snap_info->snap_cache_fsfilt; 
+        
+        vallen = sizeof(int); 
+        rc = sops->fs_get_snap_info(root_inode, SNAP_COUNT, strlen(SNAP_COUNT),
+                                    &snap_count, &vallen);
+        if (rc)
+                GOTO(exit, rc);       
+ 
+        if (snap_count > 0) {
+                int snap_root_size = snap_count * sizeof(ino_t);
+                ino_t *snap_root;
+                int i;
+                
+                OBD_ALLOC(snap_root, snap_root_size);
+                
+                if (!snap_root)
+                        GOTO(exit, rc = -ENOMEM); 
+                
+                rc = sops->fs_get_snap_info(root_inode, SNAP_ROOT_INO, 
+                                            strlen(SNAP_ROOT_INO), snap_root, 
+                                            &snap_root_size);
+                if (rc) {
+                        OBD_FREE(snap_root, sizeof(int) * snap_count);
+                        GOTO(exit, rc);
+                }
+                for (i = 0; i < snap_count; i++) {
+                        ino_t root_ino = le32_to_cpu(snap_root[i]);
+                        struct dentry *tmp = smfs_info->smsi_sb->s_root;
+                        struct snap_info *snap_info;                      
+                        struct dentry *dentry;                        
+ 
+                        root_inode = smfs_get_inode(sb, root_ino, NULL, 0);
+                        dentry = pre_smfs_dentry(NULL, root_inode, tmp, 
+                                                 NULL); 
+                        snap_info = smfs_create_snap_info(S2SMI(sb), dentry);
+                        post_smfs_dentry(dentry);
+                        if (IS_ERR(snap_info)) {
+                                OBD_FREE(snap_root, sizeof(int) * snap_count);
+                                GOTO(exit, rc = PTR_ERR(snap_info));
+                        }                
+                        list_add(&snap_info->sni_list, &(S2SNAPI(sb)->snap_list));        
+                }
+        }       
+exit:
+        if (rc) 
+                smfs_cow_cleanup(smfs_info);
+        
         RETURN(rc);
 }
 
-int smfs_cow_cleanup(struct super_block *sb)
-{
-        
-        struct snap_info   *snap_info = S2SNAPI(sb);	
-        struct smfs_hook_ops *cow_hops; 
+static int smfs_cleanup_dotinfo(struct snap_info *snap_info)
+{       
+        struct snap_dot_info *dot_info = NULL;
+        int rc = 0;
         ENTRY;
 
-        cow_hops = smfs_unregister_hook_ops(sb, COW_HOOK);
-        smfs_free_hook_ops(cow_hops);
+        if (!snap_info->sni_dot_info)
+                RETURN(rc);
+       
+        dot_info = snap_info->sni_dot_info;
 
-        SMFS_CLEAN_COW(S2SMI(sb));
-        if (snap_info) 
-               OBD_FREE(snap_info, sizeof(*snap_info)); 
-        RETURN(0);
+        if (dot_info->dot_name) { 
+                OBD_FREE(dot_info->dot_name, dot_info->dot_name_len + 1);
+        }
+        
+        OBD_FREE(dot_info, sizeof(struct snap_dot_info));
+
+        RETURN(rc);
 }
 
-static int smfs_dotsnap_dir_size(struct inode *inode)
+int smfs_cleanup_snap_info(struct snap_info *snap_info)
 {
-        struct snap_info *snap_info = S2SNAPI(inode->i_sb);
-        struct fsfilt_operations *snapops = snap_info->snap_cache_fsfilt; 
-        struct snap_table *stbl = snap_info->sntbl;
-        int size = 0, dir_size = 0, blocks;
-        int i = 0;
+        struct snap_table      *snap_table = snap_info->sni_table;
+        int rc = 0, table_size;
         ENTRY;
 
-        for (i = 0; i < stbl->sntbl_count; i++) {
-                size += snapops->fs_dir_ent_size(stbl->sntbl_items[i].sn_name);
+        l_dput(snap_info->sni_cowed_dentry);
+        if (snap_table) {
+                table_size = SNAPTABLE_SIZE(snap_table->sntbl_max_count);
+                OBD_FREE(snap_info->sni_table, table_size);
+        }
+        smfs_cleanup_dotinfo(snap_info);
+        RETURN(rc);
+}
+
+int smfs_cow_cleanup(struct smfs_super_info *smb)
+{
+        struct snap_super_info   *snap_sinfo = smb->smsi_snap_info;
+        struct list_head      	 *snap_list = &snap_sinfo->snap_list; 
+        struct smfs_hook_ops     *cow_hops;
+        int                      rc = 0; 
+        ENTRY;
+
+        while (!list_empty(snap_list)) {
+                struct snap_info *snap_info;
+                
+                snap_info = list_entry(snap_list->next, struct snap_info,
+                                       sni_list); 
+                rc = smfs_cleanup_snap_info(snap_info); 
+                if (rc) 
+                        CERROR("cleanup snap_info error rc=%d\n", rc);
+                list_del(&snap_info->sni_list); 
+                OBD_FREE(snap_info, sizeof(struct snap_info));
+        } 
+         
+        if (snap_sinfo->snap_fsfilt) 
+                fsfilt_put_ops(snap_sinfo->snap_fsfilt);
+        if (snap_sinfo->snap_cache_fsfilt)
+                fsfilt_put_ops(snap_sinfo->snap_cache_fsfilt);
+
+        cow_hops = smfs_unregister_hook_ops(smb, COW_HOOK);
+        smfs_free_hook_ops(cow_hops);
+
+        SMFS_CLEAN_COW(smb);
+        if (snap_sinfo) 
+               OBD_FREE(snap_sinfo, sizeof(struct snap_super_info));
+        RETURN(rc);
+}
+
+static struct snap_info *smfs_find_snap_info(struct inode *inode)
+{
+        struct snap_inode_info *snap_iinfo = I2SNAPI(inode);
+        struct snap_super_info *snap_sinfo = S2SNAPI(inode->i_sb);
+        struct snap_info *snap_info = NULL, *tmp; 
+
+        ENTRY;
+        list_for_each_entry_safe(snap_info, tmp, &snap_sinfo->snap_list, 
+                                 sni_list) {
+               if (snap_info->sni_root_ino == snap_iinfo->sn_root_ino)
+                        RETURN(snap_info); 
+        }
+        RETURN(NULL);
+}
+static int smfs_dotsnap_dir_size(struct inode *inode)
+{
+        struct snap_super_info *snap_sinfo = S2SNAPI(inode->i_sb);
+        struct fsfilt_operations *snapops = snap_sinfo->snap_cache_fsfilt; 
+        int size = 0, dir_size = 0, blocks, i = 0;
+        struct snap_table *snap_table = NULL; 
+        struct snap_info *snap_info = NULL;
+        ENTRY;
+       
+        snap_info = smfs_find_snap_info(inode);
+        
+        if (!snap_info) {
+                CDEBUG(D_INFO, "can not find snap info for inode %p\n", inode);
+                RETURN(0);                
+        }
+        snap_table = snap_info->sni_table;
+        for (i = 0; i < snap_table->sntbl_count; i++) {
+                char *name = snap_table->sntbl_items[i].sn_name;
+                size += snapops->fs_dir_ent_size(name);
         }
         /*FIXME this is only for ext3 dir format, may need fix for other FS*/ 
         blocks = (size + inode->i_sb->s_blocksize - 1) >> 
@@ -334,40 +474,69 @@ static int smfs_dotsnap_dir_size(struct inode *inode)
         RETURN(dir_size); 
 
 } 
+int smfs_snap_test_inode(struct inode *inode, void *args)
+{ 
+        struct smfs_iget_args *sargs = (struct smfs_iget_args*)args;
+        struct inode *dir;
+
+        LASSERT(sargs);
+        
+        dir = sargs->s_inode;
+        
+        if (dir){
+                if (I2SNAPI(inode)->sn_index != I2SNAPI(dir)->sn_index)
+                        return 0;
+        } else { 
+                if (I2SNAPI(inode)->sn_index != sargs->s_index)
+                        return 0; 
+        }
+        return 1;
+}
+
 /*FIXME Note indirect and primary inode 
 * should be recorgnized here*/
-int smfs_init_snap_inode_info(struct inode *inode, 
-                              struct snap_inode_info *sn_info) 
+int smfs_init_snap_inode_info(struct inode *inode, struct smfs_iget_args *args) 
 {
-        struct smfs_inode_info *smi = I2SMI(inode);
+        struct inode *dir;
         int vallen, rc = 0;
         ENTRY;
 
-        LASSERT(sn_info && smi);
-        smi->sm_sninfo.sn_flags = sn_info->sn_flags;
-        smi->sm_sninfo.sn_gen = sn_info->sn_gen;
-        smi->sm_sninfo.sn_index = sn_info->sn_index; 
+        LASSERT(args);
 
+        I2SNAPI(inode)->sn_index = args->s_index; 
+        
+        dir = args->s_inode;
+        if (dir) {
+                I2SNAPI(inode)->sn_flags = I2SNAPI(dir)->sn_flags;
+                I2SNAPI(inode)->sn_gen = I2SNAPI(dir)->sn_gen;
+        } else {
+                I2SNAPI(inode)->sn_flags = 0;
+                I2SNAPI(inode)->sn_gen = 0;
+        }
+        
         if (smfs_dotsnap_inode(inode)) {
-                struct snap_table *stbl= S2SNAPI(inode->i_sb)->sntbl;
-                int size = 0;
+                struct snap_info *snap_info;
+
+                snap_info = smfs_find_snap_info(inode);
+                if (!snap_info) {
+                        RETURN(-EIO);
+                }
                 /*init dot_snap inode info*/
-                size = smfs_dotsnap_dir_size(inode); 
-                inode->i_size = (loff_t)size;                   
-                inode->i_nlink = stbl->sntbl_count + 2;
+                inode->i_size = (loff_t)smfs_dotsnap_dir_size(inode);
+                inode->i_nlink = snap_info->sni_table->sntbl_count + 2;
                 inode->i_uid = 0;
                 inode->i_gid = 0;
         } else if (SMFS_DO_COW(S2SMI(inode->i_sb)) && 
-                   (smi->smi_flags & SM_DO_COW) &&
+                   (I2SMI(inode)->smi_flags & SM_DO_COW) &&
                    smfs_primary_inode(inode)) {
                 struct snap_inode_info *sni_info = I2SNAPI(inode);
-                struct fsfilt_operations *snapops = I2SNAPOPS(inode);
+                struct fsfilt_operations *sops = I2SNAPCOPS(inode);
                 
                 vallen = sizeof(sni_info->sn_gen);
                 
-                rc = snapops->fs_get_snap_info(inode, SNAP_GENERATION,
-                                               strlen(SNAP_GENERATION),
-                                               &sni_info->sn_gen, &vallen);               
+                rc = sops->fs_get_snap_info(I2CI(inode), SNAP_GENERATION,
+                                            strlen(SNAP_GENERATION),
+                                            &sni_info->sn_gen, &vallen);               
         } 
         RETURN(rc);                                              
 }
@@ -376,22 +545,30 @@ int smfs_init_snap_inode_info(struct inode *inode,
    -  hence it returns 0 in case all the volume snapshots lie in the future
    -  this is the index where a COW will land (will be created) 
 */
-void snap_last(struct super_block *sb, struct snap *snap)
+void snap_last(struct inode *inode, struct snap *snap)
 {
-	struct snap_info *snap_info = S2SNAPI(sb);
-	struct snap_table *table = snap_info->sntbl;
         time_t now = LTIME_S(CURRENT_TIME);
+	struct snap_table *snap_table;
+        struct snap_info  *snap_info;
 	int i ;
 
 	ENTRY;
+
+        snap_info = smfs_find_snap_info(inode);
+        if (!snap_info) {
+                CDEBUG(D_INFO, "can not find snap info for inode %p\n", inode);
+                EXIT;
+                return;
+        }
+        snap_table = snap_info->sni_table;
 	/* start at the highest index in the superblock snaptime array */ 
-	if (table->sntbl_count == 0) {
+	if (snap_table->sntbl_count == 0) {
                memset(snap, 0, sizeof(struct snap)); 
         } else {
-                i = table->sntbl_count - 1;
-                snap->sn_index = table->sntbl_items[i].sn_index;
-                snap->sn_time = table->sntbl_items[i].sn_time;
-                snap->sn_gen = table->sntbl_items[i].sn_gen;
+                i = snap_table->sntbl_count - 1;
+                snap->sn_index = snap_table->sntbl_items[i].sn_index;
+                snap->sn_time = snap_table->sntbl_items[i].sn_time;
+                snap->sn_gen = snap_table->sntbl_items[i].sn_gen;
         }
 	CDEBUG(D_INFO, "index: %d, time[i]: %ld, now: %ld\n",
 	       snap->sn_index, snap->sn_time, now);
@@ -399,7 +576,7 @@ void snap_last(struct super_block *sb, struct snap *snap)
 	return;
 }
 
-static int inline get_index_of_item(struct snap_table *table, char *name)
+static inline int get_index_of_item(struct snap_table *table, char *name)
 {
 	int count = table->sntbl_count;
 	int i, j;
@@ -427,20 +604,51 @@ static int inline get_index_of_item(struct snap_table *table, char *name)
 	RETURN(-ENOSPC);
 }
 
-int smfs_add_snap_item(struct super_block *sb, char *name)
+static struct dentry *smfs_find_snap_root(struct super_block *sb, 
+                                          char *path_name)
 {
-	struct snap_info *snap_info = S2SNAPI(sb);
-        struct fsfilt_operations *snapops = snap_info->snap_fsfilt;
-        struct snap_table *snap_table = snap_info->sntbl;
-        struct dentry            *d_root = snap_info->snap_root;
-        struct snap      *snap_item;
-        int    table_size, count = 0, index = 0, rc = 0;
+        struct dentry *dentry = NULL;
+        struct nameidata nd;
+        ENTRY;
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        if (path_init(path_name, LOOKUP_FOLLOW, &nd)) {
+                error = path_walk(path_name, &nd);
+                if (error) {
+                        path_release(&nd);
+                        RETURN(NULL);
+                }
+        } else {
+                RETURN(NULL);
+        }
+#else
+        if (path_lookup(path_name, LOOKUP_FOLLOW, &nd))
+                RETURN(NULL);
+                                                                                                                                                                                                     
+#endif
+        dentry = dget(nd.dentry); 
+        path_release(&nd);
+        RETURN(dentry); 
+}
+static int snap_add_item(struct smfs_super_info *smb, 
+                         struct snap_info *snap_info,
+                         char *name)
+{        
+        struct fsfilt_operations *snapops;
+        struct snap_table        *snap_table = snap_info->sni_table;
+        struct inode             *root_inode = NULL;
+        int                      table_size, count = 0, index = 0, rc = 0;
+       	struct  snap             *snap_item;
+        ENTRY;
 
         count = snap_table->sntbl_count; 
+        root_inode = iget(smb->smsi_sb, snap_info->sni_root_ino);
+        if (!root_inode || is_bad_inode(root_inode)) 
+                RETURN(-EIO); 
 	/* XXX Is down this sema necessary*/
-	down_interruptible(&snap_info->sntbl_sema);
+	down_interruptible(&snap_info->sni_sema);
         snap_item = &snap_table->sntbl_items[count];
-
+        snapops = smb->smsi_snap_info->snap_cache_fsfilt;
 	/*add item in snap_table set generation*/
 	snap_item->sn_time = LTIME_S(CURRENT_TIME);
 	/* find table index */
@@ -454,8 +662,8 @@ int smfs_add_snap_item(struct super_block *sb, char *name)
 	memcpy(snap_item->sn_name, name, SNAP_MAX_NAMELEN);
 	/* Wrote the whole snap_table to disk */
         table_size = SNAPTABLE_SIZE(snap_table->sntbl_max_count); 
-        
-        rc = snapops->fs_set_snap_info(d_root->d_inode, SNAPTABLE_INFO, 
+         
+        rc = snapops->fs_set_snap_info(root_inode, SNAPTABLE_INFO, 
                                        strlen(SNAPTABLE_INFO),
 				       snap_table, &table_size);
 	if (rc) {
@@ -465,10 +673,71 @@ int smfs_add_snap_item(struct super_block *sb, char *name)
         snap_table->sntbl_count++;
 	snap_table->sntbl_generation++;
 exit:
-	up(&snap_info->sntbl_sema);
+	up(&snap_info->sni_sema);
+        if (root_inode)
+                iput(root_inode);
 	RETURN(rc);
 }
-EXPORT_SYMBOL(smfs_add_snap_item);
+
+static struct snap_info * smfs_find_create_snap_info(struct super_block *sb, 
+                                                     struct dentry *dentry) 
+{	
+        struct snap_super_info   *snap_sinfo = S2SNAPI(sb);
+        struct snap_info *snap_info, *tmp;
+        ENTRY;
+        
+        list_for_each_entry_safe(snap_info, tmp, &snap_sinfo->snap_list, 
+                                 sni_list) {
+                if (snap_info->sni_root_ino == dentry->d_inode->i_ino) {
+                        RETURN(snap_info);
+                }      
+        } 
+
+        CDEBUG(D_INFO, "create a new  snap info root ino %lu\n", 
+               dentry->d_inode->i_ino);
+
+        snap_info = smfs_create_snap_info(S2SMI(sb), dentry);  
+
+        if (IS_ERR(snap_info))
+                RETURN(snap_info);
+
+        list_add(&snap_info->sni_list, &snap_sinfo->snap_list);        
+        RETURN(snap_info);  
+}         
+
+int smfs_add_snap_item(struct super_block *sb, char *path_name, char *name)
+{
+        struct dentry  *dentry = NULL;
+        struct snap_info *snap_info;
+        int            rc = 0;        
+        ENTRY;
+                
+        if (!SMFS_DO_COW(S2SMI(sb))) {
+                RETURN(0);
+        }
+
+        if (!path_name || !name) {
+                CERROR("patch_name and snapshot_name is NULL");
+                RETURN(-EINVAL);
+        } 
+        dentry = smfs_find_snap_root(sb, path_name);
+        if (IS_ERR(dentry)) {
+                CERROR("can not find snap_shot root by %s\n", path_name);
+                RETURN(PTR_ERR(dentry)); 
+        }
+        snap_info = smfs_find_create_snap_info(sb, dentry);
+        if (IS_ERR(snap_info)) {
+                CERROR("can not find snap_info by %s rc=%lu\n", path_name,
+                        PTR_ERR(snap_info));
+                GOTO(exit, rc = PTR_ERR(snap_info)); 
+        }
+
+        rc = snap_add_item(S2SMI(sb), snap_info, name);
+exit:       
+        dput(dentry); 
+        RETURN(rc); 
+}        
+//EXPORT_SYMBOL(smfs_add_snap_item);
 /*
  * Note: this function should be differnet with snap_do_cow.
  * In smfs_do_cow, we check the EA for whether do cow for that inode.
@@ -484,7 +753,7 @@ int smfs_needs_cow(struct inode *inode)
 
 	snap_info = &(smi_info->sm_sninfo);
 	
-        snap_last(inode->i_sb, &snap);
+        snap_last(inode, &snap);
 	/* decision .... if the snapshot is more recent than the object,
 	 * then any change to the object should cause a COW.
 	 */
@@ -499,15 +768,21 @@ int smfs_needs_cow(struct inode *inode)
 
 static int link_cowed_inode(struct inode *inode)
 {
-        struct snap_info *snap_info = S2SNAPI(inode->i_sb);	
         struct dentry *cowed_dir = NULL;
         char fidname[LL_FID_NAMELEN];
+        struct snap_info *snap_info;	
         int fidlen = 0, rc = 0;
         struct dentry *dchild = NULL;
         struct dentry *tmp = NULL;
         unsigned mode;
 
-        cowed_dir = snap_info->sn_cowed_dentry;
+        snap_info = smfs_find_snap_info(inode);
+        if (!snap_info) {
+                CERROR("can not find snap info for inode %p\n", inode);
+                RETURN(-EINVAL);                
+        }
+
+        cowed_dir = snap_info->sni_cowed_dentry;
         
         fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
 
@@ -553,25 +828,29 @@ out_lock:
  */
 int snap_do_cow(struct inode *inode, struct dentry *dparent, int del)
 {
-        struct snap_info *snap_info = S2SNAPI(inode->i_sb);	
-	struct fsfilt_operations *snapops = snap_info->snap_fsfilt;
+	struct fsfilt_operations *snapops = I2SNAPCOPS(inode);
         struct snap snap;
-	struct inode *ind = NULL;
-
-	ENTRY;
+	struct inode *ind = NULL, *cache_ind = NULL;
+	ino_t  ind_ino;
+        ENTRY;
 
 	if (!snapops || !snapops->fs_create_indirect) 
 		RETURN(-EINVAL);
 
-	snap_last(inode->i_sb, &snap);
-	ind = snapops->fs_create_indirect(inode, snap.sn_index, snap.sn_gen, 
-                                          dparent->d_inode, del);
-	if(ind && IS_ERR(ind)) {
+	snap_last(inode, &snap);
+	cache_ind = snapops->fs_create_indirect(I2CI(inode), snap.sn_index, 
+                                          snap.sn_gen, I2CI(dparent->d_inode), 
+                                          del);
+	if(cache_ind && IS_ERR(cache_ind)) {
                 CERROR("Create ind inode %lu index %d gen %d del %d rc%lu\n",
                         inode->i_ino, snap.sn_index, snap.sn_gen, del,
-                        PTR_ERR(ind));
+                        PTR_ERR(cache_ind));
 		RETURN(PTR_ERR(ind));
         }
+        ind_ino = cache_ind->i_ino;
+        iput(cache_ind);
+        /*FIXME: get indirect inode set_cow flags*/ 
+        ind = smfs_get_inode(inode->i_sb, ind_ino, inode, 0);
         if (ind) { 
                 if (!SMFS_DO_INODE_COWED(inode)) {
                         /*insert the inode to cowed inode*/
@@ -715,14 +994,21 @@ int smfs_cow_rename(struct inode *dir, struct dentry *dentry,
 int smfs_cow_write(struct inode *inode, struct dentry *dentry, void *data1,
                    void *data2)
 {
-        struct snap_info *snap_info = S2SNAPI(inode->i_sb); 
-        struct snap_table *table = snap_info->sntbl; 
+        struct snap_info *snap_info = NULL; 
+        struct snap_table *table; 
 	long   blocks[2]={-1,-1};
        	int  index = 0, i, rc = 0;
         size_t count;
 	loff_t pos;
 
         ENTRY;
+
+        snap_info = smfs_find_snap_info(inode);
+        if (!snap_info) {
+                CDEBUG(D_INFO, "can not find snap info for inode %p\n", inode);
+                RETURN(0);                
+        }
+        table = snap_info->sni_table;
 
         LASSERT(data1);
         LASSERT(data2);
@@ -756,29 +1042,29 @@ int smfs_cow_write(struct inode *inode, struct dentry *dentry, void *data1,
 			continue;
 		/*Find the nearest page in snaptable and copy back it*/
 		for (slot = table->sntbl_count - 1; slot >= 0; slot--) {
-                        struct fsfilt_operations *snapops = snap_info->snap_fsfilt;
-			struct inode *cache_inode = NULL;
+                        struct fsfilt_operations *sops = I2SNAPCOPS(inode);
+			struct inode *cind = NULL;
                		int result = 0;
 
                         index = table->sntbl_items[slot].sn_index;
-			cache_inode = snapops->fs_get_indirect(inode, NULL, index);
+			cind = sops->fs_get_indirect(I2CI(inode), NULL, index);
+			if (!cind)  continue;
 
-			if (!cache_inode)  continue;
-
-			CDEBUG(D_INFO, "find cache_ino %lu\n", cache_inode->i_ino);
+			CDEBUG(D_INFO, "find cache_ino %lu\n", cind->i_ino);
 		
-			result = snapops->fs_copy_block(inode, cache_inode, blocks[i]);
+			result = sops->fs_copy_block(I2CI(inode), cind, 
+                                                     blocks[i]);
 			if (result == 1) {
-               			iput(cache_inode);
+               			iput(cind);
 				result = 0;
 				break;
 			}
 			if (result < 0) {
-				iput(cache_inode);
+				iput(cind);
 				up(&inode->i_sem);
 				GOTO(exit, rc = result);
 			}
-               		iput(cache_inode);
+               		iput(cind);
         	}
 	}
 exit:
@@ -787,7 +1073,8 @@ exit:
 }
 EXPORT_SYMBOL(smfs_cow_write);
 /*lookup inode in dotsnap inode */
-static int smfs_dotsnap_lookup(struct inode *dir, struct dentry *dentry)
+static int smfs_dotsnap_lookup(struct inode *dir, struct dentry *dentry,
+                               struct snap_info *snap_info)
 { 
         if (dentry->d_name.len == 1 && 
             !strcmp(dentry->d_name.name, ".")) {
@@ -807,10 +1094,14 @@ static int smfs_dotsnap_lookup(struct inode *dir, struct dentry *dentry)
                 }
         } else {
                 /*find the name from the snaptable*/
-                struct fsfilt_operations *snapops = I2SNAPOPS(dir);
-                struct snap_table *table = S2SNAPI(dir->i_sb)->sntbl; 
+                struct fsfilt_operations *sops = I2SNAPCOPS(dir);
+                struct snap_table *table; 
                 struct inode *inode;
+                ino_t  cino;
                 int i = 0, index = -1;
+
+                table = snap_info->sni_table;
+                
                 for (i = 0; i < table->sntbl_count; i++) {
                         char *name = table->sntbl_items[i].sn_name;
                         if ((dentry->d_name.len == strlen(name)) &&
@@ -825,7 +1116,13 @@ static int smfs_dotsnap_lookup(struct inode *dir, struct dentry *dentry)
                                dentry->d_name.name);
                        RETURN(-ENOENT);
                 }
-                inode = snapops->fs_get_indirect(dir, NULL, index);
+                cino = sops->fs_get_indirect_ino(S2CSB(dir->i_sb), dir->i_ino,
+                                                 index);
+                inode = smfs_get_inode(dir->i_sb, cino, dir, index);
+                if (!inode || is_bad_inode(inode)) {
+                        CERROR("Can not find cino %lu inode\n", cino);
+                        RETURN(-ENOENT); 
+                } 
                 d_add(dentry, inode);
         } 
         RETURN(0);
@@ -833,10 +1130,18 @@ static int smfs_dotsnap_lookup(struct inode *dir, struct dentry *dentry)
 int smfs_cow_lookup(struct inode *inode, struct dentry *dentry, void *data1,
                     void *data2)
 {
-        struct snap_info *snap_info = S2SNAPI(inode->i_sb);
-        struct snap_dot_info *dot_info = snap_info->sn_dot_info;
+        struct snap_info *snap_info;
+        struct snap_dot_info *dot_info;
         int rc = 0, index = 0;
         ENTRY;
+
+        snap_info = smfs_find_snap_info(inode);
+        if (!snap_info) {
+                CDEBUG(D_INFO, "can not find snap info for inode %p\n", inode);
+                RETURN(0);                
+        }
+        
+        dot_info = snap_info->sni_dot_info;
 
         LASSERT(dot_info != NULL); 
         LASSERT(data1 != NULL); 
@@ -856,7 +1161,7 @@ int smfs_cow_lookup(struct inode *inode, struct dentry *dentry, void *data1,
                 RETURN(rc);
         }
         if (smfs_dotsnap_inode(inode)) {
-                rc = smfs_dotsnap_lookup(inode, dentry);
+                rc = smfs_dotsnap_lookup(inode, dentry, snap_info);
                 if (rc == 0)
                         rc = 1;
                 RETURN(rc);                
@@ -888,23 +1193,32 @@ int smfs_cow_lookup(struct inode *inode, struct dentry *dentry, void *data1,
 
 struct inode *smfs_cow_get_ind(struct inode *inode, int index)
 {
-        struct snap_info *snap_info = S2SNAPI(inode->i_sb);
-        struct fsfilt_operations *snapops = snap_info->snap_fsfilt; 
-        struct snap_table *table = snap_info->sntbl;
         long block=(index << PAGE_CACHE_SHIFT) >> inode->i_sb->s_blocksize_bits;
+        struct fsfilt_operations *sops = I2SNAPCOPS(inode); 
+        struct snap_info *snap_info = NULL;
+        struct snap_table *table = NULL;
         int slot;
 
-        ENTRY; 
+        ENTRY;
+        
+        snap_info = smfs_find_snap_info(inode);
+        if (!snap_info) {
+                CDEBUG(D_INFO, "can not find snap info for inode %p\n", inode);
+                RETURN(NULL);                
+        }
+        
+        table = snap_info->sni_table;        
+
         for (slot = table->sntbl_count - 1; slot >= 0; slot--) {
                 struct address_space_operations *aops = inode->i_mapping->a_ops;
                 struct inode *cache_inode = NULL;
                 int index = 0;
 
                 index = table->sntbl_items[slot].sn_index;
-                cache_inode = snapops->fs_get_indirect(inode, NULL, index);
+                cache_inode = sops->fs_get_indirect(I2CI(inode), NULL, index);
                                                                                                                                                                                                      
                 if (!cache_inode )  continue;
-                                                                                                                                                                                                     
+                
                 if (aops->bmap(cache_inode->i_mapping, block))
                        RETURN(cache_inode); 
                 iput(cache_inode);

@@ -30,6 +30,7 @@ struct snap_inode_info {
 	int sn_flags;		/*the flags indicated inode type */
 	int sn_gen; 	        /*the inode generation*/
         int sn_index;           /*the inode snap_index*/
+        ino_t sn_root_ino;        /*the root ino of this snap*/
 };
 struct smfs_inode_info {
         struct inode *smi_inode;
@@ -93,11 +94,12 @@ struct smfs_super_info {
         char                     *smsi_cache_ftype; /* cache file system type */
         char                     *smsi_ftype;       /* file system type */
 	struct obd_export	 *smsi_exp;	    /* file system obd exp */
-	struct snap_info	 *smsi_snap_info;   /* snap table cow */
+	struct snap_super_info	 *smsi_snap_info;   /* snap table cow */
         smfs_pack_rec_func   	 smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
         __u32                    smsi_flags;        /* flags */
         __u32                    smsi_ops_check;
         struct list_head         smsi_hook_list;
+        kmem_cache_t *           smsi_inode_cachep;  /*inode_cachep*/
 };
 
 
@@ -121,26 +123,27 @@ struct fs_extent{
         __u32   e_num;          /* number of blocks covered by extent */
 };
 
-#define I2SMI(inode)  ((struct smfs_inode_info *) (&(inode->u.generic_ip)))
+#define I2SMI(inode)  ((struct smfs_inode_info *) ((inode->u.generic_ip)))
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define S2SMI(sb)   ((struct smfs_super_info *) (&(sb->u.generic_sbp)))
-#define S2CSB(sb)   (((struct smfs_super_info *) (&(sb->u.generic_sbp)))->smsi_sb)
+#define S2SMI(sb)   ((struct smfs_super_info *) ((sb->u.generic_sbp)))
+#define S2CSB(sb)   (((struct smfs_super_info *)((sb->u.generic_sbp)))->smsi_sb)
 #else
 #define S2SMI(sb)   ((struct smfs_super_info *) (sb->s_fs_info))
 #define S2CSB(sb)   (((struct smfs_super_info *) (sb->s_fs_info))->smsi_sb)
 #endif
 
-#define I2CI(inode) (((struct smfs_inode_info*) (&(inode->u.generic_ip)))->smi_inode)
+#define I2CI(inode) (((struct smfs_inode_info*) ((inode->u.generic_ip)))->smi_inode)
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define I2CSB(inode) ((struct smfs_super_info *) (&(inode->i_sb->u.generic_sbp)))
+#define I2CSB(inode) ((struct smfs_super_info *) ((inode->i_sb->u.generic_sbp)))
 #else
 #define I2CSB(inode) ((struct smfs_super_info *) (inode->i_sb->s_fs_info))
 #endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define I2FOPS(inode) (((struct smfs_super_info *) \
-                        (&(inode->i_sb->u.generic_sbp)))->sm_cache_fsfilt)
+                        ((inode->i_sb->u.generic_sbp)))->sm_cache_fsfilt)
 #else
 #define I2FOPS(inode) (((struct smfs_super_info *) \
                         (inode->i_sb->s_fs_info))->sm_cache_fsfilt)
@@ -364,6 +367,7 @@ static inline void d_unalloc(struct dentry *dentry)
         INIT_LIST_HEAD(&dentry->d_hash);
 #else
         hlist_del_init(&dentry->d_hash);
+        dentry->d_flags |= DCACHE_UNHASHED;
 #endif
         dput(dentry); /* this will free the dentry memory */
 }

@@ -2099,17 +2099,25 @@ int jt_obd_snap_add(int argc, char **argv)
         struct obd_ioctl_data data;
         int rc = 0;
       
-        if (argc != 2)
-               return CMD_HELP; 
+        if (argc != 3)
+               return CMD_HELP;
+
+        SHMEM_SETUP();
+        register_ioc_dev(SMFS_DEV_ID, SMFS_DEV_PATH);
+        
         IOC_INIT(data);
         
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
+        data.ioc_inllen2 = strlen(argv[2]) + 2;
+        data.ioc_inlbuf2 = argv[2];
 
         IOC_PACK(argv[0], data);
        
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_SNAP_ADD, buf);
+        rc = l_ioctl(SMFS_DEV_ID, OBD_IOC_SMFS_SNAP_ADD, buf);
         
+        unregister_ioc_dev(SMFS_DEV_ID);       
+ 
         if (rc)
                 fprintf(stderr, "OBD_IOC_SNAP_ADD failed: rc=%d\n", rc);
         return rc;

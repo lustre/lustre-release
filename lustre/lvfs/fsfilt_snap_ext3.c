@@ -56,11 +56,12 @@
 
 #define EXT3_SNAP_ATTR "@snap"
 #define EXT3_SNAP_GENERATION "@snap_generation"
-#define EXT3_MAX_SNAPS 20
+#define EXT3_MAX_SNAPS 10
 #define EXT3_MAX_SNAP_DATA (sizeof(struct snap_ea))
 #define EXT3_SNAP_INDEX EXT3_XATTR_INDEX_LUSTRE
+#define EXT3_SNAP_COUNT "@snapcount"
 
-#define SB_SNAPTABLE_INO(sb)   (EXT3_SB(sb)->s_es->s_snaptable_ino)
+
 #define SB_FEATURE_COMPAT(sb)  (EXT3_SB(sb)->s_es->s_feature_compat)
                                                                                                                                                                                                      
 #define SNAP_HAS_COMPAT_FEATURE(sb,mask)        \
@@ -83,7 +84,7 @@ do {                                                            \
         journal_t *journal;                                     \
         journal = EXT3_SB(sb)->s_journal;                       \
         lock_kernel();                                          \
-        handle = journal_start(journal, 1);                     \
+        handle = journal_start(journal, blocks);                \
         unlock_kernel();                                        \
         if(IS_ERR(handle)) {                                    \
                 CERROR("can't start transaction\n");            \
@@ -1565,15 +1566,26 @@ static int fsfilt_ext3_get_snap_info(struct inode *inode, void *key,
         } else if (keylen >= strlen(SNAP_GENERATION) 
                    && strcmp(key, SNAP_GENERATION) == 0) {
                 
-                rc = ext3_xattr_get(inode, EXT3_SNAP_INDEX,EXT3_SNAP_GENERATION,
-                                    (char *)val, *vallen);
+                rc = ext3_xattr_get(inode, EXT3_SNAP_INDEX,
+                                    EXT3_SNAP_GENERATION, (char *)val, *vallen);
                 if (rc == -ENODATA) {
                         *((__u32 *)val) = 0; 
                         *vallen = sizeof(int);
                         rc = 0;
                 }
                 RETURN(rc);
-        } 
+        } else if (keylen >= strlen(SNAP_COUNT) && 
+                   strcmp(key, SNAP_COUNT) == 0) {
+                rc = ext3_xattr_get(inode, EXT3_SNAP_INDEX,
+                                    EXT3_SNAP_COUNT, val, *vallen);
+                if (rc == -ENODATA) {
+                        *((__u32 *)val) = 0; 
+                        *vallen = sizeof(int);
+                        rc = 0;
+                }
+                RETURN(rc);
+        }
+ 
         RETURN(-EINVAL);
 } 
 
@@ -1592,8 +1604,8 @@ static int fsfilt_ext3_set_snap_info(struct inode *inode, void *key,
         if (keylen >= strlen(SNAPTABLE_INFO) 
             && strcmp(key, SNAPTABLE_INFO) == 0) {
                 handle_t *handle;
-                EXT3_JOURNAL_START(inode->i_sb, handle, 
-                                   EXT3_XATTR_TRANS_BLOCKS, rc); 
+                EXT3_JOURNAL_START(inode->i_sb, handle, EXT3_XATTR_TRANS_BLOCKS,
+                                    rc); 
                 if(rc)
                         RETURN(rc);
                 rc = ext3_xattr_set_handle(handle, inode, EXT3_SNAP_INDEX, 
@@ -1607,7 +1619,26 @@ static int fsfilt_ext3_set_snap_info(struct inode *inode, void *key,
                 rc = ext3_set_generation(inode, *(int*)val);
                 
                 RETURN(rc); 
-        }
+        } else if (keylen >= strlen(SNAP_COUNT) && 
+                   (strcmp(key, SNAP_COUNT) == 0)) {
+                handle_t *handle;
+                EXT3_JOURNAL_START(inode->i_sb, handle, 
+                                   EXT3_XATTR_TRANS_BLOCKS, rc); 
+                if(rc)
+                        RETURN(rc);
+                rc = ext3_xattr_set_handle(handle, inode, EXT3_SNAP_INDEX, 
+                                           EXT3_SNAP_COUNT, val, *vallen, 0); 
+	        journal_stop(handle);
+                
+                RETURN(rc);
+        } else if (keylen >= strlen(SNAP_ROOT_INO) && 
+                   (strcmp(key, SNAP_ROOT_INO) == 0)) {
+        
+
+
+
+        }       
+ 
         RETURN(-EINVAL);
 }
 static int fsfilt_ext3_dir_ent_size(char *name)

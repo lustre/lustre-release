@@ -88,13 +88,12 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
         if (rc)
                 GOTO(exit, rc);
         
-        inode = smfs_get_inode(dir->i_sb, cache_dentry->d_inode->i_ino, dir, 0);
-        if (!inode)
-                GOTO(exit, rc = -ENOMEM);
+        SMFS_GET_INODE(dir->i_sb, cache_dentry->d_inode, dir, 0, inode, 
+                       rc, exit); 
 
         d_instantiate(dentry, inode);
-        sm_set_inode_ops(cache_dentry->d_inode, inode);
         post_smfs_inode(dir, cache_dir);
+        
         SMFS_HOOK(dir, dentry, NULL, NULL, HOOK_CREATE, handle, POST_HOOK, rc, 
                   exit); 
 exit:
@@ -153,7 +152,8 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
                         dentry->d_inode = cache_inode;
                         GOTO(exit, rc = NULL);
                 }
-                inode = smfs_get_inode(dir->i_sb, cache_inode->i_ino, dir, index);
+                SMFS_GET_INODE(dir->i_sb, cache_inode, dir, index, inode, rc2,
+                               exit);
         } else {
                 d_add(dentry, NULL);
                 GOTO(exit, rc);
@@ -224,7 +224,6 @@ static int smfs_link(struct dentry * old_dentry,
 
         SMFS_HOOK(dir, old_dentry, dentry, NULL, HOOK_LINK, handle, POST_HOOK, 
                   rc, exit); 
-        
 exit:
         unlock_kernel();
         post_smfs_dentry(cache_dentry);
@@ -310,9 +309,10 @@ static int smfs_symlink(struct inode *dir, struct dentry *dentry,
         if (cache_dir->i_op->symlink)
                 rc = cache_dir->i_op->symlink(cache_dir, cache_dentry, symname);
 
-
-        inode = smfs_get_inode(dir->i_sb, cache_dentry->d_inode->i_ino, dir, 0);
         post_smfs_inode(dir, cache_dir);
+        
+        SMFS_GET_INODE(dir->i_sb, cache_dentry->d_inode, dir, 0, inode, 
+                       rc, exit); 
         if (inode)
                 d_instantiate(dentry, inode);
         else
@@ -366,11 +366,8 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry,
         if (rc)
                 GOTO(exit, rc);
   
-        inode = smfs_get_inode(dir->i_sb, cache_dentry->d_inode->i_ino, dir, 0);
-
-        if (!inode)
-                GOTO(exit, rc = -ENOENT);
-
+        SMFS_GET_INODE(dir->i_sb, cache_dentry->d_inode, dir, 0, inode, 
+                       rc, exit); 
         d_instantiate(dentry, inode);
         post_smfs_inode(dir, cache_dir);
 
@@ -474,7 +471,8 @@ static int smfs_mknod(struct inode *dir, struct dentry *dentry,
                                          mode, rdev)))
                 GOTO(exit, rc);
 
-        inode = smfs_get_inode(dir->i_sb, cache_dentry->d_inode->i_ino, dir, 0);
+        SMFS_GET_INODE(dir->i_sb, cache_dentry->d_inode, dir, 0, inode, 
+                       rc, exit); 
 
         d_instantiate(dentry, inode);
 
@@ -603,7 +601,6 @@ static ssize_t smfs_read_dir(struct file *filp, char *buf,
         if (cache_inode->i_fop->read)
                 rc = cache_inode->i_fop->read(sfi->c_file, buf, size,
                                               cache_ppos);
-
         *ppos = *cache_ppos;
         duplicate_file(filp, sfi->c_file);
         RETURN(rc);

@@ -32,8 +32,6 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
-#include <linux/lustre_smfs.h>
-#include <linux/lustre_snap.h>
 #include "llite_internal.h"
 
 kmem_cache_t *ll_file_data_slab;

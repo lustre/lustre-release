@@ -72,12 +72,13 @@ static struct inode* fsfilt_smfs_create_indirect(struct inode *inode,
                                                index, gen, cache_parent, del);
         post_smfs_inode(inode, cache_inode);
         post_smfs_inode(inode, cache_parent);
-        
+       #if 0 
         if (cache_ind_inode && !IS_ERR(cache_ind_inode)){ 
                 /*FIXME: get indirect inode set_cow flags*/ 
                 ind_inode = smfs_get_inode(inode->i_sb, cache_ind_inode->i_ino, 
                                            inode, 0);
-        }    
+        }   
+        #endif 
         RETURN(ind_inode);
 }
 
@@ -103,12 +104,13 @@ static struct inode*  fsfilt_smfs_get_indirect(struct inode *inode,
                 cache_ind_inode = snap_fsfilt->fs_get_indirect(cache_inode, 
                                                                table, slot);
         post_smfs_inode(inode, cache_inode);
-      
+#if 0      
         if (cache_ind_inode && !IS_ERR(cache_ind_inode)){ 
                 /*FIXME: get indirect inode set_cow flags*/ 
                 ind_inode = smfs_get_inode(inode->i_sb, cache_ind_inode->i_ino,
                                            inode, slot);
         }    
+#endif
         RETURN(ind_inode);
 }
 
@@ -371,11 +373,11 @@ static int fsfilt_smfs_read_dotsnap_dir_page(struct file *file, char *buf,
 {
         struct inode *inode = file->f_dentry->d_inode;
         struct fsfilt_operations *snap_cops = I2SNAPCOPS(inode);
-        struct snap_table *stbl = S2SNAPI(inode->i_sb)->sntbl;
         int    i = 0, size = 0, off_count = 0, buf_off = 0, rc = 0;
         ENTRY;
-
+#if 0
         /*Get the offset of dir ent*/
+        //struct snap_table *stbl = S2SNAPI(inode->i_sb)->sni_table;
         while (size < *off && off_count < stbl->sntbl_count) {
                 char *name = stbl->sntbl_items[i].sn_name;
                 size +=snap_cops->fs_dir_ent_size(name);
@@ -395,7 +397,9 @@ static int fsfilt_smfs_read_dotsnap_dir_page(struct file *file, char *buf,
         }
         if (rc > 0) 
                 rc = 0; 
-
+#else
+#warning "still not implement read .snap dir page for fsfilt Wangdi"
+#endif
         RETURN(rc); 
 }
 

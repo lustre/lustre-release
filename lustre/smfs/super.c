@@ -78,16 +78,6 @@ static struct file_system_type smfs_type = {
 };
 #endif
 
-static int init_smfs(void)
-{
-        int err;
-
-        err = register_filesystem(&smfs_type);
-        if (err)
-                CERROR("register_filesystem() failed, rc = %d\n", err);
-        return err;
-}
-
 static int cleanup_smfs(void)
 {
         int err = 0;
@@ -97,7 +87,15 @@ static int cleanup_smfs(void)
                 CERROR("unregister_filesystem() failed, rc = %d\n", err);
         return 0;
 }
-
+static int init_smfs(void)
+{
+        int err;
+        
+        err = register_filesystem(&smfs_type);
+        if (err)
+                CERROR("register_filesystem() failed, rc = %d\n", err);
+        return err;
+}
 static int __init smfs_init(void)
 {
         int err;

@@ -42,9 +42,37 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_debug.h>
 #include <linux/lustre_smfs.h>
+#include <linux/lustre_snap.h>
 
 #include "smfs_internal.h"
 
+static struct super_block *smfs_get_sb_by_path(char *path, int len)
+{
+        struct super_block *sb;
+        struct nameidata nd;
+        int error = 0;
+
+        ENTRY;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        if (path_init(path, LOOKUP_FOLLOW, &nd)) {
+                error = path_walk(path, &nd);
+                if (error) {
+                        path_release(&nd);
+                        RETURN(NULL);
+                }
+        } else {
+                RETURN(NULL);
+        }
+#else
+        if (path_lookup(path, LOOKUP_FOLLOW, &nd))
+                RETURN(NULL); 
+        
+#endif
+        /* FIXME-WANGDI: add some check code here. */
+        sb = nd.dentry->d_sb;
+        path_release(&nd);
+        RETURN(sb);
+}
 
 struct smfs_control_device smfs_dev;
 
@@ -52,8 +80,8 @@ static int smfs_handle_ioctl(unsigned int cmd, unsigned long arg)
 {
         struct obd_ioctl_data *data = NULL;
          struct super_block *sb = NULL;
-        char *buf = NULL, *dir = NULL;
-        int err = 0, len = 0, count = 0, do_kml = 0;
+        char *buf = NULL;
+        int err = 0, len = 0;
 
         if (obd_ioctl_getdata(&buf, &len, (void *)arg)) {
                 CERROR("OBD ioctl: data error\n");
@@ -62,13 +90,14 @@ static int smfs_handle_ioctl(unsigned int cmd, unsigned long arg)
         data = (struct obd_ioctl_data *)buf;
 
         switch (cmd) {
-        case IOC_SMFS_START:
-        case IOC_SMFS_STOP:
-        case IOC_SMFS_REINT:
-        case IOC_SMFS_UNDO:{
-                char *name;
+        case OBD_IOC_SMFS_SNAP_ADD:{
+                char *name, *snapshot_name;
                 if (!data->ioc_inllen1 || !data->ioc_inlbuf1) {
                         CERROR("No mountpoint passed!\n");
+                        GOTO(out, err = -EINVAL);
+                }
+                if (!data->ioc_inllen2 || !data->ioc_inlbuf2) {
+                        CERROR("No snapshotname passed!\n");
                         GOTO(out, err = -EINVAL);
                 }
                 name = (char*) data->ioc_inlbuf1;
@@ -77,14 +106,10 @@ static int smfs_handle_ioctl(unsigned int cmd, unsigned long arg)
                         CERROR("can not find superblock at %s\n", buf);
                         GOTO(out, err = -EINVAL);
                 }
-                /*get cmd count*/
-                if (data->ioc_inllen2 && data->ioc_inlbuf2) {
-                        dir = (char *)data->ioc_inlbuf2;
-                }
-                if (data->ioc_plen1)
-                        count = *((int*)data->ioc_pbuf1);
-                if (data->ioc_plen2)
-                        do_kml = *((int*)data->ioc_pbuf2);
+                snapshot_name = (char *)data->ioc_inlbuf2;
+#ifdef CONFIG_SNAPFS
+                err = smfs_add_snap_item(sb, name, snapshot_name);
+#endif         
                 break;
         }
         default: {
@@ -92,35 +117,12 @@ static int smfs_handle_ioctl(unsigned int cmd, unsigned long arg)
                 GOTO(out, err = -EINVAL);
         }
         }
-
-        switch (cmd) {
-        case IOC_SMFS_START:
-                err = smfs_start_rec(sb, NULL);
-                break;
-        case IOC_SMFS_STOP:
-                err = smfs_stop_rec(sb);
-                break;
-        case IOC_SMFS_REINT:
-        case IOC_SMFS_UNDO: {
-                int flags = 0;
-                if (cmd == IOC_SMFS_REINT)
-                        SET_REC_OP_FLAGS(flags, SMFS_REINT_REC);
-                else
-                        SET_REC_OP_FLAGS(flags, SMFS_UNDO_REC);
-                if (count == 0)
-                        SET_REC_COUNT_FLAGS(flags, SMFS_REC_ALL);
-                if (do_kml)
-                        SET_REC_WRITE_KML_FLAGS(flags, SMFS_WRITE_KML);
-                err = smfs_process_rec(sb, count, dir, flags);
-                break;
-        }
-        }
 out:
         if (buf)
                 obd_ioctl_freedata(buf, len);
         RETURN(err);
 }
-
+#define SMFS_MINOR 250
 static int smfs_psdev_ioctl(struct inode * inode, struct file * filp,
                             unsigned int cmd, unsigned long arg)
 {
@@ -138,7 +140,7 @@ static int smfs_psdev_open(struct inode * inode, struct file * file)
         if (!inode)
                 RETURN(-EINVAL);
         dev = MINOR(inode->i_rdev);
-        if (dev != SMFS_PSDEV_MINOR)
+        if (dev != SMFS_MINOR)
                 RETURN(-ENODEV);
 
         RETURN(0);
@@ -153,7 +155,7 @@ static int smfs_psdev_release(struct inode * inode, struct file * file)
         if (!inode)
                 RETURN(-EINVAL);
         dev = MINOR(inode->i_rdev);
-        if (dev != SMFS_PSDEV_MINOR)
+        if (dev != SMFS_MINOR)
                 RETURN(-ENODEV);
 
         RETURN(0);
@@ -161,12 +163,11 @@ static int smfs_psdev_release(struct inode * inode, struct file * file)
 
 /* declare character device */
 static struct file_operations smfscontrol_fops = {
-        ioctl:                smfs_psdev_ioctl,            /* ioctl */
-        open:                smfs_psdev_open,       /* open */
-        release:        smfs_psdev_release,    /* release */
+        .owner   = THIS_MODULE,
+        .ioctl   = smfs_psdev_ioctl,            /* ioctl */
+        .open    = smfs_psdev_open,       /* open */
+        .release = smfs_psdev_release,    /* release */
 };
-
-#define SMFS_MINOR 250
 static struct miscdevice smfscontrol_dev = {
         minor:        SMFS_MINOR,
         name:        "smfscontrol",

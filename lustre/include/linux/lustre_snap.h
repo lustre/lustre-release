@@ -141,11 +141,12 @@ struct snap_ea{
 #define SNAP_MAX_TABLES 	32	
 #define SNAP_MAX_NAMELEN	64
 
-#define MAX_SNAPTABLE_COUNT     "MAXSnapCount"
-#define SNAPTABLE_MAGIC	        0x19760218
-#define SNAPTABLE_INFO          "snaptable"
-#define SNAP_GENERATION         "snap_generation"
-
+#define MAX_SNAPTABLE_COUNT  "MAXSnapCount"
+#define SNAPTABLE_MAGIC	     0x19760218
+#define SNAPTABLE_INFO       "snaptable"
+#define SNAP_GENERATION      "snap_generation"
+#define SNAP_COUNT           "snapcount"
+#define SNAP_ROOT_INO        "snap_root_ino"
 
 #define SNAP_LOOKUP     (REINT_MAX + 1)
 
@@ -173,17 +174,24 @@ struct snap_dot_info {
 };
 
 struct snap_info {
-        struct fsfilt_operations *snap_fsfilt;  
-        struct fsfilt_operations *snap_cache_fsfilt; 
-        struct dentry            *snap_root; 
-	struct semaphore         sntbl_sema;
-	spinlock_t               sntbl_lock;
-        struct snap_table        *sntbl;
-        struct dentry            *sn_cowed_dentry;
-        struct snap_dot_info     *sn_dot_info;
+	struct list_head         sni_list;
+        ino_t                    sni_root_ino;
+        struct semaphore         sni_sema;
+	spinlock_t               sni_lock;
+        struct snap_table        *sni_table;
+        struct dentry            *sni_cowed_dentry;
+        struct snap_dot_info     *sni_dot_info;
 };
 
-extern int smfs_add_snap_item(struct super_block *sb, char *name);
+struct snap_super_info {
+        struct fsfilt_operations *snap_fsfilt;  
+        struct fsfilt_operations *snap_cache_fsfilt; 
+        struct list_head          snap_list;
+        int                       snap_table_size;
+};
+
+extern int smfs_add_snap_item(struct super_block *sb, char *path_name, 
+                              char *name);
 extern int smfs_start_cow(struct super_block *sb);
 extern int smfs_stop_cow(struct super_block *sb);
 
@@ -224,7 +232,7 @@ static inline int smfs_under_dotsnap_inode(struct inode *inode)
                 return 1;
         return 0; 
 }
-
-
+#define SNAP_MINOR 242
+#define SNAP_MAJOR 10
 
 #endif /*_LUSTRE_SNAP_H*/

@@ -474,7 +474,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_COBD_COFF              _IOWR('f', 221, long)
 #define OBD_IOC_COBD_CFLUSH            _IOWR('f', 222, long)
 
-#define OBD_IOC_SNAP_ADD               _IOWR('f', 230, long)
+#define OBD_IOC_SMFS_SNAP_ADD          _IOWR('f', 230, long)
 
 /* XXX _IOWR('f', 250, long) has been defined in
  * portals/include/linux/kp30.h for debug, don't use it

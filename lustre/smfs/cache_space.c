@@ -79,7 +79,7 @@ int cache_space_post_hook(struct inode *inode, struct dentry *dentry,
 
 int cache_space_hook_init(struct super_block *sb)
 {
-        struct smfs_super_info  *smfs_info = S2SMI(sb);
+        struct smfs_super_info *smfs_info = S2SMI(sb);
         struct smfs_hook_ops    *cache_hops;
         int    rc = 0;
         ENTRY;
@@ -89,7 +89,7 @@ int cache_space_hook_init(struct super_block *sb)
         if (!cache_hops) {
                 RETURN(-ENOMEM);
         }
-        rc = smfs_register_hook_ops(sb, cache_hops);      
+        rc = smfs_register_hook_ops(smfs_info, cache_hops); 
         if (rc) {
                 smfs_free_hook_ops(cache_hops);
                 RETURN(rc);
@@ -99,12 +99,11 @@ int cache_space_hook_init(struct super_block *sb)
         RETURN(0);
 }
 
-int cache_space_hook_exit(struct super_block *sb)
+int cache_space_hook_exit(struct smfs_super_info *smfs_info)
 {
-        struct smfs_super_info  *smfs_info = S2SMI(sb);
         struct smfs_hook_ops *cache_hops; 
 
-        cache_hops = smfs_unregister_hook_ops(sb, CACHE_HOOK);
+        cache_hops = smfs_unregister_hook_ops(smfs_info, CACHE_HOOK);
         smfs_free_hook_ops(cache_hops);
 
         SMFS_CLEAN_CACHE_HOOK(smfs_info);

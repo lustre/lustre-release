@@ -66,8 +66,8 @@ static struct lvfs_callback_ops filter_lvfs_ops;
 
 static int filter_destroy(struct obd_export *exp, struct obdo *oa,
                           struct lov_stripe_md *ea, struct obd_trans_info *);
-static struct obd_llogs *filter_grab_llog_for_group(struct obd_device *,
-                                                    int, struct obd_export *);
+struct obd_llogs *filter_grab_llog_for_group(struct obd_device *,
+                                             int, struct obd_export *);
 
 static void filter_commit_cb(struct obd_device *obd, __u64 transno,
                              void *cb_data, int error)
@@ -2835,14 +2835,6 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
 
         case OBD_IOC_CATLOGLIST: {
                 rc = llog_catalog_list(obd, 1, data);
-                RETURN(rc);
-        }
-
-        case OBD_IOC_SNAP_ADD: {
-                char *name = data->ioc_inlbuf1;
-                if (name) {
-                        rc = fsfilt_set_snap_item(obd, obd->u.filter.fo_sb, name);
-                }
                 RETURN(rc);
         }
         case OBD_IOC_LLOG_CANCEL:

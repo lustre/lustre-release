@@ -245,7 +245,8 @@ command_t cmdlist[] = {
         {"cache_off", jt_obd_cache_off, 0,
          "usage: lsync\n"},  
         /*snap operations*/
-        {"snap_add", jt_obd_snap_add, 0, "usage: snap_add <snap_name>\n"}, 
+        {"snap_add", jt_obd_snap_add, 0, 
+         "usage: snap_add <dev_name> <snap_name>\n"}, 
         /* Llog operations */ 
         {"llog_catlist", jt_llog_catlist, 0, 
          "list all catalog logs on current device.\n"

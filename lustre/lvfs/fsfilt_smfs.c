@@ -406,7 +406,6 @@ static ssize_t fsfilt_smfs_readpage(struct file *file, char *buf,
                 
                 rc = snapops->fs_read_dotsnap_dir_page(sfi->c_file, buf, count, 
                                                        cache_ppos); 
-                
         } else {
                 if (cache_fsfilt->fs_readpage)
                         rc = cache_fsfilt->fs_readpage(sfi->c_file, buf, count,
@@ -631,12 +630,6 @@ static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
                 smfs_post_setup(sb, mnt);
                 if (SMFS_DO_REC(S2SMI(sb)))
                         rc = smfs_start_rec(sb, mnt);
-#if CONFIG_SNAPFS
-                if (SMFS_DO_COW(S2SMI(sb))) {
-                       S2SNAPI(sb)->snap_root = root_dentry;  
-                       rc = smfs_start_cow(sb);
-                }
-#endif
                 if (rc)
                         GOTO(exit, rc);
                 if (obd)
@@ -661,10 +654,6 @@ static int fsfilt_smfs_post_cleanup(struct obd_device *obd,
                 sb = mnt->mnt_sb;
                 if (SMFS_DO_REC(S2SMI(sb)))
                         rc = smfs_stop_rec(sb);
-#if CONFIG_SNAPFS
-                if (SMFS_DO_COW(S2SMI(sb)))
-                        rc = smfs_stop_cow(sb);
-#endif
                 smfs_post_cleanup(sb);
         }
         RETURN(rc);
@@ -985,7 +974,7 @@ static int fsfilt_smfs_set_snap_item(struct super_block *sb, char *name)
 
         ENTRY;
 #if CONFIG_SNAPFS
-        rc = smfs_add_snap_item(sb, name);
+#warning "still not implement for add snap item -wangdi"         
 #endif
         RETURN(rc);        
 }

@@ -123,14 +123,13 @@ struct smfs_hook_ops *smfs_alloc_hook_ops(char *name,
                                           smfs_hook_func post_hook);
 
 void smfs_free_hook_ops(struct smfs_hook_ops *hops);
-int smfs_register_hook_ops(struct super_block *sb, 
+int smfs_register_hook_ops(struct smfs_super_info *smb, 
                            struct smfs_hook_ops *smh_ops);
 
-struct smfs_hook_ops *smfs_unregister_hook_ops(struct super_block *sb, 
+struct smfs_hook_ops *smfs_unregister_hook_ops(struct smfs_super_info *smb, 
                                                char *name);
 /*smfs_lib.c*/
 void smfs_put_super(struct super_block *sb);
-extern struct super_block *smfs_get_sb_by_path(char *path, int len);
 int smfs_fill_super(struct super_block *sb, void *data, int silent);
 /*sysctl.c*/
 extern int sm_debug_level;
@@ -161,6 +160,11 @@ struct inode *smfs_get_inode(struct super_block *sb, ino_t hash,
 
 extern struct super_operations smfs_super_ops;
 
+struct smfs_iget_args {
+        struct inode *s_inode;
+        int           s_index;
+        int           s_ino;
+};
 /*symlink.c*/
 extern struct inode_operations smfs_sym_iops;
 extern struct file_operations smfs_sym_fops;
@@ -178,19 +182,21 @@ extern int smfs_post_rec_setattr(struct inode *dir, struct dentry *dentry,
 extern int smfs_post_rec_create(struct inode *dir, struct dentry *dentry,
                                 void   *data1, void   *data2);
 /*kml.c*/
-extern int smfs_kml_init(struct super_block *sb);
-extern int smfs_do_rec(struct inode *inode);
-extern int smfs_rec_cleanup(struct super_block *sb);
-extern int smfs_rec_init(struct super_block *sb);
+int smfs_do_rec(struct inode *inode);
+int smfs_rec_cleanup(struct smfs_super_info *smfs_info);
+int smfs_rec_init(struct super_block *sb);
+
 extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
                            char **pbuf, int *opcode);
 extern int smfs_process_rec(struct super_block *sb, int count,
                             char *dir, int flags);
 extern smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb);
 
-extern int ost_rec_pack_init(struct super_block *sb);
+
+/*mds_kml.c*/
+int mds_rec_pack_init(struct smfs_super_info *smsi);
 /*ost_kml.c*/
-extern int mds_rec_pack_init(struct super_block *sb);
+int ost_rec_pack_init(struct smfs_super_info *smsi);
 
 /*smfs_llog.c*/
 extern int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt);
@@ -224,10 +230,10 @@ extern int cache_space_post(int op, void *handle, struct inode *old_dir,
                             struct dentry *old_dentry, struct inode *new_dir,
                             struct dentry *new_dentry);
 
-extern int cache_space_hook_setup(struct super_block *);
-extern int cache_space_hook_cleanup(void);
-extern int cache_space_hook_init(struct super_block *);
-extern int cache_space_hook_exit(struct super_block *);
+int cache_space_hook_setup(struct super_block *);
+int cache_space_hook_cleanup(void);
+int cache_space_hook_init(struct super_block *sb);
+int cache_space_hook_exit(struct smfs_super_info *smfs_info);
 
 #define XATTR_SMFS_HOARD_MARK           "hoard"
 #define XATTR_SMFS_CACHE_LOGCOOKIE      "cache"
@@ -316,11 +322,21 @@ do {                                                                           \
                 GOTO(label, rc);                                               \
 } while(0)                                                                     \
 
+#define SMFS_GET_INODE(sb, cache_inode, dir, index, inode, rc, label)   \
+do {                                                                    \
+        LASSERT(cache_inode);                                           \
+        inode = smfs_get_inode(sb, cache_inode->i_ino, dir, index);     \
+        iput(cache_inode);                                              \
+        if (!inode)                                                     \
+                GOTO(label, rc = -ENOENT);                              \
+} while(0)        
+
+
 #if CONFIG_SNAPFS
-extern int smfs_cow_init(struct super_block *sb);
-extern int smfs_cow_cleanup(struct super_block *sb);
-extern int smfs_init_snap_inode_info(struct inode *inode, 
-                                     struct snap_inode_info *sn_info); 
+int smfs_cow_init(struct super_block *sb);
+int smfs_cow_cleanup(struct smfs_super_info *smb);
+int smfs_init_snap_inode_info(struct inode *inode, struct smfs_iget_args *args); 
+int smfs_snap_test_inode(struct inode *inode, void *args);
 #else
 #define SMFS_PRE_COW(dir, dentry, new_dir, new_dentry, op, name, rc, label)                 
 #endif 
