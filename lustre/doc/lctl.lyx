@@ -179,8 +179,14 @@ on a device name.
 devno 
 \emph default 
 option is used as above.
-\layout LyX-Code
+\layout Description
 
+--ignore_errors\SpecialChar ~
+|\SpecialChar ~
+ignore_errors Ignore errors during script processing
+\layout Description
+
+dump Save ioctls to a file 
 \layout LyX-Code
 
 \layout Description
@@ -383,6 +389,12 @@ probe\SpecialChar ~
 close
 \emph on 
  
+\emph default 
+Close the
+\emph on 
+ 
+\emph default 
+connection handle
 \layout Description
 
 getattr\SpecialChar ~
@@ -499,9 +511,31 @@ ldlm_regress_stop Stop lock manager stress test.
 dump_ldlm Dump all lock manager state, this is very useful for debugging
 \layout Description
 
-newconn\SpecialChar ~
-<olduuid>\SpecialChar ~
-[newuuid]
+activate Activate an import
+\layout Description
+
+deacttivate De-activate an import
+\layout Description
+
+recover\SpecialChar ~
+<connection UUID> 
+\layout Description
+
+lookup\SpecialChar ~
+<directory>\SpecialChar ~
+<file>
+\layout Description
+
+notransno Disable sending of committed transnumber updates
+\layout Description
+
+readonly Disable writes to the underlying device
+\layout Description
+
+abort_recovery Abort recovery on MDS device
+\layout Description
+
+mount_option Dump mount options to a file
 \layout Description
 
 get_stripe show stripe info for an echo client object.
@@ -516,21 +550,14 @@ width!count[@offset]\SpecialChar ~
 
 unset_stripe\SpecialChar ~
 <objid> unset stripe info for an echo client object.
-\layout Description
-
-newconn\SpecialChar ~
-<old_uuid>\SpecialChar ~
-<new_uuid> Delete the old connection and establish a new
- connection to a new server as in the case of a fail-over
-\layout Description
-
-fail_conn\SpecialChar ~
-<uuid> Force a connection to fail, used to simulate failure
 \end_deeper 
 \layout Description
 
 Debug
 \begin_deeper 
+\layout Description
+
+debug_daemon debug daemon control and dump to a file
 \layout Description
 
 debug_kernel\SpecialChar ~
