@@ -49,7 +49,7 @@
 +	handle_t *handle;
 +	struct buffer_head bh_tmp;
 +	int needed_blocks;
-+	int i, ret, ret2;
++	int i, ret = 0, ret2;
 +
 +	needed_blocks = extN_san_write_trans_blocks(nblocks);
 +
