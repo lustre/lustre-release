@@ -40,13 +40,14 @@ static int rd_target(char *page, char **start, off_t off, int count,
         LASSERT(dev != NULL);
         conn = &dev->u.cobd.cobd_target;
 
-	if ((dev->obd_flags & OBD_SET_UP) == 0)
+	if (!dev->obd_set_up) {
 		rc = snprintf (page, count, "not set up\n");
-	else {
-		exp = class_conn2export (conn);
+	} else {
+		exp = class_conn2export(conn);
 		LASSERT(exp != NULL);
 		rc = snprintf(page, count, "%s\n", 
                               exp->exp_obd->obd_uuid.uuid);
+                class_export_put(exp);
 	}
 	return (rc);
 }
@@ -62,13 +63,14 @@ static int rd_cache(char *page, char **start, off_t off, int count,
         LASSERT(dev != NULL);
         conn = &dev->u.cobd.cobd_cache;
 
-	if ((dev->obd_flags & OBD_SET_UP) == 0)
+	if (!dev->obd_set_up) {
 		rc = snprintf (page, count, "not set up\n");
-	else {
-		exp = class_conn2export (conn);
+        } else {
+		exp = class_conn2export(conn);
 		LASSERT (exp != NULL);
 		rc = snprintf(page, count, "%s\n", 
                               exp->exp_obd->obd_uuid.uuid);
+                class_export_put(exp);
 	}
 	return (rc);
 }

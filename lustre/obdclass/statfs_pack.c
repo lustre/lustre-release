@@ -96,8 +96,8 @@ int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
         } else
                 export = list_entry(obd->obd_exports.next, typeof(*export),
                                     exp_obd_chain);
-        conn.addr = (unsigned long)export;
-        conn.cookie = export->exp_cookie;
+        POISON(&conn.addr, 0x69, sizeof conn.addr);
+        conn.cookie = export->exp_handle.h_cookie;
 
         rc = obd_statfs(&conn, &osfs);
         if (!rc)
