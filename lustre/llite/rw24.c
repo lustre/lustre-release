@@ -49,75 +49,69 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-/* called as the osc engine completes an rpc that included our ocp.  
- * the ocp itself holds a reference to the page and will drop it when
- * the page is removed from the page cache.  our job is simply to
- * transfer rc into the page and unlock it */
-void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
+/* called for each page in a completed rpc.*/
+void ll_ap_completion_24(void *data, int cmd, int rc)
 {
-        struct page *page = ocp->ocp_page;
+        struct ll_async_page *llap;
+        struct page *page;
 
-        LASSERT(page->private == (unsigned long)ocp);
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) {
+                EXIT;
+                return;
+        }
+
+        llap->llap_queued = 0;
+        page = llap->llap_page;
+
         LASSERT(PageLocked(page));
 
-        if (rc != 0) 
+        if (rc == 0)  {
+                if (cmd == OBD_BRW_READ)
+                        SetPageUptodate(page);
+        } else { 
                 SetPageError(page);
+        }
 
-        ocp->ocp_flags &= ~OCP_IO_READY;
         unlock_page(page);
         page_cache_release(page);
 }
 
 static int ll_writepage_24(struct page *page)
 {
-        struct obd_client_page *ocp;
-        struct obd_export *exp;
         struct inode *inode = page->mapping->host;
+        struct obd_export *exp;
+        struct ll_async_page *llap;
         int rc;
         ENTRY;
 
         LASSERT(!PageDirty(page));
         LASSERT(PageLocked(page));
-        LASSERT(page->private != 0);
-
-        ocp = (struct obd_client_page *)page->private;
-        ocp->ocp_flags |= OCP_IO_READY;
-        page_cache_get(page);
-
-        /* sadly, not all callers who writepage eventually call sync_page
-         * (ahem, kswapd) so we need to raise this page's priority 
-         * immediately */
-        rc = ll_sync_page(page);
-
-        if (rc != -EAGAIN)
-                goto out;
 
         exp = ll_i2obdexp(inode);
-        if (exp == NULL) {
-                rc = -EINVAL;
-                goto out;
-        }
+        if (exp == NULL)
+                RETURN(-EINVAL);
+  
+        llap = llap_from_page(page);
+        if (IS_ERR(llap))
+                RETURN(PTR_ERR(llap));
 
-        /* mmap writepage() gets here without coming through commit_write().
-         * so we just tried to raise the priority of an io that wasn't in
-         * flight.  try again.. */
-        ocp->ocp_io_completion = ll_complete_writeback;
-        ocp->ocp_set_io_ready = ll_ocp_set_io_ready;
-        ocp->ocp_update_io_args = ll_ocp_update_io_args;
-        ocp->ocp_update_obdo = ll_ocp_update_obdo;
-        ocp->ocp_brw_flag = OBD_BRW_CREATE;
-        ocp->ocp_flags = OCP_IO_READY|OCP_IO_URGENT;
-
-        rc = obd_queue_async_io(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, 
-                                NULL, ocp, NULL);
-        /* XXX fallback to sync?  probably, when the api is more robust */
-out:
-        if (rc != 0) {
-                SetPageError(page);
-                unlock_page(page);
-                RETURN(rc);
+        page_cache_get(page);
+        if (llap->llap_queued) {
+                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL, 
+                                         llap->llap_cookie, ASYNC_READY | 
+                                         ASYNC_URGENT);
+        } else {
+                rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL, 
+                                        llap->llap_cookie, OBD_BRW_WRITE, 0, 0, 
+                                        OBD_BRW_CREATE, ASYNC_READY | 
+                                        ASYNC_URGENT);
+                if (rc == 0)
+                        llap->llap_queued = 1;
         }
-        RETURN(0);
+        if (rc)
+                page_cache_release(page);
+        RETURN(rc);
 }
 
 static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
@@ -202,11 +196,6 @@ struct address_space_operations ll_aops = {
         readpage: ll_readpage,
         direct_IO: ll_direct_IO_24,
         writepage: ll_writepage_24,
-/* we shouldn't use this until we have a better story about sync_page
- * and writepage completion racing.  also, until we differentiate between 
- * writepage and syncpage it seems of little value to raise the priority
- * twice*/
-//        sync_page: ll_sync_page,
         prepare_write: ll_prepare_write,
         commit_write: ll_commit_write,
         removepage: ll_removepage,
