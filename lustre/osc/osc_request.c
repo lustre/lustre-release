@@ -391,6 +391,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
 
         cb_data->callback = callback;
         cb_data->cb_data = data;
+        CDEBUG(D_PAGE, "data(%p)->desc = %p\n", data, desc);
         data->desc = desc;
         desc->bd_cb_data = cb_data;
 
@@ -509,6 +510,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         cb_data->callback = callback;
         cb_data->cb_data = data;
+        CDEBUG(D_PAGE, "data(%p)->desc = %p\n", data, desc);
         data->desc = desc;
         desc->bd_cb_data = cb_data;
 

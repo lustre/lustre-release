@@ -116,10 +116,9 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
         }
 
         spin_lock(&recovd->recovd_lock);
-        if (rd->rd_phase != RD_IDLE) {
-                CERROR("connection %p to %s already in recovery\n",
+        if (rd->rd_phase == RD_TROUBLED || rd->rd_phase == RD_PREPARING) {
+                CDEBUG(D_HA, "connection %p to %s already in recovery\n",
                        conn, conn->c_remote_uuid);
-                /* XXX need to distinguish from failure-in-recovery */
                 spin_unlock(&recovd->recovd_lock);
                 EXIT;
                 return;
@@ -128,6 +127,13 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
         CERROR("connection %p to %s failed\n", conn, conn->c_remote_uuid);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
+        if (rd->rd_phase != RD_IDLE) {
+                CDEBUG(D_HA,
+                       "connection %p to %s failed in recovery: restarting\n",
+                       conn, conn->c_remote_uuid);
+                /* XXX call callback with PHASE_FAILED? */
+                rd->rd_next_phase = RD_TROUBLED;
+        }
         rd->rd_phase = RD_TROUBLED;
         dump_lists(recovd);
         spin_unlock(&recovd->recovd_lock);

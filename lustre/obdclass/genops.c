@@ -37,7 +37,11 @@ static int sync_io_timeout(void *data)
         LASSERT(cbd);
         desc = cbd->desc;
 
-        LASSERT(desc);
+        if (!desc) {
+                CERROR("no desc for timed-out BRW, reopen Bugzilla 214!\n");
+                RETURN(0); /* back to sleep -- someone had better wake us up! */
+        }
+
         LASSERT(desc->bd_connection);
 
         CERROR("IO of %d pages to/from %s:%d (conn %p) timed out\n",
@@ -79,15 +83,15 @@ int ll_sync_io_cb(struct io_cb_data *data, int err, int phase)
                 if (atomic_dec_and_test(&data->refcount))
                         OBD_FREE(data, sizeof(*data));
                 if (ret == -EINTR)
-                        return ret;
+                        RETURN(ret);
         } else if (phase == CB_PHASE_FINISH) {
                 data->err = err;
                 data->complete = 1;
                 wake_up(&data->waitq);
                 if (atomic_dec_and_test(&data->refcount))
                         OBD_FREE(data, sizeof(*data));
-                return err;
-        } else
+                RETURN(err);
+        } else                
                 LBUG();
         EXIT;
         return 0;

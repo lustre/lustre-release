@@ -90,7 +90,7 @@ static void prepare_osc(struct obd_import *imp)
                 struct lustre_handle fakeconn;
                 struct obd_ioctl_data ioc_data;
                 struct obd_export *exp =
-                        list_entry(&notify_obd->obd_exports.next,
+                        list_entry(notify_obd->obd_exports.next,
                                    struct obd_export, exp_obd_chain);
                 fakeconn.addr = (__u64)(unsigned long)exp;
                 fakeconn.cookie = exp->exp_cookie;

@@ -487,8 +487,8 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
  * waitq or some similar mechanism, or an interrupt occurs (if the caller has
  * asked for interrupts to be detected).  The timeout will only fire once, so
  * callers should take care that a timeout_handler which returns zero will take
- * future steps to awaken the process.  N.B. that these steps must include making
- * the provided condition become true.
+ * future steps to awaken the process.  N.B. that these steps must include
+ * making the provided condition become true.
  *
  * If the interrupt flag (lwi_signals) is non-zero, then the process will be
  * interruptible, and will be awakened by any "killable" signal (SIGTERM,
