@@ -782,15 +782,15 @@ int trace_write_debug_mb(struct file *file, const char *buffer,
         max = simple_strtoul(string, NULL, 0);
         if (max == 0)
                 return -EINVAL;
-        max /= smp_num_cpus;
 
-        if (max * smp_num_cpus > (num_physpages >> (20 - 2 - PAGE_SHIFT)) / 5) {
+        if (max > (num_physpages >> (20 - 2 - PAGE_SHIFT)) / 5 || max >= 512) {
                 printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
-                       "%d MB, which is more than 80%% of physical RAM "
-                       "(%lu).\n", max * smp_num_cpus,
-                       (num_physpages >> (20 - 2 - PAGE_SHIFT)) / 5);
+                       "%dMB, which is more than 80%% of available RAM (%lu)\n",
+                       max, (num_physpages >> (20 - 2 - PAGE_SHIFT)) / 5);
                 return -EINVAL;
         }
+
+        max /= smp_num_cpus;
 
         for (i = 0; i < NR_CPUS; i++) {
                 struct trace_cpu_data *tcd;
