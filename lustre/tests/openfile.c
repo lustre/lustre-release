@@ -6,6 +6,7 @@
 #define DEBUG
 #endif
 
+/* for O_DIRECTORY and O_DIRECT */
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -34,9 +35,10 @@ FLAG_MAPPING flag_table[] = {
        {"O_NONBLOCK", O_NONBLOCK},
        {"O_NDELAY", O_NDELAY},
        {"O_SYNC", O_SYNC},
-       {"O_NOFOLLOW", O_NOFOLLOW},
-       {"O_DIRECTORY", O_DIRECTORY},
+       {"O_DIRECT", O_DIRECT},
        {"O_LARGEFILE", O_LARGEFILE},
+       {"O_DIRECTORY", O_DIRECTORY},
+       {"O_NOFOLLOW", O_NOFOLLOW},
        {"", -1}
 };
 

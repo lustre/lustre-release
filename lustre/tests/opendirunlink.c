@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 
+/* for O_DIRECTORY */
 #define _GNU_SOURCE
 
 #include <stdio.h>
