@@ -52,15 +52,17 @@ static void osc_con2dlmcl(struct lustre_handle *conn, struct ptlrpc_client **cl,
 static int osc_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         struct osc_obd *osc = &obd->u.osc;
-        struct obd_import *import;
+        //struct obd_import *import;
         struct ptlrpc_request *request;
         char *tmp = osc->osc_target_uuid;
         int rc, size = sizeof(osc->osc_target_uuid);
         ENTRY;
 
+        /* not used yet
         OBD_ALLOC(import, sizeof(*import));
         if (!import)
                 RETURN(-ENOMEM);
+         */
 
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd);
