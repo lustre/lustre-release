@@ -19,6 +19,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- ptlrpc cleanup bug (2710)
 	- mds timeout on local locks (2588)
 	- namespace lock held during RPCs (2431)
+	- handle interrupted sync write properly (2503)
 	- don't try to handle a message that hasn't been replied to (2699)
 	- client assert failure during cleanup after abort recovery (2701)
 	- leak mdc device after failed mount (2712)
