@@ -60,8 +60,7 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
  * If it is called with iattr->ia_valid & ATTR_FROM_OPEN, then it is a
  * magic open-path setattr that should take the setattr semaphore and
  * go to the setattr portal. */
-int mdc_setattr(struct lustre_handle *conn,
-                struct mdc_op_data *data,
+int mdc_setattr(struct lustre_handle *conn, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request)
 {
@@ -81,14 +80,15 @@ int mdc_setattr(struct lustre_handle *conn,
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount,
                               size, NULL);
-        if (!req)
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
         if (iattr->ia_valid & ATTR_FROM_OPEN) {
                 req->rq_request_portal = MDS_SETATTR_PORTAL; //XXX FIXME bug 249
                 rpc_lock = &mdc_setattr_lock;
-        } else
+        } else {
                 rpc_lock = &mdc_rpc_lock;
+        }
 
         mdc_setattr_pack(req, data, iattr, ea, ealen, ea2, ea2len);
 
@@ -106,17 +106,14 @@ int mdc_setattr(struct lustre_handle *conn,
         RETURN(rc);
 }
 
-int mdc_create(struct lustre_handle *conn,
-               struct mdc_op_data *op_data,
-               const void *data, int datalen,
-               int mode, __u32 uid, __u32 gid, __u64 time, __u64 rdev,
-               struct ptlrpc_request **request)
+int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
+               const void *data, int datalen, int mode, __u32 uid, __u32 gid,
+               __u64 time, __u64 rdev, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        int rc, size[3] = {sizeof(struct mds_rec_create),
-                           op_data->namelen + 1, 0};
+        int rc, size[3] = {sizeof(struct mds_rec_create), op_data->namelen + 1};
         int level, bufcount = 2;
-//        ENTRY;
+        ENTRY;
 
         if (data && datalen) {
                 size[bufcount] = datalen;
@@ -125,9 +122,8 @@ int mdc_create(struct lustre_handle *conn,
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount,
                               size, NULL);
-        if (!req)
-                return -ENOMEM;
-//                RETURN(-ENOMEM);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
         /* mdc_create_pack fills msg->bufs[1] with name
          * and msg->bufs[2] with tgt, for symlinks or lov MD data */
@@ -151,12 +147,10 @@ int mdc_create(struct lustre_handle *conn,
                 mdc_store_inode_generation(req, 0, 0);
 
         *request = req;
-        return rc;
-//        RETURN(rc);
+        RETURN(rc);
 }
 
-int mdc_unlink(struct lustre_handle *conn,
-               struct mdc_op_data *data,
+int mdc_unlink(struct lustre_handle *conn, struct mdc_op_data *data,
                struct ptlrpc_request **request)
 {
         struct obd_device *obddev = class_conn2obd(conn);
@@ -165,10 +159,9 @@ int mdc_unlink(struct lustre_handle *conn,
         ENTRY;
 
         LASSERT(req == NULL);
-
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 2, size,
                               NULL);
-        if (!req)
+        if (req == NULL)
                 RETURN(-ENOMEM);
         *request = req;
 
@@ -185,8 +178,7 @@ int mdc_unlink(struct lustre_handle *conn,
         RETURN(rc);
 }
 
-int mdc_link(struct lustre_handle *conn,
-             struct mdc_op_data *data,
+int mdc_link(struct lustre_handle *conn, struct mdc_op_data *data,
              struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -195,7 +187,7 @@ int mdc_link(struct lustre_handle *conn,
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 2, size,
                               NULL);
-        if (!req)
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
         mdc_link_pack(req, 0, data);
@@ -211,10 +203,8 @@ int mdc_link(struct lustre_handle *conn,
         RETURN(rc);
 }
 
-int mdc_rename(struct lustre_handle *conn,
-               struct mdc_op_data *data,
-               const char *old, int oldlen,
-               const char *new, int newlen,
+int mdc_rename(struct lustre_handle *conn, struct mdc_op_data *data,
+               const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -224,7 +214,7 @@ int mdc_rename(struct lustre_handle *conn,
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, 3, size,
                               NULL);
-        if (!req)
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
         mdc_rename_pack(req, 0, data, old, oldlen, new, newlen);
