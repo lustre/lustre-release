@@ -2262,9 +2262,8 @@ def find_local_clusters(node_db):
         debug("add_local", netuuid)
         local_clusters.append((srv.net_type, srv.cluster_id, srv.nid))
         if srv.port > 0:
-            if acceptors.has_key(srv.port):
-                panic("duplicate port:", srv.port)
-            acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
+            if not acceptors.has_key(srv.port):
+            	acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
 
 # This node is a gateway.
 is_router = 0

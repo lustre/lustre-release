@@ -19,6 +19,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- block device patches to fix I/O request sizes in 2.6 (5482)
 	- look up hostnames for IB nals (5602)
 	- 2.6 changed lock ordering of 2 semaphores, caused deadlock (5654)
+	- don't start multiple acceptors for the same port (5277)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)
