@@ -238,13 +238,13 @@ profiles
 \layout Description
 
 --port\SpecialChar ~
-[port] Optional argument to indicate the tcp port.
+[port] Optional arguement to indicate the tcp port.
  The default is 988.
  
 \layout Description
 
 --tcpbuf\SpecialChar ~
-<size> Optional argument.
+<size> Optional arguement.
  The default TCP buffer size is 1MB.
 \layout Description
 
@@ -275,8 +275,8 @@ mds
 \layout Description
 
 --size\SpecialChar ~
-<size> Optional argument indicating the size of the device to be created
- (used typically for loop devices).
+<size> Optional arguement indicating the size of the device to be
+ created (used typically for loop devices).
 \layout Description
 
 --node\SpecialChar ~
@@ -289,7 +289,7 @@ mds
 \layout Description
 
 --fstype\SpecialChar ~
-extN|ext3 Optional arguement used to specify the file system type.
+extN|ext3 Compulsory arguement used to specify the file system type.
 \layout Description
 
 --journal_size\SpecialChar ~
@@ -378,7 +378,7 @@ UUID Specify the UUID of the OST device.
 \layout Description
 
 --fstype\SpecialChar ~
-extN|ext3 Optional arguement used to specify the file system type.
+extN|ext3 Compulsory arguement used to specify the file system type.
 \layout Description
 
 --journal_size\SpecialChar ~
