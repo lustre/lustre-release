@@ -278,7 +278,7 @@ struct client_obd {
 
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
-        struct osc_creator      cl_oscc;
+        struct osc_creator       cl_oscc;
 
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;

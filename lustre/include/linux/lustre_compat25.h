@@ -149,7 +149,7 @@ static inline int cleanup_group_info(void)
 #define module_put                      __MOD_DEC_USE_COUNT
 #define LTIME_S(time)                   (time)
 #if !defined(CONFIG_RH_2_4_20) && !defined(cpu_online)
-#define cpu_online(cpu)                 (cpu_online_map & (1<<cpu))
+#define cpu_online(cpu)                 test_bit(cpu, &(cpu_online_map))
 #endif
 
 static inline int ll_path_lookup(const char *path, unsigned flags,

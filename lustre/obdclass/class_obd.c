@@ -102,6 +102,30 @@ unsigned int obd_print_fail_loc(void)
         return obd_fail_loc;
 }
 
+void ll_set_rdonly(ll_sbdev_type dev)
+{
+        CDEBUG(D_IOCTL | D_HA, "set dev %ld rdonly\n", (long)dev);
+        ll_sbdev_sync(dev);
+#ifdef HAVE_OLD_DEV_SET_RDONLY
+        dev_set_rdonly(dev, 2);
+#else
+        dev_set_rdonly(dev);
+#endif
+}
+
+void ll_clear_rdonly(ll_sbdev_type dev)
+{
+        CDEBUG(D_IOCTL | D_HA, "unset dev %ld rdonly\n", (long)dev);
+        if (ll_check_rdonly(dev)) {
+                ll_sbdev_sync(dev);
+#ifdef HAVE_OLD_DEV_SET_RDONLY
+                dev_clear_rdonly(2);
+#else
+                dev_clear_rdonly(dev);
+#endif
+        }
+}
+
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
 {
@@ -372,6 +396,8 @@ void *obd_psdev = NULL;
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
 EXPORT_SYMBOL(obd_fail_loc);
+EXPORT_SYMBOL(ll_set_rdonly);
+EXPORT_SYMBOL(ll_clear_rdonly);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_dump_on_timeout);
@@ -550,7 +576,7 @@ struct file_operations obd_device_list_fops = {
 int obd_init_checks(void)
 {
         long long llval;
-        __u64 u64val;
+        __u64 u64val, div64val;
         char buf[64];
         int len, ret = 0;
 
@@ -562,50 +588,54 @@ int obd_init_checks(void)
         llval = OBD_OBJECT_EOF;
         CDEBUG(D_INFO, "llval OBD_OBJECT_EOF = "LPX64"\n", llval);
         if (llval != OBD_OBJECT_EOF) {
-                CDEBUG(D_ERROR, "long long "LPX64"(%d) != 0xffffffffffffffff\n",
+                CERROR("long long "LPX64"(%d) != 0xffffffffffffffff\n",
                        llval, sizeof(llval));
                 ret = -EINVAL;
         }
         len = snprintf(buf, sizeof(buf), LPX64, llval);
         if (len != 18) {
-                CDEBUG(D_WARNING, "LPX64 wrong length! strlen(%s)=%d != 18\n",
-                       buf, len);
+                CWARN("LPX64 wrong length! strlen(%s)=%d != 18\n", buf, len);
                 ret = -EINVAL;
         }
 
-        u64val = OBD_OBJECT_EOF;
+        u64val = div64val = OBD_OBJECT_EOF;
         CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
         if (u64val != OBD_OBJECT_EOF) {
-                CDEBUG(D_ERROR, "__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
+                CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
                        u64val, sizeof(u64val));
-                ret = -EINVAL;
+                ret = -EOVERFLOW;
         }
         if (u64val >> 8 != OBD_OBJECT_EOF >> 8) {
-                CDEBUG(D_ERROR, "__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
+                CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
                        u64val, sizeof(u64val));
-                ret = -EINVAL;
+                return -EOVERFLOW;
+        }
+        if (do_div(div64val, 256) != (u64val & 255)) {
+                CERROR("do_div("LPX64",256) != "LPU64"\n", u64val, u64val &255);
+                return -EOVERFLOW;
+        }
+        if (u64val >> 8 != div64val) {
+                CERROR("do_div("LPX64",256) "LPU64" != "LPU64"\n",
+                       u64val, div64val, u64val >> 8);
+                return -EOVERFLOW;
         }
         len = snprintf(buf, sizeof(buf), LPX64, u64val);
         if (len != 18) {
-                CDEBUG(D_WARNING, "LPX64 wrong length! strlen(%s)=%d != 18\n",
-                       buf, len);
+                CWARN("LPX64 wrong length! strlen(%s)=%d != 18\n", buf, len);
                 ret = -EINVAL;
         }
         len = snprintf(buf, sizeof(buf), LPU64, u64val);
         if (len != 20) {
-                CDEBUG(D_WARNING, "LPU64 wrong length! strlen(%s)=%d != 20\n",
-                       buf, len);
+                CWARN("LPU64 wrong length! strlen(%s)=%d != 20\n", buf, len);
                 ret = -EINVAL;
         }
         len = snprintf(buf, sizeof(buf), LPD64, u64val);
         if (len != 2) {
-                CDEBUG(D_WARNING, "LPD64 wrong length! strlen(%s)=%d != 2\n",
-                      buf, len);
+                CWARN("LPD64 wrong length! strlen(%s)=%d != 2\n", buf, len);
                 ret = -EINVAL;
         }
         if ((u64val & ~PAGE_MASK) >= PAGE_SIZE) {
-                CDEBUG(D_WARNING, "mask failed: u64val "LPU64" >= %lu\n",
-                       u64val, PAGE_SIZE);
+                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,PAGE_SIZE);
                 ret = -EINVAL;
         }
 
@@ -630,6 +660,10 @@ int init_obdclass(void)
 
         printk(KERN_INFO "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
+
+        err = obd_init_checks();
+        if (err == -EOVERFLOW)
+                return err;
 
         class_init_uuidlist();
         err = class_handle_init();
@@ -656,7 +690,6 @@ int init_obdclass(void)
 #ifdef __KERNEL__
         obd_sysctl_init();
 #endif
-        obd_init_checks();
 
 #ifdef LPROCFS
         proc_lustre_root = proc_mkdir("lustre", proc_root_fs);

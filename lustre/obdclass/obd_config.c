@@ -361,7 +361,7 @@ out:
 }
 
 void class_decref(struct obd_device *obd)
-{            
+{
         if (atomic_dec_and_test(&obd->obd_refcount)) {
                 int err;
                 CDEBUG(D_IOCTL, "finishing cleanup of obd %s (%s)\n",
@@ -370,14 +370,14 @@ void class_decref(struct obd_device *obd)
                 if (obd->obd_stopping) {
                         /* If we're not stopping, we never set up */
                         err = obd_cleanup(obd);
-                        if (err) 
+                        if (err)
                                 CERROR("Cleanup returned %d\n", err);
                 }
                 err = __class_detach(obd);
-                if (err) 
+                if (err)
                         CERROR("Detach returned %d\n", err);
         }
-}               
+}
 
 int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
@@ -564,8 +564,7 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_SET_TIMEOUT: {
                 CDEBUG(D_IOCTL, "changing lustre timeout from %d to %d\n",
-                       obd_timeout,
-                       lcfg->lcfg_num);
+                       obd_timeout, lcfg->lcfg_num);
                 obd_timeout = lcfg->lcfg_num;
                 GOTO(out, err = 0);
         }

@@ -240,41 +240,18 @@ do {                                                            \
 #  define ll_lock_kernel
 # endif
 
-                                        
 #ifdef HAVE_OLD_DEV_SET_RDONLY
-  void dev_set_rdonly(ll_sbdev_type, int no_write);
+  void dev_set_rdonly(ll_sbdev_type dev, int no_write);
   void dev_clear_rdonly(int no_write);
 #else
-  void dev_set_rdonly(ll_sbdev_type);
-  void dev_clear_rdonly(ll_sbdev_type);
+  void dev_set_rdonly(ll_sbdev_type dev);
+  void dev_clear_rdonly(ll_sbdev_type dev);
 #endif
-int dev_check_rdonly(ll_sbdev_type);
-#define ll_check_rdonly dev_check_rdonly
+int dev_check_rdonly(ll_sbdev_type dev);
+#define ll_check_rdonly(dev) dev_check_rdonly(dev)
 
-static inline void ll_set_rdonly(ll_sbdev_type dev)
-{
-        CDEBUG(D_IOCTL | D_HA, "set dev %ld rdonly\n", (long)dev);
-        ll_sbdev_sync(dev);
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-        dev_set_rdonly(dev, 2);
-#else        
-        dev_set_rdonly(dev);
-#endif
-}
-
-static inline void ll_clear_rdonly(ll_sbdev_type dev)
-{
-        CDEBUG(D_IOCTL | D_HA, "unset dev %ld rdonly\n", (long)dev);
-        if (dev_check_rdonly(dev)) {
-                ll_sbdev_sync(dev);
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-                dev_clear_rdonly(2);
-#else
-                dev_clear_rdonly(dev);
-#endif        
-        }
-}
-
+void ll_set_rdonly(ll_sbdev_type dev);
+void ll_clear_rdonly(ll_sbdev_type dev);
 
 static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 {

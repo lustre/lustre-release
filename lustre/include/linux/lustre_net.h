@@ -285,14 +285,12 @@ struct ptlrpc_request {
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1;
         int rq_phase;
-        /* client-side refcount for SENT race */
-        atomic_t rq_refcount;
+        atomic_t rq_refcount;   /* client-side refcount for SENT race */
 
-        int rq_request_portal; /* XXX FIXME bug 249 */
-        int rq_reply_portal; /* XXX FIXME bug 249 */
+        int rq_request_portal;  /* XXX FIXME bug 249 */
+        int rq_reply_portal;    /* XXX FIXME bug 249 */
 
-        /* client-side # reply bytes actually received  */
-        int rq_nob_received;
+        int rq_nob_received; /* client-side # reply bytes actually received  */
 
         int rq_reqlen;
         struct lustre_msg *rq_reqmsg;
@@ -317,20 +315,20 @@ struct ptlrpc_request {
         struct ptlrpc_cb_id  rq_req_cbid;
 
         /* server-side... */
-        struct timeval                     rq_arrival_time; /* request arrival time */
-        struct ptlrpc_reply_state         *rq_reply_state; /* separated reply state */
-        struct ptlrpc_request_buffer_desc *rq_rqbd; /* incoming request buffer */
-        
+        struct timeval       rq_arrival_time;       /* request arrival time */
+        struct ptlrpc_reply_state *rq_reply_state;  /* separated reply state */
+        struct ptlrpc_request_buffer_desc *rq_rqbd; /* incoming request buffer*/
+
         /* client-only incoming reply */
         ptl_handle_md_t      rq_reply_md_h;
         wait_queue_head_t    rq_reply_waitq;
         struct ptlrpc_cb_id  rq_reply_cbid;
-        
-        struct ptlrpc_peer rq_peer; /* XXX see service.c can this be factored away? */
+
+        struct ptlrpc_peer rq_peer; /* XXX see service.c can this be removed? */
         char               rq_peerstr[PTL_NALFMT_SIZE];
         struct obd_export *rq_export;
         struct obd_import *rq_import;
-        
+
         void (*rq_replay_cb)(struct ptlrpc_request *);
         void (*rq_commit_cb)(struct ptlrpc_request *);
         void  *rq_cb_data;
@@ -343,7 +341,7 @@ struct ptlrpc_request {
         struct ptlrpc_request_set *rq_set;
         void *rq_interpret_reply;               /* Async completion handler */
         union ptlrpc_async_args rq_async_args;  /* Async completion context */
-        void * rq_ptlrpcd_data;
+        void *rq_ptlrpcd_data;
 };
 
 
