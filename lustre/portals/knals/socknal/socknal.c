@@ -586,7 +586,7 @@ ksocknal_free_buffers (void)
                              sizeof (ksock_sched_t) * SOCKNAL_N_SCHED);
 }
 
-void __exit
+void /*__exit*/
 ksocknal_module_fini (void)
 {
         int   i;

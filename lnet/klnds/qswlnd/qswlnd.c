@@ -111,7 +111,7 @@ kqswnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 	return (&kqswnal_api);
 }
 
-void __exit
+void /*__exit*/
 kqswnal_finalise (void)
 {
 	switch (kqswnal_data.kqn_init)

@@ -282,7 +282,7 @@ static int __init pingcli_init(void)
 } /* pingcli_init() */
 
 
-static void __exit pingcli_cleanup(void)
+static void /*__exit*/ pingcli_cleanup(void)
 {
         PORTAL_SYMBOL_UNREGISTER (kping_client);
 } /* pingcli_cleanup() */

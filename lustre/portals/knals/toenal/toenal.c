@@ -379,7 +379,7 @@ ktoenal_cmd(struct portal_ioctl_data * data, void * private)
 }
 
 
-void __exit
+void /*__exit*/
 ktoenal_module_fini (void)
 {
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",

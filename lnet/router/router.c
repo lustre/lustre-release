@@ -398,7 +398,7 @@ kpr_get_route(int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
         return (-ENOENT);
 }
 
-static void __exit
+static void /*__exit*/
 kpr_finalise (void)
 {
         LASSERT (list_empty (&kpr_nals));

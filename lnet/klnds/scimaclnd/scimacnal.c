@@ -112,7 +112,7 @@ static nal_t *kscimacnal_init(int interface, ptl_pt_index_t  ptl_size,
 
 
 /* Called by kernel at module unload time */
-static void __exit 
+static void /*__exit*/ 
 kscimacnal_finalize(void)
 {
         /* FIXME: How should the shutdown procedure really look? */

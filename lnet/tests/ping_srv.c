@@ -282,7 +282,7 @@ static int __init pingsrv_init(void)
 } /* pingsrv_init() */
 
 
-static void __exit pingsrv_cleanup(void)
+static void /*__exit*/ pingsrv_cleanup(void)
 {
         remove_proc_entry ("net/pingsrv", NULL);
         
