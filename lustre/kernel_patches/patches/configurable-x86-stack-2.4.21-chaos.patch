@@ -200,33 +200,27 @@ Index: linux-2.4.21/arch/i386/config.in
  if [ "$CONFIG_SMP" = "y" -a "$CONFIG_X86_CMPXCHG" = "y" ]; then
     define_bool CONFIG_HAVE_DEC_LOCK y
  fi
-Index: linux-2.4.21/arch/i386/vmlinux.lds
+Index: linux-p4smp/arch/i386/vmlinux.lds.in
 ===================================================================
---- linux-2.4.21.orig/arch/i386/vmlinux.lds	2004-07-09 19:14:43.000000000 -0400
-+++ linux-2.4.21/arch/i386/vmlinux.lds	2004-07-16 18:00:14.000000000 -0400
-@@ -38,7 +38,7 @@
+--- linux-p4smp.orig/arch/i386/vmlinux.lds.in	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/arch/i386/vmlinux.lds.in	2004-06-14 13:41:19.000000000 -0700
+@@ -1,6 +1,7 @@
+ 
+ #define __ASSEMBLY__
+ #include <asm/page.h>
++#include <asm/current.h>
+ 
+ /* ld script to make i386 Linux kernel
+  * Written by Martin Mares <mj@atrey.karlin.mff.cuni.cz>;
+@@ -51,7 +52,7 @@
  
    _edata = .;			/* End of data section */
  
 -  . = ALIGN(8192);		/* init_task */
-+  . = ALIGN(16384);		/* init_task */
-   .data.init_task : { *(.data.init_task) }
- 
-   . = ALIGN(4096);		/* Init code and data */
-Index: linux-2.4.21/arch/i386/vmlinux.lds.in
-===================================================================
---- linux-2.4.21.orig/arch/i386/vmlinux.lds.in	2004-07-09 19:14:45.000000000 -0400
-+++ linux-2.4.21/arch/i386/vmlinux.lds.in	2004-07-16 18:00:49.000000000 -0400
-@@ -51,7 +51,7 @@
- 
-   _edata = .;			/* End of data section */
- 
--  . = ALIGN(8192);		/* init_task */
-+  . = ALIGN(16384);		/* init_task */
++  . = ALIGN(THREAD_SIZE);		/* init_task */
    .data.init_task : { *(.data.init_task) }
  
    entry_tramp_start = .;
-Index: linux-2.4.21/include/asm-i386/current.h
 ===================================================================
 --- linux-2.4.21.orig/include/asm-i386/current.h	1998-08-14 19:35:22.000000000 -0400
 +++ linux-2.4.21/include/asm-i386/current.h	2004-07-16 18:00:14.000000000 -0400
