@@ -25,7 +25,7 @@ int main(int argc, char ** argv)
         } else if (strcmp(argv[1], "-m") == 0) {
                 do_open = 0;
         } else {
-                printf("Usage %s <-o|-m> filenamebase count\n", argv[0]);
+                printf("Usage %s {-o|-m} filenamebase count\n", argv[0]);
                 return 1;
         }
 
@@ -39,7 +39,7 @@ int main(int argc, char ** argv)
         start = last = time(0);
 
         for (i = 0; i < count; i++) {
-                sprintf(filename, "%s-%d", argv[2], i);
+                sprintf(filename, "%s%d", argv[2], i);
                 if (do_open) {
                         int fd = open(filename, O_CREAT|O_RDWR, 0644);
                         if (fd < 0) {
