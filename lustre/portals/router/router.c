@@ -202,15 +202,15 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
         LASSERT (nob == lib_iov_nob (fwd->kprfd_niov, fwd->kprfd_iov));
         
         atomic_inc (&kpr_queue_depth);
+	atomic_inc (&src_ne->kpne_refcount); /* source nal is busy until fwd completes */
 
         kpr_fwd_packets++;                   /* (loose) stats accounting */
         kpr_fwd_bytes += nob;
 
-	if (src_ne->kpne_shutdown)			/* caller is shutting down */
+	if (src_ne->kpne_shutdown)           /* caller is shutting down */
 		goto out;
 
-	fwd->kprfd_router_arg = src_ne;		/* stash caller's nal entry */
-	atomic_inc (&src_ne->kpne_refcount);	/* source nal is busy until fwd completes */
+	fwd->kprfd_router_arg = src_ne;      /* stash caller's nal entry */
 
 	read_lock (&kpr_rwlock);
 

@@ -111,7 +111,7 @@ case ${host_cpu} in
 
 	ia64 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-gstabs -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
+        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -ffixed-r13 -mfixed-range=f10-f15,f32-f127 -falign-functions=32 -mb-step'
 	KCPPFLAGS='-D__KERNEL__ -DMODULE'
         MOD_LINK=elf64_ia64
 ;;
@@ -224,7 +224,7 @@ else
   AC_MSG_RESULT(no)
 fi
 
-AC_ARG_ENABLE(zerocopy, [  --enable-zerocopy enable socknal zerocopy],enable_zerocopy="-DSOCKNAL_ZC=1", enable_zercopy=$enable_zerocopy_temp)
+AC_ARG_ENABLE(zerocopy, [  --enable-zerocopy enable socknal zerocopy],enable_zerocopy=$enable_zerocopy_temp, enable_zerocopy="")
 
 AC_ARG_ENABLE(affinity, [  --enable-affinity enable process/irq affinity],enable_affinity="-DCPU_AFFINITY=1", enable_affinity=$enable_affinity_temp)
 #####################################

@@ -673,8 +673,8 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
 
 /* FIXME: I'm not very smart; someone smarter should make this better. */
 void
-portals_debug_msg (int subsys, int mask, char *file, const char *fn, 
-                   const int line, unsigned long stack, char *format, ...)
+portals_debug_msg (int subsys, int mask, char *file, const char *fn, const int line,
+                   unsigned long stack, const char *format, ...)
 {
         va_list       ap;
         unsigned long flags;
@@ -804,7 +804,7 @@ void portals_run_lbug_upcall(char * file, const char *fn, const int line)
         argv[0] = portals_upcall;
         argv[1] = "LBUG";
         argv[2] = file;
-        argv[3] = (char *)fn;
+        argv[3] = fn;
         argv[4] = buf;
         argv[5] = NULL;
 

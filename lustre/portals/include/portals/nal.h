@@ -1,5 +1,3 @@
-/*
-*/
 #ifndef _NAL_H_
 #define _NAL_H_
 
