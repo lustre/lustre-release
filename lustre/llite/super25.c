@@ -153,9 +153,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_free, sb = NULL);
         }
 
-#warning Peter: is this the right place to raise the connection level?
         mdc_conn = sbi2mdc(sbi)->cl_import.imp_connection;
-        mdc_conn->c_level = LUSTRE_CONN_FULL;
         list_add(&mdc_conn->c_sb_chain, &sbi->ll_conn_chain);
 
         obd = class_uuid2obd(osc);
