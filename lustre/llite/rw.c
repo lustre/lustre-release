@@ -239,14 +239,14 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         obd_count        bufs_per_obdo = iobuf->nr_pages;
         struct ll_inode_info *lii = ll_i2info(inode);
         struct lov_stripe_md *md = lii->lli_smd;
-        struct brw_page *pga; 
+        struct brw_page *pga;
         int              rc = 0;
         int i;
         struct io_cb_data *cbd = ll_init_cb();
 
         ENTRY;
-        if (!cbd) 
-                RETURN(-ENOMEM); 
+        if (!cbd)
+                RETURN(-ENOMEM);
 
         if (blocksize != PAGE_SIZE) {
                 CERROR("direct_IO blocksize != PAGE_SIZE\n");
@@ -254,7 +254,7 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         }
 
         OBD_ALLOC(pga, sizeof(*pga) * bufs_per_obdo);
-        if (pga) 
+        if (!pga)
                 GOTO(out, rc = -ENOMEM);
 
         /* NB: we can't use iobuf->maplist[i]->index for the offset
