@@ -96,7 +96,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
 	SetPageUptodate(page);
  readpage_out:
-	obd_unlock_page(page);
+	UnlockPage(page);
         EXIT;
         return rc;
 } /* ll_dir_readpage */
