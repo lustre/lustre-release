@@ -696,7 +696,7 @@ kranal_active_conn_handshake(kra_peer_t *peer, kra_conn_t **connp)
 
         /* spread connections over all devices using both peer NIDs to ensure
          * all nids use all devices */
-        idx = (peer->rap_nid + kranal_lib.libnal_ni.ni_pid.nid)
+        idx = peer->rap_nid + kranal_lib.libnal_ni.ni_pid.nid;
         dev = &kranal_data.kra_devices[idx % kranal_data.kra_ndevs];
 
         rc = kranal_create_conn(&conn, dev);
@@ -1550,7 +1550,7 @@ kranal_cmd(struct portals_cfg *pcfg, void * private)
                 else {
                         rc = 0;
                         pcfg->pcfg_nid   = conn->rac_peer->rap_nid;
-                        pcfg->pcfg_id    = 0;
+                        pcfg->pcfg_id    = conn->rac_device->rad_id;
                         pcfg->pcfg_misc  = 0;
                         pcfg->pcfg_flags = 0;
                         kranal_conn_decref(conn);

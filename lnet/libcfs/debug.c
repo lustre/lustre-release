@@ -265,6 +265,7 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case TCPNAL:
                 /* userspace NAL */
         case IIBNAL:
+        case VIBNAL:
         case OPENIBNAL:
         case RANAL:
         case SOCKNAL:

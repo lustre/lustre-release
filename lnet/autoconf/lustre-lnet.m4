@@ -187,6 +187,39 @@ AC_SUBST(IIBNAL)
 ])
 
 #
+# LP_CONFIG_VIB
+#
+# check for Voltaire infiniband support
+#
+AC_DEFUN([LP_CONFIG_VIB],
+[AC_MSG_CHECKING([if Voltaire IB kernel headers are present])
+VIBCPPFLAGS="-I/usr/local/include/ibhost-kdevel -DCPU_BE=0 -DCPU_LE=1 -DGSI_PASS_PORT_NUM"
+EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/list.h>
+ 	#include <vverbs.h>
+],[
+        vv_hca_h_t     kib_hca;
+	vv_return_t    retval;
+
+	retval = vv_hca_open("ANY_HCA", NULL, &kib_hca);
+
+	return retval == vv_return_ok ? 0 : 1;
+],[
+	AC_MSG_RESULT([yes])
+	VIBNAL="vibnal"
+],[
+	AC_MSG_RESULT([no])
+	VIBNAL=""
+	VIBCPPFLAGS=""
+])
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+AC_SUBST(VIBCPPFLAGS)
+AC_SUBST(VIBNAL)
+])
+
+#
 # LP_CONFIG_RANAL
 #
 # check whether to use the RapidArray nal
@@ -336,6 +369,7 @@ if test $linux25 = 'no' ; then
 	LP_CONFIG_OPENIB
 fi
 LP_CONFIG_IIB
+LP_CONFIG_VIB
 LP_CONFIG_RANAL
 
 LP_STRUCT_PAGE_LIST
@@ -474,6 +508,7 @@ AC_DEFUN([LP_CONDITIONALS],
 AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
 AM_CONDITIONAL(BUILD_OPENIBNAL, test x$OPENIBNAL = "xopenibnal")
 AM_CONDITIONAL(BUILD_IIBNAL, test x$IIBNAL = "xiibnal")
+AM_CONDITIONAL(BUILD_VIBNAL, test x$VIBNAL = "xvibnal")
 AM_CONDITIONAL(BUILD_RANAL, test x$RANAL = "xranal")
 ])
 
@@ -496,12 +531,14 @@ portals/knals/Makefile
 portals/knals/autoMakefile
 portals/knals/gmnal/Makefile
 portals/knals/gmnal/autoMakefile
-portals/knals/iibnal/Makefile
-portals/knals/iibnal/autoMakefile
-portals/knals/lonal/Makefile
-portals/knals/lonal/autoMakefile
 portals/knals/openibnal/Makefile
 portals/knals/openibnal/autoMakefile
+portals/knals/iibnal/Makefile
+portals/knals/iibnal/autoMakefile
+portals/knals/vibnal/Makefile
+portals/knals/vibnal/autoMakefile
+portals/knals/lonal/Makefile
+portals/knals/lonal/autoMakefile
 portals/knals/qswnal/Makefile
 portals/knals/qswnal/autoMakefile
 portals/knals/ranal/Makefile

@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2004 Cluster File Systems, Inc.
  *   Author: Eric Barton <eric@bartonsoftware.com>
+ *   Author: Frank Zago <fzago@systemfabricworks.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -21,7 +22,9 @@
  *
  */
 
-#include "iibnal.h"
+#include "vibnal.h"
+
+static void kibnal_cm_callback(cm_cep_handle_t cep, cm_conn_data_t *info, void *arg);
 
 /*
  *  LIB functions follow
@@ -46,7 +49,7 @@ kibnal_tx_done (kib_tx_t *tx)
         ptl_err_t        ptlrc = (tx->tx_status == 0) ? PTL_OK : PTL_FAIL;
         unsigned long    flags;
         int              i;
-        FSTATUS          frc;
+        vv_return_t retval;
 
         LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting callback */
         LASSERT (!tx->tx_passive_rdma_wait);    /* mustn't be awaiting RDMA */
@@ -64,8 +67,8 @@ kibnal_tx_done (kib_tx_t *tx)
                         kibnal_schedule_tx_done(tx);
                         return;
                 }
-                frc = iibt_deregister_memory(tx->tx_md.md_handle);
-                LASSERT (frc == FSUCCESS);
+                retval = vv_mem_region_destroy(kibnal_data.kib_hca, tx->tx_md.md_handle);
+                LASSERT (retval == vv_return_ok);
                 tx->tx_mapped = KIB_TX_UNMAPPED;
                 break;
 
@@ -238,36 +241,28 @@ kibnal_complete_passive_rdma(kib_conn_t *conn, __u64 cookie, int status)
                 cookie, conn->ibc_peer->ibp_nid);
 }
 
-static __u32
-kibnal_lkey(kib_pages_t *ibp)
-{
-        if (kibnal_whole_mem())
-                return kibnal_data.kib_md.md_lkey;
-
-        return ibp->ibp_lkey;
-}
-
 static void
 kibnal_post_rx (kib_rx_t *rx, int do_credits)
 {
         kib_conn_t   *conn = rx->rx_conn;
         int           rc = 0;
         unsigned long flags;
-        FSTATUS       frc;
-        ENTRY;
+        vv_return_t retval;
 
-        rx->rx_gl = (IB_LOCAL_DATASEGMENT) {
-                .Address = rx->rx_vaddr,
-                .Length  = IBNAL_MSG_SIZE,
-                .Lkey    = kibnal_lkey(conn->ibc_rx_pages),
+        ENTRY;
+        
+        rx->rx_gl = (vv_scatgat_t) {
+                .v_address = (void *)rx->rx_msg,
+                .length    = IBNAL_MSG_SIZE,
+                .l_key     = rx->l_key,
         };
 
-        rx->rx_wrq = (IB_WORK_REQ) {
-                .Operation              = WROpRecv,
-                .DSListDepth            = 1,
-                .MessageLen             = IBNAL_MSG_SIZE,
-                .WorkReqId              = kibnal_ptr2wreqid(rx, 1),
-                .DSList                 = &rx->rx_gl,
+        rx->rx_wrq = (vv_wr_t) {
+                .wr_id                   = kibnal_ptr2wreqid(rx, 1),
+                .completion_notification = 1,
+                .scatgat_list            = &rx->rx_gl,
+                .num_of_data_segments    = 1,
+                .wr_type                 = vv_wr_receive,
         };
 
         KIB_ASSERT_CONN_STATE_RANGE(conn, IBNAL_CONN_ESTABLISHED,
@@ -279,9 +274,10 @@ kibnal_post_rx (kib_rx_t *rx, int do_credits)
         if (conn->ibc_state != IBNAL_CONN_ESTABLISHED)
                 rc = -ECONNABORTED;
         else {
-                frc = iibt_postrecv(conn->ibc_qp, &rx->rx_wrq);
-                if (frc != FSUCCESS) {
-                        CDEBUG(D_NET, "post failed %d\n", frc);
+                retval = vv_post_receive(kibnal_data.kib_hca, conn->ibc_qp, &rx->rx_wrq);
+
+                if (retval) {
+                        CDEBUG(D_NET, "post failed %d\n", retval);
                         rc = -EINVAL;
                 }
                 CDEBUG(D_NET, "posted rx %p\n", &rx->rx_wrq);
@@ -326,42 +322,13 @@ static inline __u32 kibnal_cksum (void *ptr, int nob)
 }
 #endif
 
-static void hexdump(char *string, void *ptr, int len)
-{
-        unsigned char *c = ptr;
-        int i;
-
-        return;
-
-        if (len < 0 || len > 2048)  {
-                printk("XXX what the hell? %d\n",len);
-                return;
-        }
-
-        printk("%d bytes of '%s' from 0x%p\n", len, string, ptr);
-
-        for (i = 0; i < len;) {
-                printk("%02x",*(c++));
-                i++;
-                if (!(i & 15)) {
-                        printk("\n");
-                } else if (!(i&1)) {
-                        printk(" ");
-                }
-        }
-
-        if(len & 15) {
-                printk("\n");
-        }
-}
-
 static void
-kibnal_rx_callback (IB_WORK_COMPLETION *wc)
+kibnal_rx_callback (vv_wc_t *wc)
 {
-        kib_rx_t     *rx = (kib_rx_t *)kibnal_wreqid2ptr(wc->WorkReqId);
+        kib_rx_t     *rx = (kib_rx_t *)kibnal_wreqid2ptr(wc->wr_id);
         kib_msg_t    *msg = rx->rx_msg;
         kib_conn_t   *conn = rx->rx_conn;
-        int           nob = wc->Length;
+        int           nob = wc->num_bytes_transfered;
         const int     base_nob = offsetof(kib_msg_t, ibm_u);
         int           credits;
         int           flipped;
@@ -377,7 +344,8 @@ kibnal_rx_callback (IB_WORK_COMPLETION *wc)
         KIB_ASSERT_CONN_STATE_RANGE(conn, IBNAL_CONN_ESTABLISHED, 
                                     IBNAL_CONN_DISCONNECTED);
 
-        CDEBUG(D_NET, "rx %p conn %p\n", rx, conn);
+        CDEBUG(D_NET, "rx %p conn %p, nob=%d\n", rx, conn, nob);
+
         LASSERT (rx->rx_posted);
         rx->rx_posted = 0;
         mb();
@@ -387,9 +355,9 @@ kibnal_rx_callback (IB_WORK_COMPLETION *wc)
         if (conn->ibc_state > IBNAL_CONN_ESTABLISHED)
                 goto failed;
 
-        if (wc->Status != WRStatusSuccess) {
+        if (wc->completion_status != vv_comp_status_success) {
                 CERROR("Rx from "LPX64" failed: %d\n", 
-                       conn->ibc_peer->ibp_nid, wc->Status);
+                       conn->ibc_peer->ibp_nid, wc->completion_status);
                 goto failed;
         }
 
@@ -398,8 +366,6 @@ kibnal_rx_callback (IB_WORK_COMPLETION *wc)
                         conn->ibc_peer->ibp_nid, nob, base_nob);
                 goto failed;
         }
-
-        hexdump("rx", rx->rx_msg, sizeof(kib_msg_t));
 
         /* Receiver does any byte flipping if necessary... */
 
@@ -535,6 +501,7 @@ kibnal_rx_callback (IB_WORK_COMPLETION *wc)
         wake_up (&kibnal_data.kib_sched_waitq);
         
         spin_unlock_irqrestore(&kibnal_data.kib_sched_lock, flags);
+
         return;
         
  failed:
@@ -545,7 +512,7 @@ kibnal_rx_callback (IB_WORK_COMPLETION *wc)
         kibnal_put_conn(conn);
 }
 
-void
+static void
 kibnal_rx (kib_rx_t *rx)
 {
         kib_msg_t   *msg = rx->rx_msg;
@@ -625,18 +592,44 @@ kibnal_fill_ibrm(kib_tx_t *tx, struct page *page, unsigned long page_offset,
 {
         kib_rdma_msg_t *ibrm = &tx->tx_msg->ibm_u.rdma;
         kib_rdma_desc_t *desc;
+        vv_l_key_t l_key;
+        vv_r_key_t r_key;
+        void *addr;
+        vv_mem_reg_h_t mem_h;
+        vv_return_t retval;
 
         LASSERTF(ibrm->ibrm_num_descs < PTL_MD_MAX_IOV, "%u\n", 
                  ibrm->ibrm_num_descs);
 
         desc = &ibrm->ibrm_desc[ibrm->ibrm_num_descs];
-        if (active)
-                ibrm->rd_key = kibnal_data.kib_md.md_lkey;
-        else
-                ibrm->rd_key = kibnal_data.kib_md.md_rkey;
+
+        addr = page_address(page) + page_offset;
+
+        /* TODO: This next step is only needed to get either the lkey
+         * or the rkey. However they should be the same than for the
+         * tx buffer, so we might as well use it. */
+        retval = vv_get_gen_mr_attrib(kibnal_data.kib_hca,
+                                      addr,
+                                      len,
+                                      &mem_h,
+                                      &l_key,
+                                      &r_key);
+        if (retval) {
+                CERROR("vv_get_gen_mr_attrib failed: %d", retval);
+                /* TODO: this shouldn't really fail, but what if? */
+                return;
+        }
+
+        if (active) {
+                ibrm->rd_key = l_key;
+        } else {
+                ibrm->rd_key = r_key;
+
+                vv_va2advertise_addr(kibnal_data.kib_hca, addr, &addr);
+        }
+
+        desc->rd_addr = (__u64)(unsigned long)addr;
         desc->rd_nob = len; /*PAGE_SIZE - kiov->kiov_offset; */
-        desc->rd_addr = kibnal_page2phys(page) + page_offset +
-                        kibnal_data.kib_md.md_addr;
 
         ibrm->ibrm_num_descs++;
 }
@@ -659,16 +652,17 @@ kibnal_map_rdma_iov(kib_tx_t *tx, unsigned long vaddr, int nob, int active)
                 nob -= len;
                 vaddr += len;
         }
+
         return 0;
 }
 
 static int
-kibnal_map_iov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
+kibnal_map_iov (kib_tx_t *tx, vv_access_con_bit_mask_t access,
                  int niov, struct iovec *iov, int offset, int nob, int active)
                  
 {
         void   *vaddr;
-        FSTATUS frc;
+        vv_return_t retval;
 
         LASSERT (nob > 0);
         LASSERT (niov > 0);
@@ -703,12 +697,12 @@ kibnal_map_iov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
         vaddr = (void *)(((unsigned long)iov->iov_base) + offset);
         tx->tx_md.md_addr = (__u64)((unsigned long)vaddr);
 
-        frc = iibt_register_memory(kibnal_data.kib_hca, vaddr, nob,
+        retval = vv_mem_region_register(kibnal_data.kib_hca, vaddr, nob,
                                    kibnal_data.kib_pd, access,
                                    &tx->tx_md.md_handle, &tx->tx_md.md_lkey,
                                    &tx->tx_md.md_rkey);
-        if (frc != 0) {
-                CERROR ("Can't map vaddr %p: %d\n", vaddr, frc);
+        if (retval != 0) {
+                CERROR ("Can't map vaddr %p: %d\n", vaddr, retval);
                 return -EINVAL;
         }
 
@@ -717,17 +711,18 @@ kibnal_map_iov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
 }
 
 static int
-kibnal_map_kiov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
+kibnal_map_kiov (kib_tx_t *tx, vv_access_con_bit_mask_t access,
                   int nkiov, ptl_kiov_t *kiov,
                   int offset, int nob, int active)
 {
-        __u64                      *phys = NULL;
-        int                         page_offset;
-        int                         nphys;
-        int                         resid;
-        int                         phys_size = 0;
-        FSTATUS                     frc;
-        int                         i, rc = 0;
+        vv_phy_list_t  phys_pages;
+        vv_phy_buf_t  *phys_buf = NULL;
+        int            page_offset;
+        int            nphys;
+        int            resid;
+        int            phys_size = 0;
+        int            i, rc = 0;
+        vv_return_t    retval;
 
         CDEBUG(D_NET, "niov %d offset %d nob %d\n", nkiov, offset, nob);
 
@@ -746,14 +741,17 @@ kibnal_map_kiov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
         nphys = 1;
 
         if (!kibnal_whole_mem()) {
-                phys_size = nkiov * sizeof (*phys);
-                PORTAL_ALLOC(phys, phys_size);
-                if (phys == NULL) {
-                        CERROR ("Can't allocate tmp phys\n");
+                phys_size = nkiov * sizeof(vv_phy_buf_t);
+                PORTAL_ALLOC(phys_buf, phys_size);
+
+                if (phys_buf == NULL) {
+                        CERROR ("Can't allocate phys_buf\n");
                         return (-ENOMEM);
                 }
 
-                phys[0] = kibnal_page2phys(kiov->kiov_page);
+                phys_buf[0].start = kibnal_page2phys(kiov->kiov_page);
+                phys_buf[0].size = PAGE_SIZE;
+
         } else {
                 tx->tx_msg->ibm_u.rdma.ibrm_num_descs = 0;
                 kibnal_fill_ibrm(tx, kiov->kiov_page, kiov->kiov_offset, 
@@ -792,8 +790,10 @@ kibnal_map_kiov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
                 }
 
                 if (!kibnal_whole_mem()) {
-                        LASSERT (nphys * sizeof (*phys) < phys_size);
-                        phys[nphys] = kibnal_page2phys(kiov->kiov_page);
+                        LASSERT (nphys * sizeof (vv_phy_buf_t) < phys_size);
+                        phys_buf[nphys].start = kibnal_page2phys(kiov->kiov_page);
+                        phys_buf[nphys].size = PAGE_SIZE;
+
                 } else {
                         if (kib_rdma_msg_len(nphys) > IBNAL_MSG_SIZE) {
                                 CERROR ("payload too big (%d)\n", nphys);
@@ -819,27 +819,28 @@ kibnal_map_kiov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
 #endif
 
 #if IBNAL_FMR
-#error "iibnal hasn't learned about FMR yet"
+#error "vibnal hasn't learned about FMR yet"
         rc = ib_fmr_register_physical (kibnal_data.kib_fmr_pool,
-                                       phys, nphys,
+                                       phys_pages, nphys,
                                        &tx->tx_md.md_addr,
                                        page_offset,
                                        &tx->tx_md.md_handle.fmr,
                                        &tx->tx_md.md_lkey,
                                        &tx->tx_md.md_rkey);
 #else
-        frc = iibt_register_physical_memory(kibnal_data.kib_hca,
+        retval = vv_phy_mem_region_register(kibnal_data.kib_hca,
+                                            &phys_pages,
                                             IBNAL_RDMA_BASE,
-                                            phys, nphys,
+                                            nphys,
                                             0,          /* offset */
                                             kibnal_data.kib_pd,
-                                            access,
+                                            vv_acc_l_mem_write | vv_acc_r_mem_write | vv_acc_r_mem_read | vv_acc_mem_bind, /* TODO: translated as-is, but seems incorrect or too much */
                                             &tx->tx_md.md_handle,
                                             &tx->tx_md.md_addr,
                                             &tx->tx_md.md_lkey,
                                             &tx->tx_md.md_rkey);
 #endif
-        if (frc == FSUCCESS) {
+        if (retval == vv_return_ok) {
                 CDEBUG(D_NET, "Mapped %d pages %d bytes @ offset %d: lkey %x, rkey %x\n",
                        nphys, nob, page_offset, tx->tx_md.md_lkey, tx->tx_md.md_rkey);
 #if IBNAL_FMR
@@ -848,13 +849,14 @@ kibnal_map_kiov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
                 tx->tx_mapped = KIB_TX_MAPPED;
 #endif
         } else {
-                CERROR ("Can't map phys: %d\n", frc);
+                CERROR ("Can't map phys_pages: %d\n", retval);
                 rc = -EFAULT;
         }
 
  out:
-        if (phys != NULL)
-                PORTAL_FREE(phys, phys_size);
+        if (phys_buf != NULL)
+                PORTAL_FREE(phys_buf, phys_size);
+
         return (rc);
 }
 
@@ -880,6 +882,7 @@ kibnal_check_sends (kib_conn_t *conn)
         int             i;
         int             done;
         int             nwork;
+
         ENTRY;
 
         spin_lock_irqsave (&conn->ibc_lock, flags);
@@ -945,7 +948,7 @@ kibnal_check_sends (kib_conn_t *conn)
                 conn->ibc_credits--;
 
                 /* we only get a tx completion for the final rdma op */ 
-                tx->tx_sending = min(tx->tx_nsp, 2);
+                tx->tx_sending = 0;
                 tx->tx_passive_rdma_wait = tx->tx_passive_rdma;
                 list_add (&tx->tx_list, &conn->ibc_active_txs);
 #if IBNAL_CKSUM
@@ -953,8 +956,6 @@ kibnal_check_sends (kib_conn_t *conn)
                 tx->tx_msg->ibm_cksum = kibnal_cksum(tx->tx_msg, tx->tx_msg->ibm_nob);
                 CDEBUG(D_NET, "cksum %x, nob %d\n", tx->tx_msg->ibm_cksum, tx->tx_msg->ibm_nob);
 #endif
-                spin_unlock_irqrestore (&conn->ibc_lock, flags);
-
                 /* NB the gap between removing tx from the queue and sending it
                  * allows message re-ordering to occur */
 
@@ -963,22 +964,22 @@ kibnal_check_sends (kib_conn_t *conn)
                 rc = -ECONNABORTED;
                 nwork = 0;
                 if (conn->ibc_state == IBNAL_CONN_ESTABLISHED) {
+                        vv_return_t retval;                        
+
                         tx->tx_status = 0;
-                        /* Driver only accepts 1 item at a time */
-                        for (i = 0; i < tx->tx_nsp; i++) {
-                                hexdump("tx", tx->tx_msg, sizeof(kib_msg_t));
-                                rc = iibt_postsend(conn->ibc_qp, 
-                                                   &tx->tx_wrq[i]);
-                                if (rc != 0)
-                                        break;
-                                if (wrq_signals_completion(&tx->tx_wrq[i]))
-                                        nwork++;
-                                CDEBUG(D_NET, "posted tx wrq %p\n", 
-                                       &tx->tx_wrq[i]);
+                        rc = 0;
+
+                        retval = vv_post_send_list(kibnal_data.kib_hca, conn->ibc_qp, tx->tx_nsp, tx->tx_wrq, vv_operation_type_send_rc);
+
+                        if (retval != 0) {
+                                CERROR("post send failed with %d\n", retval);
+                                rc = -ECONNABORTED;
+                                break;
                         }
+                        
+                        tx->tx_sending = tx->tx_nsp;
                 }
 
-                spin_lock_irqsave (&conn->ibc_lock, flags);
                 if (rc != 0) {
                         /* NB credits are transferred in the actual
                          * message, which can only be the last work item */
@@ -988,8 +989,8 @@ kibnal_check_sends (kib_conn_t *conn)
 
                         tx->tx_status = rc;
                         tx->tx_passive_rdma_wait = 0;
-                        tx->tx_sending -= tx->tx_nsp - nwork;
 
+                        /* TODO: I think this is buggy if vv_post_send_list failed. */
                         done = (tx->tx_sending == 0);
                         if (done)
                                 list_del (&tx->tx_list);
@@ -1018,9 +1019,9 @@ out:
 }
 
 static void
-kibnal_tx_callback (IB_WORK_COMPLETION *wc)
+kibnal_tx_callback (vv_wc_t *wc)
 {
-        kib_tx_t     *tx = (kib_tx_t *)kibnal_wreqid2ptr(wc->WorkReqId);
+        kib_tx_t     *tx = (kib_tx_t *)kibnal_wreqid2ptr(wc->wr_id);
         kib_conn_t   *conn;
         unsigned long flags;
         int           idle;
@@ -1029,10 +1030,10 @@ kibnal_tx_callback (IB_WORK_COMPLETION *wc)
         LASSERT (conn != NULL);
         LASSERT (tx->tx_sending != 0);
 
-        spin_lock_irqsave(&conn->ibc_lock, flags);
-
         CDEBUG(D_NET, "conn %p tx %p [%d/%d]: %d\n", conn, tx,
-               tx->tx_sending, tx->tx_nsp, wc->Status);
+               tx->tx_sending, tx->tx_nsp, wc->completion_status);
+
+        spin_lock_irqsave(&conn->ibc_lock, flags);
 
         /* I could be racing with rdma completion.  Whoever makes 'tx' idle
          * gets to free it, which also drops its ref on 'conn'.  If it's
@@ -1041,7 +1042,7 @@ kibnal_tx_callback (IB_WORK_COMPLETION *wc)
 
         tx->tx_sending--;
         idle = (tx->tx_sending == 0) &&         /* This is the final callback */
-               (!tx->tx_passive_rdma_wait);     /* Not waiting for RDMA completion */
+                (!tx->tx_passive_rdma_wait);     /* Not waiting for RDMA completion */
         if (idle)
                 list_del(&tx->tx_list);
 
@@ -1053,18 +1054,18 @@ kibnal_tx_callback (IB_WORK_COMPLETION *wc)
         if (tx->tx_sending == 0)
                 conn->ibc_nsends_posted--;
 
-        if (wc->Status != WRStatusSuccess &&
+        if (wc->completion_status != vv_comp_status_success &&
             tx->tx_status == 0)
                 tx->tx_status = -ECONNABORTED;
-                
+
         spin_unlock_irqrestore(&conn->ibc_lock, flags);
 
         if (idle)
                 kibnal_tx_done (tx);
 
-        if (wc->Status != WRStatusSuccess) {
+        if (wc->completion_status != vv_comp_status_success) {
                 CERROR ("Tx completion to "LPX64" failed: %d\n", 
-                        conn->ibc_peer->ibp_nid, wc->Status);
+                        conn->ibc_peer->ibp_nid, wc->completion_status);
                 kibnal_close_conn (conn, -ENETDOWN);
         } else {
                 /* can I shovel some more sends out the door? */
@@ -1075,39 +1076,41 @@ kibnal_tx_callback (IB_WORK_COMPLETION *wc)
 }
 
 void 
-kibnal_ca_async_callback (void *ca_arg, IB_EVENT_RECORD *ev)
+kibnal_ca_async_callback(vv_event_record_t ev)
 {
         /* XXX flesh out.  this seems largely for async errors */
-        CERROR("type: %d code: %u\n", ev->EventType, ev->EventCode);
+        CERROR("type: %d, port: %d, data: "LPX64"\n", ev.event_type, ev.port_num, ev.type.data);
 }
 
 void
-kibnal_ca_callback (void *ca_arg, void *cq_arg)
+kibnal_ca_callback (unsigned long unused_context)
 {
-        IB_HANDLE cq = *(IB_HANDLE *)cq_arg;
-        IB_HANDLE ca = *(IB_HANDLE *)ca_arg;
-        IB_WORK_COMPLETION wc;
+        vv_wc_t wc;
         int armed = 0;
-
-        CDEBUG(D_NET, "ca %p cq %p\n", ca, cq);
+        vv_return_t retval;
 
         for(;;) {
-                while (iibt_cq_poll(cq, &wc) == FSUCCESS) {
+
+                while (vv_poll_for_completion(kibnal_data.kib_hca, kibnal_data.kib_cq, &wc) == vv_return_ok) {
 
                         /* We will need to rearm the CQ to avoid a potential race. */
                         armed = 0;
-                        
-                        if (kibnal_wreqid_is_rx(wc.WorkReqId))
+
+                        if (kibnal_wreqid_is_rx(wc.wr_id))
                                 kibnal_rx_callback(&wc);
                         else
                                 kibnal_tx_callback(&wc);
                 }
+
                 if (armed)
                         return;
-                if (iibt_cq_rearm(cq, CQEventSelNextWC) != FSUCCESS) {
-                        CERROR("rearm failed?\n");
+                
+                retval = vv_request_completion_notification(kibnal_data.kib_hca, kibnal_data.kib_cq, vv_next_solicit_unsolicit_event);
+                if (retval != 0) {
+                        CERROR ("Failed to re-arm completion queue: %d\n", retval);
                         return;
                 }
+
                 armed = 1;
         }
 }
@@ -1115,10 +1118,10 @@ kibnal_ca_callback (void *ca_arg, void *cq_arg)
 void
 kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob)
 {
-        IB_LOCAL_DATASEGMENT *gl = &tx->tx_gl[tx->tx_nsp];
-        IB_WORK_REQ         *wrq = &tx->tx_wrq[tx->tx_nsp];
-        int                       fence;
-        int                       nob = offsetof (kib_msg_t, ibm_u) + body_nob;
+        vv_scatgat_t *gl = &tx->tx_gl[tx->tx_nsp];
+        vv_wr_t      *wrq = &tx->tx_wrq[tx->tx_nsp];
+        int           fence;
+        int           nob = offsetof (kib_msg_t, ibm_u) + body_nob;
 
         LASSERT (tx->tx_nsp >= 0 && 
                  tx->tx_nsp < sizeof(tx->tx_wrq)/sizeof(tx->tx_wrq[0]));
@@ -1134,22 +1137,21 @@ kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob)
         fence = (tx->tx_nsp > 0) &&
                 (type == IBNAL_MSG_PUT_DONE);
 
-        *gl = (IB_LOCAL_DATASEGMENT) {
-                .Address = tx->tx_vaddr,
-                .Length  = IBNAL_MSG_SIZE,
-                .Lkey    = kibnal_lkey(kibnal_data.kib_tx_pages),
+        *gl = (vv_scatgat_t) {
+                .v_address = (void *)tx->tx_msg,
+                .length    = nob,
+                .l_key     = tx->l_key,
         };
 
-        wrq->WorkReqId      = kibnal_ptr2wreqid(tx, 0);
-        wrq->Operation      = WROpSend;
-        wrq->DSList         = gl;
-        wrq->DSListDepth    = 1;
-        wrq->MessageLen     = nob;
-        wrq->Req.SendRC.ImmediateData  = 0;
-        wrq->Req.SendRC.Options.s.SolicitedEvent         = 1;
-        wrq->Req.SendRC.Options.s.SignaledCompletion     = 1;
-        wrq->Req.SendRC.Options.s.ImmediateData          = 0;
-        wrq->Req.SendRC.Options.s.Fence                  = fence;
+        wrq->wr_id =  kibnal_ptr2wreqid(tx, 0);
+        wrq->completion_notification = 1;
+        wrq->scatgat_list = gl;
+        wrq->num_of_data_segments = 1;
+        wrq->wr_type = vv_wr_send;
+
+        wrq->type.send.solicited_event = 1;
+
+        wrq->type.send.send_qp_type.rc_type.fance_indicator = fence;
 
         tx->tx_nsp++;
 }
@@ -1238,6 +1240,7 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
                 }
         
                 peer->ibp_connecting = 1;
+
                 kib_peer_addref(peer); /* extra ref for connd */
         
                 spin_lock (&kibnal_data.kib_connd_lock);
@@ -1263,16 +1266,13 @@ kibnal_start_passive_rdma (int type, ptl_nid_t nid,
         kib_tx_t   *tx;
         kib_msg_t  *ibmsg;
         int         rc;
-        IB_ACCESS_CONTROL         access = {0,};
+        vv_access_con_bit_mask_t access;
         
         LASSERT (type == IBNAL_MSG_PUT_RDMA || type == IBNAL_MSG_GET_RDMA);
         LASSERT (nob > 0);
         LASSERT (!in_interrupt());              /* Mapping could block */
 
-        access.s.MWBindable = 1;
-        access.s.LocalWrite = 1;
-        access.s.RdmaRead = 1;
-        access.s.RdmaWrite = 1;
+        access = vv_acc_l_mem_write | vv_acc_r_mem_write | vv_acc_r_mem_read | vv_acc_mem_bind;
 
         tx = kibnal_get_idle_tx (1);           /* May block; caller is an app thread */
         LASSERT (tx != NULL);
@@ -1349,8 +1349,8 @@ kibnal_start_active_rdma (int type, int status,
         kib_msg_t    *rxmsg = rx->rx_msg;
         kib_msg_t    *txmsg;
         kib_tx_t     *tx;
-        IB_ACCESS_CONTROL access = {0,};
-        IB_WR_OP      rdma_op;
+        vv_access_con_bit_mask_t access;
+        vv_wr_operation_t rdma_op;
         int           rc;
         __u32         i;
 
@@ -1376,11 +1376,12 @@ kibnal_start_active_rdma (int type, int status,
         rx->rx_rdma = 1;
 
         if (type == IBNAL_MSG_GET_DONE) {
-                rdma_op  = WROpRdmaWrite;
+                access = 0;
+                rdma_op  = vv_wr_rdma_write;
                 LASSERT (rxmsg->ibm_type == IBNAL_MSG_GET_RDMA);
         } else {
-                access.s.LocalWrite = 1;
-                rdma_op  = WROpRdmaRead;
+                access = vv_acc_l_mem_write;
+                rdma_op  = vv_wr_rdma_read;
                 LASSERT (rxmsg->ibm_type == IBNAL_MSG_PUT_RDMA);
         }
 
@@ -1393,7 +1394,7 @@ kibnal_start_active_rdma (int type, int status,
                 return;
         }
         LASSERT (tx->tx_nsp == 0);
-                        
+
         if (nob == 0) 
                 GOTO(init_tx, 0);
 
@@ -1438,33 +1439,46 @@ kibnal_start_active_rdma (int type, int status,
         /* ibrm_num_descs was verified in rx_callback */
         for(i = 0; i < rxmsg->ibm_u.rdma.ibrm_num_descs; i++) {
                 kib_rdma_desc_t *ldesc, *rdesc; /* local, remote */
-                IB_LOCAL_DATASEGMENT *ds = &tx->tx_gl[i];
-                IB_WORK_REQ  *wrq = &tx->tx_wrq[i];
+                vv_scatgat_t *ds = &tx->tx_gl[i];
+                vv_wr_t *wrq = &tx->tx_wrq[i];
 
                 ldesc = &tx->tx_msg->ibm_u.rdma.ibrm_desc[i];
                 rdesc = &rxmsg->ibm_u.rdma.ibrm_desc[i];
 
-                ds->Address = ldesc->rd_addr;
-                ds->Length  = ldesc->rd_nob;
-                ds->Lkey    = tx->tx_msg->ibm_u.rdma.rd_key;
+                ds->v_address = (void *)(unsigned long)ldesc->rd_addr;
+                ds->length    = ldesc->rd_nob;
+                ds->l_key     = tx->tx_msg->ibm_u.rdma.rd_key;
 
-                memset(wrq, 0, sizeof(*wrq));
-                wrq->WorkReqId      = kibnal_ptr2wreqid(tx, 0);
-                wrq->Operation      = rdma_op;
-                wrq->DSList         = ds;
-                wrq->DSListDepth    = 1;
-                wrq->MessageLen     = ds->Length;
-                wrq->Req.SendRC.ImmediateData  = 0;
-                wrq->Req.SendRC.Options.s.SolicitedEvent         = 0;
-                wrq->Req.SendRC.Options.s.SignaledCompletion     = 0;
-                wrq->Req.SendRC.Options.s.ImmediateData          = 0;
-                wrq->Req.SendRC.Options.s.Fence                  = 0;
-                wrq->Req.SendRC.RemoteDS.Address = rdesc->rd_addr;
-                wrq->Req.SendRC.RemoteDS.Rkey = rxmsg->ibm_u.rdma.rd_key;
+                wrq->wr_id = kibnal_ptr2wreqid(tx, 0);
 
+#if 0
                 /* only the last rdma post triggers tx completion */
                 if (i == rxmsg->ibm_u.rdma.ibrm_num_descs - 1)
-                        wrq->Req.SendRC.Options.s.SignaledCompletion = 1;
+                        wrq->completion_notification = 1;
+                else
+                        wrq->completion_notification = 0;
+
+#else
+                /* TODO: hack. Right now complete everything, else the
+                 * driver will deadlock. This is less efficient than
+                 * requestion a notification for only a few of the
+                 * WQE. */
+                wrq->completion_notification = 1;
+#endif
+
+                wrq->scatgat_list = ds;
+                wrq->num_of_data_segments = 1;
+                wrq->wr_type = rdma_op;
+
+                wrq->type.send.solicited_event = 0;
+
+                wrq->type.send.send_qp_type.rc_type.fance_indicator = 0;
+                wrq->type.send.send_qp_type.rc_type.r_addr = rdesc->rd_addr;
+                wrq->type.send.send_qp_type.rc_type.r_r_key = rxmsg->ibm_u.rdma.rd_key;
+
+                CDEBUG(D_NET, "prepared RDMA with r_addr=%llx r_key=%x\n",
+                       wrq->type.send.send_qp_type.rc_type.r_addr,
+                       wrq->type.send.send_qp_type.rc_type.r_r_key);
 
                 tx->tx_nsp++;
         }
@@ -1559,9 +1573,9 @@ kibnal_sendmsg(lib_nal_t    *nal,
 
                 /* Will it fit in a message? */
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
-                if (nob >= IBNAL_MSG_SIZE) {
-                        CERROR("REPLY for "LPX64" too big (RDMA not requested): %d\n", 
-                               nid, payload_nob);
+                if (nob > IBNAL_MSG_SIZE) {
+                        CERROR("REPLY for "LPX64" too big (RDMA not requested): %d (max for message is %d)\n", 
+                               nid, payload_nob, IBNAL_MSG_SIZE);
                         return (PTL_FAIL);
                 }
                 break;
@@ -1629,6 +1643,8 @@ kibnal_send (lib_nal_t *nal, void *private, lib_msg_t *cookie,
                unsigned int payload_niov, struct iovec *payload_iov,
                size_t payload_offset, size_t payload_len)
 {
+        CDEBUG(D_NET, "  pid = %d, nid="LPU64"\n",
+               pid, nid);
         return (kibnal_sendmsg(nal, private, cookie,
                                hdr, type, nid, pid,
                                payload_niov, payload_iov, NULL,
@@ -1819,7 +1835,6 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active, int rc)
 
         LASSERT (peer->ibp_connecting != 0);
         peer->ibp_connecting--;
-
         if (peer->ibp_connecting != 0) {
                 /* another connection attempt under way (loopback?)... */
                 write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
@@ -1878,9 +1893,13 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         unsigned long     flags;
         int               i;
 
+        CDEBUG(D_NET, "Enter kibnal_connreq_done for conn=%p, active=%d, status=%d\n",
+               conn, active, status);
+
         /* passive connection has no connreq & vice versa */
         LASSERTF(!active == !(conn->ibc_connreq != NULL),
                  "%d %p\n", active, conn->ibc_connreq);
+
         if (active) {
                 PORTAL_FREE (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
                 conn->ibc_connreq = NULL;
@@ -1953,9 +1972,8 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
                                atomic_read (&conn->ibc_refcount));
                         atomic_inc (&conn->ibc_refcount);
 
-                        CDEBUG(D_NET, "RX[%d] %p->%p - "LPX64"\n",
-                               i, &conn->ibc_rxs[i], conn->ibc_rxs[i].rx_msg,
-                               conn->ibc_rxs[i].rx_vaddr);
+                        CDEBUG(D_NET, "RX[%d] %p->%p\n",
+                               i, &conn->ibc_rxs[i], conn->ibc_rxs[i].rx_msg);
 
                         kibnal_post_rx (&conn->ibc_rxs[i], 0);
                 }
@@ -1984,7 +2002,7 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
 }
 
 static int
-kibnal_accept (kib_conn_t **connp, IB_HANDLE *cep,
+kibnal_accept (kib_conn_t **connp, cm_cep_handle_t *cep,
                 ptl_nid_t nid, __u64 incarnation, int queue_depth)
 {
         kib_conn_t    *conn = kibnal_create_conn();
@@ -2040,16 +2058,18 @@ kibnal_accept (kib_conn_t **connp, IB_HANDLE *cep,
         return (0);
 }
 
-static void kibnal_set_qp_state(IB_HANDLE *qp, IB_QP_STATE state)
+static void kibnal_move_qp_to_error(kib_conn_t *conn)
 {
-        IB_QP_ATTRIBUTES_MODIFY modify_attr = {0,};
-        FSTATUS frc;
+        vv_qp_attr_t qp_attr;
+        vv_return_t retval;
 
-        modify_attr.RequestState = state;
+        qp_attr.modify.qp_modify_into_state = vv_qp_state_error;
+        qp_attr.modify.vv_qp_attr_mask      = VV_QP_AT_STATE;
+        qp_attr.modify.qp_type              = vv_qp_type_r_conn;
 
-        frc = iibt_qp_modify(qp, &modify_attr, NULL);
-        if (frc != FSUCCESS)
-                CERROR("couldn't set qp state to %d, error %d\n", state, frc);
+        retval = vv_qp_modify(kibnal_data.kib_hca, conn->ibc_qp, &qp_attr, &conn->ibc_qp_attrs);
+        if (retval)
+                CERROR("couldn't move qp into error state, error %d\n", retval);
 }
 
 static void kibnal_flush_pending(kib_conn_t *conn)
@@ -2068,7 +2088,7 @@ static void kibnal_flush_pending(kib_conn_t *conn)
 
         /* set the QP to the error state so that we get flush callbacks
          * on our posted receives which can then drop their conn refs */
-        kibnal_set_qp_state(conn->ibc_qp, QPStateError);
+        kibnal_move_qp_to_error(conn);
 
         spin_lock_irqsave (&conn->ibc_lock, flags);
 
@@ -2116,102 +2136,153 @@ static void kibnal_flush_pending(kib_conn_t *conn)
 }
 
 static void
-kibnal_reject (IB_HANDLE cep, uint16_t reason)
+kibnal_reject (cm_cep_handle_t cep, cm_rej_code_t reason)
 {
-        CM_REJECT_INFO *rej;
+        cm_reject_data_t *rej;
 
         PORTAL_ALLOC(rej, sizeof(*rej));
         if (rej == NULL) /* PORTAL_ALLOC() will CERROR on failure */
                 return;  
 
-        rej->Reason = reason;
-        iibt_cm_reject(cep, rej);
+        rej->reason = reason;
+        cm_reject(cep, rej);
         PORTAL_FREE(rej, sizeof(*rej));
 }
 
-static FSTATUS
-kibnal_qp_rts(IB_HANDLE qp_handle, __u32 qpn, __u8 resp_res, 
-              IB_PATH_RECORD *path, __u8 init_depth, __u32 send_psn)
+static void get_av_from_path(ib_path_record_v2_t *path, vv_add_vec_t *av)
 {
-        IB_QP_ATTRIBUTES_MODIFY modify_attr;
-        FSTATUS frc;
+        av->service_level = path->sl;
+        av->grh_flag = 0;       /* TODO: correct? */
+        av->dlid = path->dlid;
+        av->pmtu = path->mtu;
+
+        /* From sdp-hca-params.h. */
+        switch(path->rate) {
+        case 2:
+                av->max_static_rate = 1;
+                break;
+        case 3:
+        case 4:
+        default:
+                av->max_static_rate = 0;
+                break;
+        }
+
+        av->l_ack_timeout = IBNAL_ACK_TIMEOUT;
+        av->retry_count = IBNAL_RETRY;
+        av->rnr_retry_count = IBNAL_RNR_RETRY; 
+        av->source_path_bit = 0;
+
+        av->global_dest.flow_lable = path->flow_label;
+        av->global_dest.hope_limit = path->hop_limut;
+        av->global_dest.traffic_class = path->traffic_class;
+        av->global_dest.s_gid_index = 0;
+        av->global_dest.d_gid = path->dgid;
+};
+
+static vv_return_t
+kibnal_qp_rts(vv_qp_h_t qp_handle, __u32 qpn, __u8 resp_res, 
+              ib_path_record_v2_t *path, __u8 init_depth, __u32 send_psn)
+{
+        vv_qp_attr_t qp_attr;
+        vv_return_t retval;
+
         ENTRY;
 
-        modify_attr = (IB_QP_ATTRIBUTES_MODIFY) {
-                .RequestState           = QPStateReadyToRecv,
-                .RecvPSN                = IBNAL_STARTING_PSN,
-                .DestQPNumber           = qpn,
-                .ResponderResources     = resp_res,
-                .MinRnrTimer            = UsecToRnrNakTimer(2000), /* 20 ms */
-                .Attrs                  = (IB_QP_ATTR_RECVPSN |
-                                           IB_QP_ATTR_DESTQPNUMBER | 
-                                           IB_QP_ATTR_RESPONDERRESOURCES | 
-                                           IB_QP_ATTR_DESTAV | 
-                                           IB_QP_ATTR_PATHMTU | 
-                                           IB_QP_ATTR_MINRNRTIMER),
-        };
-        GetAVFromPath(0, path, &modify_attr.PathMTU, NULL, 
-                      &modify_attr.DestAV);
+#if 1
+        /* TODO - Hack. I don't know whether I get bad values from the
+         * stack or if I'm using the wrong names. */
+        resp_res = 8;
+        init_depth = 8;
+#endif
 
-        frc = iibt_qp_modify(qp_handle, &modify_attr, NULL);
-        if (frc != FSUCCESS) 
-                RETURN(frc);
+        /* RTR */
+        qp_attr.modify.qp_modify_into_state = vv_qp_state_rtr;
+        qp_attr.modify.vv_qp_attr_mask =
+                VV_QP_AT_STATE | 
+                VV_QP_AT_ADD_VEC |
+                VV_QP_AT_DEST_QP |
+                VV_QP_AT_R_PSN |
+                VV_QP_AT_RESP_RDMA_ATOM_OUT_NUM |
+                VV_QP_AT_MIN_RNR_NAK_T | VV_QP_AT_OP_F;
 
-        modify_attr = (IB_QP_ATTRIBUTES_MODIFY) {
-                .RequestState           = QPStateReadyToSend,
-                .FlowControl            = TRUE,
-                .InitiatorDepth         = init_depth,
-                .SendPSN                = send_psn,
-                .LocalAckTimeout        = path->PktLifeTime + 2, /* 2 or 1? */
-                .RetryCount             = IBNAL_RETRY,
-                .RnrRetryCount          = IBNAL_RNR_RETRY,
-                .Attrs                  = (IB_QP_ATTR_FLOWCONTROL | 
-                                           IB_QP_ATTR_INITIATORDEPTH | 
-                                           IB_QP_ATTR_SENDPSN | 
-                                           IB_QP_ATTR_LOCALACKTIMEOUT | 
-                                           IB_QP_ATTR_RETRYCOUNT | 
-                                           IB_QP_ATTR_RNRRETRYCOUNT),
-        };
+        qp_attr.modify.qp_type = vv_qp_type_r_conn;
 
-        frc = iibt_qp_modify(qp_handle, &modify_attr, NULL);
-        RETURN(frc);
+        get_av_from_path(path, &qp_attr.modify.params.rtr.remote_add_vec);
+        qp_attr.modify.params.rtr.destanation_qp = qpn;
+        qp_attr.modify.params.rtr.receive_psn = IBNAL_STARTING_PSN;
+        qp_attr.modify.params.rtr.responder_rdma_r_atom_num = resp_res;
+        qp_attr.modify.params.rtr.opt_min_rnr_nak_timer = 16; /* 20 ms */
+
+        /* For now, force MTU to 1KB (Voltaire's advice). */
+        qp_attr.modify.params.rtr.remote_add_vec.pmtu = vv_mtu_1024;
+
+        retval = vv_qp_modify(kibnal_data.kib_hca, qp_handle, &qp_attr, NULL);
+        if (retval) {
+                CERROR("Cannot modify QP to RTR: %d\n", retval);
+                RETURN(retval);
+        }
+
+        /* RTS */
+        qp_attr.modify.qp_modify_into_state = vv_qp_state_rts;
+        qp_attr.modify.vv_qp_attr_mask = 
+                VV_QP_AT_STATE |
+                VV_QP_AT_L_ACK_T |
+                VV_QP_AT_RETRY_NUM |
+                VV_QP_AT_RNR_NUM |
+                VV_QP_AT_S_PSN |
+                VV_QP_AT_DEST_RDMA_ATOM_OUT_NUM;
+        qp_attr.modify.qp_type = vv_qp_type_r_conn;             
+
+        qp_attr.modify.params.rts.local_ack_timeout = path->pkt_life_time + 2; /* 2 or 1? */ 
+        qp_attr.modify.params.rts.retry_num = IBNAL_RETRY;
+        qp_attr.modify.params.rts.rnr_num = IBNAL_RNR_RETRY;
+        qp_attr.modify.params.rts.send_psn = send_psn;
+        qp_attr.modify.params.rts.dest_out_rdma_r_atom_num = init_depth;
+        qp_attr.modify.params.rts.flow_control = 1; /* Stack does not use it. */
+
+        retval = vv_qp_modify(kibnal_data.kib_hca, qp_handle, &qp_attr, NULL);
+        if (retval) {
+                CERROR("Cannot modify QP to RTS: %d\n", retval);
+        }
+
+        RETURN(retval);
 }
 
 static void
-kibnal_connect_reply (IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
+kibnal_connect_reply (cm_cep_handle_t cep, cm_conn_data_t *info, kib_conn_t *conn)
 {
-        IB_CA_ATTRIBUTES *ca_attr = &kibnal_data.kib_hca_attrs;
-        kib_conn_t *conn = arg;
+        vv_hca_attrib_t *ca_attr = &kibnal_data.kib_hca_attrs;
         kib_wire_connreq_t *wcr;
-        CM_REPLY_INFO *rep = &info->Info.Reply;
-        uint16_t reason;
-        FSTATUS frc;
+        cm_reply_data_t *rep = &info->data.reply;
+        cm_rej_code_t reason;
+        vv_return_t retval;
 
-        wcr = (kib_wire_connreq_t *)info->Info.Reply.PrivateData;
+        wcr = (kib_wire_connreq_t *)info->data.reply.priv_data;
 
         if (wcr->wcr_magic != cpu_to_le32(IBNAL_MSG_MAGIC)) {
                 CERROR ("Can't connect "LPX64": bad magic %08x\n",
                         conn->ibc_peer->ibp_nid, le32_to_cpu(wcr->wcr_magic));
-                GOTO(reject, reason = RC_USER_REJ);
+                GOTO(reject, reason = cm_rej_code_usr_rej);
         }
         
         if (wcr->wcr_version != cpu_to_le16(IBNAL_MSG_VERSION)) {
                 CERROR ("Can't connect "LPX64": bad version %d\n",
                         conn->ibc_peer->ibp_nid, le16_to_cpu(wcr->wcr_magic));
-                GOTO(reject, reason = RC_USER_REJ);
+                GOTO(reject, reason = cm_rej_code_usr_rej);
         }
                         
         if (wcr->wcr_queue_depth != cpu_to_le16(IBNAL_MSG_QUEUE_SIZE)) {
                 CERROR ("Can't connect "LPX64": bad queue depth %d\n",
                         conn->ibc_peer->ibp_nid, 
                         le16_to_cpu(wcr->wcr_queue_depth));
-                GOTO(reject, reason = RC_USER_REJ);
+                GOTO(reject, reason = cm_rej_code_usr_rej);
         }
                         
         if (le64_to_cpu(wcr->wcr_nid) != conn->ibc_peer->ibp_nid) {
                 CERROR ("Unexpected NID "LPX64" from "LPX64"\n",
                         le64_to_cpu(wcr->wcr_nid), conn->ibc_peer->ibp_nid);
-                GOTO(reject, reason = RC_USER_REJ);
+                GOTO(reject, reason = cm_rej_code_usr_rej);
         }
 
         CDEBUG(D_NET, "Connection %p -> "LPX64" REP_RECEIVED.\n",
@@ -2220,26 +2291,28 @@ kibnal_connect_reply (IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         conn->ibc_incarnation = le64_to_cpu(wcr->wcr_incarnation);
         conn->ibc_credits = IBNAL_MSG_QUEUE_SIZE;
 
-        frc = kibnal_qp_rts(conn->ibc_qp, rep->QPN, 
-                            min_t(__u8, rep->ArbInitiatorDepth,
-                                  ca_attr->MaxQPResponderResources),
+        retval = kibnal_qp_rts(conn->ibc_qp, rep->qpn, 
+                            min_t(__u8, rep->arb_initiator_depth,
+                                  ca_attr->max_read_atom_qp_outstanding),
                             &conn->ibc_connreq->cr_path, 
-                            min_t(__u8, rep->ArbResponderResources,
-                                  ca_attr->MaxQPInitiatorDepth),
-                            rep->StartingPSN);
-        if (frc != FSUCCESS) {
+                            min_t(__u8, rep->arb_resp_res,
+                                  ca_attr->max_qp_depth_for_init_read_atom),
+                            rep->start_psn);
+
+        if (retval) {
                 CERROR("Connection %p -> "LPX64" QP RTS/RTR failed: %d\n",
-                       conn, conn->ibc_peer->ibp_nid, frc);
-                GOTO(reject, reason = RC_NO_QP);
+                       conn, conn->ibc_peer->ibp_nid, retval);
+                GOTO(reject, reason = cm_rej_code_no_qp);
         }
 
+        dump_qp(conn);
+
         /* the callback arguments are ignored for an active accept */
-        conn->ibc_connreq->cr_discarded.Status = FSUCCESS;
-        frc = iibt_cm_accept(cep, &conn->ibc_connreq->cr_discarded, 
-                             NULL, NULL, NULL, NULL);
-        if (frc != FCM_CONNECT_ESTABLISHED) {
-                CERROR("Connection %p -> "LPX64" CMAccept failed: %d\n",
-                       conn, conn->ibc_peer->ibp_nid, frc);
+        /* TODO: memset cmrtu? */
+        retval = cm_accept(cep, NULL, &conn->ibc_connreq->cr_cm_rtu, kibnal_cm_callback, conn);
+        if (retval) {
+                CERROR("Connection %p -> "LPX64" CMAccept RTU failed: %d\n",
+                       conn, conn->ibc_peer->ibp_nid, retval);
                 kibnal_connreq_done (conn, 1, -ECONNABORTED);
                 /* XXX don't call reject after accept fails? */
                 return;
@@ -2249,6 +2322,7 @@ kibnal_connect_reply (IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                conn, conn->ibc_peer->ibp_nid);
 
         kibnal_connreq_done (conn, 1, 0);
+
         return;
 
 reject:
@@ -2256,37 +2330,56 @@ reject:
         kibnal_connreq_done (conn, 1, -EPROTO);
 }
 
-/* ib_cm.h has a wealth of information on the CM procedures */
+/* Off level CM callback */
 static void
-kibnal_cm_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
+_kibnal_cm_callback(void * arg)
 {
-        kib_conn_t       *conn = arg;
+        struct cm_off_level *cm_tq = arg;
+        cm_cep_handle_t cep = cm_tq->cep;
+        cm_conn_data_t *info = cm_tq->info;
+        kib_conn_t *conn = cm_tq->conn;
+        vv_return_t retval;
 
-        CDEBUG(D_NET, "status 0x%x\n", info->Status);
+        CDEBUG(D_NET, "CM event 0x%x for CEP %p\n", info->status, cep);
+
+        PORTAL_FREE(cm_tq, sizeof(*cm_tq));
 
         /* Established Connection Notifier */
-        switch (info->Status) {
-        default:
-                CERROR("unknown status %d on Connection %p -> "LPX64"\n",
-                       info->Status, conn, conn->ibc_peer->ibp_nid);
-                LBUG();
+        switch (info->status) {
+        case cm_event_connected:
+                CDEBUG(D_NET, "Connection %p -> "LPX64" Established\n",
+                       conn, conn->ibc_peer->ibp_nid);
+                kibnal_connreq_done (conn, 0, 0);
                 break;
 
-        case FCM_CONNECT_REPLY:
-                kibnal_connect_reply(cep, info, arg);
+        case cm_event_conn_timeout:
+        case cm_event_conn_reject:
+                /* TODO: be sure this is called only if REQ times out. */
+                CERROR("connection timed out\n");
+                LASSERT(conn->ibc_state == IBNAL_CONN_CONNECTING);
+                conn->ibc_state = IBNAL_CONN_INIT_QP;
+                kibnal_connreq_done (conn, 1, -EINVAL);
                 break;
 
-        case FCM_DISCONNECT_REQUEST:
+        case cm_event_conn_reply:
+                kibnal_connect_reply(cep, info, conn);
+                break;
+
+        case cm_event_disconn_request:
                 /* XXX lock around these state management bits? */
                 if (conn->ibc_state == IBNAL_CONN_ESTABLISHED)
                         kibnal_close_conn (conn, 0);
                 conn->ibc_state = IBNAL_CONN_DREP;
-                iibt_cm_disconnect(conn->ibc_cep, NULL, NULL);
-                break;
+                
+                retval = cm_disconnect(conn->ibc_cep, NULL, &kibnal_data.cm_data.drep_data);
+                if (retval)
+                        CERROR("disconnect rep failed: %d\n", retval);
+
+                /* Fall through ... */
 
         /* these both guarantee that no more cm callbacks will occur */
-        case FCM_DISCONNECTED: /* aka FCM_DISCONNECT_TIMEOUT */
-        case FCM_DISCONNECT_REPLY:
+        case cm_event_disconnected: /* aka cm_event_disconn_timeout */
+        case cm_event_disconn_reply:
                 CDEBUG(D_NET, "Connection %p -> "LPX64" disconnect done.\n",
                        conn, conn->ibc_peer->ibp_nid);
 
@@ -2294,14 +2387,49 @@ kibnal_cm_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                 kibnal_flush_pending(conn);
                 kibnal_put_conn(conn);        /* Lose CM's ref */
                 break;
+
+        default:
+                CERROR("unknown status %d on Connection %p -> "LPX64"\n",
+                       info->status, conn, conn->ibc_peer->ibp_nid);
+                LBUG();
+                break;
         }
 
         return;
 }
 
-static int
-kibnal_set_cm_flags(IB_HANDLE cep)
+static void
+kibnal_cm_callback(cm_cep_handle_t cep, cm_conn_data_t *info, void *arg)
 {
+        struct cm_off_level *cm_tq;
+
+        LASSERT(cep);
+        LASSERT(info);
+
+        CDEBUG(D_NET, "CM event 0x%x for CEP %p\n", info->status, cep);
+
+        PORTAL_ALLOC_ATOMIC(cm_tq, sizeof(*cm_tq));
+        if (cm_tq == NULL) {
+                CERROR("Failed to allocate a CM off level structure\n");
+                return;
+        }
+
+        cm_tq->tq.sync = 0;
+        cm_tq->tq.routine = _kibnal_cm_callback;
+        cm_tq->tq.data = cm_tq;
+
+        cm_tq->cep = cep;
+        cm_tq->info = info;
+        cm_tq->conn = (kib_conn_t *)arg;
+
+        schedule_task(&cm_tq->tq);
+}
+
+static int
+kibnal_set_cm_flags(cm_cep_handle_t cep)
+{
+#ifdef TODO
+voltaire cm doesnot appear to have that functionnality
         FSTATUS frc;
         uint32 value = 1;
 
@@ -2320,50 +2448,60 @@ kibnal_set_cm_flags(IB_HANDLE cep)
                 return -1;
         }
 #endif
+#endif
 
         return 0;
 }
 
-void
-kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
+/* Off level listen callback */
+static void
+_kibnal_listen_callback(void *arg)
 {
-        IB_CA_ATTRIBUTES *ca_attr = &kibnal_data.kib_hca_attrs;
-        IB_QP_ATTRIBUTES_QUERY *query;
-        CM_REQUEST_INFO    *req;
-        CM_CONN_INFO       *rep = NULL, *rcv = NULL;
+        struct cm_off_level *cm_tq = arg;
+        cm_cep_handle_t cep = cm_tq->cep;
+        cm_conn_data_t *info = cm_tq->info;
+        vv_hca_attrib_t *ca_attr = &kibnal_data.kib_hca_attrs;
+        cm_request_data_t  *req;
+        cm_reply_data_t    *rep = NULL;
         kib_wire_connreq_t *wcr;
         kib_conn_t         *conn = NULL;
-        uint16_t            reason = 0;
-        FSTATUS             frc;
+        cm_rej_code_t       reason = 0;
         int                 rc = 0;
-        
+        vv_return_t         retval;
+        vv_qp_attr_t       *query;
+        void               *qp_context;
+
         LASSERT(cep);
         LASSERT(info);
-        LASSERT(arg == NULL); /* no conn yet for passive */
 
-        CDEBUG(D_NET, "status 0x%x\n", info->Status);
+        CDEBUG(D_NET, "LISTEN status 0x%x for CEP %p\n", info->status, cep);
 
-        req = &info->Info.Request;
-        wcr = (kib_wire_connreq_t *)req->PrivateData;
+        PORTAL_FREE(cm_tq, sizeof(*cm_tq));
 
-        CDEBUG(D_NET, "%d from "LPX64"\n", info->Status, 
+        req = &info->data.request;
+        wcr = (kib_wire_connreq_t *)req->priv_data;
+
+        CDEBUG(D_NET, "%d from "LPX64"\n", info->status, 
                le64_to_cpu(wcr->wcr_nid));
         
-        if (info->Status == FCM_CONNECT_CANCEL)
+#ifdef TODO
+        is there an equivalent?
+        if (info->status == FCM_CONNECT_CANCEL)
                 return;
+#endif
         
-        LASSERT (info->Status == FCM_CONNECT_REQUEST);
+        LASSERT (info->status == cm_event_conn_request);
         
         if (wcr->wcr_magic != cpu_to_le32(IBNAL_MSG_MAGIC)) {
                 CERROR ("Can't accept: bad magic %08x\n",
                         le32_to_cpu(wcr->wcr_magic));
-                GOTO(out, reason = RC_USER_REJ);
+                GOTO(out, reason = cm_rej_code_usr_rej);
         }
 
         if (wcr->wcr_version != cpu_to_le16(IBNAL_MSG_VERSION)) {
                 CERROR ("Can't accept: bad version %d\n",
                         le16_to_cpu(wcr->wcr_magic));
-                GOTO(out, reason = RC_USER_REJ);
+                GOTO(out, reason = cm_rej_code_usr_rej);
         }
 
         rc = kibnal_accept(&conn, cep,
@@ -2373,56 +2511,54 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         if (rc != 0) {
                 CERROR ("Can't accept "LPX64": %d\n",
                         le64_to_cpu(wcr->wcr_nid), rc);
-                GOTO(out, reason = RC_NO_RESOURCES);
+                GOTO(out, reason = cm_rej_code_no_res);
         }
 
-        frc = kibnal_qp_rts(conn->ibc_qp, req->CEPInfo.QPN,
-                            min_t(__u8, req->CEPInfo.OfferedInitiatorDepth, 
-                                  ca_attr->MaxQPResponderResources),
-                            &req->PathInfo.Path,
-                            min_t(__u8, req->CEPInfo.OfferedResponderResources, 
-                                  ca_attr->MaxQPInitiatorDepth),
-                            req->CEPInfo.StartingPSN);
+        /* TODO: I hope I got the ca_attr names correctly. */
+        retval = kibnal_qp_rts(conn->ibc_qp, req->cep_data.qpn,
+                            min_t(__u8, req->cep_data.offered_initiator_depth, 
+                                  ca_attr->max_read_atom_qp_outstanding),
+                            &req->path_data.path,
+                            min_t(__u8, req->cep_data.offered_resp_res, 
+                                  ca_attr->max_qp_depth_for_init_read_atom),
+                            req->cep_data.start_psn);
 
-        if (frc != FSUCCESS) {
+        if (retval) {
                 CERROR ("Can't mark QP RTS/RTR  "LPX64": %d\n",
-                        le64_to_cpu(wcr->wcr_nid), frc);
-                GOTO(out, reason = RC_NO_QP);
+                        le64_to_cpu(wcr->wcr_nid), retval);
+                GOTO(out, reason = cm_rej_code_no_qp);
         }
 
-        frc = iibt_qp_query(conn->ibc_qp, &conn->ibc_qp_attrs, NULL);
-        if (frc != FSUCCESS) {
+        dump_qp(conn);
+
+        retval = vv_qp_query(kibnal_data.kib_hca, conn->ibc_qp, &qp_context, &conn->ibc_qp_attrs);
+        if (retval) {
                 CERROR ("Couldn't query qp attributes "LPX64": %d\n",
-                        le64_to_cpu(wcr->wcr_nid), frc);
-                GOTO(out, reason = RC_NO_QP);
+                        le64_to_cpu(wcr->wcr_nid), retval);
+                GOTO(out, reason = cm_rej_code_no_qp);
         }
         query = &conn->ibc_qp_attrs;
 
         PORTAL_ALLOC(rep, sizeof(*rep));
-        PORTAL_ALLOC(rcv, sizeof(*rcv));
-        if (rep == NULL || rcv == NULL) {
-                if (rep) PORTAL_FREE(rep, sizeof(*rep));
-                if (rcv) PORTAL_FREE(rcv, sizeof(*rcv));
-                CERROR ("can't allocate reply and receive buffers\n");
-                GOTO(out, reason = RC_INSUFFICIENT_RESP_RES);
+        if (rep == NULL) {
+                CERROR ("can't reply and receive buffers\n");
+                GOTO(out, reason = cm_rej_code_insuff_resp_res);
         }
 
         /* don't try to deref this into the incoming wcr :) */
-        wcr = (kib_wire_connreq_t *)rep->Info.Reply.PrivateData;
+        wcr = (kib_wire_connreq_t *)rep->priv_data;
 
-        rep->Info.Reply = (CM_REPLY_INFO) {
-                .QPN = query->QPNumber,
-                .QKey = query->Qkey,
-                .StartingPSN = query->RecvPSN,
-                .EndToEndFlowControl = query->FlowControl,
-                /* XXX Hmm. */
-                .ArbInitiatorDepth = query->InitiatorDepth,
-                .ArbResponderResources = query->ResponderResources,
-                .TargetAckDelay = 0,
-                .FailoverAccepted = 0,
-                .RnRRetryCount = req->CEPInfo.RnrRetryCount,
+        *rep = (cm_reply_data_t) {
+                .qpn = query->query.qp_num,
+                .start_psn = query->query.receve_psn,
+                .arb_resp_res = query->query.rdma_r_atom_outstand_num,
+                .arb_initiator_depth = query->query.rdma_r_atom_outstand_num,
+                .targ_ack_delay = 0,
+                .failover_accepted = 0,
+                .end_to_end_flow_ctrl = 1, /* (query->query.flow_control is never set) */
+                .rnr_retry_count = req->cep_data.rtr_retry_cnt,
         };
-                
+
         *wcr = (kib_wire_connreq_t) {
                 .wcr_magic       = cpu_to_le32(IBNAL_MSG_MAGIC),
                 .wcr_version     = cpu_to_le16(IBNAL_MSG_VERSION),
@@ -2431,15 +2567,13 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                 .wcr_incarnation = cpu_to_le64(kibnal_data.kib_incarnation),
         };
 
-        frc = iibt_cm_accept(cep, rep, rcv, kibnal_cm_callback, conn, 
-                             &conn->ibc_cep);
+        retval = cm_accept(cep, rep, NULL, kibnal_cm_callback, conn);
 
         PORTAL_FREE(rep, sizeof(*rep));
-        PORTAL_FREE(rcv, sizeof(*rcv));
 
-        if (frc != FCM_CONNECT_ESTABLISHED) {
+        if (retval) {
                 /* XXX it seems we don't call reject after this point? */
-                CERROR("iibt_cm_accept() failed: %d, aborting\n", frc);
+                CERROR("cm_accept() failed: %d, aborting\n", retval);
                 rc = -ECONNABORTED;
                 goto out;
         }
@@ -2449,6 +2583,8 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                 goto out;
         }
 
+        conn->ibc_cep = cep;
+
         CDEBUG(D_WARNING, "Connection %p -> "LPX64" ESTABLISHED.\n",
                conn, conn->ibc_peer->ibp_nid);
 
@@ -2457,61 +2593,90 @@ out:
                 kibnal_reject(cep, reason);
                 rc = -ECONNABORTED;
         }
-        if (conn != NULL) 
-                kibnal_connreq_done(conn, 0, rc);
 
         return;
 }
 
-static void
-dump_path_records(PATH_RESULTS *results)
+void
+kibnal_listen_callback(cm_cep_handle_t cep, cm_conn_data_t *info, void *arg)
 {
-        IB_PATH_RECORD *path;
-        int i;
+        struct cm_off_level *cm_tq;
 
-        for(i = 0; i < results->NumPathRecords; i++) {
-                path = &results->PathRecords[i];
-                CDEBUG(D_NET, "%d: sgid "LPX64":"LPX64" dgid "
-                       LPX64":"LPX64" pkey %x\n",
-                       i,
-                       path->SGID.Type.Global.SubnetPrefix,
-                       path->SGID.Type.Global.InterfaceID,
-                       path->DGID.Type.Global.SubnetPrefix,
-                       path->DGID.Type.Global.InterfaceID,
-                       path->P_Key);
+        LASSERT(cep);
+        LASSERT(info);
+        LASSERT(arg == NULL); /* no conn yet for passive */
+
+        PORTAL_ALLOC_ATOMIC(cm_tq, sizeof(*cm_tq));
+        if (cm_tq == NULL) {
+                CERROR("Failed to allocate a CM off level structure\n");
+                return;
         }
+
+        cm_tq->tq.sync = 0;
+        cm_tq->tq.routine = _kibnal_listen_callback;
+        cm_tq->tq.data = cm_tq;
+
+        cm_tq->cep = cep;
+        cm_tq->info = info;
+        cm_tq->conn = NULL;
+
+        schedule_task(&cm_tq->tq);
 }
 
 static void
-kibnal_pathreq_callback (void *arg, QUERY *query, 
-                         QUERY_RESULT_VALUES *query_res)
+kibnal_pathreq_callback (struct sa_request *request)
 {
-        IB_CA_ATTRIBUTES *ca_attr = &kibnal_data.kib_hca_attrs;
-        kib_conn_t *conn = arg;
-        PATH_RESULTS *path;
-        FSTATUS frc;
-        
-        if (query_res->Status != FSUCCESS || query_res->ResultDataSize == 0) {
-                CERROR ("status %d data size %d\n", query_res->Status,
-                        query_res->ResultDataSize);
+        vv_hca_attrib_t *ca_attr = &kibnal_data.kib_hca_attrs;
+        kib_conn_t *conn = request->context;
+        gsi_dtgrm_t *dtgrm;
+        sa_mad_v2_t *mad;
+        ib_path_record_v2_t *path;
+        u64 component_mask;
+        cm_return_t cmret;
+
+        if (request->status) {
+                CERROR ("status %d\n", request->status);
+                free_sa_request(request);
                 kibnal_connreq_done (conn, 1, -EINVAL);
                 return;
         }
 
-        path = (PATH_RESULTS *)query_res->QueryResult;
+        dtgrm = request->dtgrm_resp;
+        mad = (sa_mad_v2_t *) dtgrm->mad;
+        path = (ib_path_record_v2_t *) mad->payload;
 
-        if (path->NumPathRecords < 1) {
-                CERROR ("expected path records: %d\n", path->NumPathRecords);
+        /* Put the path record in host order for that stack. */
+        gid_swap(&path->sgid);
+        gid_swap(&path->dgid);
+        path->slid = be16_to_cpu(path->slid);
+        path->dlid = be16_to_cpu(path->dlid);
+        path->flow_label = be32_to_cpu(path->flow_label);
+        path->pkey = be16_to_cpu(path->pkey);
+        path->sl = be16_to_cpu(path->sl);
+
+        CDEBUG(D_NET, "sgid "LPX64":"LPX64" dgid "
+               LPX64":"LPX64" pkey %x\n",
+               path->sgid.scope.g.subnet,
+               path->sgid.scope.g.eui64,
+               path->dgid.scope.g.subnet,
+               path->dgid.scope.g.eui64,
+               path->pkey);
+
+#if TODO
+        component_mask = be64_to_cpu(mad->component_mask);
+        if ((component_mask && (1ull << 1)) == 0) {
+                CERROR ("no servivce GID in SR: "LPX64"\n", component_mask);
+                free_sa_request(request);
                 kibnal_connreq_done (conn, 1, -EINVAL);
                 return;
         }
+#endif
 
-        dump_path_records(path);
+        conn->ibc_connreq->cr_path = *path;
 
-        /* just using the first.  this is probably a horrible idea. */
-        conn->ibc_connreq->cr_path = path->PathRecords[0];
+        free_sa_request(request);    
 
-        conn->ibc_cep = iibt_cm_create_cep(CM_RC_TYPE);
+        conn->ibc_cep = cm_create_cep(cm_cep_transp_rc);
         if (conn->ibc_cep == NULL) {
                 CERROR ("Can't create CEP\n");
                 kibnal_connreq_done (conn, 1, -EINVAL);
@@ -2531,24 +2696,24 @@ kibnal_pathreq_callback (void *arg, QUERY *query,
                 .wcr_incarnation = cpu_to_le64(kibnal_data.kib_incarnation),
         };
 
-        conn->ibc_connreq->cr_cmreq = (CM_REQUEST_INFO) {
-                .SID = conn->ibc_connreq->cr_service.RID.ServiceID,
-                .CEPInfo = (CM_CEP_INFO) { 
-                        .CaGUID = kibnal_data.kib_hca_guids[0],
-                        .EndToEndFlowControl = FALSE,
-                        .PortGUID = conn->ibc_connreq->cr_path.SGID.Type.Global.InterfaceID,
-                        .RetryCount = IBNAL_RETRY,
-                        .RnrRetryCount = IBNAL_RNR_RETRY,
-                        .AckTimeout = IBNAL_ACK_TIMEOUT,
-                        .StartingPSN = IBNAL_STARTING_PSN,
-                        .QPN = conn->ibc_qp_attrs.QPNumber,
-                        .QKey = conn->ibc_qp_attrs.Qkey,
-                        .OfferedResponderResources = ca_attr->MaxQPResponderResources,
-                        .OfferedInitiatorDepth = ca_attr->MaxQPInitiatorDepth,
+        conn->ibc_connreq->cr_cm_req = (cm_request_data_t) {
+                .sid = kibnal_data.kib_service_id,
+                .cep_data = (cm_cep_data_t) { 
+                        .ca_guid = kibnal_data.kib_hca_attrs.guid,
+                        .end_to_end_flow_ctrl = 1,
+                        .port_guid = kibnal_data.kib_port_gid.scope.g.eui64,
+                        .local_port_num = kibnal_data.kib_port,
+                        .start_psn = IBNAL_STARTING_PSN,
+                        .qpn = conn->ibc_qp_attrs.query.qp_num,
+                        .retry_cnt = IBNAL_RETRY,
+                        .rtr_retry_cnt = IBNAL_RNR_RETRY,
+                        .ack_timeout = IBNAL_ACK_TIMEOUT,
+                        .offered_resp_res = ca_attr->max_read_atom_qp_outstanding,
+                        .offered_initiator_depth = ca_attr->max_qp_depth_for_init_read_atom,
                 },
-                .PathInfo = (CM_CEP_PATHINFO) {
-                        .bSubnetLocal = TRUE,
-                        .Path = conn->ibc_connreq->cr_path,
+                .path_data = (cm_cep_path_data_t) {
+                        .subn_local = TRUE,
+                        .path = conn->ibc_connreq->cr_path,
                 },
         };
 
@@ -2559,108 +2724,88 @@ kibnal_pathreq_callback (void *arg, QUERY *query,
         /* Flag I'm getting involved with the CM... */
         conn->ibc_state = IBNAL_CONN_CONNECTING;
 
+#if 0
         CDEBUG(D_NET, "Connecting to, service id "LPX64", on "LPX64"\n",
                conn->ibc_connreq->cr_service.RID.ServiceID, 
                *kibnal_service_nid_field(&conn->ibc_connreq->cr_service));
+#endif
 
-        memset(conn->ibc_connreq->cr_cmreq.PrivateData, 0, 
-               CM_REQUEST_INFO_USER_LEN);
-        memcpy(conn->ibc_connreq->cr_cmreq.PrivateData, 
+        memset(conn->ibc_connreq->cr_cm_req.priv_data, 0, 
+               cm_REQ_priv_data_len);
+        memcpy(conn->ibc_connreq->cr_cm_req.priv_data, 
                &conn->ibc_connreq->cr_wcr, sizeof(conn->ibc_connreq->cr_wcr));
 
         /* kibnal_cm_callback gets my conn ref */
-        frc = iibt_cm_connect(conn->ibc_cep, &conn->ibc_connreq->cr_cmreq,
+        cmret = cm_connect(conn->ibc_cep, &conn->ibc_connreq->cr_cm_req,
                               kibnal_cm_callback, conn);
-        if (frc != FPENDING && frc != FSUCCESS) {
-                CERROR ("Connect: %d\n", frc);
+
+        if (cmret) {
+                CERROR ("Connect failed: %d\n", cmret);
                 /* Back out state change as connect failed */
                 conn->ibc_state = IBNAL_CONN_INIT_QP;
                 kibnal_connreq_done (conn, 1, -EINVAL);
         }
+
+        CDEBUG(D_NET, "connection REQ sent\n");
 }
 
 static void
-dump_service_records(SERVICE_RECORD_RESULTS *results)
+kibnal_service_get_callback (struct sa_request *request)
 {
-        IB_SERVICE_RECORD *svc;
-        int i;
+        kib_conn_t *conn = request->context;
+        gsi_dtgrm_t *dtgrm;
+        sa_mad_v2_t *mad;
+        ib_service_record_v2_t *sr;
+        u64 component_mask;
+        int ret;
 
-        for(i = 0; i < results->NumServiceRecords; i++) {
-                svc = &results->ServiceRecords[i];
-                CDEBUG(D_NET, "%d: sid "LPX64" gid "LPX64":"LPX64" pkey %x\n",
-                       i,
-                       svc->RID.ServiceID,
-                       svc->RID.ServiceGID.Type.Global.SubnetPrefix,
-                       svc->RID.ServiceGID.Type.Global.InterfaceID,
-                       svc->RID.ServiceP_Key);
-        }
-}
-
-
-static void
-kibnal_service_get_callback (void *arg, QUERY *query, 
-                             QUERY_RESULT_VALUES *query_res)
-{
-        kib_conn_t *conn = arg;
-        SERVICE_RECORD_RESULTS *svc;
-        COMMAND_CONTROL_PARAMETERS sd_params;
-        QUERY   path_query;
-        FSTATUS frc;
-        
-        if (query_res->Status != FSUCCESS || query_res->ResultDataSize == 0) {
-                CERROR ("status %d data size %d\n", query_res->Status,
-                        query_res->ResultDataSize);
+        if (request->status) {
+                CERROR ("status %d\n", request->status);
+                free_sa_request(request);
                 kibnal_connreq_done (conn, 1, -EINVAL);
                 return;
         }
 
-        svc = (SERVICE_RECORD_RESULTS *)query_res->QueryResult;
+        dtgrm = request->dtgrm_resp;
+        mad = (sa_mad_v2_t *) dtgrm->mad;
+        sr = (ib_service_record_v2_t *) mad->payload;
 
-        if (svc->NumServiceRecords < 1) {
-                CERROR ("%d service records\n", svc->NumServiceRecords);
+        CDEBUG(D_NET, "sid "LPX64" gid "LPX64":"LPX64" pkey %x\n",
+               sr->service_id,
+               sr->service_gid.scope.g.subnet,
+               sr->service_gid.scope.g.eui64,
+               sr->service_pkey);
+
+        component_mask = be64_to_cpu(mad->component_mask);
+        if ((component_mask && (1ull << 1)) == 0) {
+                CERROR ("no service GID in SR: "LPX64"\n", component_mask);
+                free_sa_request(request);
                 kibnal_connreq_done (conn, 1, -EINVAL);
                 return;
         }
 
-        dump_service_records(svc);
+        //conn->ibc_connreq->cr_service = sr;
 
-        conn->ibc_connreq->cr_service = svc->ServiceRecords[0];
+        /* Return the response datagram to its pool. We don't need it anymore. */
+        gsi_dtgrm_pool_put(request->dtgrm_resp);
+        request->dtgrm_resp = NULL;
 
-        CDEBUG(D_NET, "Got status %d, service id "LPX64", on "LPX64"\n",
-               query_res->Status , conn->ibc_connreq->cr_service.RID.ServiceID, 
-               *kibnal_service_nid_field(&conn->ibc_connreq->cr_service));
+        /* kibnal_pathreq_callback gets my conn ref */
+        ret = kibnal_pathrecord_op(request, sr->service_gid, kibnal_pathreq_callback, conn);
+        if (ret) {
+                CERROR ("Path record request failed: %d\n", ret);
+                kibnal_connreq_done (conn, 1, -EINVAL);
+        }
 
-        memset(&path_query, 0, sizeof(path_query));
-        path_query.InputType = InputTypePortGuidPair;
-        path_query.OutputType = OutputTypePathRecord;
-        path_query.InputValue.PortGuidPair.SourcePortGuid = kibnal_data.kib_port_guid;
-        path_query.InputValue.PortGuidPair.DestPortGuid  = conn->ibc_connreq->cr_service.RID.ServiceGID.Type.Global.InterfaceID;
-
-        memset(&sd_params, 0, sizeof(sd_params));
-        sd_params.RetryCount = IBNAL_RETRY;
-        sd_params.Timeout = 10 * 1000;   /* wait 10 seconds */
-
-        /* kibnal_service_get_callback gets my conn ref */
-
-        frc = iibt_sd_query_port_fabric_information(kibnal_data.kib_sd,
-                                                    kibnal_data.kib_port_guid,
-                                                    &path_query, 
-                                                    kibnal_pathreq_callback,
-                                                    &sd_params, conn);
-        if (frc == FPENDING)
-                return;
-
-        CERROR ("Path record request failed: %d\n", frc);
-        kibnal_connreq_done (conn, 1, -EINVAL);
+        return;
 }
 
 static void
 kibnal_connect_peer (kib_peer_t *peer)
 {
-        COMMAND_CONTROL_PARAMETERS sd_params;
-        QUERY   query;
-        FSTATUS frc;
         kib_conn_t  *conn = kibnal_create_conn();
+        struct sa_request *request;
+        int ret;
 
         LASSERT (peer->ibp_connecting != 0);
 
@@ -2682,29 +2827,18 @@ kibnal_connect_peer (kib_peer_t *peer)
 
         memset(conn->ibc_connreq, 0, sizeof (*conn->ibc_connreq));
 
-        kibnal_set_service_keys(&conn->ibc_connreq->cr_service, peer->ibp_nid);
-
-        memset(&query, 0, sizeof(query));
-        query.InputType = InputTypeServiceRecord;
-        query.OutputType = OutputTypeServiceRecord;
-        query.InputValue.ServiceRecordValue.ServiceRecord = conn->ibc_connreq->cr_service;
-        query.InputValue.ServiceRecordValue.ComponentMask = KIBNAL_SERVICE_KEY_MASK;
-
-        memset(&sd_params, 0, sizeof(sd_params));
-        sd_params.RetryCount = IBNAL_RETRY;
-        sd_params.Timeout = 10 * 1000;   /* wait 10 seconds */
-
         /* kibnal_service_get_callback gets my conn ref */
-        frc = iibt_sd_query_port_fabric_information(kibnal_data.kib_sd,
-                                                    kibnal_data.kib_port_guid,
-                                                    &query, 
-                                                kibnal_service_get_callback, 
-                                                    &sd_params, conn);
-        if (frc == FPENDING)
-                return;
+        ret = kibnal_advertize_op(peer->ibp_nid, SUBN_ADM_GET, kibnal_service_get_callback, conn);
 
-        CERROR ("iibt_sd_query_port_fabric_information(): %d\n", frc);
-        kibnal_connreq_done (conn, 1, frc);
+        if (ret) {
+                CERROR("kibnal_advertize_op failed for op %d NID "LPX64"\n", SUBN_ADM_GET, peer->ibp_nid);
+                /* TODO: I'm unsure yet whether ret contains a
+                 * consistent error type, so I return -EIO in the
+                 * meantime. */
+                kibnal_connreq_done (conn, 1, -EIO);
+        }
+
+        return;
 }
 
 static int
@@ -2803,7 +2937,7 @@ kibnal_check_conns (int idx)
 static void
 kib_connd_handle_state(kib_conn_t *conn)
 {
-        FSTATUS frc;
+        vv_return_t retval;
 
         switch (conn->ibc_state) {
                 /* all refs have gone, free and be done with it */ 
@@ -2812,9 +2946,11 @@ kib_connd_handle_state(kib_conn_t *conn)
                         return; /* avoid put_conn */
 
                 case IBNAL_CONN_SEND_DREQ:
-                        frc = iibt_cm_disconnect(conn->ibc_cep, NULL, NULL);
-                        if (frc != FSUCCESS) /* XXX do real things */
-                                CERROR("disconnect failed: %d\n", frc);
+                        
+                        retval = cm_disconnect(conn->ibc_cep, &kibnal_data.cm_data.dreq_data, NULL);
+                        if (retval) /* XXX do real things */
+                                CERROR("disconnect failed: %d\n", retval);
+                        
                         conn->ibc_state = IBNAL_CONN_DREQ;
                         break;
 
@@ -3018,10 +3154,10 @@ kibnal_scheduler(void *arg)
 
 
 lib_nal_t kibnal_lib = {
-        libnal_data:        &kibnal_data,      /* NAL private data */
-        libnal_send:         kibnal_send,
-        libnal_send_pages:   kibnal_send_pages,
-        libnal_recv:         kibnal_recv,
-        libnal_recv_pages:   kibnal_recv_pages,
-        libnal_dist:         kibnal_dist
+        .libnal_data = &kibnal_data,      /* NAL private data */
+        .libnal_send = kibnal_send,
+        .libnal_send_pages = kibnal_send_pages,
+        .libnal_recv = kibnal_recv,
+        .libnal_recv_pages = kibnal_recv_pages,
+        .libnal_dist = kibnal_dist
 };

@@ -78,6 +78,7 @@ static name2num_t nalnames[] = {
         {"gm",	        GMNAL},
         {"openib",      OPENIBNAL},
         {"iib",         IIBNAL},
+        {"vib",         VIBNAL},
         {"lo",          LONAL},
         {"ra",          RANAL},
 #else
@@ -676,7 +677,8 @@ jt_ptl_print_peers (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, RANAL, 
+                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -693,6 +695,11 @@ jt_ptl_print_peers (int argc, char **argv)
                                 ptl_ipaddr_2_str (pcfg.pcfg_size, buffer[0], 1),
                                 ptl_ipaddr_2_str (pcfg.pcfg_id, buffer[1], 1),
                                 pcfg.pcfg_misc, pcfg.pcfg_count);
+                else if (g_nal_is_compatible(NULL, RANAL, 0))
+                        printf (LPX64"[%d]@%s:%d\n",
+                                pcfg.pcfg_nid, pcfg.pcfg_wait,
+                                ptl_ipaddr_2_str (pcfg.pcfg_id, buffer[1], 1),
+                                pcfg.pcfg_misc);
                 else
                         printf (LPX64"[%d]\n",
                                 pcfg.pcfg_nid, pcfg.pcfg_wait);
@@ -712,17 +719,18 @@ jt_ptl_add_peer (int argc, char **argv)
         int                      port = 0;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, RANAL, 
+                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
                 return -1;
 
         if (g_nal_is_compatible(NULL, SOCKNAL, RANAL, 0)) {
                 if (argc != 4) {
-                        fprintf (stderr, "usage(tcp): %s nid ipaddr port\n", 
+                        fprintf (stderr, "usage(tcp,ra): %s nid ipaddr port\n", 
                                  argv[0]);
                         return 0;
                 }
         } else if (argc != 2) {
-                fprintf (stderr, "usage(openib,iib): %s nid\n", argv[0]);
+                fprintf (stderr, "usage(openib,iib,vib): %s nid\n", argv[0]);
                 return 0;
         }
 
@@ -769,7 +777,8 @@ jt_ptl_del_peer (int argc, char **argv)
         int                      argidx;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, RANAL, 
+                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
                 return -1;
 
         if (g_nal_is_compatible(NULL, SOCKNAL, 0)) {
@@ -832,7 +841,8 @@ jt_ptl_print_connections (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, RANAL, 
+                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -857,6 +867,10 @@ jt_ptl_print_connections (int argc, char **argv)
                                 pcfg.pcfg_count,        /* tx buffer size */
                                 pcfg.pcfg_size,         /* rx buffer size */
                                 pcfg.pcfg_wait ? "nagle" : "nonagle");
+                else if (g_nal_is_compatible (NULL, RANAL, 0))
+                        printf ("[%d]"LPX64"\n",
+                                pcfg.pcfg_id,       /* device id */
+                                pcfg.pcfg_nid);
                 else
                         printf (LPX64"\n",
                                 pcfg.pcfg_nid);
@@ -1023,7 +1037,8 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (NULL, SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
+        if (!g_nal_is_compatible (NULL, SOCKNAL, RANAL, 
+                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
                 return 0;
 
         if (argc >= 2 &&

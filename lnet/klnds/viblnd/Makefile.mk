@@ -3,4 +3,8 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-SUBDIRS = lonal socknal qswnal gmnal openibnal iibnal vibnal ranal
+include $(src)/../../Kernelenv
+
+obj-y += kvibnal.o
+kvibnal-objs := vibnal.o vibnal_cb.o vibnal_sa.o
+

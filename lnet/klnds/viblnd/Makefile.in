@@ -1,0 +1,6 @@
+MODULES := kvibnal
+kvibnal-objs := vibnal.o vibnal_cb.o vibnal_sa.o
+
+EXTRA_POST_CFLAGS := @VIBCPPFLAGS@
+
+@INCLUDE_RULES@
