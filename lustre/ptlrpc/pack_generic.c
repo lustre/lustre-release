@@ -24,6 +24,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/obd_support.h>
 #include <linux/lustre_net.h>
 
 int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
