@@ -307,8 +307,10 @@ int client_disconnect_export(struct obd_export *exp, int failover)
         if (cli->cl_conn_count)
                 GOTO(out_no_disconnect, rc = 0);
 
-        if (imp->imp_replayable)
-                ptlrpc_pinger_del_import(imp);
+        /* Some non-replayable imports (MDS's OSCs) are pinged, so just
+         * delete it regardless.  (It's safe to delete an import that was
+         * never added.) */
+        (void)ptlrpc_pinger_del_import(imp);
 
         if (obd->obd_namespace != NULL) {
                 /* obd_no_recov == local only */
