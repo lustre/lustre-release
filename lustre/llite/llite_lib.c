@@ -402,7 +402,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         if ((attr->ia_valid & ATTR_SIZE)) {
                 struct ldlm_extent extent = {attr->ia_size, OBD_OBJECT_EOF};
-                struct lustre_handle lockh = { 0, 0 };
+                struct lustre_handle lockh = { 0 };
 
                 /* If this file doesn't have stripes yet, it is already,
                    by definition, truncated. */
