@@ -10,9 +10,9 @@ liblustreclass_a_CFLAGS = $(LLCFLAGS)
 endif
 
 if MODULES
-modulefs_DATA = obdclass$(KMODEXT)
+modulefs_DATA = obdclass$(KMODEXT) confobd$(KMODEXT)
 noinst_DATA = llog_test$(KMODEXT)
 endif # MODULES
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c llog-test.c
-DIST_SOURCES = $(filter-out llog-test.c,$(obdclass-objs:.o=.c)) $(llog-test-objs:.o=.c) llog_test.c
+MOSTLYCLEANFILES = *.o *.ko *.mod.c llog-test.c 
+DIST_SOURCES = $(filter-out llog-test.c,$(obdclass-objs:.o=.c)) $(confobd-objs:.o=.c) $(llog-test-objs:.o=.c) llog_test.c 
