@@ -234,22 +234,22 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 }
 
 static struct obd_ops cobd_ops = {
-        o_owner:                THIS_MODULE,
+        .o_owner                = THIS_MODULE,
 
-        o_setup:                cobd_setup,
-        o_cleanup:              cobd_cleanup,
+        .o_setup                = cobd_setup,
+        .o_cleanup              = cobd_cleanup,
 
-        o_connect:              cobd_connect,
-        o_disconnect:           cobd_disconnect,
+        .o_connect              = cobd_connect,
+        .o_disconnect           = cobd_disconnect,
 
-        o_get_info:             cobd_get_info,
-        o_statfs:               cobd_statfs,
+        .o_get_info             = cobd_get_info,
+        .o_statfs               = cobd_statfs,
 
-        o_getattr:              cobd_getattr,
-        o_preprw:               cobd_preprw,
-        o_commitrw:             cobd_commitrw,
-        o_brw:                  cobd_brw,
-        o_iocontrol:            cobd_iocontrol,
+        .o_getattr              = cobd_getattr,
+        .o_preprw               = cobd_preprw,
+        .o_commitrw             = cobd_commitrw,
+        .o_brw                  = cobd_brw,
+        .o_iocontrol            = cobd_iocontrol,
 };
 
 static int __init cobd_init(void)

@@ -3,7 +3,9 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
+if MODULES
 modulenet_DATA := libcfs$(KMODEXT)
+endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
 DIST_SOURCES = $(libcfs-objs:%.o=%.c)

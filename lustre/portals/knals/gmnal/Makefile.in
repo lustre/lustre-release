@@ -1,6 +1,6 @@
 MODULES := kgmnal
 kgmnal-objs := gmnal_api.o gmnal_cb.o gmnal_comm.o gmnal_utils.o gmnal_module.o
 
-EXTRA_CFLAGS := @GMCPPFLAGS@
+EXTRA_PRE_CFLAGS := @GMCPPFLAGS@
 
 @INCLUDE_RULES@

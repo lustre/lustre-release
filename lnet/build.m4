@@ -1,5 +1,9 @@
 # ----------  other tests and settings ---------
 
+AC_CHECK_TYPE([spinlock_t],
+	[AC_DEFINE(HAVE_SPINLOCK_T, 1, [spinlock_t is defined])],
+	[],
+	[#include <linux/spinlock.h>])
 
 # ---------  unsigned long long sane? -------
 

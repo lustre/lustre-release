@@ -192,16 +192,14 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 
         mds->mds_osc_obd = class_name2obd(lov_name);
         if (!mds->mds_osc_obd) {
-                CERROR("MDS cannot locate LOV %s\n",
-                       lov_name);
+                CERROR("MDS cannot locate LOV %s\n", lov_name);
                 mds->mds_osc_obd = ERR_PTR(-ENOTCONN);
                 RETURN(-ENOTCONN);
         }
 
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid);
         if (rc) {
-                CERROR("MDS cannot connect to LOV %s (%d)\n",
-                       lov_name, rc);
+                CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);
                 RETURN(rc);
         }

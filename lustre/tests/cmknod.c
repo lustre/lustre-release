@@ -46,7 +46,7 @@ int main( int argc, char **argv)
 		fprintf(stderr, "%s: created device other than requested: (%d,%d) instead of (%d,%d)\n", prog, major(st.st_rdev),minor(st.st_rdev),major(device),minor(device));
 		return 4;
 	}
-	if ( ! (st.st_mode | S_IFBLK) ) {
+	if (!S_ISCHR(st.st_mode)) {
 		fprintf(stderr, "%s: created device of different type. Requested block device, got mode %o\n", prog, st.st_mode);
 		return 5;
 	}
@@ -76,7 +76,7 @@ int main( int argc, char **argv)
 		fprintf(stderr, "%s: created device other than requested: (%d,%d) instead of (%d,%d)\n", prog, major(st.st_rdev),minor(st.st_rdev),major(device),minor(device));
 		return 9;
 	}
-	if ( ! (st.st_mode | S_IFCHR) ) {
+	if (!S_ISCHR(st.st_mode)) {
 		fprintf(stderr, "%s: created device of different type. Requested char device, got mode %o\n", prog, st.st_mode);
 		return 10;
 	}

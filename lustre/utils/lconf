@@ -35,7 +35,7 @@ if sys.version[0] == '1':
 else:
     from fcntl import F_GETFL, F_SETFL
 
-PYMOD_DIR = "@PYMOD_DIR@"
+PYMOD_DIR = "/usr/lib/lustre/python"
 
 def development_mode():
     base = os.path.dirname(sys.argv[0])
@@ -44,7 +44,7 @@ def development_mode():
     return 0
 
 if development_mode():
-    sys.path.append('@top_srcdir@/utils')
+    sys.path.append('../utils')
 else:
     sys.path.append(PYMOD_DIR)
 
@@ -733,7 +733,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
         # devsize is in 1k, and fs block count is in 4k
         block_cnt = devsize/4
 
-    if fstype in ('ext3', 'extN'):
+    if fstype in ('ext3', 'extN', 'ldiskfs'):
         # ext3 journal size is in megabytes
         if jsize == 0:
             if devsize == 0:
@@ -767,7 +767,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
     if ret:
         panic("Unable to build fs:", dev, string.join(out))
     # enable hash tree indexing on fsswe
-    if fstype in ('ext3', 'extN'):
+    if fstype in ('ext3', 'extN', 'ldiskfs'):
         htree = 'echo "feature FEATURE_C5" | debugfs -w'
         (ret, out) = run (htree, dev)
         if ret:
@@ -1419,6 +1419,8 @@ class MDSDEV(Module):
         self.add_lustre_module('osc', 'osc')
         self.add_lustre_module('lov', 'lov')
         self.add_lustre_module('mds', 'mds')
+        if self.fstype == 'ldiskfs':
+            self.add_lustre_module('ldiskfs', 'ldiskfs')
         if self.fstype:
             self.add_lustre_module('lvfs', 'fsfilt_%s' % (self.fstype))
 
@@ -1604,6 +1606,8 @@ class OSD(Module):
         # modules
         self.add_lustre_module('ost', 'ost')
         # FIXME: should we default to ext3 here?
+        if self.fstype == 'ldiskfs':
+            self.add_lustre_module('ldiskfs', 'ldiskfs')
         if self.fstype:
             self.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.fstype))
         self.add_lustre_module(self.osdtype, self.osdtype)

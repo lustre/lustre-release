@@ -268,10 +268,10 @@ extern int echo_client_init(void);
 
 #define EXPORT_SYMBOL(S)
 
-typedef int spinlock_t;
+typedef struct { } spinlock_t;
 typedef __u64 kdev_t;
 
-#define SPIN_LOCK_UNLOCKED 0
+#define SPIN_LOCK_UNLOCKED (spinlock_t) { }
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 
 static inline void spin_lock(spinlock_t *l) {return;}

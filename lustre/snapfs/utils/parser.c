@@ -34,7 +34,7 @@
 
 /* completion_matches() is #if 0-ed out in modern glibc */
 #ifndef completion_matches
-#define completion_matches rl_completion_matches
+#  define completion_matches rl_completion_matches
 #endif
 extern void using_history(void);
 extern void stifle_history(int);
@@ -248,18 +248,19 @@ static char * command_generator(const char * text, int state)
 /* probably called by readline */
 static char **command_completion(char * text, int start, int end)
 {
-        command_t         * table;
+        command_t   * table;
         char        * pos;
 
         match_tbl = top_level;
+
         for (table = find_cmd(rl_line_buffer, match_tbl, &pos);
-             table;
-             table = find_cmd(pos, match_tbl, &pos)) {
+             table; table = find_cmd(pos, match_tbl, &pos)) 
+        {
 
                 if (*(pos - 1) == ' ') match_tbl = table->pc_sub_cmd;
         }
 
-        return(completion_matches(text, command_generator));
+        return completion_matches(text, command_generator);
 }
 #endif
 

@@ -470,7 +470,6 @@ static obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
 
         /* do_div(a, b) returns a % b, and a = a / b */
         stripe_size = do_div(ost_size, ssize);
-
         if (stripe_size)
                 lov_size = ost_size * swidth + stripeno * ssize + stripe_size;
         else
@@ -2680,6 +2679,7 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
                 if (lov_size > size)
                         size = lov_size;
         }
+
         return size;
 }
 EXPORT_SYMBOL(lov_merge_size);
@@ -2825,40 +2825,40 @@ void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
 EXPORT_SYMBOL(lov_increase_kms);
 
 struct obd_ops lov_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_setup:       lov_setup,
-        o_cleanup:     lov_cleanup,
-        o_connect:     lov_connect,
-        o_disconnect:  lov_disconnect,
-        o_statfs:      lov_statfs,
-        o_packmd:      lov_packmd,
-        o_unpackmd:    lov_unpackmd,
-        o_create:      lov_create,
-        o_destroy:     lov_destroy,
-        o_getattr:     lov_getattr,
-        o_getattr_async: lov_getattr_async,
-        o_setattr:     lov_setattr,
-        o_brw:         lov_brw,
-        o_brw_async:   lov_brw_async,
-        .o_prep_async_page =    lov_prep_async_page,
-        .o_queue_async_io =     lov_queue_async_io,
-        .o_set_async_flags =    lov_set_async_flags,
-        .o_queue_group_io =     lov_queue_group_io,
-        .o_trigger_group_io =   lov_trigger_group_io,
-        .o_teardown_async_page  lov_teardown_async_page,
-        o_punch:       lov_punch,
-        o_sync:        lov_sync,
-        o_enqueue:     lov_enqueue,
-        o_match:       lov_match,
-        o_change_cbdata: lov_change_cbdata,
-        o_cancel:      lov_cancel,
-        o_cancel_unused: lov_cancel_unused,
-        o_iocontrol:   lov_iocontrol,
-        o_get_info:    lov_get_info,
-        o_set_info:    lov_set_info,
-        o_llog_init:   lov_llog_init,
-        o_llog_finish: lov_llog_finish,
-        o_notify: lov_notify,
+        .o_owner               = THIS_MODULE,
+        .o_setup               = lov_setup,
+        .o_cleanup             = lov_cleanup,
+        .o_connect             = lov_connect,
+        .o_disconnect          = lov_disconnect,
+        .o_statfs              = lov_statfs,
+        .o_packmd              = lov_packmd,
+        .o_unpackmd            = lov_unpackmd,
+        .o_create              = lov_create,
+        .o_destroy             = lov_destroy,
+        .o_getattr             = lov_getattr,
+        .o_getattr_async       = lov_getattr_async,
+        .o_setattr             = lov_setattr,
+        .o_brw                 = lov_brw,
+        .o_brw_async           = lov_brw_async,
+        .o_prep_async_page     = lov_prep_async_page,
+        .o_queue_async_io      = lov_queue_async_io,
+        .o_set_async_flags     = lov_set_async_flags,
+        .o_queue_group_io      = lov_queue_group_io,
+        .o_trigger_group_io    = lov_trigger_group_io,
+        .o_teardown_async_page = lov_teardown_async_page,
+        .o_punch               = lov_punch,
+        .o_sync                = lov_sync,
+        .o_enqueue             = lov_enqueue,
+        .o_match               = lov_match,
+        .o_change_cbdata       = lov_change_cbdata,
+        .o_cancel              = lov_cancel,
+        .o_cancel_unused       = lov_cancel_unused,
+        .o_iocontrol           = lov_iocontrol,
+        .o_get_info            = lov_get_info,
+        .o_set_info            = lov_set_info,
+        .o_llog_init           = lov_llog_init,
+        .o_llog_finish         = lov_llog_finish,
+        .o_notify              = lov_notify,
 };
 
 int __init lov_init(void)

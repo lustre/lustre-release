@@ -105,8 +105,11 @@ Second, per-architecture exclusions (ifarch)
 
 %{expand: %%define kernel_conflicts  ppp <= 2.3.15, pcmcia-cs <= 3.1.20, isdn4k-utils <= 3.0, mount < 2.10r-5, nfs-utils < 0.3.1, cipe < 1.4.5, tux < 2.1.0, kudzu <= 0.92, e2fsprogs < 1.22, initscripts < 5.84, dev < 3.2-7, iptables < 1.2.5-3, bcm5820 < 1.81, nvidia-rh72 <= 1.0, oprofile < 0.4}
 
+%if %{rhbuild}
 %define BOOT_kernel_prereq fileutils, modutils >=  2.4.18
 %define kernel_prereq %{BOOT_kernel_prereq}, initscripts >= 5.83, mkinitrd >= 3.2.6
+%endif
+
 %ifarch ia64
 %define initrd_dir /boot/efi/redhat
 %else
@@ -139,11 +142,13 @@ BuildConflicts: rhbuildsys(DiscFree) < 500Mb
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
 Autoreqprov: no
+%if %{rhbuild}
 Prereq: %{kernel_prereq}
 Conflicts: %{kernel_conflicts}
 
 BuildPreReq: patch >= 2.5.4, bash >= 2.03, sh-utils, gnupg, tar
 BuildPreReq: bzip2, findutils, dev, gzip, m4
+%endif
 
 Vendor: Cluster File Systems, Inc.
 URL: http://www.kernel.org/
@@ -195,8 +200,10 @@ Provides: module-info, kernel = %{version}
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
+%if %{rhbuild}
 Prereq: %{kernel_prereq}
 Conflicts: %{kernel_conflicts}
+%endif
 
 %description smp
 This package includes a SMP version of the Linux kernel. It is
@@ -212,9 +219,11 @@ Provides: module-info, kernel = %{version}
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
+%if %{rhbuild}
 Prereq: %{kernel_prereq}
 Conflicts: %{kernel_conflicts}
 Obsoletes: kernel-enterprise <= 2.4.10
+%endif
 
 %description bigmem
 This package includes a kernel that has appropriate configuration options
@@ -224,8 +233,10 @@ enabled for Pentium III machines with 4 Gigabyte of memory or more.
 Summary: The version of the Linux kernel used on installation boot disks.
 Group: System Environment/Kernel
 Provides: kernel = %{version}
+%if %{rhbuild}
 Prereq: %{BOOT_kernel_prereq}
 Conflicts: %{kernel_conflicts}
+%endif
 
 %description BOOT
 This package includes a trimmed down version of the Linux kernel.
@@ -237,8 +248,10 @@ turned off because of the size constraints.
 Summary: The Linux kernel used on installation boot disks for SMP machines.
 Group: System Environment/Kernel
 Provides: kernel = %{version}
+%if %{rhbuild}
 Prereq: %{BOOT_kernel_prereq}
 Conflicts: %{kernel_conflicts}
+%endif
 
 %description BOOTsmp
 This package includes a trimmed down version of the Linux kernel. This
@@ -251,8 +264,10 @@ machines that have trouble coming up to life with the uniprocessor kernel.
 Summary: The Linux Kernel compiled for the Alpha Jensen platform.
 Group: System Environment/Kernel
 Provides: kernel = %{version}
+%if %{rhbuild}
 Prereq: %{kernel_prereq}
 Conflicts: %{kernel_conflicts}
+%endif
 
 %description jensen
 This package includes a kernel that has appropriate configuration
@@ -432,7 +447,12 @@ make -s mrproper -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 rm -rf $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs/*
 cp ../kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@*.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
 cp ../kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config
-make -s oldconfig_nonint -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
+if grep -q oldconfig_nonint $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile ; then
+	OLDCONFIG='oldconfig_nonint'
+else
+	OLDCONFIG='oldconfig'
+fi
+make -s $OLDCONFIG -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 make -s symlinks -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 make -s include/linux/version.h -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 
@@ -785,10 +805,10 @@ exit 0
 %defattr(-, root, root)
 %doc lustre/COPYING lustre/BUGS lustre/ChangeLog lustre/README lustre/doc/lustre.pdf
 /sbin/*
-%{_sbindir}/*
-%{_bindir}/*
-%{_libdir}/lustre/python
-%{_sysconfdir}/init.d/lustre
+/usr/sbin/*
+/usr/bin/*
+/usr/lib/lustre/python
+/etc/init.d/lustre
 /usr/include/lustre
 /lib/lib*.a
 

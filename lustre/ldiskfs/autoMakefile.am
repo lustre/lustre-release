@@ -1,5 +1,6 @@
+if LDISKFS
 modulefs_DATA = ldiskfs$(KMODEXT)
-$(modulefs_DATA): sources
+endif
 
 ldiskfs_linux_headers := $(addprefix linux/,$(subst ext3,ldiskfs,$(notdir $(linux_headers))))
 
@@ -56,9 +57,8 @@ foo-check:
 	@echo "ldiskfs_OBJECTS: $(ldiskfs_OBJECTS)"
 	@echo "ldiskfs_LDADD: $(ldiskfs_LDADD)"
 
-
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-CLEANFILES = $(ldiskfs_sources) sources ldiskfs-dummy.c ldiskfs.mod.c
+CLEANFILES = sources *.c *.h
 
 clean: clean-am
 	rm -rf linux linux-stage

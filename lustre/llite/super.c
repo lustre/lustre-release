@@ -61,30 +61,30 @@ static struct super_block *lustre_read_super(struct super_block *sb,
 }
 
 static struct file_system_type lustre_lite_fs_type = {
-        name:           "lustre_lite",
-        fs_flags:       FS_NFSEXP_FSID,
-        read_super:     ll_read_super,
-        owner:          THIS_MODULE,
+        .owner          = THIS_MODULE,
+        .name           = "lustre_lite",
+        .fs_flags       = FS_NFSEXP_FSID,
+        .read_super     = ll_read_super,
 };
 
 /* exported operations */
 struct super_operations lustre_super_operations =
 {
-        read_inode2: ll_read_inode2,
-        clear_inode: ll_clear_inode,
-        //        delete_inode: ll_delete_inode,
-        put_super: lustre_put_super,
-        statfs: ll_statfs,
-        umount_begin: ll_umount_begin,
-        fh_to_dentry: ll_fh_to_dentry,
-        dentry_to_fh: ll_dentry_to_fh
+        .read_inode2    = ll_read_inode2,
+        .clear_inode    = ll_clear_inode,
+//        .delete_inode   = ll_delete_inode,
+        .put_super      = lustre_put_super,
+        .statfs         = ll_statfs,
+        .umount_begin   = ll_umount_begin,
+        .fh_to_dentry   = ll_fh_to_dentry,
+        .dentry_to_fh   = ll_dentry_to_fh
 };
 
 static struct file_system_type lustre_fs_type = {
-        name:           "lustre",
-        fs_flags:       FS_NFSEXP_FSID,
-        read_super:     lustre_read_super,
-        owner:          THIS_MODULE,
+        .owner          = THIS_MODULE,
+        .name           = "lustre",
+        .fs_flags       = FS_NFSEXP_FSID,
+        .read_super     = lustre_read_super,
 };
 
 static int __init init_lustre_lite(void)

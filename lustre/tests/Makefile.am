@@ -5,6 +5,7 @@ AM_CFLAGS = $(LLCFLAGS)
 # LDADD := -lreadline -ltermcap # -lefence
 EXTRA_DIST = $(pkgexample_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
 	sanity.sh rundbench
+if TESTS
 pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh
 pkgexample_SCRIPTS += local.sh echo.sh uml.sh lov.sh
 noinst_DATA =
@@ -21,6 +22,7 @@ noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify
 # noinst_PROGRAMS += ldaptest
 bin_PROGRAMS = mcreate munlink mkdirmany iopentest1 iopentest2
+endif # TESTS
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c

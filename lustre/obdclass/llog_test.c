@@ -652,12 +652,11 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 }
 
 static struct obd_ops llog_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_setup:       llog_test_setup,
-        o_cleanup:     llog_test_cleanup,
-        o_llog_init:   llog_test_llog_init,
-        o_llog_finish: llog_test_llog_finish,
-
+        .o_owner       = THIS_MODULE,
+        .o_setup       = llog_test_setup,
+        .o_cleanup     = llog_test_cleanup,
+        .o_llog_init   = llog_test_llog_init,
+        .o_llog_finish = llog_test_llog_finish,
 };
 
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };

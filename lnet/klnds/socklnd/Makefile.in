@@ -3,6 +3,6 @@ ksocknal-objs := socknal.o socknal_cb.o
 
 # If you don't build with -O2, your modules won't insert, becahse htonl is
 # just special that way.
-EXTRA_CFLAGS := -O2
+EXTRA_POST_CFLAGS := -O2
 
 @INCLUDE_RULES@

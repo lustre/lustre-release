@@ -1436,12 +1436,12 @@ static int echo_client_disconnect(struct obd_export *exp, int flags)
 }
 
 static struct obd_ops echo_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_setup:       echo_client_setup,
-        o_cleanup:     echo_client_cleanup,
-        o_iocontrol:   echo_client_iocontrol,
-        o_connect:     echo_client_connect,
-        o_disconnect:  echo_client_disconnect
+        .o_owner       = THIS_MODULE,
+        .o_setup       = echo_client_setup,
+        .o_cleanup     = echo_client_cleanup,
+        .o_iocontrol   = echo_client_iocontrol,
+        .o_connect     = echo_client_connect,
+        .o_disconnect  = echo_client_disconnect
 };
 
 int echo_client_init(void)

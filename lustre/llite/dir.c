@@ -90,7 +90,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 }
 
 struct address_space_operations ll_dir_aops = {
-        readpage: ll_dir_readpage,
+        .readpage  = ll_dir_readpage,
 };
 
 /*
@@ -645,10 +645,10 @@ int ll_dir_release(struct inode *inode, struct file *file)
 }
 
 struct file_operations ll_dir_operations = {
-        open: ll_dir_open,
-        release: ll_dir_release,
-        read: generic_read_dir,
-        readdir: ll_readdir,
-        ioctl: ll_dir_ioctl
+        .open     = ll_dir_open,
+        .release  = ll_dir_release,
+        .read     = generic_read_dir,
+        .readdir  = ll_readdir,
+        .ioctl    = ll_dir_ioctl
 };
 

@@ -125,11 +125,11 @@ static int mgmt_cleanup(struct obd_device *obd, int flags)
 }
 
 static struct obd_ops mgmt_obd_ops = {
-        o_owner:      THIS_MODULE,
-        o_setup:      mgmt_setup,
-        o_cleanup:    mgmt_cleanup,
-        o_connect:    class_connect,
-        o_disconnect: class_disconnect
+        .o_owner      = THIS_MODULE,
+        .o_setup      = mgmt_setup,
+        .o_cleanup    = mgmt_cleanup,
+        .o_connect    = class_connect,
+        .o_disconnect = class_disconnect
 };
 
 static int __init mgmt_init(void)

@@ -3,7 +3,9 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
+if SMFS
 modulefs_DATA = smfs$(KMODEXT)
+endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
 DIST_SOURCES = $(smfs-objs:%.o=%.c) kml_idl.h smfs_internal.h smfs_support.h

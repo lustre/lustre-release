@@ -28,16 +28,16 @@
 #include <sys/param.h>
 #include <assert.h>
 
-#include <config.h>
 #ifdef HAVE_LIBREADLINE
 #define	READLINE_LIBRARY
 #include <readline/readline.h>
-#endif
 
 /* completion_matches() is #if 0-ed out in modern glibc */
 #ifndef completion_matches
-#define completion_matches rl_completion_matches
+#  define completion_matches rl_completion_matches
 #endif
+#endif
+
 extern void using_history(void);
 extern void stifle_history(int);
 extern void add_history(char *);
@@ -225,14 +225,15 @@ static char **command_completion(char * text, int start, int end)
     char	* pos;
 
     match_tbl = top_level;
+    
     for (table = find_cmd(rl_line_buffer, match_tbl, &pos);
-	 table;
-	 table = find_cmd(pos, match_tbl, &pos)) {
+	 table; table = find_cmd(pos, match_tbl, &pos)) 
+    {
 
 	if (*(pos - 1) == ' ') match_tbl = table->pc_sub_cmd;
     }
 
-    return(completion_matches(text, command_generator));
+    return completion_matches(text, command_generator);
 }
 #endif
 

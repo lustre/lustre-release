@@ -27,7 +27,7 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 #ifndef __KERNEL__
-#include <liblustre.h>
+# include <liblustre.h>
 #endif
 
 #include <linux/obd_support.h>

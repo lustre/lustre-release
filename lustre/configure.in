@@ -5,7 +5,7 @@
 
 AC_INIT
 AC_CANONICAL_SYSTEM
-AM_INIT_AUTOMAKE(lustre, HEAD)
+AM_INIT_AUTOMAKE(lustre, b_smallfix)
 # AM_MAINTAINER_MODE
 
 # Four main targets: lustre kernel modules, utilities, tests, and liblustre
@@ -16,6 +16,14 @@ AC_ARG_ENABLE([modules],
 	[],[enable_modules='yes'])
 AC_MSG_RESULT([$enable_modules])
 AM_CONDITIONAL(MODULES, test x$enable_modules = xyes)
+
+AC_MSG_CHECKING([whether to build Lustre library])
+AC_ARG_ENABLE([liblustre],
+	AC_HELP_STRING([--disable-liblustre],
+			[disable building of Lustre library]),
+	[],[enable_liblustre='yes'])
+AC_MSG_RESULT([$enable_liblustre])
+AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
 
 AC_MSG_CHECKING([whether to build utilities])
 AC_ARG_ENABLE([utils],
@@ -112,36 +120,13 @@ AC_ARG_WITH([sysio],
 	])
 AC_MSG_RESULT([$SYSIO_PATH])
 
-AC_MSG_CHECKING([libsysio exists and ready for use])
-
-if test -r $SYSIO_PATH/src/libsysio.a; then
-	valid_libsysio=yes
-	AC_MSG_RESULT([yes])
-	AC_SUBST(SYSIO)
-else
-	valid_libsysio=no
-	AC_MSG_RESULT([no])
-fi
-
-AC_MSG_CHECKING([whether to build Lustre library])
-AC_ARG_ENABLE([liblustre],
-	AC_HELP_STRING([--disable-liblustre],
-			[disable building of Lustre library]),
-	[],[enable_liblustre='yes'])
-
-if test x$valid_libsysio != xyes; then
-	enable_liblustre=no
-	AC_MSG_RESULT([$enable_liblustre])
-	
-	echo "Nevertheless liblustre was enabled for build, \
-no valid libsysio is found and liblustre building will be \
-disabled. Make sure that valid libsysio exists and built \
-at $SYSIO_PATH."
-else
-	AC_MSG_RESULT([$enable_liblustre])
-fi
-
-AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
+AC_CHECK_FILE([$SYSIO_PATH/src/libsysio.a],[],
+	[
+		if test x$enable_liblustre = xyes ; then
+		   AC_MSG_ERROR([A built libsysio tree is required for building liblustre.])
+	   	fi
+	])
+AC_SUBST(SYSIO)
 
 #build mpi-tests 
 AC_MSG_CHECKING([whether to build mpitests])
@@ -192,12 +177,10 @@ AM_CONDITIONAL(TESTS, test x$enable_tests = xyes)
 
 AM_CONFIG_HEADER(include/config.h)
 
-# files that are in AC_OUTPUT but need to be executable
-AC_CONFIG_COMMANDS([chmod-lconf],[chmod +x utils/lconf])
-
 AC_OUTPUT([
 Makefile
 Rules
+autoMakefile
 cobd/Makefile
 cobd/autoMakefile
 conf/Makefile
@@ -232,8 +215,10 @@ ost/Makefile
 ost/autoMakefile
 portals/Kernelenv
 portals/Makefile
+portals/autoMakefile
 portals/doc/Makefile
 portals/knals/Makefile
+portals/knals/autoMakefile
 portals/knals/gmnal/Makefile
 portals/knals/gmnal/autoMakefile
 portals/knals/ibnal/Makefile
@@ -269,5 +254,4 @@ snapfs/utils/Makefile
 tests/Makefile
 utils/Lustre/Makefile
 utils/Makefile
-utils/lconf
 ])

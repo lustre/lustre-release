@@ -45,12 +45,17 @@
 #include <asm/uaccess.h>
 #include <asm/segment.h>
 #include <linux/miscdevice.h>
+#include <linux/version.h>
 
 # define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/kp30.h>
 #include <linux/portals_compat25.h>
 #include <linux/libcfs.h>
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#include <linux/kallsyms.h>
+#endif
 
 unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
                                             S_GMNAL | S_IBNAL);
@@ -985,8 +990,6 @@ spinlock_t stack_backtrace_lock = SPIN_LOCK_UNLOCKED;
 
 #if defined(__arch_um__)
 
-extern int is_kernel_text_address(unsigned long addr);
-
 char *portals_debug_dumpstack(void)
 {
         asm("int $3");
@@ -995,33 +998,45 @@ char *portals_debug_dumpstack(void)
 
 #elif defined(__i386__)
 
-extern int is_kernel_text_address(unsigned long addr);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 extern int lookup_symbol(unsigned long address, char *buf, int buflen);
+const char *kallsyms_lookup(unsigned long addr,
+                            unsigned long *symbolsize,
+                            unsigned long *offset,
+                            char **modname, char *namebuf);
+{
+        int rc = lookup_symbol(addr, namebuf, 128);
+        if (rc == -ENOSYS)
+                return NULL;
+        return namebuf;
+}
+#endif
 
 char *portals_debug_dumpstack(void)
 {
-        unsigned long esp = current->thread.esp;
+        unsigned long esp = current->thread.esp, addr;
         unsigned long *stack = (unsigned long *)&esp;
+        char *buf = stack_backtrace, *pbuf = buf;
         int size;
-        unsigned long addr;
-        char *buf = stack_backtrace;
-        char *pbuf = buf;
-        static char buffer[512];
-        int rc = 0;
 
         /* User space on another CPU? */
-        if ((esp ^ (unsigned long)current) & (PAGE_MASK<<1)){
+        if ((esp ^ (unsigned long)current) & (PAGE_MASK << 1)){
                 buf[0] = '\0';
                 goto out;
         }
 
         size = sprintf(pbuf, " Call Trace: ");
         pbuf += size;
-        while (((long) stack & (THREAD_SIZE-1)) != 0) {
+        while (((long) stack & (THREAD_SIZE - 1)) != 0) {
                 addr = *stack++;
-                if (is_kernel_text_address(addr)) {
-                        rc = lookup_symbol(addr, buffer, 512);
-                        if (rc == -ENOSYS) {
+                if (kernel_text_address(addr)) {
+                        const char *sym_name;
+                        char *modname, buffer[128];
+                        unsigned long junk, offset;
+
+                        sym_name = kallsyms_lookup(addr, &junk, &offset,
+                                                   &modname, buffer);
+                        if (sym_name == NULL) {
                                 if (buf + LUSTRE_TRACE_SIZE <= pbuf + 12)
                                         break;
                                 size = sprintf(pbuf, "[<%08lx>] ", addr);
@@ -1031,7 +1046,7 @@ char *portals_debug_dumpstack(void)
                                     <= pbuf + strlen(buffer) + 28 + 1)
                                         break;
                                 size = sprintf(pbuf, "([<%08lx>] %s (0x%p)) ",
-                                               addr, buffer, stack-1);
+                                               addr, buffer, stack - 1);
                         }
                         pbuf += size;
                 }

@@ -8,7 +8,7 @@ obdclass-objs += statfs_pack.o obdo.o obd_config.o
 ifeq ($(PATCHLEVEL),6)
 llog_test-objs := llog-test.o
 
-llog-test.c: llog_test.c
+$(obj)/llog-test.c: $(obj)/llog_test.c
 	ln -sf $< $@
 endif
 

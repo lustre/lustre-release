@@ -8,7 +8,8 @@ config.guess
 config.sub
 configure
 Makefile
-Makefile.in
+autoMakefile
+autoMakefile.in
 .deps
 tags
 TAGS
@@ -25,3 +26,5 @@ Rules
 missing
 mkinstalldirs
 install-sh
+.depend
+.tmp_versions

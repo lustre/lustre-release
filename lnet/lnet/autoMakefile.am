@@ -7,6 +7,8 @@ my_sources = api-eq.c api-init.c api-me.c api-errno.c api-ni.c api-wrap.c \
 		lib-dispatch.c lib-init.c lib-me.c lib-msg.c lib-eq.c \
 		lib-md.c lib-move.c lib-ni.c lib-pid.c
 
+if !CRAY_PORTALS
+
 if LIBLUSTRE
 noinst_LIBRARIES= libportals.a
 libportals_a_SOURCES= $(my_sources)
@@ -16,7 +18,9 @@ endif
 
 if MODULES
 modulenet_DATA = portals$(KMODEXT)
-endif
+endif # MODULES
+
+endif # CRAY_PORTALS
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
 DIST_SOURCES = $(portals-objs:%.o=%.c)

@@ -1,4 +1,10 @@
+if MODULES
+if !CRAY_PORTALS
+if BUILD_IBNAL
 modulenet_DATA = kibnal$(KMODEXT)
+endif
+endif
+endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
 DIST_SOURCES = $(kibnal-objs:%.o=%.c) ibnal.h

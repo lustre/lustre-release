@@ -307,7 +307,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
 #endif /* __KERNEL__ */
 
-static void ldlm_failed_ast(struct ldlm_lock *lock, int rc, char *ast_type)
+static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,const char *ast_type)
 {
         const struct ptlrpc_connection *conn = lock->l_export->exp_connection;
         char str[PTL_NALFMT_SIZE];
@@ -323,6 +323,42 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc, char *ast_type)
                portals_nid2str(conn->c_peer.peer_ni->pni_number,
                                conn->c_peer.peer_nid, str));
         ptlrpc_fail_export(lock->l_export);
+}
+
+static int ldlm_handle_ast_error(struct ldlm_lock *lock,
+                                 struct ptlrpc_request *req, int rc,
+                                 const char *ast_type)
+{
+        if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
+                LASSERT(lock->l_export);
+                if (lock->l_export->exp_libclient) {
+                        LDLM_DEBUG(lock, "%s AST to liblustre client (nid "
+                                   LPU64") timeout, just cancelling lock",
+                                   ast_type, req->rq_peer.peer_nid);
+                        ldlm_lock_cancel(lock);
+                        rc = -ERESTART;
+                } else {
+                        ldlm_del_waiting_lock(lock);
+                        ldlm_failed_ast(lock, rc, ast_type);
+                }
+        } else if (rc) {
+                if (rc == -EINVAL)
+                        LDLM_DEBUG(lock, "client (nid "LPU64") returned %d"
+                                   " from %s AST - normal race",
+                                   req->rq_peer.peer_nid,
+                                   req->rq_repmsg->status, ast_type);
+                else
+                        LDLM_ERROR(lock, "client (nid "LPU64") returned %d "
+                                   "from %s AST", req->rq_peer.peer_nid,
+                                   (req->rq_repmsg != NULL) ?
+                                   req->rq_repmsg->status : 0, ast_type);
+                ldlm_lock_cancel(lock);
+                /* Server-side AST functions are called from ldlm_reprocess_all,
+                 * which needs to be told to please restart its reprocessing. */
+                rc = -ERESTART;
+        }
+
+        return rc;
 }
 
 int ldlm_server_blocking_ast(struct ldlm_lock *lock,
@@ -386,44 +422,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
         rc = ptlrpc_queue_wait(req);
-        if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
-                LASSERT(lock->l_export);
-                if (lock->l_export->exp_libclient) {
-                        CDEBUG(D_HA, "BLOCKING AST to liblustre client (nid "
-                               LPU64") timeout, simply cancel lock 0x%p\n",
-                               req->rq_peer.peer_nid, lock);
-                        ldlm_lock_cancel(lock);
-                        rc = -ERESTART;
-                } else {
-                        ldlm_del_waiting_lock(lock);
-                        ldlm_failed_ast(lock, rc, "blocking");
-                }
-        } else if (rc) {
-                if (rc == -EINVAL)
-                        CDEBUG(D_DLMTRACE, "client (nid "LPU64") returned %d "
-                               "from blocking AST for lock %p--normal race\n",
-                               req->rq_peer.peer_nid,
-                               req->rq_repmsg->status, lock);
-                else if (rc == -ENOTCONN)
-                        CDEBUG(D_DLMTRACE, "client (nid "LPU64") returned %d "
-                               "from blocking AST for lock %p--this client was "
-                               "probably rebooted while it held a lock, nothing"
-                               " serious\n",req->rq_peer.peer_nid,
-                               req->rq_repmsg->status, lock);
-                else
-                        CDEBUG(D_ERROR, "client (nid "LPU64") returned %d "
-                               "from blocking AST for lock %p\n",
-                               req->rq_peer.peer_nid,
-                               (req->rq_repmsg != NULL)?
-                               req->rq_repmsg->status : 0,
-                               lock);
-                LDLM_DEBUG(lock, "client sent rc %d rq_status %d from blocking "
-                           "AST", rc, req->rq_status);
-                ldlm_lock_cancel(lock);
-                /* Server-side AST functions are called from ldlm_reprocess_all,
-                 * which needs to be told to please restart its reprocessing. */
-                rc = -ERESTART;
-        }
+        if (rc != 0)
+                rc = ldlm_handle_ast_error(lock, req, rc, "blocking");
 
         ptlrpc_req_finished(req);
 
@@ -493,21 +493,9 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         rc = ptlrpc_queue_wait(req);
-        if ((rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) &&
-             !lock->l_export->exp_libclient) {
-                ldlm_del_waiting_lock(lock);
-                ldlm_failed_ast(lock, rc, "completion");
-        } else if (rc == -EINVAL) {
-                LDLM_DEBUG(lock, "lost the race -- client no longer has this "
-                           "lock");
-        } else if (rc) {
-                LDLM_ERROR(lock, "client sent rc %d rq_status %d from "
-                           "completion AST", rc, req->rq_status);
-                ldlm_lock_cancel(lock);
-                /* Server-side AST functions are called from ldlm_reprocess_all,
-                 * which needs to be told to please restart its reprocessing. */
-                rc = -ERESTART;
-        }
+        if (rc != 0)
+                rc = ldlm_handle_ast_error(lock, req, rc, "completion");
+
         ptlrpc_req_finished(req);
 
         RETURN(rc);
@@ -540,23 +528,13 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
 
         rc = ptlrpc_queue_wait(req);
-        if ((rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) &&
-            !lock->l_export->exp_libclient) {
-                ldlm_del_waiting_lock(lock);
-                ldlm_failed_ast(lock, rc, "glimpse");
-        } else if (rc == -EINVAL) {
-                LDLM_DEBUG(lock, "lost the race -- client no longer has this "
-                           "lock");
-        } else if (rc == -ELDLM_NO_LOCK_DATA) {
-                LDLM_DEBUG(lock, "lost a race -- client has a lock, but no "
-                           "inode");
-        } else if (rc) {
-                LDLM_ERROR(lock, "client sent rc %d rq_status %d from "
-                           "glimpse AST", rc, req->rq_status);
-        } else {
+        if (rc == -ELDLM_NO_LOCK_DATA)
+                LDLM_DEBUG(lock, "lost race - client has a lock but no inode");
+        else if (rc != 0)
+                rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
+        else
                 rc = res->lr_namespace->ns_lvbo->lvbo_update
                         (res, req->rq_repmsg, 0, 1);
-        }
         ptlrpc_req_finished(req);
         RETURN(rc);
 }

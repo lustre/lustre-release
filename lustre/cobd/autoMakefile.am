@@ -3,8 +3,9 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
+if MODULES
 modulefs_DATA := cobd$(KMODEXT)
+endif
 
 DIST_SOURCES = $(cobd-objs:.o=.c)
-
 MOSTLYCLEANFILES = *.o *.ko *.mod.c

@@ -155,8 +155,15 @@ static int ll_special_file_open(struct inode *inode, struct file *filp)
         struct file_operations **pfop = get_save_fops(filp, FILE_OPS);
         int rc = -EINVAL;
 
-        if (pfop && *pfop && (*pfop)->open)
-                rc = (*pfop)->open(inode, filp);
+        if (pfop && *pfop) {
+                fops_get(*pfop);
+
+                if ((*pfop)->open)
+                        rc = (*pfop)->open(inode, filp);
+
+                if (rc)
+                        fops_put(*pfop);
+        }
 
         RETURN(rc);
 }
@@ -193,8 +200,9 @@ static int ll_special_ioctl(struct inode *inode, struct file *filp,
 
         if (pfop && *pfop && (*pfop)->ioctl) {
                 struct file_operations *sfops = filp->f_op;
-			
+
                 rc = (*pfop)->ioctl(inode, filp, cmd, arg);
+
                 /* sometimes, file_operations will be changed in ioctl */
                 save_fops(filp, inode, sfops);
         }
@@ -259,12 +267,12 @@ static int ll_special_release_internal(struct inode *inode, struct file *filp,
         if (pfop && *pfop) {
                 if ((*pfop)->release)
                         rc = (*pfop)->release(inode, filp);
-                /* FIXME fops_put */
+                fops_put(*pfop);
         }
 
         lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_RELEASE);
-
         err = ll_mdc_close(sbi->ll_mdc_exp, inode, filp);
+
         if (err && rc == 0)
                 rc = err;
 
@@ -281,12 +289,17 @@ static int ll_special_open(struct inode *inode, struct file *filp)
         ENTRY;
 
         if (pfop && *pfop) {
-                /* FIXME fops_get */
+                /* mostly we will have @def_blk_fops here and it is not in a
+                 * module but we do this just to be sure. */
+                fops_get(*pfop);
+
                 if ((*pfop)->open) {
                         rc = (*pfop)->open(inode, filp);
 
-                        /* sometimes file_operations will be changed in open */
-                        save_fops(filp, inode, sfops);
+                        if (rc)
+                                fops_put(*pfop);
+                        else    /* sometimes ops will be changed in open */
+                                save_fops(filp, inode, sfops);
                 }
         }
 
@@ -299,9 +312,11 @@ static int ll_special_open(struct inode *inode, struct file *filp)
                 CERROR("error opening special file: rc %d", rc);
                 ll_mdc_close(ll_i2sbi(inode)->ll_mdc_exp, inode, filp);
         } else if (err) {
-                if (pfop && *pfop && (*pfop)->release)
-                        (*pfop)->release(inode, filp);
-                /* FIXME fops_put */
+                if (pfop && *pfop) {
+                        if ((*pfop)->release)
+                                (*pfop)->release(inode, filp);
+                        fops_put(*pfop);
+                }
                 rc = err;
         }
 
@@ -323,61 +338,62 @@ static int ll_special_file_release(struct inode *inode, struct file *filp)
 }
 
 struct inode_operations ll_special_inode_operations = {
-        setattr_raw:    ll_setattr_raw,
-        setattr:        ll_setattr,
+        .setattr_raw    = ll_setattr_raw,
+        .setattr        = ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        getattr_it:     ll_getattr,
+        .getattr_it     = ll_getattr,
 #else
-        revalidate_it:  ll_inode_revalidate_it,
+        .revalidate_it  = ll_inode_revalidate_it,
 #endif
 };
 
 struct file_operations ll_special_chr_inode_fops = {
-        owner:          THIS_MODULE,
-        open:           ll_special_open,
+        .owner          = THIS_MODULE,
+        .open           = ll_special_open,
 };
 
 struct file_operations ll_special_blk_inode_fops = {
-        owner:          THIS_MODULE,
-        read:           ll_special_read,
-        write:          ll_special_write,
-        ioctl:          ll_special_ioctl,
-        open:           ll_special_open,
-        release:        ll_special_release,
-        mmap:           ll_special_mmap,
-        llseek:         ll_special_seek,
-        fsync:          ll_special_fsync,
+        .owner          = THIS_MODULE,
+        .read           = ll_special_read,
+        .write          = ll_special_write,
+        .ioctl          = ll_special_ioctl,
+        .open           = ll_special_open,
+        .release        = ll_special_release,
+        .mmap           = ll_special_mmap,
+        .llseek         = ll_special_seek,
+        .fsync          = ll_special_fsync,
 };
 
 struct file_operations ll_special_fifo_inode_fops = {
-        owner:          THIS_MODULE,
-        open:           ll_special_open,
+        .owner          = THIS_MODULE,
+        .open           = ll_special_open,
 };
 
 struct file_operations ll_special_sock_inode_fops = {
-        owner:          THIS_MODULE,
-        open:           ll_special_open
+        .owner          = THIS_MODULE,
+        .open           = ll_special_open
 };
 
 struct file_operations ll_special_chr_file_fops = {
-        owner:          THIS_MODULE,
-	llseek:		ll_special_file_seek,
-	read:		ll_special_file_read,
-	write:		ll_special_file_write,
-	poll:		ll_special_file_poll,
-	ioctl:		ll_special_file_ioctl,
-	open:		ll_special_file_open,
-	release:	ll_special_file_release,
-	fasync:		ll_special_file_fasync,
+        .owner          = THIS_MODULE,
+        .llseek         = ll_special_file_seek,
+        .read           = ll_special_file_read,
+        .write          = ll_special_file_write,
+        .poll           = ll_special_file_poll,
+        .ioctl          = ll_special_file_ioctl,
+        .open           = ll_special_file_open,
+        .release        = ll_special_file_release,
+        .fasync         = ll_special_file_fasync,
 };
 
 struct file_operations ll_special_fifo_file_fops = {
-        owner:          THIS_MODULE,
-	llseek:		ll_special_file_seek,
-	read:		ll_special_file_read,
-	write:		ll_special_file_write,
-	poll:		ll_special_file_poll,
-	ioctl:		ll_special_file_ioctl,
-	open:		ll_special_file_open,
-	release:	ll_special_file_release,
+        .owner          = THIS_MODULE,
+        .llseek         = ll_special_file_seek,
+        .read           = ll_special_file_read,
+        .write          = ll_special_file_write,
+        .poll           = ll_special_file_poll,
+        .ioctl          = ll_special_file_ioctl,
+        .open           = ll_special_file_open,
+        .release        = ll_special_file_release,
 };
+

@@ -275,20 +275,34 @@ patch_kernel()
     popd >/dev/null
 }
 
+set_make()
+{
+    MAKE="make -s CC=$CC"
+    if [ "$ARCH" ] ; then
+	MAKE="$MAKE ARCH=$ARCH"
+    fi
+    MAKE_J="$MAKE -j $JOBS"
+}
+
 depend_kernel()
 {
     (( $DEPEND_KERNEL )) || return 0
     # we need to override $CC at make time, since there is no
     # configure
-    MAKE="make -s CC=$CC"
+    set_make
     pushd "$TOPDIR/linux" >/dev/null
     echo "Overriding EXTRAVERSION in kernel..."
     perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -${EXTRA_VERSION}${TARGET_CONFIG}/" Makefile
     echo "Making depend in $PWD..."
     $MAKE mrproper || fatal 1 "Error running make mrproper"
     cp "$CONFIG_FILE" .config
-    $MAKE oldconfig_nonint || fatal 1 "Error running make oldconfig"
-    $MAKE -j $JOBS dep || fatal 1 "Error running make dep"
+    if grep -q oldconfig_nonint Makefile ; then
+	OLDCONFIG='oldconfig_nonint'
+    else
+	OLDCONFIG='oldconfig'
+    fi
+    $MAKE $OLDCONFIG || fatal 1 "Error running make oldconfig"
+    $MAKE_J dep || fatal 1 "Error running make dep"
     $MAKE include/linux/version.h || fatal 1 "Error making include/linux/version.h"
 }
 
@@ -297,17 +311,17 @@ build_kernel()
     (( $BUILD_KERNEL )) || return 0
     # we need to override $CC at make time, since there is no
     # configure
-    MAKE="make -s CC=$CC"
+    set_make
     echo "Building kernel in $PWD..."
     case "$TARGET_ARCH" in
 	i386 | i586 | i686 | athlon | x86_64)
-	    $MAKE -j $JOBS -s bzImage || fatal 1 "Error making bzImage."
+	    $MAKE_J bzImage || fatal 1 "Error making bzImage."
 	    ;;
 	*)
-	    $MAKE -j $JOBS -s boot || fatal 1 "Error making boot."
+	    $MAKE_J boot || fatal 1 "Error making boot."
 	    ;;
     esac
-    $MAKE -j $JOBS -s modules || fatal 1 "Error building modules."
+    $MAKE_J modules || fatal 1 "Error building modules."
 
     popd >/dev/null
 }
@@ -326,8 +340,9 @@ configure_lustre()
 build_lustre()
 {
     (( $BUILD_LUSTRE )) || return 0
+    set_make
     pushd "$TOPDIR" >/dev/null
-    make -j $JOBS -s || fatal 1 "Error building Lustre."
+    $MAKE_J || fatal 1 "Error building Lustre."
     popd >/dev/null
 }
 

@@ -192,9 +192,9 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err);
         }
 
-	/* making vm readahead 0 for 2.4.x. In the case of 2.6.x, 
-	   backing dev info assigned to inode mapping is used for
-	   determining maximal readahead. */
+        /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
+           backing dev info assigned to inode mapping is used for
+           determining maximal readahead. */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* bug 2805 - set VM readahead to zero */
         vm_max_readahead = vm_min_readahead = 0;
@@ -1104,10 +1104,10 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                 set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static struct backing_dev_info ll_backing_dev_info = {
-	.ra_pages	= 0,	/* No readahead */
-	.memory_backed	= 0,	/* Does contribute to dirty memory */
+        .ra_pages       = 0,    /* No readahead */
+        .memory_backed  = 0,    /* Does contribute to dirty memory */
 };
 #endif
 
@@ -1154,15 +1154,15 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
-		
-		/* initializing backing dev info. */
-		inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
+
+                /* initializing backing dev info. */
+                inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
 #endif
                 lli->ll_save_ifop = inode->i_fop;
-                
-		if (S_ISCHR(inode->i_mode))
+
+                if (S_ISCHR(inode->i_mode))
                         inode->i_fop = &ll_special_chr_inode_fops;
                 else if (S_ISBLK(inode->i_mode))
                         inode->i_fop = &ll_special_blk_inode_fops;
@@ -1170,14 +1170,14 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                         inode->i_fop = &ll_special_fifo_inode_fops;
                 else if (S_ISSOCK(inode->i_mode))
                         inode->i_fop = &ll_special_sock_inode_fops;
-        
-	        CWARN("saved %p, replaced with %p\n", lli->ll_save_ifop,
+
+                CWARN("saved %p, replaced with %p\n", lli->ll_save_ifop,
                       inode->i_fop);
-		      
+
                 if (lli->ll_save_ifop->owner) {
                         CWARN("%p has owner %p\n", lli->ll_save_ifop,
                               lli->ll_save_ifop->owner);
-		}
+                }
                 EXIT;
         }
 }

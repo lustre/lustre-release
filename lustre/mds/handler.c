@@ -1925,28 +1925,28 @@ struct lvfs_callback_ops mds_lvfs_ops = {
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mds_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_connect:     mds_connect,
-        o_init_export:  mds_init_export,
-        o_destroy_export:  mds_destroy_export,
-        o_disconnect:  mds_disconnect,
-        o_setup:       mds_setup,
-        o_precleanup:  mds_precleanup,
-        o_cleanup:     mds_cleanup,
-        o_postrecov:   mds_postrecov,
-        o_statfs:      mds_obd_statfs,
-        o_iocontrol:   mds_iocontrol,
-        o_create:      mds_obd_create,
-        o_destroy:     mds_obd_destroy,
-        o_llog_init:   mds_llog_init,
-        o_llog_finish: mds_llog_finish,
-        o_notify:      mds_notify,
+        .o_owner           = THIS_MODULE,
+        .o_connect         = mds_connect,
+        .o_init_export     = mds_init_export,
+        .o_destroy_export  = mds_destroy_export,
+        .o_disconnect      = mds_disconnect,
+        .o_setup           = mds_setup,
+        .o_precleanup      = mds_precleanup,
+        .o_cleanup         = mds_cleanup,
+        .o_postrecov       = mds_postrecov,
+        .o_statfs          = mds_obd_statfs,
+        .o_iocontrol       = mds_iocontrol,
+        .o_create          = mds_obd_create,
+        .o_destroy         = mds_obd_destroy,
+        .o_llog_init       = mds_llog_init,
+        .o_llog_finish     = mds_llog_finish,
+        .o_notify          = mds_notify,
 };
 
 static struct obd_ops mdt_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_setup:       mdt_setup,
-        o_cleanup:     mdt_cleanup,
+        .o_owner           = THIS_MODULE,
+        .o_setup           = mdt_setup,
+        .o_cleanup         = mdt_cleanup,
 };
 
 static int __init mds_init(void)

@@ -22,6 +22,6 @@ ldlm_%.c: @LUSTRE@/ldlm/ldlm_%.c
 l_lock.c: @LUSTRE@/ldlm/l_lock.c
 	ln -sf $< $@
 
-EXTRA_CFLAGS := -I@LUSTRE@/ldlm
+EXTRA_PRE_CFLAGS := -I@LUSTRE@/ldlm
 
 @INCLUDE_RULES@

@@ -253,9 +253,9 @@ static int mgmtcli_cleanup(struct obd_device *obd, int flags)
 }
 
 static struct obd_ops mgmtcli_obd_ops = {
-        o_owner:   THIS_MODULE,
-        o_setup:   mgmtcli_setup,
-        o_cleanup: client_obd_cleanup
+        .o_owner   = THIS_MODULE,
+        .o_setup   = mgmtcli_setup,
+        .o_cleanup = client_obd_cleanup
 };
 
 static int __init mgmtcli_init(void)

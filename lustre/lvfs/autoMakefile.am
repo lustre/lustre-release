@@ -18,7 +18,8 @@ if MODULES
 
 modulefs_DATA = lvfs$(KMODEXT) fsfilt_$(BACKINGFS)$(KMODEXT)
 
-$(modulefs_DATA): fsfilt_$(BACKINGFS).c
+sources: fsfilt_$(BACKINGFS).c
+	touch sources
 
 fsfilt_extN.c: fsfilt_ext3.c
 	sed -e "s/EXT3/EXTN/g" -e "s/ext3/extN/g" $< > $@
@@ -38,4 +39,4 @@ DIST_SOURCES = fsfilt.c fsfilt_ext3.c fsfilt_reiserfs.c lvfs_common.c \
 	lvfs_internal.h lvfs_linux.c lvfs_userfs.c
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-CLEANFILES = fsfilt-*.c fsfilt_ldiskfs.c fsfilt_extN.c
+CLEANFILES = fsfilt-*.c fsfilt_ldiskfs.c fsfilt_extN.c sources

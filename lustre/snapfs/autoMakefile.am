@@ -5,7 +5,9 @@
 
 SUBDIRS = . utils
 
+if SNAPFS
 modulefs_DATA = snapfs$(KMODEXT)
+endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
 DIST_SOURCES = $(snapfs-objs:%.o=%.c) snapfs_internal.h snapfs_support.h

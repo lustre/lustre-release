@@ -40,6 +40,9 @@
 # define RECALC_SIGPENDING         recalc_sigpending()
 # define CURRENT_SECONDS           CURRENT_TIME
 
+# define kernel_text_address(addr) is_kernel_text_address(addr)
+extern int is_kernel_text_address(unsigned long addr);
+
 #else /* 2.4.x */
 
 # define SIGNAL_MASK_LOCK(task, flags)                                  \
@@ -50,6 +53,9 @@
   call_usermodehelper(path, argv, envp)
 # define RECALC_SIGPENDING         recalc_sigpending(current)
 # define CURRENT_SECONDS           CURRENT_TIME
+
+# define kernel_text_address(addr) is_kernel_text_address(addr)
+extern int is_kernel_text_address(unsigned long addr);
 
 #endif
 

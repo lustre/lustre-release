@@ -792,23 +792,23 @@ static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
 }
 
 struct inode_operations ll_dir_inode_operations = {
-        link_raw:           ll_link_raw,
-        unlink_raw:         ll_unlink_raw,
-        symlink_raw:        ll_symlink_raw,
-        mkdir_raw:          ll_mkdir_raw,
-        rmdir_raw:          ll_rmdir_raw,
-        mknod_raw:          ll_mknod_raw,
-        mknod:              ll_mknod,
-        rename_raw:         ll_rename_raw,
-        setattr:            ll_setattr,
-        setattr_raw:        ll_setattr_raw,
+        .link_raw           = ll_link_raw,
+        .unlink_raw         = ll_unlink_raw,
+        .symlink_raw        = ll_symlink_raw,
+        .mkdir_raw          = ll_mkdir_raw,
+        .rmdir_raw          = ll_rmdir_raw,
+        .mknod_raw          = ll_mknod_raw,
+        .mknod              = ll_mknod,
+        .rename_raw         = ll_rename_raw,
+        .setattr            = ll_setattr,
+        .setattr_raw        = ll_setattr_raw,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        create_it:          ll_create_it,
-        lookup_it:          ll_lookup_it,
-        revalidate_it:      ll_inode_revalidate_it,
+        .create_it          = ll_create_it,
+        .lookup_it          = ll_lookup_it,
+        .revalidate_it      = ll_inode_revalidate_it,
 #else
-        lookup:             ll_lookup_nd,
-        create:             ll_create_nd,
-        getattr_it:         ll_getattr,
+        .lookup             = ll_lookup_nd,
+        .create             = ll_create_nd,
+        .getattr_it         = ll_getattr,
 #endif
 };

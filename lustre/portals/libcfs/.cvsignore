@@ -8,3 +8,4 @@ autoMakefile
 *.mod.c
 .*.flags
 .tmp_versions
+.depend

@@ -19,25 +19,28 @@
 # DIST_SOURCES = $(<module-name>-objs:.o=.c) <other sources>
 # MOSTLYCLEANFILES = *.o *.ko *.mod.c
 
-ifeq ($(KERNELRELEASE),)
+ifeq ($(PATCHLEVEL),)
 
 include autoMakefile
 
-ifeq (@MODULES_TRUE@,)
-$(foreach MODULE,$(MODULES),$(MODULE)@KMODEXT@): FORCE
-	$(MAKE) @ARCH_UM@ -C $(LINUX) SUBDIRS=$(PWD) modules
-FORCE:
-endif
+tags:
+	rm -f $(top_srcdir)/TAGS
+	ETAGSF=`etags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	find $(top_srcdir) -name '*.[hc]' | xargs etags $$ETAGSF -a
+
+	rm -f $(top_srcdir)/tags
+	CTAGSF=`ctags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	find $(top_srcdir) -name '*.[hc]' | xargs ctags $$CTAGSF -a
 
 else
 
-# we want to use -O0 for UML, unless it's already set (ie, in the
-# socknal where we need to build with -O2 so that htonl etc. are
-# linked correctly
-ifeq ($(filter -O%,$(EXTRA_CFLAGS)),)
-EXTRA_CFLAGS += @UML_CFLAGS@
-endif
-EXTRA_CFLAGS += @EXTRA_KCFLAGS@
+include @LINUX_CONFIG@
+
+EXTRA_CFLAGS := $(EXTRA_PRE_CFLAGS)
+EXTRA_CFLAGS += @EXTRA_KCFLAGS@ @UML_CFLAGS@
+EXTRA_CFLAGS += $(EXTRA_POST_CFLAGS)
 
 obj-m := $(patsubst %,%.o,$(MODULES))
 
@@ -47,6 +50,8 @@ O_TARGET := $(firstword $(obj-m))
 obj-y := $($(firstword $(MODULES))-objs)
 export-objs := $(obj-y) $(filter-out $(O_TARGET),$(obj-m))
 include $(TOPDIR)/Rules.make
+$(MODINCL)/%.ver: %.c
+	@true
 endif # PATCHLEVEL
 
 endif # KERNELRELEASE

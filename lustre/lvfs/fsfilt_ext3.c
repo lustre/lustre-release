@@ -35,7 +35,11 @@
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
 #include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/ext3_xattr.h>
+#else
+#include <ext3/xattr.h>
+#endif
 
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
@@ -297,12 +301,11 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
         rc = journal_stop(handle);
         unlock_kernel();
 
-        // LASSERT(current->journal_info == NULL);
         return rc;
 }
 
 static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
-                                        void **wait_handle)
+                                    void **wait_handle)
 {
         unsigned long tid;
         transaction_t *transaction;
@@ -781,27 +784,27 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
 }
 
 static struct fsfilt_operations fsfilt_ext3_ops = {
-        fs_type:                "ext3",
-        fs_owner:               THIS_MODULE,
-        fs_start:               fsfilt_ext3_start,
-        fs_brw_start:           fsfilt_ext3_brw_start,
-        fs_commit:              fsfilt_ext3_commit,
-        fs_commit_async:        fsfilt_ext3_commit_async,
-        fs_commit_wait:         fsfilt_ext3_commit_wait,
-        fs_setattr:             fsfilt_ext3_setattr,
-        fs_iocontrol:           fsfilt_ext3_iocontrol,
-        fs_set_md:              fsfilt_ext3_set_md,
-        fs_get_md:              fsfilt_ext3_get_md,
-        fs_readpage:            fsfilt_ext3_readpage,
-        fs_add_journal_cb:      fsfilt_ext3_add_journal_cb,
-        fs_statfs:              fsfilt_ext3_statfs,
-        fs_sync:                fsfilt_ext3_sync,
-        fs_map_inode_page:      fsfilt_ext3_map_inode_page,
-        fs_prep_san_write:      fsfilt_ext3_prep_san_write,
-        fs_write_record:        fsfilt_ext3_write_record,
-        fs_read_record:         fsfilt_ext3_read_record,
-        fs_setup:               fsfilt_ext3_setup,
-        fs_get_op_len:          fsfilt_ext3_get_op_len,
+        .fs_type                = "ext3",
+        .fs_owner               = THIS_MODULE,
+        .fs_start               = fsfilt_ext3_start,
+        .fs_brw_start           = fsfilt_ext3_brw_start,
+        .fs_commit              = fsfilt_ext3_commit,
+        .fs_commit_async        = fsfilt_ext3_commit_async,
+        .fs_commit_wait         = fsfilt_ext3_commit_wait,
+        .fs_setattr             = fsfilt_ext3_setattr,
+        .fs_iocontrol           = fsfilt_ext3_iocontrol,
+        .fs_set_md              = fsfilt_ext3_set_md,
+        .fs_get_md              = fsfilt_ext3_get_md,
+        .fs_readpage            = fsfilt_ext3_readpage,
+        .fs_add_journal_cb      = fsfilt_ext3_add_journal_cb,
+        .fs_statfs              = fsfilt_ext3_statfs,
+        .fs_sync                = fsfilt_ext3_sync,
+        .fs_map_inode_page      = fsfilt_ext3_map_inode_page,
+        .fs_prep_san_write      = fsfilt_ext3_prep_san_write,
+        .fs_write_record        = fsfilt_ext3_write_record,
+        .fs_read_record         = fsfilt_ext3_read_record,
+        .fs_setup               = fsfilt_ext3_setup,
+        .fs_get_op_len          = fsfilt_ext3_get_op_len,
 };
 
 static int __init fsfilt_ext3_init(void)

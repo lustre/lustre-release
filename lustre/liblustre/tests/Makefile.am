@@ -6,9 +6,8 @@ LIBS = $(LIBEFENCE) $(LIBREADLINE)
 
 LLIB_EXEC= ../liblustre.a -lpthread
 
+if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
-libtestcommon_a_SOURCES = test_common.c test_common.h
-
 def_tests = echo_test sanity recovery_small replay_single replay_ost_single
 
 if MPITESTS
@@ -16,6 +15,9 @@ bin_PROGRAMS = $(def_tests) test_lock_cancel
 else
 bin_PROGRAMS = $(def_tests)
 endif
+endif # LIBLUSTRE
+
+libtestcommon_a_SOURCES = test_common.c test_common.h
 
 echo_test_SOURCES = echo_test.c  ../../utils/parser.c ../../utils/obd.c ../../utils/lustre_cfg.c
 echo_test_CFLAGS = $(LL_CFLAGS)

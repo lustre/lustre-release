@@ -24,8 +24,10 @@ SYSIO_LIBS =  $(SYSIO)/drivers/native/libsysio_native.a \
               $(SYSIO)/src/libsysio.a \
               $(SYSIO)/dev/stdfd/libsysio_stdfd.a
 
+if LIBLUSTRE
 lib_LIBRARIES = liblustre.a
 noinst_LIBRARIES = libllite.a
+endif
 
 libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c llite_lib.h
 

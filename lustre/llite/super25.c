@@ -100,27 +100,27 @@ void ll_destroy_inodecache(void)
 /* exported operations */
 struct super_operations lustre_super_operations =
 {
-        .alloc_inode = ll_alloc_inode,
+        .alloc_inode   = ll_alloc_inode,
         .destroy_inode = ll_destroy_inode,
-        .clear_inode = ll_clear_inode,
-        .put_super = lustre_put_super,
-        .statfs = ll_statfs,
-        .umount_begin = ll_umount_begin
+        .clear_inode   = ll_clear_inode,
+        .put_super     = lustre_put_super,
+        .statfs        = ll_statfs,
+        .umount_begin  = ll_umount_begin
 };
 
 
 struct file_system_type lustre_lite_fs_type = {
-        .owner  = THIS_MODULE,
-        .name =   "lustre_lite",
-        .get_sb = ll_get_sb,
-        .kill_sb = kill_anon_super,
+        .owner        = THIS_MODULE,
+        .name         = "lustre_lite",
+        .get_sb       = ll_get_sb,
+        .kill_sb      = kill_anon_super,
 };
 
 struct file_system_type lustre_fs_type = {
-        .owner  = THIS_MODULE,
-        .name =   "lustre",
-        .get_sb = lustre_get_sb,
-        .kill_sb = kill_anon_super,
+        .owner        = THIS_MODULE,
+        .name         = "lustre",
+        .get_sb       = lustre_get_sb,
+        .kill_sb      = kill_anon_super,
 };
 
 static int __init init_lustre_lite(void)

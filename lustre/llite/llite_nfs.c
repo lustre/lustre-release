@@ -81,8 +81,8 @@ extern struct dentry_operations ll_d_ops;
 
 static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                                       __u32 generation, umode_t mode)
-{                                      
-        struct inode *inode;      
+{
+        struct inode *inode;
         struct dentry *result;
         struct list_head *lp;
 

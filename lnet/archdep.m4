@@ -1,7 +1,7 @@
 # -------- we can't build modules unless srcdir = builddir
 if test x$enable_modules != xno ; then
-AC_CHECK_FILE([Makefile.am],[],
-	[AC_ERROR([At this time, Lustre does not support building kernel modules with srcdir != buildir.])])
+AC_CHECK_FILE([autoMakefile.am],[],
+	[AC_MSG_ERROR([At this time, Lustre does not support building kernel modules with srcdir != buildir.])])
 fi
 
 # -------- in kernel compilation? (2.5 only) -------------
@@ -48,6 +48,24 @@ if test x$enable_inkernel = xyes ; then
         ln -s `pwd` $LINUX/fs/lustre
 fi
 
+# -------- check for .confg --------
+AC_ARG_WITH([linux-config],
+	[AC_HELP_STRING([--with-linux-config=path],
+			[set path to Linux .conf (default=\$LINUX/.config)])],
+	[LINUX_CONFIG=$with_linux_config],
+	[LINUX_CONFIG=$LINUX/.config])
+AC_SUBST(LINUX_CONFIG)
+
+AC_CHECK_FILE([/boot/kernel.h],
+	[KERNEL_SOURCE_HEADER='/boot/kernel.h'],
+	[AC_CHECK_FILE([/var/adm/running-kernel.h]),
+		[KERNEL_SOURCE_HEADER='/var/adm/running-kernel.h']])
+
+AC_ARG_WITH([kernel-source-header],
+	AC_HELP_STRING([--with-kernel-source-header=path],
+			[Use a different kernel version header.  Consult README.kernel-source for details.]),
+	[KERNEL_SOURCE_HEADER=$with_kernel_source_header])
+
 #  --------------------
 ARCH_UM=
 UML_CFLAGS=
@@ -62,7 +80,7 @@ if test x$enable_modules != xno ; then
 	    	else
 			AC_MSG_RESULT([no (asm doesn't point at asm-um)])
 		fi
-	else 
+	else
 		AC_MSG_RESULT([no (asm-um missing)])
 	fi
 fi
@@ -70,14 +88,15 @@ AC_SUBST(ARCH_UM)
 AC_SUBST(UML_CFLAGS)
 # --------- Linux 25 ------------------
 
-AC_MSG_CHECKING([if you are running linux 2.5])
-if test -e $LINUX/include/linux/namei.h ; then
-        linux25="yes"
-	KMODEXT=".ko"
-else
-	KMODEXT=".o"
-        linux25="no"
-fi
+AC_CHECK_FILE([$LINUX/include/linux/namei.h],
+	[
+	        linux25="yes"
+		KMODEXT=".ko"
+	],[
+		KMODEXT=".o"
+        	linux25="no"
+	])
+AC_MSG_CHECKING([if you are using Linux 2.6])
 AC_MSG_RESULT([$linux25])
 AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
 AC_SUBST(KMODEXT)
@@ -98,45 +117,115 @@ AC_SUBST(LLCFLAGS)
 if test x$enable_ldiskfs = xyes ; then
 	AC_DEFINE(CONFIG_LDISKFS_FS_MODULE, 1, [build ldiskfs as a module])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [enable extended attributes for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_POSIX_ACL, 1, [enable posix acls])
+	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [enable posix acls])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security])
 fi
 
-EXTRA_KCFLAGS="-g -I$PWD/portals/include -I$PWD/include $CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE"
+EXTRA_KCFLAGS="-g $CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE -I$PWD/portals/include -I$PWD/include"
 
-# ----------- make dep run? ------------------
+# these are like AC_TRY_COMPILE, but try to build modules against the
+# kernel, inside the kernel-tests directory
 
-if test x$enable_modules != xno ; then
-	AC_MSG_CHECKING([if make dep has been run in kernel source (host $host_cpu)])
-	if test -f $LINUX/include/linux/config.h ; then
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no])
-		AC_MSG_ERROR([** cannot find $LINUX/include/linux/config.h. Run make dep in $LINUX.])
-	fi
-fi
+AC_DEFUN([LUSTRE_MODULE_CONFTEST],
+[cat >conftest.c <<_ACEOF
+$1
+_ACEOF
+])
+
+AC_DEFUN([LUSTRE_MODULE_COMPILE_IFELSE],
+[m4_ifvaln([$1], [LUSTRE_MODULE_CONFTEST([$1])])dnl
+rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.ko
+AS_IF([AC_TRY_COMMAND(cp conftest.c kernel-tests && make [$2] -f $PWD/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX EXTRA_CFLAGS="$EXTRA_KCFLAGS" $ARCH_UM SUBDIRS=$PWD/kernel-tests) >/dev/null && AC_TRY_COMMAND([$3])],
+	[$4],
+	[_AC_MSG_LOG_CONFTEST
+m4_ifvaln([$5],[$5])dnl])dnl
+rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.mod.o kernel-tests/conftest.ko m4_ifval([$1], [kernel-tests/conftest.c conftest.c])[]dnl
+])
+
+AC_DEFUN([LUSTRE_MODULE_TRY_COMPILE],
+[LUSTRE_MODULE_COMPILE_IFELSE(
+	[AC_LANG_PROGRAM([[$1]], [[$2]])],
+	[modules],
+	[test -s kernel-tests/conftest.o],
+	[$3], [$4])])
+
+AC_DEFUN([LUSTRE_MODULE_TRY_MAKE],
+[LUSTRE_MODULE_COMPILE_IFELSE([AC_LANG_PROGRAM([[$1]], [[$2]])], [$3], [$4], [$5], [$6])])
 
 # ------------ include paths ------------------
 
 if test x$enable_modules != xno ; then
-	# ------------ autoconf.h ------------------
-	AC_MSG_CHECKING([if autoconf.h is in kernel source])
-	if test -f $LINUX/include/linux/autoconf.h ; then
-		AC_MSG_RESULT(yes)
-	else
-		AC_MSG_RESULT(no)
-		AC_MSG_ERROR([** cannot find $LINUX/include/linux/autoconf.h. Run make config in $LINUX.])
+	# ------------ .config exists ----------------
+	AC_CHECK_FILE([$LINUX_CONFIG],[],
+		[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult README.kernel-source])])
+
+	# ----------- make dep run? ------------------
+	AC_CHECK_FILES([$LINUX/include/linux/autoconf.h
+			$LINUX/include/linux/version.h
+			$LINUX/include/linux/config.h],[],
+		[AC_MSG_ERROR([Run make config in $LINUX.])])
+
+	# ------------ rhconfig.h includes runtime-generated bits --
+	# red hat kernel-source checks
+
+	# we know this exists after the check above.  if the user
+	# tarred up the tree and ran make dep etc. in it, then
+	# version.h gets overwritten with a standard linux one.
+
+	if grep rhconfig $LINUX/include/linux/version.h >/dev/null ; then
+		# This is a clean kernel-source tree, we need to
+		# enable extensive workarounds to get this to build
+		# modules
+		AC_CHECK_FILE([$KERNEL_SOURCE_HEADER],
+			[if test $KERNEL_SOURCE_HEADER = '/boot/kernel.h' ; then
+				AC_MSG_WARN([Using /boot/kernel.h from RUNNING kernel.])
+				AC_MSG_WARN([If this is not what you want, use --with-kernel-source-header.])
+				AC_MSG_WARN([Consult README.kernel-source for details.])
+			fi],
+			[AC_MSG_ERROR([$KERNEL_SOURCE_HEADER not found.  Consult README.kernel-source for details.])])
+		EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
 	fi
+
+	# --- check that we can build modules at all
+	AC_MSG_CHECKING([that modules can be built])
+	LUSTRE_MODULE_TRY_COMPILE([],[],
+		[
+			AC_MSG_RESULT([yes])
+		],[
+			AC_MSG_RESULT([no])
+			AC_MSG_WARN([Consult config.log for details.])
+			AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult README.kernel-source])
+			AC_MSG_ERROR([Kernel modules could not be built.])
+		])
 
 	# ------------ LINUXRELEASE and moduledir ------------------
 	AC_MSG_CHECKING([for Linux release])
-
-	# this is bogus, as it doesn't work against kernel-source rpms  
-	dnl We need to rid ourselves of the nasty [ ] quotes.
-	changequote(, )
-	dnl Get release from version.h
-	LINUXRELEASE="`sed -ne 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_-]*\).*/\1/p' $LINUX/include/linux/version.h`"
-	changequote([, ])
+	rm -f kernel-tests/conftest.i
+	LINUXRELEASE=
+	if test $linux25 = 'yes' ; then
+		makerule="$PWD/kernel-tests"
+	else
+		makerule="_dir_$PWD/kernel-tests"
+	fi
+	LUSTRE_MODULE_TRY_MAKE(
+		[#include <linux/version.h>],
+		[LINUXRELEASE=UTS_RELEASE],
+		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
+		[test -s kernel-tests/conftest.i],
+		[
+			# LINUXRELEASE="UTS_RELEASE"
+			eval $(grep LINUXRELEASE kernel-tests/conftest.i)
+		],[
+			AC_MSG_RESULT([unknown])
+			AC_MSG_ERROR([Could not preprocess test program.  Consult config.log for details.])
+		])
+	rm -f kernel-tests/conftest.i
+	if test x$LINUXRELEASE = x ; then
+		AC_MSG_RESULT([unknown])
+		AC_MSG_ERROR([Could not determine Linux release version from linux/version.h.])
+	fi
+	AC_MSG_RESULT([$LINUXRELEASE])
+	AC_SUBST(LINUXRELEASE)
 
 	moduledir='$(libdir)/modules/'$LINUXRELEASE/kernel
 	AC_SUBST(moduledir)
@@ -144,18 +233,9 @@ if test x$enable_modules != xno ; then
 	modulefsdir='$(moduledir)/fs/$(PACKAGE)'
 	AC_SUBST(modulefsdir)
 
-	AC_MSG_RESULT($LINUXRELEASE)
-	AC_SUBST(LINUXRELEASE)
-
 	# ------------ RELEASE --------------------------------
-	AC_MSG_CHECKING([lustre release])
-  
-	dnl We need to rid ourselves of the nasty [ ] quotes.
-	changequote(, )
-	dnl Get release from version.h
-	RELEASE="`sed -ne 's/-/_/g' -e 's/.*UTS_RELEASE[ \"]*\([0-9.a-zA-Z_]*\).*/\1/p' $LINUX/include/linux/version.h`_`date +%Y%m%d%H%M`"
-	changequote([, ])
-
+	AC_MSG_CHECKING([for Lustre release])
+  	RELEASE="${LINUXRELEASE}_`date +%Y%m%d%H%M`"
 	AC_MSG_RESULT($RELEASE)
 	AC_SUBST(RELEASE)
 fi
@@ -226,6 +306,7 @@ else
 fi
 AC_SUBST(QSWCPPFLAGS)
 AC_SUBST(QSWNAL)
+AM_CONDITIONAL(BUILD_QSWNAL, test x$QSWNAL = "xqswnal")
 
 AC_MSG_CHECKING([if gm support was requested])
 AC_ARG_WITH([gm],
@@ -256,7 +337,7 @@ AC_ARG_WITH([gm],
 	])
 AC_SUBST(GMCPPFLAGS)
 AC_SUBST(GMNAL)
-
+AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
 
 #fixme: where are the default IB includes?
 default_ib_include_dir=/usr/local/ib/include
@@ -291,7 +372,7 @@ AC_ARG_WITH([ib],
 	])
 AC_SUBST(IBNAL)
 AC_SUBST(IBCPPFLAGS)
-
+AM_CONDITIONAL(BUILD_IBNAL, test x$IBNAL = "xibnal")
 
 def_scamac=/opt/scali/include
 AC_MSG_CHECKING([if ScaMAC support was requested])
@@ -323,33 +404,11 @@ AC_ARG_WITH([scamac],
 	])
 AC_SUBST(SCIMACCPPFLAGS)
 AC_SUBST(SCIMACNAL)
+AM_CONDITIONAL(BUILD_SCIMACNAL, test x$SCIMACNAL = "xscimacnal")
 # if test "$with_scamac" != no -a -f ${with_scamac}/scamac.h; then
 
 AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
-
-# these are like AC_TRY_COMPILE, but try to build modules against the
-# kernel, inside the kernel-tests directory
-
-AC_DEFUN([LUSTRE_MODULE_CONFTEST],
-[cat >conftest.c <<_ACEOF
-$1
-_ACEOF
-])
-
-AC_DEFUN([LUSTRE_MODULE_COMPILE_IFELSE],
-[m4_ifvaln([$1], [LUSTRE_MODULE_CONFTEST([$1])])dnl
-rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.ko
-AS_IF([_AC_EVAL_STDERR([cp conftest.c kernel-tests && make modules -C $LINUX $ARCH_UM SUBDIRS=$PWD/kernel-tests >/dev/null]) &&
-	AC_TRY_COMMAND([test -s kernel-tests/conftest.o])],
-	[$2],
-	[_AC_MSG_LOG_CONFTEST
-m4_ifvaln([$3],[$3])dnl])dnl
-rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.mod.o kernel-tests/conftest.ko m4_ifval([$1], [kernel-tests/conftest.c conftest.c])[]dnl
-])
-
-AC_DEFUN([LUSTRE_MODULE_TRY_COMPILE],
-[LUSTRE_MODULE_COMPILE_IFELSE([AC_LANG_PROGRAM([[$1]], [[$2]])], [$3], [$4])])
 
 # ---------- Red Hat 2.4.18 has iobuf->dovary --------------
 # But other kernels don't
@@ -448,6 +507,22 @@ if test x$enable_modules != xno ; then
 			#endif
 		],[
 			AC_MSG_RESULT([yes])
+		],[
+			AC_MSG_RESULT([no])
+		])
+
+	# ------------ preempt -----------------------
+	AC_MSG_CHECKING([if preempt is enabled])
+	LUSTRE_MODULE_TRY_COMPILE(
+		[
+			#include <linux/config.h>
+		],[
+			#ifndef CONFIG_PREEMPT
+			#error CONFIG_PREEMPT is not #defined
+			#endif
+		],[
+			AC_MSG_RESULT([yes])
+			AC_MSG_ERROR([Lustre does not support kernels with preempt enabled.])
 		],[
 			AC_MSG_RESULT([no])
 		])

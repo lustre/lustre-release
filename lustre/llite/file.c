@@ -485,6 +485,7 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 down(&inode->i_sem);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
+		
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
@@ -1422,25 +1423,28 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
 #endif
 
 struct file_operations ll_file_operations = {
-        read:           ll_file_read,
-        write:          ll_file_write,
-        ioctl:          ll_file_ioctl,
-        open:           ll_file_open,
-        release:        ll_file_release,
-        mmap:           generic_file_mmap,
-        llseek:         ll_file_seek,
-        fsync:          ll_fsync,
-        //lock:           ll_file_flock
+        .read           = ll_file_read,
+        .write          = ll_file_write,
+        .ioctl          = ll_file_ioctl,
+        .open           = ll_file_open,
+        .release        = ll_file_release,
+        .mmap           = generic_file_mmap,
+        .llseek         = ll_file_seek,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        .sendfile       = generic_file_sendfile,
+#endif
+        .fsync          = ll_fsync,
+        //.lock           ll_file_flock
 };
 
 struct inode_operations ll_file_inode_operations = {
-        setattr_raw:    ll_setattr_raw,
-        setattr:        ll_setattr,
-        truncate:       ll_truncate,
+        .setattr_raw    = ll_setattr_raw,
+        .setattr        = ll_setattr,
+        .truncate       = ll_truncate,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        getattr_it:     ll_getattr,
+        .getattr_it     = ll_getattr,
 #else
-        revalidate_it:  ll_inode_revalidate_it,
+        .revalidate_it  = ll_inode_revalidate_it,
 #endif
 };
 

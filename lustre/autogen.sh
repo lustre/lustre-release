@@ -65,5 +65,12 @@ check_version() {
 
 check_version automake "1.7.8"
 check_version autoconf "2.57"
-echo "Running autoreconf..."
-autoreconf -fi
+echo "Running aclocal..."
+aclocal
+echo "Running autoheader..."
+autoheader
+echo "Running automake..."
+automake -a -c
+echo "Running autoconf..."
+autoconf
+
