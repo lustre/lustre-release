@@ -213,7 +213,8 @@ EXPORT_SYMBOL(ptlrpc_put_ldlm_hooks);
 EXPORT_SYMBOL(ptlrpc_ldlm_hooks_referenced);
 
 /* recover.c */
-EXPORT_SYMBOL(ptlrpc_run_recovery_upcall);
+EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);
+EXPORT_SYMBOL(ptlrpc_run_failed_import_upcall);
 EXPORT_SYMBOL(ptlrpc_reconnect_import);
 EXPORT_SYMBOL(ptlrpc_replay);
 EXPORT_SYMBOL(ptlrpc_resend);
