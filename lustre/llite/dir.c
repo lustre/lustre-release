@@ -129,7 +129,7 @@ struct address_space_operations ll_dir_aops = {
         prepare_write: ll_dir_prepare_write
 };
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,3))
 int waitfor_one_page(struct page *page)
 {
         int error = 0;
@@ -143,7 +143,7 @@ int waitfor_one_page(struct page *page)
         } while ((bh = bh->b_this_page) != head);
         return error;
 }
-#else 
+#elif (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int waitfor_one_page(struct page *page)
 {
         wait_on_page_locked(page);
