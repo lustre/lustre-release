@@ -246,10 +246,14 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 rc = llog_lvfs_pad(ctxt, file, left, loghandle->lgh_last_idx);
                 if (rc)
                         RETURN(rc);
+                /* if it's the last idx in log file, then return -ENOSPC */
+                if (loghandle->lgh_last_idx == LLOG_BITMAP_SIZE(llh) - 1)
+                        RETURN(-ENOSPC);
         }
 
         loghandle->lgh_last_idx++;
         index = loghandle->lgh_last_idx;
+        LASSERT(index < LLOG_BITMAP_SIZE(llh));
         rec->lrh_index = cpu_to_le32(index);
         if (buf == NULL) {
                 lrt = (void *)rec + le32_to_cpu(rec->lrh_len) - sizeof(*lrt);
