@@ -143,17 +143,15 @@ struct echo_obd {
 };
 
 struct recovd_obd {
-        __u32                 recovd_phase;
-        __u32                 recovd_next_phase;
-        __u32                 recovd_flags;
-        struct recovd_data   *recovd_current_rd;
         spinlock_t            recovd_lock;
         struct list_head      recovd_managed_items; /* items managed  */
-        struct list_head      recovd_troubled_items; /* items in trouble */
+        struct list_head      recovd_troubled_items; /* items in recovery */
+
         wait_queue_head_t     recovd_recovery_waitq;
         wait_queue_head_t     recovd_ctl_waitq;
         wait_queue_head_t     recovd_waitq;
         struct task_struct   *recovd_thread;
+        __u32                 recovd_state;
 };
 
 struct trace_obd {

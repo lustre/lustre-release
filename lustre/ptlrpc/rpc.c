@@ -64,8 +64,6 @@ int connmgr_cleanup(struct obd_device *dev)
         RETURN(0);
 }
 
-/* should this be in llite? */
-
 int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
                       void *uarg)
 {
@@ -73,9 +71,8 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
         struct obd_device *obd = class_conn2obd(hdl);
         struct recovd_obd *recovd = &obd->u.recovd;
         struct obd_ioctl_data *data = karg;
-#if 0 && PARALLEL_RECOVERY
         struct list_head *tmp;
-#endif
+        int rc = 0;
 
         ENTRY;
 
@@ -84,7 +81,6 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
         
         /* Find the connection that's been rebuilt. */
         spin_lock(&recovd->recovd_lock);
-#if 0 && PARALLEL_RECOVERY
         list_for_each(tmp, &recovd->recovd_troubled_items) {
                 conn = list_entry(tmp, struct ptlrpc_connection,
                                   c_recovd_data.rd_managed_chain);
@@ -95,24 +91,14 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
                         break;
                 conn = NULL;
         }
-#endif
-        if (!recovd->recovd_current_rd) {
-                spin_unlock(&recovd->recovd_lock);
-                LBUG();
-        }
 
-        conn = class_rd2conn(recovd->recovd_current_rd);
-        spin_unlock(&recovd->recovd_lock);
+        if (!conn)
+                GOTO(out, rc = -EINVAL);
+
+        if (conn->c_recovd_data.rd_phase != RECOVD_PREPARING)
+                GOTO(out, rc = -EALREADY);
 
         spin_lock(&conn->c_lock);
-
-        if (strcmp(conn->c_remote_uuid, data->ioc_inlbuf1)) {
-                CERROR("NEWCONN for %s: currently recovering %s\n",
-                       data->ioc_inlbuf1, conn->c_remote_uuid);
-                spin_unlock(&conn->c_lock);
-                RETURN(-EINVAL);
-        }
-
         if (data->ioc_inllen2) {
                 CERROR("conn %p UUID change %s -> %s\n",
                        conn, conn->c_remote_uuid, data->ioc_inlbuf2);
@@ -122,23 +108,13 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
                        conn->c_remote_uuid);
         }
         ptlrpc_readdress_connection(conn, conn->c_remote_uuid);
-        
-        spin_lock(&recovd->recovd_lock);
-#if 0 && PARALLEL_RECOVERY
-        if (conn->c_recovd_data->rd_state != RECOVD_PREPARING)
-                LBUG();
-        conn->c_recovd_data->rd_state = RECOVD_PREPARED;
-#endif
-        if (recovd->recovd_phase != RECOVD_PREPARING ||
-            recovd->recovd_next_phase != RECOVD_PREPARED ||
-            recovd->recovd_current_rd != &conn->c_recovd_data) {
-                LBUG();
-        }
-        recovd->recovd_phase = RECOVD_PREPARED;
-        wake_up(&recovd->recovd_waitq);
-        spin_unlock(&recovd->recovd_lock);
         spin_unlock(&conn->c_lock);
-        RETURN(0);
+        
+        conn->c_recovd_data.rd_phase = RECOVD_PREPARED;
+        wake_up(&recovd->recovd_waitq);
+ out:
+        spin_unlock(&recovd->recovd_lock);
+        RETURN(rc);
 }
 
 

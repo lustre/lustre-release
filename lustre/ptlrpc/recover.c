@@ -115,7 +115,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 
                 /* replay what needs to be replayed */
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
-                        CDEBUG(D_INODE, "req %Ld needs replay [last rcvd %Ld]\n",
+                        CDEBUG(D_NET, "req %Ld needs replay [last rcvd %Ld]\n",
                                req->rq_xid, conn->c_last_xid);
                         rc = ptlrpc_replay_req(req);
 #if 0
@@ -135,7 +135,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* server has seen req, we have reply: skip */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                     req->rq_xid <= conn->c_last_xid) { 
-                        CDEBUG(D_INODE,
+                        CDEBUG(D_NET,
                                "req %Ld was complete: skip [last rcvd %Ld]\n", 
                                req->rq_xid, conn->c_last_xid);
                         continue;
@@ -144,7 +144,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* server has lost req, we have reply: resend, ign reply */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                     req->rq_xid > conn->c_last_xid) { 
-                        CDEBUG(D_INODE, "lost req %Ld have rep: replay [last "
+                        CDEBUG(D_NET, "lost req %Ld have rep: replay [last "
                                "rcvd %Ld]\n", req->rq_xid, conn->c_last_xid);
                         rc = ptlrpc_replay_req(req); 
                         if (rc) {
@@ -157,7 +157,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* server has seen req, we have lost reply: -ERESTARTSYS */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                      req->rq_xid <= conn->c_last_xid) { 
-                        CDEBUG(D_INODE, "lost rep %Ld srv did req: restart "
+                        CDEBUG(D_NET, "lost rep %Ld srv did req: restart "
                                "[last rcvd %Ld]\n", 
                                req->rq_xid, conn->c_last_xid);
                         ptlrpc_restart_req(req);
@@ -166,7 +166,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* service has not seen req, no reply: resend */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                      req->rq_xid > conn->c_last_xid) {
-                        CDEBUG(D_INODE,
+                        CDEBUG(D_NET,
                                "lost rep/req %Ld: resend [last rcvd %Ld]\n", 
                                req->rq_xid, conn->c_last_xid);
                         ptlrpc_resend_req(req);
@@ -177,6 +177,8 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
         conn->c_level = LUSTRE_CONN_FULL;
         recovd_conn_fixed(conn);
 
+        CDEBUG(D_NET, "recovery complete on conn %p(%s), waking delayed reqs\n",
+               conn, conn->c_remote_uuid);
         /* Finally, continue what we delayed since recovery started */
         list_for_each_safe(tmp, pos, &conn->c_delayed_head) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
@@ -187,6 +189,13 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
  out:
         spin_unlock(&conn->c_lock);
         return rc;
+}
+
+static int ll_retry_recovery(struct ptlrpc_connection *conn)
+{
+        /* XXX use a timer, sideshow bob */
+        recovd_conn_fail(conn);
+        return 0;
 }
 
 int ll_recover(struct recovd_data *rd, int phase)
@@ -202,8 +211,7 @@ int ll_recover(struct recovd_data *rd, int phase)
             case PTLRPC_RECOVD_PHASE_RECOVER:
                 RETURN(ll_recover_reconnect(conn));
             case PTLRPC_RECOVD_PHASE_FAILURE:
-                fixme();
-                RETURN(0);
+                RETURN(ll_retry_recovery(conn));
         }
 
         LBUG();

@@ -166,6 +166,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         cli->cl_import.imp_handle.addr = request->rq_repmsg->addr;
         cli->cl_import.imp_handle.cookie = request->rq_repmsg->cookie;
 
+
         recovd_conn_manage(c, ptlrpc_recovd, ll_recover);
 
         EXIT;

@@ -480,8 +480,9 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         /* XXX probably both an import and connection level are needed */
         if (req->rq_level > conn->c_level) { 
-                CERROR("process %d waiting for recovery (%d > %d)\n", 
-                       current->pid, req->rq_level, conn->c_level);
+                CERROR("pid %d waiting for recovery (%d > %d) on conn %p(%s)\n", 
+                       current->pid, req->rq_level, conn->c_level, conn,
+                       conn->c_remote_uuid);
 
                 spin_lock(&conn->c_lock);
                 list_del(&req->rq_list);
@@ -515,11 +516,11 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 /* the sleep below will time out, triggering recovery */
         }
 
-        CDEBUG(D_OTHER, "-- sleeping\n");
+        CDEBUG(D_OTHER, "-- sleeping on xid "LPD64"\n", req->rq_xid);
         lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
                                interrupted_request,req);
         l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
-        CDEBUG(D_OTHER, "-- done\n");
+        CDEBUG(D_OTHER, "-- done sleeping on xid "LPD64"\n", req->rq_xid);
 
         /* Don't resend if we were interrupted. */
         if ((req->rq_flags & (PTL_RPC_FL_RESEND | PTL_RPC_FL_INTR)) ==

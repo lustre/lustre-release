@@ -11,17 +11,18 @@ struct recovd_data;
 struct recovd_obd;
 struct ptlrpc_connection;
 
-/* recovd_phase values */
+/* rd_phase/rd_next_phase values */
 #define RECOVD_IDLE              0
 #define RECOVD_PREPARING         1
 #define RECOVD_PREPARED          2
 #define RECOVD_RECOVERING        3
 #define RECOVD_RECOVERED         4
+#define RECOVD_FAILED            5
 
-/* recovd_flags bits */
-#define RECOVD_STOPPING          1  /* how cleanup tells recovd to quit */
-#define RECOVD_STOPPED           2  /* after recovd has stopped */
-#define RECOVD_FAILED            4  /* the current recovery has failed */
+/* recovd_state values */
+#define RECOVD_READY             1
+#define RECOVD_STOPPING          2  /* how cleanup tells recovd to quit */
+#define RECOVD_STOPPED           4  /* after recovd has stopped */
 
 #define PTLRPC_RECOVD_PHASE_PREPARE  1
 #define PTLRPC_RECOVD_PHASE_RECOVER  2
@@ -33,6 +34,9 @@ struct recovd_data {
         struct list_head     rd_managed_chain;
         ptlrpc_recovery_cb_t rd_recover;
         struct recovd_obd   *rd_recovd;
+        __u32                rd_phase;
+        __u32                rd_next_phase;
+        __u32                rd_flags;
 };
 
 void recovd_conn_fail(struct ptlrpc_connection *conn);
