@@ -158,7 +158,7 @@
 -		if (inode->i_op->follow_link) {
 -			err = do_follow_link(dentry, nd);
 +		if (inode->i_op->follow_link || inode->i_op->follow_link2) {
-+			err = do_follow_link(dentry, nd, it);
++			err = do_follow_link(dentry, nd, NULL);
  			dput(dentry);
  			if (err)
  				goto return_err;
