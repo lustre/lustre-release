@@ -201,14 +201,6 @@ static int new_connection(void *z)
     return(1);
 }
 
-/* FIXME assuming little endian, cleanup!! */
-#define __cpu_to_le64(x) ((__u64)(x))
-#define __le64_to_cpu(x) ((__u64)(x))
-#define __cpu_to_le32(x) ((__u32)(x))
-#define __le32_to_cpu(x) ((__u32)(x))
-#define __cpu_to_le16(x) ((__u16)(x))
-#define __le16_to_cpu(x) ((__u16)(x))
-
 extern ptl_nid_t tcpnal_mynid;
 
 int
@@ -221,15 +213,15 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
         memset (&hdr, 0, sizeof (hdr));
-        hmv->magic         = __cpu_to_le32 (PORTALS_PROTO_MAGIC);
-        hmv->version_major = __cpu_to_le32 (PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor = __cpu_to_le32 (PORTALS_PROTO_VERSION_MINOR);
+        hmv->magic         = cpu_to_le32(PORTALS_PROTO_MAGIC);
+        hmv->version_major = cpu_to_le32(PORTALS_PROTO_VERSION_MAJOR);
+        hmv->version_minor = cpu_to_le32(PORTALS_PROTO_VERSION_MINOR);
         
-        hdr.src_nid = __cpu_to_le64 (tcpnal_mynid);
-        hdr.type    = __cpu_to_le32 (PTL_MSG_HELLO);
+        hdr.src_nid = cpu_to_le64(tcpnal_mynid);
+        hdr.type    = cpu_to_le32(PTL_MSG_HELLO);
 
-        hdr.msg.hello.type = __cpu_to_le32 (type);
-        hdr.msg.hello.incarnation = __cpu_to_le64(incarnation);
+        hdr.msg.hello.type = cpu_to_le32(type);
+        hdr.msg.hello.incarnation = cpu_to_le64(incarnation);
 
         /* Assume sufficient socket buffering for this message */
         rc = syscall(SYS_write, sockfd, &hdr, sizeof(hdr));
@@ -244,18 +236,18 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
                 return (rc);
         }
         
-        if (hmv->magic != __le32_to_cpu (PORTALS_PROTO_MAGIC)) {
+        if (hmv->magic != le32_to_cpu(PORTALS_PROTO_MAGIC)) {
                 CERROR ("Bad magic %#08x (%#08x expected) from "LPX64"\n",
-                        __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, *nid);
+                        cpu_to_le32(hmv->magic), PORTALS_PROTO_MAGIC, *nid);
                 return (-EPROTO);
         }
 
-        if (hmv->version_major != __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
-            hmv->version_minor != __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
+        if (hmv->version_major != cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
+            hmv->version_minor != cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
                         " from "LPX64"\n",
-                        __le16_to_cpu (hmv->version_major),
-                        __le16_to_cpu (hmv->version_minor),
+                        le16_to_cpu (hmv->version_major),
+                        le16_to_cpu (hmv->version_minor),
                         PORTALS_PROTO_VERSION_MAJOR,
                         PORTALS_PROTO_VERSION_MINOR,
                         *nid);
@@ -276,25 +268,25 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         }
 
         /* ...and check we got what we expected */
-        if (hdr.type != __cpu_to_le32 (PTL_MSG_HELLO) ||
-            hdr.payload_length != __cpu_to_le32 (0)) {
+        if (hdr.type != cpu_to_le32 (PTL_MSG_HELLO) ||
+            hdr.payload_length != cpu_to_le32 (0)) {
                 CERROR ("Expecting a HELLO hdr with 0 payload,"
                         " but got type %d with %d payload from "LPX64"\n",
-                        __le32_to_cpu (hdr.type),
-                        __le32_to_cpu (hdr.payload_length), *nid);
+                        le32_to_cpu (hdr.type),
+                        le32_to_cpu (hdr.payload_length), *nid);
                 return (-EPROTO);
         }
 
-        if (__le64_to_cpu(hdr.src_nid) == PTL_NID_ANY) {
+        if (le64_to_cpu(hdr.src_nid) == PTL_NID_ANY) {
                 CERROR("Expecting a HELLO hdr with a NID, but got PTL_NID_ANY\n");
                 return (-EPROTO);
         }
 
         if (*nid == PTL_NID_ANY) {              /* don't know peer's nid yet */
-                *nid = __le64_to_cpu(hdr.src_nid);
-        } else if (*nid != __le64_to_cpu (hdr.src_nid)) {
+                *nid = le64_to_cpu(hdr.src_nid);
+        } else if (*nid != le64_to_cpu (hdr.src_nid)) {
                 CERROR ("Connected to nid "LPX64", but expecting "LPX64"\n",
-                        __le64_to_cpu (hdr.src_nid), *nid);
+                        le64_to_cpu (hdr.src_nid), *nid);
                 return (-EPROTO);
         }
 
