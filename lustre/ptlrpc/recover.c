@@ -40,7 +40,6 @@ int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
         /*
-
          * This address is the export that represents our client-side LDLM
          * service (for ASTs).  We should only have one on this list, so we
          * just grab the first one.
