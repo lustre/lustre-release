@@ -111,12 +111,10 @@ void obdfs_cleanup_pgrqcache(void)
 {
 	ENTRY;
 	if (obdfs_pgrq_cachep != NULL) {
-		/*
-		CDEBUG(D_INODE, "shrinking obdfs_pgrqcache at %p\n",
+		CDEBUG(D_INODE, "destroying obdfs_pgrqcache at %p\n",
 		       obdfs_pgrq_cachep);
-		if (kmem_cache_shrink(obdfs_pgrq_cachep))
+		if (kmem_cache_destroy(obdfs_pgrq_cachep))
 			printk(KERN_INFO "obd_cleanup_pgrqcache: unable to free all of cache\n");
-		*/
 	} else
 		printk(KERN_INFO "obd_cleanup_pgrqcache: called with NULL cache pointer\n");
 

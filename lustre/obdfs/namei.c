@@ -446,7 +446,7 @@ static void show_dentry(struct list_head * dlist, int subdirs)
 #endif
 
 
-struct inode *obdfs_new_inode(struct inode *dir)
+static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 {
 	struct obdo *oa;
 	struct inode *inode;
@@ -458,6 +458,10 @@ struct inode *obdfs_new_inode(struct inode *dir)
 		EXIT;
 		return ERR_PTR(-ENOMEM);
 	}
+
+	/* Send a hint to the create method on the type of file created */
+	oa->o_mode = mode;
+	oa->o_valid |= OBD_MD_FLMODE;
 
 	err = IOPS(dir, create)(IID(dir), oa);
 
@@ -475,6 +479,8 @@ struct inode *obdfs_new_inode(struct inode *dir)
 		EXIT;
 		return ERR_PTR(-EIO);
 	}
+
+	inode->i_mode = mode; /* XXX not sure if we need this or iget does it */
 
 	if (!list_empty(&inode->i_dentry)) {
 		CDEBUG(D_INODE, "New inode (%ld) has aliases!\n", inode->i_ino);
@@ -509,14 +515,13 @@ int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 	int err = -EIO;
 
         ENTRY;
-	inode = obdfs_new_inode(dir);
+	inode = obdfs_new_inode(dir, mode);
 	if ( IS_ERR(inode) ) {
 		EXIT;
 		return PTR_ERR(inode);
 	}
 
 	inode->i_op = &obdfs_file_inode_operations;
-	inode->i_mode = mode;
 	mark_inode_dirty(inode);
 	page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
 	if (!page) {
@@ -548,7 +553,7 @@ int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 
         ENTRY;
 
-	inode = obdfs_new_inode(dir);
+	inode = obdfs_new_inode(dir, mode);
 	if ( IS_ERR(inode) ) {
 		EXIT;
 		return PTR_ERR(inode);
@@ -593,7 +598,11 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	if (dir->i_nlink >= EXT2_LINK_MAX)
 		goto out;
 
-	inode = obdfs_new_inode(dir);
+	mode |= S_IFDIR;
+	if (dir->i_mode & S_ISGID)
+		mode |= S_ISGID;
+
+	inode = obdfs_new_inode(dir, mode);
 	if ( IS_ERR(inode) ) {
 		EXIT;
 		return PTR_ERR(inode);
@@ -632,9 +641,6 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	page_cache_release(inode_page);
 
 	inode->i_nlink = 2;
-	inode->i_mode = S_IFDIR | mode;
-	if (dir->i_mode & S_ISGID)
-		inode->i_mode |= S_ISGID;
 	mark_inode_dirty(inode);
 
 	/* now deal with the parent */
@@ -856,19 +862,19 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry,
 	char c;
 
         ENTRY;
-	inode = obdfs_new_inode(dir);
-	oinfo = OBDFS_INFO(inode);
+	inode = obdfs_new_inode(dir, S_IFLNK | S_IRWXUGO);
 	if ( IS_ERR(inode) ) {
 		EXIT;
 		return PTR_ERR(inode);
 	}
 
-	inode->i_mode = S_IFLNK | S_IRWXUGO;
 	inode->i_op = &obdfs_symlink_inode_operations;
 	for (l = 0; l < inode->i_sb->s_blocksize - 1 && symname [l]; l++)
 		;
 
-	if (l >= sizeof(OBDFS_INFO(inode)->oi_inline)) {
+	oinfo = OBDFS_INFO(inode);
+
+	if (l >= sizeof(oinfo->oi_inline)) {
 		CDEBUG(D_INODE, "l=%d, normal symlink\n", l);
 
 		name_page = obdfs_getpage(inode, 0, 1, LOCKED);
@@ -901,7 +907,8 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry,
 	inode->i_size = i;
 	mark_inode_dirty(inode);
 
-	page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
+	page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len,
+				&de, &err);
 	if (!page)
 		goto out_no_entry;
 	de->inode = cpu_to_le32(inode->i_ino);

@@ -358,7 +358,6 @@ sub Device {
 }
 
 
-
 sub Attach {
     my $err = 0;
     my $type = shift;
@@ -412,6 +411,7 @@ usage:
     }
 }
 
+
 sub Detach {
     my $err = 0;
     my $data = "";
@@ -441,7 +441,6 @@ sub TestExt2Iterator {
 
     my $len = length($type);
     my $cl = length($data);
-    my $add = pack("p", $data);
     print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
 
@@ -471,7 +470,6 @@ sub SnapDelete {
 
     my $len = length($type);
     my $cl = length($data);
-    my $add = pack("p", $data);
     print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
 
@@ -591,7 +589,6 @@ sub SnapPrint {
 
     my $len = length($type);
     my $cl = length($data);
-    my $add = pack("p", $data);
     print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
 
@@ -632,13 +629,13 @@ sub SnapSetTable {
     $data = pack("ii", $snaptableno, $snapcount);
     $datalen = 2 * 4;
     foreach my $time (sort keys %{$table}) {
+	# XXX we should change to pack LL instead of I for times
 	$data .= pack("Ii", $time, $table->{$time});
 	$datalen += 8;
     }
 
     my $len = length($type);
     my $cl = length($data);
-    my $add = pack("p", $data);
     print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
 
@@ -755,15 +752,18 @@ sub WriteSnapShotTable {
 
 sub Copy {
     my $err = 0;
-    my $srcid = shift;
-    my $dstid = shift;
+    my $src_obdo;
+    my $dst_obdo;
 
     # Note: _copy IOCTL takes parameters as dst, src.
     #       Copy function takes parameters as src, dst.
-    my $data = pack("III", $::client_id, $dstid, $srcid);
-    my $datalen = 12;
+    $src_obdo->{id} = shift;
+    $dst_obdo->{id} = shift;
+    $src_obdo->{valid} = &OBD_MD_FLALL;
 
-    my $packed = pack("ip", $datalen, $data);
+    # XXX need to fix copy so we can have 2 client IDs here
+    my $packed = pack("L", $::client_id) . obdo_pack($dst_obdo) . pack("L", $::client_id) . obdo_pack($src_obdo);
+
     my $rc = ioctl(DEV_OBD, &OBD_IOC_COPY, $packed);
 
     if (!defined $rc) {
@@ -777,15 +777,16 @@ sub Copy {
 
 sub Migrate {
     my $err = 0;
-    my $srcid = shift;
-    my $dstid = shift;
 
     # Note: _migr IOCTL takes parameters as dst, src.
     #       Migrate function takes parameters as src, dst.
-    my $data = pack("III", $::client_id, $dstid, $srcid);
-    my $datalen = 12;
+    $src_obdo->{id} = shift;
+    $dst_obdo->{id} = shift;
+    $src_obdo->{valid} = &OBD_MD_FLALL;
 
-    my $packed = pack("ip", $datalen, $data);
+    # We pack a dummy connection ID here
+    my $packed = pack("L", $::client_id) . obdo_pack($dst_obdo) . pack("L", $::client_id) . obdo_pack($src_obdo);
+
     my $rc = ioctl(DEV_OBD, &OBD_IOC_MIGR, $packed);
 
     if (!defined $rc) {
@@ -1017,20 +1018,19 @@ sub Getattr {
 	return;
     }
 
-    my $inode = shift;
+    my $id = shift;
 
-    if (!defined($inode) || scalar($inode) < 1) {
+    if (!defined($id) || scalar($id) < 1) {
 	print "invalid arguments; type \"help getattr\" for a synopsis\n";
 	return;
     }
 
     # see Setattr
     my $obdo;
-    $obdo->{id} = $inode;
+    $obdo->{id} = $id;
     $obdo->{valid} = &OBD_MD_FLALL;
     my $packed = pack("L", $::client_id) . obdo_pack($obdo);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_GETATTR, $packed);
-
     
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
@@ -1048,16 +1048,16 @@ sub Setattr {
 	return;
     }
 
-    my $inode = shift;
+    my $id = shift;
 
-    if (!defined($inode) || scalar($inode) < 1) {
+    if (!defined($id) || scalar($id) < 1) {
 	print "invalid arguments; type \"help setattr\" for a synopsis\n";
 	return;
     }
 
     # XXX we do not currently set all of the fields in the obdo
     my $obdo;
-    $obdo->{id} = $inode;
+    $obdo->{id} = $id;
     $obdo->{mode} = oct(shift);
     $obdo->{uid} = shift;
     $obdo->{gid} = shift;

@@ -60,11 +60,9 @@ void obd_cleanup_obdo_cache(void)
 {
 	ENTRY;
 	if (obdo_cachep != NULL) {
-		/*
-		CDEBUG(D_INODE, "shrinking obdo_cache at %p\n", obdo_cachep);
-		if (kmem_cache_shrink(obdo_cachep))
+		CDEBUG(D_INODE, "destroying obdo_cache at %p\n", obdo_cachep);
+		if (kmem_cache_destroy(obdo_cachep))
 			printk(KERN_INFO "obd_cleanup_obdo_cache: unable to free all of cache\n");
-		*/
 	} else
 		printk(KERN_INFO "obd_cleanup_obdo_cache: called with NULL cache pointer\n");
 

@@ -156,8 +156,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 {
 	struct obd_device *obddev;
 	/* NOTE this must be larger than any of the ioctl data structs */
-	char buff[1024];
-	void *karg = buff;
+	char buf[1024];
+	void *tmp_buf = buf;
 	struct obd_conn conn;
 	int err, dev;
 	long int cli_id; /* connect, disconnect */
@@ -176,7 +176,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		return -EINVAL;
 	case OBD_IOC_ATTACH: {
 		struct obd_type *type;
-		struct oic_generic *input = karg;
+		struct oic_generic *input = tmp_buf;
 
 		ENTRY;
 		/* have we attached a type to this device */
@@ -290,7 +290,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			int setup_datalen;
 			void *setup_data;
 		} *setup;
-		setup = karg;
+		setup = tmp_buf;
 
 		ENTRY;
 		/* have we attached a type to this device */
@@ -423,7 +423,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		return 0;
 
 	case OBD_IOC_SYNC: {
-		struct oic_range_s *range = karg;
+		struct oic_range_s *range = tmp_buf;
 
 		if (!obddev->obd_type)
 			return -ENODEV;
@@ -453,7 +453,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		return put_user(err, (int *) arg);
 	}
 	case OBD_IOC_CREATE: {
-		struct oic_attr_s *attr = karg;
+		struct oic_attr_s *attr = tmp_buf;
 
 		err = copy_from_user(attr, (const void *)arg,  sizeof(*attr));
 		if (err) {
@@ -484,7 +484,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	}
 
 	case OBD_IOC_DESTROY: {
-		struct oic_attr_s *attr = karg;
+		struct oic_attr_s *attr = tmp_buf;
 		
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
@@ -506,7 +506,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	}
 
 	case OBD_IOC_SETATTR: {
-		struct oic_attr_s *attr = karg;
+		struct oic_attr_s *attr = tmp_buf;
 
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
@@ -526,7 +526,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	}
 
 	case OBD_IOC_GETATTR: {
-		struct oic_attr_s *attr = karg;
+		struct oic_attr_s *attr = tmp_buf;
 
 		err = copy_from_user(attr, (int *)arg, sizeof(*attr));
 		if (err)
@@ -546,7 +546,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 	case OBD_IOC_READ: {
 		int err;
-		struct oic_rw_s *rw_s = karg;  /* read, write ioctl str */
+		struct oic_rw_s *rw_s = tmp_buf;  /* read, write ioctl str */
 
 		err = copy_from_user(rw_s, (int *)arg, sizeof(*rw_s));
 		if ( err ) {
@@ -575,7 +575,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	}
 
 	case OBD_IOC_WRITE: {
-		struct oic_rw_s *rw_s = karg;  /* read, write ioctl str */
+		struct oic_rw_s *rw_s = tmp_buf;  /* read, write ioctl str */
 
 		err = copy_from_user(rw_s, (int *)arg, sizeof(*rw_s));
 		if ( err ) {
@@ -602,7 +602,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		return err;
 	}
 	case OBD_IOC_PREALLOCATE: {
-		struct oic_prealloc_s *prealloc = karg;
+		struct oic_prealloc_s *prealloc = tmp_buf;
 
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
@@ -660,7 +660,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		
 	}
 	case OBD_IOC_COPY: {
-		struct ioc_mv_s *mvdata = karg;
+		struct ioc_mv_s *mvdata = tmp_buf;
 
 		if ( (!(obddev->obd_flags & OBD_SET_UP)) ||
 		     (!(obddev->obd_flags & OBD_ATTACHED))) {
@@ -692,7 +692,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	}
 
 	case OBD_IOC_MIGR: {
-		struct ioc_mv_s *mvdata = karg;
+		struct ioc_mv_s *mvdata = tmp_buf;
 
 		if ( (!(obddev->obd_flags & OBD_SET_UP)) ||
 		     (!(obddev->obd_flags & OBD_ATTACHED))) {
@@ -706,7 +706,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return err;
 		}
 
-		CDEBUG(D_IOCTL, "Migrate copying %d\n", sizeof(*mvdata));
+		CDEBUG(D_IOCTL, "Migrate copying %d bytes\n", sizeof(*mvdata));
 
 		if ( !OBT(obddev) || !OBP(obddev, migrate) )
 			return -EOPNOTSUPP;
@@ -718,7 +718,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		conn.oc_id = mvdata->src_conn_id;
 		err = OBP(obddev, migrate)(&conn, &mvdata->dst, &mvdata->src, 
-					   mvdata->dst.o_size, 0);
+					   mvdata->src.o_size, 0);
 
 		return err;
 	}
@@ -761,7 +761,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		/* get the generic data */
 		karg = input.att_data;
-		err = getdata(input.att_datalen, karg);
+		err = getdata(input.att_datalen, &karg);
 		if ( err ) {
 			EXIT;
 			return err;

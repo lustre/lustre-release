@@ -7,7 +7,9 @@ OBDDIR="`dirname $0`/.."
 
 [ ! -d $MNTOBD/lost+found ] && $OBDDIR/demos/obdfssetup.sh
 
-echo "yesterday" > $MNTOBD/hello	# create a file
-echo "testing" > $MNTOBD/goodbye	# create a file
-ln -s hello $MNTOBD/link		# create a symbolic link
-cd $MNTOBD ; touch a b c ; cd -		# create a file
+echo "echo yesterday >> $MNTOBD/hello"	# create a file
+echo "yesterday" > $MNTOBD/hello
+echo "echo testing > $MNTOBD/goodbye"	# create a file
+echo "testing" > $MNTOBD/goodbye
+plog ln -s hello $MNTOBD/link		# create a symbolic link
+cd $MNTOBD ; plog touch a b c ; cd -		# create a file

@@ -440,11 +440,11 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
  *  ======== OBD IOCL Declarations ===========
  */
 struct oic_generic {
-	int  att_connid;
-	int  att_typelen;
-	void *att_type;
-	int  att_datalen;
-	void *att_data;
+	long	 att_connid;
+	int	 att_typelen;
+	void	*att_type;
+	int	 att_datalen;
+	void	*att_data;
 };
 
 

@@ -7,12 +7,6 @@ OBDDIR="`dirname $0`/.."
 
 
 # prepare the snapshot drive with a file to be COW'd
-mount | grep "$MNTOBD " > /dev/null 2>&1
-if [ x$? = x0 ]; then 
-    echo "Stuff still mounted on $MNTOBD; clean up first."
-    exit 
-fi
-
 if [ ! -d /mnt/obd/lost+found ]; then 
     $OBDDIR/demos/obdfssetup.sh
     if [ x$? != x0 ]; then 
@@ -29,9 +23,9 @@ if [ ! -f $MNTOBD/hello ]; then
     fi
 fi
 
-umount $MNTOBD
+plog umount $MNTOBD
 
-insmod $OBDDIR/snap/obdsnap.o
+plog insmod $OBDDIR/snap/obdsnap.o
 
 rm -f $SNAPTABLE
 
