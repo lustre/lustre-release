@@ -28,7 +28,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define __spec_install_post /usr/lib/rpm/brp-compress || :
 #
 # RPM foo magic
-%define _missing_doc_files_terminate_build    0
+%define _missing_doc_files_terminate_build 0
 %define _unpackaged_files_terminate_build 0
 %define debug_package %{nil}
 
@@ -51,6 +51,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define buildjensen 0
 %define buildsmp 0
 %define buildbigsmp 0
+%define buildpseries64 0
 %define buildup 0
 %define buildsrc 0
 
@@ -78,6 +79,10 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define buildbigsmp 1
 %endif
 
+%ifarch @PSERIES64_ARCHS@
+%define buildpseries64 1
+%endif
+
 %ifarch @UP_ARCHS@
 %define buildup 1
 %endif
@@ -88,6 +93,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define buildbigsmp 0
 %define buildBOOT 0
 %define buildbigmem 0
+%define buildpseries64 0
 %define buildjensen 0
 %endif
 
@@ -105,6 +111,7 @@ Second, per-architecture exclusions (ifarch)
 %{expand: %%define buildup_%{buildup} yadda}
 %{expand: %%define buildsmp_%{buildsmp} yadda}
 %{expand: %%define buildbigsmp_%{buildbigsmp} yadda}
+%{expand: %%define buildpseries64_%{buildpseries64} yadda}
 %{expand: %%define buildBOOT_%{buildBOOT} yadda}
 %{expand: %%define buildbigmem_%{buildbigmem} yadda}
 %{expand: %%define buildjensen_%{buildjensen} yadda}
@@ -133,6 +140,9 @@ Second, per-architecture exclusions (ifarch)
 %define kernel_glob vmlinuz-%{KVERREL}
 %endif
 %ifarch alpha
+%define kernel_glob vmlinu?-%{KVERREL}
+%endif
+%ifarch ppc ppc64
 %define kernel_glob vmlinu?-%{KVERREL}
 %endif
 
@@ -248,6 +258,25 @@ work fine on single-CPU boxes.
 
 Install the kernel-bigsmp package if your machine uses two or more CPUs.
 
+%package pseries64
+Summary: Standard Kernel for 64-bit Power based SMP and LPAR Machines
+Group: System/Kernel
+Provides: module-info, kernel = %{version}, k_smp4G
+%ifarch %{all_x86} ia64 x86_64
+Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
+%endif
+%if %{rhbuild}
+Prereq: %{kernel_prereq}
+Conflicts: %{kernel_conflicts}
+%endif
+
+%description pseries64
+The standard kernel for Power3, Power4 and PowerPC 970 64-bit SMP
+machines.
+
+This kernel can be used for all 64bit RS/6000, pSeries and JS20
+machines.
+
 %package bigmem
 Summary: The Linux Kernel for machines with more than 4 Gigabyte of memory.
 Group: System Environment/Kernel
@@ -355,7 +384,7 @@ sh -x ./build/lmake \
 popd >/dev/null
 
 # handle both SuSE and Red Hat's new-kernel-pkg bits
-for flavor in "" smp bigmem bigsmp BOOT jensen ; do
+for flavor in "" smp bigmem bigsmp pseries64 BOOT jensen ; do
 	for when in pre preun post postun ; do
 		script="${when}${flavor}.sh"
 		echo "if [ -f /etc/SuSE-release ] ; then" > ${script}
@@ -541,6 +570,10 @@ BuildKernel smp
 BuildKernel bigsmp
 %endif
 
+%if %{buildpseries64}
+BuildKernel pseries64
+%endif
+
 %if %{buildup}
 BuildKernel
 %endif
@@ -591,8 +624,11 @@ BuildObj ()
    	    fi
         done
 	MAKE="make -s O=$o -C ${c}"
-	$MAKE $OLDCONFIG
-	$MAKE prepare-all
+	if [ "$CC" ] ; then
+	    MAKE_CC="CC=$CC"
+	fi
+	$MAKE "$MAKE_CC" $OLDCONFIG
+	$MAKE "$MAKE_CC" prepare-all
 	$MAKE clean
 	rm -rf $o/.config.old $o/include/config
         # Replace the Makefile in the object directory with a version
@@ -645,6 +681,9 @@ if [ "%{buildbase}" -ne 0 ] ; then
 	if [ "%{buildbigsmp}" -ne 0 ] ; then
 	    BuildObj bigsmp
         fi
+	if [ "%{buildpseries64}" -ne 0 ] ; then
+	    BuildObj pseries64
+        fi
         if [ "%{buildup}" -ne 0 ] ; then
 	    BuildObj up
         fi
@@ -664,9 +703,12 @@ if [ "%{buildbase}" -ne 0 ] ; then
 		break
    	    fi
         done
-        make -s $OLDCONFIG -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
-        make -s symlinks -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
-        make -s include/linux/version.h -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
+	if [ "$CC" ] ; then
+	    MAKE_CC="CC=$CC"
+	fi
+        make "$MAKE_CC" -s $OLDCONFIG -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
+        make "$MAKE_CC" -s symlinks -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
+        make "$MAKE_CC" -s include/linux/version.h -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 
         #this generates modversions info which we want to include and we may as
         #well include the depends stuff as well, after we fix the paths
@@ -700,7 +742,7 @@ EOF
         install -m 644 %{SOURCE15} rhconfig.h
         echo "#include <linux/rhconfig.h>" >> version.h
         keyword=if
-        for i in smp BOOT BOOTsmp bigmem bigsmp up ; do
+        for i in smp BOOT BOOTsmp bigmem bigsmp pseries64 up ; do
             # When we build in an i386, we don't have an bigmem header directory
             # in savedheaders/i386/bigmem.  We also don't have a BOOT directory
             # anywhere except in savedheaders/i386.  So, we need to use this method
@@ -762,9 +804,13 @@ rm -rf $RPM_BUILD_ROOT
 
 %pre bigsmp -f prebigsmp.sh
 
+%pre pseries64 -f prepseries64.sh
+
 %pre bigmem -f prebigmem.sh
 
 %post -f post.sh
+
+%post pseries64 -f postpseries64.sh
 
 %post smp -f postsmp.sh
 
@@ -794,6 +840,8 @@ fi
 # Allow clean removal of modules directory
 %preun -f preun.sh
 
+%preun pseries64 -f preunpseries64.sh
+
 %preun smp -f preunsmp.sh
 
 %preun bigsmp -f preunbigsmp.sh
@@ -806,6 +854,8 @@ fi
 
 # suse needs these i guess
 %postun -f postun.sh
+
+%postun pseries64 -f postunpseries64.sh
 
 %postun smp -f postunsmp.sh
 
@@ -826,6 +876,9 @@ fi
 [ -x /usr/sbin/module_upgrade ] && /usr/sbin/module_upgrade || :
 
 %triggerin bigsmp -- kudzu
+[ -x /usr/sbin/module_upgrade ] && /usr/sbin/module_upgrade || :
+
+%triggerin pseries64 -- kudzu
 [ -x /usr/sbin/module_upgrade ] && /usr/sbin/module_upgrade || :
 
 %triggerin bigmem -- kudzu
@@ -883,6 +936,10 @@ fi
 %files bigsmp -f kernelbigsmp.files
 %endif
 
+%if %{buildpseries64}
+%files bigsmp -f kernelpseries64.files
+%endif
+
 %if %{buildbigmem}
 %files bigmem -f kernelbigmem.files
 %endif
@@ -901,7 +958,7 @@ fi
 
 %files -n lustre-lite-utils
 %defattr(-, root, root)
-%doc lustre/COPYING lustre/BUGS lustre/ChangeLog lustre/README lustre/doc/lustre.pdf
+%doc lustre/COPYING lustre/lustre/BUGS lustre/ChangeLog lustre/README lustre/lustre/doc/lustre.pdf
 /sbin/*
 /usr/sbin/*
 /usr/bin/*

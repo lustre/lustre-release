@@ -33,6 +33,7 @@ BOOT_ARCHS=
 JENSEN_ARCHS=
 SMP_ARCHS=
 BIGSMP_ARCHS=
+PSERIES64_ARCHS=
 UP_ARCHS=
 
 RHBUILD=0
@@ -295,7 +296,7 @@ set_make()
 {
     MAKE="make -s"
     if [ "$CC" ] ; then
-	MAKE="$MAKE CC=$CC"
+	MAKE_CC="CC=$CC"
     fi
     if [ "$ARCH" ] ; then
 	MAKE_ARCH="$MAKE ARCH=$ARCH"
@@ -321,24 +322,24 @@ depend_kernel()
     echo "Overriding EXTRAVERSION in kernel..."
     perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -${EXTRA_VERSION}${TARGET_CONFIG}/" Makefile
     echo "Making depend in $PWD..."
-    $MAKE mrproper || fatal 1 "Error running make mrproper"
+    $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
     cp "$CONFIG_FILE" .config
     for oc in oldconfig_nonint silentoldconfig oldconfig ; do
 	if grep -q "$oc" Makefile ; then
-	    $MAKE $oc || fatal 1 "Error running make oldconfig"
+	    $MAKE "$MAKE_CC" $oc || fatal 1 "Error running make oldconfig"
 	    break
 	fi
     done
     case "$VERSION" in
 	2.6*)
-            $MAKE include/asm
+            $MAKE "$MAKE_CC" include/asm
             ;;
         2.4*)
-	    $MAKE symlinks
-	    $MAKE dep || fatal 1 "Error running make dep"
+	    $MAKE "$MAKE_CC" symlinks
+	    $MAKE "$MAKE_CC" dep || fatal 1 "Error running make dep"
 	    ;;
     esac
-    $MAKE include/linux/version.h || fatal 1 "Error making include/linux/version.h"
+    $MAKE "$MAKE_CC" include/linux/version.h || fatal 1 "Error making include/linux/version.h"
 }
 
 build_kernel()
@@ -348,16 +349,16 @@ build_kernel()
     echo "Building kernel in $PWD..."
     case "$TARGET_ARCH" in
 	i386 | i586 | i686 | athlon | x86_64)
-	    $MAKE_J bzImage || fatal 1 "Error making bzImage."
+	    $MAKE_J "$MAKE_CC" bzImage || fatal 1 "Error making bzImage."
 	    ;;
         ppc | ppc64)
-	    $MAKE_J vmlinux || fatal 1 "Error making vmlinux."
+	    $MAKE_J "$MAKE_CC" vmlinux || fatal 1 "Error making vmlinux."
 	    ;;
 	*)
-	    $MAKE_J boot || fatal 1 "Error making boot."
+	    $MAKE_J "$MAKE_CC" boot || fatal 1 "Error making boot."
 	    ;;
     esac
-    $MAKE_J modules || fatal 1 "Error building modules."
+    $MAKE_J "$MAKE_CC" modules || fatal 1 "Error building modules."
 
     popd >/dev/null
 }
@@ -378,7 +379,7 @@ build_lustre()
     (( $BUILD_LUSTRE )) || return 0
     set_make
     pushd "$TOPDIR" >/dev/null
-    $MAKE_J || fatal 1 "Error building Lustre."
+    $MAKE_J "$MAKE_CC" || fatal 1 "Error building Lustre."
     popd >/dev/null
 }
 
@@ -397,7 +398,7 @@ install_kernel()
     mkdir -p "$DESTDIR/dev/shm"
     mkdir -p "$DESTDIR/lib/modules/${FULL_VERSION}"
 
-    $MAKE INSTALL_MOD_PATH="$DESTDIR" KERNELRELEASE="$FULL_VERSION" \
+    $MAKE "$MAKE_CC" INSTALL_MOD_PATH="$DESTDIR" KERNELRELEASE="$FULL_VERSION" \
 	-s modules_install || \
 	fatal 1 "Error installing modules."
 
@@ -445,7 +446,7 @@ install_lustre()
     set_make
     FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null
-    $MAKE -s install "DESTDIR=$DESTDIR" KERNELRELEASE="$FULL_VERSION" || fatal 1 "Error installing Lustre."
+    $MAKE "$MAKE_CC" -s install "DESTDIR=$DESTDIR" KERNELRELEASE="$FULL_VERSION" || fatal 1 "Error installing Lustre."
     popd >/dev/null
 }
 
@@ -462,7 +463,7 @@ build_kms()
 	    build_dir="${TOPDIR}/modules-${FULL_VERSION}/${dir##*/}"
 	    cp -a $dir $build_dir
 	    # these modules are terrible, and don't all build
-	    $MAKE_J -C $build_dir modules KERNEL_SOURCE="${TOPDIR}/linux"
+	    $MAKE_J "$MAKE_CC" -C $build_dir modules KERNEL_SOURCE="${TOPDIR}/linux"
 	fi
     done
 }
@@ -483,7 +484,7 @@ install_kms()
     for build_dir in "${TOPDIR}/modules-${FULL_VERSION}/*" ; do
 	[ -d $build_dir ] || continue
         # these modules are terrible, and don't all build
-	$MAKE -C $build_dir KERNEL_SOURCE="${TOPDIR}/linux" INSTALL_MOD_PATH="$DESTDIR" 
+	$MAKE "$MAKE_CC" -C $build_dir KERNEL_SOURCE="${TOPDIR}/linux" INSTALL_MOD_PATH="$DESTDIR" 
     done
     (   symver vmlinux
 	moddir="${DESTDIR}/lib/modules/${FULL_VERSION}"
@@ -542,6 +543,9 @@ save_all_headers()
 
     for arch in $BIGSMP_ARCHS ; do
 	save_headers bigsmp $arch
+    done
+    for arch in $PSERIES64_ARCHS ; do
+	save_headers pseries64 $arch
     done
     for arch in $UP_ARCHS ; do
 	save_headers up $arch
