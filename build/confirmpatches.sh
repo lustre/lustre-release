@@ -1,6 +1,6 @@
 SERIESPATH=./series
 PATCHESPATH=./patches
-for SERIES in `ls $SERIESPATH | grep -v CVS` ; do
+for SERIES in `ls $SERIESPATH | egrep -v "CVS|~$|.orig"` ; do
 	#echo $SERIES
 	for PATCH in `cat $SERIESPATH/$SERIES`; do
 		#echo $PATCH
