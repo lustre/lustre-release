@@ -136,7 +136,7 @@ pass
 $CLEAN
 $START
 
-echo '== mkdir .../d7; mcreate .../d7/f2; chmod .../d7/f2 = test 7b'
+echo '== mkdir .../d7; mcreate .../d7/f2; echo foo > .../d7/f2 = test 7b'
 $MCREATE $DIR/d7/f2
 echo -n foo > $DIR/d7/f2
 [ "`cat $DIR/d7/f2`" = "foo" ] || error
@@ -520,13 +520,13 @@ $CREATETEST $DIR/d28/ct || error
 pass
 
 echo '== IT_GETATTR regression  ======================== test29'
-mkdir $MOUNT/d29
-touch $MOUNT/d29/foo
-ls -l $MOUNT/d29
-MDCDIR=${MDCDIR:-/proc/fs/lustre/ldlm/ldlm/MDC_MNT_localhost_mds1}
+mkdir $DIR/d29
+touch $DIR/d29/foo
+ls -l $DIR/d29
+MDCDIR=${MDCDIR:-/proc/fs/lustre/ldlm/ldlm/MDC_*}
 LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
 LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
-ls -l $MOUNT/d29
+ls -l $DIR/d29
 LOCKCOUNTCURRENT=`cat $MDCDIR/lock_count`
 LOCKUNUSEDCOUNTCURRENT=`cat $MDCDIR/lock_unused_count`
 if [ $LOCKCOUNTCURRENT -gt $LOCKCOUNTORIG ] || [ $LOCKUNUSEDCOUNTCURRENT -gt $LOCKUNUSEDCOUNTORIG ]; then
@@ -536,8 +536,14 @@ pass
 $CLEAN
 $START
 
+echo '== run binary from Lustre (execve) ======== test30'
+cp `which ls` $DIR
+$DIR/ls /
+$CLEAN
+$START
+
 echo '== cleanup ============================================='
-rm -r $DIR/[Rdfs][1-9]*
+rm -r $DIR/[Rdfs][1-9]* $DIR/ls
 
 echo '======================= finished ======================='
 exit

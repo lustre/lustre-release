@@ -3,8 +3,14 @@
 # the CVS HEAD are allowed.
 set -vxe
 
+[ "$CONFIGS" -a -z "$SANITYN" ] && SANITYN=no
 [ "$CONFIGS" ] || CONFIGS="local lov"
-[ "$THREADS" ] || THREADS=1
+[ "$MAX_THREADS" ] || MAX_THREADS=50
+if [ -z "$THREADS" ]; then
+	KB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
+	THREADS=`expr $KB / 16384`
+	[ $THREADS -gt $MAX_THREADS ] && THREADS=$MAX_THREADS
+fi
 [ "$SIZE" ] || SIZE=20480
 [ "$RSIZE" ] || RSIZE=64
 [ "$UID" ] || UID=1000
@@ -27,13 +33,17 @@ for NAME in $CONFIGS; do
 
 	if [ "$DBENCH" != "no" ]; then
 		mount | grep $MNT || sh llmount.sh
+		SPACE=`df $MNT | tail -1 | awk '{ print $4 }'`
+		DB_THREADS=`expr $SPACE / 50000`
+		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
+
 		$DEBUG_OFF
 		sh rundbench 1
 		sh llmountcleanup.sh
 		sh llrmount.sh
-		if [ $THREADS -gt 1 ]; then
+		if [ $DB_THREADS -gt 1 ]; then
 			$DEBUG_OFF
-			sh rundbench $THREADS
+			sh rundbench $DB_THREADS
 			sh llmountcleanup.sh
 			sh llrmount.sh
 		fi
@@ -58,21 +68,24 @@ for NAME in $CONFIGS; do
 	fi
 	if [ "$IOZONE_DIR" != "no" ]; then
 		mount | grep $MNT || sh llmount.sh
+		SPACE=`df $MNT | tail -1 | awk '{ print $4 }'`
+		IOZ_THREADS=`expr $SPACE / $SIZE`
+		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
+
 		$DEBUG_OFF
 		iozone -I $IOZONE_OPTS $IOZONE_FILE.odir
 		IOZVER=`iozone -v | awk '/Revision:/ { print $3 }' | tr -d '.'`
 		sh llmountcleanup.sh
 		sh llrmount.sh
-		if [ "$THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
+		if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
 			$DEBUG_OFF
 			THREAD=1
 			IOZONE_FILE="-F "
-			SIZE=`expr $SIZE / $THREADS`
-			while [ $THREAD -le $THREADS ]; do
+			while [ $THREAD -le $IOZ_THREADS ]; do
 				IOZONE_FILE="$IOZONE_FILE $MNT/iozone.$THREAD"
 				THREAD=`expr $THREAD + 1`
 			done
-			iozone -I $IOZONE_OPTS -t $THREADS $IOZONE_FILE
+			iozone -I $IOZONE_OPTS -t $IOZ_THREADS $IOZONE_FILE
 			sh llmountcleanup.sh
 			sh llrmount.sh
 		elif [ $IOZVER -lt 3145 ]; then
@@ -90,5 +103,9 @@ for NAME in $CONFIGS; do
 	mount | grep $MNT && sh llmountcleanup.sh
 done
 
-[ "$SANITYN" != "no" ] && NAME=mount2 sh sanityN.sh
-
+if [ "$SANITYN" != "no" ]; then
+	export NAME=mount2
+	mount | grep $MNT || sh llmount.sh
+	sh sanityN.sh
+	mount | grep $MNT && sh llmountcleanup.sh
+fi
