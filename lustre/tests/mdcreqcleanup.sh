@@ -16,7 +16,6 @@ EOF
 rmmod mds
 rmmod osc
 rmmod ost
-rmmod obdext2
 rmmod obdclass
 rmmod ptlrpc
 
