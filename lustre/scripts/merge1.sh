@@ -61,7 +61,7 @@ CHILD=$CHILD
 date=$date
 module=$module
 CONFLICTS=$CONFLICTS
-OPERATION=Merge
+OPERATION=Update
 OPERWHERE=from
 EOF
 
