@@ -128,8 +128,8 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                 ptlrpc_link_svc_me(rqbd);
         }
 
-        CDEBUG(D_NET, "Starting service listening on portal %d\n",
-               service->srv_req_portal);
+        CDEBUG(D_NET, "Starting service listening on portal %d (eq: %p)\n",
+               service->srv_req_portal, service->srv_eq_h.handle_idx);
 
         RETURN(service);
 failed:
@@ -193,7 +193,8 @@ static int handle_incoming_request(struct obd_device *obddev,
                 goto out;
         }
 
-        CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
+        CDEBUG(D_NET, "got req "LPD64" (md: %p + %d)\n", request->rq_xid,
+               event->mem_desc.start, event->offset);
 
         request->rq_peer.peer_nid = event->initiator.nid;
         /* FIXME: this NI should be the incoming NI.
