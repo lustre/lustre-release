@@ -481,8 +481,9 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         }
 
         if (req->rq_export == NULL) {
-                CERROR("lustre_dlm: operation %d with missing/invalid export\n",
-                       req->rq_reqmsg->opc);
+                CERROR("operation %d with bad export (ptl req %d/rep %d)\n",
+                       req->rq_reqmsg->opc, req->rq_request_portal,
+                       req->rq_reply_portal);
                 CERROR("--> export addr: "LPX64", cookie: "LPX64"\n",
                        req->rq_reqmsg->addr, req->rq_reqmsg->cookie);
                 CERROR("--> ignoring this error as a temporary workaround!  "
@@ -523,9 +524,14 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
         }
 
         if (req->rq_export == NULL) {
-                CERROR("lustre_dlm: operation %d with missing/invalid export\n",
-                       req->rq_reqmsg->opc);
-                RETURN(-ENOTCONN);
+                CERROR("operation %d with bad export (ptl req %d/rep %d)\n",
+                       req->rq_reqmsg->opc, req->rq_request_portal,
+                       req->rq_reply_portal);
+                CERROR("--> export addr: "LPX64", cookie: "LPX64"\n",
+                       req->rq_reqmsg->addr, req->rq_reqmsg->cookie);
+                CERROR("--> ignoring this error as a temporary workaround!  "
+                       "beware!\n");
+                //RETURN(-ENOTCONN);
         }
 
         switch (req->rq_reqmsg->opc) {
