@@ -91,10 +91,6 @@ ksocknal_api_forward(nal_t *nal, int id, void *args, size_t args_len,
 int
 ksocknal_api_shutdown(nal_t *nal, int ni)
 {
-        CDEBUG (D_NET, "closing all connections\n");
-
-        ksocknal_del_route (PTL_NID_ANY, 0, 0, 0);
-        ksocknal_close_matching_conns (PTL_NID_ANY, 0);
         return PTL_OK;
 }
 
@@ -276,9 +272,6 @@ ksocknal_create_peer (ptl_nid_t nid)
         INIT_LIST_HEAD (&peer->ksnp_routes);
         INIT_LIST_HEAD (&peer->ksnp_tx_queue);
 
-        /* Can't unload while peers exist; ensures all I/O has terminated
-         * before unload attempts */
-        PORTAL_MODULE_USE;
         atomic_inc (&ksocknal_data.ksnd_npeers);
         return (peer);
 }
@@ -300,7 +293,6 @@ ksocknal_destroy_peer (ksock_peer_t *peer)
          * that _all_ state to do with this peer has been cleaned up when
          * its refcount drops to zero. */
         atomic_dec (&ksocknal_data.ksnd_npeers);
-        PORTAL_MODULE_UNUSE;
 }
 
 void
@@ -1453,7 +1445,28 @@ ksocknal_module_fini (void)
                 /* fall through */
 
         case SOCKNAL_INIT_PTL:
+                /* No more calls to ksocknal_cmd() to create new
+                 * autoroutes/connections since we're being unloaded. */
                 PtlNIFini(ksocknal_ni);
+
+                /* Delete all autoroute entries */
+                ksocknal_del_route(PTL_NID_ANY, 0, 0, 0);
+
+                /* Delete all connections */
+                ksocknal_close_matching_conns (PTL_NID_ANY, 0);
+                
+                /* Wait for all peer state to clean up */
+                i = 2;
+                while (atomic_read (&ksocknal_data.ksnd_npeers) != 0) {
+                        i++;
+                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
+                               "waiting for %d peers to disconnect\n",
+                               atomic_read (&ksocknal_data.ksnd_npeers));
+                        set_current_state (TASK_UNINTERRUPTIBLE);
+                        schedule_timeout (HZ);
+                }
+
+                /* Tell lib we've stopped calling into her. */
                 lib_fini(&ksocknal_lib);
                 /* fall through */
 
