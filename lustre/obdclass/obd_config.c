@@ -472,3 +472,99 @@ out:
         RETURN(err);
 }
 	    
+static int class_config_llog_handler(struct llog_handle * handle,
+                                     struct llog_rec_hdr *rec, void *data)
+{
+        struct config_llog_instance *cfg = data;
+        int cfg_len = rec->lrh_len;
+        char *cfg_buf = (char*) (rec + 1);
+        int rc = 0;
+
+        if (rec->lrh_type == OBD_CFG_REC) {
+                char *buf;
+                struct lustre_cfg *lcfg;
+                char *old_name = NULL;
+                int old_len = 0;
+                char *old_uuid = NULL;
+                int old_uuid_len = 0;
+                char *inst_name = NULL;
+                int inst_len = 0;
+
+                rc = lustre_cfg_getdata(&buf, cfg_len, cfg_buf, 1);
+                if (rc) 
+                        GOTO(out, rc);
+                lcfg = (struct lustre_cfg* ) buf;
+
+                if (cfg && lcfg->lcfg_dev_name) {
+                        inst_len = strlen(lcfg->lcfg_dev_name) + 
+                                strlen(cfg->cfg_instance) + 2;
+                        OBD_ALLOC(inst_name, inst_len);
+                        sprintf(inst_name, "%s-%s", lcfg->lcfg_dev_name, 
+                                cfg->cfg_instance);
+                        old_name = lcfg->lcfg_dev_name;
+                        old_len = lcfg->lcfg_dev_namelen;
+                        lcfg->lcfg_dev_name = inst_name;
+                        lcfg->lcfg_dev_namelen = strlen(inst_name) + 1;
+                }
+                
+                if (cfg && lcfg->lcfg_command == LCFG_ATTACH) {
+                        old_uuid = lcfg->lcfg_inlbuf2;
+                        old_uuid_len = lcfg->lcfg_inllen2;
+
+                        lcfg->lcfg_inlbuf2 = (char*)&cfg->cfg_uuid.uuid;
+                        lcfg->lcfg_inllen2 = sizeof(cfg->cfg_uuid);
+                }
+
+                rc = class_process_config(lcfg);
+
+                if (old_name) {
+                        lcfg->lcfg_dev_name = old_name;
+                        lcfg->lcfg_dev_namelen = old_len;
+                        OBD_FREE(inst_name, inst_len);
+                }
+              
+                if (old_uuid) {
+                        lcfg->lcfg_inlbuf2 = old_uuid;
+                        lcfg->lcfg_inllen2 = old_uuid_len;
+                }
+                
+                lustre_cfg_freedata(buf, cfg_len);
+        } else if (rec->lrh_type == PTL_CFG_REC) {
+                rc = kportal_nal_cmd((struct portals_cfg *)cfg_buf);
+        }
+out:
+        RETURN(rc);
+}
+
+int class_config_parse_llog(struct obd_export *exp, char *name, 
+                          struct config_llog_instance *cfg)
+{
+        struct llog_handle *llh;
+        struct obd_device *obd = exp->exp_obd;
+        int rc, rc2;
+
+        obd->obd_log_exp = class_export_get(exp);
+
+        rc = llog_create(obd, &llh, NULL, name);
+        if (rc) {
+                class_export_put(obd->obd_log_exp);
+                obd->obd_log_exp = NULL;
+                RETURN(rc);
+        }
+
+        rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
+        if (rc) 
+                GOTO(parse_out, rc);
+
+        rc = llog_process(llh, class_config_llog_handler, cfg);
+parse_out:
+        rc2 = llog_close(llh);
+        if (rc == 0)
+                rc = rc2;
+
+        class_export_put(obd->obd_log_exp);
+        obd->obd_log_exp = NULL;
+        RETURN(rc);
+
+}
+
