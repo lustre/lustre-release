@@ -277,7 +277,7 @@ int ll_commit_write(struct file *file, struct page *page,
         obd_count        bufs_per_obdo = 1;
         struct obdo     *oa;
         obd_size         count = to;
-        obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT) + to;
+        obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT);
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
         int              err;
 	struct iattr     iattr;
@@ -299,9 +299,9 @@ int ll_commit_write(struct file *file, struct page *page,
 	}
         kunmap(page);
 
-	if (offset > inode->i_size) {
+	if (offset + to > inode->i_size) {
 		iattr.ia_valid = ATTR_SIZE;
-		iattr.ia_size = offset;
+		iattr.ia_size = offset + to;
 		/* do NOT truncate */
 		err = ll_inode_setattr(inode, &iattr, 0);
 		if (err) {
