@@ -306,14 +306,20 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
 char *
 ptl_nid2str (char *buffer, ptl_nid_t nid)
 {
-        __u32           addr = htonl((__u32)nid); /* back to NETWORK byte order */
-        struct hostent *he = gethostbyaddr ((const char *)&addr, sizeof (addr), AF_INET);
+        struct hostent *he = NULL;
 
+        /* Don't try to resolve NIDs that are e.g. Elan host IDs.  Assume
+         * TCP addresses in the 0.x.x.x subnet are not in use.  This can
+         * happen on routers and slows things down a _lot_.  Bug 3442. */
+        if (nid & 0xff000000) {
+                __u32 addr = htonl((__u32)nid); /* back to NETWORK byte order */
+                he = gethostbyaddr((const char *)&addr, sizeof(addr), AF_INET);
+        }
         if (he != NULL)
-                strcpy (buffer, he->h_name);
+                sprintf(buffer, "%#x:%s", (int)(nid >> 32), he->h_name);
         else
-                sprintf (buffer, LPX64, nid);
-        
+                sprintf(buffer, LPX64, nid);
+
         return (buffer);
 }
 

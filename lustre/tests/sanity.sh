@@ -20,6 +20,7 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 TMP=${TMP:-/tmp}
+FSTYPE=${FSTYPE:-ext3}
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
@@ -56,7 +57,7 @@ clean() {
 	sh llmountcleanup.sh > /dev/null || exit 20
 	I_MOUNTED=no
 }
-CLEAN=${CLEAN:-clean}
+CLEAN=${CLEAN:-:}
 
 start() {
 	echo -n "mnt.."
@@ -64,7 +65,7 @@ start() {
 	I_MOUNTED=yes
 	echo "done"
 }
-START=${START:-start}
+START=${START:-:}
 
 log() {
 	echo "$*"
@@ -192,11 +193,7 @@ build_test_filter
 echo preparing for tests involving mounts
 EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
 touch $EXT2_DEV
-mke2fs -F $EXT2_DEV 1000 > /dev/null
-
-EXT3_DEV=${EXT3_DEV:-/tmp/SANITY_EXT3_DEV.LOOP}
-touch $EXT3_DEV
-mkfs.ext3 -F $EXT3_DEV 10000 > /dev/null
+mke2fs -j -F $EXT2_DEV 8000 > /dev/null
 
 test_0() {
 	touch $DIR/f
@@ -887,7 +884,7 @@ test_31c() {
 	multiop $DIR/f31c Ouc
 	usleep 500
 	kill -USR1 $MULTIPID
-	wait $MUTLIPID
+	wait $MULTIPID
 }
 run_test 31c "open-unlink file with multiple links ============="
 
@@ -1567,8 +1564,8 @@ test_48b() { # bug 2399
 	cd . && error "'cd .' worked after removing cwd"
 	mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
-	ln -s . foo && error "'ln -s .' worked after removing cwd" || true
-	cd .. || error "'cd ..' failed after removing cwd"
+	ln -s . foo && error "'ln -s .' worked after removing cwd"
+	cd .. || echo "'cd ..' failed after removing cwd `pwd`"  #bug 3517
 }
 run_test 48b "Access removed working dir (should return errors)="
 
@@ -1578,7 +1575,7 @@ test_48c() { # bug 2350
 	#set -vx
 	mkdir -p $DIR/d48c/dir
 	cd $DIR/d48c/dir
-	rmdir $DIR/d48c/dir || error "remove cwd $DIR/d48c/dir failed"
+	$TRACE rmdir $DIR/d48c/dir || error "remove cwd $DIR/d48c/dir failed"
 	$TRACE touch foo && error "'touch foo' worked after removing cwd"
 	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
 	$TRACE ls . && error "'ls .' worked after removing cwd"
@@ -1586,8 +1583,8 @@ test_48c() { # bug 2350
 	$TRACE cd . && error "'cd .' worked after removing cwd"
 	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
 	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
-	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
-	$TRACE cd .. || true #bug 3415 error "'cd ..' failed after removing cwd"
+	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd"
+	$TRACE cd .. || echo "'cd ..' failed after removing cwd `pwd`" #bug 3415
 }
 run_test 48c "Access removed working subdir (should return errors)"
 
@@ -1597,16 +1594,17 @@ test_48d() { # bug 2350
 	#set -vx
 	mkdir -p $DIR/d48d/dir
 	cd $DIR/d48d/dir
-	rm -r $DIR/d48d || error "remove cwd and parent $DIR/d48d failed"
-	$TRACE touch foo && error "'touch foo' worked after removing cwd"
-	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
-	$TRACE ls . && error "'ls .' worked after removing cwd"
-	$TRACE ls .. #bug 3415 && error "'ls ..' worked after removing cwd"
-	$TRACE cd . && error "'cd .' worked after recreate cwd"
-	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
-	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
-	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
-	$TRACE cd .. && error "'cd ..' worked after recreate cwd" || true
+	$TRACE rmdir $DIR/d48d/dir || error "remove cwd $DIR/d48d/dir failed"
+	$TRACE rmdir $DIR/d48d || error "remove parent $DIR/d48d failed"
+	$TRACE touch foo && error "'touch foo' worked after removing parent"
+	$TRACE mkdir foo && error "'mkdir foo' worked after removing parent"
+	$TRACE ls . && error "'ls .' worked after removing parent"
+	$TRACE ls .. && error "'ls ..' worked after removing parent"
+	$TRACE cd . && error "'cd .' worked after recreate parent"
+	$TRACE mkdir . && error "'mkdir .' worked after removing parent"
+	$TRACE rmdir . && error "'rmdir .' worked after removing parent"
+	$TRACE ln -s . foo && error "'ln -s .' worked after removing parent"
+	$TRACE cd .. && error "'cd ..' worked after recreate parent" || true
 }
 run_test 48d "Access removed parent subdir (should return errors)"
 
@@ -1734,14 +1732,24 @@ test_54d() {
 }
 run_test 54d "fifo device works in lustre ======================"
 
+check_fstype() {
+	grep -q $FSTYPE /proc/filesystems && return 0
+	modprobe $FSTYPE
+	grep -q $FSTYPE /proc/filesystems && return 0
+	insmod ../$FSTYPE/$FSTYPE.o
+	grep -q $FSTYPE /proc/filesystems && return 0
+	return 1
+}
+
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        mount -t ext3 -o loop,iopen $EXT3_DEV $DIR/d55 || error "mounting"
+        check_fstype && echo "can't find fs $FSTYPE, skipping test 55" && return
+        mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
         touch $DIR/d55/foo
         $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
         $IOPENTEST2 $DIR/d55 || error "running $IOPENTEST2"
-        echo "check for $EXT3_DEV. Please wait..."
+        echo "check for $EXT2_DEV. Please wait..."
         rm -rf $DIR/d55/*
         umount $DIR/d55 || error "unmounting"
 }

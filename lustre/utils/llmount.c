@@ -132,7 +132,7 @@ print_options(struct lustre_mount_data *lmd)
         printf("port:            %d\n", lmd->lmd_port);
 
         for (i = 0; i < route_index; i++)
-                printf("route:           0x%llx : 0x%llx - 0x%llx\n",
+                printf("route:           "LPX64" : "LPX64" - "LPX64"\n",
                        routes[i].gw, routes[i].lo, routes[i].hi);
 
         return 0;
@@ -487,9 +487,9 @@ static int set_routes(struct lustre_mount_data *lmd) {
               rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
               if (rc != 0) {
                       fprintf(stderr, "%s: Unable to add route "
-                              "0x%llx : 0x%llx - 0x%llx\n[%d] %s\n",
-                               progname, routes[i].gw, routes[i].lo,
-                               routes[i].hi, errno, strerror(errno));
+                              LPX64" : "LPX64" - "LPX64"\n[%d] %s\n",
+                              progname, routes[i].gw, routes[i].lo,
+                              routes[i].hi, errno, strerror(errno));
                       err = -1;
                       break;
               }

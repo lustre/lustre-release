@@ -1,3 +1,15 @@
+tbd  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.3
+       * bug fixes
+	- clean kiobufs before and after use (3485)
+	- strip trailing '/'s before comparing paths with /proc/mounts (3486)
+	- remove assertions to work around "in-flight rpcs" recovery bug (3063)
+	- change init script to fail more clearly if not run as root (1528)
+	- fix ns_lock/i_sem lock ordering deadlock for kms update (3477)
+	- don't do DNS lookups on NIDs too small for IP addresses (3442)
+       * miscellania
+	- servers can dump a log evicting a client - lustre.dump_on_timeout=1
+
 2004-05-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2
        * bug fixes
@@ -46,6 +58,8 @@
 	- fix compilation for qswnal for 2.6 kernels (3125)
 	- increase maximum number of MDS request buffers for large systems
 	- change liblustreapi to be useful for external progs like lfsck (3098)
+	- increase local configuration timeout for slow disks (3353)
+	- allow configuring ldlm AST timeout - lustre.ldlm_timeout=<seconds>
 
 2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1

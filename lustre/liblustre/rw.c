@@ -110,8 +110,10 @@ static int llu_extent_lock_callback(struct ldlm_lock *lock,
                 lsm = lli->lli_smd;
 
                 stripe = llu_lock_to_stripe_offset(inode, lock);
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
@@ -172,11 +174,12 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 }
 
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
+__u64 lov_merge_blocks(struct lov_stripe_md *lsm);
 __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
 
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
-int llu_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
+int llu_glimpse_size(struct inode *inode)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
@@ -194,10 +197,13 @@ int llu_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
         if (rc > 0)
                 RETURN(-EIO);
 
-        lvb->lvb_size = lov_merge_size(lli->lli_smd, 0);
-        //inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
+        lli->lli_st_size = lov_merge_size(lli->lli_smd, 0);
+        lli->lli_st_blocks = lov_merge_blocks(lli->lli_smd);
+        //lli->lli_st_mtime = lov_merge_mtime(lli->lli_smd, lli->lli_st_mtime);
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64"\n", lvb->lvb_size);
+        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
+               lli->lli_st_size, lli->lli_st_blocks);
+
 
         obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
 
@@ -837,12 +843,10 @@ llu_file_read(struct inode *inode, const struct iovec *iovec,
                         /* A glimpse is necessary to determine whether we
                          * return a short read or some zeroes at the end of
                          * the buffer */
-                        struct ost_lvb lvb;
-                        if (llu_glimpse_size(inode, &lvb)) {
-                                llu_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
+                        if (llu_glimpse_size(inode)) {
+                                llu_extent_unlock(fd, inode, lsm,LCK_PR,&lockh);
                                 GOTO(err_out, err = -ENOLCK);
                         }
-                        lli->lli_st_size = lvb.lvb_size;
                 } else {
                         lli->lli_st_size = kms;
                 }

@@ -69,7 +69,7 @@ struct llu_inode_info {
         char                   *lli_symlink_name;
         struct semaphore        lli_open_sem;
         __u64                   lli_maxbytes;
-        unsigned long        	lli_flags;
+        unsigned long           lli_flags;
 
         /* for libsysio */
         struct file_identifier  lli_sysio_fid;
@@ -99,7 +99,7 @@ struct llu_inode_info {
         dev_t                   lli_st_rdev;
         loff_t                  lli_st_size;
         unsigned int            lli_st_blksize;
-        unsigned int            lli_st_blocks;
+        unsigned long           lli_st_blocks;
         time_t                  lli_st_atime;
         time_t                  lli_st_mtime;
         time_t                  lli_st_ctime;
@@ -294,11 +294,11 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 int llu_iop_iodone(struct ioctx *ioctxp __IS_UNUSED);
 struct llu_sysio_callback_args*
 llu_file_write(struct inode *inode, const struct iovec *iovec,
-        	       size_t iovlen, loff_t pos);
+               size_t iovlen, loff_t pos);
 struct llu_sysio_callback_args*
 llu_file_read(struct inode *inode, const struct iovec *iovec,
               size_t iovlen, loff_t pos);
-int llu_glimpse_size(struct inode *inode, struct ost_lvb *lvb);
+int llu_glimpse_size(struct inode *inode);
 int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                     struct lov_stripe_md *lsm, int mode,
                     ldlm_policy_data_t *policy, struct lustre_handle *lockh,

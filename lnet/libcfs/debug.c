@@ -1067,8 +1067,15 @@ char *portals_debug_dumpstack(void)
 }
 
 #endif /* __arch_um__ */
+struct task_struct *portals_current(void)
+{
+        CWARN("current task struct is %p\n", current);
+        return current;
+}
+
 EXPORT_SYMBOL(stack_backtrace_lock);
 EXPORT_SYMBOL(portals_debug_dumpstack);
+EXPORT_SYMBOL(portals_current);
 #endif /* __KERNEL__ */
 
 EXPORT_SYMBOL(portals_debug_dumplog);

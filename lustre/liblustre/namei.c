@@ -349,12 +349,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = llu_glimpse_size(inode, &lvb);
+                        rc = llu_glimpse_size(inode);
                         if (rc) {
                                 I_RELE(inode);
                                 RETURN(rc);
                         }
-                        lli->lli_st_size = lvb.lvb_size;
                 }
         } else {
                 ENTRY;

@@ -44,6 +44,11 @@ STATUS=${STATUS_DIR}/sysStatus
 
 start() {
         echo -n "Starting $SERVICE: "
+	if [ $UID -ne 0 ]; then
+		echo "Lustre should be started as root"
+		RETVAL=1
+		return
+	fi
         ${LCONF} ${LCONF_START_ARGS}
         RETVAL=$?
         echo $SERVICE
@@ -57,6 +62,11 @@ start() {
 
 stop() {
         echo -n "Shutting down $SERVICE: "
+	if [ $UID -ne 0 ]; then
+		echo "Lustre should be stopped as root"
+		RETVAL=1
+		return
+	fi
         ${LCONF} ${LCONF_STOP_ARGS}
         RETVAL=$?
         echo $SERVICE

@@ -87,6 +87,7 @@ int proc_version;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
+unsigned int obd_dump_on_timeout;
 unsigned int obd_timeout = 100;
 unsigned int ldlm_timeout = 6;
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
@@ -383,6 +384,7 @@ EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
+EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
 EXPORT_SYMBOL(obd_lustre_upcall);

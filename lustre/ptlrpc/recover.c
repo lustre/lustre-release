@@ -388,6 +388,9 @@ void ptlrpc_fail_export(struct obd_export *exp)
         CDEBUG(D_HA, "disconnecting export %p/%s\n",
                exp, exp->exp_client_uuid.uuid);
 
+        if (obd_dump_on_timeout)
+                portals_debug_dumplog();
+
         /* Most callers into obd_disconnect are removing their own reference
          * (request, for example) in addition to the one from the hash table.
          * We don't have such a reference here, so make one. */

@@ -472,15 +472,17 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 stripe = ll_lock_to_stripe_offset(inode, lock);
                 ll_pgcache_remove_extent(inode, lsm, lock, stripe);
 
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 down(&inode->i_sem);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
-		
+
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
                 up(&inode->i_sem);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 //ll_try_done_writing(inode);
         iput:
                 iput(inode);
@@ -524,6 +526,7 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 lvb = lock->l_lvb_data;
                 lsm->lsm_oinfo[stripe].loi_rss = lvb->lvb_size;
 
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 down(&inode->i_sem);
                 kms = MAX(lsm->lsm_oinfo[stripe].loi_kms, lvb->lvb_size);
                 kms = ldlm_extent_shift_kms(NULL, kms);
@@ -532,6 +535,7 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
                 up(&inode->i_sem);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         }
 
         iput(inode);
@@ -595,7 +599,7 @@ __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
 
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
-int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
+int ll_glimpse_size(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -609,18 +613,18 @@ int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
         rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
                          LCK_PR, &flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
-                         sizeof(*lvb), lustre_swab_ost_lvb, &lockh);
+                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
         if (rc != 0) {
                 CERROR("obd_enqueue returned rc %d, returning -EIO\n", rc);
                 RETURN(rc > 0 ? -EIO : rc);
         }
 
-        lvb->lvb_size = lov_merge_size(lli->lli_smd, 0);
+        inode->i_size = lov_merge_size(lli->lli_smd, 0);
         inode->i_blocks = lov_merge_blocks(lli->lli_smd);
         //inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
-               lvb->lvb_size, lvb->lvb_blocks);
+        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
+               inode->i_size, inode->i_blocks);
 
         obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
 
@@ -718,11 +722,9 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (*ppos + count - 1 > kms) {
                 /* A glimpse is necessary to determine whether we return a short
                  * read or some zeroes at the end of the buffer */
-                struct ost_lvb lvb;
-                retval = ll_glimpse_size(inode, &lvb);
+                retval = ll_glimpse_size(inode);
                 if (retval)
                         goto out;
-                inode->i_size = lvb.lvb_size;
         } else {
                 inode->i_size = kms;
         }
@@ -1297,12 +1299,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
-        {
-                struct ost_lvb lvb;
-
-                rc = ll_glimpse_size(inode, &lvb);
-                inode->i_size = lvb.lvb_size;
-        }
+        rc = ll_glimpse_size(inode);
         RETURN(rc);
 }
 

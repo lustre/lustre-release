@@ -297,7 +297,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
                     ll_i2info(inode)->lli_smd != NULL) {
                         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-                        struct ost_lvb lvb;
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
@@ -305,12 +304,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = ll_glimpse_size(inode, &lvb);
+                        rc = ll_glimpse_size(inode);
                         if (rc) {
                                 iput(inode);
                                 RETURN(rc);
                         }
-                        inode->i_size = lvb.lvb_size;
                 }
 
                 dentry = *de = ll_find_alias(inode, dentry);

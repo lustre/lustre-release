@@ -1100,8 +1100,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         down(&res->lr_lvb_sem);
         res_lvb = res->lr_lvb_data;
         LASSERT(res_lvb != NULL);
-        reply_lvb->lvb_size = res_lvb->lvb_size;
-        reply_lvb->lvb_blocks = res_lvb->lvb_blocks;
+        memcpy(reply_lvb, res_lvb, sizeof(*reply_lvb));
         up(&res->lr_lvb_sem);
 
         list_for_each(tmp, &res->lr_granted) {
@@ -1204,7 +1203,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         if (rc)
                 GOTO(err_mntput, rc);
 
-        
         filter->fo_destroy_in_progress = 0;
         sema_init(&filter->fo_create_lock, 1);
 

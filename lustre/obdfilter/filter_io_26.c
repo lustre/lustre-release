@@ -142,6 +142,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         cleanup_phase = 2;
 
+        generic_osync_inode(inode, inode->i_mapping, OSYNC_DATA|OSYNC_METADATA);
+
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso,
                                            niocount, res, oti);
         
@@ -181,7 +183,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                         offs = k * inode->i_sb->s_blocksize;
 
                         if (!bio || !can_be_merged(bio, sector) ||
-                            !bio_add_page(bio, lnb->page, lnb->len, offs)) {
+                            !bio_add_page(bio, lnb->page, PAGE_SIZE, offs)) {
                                 if (bio) {
                                         atomic_inc(&dreq->numreqs);
                                         submit_bio(WRITE, bio);
@@ -194,7 +196,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                                 bio->bi_end_io = dio_complete_routine;
                                 bio->bi_private = dreq;
 
-                                if (!bio_add_page(bio, lnb->page, lnb->len, 0))
+                                if (!bio_add_page(bio, lnb->page, PAGE_SIZE, 
+                                                  offs))
                                         LBUG();
                         }
                 }
@@ -206,7 +209,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                         iattr.ia_size = this_size;
         }
 
-#warning This probably needs filemap_fdatasync() like filter_io_24 (bug 2366)
         if (bio) {
                 atomic_inc(&dreq->numreqs);
                 submit_bio(WRITE, bio);

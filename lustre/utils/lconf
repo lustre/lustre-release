@@ -1867,10 +1867,29 @@ def generate_client_uuid(name):
         return client_uuid[:36]
 
 
+def my_rstrip(s, chars):
+    """my_rstrip(s, chars) -> strips any instances of the characters
+    found in chars from the right side of string s"""
+    # XXX required because python versions pre 2.2.3 don't allow
+    #string.rstrip() to take alternate char lists
+    import string
+    ns=s
+    try:
+        ns = string.rstrip(s, '/')
+    except TypeError, e:
+        for i in range(len(s) - 1, 0, -1):
+            if s[i] in chars:
+                continue
+            else:
+                ns = s[0:i+1]
+                break
+    return ns
+	
+
 class Mountpoint(Module):
     def __init__(self,db):
         Module.__init__(self, 'MTPT', db)
-        self.path = self.db.get_val('path')
+        self.path = my_rstrip(self.db.get_val('path'), '/')
         self.fs_uuid = self.db.get_first_ref('filesystem')
         fs = self.db.lookup(self.fs_uuid)
         self.mds_uuid = fs.get_first_ref('mds')
@@ -2416,8 +2435,8 @@ def sys_optimize_elan ():
                  "/proc/qsnet/elan3/config/eventint_punt_loops",
                  "/proc/qsnet/elan4/config/elan4_mainint_punt_loops"]
     for p in procfiles:
-        if os.access(p, os.R_OK):
-            run ("echo 0 > " + p)
+        if os.access(p, os.W_OK):
+            run ("echo 1 > " + p)
 
 def sys_set_ptldebug(ptldebug):
     if config.ptldebug:

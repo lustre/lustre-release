@@ -435,14 +435,7 @@ static int llu_inode_revalidate(struct inode *inode)
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
-        {
-                struct ost_lvb lvb;
-                ldlm_error_t err;
-
-                err = llu_glimpse_size(inode, &lvb);
-                lli->lli_st_size = lvb.lvb_size;
-        }
-        RETURN(0);
+        RETURN(llu_glimpse_size(inode));
 }
 
 static void copy_stat_buf(struct inode *ino, struct intnl_stat *b)

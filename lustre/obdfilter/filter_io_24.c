@@ -221,6 +221,21 @@ static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
         return 1;
 }
 
+/* some kernels require alloc_kiovec callers to zero members through the use of
+ * map_user_kiobuf and unmap_.. we don't use those, so we have a little helper
+ * that makes sure we don't break the rules. */
+static void clear_kiobuf(struct kiobuf *iobuf)
+{
+        int i;
+
+        for (i = 0; i < iobuf->array_len; i++)
+                iobuf->maplist[i] = NULL;
+
+        iobuf->nr_pages = 0;
+        iobuf->offset = 0;
+        iobuf->length = 0;
+}
+
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
                           struct niobuf_local *res, struct obd_trans_info *oti,
@@ -256,9 +271,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc)
                 GOTO(cleanup, rc);
 
-        iobuf->offset = 0;
-        iobuf->length = 0;
-        iobuf->nr_pages = 0;
+        clear_kiobuf(iobuf);
 
         cleanup_phase = 1;
         fso.fso_dentry = res->dentry;
@@ -329,6 +342,7 @@ cleanup:
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
+                clear_kiobuf(iobuf);
                 free_kiovec(1, &iobuf);
         case 0:
                 for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {

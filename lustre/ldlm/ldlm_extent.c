@@ -255,6 +255,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 
 /* When a lock is cancelled by a client, the KMS may undergo change if this
  * is the "highest lock".  This function returns the new KMS value.
+ * Caller must hold ns_lock already.
  *
  * NB: A lock on [x,y] protects a KMS of up to y + 1 bytes! */
 __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
@@ -270,7 +271,6 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
          * calculation of the kms */
         lock->l_flags |= LDLM_FL_KMS_IGNORE;
 
-        l_lock(&res->lr_namespace->ns_lock);
         list_for_each(tmp, &res->lr_granted) {
                 lck = list_entry(tmp, struct ldlm_lock, l_res_link);
 
@@ -278,7 +278,7 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
                         continue;
 
                 if (lck->l_policy_data.l_extent.end >= old_kms)
-                        GOTO(out, kms = old_kms);
+                        RETURN(old_kms);
 
                 /* This extent _has_ to be smaller than old_kms (checked above)
                  * so kms can only ever be smaller or the same as old_kms. */
@@ -287,8 +287,5 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
         }
         LASSERTF(kms <= old_kms, "kms "LPU64" old_kms "LPU64"\n", kms, old_kms);
 
-        GOTO(out, kms);
- out:
-        l_unlock(&res->lr_namespace->ns_lock);
-        return kms;
+        RETURN(kms);
 }

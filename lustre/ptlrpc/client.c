@@ -668,13 +668,9 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                         if (req->rq_waiting || req->rq_resend) {
                                 int status;
 
-                                LASSERT (!ptlrpc_client_receiving_reply(req));
-                                LASSERT (req->rq_bulk == NULL ||
-                                         !ptlrpc_bulk_active(req->rq_bulk));
-
                                 spin_lock_irqsave(&imp->imp_lock, flags);
 
-                                if (ptlrpc_import_delay_req(imp, req, &status)) {
+                                if (ptlrpc_import_delay_req(imp, req, &status)){
                                         spin_unlock_irqrestore(&imp->imp_lock,
                                                                flags);
                                         continue;
@@ -707,6 +703,8 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                         ptlrpc_unregister_reply(req);
                                         if (req->rq_bulk) {
                                                 __u64 old_xid = req->rq_xid;
+
+                                                ptlrpc_unregister_bulk (req);
 
                                                 /* ensure previous bulk fails */
                                                 req->rq_xid = ptlrpc_next_xid();
