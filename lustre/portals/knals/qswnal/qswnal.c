@@ -179,6 +179,7 @@ kqswnal_finalise (void)
 
 	case KQN_INIT_ALL:
 		PORTAL_SYMBOL_UNREGISTER (kqswnal_ni);
+                kportal_nal_unregister(QSWNAL);
 		/* fall through */
 
 	case KQN_INIT_PTL:

@@ -8,10 +8,12 @@ COMPILE = $(CC) -Wall -g -I$(srcdir)/../include
 LINK = $(CC) -o $@
 
 if LIBLUSTRE
-sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck
+tmp=
 else
-sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck gmnalnid
+tmp=gmnalnid
 endif
+
+sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck $(tmp)
 lib_LIBRARIES = libptlctl.a
 
 acceptor_SOURCES = acceptor.c # -lefence
