@@ -390,14 +390,17 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	case OBD_IOC_BRW_WRITE:
 		rw = OBD_BRW_WRITE;
 	case OBD_IOC_BRW_READ: {
-		/* FIXME: use a better ioctl data struct than obd_ioctl_data */
+		/* FIXME: use a better ioctl data struct than obd_ioctl_data.
+                 *        We don't really support multiple-obdo I/Os here,
+                 *        for example offset and count are not per-obdo.
+                 */
                 struct obd_conn conns[2];
                 struct obdo     *obdos[2];
                 obd_count       oa_bufs[2];
-                struct page     **bufs;
-                obd_size        counts[2];
-                obd_off         offsets[2];
-                obd_flag        flags[2];
+                struct page     **bufs = NULL;
+                obd_size        *counts = NULL;
+                obd_off         *offsets = NULL;
+                obd_flag        *flags = NULL;
                 int             pages;
                 int             i, j;
 
@@ -409,10 +412,14 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                        rw == OBD_BRW_READ ? "read" : "write",
                        oa_bufs[0], oa_bufs[1]);
                 bufs = kmalloc(pages * sizeof(struct page *), GFP_KERNEL);
-                if (!bufs) {
-                        CERROR("no memory for %d BRW bufs\n", pages);
+                counts = kmalloc(pages * sizeof(obd_size), GFP_KERNEL);
+                offsets = kmalloc(pages * sizeof(obd_off), GFP_KERNEL);
+                flags = kmalloc(pages * sizeof(obd_flag), GFP_KERNEL);
+                if (!bufs || !counts || !offsets || !flags) {
+                        CERROR("no memory for %d BRW per-page data\n", pages);
                         EXIT;
-                        return -ENOMEM;
+                        err = -ENOMEM;
+                        goto brw_free;
                 }
 
                 obdos[0] = &data->ioc_obdo1;
@@ -420,14 +427,17 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 pages = 0;
                 for (i = 0; i < 2; i++) {
+                        unsigned long off;
                         void *from;
 
                         conns[i].oc_id = (&data->ioc_conn1)[i];
                         conns[i].oc_dev = obd;
 
                         from = (&data->ioc_pbuf1)[i];
+                        off = data->ioc_offset;
 
-                        for (j = 0; j < oa_bufs[i]; j++) {
+                        for (j = 0; j < oa_bufs[i];
+                             j++, pages++, off += PAGE_SIZE, from += PAGE_SIZE){
                                 unsigned long to;
 
                                 to = __get_free_pages(GFP_KERNEL, 0);
@@ -437,16 +447,15 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                         free_pages(to, 0);
                                  */
                                         CERROR("no memory for brw pages\n");
+                                        err = -ENOMEM;
                                         EXIT;
                                         goto brw_cleanup;
                                 }
-                                bufs[pages++] = virt_to_page(to);
-                                from += PAGE_SIZE;
+                                bufs[pages] = virt_to_page(to);
+                                counts[pages] = PAGE_SIZE;
+                                offsets[pages] = off;
+                                flags[pages] = 0;
                         }
-
-                        counts[i] = data->ioc_count;
-                        offsets[i] = data->ioc_offset;
-                        flags[i] = 0;
                 }
 
                 err = obd_brw(rw, conns, 2, obdos, oa_bufs, bufs,
@@ -456,6 +465,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         brw_cleanup:
                 while (pages-- > 0)
                         free_pages((unsigned long)page_address(bufs[pages]), 0);
+        brw_free:
+                kfree(flags);
+                kfree(offsets);
+                kfree(counts);
                 kfree(bufs);
                 return err;
         }
