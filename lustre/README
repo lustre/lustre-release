@@ -1,1 +1,8 @@
-Build instructions can be found in the lustre-HOWTO in the doc directory.
+Instructions for building, configuring, and running Lustre can be found in
+the file doc/lustre-HOWTO.txt.
+
+If you have checked lustre directly out of CVS, then you either need to
+get lyx to build the lustre-HOWTO.txt from the source file, get the PDF
+version from the lustre.org website, or install the lustre-doc RPM for
+the formatted text version (or read the somewhat cryptic lustre-HOWTO.lin
+file if you are desparate).
