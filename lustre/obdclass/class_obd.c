@@ -560,7 +560,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         }
                 }
 
-                err = copy_to_user((int *)arg, data, len);
+                err = copy_to_user((void *)arg, data, len);
                 GOTO(out, err);
         }
 
@@ -591,7 +591,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
-                err = copy_to_user((int *)arg, data, sizeof(*data));
+                err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -621,7 +621,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
-                err = copy_to_user((int *)arg, data, sizeof(*data));
+                err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -644,7 +644,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (dev == -1)
                         GOTO(out, err=-EINVAL);
 
-                err = copy_to_user((int *)arg, data, sizeof(*data));
+                err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -836,7 +836,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (err)
                         GOTO(out, err);
 
-                err = copy_to_user((int *)arg, data, sizeof(*data));
+                err = copy_to_user((void *)arg, data, sizeof(*data));
                 // XXX save connection data into file handle
                 GOTO(out, err);
         }
@@ -863,7 +863,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (err)
                         GOTO(out, err);
 
-                err = copy_to_user((int *)arg, data, sizeof(*data));
+                err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -874,7 +874,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (err)
                         GOTO(out, err);
 
-                err = copy_to_user((int *)arg, data, sizeof(*data));
+                err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -884,7 +884,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (err)
                         GOTO(out, err);
 
-                err = copy_to_user((int *)arg, data, sizeof(*data));
+                err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -896,7 +896,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (err)
                         GOTO(out, err);
 
-                err = copy_to_user((int *)arg, data, sizeof(*data));
+                err = copy_to_user((void *)arg, data, sizeof(*data));
                 GOTO(out, err);
         }
 
@@ -1004,7 +1004,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 if (err)
                         GOTO(out, err);
 
-                err = copy_to_user((int *)arg, data, len);
+                err = copy_to_user((void *)arg, data, len);
                 GOTO(out, err);
         }
 
@@ -1037,6 +1037,7 @@ void (*class_signal_connection_failure)(struct ptlrpc_connection *);
 
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
+EXPORT_SYMBOL(handle_cachep);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_timeout);
