@@ -20,7 +20,7 @@
  *
  *  Copyright (C) 2002, 2003  Cluster File Systems, Inc
  *
- *  this started as an implementation of an io daemon that woke regularly 
+ *  this started as an implementation of an io daemon that woke regularly
  *  to force writeback.. the throttling in prepare_write and kupdate's usual
  *  writeback pressure got rid of our thread, but the file name remains.
  */
@@ -49,7 +49,7 @@ extern spinlock_t inode_lock;
 struct ll_writeback_pages {
         unsigned        has_whole_pages:1,
                         num_frags:2,
-                        num_pages:29; 
+                        num_pages:29;
         struct brw_page pgs[LLWP_MAX_PAGES];
 };
 
@@ -72,19 +72,19 @@ void sort_brw_pages(struct brw_page *array, int num)
         for( stride = 1; stride < num ; stride = (stride*3) +1  )
                 ;
 
-	do {
-		stride /= 3;
-		for ( i = stride ; i < num ; i++ ) {
-			tmp = array[i];
-			j = i;
-			while ( j >= stride && 
+        do {
+                stride /= 3;
+                for ( i = stride ; i < num ; i++ ) {
+                        tmp = array[i];
+                        j = i;
+                        while ( j >= stride &&
                                         array[j - stride].off > tmp.off ) {
-				array[j] = array[j - stride];
-				j -= stride;
-			}
-			array[j] = tmp;
-		}
-	} while ( stride > 1 );
+                                array[j] = array[j - stride];
+                                j -= stride;
+                        }
+                        array[j] = tmp;
+                }
+        } while ( stride > 1 );
 }
 
 /*
@@ -93,7 +93,7 @@ void sort_brw_pages(struct brw_page *array, int num)
  * than the page we can unlock the page because truncate_inode_pages will
  * be waiting to cleanup the page
  */
-static int llwp_consume_page(struct ll_writeback_pages *llwp, 
+static int llwp_consume_page(struct ll_writeback_pages *llwp,
                              struct inode *inode, struct page *page)
 {
         obd_off off = ((obd_off)page->index) << PAGE_SHIFT;
@@ -137,20 +137,20 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
         CDEBUG(D_CACHE, "brw_page %p: off %lld cnt %d, page %p: ind %ld\n",
                         pg, pg->off, pg->count, page, page->index);
 
-out:
         if ( llwp->num_frags == 3 || llwp->num_pages == LLWP_MAX_PAGES )
                 return -1;
 
+out:
         return 0;
 }
 
-/* 
+/*
  * returns the number of pages that it added to the pgs array
  *
  * this duplicates filemap_fdatasync and gives us an opportunity to grab lots
- * of dirty pages.. 
+ * of dirty pages..
  */
-static void ll_get_dirty_pages(struct inode *inode, 
+static void ll_get_dirty_pages(struct inode *inode,
                                struct ll_writeback_pages *llwp)
 {
         struct address_space *mapping = inode->i_mapping;
@@ -183,7 +183,7 @@ static void ll_get_dirty_pages(struct inode *inode,
         EXIT;
 }
 
-static void ll_brw_pages_unlock( struct inode *inode, 
+static void ll_brw_pages_unlock( struct inode *inode,
                                  struct ll_writeback_pages *llwp)
 {
         int rc, i;
@@ -199,7 +199,7 @@ static void ll_brw_pages_unlock( struct inode *inode,
         set.brw_callback = ll_brw_sync_wait;
 
         rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode),
-                     ll_i2info(inode)->lli_smd, llwp->num_pages, llwp->pgs, 
+                     ll_i2info(inode)->lli_smd, llwp->num_pages, llwp->pgs,
                      &set, NULL);
         if (rc) {
                 CERROR("error from obd_brw: rc = %d\n", rc);
@@ -260,7 +260,7 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
 
                         if ( ! (inode->i_state & I_DIRTY_PAGES) ) {
                                 inode = NULL;
-                                continue; 
+                                continue;
                         }
                         break;
                 }
@@ -276,7 +276,8 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
 
                 spin_unlock(&inode_lock);
 
-                do { 
+                do {
+                        memset(llwp, 0, sizeof(*llwp));
                         ll_get_dirty_pages(inode, llwp);
                         if ( llwp->num_pages ) {
                                 ll_brw_pages_unlock(inode, llwp);
@@ -289,8 +290,8 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
 
                 inode->i_state &= ~I_LOCK;
                 /*
-                 * we are sneaky and leave the inode on the dirty list, 
-                 * even though it might not still be.. 
+                 * we are sneaky and leave the inode on the dirty list,
+                 * even though it might not still be..
                  */
                 if (!(inode->i_state & I_FREEING)) {
                         list_del(&inode->i_list);
