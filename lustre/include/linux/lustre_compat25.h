@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2003 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -23,25 +23,13 @@
 #ifndef _COMPAT25_H
 #define _COMPAT25_H
 
+#include <linux/portals_compat25.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 #define KDEVT_VAL(dev, val)         dev.value = 0               
 #else
 #define KDEVT_VAL(dev, val)         dev = 0               
 #endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-# define SIGNAL_MASK_LOCK(task, flags)         spin_lock_irqsave(                     \
-		&task->sighand->siglock, flags)
-# define SIGNAL_MASK_UNLOCK(task, flags)       spin_unlock_irqrestore(                \
-		&task->sighand->siglock, flags)
-#else
-# define SIGNAL_MASK_LOCK(task, flags)         spin_lock_irqsave(                     \
-		&task->sigmask_lock, flags)
-# define SIGNAL_MASK_UNLOCK(task, flags)       spin_unlock_irqrestore(                \
-		&task->sigmask_lock, flags)
-#endif
-
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 # define PGCACHE_WRLOCK(mapping)          write_lock(&mapping->page_lock)
@@ -77,13 +65,6 @@
 #else
 # define LL_CHECK_DIRTY(sb)              ll_check_dirty(sb)
 #endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-# define RECALC_SIGPENDING         recalc_sigpending()
-#else
-# define RECALC_SIGPENDING         recalc_sigpending(current)
-#endif
-
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #define  rb_node_s rb_node
