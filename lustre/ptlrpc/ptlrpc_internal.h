@@ -98,5 +98,9 @@ enum {
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
+/* pinger.c */
+int ptlrpc_start_pinger(void);
+int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
+
 #endif /* PTLRPC_INTERNAL_H */
