@@ -45,7 +45,11 @@ char usage[] =
 "        Y  fdatasync\n"
 "        z  seek to zero\n";
 
-void null_handler(int unused) { }
+static int usr1_received;
+void usr1_handler(int unused) 
+{ 
+        usr1_received = 1;
+}
 
 static const char *
 pop_arg(int argc, char *argv[])
@@ -73,14 +77,17 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        signal(SIGUSR1, null_handler);
+        signal(SIGUSR1, usr1_handler);
 
         fname = argv[1];
 
         for (commands = argv[2]; *commands; commands++) {
                 switch (*commands) {
                 case '_':
-                        pause();
+                        if (usr1_received == 0)
+                                pause();
+                        usr1_received = 0;
+                        signal(SIGUSR1, usr1_handler);
                         break;
                 case 'c':
                         if (close(fd) == -1) {

@@ -75,9 +75,9 @@ static int it_to_lock_mode(struct lookup_intent *it)
 {
         /* CREAT needs to be tested before open (both could be set) */
         if (it->it_op & IT_CREAT)
-                return LCK_PW;
+                return LCK_CW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
-                return LCK_PR;
+                return LCK_CR;
 
         LBUG();
         RETURN(-EINVAL);
@@ -198,7 +198,7 @@ int mdc_enqueue(struct obd_export *exp,
                           sizeof(struct mds_body),
                           obddev->u.cli.cl_max_mds_easize,
                           obddev->u.cli.cl_max_mds_cookiesize};
-        struct ldlm_reply *dlm_rep;
+        struct ldlm_reply *dlm_rep = NULL;
         struct ldlm_intent *lit;
         struct ldlm_request *lockreq;
         void *eadata;
@@ -304,6 +304,13 @@ int mdc_enqueue(struct obd_export *exp,
 
         /* This can go when we're sure that this can never happen */
         LASSERT(rc != -ENOENT);
+        /* We need dlm_rep to be assigned this early, to check lock mode of
+           returned lock from request to avoid possible race with lock
+           conversion */
+        if (rc == ELDLM_LOCK_ABORTED || !rc) {
+                dlm_rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*dlm_rep));
+                LASSERT(dlm_rep != NULL);   /* checked by ldlm_cli_enqueue() */
+        }
         if (rc == ELDLM_LOCK_ABORTED) {
                 lock_mode = 0;
                 memset(lockh, 0, sizeof(*lockh));
@@ -319,18 +326,16 @@ int mdc_enqueue(struct obd_export *exp,
 
                 /* If the server gave us back a different lock mode, we should
                  * fix up our variables. */
-                if (lock->l_req_mode != lock_mode) {
-                        ldlm_lock_addref(lockh, lock->l_req_mode);
+                if (dlm_rep->lock_desc.l_req_mode != lock_mode) {
+                        ldlm_lock_addref(lockh, dlm_rep->lock_desc.l_req_mode);
                         ldlm_lock_decref(lockh, lock_mode);
-                        lock_mode = lock->l_req_mode;
+                        lock_mode = dlm_rep->lock_desc.l_req_mode;
                 }
 
                 ldlm_lock_allow_match(lock);
                 LDLM_LOCK_PUT(lock);
         }
 
-        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*dlm_rep));
-        LASSERT(dlm_rep != NULL);           /* checked by ldlm_cli_enqueue() */
         LASSERT_REPSWABBED(req, 0);         /* swabbed by ldlm_cli_enqueue() */
 
         it->d.lustre.it_disposition = (int) dlm_rep->lock_policy_res1;
@@ -442,7 +447,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                                                         cfid->generation}};
                 struct lustre_handle lockh;
                 ldlm_policy_data_t policy;
-                int mode = LCK_PR;
+                int mode = LCK_CR;
 
                 /* For the GETATTR case, ll_revalidate_it issues two separate
                    queries - for LOOKUP and for UPDATE lock because if cannot
@@ -451,15 +456,24 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 policy.l_inodebits.bits = 
                                  (it->it_op == IT_GETATTR)?MDS_INODELOCK_UPDATE:
                                                            MDS_INODELOCK_LOOKUP;
-                mode = LCK_PR;
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                      LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_IBITS, &policy, LCK_PR, &lockh);
+                                     LDLM_IBITS, &policy, mode, &lockh);
+
+                /* Only CW, CR and PR locks might happen on client at the time
+                 */
                 if (!rc) {
-                        mode = LCK_PW;
+                        mode = LCK_PR;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                              LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy, LCK_PW,
+                                             LDLM_IBITS, &policy, mode,
+                                             &lockh);
+                }
+                if (!rc) {
+                        mode = LCK_CW;
+                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
+                                             LDLM_FL_BLOCK_GRANTED, &res_id,
+                                             LDLM_IBITS, &policy, mode,
                                              &lockh);
                 }
                 if (rc) {
