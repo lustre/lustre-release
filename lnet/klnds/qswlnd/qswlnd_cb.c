@@ -617,6 +617,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         if (ktx == NULL) {
                 kqswnal_cerror_hdr (hdr);
                 lib_finalize (&kqswnal_lib, private, cookie);
+                return (-1);
         }
 
         memcpy (ktx->ktx_buffer, hdr, sizeof (*hdr)); /* copy hdr from caller's stack */
