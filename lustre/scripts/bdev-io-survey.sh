@@ -578,6 +578,8 @@ test_one() {
 
 	echo $test with $threads threads
 
+	$oprofile opcontrol --start
+
 	# start up vmstat and record its pid
         nice -19 vmstat 1 > $vmstat_log 2>&1 &
 	[ $? = 0 ] || die "vmstat failed"
@@ -593,6 +595,8 @@ test_one() {
 		pid_now_running $pid
 		iostat_pids[$i]=$pid
 	done
+
+	$oprofile opcontrol --reset
 
 	# start all the tests.  each returns a pid to wait on
 	pids=""
@@ -622,6 +626,12 @@ test_one() {
 		unset iostat_pids[$i]
 		pid_has_stopped $pid
 	done
+
+	$oprofile opcontrol --shutdown
+	$oprofile opreport > $tmpdir/oprofile
+	echo >> $tmpdir/oprofile
+	$oprofile opreport -c -l | head -20 >> $tmpdir/oprofile
+	save_output $tmpdir/oprofile $opref.oprofile
 
 	# collect the results of vmstat and iostat
 	cpu=$(mean_stddev $(awk \
@@ -756,8 +766,9 @@ if [ -z "$io_len" ]; then
 fi
 
 if [ ! -z "$output_dir" ]; then
-	[ ! -e "$output_dir" ] && "output dir $output_dir doesn't exist"
-	[ ! -d "$output_dir" ] && "output dir $output_dir isn't a directory"
+	[ ! -e "$output_dir" ] && mkdir -p "$output_dir" || die \
+		"error creating $output_dir"
+	[ ! -d "$output_dir" ] && die "$output_dir isn't a directory"
 fi
 
 block=`echo $block | sed -e 's/,/ /g'`
@@ -770,6 +781,14 @@ for t in $run_tests; do
 		die "$t isn't one of the possible tests: $possible_tests"
 	fi
 done
+
+if which opcontrol; then
+        echo generating oprofile results
+        oprofile=""
+else
+        echo not using oprofile
+        oprofile=": "
+fi
 
 [ $min_threads -gt $max_threads ] && \
 	die "min threads $min_threads must be <= min_threads $min_threads"
@@ -816,6 +835,7 @@ done
 	echo "T = number of concurrent threads per device"
 	echo "L = base io operation length, in KB"
 	echo "m = IO method: read, write, or over-write"
+	echo "A = aggregate throughput from all devices"
 	echo "C = percentage CPU used, both user and system"
 	echo "MB/s = per-device throughput"
 	echo "rR = read requests issued to the device per second"
