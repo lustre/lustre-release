@@ -16,7 +16,6 @@
 #include <linux/version.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
-#include <linux/obd_lov.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
@@ -279,13 +278,10 @@ static void ll_clear_inode(struct inode *inode)
 
         if (atomic_read(&inode->i_count) == 0) {
                 struct ll_inode_info *lli = ll_i2info(inode);
-                struct lov_stripe_md *lsm = lli->lli_smd;
                 char *symlink_name = lli->lli_symlink_name;
 
-                if (lsm) {
-                        OBD_FREE(lsm, ll_ost_easize(inode->i_sb));
-                        lli->lli_smd = NULL;
-                }
+                if (lli->lli_smd)
+                        obd_free_mem_md(&sbi->ll_osc_conn, lli->lli_smd);
                 if (symlink_name) {
                         OBD_FREE(symlink_name, strlen(symlink_name) + 1);
                         lli->lli_symlink_name = NULL;
@@ -316,7 +312,6 @@ static void ll_delete_inode(struct inode *inode)
                         GOTO(out, -ENOMEM);
 
                 oa->o_id = lsm->lsm_object_id;
-                oa->o_easize = ll_mds_easize(inode->i_sb);
                 oa->o_mode = inode->i_mode;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLTYPE;
 
@@ -475,6 +470,7 @@ int ll_read_inode2(struct inode *inode, void *opaque)
         struct ll_read_inode2_cookie *lic = opaque;
         struct mds_body *body = lic->lic_body;
         struct ll_inode_info *lli = ll_i2info(inode);
+        int rc = 0;
         ENTRY;
 
         sema_init(&lli->lli_open_sem, 1);
@@ -483,33 +479,12 @@ int ll_read_inode2(struct inode *inode, void *opaque)
         ll_update_inode(inode, body);
 
         //if (body->valid & OBD_MD_FLEASIZE)
-        if (lic && lic->lic_lmm) {
-                struct lov_mds_md *lmm = lic->lic_lmm;
-                int size;
-
-                /* XXX This should probably not be an error in the future,
-                 *     when we allow LOV OSTs to be added.
-                 */
-                if (lmm->lmm_easize != ll_mds_easize(inode->i_sb)) {
-                        CERROR("Striping metadata size error %ld\n",
-                               inode->i_ino);
-                        LBUG();
-                }
-                size = ll_ost_easize(inode->i_sb);
-                OBD_ALLOC(lli->lli_smd, size);
-                if (!lli->lli_smd) {
-                        CERROR("No memory for %d\n", size);
-                        LBUG();
-                }
-                lov_unpackmd(lli->lli_smd, lmm);
-        } else {
-                lli->lli_smd = NULL;
-        }
+        LASSERT(!lli->lli_smd);
+        if (lic && lic->lic_lmm)
+                obd_unpackmd(ll_i2obdconn(inode), &lli->lli_smd, lic->lic_lmm);
 
         /* Get the authoritative file size */
-        if (lli->lli_smd && (inode->i_mode & S_IFREG)) {
-                int rc;
-
+        if (lli->lli_smd && S_ISREG(inode->i_mode)) {
                 rc = ll_file_size(inode, lli->lli_smd);
                 if (rc) {
                         CERROR("ll_file_size: %d\n", rc);
@@ -538,7 +513,8 @@ int ll_read_inode2(struct inode *inode, void *opaque)
                                    kdev_t_to_nr(inode->i_rdev));
                 EXIT;
         }
-        return 0;
+
+        return rc;
 }
 
 static inline void invalidate_request_list(struct list_head *req_list)
