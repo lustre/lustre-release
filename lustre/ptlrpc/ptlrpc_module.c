@@ -40,8 +40,6 @@ extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
 
 int (*ptlrpc_ldlm_namespace_cleanup)(struct ldlm_namespace *, int);
-int (*ptlrpc_ldlm_cli_cancel_unused)(struct ldlm_namespace *,
-                                     struct ldlm_res_id *, int);
 int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
 
 #define GET_HOOK(name)                                                         \
@@ -62,7 +60,6 @@ int ptlrpc_get_ldlm_hooks(void)
         if (ensured)
                 return 1;
 
-        GET_HOOK(ldlm_cli_cancel_unused);
         GET_HOOK(ldlm_namespace_cleanup);
         GET_HOOK(ldlm_replay_locks);
 
@@ -81,10 +78,9 @@ if (ptlrpc_##hook) {                                                           \
 void ptlrpc_put_ldlm_hooks(void)
 {
         ENTRY;
-
-        PUT_HOOK(ldlm_cli_cancel_unused);
         PUT_HOOK(ldlm_namespace_cleanup);
         PUT_HOOK(ldlm_replay_locks);
+        EXIT;
 }
 
 #undef PUT_HOOK
@@ -205,6 +201,9 @@ EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
+
+/* ptlrpc_module.c */
+EXPORT_SYMBOL(ptlrpc_put_ldlm_hooks);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_upcall);
