@@ -586,8 +586,6 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
         return err;
 }
 
-#define LDLM_NUM_THREADS        4
-
 static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct ldlm_obd *ldlm = &obddev->u.ldlm;

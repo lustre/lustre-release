@@ -1440,6 +1440,8 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
                         GOTO(out_ctxt, rc = PTR_ERR(*desc_private));
         }
 
+        obd_highmem_get(niocount);
+
         for (i = 0; i < objcount; i++, o++) {
                 struct dentry *dentry;
                 struct inode *inode;
@@ -1502,6 +1504,7 @@ out_clean:
                 else
                         lustre_put_page(lnb->page);
         }
+        obd_highmem_put(niocount);
         goto out_stop;
 }
 
@@ -1588,6 +1591,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                         } else
                                 lustre_put_page(page);
 
+                        obd_highmem_put(1);
                         f_dput(r->dentry);
                 }
         }
@@ -1606,6 +1610,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                                 continue;
 
                         err = filter_write_locked_page(r);
+                        obd_highmem_put(1);
                         if (!rc)
                                 rc = err;
                         f_dput(r->dentry);
