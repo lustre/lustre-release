@@ -444,14 +444,87 @@ static int mds_post_mds_lovconf(struct obd_device *obd)
 int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len, 
                   void *karg, void *uarg)
 {
+        static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
         struct obd_device *obd = exp->exp_obd;
+        struct mds_obd *mds = &obd->u.mds;
         struct obd_ioctl_data *data = karg;
         struct lov_desc *desc;
         struct obd_uuid *uuidarray;
+        struct obd_run_ctxt saved;
         int count;
-        int rc;
+        int rc = 0;
 
         switch (cmd) {
+        case OBD_IOC_RECORD: {
+                char *name = data->ioc_inlbuf1;
+                if (mds->mds_cfg_llh)
+                        RETURN(-EBUSY);
+
+                obd->obd_log_exp = class_export_get(exp);
+
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                rc = llog_create(obd, &mds->mds_cfg_llh, NULL, name);
+                if (rc == 0)
+                        llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN, 
+                                         &cfg_uuid);
+                else
+                        mds->mds_cfg_llh = NULL;
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                        
+
+                RETURN(rc);
+        }
+
+        case OBD_IOC_ENDRECORD: {
+                if (!mds->mds_cfg_llh)
+                        RETURN(-EBADF);
+
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                rc = llog_close(mds->mds_cfg_llh);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+
+                mds->mds_cfg_llh = NULL;
+                class_export_put(obd->obd_log_exp);
+                obd->obd_log_exp = NULL;
+                RETURN(rc);
+        }
+
+        case OBD_IOC_DORECORD: {
+                struct llog_rec_hdr rec;
+
+                if (!mds->mds_cfg_llh)
+                        RETURN(-EBADF);
+
+//                rec.lrh_len = len;
+                rec.lrh_len = 16;
+                rec.lrh_type = OBD_CFG_REC;
+
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+//#warning repack karg here and pad to 16 bytes
+//                rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0, karg, -1);
+                rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0, 
+                                    "a 15bytestring  ", -1);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+
+                RETURN(rc);
+        }
+
+        case OBD_IOC_PARSE: {
+                struct llog_rec_hdr rec;
+
+                if (!mds->mds_cfg_llh)
+                        RETURN(-EBADF);
+
+                rec.lrh_len = len;
+                rec.lrh_type = OBD_CFG_REC;
+
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0, karg, -1);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+
+                RETURN(rc);
+        }
+
         case OBD_IOC_LOV_SET_CONFIG:
                 desc = (struct lov_desc *)data->ioc_inlbuf1;
                 if (sizeof(*desc) > data->ioc_inllen1) {
@@ -478,7 +551,6 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
 
         case OBD_IOC_LOV_GET_CONFIG: {
-                struct obd_run_ctxt saved;
                 desc = (struct lov_desc *)data->ioc_inlbuf1;
                 if (sizeof(*desc) > data->ioc_inllen1) {
                         CERROR("descriptor size wrong\n");
