@@ -8,4 +8,4 @@ modulenet_DATA := libcfs$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(libcfs-objs:%.o=%.c)
+DIST_SOURCES = $(libcfs-objs:%.o=%.c) tracefile.h
