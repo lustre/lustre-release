@@ -408,7 +408,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id)
 
         res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         if (res == NULL)
-                RETURN(-ENOMEM);
+                RETURN(-EINVAL);
 
         l_lock(&ns->ns_lock);
         list_for_each(tmp, &res->lr_granted) {

@@ -268,11 +268,11 @@ int target_handle_connect(struct ptlrpc_request *req)
         conn.addr = req->rq_reqmsg->addr;
         conn.cookie = req->rq_reqmsg->cookie;
 
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
+        rc = obd_connect(&conn, target, cluuid);
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_connect(&conn, target, cluuid);
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 GOTO(out, rc);
         req->rq_repmsg->addr = conn.addr;

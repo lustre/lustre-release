@@ -213,7 +213,7 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 struct lookup_intent *it, int lock_mode, struct inode *dir,
-                struct dentry *de, struct lustre_handle *lockh, __u64 id,
+                struct dentry *de, struct lustre_handle *lockh,
                 char *tgt, int tgtlen, void *data, int datalen)
 {
         struct ptlrpc_request *req;
@@ -259,7 +259,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 lit->opc = NTOH__u64((__u64)it->it_op);
 
                 /* pack the intended request */
-                mds_create_pack(req, 2, dir, it->it_mode, id, current->fsuid,
+                mds_create_pack(req, 2, dir, it->it_mode, 0, current->fsuid,
                                 current->fsgid, CURRENT_TIME, de->d_name.name,
                                 de->d_name.len, tgt, tgtlen);
                 req->rq_replen = lustre_msg_size(3, repsize);
