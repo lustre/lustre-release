@@ -292,6 +292,49 @@ void lov_dump_user_lmm(struct find_param *param, char *dname, char *fname)
         }
 }
 
+int get_file_stripe(char *path, struct lov_user_md *lum)
+{
+        char *dname, *fname;
+        int fd, rc = 0;
+
+        fname = strrchr(path, '/');
+
+        /* It should be a file (or other non-directory) */
+        if (fname == NULL) {
+                dname = (char *)malloc(2);
+                if (dname == NULL)
+                        return ENOMEM;
+                strcpy(dname, ".");
+                fname = path;
+        } else {
+                dname = (char *)malloc(fname - path + 1);
+                if (dname == NULL)
+                        return ENOMEM;
+                strncpy(dname, path, fname - path);
+                dname[fname - path + 1] = '\0';
+                fname++;
+        }
+
+        if ((fd = open(dname, O_RDONLY)) == -1) {
+                free(dname);
+                return errno;
+        }
+
+        strncpy((char *)lum, fname, sizeof(*lum));
+        if (ioctl(fd, IOC_MDC_GETSTRIPE, (void *)lum) == -1) {
+                close(fd);
+                free(dname);
+                return errno;
+        }
+
+        if (close(fd) == -1)
+                rc = errno;
+
+        free(dname);
+
+        return rc;
+}
+
 static int process_file(DIR *dir, char *dname, char *fname,
                          struct find_param *param)
 {
