@@ -79,6 +79,9 @@ struct ptlrpc_connection {
 
         atomic_t c_refcount;
         __u64 c_token;
+
+        __u64 c_remote_conn;
+        __u64 c_remote_token;
 };
 
 struct ptlrpc_client {

@@ -168,6 +168,10 @@ static int handle_incoming_request(struct obd_device *obddev,
 
         CDEBUG(D_NET, "got req %d\n", request.rq_reqmsg->xid);
 
+        /* FIXME: rq_reqmsg->conn should be, if nonzero, the local connection
+         * structure.  Until we have the HA connect messages that we talked
+         * about, however, we don't have a way to exchange that address/token
+         * pair and this will always be zero. */
         if (request.rq_reqmsg->conn) {
                 request.rq_connection =
                         (void *)(unsigned long)request.rq_reqmsg->conn;
@@ -178,7 +182,6 @@ static int handle_incoming_request(struct obd_device *obddev,
                 request.rq_connection = ptlrpc_get_connection(&peer);
                 if (!request.rq_connection)
                         LBUG();
-                CERROR("Did not find valid/conn token pair.\n");
         }
 
         peer.peer_nid = svc->srv_ev.initiator.nid;

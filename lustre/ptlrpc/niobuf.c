@@ -207,8 +207,8 @@ int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
         /* FIXME: we need to increment the count of handled events */
         req->rq_type = PTL_RPC_REPLY;
-        req->rq_repmsg->conn = req->rq_reqmsg->conn;
-        req->rq_repmsg->token = req->rq_reqmsg->token;
+        req->rq_repmsg->conn = req->rq_connection->c_remote_conn;
+        req->rq_repmsg->token = req->rq_connection->c_remote_token;
         req->rq_repmsg->xid = HTON__u32(req->rq_reqmsg->xid);
         req->rq_repmsg->status = HTON__u32(req->rq_status);
         req->rq_reqmsg->type = HTON__u32(req->rq_type);

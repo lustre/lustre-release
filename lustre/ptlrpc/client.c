@@ -120,14 +120,14 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         request->rq_type = PTL_RPC_REQUEST;
         request->rq_connection = ptlrpc_connection_addref(conn);
 
-        request->rq_reqmsg->conn = (__u64)(unsigned long)conn;
-        request->rq_reqmsg->token = conn->c_token;
+        request->rq_reqmsg->conn = (__u64)(unsigned long)conn->c_remote_conn;
+        request->rq_reqmsg->token = conn->c_remote_token;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->type = HTON__u32(request->rq_type);
 
         spin_lock(&conn->c_lock);
         request->rq_reqmsg->xid = HTON__u32(++conn->c_xid_out);
-        spin_unlock(&c->c_lock);
+        spin_unlock(&conn->c_lock);
 
         request->rq_client = cl;
 
