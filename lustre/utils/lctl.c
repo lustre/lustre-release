@@ -64,9 +64,9 @@ command_t cmdlist[] = {
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
         {"--net", jt_opt_net, 0, "run <command> after setting network to <net>\n"
-         "usage: --net <tcp/elan/myrinet/scimac> <command>"},
+         "usage: --net <tcp/elan/myrinet> <command>"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
-         "usage: network <tcp/elan/myrinet/scimac>"},
+         "usage: network <tcp/elan/myrinet>"},
         {"autoconn_list", jt_ptl_print_autoconnects, 0, "print autoconnect entries\n"
          "usage: print_autoconns"},
         {"add_autoconn", jt_ptl_add_autoconnect, 0, "add an autoconnect entry\n"
@@ -83,7 +83,7 @@ command_t cmdlist[] = {
          "usage: active_tx"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
-         "setup for elan/myrinet/scimac networks.\n"
+         "setup for elan/myrinet networks.\n"
          "usage: mynid [<nid>]"},
         {"shownid", jt_ptl_shownid, 0, "print the local NID\n"
          "usage: shownid"},

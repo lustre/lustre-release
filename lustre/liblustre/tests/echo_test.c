@@ -51,7 +51,6 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case QSWNAL:
         case GMNAL:
         case IBNAL:
-        case SCIMACNAL:
                 snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
                 break;

@@ -602,7 +602,6 @@ int ptlrpc_init_portals(void)
                 {GMNAL,   "gmnal"},
                 {IBNAL,   "ibnal"},
                 {TCPNAL,  "tcpnal"},
-                {SCIMACNAL, "scimacnal"},
                 {CRAY_KB_ERNAL, "cray_kb_ernal"}};
         int   rc;
         int   i;

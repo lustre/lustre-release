@@ -74,7 +74,7 @@ Object creation command summary:
   --node node_name
   --nid nid
   --cluster_id 
-  --nettype tcp|elan|gm|scimac
+  --nettype tcp|elan|gm
   --hostaddr addr
   --port port
   --tcpbuf size
@@ -154,7 +154,7 @@ lmc_options = [
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
     # network 
-    ('nettype', "Specify the network type. This can be tcp/elan/gm/scimac.", PARAM),
+    ('nettype', "Specify the network type. This can be tcp/elan/gm.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
     ('tcpbuf', "Optional argument to specify the TCP buffer size.", PARAM, "0"),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
@@ -637,7 +637,7 @@ def add_net(gen, lustre, options):
         port = get_option_int(options, 'port')
         tcpbuf = get_option_int(options, 'tcpbuf')
         irq_aff = get_option_int(options, 'irq_affinity')
-    elif net_type in ('elan', 'gm', 'scimac'):
+    elif net_type in ('elan', 'gm'):
         port = 0
         tcpbuf = 0
         irq_aff = 0

@@ -387,39 +387,6 @@ AC_SUBST(IBNAL)
 AC_SUBST(IBCPPFLAGS)
 AM_CONDITIONAL(BUILD_IBNAL, test x$IBNAL = "xibnal")
 
-def_scamac=/opt/scali/include
-AC_MSG_CHECKING([if ScaMAC support was requested])
-AC_ARG_WITH([scamac],
-	AC_HELP_STRING([--with-scamac=yes/no/path],
-		       [Path to ScaMAC includes (default=/opt/scali/include)]),
-	[
-		case $with_scamac in
-			yes)
-				AC_MSG_RESULT([yes])
-				SCIMACCPPFLAGS="-I/opt/scali/include"
-				SCIMACNAL="scimacnal"
-				;;
-			no)
-				AC_MSG_RESULT([no])
-				SCIMACCPPFLAGS=""
-				SCIMACNAL=""
-				;;
-			*)
-				AC_MSG_RESULT([yes])
-				SCIMACCPPFLAGS="-I$with_scamac -I$with_scamac/icm"
-				SCIMACNAL="scimacnal"
-				;;
-		esac
-	],[
-		AC_MSG_RESULT([no])
-		SCIMACCPPFLAGS=""
-		SCIMACNAL=""
-	])
-AC_SUBST(SCIMACCPPFLAGS)
-AC_SUBST(SCIMACNAL)
-AM_CONDITIONAL(BUILD_SCIMACNAL, test x$SCIMACNAL = "xscimacnal")
-# if test "$with_scamac" != no -a -f ${with_scamac}/scamac.h; then
-
 AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
 

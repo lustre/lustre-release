@@ -921,15 +921,6 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
             log(e)
     elif net_type == 'gm':
         fixme("automatic local address for GM")
-    elif net_type == 'scimac':
-        scinode="/opt/scali/sbin/scinode"
-        if os.path.exists(scinode):
-            (rc,local) = run(scinode)
-        else:
-            panic (scinode, " not found on node with scimac networking")
-        if rc:
-            panic (scinode, " failed")
-        local=string.rstrip(local[0])
 
     return local
 
@@ -1126,8 +1117,6 @@ class Network(Module):
             self.add_portals_module("knals/qswnal", 'kqswnal')
         if self.net_type == 'gm':
             self.add_portals_module("knals/gmnal", 'kgmnal')
-        if self.net_type == 'scimac':
-            self.add_portals_module("knals/scimacnal", 'kscimacnal')
 
     def nid_to_uuid(self, nid):
         return "NID_%s_UUID" %(nid,)

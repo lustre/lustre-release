@@ -81,7 +81,6 @@ static name2num_t nalnames[] = {
         {"elan",	QSWNAL},
         {"gm",	        GMNAL},
         {"ib",	        IBNAL},
-        {"scimac",      SCIMACNAL},
         {NULL,		-1}
 };
 

@@ -640,10 +640,9 @@ enum {
         GMNAL     = 3,
         /*          4 unused */
         TCPNAL    = 5,
-        SCIMACNAL = 6,
-        ROUTER    = 7,
-        IBNAL     = 8,
-        CRAY_KB_ERNAL = 9,
+        ROUTER    = 6,
+        IBNAL     = 7,
+        CRAY_KB_ERNAL = 8,
         NAL_ENUM_END_MARKER
 };
 
