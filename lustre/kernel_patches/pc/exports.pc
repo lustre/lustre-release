@@ -1,4 +1,0 @@
-fs/ext3/Makefile
-fs/ext3/super.c
-include/linux/fs.h
-kernel/ksyms.c
