@@ -60,6 +60,7 @@ ssize_t obdfs_file_write(struct file *file, const char *buf, size_t count, loff_
 
 	retval = generic_file_write(file, buf, count,
 				    ppos, obdfs_write_one_page);
+	CDEBUG(D_INODE, "Wrote %d\n", retval);
 	if (retval > 0) {
 		struct inode *inode = file->f_dentry->d_inode;
 		remove_suid(inode);

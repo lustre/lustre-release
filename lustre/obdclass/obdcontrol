@@ -296,7 +296,7 @@ sub Setup {
 
 sub Cleanup {
     my $err = "0";
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_CLEANUP_OBDDEV, $err);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_CLEANUP, $err);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
@@ -380,9 +380,11 @@ sub Create {
 	for ($i = 0; $i < scalar($arg); $i++) {
 	    $rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
 	    my $ino = unpack("L", $packed);
-	    if (!($rc eq "0 but true") || $packed == 0) {
+	    if (!($rc eq "0 but true")) {
 		last;
+		$packed = pack("IL", $::client_id, $prealloc);
 	    } elsif (!defined($quiet)) {
+		$packed = pack("IL", $::client_id, $prealloc);
 		print "Created object #$ino.\n";
 	    }
 	}

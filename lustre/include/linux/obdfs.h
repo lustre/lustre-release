@@ -13,6 +13,10 @@
 #define OBDFS_H
 #include <../obd/linux/obd_class.h>
 
+/* super.c */
+void obdfs_read_inode(struct inode *inode);
+
+
 /* file.c */
 ssize_t obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos);
 

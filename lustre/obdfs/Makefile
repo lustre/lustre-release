@@ -15,9 +15,13 @@ CPPFLAGS = $(PCDEBUG) -D__KERNEL__ -DMODULE -I../include \
 	   -I. -I$(LINUX)/include $(SMPFLAG)
 COFLAGS = -kv
 
+ifeq ($(CONFIG_MODVERSIONS),"y")
 CFLAGS= $(KFLAGS) $(MFLAG)
+else 
+CFLAGS= $(KFLAGS)
+endif
 
-SRCS=file.c dir.c sysctl.c super.c rw.c namei.c
+SRCS=file.c dir.c sysctl.c super.c rw.c namei.c # symlink.c
 OBJS=$(SRCS:%.c=%.o)
 
 MODULES = obdfs.o

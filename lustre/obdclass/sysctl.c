@@ -46,12 +46,13 @@ static ctl_table obd_table[] = {
 	{ 0 }
 };
 
+#if 0
 static ctl_table jukebox_table[] = {
        {OBD_SYSCTL, "obd",    NULL, 0, 0555, obd_table},
        {0}
 };
 
-
+#endif
 void obd_sysctl_init (void)
 {
 #ifdef CONFIG_SYSCTL

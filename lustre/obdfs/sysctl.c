@@ -29,6 +29,7 @@ int obdfs_print_entry = 1;
 #define OBDFS_RESET           7
 
 #define OBDFS_VARS_SLOT       2
+#if 0
 
 static ctl_table obdfs_table[] = {
 	{OBDFS_DEBUG, "debug", &obdfs_debug_level, sizeof(int), 0644, NULL, &proc_dointvec},
@@ -40,9 +41,11 @@ static ctl_table jukebox_table[] = {
        {OBDFS_SYSCTL, "obdfs",    NULL, 0, 0555, obdfs_table},
        {0}
 };
+#endif
 
 void obdfs_sysctl_init (void)
 {
+
 #ifdef CONFIG_SYSCTL
 	if ( !obdfs_table_header )
 		obdfs_table_header = register_sysctl_table(jukebox_table, 0); 

@@ -1,5 +1,5 @@
-#ifndef _OBD_SIM
-#define _OBD_SIM
+#ifndef _OBD_SNAP
+#define _OBD_SNAP
 
 #define OBD_SNAP_MAGIC 0x47224722
 
@@ -21,7 +21,7 @@ struct snap_object_data {
 	int od_magic;
 	/* id of snaps of object; slot 0 has the current data */
 	unsigned long od_ids[SNAP_MAX + 1]; 
-}
+};
 
 
 

@@ -35,7 +35,6 @@
 
 /* VFS super_block ops */
 static struct super_block *obdfs_read_super(struct super_block *, void *, int);
-static void obdfs_read_inode(struct inode *);
 static int  obdfs_notify_change(struct dentry *dentry, struct iattr *attr);
 static void obdfs_write_inode(struct inode *);
 static void obdfs_delete_inode(struct inode *);
@@ -130,6 +129,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	}
 	
 
+
         lock_super(sb);
         sb->u.generic_sbp = sbi;
 	
@@ -147,9 +147,11 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	    unlock_super(sb);
 	    goto error;
 	} 
+	
 
-	printk("obdfs_read_super: rootinode is %ld dev %d\n", 
-	       root->i_ino, root->i_dev);
+	printk("obdfs_read_super: sbdev %d,  rootinode is %ld dev %d, blocksize %ld, "
+	       "blocksize bits %ld\n", 
+	       sb->s_dev, root->i_ino, root->i_dev, blocksize, blocksize_bits);
 	sb->s_root = d_alloc_root(root);
 	unlock_super(sb);
 	EXIT;  
@@ -194,7 +196,7 @@ static void obdfs_put_super(struct super_block *sb)
 extern struct inode_operations obdfs_inode_ops;
 
 /* all filling in of inodes postponed until lookup */
-static void obdfs_read_inode(struct inode *inode)
+void obdfs_read_inode(struct inode *inode)
 {
 	int error;
 	struct obdfs_sb_info *sbi = inode->i_sb->u.generic_sbp;
@@ -203,10 +205,11 @@ static void obdfs_read_inode(struct inode *inode)
 	error = sbi->osi_ops->o_getattr(sbi->osi_conn_info.conn_id, 
 					inode->i_ino, inode);
 	if (error) {
-		printk("obdfs_read_inode: ibd_getattr fails (%d)\n", error);
+		printk("obdfs_read_inode: obd_getattr fails (%d)\n", error);
 		return;
 	}
 
+	IDEBUG(inode);
 	inode->i_op = &obdfs_inode_ops;
 	return;
 }
@@ -220,7 +223,7 @@ static void obdfs_write_inode(struct inode *inode)
 	error = sbi->osi_ops->o_setattr(sbi->osi_conn_info.conn_id, 
 					inode->i_ino, inode);
 	if (error) {
-		printk("obdfs_write_inode: ibd_setattr fails (%d)\n", error);
+		printk("obdfs_write_inode: obd_setattr fails (%d)\n", error);
 		return;
 	}
 

@@ -3,20 +3,21 @@
 
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
-
+#include <linux/time.h>
 #include <linux/obd.h>
 
 #include <linux/obd_sim.h>
 #include <linux/obd_snap.h>
 /* #include <linux/obd_fc.h> */
 #include <linux/obd_raid1.h>
+#include <linux/obd_rpc.h>
 
 
 #define OBD_PSDEV_MAJOR 120
 #define MAX_OBD_DEVICES 2
 #define MAX_MULTI 16
 
-typedef unsigned long objid;
+typedef int objid;
 typedef struct inode obdattr;
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -42,6 +43,7 @@ struct obd_device {
 		struct sim_obd sim;
 		struct raid1_obd raid1;
 		struct snap_obd snap;
+		struct rpc_obd rpc;
 		/* struct fc_obd fc; */
 	} u;
 };
@@ -62,7 +64,7 @@ struct obd_ops {
 	unsigned long (*o_read)(unsigned int conn_id, unsigned long ino, char *buf, unsigned long count, loff_t offset, int *err);
 	unsigned long (*o_read2)(unsigned int conn_id, unsigned long ino, char *buf, unsigned long count, loff_t offset, int *err);
 	unsigned long (*o_write)(unsigned int conn_id, unsigned long ino, char *buf, unsigned long count, loff_t offset, int *err);
-	int (*o_brw)(int rw, int conn, int objectid, struct page *page, int create);
+	int (*o_brw)(int rw, int conn, obdattr *obj, struct page *page, int create);
 	long (*o_preallocate)(unsigned int conn_id, int req, long inodes[32], int *err);
 	int (*o_cleanup_device)(struct obd_device *);
 	int  (*o_get_info)(unsigned int conn_id, int keylen, void *key, int *vallen, void **val);

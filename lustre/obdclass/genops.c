@@ -122,13 +122,13 @@ int gen_multi_setup(struct obd_device *obddev, int len, void *data)
 int gen_multi_cleanup(struct obd_device * obddev)
 {
 	int i;
-	struct obd_device *rdev = obddev->obd_multi_dev[0];
+	struct obd_device **rdev = obddev->obd_multi_dev;
 
 	for (i = 0 ; i < obddev->obd_multi_count ; i++ ) {
 		int rc;
-		struct obd_device *child = rdev + i;
+		struct obd_device *child = *(rdev + i);
 		rc  = OBP(child, cleanup)(child);
-		*child = -1;
+		*(rdev + i) = NULL;
 
 		if ( rc != 0 ) {
 			/* XXX disconnect others */
@@ -167,19 +167,19 @@ int gen_multi_attach(struct obd_device *obddev, int len, void *data)
 int gen_multi_cleanup_device(struct obd_device *obddev)
 {
 	int i;
-	struct obd_device *rdev;
+	struct obd_device **rdev;
 
-	rdev =  obddev->obd_multi_dev[0];
+	rdev =  obddev->obd_multi_dev;
 	for (i = 0 ; i < obddev->obd_multi_count ; i++ ) {
 		int rc;
-		struct obd_device *child = rdev + i;
+		struct obd_device *child = *(rdev + i);
 		rc  = OBP(child, disconnect)
 			(obddev->obd_multi_conns[i].conn_id);
 
 		if ( rc != 0 ) {
 			printk("OBD multi cleanup dev: disconnect failure %d\n", child->obd_minor);
 		}
-		*child = 0;
+		*(rdev + i) = NULL;
 	}		
 	return 0;
 } /* gen_multi_cleanup_device */

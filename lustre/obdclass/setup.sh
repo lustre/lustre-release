@@ -10,4 +10,4 @@ attach sim_obd
 setup
 quit
 EOF
-mount -t obdfs /dev/loop0 /mnt/obd
+mount -t obdfs /dev/obd0 /mnt/obd

@@ -55,6 +55,7 @@ int obdfs_check_dir_entry (const char * function, struct inode * dir,
 			  unsigned long offset)
 {
 	const char * error_msg = NULL;
+	return 1;
 
 	ENTRY;
 	if ( !de ) {
@@ -106,7 +107,8 @@ int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 	offset = filp->f_pos & (PAGE_SIZE - 1);
 
 	while (!error && !stored && filp->f_pos < inode->i_size) {
-		page = obdfs_getpage(inode, offset, 0, NOLOCK);
+		IDEBUG(inode);
+		page = obdfs_getpage(inode, offset, 0, LOCKED);
 		PDEBUG(page, "readdir");
 		if (!page) {
 			ext2_error (sb, "ext2_readdir",
@@ -182,6 +184,7 @@ revalidate:
 			filp->f_pos += le16_to_cpu(de->rec_len);
 		}
 		offset = 0;
+		UnlockPage(page);
 		page_cache_release(page);
 	}
 	UPDATE_ATIME(inode);

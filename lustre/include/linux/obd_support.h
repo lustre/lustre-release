@@ -1,3 +1,4 @@
+
 #ifndef _OBD_SUPPORT
 #define _OBD_SUPPORT
 #include <linux/malloc.h>
@@ -44,7 +45,7 @@ extern int obd_print_entry;
 
 #define EXIT								      \
         if (obd_print_entry)						      \
-                printk("Process %d leaving %s\n", current->pid, __FUNCTION__)
+                printk("Process %d leaving %s [%d]\n", current->pid, __FUNCTION__, __LINE__)
 
 #else /* SIM_OBD_DEBUG */
 
@@ -57,16 +58,25 @@ extern int obd_print_entry;
 
 #define CMD(cmd) (( cmd == READ ) ? "read" : "write")
 
+#define IDEBUG(inode) { \
+	if ( !list_empty(&inode->i_data.pages) || inode->i_data.nrpages ) {\
+		struct page * page;\
+		printk("XXXXX: func %s line %d ino %ld list not empty, pages %ld\n", __FUNCTION__ , __LINE__,\
+		       inode->i_ino, inode->i_data.nrpages);\
+		page = list_entry(inode->i_data.pages.next, struct page , list);\
+		PDEBUG(page, "READ INODE");\
+	}}
+
+
 #define PDEBUG(page,cmd)	{if (page){\
 		char *uptodate = (Page_Uptodate(page)) ? "yes" : "no";\
 		char *locked = (PageLocked(page)) ? "yes" : "no";\
 		int count = page->count.counter;\
-		long ino = (page->inode) ? page->inode->i_ino : -1;\
-                long offset = page->offset / PAGE_SIZE;\
+                long offset = page->offset;\
 		\
-		CDEBUG(D_IOCTL, " ** %s, cmd: %s, ino: %ld, off %ld, uptodate: %s, "\
-		       "locked: %s, cnt %d page %p ** \n", __FUNCTION__,\
-		       cmd, ino, offset, uptodate, locked, count, page);\
+		CDEBUG(D_IOCTL, " ** %s, cmd: %s, off %ld, uptodate: %s, "\
+		       "locked: %s, cnt %d page %p pages %ld** \n", __FUNCTION__,\
+		       cmd, offset, uptodate, locked, count, page, page->mapping->nrpages);\
 	} else { CDEBUG(D_IOCTL, "** %s, no page\n", __FUNCTION__); }}
 
 
@@ -112,7 +122,7 @@ static inline void inode_to_iattr(struct inode *inode, struct iattr *tmp)
 	tmp->ia_atime = inode->i_atime;
 	tmp->ia_mtime = inode->i_mtime;
 	tmp->ia_ctime = inode->i_ctime;
-	tmp->ia_attr_flags = inode->i_flags;
+	/*	tmp->ia_flags = inode->i_flags; */
 
 	tmp->ia_valid = ~0;
 }
@@ -126,7 +136,7 @@ static inline void inode_cpy(struct inode *dest, struct inode *src)
 	dest->i_atime = src->i_atime;
 	dest->i_mtime = src->i_mtime;
 	dest->i_ctime = src->i_ctime;
-	dest->i_attr_flags = src->i_flags;
+	dest->i_flags = src->i_flags;
 	/* allocation of space */
 	dest->i_blocks = src->i_blocks;
 
