@@ -359,7 +359,7 @@ int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
 
                 bulk = ptlrpc_prep_bulk(connection);
                 if (bulk == NULL)
-                        return -ENOMEM;
+                        RETURN(-ENOMEM);
 
                 bulk->b_buf = (void *)(unsigned long)src->addr;
                 bulk->b_buflen = src->len;
@@ -369,7 +369,7 @@ int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
                         CERROR("send_bulk failed: %d\n", rc);
                         ptlrpc_free_bulk(bulk);
                         LBUG();
-                        return rc;
+                        RETURN(rc);
                 }
                 wait_event_interruptible(bulk->b_waitq,
                                          ptlrpc_check_bulk_sent(bulk));
