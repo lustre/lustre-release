@@ -30,10 +30,9 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/lustre_compat25.h>
 #endif
-
 #include "llite_internal.h"
 
-static int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
+int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                         struct file *file)
 {
         struct ll_file_data *fd = file->private_data;
@@ -140,7 +139,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         RETURN(rc);
 }
 
-static int ll_local_open(struct file *file, struct lookup_intent *it)
+int ll_local_open(struct file *file, struct lookup_intent *it)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
@@ -612,6 +611,7 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 }
 
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
+__u64 lov_merge_blocks(struct lov_stripe_md *lsm);
 __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
 
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
@@ -637,9 +637,11 @@ int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
         }
 
         lvb->lvb_size = lov_merge_size(lli->lli_smd, 0);
+        inode->i_blocks = lov_merge_blocks(lli->lli_smd);
         //inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64"\n", lvb->lvb_size);
+        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
+               lvb->lvb_size, lvb->lvb_blocks);
 
         obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
 
@@ -1453,12 +1455,3 @@ struct inode_operations ll_file_inode_operations = {
 #endif
 };
 
-struct inode_operations ll_special_inode_operations = {
-        setattr_raw:    ll_setattr_raw,
-        setattr:        ll_setattr,
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        getattr_it:     ll_getattr,
-#else
-        revalidate_it:  ll_inode_revalidate_it,
-#endif
-};

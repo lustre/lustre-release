@@ -1381,7 +1381,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-ENOMEM);
 
         memset((void *)page, 0, PAGE_SIZE);
-        sprintf((char *)page, "iopen_nopriv");
+        sprintf((char *)page, "iopen_nopriv,errors=remount-ro");
 
         mnt = do_kern_mount(lcfg->lcfg_inlbuf2, 0,
                             lcfg->lcfg_inlbuf1, (void *)page);

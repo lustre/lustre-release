@@ -1808,7 +1808,8 @@ static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         /* XXX woah, shouldn't we be altering more here?  size? */
         oa->o_id = lap->lap_loi_id;
 }
-static void lov_ap_completion(void *data, int cmd, int rc)
+
+static void lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct lov_async_page *lap = lap_from_cookie(data);
         if (IS_ERR(lap))
@@ -1817,7 +1818,7 @@ static void lov_ap_completion(void *data, int cmd, int rc)
         /* in a raid1 regime this would down a count of many ios
          * in flight, onl calling the caller_ops completion when all
          * the raid1 ios are complete */
-        lap->lap_caller_ops->ap_completion(lap->lap_caller_data, cmd, rc);
+        lap->lap_caller_ops->ap_completion(lap->lap_caller_data, cmd, oa, rc);
 }
 
 static struct obd_async_page_ops lov_async_page_ops = {
@@ -2063,6 +2064,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 submd->lsm_oinfo->loi_kms_valid = loi->loi_kms_valid;
                 submd->lsm_oinfo->loi_rss = loi->loi_rss;
                 submd->lsm_oinfo->loi_kms = loi->loi_kms;
+                submd->lsm_oinfo->loi_blocks = loi->loi_blocks;
                 loi->loi_mtime = submd->lsm_oinfo->loi_mtime;
                 /* XXX submd is not fully initialized here */
                 *flags = save_flags;
@@ -2083,6 +2085,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                         LASSERT(lock != NULL);
                         loi->loi_rss = tmp;
+                        loi->loi_blocks = submd->lsm_oinfo->loi_blocks;
                         /* Extend KMS up to the end of this lock and no further
                          * A lock on [x,y] means a KMS of up to y + 1 bytes! */
                         if (tmp > lock->l_policy_data.l_extent.end)
@@ -2105,6 +2108,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                            save_flags & LDLM_FL_HAS_INTENT) {
                         memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                         loi->loi_rss = submd->lsm_oinfo->loi_rss;
+                        loi->loi_blocks = submd->lsm_oinfo->loi_blocks;
                         CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
                                " kms="LPU64"\n", loi->loi_rss, loi->loi_kms);
                 } else {
@@ -2692,6 +2696,21 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
         return size;
 }
 EXPORT_SYMBOL(lov_merge_size);
+
+/* Merge blocks */
+__u64 lov_merge_blocks(struct lov_stripe_md *lsm)
+{
+        struct lov_oinfo *loi;
+        __u64 blocks = 0;
+        int i;
+
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
+             i++, loi++) {
+                blocks += loi->loi_blocks;
+        }
+        return blocks;
+}
+EXPORT_SYMBOL(lov_merge_blocks);
 
 __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time)
 {

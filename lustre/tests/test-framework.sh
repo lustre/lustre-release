@@ -31,6 +31,7 @@ init_test_env() {
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=/r
+    export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LLMOUNT=${LLMOUNT:-"llmount"}

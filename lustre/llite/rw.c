@@ -208,21 +208,6 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         return rc;
 }
 
-int ll_write_count(struct page *page)
-{
-        struct inode *inode = page->mapping->host;
-
-        /* catch race with truncate */
-        if (((loff_t)page->index << PAGE_SHIFT) >= inode->i_size)
-                return 0;
-
-        /* catch sub-page write at end of file */
-        if (((loff_t)page->index << PAGE_SHIFT) + PAGE_SIZE > inode->i_size)
-                return inode->i_size % PAGE_SIZE;
-
-        return PAGE_SIZE;
-}
-
 struct ll_async_page *llap_from_cookie(void *cookie)
 {
         struct ll_async_page *llap = cookie;
@@ -264,9 +249,26 @@ static int ll_ap_make_ready(void *data, int cmd)
         RETURN(0);
 }
 
+/* We have two reasons for giving llite the opportunity to change the 
+ * write length of a given queued page as it builds the RPC containing
+ * the page: 
+ *
+ * 1) Further extending writes may have landed in the page cache
+ *    since a partial write first queued this page requiring us
+ *    to write more from the page cache.
+ * 2) We might have raced with truncate and want to avoid performing
+ *    write RPCs that are just going to be thrown away by the 
+ *    truncate's punch on the storage targets.
+ *
+ * The kms serves these purposes as it is set at both truncate and extending
+ * writes.
+ */
 static int ll_ap_refresh_count(void *data, int cmd)
 {
         struct ll_async_page *llap;
+        struct lov_stripe_md *lsm;
+        struct page *page;
+        __u64 kms;
         ENTRY;
 
         /* readpage queues with _COUNT_STABLE, shouldn't get here. */
@@ -276,7 +278,19 @@ static int ll_ap_refresh_count(void *data, int cmd)
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
-        return ll_write_count(llap->llap_page);
+        page = llap->llap_page;
+        lsm = ll_i2info(page->mapping->host)->lli_smd;
+        kms = lov_merge_size(lsm, 1);
+
+        /* catch race with truncate */
+        if (((__u64)page->index << PAGE_SHIFT) >= kms)
+                return 0;
+
+        /* catch sub-page write at end of file */
+        if (((__u64)page->index << PAGE_SHIFT) + PAGE_SIZE > kms)
+                return kms % PAGE_SIZE;
+
+        return PAGE_SIZE;
 }
 
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
@@ -459,6 +473,50 @@ out:
                 SetPageUptodate(page);
         }
         RETURN(rc);
+}
+
+/* called for each page in a completed rpc.*/
+void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
+{
+        struct ll_async_page *llap;
+        struct page *page;
+        ENTRY;
+
+        llap = llap_from_cookie(data);
+        if (IS_ERR(llap)) {
+                EXIT;
+                return;
+        }
+
+        page = llap->llap_page;
+        LASSERT(PageLocked(page));
+
+        LL_CDEBUG_PAGE(D_PAGE, page, "completing cmd %d with %d\n", cmd, rc);
+
+        if (rc == 0)  {
+                if (cmd == OBD_BRW_READ) {
+                        if (!llap->llap_defer_uptodate)
+                                SetPageUptodate(page);
+                } else {
+                        llap->llap_write_queued = 0;
+                }
+                ClearPageError(page);
+        } else {
+                if (cmd == OBD_BRW_READ)
+                        llap->llap_defer_uptodate = 0;
+                SetPageError(page);
+        }
+
+
+        unlock_page(page);
+
+        if (0 && cmd == OBD_BRW_WRITE) {
+                llap_write_complete(page->mapping->host, llap);
+                ll_try_done_writing(page->mapping->host);
+        }
+
+        page_cache_release(page);
+        EXIT;
 }
 
 /* the kernel calls us here when a page is unhashed from the page cache.

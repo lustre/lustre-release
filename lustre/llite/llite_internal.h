@@ -147,13 +147,7 @@ void ll_prepare_mdc_op_data(struct mdc_op_data *,
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define ll_ap_completion ll_ap_completion_24
-void ll_ap_completion_24(void *data, int cmd, int rc);
-#else
-#define ll_ap_completion ll_ap_completion_26
-void ll_ap_completion_26(void *data, int cmd, int rc);
-#endif
+void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 void ll_removepage(struct page *page);
 int ll_sync_page(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
@@ -166,7 +160,6 @@ void ll_truncate(struct inode *inode);
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
-extern struct inode_operations ll_special_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
@@ -177,6 +170,9 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb);
+int ll_local_open(struct file *file, struct lookup_intent *it);
+int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
+                 struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
@@ -225,6 +221,16 @@ __u32 get_uuid2int(const char *name, int len);
 struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
                                int fhtype, int parent);
 int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
+
+/* llite/special.c */
+extern struct inode_operations ll_special_inode_operations;
+extern struct file_operations ll_special_chr_inode_fops;
+extern struct file_operations ll_special_chr_file_fops;
+extern struct file_operations ll_special_blk_inode_fops;
+extern struct file_operations ll_special_fifo_inode_fops;
+extern struct file_operations ll_special_fifo_file_fops;
+extern struct file_operations ll_special_sock_inode_fops;
+
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
 

@@ -1104,6 +1104,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         res_lvb = res->lr_lvb_data;
         LASSERT(res_lvb != NULL);
         reply_lvb->lvb_size = res_lvb->lvb_size;
+        reply_lvb->lvb_blocks = res_lvb->lvb_blocks;
         up(&res->lr_lvb_sem);
 
         list_for_each(tmp, &res->lr_granted) {
@@ -1143,6 +1144,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         down(&res->lr_lvb_sem);
         reply_lvb->lvb_size = res_lvb->lvb_size;
+        reply_lvb->lvb_blocks = res_lvb->lvb_blocks;
         up(&res->lr_lvb_sem);
 
         LDLM_LOCK_PUT(l);

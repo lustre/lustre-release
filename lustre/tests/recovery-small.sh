@@ -293,27 +293,32 @@ test_18b() {
 run_test 18b "eviction and reconnect clears page cache (2766)"
 
 test_19a() {	# bug 2983 - ldlm_handle_enqueue cleanup
-	mkdir -p $DIR/d19
-	multiop $DIR/d19/f19a O_wc &
+	mkdir -p $DIR/$tdir
+	multiop $DIR/$tdir/${tfile} O_wc &
 	MULTI_PID=$!
 	usleep 500
 	cancel_lru_locks OSC
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	set -vx
 	kill -USR1 $MULTI_PID
-	wait $MULTI_PID && error "multiop didn't fail enqueue" || true
+	wait $MULTI_PID
+	rc=$?
+	[ $rc -eq 0 ] && error "multiop didn't fail enqueue: rc $rc" || true
+	set +vx
 }
-run_test 19a "ldlm_handle_enqueue error (should return error) ==="
+run_test 19a "ldlm_handle_enqueue error (should return error)" 
 
 test_19b() {	# bug 2986 - ldlm_handle_enqueue error during open
-	mkdir $DIR/d19
-	touch $DIR/d19/f19b
+	mkdir $DIR/$tdir
+	touch $DIR/$tdir/${tfile}
 	cancel_lru_locks OSC
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost sysctl -w lustre.fail_loc=0x80000308
-	dd if=/etc/hosts of=$DIR/d19/f19b && error "didn't fail enqueue" || true
+	dd if=/etc/hosts of=$DIR/$tdir/$tfile && \
+		error "didn't fail open enqueue" || true
 }
-run_test 19b "ldlm_handle_enqueue error (should return error) ==="
+run_test 19b "ldlm_handle_enqueue error (should return error)"
 
 
 $CLEANUP
