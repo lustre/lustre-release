@@ -256,15 +256,16 @@ void ll_truncate(struct inode *inode)
         int err;
         ENTRY;
 
-        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+        oa = ll_oa_from_inode(inode, OBD_MD_FLID | OBD_MD_FLSIZE);
         if (!oa) {
                 CERROR("no memory to allocate obdo!\n");
                 return;
         }
 
-        CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
+        CDEBUG(D_INFO, "calling punch for %ld (all bytes after %Lu)\n",
                (long)oa->o_id, (unsigned long long)oa->o_size);
-        err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
+        /* truncate == punch from i_size onwards */
+        err = obd_punch(ll_i2obdconn(inode), oa, -1 - oa->o_size, oa->o_size);
         obdo_free(oa);
 
         if (err)
