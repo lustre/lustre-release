@@ -40,6 +40,24 @@ struct client_obd *client_conn2cli(struct lustre_handle *conn)
         return &export->exp_obd->u.cli;
 }
 
+struct obd_device *client_tgtuuid2obd(char *tgtuuid)
+{
+        int i;
+
+        for (i=0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd = &obd_dev[i];
+                if ((strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0) ||
+                    (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)) {
+                        struct client_obd *cli = &obd->u.cli;
+                        if (strncmp(tgtuuid, cli->cl_target_uuid, 
+                                    sizeof(cli->cl_target_uuid)) == 0)
+                                return obd;
+                }
+        }
+
+        return NULL;
+}
+
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct obd_ioctl_data* data = buf;
