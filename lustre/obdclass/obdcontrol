@@ -1,5 +1,19 @@
 #!/usr/bin/perl
 
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+#
+# Copyright (C) 1998, Stelias Computing
+# 
+# Modified for InterMezzo from Gordian's HSM bcache device/jcm module
+# Copyright (C) 1999, Carnegie Mellon University
+#
+# Derived from InterMezzo's incontrol, modified for OBD's
+# Copyright (C) 1999, Stelias Computing
+#
+#
+
 #use strict;
 BEGIN { require "asm/errno.ph" };
 BEGIN { require "asm/ioctl.ph" };
@@ -7,10 +21,10 @@ BEGIN { require "asm/ioctl.ph" };
 # p2ph generated invalid macros for ioctl stuff, so I override some of it here
 eval 'sub OBD_IOC_CREATE () { &_IOC(2, ord(\'f\'), 3, 4);}' unless
   defined(&OBD_IOC_CREATE);
-eval 'sub OBD_IOC_SETUP () { &_IOC(1, ord(\'f\'), 4, 4);}' unless
-  defined(&OBD_IOC_SETUP);
-eval 'sub OBD_IOC_SYNC () { &_IOC(2, ord(\'f\'), 5, 4);}' unless
-  defined(&OBD_IOC_SYNC);
+eval 'sub OBD_IOC_SETUP_SUPER () { &_IOC(1, ord(\'f\'), 4, 4);}' unless
+  defined(&OBD_IOC_SETUP_SUPER);
+eval 'sub OBD_IOC_CLEANUP_SUPER () { &_IOC(0, ord(\'f\'), 5, 0);}' unless
+  defined(&OBD_IOC_CLEANUP_SUPER);
 eval 'sub OBD_IOC_DESTROY () { &_IOC(1, ord(\'f\'), 6, 4);}' unless
   defined(&OBD_IOC_DESTROY);
 eval 'sub OBD_IOC_PREALLOCATE () { &_IOC(3, ord(\'f\'), 7, 4);}' unless
@@ -31,6 +45,8 @@ eval 'sub OBD_IOC_DISCONNECT () { &_IOC(1, ord(\'f\'), 14, 4);}' unless
   defined(&OBD_IOC_DISCONNECT);
 eval 'sub OBD_IOC_STATFS () { &_IOC(3, ord(\'f\'), 15, 4);}' unless
   defined(&OBD_IOC_STATFS);
+eval 'sub OBD_IOC_SYNC () { &_IOC(2, ord(\'f\'), 5, 4);}' unless
+  defined(&OBD_IOC_SYNC);
 
 eval 'sub ATTR_MODE () {1;}' unless defined(&ATTR_MODE);
 eval 'sub ATTR_UID () {2;}' unless defined(&ATTR_UID);
@@ -51,7 +67,9 @@ my ($device, $filesystem);
 # startup options (I'll replace these when I have some to replace with)
 GetOptions("device=s" => \$device, "fs=s" => $filesystem) || die "Getoptions";
 
+# genuine new simulated OBD device
 $device = "/dev/obd" unless $device;
+# object store in the ext2 formatted block device
 $filesystem = "/dev/loop0" unless $filesystem;
 
 # get a console for the app
@@ -68,16 +86,17 @@ my $arg;
 
 my %commands =
     ('create' => {func => "Create", doc => "create: creates a new inode"},
-     'setup' => {func => "Setup", doc => "setup: initializes the environment"},
+     'setup' => {func => "Setup", doc => "setup: link the ext2 partition (default /dev/loop0) to this obddev"},
      'connect' => {func => "Connect", doc => "connect: allocates client ID for this session"},
      'disconnect' => {func => "Disconnect", doc => "disconnect [id]: frees client resources"},
      'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
      'destroy' => {func => "Destroy", doc => "setup: destroys an inode"},
+     'cleanup' => {func => "Cleanup", doc => "detach the superblock from this minor obd dev"},
      'dec_use_count' => {func => "Decusecount", doc => "decreases the module use count so that the module can be removed following an oops"},
      'read' => {func => "Read", doc => "read <inode> <count> [offset]"},
      'write' => {func => "Write", doc => "write <inode> <offset> <text>"},
-     'setattr' => {func => "Setattr", doc => "setattr [mode [uid [gid [size [atime [mtime [ctime]]]]]]]"},
-     'getattr' => {func => "Getattr", doc => "getattr [inode]: displays inode object attributes"},
+     'setattr' => {func => "Setattr", doc => "setattr <inode> [mode [uid [gid [size [atime [mtime [ctime]]]]]]]"},
+     'getattr' => {func => "Getattr", doc => "getattr <inode>: displays inode object attributes"},
      'preallocate' => {func => "Preallocate", doc => "preallocate [num]: requests preallocation of num inodes."},
      'statfs' => {func => "Statfs", doc => "statfs: filesystem status information"},
      'help' => {func => \&Help,  doc => "help: this message"},
@@ -93,7 +112,7 @@ my @jcm_cmd_list = keys %commands;
 $attribs->{attempted_completion_function} = \&completeme;
 #------------------------------------------------------------------------------
 # Open the device, as we need an FD for the ioctl
-sysopen(DEV_OBD, $device, 0);
+sysopen(DEV_OBD, $device, 0) || die "Cannot open $device";
 
 if (!defined($::st = stat($filesystem))) {
     die "Unable to stat $filesystem.\n";
@@ -154,7 +173,7 @@ sub execute_line {
 sub Setup {
     my $err = 0;
     my $packed = pack("L", $::st->rdev());
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP, $packed);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP_SUPER, $packed);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
@@ -164,6 +183,20 @@ sub Setup {
 	print "ioctl returned error code $rc.\n";
     }
 }
+
+sub Cleanup {
+    my $err = "0";
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_CLEANUP_SUPER, $err);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
 
 sub Connect {
     my $id = 0;
@@ -279,8 +312,9 @@ sub Sync {
 }
 
 sub Destroy {
-    if (!defined($id)) {
-	$id = $::client_id;
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
     }
 
     my $arg = shift;
@@ -328,7 +362,7 @@ sub Getattr {
 	($valid, $mode, $uid, $gid, $size, $atime, $mtime, $ctime, $flags) =
 	  unpack("ISssx2lLLLI", $packed);
 
-	printf("Inode: %d  Mode:  %04d\n", $inode, $mode);
+	printf("Inode: %d  Mode:  %o\n", $inode, $mode);
 	printf("User: %6d   Group: %6d   Size: %d\n", $uid, $gid, $size);
 	printf("ctime: %08lx -- %s\n", $ctime, scalar(gmtime($ctime)));
 	printf("atime: %08lx -- %s\n", $atime, scalar(gmtime($atime)));
@@ -348,7 +382,7 @@ sub Setattr {
 
     my $inode = shift;
     my $valid = 0;
-    my $mode = shift;
+    my $mode = oct(shift);
     my $uid = shift;
     my $gid = shift;
     my $size = shift;
@@ -395,6 +429,8 @@ sub Setattr {
     #        time_t          ia_ctime; (32)
     #        unsigned int    ia_attr_flags; (32)
     #};
+
+    printf "valid is %x, mode is %o\n", $valid, $mode;
     my $packed = pack("ILLSssx2ILLLL", $::client_id, $inode, $valid, $mode,
 		      $uid, $gid, $size, $atime, $mtime, $ctime, 0);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_SETATTR, $packed);
@@ -440,7 +476,7 @@ sub Read {
 
     my $rc = ioctl(DEV_OBD, &OBD_IOC_READ, $packed);
 
-    $retval = unpack("L", $packed);
+    $retval = unpack("l", $packed);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
@@ -486,7 +522,7 @@ sub Write {
     my $packed = pack("ILpLLL", $::client_id, $inode, $text, $count, 0, $offset);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_WRITE, $packed);
 
-    $retval = unpack("L", $packed);
+    $retval = unpack("l", $packed);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";

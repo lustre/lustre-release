@@ -1,3 +1,16 @@
+/* object based disk file system
+ * 
+ * This software is licensed under the GPL.  See the file COPYING in the
+ * top directory of this distribution for details.
+ * 
+ * Copyright (C), 1999, Stelias Computing Inc
+ *
+ *
+ */
+
+
+#ifndef _OBDFS_H
+#define OBDFS_H
 #include <../obd/linux/sim_obd.h>
 
 
@@ -15,3 +28,6 @@ void obdfs_sysctl_clean(void);
 struct obdfs_inode_info;
 
 #define OBDFS_SUPER_MAGIC 0x4711
+
+#endif
+

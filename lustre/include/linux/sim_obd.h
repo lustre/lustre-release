@@ -17,7 +17,7 @@ extern int obd_print_entry;
 
 /* debugging masks */
 #define D_PSDEV       1 /* debug information from psdev.c */
-#define D_UNUSED1     2
+#define D_INODE       2
 #define D_UNUSED2     4
 #define D_UNUSED3     8
 #define D_UNUSED4    16
@@ -58,7 +58,7 @@ extern int obd_print_entry;
 #define OBD_ALLOC(ptr, cast, size)					\
 do {									\
 	if (size <= 4096) {						\
-		ptr = (cast)kmalloc((unsigned long) size, GFP_KERNEL);	\
+		ptr = (cast)kmalloc((unsigned long) size, GFP_KERNEL); \
                 CDEBUG(D_MALLOC, "kmalloced: %x at %x.\n",		\
 		       (int) size, (int) ptr);				\
 	} else {							\
@@ -87,11 +87,13 @@ do {							\
 } while (0)
 
 
-#define MAX_DEVICES 128
+
+
+#define MAX_OBD_DEVICES 2
 struct obd_conn_info {
-	unsigned int conn_id;
-	unsigned long conn_ino;
-	unsigned long conn_blocksize;
+	unsigned int conn_id;     /* handle */
+	unsigned long conn_ino;   /* root inode number */
+	unsigned long conn_blocksize; 
 	unsigned char conn_blocksize_bits;
 };
 
@@ -141,8 +143,8 @@ struct oic_rw_s {
 };
 
 #define OBD_IOC_CREATE                 _IOR ('f',  3, long)
-#define OBD_IOC_SETUP                  _IOW ('f',  4, long)
-#define OBD_IOC_SYNC                   _IOR ('f',  5, long)
+#define OBD_IOC_SETUP_SUPER            _IOW ('f',  4, long)
+#define OBD_IOC_CLEANUP_SUPER          _IO  ('f',  5      )
 #define OBD_IOC_DESTROY                _IOW ('f',  6, long)
 #define OBD_IOC_PREALLOCATE            _IOWR('f',  7, long)
 #define OBD_IOC_DEC_USE_COUNT          _IO  ('f',  8      )
@@ -153,7 +155,11 @@ struct oic_rw_s {
 #define OBD_IOC_CONNECT                _IOR ('f', 13, long)
 #define OBD_IOC_DISCONNECT             _IOW ('f', 14, long)
 #define OBD_IOC_STATFS                 _IOWR('f', 15, long)
-#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 16      )
+#define OBD_IOC_SYNC                   _IOR ('f',  16, long)
+
+
+
+#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
 
 /* balloc.c */
 int ext2_new_block (const struct inode * inode, unsigned long goal,
@@ -195,12 +201,15 @@ struct buffer_head * obd_getblk (struct inode * inode, long block,
                                  int create, int * err);
 
 /* interface.c */
+void obd_cleanup_device(int dev);
 extern int obd_create (struct super_block * sb, int inode_hint, int * err);
 extern void obd_unlink (struct inode * inode);
 extern struct obd_client * obd_client(int cli_id);
 extern void obd_cleanup_client (struct obd_device * obddev,
 				struct obd_client * cli);
 void obd_cleanup_device(int dev);
+int obd_cleanup_super(struct obd_device * obddev);
+int obd_setup_super(struct obd_device * obddev, int sbdev);
 long obd_preallocate_inodes(unsigned int conn_id,
 			    int req, long inodes[32], int * err);
 long obd_preallocate_quota(struct super_block * sb, struct obd_client * cli,
@@ -225,7 +234,6 @@ int obd_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
 #undef ext2_error
 #define ext2_error obd_warning
 #define ext2_panic obd_warning
-
 #ifdef EXT2FS_DEBUG
 #  undef ext2_debug
 #  define ext2_debug(format, a...) CDEBUG(D_EXT2, format, ## a)
@@ -256,5 +264,4 @@ extern struct inode_operations ext2_file_inode_operations;
 
 /* super.c */
 extern struct super_operations ext2_sops;
-
 #endif /* __LINUX_SIM_OBD_H */

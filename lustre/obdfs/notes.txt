@@ -1,0 +1,198 @@
+Considerations for an API between OBD's and OBDFS
+
+
+OBDFS 
+
+Methods needed:
+
+struct super_operations {
+	void (*read_inode) (struct inode *);
+	void (*write_inode) (struct inode *);
+	void (*put_inode) (struct inode *);
+	void (*delete_inode) (struct inode *);
+	int (*notify_change) (struct dentry *, struct iattr *);
+	void (*put_super) (struct super_block *);
+	void (*write_super) (struct super_block *);
+	int (*statfs) (struct super_block *, struct statfs *, int);
+*	int (*remount_fs) (struct super_block *, int *, char *);
+	void (*clear_inode) (struct inode *);
+*	void (*umount_begin) (struct super_block *);
+};
+
+
+read_inode:
+
+Called from function iget(ino, dev) - through get_new_inode.
+Typically called only when a VFS inode is instantiated by FS, i.e.
+upon lookup, create, mkdir, or upon mounting for the / inode.
+
+  -  executed for new inodes and for existing inodes
+  -  for new inodes, avoid traffic to disk
+
+E.g:
+
+lookup("name in dir-inode")
+{
+	get data from dir-inode; 
+	find ino of "name" in this data;
+	iget(sb(dev), ino); 
+	---> calls read_inode 
+	     ----> obd_getattr(obj-no = ino)
+}
+
+create("name in dir-inode") 
+{
+	get ino for name from pre-alloced obj-no's
+        ---> may call obd_prealloc_ids(hint)
+
+	iget(sb(dev), ino)
+	---> call read_inode 
+	     ---> do not contact OBD, fill in from FS
+
+	change data from dir-inode, to contain ("name, ino");
+}
+
+mkdir("name in dir-inode")
+{
+	as above
+}
+
+read_super(dev, data)
+{
+	struct obdfs_sb *sb = ... ;
+	obd_connect(dev, &sb->obdfs_conn_info);
+
+	iget(sb, sb->obdfs_conn_info->conn_ino);
+
+
+}
+
+We currently have:
+
+struct obd_conn_info {
+	unsigned int conn_id;
+	unsigned long conn_ino;
+	unsigned long conn_blocksize;
+	unsigned char conn_blocksize_bits;
+};
+
+read_inode(inode)
+{
+	struct iattr attr;
+
+	
+	if ( inode in inode_attr cache ) {
+	        get_attr_from_cache(inode, &attr);
+	} else {
+		obd_getattr(conn_id, inode->i_ino, &attr);
+	}		
+
+	inode_setattr(inode, &attr);
+}
+
+Write_inode is called from the bdflush (sync_dev) routines, through
+write_inode, sync_inode, sync_list, sync_inodes etc:
+
+void sync_dev(kdev_t dev)
+{
+	sync_buffers(dev, 0);
+	sync_supers(dev);
+	sync_inodes(dev);
+	sync_buffers(dev, 0);
+	DQUOT_SYNC(dev);
+	/*
+	 * FIXME(eric) we need to sync the physical devices here.
+	 * This is because some (scsi) controllers have huge amounts of
+	 * cache onboard (hundreds of Mb), and we need to instruct
+	 * them to commit all of the dirty memory to disk, and we should
+	 * not return until this has happened.
+	 *
+	 * This would need to get implemented by going through the assorted
+	 * layers so that each block major number can be synced, and this
+	 * would call down into the upper and mid-layer scsi.
+	 */
+}
+
+This sync_inodes function is responsible (for "block" disk file
+systems) for copying the modified inode metadata into the buffer
+cache.  The sync_buffers call which follows sync_inodes is responsible
+for writing back this meta data.  For OBD's this is different.
+
+I expect the following routine to be there:
+
+sync_inode_pages(dev,0);
+sync_supers(dev);
+sync_inode_metadata(dev);
+
+
+The statfs function should return simple summary information available 
+on the disk: %free, total space, etc.    May require a new obd_command.
+
+Similarly write_super would instruct the disk to commit any pending
+data.  This is called from do_unmount just before put_super (the
+latter breaks down the vm super block  structure).  
+
+Write_super should: 
+- undo pre-allocated inode numbers
+
+The disk itself also needs a cleanup function.
+
+struct file_operations {
+	loff_t (*llseek) (struct file *, loff_t, int);
+	ssize_t (*read) (struct file *, char *, size_t, loff_t *);
+	ssize_t (*write) (struct file *, const char *, size_t, loff_t *);
+	int (*readdir) (struct file *, void *, filldir_t);
+	unsigned int (*poll) (struct file *, struct poll_table_struct *);
+	int (*ioctl) (struct inode *, struct file *, unsigned int, unsigned long);
+	int (*mmap) (struct file *, struct vm_area_struct *);
+	int (*open) (struct inode *, struct file *);
+	int (*flush) (struct file *);
+	int (*release) (struct inode *, struct file *);
+	int (*fsync) (struct file *, struct dentry *);
+	int (*fasync) (int, struct file *, int);
+	int (*check_media_change) (kdev_t dev);
+	int (*revalidate) (kdev_t dev);
+	int (*lock) (struct file *, int, struct file_lock *);
+};
+
+
+struct inode_operations {
+	struct file_operations * default_file_ops;
+	int (*create) (struct inode *,struct dentry *,int);
+	struct dentry * (*lookup) (struct inode *,struct dentry *);
+	int (*link) (struct dentry *,struct inode *,struct dentry *);
+	int (*unlink) (struct inode *,struct dentry *);
+	int (*symlink) (struct inode *,struct dentry *,const char *);
+	int (*mkdir) (struct inode *,struct dentry *,int);
+	int (*rmdir) (struct inode *,struct dentry *);
+	int (*mknod) (struct inode *,struct dentry *,int,int);
+	int (*rename) (struct inode *, struct dentry *,
+			struct inode *, struct dentry *);
+	int (*readlink) (struct dentry *, char *,int);
+	struct dentry * (*follow_link) (struct dentry *, struct dentry *, unsigned int);
+	/*
+	 * the order of these functions within the VFS template has been
+	 * changed because SMP locking has changed: from now on all get_block,
+	 * readpage, writepage and flushpage functions are supposed to do
+	 * whatever locking they need to get proper SMP operation - for
+	 * now in most cases this means a lock/unlock_kernel at entry/exit.
+	 * [The new order is also slightly more logical :)]
+	 */
+	/*
+	 * Generic block allocator exported by the lowlevel fs. All metadata
+	 * details are handled by the lowlevel fs, all 'logical data content'
+	 * details are handled by the highlevel block layer.
+	 */
+	int (*get_block) (struct inode *, long, struct buffer_head *, int);
+
+	int (*readpage) (struct file *, struct page *);
+	int (*writepage) (struct file *, struct page *);
+	int (*flushpage) (struct inode *, struct page *, unsigned long);
+
+	void (*truncate) (struct inode *);
+	int (*permission) (struct inode *, int);
+	int (*smap) (struct inode *,int);
+	int (*revalidate) (struct dentry *);
+};
+
+

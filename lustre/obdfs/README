@@ -1,0 +1,22 @@
+OBDFS - v 0.001
+
+This version can mount, list and set the attributes of the root
+directory.
+
+1. configure the obd to use /dev/obd with a scratch file system
+
+2. make
+
+3. insmod obdfs
+
+4. mount -t obdfs /dev/obd /mnt
+
+To verify: type mount (output:
+/dev/obd on /mnt type obdfs (rw))
+
+5. ls -ld /mnt
+
+6. chmod 711 /mnt, ls -ld /mnt
+
+7. chown seagate /mnt , ls -ld /mnt
+
