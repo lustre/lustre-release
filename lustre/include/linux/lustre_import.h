@@ -57,7 +57,7 @@ struct obd_import {
 
         /* flags */
         int                       imp_invalid:1, imp_replayable:1,
-                                  imp_dlm_fake:1;
+                                  imp_dlm_fake:1, imp_server_timeout:1;
         __u32                     imp_connect_op;
 };
 
