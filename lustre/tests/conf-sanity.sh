@@ -226,25 +226,45 @@ test_9() {
         start_ost
         start_mds
         mount_client $MOUNT
-        [ "`cat /proc/sys/portals/debug`" = "1" ] && \
-           echo "lmc --debug success" || return 1
-        [ "`cat /proc/sys/portals/subsystem_debug`" = "16777216" ] && \
-           echo "lmc --subsystem success" || return 1
+        CHECK_PTLDEBUG="`cat /proc/sys/portals/debug`"
+        if [ $CHECK_PTLDEBUG = "1" ]; then
+           echo "lmc --debug success"
+        else
+           echo "lmc --debug: want 1, have $CHECK_PTLDEBUG"
+           return 1
+        fi
+        CHECK_SUBSYSTEM="`cat /proc/sys/portals/subsystem_debug`"
+        if [ $CHECK_SUBSYSTEM = "2" ]; then
+           echo "lmc --subsystem success"
+        else
+           echo "lmc --subsystem: want 2, have $CHECK_SUBSYSTEM"
+           return 1
+        fi
         check_mount || return 41
         cleanup
 
         # the new PTLDEBUG/SUBSYSTEM used for lconf --ptldebug/subsystem
-        PTLDEBUG="inode"
-        SUBSYSTEM="mds"
+        PTLDEBUG="inode+trace"
+        SUBSYSTEM="mds+ost"
 
         # check lconf --ptldebug/subsystem overriding lmc --ptldebug/subsystem
         start_ost
         start_mds
+        CHECK_PTLDEBUG="`do_facet mds cat /proc/sys/portals/debug`"
+        if [ $CHECK_PTLDEBUG = "3" ]; then
+           echo "lconf --debug success"
+        else
+           echo "lconf --debug: want 3, have $CHECK_PTLDEBUG"
+           return 1
+        fi
+        CHECK_SUBSYSTEM="`do_facet mds cat /proc/sys/portals/subsystem_debug`"
+        if [ $CHECK_SUBSYSTEM = "20" ]; then
+           echo "lconf --subsystem success"
+        else
+           echo "lconf --subsystem: want 20, have $CHECK_SUBSYSTEM"
+           return 1
+        fi
         mount_client $MOUNT
-        [ "`cat /proc/sys/portals/debug`" = "2" ] && \
-           echo "lconf --debug overriding success" || return 1
-        [ "`cat /proc/sys/portals/subsystem_debug`" = "33554432" ] && \
-           echo "lconf --subsystem overriding success" || return 1
         check_mount || return 41
         cleanup
 
@@ -253,7 +273,8 @@ test_9() {
         SUBSYSTEM=$OLDSUBSYSTEM
         gen_config
 }
-run_test 9 "test --ptldebug and --subsystem for lmc"
+
+run_test 9 "test --ptldebug and --subsystem for lmc and lconf"
 
 test_10() {
         OLDXMLCONFIG=$XMLCONFIG
@@ -292,5 +313,76 @@ test_11() {
         XMLCONFIG=$OLDXMLCONFIG
 }
 run_test 11 "use default lov configuration (should return error)"
+
+test_12() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="batch.xml"
+        BATCHFILE="batchfile"
+
+        # test double quote
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        [ -f "$BATCHFILE" ] && rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \"-I 128\"" >> $BATCHFILE
+        # --mkfsoptions "-I 128"
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "matched double quote success"
+        else
+                echo "matched double quote fail"
+                return 1
+        fi 
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \"-I 128" >> $BATCHFILE
+        # --mkfsoptions "-I 128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "unmatched double quote should return error"
+
+        # test single quote
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions '-I 128'" >> $BATCHFILE
+        # --mkfsoptions '-I 128'
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "matched single quote success"
+        else
+                echo "matched single quote fail"
+                return 1
+        fi
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions '-I 128" >> $BATCHFILE
+        # --mkfsoptions '-I 128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "unmatched single quote should return error"
+
+        # test backslash
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \-\I\ \128" >> $BATCHFILE
+        # --mkfsoptions \-\I\ \128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "backslash followed by a whitespace/letter success"
+        else
+                echo "backslash followed by a whitespace/letter fail"
+                return 1
+        fi
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions -I\ 128\\" >> $BATCHFILE
+        # --mkfsoptions -I\ 128\
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "backslash followed by nothing should return error"
+
+        rm -f $BATCHFILE
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 12 "lmc --batch, with single/double quote, backslash in batchfile"
 
 equals_msg "Done"
