@@ -106,8 +106,8 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
         }
 
         page_cache_get(page);
-        llwp->num_pages++;
         pg = &llwp->pgs[llwp->num_pages];
+        llwp->num_pages++;
 
         pg->pg = page;
         pg->off = off;
