@@ -1,4 +1,4 @@
-sinclude(lustre/autoconf/version.ac)
+sinclude(lustre/autoconf/lustre-version.ac)
 
 AC_INIT([Lustre], [LUSTRE_VERSION], [https://bugzilla.lustre.org/], [lustre])
 
