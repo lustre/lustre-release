@@ -1,13 +1,9 @@
-ifeq (@MODULES_TRUE@,)
-
 subdir-m += libcfs
-ifeq (@CRAY_PORTALS_FALSE@,)
-subdir-m += portals
-subdir-m += knals
-subdir-m += router
-subdir-m += tests
-endif # CRAY_PORTALS_FALSE
 
-endif # MODULES
+cray-subdirs += portals
+cray-subdirs += knals
+cray-subdirs += router
+cray-subdirs += tests
+@CRAY_PORTALS_FALSE@subdir-m += $(cray-subdirs)
 
 @INCLUDE_RULES@

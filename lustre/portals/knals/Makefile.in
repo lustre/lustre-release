@@ -1,11 +1,7 @@
-ifeq (@MODULES_TRUE@,)
-
 @BUILD_GMNAL_TRUE@subdir-m += gmnal
 @BUILD_IBNAL_TRUE@subdir-m += ibnal
 @BUILD_QSWNAL_TRUE@subdir-m += qswnal
 @BUILD_SCIMACNAL_TRUE@subdir-m += scimacnal
 subdir-m += socknal
-
-endif # MODULES_TRUE
 
 @INCLUDE_RULES@
