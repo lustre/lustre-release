@@ -41,6 +41,7 @@ void ldlm_proc_cleanup(struct obd_device *obd)
 }
 
 /* FIXME: This can go away when we start to really use lprocfs */
+#ifndef LPROC_SNMP
 static int lprocfs_ll_rd(char *page, char **start, off_t off,
                          int count, int *eof, void *data)
 {
@@ -51,6 +52,7 @@ static int lprocfs_ll_rd(char *page, char **start, off_t off,
 
         return len;
 }
+#endif
 
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
