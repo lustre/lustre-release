@@ -1,0 +1,59 @@
+Index: linux-2.4.21-suse2/include/linux/mm.h
+===================================================================
+--- linux-2.4.21-suse2.orig/include/linux/mm.h	2004-01-10 15:51:22.000000000 +0300
++++ linux-2.4.21-suse2/include/linux/mm.h	2004-01-10 16:02:42.000000000 +0300
+@@ -661,6 +661,7 @@
+ #define __GFP_IO	0x40	/* Can start low memory physical IO? */
+ #define __GFP_HIGHIO	0x80	/* Can start high mem physical IO? */
+ #define __GFP_FS	0x100	/* Can call down to low-level FS? */
++#define __GFP_MEMALLOC	0x200	/* like PF_MEMALLOC: see __alloc_pages */
+ 
+ #define GFP_NOHIGHIO	(__GFP_HIGH | __GFP_WAIT | __GFP_IO)
+ #define GFP_NOIO	(__GFP_HIGH | __GFP_WAIT)
+@@ -671,6 +672,7 @@
+ #define GFP_KERNEL	(__GFP_HIGH | __GFP_WAIT | __GFP_IO | __GFP_HIGHIO | __GFP_FS)
+ #define GFP_NFS		(__GFP_HIGH | __GFP_WAIT | __GFP_IO | __GFP_HIGHIO | __GFP_FS)
+ #define GFP_KSWAPD	(             __GFP_WAIT | __GFP_IO | __GFP_HIGHIO | __GFP_FS)
++#define GFP_MEMALLOC	__GFP_MEMALLOC
+ 
+ /* Flag - indicates that the buffer will be suitable for DMA.  Ignored on some
+    platforms, used as appropriate on others */
+Index: linux-2.4.21-suse2/include/linux/slab.h
+===================================================================
+--- linux-2.4.21-suse2.orig/include/linux/slab.h	2004-01-10 12:48:36.000000000 +0300
++++ linux-2.4.21-suse2/include/linux/slab.h	2004-01-10 16:02:42.000000000 +0300
+@@ -23,6 +23,7 @@
+ #define	SLAB_KERNEL		GFP_KERNEL
+ #define	SLAB_NFS		GFP_NFS
+ #define	SLAB_DMA		GFP_DMA
++#define	SLAB_MEMALLOC		GFP_MEMALLOC
+ 
+ #define SLAB_LEVEL_MASK		(__GFP_WAIT|__GFP_HIGH|__GFP_IO|__GFP_HIGHIO|__GFP_FS)
+ #define	SLAB_NO_GROW		0x00001000UL	/* don't grow a cache */
+Index: linux-2.4.21-suse2/mm/page_alloc.c
+===================================================================
+--- linux-2.4.21-suse2.orig/mm/page_alloc.c	2004-01-10 14:56:13.000000000 +0300
++++ linux-2.4.21-suse2/mm/page_alloc.c	2004-01-10 16:03:20.000000000 +0300
+@@ -448,7 +448,8 @@
+ 
+ 	/* here we're in the low on memory slow path */
+ 
+-	if (current->flags & PF_MEMALLOC && !in_interrupt()) {
++	if (((current->flags & PF_MEMALLOC) || (gfp_mask & __GFP_MEMALLOC))
++			&& !in_interrupt()) {
+ 		zone = zonelist->zones;
+ 		for (;;) {
+ 			zone_t *z = *(zone++);
+Index: linux-2.4.21-suse2/mm/slab.c
+===================================================================
+--- linux-2.4.21-suse2.orig/mm/slab.c	2003-10-28 21:33:57.000000000 +0300
++++ linux-2.4.21-suse2/mm/slab.c	2004-01-10 16:02:42.000000000 +0300
+@@ -1115,7 +1115,7 @@
+ 	/* Be lazy and only check for valid flags here,
+  	 * keeping it out of the critical path in kmem_cache_alloc().
+ 	 */
+-	if (flags & ~(SLAB_DMA|SLAB_LEVEL_MASK|SLAB_NO_GROW))
++	if (flags & ~(SLAB_DMA|SLAB_LEVEL_MASK|SLAB_NO_GROW|SLAB_MEMALLOC))
+ 		BUG();
+ 	if (flags & SLAB_NO_GROW)
+ 		return 0;
