@@ -1099,13 +1099,10 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         if (!ptlrpc_client_receiving_reply(request))
                 return;
 
-        rc = PtlMDUnlink (request->rq_reply_md_h);
-        if (rc == PTL_MD_INVALID) {
-                LASSERT (!ptlrpc_client_receiving_reply(request));
-                return;
-        }
-        
-        LASSERT (rc == PTL_OK);
+        PtlMDUnlink (request->rq_reply_md_h);
+
+        /* We have to l_wait_event() whatever the result, to give liblustre
+         * a chance to run reply_in_callback() */
 
         if (request->rq_set == NULL)
                 wq = &request->rq_set->set_waitq;

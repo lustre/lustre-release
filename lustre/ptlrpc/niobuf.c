@@ -194,16 +194,11 @@ void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
                 return;                         /* never started */
         
         /* The unlink ensures the callback happens ASAP and is the last
-         * one.  If it fails, it must be because completion just
-         * happened. */
+         * one.  If it fails, it must be because completion just happened,
+         * but we must still l_wait_event() in this case, to give liblustre
+         * a chance to run server_bulk_callback()*/
 
-        rc = PtlMDUnlink (desc->bd_md_h);
-        if (rc == PTL_MD_INVALID) {
-                LASSERT(!ptlrpc_bulk_active(desc));
-                return;
-        }
-        
-        LASSERT (rc == PTL_OK);
+        PtlMDUnlink (desc->bd_md_h);
 
         for (;;) {
                 /* Network access will complete in finite time but the HUGE
@@ -312,16 +307,11 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
         LASSERT (desc->bd_req == req);          /* bd_req NULL until registered */
 
         /* the unlink ensures the callback happens ASAP and is the last
-         * one.  If it fails, it must be because completion just
-         * happened. */
+         * one.  If it fails, it must be because completion just happened,
+         * but we must still l_wait_event() in this case to give liblustre
+         * a chance to run client_bulk_callback() */
 
-        rc = PtlMDUnlink (desc->bd_md_h);
-        if (rc == PTL_MD_INVALID) {
-                LASSERT(!ptlrpc_bulk_active(desc));
-                return;
-        }
-        
-        LASSERT (rc == PTL_OK);
+        PtlMDUnlink (desc->bd_md_h);
         
         if (desc->bd_req->rq_set != NULL)
                 wq = &req->rq_set->set_waitq;
