@@ -23,7 +23,9 @@
 
 #ifndef _KPTLROUTER_H
 #define _KPTLROUTER_H
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/config.h>
 #include <linux/module.h>

@@ -25,7 +25,9 @@
  */
 
 #define DEBUG_PORTAL_ALLOC
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -59,11 +61,7 @@
 
 #define SOCKNAL_N_SCHED num_online_cpus()       /* # socknal schedulers */
 
-#if PTL_LARGE_MTU
-# define SOCKNAL_MAX_FWD_PAYLOAD (256<<10)      /* biggest payload I can forward */
-#else
-# define SOCKNAL_MAX_FWD_PAYLOAD (64<<10)       /* biggest payload I can forward */
-#endif
+#define SOCKNAL_MAX_FWD_PAYLOAD PTL_MTU         /* biggest payload I can forward */
 
 #define SOCKNAL_NLTXS           128             /* # normal transmit messages */
 #define SOCKNAL_NNBLK_LTXS	128             /* # transmit messages reserved if can't block */

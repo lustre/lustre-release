@@ -24,7 +24,9 @@
 
 #ifndef _QSWNAL_H
 #define _QSWNAL_H
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #ifdef PROPRIETARY_ELAN
 # include <qsw/kernel.h>
@@ -93,12 +95,7 @@ typedef unsigned long kqsw_csum_t;
  * Performance Tuning defines
  * NB no mention of PAGE_SIZE for interoperability
  */
-#if PTL_LARGE_MTU
-# define KQSW_MAXPAYLOAD		(256<<10) /* biggest message this NAL will cope with */
-#else
-# define KQSW_MAXPAYLOAD		(64<<10) /* biggest message this NAL will cope with */
-#endif
-
+#define KQSW_MAXPAYLOAD                 PTL_MTU
 #define KQSW_SMALLPAYLOAD		((4<<10) - KQSW_HDR_SIZE) /* small/large ep receiver breakpoint */
 
 #define KQSW_TX_MAXCONTIG           	(1<<10)	/* largest payload that gets made contiguous on transmit */
