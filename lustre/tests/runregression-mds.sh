@@ -45,11 +45,12 @@ USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
 USED=`expr $USED + 16`	# Some space for the status file
 
 THREADS=1
-while [ ! -f $ENDRUN ]; do
+while [ $THREADS -lt 196 ]; do
 	echo "starting $THREADS threads at `date`"
 	echo 0 > /proc/sys/portals/debug
 	$SRCDIR/createdestroy /mnt/lustre/file-$$ $COUNT -10 $THREADS
-	THREADS=`expr $THREADS + 1`
+	$SRCDIR/openclose /mnt/lustre/file-$$ $COUNT $THREADS
+	THREADS=`expr $THREADS + 5`
 	$LCONF --cleanup $OPTS || fail 10
 	$LCONF $OPTS || fail 11
 done
