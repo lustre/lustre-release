@@ -2609,11 +2609,24 @@ def main():
     init_select(config.select)
 
     if len(args) > 0:
-        if not os.access(args[0], os.R_OK):
+        # allow config to be fetched via HTTP
+        if args[0].startswith('http://'):
+            import urllib2
+            try:
+                config_file = urllib2.urlopen(args[0])
+            except (urllib2.URLError, socket.error), err:
+                if hasattr(err, 'args'):
+                    err = err.args[1]
+                print "Could not access '%s': %s" %(args[0], err)
+                sys.exit(1)
+        elif not os.access(args[0], os.R_OK):
             print 'File not found or readable:', args[0]
             sys.exit(1)
+        else:
+            # regular file
+            config_file = open(args[0], 'r')
         try:
-            dom = xml.dom.minidom.parse(args[0])
+            dom = xml.dom.minidom.parse(config_file)
         except Exception:
             panic("%s does not appear to be a config file." % (args[0]))
             sys.exit(1) # make sure to die here, even in debug mode.
