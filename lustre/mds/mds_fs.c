@@ -247,7 +247,7 @@ static int mds_fs_prep(struct mds_obd *mds)
         int rc;
 
         push_ctxt(&saved, &mds->mds_ctxt);
-        dentry = simple_mkdir(current->fs->pwd, "ROOT", 0700);
+        dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create ROOT directory: rc = %d\n", rc);
