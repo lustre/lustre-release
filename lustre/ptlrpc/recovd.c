@@ -14,7 +14,6 @@
  *
  */
 
-#define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/kmod.h>

@@ -22,8 +22,6 @@
  *
  */
 
-#define EXPORT_SYMTAB
-
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/lustre_net.h>

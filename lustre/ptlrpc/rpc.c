@@ -21,11 +21,9 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/module.h>
-
 #define DEBUG_SUBSYSTEM S_RPC
 
+#include <linux/module.h>
 #include <linux/lustre_ha.h>
 
 extern int ptlrpc_init_portals(void);
@@ -145,6 +143,54 @@ static void __exit ptlrpc_exit(void)
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
 }
+
+/* connection.c */
+EXPORT_SYMBOL(ptlrpc_readdress_connection);
+EXPORT_SYMBOL(ptlrpc_get_connection);
+EXPORT_SYMBOL(ptlrpc_put_connection);
+EXPORT_SYMBOL(ptlrpc_connection_addref);
+EXPORT_SYMBOL(ptlrpc_init_connection);
+EXPORT_SYMBOL(ptlrpc_cleanup_connection);
+
+/* niobuf.c */
+EXPORT_SYMBOL(ptlrpc_send_bulk);
+EXPORT_SYMBOL(ptlrpc_register_bulk);
+EXPORT_SYMBOL(ptlrpc_abort_bulk);
+EXPORT_SYMBOL(ptlrpc_reply);
+EXPORT_SYMBOL(ptlrpc_error);
+EXPORT_SYMBOL(ptlrpc_resend_req);
+EXPORT_SYMBOL(ptl_send_rpc);
+EXPORT_SYMBOL(ptlrpc_link_svc_me);
+
+/* client.c */
+EXPORT_SYMBOL(ptlrpc_init_client);
+EXPORT_SYMBOL(ptlrpc_cleanup_client);
+EXPORT_SYMBOL(ptlrpc_req_to_uuid);
+EXPORT_SYMBOL(ptlrpc_uuid_to_connection);
+EXPORT_SYMBOL(ptlrpc_queue_wait);
+EXPORT_SYMBOL(ptlrpc_continue_req);
+EXPORT_SYMBOL(ptlrpc_replay_req);
+EXPORT_SYMBOL(ptlrpc_restart_req);
+EXPORT_SYMBOL(ptlrpc_prep_req);
+EXPORT_SYMBOL(ptlrpc_free_req);
+EXPORT_SYMBOL(ptlrpc_req_finished);
+EXPORT_SYMBOL(ptlrpc_prep_bulk);
+EXPORT_SYMBOL(ptlrpc_free_bulk);
+EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
+EXPORT_SYMBOL(ptlrpc_free_bulk_page);
+EXPORT_SYMBOL(ptlrpc_check_status);
+
+/* service.c */
+EXPORT_SYMBOL(ptlrpc_init_svc);
+EXPORT_SYMBOL(ptlrpc_stop_all_threads);
+EXPORT_SYMBOL(ptlrpc_start_thread);
+EXPORT_SYMBOL(rpc_unregister_service);
+
+/* pack_generic.c */
+EXPORT_SYMBOL(lustre_pack_msg);
+EXPORT_SYMBOL(lustre_msg_size);
+EXPORT_SYMBOL(lustre_unpack_msg);
+EXPORT_SYMBOL(lustre_msg_buf);
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor v1.0");
