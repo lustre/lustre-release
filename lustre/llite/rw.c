@@ -531,7 +531,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 out:
         if (rc == 0) {
                 size = (((obd_off)page->index) << PAGE_SHIFT) + to;
-                lov_increase_kms(exp, lsm, size);
+                lov_increase_kms(ll_i2dtexp(inode), lsm, size);
                 if (size > inode->i_size)
                         inode->i_size = size;
                 SetPageUptodate(page);
