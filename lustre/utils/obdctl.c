@@ -466,7 +466,7 @@ static int jt_attach(int argc, char **argv)
                         printf("Name too long to set environment\n");
                         return -EINVAL;
                 }
-                snprintf(name, 512, "LUSTRE-dev-%s", argv[2]);
+                snprintf(name, 512, "LUSTRE_DEV_%s", argv[2]);
                 rc = setenv(name, argv[1], 1); 
                 if (rc) { 
                         printf("error setting env variable %s\n", name); 
