@@ -42,6 +42,7 @@ int jt_obd_no_transno(int argc, char **argv);
 int jt_obd_set_readonly(int argc, char **argv);
 int jt_obd_abort_recovery(int argc, char **argv);
 int jt_obd_newdev(int argc, char **argv);
+int jt_obd_mount_option(int argc, char **argv);
 int jt_obd_list(int argc, char **argv);
 int jt_obd_attach(int argc, char **argv);
 int jt_obd_setup(int argc, char **argv);
