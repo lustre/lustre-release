@@ -41,8 +41,8 @@ replay_barrier() {
 }
 
 fail() {
-    stop mds -f --failover
-    start mds
+    stop mds -f --failover --nomod
+    start mds --nomod
     df $MOUNTPT
 }
 
@@ -72,9 +72,56 @@ error() {
     exit 1
 }
 
-EQUALS="======================================================================"
+build_test_filter() {
+        for O in $ONLY; do
+            eval ONLY_${O}=true
+        done
+        for E in $EXCEPT $ALWAYS_EXCEPT; do
+            eval EXCEPT_${E}=true
+        done
+}
+
+_basetest() {
+    echo $*
+}
+
+basetest() {
+    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+}
 
 run_test() {
+         base=`basetest $1`
+         if [ ! -z $ONLY ]; then
+                 testname=ONLY_$1
+                 if [ ${!testname}x != x ]; then
+ 			run_one $1 "$2"
+ 			return $?
+                 fi
+                 testname=ONLY_$base
+                 if [ ${!testname}x != x ]; then
+                         run_one $1 "$2"
+                         return $?
+                 fi
+                 echo -n "."
+                 return 0
+ 	fi
+        testname=EXCEPT_$1
+        if [ ${!testname}x != x ]; then
+                 echo "skipping excluded test $1"
+                 return 0
+        fi
+        testname=EXCEPT_$base
+        if [ ${!testname}x != x ]; then
+                 echo "skipping excluded test $1 (base $base)"
+                 return 0
+        fi
+        run_one $1 "$2"
+ 	return $?
+}
+
+EQUALS="======================================================================"
+
+run_one() {
     testnum=$1
     message=$2
     
@@ -85,6 +132,8 @@ run_test() {
 
     test_${testnum} || error "test_$testnum failed with $?"
 }
+
+build_test_filter
 
 gen_config
 start mds --reformat $MDSLCONFARGS
@@ -105,7 +154,7 @@ test_2() {
     mkdir $MOUNTPT/d2
     mcreate $MOUNTPT/d2/f2
     fail
-    ls $MOUNTPT/d2/fs
+    ls $MOUNTPT/d2/f2
     rm -fr $MOUNTPT/d2
 }
 run_test 2 "mkdir + contained create"
