@@ -25,6 +25,8 @@ kmem_cache_t *import_cachep = NULL;
 kmem_cache_t *export_cachep = NULL;
 kmem_cache_t *handle_cachep = NULL;
 
+int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
+
 /* I would prefer if these next four functions were in ptlrpc, to be honest,
  * but obdclass uses them for the netregression ioctls. -phil */
 static int sync_io_timeout(void *data)
@@ -390,6 +392,8 @@ void class_destroy_export(struct obd_export *exp)
 {
         ENTRY;
 
+        LASSERT(exp->exp_cookie != DEAD_HANDLE_MAGIC);
+
         spin_lock(&exp->exp_obd->obd_dev_lock);
         list_del(&exp->exp_obd_chain);
         spin_unlock(&exp->exp_obd->obd_dev_lock);
@@ -400,7 +404,7 @@ void class_destroy_export(struct obd_export *exp)
         list_del(&exp->exp_conn_chain);
         if (exp->exp_connection) {
                 spin_unlock(&exp->exp_connection->c_lock);
-                //ptlrpc_put_connection(exp->exp_connection);
+                ptlrpc_put_connection_superhack(exp->exp_connection);
         }
 
         exp->exp_cookie = DEAD_HANDLE_MAGIC;

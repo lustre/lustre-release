@@ -178,6 +178,7 @@ static int __init ptlrpc_init(void)
                 RETURN(rc);
         ptlrpc_init_connection();
         class_register_type(&recovd_obd_ops, LUSTRE_HA_NAME);
+        ptlrpc_put_connection_superhack = ptlrpc_put_connection;
         return 0;
 }
 

@@ -1041,6 +1041,7 @@ EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(obd_recovery_upcall);
+EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
 EXPORT_SYMBOL(class_register_type);
 EXPORT_SYMBOL(class_unregister_type);

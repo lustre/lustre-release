@@ -273,7 +273,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         }
 
-        ptlrpc_connection_addref(req->rq_connection);
         EXIT;
  out:
         if (lock)

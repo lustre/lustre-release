@@ -103,10 +103,10 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
 int client_obd_cleanup(struct obd_device * obddev)
 {
-        struct client_obd *mdc = &obddev->u.cli;
+        struct client_obd *obd = &obddev->u.cli;
 
-        ptlrpc_cleanup_client(&mdc->cl_import);
-        ptlrpc_put_connection(mdc->cl_import.imp_connection);
+        ptlrpc_cleanup_client(&obd->cl_import);
+        ptlrpc_put_connection(obd->cl_import.imp_connection);
 
         MOD_DEC_USE_COUNT;
         return 0;
@@ -149,7 +149,8 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         request->rq_replen = lustre_msg_size(0, NULL);
         request->rq_reqmsg->addr = conn->addr;
         request->rq_reqmsg->cookie = conn->cookie;
-        c = class_conn2export(conn)->exp_connection = request->rq_connection;
+        c = class_conn2export(conn)->exp_connection =
+                ptlrpc_connection_addref(request->rq_connection);
         recovd_conn_manage(c, recovd, recover);
 
         rc = ptlrpc_queue_wait(request);

@@ -211,6 +211,8 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         lock->l_flags |= LDLM_FL_DESTROYED;
 
         /* Wake anyone waiting for this lock */
+        /* FIXME: I should probably add yet another flag, instead of using
+         * l_export to only call this on clients */
         if (lock->l_export && lock->l_completion_ast)
                 lock->l_completion_ast(lock, 0);
 
