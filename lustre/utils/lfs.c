@@ -35,6 +35,7 @@
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
 #include <lustre/liblustreapi.h>
+#include <lustre/lustre_user.h>
 
 #include "parser.h"
 #include "obdctl.h"
@@ -69,7 +70,7 @@ command_t cmdlist[] = {
         {"getstripe", lfs_getstripe, 0,
          "To list the striping pattern for given filename.\n"
          "usage:getstripe <filename>"},
-        {"check", lfs_check, 0, 
+        {"check", lfs_check, 0,
          "Display the status of MDS or OSTs (as specified in the command) "
          "or all the servers (MDS and OSTs).\n"
          "usage: check <osts|mds|servers>"},
@@ -255,7 +256,7 @@ static int lfs_osts(int argc, char **argv)
         struct mntent *mnt = NULL;
         struct obd_uuid *obduuid = NULL;
         int rc=0;
-                                                                                                                             
+
         if (argc != 1)
                 return CMD_HELP;
 
@@ -277,7 +278,7 @@ static int lfs_osts(int argc, char **argv)
                 }
                 endmntent(fp);
         }
-                                                                                                                             
+
         return rc;
 }
 

@@ -38,31 +38,17 @@
 # include <sys/time.h>
 #endif
 
-#ifndef PTL_USE_DESC_LISTS
-static int ptl_slab_users;
-
-atomic_t md_in_use_count = ATOMIC_INIT(0);
-atomic_t msg_in_use_count = ATOMIC_INIT(0);
-atomic_t me_in_use_count = ATOMIC_INIT(0);
-atomic_t eq_in_use_count = ATOMIC_INIT(0);
+#ifndef PTL_USE_LIB_FREELIST
 
 int
 kportal_descriptor_setup (nal_cb_t *nal)
 {
-        ptl_slab_users++;
-        RETURN(PTL_OK);
+        return PTL_OK;
 }
 
 void
 kportal_descriptor_cleanup (nal_cb_t *nal)
 {
-        if (--ptl_slab_users != 0)
-                return;
-
-        LASSERT (atomic_read (&md_in_use_count) == 0);
-        LASSERT (atomic_read (&me_in_use_count) == 0);
-        LASSERT (atomic_read (&eq_in_use_count) == 0);
-        LASSERT (atomic_read (&msg_in_use_count) == 0);
 }
 #else
 
