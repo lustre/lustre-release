@@ -2,6 +2,7 @@ configurable-x86-stack-2.4.20.patch
 uml-patch-2.4.20-6.patch
 uml-2.4.20-do_mmap_pgoff-fix.patch
 uml-2.4.20-fixes-1.patch
+uml_get_kmem_end_export.patch
 dev_read_only_2.4.20.patch
 exports_2.4.20.patch
 lustre_version.patch
@@ -24,7 +25,7 @@ ext3-unmount_sync.patch
 ext3-use-after-free.patch
 ext3-orphan_lock.patch
 ext3-noread-2.4.20.patch
-ext3-delete_thread-2.4.20.patch
+ext3-delete_thread-2.4.20.patch 
 extN-wantedi.patch
 ext3-san-2.4.20.patch
 ext3-map_inode_page.patch
@@ -48,3 +49,4 @@ ext3-trusted_ea-2.4.20.patch
 kernel_text_address-2.4.20-vanilla.patch 
 ext3-xattr-ptr-arith-fix.patch
 gfp_memalloc-2.4.22.patch
+procfs-ndynamic-2.4.patch
