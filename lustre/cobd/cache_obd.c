@@ -133,7 +133,7 @@ cobd_get_info(struct lustre_handle *conn, obd_count keylen,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -151,7 +151,7 @@ cobd_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -167,7 +167,7 @@ cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -184,7 +184,7 @@ cobd_open(struct lustre_handle *conn, struct obdo *oa,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -200,7 +200,7 @@ cobd_close(struct lustre_handle *conn, struct obdo *oa,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -219,7 +219,7 @@ cobd_preprw(int cmd, struct lustre_handle *conn,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -243,7 +243,7 @@ cobd_commitrw(int cmd, struct lustre_handle *conn,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -267,7 +267,7 @@ cobd_brw(int cmd, struct lustre_handle *conn,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -287,7 +287,7 @@ cobd_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
