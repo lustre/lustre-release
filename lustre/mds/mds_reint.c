@@ -127,7 +127,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         inode = de->d_inode;
         CDEBUG(D_INODE, "ino %ld\n", inode->i_ino);
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, 
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
                        to_kdev_t(inode->i_sb->s_dev));
 
         handle = mds_fs_start(mds, inode, MDS_FSOP_SETATTR);
@@ -413,7 +413,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                "child missing (%ld/%s); OK for REPLAYING\n",
                                dir->i_ino, rec->ur_name);
                         rc = 0;
-                } else { 
+                } else {
                         CDEBUG(D_INODE,
                                "child doesn't exist (dir %ld, name %s)\n",
                                dir->i_ino, rec->ur_name);
@@ -432,7 +432,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 mds_pack_inode2body(body, inode);
         }
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, 
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE,
                        to_kdev_t(dir->i_sb->s_dev));
 
         switch (rec->ur_mode /* & S_IFMT ? */) {
@@ -655,7 +655,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct dentry *de_new = NULL;
         struct mds_obd *mds = mds_req2mds(req);
         struct lustre_handle tgtlockh, srclockh, oldhandle;
-        int flags, lock_mode, rc = 0, err;
+        int flags = 0, lock_mode, rc = 0, err;
         void *handle;
         __u64 res_id[3] = { 0 };
         ENTRY;
@@ -692,6 +692,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
                              NULL, 0, lock_mode, &tgtlockh);
         if (rc == 0) {
+                flags = 0;
                 LDLM_DEBUG_NOLOCK("enqueue res "LPU64, res_id[0]);
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
                                       res_id, LDLM_PLAIN, NULL, 0, lock_mode,
@@ -773,6 +774,7 @@ out_rename_denew:
 out_rename_deold:
         if (!rc) {
                 res_id[0] = de_old->d_inode->i_ino;
+                flags = 0;
                 /* Take an exclusive lock on the resource that we're
                  * about to free, to force everyone to drop their
                  * locks. */

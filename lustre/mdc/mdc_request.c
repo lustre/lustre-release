@@ -205,7 +205,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         struct obd_device *obddev = class_conn2obd(conn);
         __u64 res_id[RES_NAME_SIZE] = {dir->i_ino};
         int size[5] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
-        int rc, flags;
+        int rc, flags = 0;
         int repsize[3] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
                           obddev->u.cli.cl_max_mds_easize};

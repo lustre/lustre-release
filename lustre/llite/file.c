@@ -415,7 +415,6 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         struct ll_file_data *fd = (struct ll_file_data *)filp->private_data;
         struct inode *inode = filp->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ldlm_extent extent;
         struct lustre_handle *lockhs = NULL;
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         int flags = 0;
@@ -425,6 +424,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) &&
             !(sbi->ll_flags & LL_SBI_NOLCK)) {
+                struct ldlm_extent extent;
                 OBD_ALLOC(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
                         RETURN(-ENOMEM);
@@ -475,7 +475,6 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         struct ll_file_data *fd = (struct ll_file_data *)file->private_data;
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ldlm_extent extent;
         struct lustre_handle *lockhs = NULL, *eof_lockhs = NULL;
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         int flags = 0;
@@ -514,6 +513,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) &&
             !(sbi->ll_flags & LL_SBI_NOLCK)) {
+                struct ldlm_extent extent;
                 OBD_ALLOC(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
                         GOTO(out_eof, retval = -ENOMEM);

@@ -169,8 +169,11 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
-        int rc, size = sizeof(*body), req_passed_in = 1;
+        int rc, size = sizeof(*body), req_passed_in = 1, is_replay;
         ENTRY;
+
+        is_replay = *flags & LDLM_FL_REPLAY;
+        LASSERT(connh != NULL || !is_replay);
 
         if (connh == NULL)
                 return ldlm_cli_enqueue_local(ns, parent_lock_handle, res_id,
@@ -178,15 +181,25 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                                               flags, completion, blocking, data,
                                               data_len, lockh);
 
-        *flags = 0;
-        lock = ldlm_lock_create(ns, parent_lock_handle, res_id, type, mode,
-                                data, data_len);
-        if (lock == NULL)
-                GOTO(out_nolock, rc = -ENOMEM);
-        LDLM_DEBUG(lock, "client-side enqueue START");
-        /* for the local lock, add the reference */
-        ldlm_lock_addref_internal(lock, mode);
-        ldlm_lock2handle(lock, lockh);
+        /* If we're replaying this lock, just check some invariants.
+         * If we're creating a new lock, get everything all setup nice. */
+        if (is_replay) {
+                lock = ldlm_handle2lock(lockh);
+                LDLM_DEBUG(lock, "client-side enqueue START");
+                LASSERT(connh == lock->l_connh);
+        } else {
+                lock = ldlm_lock_create(ns, parent_lock_handle, res_id, type,
+                                        mode, data, data_len);
+                if (lock == NULL)
+                        GOTO(out_nolock, rc = -ENOMEM);
+                LDLM_DEBUG(lock, "client-side enqueue START");
+                /* for the local lock, add the reference */
+                ldlm_lock_addref_internal(lock, mode);
+                ldlm_lock2handle(lock, lockh);
+                if (type == LDLM_EXTENT)
+                        memcpy(&lock->l_extent, cookie,
+                               sizeof(body->lock_desc.l_extent));
+        }
 
         if (req == NULL) {
                 req = ptlrpc_prep_req(class_conn2cliimp(connh), LDLM_ENQUEUE, 1,
@@ -197,17 +210,9 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         } else if (req->rq_reqmsg->buflens[0] != sizeof(*body))
                 LBUG();
 
-        /* Dump all of this data into the request buffer */
+        /* Dump lock data into the request buffer */
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ldlm_lock2desc(lock, &body->lock_desc);
-        /* Phil: make this part of ldlm_lock2desc */
-        if (type == LDLM_EXTENT) {
-                memcpy(&body->lock_desc.l_extent, cookie,
-                       sizeof(body->lock_desc.l_extent));
-                CDEBUG(D_INFO, "extent in body: "LPU64" -> "LPU64"\n",
-                           body->lock_desc.l_extent.start,
-                           body->lock_desc.l_extent.end);
-        }
         body->lock_flags = *flags;
 
         memcpy(&body->lock_handle1, lockh, sizeof(*lockh));
@@ -223,11 +228,12 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         lock->l_connh = connh;
         lock->l_export = NULL;
 
+        LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
-        /* FIXME: status check here? */
         rc = ptlrpc_check_status(req, rc);
 
         if (rc != ELDLM_OK) {
+                LASSERT(!is_replay);
                 LDLM_DEBUG(lock, "client-side enqueue END (%s)",
                            rc == ELDLM_LOCK_ABORTED ? "ABORTED" : "FAILED");
                 ldlm_lock_decref(lockh, mode);
@@ -240,22 +246,26 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         reply = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&lock->l_remote_handle, &reply->lock_handle,
                sizeof(lock->l_remote_handle));
-        if (type == LDLM_EXTENT)
-                memcpy(cookie, &reply->lock_extent, sizeof(reply->lock_extent));
         *flags = reply->lock_flags;
 
         CDEBUG(D_INFO, "remote handle: %p, flags: %d\n",
                (void *)(unsigned long)reply->lock_handle.addr, *flags);
-        CDEBUG(D_INFO, "requested extent: "LPU64" -> "LPU64", got extent "
-               LPU64" -> "LPU64"\n",
-               body->lock_desc.l_extent.start, body->lock_desc.l_extent.end,
-               reply->lock_extent.start, reply->lock_extent.end);
+        if (type == LDLM_EXTENT) {
+                CDEBUG(D_INFO, "requested extent: "LPU64" -> "LPU64", got "
+                       "extent "LPU64" -> "LPU64"\n",
+                       body->lock_desc.l_extent.start,
+                       body->lock_desc.l_extent.end,
+                       reply->lock_extent.start, reply->lock_extent.end);
+                cookie = &reply->lock_extent; /* FIXME bug 629281 */
+                cookielen = sizeof(reply->lock_extent);
+        }
 
         /* If enqueue returned a blocked lock but the completion handler has
          * already run, then it fixed up the resource and we don't need to do it
          * again. */
         if ((*flags) & LDLM_FL_LOCK_CHANGED) {
                 int newmode = reply->lock_mode;
+                LASSERT(!is_replay);
                 if (newmode && newmode != lock->l_req_mode) {
                         LDLM_DEBUG(lock, "server returned different mode %s",
                                    ldlm_lockname[newmode]);
@@ -282,10 +292,12 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         if (!req_passed_in)
                 ptlrpc_req_finished(req);
 
-        rc = ldlm_lock_enqueue(lock, cookie, cookielen, flags, completion,
-                               blocking);
-        if (lock->l_completion_ast)
-                lock->l_completion_ast(lock, *flags);
+        if (!is_replay) {
+                rc = ldlm_lock_enqueue(lock, cookie, cookielen, flags,
+                                       completion, blocking);
+                if (lock->l_completion_ast)
+                        lock->l_completion_ast(lock, *flags);
+        }
 
         LDLM_DEBUG(lock, "client-side enqueue END");
         EXIT;
@@ -325,10 +337,20 @@ int ldlm_match_or_enqueue(struct lustre_handle *connh,
                 RETURN(0);
 }
 
+int ldlm_cli_replay_enqueue(struct ldlm_lock *lock)
+{
+        struct lustre_handle lockh;
+        int flags = LDLM_FL_REPLAY;
+        ldlm_lock2handle(lock, &lockh);
+        return ldlm_cli_enqueue(lock->l_connh, NULL, NULL, NULL, NULL,
+                                lock->l_resource->lr_type, NULL, 0, -1, &flags,
+                                NULL, NULL, NULL, 0, &lockh);
+}
+
 static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
                                   int *flags)
 {
-
+        ENTRY;
         if (lock->l_resource->lr_namespace->ns_client) {
                 CERROR("Trying to cancel local lock\n");
                 LBUG();
@@ -365,7 +387,7 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
         connh = lock->l_connh;
 
         if (!connh)
-                return ldlm_cli_convert_local(lock, new_mode, flags);
+                RETURN(ldlm_cli_convert_local(lock, new_mode, flags));
 
         LDLM_DEBUG(lock, "client-side convert");
 
@@ -470,12 +492,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         return rc;
 }
 
-/* Cancel all locks on a given resource that have 0 readers/writers.
- *
- * If 'local_only' is true, throw the locks away without trying to notify the
- * server. */
-int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
-                           int local_only)
+static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
+                                           __u64 *res_id, int local_only)
 {
         struct ldlm_resource *res;
         struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
@@ -533,4 +551,40 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
         ldlm_resource_put(res);
 
         RETURN(0);
+}
+
+/* Cancel all locks on a namespace (or a specific resource, if given) that have
+ * 0 readers/writers.
+ *
+ * If 'local_only' is true, throw the locks away without trying to notify the
+ * server. */
+int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
+                           int local_only)
+{
+        int i;
+
+        if (res_id)
+                RETURN(ldlm_cli_cancel_unused_resource(ns, res_id, local_only));
+
+        l_lock(&ns->ns_lock);
+        for (i = 0; i < RES_HASH_SIZE; i++) {
+                struct list_head *tmp, *pos;
+                list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
+                        int rc;
+                        struct ldlm_resource *res;
+                        res = list_entry(tmp, struct ldlm_resource, lr_hash);
+                        ldlm_resource_getref(res);
+
+                        rc = ldlm_cli_cancel_unused_resource(ns, res->lr_name,
+                                                             local_only);
+
+                        if (rc)
+                                CERROR("cancel_unused_res ("LPU64"): %d\n",
+                                       res->lr_name[0], rc);
+                        ldlm_resource_put(res);
+                }
+        }
+        l_unlock(&ns->ns_lock);
+
+        return ELDLM_OK;
 }

@@ -39,6 +39,7 @@ typedef enum {
 #define LDLM_FL_DESTROYED      (1 << 6)
 #define LDLM_FL_WAIT_NOREPROC  (1 << 7)
 #define LDLM_FL_CANCEL         (1 << 8)
+#define LDLM_FL_REPLAY         (1 << 9)
 
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
@@ -144,8 +145,6 @@ struct ldlm_lock {
         struct lustre_handle   l_remote_handle;
         void                 *l_data;
         __u32                 l_data_len;
-        void                 *l_cookie;
-        int                   l_cookie_len;
         struct ldlm_extent    l_extent;
         __u32                 l_version[RES_VERSION_SIZE];
 
@@ -308,7 +307,7 @@ void ldlm_lock_put(struct ldlm_lock *lock);
 void ldlm_lock_destroy(struct ldlm_lock *lock);
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc);
 void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode);
-void ldlm_lock_addref_internal(struct ldlm_lock* , __u32 mode);
+void ldlm_lock_addref_internal(struct ldlm_lock *, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_grant_lock(struct ldlm_lock *lock);
 int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,

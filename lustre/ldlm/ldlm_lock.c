@@ -564,7 +564,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                         continue;
 
                 /* lock_convert() takes the resource lock, so we're sure that
-                 * req_mode, lr_type, and l_cookie won't change beneath us */
+                 * req_mode and lr_type won't change beneath us */
                 if (lock->l_req_mode != mode)
                         continue;
 
@@ -673,9 +673,10 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
         if (res->lr_type == LDLM_EXTENT)
                 memcpy(&lock->l_extent, cookie, sizeof(lock->l_extent));
 
-        /* policies are not executed on the client */
+        /* policies are not executed on the client or during replay */
         local = res->lr_namespace->ns_client;
-        if (!local && (policy = ldlm_res_policy_table[res->lr_type])) {
+        if (!local && !(*flags & LDLM_FL_REPLAY) &&
+            (policy = ldlm_res_policy_table[res->lr_type])) {
                 int rc;
                 rc = policy(lock, cookie, lock->l_req_mode, NULL);
 
@@ -687,9 +688,6 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
                         RETURN(rc);
                 }
         }
-
-        lock->l_cookie = cookie;
-        lock->l_cookie_len = cookie_len;
 
         l_lock(&res->lr_namespace->ns_lock);
         if (local && lock->l_req_mode == lock->l_granted_mode) {
@@ -705,9 +703,15 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
          * namespace only has information about locks taken by that client, and
          * thus doesn't have enough information to decide for itself if it can
          * be granted (below).  In this case, we do exactly what the server
-         * tells us to do, as dictated by the 'flags' */
+         * tells us to do, as dictated by the 'flags'.
+         *
+         * We do exactly the same thing during recovery, when the server is
+         * more or less trusting the clients not to lie.
+         *
+         * FIXME (bug 629283): Detect obvious lies by checking compatibility in
+         * granted/converting queues. */
         ldlm_resource_unlink_lock(lock);
-        if (local) {
+        if (local || (*flags & LDLM_FL_REPLAY)) {
                 if (*flags & LDLM_FL_BLOCK_CONV)
                         ldlm_resource_add_lock(res, res->lr_converting.prev,
                                                lock);

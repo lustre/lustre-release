@@ -557,7 +557,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         struct inode *dir;
         struct lustre_handle lockh;
         char *name;
-        int namelen, flags, lock_mode, rc = 0;
+        int namelen, flags = 0, lock_mode, rc = 0;
         struct obd_ucred uc;
         __u64 res_id[3] = {0, 0, 0};
         ENTRY;
