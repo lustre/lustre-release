@@ -30,3 +30,6 @@ ext3-error-export.patch
 iopen-2.4.20.patch
 tcp-zero-copy.patch
 socket-exports-vanilla.patch
+jbd-ctx_switch.patch
+jbd-flushtime.patch
+jbd-get_write_access.patch
