@@ -34,6 +34,8 @@ $subsys->{LDLM} = 17;
 $subsys->{LOV} = 18;
 $subsys->{GMNAL} = 19;
 $subsys->{PTLROUTER} = 20;
+$subsys->{COBD} = 21;
+$subsys->{IBNAL} = 22;
 
 
 $masks->{TRACE} = 1 << 0; # /* ENTRY/EXIT markers */
@@ -298,6 +300,7 @@ while (<LOG>) {
                     $linesubsys == $subsys->{PORTALS} ||
                     $linesubsys == $subsys->{SOCKNAL} ||
                     $linesubsys == $subsys->{QSWNAL} ||
+                    $linesubsys == $subsys->{IBNAL} ||
                     $linesubsys == $subsys->{GMNAL}));
 	if(!$entering_rpc) {entering_rpc($_);}
 	if(!$leaving_rpc) {leaving_rpc($_);}
