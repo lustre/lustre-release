@@ -307,7 +307,7 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 
 	if (gmnal_alloc_srxd(nal_data) != GMNAL_STATUS_OK) {
 		CDEBUG(D_ERROR, "Failed to allocate small rx descriptors\n");
-		gmnal_free_stxd(nal_data);
+		gmnal_free_txd(nal_data);
 		GMNAL_GM_LOCK(nal_data);
 		gm_close(nal_data->gm_port);
 		gm_finalize();
@@ -336,7 +336,7 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 	/*
 	 *	Allocate pools of small tx buffers and descriptors
 	 */
-	if (gmnal_alloc_stxd(nal_data) != GMNAL_STATUS_OK) {
+	if (gmnal_alloc_txd(nal_data) != GMNAL_STATUS_OK) {
 		CDEBUG(D_ERROR, "Failed to allocate small tx descriptors\n");
 		GMNAL_GM_LOCK(nal_data);
 		gm_close(nal_data->gm_port);
@@ -369,7 +369,7 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 		gmnal_stop_rxthread(nal_data);
 		gmnal_stop_ctthread(nal_data);
 		CDEBUG(D_ERROR, "can't determine node id\n");
-		gmnal_free_stxd(nal_data);
+		gmnal_free_txd(nal_data);
 		gmnal_free_srxd(nal_data);
 		GMNAL_GM_LOCK(nal_data);
 		gm_close(nal_data->gm_port);
@@ -390,7 +390,7 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 		CDEBUG(D_ERROR, "failed to obtain global id\n");
 		gmnal_stop_rxthread(nal_data);
 		gmnal_stop_ctthread(nal_data);
-		gmnal_free_stxd(nal_data);
+		gmnal_free_txd(nal_data);
 		gmnal_free_srxd(nal_data);
 		GMNAL_GM_LOCK(nal_data);
 		gm_close(nal_data->gm_port);
@@ -417,7 +417,7 @@ gmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 		CDEBUG(D_ERROR, "lib_init failed\n");
 		gmnal_stop_rxthread(nal_data);
 		gmnal_stop_ctthread(nal_data);
-		gmnal_free_stxd(nal_data);
+		gmnal_free_txd(nal_data);
 		gmnal_free_srxd(nal_data);
 		GMNAL_GM_LOCK(nal_data);
 		gm_close(nal_data->gm_port);
@@ -453,7 +453,7 @@ void gmnal_fini()
 
 	gmnal_stop_rxthread(nal_data);
 	gmnal_stop_ctthread(nal_data);
-	gmnal_free_stxd(nal_data);
+	gmnal_free_txd(nal_data);
 	gmnal_free_srxd(nal_data);
 	GMNAL_GM_LOCK(nal_data);
 	gm_close(nal_data->gm_port);

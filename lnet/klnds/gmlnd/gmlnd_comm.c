@@ -950,7 +950,7 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 	unsigned long	sbuf_long;
 	gm_remote_ptr_t	remote_ptr = 0;
 	unsigned int	source_node;
-	gmnal_stxd_t	*stxd = NULL;
+	gmnal_ltxd_t	*ltxd = NULL;
 	gmnal_data_t	*nal_data = srxd->nal_data;
 
 	CDEBUG(D_TRACE, "copy[%d] nal_data[%p]\n", do_copy, nal_data);
@@ -989,8 +989,8 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 			ncalls++;
 			if (do_copy) {
 				CDEBUG(D_INFO, "slen>rlen\n");
-				stxd = gmnal_get_stxd(nal_data, 1);
-				stxd->srxd = srxd;
+				ltxd = gmnal_get_ltxd(nal_data);
+				ltxd->srxd = srxd;
 				GMNAL_GM_LOCK(nal_data);
 				/* 
 				 *	funny business to get rid 
@@ -1001,7 +1001,7 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
 				       rlen, GM_LOW_PRIORITY, source_node, 
 				       GMNAL_GM_PORT, 
-				       gmnal_remote_get_callback, stxd);
+				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}
 			/*
@@ -1017,15 +1017,15 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 			ncalls++;
 			if (do_copy) {
 				CDEBUG(D_INFO, "slen<rlen\n");
-				stxd = gmnal_get_stxd(nal_data, 1);
-				stxd->srxd = srxd;
+				ltxd = gmnal_get_ltxd(nal_data);
+				ltxd->srxd = srxd;
 				GMNAL_GM_LOCK(nal_data);
 				sbuf_long = (unsigned long) sbuf;
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
 				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
 				       slen, GM_LOW_PRIORITY, source_node, 
 				       GMNAL_GM_PORT, 
-				       gmnal_remote_get_callback, stxd);
+				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}
 			/*
@@ -1040,15 +1040,15 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 			ncalls++;
 			if (do_copy) {
 				CDEBUG(D_INFO, "rlen=slen\n");
-				stxd = gmnal_get_stxd(nal_data, 1);
-				stxd->srxd = srxd;
+				ltxd = gmnal_get_ltxd(nal_data);
+				ltxd->srxd = srxd;
 				GMNAL_GM_LOCK(nal_data);
 				sbuf_long = (unsigned long) sbuf;
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
 				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
 				       rlen, GM_LOW_PRIORITY, source_node, 
 				       GMNAL_GM_PORT, 
-				       gmnal_remote_get_callback, stxd);
+				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}
 			/*
@@ -1078,8 +1078,8 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 			   gm_status_t status)
 {
 
-	gmnal_stxd_t	*stxd = (gmnal_stxd_t*)context;
-	gmnal_srxd_t	*srxd = stxd->srxd;
+	gmnal_ltxd_t	*ltxd = (gmnal_ltxd_t*)context;
+	gmnal_srxd_t	*srxd = ltxd->srxd;
 	nal_cb_t	*nal_cb = srxd->nal_data->nal_cb;
 	int		lastone;
 	struct	iovec	*riov;
@@ -1103,7 +1103,7 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 	/*
 	 *	everyone returns a send token
 	 */
-	gmnal_return_stxd(nal_data, stxd);
+	gmnal_return_ltxd(nal_data, ltxd);
 
 	if (!lastone) {
 		CDEBUG(D_ERROR, "NOT final callback context[%p]\n", srxd);
