@@ -550,15 +550,17 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
 
 	filter_id(id, oa->o_id, oa->o_mode);
 	push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
-	dir = filter_parent(oa->o_id, oa->o_mode); 
-	if (!dir || IS_ERR(dir)) { 
+	dir = filter_parent(oa->o_id, oa->o_mode);
+	if (IS_ERR(dir)) {
+		rc = PTR_ERR(dir);
+		EXIT;
 		goto out;
 	}
 
 	rc = simple_unlink(dir->f_dentry, id);
-	
- out:
-	filp_close(dir, 0); 
+
+	filp_close(dir, 0);
+out:
 	pop_ctxt(&saved);
 	EXIT;
         return rc;
