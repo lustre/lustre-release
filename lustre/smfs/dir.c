@@ -202,9 +202,6 @@ static int smfs_unlink(struct inode * dir,
 	cache_dentry = d_alloc(&parent, &dentry->d_name);
 	d_add(cache_dentry, cache_inode);
 
-	pre_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
-	pre_smfs_inode(dir, cache_dir);
-	
 	if (cache_dir->i_op->unlink)
 		rc = cache_dir->i_op->unlink(cache_dir, cache_dentry);
 
