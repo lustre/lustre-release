@@ -1,7 +1,7 @@
 # This file is sourced by lustre/lustrecvs
 
 portalstag="HEAD"
-libsysiotag="LIBSYSIO_HEAD_20040607"
+libsysiotag="LIBSYSIO_HEAD_20040809"
 
 case "$lustretag" in
     '')
@@ -22,10 +22,6 @@ case "$lustretag" in
 
     b1_4_bgl)
 	portalstag="b1_4_bgl"
-	;;
-
-    b_newsysio | b_sec)
-        libsysiotag="LIBSYSIO_HEAD_20040809"
 	;;
 
     b_port_step)
