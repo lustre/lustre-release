@@ -351,7 +351,7 @@ build_kernel()
 	i386 | i586 | i686 | athlon | x86_64)
 	    $MAKE_J "$MAKE_CC" bzImage || fatal 1 "Error making bzImage."
 	    ;;
-        ppc | ppc64)
+    ia64 | ppc | ppc64)
 	    $MAKE_J "$MAKE_CC" vmlinux || fatal 1 "Error making vmlinux."
 	    ;;
 	*)
