@@ -137,7 +137,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(0);
 }
 
-int client_obd_cleanup(struct obd_device *obddev)
+int client_obd_cleanup(struct obd_device *obddev, int force)
 {
         struct client_obd *obd = &obddev->u.cli;
 
