@@ -226,6 +226,40 @@ static int jt_disconnect(int argc, char **argv)
         return rc;
 }
 
+static int jt__device(int argc, char **argv)
+{
+        char *arg2[20];
+        int rc;
+
+        if (argc < 3) {
+                fprintf(stderr, "usage: %s devno <command [args ...]>\n",
+                        argv[0]);
+                return -1;
+        }
+
+        arg2[0] = "device";
+        arg2[1] = argv[1];
+        arg2[2] = NULL;
+        rc = jt_device(2, arg2);
+
+        if (!rc) {
+                arg2[0] = "connect";
+                arg2[1] = NULL;
+                rc = jt_connect(1, arg2);
+        }
+
+        if (!rc)
+                rc = Parser_execarg(argc - 2, &argv[2], cmdlist);
+
+        if (!rc) {
+                arg2[0] = "disconnect";
+                arg2[1] = NULL;
+                rc = jt_disconnect(1, arg2);
+        }
+
+        return rc;
+}
+
 static int jt_detach(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -650,6 +684,7 @@ static int jt_test_ldlm(int argc, char **argv)
 }
 
 command_t cmdlist[] = {
+        {"--device", jt__device, 0, "device <devno> <command [args ...]>"},
         {"device", jt_device, 0, "set current device (args device no)"},
         {"attach", jt_attach, 0, "name the type of device (args: type data"},
         {"setup", jt_setup, 0, "setup device (args: <blkdev> [data]"},
