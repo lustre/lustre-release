@@ -288,7 +288,7 @@ setup_mds() {
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach mds MDSDEV MDSUUID
+	attach mds MDSDEV MDSUUID  
 	setup ${MDS} ${MDSFS}
 	quit
 	EOF
@@ -393,7 +393,7 @@ setup_mdc() {
 	$OBDCTL <<- EOF || return $?
 	newdev
 	attach mdc $THEMDC
-	setup MDSDEV $MDSNODE
+	setup MDSUUID $MDSNODE
 	quit
 	EOF
         done

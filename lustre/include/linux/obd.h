@@ -67,10 +67,19 @@ struct mds_client_info;
 struct mds_server_data;
 
 struct mdc_obd {
+        struct lustre_handle mdc_connh;
         struct ptlrpc_client *mdc_client;
         struct ptlrpc_client *mdc_ldlm_client;
         struct ptlrpc_connection *mdc_conn;
         __u8 mdc_target_uuid[37];
+};
+
+struct osc_obd {
+        struct lustre_handle osc_connh;
+        struct ptlrpc_client *osc_client;
+        struct ptlrpc_client *osc_ldlm_client;
+        struct ptlrpc_connection *osc_conn;
+        __u8 osc_target_uuid[37];
 };
 
 struct mds_obd {
@@ -149,13 +158,6 @@ struct ost_obd {
         struct obd_conn ost_conn;   /* the local connection to the OBD */
 };
 
-struct osc_obd {
-        struct lustre_handle osc_connh;
-        struct ptlrpc_client *osc_client;
-        struct ptlrpc_client *osc_ldlm_client;
-        struct ptlrpc_connection *osc_conn;
-        __u8 osc_target_uuid[37];
-};
 
 typedef __u8 uuid_t[37];
 

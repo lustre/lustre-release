@@ -55,7 +55,7 @@ int mdc_setattr(struct obd_conn *conn,
         int rc, size = sizeof(*rec);
         ENTRY;
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
                               MDS_REINT, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
@@ -96,7 +96,8 @@ int mdc_create(struct obd_conn *conn,
                 bufcount = 3;
         }
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, MDS_REINT,
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
+                              MDS_REINT,
                               bufcount, size, bufs);
         if (!req)
                 RETURN(-ENOMEM);
@@ -142,8 +143,8 @@ int mdc_unlink(struct obd_conn *conn,
         int rc, size[2] = {sizeof(struct mds_rec_unlink), namelen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, MDS_REINT, 2,
-                              size, NULL);
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
+                              MDS_REINT, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -169,8 +170,8 @@ int mdc_link(struct obd_conn *conn,
         int rc, size[2] = {sizeof(struct mds_rec_link), namelen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, MDS_REINT, 2,
-                              size, NULL);
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
+                              MDS_REINT, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -198,7 +199,7 @@ int mdc_rename(struct obd_conn *conn,
                            newlen + 1};
         ENTRY;
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh, 
                               MDS_REINT, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);

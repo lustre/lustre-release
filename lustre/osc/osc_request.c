@@ -56,7 +56,6 @@ static int osc_connect(struct obd_conn *conn, struct obd_device *obd)
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
-        struct ost_body *body;
         char *tmp = osc->osc_target_uuid;
         int rc, size = sizeof(osc->osc_target_uuid);
         ENTRY;
@@ -71,12 +70,12 @@ static int osc_connect(struct obd_conn *conn, struct obd_device *obd)
                 GOTO(out, rc);
 
         osc_obd2cl(obd, &cl, &connection);
-        request = ptlrpc_prep_req(cl, connection, OST_CONNECT, 1, &size, &tmp);
+        request = ptlrpc_prep_req(osc->osc_client, osc->osc_conn, 
+                                  OST_CONNECT, 1, &size, &tmp);
         if (!request)
                 RETURN(-ENOMEM);
 
-        size = sizeof(*body);
-        request->rq_replen = lustre_msg_size(1, &size);
+        request->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
@@ -85,17 +84,10 @@ static int osc_connect(struct obd_conn *conn, struct obd_device *obd)
                 GOTO(out, rc);
         }
 
-        body = lustre_msg_buf(request->rq_repmsg, 0);
-        CDEBUG(D_INODE, "received connid %d\n", body->connid);
-
-
         /* XXX: Make this a handle */
         osc->osc_connh.addr = request->rq_repmsg->addr;
         osc->osc_connh.cookie = request->rq_repmsg->cookie;
-        /* This might be redundant. */
-        cl->cli_target_devno = request->rq_repmsg->target_id;
-        osc->osc_ldlm_client->cli_target_devno = cl->cli_target_devno;
-        conn->oc_id = body->connid;
+
         EXIT;
  out:
         ptlrpc_free_req(request);
@@ -109,20 +101,15 @@ static int osc_disconnect(struct obd_conn *conn)
         struct ptlrpc_request *request;
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
-        struct ost_body *body;
         struct osc_obd *osc = &gen_conn2obd(conn)->u.osc;
-        int rc, size = sizeof(*body);
+        int rc;
         ENTRY;
 
         osc_con2cl(conn, &cl, &connection);
         request = ptlrpc_prep_req2(cl, connection, &osc->osc_connh,
-                                  OST_DISCONNECT, 1, &size, NULL);
+                                  OST_DISCONNECT, 0, NULL, NULL);
         if (!request)
                 RETURN(-ENOMEM);
-
-        body = lustre_msg_buf(request->rq_reqmsg, 0);
-        body->connid = conn->oc_id;
-
         request->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(request);

@@ -44,7 +44,7 @@ int mdc_getstatus(struct obd_conn *conn, struct ll_fid *rootfid,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
                               MDS_GETSTATUS, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
@@ -90,7 +90,7 @@ int mdc_getattr(struct obd_conn *conn,
         int rc, size[2] = {sizeof(*body), 0}, bufcount = 1;
         ENTRY;
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
                               MDS_GETATTR, 1, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
@@ -199,7 +199,8 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 size[2] = sizeof(struct mds_rec_create);
                 size[3] = de->d_name.len + 1;
                 size[4] = tgtlen + 1;
-                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                       &mdc->mdc_connh, 
                                       LDLM_ENQUEUE, 5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
@@ -223,8 +224,8 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 size[2] = sizeof(struct mds_rec_rename);
                 size[3] = old_de->d_name.len + 1;
                 size[4] = de->d_name.len + 1;
-                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                      LDLM_ENQUEUE, 5, size, NULL);
+                req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                      &mdc->mdc_connh, LDLM_ENQUEUE, 5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -244,8 +245,8 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         } else if ( it->it_op == IT_UNLINK ) {
                 size[2] = sizeof(struct mds_rec_unlink);
                 size[3] = de->d_name.len + 1;
-                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                      LDLM_ENQUEUE, 4, size, NULL);
+                req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                &mdc->mdc_connh, LDLM_ENQUEUE, 4, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -262,8 +263,8 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         } else if ( it->it_op == IT_RMDIR ) {
                 size[2] = sizeof(struct mds_rec_unlink);
                 size[3] = de->d_name.len + 1;
-                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                      LDLM_ENQUEUE, 4, size, NULL);
+                req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                      &mdc->mdc_connh, LDLM_ENQUEUE, 4, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -281,8 +282,8 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 size[2] = sizeof(struct mds_body);
                 size[3] = de->d_name.len + 1;
 
-                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                      LDLM_ENQUEUE, 4, size, NULL);
+                req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                      &mdc->mdc_connh, LDLM_ENQUEUE, 4, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -301,8 +302,8 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         } else if ( it->it_op == IT_SETATTR) {
                 size[2] = sizeof(struct mds_rec_setattr);
                 size[3] = de->d_name.len + 1;
-                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                      LDLM_ENQUEUE, 5, size, NULL);
+                req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                &mdc->mdc_connh, LDLM_ENQUEUE, 5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -318,8 +319,8 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 size[1] = sizeof(struct mds_body);
                 req->rq_replen = lustre_msg_size(2, size);
         } else if ( it->it_op == IT_READDIR ) {
-                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                      LDLM_ENQUEUE, 1, size, NULL);
+                req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                &mdc->mdc_connh, LDLM_ENQUEUE, 1, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
@@ -367,7 +368,7 @@ int mdc_open(struct obd_conn *conn, ino_t ino, int type, int flags,
                 size[1] = sizeof(*obdo);
         }
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
                               MDS_OPEN, bufcount, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
@@ -408,7 +409,7 @@ int mdc_close(struct obd_conn *conn,
         int rc, size = sizeof(*body);
         struct ptlrpc_request *req;
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
                               MDS_CLOSE, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
@@ -446,7 +447,7 @@ int mdc_readpage(struct obd_conn *conn, ino_t ino, int type, __u64 offset,
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
                               MDS_READPAGE, 1, &size, NULL);
         if (!req)
                 GOTO(out2, rc = -ENOMEM);
@@ -497,8 +498,8 @@ int mdc_statfs(struct obd_conn *conn, struct statfs *sfs,
         int rc, size = sizeof(*osfs);
         ENTRY;
 
-        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, MDS_STATFS,
-                              0, NULL, NULL);
+        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, &mdc->mdc_connh,
+                              MDS_STATFS, 0, NULL, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
         req->rq_replen = lustre_msg_size(1, &size);
@@ -739,7 +740,12 @@ static int mdc_connect(struct obd_conn *conn, struct obd_device *obd)
         if (obd->obd_namespace == NULL)
                 RETURN(-ENOMEM);
 
-        request = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
+        MOD_INC_USE_COUNT;
+        rc = gen_connect(conn, obd);
+        if (rc) 
+                GOTO(out, rc);
+
+        request = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn,
                                   MDS_CONNECT, 1, &size, &tmp);
         if (!request)
                 RETURN(-ENOMEM);
@@ -747,15 +753,18 @@ static int mdc_connect(struct obd_conn *conn, struct obd_device *obd)
         request->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
-        mdc->mdc_client->cli_target_devno = request->rq_repmsg->target_id;
-        mdc->mdc_ldlm_client->cli_target_devno =
-                mdc->mdc_client->cli_target_devno;
+        mdc->mdc_connh.addr = request->rq_repmsg->addr;
+        mdc->mdc_connh.cookie = request->rq_repmsg->cookie;
+
         EXIT;
  out:
         ptlrpc_free_req(request);
+        if (rc) 
+                MOD_DEC_USE_COUNT;
         return rc;
 }
 
@@ -764,19 +773,14 @@ static int mdc_disconnect(struct obd_conn *conn)
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
         struct obd_device *obd = gen_conn2obd(conn);
         struct ptlrpc_request *request;
-        struct mds_body *body;
-        int rc, size = sizeof(*body);
+        int rc;
         ENTRY;
 
         ldlm_namespace_free(obd->obd_namespace);
-        request = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
-                                  MDS_DISCONNECT, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, 
+                                   &mdc->mdc_connh, MDS_DISCONNECT, 0, NULL, NULL);
         if (!request)
                 RETURN(-ENOMEM);
-
-        body = lustre_msg_buf(request->rq_reqmsg, 0);
-        body->valid = conn->oc_id;
 
         request->rq_replen = lustre_msg_size(0, NULL);
 

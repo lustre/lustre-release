@@ -27,6 +27,11 @@ extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                                 struct ptlrpc_request *req);
 static int mds_cleanup(struct obd_device * obddev);
 
+static struct mds_obd *mds_export2mds(struct obd_export *export)
+{
+        return &export->export_obd->u.mds;
+}
+
 /* Assumes caller has already pushed into the kernel filesystem context */
 static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         __u64 offset)
@@ -146,48 +151,34 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         return result;
 }
 
-static int mds_connect(struct ptlrpc_request *req, struct mds_obd **mdsp)
+static int mds_connect(struct obd_conn *conn, struct obd_device *obd)
 {
-        struct mds_obd *mds;
-        char *uuid;
-        int rc, i;
-        ENTRY;
+        int rc;
 
-        uuid = lustre_msg_buf(req->rq_reqmsg, 0);
-        if (req->rq_reqmsg->buflens[0] > 37) {
-                /* Invalid UUID */
-                req->rq_status = -EINVAL;
-                RETURN(-EINVAL);
-        }
+        MOD_INC_USE_COUNT;
+        rc = gen_connect(conn, obd);
 
-        i = obd_class_name2dev(uuid);
-        if (i == -1) {
-                req->rq_status = -ENODEV;
-                RETURN(-ENODEV);
-        }
+        if (rc)
+                MOD_DEC_USE_COUNT;
 
-        *mdsp = mds = &(obd_dev[i].u.mds);
-        if (mds != &(req->rq_obd->u.mds)) {
-                CERROR("device %d (%s) is not an mds\n", i, uuid);
-                req->rq_status = -ENODEV;
-                RETURN(-ENODEV);
-        }
+        return rc;
+}
 
-        CDEBUG(D_INFO, "MDS connect from UUID '%s'\n",
-               ptlrpc_req_to_uuid(req));
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_CONNECT_PACK)) {
-                req->rq_status = -ENOMEM;
-                RETURN(-ENOMEM);
-        }
-        req->rq_repmsg->target_id = i;
+static int mds_disconnect(struct obd_conn *conn)
+{
+        int rc;
 
-        RETURN(0);
+        rc = gen_disconnect(conn);
+        if (!rc)
+                MOD_DEC_USE_COUNT;
+
+        return rc;
 }
 
 /* FIXME: the error cases need fixing to avoid leaks */
-static int mds_getstatus(struct mds_obd *mds, struct ptlrpc_request *req)
+static int mds_getstatus(struct ptlrpc_request *req)
 {
+        struct mds_obd *mds = mds_export2mds(req->rq_export); 
         struct mds_body *body;
         struct mds_client_info *mci;
         struct mds_client_data *mcd;
@@ -239,21 +230,6 @@ static int mds_getstatus(struct mds_obd *mds, struct ptlrpc_request *req)
            mds_pack_rep_body converts it to network order */
         body->last_xid = le32_to_cpu(mcd->mcd_last_xid);
         mds_pack_rep_body(req);
-        RETURN(0);
-}
-
-static int mds_disconnect(struct mds_obd *mds, struct ptlrpc_request *req)
-{
-        struct mds_body *body;
-        int rc;
-        ENTRY;
-
-        body = lustre_msg_buf(req->rq_reqmsg, 0);
-
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                RETURN(rc);
-
         RETURN(0);
 }
 
@@ -630,8 +606,9 @@ static int mds_close(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int mds_readpage(struct mds_obd *mds, struct ptlrpc_request *req)
+static int mds_readpage(struct ptlrpc_request *req)
 {
+        struct mds_obd *mds = mds_export2mds(req->rq_export);
         struct vfsmount *mnt;
         struct dentry *de;
         struct file *file;
@@ -690,9 +667,6 @@ int mds_reint(int offset, struct ptlrpc_request *req)
 
 int mds_handle(struct ptlrpc_request *req)
 {
-        struct obd_device *dev = req->rq_obd;
-        struct ptlrpc_service *svc = req->rq_svc;
-        struct mds_obd *mds = NULL;
         int rc;
         ENTRY;
 
@@ -708,35 +682,30 @@ int mds_handle(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 
-        if (req->rq_reqmsg->opc != MDS_CONNECT) {
-                int id = req->rq_reqmsg->target_id;
-                struct obd_device *obddev;
-                if (id < 0 || id > MAX_OBD_DEVICES)
-                        GOTO(out, rc = -ENODEV);
-                obddev = &obd_dev[id];
-                if (strcmp(obddev->obd_type->typ_name, "mds") != 0)
-                        GOTO(out, rc = -EINVAL);
-                mds = &obddev->u.mds;
-                req->rq_obd = obddev;
-        }
+        if (req->rq_reqmsg->opc != MDS_CONNECT &&
+            req->rq_export == NULL)
+                GOTO(out, rc = -ENOTCONN);
+
+        if (strcmp(req->rq_obd->obd_type->typ_name, "mds") != 0)
+                GOTO(out, rc = -EINVAL);
 
         switch (req->rq_reqmsg->opc) {
         case MDS_CONNECT:
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
-                rc = mds_connect(req, &mds);
+                rc = target_handle_connect(req);
                 break;
 
         case MDS_DISCONNECT:
                 CDEBUG(D_INODE, "disconnect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_DISCONNECT_NET, 0);
-                rc = mds_disconnect(mds, req);
+                rc = target_handle_disconnect(req);
                 break;
 
         case MDS_GETSTATUS:
                 CDEBUG(D_INODE, "getstatus\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETSTATUS_NET, 0);
-                rc = mds_getstatus(mds, req);
+                rc = mds_getstatus(req);
                 break;
 
         case MDS_GETATTR:
@@ -754,7 +723,7 @@ int mds_handle(struct ptlrpc_request *req)
         case MDS_READPAGE:
                 CDEBUG(D_INODE, "readpage\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_NET, 0);
-                rc = mds_readpage(mds, req);
+                rc = mds_readpage(req);
 
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
                         return 0;
@@ -789,7 +758,7 @@ int mds_handle(struct ptlrpc_request *req)
                 break;
 
         default:
-                rc = ptlrpc_error(svc, req);
+                rc = ptlrpc_error(req->rq_svc, req);
                 RETURN(rc);
         }
 
@@ -801,8 +770,10 @@ out:
          * and we are not supposed to allow transactions while in recovery.
          */
         if (rc) {
-                ptlrpc_error(svc, req);
+                CERROR("mds: processing error %d\n", rc);
+                ptlrpc_error(req->rq_svc, req);
         } else {
+                struct mds_obd *mds = &req->rq_obd->u.mds;
                 req->rq_repmsg->last_rcvd = HTON__u64(mds->mds_last_rcvd);
                 req->rq_repmsg->last_committed =
                         HTON__u64(mds->mds_last_committed);
@@ -811,7 +782,7 @@ out:
                        (unsigned long long)mds->mds_last_committed,
                        cpu_to_le32(req->rq_xid));
                 CDEBUG(D_NET, "sending reply\n");
-                ptlrpc_reply(svc, req);
+                ptlrpc_reply(req->rq_svc, req);
         }
         return 0;
 }
@@ -1026,6 +997,8 @@ static int mds_cleanup(struct obd_device * obddev)
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mds_obd_ops = {
+        o_connect:     mds_connect,
+        o_disconnect:  mds_disconnect,
         o_setup:       mds_setup,
         o_cleanup:     mds_cleanup,
 };

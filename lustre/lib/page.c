@@ -46,6 +46,7 @@
 #define DEBUG_SUBSYSTEM S_OST
 
 #include <linux/obd_class.h>
+#include <linux/lustre_net.h>
 #include <linux/lustre_lib.h>
 
 /*

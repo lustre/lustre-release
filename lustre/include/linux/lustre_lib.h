@@ -36,6 +36,11 @@
 #include <linux/lustre_idl.h>
 
 #ifdef __KERNEL__
+/* l_net.c */
+struct ptlrpc_request;
+int target_handle_connect(struct ptlrpc_request *req);
+int target_handle_disconnect(struct ptlrpc_request *req);
+
 /* l_lock.c */
 struct lustre_lock { 
         int l_depth;

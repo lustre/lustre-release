@@ -170,75 +170,6 @@ static int ost_setattr(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int ost_connect(struct ptlrpc_request *req)
-{
-        struct ost_body *body;
-        struct obd_device *target;
-        struct obd_export *export;
-        struct obd_conn conn;
-        char *uuid;
-        int rc, size = sizeof(*body), i;
-        ENTRY;
-
-        uuid = lustre_msg_buf(req->rq_reqmsg, 0);
-        if (req->rq_reqmsg->buflens[0] > 37) {
-                /* Invalid UUID */
-                req->rq_status = -EINVAL;
-                RETURN(0);
-        }
-
-        i = obd_class_uuid2dev(uuid);
-        if (i == -1) {
-                req->rq_status = -ENODEV;
-                RETURN(0);
-        }
-
-        target = &obd_dev[i];
-        if (!target) {
-                req->rq_status = -ENODEV;
-                RETURN(0);
-        }
-
-        conn.addr = req->rq_reqmsg->addr;
-        conn.cookie = req->rq_reqmsg->cookie;
-
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                RETURN(rc);
-
-        req->rq_status = obd_connect(&conn, target);
-        req->rq_repmsg->addr = conn.addr;
-        req->rq_repmsg->cookie = conn.cookie;
-
-        export = gen_client(&conn); 
-        if (!export)
-                LBUG();
-
-        req->rq_export = export;
-        export->export_connection = req->rq_connection;
-        CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repmsg, conn.oc_id);
-        body = lustre_msg_buf(req->rq_repmsg, 0);
-        body->connid = conn.oc_id;
-        RETURN(0);
-}
-
-static int ost_disconnect(struct ptlrpc_request *req)
-{
-        struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
-        struct ost_body *body;
-        int rc;
-        ENTRY;
-
-        body = lustre_msg_buf(req->rq_reqmsg, 0);
-
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                RETURN(rc);
-
-        req->rq_status = obd_disconnect(conn);
-        RETURN(0);
-}
-
 static int ost_get_info(struct ptlrpc_request *req)
 {
         struct obd_conn *conn = (struct obd_conn *)req->rq_reqmsg;
@@ -504,12 +435,12 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_CONNECT:
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
-                rc = ost_connect(req);
+                rc = target_handle_connect(req);
                 break;
         case OST_DISCONNECT:
                 CDEBUG(D_INODE, "disconnect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_DISCONNECT_NET, 0);
-                rc = ost_disconnect(req);
+                rc = target_handle_disconnect(req);
                 break;
         case OST_GET_INFO:
                 CDEBUG(D_INODE, "get_info\n");
