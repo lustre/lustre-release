@@ -22,13 +22,13 @@ EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) master.bib
 all: $(DOCS)
 
 # update date and version in document
-tag := $(shell cat $(srcdir)/CVS/Tag)
+tag := $(shell sed -e 's/^.//' $(srcdir)/CVS/Tag)
 date := $(shell date +%x)
 addversion = sed -e 's|@T''AG@|$(tag)|g; s|@VER''SION@|$(VERSION)|g; s|@DA''TE@|$(date)|g'
 
 # Regenerate when the $(VERSION) or CVS/Tag changes.
 CVS/Tag:
-	echo HEAD > CVS/Tag
+	echo NHEAD > CVS/Tag
 .INTERMEDIATE: $(GENERATED)
 $(GENERATED) : %.lyx: %.lin Makefile CVS/Tag
 	$(addversion) $< > $@
