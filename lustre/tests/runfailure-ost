@@ -1,9 +1,11 @@
 #!/bin/sh
 
-set -vx
-
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
+
+setup_opts "$@"
+
+set -vx
 
 test_fail() {
 	echo $1 > /proc/sys/lustre/fail_loc
