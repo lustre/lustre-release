@@ -1,10 +1,11 @@
 series/chaos
-   chaos-39
+   chaos                    ** up to date for current chaos kernel
 series/rh-2.4.18-18
    redhat 2.4.18-18
 series/hp-pnnl              ** Note: functionally equivalent to 2.4.19 
    linux-2.4.18-hp2_pnnl2
-series/vanilla-2.4.19       ** Not officially supported
+series/vanilla-2.4.19       ** Not supported - ask Niklas Edmundsson
+                               <nikke@ing.umu.se>
    linux-2.4.19
-series/lin-2.5.44
-   uml-2.5.44
+series/vanilla-2.5.63       ** Development may not work
+   linux-2.5.63
