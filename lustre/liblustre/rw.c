@@ -313,14 +313,6 @@ struct ll_async_page {
         struct inode   *llap_inode;
 };
 
-static struct ll_async_page *llap_from_cookie(void *cookie)
-{
-        struct ll_async_page *llap = cookie;
-        if (llap->llap_magic != LLAP_MAGIC)
-                return ERR_PTR(-EINVAL);
-        return llap;
-};
-
 static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
         struct ll_async_page *llap;
@@ -329,12 +321,7 @@ static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         obd_flag valid_flags;
         ENTRY;
 
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap)) {
-                EXIT;
-                return;
-        }
-
+        llap = LLAP_FROM_COOKIE(data);
         inode = llap->llap_inode;
         lsm = llu_i2info(inode)->lli_smd;
 
@@ -354,12 +341,7 @@ static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         struct ll_async_page *llap;
         struct page *page;
 
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap)) {
-                EXIT;
-                return;
-        }
-
+        llap = LLAP_FROM_COOKIE(data);
         llap->llap_queued = 0;
         page = llap->llap_page;
 
