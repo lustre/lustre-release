@@ -42,6 +42,7 @@ struct lock_wait_data {
 
 int ldlm_expired_completion_wait(void *data)
 {
+        static unsigned long next_dump = 0;
         struct lock_wait_data *lwd = data;
         struct ldlm_lock *lock = lwd->lwd_lock;
         struct obd_import *imp;
@@ -59,6 +60,10 @@ int ldlm_expired_completion_wait(void *data)
         LDLM_ERROR(lock, "lock timed out, entering recovery for %s@%s",
                    imp->imp_target_uuid.uuid,
                    imp->imp_connection->c_remote_uuid.uuid);
+        if (time_after(jiffies, next_dump)) {
+                next_dump = jiffies + 300 * HZ;
+                ldlm_namespace_dump(lock->l_resource->lr_namespace);
+        }
 
         RETURN(0);
 }

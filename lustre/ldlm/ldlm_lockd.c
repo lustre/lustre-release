@@ -555,8 +555,11 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         /* We never send a blocking AST until the lock is granted, but
          * we can tell it right now */
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_flags & LDLM_FL_AST_SENT)
+        if (lock->l_flags & LDLM_FL_AST_SENT) {
                 dlm_rep->lock_flags |= LDLM_FL_AST_SENT;
+                if (lock->l_granted_mode == lock->l_req_mode)
+                        ldlm_add_waiting_lock(lock);
+        }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         EXIT;
