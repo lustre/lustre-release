@@ -437,27 +437,6 @@ int mds_post_mds_lovconf(struct obd_device *obd)
         return rc;
 }
 
-int 
-mds_process_log_rec(struct llog_handle * loghandle, 
-                            struct llog_rec_hdr *rec, void *data)
-{
-        int cfg_len = rec->lrh_len;
-        char *cfg_buf = (char*) (rec + 1);
-        int rc = 0;
-
-        if (rec->lrh_type == OBD_CFG_REC) {
-                char *buf;
-                rc = lustre_cfg_getdata(&buf,cfg_len, cfg_buf, 1);
-                if (rc) 
-                        RETURN(rc);
-                rc = class_process_config((struct lustre_cfg* ) buf);
-                lustre_cfg_freedata(buf, cfg_len);
-        } else if (rec->lrh_type == PTL_CFG_REC) {
-                rc = kportal_nal_cmd((struct portals_cfg *)cfg_buf);
-        }
-        RETURN(rc);
-}
-
 int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len, 
                   void *karg, void *uarg)
 {
@@ -542,36 +521,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_PARSE: {
-                char *name = data->ioc_inlbuf1;
-                struct llog_handle *llh;
-
-                obd->obd_log_exp = class_export_get(exp);
-
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                rc = llog_create(obd, &llh, NULL, name);
-                if (rc) {
-                        class_export_put(obd->obd_log_exp);
-                        obd->obd_log_exp = NULL;
-                        RETURN(rc);
-                }
-
-                rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, 
-                                      &cfg_uuid);
-                if (rc) {
-                        class_export_put(obd->obd_log_exp);
-                        obd->obd_log_exp = NULL;
-                        RETURN(rc);
-                }
-
-                rc = llog_process(llh, mds_process_log_rec, NULL);
-                if (rc) {
-                        class_export_put(obd->obd_log_exp);
-                        obd->obd_log_exp = NULL;
-                        RETURN(rc);
-                }
-
-                rc = llog_close(llh);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                rc = class_config_parse_llog(exp, data->ioc_inlbuf1, NULL);
 
                 // XXX CONFIG this is here because the LOV is set up at an unexpected time
                 rc  = mds_post_mds_lovconf(obd);
