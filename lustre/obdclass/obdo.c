@@ -183,7 +183,11 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 newvalid |= OBD_MD_FLGENER;
         }
         if (valid & OBD_MD_FLRDEV) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 dst->o_rdev = (__u32)kdev_t_to_nr(src->i_rdev);
+#else
+                dst->o_rdev = (__u32)old_decode_dev(src->i_rdev);
+#endif
                 newvalid |= OBD_MD_FLRDEV;
         }
 
@@ -255,7 +259,11 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         if (valid & OBD_MD_FLGENER)
                 dst->i_generation = src->o_generation;
         if (valid & OBD_MD_FLRDEV)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 dst->i_rdev = to_kdev_t(src->o_rdev);
+#else
+                dst->i_rdev = old_decode_dev(src->o_rdev);
+#endif
 }
 EXPORT_SYMBOL(obdo_to_inode);
 #endif

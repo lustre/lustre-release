@@ -31,6 +31,7 @@
 # include <linux/lustre_net.h>
 # include <linux/lustre_dlm.h>
 # include <linux/lustre_lib.h>
+# include <linux/lustre_compat25.h>
 
 /* convert a pathname into a kdev_t */
 static kdev_t path2dev(char *path)
