@@ -160,7 +160,7 @@ command_t cmdlist[] = {
          "usage: lov_modify_tgts add|del <lov-name> <uuid> <index> <gen>"},
         {"lov_getconfig", jt_obd_lov_getconfig, 0,
          "read lov configuration from an mds device\n"
-         "usage: lov_getconfig /mount/path"},
+         "usage: lov_getconfig <mountpoint>"},
         {"record", jt_cfg_record, 0, "record commands that follow in log\n"
          "usage: record cfg-uuid-name"},
         {"endrecord", jt_cfg_endrecord, 0, "stop recording\n"

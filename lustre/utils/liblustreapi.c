@@ -53,7 +53,7 @@
 static void err_msg(char *fmt, ...)
 {
         va_list args;
-        int tmp_errno = errno;
+        int tmp_errno = abs(errno);
 
         va_start(args, fmt);
         vfprintf(stderr, fmt, args);
@@ -67,13 +67,7 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
         struct lov_user_md lum = { 0 };
         int fd, rc = 0;
         int isdir = 0;
-
-        /*  Initialize IOCTL striping pattern structure  */
-        lum.lmm_magic = LOV_USER_MAGIC;
-        lum.lmm_pattern = stripe_pattern;
-        lum.lmm_stripe_size = stripe_size;
-        lum.lmm_stripe_count = stripe_count;
-        lum.lmm_stripe_offset = stripe_offset;
+        int page_size;
 
         fd = open(name, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
         if (errno == EISDIR) {
@@ -87,6 +81,45 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
                 return rc;
         }
 
+        /* 64 KB is the largest common page size I'm aware of (on ia64), but
+         * check the local page size just in case. */
+        page_size = 65536;
+        if (getpagesize() > page_size) {
+                page_size = getpagesize();
+                fprintf(stderr, "WARNING: your page size (%d) is larger than "
+                        "expected.\n", page_size);
+        }
+        if ((stripe_size < 0 || stripe_size % 65536) &&
+            !(isdir && stripe_size == -1)) {
+                rc = -EINVAL;
+                err_msg("error: stripe_size must be an even "
+                        "multiple of %d bytes.\n", page_size);
+                goto out;
+        }
+        if (stripe_offset < -1 || stripe_offset > 65534) {
+                errno = rc = -EINVAL;
+                err_msg("error: bad stripe offset %d\n", stripe_offset);
+                goto out;
+        }
+        if (stripe_count < -1 || stripe_count > 65534) {
+                errno = rc = -EINVAL;
+                err_msg("error: bad stripe count %d\n", stripe_count);
+                goto out;
+        }
+        if (stripe_count > 0 && (__u64)stripe_size * stripe_count > ~0UL) {
+                errno = rc = -EINVAL;
+                err_msg("error: stripe_size %ld * stripe_count %d "
+                        "exceeds %lu bytes.\n", ~0UL);
+                goto out;
+        }
+
+        /*  Initialize IOCTL striping pattern structure  */
+        lum.lmm_magic = LOV_USER_MAGIC;
+        lum.lmm_pattern = stripe_pattern;
+        lum.lmm_stripe_size = stripe_size;
+        lum.lmm_stripe_count = stripe_count;
+        lum.lmm_stripe_offset = stripe_offset;
+
         /* setting stripe pattern 0 -1 0 to a dir means to delete it */
         if (isdir) {
                 if (stripe_size == 0 && stripe_count == 0 &&
@@ -94,8 +127,8 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
                         lum.lmm_stripe_size = -1;
         } else {
                 if (stripe_size == -1) {
+                        errno = rc = -EPERM;
                         err_msg("deleting file stripe info is not allowed\n");
-                        rc = -EPERM;
                         goto out;
                 }
         }
@@ -276,12 +309,14 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
 
         /* if it's a directory */
         if (*fname == '\0') {
-                if (header && (obdstripe == 1)) {
-                        printf("default lmm_stripe_count:  %u\n"
-                               "default lmm_stripe_size:   %u\n"
-                               "default lmm_stripe_offset: %u\n",
-                               lum->lmm_stripe_count, lum->lmm_stripe_size,
-                               (int)lum->lmm_stripe_offset);
+                if (obdstripe == 1) {
+                        printf("default stripe_count: %d stripe_size: %u "
+                               "stripe_offset: %d\n",
+                               lum->lmm_stripe_count == (__u16)-1 ? -1 :
+                                        lum->lmm_stripe_count,
+                               lum->lmm_stripe_size,
+                               lum->lmm_stripe_offset == (__u16)-1 ? -1 :
+                                        lum->lmm_stripe_offset);
                 }
                 return;
         }

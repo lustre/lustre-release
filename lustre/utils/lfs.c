@@ -93,7 +93,6 @@ static int lfs_setstripe(int argc, char **argv)
         long st_size;
         int  st_offset, st_count;
         char *end;
-        int page_size;
 
         if (argc != 5 && argc != 3)
                 return CMD_HELP;
@@ -115,19 +114,6 @@ static int lfs_setstripe(int argc, char **argv)
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe size '%s'\n",
                                 argv[0], argv[2]);
-                        return CMD_HELP;
-                }
-                /* 64 KB is the largest common page size I'm aware of (on ia64), but
-                 * check the local page size just in case. */
-                page_size = 65536;
-                if (getpagesize() > page_size) {
-                        fprintf(stderr, "WARNING: your page size (%d) is larger than "
-                                "expected.\n", getpagesize());
-                        page_size = getpagesize();
-                }
-                if (st_size % page_size) {
-                        fprintf(stderr, "FATAL: stripe_size must be an even multiple "
-                                "of %d bytes.\n", page_size);
                         return CMD_HELP;
                 }
                 
