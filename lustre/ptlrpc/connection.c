@@ -89,7 +89,8 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_INFO, "connection=%p\n", c);
+        CDEBUG(D_INFO, "connection=%p refcount %d\n",
+               c, atomic_read(&c->c_refcount) - 1);
         if (atomic_dec_and_test(&c->c_refcount)) {
                 spin_lock(&conn_lock);
                 list_del(&c->c_link);
@@ -98,7 +99,8 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 rc = 1;
         }
         if (atomic_read(&c->c_refcount) < 0)
-                CDEBUG(D_INFO, "refcount < 0 for connection %p!\n", c);
+                CERROR("connection %p refcount %d!\n",
+                       c, atomic_read(&c->c_refcount));
 
         RETURN(rc);
 }
@@ -106,7 +108,8 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
 {
         ENTRY;
-        CDEBUG(D_INFO, "connection=%p\n", c);
+        CDEBUG(D_INFO, "connection=%p refcount %d\n",
+               c, atomic_read(&c->c_refcount) + 1);
         atomic_inc(&c->c_refcount);
         RETURN(c);
 }

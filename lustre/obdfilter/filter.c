@@ -1280,15 +1280,13 @@ static int filter_get_info(struct lustre_handle *conn, obd_count keylen,
                            void *key, obd_count *vallen, void **val)
 {
         struct obd_device *obd;
-        struct obd_export * export;
         ENTRY;
 
-        if (!(export = class_conn2export(conn))) {
-                CDEBUG(D_IOCTL, "invalid client %Lx\n", conn->addr);
+        obd = class_conn2obd(conn);
+        if (!obd) {
+                CDEBUG(D_IOCTL, "invalid client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
         }
-
-        obd = class_conn2obd(conn);
 
         if ( keylen == strlen("blocksize") &&
              memcmp(key, "blocksize", keylen) == 0 ) {

@@ -393,10 +393,10 @@ void class_disconnect_all(struct obd_device *obddev)
                         int rc;
 
                         export = list_entry(tmp, struct obd_export, exp_chain);
-                        CERROR("force disconnecting export %p\n", export);
                         conn.addr = (__u64)(unsigned long)export;
                         conn.cookie = export->exp_cookie;
                         spin_unlock(&obddev->obd_dev_lock);
+                        CERROR("force disconnecting export %p\n", export);
                         rc = obd_disconnect(&conn);
                         if (rc < 0) {
                                 /* AED: not so sure about this...  We can't
