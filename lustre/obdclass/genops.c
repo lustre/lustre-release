@@ -82,14 +82,14 @@ struct obd_type *class_get_type(char *name)
         }
 #endif
         if (type)
-                __MOD_INC_USE_COUNT(type->typ_ops->o_owner);
+                try_module_get(type->typ_ops->o_owner);
         return type;
 }
 
 void class_put_type(struct obd_type *type)
 {
         LASSERT(type);
-        __MOD_DEC_USE_COUNT(type->typ_ops->o_owner);
+        module_put(type->typ_ops->o_owner);
 }
 
 int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
@@ -296,7 +296,10 @@ struct obd_device *class_conn2obd(struct lustre_handle *conn)
 
 struct obd_import *class_conn2cliimp(struct lustre_handle *conn)
 {
-        return class_conn2obd(conn)->u.cli.cl_import;
+        struct obd_device *obd = class_conn2obd(conn);
+        if (obd == NULL)
+                return NULL;
+        return obd->u.cli.cl_import;
 }
 
 struct obd_import *class_conn2ldlmimp(struct lustre_handle *conn)
@@ -329,6 +332,7 @@ struct obd_export *class_export_get(struct obd_export *exp)
 void class_export_put(struct obd_export *exp)
 {
         ENTRY;
+        LASSERT(exp != NULL);
 
         LASSERT(exp);
         CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
@@ -357,18 +361,18 @@ void class_export_put(struct obd_export *exp)
         EXIT;
 }
 
-struct obd_export *class_new_export(struct obd_device *obddev)
+struct obd_export *class_new_export(struct obd_device *obd)
 {
         struct obd_export *export;
 
         OBD_ALLOC(export, sizeof(*export));
         if (!export) {
-                CERROR("no memory! (minor %d)\n", obddev->obd_minor);
+                CERROR("no memory! (minor %d)\n", obd->obd_minor);
                 return NULL;
         }
 
         atomic_set(&export->exp_refcount, 2);
-        export->exp_obd = obddev;
+        export->exp_obd = obd;
         /* XXX this should be in LDLM init */
         INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
 
@@ -376,12 +380,12 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         class_handle_hash(&export->exp_handle, export_handle_addref);
         spin_lock_init(&export->exp_lock);
 
-        spin_lock(&obddev->obd_dev_lock);
-        LASSERT(!obddev->obd_stopping); /* shouldn't happen, but might race */
-        atomic_inc(&obddev->obd_refcount);
+        spin_lock(&obd->obd_dev_lock);
+        LASSERT(!obd->obd_stopping); /* shouldn't happen, but might race */
+        atomic_inc(&obd->obd_refcount);
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
         export->exp_obd->obd_num_exports++;
-        spin_unlock(&obddev->obd_dev_lock);
+        spin_unlock(&obd->obd_dev_lock);
         return export;
 }
 
@@ -474,11 +478,11 @@ void class_destroy_import(struct obd_import *import)
 
 /* a connection defines an export context in which preallocation can
    be managed. */
-int class_connect(struct lustre_handle *exporth, struct obd_device *obd,
+int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid)
 {
         struct obd_export *export;
-        LASSERT(exporth != NULL);
+        LASSERT(conn != NULL);
         LASSERT(obd != NULL);
         LASSERT(cluuid != NULL);
 
@@ -486,17 +490,17 @@ int class_connect(struct lustre_handle *exporth, struct obd_device *obd,
         if (export == NULL)
                 return -ENOMEM;
 
-        exporth->cookie = export->exp_handle.h_cookie;
+        conn->cookie = export->exp_handle.h_cookie;
         memcpy(&export->exp_client_uuid, cluuid,
                sizeof(export->exp_client_uuid));
         class_export_put(export);
 
         CDEBUG(D_IOCTL, "connect: client %s, cookie "LPX64"\n",
-               cluuid->uuid, exporth->cookie);
+               cluuid->uuid, conn->cookie);
         return 0;
 }
 
-int class_disconnect(struct lustre_handle *conn, int failover)
+int class_disconnect(struct lustre_handle *conn, int flags)
 {
         struct obd_export *export = class_conn2export(conn);
         ENTRY;
@@ -515,7 +519,7 @@ int class_disconnect(struct lustre_handle *conn, int failover)
         RETURN(0);
 }
 
-void class_disconnect_exports(struct obd_device *obd, int failover)
+void class_disconnect_exports(struct obd_device *obd, int flags)
 {
         int rc;
         struct list_head *tmp, *n, work_list;
@@ -536,7 +540,7 @@ void class_disconnect_exports(struct obd_device *obd, int failover)
 
                 class_export_get(exp);
                 fake_conn.cookie = exp->exp_handle.h_cookie;
-                rc = obd_disconnect(&fake_conn, failover);
+                rc = obd_disconnect(&fake_conn, flags);
                 /* exports created from last_rcvd data, and "fake"
                    exports created by lctl don't have an import */
                 if (exp->exp_ldlm_data.led_import != NULL)
