@@ -270,8 +270,9 @@ static int log_commit_thread(void *arg)
                         } else {
                                 spin_unlock(&lcm->lcm_llcd_lock);
                                 CERROR("commit %p dropped %d cookies: rc %d\n",
-                                       llcd, llcd->llcd_cookiebytes /
-                                       sizeof(*llcd->llcd_cookies), rc);
+                                       llcd, (int)(llcd->llcd_cookiebytes /
+                                                   sizeof(*llcd->llcd_cookies)),
+                                       rc);
                                 llcd_put(llcd);
                         }
                         break;
