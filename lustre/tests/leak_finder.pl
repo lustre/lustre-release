@@ -8,17 +8,21 @@ STDERR->autoflush(1);
 my ($line, $memory);
 my $debug_line = 0;
 
+my $total = 0;
+my $max = 0;
+
 while ($line = <>) {
     $debug_line++;
     my ($file, $func, $lno, $name, $size, $addr, $type);
-    if ($line =~ m/^.*\((.*):(\d+):(.*)\(\) (\d+ \| )?\d+\+\d+\): [vk](.*) '(.*)': (\d+) at (.*) \(tot .*$/) {
+    if ($line =~ m/^.*\((.*):(\d+):(.*)\(\) (\d+ \| )?\d+\+\d+\): (k|v|slab-)(.*) '(.*)': (\d+) at (.*) \(tot (.*)\).*$/) {
         $file = $1;
         $lno = $2;
         $func = $3;
-        $type = $5;
-        $name = $6;
-        $size = $7;
-        $addr = $8;
+        $type = $6;
+        $name = $7;
+        $size = $8;
+        $addr = $9;
+        $tot = $10;
 
 	# we can't dump the log after portals has exited, so skip "leaks"
 	# from memory freed in the portals module unloading.
@@ -31,13 +35,24 @@ while ($line = <>) {
         next;
     }
 
-    if ($type eq 'malloced') {
+    if (index($type, 'alloced') >= 0) {
+        if (defined($memory->{$addr})) {
+            print STDERR "*** Two allocs with the same address ($size bytes at $addr, $file:$func:$lno)\n";
+            print STDERR "    first malloc at $memory->{$addr}->{file}:$memory->{$addr}->{func}:$memory->{$addr}->{lno}, second at $file:$func:$lno\n";
+            next;
+        }
+
         $memory->{$addr}->{name} = $name;
         $memory->{$addr}->{size} = $size;
         $memory->{$addr}->{file} = $file;
         $memory->{$addr}->{func} = $func;
         $memory->{$addr}->{lno} = $lno;
         $memory->{$addr}->{debug_line} = $debug_line;
+
+        $total += $size;
+        if ($total > $max) {
+            $max = $total;
+        }
     } else {
         if (!defined($memory->{$addr})) {
             print STDERR "*** Free without malloc ($size bytes at $addr, $file:$func:$lno)\n";
@@ -52,6 +67,11 @@ while ($line = <>) {
         }
 
         delete $memory->{$addr};
+        $total -= $size;
+    }
+    if ($total != int($tot)) {
+        print "kernel total $tot != my total $total\n";
+        $total = $tot;
     }
 }
 
@@ -66,4 +86,4 @@ foreach $key (@sorted) {
     print STDERR "*** Leak: $memory->{$key}->{size} bytes allocated at $key ($memory->{$key}->{file}:$memory->{$key}->{func}:$memory->{$key}->{lno}, debug file line $memory->{$key}->{debug_line})\n";
 }
 
-print "Done.\n";
+print "maximum used: $max, amount leaked: $total\n";
