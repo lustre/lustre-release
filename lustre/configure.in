@@ -1,0 +1,83 @@
+# Copyright (C) 2001-2003 Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+AC_INIT
+AC_CANONICAL_SYSTEM
+
+# Automake variables.  Steal the version number from lustre.spec.in.
+AM_INIT_AUTOMAKE(lustre, builtin([esyscmd], [sed -ne '/^%define version /{ s/.*version //; p; q; }' scripts/lustre.spec.in]))
+#AM_MAINTAINER_MODE
+
+# LLNL patches their ext3 and calls it extN
+AC_ARG_ENABLE(extN, [  --enable-extN use extN instead of ext3 for lustre backend])
+AM_CONDITIONAL(EXTN, test x$enable_extN = xyes)
+
+# specify wether to build doc or not
+AC_ARG_ENABLE(doc, [  --disable-doc skip creation of pdf documentation],
+		   [
+			if test x$enable_doc = xyes ; then
+			    ENABLE_DOC=1	   
+			else
+			    ENABLE_DOC=0
+			fi
+		   ],
+		   [ ENABLE_DOC=0 ])
+AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
+AC_SUBST(ENABLE_DOC)
+
+# the pinger is temporary, until we have the recovery node in place
+AC_ARG_ENABLE(pinger, [  --disable-pinger disable recovery pinger support])
+if test x$enable_pinger != xno ; then
+  AC_DEFINE(ENABLE_PINGER, 1, Use the Pinger)
+fi
+
+# very experimental orphan support
+AC_ARG_ENABLE(orphans, [  --enable-orphans very experimental orphan recovery support])
+if test x$enable_orphans = xyes ; then
+  AC_DEFINE(ENABLE_ORPHANS, 1, Compile with orphan support)
+fi
+
+AC_ARG_WITH(obd-buffer-size, [  --with-obd-buffer-size=[size] set lctl ioctl maximum bytes (default=8192)],OBD_BUFFER_SIZE=$with_obd_buffer_size,OBD_BUFFER_SIZE=8192)
+AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
+
+# specify location of libsysio tree
+AC_ARG_WITH(sysio, [  --with-sysio=[path] set path to libsysio source (default=../libsysio)], sysiodir=$withval)
+if test x$sysiodir = x; then
+	SYSIO='$(top_srcdir)/../libsysio'
+else
+	SYSIO=$sysiodir
+fi
+AC_SUBST(SYSIO)
+
+# snap compilation 
+AC_ARG_ENABLE(snapfs, [ --enable-snapfs build snapfs])
+AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
+
+
+sinclude(portals/build.m4)
+sinclude(portals/archdep.m4)
+
+if test x$enable_inkernel = xyes ; then
+	find . -name Makefile.mk | sed 's/.mk$//' | xargs -n 1 \
+		sh -e -x -c '(cp -f $0.mk $0.in)'
+fi
+
+AM_CONFIG_HEADER(portals/include/config.h)
+
+AC_OUTPUT([Makefile lvfs/Makefile portals/Makefile portals/Kernelenv \
+          portals/libcfs/Makefile portals/portals/Makefile \
+          portals/unals/Makefile portals/knals/Makefile \
+          portals/router/Makefile portals/knals/socknal/Makefile \
+          portals/knals/gmnal/Makefile portals/knals/qswnal/Makefile \
+	  portals/knals/scimacnal/Makefile \
+	  portals/knals/ibnal/Makefile \
+          portals/utils/Makefile portals/tests/Makefile portals/doc/Makefile \
+          obdecho/Makefile ptlrpc/Makefile liblustre/Makefile \
+	  lov/Makefile osc/Makefile mdc/Makefile mds/Makefile ost/Makefile \
+	  cobd/Makefile ptlbd/Makefile conf/Makefile  tests/Makefile \
+	  utils/Makefile utils/Lustre/Makefile obdfilter/Makefile \
+          obdclass/Makefile snapfs/Makefile snapfs/utils/Makefile \
+	  include/Makefile include/linux/Makefile llite/Makefile doc/Makefile scripts/Makefile \
+	  scripts/lustre.spec])
