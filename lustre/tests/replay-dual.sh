@@ -46,8 +46,10 @@ replay_barrier() {
 
 fail() {
     local facet=$1
+    lctl mark "FAIL $facet"
     stop $facet --force --failover --nomod
     start $facet --nomod
+    lctl mark "RECOVER $facet"
     df $MOUNT1 | tail -1
     df $MOUNT2 | tail -1
 }
@@ -217,8 +219,50 @@ test_4() {
 
 run_test 4 "|X| mkdir adir (-EEXIST), mkdir adir/bdir "
 
+
+test_5() {
+    # multiclient version of replay_single.sh/test_8
+    mcreate $MOUNT1/a
+    multiop $MOUNT2/a o_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $MOUNT1/a
+    replay_barrier mds
+    kill -USR1 $pid
+    wait $pid || return 1
+
+    fail mds
+    [ -e $MOUNT2/a ] && return 2
+    return 0
+}
+run_test 5 "open, unlink |X| close"
+
+
+test_6() {
+    mcreate $MOUNT1/a
+    multiop $MOUNT2/a o_c &
+    pid1=$!
+    multiop $MOUNT1/a o_c &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $MOUNT1/a
+    replay_barrier mds
+    kill -USR1 $pid1
+    wait $pid1 || return 1
+
+    fail mds
+    kill -USR1 $pid2
+    wait $pid2 || return 1
+    [ -e $MOUNT2/a ] && return 2
+    return 0
+}
+run_test 6 "open1, open2, unlink |X| close1 [fail mds] close2"
+
+
 equals_msg test complete, cleaning up
 stop client2 --nomod
 stop client1
 stop ost
-stop mds
+stop mds --dump cleanup-dual.log
