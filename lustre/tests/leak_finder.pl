@@ -14,15 +14,15 @@ my $max = 0;
 while ($line = <>) {
     $debug_line++;
     my ($file, $func, $lno, $name, $size, $addr, $type);
-    if ($line =~ m/^.*\((.*):(\d+):(.*)\(\) (\d+ \| )?\d+\+\d+\): (k|v|slab-)(.*) '(.*)': (\d+) at (.*) \(tot (.*)\).*$/) {
-        $file = $1;
-        $lno = $2;
-        $func = $3;
-        $type = $6;
-        $name = $7;
-        $size = $8;
-        $addr = $9;
-        $tot = $10;
+    if ($line =~ m/^.* :(k|v|slab-)(.*) '(.*)': (\d+) at (.*) \(tot (.*)\)(|\.):\((.*):(\d+):(.*)\(\) (\d+) \| \d+\+\d+\).*$/){
+	$type = $2;
+	$name = $3;
+	$size = $4;
+	$addr = $5;
+	$tot = $6;
+	$file = $8;
+	$lno = $9;
+	$func = $10;
 
 	# we can't dump the log after portals has exited, so skip "leaks"
 	# from memory freed in the portals module unloading.

@@ -75,7 +75,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        fprintf(stderr, "fstating\n");
+        fprintf(stderr, "fstat...\n");
         rc = fstat(fd, &st);
         if (rc) {
                 fprintf(stderr, "fstat (unlink) %s\n", strerror(errno));
