@@ -36,7 +36,7 @@ case x$with_sysio in
 		;;
 	*)
 		AC_MSG_RESULT([$with_sysio])
-		AC_CHECK_FILE([$with_sysio/src/libsysio.a],[],[
+		AC_CHECK_FILE([$with_sysio/lib/libsysio.a],[],[
 			AC_MSG_ERROR([A complete (built) external libsysio was not found.])
 		])
 		SYSIO=$with_sysio
