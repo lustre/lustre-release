@@ -461,6 +461,7 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
 out:
         if (rc) {
                 CERROR("no header\n");
+                LBUG();
                 return 0;
         }
 

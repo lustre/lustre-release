@@ -293,7 +293,6 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         local_id.nid = PTL_ID_ANY;
         local_id.pid = PTL_ID_ANY;
 
-        //CERROR("sending req %d\n", request->rq_xid);
         rc = PtlMEAttach(peer->peer_ni, request->rq_reply_portal, local_id,
                           request->rq_xid, 0, PTL_UNLINK, PTL_INS_AFTER,
                           &request->rq_reply_me_h);
@@ -314,7 +313,6 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 
         rc = PtlMDAttach(request->rq_reply_me_h, request->rq_reply_md,
                          PTL_UNLINK, &request->rq_reply_md_h);
-        //CERROR("MDAttach (send RPC): %Lu\n", (__u64)request->rq_reply_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LBUG();

@@ -84,6 +84,8 @@ struct ptlrpc_client {
 
         spinlock_t cli_lock;
         __u32 cli_xid;
+        atomic_t cli_queue_length;
+        wait_queue_head_t cli_waitq;
 };
 
 /* These do double-duty in rq_type and rq_flags */
