@@ -1,6 +1,8 @@
 # define DEBUG_SUBSYSTEM S_PORTALS
 # define PORTAL_DEBUG
 
+#include "build_check.h"
+
 #ifndef __KERNEL__
 # include <stdio.h>
 # include <stdlib.h>

@@ -4,6 +4,8 @@
 #ifndef _P30_H_
 #define _P30_H_
 
+#include "build_check.h"
+
 /*
  * p30.h
  *
@@ -22,14 +24,6 @@
 #include <portals/nal.h>
 #include <portals/api.h>
 #include <portals/nalids.h>
-
-extern int __p30_initialized;	/* for libraries & test codes  */
-extern int __p30_myr_initialized;	/*   that don't know if p30    */
-extern int __p30_ip_initialized;	/*   had been initialized yet  */
-extern ptl_handle_ni_t __myr_ni_handle, __ip_ni_handle;
-
-extern int __p30_myr_timeout;	/* in seconds, for PtlNIBarrier,     */
-extern int __p30_ip_timeout;	/* PtlReduce_all, & PtlBroadcast_all */
 
 /*
  * Debugging flags reserved for the Portals reference library.

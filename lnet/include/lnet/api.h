@@ -1,11 +1,12 @@
 #ifndef P30_API_H
 #define P30_API_H
 
+#include "build_check.h"
+
 #include <portals/types.h>
 
 #ifndef PTL_NO_WRAP
-int PtlInit(void);
-int PtlInitialized(void);
+int PtlInit(int *);
 void PtlFini(void);
 
 int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size_in,
@@ -24,10 +25,6 @@ int PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id);
 /*
  * Network interfaces
  */
-
-#ifndef PTL_NO_WRAP
-int PtlNIBarrier(ptl_handle_ni_t interface_in);
-#endif
 
 int PtlNIStatus(ptl_handle_ni_t interface_in, ptl_sr_index_t register_in,
                 ptl_sr_value_t * status_out);
@@ -62,6 +59,13 @@ unsigned int PtlNIDebug(ptl_handle_ni_t ni, unsigned int mask_in);
  */
 int PtlFailNid (ptl_handle_ni_t ni, ptl_nid_t nid, unsigned int threshold);
 
+/*
+ * PtlSnprintHandle: 
+ *
+ * This is not an official Portals 3 API call.  It is provided
+ * so that an application can print an opaque handle.
+ */
+void PtlSnprintHandle (char *str, int str_len, ptl_handle_any_t handle);
 
 /*
  * Match entries
@@ -95,7 +99,7 @@ int PtlMDAttach(ptl_handle_me_t current_in, ptl_md_t md_in,
                 ptl_unlink_t unlink_in, ptl_handle_md_t * handle_out);
 
 int PtlMDBind(ptl_handle_ni_t ni_in, ptl_md_t md_in,
-              ptl_handle_md_t * handle_out);
+	      ptl_unlink_t unlink_in, ptl_handle_md_t * handle_out);
 
 int PtlMDUnlink(ptl_handle_md_t md_in);
 
@@ -130,8 +134,8 @@ int PtlEQGet(ptl_handle_eq_t eventq_in, ptl_event_t * event_out);
 
 int PtlEQWait(ptl_handle_eq_t eventq_in, ptl_event_t * event_out);
 
-int PtlEQWait_timeout(ptl_handle_eq_t eventq_in, ptl_event_t * event_out,
-                      int timeout);
+int PtlEQPoll(ptl_handle_eq_t *eventqs_in, int neq_in, int timeout,
+	      ptl_event_t *event_out, int *which_out);
 #endif
 
 /*

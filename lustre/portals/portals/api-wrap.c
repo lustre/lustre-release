@@ -33,12 +33,12 @@ static int do_forward(ptl_handle_any_t any_h, int cmd, void *argbuf,
 
         if (!ptl_init) {
                 CERROR("Not initialized\n");
-                return PTL_NOINIT;
+                return PTL_NO_INIT;
         }
 
         nal = ptl_hndl2nal(&any_h);
         if (!nal)
-                return PTL_INV_HANDLE;
+                return PTL_HANDLE_INVALID;
 
         nal->forward(nal, cmd, argbuf, argsize, retbuf, retsize);
 
@@ -194,7 +194,7 @@ int PtlMEInsert(ptl_handle_me_t current_in, ptl_process_id_t match_id_in,
                         sizeof(ret));
 
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_ME : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
 
         if (handle_out) {
                 handle_out->nal_idx = current_in.nal_idx;
@@ -216,7 +216,7 @@ int PtlMEUnlink(ptl_handle_me_t current_in)
                         sizeof(ret));
 
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_ME : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
 
         return ret.rc;
 }
@@ -250,7 +250,7 @@ int PtlMEDump(ptl_handle_me_t current_in)
                         sizeof(ret));
 
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_ME : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
 
         return ret.rc;
 }
@@ -263,16 +263,16 @@ static int validate_md(ptl_handle_any_t current_in, ptl_md_t md_in)
 
         if (!ptl_init) {
                 CERROR("PtlMDAttach/Bind/Update: Not initialized\n");
-                return PTL_NOINIT;
+                return PTL_NO_INIT;
         }
 
         nal = ptl_hndl2nal(&current_in);
         if (!nal)
-                return PTL_INV_HANDLE;
+                return PTL_HANDLE_INVALID;
 
         if (nal->validate != NULL)                /* nal->validate not a NOOP */
         {
-                if ((md_in.options & PTL_MD_IOV) == 0)        /* contiguous */
+                if ((md_in.options & PTL_MD_IOVEC) == 0) /* contiguous */
                 {
                         rc = nal->validate (nal, md_in.start, md_in.length);
                         if (rc)
@@ -296,7 +296,7 @@ static int validate_md(ptl_handle_any_t current_in, ptl_md_t md_in)
 
 static ptl_handle_eq_t md2eq (ptl_md_t *md)
 {
-        if (PtlHandleEqual (md->eventq, PTL_EQ_NONE))
+        if (PtlHandleIsEqual (md->eventq, PTL_EQ_NONE))
                 return (PTL_EQ_NONE);
         
         return (ptl_handle2usereq (&md->eventq)->cb_eq_handle);
@@ -322,7 +322,7 @@ int PtlMDAttach(ptl_handle_me_t me_in, ptl_md_t md_in,
         }
 
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_ME : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
 
         if (handle_out) {
                 handle_out->nal_idx = me_in.nal_idx;
@@ -334,7 +334,7 @@ int PtlMDAttach(ptl_handle_me_t me_in, ptl_md_t md_in,
 
 
 int PtlMDBind(ptl_handle_ni_t ni_in, ptl_md_t md_in,
-                       ptl_handle_md_t * handle_out)
+              ptl_unlink_t unlink_in, ptl_handle_md_t * handle_out)
 {
         PtlMDBind_in args;
         PtlMDBind_out ret;
@@ -347,6 +347,7 @@ int PtlMDBind(ptl_handle_ni_t ni_in, ptl_md_t md_in,
         args.eq_in = md2eq(&md_in);
         args.ni_in = ni_in;
         args.md_in = md_in;
+        args.unlink_in = unlink_in;
 
         rc = do_forward(ni_in, PTL_MDBIND, 
                         &args, sizeof(args), &ret, sizeof(ret));
@@ -379,13 +380,13 @@ int PtlMDUpdate(ptl_handle_md_t md_in, ptl_md_t *old_inout,
         if (new_inout) {
                 rc = validate_md (md_in, *new_inout);
                 if (rc != PTL_OK)
-                        return (rc == PTL_INV_HANDLE) ? PTL_INV_MD : rc;
+                        return (rc == PTL_HANDLE_INVALID) ? PTL_MD_INVALID : rc;
                 args.new_inout = *new_inout;
                 args.new_inout_valid = 1;
         } else
                 args.new_inout_valid = 0;
 
-        if (PtlHandleEqual (testq_in, PTL_EQ_NONE)) {
+        if (PtlHandleIsEqual (testq_in, PTL_EQ_NONE)) {
                 args.testq_in = PTL_EQ_NONE;
                 args.sequence_in = -1;
         } else {
@@ -398,7 +399,7 @@ int PtlMDUpdate(ptl_handle_md_t md_in, ptl_md_t *old_inout,
         rc = do_forward(md_in, PTL_MDUPDATE, &args, sizeof(args), &ret,
                         sizeof(ret));
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_MD : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_MD_INVALID : rc;
 
         if (old_inout)
                 *old_inout = ret.old_inout;
@@ -416,7 +417,7 @@ int PtlMDUnlink(ptl_handle_md_t md_in)
         rc = do_forward(md_in, PTL_MDUNLINK, &args, sizeof(args), &ret,
                         sizeof(ret));
         if (rc != PTL_OK)
-                return (rc == PTL_INV_HANDLE) ? PTL_INV_MD : rc;
+                return (rc == PTL_HANDLE_INVALID) ? PTL_MD_INVALID : rc;
 
         return ret.rc;
 }
@@ -433,11 +434,11 @@ int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
         nal_t *nal;
 
         if (!ptl_init)
-                return PTL_NOINIT;
+                return PTL_NO_INIT;
         
         nal = ptl_hndl2nal (&interface);
         if (nal == NULL)
-                return PTL_INV_HANDLE;
+                return PTL_HANDLE_INVALID;
 
         if (count != LOWEST_BIT_SET(count)) {   /* not a power of 2 already */
                 do {                    /* knock off all but the top bit... */
@@ -452,7 +453,7 @@ int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
 
         PORTAL_ALLOC(ev, count * sizeof(ptl_event_t));
         if (!ev)
-                return PTL_NOSPACE;
+                return PTL_NO_SPACE;
 
         for (i = 0; i < count; i++)
                 ev[i].sequence = 0;
@@ -478,7 +479,7 @@ int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
 
         PORTAL_ALLOC(eq, sizeof(*eq));
         if (!eq) {
-                rc = PTL_NOSPACE;
+                rc = PTL_NO_SPACE;
                 goto fail;
         }
 
