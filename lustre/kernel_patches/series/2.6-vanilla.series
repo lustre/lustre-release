@@ -13,3 +13,4 @@ export-2.6-suse.patch
 header-guards-2.6-suse.patch
 ext3-super-ntohl.patch
 lookup_bdev_init_intent.patch
+ext3-nlinks-2.6.7.patch
