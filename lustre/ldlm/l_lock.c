@@ -65,6 +65,10 @@ void l_lock(struct lustre_lock *lock)
                 owner = 1;
         spin_unlock(&lock->l_spin);
 
+        /* This is safe to increment outside the spinlock because we
+         * can only have 1 CPU running on the current task
+         * (i.e. l_owner == current), regardless of the number of CPUs.
+         */
         if (owner) {
                 ++lock->l_depth;
         } else {
