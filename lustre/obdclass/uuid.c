@@ -86,7 +86,7 @@ static void uuid_pack(struct uuid *uu, class_uuid_t ptr)
 	memcpy(out+10, uu->node, 6);
 }
 
-int class_uuid_parse(obd_uuid_t in, class_uuid_t uu)
+int class_uuid_parse(struct obd_uuid in, class_uuid_t uu)
 {
 	struct uuid uuid;
 	int i;
@@ -122,12 +122,12 @@ int class_uuid_parse(obd_uuid_t in, class_uuid_t uu)
 }
 #endif
 
-void class_uuid_unparse(class_uuid_t uu, obd_uuid_t out)
+void class_uuid_unparse(class_uuid_t uu, struct obd_uuid out)
 {
 	struct uuid uuid;
 
 	uuid_unpack(uu, &uuid);
-	sprintf(out,
+	sprintf(out.uuid,
 		"%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 		uuid.time_low, uuid.time_mid, uuid.time_hi_and_version,
 		uuid.clock_seq >> 8, uuid.clock_seq & 0xFF,
