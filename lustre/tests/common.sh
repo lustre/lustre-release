@@ -225,15 +225,15 @@ setup_portals() {
 	start_acceptor
 
 	$PTLCTL <<- EOF
-	setup $NETWORK
+	network $NETWORK
 	mynid $LOCALHOST
 	connect $MDSNODE $PORT
-	add_uuid $MDSNODE
+	add_uuid $MDSNODE $MDSNODE
 	connect $OSTNODE $PORT
-	add_uuid $OSTNODE
+	add_uuid $OSTNODE $OSTNODE
 	connect $DLM $PORT
-	add_uuid $DLM
-	add_uuid self
+	add_uuid $DLM $DLM
+	add_uuid self $LOCALHOST
 	quit
 EOF
 }
