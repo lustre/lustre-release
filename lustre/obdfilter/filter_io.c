@@ -202,11 +202,10 @@ int filter_get_page_write(struct inode *inode, struct niobuf_local *lnb,
                 lnb->page = page;
                 lnb->flags |= N_LOCAL_TEMP_PAGE;
         } else if (!IS_ERR(page)) {
+                unsigned from = lnb->offset & ~PAGE_MASK, to = from + lnb->len;
                 (*pglocked)++;
 
-                rc = mapping->a_ops->prepare_write(NULL, page,
-                                                   lnb->offset & ~PAGE_MASK,
-                                                   lnb->len);
+                rc = mapping->a_ops->prepare_write(NULL, page, from, to);
                 if (rc) {
                         if (rc != -ENOSPC)
                                 CERROR("page index %lu, rc = %d\n", index, rc);
