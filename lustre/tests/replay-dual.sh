@@ -156,6 +156,7 @@ PINGER=`cat /proc/fs/lustre/pinger`
 if [ "$PINGER" != "on" ]; then
     echo "ERROR: Lustre must be built with --enable-pinger for replay-dual"
     stop mds
+    exit
 fi
 
 start ost --reformat
