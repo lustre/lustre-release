@@ -529,6 +529,10 @@ static int filter_start_page_write(struct inode *inode,
                 RETURN(lnb->rc = -ENOMEM);
         }
         POISON_PAGE(page, 0xf1);
+        if (lnb->len != PAGE_SIZE) {
+                memset(kmap(page) + lnb->len, 0, PAGE_SIZE - lnb->len);
+                kunmap(page);
+        }
         page->index = lnb->offset >> PAGE_SHIFT;
         lnb->page = page;
 
