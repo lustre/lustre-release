@@ -256,7 +256,7 @@ int _sysio_lustre_init(void)
 extern int _sysio_native_init();
 extern unsigned int obd_timeout;
 
-static char *lustre_path = NULL;
+char *lustre_path = NULL;
 
 /* global variables */
 char   *g_zconf_mdsname = NULL; /* mdsname, for zeroconf */
