@@ -172,7 +172,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         lock1 = ldlm_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_CR, NULL, 0);
         if (lock1 == NULL)
                 LBUG();
-        err = ldlm_lock_enqueue(lock1, NULL, 0, &flags,
+        err = ldlm_lock_enqueue(&lock1, NULL, 0, &flags,
                                 ldlm_completion_ast, ldlm_blocking_ast);
         if (err != ELDLM_OK)
                 LBUG();
@@ -180,7 +180,7 @@ int ldlm_test_basics(struct obd_device *obddev)
         lock = ldlm_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_EX, NULL, 0);
         if (lock == NULL)
                 LBUG();
-        err = ldlm_lock_enqueue(lock, NULL, 0, &flags,
+        err = ldlm_lock_enqueue(&lock, NULL, 0, &flags,
                                 ldlm_completion_ast, ldlm_blocking_ast);
         if (err != ELDLM_OK)
                 LBUG();
@@ -222,7 +222,8 @@ int ldlm_test_extents(struct obd_device *obddev)
                                  0);
         if (lock1 == NULL)
                 LBUG();
-        err = ldlm_lock_enqueue(lock1, &ext1, sizeof(ext1), &flags, NULL, NULL);
+        err = ldlm_lock_enqueue(&lock1, &ext1, sizeof(ext1), &flags, NULL,
+                                NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
@@ -231,7 +232,8 @@ int ldlm_test_extents(struct obd_device *obddev)
         flags = 0;
         lock2 = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
                                 NULL, 0);
-        err = ldlm_lock_enqueue(lock2, &ext2, sizeof(ext2), &flags, NULL, NULL);
+        err = ldlm_lock_enqueue(&lock2, &ext2, sizeof(ext2), &flags, NULL,
+                                NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
@@ -241,8 +243,7 @@ int ldlm_test_extents(struct obd_device *obddev)
         lock = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_EX, NULL, 0);
         if (lock == NULL)
                 LBUG();
-        err = ldlm_lock_enqueue(lock, &ext3, sizeof(ext3), &flags,
-                                NULL, NULL);
+        err = ldlm_lock_enqueue(&lock, &ext3, sizeof(ext3), &flags, NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_BLOCK_GRANTED))
