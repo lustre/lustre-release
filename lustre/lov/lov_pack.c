@@ -333,7 +333,7 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         /* Bug 1185 FIXME: struct lov_mds_md is little-endian everywhere else */
 
         if (lmm.lmm_magic != LOV_MAGIC) {
-                CERROR("bad userland LOV MAGIC: %#08x != %#08x\n",
+                CDEBUG(D_IOCTL, "bad userland LOV MAGIC: %#08x != %#08x\n",
                        lmm.lmm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
@@ -352,14 +352,14 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         }
 #endif
         if (lmm.lmm_stripe_size & (PAGE_SIZE - 1)) {
-                CERROR("stripe size %u not multiple of %lu\n",
+                CDEBUG(D_IOCTL, "stripe size %u not multiple of %lu\n",
                        lmm.lmm_stripe_size, PAGE_SIZE);
                 RETURN(-EINVAL);
         }
         stripe_count = lov_get_stripecnt(lov, lmm.lmm_stripe_count);
 
         if ((__u64)lmm.lmm_stripe_size * stripe_count > ~0UL) {
-                CERROR("stripe width %ux%u > %lu on 32-bit system\n",
+                CDEBUG(D_IOCTL, "stripe width %ux%u > %lu on 32-bit system\n",
                        lmm.lmm_stripe_size, (int)lmm.lmm_stripe_count, ~0UL);
                 RETURN(-EINVAL);
         }
