@@ -1112,7 +1112,6 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         struct lmv_obd *lmv = &obd->u.lmv;
         int mea_size;
         ENTRY;
-        lmv_connect(obd);
 
 	mea_size = sizeof(struct ll_fid) * lmv->count + sizeof(struct mea);
         if (!lmmp)
@@ -1147,7 +1146,6 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **mem_tgt,
         struct mea *mea = (void *) disk_src;
         int mea_size;
         ENTRY;
-        lmv_connect(obd);
 
 	mea_size = sizeof(struct ll_fid) * lmv->count + sizeof(struct mea);
         if (mem_tgt == NULL)
