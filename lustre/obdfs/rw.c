@@ -384,7 +384,8 @@ int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsi
         int rc;
         struct inode *inode = page->mapping->host;
         loff_t pos = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
-        rc = obdfs_writepage(page);
+	// XXX test with synchronous writes
+        rc = obdfs_do_writepage(page, 1);
         kunmap(page);
         if (pos > inode->i_size) {
                 inode->i_size = pos;

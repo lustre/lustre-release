@@ -459,7 +459,6 @@ int obdfs_notify_change(struct dentry *de, struct iattr *attr)
 static int obdfs_statfs(struct super_block *sb, struct statfs *buf)
 {
         struct statfs tmp;
-        int bufsize = sizeof(*buf);
         int err;
 
         ENTRY;
@@ -469,8 +468,8 @@ static int obdfs_statfs(struct super_block *sb, struct statfs *buf)
                 printk(__FUNCTION__ ": obd_statfs fails (%d)\n", err);
                 return err;
         }
-        copy_to_user(buf, &tmp, (bufsize<sizeof(tmp)) ? bufsize : sizeof(tmp));
-
+	memcpy(buf, &tmp, sizeof(*buf));
+	CDEBUG(D_SUPER, "statfs returns avail %ld\n", tmp.f_bavail);
         EXIT;
 
         return err; 
