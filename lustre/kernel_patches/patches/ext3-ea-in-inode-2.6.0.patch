@@ -644,7 +644,7 @@ Index: linux-2.6.0/fs/ext3/xattr.c
   * ext3_xattr_set_handle()
   *
   * Create, replace or remove an extended attribute for this inode. Buffer
-@@ -470,6 +959,103 @@
+@@ -470,6 +959,104 @@
   */
  int
  ext3_xattr_set_handle(handle_t *handle, struct inode *inode, int name_index,
@@ -686,10 +686,11 @@ Index: linux-2.6.0/fs/ext3/xattr.c
 +		if (err != 0 && err != -ENOENT) {
 +			/* not found EA in block */
 +			goto finish;	
++		} else if (err == 0) {
++			/* found EA in block */
++			where = 1;
++			found = 1;
 +		}
-+		/* found EA in block */
-+		where = 1;
-+		found = 1;
 +	} else
 +		goto finish;
 +

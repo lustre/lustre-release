@@ -620,7 +620,7 @@
   * ext3_xattr_set()
   *
   * Create, replace or remove an extended attribute for this inode. Buffer
-@@ -566,6 +1050,100 @@ static void ext3_xattr_update_super_bloc
+@@ -566,6 +1050,101 @@ static void ext3_xattr_update_super_bloc
   */
  int
  ext3_xattr_set(handle_t *handle, struct inode *inode, int name_index,
@@ -660,10 +660,11 @@
 +		if (err != 0 && err != -ENOENT) {
 +			/* not found EA in block */
 +			goto finish;	
++		} else if (err == 0) {
++			/* found EA in block */
++			where = 1;
++			found = 1;
 +		}
-+		/* found EA in block */
-+		where = 1;
-+		found = 1;
 +	} else
 +		goto finish;
 +
