@@ -123,7 +123,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
          * out-or-order and have already consumed some grant.  We want to
          * leave this here in case there is a large error in accounting. */
         CDEBUG(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ?
-               D_ERROR : D_CACHE,
+               D_WARNING : D_CACHE,
                "%s: cli %s/%p reports grant: "LPU64" dropped: %u, local: %lu\n",
                obd->obd_name, exp->exp_client_uuid.uuid, exp, oa->o_grant,
                oa->o_dropped, fed->fed_grant);
@@ -625,7 +625,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 rc = filter_start_page_write(dentry->d_inode, lnb);
                 if (rc) {
-                        CDEBUG(D_ERROR, "page err %u@"LPU64" %u/%u %p: rc %d\n",
+                        CERROR("page err %u@"LPU64" %u/%u %p: rc %d\n",
                                lnb->len, lnb->offset,
                                i, obj->ioo_bufcnt, dentry, rc);
                         while (lnb-- > res)
