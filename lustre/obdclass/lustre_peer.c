@@ -142,8 +142,11 @@ int class_del_uuid (char *uuid)
 
         spin_unlock (&g_uuid_lock);
 
-        if (list_empty (&deathrow))
+        if (list_empty (&deathrow)) {
+                if (uuid)
+                        CERROR("del non-existed uuid %s\n", uuid);
                 return -EINVAL;
+        }
 
         do {
                 data = list_entry(deathrow.next, struct uuid_nid_data, head);
