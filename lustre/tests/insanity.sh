@@ -111,7 +111,7 @@ setup() {
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     wait_for mds
     start mds $MDSLCONFARGS ${REFORMAT}
-    while ! $PDSH $HOST "ls -ld $LUSTRE"; do sleep 5; done
+    while ! $PDSH $HOST "$CHECKSTAT -t dir $LUSTRE"; do sleep 5; done
     do_node $CLIENTS lconf --node client_facet \
 	--select mds_service=$ACTIVEMDS $XMLCONFIG
 }
@@ -316,7 +316,7 @@ test_5() {
     
     #OST Portion
     echo "Failing OST"
-    shutdown_node ost2
+    shutdown_facet ost2
     reboot_facet ost2
 
     #Check FS
@@ -348,7 +348,7 @@ test_6() {
 	
     #OST Portion
     echo "Failing OST"
-    shutdown_node ost1
+    shutdown_facet ost1
     reboot_facet ost1
 
     #Check FS
@@ -457,7 +457,7 @@ test_8() {
 
     #OST Portion
     echo "Failing OST"
-    shutdown_node ost1
+    shutdown_facet ost1
     reboot_facet ost1
 
     #Check FS

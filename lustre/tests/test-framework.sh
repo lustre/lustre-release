@@ -97,6 +97,7 @@ shutdown_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
        $POWER_DOWN `facet_active_host $facet`
+       sleep 2 
     elif [ "$FAILURE_MODE" = SOFT ]; then
        stop $facet --force --failover --nomod
     fi
@@ -112,7 +113,7 @@ reboot_facet() {
 wait_for_host() {
    HOST=$1
    check_network  $HOST 900
-   while ! $PDSH $HOST "ls -ld $LUSTRE"; do sleep 5; done
+   while ! $PDSH $HOST "$CHECKSTAT -t dir $LUSTRE"; do sleep 5; done
 }
 
 wait_for() {
@@ -132,7 +133,6 @@ facet_failover() {
     facet=$1
     echo "Failing $facet node `facet_active_host $facet`"
     shutdown_facet $facet
-    sleep 2
     reboot_facet $facet
     client_df &
     DFPID=$!
