@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <dirent.h>
 
 #include "test_common.h"
 
@@ -277,4 +278,26 @@ void t_grep(const char *path, char *str)
 void t_grep_v(const char *path, char *str)
 {
 	_t_grep(path, str, 0);
+}
+
+void t_ls(int fd, char *buf, int size)
+{
+	struct dirent *ent;
+	int rc, pos;
+	off_t base = 0;
+
+	printf("dir entries listing...\n");
+	while ((rc = getdirentries(fd, buf, size, &base)) > 0) {
+		pos = 0;
+		while (pos < rc) {
+			ent = (struct dirent *) ((char*) buf + pos);
+			printf("%s\n", ent->d_name);
+			pos += ent->d_reclen;
+		}
+	}
+
+	if (rc < 0) {
+		printf("getdents error %d\n", rc);
+		EXIT(-1);
+	}
 }
