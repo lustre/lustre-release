@@ -349,9 +349,14 @@ static void translate_lookup_intent(struct intent *intent,
 {
         memset(it, 0, sizeof(*it));
 
-        /* FIXME libsysio will assign intent like following:
+        /* libsysio will assign intent like following:
+         * NOTE: INT_CREAT has include INT_UPDPARENT
+         *
          * open: INT_OPEN [| INT_CREAT]
          * mkdir: INT_CREAT
+         * symlink: INT_CREAT
+         * unlink: INT_UPDPARENT
+         * rmdir: INT_UPDPARENT
          *
          * following logic is adjusted for libsysio
          */
