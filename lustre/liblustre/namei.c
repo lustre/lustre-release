@@ -135,6 +135,18 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
+        /* This is due to bad interaction with libsysio. remove this when we
+         * switched to libbsdio
+         */
+        {
+                struct llu_inode_info *lli = llu_i2info(pb->pb_ino);
+                if (lli->lli_it) {
+                        CERROR("inode %lu still have intent %p(opc 0x%x), release it\n",
+                                        lli->lli_st_ino, lli->lli_it, lli->lli_it->it_op);
+                        ll_intent_release(pb->pb_ino, lli->lli_it);
+                }
+        }
+
         if (it == NULL || it->it_op == IT_GETATTR) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate2 if we already have a lock, let's
@@ -344,9 +356,20 @@ static int llu_lookup2(struct inode *parent, struct pnode *pnode,
         RETURN(rc);
 }
 
-static void translate_lookup_intent(struct intent *intent,
-                                    struct lookup_intent *it)
+static struct lookup_intent*
+translate_lookup_intent(struct intent *intent, const char *path)
 {
+        struct lookup_intent *it;
+
+        /* libsysio trick */
+        if (!intent || path) {
+                CDEBUG(D_VFSTRACE, "not intent needed\n");
+                return NULL;
+        }
+
+        OBD_ALLOC(it, sizeof(*it));
+        LASSERT(it);
+
         memset(it, 0, sizeof(*it));
 
         /* libsysio will assign intent like following:
@@ -357,6 +380,8 @@ static void translate_lookup_intent(struct intent *intent,
          * symlink: INT_CREAT
          * unlink: INT_UPDPARENT
          * rmdir: INT_UPDPARENT
+         * stat: INT_GETATTR
+         * setattr: NULL
          *
          * following logic is adjusted for libsysio
          */
@@ -365,8 +390,10 @@ static void translate_lookup_intent(struct intent *intent,
 
         if (intent->int_opmask & INT_OPEN)
                 it->it_op |= IT_OPEN;
+        /*
         else if (intent->int_opmask & INT_CREAT)
                 it->it_op |= IT_LOOKUP;
+         */
 
         /* FIXME libsysio has strange code on intent handling,
          * more check later */
@@ -374,14 +401,26 @@ static void translate_lookup_intent(struct intent *intent,
                 it->it_op |= IT_CREAT;
                 it->it_mode = *((int*)intent->int_arg1);
         }
+
         if (intent->int_opmask & INT_GETATTR)
                 it->it_op |= IT_GETATTR;
+        /* XXX */
+        if (intent->int_opmask & INT_SETATTR)
+                LBUG();
+
         /* libsysio is different to linux vfs when doing unlink/rmdir,
          * INT_UPDPARENT was passed down during name resolution. Here
          * we treat it as normal lookup, later unlink()/rmdir() will
          * do the actual work */
-        if (intent->int_opmask & INT_UPDPARENT)
-                it->it_op |= IT_LOOKUP;
+
+        /* conform to kernel code, if only IT_LOOKUP was set, don't
+         * pass down it */
+        if (!it->it_op || it->it_op == IT_LOOKUP) {
+                OBD_FREE(it, sizeof(*it));
+                it = NULL;
+        }
+        CDEBUG(D_VFSTRACE, "final intent 0x%x\n", it ? it->it_op : 0);
+        return it;
 }
 
 int llu_iop_lookup(struct pnode *pnode,
@@ -389,8 +428,9 @@ int llu_iop_lookup(struct pnode *pnode,
                    struct intent *intnt,
                    const char *path)
 {
-        struct lookup_intent it_buf, *it;
+        struct lookup_intent *it;
         int rc;
+        ENTRY;
 
         *inop = NULL;
 
@@ -404,23 +444,15 @@ int llu_iop_lookup(struct pnode *pnode,
         }
 
         if (!pnode->p_base->pb_name.len)
-                return -EINVAL;
+                RETURN(-EINVAL);
 
-        /* libsysio trick */
-        if (intnt && path)
-                intnt = NULL;
-
-        if (intnt) {
-                translate_lookup_intent(intnt, &it_buf);
-                it = &it_buf;
-        } else
-                it = NULL;
+        it = translate_lookup_intent(intnt, path);
 
         /* param flags is not used, let it be 0 */
         if (llu_pb_revalidate(pnode, 0, it)) {
                 LASSERT(pnode->p_base->pb_ino);
                 *inop = pnode->p_base->pb_ino;
-                return 0;
+                RETURN(0);
         }
 
         rc = llu_lookup2(pnode->p_parent->p_base->pb_ino, pnode, it);
@@ -431,6 +463,6 @@ int llu_iop_lookup(struct pnode *pnode,
                         *inop = pnode->p_base->pb_ino;
         }
 
-        return rc;
+        RETURN(rc);
 }
 
