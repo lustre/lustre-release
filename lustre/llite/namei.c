@@ -249,11 +249,9 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                         if (it->it_status && it->it_status != -EEXIST)
                                 GOTO(neg_req, NULL);
                 } else if (it->it_op & (IT_RENAME2 | IT_LINK2)) {
-                        struct mds_body *body =
-                                lustre_msg_buf(request->rq_repmsg, offset);
                         it->it_data = NULL;
                         /* This means the target lookup is negative */
-                        if (body->valid == 0)
+                        if (lic.lic_body->valid == 0)
                                 GOTO(neg_req, NULL);
                         goto iget;
                 }
