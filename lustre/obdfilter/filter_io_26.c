@@ -111,6 +111,24 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         struct dio_request *dreq = bio->bi_private;
         unsigned long flags;
 
+        if (dreq == NULL) {
+                CERROR("***** bio->bi_private is NULL!  This should never "
+                       "happen.  Normally, I would crash here, but instead I "
+                       "will dump the bio contents to the console.  Please "
+                       "report this to CFS, along with any interesting messages "
+                       "leading up to this point (like SCSI errors, perhaps).  "
+                       "Because bi_private is NULL, I can't wake up the thread "
+                       "that initiated this I/O -- so you will probably have to "
+                       "reboot this node.");
+                CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
+                       "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
+                       "bi_private: %p\n", bio->bi_next, bio->bi_flags,
+                       bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
+                       bio->bi_end_io, atomic_read(&bio->bi_cnt),
+                       bio->bi_private);
+                return 0;
+        }
+
         spin_lock_irqsave(&dreq->dr_lock, flags);
         bio->bi_private = dreq->dr_bios;
         dreq->dr_bios = bio;
