@@ -54,3 +54,7 @@ linux-2.4.20-tmpfs-xattr.patch
 linux-2.4.20-tmpfs-iopen.patch
 linux-2.4.20-filemap.patch
 ext3-truncate-buffer-head.patch
+dynamic-locks-2.4.20-rh.patch 
+vfs-pdirops-2.4.20.patch
+ext3-pdirops-2.4.20.patch 
+ext3-mds-num-2.4.24.patch 
