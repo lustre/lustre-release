@@ -106,6 +106,6 @@ ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         }
 
         list_del_init(&lock->l_res_link);
-        ldlm_grant_lock(lock, NULL, 0, 1);
+        ldlm_grant_lock(lock, NULL, 0, !first_enq);
         RETURN(LDLM_ITER_CONTINUE);
 }

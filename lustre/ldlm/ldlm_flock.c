@@ -305,7 +305,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                  * release the ns_lock, allocate the new lock,
                  * and restart processing this lock. */
                 new2 = ldlm_lock_create(ns, NULL, res->lr_name, LDLM_FLOCK,
-                                        lock->l_granted_mode, NULL, NULL);
+                                        lock->l_granted_mode, NULL, NULL, NULL);
                 if (!new2) {
                         ldlm_flock_destroy(req, lock->l_granted_mode, *flags);
                         *err = -ENOLCK;
@@ -404,7 +404,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");
 
-        ldlm_lock_dump(D_OTHER, lock);
+        ldlm_lock_dump(D_OTHER, lock, 0);
 
         fwd.fwd_lock = lock;
         obd = class_exp2obd(lock->l_conn_export);
