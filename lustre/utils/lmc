@@ -1047,11 +1047,11 @@ def cmdlinesplit(cmdline):
             if arg is None: arg = match.group(1)
             else:           arg = arg + match.group(1)
                                                                                                                                                
-        elif c.isspace():
+        elif c in string.whitespace:
             if arg != None:
                 arg_list.append(str(arg))
             arg = None
-            while i < len(cmdline) and cmdline[i].isspace():
+            while i < len(cmdline) and cmdline[i] in string.whitespace:
                 i = i + 1
         else:
             match = outside.match(cmdline, i)
