@@ -48,7 +48,15 @@ lconf\SpecialChar ~
 DESCRIPTION
 \layout Standard
 
-This program configures a node following directives in the <XML-config-file>.
+This program configures a node following directives in the <XML-config-file>..
+ There will be single configuration file for all the nodes in a single cluster.
+ This file should be distributed to all the nodes in the cluster or kept
+ in a location accessible to all the nodes.
+ One option is to store the cluster configuration information in LDAP format
+ on an LDAP server that can be reached from all the cluster nodes.
+\layout Description
+
+--ldapurl LDAP server URL 
 \layout Description
 
 --node\SpecialChar ~
@@ -102,15 +110,21 @@ node_name
 --verbose,-v Be verbose and show actions while going along.
 \layout Description
 
---reformat Reformat all the devices
+--dump\SpecialChar ~
+<file> Dump the kernel debug log to the specified file before portals
+ is unloaded during cleanup.
+\layout Description
+
+--reformat Reformat all the devices.
+ This is essential on the first time the file system is brought up.
 \layout Description
 
 -h,--help Print help.
 \layout Description
 
 --maxlevel\SpecialChar ~
-<level> [NOT IMPLEMENTED] Perform configuration of devices and
- services up to level given.
+<level> Perform configuration of devices and services up to level
+ given.
  
 \emph on 
 level
@@ -122,6 +136,22 @@ net, dev, svc, fs.
 \series default 
 When used in conjunction with cleanup, services are torn down up to a certain
  level.
+ Default is 100.
+\layout Description
+
+--minlevel\SpecialChar ~
+<level> Specify the minimum level of services to configure/cleanup.
+ Default is 0.
+\layout Description
+
+--lustre=src_dir Specify the base directory for Lustre sources, this parameter
+ will cause lconf to load the lustre modules from this soure tree.
+\layout Description
+
+--portals=src_dir Portals source directory.
+ If this is a relative path, it is assumed to be relative to Lustre source
+ tree location.
+ 
 \layout Subsection
 
 EXAMPLES
