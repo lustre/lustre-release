@@ -419,6 +419,7 @@ static int filter_destroy_internal(struct obd_device *obd,
         struct obd_run_ctxt saved;
         struct inode *inode = object_dentry->d_inode;
         int rc;
+        ENTRY;
 
         if (inode->i_nlink != 1 || atomic_read(&inode->i_count) != 1) {
                 CERROR("destroying objid %*s nlink = %d, count = %d\n",
@@ -437,7 +438,7 @@ static int filter_destroy_internal(struct obd_device *obd,
                        object_dentry->d_name.len,
                        object_dentry->d_name.name, rc);
 
-        return rc;
+        RETURN(rc);
 }
 
 static int filter_close_internal(struct obd_device *obd,
@@ -877,6 +878,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct dentry *dir_dentry, *object_dentry;
+        struct filter_dentry_data *fdd = object_dentry->d_fsdata;
         int rc;
         ENTRY;
 
@@ -885,7 +887,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_INODE, "destroying object "LPD64"\n", oa->o_id);
+        CDEBUG(D_INODE, "destroying objid "LPX64"\n", oa->o_id);
 
         dir_dentry = filter_parent(obd, oa->o_mode);
         down(&dir_dentry->d_inode->i_sem);
@@ -894,13 +896,19 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
         if (IS_ERR(object_dentry))
                 GOTO(out, rc = -ENOENT);
 
-        if (object_dentry->d_fsdata) {
+        if (fdd && atomic_read(&fdd->fdd_open_count)) {
                 struct filter_dentry_data *fdd = object_dentry->d_fsdata;
 
                 if (!(fdd->fdd_flags & FILTER_FLAG_DESTROY)) {
                         fdd->fdd_flags |= FILTER_FLAG_DESTROY;
                         /* XXX put into PENDING directory in case of crash */
-                }
+                        CDEBUG(D_INODE,
+                               "defer destroy of %dx open objid "LPX64"\n",
+                               atomic_read(&fdd->fdd_open_count), oa->o_id);
+                } else
+                        CDEBUG(D_INODE,
+                               "repeat destroy of %dx open objid "LPX64"\n",
+                               atomic_read(&fdd->fdd_open_count), oa->o_id);
                 GOTO(out_dput, rc = 0);
         }
 
