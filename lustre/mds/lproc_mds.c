@@ -25,68 +25,63 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
 
-int rd_uuid(char* page, char **start, off_t off, int count, int *eof, 
+int rd_uuid(char *page, char **start, off_t off, int count, int *eof,
             void *data)
 {
         struct obd_device* temp = (struct obd_device*)data;
-        int len = 0;
-        len += snprintf(page, count, "%s\n", temp->obd_uuid); 
-        return len;  
+        return snprintf(page, count, "%s\n", temp->obd_uuid);
 }
-int rd_blksize(char* page, char **start, off_t off, int count, int *eof, 
+
+int rd_blksize(char *page, char **start, off_t off, int count, int *eof,
                void *data)
 {
         struct obd_device* temp = (struct obd_device*)data;
         struct mds_obd *mds = &temp->u.mds;
         struct statfs mystats;
-        int rc, len = 0;
-        
+        int rc;
+
         rc = vfs_statfs(mds->mds_sb, &mystats);
         if (rc) {
                 CERROR("mds: statfs failed: rc %d\n", rc);
                 return 0;
         }
-        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_bsize)); 
-        return len;
-
+        return snprintf(page, count, LPU64"\n", (__u64)(mystats.f_bsize));
 }
-int rd_kbtotal(char* page, char **start, off_t off, int count, int *eof, 
+
+int rd_kbtotal(char *page, char **start, off_t off, int count, int *eof,
                void *data)
 {
         struct obd_device* temp = (struct obd_device*)data;
         struct mds_obd *mds = &temp->u.mds;
         struct statfs mystats;
-        int rc, len = 0;
+        int rc;
         __u32 blk_size;
         __u64 result;
-        
+
         rc = vfs_statfs(mds->mds_sb, &mystats);
         if (rc) {
                 CERROR("mds: statfs failed: rc %d\n", rc);
                 return 0;
         }
-        
+
         blk_size = mystats.f_bsize;
         blk_size >>= 10;
         result = mystats.f_blocks;
-        while(blk_size >>= 1){
+        while(blk_size >>= 1)
                 result <<= 1;
-        }
-        len += snprintf(page, count, LPU64"\n", result); 
-        return len;  
-        
+
+        return snprintf(page, count, LPU64"\n", result);
 }
 
-int rd_kbfree(char* page, char **start, off_t off, int count, int *eof, 
+int rd_kbfree(char *page, char **start, off_t off, int count, int *eof,
               void *data)
 {
         struct obd_device* temp = (struct obd_device*)data;
         struct mds_obd *mds = &temp->u.mds;
         struct statfs mystats;
-        int rc, len = 0;
+        int rc;
         __u32 blk_size;
         __u64 result;
-        
 
         rc = vfs_statfs(mds->mds_sb, &mystats);
         if (rc) {
@@ -96,12 +91,10 @@ int rd_kbfree(char* page, char **start, off_t off, int count, int *eof,
         blk_size = mystats.f_bsize;
         blk_size >>= 10;
         result = mystats.f_blocks;
-        while(blk_size >>= 1){
+        while (blk_size >>= 1)
                 result <<= 1;
-        }
-        len += snprintf(page, count, LPU64"\n", result);
-        return len;  
-        
+
+        return snprintf(page, count, LPU64"\n", result);
 }
 
 int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
@@ -112,45 +105,41 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
         return snprintf(page, count, "%s\n", obd->obd_fsops->fs_type);
 }
 
-int rd_filestotal(char* page, char **start, off_t off, int count, int *eof, 
+int rd_filestotal(char *page, char **start, off_t off, int count, int *eof,
                   void *data)
 {
         struct obd_device* temp = (struct obd_device*)data;
         struct mds_obd *mds = &temp->u.mds;
         struct statfs mystats;
-        int rc, len = 0;
-        
+        int rc;
+
         rc = vfs_statfs(mds->mds_sb, &mystats);
         if (rc) {
                 CERROR("mds: statfs failed: rc %d\n", rc);
                 return 0;
         }
-        
-        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_files));
-        return len;  
-
-        
+        return snprintf(page, count, LPU64"\n", (__u64)(mystats.f_files));
 }
 
-int rd_filesfree(char* page, char **start, off_t off, int count, int *eof, 
-                  void *data)
+int rd_filesfree(char *page, char **start, off_t off, int count, int *eof,
+                 void *data)
 {
         struct obd_device* temp = (struct obd_device*)data;
         struct mds_obd *mds = &temp->u.mds;
         struct statfs mystats;
         int rc, len = 0;
-        
+
         rc = vfs_statfs(mds->mds_sb, &mystats);
         if (rc) {
                 CERROR("mds: statfs failed: rc %d\n", rc);
                 return 0;
         }
-        
+
         len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_ffree));
-        return len; 
+        return len;
 }
 
-int rd_filegroups(char* page, char **start, off_t off, int count, int *eof, 
+int rd_filegroups(char *page, char **start, off_t off, int count, int *eof,
                   void *data)
 {
         return 0;
@@ -166,13 +155,13 @@ struct lprocfs_vars status_var_nm_1[]={
         {"status/filegroups", rd_filegroups, 0, 0},
         {0}
 };
-int rd_numrefs(char* page, char **start, off_t off, int count, int *eof, 
+
+int rd_numrefs(char *page, char **start, off_t off, int count, int *eof,
                void *data)
 {
-        struct obd_type* class = (struct obd_type*)data;
-        int len = 0;
-        len += snprintf(page, count, "%d\n", class->typ_refcnt);
-        return len;
+        struct obd_type *class = (struct obd_type*)data;
+
+        return snprintf(page, count, "%d\n", class->typ_refcnt);
 }
 
 struct lprocfs_vars status_class_var[]={
