@@ -1,0 +1,9 @@
+old_shopt=$(shopt -p nullglob || :)
+shopt -s nullglob
+for script in /lib/modules/scripts/* ; do
+    if [ -f "$script" -a -x "$script" ] \
+	&& ! "$script" --@when@ %ver_str $1 ; then
+	echo "$script failed."
+    fi
+done
+eval $old_shopt

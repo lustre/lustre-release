@@ -30,3 +30,4 @@ install-sh
 .tmp_versions
 config.h
 config.h.in
+stamp-h1

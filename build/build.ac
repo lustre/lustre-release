@@ -434,4 +434,5 @@ AC_SUBST(ENABLE_INIT_SCRIPTS)
 AC_CONFIG_FILES([
 build/autoMakefile
 build/Rules
+build/lustre.spec
 ])
