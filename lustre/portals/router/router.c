@@ -456,14 +456,13 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
         CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %d\n", fwd,
                 target_nid, src_ne->kpne_interface.kprni_nalid);
 
-        LASSERT (nob >= sizeof (ptl_hdr_t)); /* at least got a packet header */
-        LASSERT (nob == lib_iov_nob (fwd->kprfd_niov, fwd->kprfd_iov));
+        LASSERT (nob == lib_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
         
         atomic_inc (&kpr_queue_depth);
 	atomic_inc (&src_ne->kpne_refcount); /* source nal is busy until fwd completes */
 
         kpr_fwd_packets++;                   /* (loose) stats accounting */
-        kpr_fwd_bytes += nob;
+        kpr_fwd_bytes += nob + sizeof(ptl_hdr_t);
 
 	if (src_ne->kpne_shutdown)           /* caller is shutting down */
 		goto out;

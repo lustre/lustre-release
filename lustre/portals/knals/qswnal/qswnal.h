@@ -153,8 +153,7 @@ typedef struct
         int              krx_rpc_reply_sent;    /* rpc reply sent */
         atomic_t         krx_refcount;          /* how to tell when rpc is done */
         kpr_fwd_desc_t   krx_fwd;               /* embedded forwarding descriptor */
-        struct page     *krx_pages[KQSW_NRXMSGPAGES_LARGE]; /* pages allocated */
-        struct iovec     krx_iov[KQSW_NRXMSGPAGES_LARGE]; /* iovec for forwarding */
+        ptl_kiov_t       krx_kiov[KQSW_NRXMSGPAGES_LARGE]; /* buffer frags */
 }  kqswnal_rx_t;
 
 typedef struct

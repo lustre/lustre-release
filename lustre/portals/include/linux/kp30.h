@@ -362,13 +362,14 @@ typedef struct {
         struct list_head     kprfd_list;        /* stash in queues (routing target can use) */
         ptl_nid_t            kprfd_target_nid;  /* final destination NID */
         ptl_nid_t            kprfd_gateway_nid; /* gateway NID */
-        int                  kprfd_nob;         /* # message bytes (including header) */
-        int                  kprfd_niov;        /* # message frags (including header) */
-        struct iovec        *kprfd_iov;         /* message fragments */
-        void                *kprfd_router_arg;  // originating NAL's router arg
+        ptl_hdr_t           *kprfd_hdr;         /* header in wire byte order */
+        int                  kprfd_nob;         /* # payload bytes */
+        int                  kprfd_niov;        /* # payload frags */
+        ptl_kiov_t          *kprfd_kiov;        /* payload fragments */
+        void                *kprfd_router_arg;  /* originating NAL's router arg */
         kpr_fwd_callback_t   kprfd_callback;    /* completion callback */
         void                *kprfd_callback_arg; /* completion callback arg */
-        kprfd_scratch_t      kprfd_scratch;    // scratchpad for routing targets
+        kprfd_scratch_t      kprfd_scratch;     /* scratchpad for routing targets */
 } kpr_fwd_desc_t;
 
 typedef void  (*kpr_fwd_t)(void *arg, kpr_fwd_desc_t *fwd);
@@ -471,15 +472,16 @@ kpr_lookup (kpr_router_t *router, ptl_nid_t nid, int nob, ptl_nid_t *gateway_nid
 }
 
 static inline void
-kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid,
-              int nob, int niov, struct iovec *iov,
+kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid, ptl_hdr_t *hdr,
+              int nob, int niov, ptl_kiov_t *kiov,
               kpr_fwd_callback_t callback, void *callback_arg)
 {
         fwd->kprfd_target_nid   = nid;
         fwd->kprfd_gateway_nid  = nid;
+        fwd->kprfd_hdr          = hdr;
         fwd->kprfd_nob          = nob;
         fwd->kprfd_niov         = niov;
-        fwd->kprfd_iov          = iov;
+        fwd->kprfd_kiov         = kiov;
         fwd->kprfd_callback     = callback;
         fwd->kprfd_callback_arg = callback_arg;
 }
