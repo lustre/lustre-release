@@ -19,7 +19,7 @@ echo 0xffffffff > /proc/sys/portals/debug
 
 $OBDCTL <<EOF
 device 0
-attach mds
+attach mds MDSDEV
 setup ${MDS} ${MDSFS}
 quit
 EOF

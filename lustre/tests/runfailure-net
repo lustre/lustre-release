@@ -2,6 +2,9 @@
 
 set -vx
 
+SRCDIR="`dirname $0`"
+. $SRCDIR/common.sh
+
 test_fail() {
 	echo $1 > /proc/sys/lustre/fail_loc
 	shift
@@ -11,7 +14,7 @@ test_fail() {
 
         echo 0 > /proc/sys/lustre/fail_loc
         umount /mnt/lustre || exit 1
-        mount -t lustre_lite -o device=5 none /mnt/lustre || exit 1
+        mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre || exit 1
 }
 
 [ -c /dev/request ] || mknod /dev/request c 10 244

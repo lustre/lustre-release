@@ -13,7 +13,7 @@ setup_lustre
 
 $OBDCTL <<EOF
 device 0
-attach ldlm
+attach ldlm LDLMDEV
 setup
 test_ldlm
 quit

@@ -22,16 +22,16 @@ echo 0xffffffff > /proc/sys/portals/debug
 
 $OBDCTL <<EOF
 device 0
-attach mds
+attach mds MDSDEV
 setup ${MDS} ${MDSFS}
 device 1
-attach obdext2
+attach obdext2 OBDEXT2DEV
 setup ${OST}
 device 2
-attach ost
+attach ost OSTDEV
 setup 1
 device 3
-attach osc
+attach osc OSCDEV
 setup 2
 quit
 EOF

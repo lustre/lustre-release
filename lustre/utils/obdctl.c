@@ -451,17 +451,10 @@ static int jt_attach(int argc, char **argv)
                 data.ioc_inlbuf2 = argv[2];
         }
 
-        printf("%s: len %d addr %p type %s data %s\n",
-               cmdname(argv[0]), data.ioc_len, buf,
-               MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
-
         if (obd_ioctl_pack(&data, &buf, max)) {
                 fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
                 return -2;
         }
-        printf("%s: len %d addr %p raw %p type %s data %s and %s\n",
-               cmdname(argv[0]), data.ioc_len, buf, rawbuf,
-               MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2), &buf[516]);
 
         rc = ioctl(fd, OBD_IOC_ATTACH , buf);
         if (rc < 0)
@@ -545,18 +538,10 @@ static int jt_setup(int argc, char **argv)
                 data.ioc_inlbuf2 = argv[2];
         }
 
-        printf("%s: len %d addr %p device %s type %s\n",
-               cmdname(argv[0]), data.ioc_len, buf,
-               MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
-
         if (obd_ioctl_pack(&data, &buf, max)) {
                 fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
                 return -2;
         }
-        printf("%s: len %d addr %p raw %p device %s type %s\n",
-               cmdname(argv[0]), data.ioc_len, buf, rawbuf,
-               MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
-
         rc = ioctl(fd, OBD_IOC_SETUP , buf);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),

@@ -14,13 +14,13 @@ setup_lustre
 
 $OBDCTL <<EOF
 device 0
-attach ptlrpc
+attach ptlrpc RPCDEV
 setup
 device 1
-attach ldlm
+attach ldlm LDLMDEV
 setup
 device 2
-attach osc
+attach osc OSCDEV
 setup -1
 quit
 EOF

@@ -24,13 +24,13 @@ OBD=${LOOPDEV}
 
 $OBDCTL <<EOF
 device 0
-attach obdext2
+attach obdext2 OBDEXT2DEV
 setup ${OBD}
 device 1
-attach ost
+attach ost OSTDEV
 setup 0
 device 2
-attach osc
+attach osc OSCDEV
 setup -1
 quit
 EOF

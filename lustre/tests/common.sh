@@ -217,7 +217,7 @@ setup_mds() {
 	
 	$OBDCTL <<- EOF
 	device ${MDS_DEVNO}
-	attach mds
+	attach mds MDSDEV
 	setup ${MDS} ${MDSFS}
 	quit
 	EOF
@@ -268,10 +268,10 @@ setup_ost() {
 
 	$OBDCTL <<- EOF
 	device ${OBD_DEVNO}
-	attach ${OSTTYPE}
+	attach ${OSTTYPE} OSTDEV
 	setup ${OBD} ${OBDARG}
 	device ${OST_DEVNO}
-	attach ost
+	attach ost OSTDEV
 	setup ${OBD_DEVNO}
 	quit
 	EOF
@@ -287,7 +287,7 @@ setup_osc() {
 	OSC_DEVNO=$DEVNO; DEVNO=`expr $DEVNO + 1`
 	$OBDCTL <<- EOF || return $rc
 	device ${OSC_DEVNO}
-	attach osc
+	attach osc OSCDEV
 	setup -1
 	quit
 	EOF
@@ -451,4 +451,9 @@ cleanup_osc() {
 cleanup_client() {
 	cleanup_mount && cleanup_osc
 	DEVNO=0
+}
+
+fail() { 
+    echo $1
+    exit 1
 }

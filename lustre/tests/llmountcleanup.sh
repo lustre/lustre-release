@@ -3,29 +3,29 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-umount /mnt/lustre
+umount /mnt/lustre || fail "cannot unmount"
 
 killall acceptor
 rmmod llite
 rmmod mdc
 
 $OBDCTL <<EOF
-device 5
+name2dev OSCDEV
 cleanup
 detach
-device 4
+name2dev LDLMDEV
 cleanup
 detach
-device 3
+name2dev RPCDEV
 cleanup
 detach
-device 2
+name2dev OSTDEV
 cleanup
 detach
-device 1
+name2dev FILTERDEV
 cleanup
 detach
-device 0
+name2dev MDSDEV
 cleanup
 detach
 quit
