@@ -8,7 +8,7 @@ my $mount_count = shift || usage();
 my $i = shift || usage();
 my $count = $i;
 my $files = 5;
-my $mcreate = 0; # should we use mcreate or open?
+my $mcreate = 1; # should we use mcreate or open?
 
 sub usage () {
     print "Usage: $0 <mount point prefix> <mount count> <iterations>\n";
