@@ -63,7 +63,6 @@ typedef struct
 static name2num_t nalnames[] = {
         {"any",         0},
         {"tcp",		SOCKNAL},
-        {"toe",		TOENAL},
         {"elan",	QSWNAL},
         {"gm",	        GMNAL},
         {"ib",	        IBNAL},
@@ -651,7 +650,7 @@ int jt_ptl_connect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, TOENAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, 0))
                 return -1;
         
         rc = ptl_parse_ipaddr (&ipaddr, argv[1]);
@@ -797,7 +796,7 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (NULL, SOCKNAL, TOENAL, 0))
+        if (!g_nal_is_compatible (NULL, SOCKNAL, 0))
                 return 0;
 
         if (argc >= 2 &&
@@ -838,7 +837,7 @@ int jt_ptl_push_connection (int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, TOENAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, 0))
                 return -1;
         
         if (argc > 1 &&

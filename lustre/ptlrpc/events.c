@@ -519,7 +519,6 @@ int ptlrpc_init_portals(void)
                 {SOCKNAL, "socknal"},
                 {GMNAL,   "gmnal"},
                 {IBNAL,   "ibnal"},
-                {TOENAL,  "toenal"},
                 {TCPNAL,  "tcpnal"},
                 {SCIMACNAL, "scimacnal"}};
         int   rc;

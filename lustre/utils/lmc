@@ -60,7 +60,7 @@ Object creation command summary:
   --node node_name
   --nid nid
   --cluster_id 
-  --nettype tcp|elan|toe|gm|scimac
+  --nettype tcp|elan|gm|scimac
   --hostaddr addr
   --port port
   --tcpbuf size
@@ -596,7 +596,7 @@ def add_net(gen, lustre, options):
     hostaddr = get_option(options, 'hostaddr')
     net_type = get_option(options, 'nettype')
 
-    if net_type in ('tcp', 'toe'):
+    if net_type in ('tcp',):
         port = get_option_int(options, 'port')
         tcpbuf = get_option_int(options, 'tcpbuf')
         irq_aff = get_option_int(options, 'irq_affinity')

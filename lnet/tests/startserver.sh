@@ -9,13 +9,6 @@ else
 fi
 
 case "$1" in
-	toe)
-		/sbin/insmod  ../oslib/portals.o
-		/sbin/insmod ../toenal/ktoenal.o
-		/sbin/insmod ./$PING nal=4
-		echo ktoenal > /tmp/nal
-	;;
-	
 	tcp)
 		/sbin/insmod  ../oslib/portals.o
 		/sbin/insmod ../socknal/ksocknal.o
@@ -38,7 +31,7 @@ case "$1" in
 	;;
 	
 	*)
-		echo "Usage : ${0} < tcp | toe | elan | gm>"
+		echo "Usage : ${0} < tcp | elan | gm>"
 		exit 1;
 esac
 ../utils/acceptor 9999&

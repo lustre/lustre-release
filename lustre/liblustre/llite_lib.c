@@ -98,7 +98,6 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case QSWNAL:
         case GMNAL:
         case IBNAL:
-        case TOENAL:
         case SCIMACNAL:
                 sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
                 break;

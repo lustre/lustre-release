@@ -256,8 +256,6 @@ class AcceptorHandler(DaemonHandler):
         self.send_mem = send_mem
         self.recv_mem = recv_mem
 
-        if net_type == 'toe':
-            self.flags = self.flags + ' -N 4'
         if irq_aff:
             self.flags = self.flags + ' -i'
 
@@ -417,7 +415,7 @@ class LCTLInterface:
 
     def add_autoconn(self, net_type, send_mem, recv_mem, nid, hostaddr,
                      port, flags):
-        if net_type  in ('tcp', 'toe') and not config.lctl_dump:
+        if net_type  in ('tcp',) and not config.lctl_dump:
             cmds =  """
   network %s
   send_mem %d
@@ -431,7 +429,7 @@ class LCTLInterface:
     
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-        if srv.net_type  in ('tcp', 'toe') and not config.lctl_dump:
+        if srv.net_type  in ('tcp',) and not config.lctl_dump:
             flags = 's'
             if srv.irq_affinity:
                 flags = flags + 'i'
@@ -492,7 +490,7 @@ class LCTLInterface:
 
 
     def del_autoconn(self, net_type, nid, hostaddr):
-        if net_type  in ('tcp', 'toe') and not config.lctl_dump:
+        if net_type  in ('tcp',) and not config.lctl_dump:
                 cmds =  """
   ignore_errors
   network %s
@@ -504,7 +502,7 @@ class LCTLInterface:
     # disconnect one connection
     def disconnect(self, srv):
         self.del_uuid(srv.nid_uuid)
-        if srv.net_type  in ('tcp', 'toe') and not config.lctl_dump:
+        if srv.net_type  in ('tcp',) and not config.lctl_dump:
             self.del_autoconn(srv.net_type, srv.nid, srv.hostaddr)
 
     def del_uuid(self, uuid):
@@ -856,7 +854,7 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
 def sys_get_local_address(net_type, wildcard, cluster_id):
     """Return the local address for the network type."""
     local = ""
-    if net_type in ('tcp', 'toe'):
+    if net_type in ('tcp',):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -1085,8 +1083,6 @@ class Network(Module):
             self.add_portals_module("router", 'kptlrouter')
         if self.net_type == 'tcp':
             self.add_portals_module("knals/socknal", 'ksocknal')
-        if self.net_type == 'toe':
-            self.add_portals_module("knals/toenal", 'ktoenal')
         if self.net_type == 'elan':
             self.add_portals_module("knals/qswnal", 'kqswnal')
         if self.net_type == 'gm':
@@ -1156,7 +1152,7 @@ class RouteTable(Module):
                          lo, hi):
         # only setup connections for tcp NALs
         srvdb = None
-        if not net_type in ('tcp', 'toe'):
+        if not net_type in ('tcp',):
             return None
 
         # connect to target if route is to single node and this node is the gw

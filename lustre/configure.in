@@ -53,7 +53,7 @@ AC_OUTPUT([Makefile lvfs/Makefile portals/Makefile portals/Kernelenv \
           portals/unals/Makefile portals/knals/Makefile \
           portals/router/Makefile portals/knals/socknal/Makefile \
           portals/knals/gmnal/Makefile portals/knals/qswnal/Makefile \
-	  portals/knals/scimacnal/Makefile portals/knals/toenal/Makefile \
+	  portals/knals/scimacnal/Makefile \
 	  portals/knals/ibnal/Makefile \
           portals/utils/Makefile portals/tests/Makefile portals/doc/Makefile \
           obdecho/Makefile ptlrpc/Makefile liblustre/Makefile \

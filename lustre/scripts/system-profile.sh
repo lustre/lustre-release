@@ -9,7 +9,7 @@ export OUTPUTDIR=/home/op
 export KERNELDIR=/usr/src/linux
 export LUSTREDIR=/usr/src/lustre
 export PORTALSDIR=/usr/src/portals
-NAL=toenal
+NAL=socknal
 
 # Params for OPROFILE
 #CTR0_EVENT=CPU_CLK_UNHALTED
