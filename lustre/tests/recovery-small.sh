@@ -29,7 +29,8 @@ MDSDEV=${MDSDEV:-/tmp/mds}
 OSTDEV=${OSTDEV:-/tmp/ost}
 MDSSIZE=${MDSSIZE:-100000}
 OSTSIZE=${OSTSIZE:-100000}
-UPCALL=${UPCALL:-$RLUSTRE/tests/recovery-small-upcall.sh}
+UPCALL=${UPCALL:-$RPWD/recovery-small-upcall.sh}
+FSTYPE=${FSTYPE:-ext3}
 
 do_mds() {
     $PDSH $MDSNODE "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@" || exit $?
@@ -64,9 +65,9 @@ make_config() {
            --nettype $NETWORKTYPE || exit 4
     done
     lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --dev $MDSDEV \
-        --size $MDSSIZE || exit 5
+        --size $MDSSIZE --fstype $FSTYPE || exit 5
     lmc -m $CONFIG --add ost --node $OSTNODE --ost ost1 --dev $OSTDEV \
-        --size $OSTSIZE || exit 6
+        --size $OSTSIZE --fstype $FSTYPE || exit 6
     lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --mds mds1 \
         --ost ost1 || exit 7
 }
