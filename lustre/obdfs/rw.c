@@ -169,8 +169,8 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
 	oa->o_valid = OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
-	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %ld\n", 
-	       from, to, (unsigned long )count);
+	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
+	       from, to, count);
 
         err = IOPS(inode, brw)(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);

@@ -36,6 +36,7 @@
  *     function that is exported to other modules. 
  */
 
+#define EXPORT_SYMTAB
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/version.h>
