@@ -142,9 +142,10 @@ static struct obd_ops ptlbd_sv_obd_ops = {
 
 int ptlbd_sv_init(void)
 {
-        extern struct lprocfs_vars status_class_var[];
+        struct lprocfs_static_vars lvars;
 
-        return class_register_type(&ptlbd_sv_obd_ops, status_class_var,
+        lprocfs_init_vars(&lvars);
+        return class_register_type(&ptlbd_sv_obd_ops, lvars.module_vars,
                                    OBD_PTLBD_SV_DEVICENAME);
 }
 

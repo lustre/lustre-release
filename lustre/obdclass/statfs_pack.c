@@ -27,6 +27,7 @@
 #define EXPORT_SYMTAB
 #include <linux/lustre_net.h>
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 
 void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src)
 {
@@ -69,7 +70,35 @@ void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
         sfs->f_namelen = osfs->os_namelen;
 }
 
+int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
+{
+        struct lustre_handle conn;
+        struct obd_export *export, *my_export = NULL;
+        struct obd_statfs osfs = { 0 };
+        int rc;
+        ENTRY;
+
+        if (list_empty(&obd->obd_exports)) {
+                export = my_export = class_new_export(obd);
+                if (export == NULL)
+                        RETURN(-ENOMEM);
+        } else
+                export = list_entry(obd->obd_exports.next, typeof(*export),
+                                    exp_obd_chain);
+        conn.addr = (unsigned long)export;
+        conn.cookie = export->exp_cookie;
+
+        rc = obd_statfs(&conn, &osfs);
+        if (!rc)
+                statfs_unpack(sfs, &osfs);
+
+        if (my_export)
+                class_destroy_export(my_export);
+        RETURN(rc);
+}
+
 EXPORT_SYMBOL(obd_statfs_pack);
 EXPORT_SYMBOL(obd_statfs_unpack);
 EXPORT_SYMBOL(statfs_pack);
 EXPORT_SYMBOL(statfs_unpack);
+EXPORT_SYMBOL(obd_self_statfs);

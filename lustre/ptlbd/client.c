@@ -104,7 +104,7 @@ static int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
         ENTRY;
 
         rc = class_connect(conn, obd, cluuid);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
 
         INIT_LIST_HEAD(&imp->imp_chain);
@@ -130,9 +130,10 @@ static struct obd_ops ptlbd_cl_obd_ops = {
 
 int ptlbd_cl_init(void)
 {
-        extern struct lprocfs_vars status_class_var[];
+        struct lprocfs_static_vars lvars;
 
-        return class_register_type(&ptlbd_cl_obd_ops, status_class_var,
+        lprocfs_init_vars(&lvars);
+        return class_register_type(&ptlbd_cl_obd_ops, lvars.module_vars,
                                    OBD_PTLBD_CL_DEVICENAME);
 }
 
