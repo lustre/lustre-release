@@ -264,17 +264,3 @@ int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off)
 }
 EXPORT_SYMBOL(lustre_fwrite);
 
-/*
- * Sync a file from within kernel context.  Prior to calling this
- * function we should already have done a push_ctxt().
- */
-int lustre_fsync(struct file *file)
-{
-        ENTRY;
-        ASSERT_KERNEL_CTXT("kernel doing sync outside kernel context\n");
-        if (!file || !file->f_op || !file->f_op->fsync)
-                RETURN(-ENOSYS);
-
-        RETURN(file->f_op->fsync(file, file->f_dentry, 0));
-}
-EXPORT_SYMBOL(lustre_fsync);

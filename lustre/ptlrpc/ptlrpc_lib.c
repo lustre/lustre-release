@@ -132,6 +132,9 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
         cli->cl_sandev = to_kdev_t(0);
 
+
+        obddev->obd_logops = &llogd_client_ops;
+
         /* Register with management client if we need to. */
         if (lcfg->lcfg_inllen3 > 0) {
                 char *mgmt_name = lcfg->lcfg_inlbuf3;

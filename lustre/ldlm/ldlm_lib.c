@@ -375,6 +375,10 @@ void target_destroy_export(struct obd_export *exp)
            exports created by lctl don't have an import */
         if (exp->exp_imp_reverse != NULL)
                 class_destroy_import(exp->exp_imp_reverse);
+
+        /* We cancel locks at disconnect time, but this will catch any locks
+         * granted in a race with recovery-induced disconnect. */
+        ldlm_cancel_locks_for_export(exp);
 }
 
 /*
@@ -452,8 +456,8 @@ void target_abort_recovery(void *data)
                 OBP(obd, postsetup)(obd);
 
         /* when recovery was abort, cleanup orphans for mds */
-        if (OBT(obd) && OBP(obd, postcleanup)) {
-                rc = OBP(obd, postcleanup)(obd);
+        if (OBT(obd) && OBP(obd, postrecov)) {
+                rc = OBP(obd, postrecov)(obd);
                 CERROR("Cleanup %d orphans after recovery was abort!\n", rc);
         }
 
@@ -742,16 +746,16 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                        obd->obd_name);
                 obd->obd_recovering = 0;
 
-                /* when recovering finished, cleanup orphans for mds       */
-                /* there should be no orphan cleaned up for this condition */
-                if (OBT(obd) && OBP(obd, postcleanup)) {
-                        CERROR("cleanup orphans after all clients recovered\n");
-                        rc2 = OBP(obd, postcleanup)(obd);
-                        LASSERT(rc2 == 0);
-                }
-
                 if (OBT(obd) && OBP(obd, postsetup))
                         OBP(obd, postsetup)(obd);
+
+                /* when recovering finished, cleanup orphans for mds       */
+                if (OBT(obd) && OBP(obd, postrecov)) {
+                        CERROR("cleanup orphans after all clients recovered\n");
+                        rc2 = OBP(obd, postrecov)(obd);
+                        //LASSERT(rc2 == 0);
+                        CERROR("cleanup %d orphans\n", rc2);
+                }
 
                 list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
                         req = list_entry(tmp, struct ptlrpc_request, rq_list);
