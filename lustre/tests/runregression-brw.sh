@@ -4,21 +4,21 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-COUNT=${COUNT:-10000000}
+COUNT=${COUNT:-1000000}
 COUNT_10=`expr $COUNT / 10`
 COUNT_100=`expr $COUNT / 100`
 
 ENDRUN=endrun-`hostname`
 
-OSCNAME="`$OBDCTL device_list 2> /dev/null | awk '/ osc | lov / { print $4 }' | tail -1`"
+ECHONAME="`$OBDCTL device_list 2> /dev/null | awk '/ echo_client / { print $4 }' | tail -1`"
 
-if [ -z "$OSCNAME" ]; then
-	echo "$0: needs an OSC set up first" 1>&2
+if [ -z "$ECHONAME" ]; then
+	echo "$0: needs an ECHO_CLIENT set up first" 1>&2
 	exit 1
 fi
 
 cleanup () {
-	$OBDCTL --device \$$OSCNAME destroy $OID
+	$OBDCTL --device \$$ECHONAME destroy $OID
 }
 	
 runthreads() {
@@ -36,14 +36,13 @@ runthreads() {
 		DO=test_brw
 		RW=w
 		;;
-
 	test_brw_read)
 		DO=test_brw
 		RW=r
 		;;
 	esac
 
-	$OBDCTL --threads $THR v \$$OSCNAME $DO $CNT $RW $V $PGS $OID || exit 1
+	$OBDCTL --threads $THR v \$$ECHONAME $DO $CNT $RW $V $PGS $OID || exit 1
 
 	if [ -e $ENDRUN ]; then
 		rm $ENDRUN
@@ -52,7 +51,7 @@ runthreads() {
 	fi
 }
 
-[ -z "$OID" ] && OID=`$OBDCTL --device \\$$OSCNAME create 1 | awk '/is object id/ { print $6 }'`
+[ -z "$OID" ] && OID=`$OBDCTL --device \\$$ECHONAME create 1 | awk '/is object id/ { print $6 }'`
 [ -z "$OID" ] && echo "error creating object" 1>&2 && exit 1
 
 # TODO: obdctl needs to check on the progress of each forked thread
