@@ -15,6 +15,7 @@ TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
 DOCS = lustre.pdf lustre-HOWTO.txt
+HOWTODOC = lustre-HOWTO.txt
 IMAGES := $(patsubst %.fig,%.eps,$(wildcard *.fig))
 LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
 	$(wildcard *.lin *.lyx))
@@ -26,7 +27,8 @@ GENERATED = $(VERSIONED) lustre-full.tex lustre-chbar.tex
 
 EXTRA_DIST = chbar.sh postbar tex2pdf $(DOCS) $(IMAGES) $(LYXFILES) lustre.bib
 
-all: $(DOCS)
+all: $(HOWTODOC)
+docs: $(DOCS)
 
 # These variables are set by lbuild/check-build.
 RPMRELEASE ?= RELEASE
