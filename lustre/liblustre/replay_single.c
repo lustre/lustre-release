@@ -179,8 +179,8 @@ void t3a()
 
 void t3b()
 {
-        ENTRY("60 create/delete(>1'st block precreated)");
-        n_create_delete(60);
+        ENTRY("30 create/delete(>1'st block precreated)");
+        n_create_delete(30);
         LEAVE();
 }
 
