@@ -74,7 +74,7 @@ int lmv_handle_remote_inode(struct obd_export *exp, struct ll_uctxt *uctxt,
         if (body->valid & OBD_MD_MDS) {
                 /* oh, MDS reports that this is remote inode case
                  * i.e. we have to ask for real attrs on another MDS */
-                struct ptlrpc_request *req;
+                struct ptlrpc_request *req = NULL;
                 struct ll_fid nfid;
                 struct lustre_handle plock;
                 int pmode;
