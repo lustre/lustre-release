@@ -294,6 +294,8 @@ void filter_setup_file_ops(struct filter_fs 	   *cache,
 	if (filter_fops) {
 		if (filter_fops->read)
 			u_fops->read = filter_fops->read;
+		if (filter_fops->write)
+			u_fops->write = filter_fops->write;
 	}
 	if (filter_aops) {
 		if (filter_aops->readpage)

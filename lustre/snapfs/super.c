@@ -16,6 +16,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <linux/loop.h>
 #include <linux/jbd.h>
 #include <linux/ext3_fs.h>
 #include <linux/snap.h>
@@ -223,6 +224,7 @@ snapfs_read_super (
 					sb->s_root->d_op, 
 					&currentfs_dentry_ops);
 		sb->s_root->d_op = filter_c2udops(cache->cache_filter);
+		init_filter_data(sb->s_root->d_inode, 0); 
 	}
         /*
          * Save a pointer to the snap_cache structure in the
@@ -268,7 +270,31 @@ static char *clonefs_options(char *options, char **devstr, char **namestr)
 	}
 	return pos;
 }
+static int snap_cache_lookup_ino_cb(struct snap_cache *cache, void *in, unsigned long *out)
+{
+	ino_t ino = *((unsigned long*)in);
 
+	if (cache) {
+		struct super_block *sb = cache->cache_sb;
+		kdev_t dev = sb->s_dev;
+
+		if (MAJOR(dev) != LOOP_MAJOR) 
+			return 0;
+		if (sb->s_bdev->bd_op && sb->s_bdev->bd_op->ioctl) {
+			struct inode *inode = sb->s_bdev->bd_inode;
+			struct loop_info loop_info;
+
+			sb->s_bdev->bd_op->ioctl(inode, NULL, LOOP_GET_INFO, 
+					         (unsigned long)&loop_info);
+			
+			if(loop_info.lo_inode == ino) {
+				*out = sb->s_dev; 
+				return 1;
+			}
+		}
+	}
+	return 0;	
+}
 static int snapfs_path2dev(char *dev_path, kdev_t *dev)
 {
 	struct dentry *dentry;
@@ -290,8 +316,19 @@ static int snapfs_path2dev(char *dev_path, kdev_t *dev)
 		path_release(&nd);
 		return -ENODEV;
 	}
+	if (S_ISBLK(dentry->d_inode->i_mode)) {
+		*dev = kdev_t_to_nr(dentry->d_inode->i_rdev);
+	} else {
+		/*here we must walk through all the snap cache to 
+		 *find the loop device */
+		kdev_t tmp;
 
-	*dev = kdev_t_to_nr(dentry->d_inode->i_rdev);
+		if (snap_cache_process(snap_cache_lookup_ino_cb,
+				       &dentry->d_inode->i_ino, 
+				       (unsigned long*)&tmp))
+			return -EINVAL;
+		*dev = tmp;
+	}
 	path_release(&nd);
 	return 0;
 }
