@@ -5,7 +5,7 @@ CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I$(PORTALS)/include \
 -I/usr/lib/glib/include -I$(srcdir)/../include -Wall
 KFLAGS:=
 CPPFLAGS :=
-LDADD := -lreadline -ltermcap # -lefence
+LDADD := -lreadline -ltermcap -lxml2 # -lefence
 bin_PROGRAMS = obdctl
 obdctl_SOURCES = parser.c obdctl.c
 
