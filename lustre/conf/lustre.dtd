@@ -53,7 +53,7 @@
 <!ATTLIST ptlrpc %object.attr;>
 
 <!ELEMENT osd (fstype | devpath | devsize | autoformat | 
-               target_ref | node_ref | journalsize )*>
+               target_ref | node_ref | journalsize | mkfsoptions)*>
 <!ATTLIST osd %object.attr; 
               osdtype (obdfilter | obdecho) 'obdfilter'>
 
@@ -71,7 +71,7 @@
               failover ( 1 | 0 ) #IMPLIED>
 
 <!ELEMENT mdsdev (fstype | devpath | devsize | autoformat | 
-                  target_ref | node_ref | journalsize )*>
+                  target_ref | node_ref | journalsize | mkfsoptions)*>
 <!ATTLIST mdsdev %object.attr;>
 
 <!ELEMENT lov (mds_ref |(obd_ref)+)*>
@@ -90,6 +90,7 @@
 <!ELEMENT ptldebug      %object.content;>
 <!ELEMENT subsystem     %object.content;>
 <!ELEMENT journalsize   %object.content;>
+<!ELEMENT mkfsoptions   %object.content;>
 <!ELEMENT fstype        %object.content;>
 <!ELEMENT nid           %object.content;>
 <!ELEMENT port          %object.content;>

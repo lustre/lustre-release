@@ -370,6 +370,34 @@ int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 
 #endif
 
-#define _LIBCFS_H
+#ifdef __KERNEL__
+/* libcfs watchdogs */
+struct lc_watchdog;
+
+/* Just use the default handler (dumplog)  */
+#define LC_WATCHDOG_DEFAULT_CB NULL
+
+/* Add a watchdog which fires after "time" milliseconds of delay.  You have to
+ * touch it once to enable it. */
+struct lc_watchdog *lc_watchdog_add(int time, 
+                                    void (*cb)(struct lc_watchdog *,
+                                               struct task_struct *,
+                                               void *),
+                                    void *data);
+
+/* Enables a watchdog and resets its timer. */
+void lc_watchdog_touch(struct lc_watchdog *lcw);
+
+/* Disable a watchdog; touch it to restart it. */
+void lc_watchdog_disable(struct lc_watchdog *lcw);
+
+/* Clean up the watchdog */
+void lc_watchdog_delete(struct lc_watchdog *lcw);
+
+/* Dump a debug log */
+void lc_watchdog_dumplog(struct lc_watchdog *lcw,
+                         struct task_struct *tsk,
+                         void *data);
+#endif /* !__KERNEL__ */
 
 #endif /* _LIBCFS_H */

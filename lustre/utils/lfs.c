@@ -184,16 +184,53 @@ static int lfs_find(int argc, char **argv)
 
 static int lfs_getstripe(int argc, char **argv)
 {
+        struct option long_opts[] = {
+                {"quiet", 0, 0, 'q'},
+                {"verbose", 0, 0, 'v'},
+                {0, 0, 0, 0}
+        };
+        char short_opts[] = "qv";
+        int quiet, verbose, recursive, c, rc;
         struct obd_uuid *obduuid = NULL;
-        int rc;
 
-        if (argc != 2)
+        optind = 0;
+        quiet = verbose = recursive = 0;
+        while ((c = getopt_long(argc, argv, short_opts,
+                                        long_opts, NULL)) != -1) {
+                switch (c) {
+                case 'o':
+                        if (obduuid) {
+                                fprintf(stderr,
+                                        "error: %s: only one obduuid allowed",
+                                        argv[0]);
+                                return CMD_HELP;
+                        }
+                        obduuid = (struct obd_uuid *)optarg;
+                        break;
+                case 'q':
+                        quiet++;
+                        verbose = 0;
+                        break;
+                case 'v':
+                        verbose++;
+                        quiet = 0;
+                        break;
+                case '?':
+                        return CMD_HELP;
+                        break;
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[optind - 1]);
+                        return CMD_HELP;
+                        break;
+                }
+        }
+
+        if (optind >= argc)
                 return CMD_HELP;
 
-        optind = 1;
-
         do {
-                rc = llapi_find(argv[optind], obduuid, 0, 0, 0);
+                rc = llapi_find(argv[optind], obduuid, recursive,verbose,quiet);
         } while (++optind < argc && !rc);
 
         if (rc)

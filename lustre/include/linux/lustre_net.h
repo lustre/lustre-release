@@ -477,7 +477,8 @@ struct ptlrpc_service {
         int              srv_n_difficult_replies; /* # 'difficult' replies */
         int              srv_n_active_reqs;     /* # reqs being served */
         int              srv_rqbd_timeout;      /* timeout before re-posting reqs */
-        
+        int              srv_watchdog_timeout; /* soft watchdog timeout, in ms */
+
         __u32 srv_req_portal;
         __u32 srv_rep_portal;
 
@@ -644,7 +645,8 @@ void ptlrpc_save_lock (struct ptlrpc_request *req,
 void ptlrpc_commit_replies (struct obd_device *obd);
 void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
 struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
-                                       int req_portal, int rep_portal, 
+                                       int req_portal, int rep_portal,
+                                       int watchdog_timeout, /* in ms */
                                        svc_handler_t, char *name,
                                        struct proc_dir_entry *proc_entry);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);

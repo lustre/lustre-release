@@ -720,6 +720,41 @@ if test x$enable_modules != xno ; then
 			AC_MSG_RESULT([no])
 		])
 
+	# ------------ kallsyms (so software watchdogs produce useful stacks)
+	AC_MSG_CHECKING([if kallsyms is enabled])
+	LUSTRE_MODULE_TRY_COMPILE(
+		[
+			#include <linux/config.h>
+		],[
+			#ifndef CONFIG_KALLSYMS
+			#error CONFIG_KALLSYMS is not #defined
+			#endif
+		],[
+			AC_MSG_RESULT([yes])
+		],[
+			AC_MSG_RESULT([no])
+			if test "x$ARCH_UM" = "x" ; then
+				AC_MSG_ERROR([Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.])
+			fi
+		])
+
+	# ------------ check for our show_task patch
+	AC_MSG_CHECKING([if kernel exports show_task])
+	have_show_task=0
+	for file in ksyms sched ; do
+		if grep -q "EXPORT_SYMBOL(show_task)" \
+			 "$LINUX/kernel/$file.c" 2>/dev/null ; then
+			have_show_task=1
+			break
+		fi
+	done
+	if test x$have_show_task = x1 ; then
+		AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
+		AC_MSG_RESULT(yes)
+	else
+		AC_MSG_RESULT(no)
+	fi
+
 	case $BACKINGFS in
 		ext3)
 			# --- Check that ext3 and ext3 xattr are enabled in the kernel

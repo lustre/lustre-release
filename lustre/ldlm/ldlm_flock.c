@@ -39,6 +39,9 @@
 
 static struct list_head ldlm_flock_waitq = LIST_HEAD_INIT(ldlm_flock_waitq);
 
+int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                            void *data, int flag);
+
 /**
  * list_for_remaining_safe - iterate over the remaining entries in a list
  *              and safeguard against removal of a list entry.
@@ -74,6 +77,8 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
 
         LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: 0x%x)",
                    mode, flags);
+
+        LASSERT(list_empty(&lock->l_flock_waitq));
 
         list_del_init(&lock->l_res_link);
         if (flags == LDLM_FL_WAIT_NOREPROC) {
@@ -125,6 +130,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         struct ldlm_lock *new = req;
         struct ldlm_lock *new2 = NULL;
         ldlm_mode_t mode = req->l_req_mode;
+        int local = ns->ns_client;
         int added = (mode == LCK_NL);
         int overlaps = 0;
         ENTRY;
@@ -136,8 +142,14 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
 
         *err = ELDLM_OK;
 
-        /* No blocking ASTs are sent for Posix file & record locks */
-        req->l_blocking_ast = NULL;
+        if (local) {
+                /* No blocking ASTs are sent to the clients for
+                 * Posix file & record locks */
+                req->l_blocking_ast = NULL;
+        } else {
+                /* Called on the server for lock cancels. */
+                req->l_blocking_ast = ldlm_flock_blocking_ast;
+        }
 
         if ((*flags == LDLM_FL_WAIT_NOREPROC) || (mode == LCK_NL)) {
                 /* This loop determines where this processes locks start
@@ -218,6 +230,10 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                 *flags |= LDLM_FL_LOCK_CHANGED;
                 RETURN(LDLM_ITER_STOP);
         }
+
+        /* In case we had slept on this lock request take it off of the
+         * deadlock detection waitq. */
+        list_del_init(&req->l_flock_waitq);
 
         /* Scan the locks owned by this process that overlap this request.
          * We may have to merge or split existing locks. */
@@ -412,10 +428,13 @@ ldlm_flock_interrupted_wait(void *data)
         ENTRY;
 
         lock = ((struct ldlm_flock_wait_data *)data)->fwd_lock;
+
+        /* take lock off the deadlock detection waitq. */
+        list_del_init(&lock->l_flock_waitq);
+
         ldlm_lock_decref_internal(lock, lock->l_req_mode);
         ldlm_lock2handle(lock, &lockh);
         rc = ldlm_cli_cancel(&lockh);
-        CDEBUG(D_DLMTRACE, "ldlm_cli_cancel: %d\n", rc);
         EXIT;
 }
 
@@ -450,7 +469,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");
 
-        ldlm_lock_dump(D_OTHER, lock, 0);
+        ldlm_lock_dump(D_DLMTRACE, lock, 0);
 
         fwd.fwd_lock = lock;
         obd = class_exp2obd(lock->l_conn_export);
@@ -486,7 +505,7 @@ granted:
         ns = lock->l_resource->lr_namespace;
         l_lock(&ns->ns_lock);
 
-        /* take data off of deadlock detection waitq. */
+        /* take lock off the deadlock detection waitq. */
         list_del_init(&lock->l_flock_waitq);
 
         /* ldlm_lock_enqueue() has already placed lock on the granted list. */
@@ -516,6 +535,24 @@ granted:
                 flags = LDLM_FL_WAIT_NOREPROC;
                 ldlm_process_flock_lock(lock, &flags, 1, &err);
         }
+        l_unlock(&ns->ns_lock);
+        RETURN(0);
+}
+
+int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                            void *data, int flag)
+{
+        struct ldlm_namespace *ns;
+        ENTRY;
+
+        LASSERT(lock);
+        LASSERT(flag == LDLM_CB_CANCELING);
+
+        ns = lock->l_resource->lr_namespace;
+        
+        /* take lock off the deadlock detection waitq. */
+        l_lock(&ns->ns_lock);
+        list_del_init(&lock->l_flock_waitq);
         l_unlock(&ns->ns_lock);
         RETURN(0);
 }

@@ -594,6 +594,7 @@ do {                                                                           \
         int __timed_out = 0;                                                   \
         unsigned long irqflags;                                                \
         sigset_t blocked;                                                      \
+        signed long timeout_remaining;                                         \
                                                                                \
         init_waitqueue_entry(&__wait, current);                                \
         if (excl)                                                              \
@@ -607,12 +608,15 @@ do {                                                                           \
         else                                                                   \
             blocked = l_w_e_set_sigs(0);                                       \
                                                                                \
+        timeout_remaining = info->lwi_timeout;                                 \
+                                                                               \
         for (;;) {                                                             \
             set_current_state(TASK_INTERRUPTIBLE);                             \
             if (condition)                                                     \
                     break;                                                     \
             if (info->lwi_timeout && !__timed_out) {                           \
-                if (schedule_timeout(info->lwi_timeout) == 0) {                \
+                timeout_remaining = schedule_timeout(timeout_remaining);       \
+                if (timeout_remaining == 0) {                                  \
                     __timed_out = 1;                                           \
                     if (!info->lwi_on_timeout ||                               \
                         info->lwi_on_timeout(info->lwi_cb_data)) {             \
@@ -629,10 +633,20 @@ do {                                                                           \
             if (condition)                                                     \
                     break;                                                     \
             if (signal_pending(current)) {                                     \
-                if (info->lwi_on_signal)                                       \
-                        info->lwi_on_signal(info->lwi_cb_data);                \
-                ret = -EINTR;                                                  \
-                break;                                                         \
+                    if (__timed_out) {                                         \
+                            break;                                             \
+                    } else {                                                   \
+                            /* We have to do this here because some signals */ \
+                            /* are not blockable - ie from strace(1).       */ \
+                            /* In these cases we want to schedule_timeout() */ \
+                            /* again, because we don't want that to return  */ \
+                            /* -EINTR when the RPC actually succeeded.      */ \
+                            /* the RECALC_SIGPENDING below will deliver the */ \
+                            /* signal properly.                             */ \
+                            SIGNAL_MASK_LOCK(current, irqflags);               \
+                            CLEAR_SIGPENDING;                                  \
+                            SIGNAL_MASK_UNLOCK(current, irqflags);             \
+                    }                                                          \
             }                                                                  \
         }                                                                      \
                                                                                \
@@ -640,6 +654,12 @@ do {                                                                           \
         current->blocked = blocked;                                            \
         RECALC_SIGPENDING;                                                     \
         SIGNAL_MASK_UNLOCK(current, irqflags);                                 \
+                                                                               \
+        if (__timed_out && signal_pending(current)) {                          \
+                if (info->lwi_on_signal)                                       \
+                        info->lwi_on_signal(info->lwi_cb_data);                \
+                ret = -EINTR;                                                  \
+        }                                                                      \
                                                                                \
         current->state = TASK_RUNNING;                                         \
         remove_wait_queue(&wq, &__wait);                                       \

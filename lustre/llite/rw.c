@@ -360,7 +360,7 @@ struct ll_async_page *llap_cast_private(struct page *page)
 }
 
 /* XXX have the exp be an argument? */
-struct ll_async_page *llap_from_page(struct page *page)
+struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -369,9 +369,11 @@ struct ll_async_page *llap_from_page(struct page *page)
         int rc;
         ENTRY;
 
+        LASSERTF(origin < LLAP__ORIGIN_MAX, "%u\n", origin);
+
         llap = llap_cast_private(page);
         if (llap != NULL)
-                RETURN(llap);
+                GOTO(out, llap);
 
         exp = ll_i2obdexp(page->mapping->host);
         if (exp == NULL)
@@ -400,6 +402,8 @@ struct ll_async_page *llap_from_page(struct page *page)
         list_add_tail(&llap->llap_proc_item, &sbi->ll_pglist);
         spin_unlock(&sbi->ll_lock);
 
+out:
+        llap->llap_origin = origin;
         RETURN(llap);
 }
 
@@ -492,7 +496,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         CDEBUG(D_INODE, "inode %p is writing page %p from %d to %d at %lu\n",
                inode, page, from, to, page->index);
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, LLAP_ORIGIN_COMMIT_WRITE);
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
@@ -640,7 +644,7 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, 0);
         if (IS_ERR(llap)) {
                 CERROR("page %p ind %lu couldn't find llap: %ld\n", page,
                        page->index, PTR_ERR(llap));
@@ -727,7 +731,7 @@ void ll_ra_accounting(struct page *page, struct address_space *mapping)
 {
         struct ll_async_page *llap;
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
         if (IS_ERR(llap))
                 return;
 
@@ -804,7 +808,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
                 /* we do this first so that we can see the page in the /proc
                  * accounting */
-                llap = llap_from_page(page);
+                llap = llap_from_page(page, LLAP_ORIGIN_READAHEAD);
                 if (IS_ERR(llap) || llap->llap_defer_uptodate)
                         goto next_page;
 
@@ -983,7 +987,7 @@ int ll_readpage(struct file *filp, struct page *page)
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, LLAP_ORIGIN_READPAGE);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
 

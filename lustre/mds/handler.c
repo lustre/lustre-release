@@ -866,6 +866,10 @@ static int mds_statfs(struct ptlrpc_request *req)
         int rc, size = sizeof(struct obd_statfs);
         ENTRY;
 
+        /* This will trigger a watchdog timeout */
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
+                         (MDS_SERVICE_WATCHDOG_TIMEOUT / 1000) + 1);
+
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
                 CERROR("mds: statfs lustre_pack_reply failed: rc = %d\n", rc);
@@ -1899,6 +1903,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+                                MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds", obd->obd_proc_entry);
 
         if (!mds->mds_service) {
@@ -1914,6 +1919,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_setattr_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_SETATTR_PORTAL, MDC_REPLY_PORTAL,
+                                MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_setattr",
                                 obd->obd_proc_entry);
         if (!mds->mds_setattr_service) {
@@ -1929,6 +1935,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_readpage_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_READPAGE_PORTAL, MDC_REPLY_PORTAL,
+                                MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_readpage",
                                 obd->obd_proc_entry);
         if (!mds->mds_readpage_service) {

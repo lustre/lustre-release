@@ -1650,9 +1650,9 @@ Index: linux-stage/include/linux/ext3_fs.h
   */
 @@ -336,6 +338,7 @@
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
- #define EXT3_MOUNT_EXTENTS		0x10000	/* Extents support */
- #define EXT3_MOUNT_EXTDEBUG		0x20000	/* Extents debug */
-+#define EXT3_MOUNT_MBALLOC		0x100000/* Buddy allocation support */
+ #define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
+ #define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
++#define EXT3_MOUNT_MBALLOC		0x400000/* Buddy allocation support */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef clear_opt

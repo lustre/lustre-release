@@ -64,7 +64,7 @@ static int ll_writepage_24(struct page *page)
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
 
@@ -177,6 +177,13 @@ static int ll_direct_IO_24(int rw,
         RETURN(rc);
 }
 
+#ifdef KERNEL_HAS_AS_MAX_READAHEAD
+static int ll_max_readahead(struct inode *inode)
+{
+        return 0;
+}
+#endif
+
 struct address_space_operations ll_aops = {
         .readpage       = ll_readpage,
         .direct_IO      = ll_direct_IO_24,
@@ -185,5 +192,8 @@ struct address_space_operations ll_aops = {
         .commit_write   = ll_commit_write,
         .removepage     = ll_removepage,
         .sync_page      = NULL,
-        .bmap           = NULL
+        .bmap           = NULL,
+#ifdef KERNEL_HAS_AS_MAX_READAHEAD
+        .max_readahead  = ll_max_readahead,
+#endif
 };

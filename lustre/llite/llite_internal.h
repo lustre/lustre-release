@@ -134,8 +134,18 @@ struct ll_async_page {
          /* only trust these if the page lock is providing exclusion */
         unsigned         llap_write_queued:1,
                          llap_defer_uptodate:1,
+                         llap_origin:3,
                          llap_ra_used:1;
         struct list_head llap_proc_item;
+};
+
+enum {
+        LLAP_ORIGIN_UNKNOWN = 0,
+        LLAP_ORIGIN_READPAGE,
+        LLAP_ORIGIN_READAHEAD,
+        LLAP_ORIGIN_COMMIT_WRITE,
+        LLAP_ORIGIN_WRITEPAGE,
+        LLAP__ORIGIN_MAX,
 };
 
 /* llite/lproc_llite.c */
@@ -163,12 +173,13 @@ void ll_prepare_mdc_op_data(struct mdc_op_data *,
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
+int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
-struct ll_async_page *llap_from_page(struct page *page);
+struct ll_async_page *llap_from_page(struct page *page, unsigned origin);
 struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 void ll_ra_accounting(struct page *page, struct address_space *mapping);

@@ -559,7 +559,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int                      objcount, niocount, npages;
         int                      comms_error = 0;
         int                      rc, swab, i, j;
-        struct timeval           start;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
@@ -1139,7 +1138,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL, 30000,
                                 ost_handle, "ost",
                                 obd->obd_proc_entry);
         if (ost->ost_service == NULL) {
@@ -1154,7 +1153,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_create_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL,
+                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL, 30000,
                                 ost_handle, "ost_create",
                                 obd->obd_proc_entry);
         if (ost->ost_create_service == NULL) {

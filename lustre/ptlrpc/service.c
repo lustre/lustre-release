@@ -126,6 +126,9 @@ ptlrpc_grow_req_bufs(struct ptlrpc_srv_ni *srv_ni)
         struct ptlrpc_request_buffer_desc *rqbd;
         int                                i;
 
+        CDEBUG(D_RPCTRACE, "%s: allocate %d new %d-byte reqbufs (%d/%d left)\n",
+               svc->srv_name, svc->srv_nbuf_per_group, svc->srv_buf_size,
+               srv_ni->sni_nrqbd_receiving, svc->srv_nbufs);
         for (i = 0; i < svc->srv_nbuf_per_group; i++) {
                 rqbd = ptlrpc_alloc_rqbd(srv_ni);
 
@@ -275,7 +278,7 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 
 struct ptlrpc_service *
 ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
-                int req_portal, int rep_portal, 
+                int req_portal, int rep_portal, int watchdog_timeout,
                 svc_handler_t handler, char *name,
                 struct proc_dir_entry *proc_entry)
 {
@@ -306,6 +309,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
         service->srv_buf_size = bufsize;
         service->srv_rep_portal = rep_portal;
         service->srv_req_portal = req_portal;
+        service->srv_watchdog_timeout = watchdog_timeout;
         service->srv_handler = handler;
 
         INIT_LIST_HEAD(&service->srv_request_queue);
@@ -695,6 +699,7 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct ptlrpc_service  *svc = data->svc;
         struct ptlrpc_thread   *thread = data->thread;
+        struct lc_watchdog     *watchdog;
         unsigned long           flags;
         ENTRY;
 
@@ -716,6 +721,9 @@ static int ptlrpc_main(void *arg)
         thread->t_flags = SVC_RUNNING;
         wake_up(&thread->t_ctl_waitq);
 
+        watchdog = lc_watchdog_add(svc->srv_watchdog_timeout,
+                                   LC_WATCHDOG_DEFAULT_CB, NULL);
+
         spin_lock_irqsave(&svc->srv_lock, flags);
         svc->srv_nthreads++;
         spin_unlock_irqrestore(&svc->srv_lock, flags);
@@ -728,6 +736,8 @@ static int ptlrpc_main(void *arg)
                 struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
                                                      ptlrpc_retry_rqbds, svc);
 
+                lc_watchdog_disable(watchdog);
+
                 l_wait_event_exclusive (svc->srv_waitq,
                               ((thread->t_flags & SVC_STOPPING) != 0 &&
                                svc->srv_n_difficult_replies == 0) ||
@@ -739,6 +749,8 @@ static int ptlrpc_main(void *arg)
                                 svc->srv_n_active_reqs <
                                 (svc->srv_nthreads - 1))),
                               &lwi);
+
+                lc_watchdog_touch(watchdog);
 
                 ptlrpc_check_rqbd_pools(svc);
 
@@ -769,6 +781,8 @@ static int ptlrpc_main(void *arg)
         wake_up(&thread->t_ctl_waitq);
 
         spin_unlock_irqrestore(&svc->srv_lock, flags);
+
+        lc_watchdog_delete(watchdog);
 
         CDEBUG(D_NET, "service thread exiting, process %d\n", current->pid);
         return 0;

@@ -20,6 +20,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- use transno after validating reply (3892)
 	- process timed out requests if import state changes (3754)
 	- update mtime on OST during writes, return in glimpse (4829)
+	- add mkfsoptions to LDAP (4679)
+	- use ->max_readahead method instead of zapping global ra (5039)
+	- don't interrupt __l_wait_event() during strace
+       * miscellania
+	- add software watchdogs to catch hung threads quickly (4941)
+	- make lustrefs init script start after nfs is mounted 
 
 2004-10-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.7

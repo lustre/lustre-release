@@ -196,7 +196,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
            backing dev info assigned to inode mapping is used for
            determining maximal readahead. */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)) && \
+    !defined(KERNEL_HAS_AS_MAX_READAHEAD)
         /* bug 2805 - set VM readahead to zero */
         vm_max_readahead = vm_min_readahead = 0;
 #endif
@@ -508,6 +509,35 @@ out:
         RETURN(rc);
 }
 
+static void lustre_manual_cleanup(struct ll_sb_info *sbi)
+{
+        struct lustre_cfg lcfg;
+        struct obd_device *obd;
+        int next = 0;
+
+        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL)
+        {
+                int err;
+
+                LCFG_INIT(lcfg, LCFG_CLEANUP, obd->obd_name);
+                err = class_process_config(&lcfg);
+                if (err) {
+                        CERROR("cleanup failed: %s\n", obd->obd_name);
+                        //continue;
+                }
+
+                LCFG_INIT(lcfg, LCFG_DETACH, obd->obd_name);
+                err = class_process_config(&lcfg);
+                if (err) {
+                        CERROR("detach failed: %s\n", obd->obd_name);
+                        //continue;
+                }
+        }
+
+        if (sbi->ll_lmd != NULL)
+                class_del_profile(sbi->ll_lmd->lmd_profile);
+}
+
 int lustre_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct lustre_mount_data * lmd = data;
@@ -618,8 +648,10 @@ out_free:
 
                         err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg,
                                                  0);
-                        if (err < 0)
+                        if (err < 0) {
                                 CERROR("Unable to process log: %s\n", cln_prof);
+                                lustre_manual_cleanup(sbi);
+                        }
                         OBD_FREE(cln_prof, len);
                         OBD_FREE(sbi->ll_instance, strlen(sbi->ll_instance)+ 1);
                 }
@@ -629,35 +661,6 @@ out_free:
 
         goto out_dev;
 } /* lustre_fill_super */
-
-static void lustre_manual_cleanup(struct ll_sb_info *sbi)
-{
-        struct lustre_cfg lcfg;
-        struct obd_device *obd;
-        int next = 0;
-
-        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL)
-        {
-                int err;
-
-                LCFG_INIT(lcfg, LCFG_CLEANUP, obd->obd_name);
-                err = class_process_config(&lcfg);
-                if (err) {
-                        CERROR("cleanup failed: %s\n", obd->obd_name);
-                        //continue;
-                }
-
-                LCFG_INIT(lcfg, LCFG_DETACH, obd->obd_name);
-                err = class_process_config(&lcfg);
-                if (err) {
-                        CERROR("detach failed: %s\n", obd->obd_name);
-                        //continue;
-                }
-        }
-
-        if (sbi->ll_lmd != NULL)
-                class_del_profile(sbi->ll_lmd->lmd_profile);
-}
 
 void lustre_put_super(struct super_block *sb)
 {
