@@ -478,7 +478,7 @@ symver()
 install_kms()
 {
     (( $INSTALL_KERNEL )) || return 0
-    (( $SUSEBUILD )) || return 0
+    (( $LINUX26 )) || return 0
     set_make
     FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     for build_dir in "${TOPDIR}/modules-${FULL_VERSION}/*" ; do
