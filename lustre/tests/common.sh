@@ -150,14 +150,7 @@ setup_opts() {
 setup_variables() {
 	[ -z "$OSTNODE" ] && OSTNODE=$SERVER
 	[ -z "$MDSNODE" ] && MDSNODE=$SERVER
-
-	if [ -z "$DLM" ]; then
-		if [ "$LOCALHOST" == "$SERVER" ]; then
-			DLM=localhost
-		else
-			DLM=$SERVER
-		fi
-	fi
+        [ -z "$DLM" ] && DLM=$SERVER
 }
 
 setup_portals() {
