@@ -702,7 +702,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
                         rc = vfs_mkdir(dir, dchild, rec->ur_mode);
                         if (rc) {
-                                CERROR("Can't create dir %s, rc = %d\n",
+                                CERROR("Can't create dir \"%s\", rc = %d\n",
                                        dchild->d_name.name, rc);
                                 GOTO(cleanup, rc);
                         }

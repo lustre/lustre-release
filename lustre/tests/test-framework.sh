@@ -29,7 +29,7 @@ init_test_env() {
     export XMLCONFIG=${XMLCONFIG:-${TESTSUITE}.xml}
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
-    [ -d /r ] && export ROOT=/r
+    [ -d /r ] && test "x$ROOT" = "x" && export ROOT=/r
     export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
