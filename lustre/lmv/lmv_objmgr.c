@@ -48,13 +48,13 @@
 #include <linux/obd_lmv.h>
 #include "lmv_internal.h"
 
-LIST_HEAD(lmv_obj_list);
-spinlock_t lmv_obj_list_lock = SPIN_LOCK_UNLOCKED;
+static LIST_HEAD(lmv_obj_list);
+static spinlock_t lmv_obj_list_lock = SPIN_LOCK_UNLOCKED;
 
 /* creates new obj on passed @fid and @mea. */
-static struct lmv_obj *
-__lmv_alloc_obj(struct obd_device *obd, struct ll_fid *fid,
-                struct mea *mea)
+struct lmv_obj *
+lmv_alloc_obj(struct obd_device *obd, struct ll_fid *fid,
+              struct mea *mea)
 {
         int i;
         struct lmv_obj *obj;
@@ -67,7 +67,9 @@ __lmv_alloc_obj(struct obd_device *obd, struct ll_fid *fid,
 
         obj->obd = obd;
         obj->fid = *fid;
+        obj->freeing = 0;
           
+        init_MUTEX(&obj->guard);
         atomic_set(&obj->count, 0);
         obj->objcount = mea->mea_count;
 
@@ -97,8 +99,8 @@ err_obj:
 }
 
 /* destroys passed @obj. */
-static void
-__lmv_free_obj(struct lmv_obj *obj)
+void
+lmv_free_obj(struct lmv_obj *obj)
 {
         unsigned int obj_size;
         struct lmv_obd *lmv = &obj->obd->u.lmv;
@@ -110,16 +112,56 @@ __lmv_free_obj(struct lmv_obj *obj)
         OBD_FREE(obj, sizeof(*obj));
 }
 
-struct lmv_obj *
-lmv_get_obj(struct lmv_obj *obj)
+static void
+__lmv_add_obj(struct lmv_obj *obj)
+{
+        atomic_inc(&obj->count);
+        list_add(&obj->list, &lmv_obj_list);
+}
+
+void
+lmv_add_obj(struct lmv_obj *obj)
+{
+        spin_lock(&lmv_obj_list_lock);
+        __lmv_add_obj(obj);
+        spin_unlock(&lmv_obj_list_lock);
+}
+
+static void
+__lmv_del_obj(struct lmv_obj *obj)
+{
+        list_del(&obj->list);
+        lmv_free_obj(obj);
+}
+
+void
+lmv_del_obj(struct lmv_obj *obj)
+{
+        spin_lock(&lmv_obj_list_lock);
+        __lmv_del_obj(obj);
+        spin_unlock(&lmv_obj_list_lock);
+}
+
+static struct lmv_obj *
+__lmv_get_obj(struct lmv_obj *obj)
 {
         LASSERT(obj);
         atomic_inc(&obj->count);
         return obj;
 }
 
-void
-lmv_put_obj(struct lmv_obj *obj)
+struct lmv_obj *
+lmv_get_obj(struct lmv_obj *obj)
+{
+        spin_lock(&lmv_obj_list_lock);
+        __lmv_get_obj(obj);
+        spin_unlock(&lmv_obj_list_lock);
+
+        return obj;
+}
+
+static void
+__lmv_put_obj(struct lmv_obj *obj)
 {
         LASSERT(obj);
 
@@ -128,8 +170,16 @@ lmv_put_obj(struct lmv_obj *obj)
                 CDEBUG(D_OTHER, "last reference to %lu/%lu/%lu - destroying\n",
                        (unsigned long)fid->mds, (unsigned long)fid->id,
                        (unsigned long)fid->generation);
-                __lmv_free_obj(obj);
+                __lmv_del_obj(obj);
         }
+}
+
+void
+lmv_put_obj(struct lmv_obj *obj)
+{
+        spin_lock(&lmv_obj_list_lock);
+        __lmv_put_obj(obj);
+        spin_unlock(&lmv_obj_list_lock);
 }
 
 static struct lmv_obj *
@@ -140,8 +190,24 @@ __lmv_grab_obj(struct obd_device *obd, struct ll_fid *fid)
 
         list_for_each(cur, &lmv_obj_list) {
                 obj = list_entry(cur, struct lmv_obj, list);
-                if (fid_equal(&obj->fid, fid))
-                        return lmv_get_obj(obj);
+
+                /* check if object is in progress of destroying. If so - skip
+                 * it. */
+                down(&obj->guard);
+
+                if (obj->freeing) {
+                        up(&obj->guard);
+                        continue;
+                }
+
+                /* check if this is waht we're looking for. */
+                if (fid_equal(&obj->fid, fid)) {
+                        __lmv_get_obj(obj);
+                        up(&obj->guard);
+                        return obj;
+                }
+                
+                up(&obj->guard);
         }
         return NULL;
 }
@@ -160,12 +226,12 @@ lmv_grab_obj(struct obd_device *obd, struct ll_fid *fid)
 }
 
 /* looks in objects list for an object that matches passed @fid. If it is not
- * found -- creates it using passed @mea and puts to list. */
+ * found -- creates it using passed @mea and puts onto list. */
 static struct lmv_obj *
 __lmv_create_obj(struct obd_device *obd, struct ll_fid *fid,
                  struct mea *mea)
 {
-        struct lmv_obj *obj, *cobj;
+        struct lmv_obj *new, *obj;
         ENTRY;
 
         obj = lmv_grab_obj(obd, fid);
@@ -173,35 +239,36 @@ __lmv_create_obj(struct obd_device *obd, struct ll_fid *fid,
                 RETURN(obj);
 
         /* no such object yet, allocate and initialize it. */
-        obj = __lmv_alloc_obj(obd, fid, mea);
-        if (!obj)
+        new = lmv_alloc_obj(obd, fid, mea);
+        if (!new)
                 RETURN(NULL);
 
         /* check if someone create it already while we were dealing with
          * allocating @obj. */
         spin_lock(&lmv_obj_list_lock);
-        cobj = __lmv_grab_obj(obd, fid);
-        if (cobj) {
+        obj = __lmv_grab_obj(obd, fid);
+        if (obj) {
                 /* someone created it already - put @obj and getting out. */
-                __lmv_free_obj(obj);
+                lmv_free_obj(new);
                 spin_unlock(&lmv_obj_list_lock);
-                RETURN(cobj);
+                RETURN(obj);
         }
 
-        /* object is referenced by list and thus should have additional
-         * reference counted. */
-        lmv_get_obj(obj);
-        list_add(&obj->list, &lmv_obj_list);
+        __lmv_add_obj(new);
+        __lmv_get_obj(new);
+        
         spin_unlock(&lmv_obj_list_lock);
 
         CDEBUG(D_OTHER, "new obj in lmv cache: %lu/%lu/%lu\n",
                (unsigned long)fid->mds, (unsigned long)fid->id,
                (unsigned long)fid->generation);
 
-        RETURN(lmv_get_obj(obj));
+        RETURN(new);
         
 }
 
+/* creates object from passed @fid and @mea. If @mea is NULL, it will be
+ * obtained from correct MDT and used for constructing the object. */
 int
 lmv_create_obj(struct obd_export *exp,
                struct ll_fid *fid, struct mea *mea)
@@ -255,14 +322,19 @@ lmv_create_obj(struct obd_export *exp,
                        (unsigned long)fid->mds, (unsigned long)fid->id,
                        (unsigned long)fid->generation);
                 GOTO(cleanup, rc = -ENOMEM);
-        } else
-                lmv_put_obj(obj);
+        }
+        
+        lmv_put_obj(obj);
 cleanup:
         if (req)       
                 ptlrpc_req_finished(req);
         RETURN(rc); 
 }
 
+/* looks for object with @fid and orders to destroy it. It possible the object
+ * will not be destroyed right now, because it is still using by someone. In
+ * this case it will be marked as "freeing" and will not be accessible anymore
+ * for subsequent callers of lmv_grab_obj(). */
 int
 lmv_destroy_obj(struct obd_export *exp, struct ll_fid *fid)
 {
@@ -275,9 +347,13 @@ lmv_destroy_obj(struct obd_export *exp, struct ll_fid *fid)
         
         obj = __lmv_grab_obj(obd, fid);
         if (obj) {
-                list_del(&obj->list);
-                lmv_put_obj(obj);
-                lmv_put_obj(obj);
+                down(&obj->guard);
+                obj->freeing = 1;
+                up(&obj->guard);
+                
+                __lmv_put_obj(obj);
+                __lmv_put_obj(obj);
+                
                 rc = 1;
         }
         
@@ -307,20 +383,7 @@ lmv_cleanup_mgr(struct obd_device *obd)
                 if (obj->obd != obd)
                         continue;
 
-                list_del(&obj->list);
-
-                if (atomic_read(&obj->count) > 1) {
-                        struct ll_fid *fid = &obj->fid;
-                        
-                        CERROR("Object %lu/%lu/%lu has invalid ref count %d\n",
-                               (unsigned long)fid->mds, (unsigned long)fid->id,
-                               (unsigned long)fid->generation,
-                               atomic_read(&obj->count));
-                }
-        
-                /* list does not use object anymore, ref counter should be
-                 * descreased. */
-                lmv_put_obj(obj);
+                __lmv_put_obj(obj);
         }
         spin_unlock(&lmv_obj_list_lock);
 }

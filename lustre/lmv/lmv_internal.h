@@ -13,6 +13,8 @@ struct lmv_inode {
 
 struct lmv_obj {
         struct list_head        list;
+	struct semaphore        guard;
+	int                     freeing;        /* object ig freeing. */
         atomic_t                count;
         struct ll_fid           fid;            /* master fid of dir */
         void                    *update;        /* bitmap of status (uptodate) */
@@ -30,6 +32,14 @@ struct lmv_obj *lmv_get_obj(struct lmv_obj *obj);
 
 struct lmv_obj *lmv_grab_obj(struct obd_device *obd,
 			     struct ll_fid *fid);
+
+void lmv_free_obj(struct lmv_obj *obj);
+void lmv_add_obj(struct lmv_obj *obj);
+void lmv_del_obj(struct lmv_obj *obj);
+
+struct lmv_obj *lmv_alloc_obj(struct obd_device *obd,
+			      struct ll_fid *fid,
+			      struct mea *mea);
 
 int lmv_create_obj(struct obd_export *exp, struct ll_fid *fid,
 		   struct mea *mea);
