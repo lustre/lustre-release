@@ -216,6 +216,14 @@ extern void kportal_assertion_failed(char *expr,char *file,char *func,int line);
 #endif
 
 #ifdef __arch_um__
+#define LBUG_WITH_LOC(file, func, line)                                 \
+do {                                                                    \
+        CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
+        portals_debug_dumplog();                                        \
+        portals_run_lbug_upcall(file, func, line);                      \
+        panic("LBUG");                                                  \
+} while (0)
+
 #define LBUG()                                                          \
 do {                                                                    \
         CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
@@ -224,6 +232,15 @@ do {                                                                    \
         panic("LBUG");                                                  \
 } while (0)
 #else
+#define LBUG_WITH_LOC(file, func, line)                                 \
+do {                                                                    \
+        CEMERG("LBUG\n");                                               \
+        portals_debug_dumplog();                                        \
+        portals_run_lbug_upcall(file, func, line);                      \
+        set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
+        schedule();                                                     \
+} while (0)
+
 #define LBUG()                                                          \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \

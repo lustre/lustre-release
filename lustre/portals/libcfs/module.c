@@ -67,7 +67,7 @@ kportal_assertion_failed (char *expr, char *file, char *func, int line)
 {
         portals_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK(),
                           "ASSERTION(%s) failed\n", expr);
-        LBUG();
+        LBUG_WITH_LOC(file, func, line);
 }
 #endif
 
