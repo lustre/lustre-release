@@ -23,6 +23,13 @@
 #ifndef _COMPAT25_H
 #define _COMPAT25_H
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+#define KDEVT_VAL(dev, val)         dev.value = 0               
+#else
+#define KDEVT_VAL(dev, val)         dev = 0               
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 # define SIGNAL_MASK_LOCK(task, flags)         spin_lock_irqsave(                     \
 		&task->sighand->siglock, flags)
