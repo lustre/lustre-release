@@ -1,11 +1,21 @@
- fs/namei.c         |   79 +++++++++++++++++++++++++++++++++++++++++++++++------
- fs/open.c          |   65 ++++++++++++++++++++++++++++++++++++++-----
- include/linux/fs.h |    7 ++++
- 3 files changed, 136 insertions(+), 15 deletions(-)
+ fs/exec.c          |    2 -
+ fs/namei.c         |   81 +++++++++++++++++++++++++++++++++++++++++++++++------
+ fs/open.c          |   73 +++++++++++++++++++++++++++++++++++++++++------
+ include/linux/fs.h |    9 +++++
+ 4 files changed, 144 insertions(+), 21 deletions(-)
 
---- uml-2.5/fs/namei.c~vfs_nointent_2.5.69_rev1	2003-05-29 01:19:34.000000000 -0600
-+++ uml-2.5-braam/fs/namei.c	2003-05-29 01:23:15.000000000 -0600
-@@ -1467,6 +1467,15 @@ asmlinkage long sys_mknod(const char __u
+--- uml-2.5-lustre/fs/namei.c~vfs_nointent_2.5.69_rev1	2003-05-31 17:04:05.000000000 -0700
++++ uml-2.5-lustre-zab/fs/namei.c	2003-05-31 17:05:54.000000000 -0700
+@@ -1248,7 +1248,7 @@ int may_open(struct nameidata *nd, int a
+ 		if (!error) {
+ 			DQUOT_INIT(inode);
+ 			
+-			error = do_truncate(dentry, 0);
++			error = do_truncate(dentry, 0, 1);
+ 		}
+ 		put_write_access(inode);
+ 		if (error)
+@@ -1493,6 +1493,15 @@ asmlinkage long sys_mknod(const char __u
  	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  	if (error)
  		goto out;
@@ -21,7 +31,7 @@
  	dentry = lookup_create(&nd, 0);
  	error = PTR_ERR(dentry);
  
-@@ -1489,6 +1498,7 @@ asmlinkage long sys_mknod(const char __u
+@@ -1515,6 +1524,7 @@ asmlinkage long sys_mknod(const char __u
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
@@ -29,7 +39,7 @@
  	path_release(&nd);
  out:
  	putname(tmp);
-@@ -1530,10 +1540,18 @@ asmlinkage long sys_mkdir(const char __u
+@@ -1556,10 +1566,18 @@ asmlinkage long sys_mkdir(const char __u
  	if (!IS_ERR(tmp)) {
  		struct dentry *dentry;
  		struct nameidata nd;
@@ -48,7 +58,7 @@
  		dentry = lookup_create(&nd, 1);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
-@@ -1543,6 +1561,7 @@ asmlinkage long sys_mkdir(const char __u
+@@ -1569,6 +1587,7 @@ asmlinkage long sys_mkdir(const char __u
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -56,7 +66,7 @@
  		path_release(&nd);
  out:
  		putname(tmp);
-@@ -1623,6 +1642,7 @@ asmlinkage long sys_rmdir(const char __u
+@@ -1649,6 +1668,7 @@ asmlinkage long sys_rmdir(const char __u
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -64,7 +74,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1643,8 +1663,18 @@ asmlinkage long sys_rmdir(const char __u
+@@ -1669,8 +1689,18 @@ asmlinkage long sys_rmdir(const char __u
  			error = -EBUSY;
  			goto exit1;
  	}
@@ -84,7 +94,7 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-@@ -1699,6 +1729,7 @@ asmlinkage long sys_unlink(const char __
+@@ -1725,6 +1755,7 @@ asmlinkage long sys_unlink(const char __
  	struct dentry *dentry;
  	struct nameidata nd;
  	struct inode *inode = NULL;
@@ -92,7 +102,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1710,8 +1741,15 @@ asmlinkage long sys_unlink(const char __
+@@ -1736,8 +1767,15 @@ asmlinkage long sys_unlink(const char __
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
@@ -109,7 +119,7 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1777,10 +1815,18 @@ asmlinkage long sys_symlink(const char _
+@@ -1803,10 +1841,18 @@ asmlinkage long sys_symlink(const char _
  	if (!IS_ERR(to)) {
  		struct dentry *dentry;
  		struct nameidata nd;
@@ -128,7 +138,7 @@
  		dentry = lookup_create(&nd, 0);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
-@@ -1788,6 +1834,7 @@ asmlinkage long sys_symlink(const char _
+@@ -1814,6 +1860,7 @@ asmlinkage long sys_symlink(const char _
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -136,7 +146,7 @@
  		path_release(&nd);
  out:
  		putname(to);
-@@ -1851,6 +1898,8 @@ asmlinkage long sys_link(const char __us
+@@ -1877,6 +1924,8 @@ asmlinkage long sys_link(const char __us
  	struct nameidata nd, old_nd;
  	int error;
  	char * to;
@@ -145,7 +155,7 @@
  
  	to = getname(newname);
  	if (IS_ERR(to))
-@@ -1865,6 +1914,13 @@ asmlinkage long sys_link(const char __us
+@@ -1891,6 +1940,13 @@ asmlinkage long sys_link(const char __us
  	error = -EXDEV;
  	if (old_nd.mnt != nd.mnt)
  		goto out_release;
@@ -159,7 +169,7 @@
  	new_dentry = lookup_create(&nd, 0);
  	error = PTR_ERR(new_dentry);
  	if (!IS_ERR(new_dentry)) {
-@@ -1915,7 +1971,7 @@ exit:
+@@ -1941,7 +1997,7 @@ exit:
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -168,7 +178,7 @@
  {
  	int error = 0;
  	struct inode *target;
-@@ -1960,7 +2016,7 @@ int vfs_rename_dir(struct inode *old_dir
+@@ -1986,7 +2042,7 @@ int vfs_rename_dir(struct inode *old_dir
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -177,7 +187,7 @@
  {
  	struct inode *target;
  	int error;
-@@ -2037,6 +2093,8 @@ static inline int do_rename(const char *
+@@ -2063,6 +2119,8 @@ static inline int do_rename(const char *
  	struct dentry * old_dentry, *new_dentry;
  	struct dentry * trap;
  	struct nameidata oldnd, newnd;
@@ -186,7 +196,7 @@
  
  	error = path_lookup(oldname, LOOKUP_PARENT, &oldnd);
  	if (error)
-@@ -2059,9 +2117,15 @@ static inline int do_rename(const char *
+@@ -2085,9 +2143,15 @@ static inline int do_rename(const char *
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
@@ -203,7 +213,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -2081,7 +2145,7 @@ static inline int do_rename(const char *
+@@ -2107,7 +2171,7 @@ static inline int do_rename(const char *
  	error = -EINVAL;
  	if (old_dentry == trap)
  		goto exit4;
@@ -212,7 +222,7 @@
  	error = PTR_ERR(new_dentry);
  	if (IS_ERR(new_dentry))
  		goto exit4;
-@@ -2090,8 +2154,7 @@ static inline int do_rename(const char *
+@@ -2116,8 +2180,7 @@ static inline int do_rename(const char *
  	if (new_dentry == trap)
  		goto exit5;
  
@@ -222,21 +232,27 @@
  exit5:
  	dput(new_dentry);
  exit4:
---- uml-2.5/fs/open.c~vfs_nointent_2.5.69_rev1	2003-05-29 01:19:34.000000000 -0600
-+++ uml-2.5-braam/fs/open.c	2003-05-29 01:19:34.000000000 -0600
-@@ -78,6 +78,7 @@ out:
- int do_truncate(struct dentry *dentry, loff_t length)
+--- uml-2.5-lustre/fs/open.c~vfs_nointent_2.5.69_rev1	2003-05-31 17:04:05.000000000 -0700
++++ uml-2.5-lustre-zab/fs/open.c	2003-05-31 17:05:36.000000000 -0700
+@@ -75,9 +75,10 @@ out:
+ 	return error;
+ }
+ 
+-int do_truncate(struct dentry *dentry, loff_t length)
++int do_truncate(struct dentry *dentry, loff_t length, int called_from_open)
  {
  	int err;
 +	struct inode_operations *op = dentry->d_inode->i_op;
  	struct iattr newattrs;
  
  	/* Not pretty: "inode->i_size" shouldn't really be signed. But it is. */
-@@ -87,7 +88,12 @@ int do_truncate(struct dentry *dentry, l
+@@ -87,7 +88,14 @@ int do_truncate(struct dentry *dentry, l
  	newattrs.ia_size = length;
  	newattrs.ia_valid = ATTR_SIZE | ATTR_CTIME;
  	down(&dentry->d_inode->i_sem);
 -	err = notify_change(dentry, &newattrs);
++	if (called_from_open)
++		newattrs.ia_valid |= ATTR_FROM_OPEN;
 +	if (op->setattr_raw) {
 +		newattrs.ia_valid |= ATTR_RAW;
 +		newattrs.ia_ctime = CURRENT_TIME;
@@ -246,7 +262,25 @@
  	up(&dentry->d_inode->i_sem);
  	return err;
  }
-@@ -266,9 +272,19 @@ asmlinkage long sys_utime(char __user * 
+@@ -143,7 +151,7 @@ static inline long do_sys_truncate(const
+ 	error = locks_verify_truncate(inode, NULL, length);
+ 	if (!error) {
+ 		DQUOT_INIT(inode);
+-		error = do_truncate(nd.dentry, length);
++		error = do_truncate(nd.dentry, length, 0);
+ 	}
+ 	put_write_access(inode);
+ 
+@@ -195,7 +203,7 @@ static inline long do_sys_ftruncate(unsi
+ 
+ 	error = locks_verify_truncate(inode, file, length);
+ 	if (!error)
+-		error = do_truncate(dentry, length);
++		error = do_truncate(dentry, length, 0);
+ out_putf:
+ 	fput(file);
+ out:
+@@ -266,9 +274,19 @@ asmlinkage long sys_utime(char __user * 
  		    (error = permission(inode,MAY_WRITE)) != 0)
  			goto dput_and_out;
  	}
@@ -269,7 +303,7 @@
  dput_and_out:
  	path_release(&nd);
  out:
-@@ -311,9 +327,19 @@ long do_utimes(char __user * filename, s
+@@ -311,9 +329,19 @@ long do_utimes(char __user * filename, s
  		    (error = permission(inode,MAY_WRITE)) != 0)
  			goto dput_and_out;
  	}
@@ -292,7 +326,7 @@
  dput_and_out:
  	path_release(&nd);
  out:
-@@ -517,6 +543,18 @@ asmlinkage long sys_chmod(const char __u
+@@ -517,6 +545,18 @@ asmlinkage long sys_chmod(const char __u
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
  	
@@ -311,7 +345,7 @@
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto dput_and_out;
-@@ -550,6 +588,18 @@ static int chown_common(struct dentry * 
+@@ -550,6 +590,18 @@ static int chown_common(struct dentry * 
  	if (IS_RDONLY(inode))
  		goto out;
  	error = -EPERM;
@@ -330,7 +364,7 @@
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
  	newattrs.ia_valid =  ATTR_CTIME;
-@@ -563,6 +613,7 @@ static int chown_common(struct dentry * 
+@@ -563,6 +615,7 @@ static int chown_common(struct dentry * 
  	}
  	if (!S_ISDIR(inode->i_mode))
  		newattrs.ia_valid |= ATTR_KILL_SUID|ATTR_KILL_SGID;
@@ -338,9 +372,9 @@
  	down(&inode->i_sem);
  	error = notify_change(dentry, &newattrs);
  	up(&inode->i_sem);
---- uml-2.5/include/linux/fs.h~vfs_nointent_2.5.69_rev1	2003-05-29 01:19:34.000000000 -0600
-+++ uml-2.5-braam/include/linux/fs.h	2003-05-29 01:19:34.000000000 -0600
-@@ -736,13 +736,20 @@ struct inode_operations {
+--- uml-2.5-lustre/include/linux/fs.h~vfs_nointent_2.5.69_rev1	2003-05-31 17:04:05.000000000 -0700
++++ uml-2.5-lustre-zab/include/linux/fs.h	2003-05-31 17:08:21.000000000 -0700
+@@ -737,13 +737,20 @@ struct inode_operations {
  	struct dentry * (*lookup_it) (struct inode *,struct dentry *,
  					struct lookup_intent *);
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
@@ -361,5 +395,25 @@
  	int (*readlink) (struct dentry *, char __user *,int);
  	int (*follow_link) (struct dentry *, struct nameidata *);
  	void (*truncate) (struct inode *);
+@@ -1027,7 +1034,7 @@ static inline int break_lease(struct ino
+ 
+ asmlinkage long sys_open(const char *, int, int);
+ asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
+-extern int do_truncate(struct dentry *, loff_t start);
++extern int do_truncate(struct dentry *, loff_t start, int called_from_open);
+ 
+ extern struct file *filp_open(const char *, int, int);
+ extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
+--- uml-2.5-lustre/fs/exec.c~vfs_nointent_2.5.69_rev1	2003-05-31 16:58:16.000000000 -0700
++++ uml-2.5-lustre-zab/fs/exec.c	2003-05-31 17:08:10.000000000 -0700
+@@ -1353,7 +1353,7 @@ int do_coredump(long signr, int exit_cod
+ 		goto close_fail;
+ 	if (!file->f_op->write)
+ 		goto close_fail;
+-	if (do_truncate(file->f_dentry, 0) != 0)
++	if (do_truncate(file->f_dentry, 0, 0) != 0)
+ 		goto close_fail;
+ 
+ 	retval = binfmt->core_dump(signr, regs, file);
 
 _
