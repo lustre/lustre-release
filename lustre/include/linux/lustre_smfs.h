@@ -102,6 +102,7 @@ struct smfs_super_info {
         smfs_pack_rec_func   	 smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
         __u32                    smsi_flags;        /* flags */
         __u32                    smsi_ops_check;
+        struct list_head         smsi_plg_list;
         struct list_head         smsi_hook_list;
         kmem_cache_t *           smsi_inode_cachep;  /*inode_cachep*/
 };
@@ -307,7 +308,7 @@ static inline void duplicate_inode(struct inode *dst_inode,
         dst_inode->i_mtime = src_inode->i_mtime;
         dst_inode->i_blksize = src_inode->i_blksize;
         dst_inode->i_version = src_inode->i_version;
-        dst_inode->i_state = src_inode->i_state;
+        //dst_inode->i_state = src_inode->i_state;
         dst_inode->i_generation = src_inode->i_generation;
         dst_inode->i_flags = src_inode->i_flags;
 
@@ -325,7 +326,7 @@ static inline void post_smfs_inode(struct inode *inode,
                  * here we must release the cache_inode, otherwise we will have
                  * no chance to do it later.
                  */
-                cache_inode->i_state &=~I_LOCK;
+                //cache_inode->i_state &=~I_LOCK;
                 inode->i_blocks = cache_inode->i_blocks;
         }
 }
@@ -333,10 +334,9 @@ static inline void post_smfs_inode(struct inode *inode,
 static inline void pre_smfs_inode(struct inode *inode,
                                   struct inode *cache_inode)
 {
-        if (inode && cache_inode) {
-                cache_inode->i_state = inode->i_state;
-        //      duplicate_inode(cache_inode, inode);
-        }
+        //if (inode && cache_inode) {
+                //cache_inode->i_state = inode->i_state;
+        //}
 }
 
 /* instantiate a file handle to the cache file */
@@ -369,18 +369,6 @@ static inline void duplicate_sb(struct super_block *dst_sb,
         dst_sb->s_blocksize_bits = src_sb->s_blocksize_bits;
         dst_sb->s_maxbytes = src_sb->s_maxbytes;
         dst_sb->s_flags = src_sb->s_flags;
-}
-
-static inline void d_unalloc(struct dentry *dentry)
-{
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        list_del(&dentry->d_hash);
-        INIT_LIST_HEAD(&dentry->d_hash);
-#else
-        hlist_del_init(&dentry->d_hash);
-        dentry->d_flags |= DCACHE_UNHASHED;
-#endif
-        dput(dentry); /* this will free the dentry memory */
 }
 
 static inline int smfs_get_dentry_name_index(struct dentry *dentry,
@@ -421,34 +409,54 @@ static inline void smfs_free_dentry_name(struct qstr *str)
         OBD_FREE(name, str->len + 1);
 }
 
+static int smfs_d_delete(struct dentry * dentry) 
+{
+        return 1;
+}
+
+static inline void d_unalloc(struct dentry *dentry)
+{
+        struct dentry_operations dop = {
+                .d_delete = smfs_d_delete,
+        };
+        //this will invoke unhash and kill for dentry
+        dentry->d_op = &dop;
+        dput(dentry); /* this will free the dentry memory */
+}
+
 static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
                                              struct inode *cache_inode,
                                              struct dentry *dentry)
 {
         struct dentry *cache_dentry = NULL;
         
+        
+        if (!parent_dentry) {
+                cache_dentry = d_find_alias(cache_inode);
+                if (cache_dentry) 
+                        RETURN(cache_dentry);
+        }
+        
         cache_dentry = d_alloc(parent_dentry, &dentry->d_name);
         if (!cache_dentry)
                 RETURN(NULL);
+        
         if (!parent_dentry)
                 cache_dentry->d_parent = cache_dentry;
-        if (cache_inode)
+        
+        if (cache_inode) {
+                atomic_inc(&cache_inode->i_count); //d_instantiate suppose that
                 d_add(cache_dentry, cache_inode);
+        }
+        
         RETURN(cache_dentry);
 }
 
 static inline void post_smfs_dentry(struct dentry *cache_dentry)
 {
-        if (!cache_dentry)
-                return;
-
-        /* 
-         * this is needed because d_unalloc() calls dput(), which in turn calls
-         * iput() on dentry inode.
-         */
-        if (cache_dentry->d_inode)
-                igrab(cache_dentry->d_inode);
-        d_unalloc(cache_dentry);
+        if (cache_dentry)
+                d_unalloc(cache_dentry);
+        
 }
 
 /*FIXME there should be more conditions in this check*/
