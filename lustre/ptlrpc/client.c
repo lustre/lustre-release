@@ -658,6 +658,8 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                         if (req->rq_waiting || req->rq_resend) {
                                 int status;
 
+                                ptlrpc_unregister_reply(req);
+
                                 spin_lock_irqsave(&imp->imp_lock, flags);
 
                                 if (ptlrpc_import_delay_req(imp, req, &status)){
@@ -690,7 +692,6 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                 if (req->rq_resend) {
                                         lustre_msg_add_flags(req->rq_reqmsg,
                                                              MSG_RESENT);
-                                        ptlrpc_unregister_reply(req);
                                         if (req->rq_bulk) {
                                                 __u64 old_xid = req->rq_xid;
 
