@@ -75,7 +75,7 @@ static int verify_handle(char * test, struct llog_handle *llh, int num_recs)
 static int llog_test_1(struct obd_device *obd, char * name)
 {
         struct llog_handle *llh;
-        struct llog_obd_ctxt *ctxt = obd->obd_llog_ctxt[LLOG_TEST_ORIG_CTXT];
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int rc;
         int rc2;
         ENTRY;
@@ -110,7 +110,7 @@ static int llog_test_2(struct obd_device *obd, char * name, struct llog_handle *
         struct llog_handle *loghandle;
         struct llog_logid logid;
         int rc;
-        struct llog_obd_ctxt *ctxt = obd->obd_llog_ctxt[LLOG_TEST_ORIG_CTXT];
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         ENTRY;
 
         CERROR("2a: re-open a log with name: %s\n", name);
@@ -223,7 +223,7 @@ static int llog_test_4(struct obd_device *obd)
         int rc, i, buflen;
         struct llog_mini_rec lmr;
         struct llog_cookie cookie;
-        struct llog_obd_ctxt *ctxt = obd->obd_llog_ctxt[LLOG_TEST_ORIG_CTXT];
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int num_recs = 0;
         char *buf;
         struct llog_rec_hdr rec;
@@ -362,7 +362,7 @@ static int llog_test_5(struct obd_device *obd)
         char name[10];
         int rc;
         struct llog_mini_rec lmr;
-        struct llog_obd_ctxt *ctxt = obd->obd_llog_ctxt[LLOG_TEST_ORIG_CTXT];
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
 
         ENTRY;
 
@@ -426,13 +426,13 @@ static int llog_test_5(struct obd_device *obd)
 static int llog_test_6(struct obd_device *obd, char * name)
 {
         struct obd_device *mdc_obd;
-        struct llog_obd_ctxt *ctxt = obd->obd_llog_ctxt[LLOG_TEST_ORIG_CTXT];
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         struct obd_uuid *mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
         struct lustre_handle exph = {0, };
         struct obd_export * exp;
         struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
         struct llog_handle *llh = NULL;
-        struct llog_obd_ctxt *nctxt;
+        struct llog_ctxt *nctxt;
         int rc;
 
         CERROR("6a: re-open log %s using client API\n", name);
@@ -450,7 +450,7 @@ static int llog_test_6(struct obd_device *obd, char * name)
         }
         exp = class_conn2export(&exph);
 
-        nctxt = mdc_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
+        nctxt = llog_get_context(mdc_obd, LLOG_CONFIG_REPL_CTXT);
         rc = llog_create(nctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("6: llog_create failed %d\n", rc);
@@ -464,10 +464,10 @@ static int llog_test_6(struct obd_device *obd, char * name)
         }
 
         rc = llog_process(llh, (llog_cb_t)plain_print_cb, NULL);
-parse_out:
         if (rc) 
                 CERROR("6: llog_process failed %d\n", rc);
 
+parse_out:
         rc = llog_close(llh);
         if (rc) {
                 CERROR("6: llog_close failed: rc = %d\n", rc);
@@ -485,7 +485,7 @@ static int llog_run_tests(struct obd_device *obd)
 {
         struct llog_handle *llh;
         struct obd_run_ctxt saved;
-        struct llog_obd_ctxt *ctxt = obd->obd_llog_ctxt[LLOG_TEST_ORIG_CTXT];
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int rc, err, cleanup_phase = 0;
         char name[10];
         ENTRY;
@@ -549,7 +549,7 @@ static int llog_test_llog_finish(struct obd_device *obd, int count)
         int rc;
         ENTRY;
 
-        rc = llog_cleanup(obd->obd_llog_ctxt[LLOG_TEST_ORIG_CTXT]);
+        rc = llog_cleanup(llog_get_context(obd, LLOG_TEST_ORIG_CTXT));
         RETURN(rc);
 }
 

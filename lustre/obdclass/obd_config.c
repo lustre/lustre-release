@@ -585,7 +585,7 @@ out:
         RETURN(rc);
 }
 
-int class_config_parse_llog(struct llog_obd_ctxt *ctxt, char *name, 
+int class_config_parse_llog(struct llog_ctxt *ctxt, char *name, 
                           struct config_llog_instance *cfg)
 {
         struct llog_handle *llh;
@@ -680,7 +680,7 @@ out:
         RETURN(rc);
 }
 
-int class_config_dump_llog(struct llog_obd_ctxt *ctxt, char *name, 
+int class_config_dump_llog(struct llog_ctxt *ctxt, char *name, 
                           struct config_llog_instance *cfg)
 {
         struct llog_handle *llh;
