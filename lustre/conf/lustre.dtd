@@ -21,12 +21,12 @@
                
 <!ELEMENT network (nid | port | route_tbl | sendmem | recvmem)*>
 <!ATTLIST network %object.attr;
-                  nettype (tcp | elan | gm) 'tcp'>
+                  nettype (tcp | elan | gm | ibnal) 'tcp'>
 
 <!ELEMENT routetbl (route)*>
 <!ATTLIST routetbl %object.attr;>
 <!ELEMENT route %object.content;>
-<!ATTLIST route type (elan | tcp | gm) #REQUIRED
+<!ATTLIST route type (elan | tcp | gm | ibnal) #REQUIRED
                 gw CDATA #REQUIRED
                 lo CDATA #REQUIRED
                 hi CDATA #IMPLIED >
