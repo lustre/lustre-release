@@ -301,7 +301,7 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                       struct lustre_handle *obd_import,
                       struct lustre_md *md)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(md);
@@ -327,14 +327,12 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
                 LASSERT_REPSWABBED (req, offset + 1);
 
                 rc = obd_unpackmd(obd_import, &md->lsm, lmm, lmmsize);
-                if (rc < 0) {
-                        /* XXX don't know if I should do this... */
-                        CERROR ("Error %d unpacking eadata\n", rc);
-                        LBUG();
+                if (rc >= 0) {
+                        LASSERT (rc >= sizeof (*md->lsm));
+                        rc = 0;
                 }
-                LASSERT (rc >= sizeof (*md->lsm));
         }
-        RETURN(0);
+        RETURN(rc);
 }
 
 
