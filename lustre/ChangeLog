@@ -2,6 +2,10 @@ TBA
 	* version v0_5_16
 	* bug fixes:
 	  - limit Lustre IOVs to PTL_MD_MAX_IOV (611336)
+        * protocol change to lustre_msg: move |version| and add |flags|
+        * added replay of create, unlink, link and rename operations during
+          MDS failover; recovery should be much more robust now
+        * remove failed OSCs from LOVs
 
 2002-10-23  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_15

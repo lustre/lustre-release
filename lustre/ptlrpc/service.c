@@ -185,6 +185,14 @@ static int handle_incoming_request(struct obd_device *obddev,
                 goto out;
         }
 
+        if (request->rq_reqmsg->version != PTLRPC_MSG_VERSION) {
+                CERROR("wrong lustre_msg version %d: ptl %d from "LPX64" xid "
+                       LPD64"\n",
+                       request->rq_reqmsg->version, svc->srv_req_portal,
+                       event->initiator.nid, request->rq_xid);
+                goto out;
+        }
+
         CDEBUG(D_NET, "got req "LPD64" (md: %p + %d)\n", request->rq_xid,
                event->mem_desc.start, event->offset);
 

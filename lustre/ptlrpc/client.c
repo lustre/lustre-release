@@ -197,6 +197,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         spin_unlock(&conn->c_lock);
 
         request->rq_reqmsg->magic = PTLRPC_MSG_MAGIC; 
+        request->rq_reqmsg->version = PTLRPC_MSG_VERSION;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->flags = 0;
 

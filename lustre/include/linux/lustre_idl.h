@@ -117,6 +117,7 @@ struct lustre_msg {
         __u64 transno;
         __u32 status;
         __u32 bufcount;
+        __u32 version;
         __u32 buflens[0];
 };
 
