@@ -83,8 +83,8 @@ static int ll_ddelete(struct dentry *de)
 {
         ENTRY;
         LASSERT(de);
-        CDEBUG(D_DENTRY, "%s dentry %*s (%p, parent %p, inode %p) %s%s\n",
-               (de->d_flags & DCACHE_LUSTRE_INVALID ? "keeping" : "deleting"),
+        CDEBUG(D_DENTRY, "%s dentry %.*s (%p, parent %p, inode %p) %s%s\n",
+               (de->d_flags & DCACHE_LUSTRE_INVALID ? "deleting" : "keeping"),
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                d_unhashed(de) ? "" : "hashed,",
                list_empty(&de->d_subdirs) ? "" : "subdirs");
@@ -96,7 +96,7 @@ void ll_set_dd(struct dentry *de)
         ENTRY;
         LASSERT(de != NULL);
 
-        CDEBUG(D_DENTRY, "ldd on dentry %*s (%p) parent %p inode %p refc %d\n",
+        CDEBUG(D_DENTRY, "ldd on dentry %.*s (%p) parent %p inode %p refc %d\n",
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                atomic_read(&de->d_count));
         lock_kernel();
@@ -158,7 +158,7 @@ restart:
         while ((tmp = tmp->next) != head) {
                 struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
                 if (atomic_read(&dentry->d_count) == 0) {
-                        CDEBUG(D_DENTRY, "deleting dentry %*s (%p) parent %p "
+                        CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
                                "inode %p\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
                                dentry->d_inode);
@@ -168,7 +168,7 @@ restart:
                         dput(dentry);
                         goto restart;
                 } else if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
-                        CDEBUG(D_DENTRY, "unhashing dentry %*s (%p) parent %p "
+                        CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
                                "inode %p refc %d\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
                                dentry->d_inode, atomic_read(&dentry->d_count));
@@ -316,7 +316,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
                 /* done in ll_unhash_aliases()
                 dentry->d_flags |= DCACHE_LUSTRE_INVALID; */
         } else {
-                CDEBUG(D_DENTRY, "revalidated dentry %*s (%p) parent %p "
+                CDEBUG(D_DENTRY, "revalidated dentry %.*s (%p) parent %p "
                                "inode %p refc %d\n", de->d_name.len,
                                de->d_name.name, de, de->d_parent, de->d_inode,
                                atomic_read(&de->d_count));

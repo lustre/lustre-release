@@ -61,7 +61,6 @@
 unsigned int portal_debug;
 unsigned int portal_printk;
 unsigned int portal_stack;
-unsigned int portal_cerror = 1;
 
 static unsigned int g_nal = 0;
 
@@ -657,6 +656,7 @@ int jt_ptl_connect(int argc, char **argv)
 {
         struct portals_cfg pcfg;
         struct sockaddr_in srvaddr;
+        struct sockaddr_in locaddr;
         __u32 ipaddr;
         char *flag;
         int fd, rc;
@@ -665,7 +665,7 @@ int jt_ptl_connect(int argc, char **argv)
         int txmem = 0;
         int bind_irq = 0;
         int type = SOCKNAL_CONN_ANY;
-        int port;
+        int port, rport;
         int o;
         int olen;
 
@@ -726,45 +726,76 @@ int jt_ptl_connect(int argc, char **argv)
                                 return (-1);
                         }
 
+        memset(&locaddr, 0, sizeof(locaddr));
+        locaddr.sin_family = AF_INET;
+        locaddr.sin_addr.s_addr = INADDR_ANY;
+
         memset(&srvaddr, 0, sizeof(srvaddr));
         srvaddr.sin_family = AF_INET;
         srvaddr.sin_port = htons(port);
         srvaddr.sin_addr.s_addr = htonl(ipaddr);
 
-        fd = socket(PF_INET, SOCK_STREAM, 0);
-        if ( fd < 0 ) {
-                fprintf(stderr, "socket() failed: %s\n", strerror(errno));
-                return -1;
-        }
+        for (rport = IPPORT_RESERVED - 1; rport > IPPORT_RESERVED / 2; --rport) {
+                fd = socket(PF_INET, SOCK_STREAM, 0); 
+                if ( fd < 0 ) { 
+                        fprintf(stderr, "socket() failed: %s\n", strerror(errno)); 
+                        return -1; 
+                }
 
-        if (g_socket_nonagle)
-        {
                 o = 1;
-                if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &o, sizeof (o)) != 0) { 
-                        fprintf(stderr, "cannot disable nagle: %s\n", strerror(errno));
-                        return (-1);
+                rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 
+                                &o, sizeof(o));
+
+                if (g_socket_nonagle) {
+                        o = 1;
+                        rc = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &o, sizeof (o));
+                        if (rc != 0) {
+                                fprintf(stderr, "cannot disable nagle: %s\n",
+                                        strerror(errno));
+                                return (-1);
+                        }
+                }
+                
+                if (g_socket_rxmem != 0) {
+                        o = g_socket_rxmem;
+                        rc = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &o, sizeof (o));
+                        if (rc != 0) {
+                                fprintf(stderr, "cannot set receive buffer size: %s\n",
+                                        strerror(errno));
+                                return (-1);
+                        }
+                }
+                
+                if (g_socket_txmem != 0) {
+                        o = g_socket_txmem;
+                        rc = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &o, sizeof (o));
+                        if (rc != 0) {
+                                fprintf(stderr, "cannot set send buffer size: %s\n", strerror(errno));
+                                return (-1);
+                        }
+                }
+                
+                locaddr.sin_port = htons(rport);
+                rc = bind(fd, (struct sockaddr *)&locaddr, sizeof(locaddr)); 
+                if (rc == 0 || errno == EACCES) {
+                        rc = connect(fd, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
+                        if (rc == 0) {
+                                break;
+                        } else if (errno != EADDRINUSE) {
+                                fprintf(stderr, "Error connecting to host: %s\n", strerror(errno));
+                                close(fd);
+                                return -1;
+                        }
+                } else if (errno != EADDRINUSE) {
+                        fprintf(stderr, "Error binding to port %d: %d: %s\n", port, errno, strerror(errno));
+                        close(fd);
+                        return -1;
                 }
         }
 
-        if (g_socket_rxmem != 0) {
-                o = g_socket_rxmem;
-                if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &o, sizeof (o)) != 0) { 
-                        fprintf(stderr, "cannot set receive buffer size: %s\n", strerror(errno));
-                        return (-1);
-                }
-        }
-
-        if (g_socket_txmem != 0) {
-                o = g_socket_txmem;
-                if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &o, sizeof (o)) != 0) { 
-                        fprintf(stderr, "cannot set send buffer size: %s\n", strerror(errno));
-                        return (-1);
-                }
-        }
-
-        rc = connect(fd, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
-        if ( rc == -1 ) { 
-                fprintf(stderr, "connect() failed: %s\n", strerror(errno));
+        if (rport == IPPORT_RESERVED / 2) {
+                fprintf(stderr,
+                        "Warning: all privileged ports are in use.\n"); 
                 return -1;
         }
 

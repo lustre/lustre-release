@@ -608,7 +608,7 @@ output_line(struct test_file *tf, int op, unsigned offset,
 			  (monitorend == -1 || offset <= monitorend)))))))
 		return;
 
-	prt("%06lu %lu.%06lu %*s%-10s %#08x %s %#08x\t(0x%x bytes)\n",
+	prt("%06lu %lu.%06lu %.*s%-10s %#08x %s %#08x\t(0x%x bytes)\n",
 		testcalls, tv->tv_sec, tv->tv_usec, max_tf_len,
 		tf_num, ops[op], 
 		offset, op == OP_TRUNCATE ? " to " : "thru",

@@ -83,7 +83,7 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
 
         /*
         CDEBUG(D_INFO,
-               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
+               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%.*s), pwdmnt %p:%d\n",
                save, current, current->fs, current->fs->pwd,
                atomic_read(&current->fs->pwd->d_count),
                atomic_read(&current->fs->pwd->d_inode->i_count),
@@ -128,7 +128,7 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
 
         /*
         CDEBUG(D_INFO,
-               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
+               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%.*s), pwdmnt %p:%d\n",
                new_ctx, current, current->fs, current->fs->pwd,
                atomic_read(&current->fs->pwd->d_count),
                atomic_read(&current->fs->pwd->d_inode->i_count),
@@ -149,7 +149,7 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
 
         /*
         CDEBUG(D_INFO,
-               " = pop  %p==%p = cur %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
+               " = pop  %p==%p = cur %p pwd %p:d%d:i%d (%.*s), pwdmnt %p:%d\n",
                new_ctx, current, current->fs, current->fs->pwd,
                atomic_read(&current->fs->pwd->d_count),
                atomic_read(&current->fs->pwd->d_inode->i_count),
@@ -178,7 +178,7 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
 
         /*
         CDEBUG(D_INFO,
-               "= pop  %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
+               "= pop  %p->%p = cur fs %p pwd %p:d%d:i%d (%.*s), pwdmnt %p:%d\n",
                saved, current, current->fs, current->fs->pwd,
                atomic_read(&current->fs->pwd->d_count),
                atomic_read(&current->fs->pwd->d_inode->i_count),
@@ -197,7 +197,7 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix)
         ENTRY;
 
         ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
-        CDEBUG(D_INODE, "creating file %*s\n", (int)strlen(name), name);
+        CDEBUG(D_INODE, "creating file %.*s\n", (int)strlen(name), name);
 
         dchild = ll_lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
@@ -242,7 +242,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
         ENTRY;
 
         ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
-        CDEBUG(D_INODE, "creating directory %*s\n", (int)strlen(name), name);
+        CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
         dchild = ll_lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
                 GOTO(out_up, dchild);

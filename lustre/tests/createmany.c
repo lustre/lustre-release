@@ -14,14 +14,14 @@
 
 void usage(char *prog)
 {
-        printf("usage: %s {-o|-m|-l<tgt>} filenamefmt count\n", prog);
-        printf("       %s {-o|-m|-l<tgt>} filenamefmt -seconds\n", prog);
-        printf("       %s {-o|-m|-l<tgt>} filenamefmt start count\n", prog);
+        printf("usage: %s {-o|-m|-d|-l<tgt>} filenamefmt count\n", prog);
+        printf("       %s {-o|-m|-d|-l<tgt>} filenamefmt -seconds\n", prog);
+        printf("       %s {-o|-m|-d|-l<tgt>} filenamefmt start count\n", prog);
 }
 
 int main(int argc, char ** argv)
 {
-        int i, rc = 0, do_open = 0, do_link = 0;
+        int i, rc = 0, do_open = 0, do_link = 0, do_mkdir = 0;
         char format[4096], *fmt, *tgt = NULL;
         char filename[4096];
         long start, last, end;
@@ -32,7 +32,9 @@ int main(int argc, char ** argv)
                 return 1;
         }
 
-        if (strcmp(argv[1], "-o") == 0) {
+        if (strcmp(argv[1], "-d") == 0) {
+                do_mkdir = 1;
+        } else if (strcmp(argv[1], "-o") == 0) {
                 do_open = 1;
         } else if (strncmp(argv[1], "-l", 2) == 0 && argv[1][2]) {
                 tgt = argv[1] + 2;
@@ -85,7 +87,15 @@ int main(int argc, char ** argv)
                         rc = link(tgt, filename);
                         if (rc) {
                                 printf("link(%s, %s) error: %s\n",
-                                      tgt, filename, strerror(errno));
+                                       tgt, filename, strerror(errno));
+                                rc = errno;
+                                break;
+                        }
+                } else if (do_mkdir) {
+                        rc = mkdir(filename, 0755);
+                        if (rc) {
+                                printf("mkdir(%s) error: %s\n",
+                                       filename, strerror(errno));
                                 rc = errno;
                                 break;
                         }

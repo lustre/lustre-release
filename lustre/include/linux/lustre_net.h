@@ -89,7 +89,7 @@
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   MDT_MAX_THREADS), 2UL)
-#define MDS_NBUFS        64
+#define MDS_NBUFS       (64 * smp_num_cpus)
 #define MDS_BUFSIZE     (8 * 1024)
 /* Assume file name length = FNAME_MAX = 256 (true for extN).
  *        path name length = PATH_MAX = 4096
@@ -110,7 +110,7 @@
 #define OST_MAX_THREADS 36UL
 #define OST_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   OST_MAX_THREADS), 2UL)
-#define OST_NBUFS        64
+#define OST_NBUFS       (64 * smp_num_cpus)
 #define OST_BUFSIZE     (8 * 1024)
 /* OST_MAXREQSIZE ~= 1640 bytes =
  * lustre_msg + obdo + 16 * obd_ioobj + 64 * niobuf_remote

@@ -5,7 +5,7 @@
 
 AC_INIT
 AC_CANONICAL_SYSTEM
-AM_INIT_AUTOMAKE(lustre, 1.2.6)
+AM_INIT_AUTOMAKE(lustre, 1.2.7)
 # AM_MAINTAINER_MODE
 
 # Four main targets: lustre kernel modules, utilities, tests, and liblustre
@@ -189,6 +189,12 @@ doc/Makefile
 include/Makefile
 include/linux/Makefile
 include/lustre/Makefile
+kernel_patches/targets/2.6-suse.target
+kernel_patches/targets/2.6-vanilla.target
+kernel_patches/targets/hp_pnnl-2.4.target
+kernel_patches/targets/rh-2.4.target
+kernel_patches/targets/rhel-2.4.target
+kernel_patches/targets/suse-2.4.21-2.target
 ldiskfs/Makefile
 ldiskfs/autoMakefile
 ldlm/Makefile

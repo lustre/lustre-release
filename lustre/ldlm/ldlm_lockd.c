@@ -597,9 +597,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                                   lock->l_handle.h_cookie);
                         GOTO(existing_lock, rc = 0);
                 }
-                
         }
-            
+
         /* The lock's callback data might be set in the policy function */
         lock = ldlm_lock_create(obddev->obd_namespace, &dlm_req->lock_handle2,
                                 dlm_req->lock_desc.l_resource.lr_name,

@@ -72,7 +72,7 @@ command_t cmdlist[] = {
          "usage: print_autoconns"},
         {"add_autoconn", jt_ptl_add_autoconnect, 0, "add an autoconnect entry\n"
          "usage: add_autoconn <nid> <host> <port> [ise]"},
-        {"del_autoconn", jt_ptl_del_autoconnect, 0, "remove an autoconnect entry\n"
+        {"del_autoconn",jt_ptl_del_autoconnect,0,"remove an autoconnect entry\n"
          "usage: del_autoconn [<nid>] [<host>] [ks]"},
         {"conn_list", jt_ptl_print_connections, 0, "connect to a remote nid\n"
          "usage: print_conns"},
@@ -80,7 +80,7 @@ command_t cmdlist[] = {
          "usage: connect <host> <port> [iIOC]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
          "usage: disconnect [<nid>]"},
-        {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits (no args)\n"
+        {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits\n"
          "usage: active_tx"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
@@ -267,7 +267,7 @@ command_t cmdlist[] = {
         {"======== debug =========", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
          "debug daemon control and dump to a file\n"
-         "usage: debug_daemon [start file <#MB>|stop|pause|continue]"},
+         "usage: debug_daemon {start file [#MB]|stop}"},
         {"debug_kernel", jt_dbg_debug_kernel, 0,
          "get debug buffer and dump to a file, same as dk\n"
          "usage: debug_kernel [file] [raw]"},

@@ -238,7 +238,7 @@ void lustre_common_put_super(struct super_block *sb)
         // We do this to get rid of orphaned dentries. That is not really trw.
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
-                CWARN("orphan dentry %*s (%p->%p) at unmount\n",
+                CWARN("orphan dentry %.*s (%p->%p) at unmount\n",
                       dentry->d_name.len, dentry->d_name.name, dentry, next);
                 shrink_dcache_parent(dentry);
         }

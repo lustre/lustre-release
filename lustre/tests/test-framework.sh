@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -94,7 +94,7 @@ zconf_mount() {
     else
        # this is so cheating
        do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG  > /dev/null || return 2
-       do_node $client $LLMOUNT `facet_active_host mds`:/mds_svc/client_facet $mnt -o nettype=$NETTYPE|| return 4
+       do_node $client $LLMOUNT -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $mnt || return 4
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -489,9 +489,11 @@ error() {
 }
 
 build_test_filter() {
+        [ "$ONLY" ] && log "only running test $ONLY"
         for O in $ONLY; do
             eval ONLY_${O}=true
         done
+        [ "$EXCEPT$ALWAYS_EXCEPT" ] && log "skipping $EXCEPT $ALWAYS_EXCEPT"
         for E in $EXCEPT $ALWAYS_EXCEPT; do
             eval EXCEPT_${E}=true
         done
@@ -550,6 +552,10 @@ log() {
 	lctl mark "$*" 2> /dev/null || true
 }
 
+pass() {
+	echo PASS $@
+}
+
 run_one() {
     testnum=$1
     message=$2
@@ -559,8 +565,10 @@ run_one() {
     # Pretty tests run faster.
     equals_msg $testnum: $message
 
-    log "== test $testnum: $message =========== `date +%H:%M:%S`"
+    BEFORE=`date +%s`
+    log "== test $testnum: $message =========== `date +%H:%M:%S` ($BEFORE)"
     test_${testnum} || error "test_$testnum failed with $?"
+    pass "($((`date +%s` - $BEFORE))s)"
 }
 
 canonical_path() {

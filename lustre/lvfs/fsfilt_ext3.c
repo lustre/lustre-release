@@ -142,6 +142,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
 
  journal_start:
         lock_kernel();
+        LASSERTF(nblocks > 0, "can't start %d credit transaction\n", nblocks);
         handle = journal_start(EXT3_JOURNAL(inode), nblocks);
         unlock_kernel();
 
@@ -233,6 +234,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
                 EXT3_SINGLEDATA_TRANS_BLOCKS;
 #endif
 
+        LASSERTF(needed > 0, "can't start %d credit transaction\n", needed);
         return needed;
 }
 

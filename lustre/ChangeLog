@@ -1,3 +1,25 @@
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.7
+       * bug fixes
+	- ignore -ENOENT errors in osc_destroy (3639)
+	- notify osc create thread that OSC is being cleaned up (4600)
+	- bind to privileged port in socknal and tcpnal (3689)
+	- add nettype argument for llmount in #5d in conf-sanity.sh (3936)
+	- reconstruct ost_handle() like mds_handle() (4657)
+	- create a new thread to do import eviction to avoid deadlock (3969)
+	- let lconf resolve symlinked-to devices (4629)
+	- don't unlink "objects" from directory with default EA (4554)
+	- hold socknal file ref over connect in case target is down (4394)
+	- allow more than 32000 subdirectories in a single directory (3244)
+	- OST returns ENOSPC from object create when no space left (4539)
+	- don't send truncate RPC if file size isn't changing (4410)
+	- limit OSC precreate to 1/2 of value OST considers bogus (4778)
+       * miscellania
+	- rate limit CERROR/CWARN console message to avoid overload (4519)
+	- GETFILEINFO dir ioctl returns LOV EA + MDS stat in 1 call (3327)
+	- basic mmap support (3918)
+	- kernel patch series update from b1_4 (4711)
+
 2004-09-16  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.6
        * bug fixes
@@ -11,7 +33,9 @@
 	- "lctl deactivate" will stop automatic recovery attempts (3406)
 	- look for existing locks in ldlm_handle_enqueue() (3764)
 	- don't resolve lock handle twice in recovery avoiding race (4401)
-	- basic mmap support (3918)
+	- revalidate should check working dir is a directory (4134)
+       * miscellania
+	- don't always mark "slow" obdfilter messages as errors (4418)
 	
 2004-08-24  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.5
@@ -19,7 +43,7 @@
 	- don't close LustreDB during write_conf until it is done (3860)
 	- fix typo in lconf for_each_profile (3821)
 	- allow dumping logs from multiple threads at one time (3820)
-	- don't allow multiple threads in OSC recovery(3812)
+	- don't allow multiple threads in OSC recovery (3812)
 	- fix debug_size parameters (3864)
 	- fix mds_postrecov to initialize import for llog ctxt (3121)
 	- replace config semaphore with spinlock (3306)
@@ -35,7 +59,6 @@
 	- don't match INVALID dentries from d_lookup and spin (3784)
 	- hold dcache_lock while marking dentries INVALID and hashing (4255)
 	- fix invalid assertion in ptlrpc_set_wait (3880)
-	- create a new thread to do import eviction to avoid deadlock (3969)
        * miscellania
 	- add libwrap support for the TCP acceptor (3996)
 	- add /proc/sys/portals/routes for non-root route listing (3994)

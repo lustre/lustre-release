@@ -519,7 +519,7 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         }
 out:
-        RETURN(err);
+        return err;
 }
 
 static int class_config_llog_handler(struct llog_handle * handle,
@@ -619,8 +619,8 @@ parse_out:
 
 }
 
-static int class_config_dump_handler(struct llog_handle * handle,
-                                     struct llog_rec_hdr *rec, void *data)
+int class_config_dump_handler(struct llog_handle * handle,
+                              struct llog_rec_hdr *rec, void *data)
 {
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
@@ -651,11 +651,11 @@ static int class_config_dump_handler(struct llog_handle * handle,
                 if (lcfg->lcfg_inlbuf1)
                         CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf1);
                 if (lcfg->lcfg_inlbuf2)
-                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf2);
+                        CDEBUG(D_INFO, "     inlbuf2: %s\n",lcfg->lcfg_inlbuf2);
                 if (lcfg->lcfg_inlbuf3)
-                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf3);
+                        CDEBUG(D_INFO, "     inlbuf3: %s\n",lcfg->lcfg_inlbuf3);
                 if (lcfg->lcfg_inlbuf4)
-                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf4);
+                        CDEBUG(D_INFO, "     inlbuf4: %s\n",lcfg->lcfg_inlbuf4);
 
                 lustre_cfg_freedata(buf, cfg_len);
         } else if (rec->lrh_type == PTL_CFG_REC) {

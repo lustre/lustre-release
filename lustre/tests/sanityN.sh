@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768 3192
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b 14c"}
+# bug number for skipped test: 1768 3192 3192
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -12,6 +12,7 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b 14c"}
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
+SIZE=${SIZE:-40960}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 LFIND=${LFIND:-lfind}
@@ -64,11 +65,12 @@ run_one() {
 	if ! mount | grep -q $DIR1; then
 		$START
 	fi
-	log "== test $1: $2 `date +%H:%M:%S`"
+	BEFORE=`date +%s`
+	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
 	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
-	pass
+	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
 	$CLEAN
 }
@@ -107,7 +109,7 @@ error () {
 }
 
 pass() {
-	echo PASS
+	echo PASS $@
 }
 
 export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -n 1`
@@ -370,8 +372,37 @@ run_test 17 "resource creation/LVB creation race ==============="
 
 test_18() {
 	./mmap_sanity -d $MOUNT1 -m $MOUNT2
+	sync; sleep 1; sync
 }
 run_test 18 "mmap sanity check ================================="
+
+test_19() { # bug3811
+	[ -d /proc/fs/lustre/obdfilter ] || return 0
+
+	MAX=`cat /proc/fs/lustre/obdfilter/*/readcache_max_filesize | head -n 1`
+	for O in /proc/fs/lustre/obdfilter/OST*; do
+		echo 4096 > $O/readcache_max_filesize
+	done
+	dd if=/dev/urandom of=$TMP/f19b bs=512k count=32
+	SUM=`cksum $TMP/f19b | cut -d" " -f 1,2`
+	cp $TMP/f19b $DIR1/f19b
+	for i in `seq 1 20`; do
+		[ $((i % 5)) -eq 0 ] && log "test_18 loop $i"
+		cancel_lru_locks OSC > /dev/null
+		cksum $DIR1/f19b | cut -d" " -f 1,2 > $TMP/sum1 & \
+		cksum $DIR2/f19b | cut -d" " -f 1,2 > $TMP/sum2
+		wait
+		[ "`cat $TMP/sum1`" = "$SUM" ] || \
+			error "$DIR1/f19b `cat $TMP/sum1` != $SUM"
+		[ "`cat $TMP/sum2`" = "$SUM" ] || \
+			error "$DIR2/f19b `cat $TMP/sum2` != $SUM"
+	done
+	for O in /proc/fs/lustre/obdfilter/OST*; do
+		echo $MAX > $O/readcache_max_filesize
+	done
+	rm $DIR1/f19b
+}
+#run_test 19 "test concurrent uncached read races ==============="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

@@ -321,6 +321,11 @@ void portals_debug_dumplog(void);
     printf("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
            (subsys), (mask), (long)time(0), file, fn, line,                   \
            getpid() , stack, ## a);
+
+#undef CWARN
+#undef CERROR
+#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
+#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
 #endif
 
 /* support decl needed both by kernel and liblustre */

@@ -818,6 +818,14 @@ int mds_open(struct mds_update_record *rec, int offset,
          * opened this file and is only replaying the RPC, so we open the
          * inode by fid (at some large expense in security). */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                if (rec->ur_fid2->id == 0) {
+                        struct ldlm_lock *lock = ldlm_handle2lock(child_lockh);
+                        if (lock) {
+                                LDLM_ERROR(lock, "fid2 not set on open replay");
+                                LDLM_LOCK_PUT(lock);
+                        }
+                        DEBUG_REQ(D_ERROR, req, "fid2 not set on open replay");
+                }
                 LASSERT(rec->ur_fid2->id);
 
                 rc = mds_open_by_fid(req, rec->ur_fid2, body, rec->ur_flags,
@@ -943,7 +951,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
 
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
-                 "dchild %*s (%p) inode %p\n", dchild->d_name.len,
+                 "dchild %.*s (%p) inode %p\n", dchild->d_name.len,
                  dchild->d_name.name, dchild, dchild->d_inode);
 
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
@@ -1008,7 +1016,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (rc && created) {
                         int err = vfs_unlink(dparent->d_inode, dchild);
                         if (err) {
-                                CERROR("unlink(%*s) in error path: %d\n",
+                                CERROR("unlink(%.*s) in error path: %d\n",
                                        dchild->d_name.len, dchild->d_name.name,
                                        err);
                         }
@@ -1104,6 +1112,14 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 LASSERT(pending_child->d_inode != NULL);
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
+                if (S_ISDIR(pending_child->d_inode->i_mode)) {
+                        rc = vfs_rmdir(pending_dir, pending_child);
+                        if (rc)
+                                CERROR("error unlinking orphan dir %s: rc %d\n",
+                                       fidname,rc);
+                        goto out;
+                }
+
                 if (req != NULL && req->rq_repmsg != NULL) {
                         lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
                         stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
@@ -1129,10 +1145,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 pending_child->d_fsdata = (void *) &dp;
                 dp.p_inum = 0;
                 dp.p_ptr = req;
-                if (S_ISDIR(pending_child->d_inode->i_mode))
-                        rc = vfs_rmdir(pending_dir, pending_child);
-                else
-                        rc = vfs_unlink(pending_dir, pending_child);
+                rc = vfs_unlink(pending_dir, pending_child);
                 if (rc)
                         CERROR("error unlinking orphan %s: rc %d\n",fidname,rc);
 

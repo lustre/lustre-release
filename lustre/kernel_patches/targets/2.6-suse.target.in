@@ -1,0 +1,17 @@
+lnxmaj="2.6.4"
+lnxrel="51.0"
+
+KERNEL=linux-$lnxmaj-$lnxrel.tar.gz
+SERIES=2.6-suse.series
+VERSION=$lnxmaj
+EXTRA_VERSION=$lnxrel_lustre.@VERSION@
+RHBUILD=0
+LINUX26=1
+
+BASE_ARCHS="i686"
+BIGMEM_ARCHS=""
+BOOT_ARCHS=""
+JENSEN_ARCHS=""
+SMP_ARCHS="i686"
+UP_ARCHS=""
+SRC_ARCHS=""

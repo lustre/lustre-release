@@ -189,7 +189,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 out:
         free(buf);
 
-        return 0;
+        return rc;
 }
 
 static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)

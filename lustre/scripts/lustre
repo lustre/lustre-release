@@ -19,6 +19,7 @@ LOCK=/var/lock/subsys/$SERVICE
 : ${LCONF:=/usr/sbin/lconf}
 : ${LCONF_START_ARGS:="${LUSTRE_CONFIG_XML}"}
 : ${LCONF_STOP_ARGS:="--force --cleanup ${LUSTRE_CONFIG_XML}"}
+: ${LCTL:=/usr/sbin/lctl}
 
 # Source function library.
 if [ -f /etc/init.d/functions ] ; then
@@ -33,7 +34,9 @@ fi
 # Check that networking is up.
 [ "${NETWORKING}" = "no" ] && exit 0
 
-[ -x ${LCONF} -a -f ${LUSTRE_CONFIG_XML} ] || exit 0
+[ -x ${LCONF} -a -x ${LCTL} ] || exit 0
+
+[ -f ${LUSTRE_CONFIG_XML} ] || ( echo "unconfigured" && exit 0 )
 
 # Create /var/lustre directory 
 # This is used by snmp agent for checking lustre services	 \
@@ -81,6 +84,19 @@ stop() {
 restart() {
 	stop
 	start
+}
+
+status() {
+	${LCTL} dl 2>/dev/null | while read INDEX STAT MODULE NAME; do
+		case $MODULE in
+			ost|mds|osc|mdc)
+				[ "`grep -v FULL /proc/fs/lustre/*c/*/*_server_uuid`" ] \
+				&& echo "recovery" || echo "running"
+				return
+				;;
+		esac
+	done
+	echo "stopped"
 }
 
 # See how we were called.

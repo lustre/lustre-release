@@ -145,7 +145,7 @@ show_connection (int fd, __u32 net_ip)
 void
 usage (char *myname)
 {
-        fprintf (stderr, "Usage: %s [-r recv_mem] [-s send_mem] [-n] [-N nal_id] port\n", myname);
+        fprintf (stderr, "Usage: %s [-r recv_mem] [-s send_mem] [-n] [-p] [-N nal_id] port\n", myname);
         exit (1);
 }
 
@@ -159,9 +159,11 @@ int main(int argc, char **argv)
         int noclose = 0;
         int nonagle = 1;
         int nal = SOCKNAL;
-        int bind_irq = 0;
+        int bind_irq = 0; 
+        int rport;
+        int require_privports = 1;
         
-        while ((c = getopt (argc, argv, "N:r:s:nli")) != -1)
+        while ((c = getopt (argc, argv, "N:pr:s:nli")) != -1)
                 switch (c)
                 {
                 case 'r':
@@ -185,7 +187,9 @@ int main(int argc, char **argv)
                 case 'i':
                         bind_irq = 1;
                         break;
-                        
+                case 'p':
+                        require_privports = 0;
+                        break;
                 case 'N':
                         if (parse_size(&nal, optarg) != 0 || 
                             nal < 0 || nal > NAL_MAX_NR)
@@ -271,7 +275,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        rc = daemon(1, noclose);
+        rc = daemon(0, noclose);
         if (rc < 0) {
                 perror("daemon(): ");
                 exit(1);
@@ -287,11 +291,12 @@ int main(int argc, char **argv)
                 int cfd;
                 struct portal_ioctl_data data;
                 struct portals_cfg pcfg;
+                int    privileged = 0;
+                char addrstr[INET_ADDRSTRLEN];
 #ifdef HAVE_LIBWRAP
                 struct request_info request;
-                char addrstr[INET_ADDRSTRLEN];
 #endif
-               
+
                 cfd = accept(fd, (struct sockaddr *)&clntaddr, &len);
                 if ( cfd < 0 ) {
                         perror("accept");
@@ -299,6 +304,7 @@ int main(int argc, char **argv)
                         continue;
                 }
 
+                rport = ntohs(clntaddr.sin_port);
 #ifdef HAVE_LIBWRAP
                 /* libwrap access control */
                 request_init(&request, RQ_DAEMON, "lustre", RQ_FILE, cfd, 0);
@@ -307,11 +313,21 @@ int main(int argc, char **argv)
                         inet_ntop(AF_INET, &clntaddr.sin_addr,
                                   addrstr, INET_ADDRSTRLEN);
                         syslog(LOG_WARNING, "Unauthorized access from %s:%hd\n",
-                               addrstr, ntohs(clntaddr.sin_port));
+                               addrstr, rport);
                         close (cfd);
                         continue;
                 }
 #endif
+
+                if (require_privports && rport >= IPPORT_RESERVED) {
+                        inet_ntop(AF_INET, &clntaddr.sin_addr,
+                                  addrstr, INET_ADDRSTRLEN);
+                        syslog(LOG_ERR,  "Closing non-privileged connection from %s:%d\n",
+                               addrstr, rport);
+                        close(cfd);
+                        continue;
+                }
+
                 show_connection (cfd, clntaddr.sin_addr.s_addr);
 
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
@@ -319,11 +335,11 @@ int main(int argc, char **argv)
                 pcfg.pcfg_fd = cfd;
                 pcfg.pcfg_flags = bind_irq;
                 pcfg.pcfg_misc = SOCKNAL_CONN_NONE; /* == incoming connection */
-                
+
                 PORTAL_IOC_INIT(data);
                 data.ioc_pbuf1 = (char*)&pcfg;
                 data.ioc_plen1 = sizeof(pcfg);
-                
+
                 if (ioctl(pfd, IOC_PORTAL_NAL_CMD, &data) < 0) {
                         perror("ioctl failed");
                 } else {

@@ -894,6 +894,7 @@ test_45() {
     wait $pid || return 1
 
     $LCTL --device $mdcdev activate
+    sleep 1
 
     $CHECKSTAT -t file $DIR/$tfile || return 2
     return 0

@@ -113,7 +113,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                 RETURN(0);
 
         down(&res->lr_lvb_sem);
-        if (!res->lr_lvb_data) {
+        if (lvb == NULL) {
                 CERROR("No lvb when running lvbo_update!\n");
                 GOTO(out, rc = 0);
         }
@@ -141,13 +141,18 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                                lvb->lvb_mtime, new->lvb_mtime);
                         lvb->lvb_mtime = new->lvb_mtime;
                 }
-                if (new->lvb_blocks > lvb->lvb_blocks || !increase) {
-                        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks: "
+                if (new->lvb_atime > lvb->lvb_atime || !increase) {
+                        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb atime: "
                                LPU64" -> "LPU64"\n", res->lr_name.name[0],
-                               lvb->lvb_blocks, new->lvb_blocks);
-                        lvb->lvb_blocks = new->lvb_blocks;
+                               lvb->lvb_atime, new->lvb_atime);
+                        lvb->lvb_atime = new->lvb_atime;
                 }
-                GOTO(out, rc = 0);
+                if (new->lvb_ctime > lvb->lvb_ctime || !increase) {
+                        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb ctime: "
+                               LPU64" -> "LPU64"\n", res->lr_name.name[0],
+                               lvb->lvb_ctime, new->lvb_ctime);
+                        lvb->lvb_ctime = new->lvb_ctime;
+                }
         }
 
         /* Update the LVB from the disk inode */
@@ -173,6 +178,18 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                        LPU64" -> %lu\n", res->lr_name.name[0],
                        lvb->lvb_mtime, LTIME_S(dentry->d_inode->i_mtime));
                 lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
+        }
+        if (LTIME_S(dentry->d_inode->i_atime) > lvb->lvb_atime || !increase) {
+                CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb atime from disk: "
+                       LPU64" -> %lu\n", res->lr_name.name[0],
+                       lvb->lvb_atime, LTIME_S(dentry->d_inode->i_atime));
+                lvb->lvb_atime = LTIME_S(dentry->d_inode->i_atime);
+        }
+        if (LTIME_S(dentry->d_inode->i_ctime) > lvb->lvb_ctime || !increase) {
+                CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb ctime from disk: "
+                       LPU64" -> %lu\n", res->lr_name.name[0],
+                       lvb->lvb_ctime, LTIME_S(dentry->d_inode->i_ctime));
+                lvb->lvb_ctime = LTIME_S(dentry->d_inode->i_ctime);
         }
         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks from disk: "
                LPU64" -> %lu\n", res->lr_name.name[0],

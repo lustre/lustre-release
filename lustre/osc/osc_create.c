@@ -56,8 +56,7 @@
 #include <linux/obd_class.h>
 #include "osc_internal.h"
 
-static int osc_interpret_create(struct ptlrpc_request *req, void *data,
-                                int rc)
+static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
 {
         struct osc_creator *oscc;
         struct ost_body *body = NULL;
@@ -73,11 +72,11 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data,
         oscc = req->rq_async_args.pointer_arg[0];
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
-        if (body)
-                oscc->oscc_last_id = body->oa.o_id;
-        if (rc == -ENOSPC) {
+        if (rc == -ENOSPC || rc == -EROFS) {
                 DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
+                if (body && rc == -ENOSPC)
+                        oscc->oscc_last_id = body->oa.o_id;
                 spin_unlock(&oscc->oscc_lock);
         } else if (rc != 0 && rc != -EIO) {
                 DEBUG_REQ(D_ERROR, req,
@@ -87,8 +86,11 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data,
                 spin_unlock(&oscc->oscc_lock);
                 ptlrpc_fail_import(req->rq_import, req->rq_import_generation);
         } else {
-                if (rc == 0)
+                if (rc == 0) {
                         oscc->oscc_flags &= ~OSCC_FLAG_LOW;
+                        if (body)
+                                oscc->oscc_last_id = body->oa.o_id;
+                }
                 spin_unlock(&oscc->oscc_lock);
         }
 
@@ -116,8 +118,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
                 oscc->oscc_grow_count *= 2;
         }
 
-        if (oscc->oscc_grow_count > OST_MAX_PRECREATE)
-                oscc->oscc_grow_count = OST_MAX_PRECREATE;
+        if (oscc->oscc_grow_count > OST_MAX_PRECREATE / 2)
+                oscc->oscc_grow_count = OST_MAX_PRECREATE / 2;
 
         if (oscc->oscc_flags & OSCC_FLAG_CREATING ||
             oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
@@ -252,7 +254,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
                 oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
                 CDEBUG(D_HA, "%s: oscc recovery started\n",
-                        exp->exp_obd->obd_name);
+                       oscc->oscc_obd->obd_name);
                 spin_unlock(&oscc->oscc_lock);
 
                 /* delete from next_id on up */
@@ -260,7 +262,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 oa->o_id = oscc->oscc_next_id - 1;
 
                 CDEBUG(D_HA, "%s: deleting to next_id: "LPU64"\n",
-                       exp->exp_obd->obd_name, oa->o_id);
+                       oscc->oscc_obd->obd_name, oa->o_id);
 
                 rc = osc_real_create(exp, oa, ea, NULL);
 
@@ -272,11 +274,11 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
                         oscc->oscc_last_id = oa->o_id;
                         CDEBUG(D_HA, "%s: oscc recovery finished: %d\n",
-                               exp->exp_obd->obd_name, rc);
+                               oscc->oscc_obd->obd_name, rc);
                         wake_up(&oscc->oscc_waitq);
                 } else {
                         CDEBUG(D_ERROR, "%s: oscc recovery failed: %d\n",
-                               exp->exp_obd->obd_name, rc);
+                               oscc->oscc_obd->obd_name, rc);
                 }
                 spin_unlock(&oscc->oscc_lock);
 
@@ -314,6 +316,11 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
 
                 spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_EXITING) {
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
+                }
+
                 if (oscc->oscc_last_id >= oscc->oscc_next_id) {
                         memcpy(oa, &oscc->oscc_oa, sizeof(*oa));
                         oa->o_id = oscc->oscc_next_id;

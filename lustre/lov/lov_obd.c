@@ -1569,7 +1569,7 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
                                      tmp_oa, &si->lsm, si->bufct,
                                      &ioarr[shift], oti);
                         if (rc)
-                                GOTO(out_ioarr, rc);
+                                GOTO(out_oa, rc);
 
                         lov_merge_attrs(ret_oa, tmp_oa, tmp_oa->o_valid, lsm,
                                         i, &set);
@@ -1594,40 +1594,21 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
         return rc;
 }
 
-static int lov_brw_interpret(struct ptlrpc_request_set *reqset, void *data,
-                             int rc)
+static int lov_brw_interpret(struct ptlrpc_request_set *set, void *data, int rc)
 {
         struct lov_brw_async_args *aa = data;
         struct lov_stripe_md *lsm = aa->aa_lsm;
-        obd_count             oa_bufs = aa->aa_oa_bufs;
-        struct obdo          *oa = aa->aa_oa;
         struct obdo          *obdos = aa->aa_obdos;
-        struct brw_page      *ioarr = aa->aa_ioarr;
         struct lov_oinfo     *loi;
-        int i, set = 0;
+        int i = 0;
         ENTRY;
 
-        if (rc == 0) {
-                /* NB all stripe requests succeeded to get here */
-
-                for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-                     i++, loi++) {
-                        if (obdos[i].o_valid == 0)      /* inactive stripe */
-                                continue;
-
-                        lov_merge_attrs(oa, &obdos[i], obdos[i].o_valid, lsm,
-                                        i, &set);
-                }
-
-                if (!set) {
-                        CERROR("No stripes had valid attrs\n");
-                        rc = -EIO;
-                }
-        }
-        oa->o_id = lsm->lsm_object_id;
+        for (loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++)
+                if (obdos[i].o_valid & OBD_MD_FLBLOCKS)
+                        loi->loi_blocks = obdos[i].o_blocks;
 
         OBD_FREE(obdos, lsm->lsm_stripe_count * sizeof(*obdos));
-        OBD_FREE(ioarr, sizeof(*ioarr) * oa_bufs);
+        OBD_FREE(aa->aa_ioarr, sizeof(*aa->aa_ioarr) * aa->aa_oa_bufs);
         RETURN(rc);
 }
 
@@ -2804,7 +2785,7 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 #endif
 
-void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
+int lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                       obd_off size)
 {
         struct lov_oinfo *loi;
@@ -2821,7 +2802,7 @@ void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                stripe, kms > loi->loi_kms ? "" : "not ", loi->loi_kms, kms);
         if (kms > loi->loi_kms)
                 loi->loi_kms = kms;
-        EXIT;
+        RETURN(0);
 }
 EXPORT_SYMBOL(lov_increase_kms);
 
@@ -2847,6 +2828,7 @@ struct obd_ops lov_obd_ops = {
         .o_queue_group_io      = lov_queue_group_io,
         .o_trigger_group_io    = lov_trigger_group_io,
         .o_teardown_async_page = lov_teardown_async_page,
+        .o_increase_kms        = lov_increase_kms,
         .o_punch               = lov_punch,
         .o_sync                = lov_sync,
         .o_enqueue             = lov_enqueue,

@@ -222,6 +222,12 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
         LASSERT (body != NULL);
 
         memcpy(&rec->cr_replayfid, &body->fid1, sizeof rec->cr_replayfid);
+        if (body->fid1.id == 0) {
+                DEBUG_REQ(D_ERROR, req, "saving replay request with id = 0 "
+                          "gen = %u", body->fid1.generation);
+                LBUG();
+        }
+
         DEBUG_REQ(D_HA, req, "storing generation %u for ino "LPU64,
                   rec->cr_replayfid.generation, rec->cr_replayfid.id);
 }
@@ -355,6 +361,12 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
         open_req->rq_replay_cb = mdc_replay_open;
         open_req->rq_commit_cb = mdc_commit_open;
         open_req->rq_cb_data = mod;
+        if (body->fid1.id == 0) {
+                DEBUG_REQ(D_ERROR, open_req, "saving replay request with "
+                          "id = 0 gen = %u", body->fid1.generation);
+                LBUG();
+        }
+
         DEBUG_REQ(D_HA, open_req, "set up replay data");
 }
 
@@ -468,8 +480,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
                 LASSERT(mod->mod_open_req->rq_type != LI_POISON);
-                DEBUG_REQ(D_HA, mod->mod_open_req, "matched open req %p",
-                          mod->mod_open_req);
+                DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
         } else {
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
         }

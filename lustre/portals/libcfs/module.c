@@ -400,6 +400,8 @@ kportal_nal_cmd(struct portals_cfg *pcfg)
                 CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, 
                        pcfg->pcfg_command);
                 rc = nal_cmd[nal].nch_handler(pcfg, nal_cmd[nal].nch_private);
+        } else {
+                CERROR("invalid nal: %d, cmd: %d\n", nal, pcfg->pcfg_command);
         }
         up(&nal_cmd_sem);
         RETURN(rc);

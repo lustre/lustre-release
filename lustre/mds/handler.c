@@ -342,7 +342,7 @@ static int mds_destroy_export(struct obd_export *export)
 
                 /* If you change this message, be sure to update
                  * replay_single:test_46 */
-                CDEBUG(D_INODE, "force closing file handle for %*s (%s:%lu)\n",
+                CDEBUG(D_INODE, "force closing file handle for %.*s (%s:%lu)\n",
                        dentry->d_name.len, dentry->d_name.name,
                        ll_bdevname(dentry->d_inode->i_sb, btmp),
                        dentry->d_inode->i_ino);
@@ -1128,9 +1128,11 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "connect");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mds_handle);
-                if (!rc)
+                if (!rc) {
                         /* Now that we have an export, set mds. */
+                        obd = req->rq_export->exp_obd;
                         mds = mds_req2mds(req);
+                }
                 break;
 
         case MDS_DISCONNECT:
@@ -1322,8 +1324,6 @@ int mds_handle(struct ptlrpc_request *req)
         /* If we're DISCONNECTing, the mds_export_data is already freed */
         if (!rc && req->rq_reqmsg->opc != MDS_DISCONNECT) {
                 struct mds_export_data *med = &req->rq_export->exp_mds_data;
-                struct obd_device *obd = list_entry(mds, struct obd_device,
-                                                    u.mds);
                 req->rq_repmsg->last_xid =
                         le64_to_cpu(med->med_mcd->mcd_last_xid);
 

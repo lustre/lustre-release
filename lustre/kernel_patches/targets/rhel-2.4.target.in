@@ -1,0 +1,24 @@
+lnxmaj="2.4.21"
+lnxrel="15.0.4.EL"
+
+KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
+SERIES=chaos-2.4.21
+VERSION=${lnxmaj}
+EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
+RHBUILD=1
+
+BASE_ARCHS="i686"
+BIGMEM_ARCHS=""
+BOOT_ARCHS=""
+JENSEN_ARCHS=""
+SMP_ARCHS="i686 x86_64"
+UP_ARCHS=""
+
+# the modules in this kernel do not build with gcc 3.3 or 2.96
+for cc in i386-redhat-linux-gcc-3.2.3 gcc32 gcc ; do
+    if which $cc >/dev/null 2>/dev/null ; then
+        export CC=$cc
+        break
+    fi
+done
+export CC=gcc

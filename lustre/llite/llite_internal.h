@@ -10,6 +10,8 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+#include <linux/lustre_debug.h>
+
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_RA_MAX ((40 << 20) >> PAGE_CACHE_SHIFT)
@@ -145,12 +147,6 @@ enum {
         LLAP_ORIGIN_WRITEPAGE,
         LLAP__ORIGIN_MAX,
 };
-
-
-
-#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                         \
-        CDEBUG(mask, "page %p map %p ind %lu priv %0lx: " fmt,          \
-               page, page->mapping, page->index, page->private, ## arg)
 
 /* llite/lproc_llite.c */
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,

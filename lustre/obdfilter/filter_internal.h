@@ -14,6 +14,7 @@
 # include <linux/spinlock.h>
 #endif
 #include <linux/lustre_handles.h>
+#include <linux/lustre_debug.h>
 #include <linux/obd.h>
 
 #define FILTER_LAYOUT_VERSION "2"

@@ -820,13 +820,17 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         struct obd_import *imp = req->rq_import;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR, req, "timeout (sent %lu)", (long)req->rq_sent);
+        DEBUG_REQ(D_ERROR, req, "timeout (sent at %lu, %lus ago)",
+                  (long)req->rq_sent, LTIME_S(CURRENT_TIME) - req->rq_sent);
 
         spin_lock_irqsave (&req->rq_lock, flags);
         req->rq_timedout = 1;
         spin_unlock_irqrestore (&req->rq_lock, flags);
 
         ptlrpc_unregister_reply (req);
+
+        if (obd_dump_on_timeout)
+                portals_debug_dumplog();
 
         if (req->rq_bulk != NULL)
                 ptlrpc_unregister_bulk (req);
@@ -842,7 +846,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
 
         /* If this request is for recovery or other primordial tasks,
          * then error it out here. */
-        if (req->rq_send_state != LUSTRE_IMP_FULL || 
+        if (req->rq_send_state != LUSTRE_IMP_FULL ||
             imp->imp_obd->obd_no_recov) {
                 spin_lock_irqsave (&req->rq_lock, flags);
                 req->rq_status = -ETIMEDOUT;

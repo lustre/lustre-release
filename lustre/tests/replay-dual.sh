@@ -292,9 +292,9 @@ test_14() {
     facet_failover mds
     # expect failover to fail
     df $MOUNT && return 1
+    sleep 1
 
-    # first 25 files shouuld have been 
-    # replayed 
+    # first 25 files should have been replayed 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
     zconf_mount `hostname` $MOUNT2
@@ -366,7 +366,7 @@ test_18() {	# bug 3822 - evicting client with enqueued lock
 	mkdir -p $MOUNT1/$tdir
 	touch $MOUNT1/$tdir/f0
 #define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
-	statmany -s $MOUNT1/$tdir/f 500 &
+	statmany -s $MOUNT1/$tdir/f 1 500 &
 	OPENPID=$!
 	NOW=`date +%s`
 	do_facet mds sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
@@ -379,6 +379,7 @@ test_18() {	# bug 3822 - evicting client with enqueued lock
 	wait $OPENPID
 	dmesg | grep "entering recovery in server" && \
 		error "client not evicted" || true
+	set +vx
 }
 run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 

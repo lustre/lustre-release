@@ -493,11 +493,12 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ptlrpc_req_finished(request);
                 RETURN(rc);
         }
+        case IOC_MDC_GETFILEINFO:
         case IOC_MDC_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct ll_fid fid;
                 struct mds_body *body;
-                struct lov_user_md *lump = (struct lov_user_md *)arg;
+                struct lov_user_md *lump;
                 struct lov_mds_md *lmm;
                 char *filename;
                 int rc, lmmsize;
@@ -532,6 +533,33 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 lmm = lustre_msg_buf(request->rq_repmsg, 1, lmmsize);
                 LASSERT(lmm != NULL);
                 LASSERT_REPSWABBED(request, 1);
+
+                if (cmd == IOC_MDC_GETFILEINFO) {
+                        struct lov_user_mds_data *lmdp;
+                        lstat_t st = { 0 };
+
+                        st.st_dev     = 0;
+                        st.st_mode    = body->mode;
+                        st.st_nlink   = body->nlink;
+                        st.st_uid     = body->uid;
+                        st.st_gid     = body->gid;
+                        st.st_rdev    = body->rdev;
+                        st.st_size    = body->size;
+                        st.st_blksize = PAGE_SIZE;
+                        st.st_blocks  = body->blocks;
+                        st.st_atime   = body->atime;
+                        st.st_mtime   = body->mtime;
+                        st.st_ctime   = body->ctime;
+                        st.st_ino     = body->ino;
+
+                        lmdp = (struct lov_user_mds_data *)arg;
+                        rc = copy_to_user(&lmdp->lmd_st, &st, sizeof(st));
+                        if (rc)
+                                GOTO(out_req, rc = -EFAULT);
+                        lump = &lmdp->lmd_lmm;
+                } else {
+                        lump = (struct lov_user_md *)arg;
+                }
 
                 rc = copy_to_user(lump, lmm, lmmsize);
                 if (rc)

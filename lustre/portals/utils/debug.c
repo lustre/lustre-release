@@ -452,6 +452,7 @@ int jt_dbg_debug_file(int argc, char **argv)
         return parse_buffer(in, out);
 }
 
+const char debug_daemon_usage[]="usage: debug_daemon {start file [MB]|stop}\n";
 int jt_dbg_debug_daemon(int argc, char **argv)
 {
         int i, rc, fd;
@@ -459,8 +460,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
         struct portal_ioctl_data data;
 
         if (argc <= 1) {
-                fprintf(stderr, "usage: %s [start file <#MB>|stop|pause|"
-                        "continue]\n", argv[0]);
+                fprintf(stderr, debug_daemon_usage);
                 return 0;
         }
 
@@ -473,8 +473,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
 
         if (strcasecmp(argv[1], "start") == 0) {
                 if (argc != 3) {
-                        fprintf(stderr, "usage: %s [start file|stop]\n",
-                                argv[0]);
+                        fprintf(stderr, debug_daemon_usage);
                         return 1;
                 }
 
@@ -494,7 +493,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                         return 1;
                 }
         } else {
-                fprintf(stderr, "usage: %s [start file|stop]\n", argv[0]);
+                fprintf(stderr, debug_daemon_usage);
                 return 1;
         }
 

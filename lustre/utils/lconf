@@ -742,13 +742,47 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
                     ret, out = runcmd("ls -l %s" %dev)
                     devsize = int(string.split(out[0])[4]) / 1024
                 else:
-                    devlast = dev.split("/")[-1]
-                    ret, out = runcmd("cat /proc/partitions | grep %s"%devlast)
-                    if ret:
-                        panic("Unable to read the size of block device:", dev)
+                    # sfdisk works for symlink, hardlink, and realdev
+                    ret, out = runcmd("sfdisk -s %s" %dev)
+                    if not ret:
+                        devsize = int(out[0])
                     else:
-                        out = out[0].split()
-                        devsize = int(out[2])
+                        # sfdisk -s will fail for too large block device,
+                        # then, read the size of partition from /proc/partitions
+                                                                                                               
+                        # get the realpath of the device
+                        # it may be the real device, such as /dev/hda7
+                        # or the hardlink created via mknod for a device
+                        if 'realpath' in dir(os.path):
+                            real_dev = os.path.realpath(dev)
+                        else:
+                            real_dev = dev
+                            link_count = 0
+                            while os.path.islink(real_dev) and (link_count < 20):
+                                link_count = link_count + 1
+                                dev_link = os.readlink(real_dev)
+                                if os.path.isabs(dev_link):
+                                    real_dev = dev_link
+                                else:
+                                    real_dev = os.path.join(os.path.dirname(real_dev), dev_link)
+                                if link_count > 19:
+                                    panic("Entountered too many symbolic links resolving block device:", dev)
+                                                                                                               
+                        # get the major and minor number of the realpath via ls
+                        # it seems python(os.stat) does not return
+                        # the st_rdev member of the stat structure
+                        ret, out = runcmd("ls -l %s" %real_dev)
+                        major = string.split(string.split(out[0])[4], ",")[0]
+                        minor = string.split(out[0])[5]
+                                                                                                               
+                        # get the devsize from /proc/partitions with the major and minor number
+                        ret, out = runcmd("cat /proc/partitions")
+                        for line in out:
+                            if len(line) > 1:
+                                if string.split(line)[0] == major and string.split(line)[1] == minor:
+                                    devsize = int(string.split(line)[2])
+                                    break
+
             if devsize > 1024 * 1024:
                 jsize = ((devsize / 102400) * 4)
             if jsize > 400:

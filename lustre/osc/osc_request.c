@@ -485,6 +485,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
+        if (rc == -ENOENT)
+                rc = 0;
         if (rc)
                 GOTO(out, rc);
 
@@ -2350,6 +2352,8 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
+                if (!(old_inode->i_state & I_FREEING))
+                        LDLM_ERROR(lock, "inconsistent l_ast_data found");
                 LASSERTF(old_inode->i_state & I_FREEING,
                          "Found existing inode %p/%lu/%u state %lu in lock: "
                          "setting data to %p/%lu/%u\n", old_inode,
@@ -2989,10 +2993,16 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 
 int osc_cleanup(struct obd_device *obd, int flags)
 {
+        struct osc_creator *oscc = &obd->u.cli.cl_oscc;
         int rc;
 
         ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_obd_cleanup(obd);
+
+        spin_lock(&oscc->oscc_lock);
+        oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
+        oscc->oscc_flags |= OSCC_FLAG_EXITING;
+        spin_unlock(&oscc->oscc_lock);
 
         rc = client_obd_cleanup(obd, flags);
         ptlrpcd_decref();

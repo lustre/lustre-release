@@ -314,9 +314,16 @@ connection force_tcp_connection(manager m,
 {
     connection conn;
     struct sockaddr_in addr;
+    struct sockaddr_in locaddr; 
     unsigned int id[2];
+    struct timeval tv;
+    __u64 incarnation;
 
-    port = tcpnal_acceptor_port;
+    int fd;
+    int option;
+    int rc;
+    int rport;
+    ptl_nid_t peernid = PTL_NID_ANY;
 
     id[0] = ip;
     id[1] = port;
@@ -324,50 +331,85 @@ connection force_tcp_connection(manager m,
     pthread_mutex_lock(&m->conn_lock);
 
     conn = hash_table_find(m->connections, id);
-    if (!conn) {
-        int fd;
-        int option;
-        ptl_nid_t peernid = PTL_NID_ANY;
+    if (conn)
+            goto out;
 
-        bzero((char *) &addr, sizeof(addr));
-        addr.sin_family      = AF_INET;
-        addr.sin_addr.s_addr = htonl(ip);
-        addr.sin_port        = htons(port);
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(ip);
+    addr.sin_port        = htons(port);
 
-        if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) { 
-            perror("tcpnal socket failed");
-            exit(-1);
-        }
-        if (connect(fd, (struct sockaddr *)&addr,
-                    sizeof(struct sockaddr_in))) {
-            perror("tcpnal connect");
-            return(0);
-        }
+    memset(&locaddr, 0, sizeof(locaddr)); 
+    locaddr.sin_family = AF_INET; 
+    locaddr.sin_addr.s_addr = INADDR_ANY;
 
+    for (rport = IPPORT_RESERVED - 1; rport > IPPORT_RESERVED / 2; --rport) {
+            fd = socket(AF_INET, SOCK_STREAM, 0);
+            if (fd < 0) {
+                    perror("tcpnal socket failed");
+                    goto out;
+            } 
+            
+            option = 1;
+            rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 
+                            &option, sizeof(option));
+            if (rc != 0) {
+                    perror ("Can't set SO_REUSEADDR for socket"); 
+                    close(fd);
+                    goto out;
+            } 
+
+            locaddr.sin_port = htons(rport);
+            rc = bind(fd, (struct sockaddr *)&locaddr, sizeof(locaddr));
+            if (rc == 0 || errno == EACCES) {
+                    rc = connect(fd, (struct sockaddr *)&addr,
+                                 sizeof(struct sockaddr_in));
+                    if (rc == 0) {
+                            break;
+                    } else if (errno != EADDRINUSE) {
+                            perror("Error connecting to remote host");
+                            close(fd);
+                            goto out;
+                    }
+            } else if (errno != EADDRINUSE) {
+                    perror("Error binding to privileged port");
+                    close(fd);
+                    goto out;
+            }
+            close(fd);
+    }
+    
+    if (rport == IPPORT_RESERVED / 2) {
+            fprintf(stderr, "Out of ports trying to bind to a reserved port\n");
+            goto out;
+    }
+    
 #if 1
-        option = 1;
-        setsockopt(fd, SOL_TCP, TCP_NODELAY, &option, sizeof(option));
-        option = 1<<20;
-        setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &option, sizeof(option));
-        option = 1<<20;
-        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &option, sizeof(option));
+    option = 1;
+    setsockopt(fd, SOL_TCP, TCP_NODELAY, &option, sizeof(option));
+    option = 1<<20;
+    setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &option, sizeof(option));
+    option = 1<<20;
+    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &option, sizeof(option));
 #endif
    
-        /* say hello */
-        if (tcpnal_hello(fd, &peernid, SOCKNAL_CONN_ANY, 0))
+    gettimeofday(&tv, NULL);
+    incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+
+    /* say hello */
+    if (tcpnal_hello(fd, &peernid, SOCKNAL_CONN_ANY, incarnation))
             exit(-1);
+    
+    conn = allocate_connection(m, ip, port, fd);
+    
+    /* let nal thread know this event right away */
+    if (conn)
+            procbridge_wakeup_nal(pb);
 
-        conn = allocate_connection(m, ip, port, fd);
-
-        /* let nal thread know this event right away */
-        if (conn)
-                procbridge_wakeup_nal(pb);
-    }
-
+out:
     pthread_mutex_unlock(&m->conn_lock);
     return (conn);
 }
-
 
 /* Function:  bind_socket
  * Arguments: t: the nal state for this interface

@@ -315,7 +315,7 @@ depend_kernel()
             SYMLINKS="include/asm"
             ;;
         2.4*)
-	    SYMLINKS="symlinks"
+	    SYMLINKS="symlinnks"
 	    ;;
     esac
     $MAKE $SYMLINKS

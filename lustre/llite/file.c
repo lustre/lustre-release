@@ -1109,9 +1109,10 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         struct lustre_handle lockh = {0};
         loff_t retval;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),to=%llu(%s)\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%llu(%s)\n",
                inode->i_ino, inode->i_generation, inode,
-               offset + ((origin==2) ? inode->i_size : file->f_pos),
+               offset + ((origin == 2) ? inode->i_size :
+                         (origin == 1) ? file->f_pos : 0),
                origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR": "SEEK_SET");
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);

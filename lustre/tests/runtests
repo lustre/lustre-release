@@ -22,11 +22,11 @@ ERROR=
 SRC=/etc
 [ "$COUNT" ] || COUNT=1000
 
-[ "$LCONF" ] || LCONF=$SRCDIR/../utils/lconf
+[ "$LCONF" ] || LCONF=lconf
 
-[ "$MCREATE" ] || MCREATE=$SRCDIR/../tests/mcreate
+[ "$MCREATE" ] || MCREATE=mcreate
 
-[ "$MKDIRMANY" ] || MKDIRMANY=$SRCDIR/../tests/mkdirmany
+[ "$MKDIRMANY" ] || MKDIRMANY="createmany -d"
 
 while [ "$1" ]; do
 	case $1 in
@@ -117,7 +117,7 @@ if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
 fi
 
 # mkdirmany test (bug 589)
-log "running mkdirmany $MOUNT/base$$ 100"
+log "running $MKDIRMANY $MOUNT/base$$ 100"
 $MKDIRMANY $MOUNT/base$$ 100 || fail "mkdirmany failed"
 log "removing mkdirmany directories"
 rmdir $MOUNT/base$$* || fail "mkdirmany cleanup failed"

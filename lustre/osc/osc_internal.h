@@ -49,6 +49,7 @@ struct osc_cache_waiter {
 #define OSCC_FLAG_NOSPC              0x04 /* can't create more objects on OST */
 #define OSCC_FLAG_SYNC_IN_PROGRESS   0x08 /* only allow one thread to sync */
 #define OSCC_FLAG_LOW                0x10
+#define OSCC_FLAG_EXITING            0x20
 
 int osc_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);

@@ -407,6 +407,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_CHECK      0x10
 #define OBD_BRW_FROM_GRANT 0x20 /* the osc manages this under llite */
 #define OBD_BRW_GRANTED    0x40 /* the ost manages this */
+#define OBD_BRW_DROP       0x80 /* drop the page after IO */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 

@@ -168,6 +168,7 @@ int mds_client_free(struct obd_export *exp, int clear_client)
 
  free_and_out:
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
+        med->med_mcd = NULL;
 
         return 0;
 }

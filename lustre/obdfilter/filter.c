@@ -968,10 +968,14 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
         len = sprintf(name, LPU64, id);
         if (dir_dentry == NULL) {
                 dparent = filter_parent_lock(obd, group, id);
-                if (IS_ERR(dparent))
+                if (IS_ERR(dparent)) {
+                        CERROR("%s: error getting object "LPU64":"LPU64
+                               " parent: rc %ld\n", obd->obd_name,
+                               id, group, PTR_ERR(dparent));
                         RETURN(dparent);
+                }
         }
-        CDEBUG(D_INODE, "looking up object O/%*s/%s\n",
+        CDEBUG(D_INODE, "looking up object O/%.*s/%s\n",
                dparent->d_name.len, dparent->d_name.name, name);
         dchild = /*ll_*/lookup_one_len(name, dparent, len);
         if (dir_dentry == NULL)
@@ -1029,7 +1033,7 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
         ENTRY;
 
         if (inode->i_nlink != 1 || atomic_read(&inode->i_count) != 1) {
-                CERROR("destroying objid %*s nlink = %lu, count = %d\n",
+                CERROR("destroying objid %.*s nlink = %lu, count = %d\n",
                        dchild->d_name.len, dchild->d_name.name,
                        (unsigned long)inode->i_nlink,
                        atomic_read(&inode->i_count));
@@ -1038,7 +1042,7 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
         rc = vfs_unlink(dparent->d_inode, dchild);
 
         if (rc)
-                CERROR("error unlinking objid %*s: rc %d\n",
+                CERROR("error unlinking objid %.*s: rc %d\n",
                        dchild->d_name.len, dchild->d_name.name, rc);
 
         RETURN(rc);
@@ -1504,9 +1508,9 @@ static void filter_grant_discard(struct obd_export *exp)
         int level = D_CACHE;
 
         spin_lock(&obd->obd_osfs_lock);
-        spin_lock(&exp->exp_obd->obd_dev_lock);
+        spin_lock(&obd->obd_dev_lock);
         list_del_init(&exp->exp_obd_chain);
-        spin_unlock(&exp->exp_obd->obd_dev_lock);
+        spin_unlock(&obd->obd_dev_lock);
 
         if (fed->fed_dirty < 0 || fed->fed_grant < 0 || fed->fed_pending < 0)
                 level = D_ERROR;
@@ -1519,7 +1523,7 @@ static void filter_grant_discard(struct obd_export *exp)
                  obd->obd_name, filter->fo_tot_granted,
                  exp->exp_client_uuid.uuid, exp, fed->fed_grant);
         filter->fo_tot_granted -= fed->fed_grant;
-        LASSERTF(exp->exp_obd->u.filter.fo_tot_pending >= fed->fed_pending,
+        LASSERTF(filter->fo_tot_pending >= fed->fed_pending,
                  "%s: tot_pending "LPU64" cli %s/%p fed_pending %ld\n",
                  obd->obd_name, filter->fo_tot_pending,
                  exp->exp_client_uuid.uuid, exp, fed->fed_pending);
@@ -1863,6 +1867,37 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
         }
 }
 
+static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
+                         unsigned long max_age)
+{
+        struct filter_obd *filter = &obd->u.filter;
+        int blockbits = filter->fo_sb->s_blocksize_bits;
+        int rc;
+        ENTRY;
+
+        /* at least try to account for cached pages.  its still racey and
+         * might be under-reporting if clients haven't announced their
+         * caches with brw recently */
+        spin_lock(&obd->obd_osfs_lock);
+        rc = fsfilt_statfs(obd, filter->fo_sb, max_age);
+        memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
+        spin_unlock(&obd->obd_osfs_lock);
+
+        CDEBUG(D_SUPER | D_CACHE, "blocks cached "LPU64" granted "LPU64
+               " pending "LPU64" free "LPU64" avail "LPU64"\n",
+               filter->fo_tot_dirty, filter->fo_tot_granted,
+               filter->fo_tot_pending,
+               osfs->os_bfree << blockbits, osfs->os_bavail << blockbits);
+
+        filter_grant_sanity_check(obd, __FUNCTION__);
+
+        osfs->os_bavail -= min(osfs->os_bavail,
+                               (filter->fo_tot_dirty + filter->fo_tot_pending +
+                                osfs->os_bsize -1) >> blockbits);
+
+        RETURN(rc);
+}
+
 /* We rely on the fact that only one thread will be creating files in a given
  * group at a time, which is why we don't need an atomic filter_get_new_id.
  * Even if we had that atomic function, the following race would exist:
@@ -1877,6 +1912,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 {
         struct dentry *dchild = NULL, *dparent = NULL;
         struct filter_obd *filter;
+        struct obd_statfs *osfs;
         int err = 0, rc = 0, recreate_obj = 0, i;
         __u64 next_id;
         void *handle = NULL;
@@ -1887,6 +1923,21 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                 recreate_obj = 1;
+        } else {
+                OBD_ALLOC(osfs, sizeof(*osfs));
+                if(osfs == NULL)
+                        RETURN(-ENOMEM);
+                rc = filter_statfs(obd, osfs, jiffies-HZ);
+                if(rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
+                        CDEBUG(D_HA, "This OST has not enough space! avail "LPU64"\n",
+                                osfs->os_bavail << filter->fo_sb->s_blocksize_bits);
+                        *num=0;
+                        rc = -ENOSPC;
+                }
+                OBD_FREE(osfs, sizeof(*osfs));
+                if (rc) {
+                        RETURN(rc);
+                }
         }
 
         CDEBUG(D_HA, "%s: precreating %d objects\n", obd->obd_name, *num);
@@ -1933,11 +1984,11 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                          * already exists
                          */
                         if (recreate_obj) {
-                                CERROR("%s: recreating existing object %*s?\n",
+                                CERROR("%s: recreating existing object %.*s?\n",
                                        obd->obd_name, dchild->d_name.len,
                                        dchild->d_name.name);
                         } else {
-                                CERROR("%s: Serious error: objid %*s already "
+                                CERROR("%s: Serious error: objid %.*s already "
                                        "exists; is this filesystem corrupt?\n",
                                        obd->obd_name, dchild->d_name.len,
                                        dchild->d_name.name);
@@ -2040,7 +2091,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                 if (diff > 0) {
                         oa->o_id = filter_last_id(&obd->u.filter, oa);
                         rc = filter_precreate(obd, oa, group, &diff);
-                        oa->o_id += diff;
+                        oa->o_id = filter_last_id(&obd->u.filter, oa);
                         oa->o_valid = OBD_MD_FLID;
                 }
         }
@@ -2239,37 +2290,6 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                         unsigned long max_age)
-{
-        struct filter_obd *filter = &obd->u.filter;
-        int blockbits = filter->fo_sb->s_blocksize_bits;
-        int rc;
-        ENTRY;
-
-        /* at least try to account for cached pages.  its still racey and
-         * might be under-reporting if clients haven't announced their
-         * caches with brw recently */
-        spin_lock(&obd->obd_osfs_lock);
-        rc = fsfilt_statfs(obd, filter->fo_sb, max_age);
-        memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
-        spin_unlock(&obd->obd_osfs_lock);
-
-        CDEBUG(D_SUPER | D_CACHE, "blocks cached "LPU64" granted "LPU64
-               " pending "LPU64" free "LPU64" avail "LPU64"\n",
-               filter->fo_tot_dirty, filter->fo_tot_granted,
-               filter->fo_tot_pending,
-               osfs->os_bfree << blockbits, osfs->os_bavail << blockbits);
-
-        filter_grant_sanity_check(obd, __FUNCTION__);
-
-        osfs->os_bavail -= min(osfs->os_bavail,
-                               (filter->fo_tot_dirty + filter->fo_tot_pending +
-                                osfs->os_bsize -1) >> blockbits);
-
-        RETURN(rc);
-}
-
 static int filter_get_info(struct obd_export *exp, __u32 keylen,
                            void *key, __u32 *vallen, void *val)
 {
@@ -2331,7 +2351,8 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
             memcmp(key, "mds_conn", keylen) != 0)
                 RETURN(-EINVAL);
 
-        CWARN("Received MDS connection ("LPX64")\n", conn.cookie);
+        CWARN("%s: received MDS connection ("LPX64")\n",
+              obd->obd_name, conn.cookie);
         memcpy(&obd->u.filter.fo_mdc_conn, &conn, sizeof(conn));
         ctxt = llog_get_context(obd, LLOG_UNLINK_REPL_CTXT);
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);

@@ -765,6 +765,19 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
+static inline int obd_increase_kms(struct obd_export *exp,
+                                   struct lov_stripe_md *lsm, obd_off size)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, increase_kms, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, increase_kms);
+
+        rc = OBP(exp->exp_obd, increase_kms)(exp, lsm, size);
+        RETURN(rc);
+}
+
 static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
                                 int len, void *karg, void *uarg)
 {

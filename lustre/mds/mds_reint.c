@@ -1443,7 +1443,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 2; /* target directory dentry */
 
-        CDEBUG(D_INODE, "linking %*s/%s to inode %lu\n",
+        CDEBUG(D_INODE, "linking %.*s/%s to inode %lu\n",
                de_tgt_dir->d_name.len, de_tgt_dir->d_name.name, rec->ur_name,
                de_src->d_inode->i_ino);
 
@@ -1596,7 +1596,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         *de_oldp = ll_lookup_one_len(old_name, *de_srcdirp, old_len - 1);
         if (IS_ERR(*de_oldp)) {
                 rc = PTR_ERR(*de_oldp);
-                CERROR("old child lookup error (%*s): %d\n",
+                CERROR("old child lookup error (%.*s): %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
         }
@@ -1618,7 +1618,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         *de_newp = ll_lookup_one_len(new_name, *de_tgtdirp, new_len - 1);
         if (IS_ERR(*de_newp)) {
                 rc = PTR_ERR(*de_newp);
-                CERROR("new child lookup error (%*s): %d\n",
+                CERROR("new child lookup error (%.*s): %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
         }

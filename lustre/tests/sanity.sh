@@ -93,11 +93,12 @@ run_one() {
 	if ! mount | grep -q $DIR; then
 		$START
 	fi
-	log "== test $1: $2= `date +%H:%M:%S`"
+	BEFORE=`date +%s`
+	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
 	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
-	pass
+	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
 	$CLEAN
 }
@@ -161,7 +162,7 @@ error() {
 }
 
 pass() { 
-	echo PASS
+	echo PASS $@
 }
 
 MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
@@ -181,6 +182,8 @@ LOVNAME=`cat /proc/fs/lustre/llite/fs0/lov/common_name`
 OSTCOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/numobd`
 STRIPECOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/stripecount`
 STRIPESIZE=`cat /proc/fs/lustre/lov/$LOVNAME/stripesize`
+ORIGFREE=`cat /proc/fs/lustre/lov/$LOVNAME/kbytesavail`
+MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -874,6 +877,37 @@ test_27l() {
 }
 run_test 27l "check setstripe permissions (should return error)"
 
+test_27m() {
+        [ "$OSTCOUNT" -lt "2" ] && echo "skipping out-of-space test on OST0" && return
+        if [ $ORIGFREE -gt $MAXFREE ]; then
+                echo "skipping out-of-space test on OST0"
+                return
+        fi
+        if [ ! -d $DIR/d27 ]; then
+                mkdir -p $DIR/d27
+        fi
+        $LSTRIPE $DIR/d27/f27m_1 0 0 1
+        dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
+                error "dd should fill OST0"
+        i=2
+        while $LSTRIPE $DIR/d27/f27m_$i  0 0 1 ; do
+                i=`expr $i + 1`
+                if [ $i -gt 2000 ] ; then
+                	break
+		fi
+        done
+        i=`expr $i + 1`
+        touch $DIR/d27/f27m_$i
+        [ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+                error "OST0 was full but new created file still use it"
+        i=`expr $i + 1`
+        touch $DIR/d27/f27m_$i
+        [ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+                error "OST0 was full but new created file still use it"
+        rm $DIR/d27/f27m_1
+}
+run_test 27m "create file while OST0 was full =================="
+
 test_28() {
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error
@@ -956,6 +990,40 @@ test_31e() { # bug 2904
 	openfilleddirunlink $DIR/d31e || error
 }
 run_test 31e "remove of open non-empty directory ==============="
+
+test_31f() { # bug 4554
+	set -vx
+	mkdir $DIR/d31f
+	lfs setstripe $DIR/d31f 1048576 -1 1
+	cp /etc/hosts $DIR/d31f
+	ls -l $DIR/d31f
+	lfs getstripe $DIR/d31f/hosts
+	multiop $DIR/d31f D_c &
+	MULTIPID=$!
+
+	sleep 1
+
+	rm -rv $DIR/d31f || error "first of $DIR/d31f"
+	mkdir $DIR/d31f
+	lfs setstripe $DIR/d31f 1048576 -1 1
+	cp /etc/hosts $DIR/d31f
+	ls -l $DIR/d31f
+	lfs getstripe $DIR/d31f/hosts
+	multiop $DIR/d31f D_c &
+	MULTIPID2=$!
+	
+	sleep 6
+
+	kill -USR1 $MULTIPID || error "first opendir $MULTIPID not running"
+	wait $MULTIPID || error "first opendir $MULTIPID failed"
+
+	sleep 6
+
+	kill -USR1 $MULTIPID2 || error "second opendir $MULTIPID not running"
+	wait $MULTIPID2 || error "second opendir $MULTIPID2 failed"
+	set +vx
+}
+run_test 31f "remove of open directory with open-unlink file ==="
 
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
@@ -1725,17 +1793,17 @@ test_51b() {
 	[ $NUMFREE -lt $NUMTEST ] && NUMTEST=$(($NUMFREE - 50))
 
 	mkdir -p $DIR/d51b
-	(cd $DIR/d51b; mkdirmany t $NUMTEST)
+	createmany -d $DIR/d51b/t- $NUMTEST
 }
-run_test 51b "mkdir .../t-0 --- .../t-70000 ===================="
+run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51c() {
 	[ ! -d $DIR/d51b ] && echo "skipping test 51c: $DIR/51b missing" && \
 		return
 
-	(cd $DIR/d51b; rmdirmany t $NUMTEST)
+	unlinkmany -d $DIR/d51b/t- $NUMTEST
 }
-run_test 51c "rmdir .../t-0 --- .../t-70000 ===================="
+run_test 51c "rmdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_52a() {
 	[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
@@ -2226,6 +2294,18 @@ test_99f() {
 	$RUNAS cvs commit -m 'nomsg' foo99
 }
 run_test 99f "cvs commit ======================================="
+
+test_100() {
+	netstat -ta | while read PROT SND RCV LOCAL REMOTE STAT; do
+		LPORT=`echo $LOCAL | cut -d: -f2`
+		RPORT=`echo $REMOTE | cut -d: -f2`
+		if [ "$PROT" = "tcp" ] && [ "$LPORT" != "*" ] && [ "$RPORT" != "*" ] && [ $RPORT -eq 988 ] && [ $LPORT -gt 1024 ]; then
+			echo "local port: $LPORT > 1024"
+			error
+		fi
+	done
+}
+run_test 100 "check local port using privileged port ==========="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

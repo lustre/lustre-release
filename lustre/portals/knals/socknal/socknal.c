@@ -791,6 +791,9 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
                 }
         }
 
+        /* Give conn a ref on sock->file since we're going to return success */
+        get_file(sock->file);
+
         LASSERT (!peer->ksnp_closing);
 
         conn->ksnc_peer = peer;

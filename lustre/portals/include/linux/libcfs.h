@@ -19,7 +19,6 @@ extern unsigned int portal_subsystem_debug;
 extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
-extern unsigned int portal_cerror;
 
 #include <asm/types.h>
 struct ptldebug_header {
@@ -131,8 +130,6 @@ struct ptldebug_header {
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
-        if (portal_cerror == 0)                                               \
-                break;                                                        \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||                     \
             (portal_debug & (mask) &&                                         \
@@ -142,8 +139,40 @@ do {                                                                          \
                                   CDEBUG_STACK, format, ## a);                \
 } while (0)
 
-#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
-#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
+#define CDEBUG_MAX_LIMIT 600
+#define CDEBUG_LIMIT(cdebug_mask, cdebug_format, a...)                        \
+do {                                                                          \
+        static unsigned long cdebug_next;                                     \
+        static int cdebug_count, cdebug_delay = 1;                            \
+                                                                              \
+        CHECK_STACK(CDEBUG_STACK);                                            \
+        if (time_after(jiffies, cdebug_next)) {                               \
+                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
+                                  __FUNCTION__, __LINE__, CDEBUG_STACK,       \
+                                  cdebug_format, ## a);                       \
+                if (cdebug_count) {                                           \
+                        portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
+                                          __FILE__, __FUNCTION__, __LINE__,   \
+                                          0, cdebug_format, ## a);            \
+                        cdebug_count = 0;                                     \
+                }                                                             \
+                if (time_after(jiffies, cdebug_next+(CDEBUG_MAX_LIMIT+10)*HZ))\
+                        cdebug_delay = cdebug_delay > 8 ? cdebug_delay/8 : 1; \
+                else                                                          \
+                        cdebug_delay = cdebug_delay*2 >= CDEBUG_MAX_LIMIT*HZ? \
+                                CDEBUG_MAX_LIMIT * HZ : cdebug_delay*2;       \
+                cdebug_next = jiffies + cdebug_delay;                         \
+        } else {                                                              \
+                portals_debug_msg(DEBUG_SUBSYSTEM,                            \
+                                  portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),\
+                                  __FILE__, __FUNCTION__, __LINE__,           \
+                                  CDEBUG_STACK, cdebug_format, ## a);         \
+                cdebug_count++;                                               \
+        }                                                                     \
+} while (0)
+
+#define CWARN(format, a...) CDEBUG_LIMIT(D_WARNING, format, ## a)
+#define CERROR(format, a...) CDEBUG_LIMIT(D_ERROR, format, ## a)
 #define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
 
 #define GOTO(label, rc)                                                 \

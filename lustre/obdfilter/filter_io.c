@@ -598,8 +598,13 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         rc = filter_grant_check(exp, objcount, &fso, niocount, nb, res,
                                 &left, dentry->d_inode);
+
+        /* We're finishing using body->oa as an input variable, so reset
+         * o_valid here. */
         if (oa && oa->o_valid & OBD_MD_FLGRANT)
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
+
+        oa->o_valid = 0;
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
@@ -612,7 +617,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
              i++, lnb++, rnb++) {
                 /* We still set up for ungranted pages so that granted pages
                  * can be written to disk as they were promised, and portals
-                 * needs to keep the pages all aligned properly. */ 
+                 * needs to keep the pages all aligned properly. */
                 lnb->dentry = dentry;
                 lnb->offset = rnb->offset;
                 lnb->len    = rnb->len;

@@ -28,6 +28,7 @@
 #include <linux/string.h>
 #else
 #include <string.h>
+#include <sys/stat.h>
 #endif
 
 /* for statfs() */
@@ -45,6 +46,7 @@
 
 #define IOC_MDC_TYPE            'i'
 #define IOC_MDC_GETSTRIPE       _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
+#define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_mds_data *)
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 
@@ -77,6 +79,19 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
+
+#if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__)
+typedef struct stat     lstat_t;
+#else
+typedef struct stat64   lstat_t;
+#endif
+
+#define lov_user_mds_data lov_user_mds_data_v1
+struct lov_user_mds_data_v1 {
+        lstat_t lmd_st;                 /* MDS stat struct */
+        struct lov_user_md_v1 lmd_lmm;  /* LOV EA user data */
+} __attribute__((packed));
+
 
 struct ll_recreate_obj {
         __u64 lrc_id;

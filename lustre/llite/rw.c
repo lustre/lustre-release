@@ -1,4 +1,4 @@
-/* p_fr-*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Lustre Lite I/O page cache routines shared by different kernel revs
@@ -98,6 +98,8 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         RETURN(rc);
 }
 
+__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
+
 /* this isn't where truncate starts.   roughly:
  * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
  * we grab the lock back in setattr_raw to avoid races. */
@@ -107,8 +109,8 @@ void ll_truncate(struct inode *inode)
         struct obdo oa;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
-               inode->i_generation, inode);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %llu\n", inode->i_ino,
+               inode->i_generation, inode, inode->i_size);
 
         if (!lsm) {
                 CDEBUG(D_INODE, "truncate on inode %lu with no objects\n",
@@ -117,24 +119,30 @@ void ll_truncate(struct inode *inode)
                 return;
         }
 
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE|OBD_MD_FLMODE|OBD_MD_FLATIME|
-                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        if (lov_merge_size(lsm, 0) == inode->i_size) {
+                CDEBUG(D_VFSTRACE, "skipping punch for "LPX64" (size = %llu)\n",
+                       lsm->lsm_object_id, inode->i_size);
+        } else {
+                CDEBUG(D_INFO, "calling punch for "LPX64" (new size %llu)\n",
+                       lsm->lsm_object_id, inode->i_size);
 
-        CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
-               oa.o_id, inode->i_size);
+                oa.o_id = lsm->lsm_object_id;
+                oa.o_valid = OBD_MD_FLID;
+                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                                OBD_MD_FLATIME |OBD_MD_FLMTIME |OBD_MD_FLCTIME);
 
-        /* truncate == punch from new size to absolute end of file */
-        /* NB: obd_punch must be called with i_sem held!  It updates the kms! */
-        rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
-                       OBD_OBJECT_EOF, NULL);
-        if (rc)
-                CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
-        else
-                obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                          OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                          OBD_MD_FLCTIME);
+                /* truncate == punch from new size to absolute end of file */
+                /* NB: must call obd_punch with i_sem held!  It updates kms! */
+                rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
+                               OBD_OBJECT_EOF, NULL);
+                if (rc)
+                        CERROR("obd_truncate fails (%d) ino %lu\n", rc,
+                               inode->i_ino);
+                else
+                        obdo_to_inode(inode, &oa, OBD_MD_FLSIZE|OBD_MD_FLBLOCKS|
+                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                      OBD_MD_FLCTIME);
+        }
 
         EXIT;
         return;
@@ -396,11 +404,10 @@ out:
         RETURN(llap);
 }
 
-static int queue_or_sync_write(struct obd_export *exp, 
-                               struct lov_stripe_md *lsm, 
+static int queue_or_sync_write(struct obd_export *exp,
+                               struct lov_stripe_md *lsm,
                                struct ll_async_page *llap,
-                               unsigned to,
-                               obd_flag async_flags)
+                               unsigned to, obd_flag async_flags)
 {
         struct obd_io_group *oig;
         int rc;
@@ -434,12 +441,11 @@ static int queue_or_sync_write(struct obd_export *exp,
                 GOTO(free_oig, rc);
 
         rc = oig_wait(oig);
-        
+
         if (!rc && async_flags & ASYNC_READY)
                 unlock_page(llap->llap_page);
 
-        LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "sync write returned %d\n", 
-                       rc);
+        LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "sync write returned %d\n", rc);
 
 free_oig:
         oig_release(oig);
@@ -447,8 +453,6 @@ out:
         RETURN(rc);
 }
 
-void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
-                      obd_off size);
 /* update our write count to account for i_size increases that may have
  * happened since we've queued the page for io. */
 
@@ -477,6 +481,10 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
+        exp = ll_i2obdexp(inode);
+        if (exp == NULL)
+                RETURN(-EINVAL);
+
         /* queue a write for some time in the future the first time we
          * dirty the page */
         if (!PageDirty(page)) {
@@ -486,7 +494,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
                 exp = ll_i2obdexp(inode);
                 if (exp == NULL)
                         RETURN(-EINVAL);
-                
+
                 rc = queue_or_sync_write(exp, ll_i2info(inode)->lli_smd, llap,
                                          to, 0);
                 if (rc)
@@ -505,7 +513,8 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 out:
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
         if (rc == 0) {
-                lov_increase_kms(exp, lsm, size);
+                size = (((obd_off)page->index) << PAGE_SHIFT) + to;
+                obd_increase_kms(exp, lsm, size);
                 if (size > inode->i_size)
                         inode->i_size = size;
                 SetPageUptodate(page);

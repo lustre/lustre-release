@@ -70,14 +70,10 @@ if [ "$ONLY" == "cleanup" ]; then
     exit
 fi
 
-if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w portals.debug=0 || true
-    cleanup
-    exit
-fi
-
 REFORMAT=--reformat $SETUP
 unset REFORMAT
+
+[ "$ONLY" == "setup" ] && exit
 
 test_1() {
     drop_request "mcreate $MOUNT/1"  || return 1

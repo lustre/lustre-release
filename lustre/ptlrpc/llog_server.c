@@ -74,6 +74,7 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
                         CERROR("Can't unpack name\n");
                         GOTO(out, rc = -EFAULT);
                 }
+                CDEBUG(D_INFO, "opening log %s\n", name);
         }
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);

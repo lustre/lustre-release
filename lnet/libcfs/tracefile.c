@@ -126,7 +126,7 @@ static struct page *trace_get_page(struct trace_cpu_data *tcd,
                         return NULL;
                 }
                 page->index = 0;
-                page->mapping = (void *)smp_processor_id();
+                page->mapping = (void *)(long)smp_processor_id();
                 list_add_tail(&PAGE_LIST(page), &tcd->tcd_pages);
                 tcd->tcd_cur_pages++;
 
@@ -190,7 +190,7 @@ static void print_to_console(struct ptldebug_header *hdr, int mask, char *buf,
                 ptype = KERN_INFO;
         }
 
-        printk("%s%s: %d:%d:(%s:%d:%s()) %*s", ptype, prefix, hdr->ph_pid,
+        printk("%s%s: %d:%d:(%s:%d:%s()) %.*s", ptype, prefix, hdr->ph_pid,
                hdr->ph_extern_pid, file, hdr->ph_line_num, fn, len, buf);
 }
 
@@ -453,7 +453,8 @@ int tracefile_dump_all_pages(char *filename)
         filp = filp_open(filename, O_CREAT|O_EXCL|O_WRONLY, 0600);
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);
-                printk(KERN_ERR "couldn't open %s: %d\n", filename, rc);
+                printk(KERN_ERR "LustreError: can't open %s for dump: rc %d\n",
+                       filename, rc);
                 goto out;
         }
 
@@ -625,7 +626,7 @@ static int tracefiled(void *arg)
                         LASSERT(page_count(page) > 0);
 
                         rc = filp->f_op->write(filp, page_address(page),
-                                        page->index, &filp->f_pos);
+                                               page->index, &filp->f_pos);
                         if (rc != page->index) {
                                 printk(KERN_WARNING "wanted to write %lu but "
                                        "wrote %d\n", page->index, rc);

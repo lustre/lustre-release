@@ -610,6 +610,8 @@ struct obd_ops {
         int (*o_teardown_async_page)(struct obd_export *exp,
                                      struct lov_stripe_md *lsm,
                                      struct lov_oinfo *loi, void *cookie);
+        int (*o_increase_kms)(struct obd_export *exp, struct lov_stripe_md *lsm,
+                              obd_off size);
         int (*o_punch)(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, obd_size start,
                        obd_size end, struct obd_trans_info *oti);

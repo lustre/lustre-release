@@ -67,9 +67,6 @@ unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
                              D_RPCTRACE | D_VFSTRACE);
 EXPORT_SYMBOL(portal_debug);
 
-unsigned int portal_cerror = 1;
-EXPORT_SYMBOL(portal_cerror);
-
 unsigned int portal_printk;
 EXPORT_SYMBOL(portal_printk);
 
@@ -100,6 +97,7 @@ int portals_do_debug_dumplog(void *arg)
 
         snprintf(debug_file_name, sizeof(debug_file_path) - 1,
                  "%s.%ld.%ld", debug_file_path, CURRENT_SECONDS, (long)arg);
+        printk(KERN_ALERT "LustreError: dumping log to %s\n", debug_file_name);
         tracefile_dump_all_pages(debug_file_name);
 
         current->journal_info = journal_info;
@@ -183,7 +181,7 @@ int portals_debug_clear_buffer(void)
 int portals_debug_mark_buffer(char *text)
 {
         CDEBUG(D_TRACE,"***************************************************\n");
-        CWARN("DEBUG MARKER: %s\n", text);
+        CDEBUG(D_WARNING, "DEBUG MARKER: %s\n", text);
         CDEBUG(D_TRACE,"***************************************************\n");
 
         return 0;

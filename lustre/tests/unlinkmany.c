@@ -16,16 +16,22 @@ void usage(char *prog)
 
 int main(int argc, char ** argv)
 {
-        int i, rc = 0;
+        int i, rc = 0, do_rmdir = 0;
         char format[4096], *fmt;
         char filename[4096];
         long start, last;
 	long begin = 0, count;
 
-        if (argc < 3 || argc > 4) {
+        if (argc < 3 || argc > 5) {
 		usage(argv[0]);
                 return 1;
         }
+
+        if (strcmp(argv[1], "-d") == 0) {
+                do_rmdir = 1;
+		argv++;
+		argc--;
+	}
 
         if (strlen(argv[1]) > 4080) {
                 printf("name too long\n");
@@ -53,9 +59,13 @@ int main(int argc, char ** argv)
 	}
         for (i = 0; i < count; i++, begin++) {
                 sprintf(filename, fmt, begin);
-                rc = unlink(filename);
+		if (do_rmdir)
+			rc = rmdir(filename);
+		else
+			rc = unlink(filename);
                 if (rc) {
-                        printf("unlink(%s) error: %s\n",
+                        printf("%s(%s) error: %s\n",
+			       do_rmdir ? "rmdir" : "unlink",
                                filename, strerror(errno));
                         rc = errno;
                         break;

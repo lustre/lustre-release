@@ -845,7 +845,7 @@ void ldlm_change_cbdata(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
         ENTRY;
 
         if (ns == NULL) {
-                CERROR("must pass in namespace");
+                CERROR("must pass in namespace\n");
                 LBUG();
         }
 

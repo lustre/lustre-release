@@ -228,7 +228,7 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
         /* d_instantiate */
         if (!list_empty(&de->d_alias)) {
                 spin_unlock(&dcache_lock);
-                CERROR("dentry %*s %p alias next %p, prev %p\n",
+                CERROR("dentry %.*s %p alias next %p, prev %p\n",
                        de->d_name.len, de->d_name.name, de,
                        de->d_alias.next, de->d_alias.prev);
                 LBUG();
@@ -238,9 +238,9 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
         de->d_inode = inode;
 
         /* d_rehash */
-        if (!list_empty(&de->d_hash)) {
+        if (!d_unhashed(de)) {
                 spin_unlock(&dcache_lock);
-                CERROR("dentry %*s %p hash next %p, prev %p\n",
+                CERROR("dentry %.*s %p hash next %p, prev %p\n",
                        de->d_name.len, de->d_name.name, de,
                        de->d_hash.next, de->d_hash.prev);
                 LBUG();
@@ -283,7 +283,7 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 atomic_inc(&dentry->d_count);
                 spin_unlock(&dcache_lock);
                 iput(inode);
-                CDEBUG(D_DENTRY, "alias dentry %*s (%p) parent %p inode %p "
+                CDEBUG(D_DENTRY, "alias dentry %.*s (%p) parent %p inode %p "
                        "refc %d\n", de->d_name.len, de->d_name.name, de,
                        de->d_parent, de->d_inode, atomic_read(&de->d_count));
                 return dentry;
@@ -368,7 +368,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (dentry->d_name.len > EXT3_NAME_LEN)
                 RETURN(ERR_PTR(-ENAMETOOLONG));
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p),intent=%s\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),intent=%s\n",
                dentry->d_name.len, dentry->d_name.name, parent->i_ino,
                parent->i_generation, parent, LL_IT2STR(it));
 
@@ -477,7 +477,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p),intent=%s\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),intent=%s\n",
                dentry->d_name.len, dentry->d_name.name, dir->i_ino,
                dir->i_generation, dir, LL_IT2STR(it));
 
@@ -530,7 +530,7 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
@@ -574,7 +574,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                dchild->d_name.len, dchild->d_name.name,
                dir->i_ino, dir->i_generation, dir);
 
@@ -628,7 +628,7 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p),target=%s\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),target=%s\n",
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation,
                dir, tgt);
 
@@ -658,10 +658,9 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 
         ENTRY;
         CDEBUG(D_VFSTRACE,
-               "VFS Op:name=%*s inode=%lu/%u(%p), dir=%lu/%u(%p), target=%*s\n",
-               srcnd->last.len, srcnd->last.name, src->i_ino, src->i_generation,
-               src, dir->i_ino, dir->i_generation, dir,
-               tgtnd->last.len, tgtnd->last.name);
+               "VFS Op: inode=%lu/%u(%p), dir=%lu/%u(%p), target=%.*s\n",
+               src->i_ino, src->i_generation, src, dir->i_ino,
+               dir->i_generation, dir, tgtnd->last.len, tgtnd->last.name);
 
         ll_prepare_mdc_op_data(&op_data, src, dir, tgtnd->last.name,
                                tgtnd->last.len, 0);
@@ -683,7 +682,7 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
@@ -708,7 +707,7 @@ static int ll_rmdir_raw(struct nameidata *nd)
         struct mdc_op_data op_data;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
@@ -797,7 +796,7 @@ static int ll_unlink_raw(struct nameidata *nd)
         struct mdc_op_data op_data;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
@@ -823,7 +822,7 @@ static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         struct mdc_op_data op_data;
         int err;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:oldname=%*s,src_dir=%lu/%u(%p),newname=%*s,"
+        CDEBUG(D_VFSTRACE,"VFS Op:oldname=%.*s,src_dir=%lu/%u(%p),newname=%.*s,"
                "tgt_dir=%lu/%u(%p)\n", srcnd->last.len, srcnd->last.name,
                src->i_ino, src->i_generation, src, tgtnd->last.len,
                tgtnd->last.name, tgt->i_ino, tgt->i_generation, tgt);
