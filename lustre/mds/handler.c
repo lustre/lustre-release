@@ -726,14 +726,13 @@ static int mds_statfs(struct ptlrpc_request *req)
         int rc, size = sizeof(*osfs);
         ENTRY;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen,
-                             &req->rq_repmsg);
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
                 CERROR("mds: statfs lustre_pack_msg failed: rc = %d\n", rc);
                 GOTO(out, rc);
         }
 
-        rc = vfs_statfs(mds->mds_sb, &sfs);
+        rc = mds_fs_statfs(mds, &sfs);
         if (rc) {
                 CERROR("mds: statfs failed: rc %d\n", rc);
                 GOTO(out, rc);
