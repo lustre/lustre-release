@@ -76,7 +76,8 @@ static int it_to_lock_mode(struct lookup_intent *it)
         /* CREAT needs to be tested before open (both could be set) */
         if (it->it_op & IT_CREAT)
                 return LCK_PW;
-        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
+        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP |
+                              IT_CHDIR))
                 return LCK_PR;
 
         LBUG();
@@ -250,7 +251,7 @@ int mdc_enqueue(struct obd_export *exp,
                 /* get ready for the reply */
                 reply_buffers = 4;
                 req->rq_replen = lustre_msg_size(4, repsize);
-        } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
+        } else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR)) {
                 int valid = OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
                 size[2] = sizeof(struct mds_body);
                 size[3] = data->namelen + 1;
@@ -423,7 +424,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         CDEBUG(D_DLMTRACE, "name: %*s in %ld, intent: %s\n", len, name,
                (unsigned long)pfid->id, ldlm_it2str(it->it_op));
 
-        if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
+        if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR ||
+                     it->it_op == IT_CHDIR)) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
@@ -527,7 +529,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         } else if (it->it_op == IT_OPEN) {
                 LASSERT(!it_disposition(it, DISP_OPEN_CREATE));
         } else {
-                LASSERT(it->it_op & (IT_GETATTR | IT_LOOKUP));
+                LASSERT(it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR));
         }
 
         /* If we already have a matching lock, then cancel the new
