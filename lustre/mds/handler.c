@@ -1086,6 +1086,13 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 LASSERT(dparent);
 
                 dchild = ll_lookup_one_len(name, dparent, namesize - 1);
+                if (IS_ERR(dchild)) {
+                        DEBUG_REQ(D_ERROR, req, "resent, not enqueuing new locks");
+                        CDEBUG(D_ERROR, "lock against [%lu:%lu]/%*s\n",
+                               (unsigned long) id_ino(&body->id1),
+                               (unsigned long) id_gen(&body->id1),
+                               namesize - 1, name);
+                }
                 LASSERT(!IS_ERR(dchild));
                 LDLM_LOCK_PUT(granted_lock);
         }
