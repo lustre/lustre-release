@@ -18,6 +18,6 @@ ext3-2.4-ino_t.patch
 ext3-largefile.patch
 ext3-truncate_blocks.patch
 ext3-unmount_sync.patch
-ext3-use_after_free.patch
+ext3-use-after-free.patch
 extN-wantedi.patch
 extN-san.patch
