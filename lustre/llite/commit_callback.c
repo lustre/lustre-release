@@ -84,8 +84,6 @@ static int ll_commitcbd_main(void *arg)
                         EXIT;
                         break;
                 }
-                if (!list_empty(&sbi->ll_mds_client.cli_replied_head))
-                        CERROR("** clean up committed reqs here **\n"); 
 
                 schedule_timeout(sbi->ll_commitcbd_timeout);
                 CERROR("commit callback daemon woken up - FIXME\n"); 

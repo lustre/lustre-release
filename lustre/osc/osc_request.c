@@ -643,6 +643,8 @@ static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
                            osc->osc_client);
         ptlrpc_init_client(NULL, NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            osc->osc_ldlm_client);
+        osc->osc_client->cli_name = "osc";
+        osc->osc_ldlm_client->cli_name = "ldlm";
 
         MOD_INC_USE_COUNT;
         RETURN(0);

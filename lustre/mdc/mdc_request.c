@@ -48,6 +48,7 @@ int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
+        req->rq_level = LUSTRE_CONN_CON;
         req->rq_replen = lustre_msg_size(1, &size);
 
         mds_pack_req_body(req);
@@ -95,6 +96,7 @@ int mdc_getattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         body->valid = valid;
 
         req->rq_replen = lustre_msg_size(1, &size);
+        req->rq_level = LUSTRE_CONN_FULL;
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
@@ -112,7 +114,7 @@ int mdc_getattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 }
 
 int mdc_open(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
-             ino_t ino, int type, int flags, __u64 *fh,
+             ino_t ino, int type, int flags, __u64 cookie, __u64 *fh,
              struct ptlrpc_request **request)
 {
         struct mds_body *body;
@@ -123,10 +125,12 @@ int mdc_open(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        req->rq_flags |= PTL_RPC_FL_RETAIN;
+        req->rq_flags |= PTL_RPC_FL_REPLAY;
+        req->rq_level = LUSTRE_CONN_FULL;
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->flags = HTON__u32(flags);
+        body->objid = cookie; 
 
         req->rq_replen = lustre_msg_size(1, &size);
 
@@ -160,6 +164,7 @@ int mdc_close(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->objid = fh;
 
+        req->rq_level = LUSTRE_CONN_FULL;
         req->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(req);
@@ -214,7 +219,7 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         body->size = offset;
 
         req->rq_replen = lustre_msg_size(1, size);
-
+        req->rq_level = LUSTRE_CONN_FULL;
         rc = ptlrpc_queue_wait(req);
         if (rc) {
                 CERROR("error in handling %d\n", rc);
@@ -323,7 +328,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 __u64 fh, ino;
                 copy_from_user(&ino, (__u64 *)arg, sizeof(ino));
                 CERROR("-- opening ino %llu\n", (unsigned long long)ino);
-                err = mdc_open(&cl, conn, ino, S_IFDIR, O_RDONLY, &fh,
+                err = mdc_open(&cl, conn, ino, S_IFDIR, O_RDONLY, 4711, &fh, 
                                &request);
                 copy_to_user((__u64 *)arg, &fh, sizeof(fh));
                 CERROR("-- done err %d (fh=%Lu)\n", err,

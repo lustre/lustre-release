@@ -53,7 +53,7 @@ struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid)
                              sizeof(mci->mci_mcd->mcd_uuid)))
                         return mci;
         }
-        CDEBUG(D_INFO, "no client UUID found for '%s'\n", uuid);
+        CDEBUG(D_INFO, "no mds client info found for  UUID '%s'\n", uuid);
         return NULL;
 }
 
@@ -135,6 +135,54 @@ out_setattr:
         return(0);
 }
 
+static int mds_reint_recreate(struct mds_update_record *rec,
+                            struct ptlrpc_request *req)
+{
+        struct dentry *de = NULL;
+        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct dentry *dchild = NULL;
+        struct inode *dir;
+        int rc = 0;
+        ENTRY;
+
+        de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
+        if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE)) {
+                LBUG();
+                GOTO(out_create_de, rc = -ESTALE);
+        }
+        dir = de->d_inode;
+        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
+
+        down(&dir->i_sem);
+        dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
+        if (IS_ERR(dchild)) {
+                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
+                up(&dir->i_sem);
+                LBUG();
+                GOTO(out_create_dchild, rc = -ESTALE);
+        }
+
+        if (dchild->d_inode) {
+                struct mds_body *body;
+                rc = 0;
+                body = lustre_msg_buf(req->rq_repmsg, 0);
+                body->ino = dchild->d_inode->i_ino;
+                body->generation = dchild->d_inode->i_generation;
+        } else { 
+                CERROR("child doesn't exist (dir %ld, name %s)\n",
+                       dir->i_ino, rec->ur_name);
+                rc = -ENOENT;
+                LBUG();
+        }
+
+out_create_dchild:
+        l_dput(dchild);
+        up(&dir->i_sem);
+out_create_de:
+        l_dput(de);
+        req->rq_status = rc;
+        return 0;
+}
 static int mds_reint_create(struct mds_update_record *rec,
                             struct ptlrpc_request *req)
 {
@@ -152,7 +200,8 @@ static int mds_reint_create(struct mds_update_record *rec,
                 GOTO(out_create_de, rc = -ESTALE);
         }
         dir = de->d_inode;
-        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
+        CDEBUG(D_INODE, "parent ino %ld name %s mode %o\n", 
+               dir->i_ino, rec->ur_name, rec->ur_mode);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
@@ -478,6 +527,7 @@ static mds_reinter reinters[REINT_MAX+1] = {
         [REINT_UNLINK]    mds_reint_unlink,
         [REINT_LINK]      mds_reint_link,
         [REINT_RENAME]    mds_reint_rename,
+        [REINT_RECREATE]  mds_reint_recreate,
 };
 
 int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)

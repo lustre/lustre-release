@@ -128,7 +128,6 @@ static int recovd_handle_event(struct recovd_obd *recovd)
 
         if (recovd->recovd_flags & RECOVD_UPCALL_ANSWER) { 
                 CERROR("UPCALL_WAITING: upcall answer\n");
-                CERROR("** fill me in with recovery\n");
 
                 while (!list_empty(&recovd->recovd_troubled_lh)) {
                         struct ptlrpc_client *cli =

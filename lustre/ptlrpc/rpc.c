@@ -57,6 +57,7 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         ptlrpc_init_client(NULL, NULL, CONNMGR_REQUEST_PORTAL, 
                            CONNMGR_REPLY_PORTAL, recovd->recovd_client);
+        recovd->recovd_client->cli_name = "connmgr"; 
 
         err = ptlrpc_start_thread(obddev, recovd->recovd_service, "lustre_connmgr");
         if (err) {

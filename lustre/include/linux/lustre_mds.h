@@ -87,8 +87,17 @@ struct mds_client_data {
 /* In-memory access to client data from MDS struct */
 struct mds_client_info {
         struct list_head mci_list;
+        struct list_head mci_open_head;
         struct mds_client_data *mci_mcd;
         int mci_off;
+};
+
+/* file data for open files on MDS */
+struct mds_file_data { 
+        struct list_head mfd_list;
+        struct file * mfd_file;
+        __u64             mfd_clientfd;
+        __u32             mfd_clientcookie;
 };
 
 /* mds/mds_reint.c  */
@@ -123,7 +132,7 @@ int mdc_getattr(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
 int mdc_setattr(struct ptlrpc_client *, struct ptlrpc_connection *,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
-             int type, int flags, __u64 *fh, struct ptlrpc_request **req);
+             int type, int flags, __u64 cookie, __u64 *fh, struct ptlrpc_request **req); 
 int mdc_close(struct ptlrpc_client *cl, struct ptlrpc_connection *peer,
               ino_t ino, int type, __u64 fh,  struct ptlrpc_request **req);
 int mdc_readpage(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,

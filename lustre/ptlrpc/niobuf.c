@@ -94,14 +94,14 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         remote_id.nid = conn->c_peer.peer_nid;
         remote_id.pid = 0;
 
-        CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %d\n",
-               request->rq_req_md.length, portal, request->rq_reqmsg->xid);
+        CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %Ld\n",
+               request->rq_req_md.length, portal, request->rq_xid);
 
         rc = PtlPut(md_h, ack, remote_id, portal, 0, request->rq_reqmsg->xid,
                     0, 0);
         if (rc != PTL_OK) {
-                CERROR("PtlPut(%d, %d, %d) failed: %d\n", remote_id.nid,
-                       portal, request->rq_reqmsg->xid, rc);
+                CERROR("PtlPut(%d, %d, %Ld) failed: %d\n", remote_id.nid,
+                       portal, request->rq_xid, rc);
                 PtlMDUnlink(md_h);
         }
 
@@ -228,14 +228,6 @@ int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         RETURN(rc);
 }
 
-void ptlrpc_resend_req(struct ptlrpc_request *req)
-{
-        ENTRY;
-        req->rq_flags |= PTL_RPC_FL_RESEND;
-        req->rq_flags &= ~PTL_RPC_FL_TIMEOUT;
-        wake_up_interruptible(&req->rq_wait_for_rep);
-        EXIT;
-}
 
 int ptl_send_rpc(struct ptlrpc_request *request)
 {
@@ -249,18 +241,21 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 CERROR("wrong packet type sent %d\n",
                        NTOH__u32(request->rq_reqmsg->type));
                 LBUG();
-                RETURN(-EINVAL);
+                RETURN(EINVAL);
         }
         if (request->rq_replen == 0) {
                 CERROR("request->rq_replen is 0!\n");
-                RETURN(-EINVAL);
+                RETURN(EINVAL);
         }
 
         /* request->rq_repmsg is set only when the reply comes in, in
          * client_packet_callback() */
+        if (request->rq_reply_md.start)
+                OBD_FREE(request->rq_reply_md.start, request->rq_replen);
+
         OBD_ALLOC(repbuf, request->rq_replen);
         if (!repbuf)
-                RETURN(-ENOMEM);
+                RETURN(ENOMEM);
 
         local_id.nid = PTL_ID_ANY;
         local_id.pid = PTL_ID_ANY;
@@ -293,13 +288,9 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 GOTO(cleanup2, rc);
         }
 
-        CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %u, portal %u\n",
-               request->rq_replen, request->rq_reqmsg->xid,
+        CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %Lu, portal %u\n",
+               request->rq_replen, request->rq_xid,
                request->rq_client->cli_reply_portal);
-
-        spin_lock(&request->rq_client->cli_lock);
-        list_add(&request->rq_list, &request->rq_client->cli_sending_head);
-        spin_unlock(&request->rq_client->cli_lock);
 
         rc = ptl_send_buf(request, request->rq_connection,
                           request->rq_client->cli_request_portal);

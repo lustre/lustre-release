@@ -163,6 +163,7 @@ int mds_client_add(struct mds_obd *mds, struct mds_client_data *mcd, int cl_off)
                 CERROR("no memory for MDS client info\n");
                 RETURN(-ENOMEM);
         }
+        INIT_LIST_HEAD(&mci->mci_open_head);
 
         CDEBUG(D_INFO, "client at offset %d with UUID '%s' added\n",
                cl_off, mcd->mcd_uuid);
@@ -296,7 +297,9 @@ int mds_connect(struct ptlrpc_request *req)
                 CDEBUG(D_INFO, "found existing data for UUID '%s' at #%d\n",
                        mcd->mcd_uuid, mci->mci_off);
         }
-        body->last_xid = HTON__u32(mcd->mcd_last_xid);
+        /* mcd_last_xid is is stored in little endian on the disk and 
+           mds_pack_rep_body converts it to network order */
+        body->last_xid = le32_to_cpu(mcd->mcd_last_xid);
         mds_pack_rep_body(req);
         RETURN(0);
 }
@@ -349,9 +352,13 @@ int mds_open(struct ptlrpc_request *req)
         struct mds_body *body;
         struct file *file;
         struct vfsmount *mnt;
+        struct mds_client_info *mci;
         __u32 flags;
+        struct list_head *tmp;
+        struct mds_file_data *mfd;
         int rc, size = sizeof(*body);
         ENTRY;
+
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
@@ -360,18 +367,52 @@ int mds_open(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
+
+        mci = mds_uuid_to_mci(mds, ptlrpc_req_to_uuid(req));
+        if (!mci) { 
+                CERROR("mds: no mci!\n");
+                req->rq_status = -ENOTCONN;
+                RETURN(0);
+        }
+
         body = lustre_msg_buf(req->rq_reqmsg, 0);
+
+        /* was this animal open already? */
+        list_for_each(tmp, &mci->mci_open_head) { 
+                struct mds_file_data *fd;
+                fd = list_entry(tmp, struct mds_file_data, mfd_list);
+                if (body->objid == fd->mfd_clientfd && 
+                    body->fid1.id == fd->mfd_file->f_dentry->d_inode->i_ino) { 
+                        CERROR("Re opening %Ld\n", body->fid1.id);
+                        RETURN(0);
+                }
+        }
+
+        OBD_ALLOC(mfd, sizeof(*mfd));
+        if (!mfd) { 
+                CERROR("mds: out of memory\n");
+                req->rq_status = -ENOMEM;
+                RETURN(0);
+        }
+
         de = mds_fid2dentry(mds, &body->fid1, &mnt);
         if (IS_ERR(de)) {
                 req->rq_status = -ENOENT;
                 RETURN(0);
         }
+
         flags = body->flags;
         file = dentry_open(de, mnt, flags);
         if (!file || IS_ERR(file)) {
                 req->rq_status = -EINVAL;
+                OBD_FREE(mfd, sizeof(*mfd));
                 RETURN(0);
         }
+
+        file->private_data = mfd;
+        mfd->mfd_file = file;
+        mfd->mfd_clientfd = body->objid;
+        list_add(&mfd->mfd_list, &mci->mci_open_head); 
 
         body = lustre_msg_buf(req->rq_repmsg, 0);
         body->objid = (__u64) (unsigned long)file;
@@ -384,6 +425,7 @@ int mds_close(struct ptlrpc_request *req)
         struct mds_body *body;
         struct file *file;
         struct vfsmount *mnt;
+        struct mds_file_data *mfd;
         int rc;
         ENTRY;
 
@@ -402,8 +444,13 @@ int mds_close(struct ptlrpc_request *req)
         }
 
         file = (struct file *)(unsigned long)body->objid;
-        req->rq_status = filp_close(file, 0);
+        if (!file->f_dentry) 
+                LBUG();
+        mfd = (struct mds_file_data *)file->private_data;
+        list_del(&mfd->mfd_list);
+        OBD_FREE(mfd, sizeof(*mfd));
 
+        req->rq_status = filp_close(file, 0);
         l_dput(de);
         mntput(mnt);
 
@@ -521,6 +568,7 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                 CDEBUG(D_INODE, "reint\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
                 rc = mds_reint(req);
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET_REP, 0);
                 break;
 
         case MDS_OPEN:
@@ -549,9 +597,10 @@ out:
          */
         req->rq_repmsg->last_rcvd = HTON__u64(mds->mds_last_rcvd);
         req->rq_repmsg->last_committed = HTON__u64(mds->mds_last_committed);
-        CDEBUG(D_INFO, "last_rcvd %Lu, last_committed %Lu\n",
+        CDEBUG(D_INFO, "last_rcvd %Lu, last_committed %Lu, xid %d\n",
                (unsigned long long)mds->mds_last_rcvd,
-               (unsigned long long)mds->mds_last_committed);
+               (unsigned long long)mds->mds_last_committed, 
+               cpu_to_le32(req->rq_reqmsg->xid));
         if (rc) {
                 ptlrpc_error(svc, req);
         } else {

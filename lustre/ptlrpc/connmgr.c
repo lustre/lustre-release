@@ -59,6 +59,7 @@ int connmgr_connect(struct recovd_obd *recovd, struct ptlrpc_connection *conn)
         strncpy(body->conn_uuid, conn->c_local_uuid, sizeof(body->conn_uuid));
 
         req->rq_replen = lustre_msg_size(1, &size);
+        req->rq_level = LUSTRE_CONN_NEW;
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);

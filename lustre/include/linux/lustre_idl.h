@@ -165,19 +165,20 @@ struct obd_ioobj {
  */
 
 /* opcodes */
-#define MDS_GETATTR   1
-#define MDS_OPEN      2
-#define MDS_CLOSE     3
-#define MDS_REINT     4
-#define MDS_READPAGE  5
-#define MDS_CONNECT   6
+#define MDS_GETATTR    1
+#define MDS_OPEN       2
+#define MDS_CLOSE      3
+#define MDS_REINT      4
+#define MDS_READPAGE   6
+#define MDS_CONNECT    7
 
-#define REINT_SETATTR 1
-#define REINT_CREATE  2
-#define REINT_LINK    3
-#define REINT_UNLINK  4
-#define REINT_RENAME  5
-#define REINT_MAX     5
+#define REINT_SETATTR  1
+#define REINT_CREATE   2
+#define REINT_LINK     3
+#define REINT_UNLINK   4
+#define REINT_RENAME   5
+#define REINT_RECREATE 6
+#define REINT_MAX      6
 
 struct ll_fid {
         __u64 id;

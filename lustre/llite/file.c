@@ -51,7 +51,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
         memset(fd, 0, sizeof(*fd));
 
         rc = mdc_open(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
-                      S_IFREG, file->f_flags, &fd->fd_mdshandle, &req);
+                      S_IFREG, file->f_flags, (__u64)(unsigned long)file, 
+                      &fd->fd_mdshandle, &req); 
         fd->fd_req = req;
         ptlrpc_req_finished(req);
         if (rc) {
@@ -110,12 +111,19 @@ static int ll_file_release(struct inode *inode, struct file *file)
         if (rc)
                 GOTO(out, abs(rc));
 
-        iattr.ia_valid = ATTR_SIZE;
-        iattr.ia_size = inode->i_size;
-        rc = ll_inode_setattr(inode, &iattr, 0);
-        if (rc) {
-                CERROR("failed - %d.\n", rc);
-                rc = -EIO; /* XXX - GOTO(out)? -phil */
+        if (file->f_flags & O_WRONLY) {
+                struct iattr attr;
+                attr.ia_valid = ATTR_MTIME | ATTR_CTIME | ATTR_ATIME | ATTR_SIZE;
+                attr.ia_mtime = inode->i_mtime;
+                attr.ia_ctime = inode->i_ctime;
+                attr.ia_atime = inode->i_atime;
+                iattr.ia_size = inode->i_size;
+
+                rc = ll_inode_setattr(inode, &iattr, 0);
+                if (rc) {
+                        CERROR("failed - %d.\n", rc);
+                        rc = -EIO; /* XXX - GOTO(out)? -phil */
+                }
         }
 
         rc = mdc_close(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
@@ -239,14 +247,6 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         retval = generic_file_write(file, buf, count, ppos);
 
-        /* update mtime/ctime/atime here, NOT size */
-        if (retval > 0) {
-                struct iattr attr;
-                attr.ia_valid = ATTR_MTIME | ATTR_CTIME | ATTR_ATIME;
-                attr.ia_mtime = attr.ia_ctime = attr.ia_atime =
-                        CURRENT_TIME;
-                ll_setattr(file->f_dentry, &attr);
-        }
 
 #if 0
         err = obd_cancel(&sbi->ll_conn, LCK_PW, &lockh);

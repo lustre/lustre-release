@@ -11,6 +11,7 @@
 #include <linux/mm.h>
 #include <linux/string.h>
 #include <linux/stat.h>
+#include <linux/iobuf.h>
 #include <linux/errno.h>
 #include <linux/locks.h>
 #include <linux/unistd.h>
@@ -349,9 +350,64 @@ void ll_truncate(struct inode *inode)
         return;
 } /* ll_truncate */
 
+int ll_direct_IO(int rw, struct inode * inode, struct kiobuf * iobuf, unsigned long blocknr, int blocksize)
+{
+        int i;
+        obd_count        num_obdo = 1;
+        obd_count        bufs_per_obdo = iobuf->nr_pages;
+        struct obdo     *oa = NULL;
+        obd_size         *count = NULL;
+        obd_off          *offset = NULL;
+        obd_flag         *flags = NULL;
+        int              err = 0;
+
+        ENTRY;
+
+        OBD_ALLOC(count, sizeof(obd_size) * bufs_per_obdo); 
+        if (!count)
+                GOTO(out, err=-ENOMEM); 
+
+        OBD_ALLOC(offset, sizeof(obd_off) * bufs_per_obdo); 
+        if (!offset)
+                GOTO(out, err=-ENOMEM); 
+
+        OBD_ALLOC(flags, sizeof(obd_flag) * bufs_per_obdo); 
+        if (!flags)
+                GOTO(out, err=-ENOMEM); 
+
+        for (i = 0 ; i < bufs_per_obdo ; i++) { 
+                count[i] = PAGE_SIZE;
+                offset[i] = ((obd_off)(iobuf->maplist[i])->index) << PAGE_SHIFT;
+                flags[i] = OBD_BRW_CREATE;
+        }
+
+        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+        if (!oa)
+                RETURN(-ENOMEM);
+
+        err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
+                      iobuf->maplist, count, offset, flags);
+        if (err == 0) 
+                err = bufs_per_obdo * 4096;
+
+ out:
+        if (oa) 
+                obdo_free(oa);
+        if (flags) 
+                OBD_FREE(flags, sizeof(obd_flag) * bufs_per_obdo); 
+        if (count) 
+                OBD_FREE(count, sizeof(obd_count) * bufs_per_obdo); 
+        if (offset) 
+                OBD_FREE(offset, sizeof(obd_off) * bufs_per_obdo); 
+        RETURN(err);
+}
+
+
+
 struct address_space_operations ll_aops = {
         readpage: ll_readpage,
         writepage: ll_writepage,
+        direct_IO: ll_direct_IO,
         sync_page: block_sync_page,
         prepare_write: ll_prepare_write, 
         commit_write: ll_commit_write,

@@ -31,14 +31,15 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
 
-static int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request)
+static int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request, int level)
 {
         int rc;
+        request->rq_level = level;
 
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
-        if (rc)
-                CERROR("error in handling %d\n", rc);
+
+        CERROR("error in handling %d\n", rc);
 
         return rc;
 }
@@ -62,8 +63,10 @@ int mdc_setattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         size = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, &size);
 
-        rc = mdc_reint(cl, req);
+        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
         *request = req;
+        if (rc == -ERESTARTSYS )
+                rc = 0;
 
         RETURN(rc);
 }
@@ -77,6 +80,7 @@ int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         struct ptlrpc_request *req;
         int rc, size[3] = {sizeof(*rec), namelen + 1, tgtlen + 1};
         char *tmp;
+        int level;
         ENTRY;
 
         req = ptlrpc_prep_req(cl, conn, MDS_REINT, 3, size, NULL);
@@ -97,9 +101,19 @@ int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(cl, req);
-        *request = req;
+        level = LUSTRE_CONN_FULL;
+ resend:
+        rc = mdc_reint(cl, req, level);
+        if (rc == -ERESTARTSYS ) { 
+                struct mds_update_record_hdr *hdr = lustre_msg_buf(req->rq_reqmsg, 0);
+                level = LUSTRE_CONN_RECOVD;
+                CERROR("Lost reply: re-create rep.\n"); 
+                req->rq_flags = 0;
+                hdr->ur_opcode = NTOH__u32(REINT_RECREATE);
+                goto resend;
+        }
 
+        *request = req;
         RETURN(rc);
 }
 
@@ -126,8 +140,10 @@ int mdc_unlink(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(cl, req);
+        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
         *request = req;
+        if (rc == -ERESTARTSYS )
+                rc = 0;
 
         RETURN(rc);
 }
@@ -155,8 +171,10 @@ int mdc_link(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(cl, req);
+        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
         *request = req;
+        if (rc == -ERESTARTSYS )
+                rc = 0;
 
         RETURN(rc);
 }
@@ -190,8 +208,10 @@ int mdc_rename(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(cl, req);
+        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
         *request = req;
+        if (rc == -ERESTARTSYS )
+                rc = 0;
 
         RETURN(rc);
 }

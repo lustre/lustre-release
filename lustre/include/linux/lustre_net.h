@@ -79,8 +79,8 @@
 struct ptlrpc_connection {
         struct list_head c_link;
         struct lustre_peer c_peer;
-        __u8 c_local_uuid[37];
-        __u8 c_remote_uuid[37];
+        __u8 c_local_uuid[37];  /* XXX do we need this? */
+        __u8 c_remote_uuid[37]; 
 
         int c_level;
         __u32 c_generation;  /* changes upon new connection */
@@ -104,18 +104,18 @@ struct ptlrpc_client {
         __u64 cli_last_rcvd;
         __u64 cli_last_committed;
 
+        void *cli_data;
         struct semaphore cli_rpc_sem; /* limits outstanding requests */
 
         spinlock_t cli_lock; /* protects lists */
+        struct list_head cli_delayed_head; /* delayed until after recovery */
         struct list_head cli_sending_head;
-        struct list_head cli_sent_head;
-        struct list_head cli_replied_head;
-        struct list_head cli_replay_head;
         struct list_head cli_dying_head;
         struct list_head cli_ha_item;
-        void (*cli_recover)(struct ptlrpc_client *); 
+        int (*cli_recover)(struct ptlrpc_client *); 
 
         struct recovd_obd *cli_recovd;
+        char *cli_name;
 };
 
 /* packet types */
@@ -124,16 +124,18 @@ struct ptlrpc_client {
 
 /* state flags of requests */
 #define PTL_RPC_FL_INTR      (1 << 0)
-#define PTL_RPC_FL_REPLY     (1 << 1)
+#define PTL_RPC_FL_REPLIED   (1 << 1)  /* reply was received */
 #define PTL_RPC_FL_SENT      (1 << 2)
 #define PTL_BULK_FL_SENT     (1 << 3)
 #define PTL_BULK_FL_RCVD     (1 << 4)
 #define PTL_RPC_FL_ERR       (1 << 5)
 #define PTL_RPC_FL_TIMEOUT   (1 << 6)
 #define PTL_RPC_FL_RESEND    (1 << 7)
-#define PTL_RPC_FL_COMMITTED (1 << 8)
+#define PTL_RPC_FL_RECOVERY  (1 << 8)  /* retransmission for recovery */
 #define PTL_RPC_FL_FINISHED  (1 << 9)
-#define PTL_RPC_FL_RETAIN    (1 << 10)
+#define PTL_RPC_FL_RETAIN    (1 << 10) /* retain for replay after reply */
+#define PTL_RPC_FL_REPLAY    (1 << 11) /* replay upon recovery */
+#define PTL_RPC_FL_ALLOCREP  (1 << 12) /* reply buffer allocated */
 
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
@@ -150,10 +152,12 @@ struct ptlrpc_request {
         int rq_replen;
         struct lustre_msg *rq_repmsg;
         __u64 rq_transno;
+        __u64 rq_xid;
 
         char *rq_bulkbuf;
         int rq_bulklen;
 
+        int rq_level;
         time_t rq_time;
         time_t rq_timeout;
         //        void * rq_reply_handle;
@@ -233,6 +237,7 @@ typedef int (*svc_handler_t)(struct obd_device *obddev,
                              struct ptlrpc_request *req);
 
 /* rpc/connection.c */
+void ptlrpc_readdress_connection(struct ptlrpc_connection *conn, char *uuid);
 struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
@@ -252,13 +257,18 @@ void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
 void ptlrpc_init_client(struct recovd_obd *, 
-                        void (*recover)(struct ptlrpc_client *),
+                        int (*recover)(struct ptlrpc_client *),
                         int req_portal, int rep_portal,
                         struct ptlrpc_client *);
 void ptlrpc_cleanup_client(struct ptlrpc_client *cli);
 __u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid);
+
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
+void ptlrpc_continue_req(struct ptlrpc_request *req);
+int ptlrpc_replay_req(struct ptlrpc_request *req);
+void ptlrpc_restart_req(struct ptlrpc_request *req);
+
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                                        struct ptlrpc_connection *u, int opcode,
                                        int count, int *lengths, char **bufs);

@@ -297,6 +297,7 @@ static update_unpacker mds_unpackers[REINT_MAX + 1] = {
         [REINT_LINK] mds_link_unpack,
         [REINT_UNLINK] mds_unlink_unpack,
         [REINT_RENAME] mds_rename_unpack,
+        [REINT_RECREATE] mds_create_unpack,
 };
 
 int mds_update_unpack(struct ptlrpc_request *req, struct mds_update_record *rec)

@@ -88,8 +88,8 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
         m->type = NTOH__u32(m->type);
         m->connid = NTOH__u32(m->connid);
         m->bufcount = NTOH__u32(m->bufcount);
-        m->last_rcvd = NTOH__u32(m->last_rcvd);
-        m->last_committed = NTOH__u32(m->last_committed);
+        m->last_rcvd = NTOH__u64(m->last_rcvd);
+        m->last_committed = NTOH__u64(m->last_committed);
 
         required_len += m->bufcount * sizeof(__u32);
         if (len < required_len)

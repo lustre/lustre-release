@@ -27,7 +27,7 @@
 #include <linux/lustre_ha.h>
 
 void ptlrpc_init_client(struct recovd_obd *recovd, 
-                        void (*recover)(struct ptlrpc_client *recover),
+                        int (*recover)(struct ptlrpc_client *recover),
                         int req_portal,
                         int rep_portal, struct ptlrpc_client *cl)
 {
@@ -39,10 +39,8 @@ void ptlrpc_init_client(struct recovd_obd *recovd,
         cl->cli_obd = NULL;
         cl->cli_request_portal = req_portal;
         cl->cli_reply_portal = rep_portal;
+        INIT_LIST_HEAD(&cl->cli_delayed_head);
         INIT_LIST_HEAD(&cl->cli_sending_head);
-        INIT_LIST_HEAD(&cl->cli_sent_head);
-        INIT_LIST_HEAD(&cl->cli_replied_head);
-        INIT_LIST_HEAD(&cl->cli_replay_head);
         INIT_LIST_HEAD(&cl->cli_dying_head);
         spin_lock_init(&cl->cli_lock);
         sema_init(&cl->cli_rpc_sem, 32);
@@ -70,6 +68,21 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid)
                 c->c_epoch++;
 
         return c;
+}
+
+void ptlrpc_readdress_connection(struct ptlrpc_connection *conn, char *uuid)
+{
+        struct lustre_peer peer;
+        int err;
+
+        err = kportal_uuid_to_peer(uuid, &peer);
+        if (err != 0) {
+                CERROR("cannot find peer %s!\n", uuid);
+                return;
+        }
+        
+        memcpy(&conn->c_peer, &peer, sizeof(peer)); 
+        return;
 }
 
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
@@ -135,6 +148,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 
         spin_lock(&conn->c_lock);
         request->rq_reqmsg->xid = HTON__u32(++conn->c_xid_out);
+        request->rq_xid = conn->c_xid_out;
         spin_unlock(&conn->c_lock);
 
         request->rq_client = cl;
@@ -150,6 +164,7 @@ void ptlrpc_req_finished(struct ptlrpc_request *request)
         if (request->rq_repmsg != NULL) { 
                 OBD_FREE(request->rq_repmsg, request->rq_replen);
                 request->rq_repmsg = NULL;
+                request->rq_reply_md.start = NULL; 
         }
 
         if (atomic_dec_and_test(&request->rq_refcount))
@@ -168,7 +183,7 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
 
         if (request->rq_client) {
                 spin_lock(&request->rq_client->cli_lock);
-                list_del(&request->rq_list);
+                list_del_init(&request->rq_list);
                 spin_unlock(&request->rq_client->cli_lock);
         }
 
@@ -183,24 +198,35 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
 
         if (req->rq_repmsg != NULL) {
                 req->rq_transno = NTOH__u64(req->rq_repmsg->transno);
-                req->rq_flags |= PTL_RPC_FL_REPLY;
+                req->rq_flags |= PTL_RPC_FL_REPLIED;
                 GOTO(out, rc = 1);
         }
 
         if (req->rq_flags & PTL_RPC_FL_RESEND) { 
                 CERROR("-- RESEND --\n");
-                req->rq_status = -EAGAIN;
                 GOTO(out, rc = 1);
         }
+
+        if (req->rq_flags & PTL_RPC_FL_RECOVERY) { 
+                CERROR("-- RESTART --\n");
+                GOTO(out, rc = 1);
+        }
+
 
         if (CURRENT_TIME - req->rq_time >= req->rq_timeout) {
                 CERROR("-- REQ TIMEOUT --\n");
                 /* clear the timeout */
                 req->rq_timeout = 0;
+                req->rq_connection->c_level = LUSTRE_CONN_RECOVD;
                 req->rq_flags |= PTL_RPC_FL_TIMEOUT;
                 if (req->rq_client && req->rq_client->cli_recovd)
                         recovd_cli_fail(req->rq_client);
-                GOTO(out, rc = 0);
+                if (req->rq_level < LUSTRE_CONN_FULL)
+                        rc = -ETIMEDOUT;
+                else 
+                        rc = 0;
+
+                GOTO(out, rc);
         }
 
         if (req->rq_timeout) { 
@@ -277,27 +303,32 @@ void ptlrpc_free_committed(struct ptlrpc_client *cli)
         struct list_head *tmp, *saved;
         struct ptlrpc_request *req;
 
-        list_for_each_safe(tmp, saved, &cli->cli_replied_head) {
+        list_for_each_safe(tmp, saved, &cli->cli_sending_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
+                if ( (req->rq_flags & PTL_RPC_FL_REPLAY) ) { 
+                        CDEBUG(D_INFO, "Retaining request %Ld for replay\n",
+                               req->rq_xid);
+                        continue;
+                }
+                        
                 /* not yet committed */ 
-                if (req->rq_transno > cli->cli_last_committed)
+                if (!req->rq_transno ||
+                    req->rq_transno > cli->cli_last_committed)
                         break; 
 
-                /* retain for replay if flagged */
-                list_del(&req->rq_list);
-                if (req->rq_flags & PTL_RPC_FL_RETAIN) {
-                        list_add(&req->rq_list, &cli->cli_replay_head);
+                CDEBUG(D_INFO, "Marking request %Ld as committed ("
+                       "transno=%Lu, last_committed=%Lu\n", 
+                       req->rq_xid, req->rq_transno, 
+                       cli->cli_last_committed);
+                if (atomic_dec_and_test(&req->rq_refcount)) {
+                        /* we do this to prevent free_req deadlock */
+                        list_del_init(&req->rq_list); 
+                        req->rq_client = NULL;
+                        ptlrpc_free_req(req);
                 } else {
-                        CDEBUG(D_INFO, "Marking request %p as committed ("
-                               "transno=%Lu, last_committed=%Lu\n", req,
-                               req->rq_transno, cli->cli_last_committed);
-                        if (atomic_dec_and_test(&req->rq_refcount)) {
-                                /* we do this to prevent free_req deadlock */
-                                req->rq_client = NULL;
-                                ptlrpc_free_req(req);
-                        } else
-                                list_add(&req->rq_list, &cli->cli_dying_head);
+                        list_del_init(&req->rq_list);
+                        list_add(&req->rq_list, &cli->cli_dying_head);
                 }
         }
 
@@ -312,66 +343,107 @@ void ptlrpc_cleanup_client(struct ptlrpc_client *cli)
         ENTRY;
 
         spin_lock(&cli->cli_lock);
-        list_for_each_safe(tmp, saved, &cli->cli_replied_head) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                /* We do this to prevent ptlrpc_free_req from taking cli_lock */
-                CDEBUG(D_INFO, "Cleaning req %p from replied list.\n", req);
-                list_del(&req->rq_list);
-                req->rq_client = NULL;
-                ptlrpc_free_req(req); 
-        }
-        list_for_each_safe(tmp, saved, &cli->cli_sent_head) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                CDEBUG(D_INFO, "Cleaning req %p from sent list.\n", req);
-                list_del(&req->rq_list);
-                req->rq_client = NULL;
-                ptlrpc_free_req(req); 
-        }
-        list_for_each_safe(tmp, saved, &cli->cli_replay_head) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                CERROR("Request %p is on the replay list at cleanup!\n", req);
-                list_del(&req->rq_list);
-                req->rq_client = NULL;
-                ptlrpc_free_req(req); 
-        }
         list_for_each_safe(tmp, saved, &cli->cli_sending_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 CDEBUG(D_INFO, "Cleaning req %p from sending list.\n", req);
-                list_del(&req->rq_list);
+                list_del_init(&req->rq_list);
                 req->rq_client = NULL;
                 ptlrpc_free_req(req); 
         }
         list_for_each_safe(tmp, saved, &cli->cli_dying_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 CERROR("Request %p is on the dying list at cleanup!\n", req);
-                list_del(&req->rq_list);
+                list_del_init(&req->rq_list);
                 req->rq_client = NULL;
                 ptlrpc_free_req(req); 
         }
         spin_unlock(&cli->cli_lock);
+
         EXIT;
         return;
+}
+
+void ptlrpc_continue_req(struct ptlrpc_request *req)
+{
+        ENTRY;
+        CDEBUG(D_INODE, "continue delayed request %Ld opc %d\n", 
+               req->rq_xid, req->rq_reqmsg->opc); 
+        wake_up_interruptible(&req->rq_wait_for_rep); 
+        EXIT;
+}
+
+void ptlrpc_resend_req(struct ptlrpc_request *req)
+{
+        ENTRY;
+        CDEBUG(D_INODE, "resend request %Ld, opc %d\n", 
+               req->rq_xid, req->rq_reqmsg->opc);
+        req->rq_status = -EAGAIN;
+        req->rq_level = LUSTRE_CONN_RECOVD;
+        req->rq_flags |= PTL_RPC_FL_RESEND;
+        req->rq_flags &= ~PTL_RPC_FL_TIMEOUT;
+        wake_up_interruptible(&req->rq_wait_for_rep);
+        EXIT;
+}
+
+void ptlrpc_restart_req(struct ptlrpc_request *req)
+{
+        ENTRY;
+        CDEBUG(D_INODE, "restart completed request %Ld, opc %d\n", 
+               req->rq_xid, req->rq_reqmsg->opc);
+        req->rq_status = -ERESTARTSYS;
+        req->rq_flags |= PTL_RPC_FL_RECOVERY;
+        req->rq_flags &= ~PTL_RPC_FL_TIMEOUT;
+        wake_up_interruptible(&req->rq_wait_for_rep);
+        EXIT;
 }
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
         int rc = 0;
+        struct ptlrpc_client *cli = req->rq_client;
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
+        CERROR("subsys: %s req %Ld opc %d level %d, conn level %d\n", 
+               cli->cli_name, req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
+               req->rq_connection->c_level);
+
+        /* XXX probably both an import and connection level are needed */
+        if (req->rq_level > req->rq_connection->c_level) { 
+                CERROR("process %d waiting for recovery\n", current->pid);
+                spin_lock(&cli->cli_lock);
+                list_del_init(&req->rq_list);
+                list_add(&req->rq_list, cli->cli_delayed_head.prev); 
+                spin_unlock(&cli->cli_lock);
+                wait_event_interruptible
+                        (req->rq_wait_for_rep, 
+                         req->rq_level <= req->rq_connection->c_level);
+                spin_lock(&cli->cli_lock);
+                list_del_init(&req->rq_list);
+                spin_unlock(&cli->cli_lock);
+                CERROR("process %d resumed\n", current->pid);
+        }
  resend:
         req->rq_time = CURRENT_TIME;
         req->rq_timeout = 30;
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
+                if ( rc > 0 ) 
+                        rc = -rc;
                 ptlrpc_cleanup_request_buf(req);
-                up(&req->rq_client->cli_rpc_sem);
+                up(&cli->cli_rpc_sem);
                 RETURN(-rc);
         }
 
+        spin_lock(&cli->cli_lock);
+        list_del_init(&req->rq_list);
+        list_add(&req->rq_list, cli->cli_sending_head.prev);
+        spin_unlock(&cli->cli_lock);
+
         CDEBUG(D_OTHER, "-- sleeping\n");
-        wait_event_interruptible(req->rq_wait_for_rep, ptlrpc_check_reply(req));
+        wait_event_interruptible(req->rq_wait_for_rep, 
+                                 ptlrpc_check_reply(req));
         CDEBUG(D_OTHER, "-- done\n");
 
         if (req->rq_flags & PTL_RPC_FL_RESEND) {
@@ -379,19 +451,15 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 goto resend;
         }
 
-        //ptlrpc_cleanup_request_buf(req);
-        up(&req->rq_client->cli_rpc_sem);
+        up(&cli->cli_rpc_sem);
         if (req->rq_flags & PTL_RPC_FL_INTR) {
                 /* Clean up the dangling reply buffers */
                 ptlrpc_abort(req);
                 GOTO(out, rc = -EINTR);
         }
 
-        if (! (req->rq_flags & PTL_RPC_FL_REPLY)) {
-                CERROR("Unknown reason for wakeup\n");
-                /* XXX Phil - I end up here when I kill obdctl */
-                ptlrpc_abort(req);
-                GOTO(out, rc = -EINTR);
+        if (! (req->rq_flags & PTL_RPC_FL_REPLIED)) {
+                GOTO(out, rc = req->rq_status);
         }
 
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_replen);
@@ -404,17 +472,70 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
                        req->rq_replen, req->rq_repmsg->status);
 
-        spin_lock(&req->rq_client->cli_lock);
-        /* add to the tail of the replied head */
-        list_del(&req->rq_list);
-        list_add(&req->rq_list, req->rq_client->cli_replied_head.prev); 
-
-        req->rq_client->cli_last_rcvd = req->rq_repmsg->last_rcvd;
-        req->rq_client->cli_last_committed = req->rq_repmsg->last_committed;
-        ptlrpc_free_committed(req->rq_client); 
-        spin_unlock(&req->rq_client->cli_lock);
+        spin_lock(&cli->cli_lock);
+        cli->cli_last_rcvd = req->rq_repmsg->last_rcvd;
+        cli->cli_last_committed = req->rq_repmsg->last_committed;
+        ptlrpc_free_committed(cli); 
+        spin_unlock(&cli->cli_lock);
 
         EXIT;
  out:
         return rc;
+}
+
+int ptlrpc_replay_req(struct ptlrpc_request *req)
+{
+        int rc = 0;
+        struct ptlrpc_client *cli = req->rq_client;
+        ENTRY;
+
+        init_waitqueue_head(&req->rq_wait_for_rep);
+        CERROR("req %Ld opc %d level %d, conn level %d\n", 
+               req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
+               req->rq_connection->c_level);
+
+        req->rq_time = CURRENT_TIME;
+        req->rq_timeout = 3;
+        rc = ptl_send_rpc(req);
+        if (rc) {
+                CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
+                ptlrpc_cleanup_request_buf(req);
+                up(&cli->cli_rpc_sem);
+                RETURN(-rc);
+        }
+
+        CDEBUG(D_OTHER, "-- sleeping\n");
+        wait_event_interruptible(req->rq_wait_for_rep, 
+                                 ptlrpc_check_reply(req));
+        CDEBUG(D_OTHER, "-- done\n");
+
+        up(&cli->cli_rpc_sem);
+
+        if (!(req->rq_flags & PTL_RPC_FL_REPLIED)) {
+                CERROR("Unknown reason for wakeup\n");
+                /* XXX Phil - I end up here when I kill obdctl */
+                ptlrpc_abort(req);
+                GOTO(out, rc = -EINTR);
+        }
+
+        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_replen);
+        if (rc) {
+                CERROR("unpack_rep failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        CDEBUG(D_NET, "got rep %d\n", req->rq_repmsg->xid);
+        if (req->rq_repmsg->status == 0)
+                CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
+                       req->rq_replen, req->rq_repmsg->status);
+        else {
+                CERROR("recovery failed: "); 
+                CERROR("req %Ld opc %d level %d, conn level %d\n", 
+                       req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
+                       req->rq_connection->c_level);
+                LBUG();
+        }
+
+ out:
+        RETURN(rc);
 }

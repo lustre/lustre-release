@@ -35,17 +35,9 @@ static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL;
  */
 static int request_out_callback(ptl_event_t *ev, void *data)
 {
-        struct ptlrpc_request *req = ev->mem_desc.user_ptr;
-        struct ptlrpc_client *cl = req->rq_client;
-
         ENTRY;
 
-        if (ev->type == PTL_EVENT_SENT) {
-                spin_lock(&req->rq_client->cli_lock);
-                list_del(&req->rq_list);
-                list_add(&req->rq_list, &cl->cli_sent_head);
-                spin_unlock(&req->rq_client->cli_lock);
-        } else {
+        if (ev->type != PTL_EVENT_SENT) {
                 // XXX make sure we understand all events, including ACK's
                 CERROR("Unknown event %d\n", ev->type);
                 LBUG();

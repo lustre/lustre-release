@@ -26,7 +26,7 @@ extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
 
-extern void ll_recover(struct ptlrpc_client *);
+extern int ll_recover(struct ptlrpc_client *);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 
@@ -130,6 +130,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
                            MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                            &sbi->ll_mds_client);
 
+        sbi->ll_mds_client.cli_data = sbi;
+        sbi->ll_mds_client.cli_name = "mdc";
         sbi->ll_mds_conn = ptlrpc_uuid_to_connection("mds");
         if (!sbi->ll_mds_conn) {
                 CERROR("cannot find MDS\n");
