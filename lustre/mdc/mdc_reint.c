@@ -30,6 +30,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
+#include <linux/obd_lov.h>
 
 static int mdc_reint(struct ptlrpc_request *request, int level)
 {
