@@ -1806,9 +1806,6 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 #endif
 
-int lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
-                      obd_off size);
-
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,
         .o_setup               = lov_setup,
@@ -1831,7 +1828,7 @@ struct obd_ops lov_obd_ops = {
         .o_queue_group_io      = lov_queue_group_io,
         .o_trigger_group_io    = lov_trigger_group_io,
         .o_teardown_async_page = lov_teardown_async_page,
-        .o_increase_kms        = lov_increase_kms,
+        .o_adjust_kms          = lov_adjust_kms,
         .o_punch               = lov_punch,
         .o_sync                = lov_sync,
         .o_enqueue             = lov_enqueue,

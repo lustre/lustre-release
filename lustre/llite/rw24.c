@@ -127,7 +127,7 @@ static int ll_direct_IO_24(int rw,
         if (rc == 0) {
                 rc = iobuf->length;
                 if (rw == WRITE)
-                        obd_increase_kms(ll_i2obdexp(inode), lsm, offset);
+                        obd_adjust_kms(ll_i2obdexp(inode), lsm, offset, 0);
         }
 
         OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);

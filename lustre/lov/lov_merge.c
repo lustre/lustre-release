@@ -88,13 +88,25 @@ __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time)
 }
 EXPORT_SYMBOL(lov_merge_mtime);
 
-int lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
-                      obd_off size)
+/* Must be called with the inode's lli_size_sem held. */
+int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
+                   obd_off size, int shrink)
 {
         struct lov_oinfo *loi;
         int stripe = 0;
         __u64 kms;
         ENTRY;
+
+        if (shrink) {
+                struct lov_oinfo *loi;
+                int i = 0;
+                for (loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
+                     i++, loi++) {
+                        kms = lov_size_to_stripe(lsm, size, i);
+                        loi->loi_kms = loi->loi_rss = kms;
+                }
+                RETURN(0);
+        }
 
         if (size > 0)
                 stripe = lov_stripe_number(lsm, size - 1);
@@ -108,7 +120,6 @@ int lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         RETURN(0);
 }
-EXPORT_SYMBOL(lov_increase_kms);
 
 void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                      struct lov_stripe_md *lsm, int stripeno, int *set)

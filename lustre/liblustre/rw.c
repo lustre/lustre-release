@@ -697,9 +697,6 @@ out_cleanup:
         RETURN(ERR_PTR(rc));
 }
 
-void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
-                      obd_off size);
-
 struct llu_sysio_callback_args*
 llu_file_write(struct inode *inode, const struct iovec *iovec,
                size_t iovlen, loff_t pos)
@@ -758,7 +755,7 @@ llu_file_write(struct inode *inode, const struct iovec *iovec,
                         /* save cookie */
                         lsca->cookies[lsca->ncookies++] = cookie;
                         pos += count;
-                        lov_increase_kms(exp, lsm, pos);
+                        obd_adjust_kms(exp, lsm, pos, 0);
                         /* file size grow */
                         if (pos > lli->lli_st_size)
                                 lli->lli_st_size = pos;

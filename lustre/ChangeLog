@@ -44,6 +44,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- mmap locking landed again, after considerable improvement (2828)
 	- fix lustre/lustrefs init scripts for SuSE (patch from Scali, 5702)
 	- don't hold the pinger_sem in ptlrpc_pinger_sending_on_import
+	- change obd_increase_kms to obd_adjust_kms (up or down) (5654)
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0
