@@ -3,8 +3,6 @@
 config=uml.xml
 LMC=../utils/lmc
 
-echo "FIXME: autoformat is no by default, edit $config to change"
-
 # create nodes
 ${LMC} -o $config --node uml1 --net uml1 tcp 
 ${LMC} -m $config --node uml2 --net uml2 tcp 
