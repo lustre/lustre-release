@@ -22,11 +22,14 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_RPC
+#ifdef __KERNEL__
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kmod.h>
-
-#define DEBUG_SUBSYSTEM S_RPC
+#else 
+#include <liblustre.h>
+#endif
 
 #include <linux/lustre_ha.h>
 #include <linux/lustre_net.h>
