@@ -22,6 +22,27 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
 
+
+/* push / pop to root of obd store */
+void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
+{ 
+        save->fs = get_fs();
+        save->pwd = dget(current->fs->pwd);
+        save->pwdmnt = mntget(current->fs->pwdmnt);
+
+        set_fs(new->fs);
+        set_fs_pwd(current->fs, new->pwdmnt, new->pwd);
+}
+
+void pop_ctxt(struct obd_run_ctxt *saved)
+{
+        set_fs(saved->fs);
+        set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
+
+        dput(saved->pwd);
+        mntput(saved->pwdmnt);
+}
+
 /* utility to make a directory */
 int simple_mkdir(struct dentry *dir, char *name, int mode)
 {
