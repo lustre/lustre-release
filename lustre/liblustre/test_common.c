@@ -5,10 +5,9 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
+#include <errno.h>
 
 #include "test_common.h"
-
-extern int errno;
 
 int exit_on_err = 1;
 

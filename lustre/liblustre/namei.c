@@ -372,7 +372,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (rc)
                         RETURN(rc);
 
-                inode = llu_iget(parent->i_fs, (obd_id)md.body->ino, &md);
+                inode = llu_iget(parent->i_fs, &md);
                 if (!inode) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)

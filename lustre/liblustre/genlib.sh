@@ -13,7 +13,7 @@ CWD=`pwd`
 
 LUS=$CWD/../
 PTL=$LUS/portals
-SYSIO=$LUS/../../libsysio
+SYSIO=$LUS/../libsysio
 
 TMP=/tmp/llib_tmp
 
