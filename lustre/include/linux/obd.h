@@ -300,7 +300,8 @@ struct obd_ops {
                          struct lustre_handle *lockh);
         int (*o_cancel)(struct lustre_handle *, struct lov_stripe_md *md,
                         __u32 mode, struct lustre_handle *);
-        int (*o_cancel_unused)(struct lustre_handle *, struct lov_stripe_md *);
+        int (*o_cancel_unused)(struct lustre_handle *, struct lov_stripe_md *,
+                               int local_only);
 };
 
 static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,

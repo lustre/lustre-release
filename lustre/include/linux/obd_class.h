@@ -408,14 +408,14 @@ static inline int obd_cancel(struct lustre_handle *conn,
 }
 
 static inline int obd_cancel_unused(struct lustre_handle *conn,
-                                    struct lov_stripe_md *lsm)
+                                    struct lov_stripe_md *lsm, int local)
 {
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->exp_obd, cancel_unused);
 
-        rc = OBP(export->exp_obd, cancel_unused)(conn, lsm);
+        rc = OBP(export->exp_obd, cancel_unused)(conn, lsm, local);
         RETURN(rc);
 }
 

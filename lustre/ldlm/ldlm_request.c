@@ -400,8 +400,12 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         return rc;
 }
 
-/* Cancel all locks on a given resource that have 0 readers/writers */
-int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id)
+/* Cancel all locks on a given resource that have 0 readers/writers.
+ *
+ * If 'local_only' is true, throw the locks away without trying to notify the
+ * server. */
+int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
+                           int local_only)
 {
         struct ldlm_resource *res;
         struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
@@ -440,11 +444,14 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id)
                 int rc;
                 w = list_entry(tmp, struct ldlm_ast_work, w_list);
 
-                ldlm_lock2handle(w->w_lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
-                if (rc != ELDLM_OK)
-                        CERROR("ldlm_cli_cancel: %d\n", rc);
-
+                if (local_only)
+                        ldlm_lock_cancel(w->w_lock);
+                else {
+                        ldlm_lock2handle(w->w_lock, &lockh);
+                        rc = ldlm_cli_cancel(&lockh);
+                        if (rc != ELDLM_OK)
+                                CERROR("ldlm_cli_cancel: %d\n", rc);
+                }
                 LDLM_LOCK_PUT(w->w_lock);
                 list_del(&w->w_list);
                 OBD_FREE(w, sizeof(*w));
