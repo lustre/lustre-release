@@ -76,6 +76,7 @@ struct obdo {
 #define OBD_MD_FLGENER	(0x2000UL)
 #define OBD_MD_FLINLINE	(0x4000UL)
 #define OBD_MD_FLOBDMD	(0x8000UL)
+#define OBD_MD_FLNOTOBD	(~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG))
 
 /*
  *  ======== OBD Device Declarations ===========
@@ -190,12 +191,12 @@ extern kmem_cache_t *obdo_cachep;
 
 static __inline__ struct obdo *obdo_alloc(void)
 {
-	struct obdo *res = NULL;
+	struct obdo *oa = NULL;
 
-	res = kmem_cache_alloc(obdo_cachep, SLAB_KERNEL);
-	memset(res, 0, sizeof (*res));
+	oa = kmem_cache_alloc(obdo_cachep, SLAB_KERNEL);
+	memset(oa, 0, sizeof (*oa));
 
-	return res;
+	return oa;
 }
 
 static __inline__ void obdo_free(struct obdo *oa)
@@ -207,26 +208,27 @@ static __inline__ void obdo_free(struct obdo *oa)
 
 
 
-static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id)
+static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id,
+					   obd_flag valid)
 {
-	struct obdo *res = NULL;
+	struct obdo *oa;
 	int err;
 
-	res = kmem_cache_alloc(obdo_cachep, SLAB_KERNEL);
-	if ( !res ) {
+	oa = obdo_alloc();
+	if ( !oa ) {
 		EXIT;
 		return ERR_PTR(-ENOMEM);
 	}
-	memset(res, 0, sizeof(*res));
-	res->o_id = id;
-	res->o_valid = OBD_MD_FLALL;
-	if ((err = OBP(conn->oc_dev, getattr)(conn, res))) {
-		OBD_FREE(res, sizeof(*res));
+	memset(oa, 0, sizeof(*oa));
+	oa->o_id = id;
+	oa->o_valid = valid;
+	if ((err = OBP(conn->oc_dev, getattr)(conn, oa))) {
+		obdo_free(oa);
 		EXIT;
 		return ERR_PTR(err);
 	}
 	EXIT;
-	return res;
+	return oa;
 }
 
 static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
@@ -291,16 +293,24 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 		dst->o_gid = src->o_gid;
 	if ( src->o_valid & OBD_MD_FLFLAGS ) 
 		dst->o_flags = src->o_flags;
+	/*
 	if ( src->o_valid & OBD_MD_FLOBDFLG ) 
 		dst->o_obdflags = src->o_obdflags;
+	*/
 	if ( src->o_valid & OBD_MD_FLNLINK ) 
 		dst->o_nlink = src->o_nlink;
 	if ( src->o_valid & OBD_MD_FLGENER ) 
 		dst->o_generation = src->o_generation;
-	if ( src->o_valid & OBD_MD_FLINLINE ) 
+	if ( src->o_valid & OBD_MD_FLINLINE &&
+	     src->o_obdflags & OBD_FL_INLINEDATA) {
 		memcpy(dst->o_inline, src->o_inline, sizeof(src->o_inline));
-	if ( src->o_valid & OBD_MD_FLOBDMD ) 
+		dst->o_obdflags |= OBD_FL_INLINEDATA;
+	}
+	if ( src->o_valid & OBD_MD_FLOBDMD &&
+	     src->o_obdflags & OBD_FL_OBDMDEXISTS) {
 		memcpy(dst->o_obdmd, src->o_obdmd, sizeof(src->o_obdmd));
+		dst->o_obdflags |= OBD_FL_OBDMDEXISTS;
+	}
 
 	dst->o_valid |= src->o_valid;
 }

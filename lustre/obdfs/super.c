@@ -286,65 +286,17 @@ static void obdfs_put_super(struct super_block *sb)
 	EXIT;
 } /* obdfs_put_super */
 
-void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
-{
-	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
-
-	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
-	obdo_from_inode(oa, inode);
-	if (obdfs_has_inline(inode)) {
-		CDEBUG(D_INODE, "inode has inline data\n");
-		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
-		oa->o_obdflags |= OBD_FL_INLINEDATA;
-		oa->o_valid |= OBD_MD_FLINLINE;
-	}
-	if (obdfs_has_obdmd(inode)) {
-		CDEBUG(D_INODE, "inode %ld has obdmd data\n");
-		oa->o_obdflags |= OBD_FL_OBDMDEXISTS;
-	}
-} /* obdfs_from_inode */
-
-void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
-{
-	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
-
-	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
-	obdo_to_inode(inode, oa);
-	if (obdo_has_inline(oa)) {
-		CDEBUG(D_INODE, "obdo has inline data\n");
-		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
-		oinfo->oi_flags |= OBD_FL_INLINEDATA;
-	}
-	if (obdo_has_obdmd(oa)) {
-		CDEBUG(D_INODE, "obdo has obdmd data\n");
-		oinfo->oi_flags |= OBD_FL_OBDMDEXISTS;
-	}
-} /* obdfs_to_inode */
-
 /* all filling in of inodes postponed until lookup */
 void obdfs_read_inode(struct inode *inode)
 {
 	struct obdo *oa;
-	int err;
 
 	ENTRY;
-	oa = obdo_alloc();
-	if (!oa) {
-		printk("obdfs_read_inode: obdo_alloc failed\n");
+	oa = obdo_fromid(IID(inode), inode->i_ino, OBD_MD_FLNOTOBD);
+	if ( IS_ERR(oa) ) {
+		printk("obdfs_read_inode: obdo_fromid failed\n");
 		EXIT;
-		return;
-	}
-	oa->o_valid = ~OBD_MD_FLOBDMD;
-	oa->o_id = inode->i_ino;
-
-	INIT_LIST_HEAD(&OBDFS_INFO(inode)->oi_pages);
-	
-	err = IOPS(inode, getattr)(IID(inode), oa);
-	if ( err ) {
-		printk("obdfs_read_inode: obd_getattr fails (%d)\n", err);
-		obdo_free(oa);
-		EXIT;
-		return;
+		return /* PTR_ERR(oa) */;
 	}
 
 	ODEBUG(oa);
@@ -362,6 +314,7 @@ void obdfs_read_inode(struct inode *inode)
 		inode->i_op = &obdfs_symlink_inode_operations;
 	else
 		init_special_inode(inode, inode->i_mode,
+				   /* XXX need to fill in the ext2 side */
 				   ((long *)OBDFS_INFO(inode)->oi_inline)[0]);
 
 	EXIT;
@@ -380,7 +333,7 @@ static void obdfs_write_inode(struct inode *inode)
 		return;
 	}
 
-	oa->o_valid = ~OBD_MD_FLOBDMD;
+	oa->o_valid = OBD_MD_FLNOTOBD;
 	obdfs_from_inode(oa, inode);
 	err = IOPS(inode, setattr)(IID(inode), oa);
 
@@ -407,7 +360,11 @@ static void obdfs_delete_inode(struct inode *inode)
         ENTRY;
 
 	oa = obdo_alloc();
-	oa->o_valid = ~OBD_MD_FLOBDMD;
+	if ( !oa ) {
+		printk("obdfs_delete_inode: obdo_alloc failed\n");
+		return;
+	}
+	oa->o_valid = OBD_MD_FLNOTOBD;
 	obdfs_from_inode(oa, inode);
 
 	err = IOPS(inode, destroy)(IID(inode), oa);

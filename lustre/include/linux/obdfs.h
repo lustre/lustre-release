@@ -103,10 +103,32 @@ static inline int obdfs_has_inline(struct inode *inode)
 	return (OBDFS_INFO(inode)->oi_flags & OBD_FL_INLINEDATA);
 }
 
-static inline int obdfs_has_obdmd(struct inode *inode)
+static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
-	return (OBDFS_INFO(inode)->oi_flags & OBD_FL_OBDMDEXISTS);
-}
+	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
+
+	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
+	obdo_from_inode(oa, inode);
+	if (obdfs_has_inline(inode)) {
+		CDEBUG(D_INODE, "inode has inline data\n");
+		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
+		oa->o_obdflags |= OBD_FL_INLINEDATA;
+		oa->o_valid |= OBD_MD_FLINLINE;
+	}
+} /* obdfs_from_inode */
+
+static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
+{
+	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
+
+	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
+	obdo_to_inode(inode, oa);
+	if (obdo_has_inline(oa)) {
+		CDEBUG(D_INODE, "obdo has inline data\n");
+		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
+		oinfo->oi_flags |= OBD_FL_INLINEDATA;
+	}
+} /* obdfs_to_inode */
 
 #define NOLOCK 0
 #define LOCKED 1

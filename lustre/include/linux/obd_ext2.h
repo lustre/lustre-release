@@ -15,7 +15,6 @@ extern struct file_operations *obd_fso;
 
 /* ext2_obd.c */
 extern struct obd_ops ext2_obd_ops;
-inline long ext2_block_map (struct inode * inode, long block);
 
 /* balloc.c */
 int ext2_new_block (const struct inode * inode, unsigned long goal,
@@ -32,28 +31,19 @@ struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
 unsigned long ext2_count_free(struct buffer_head * map, unsigned int numchars);
 
 /* fsync.c */
-extern int obd_sync_file(struct file * file, struct dentry *dentry);
+int ext2_sync_file(struct file * file, struct dentry *dentry);
 
 /* ialloc.c */
-extern void ext2_free_inode (struct inode * inode);
-extern struct inode * ext2_new_inode (const struct inode * dir, int mode,
+void ext2_free_inode (struct inode * inode);
+struct inode * ext2_new_inode (const struct inode * dir, int mode,
 				     int * err);
-extern unsigned long ext2_count_free_inodes (struct super_block * sb);
-extern void ext2_check_inodes_bitmap (struct super_block * sb);
-extern int load_inode_bitmap (struct super_block * sb,
+unsigned long ext2_count_free_inodes (struct super_block * sb);
+void ext2_check_inodes_bitmap (struct super_block * sb);
+int load_inode_bitmap (struct super_block * sb,
 			      unsigned int block_group);
 
 /* inode.c */
-void obd_read_inode (struct inode * inode);
-void obd_write_inode (struct inode * inode);
-void obd_put_inode (struct inode * inode);
-void obd_delete_inode (struct inode * inode);
-void obd_discard_prealloc_blocks (struct inode * inode);
-int obd_sync_inode (struct inode *inode);
-struct buffer_head * obd_bread (struct inode * inode, int block, 
-                                int create, int *err);
-struct buffer_head * obd_getblk (struct inode * inode, long block,
-                                 int create, int * err);
+inline long ext2_block_map (struct inode * inode, long block);
 
 
 /* super.c */

@@ -43,7 +43,7 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 	int err;
 
 	ENTRY;
-	obdo = obdo_fromid(IID(inode), inode->i_ino);
+	obdo = obdo_fromid(IID(inode), inode->i_ino, OBD_MD_FLNOTOBD);
 	if ( IS_ERR(obdo) ) {
 		EXIT;
 		return PTR_ERR(obdo);
