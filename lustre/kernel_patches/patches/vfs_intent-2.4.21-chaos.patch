@@ -300,7 +300,7 @@ Index: 68chaos_eebperf/fs/namei.c
  				break;
  		}
  		goto return_base;
-@@ -647,6 +684,27 @@
+@@ -647,6 +684,34 @@
  		 * Check the cached dentry for staleness.
  		 */
  		dentry = nd->dentry;
@@ -324,6 +324,13 @@ Index: 68chaos_eebperf/fs/namei.c
 +			}
 +			if (!nd->dentry->d_inode)
 +				goto no_inode;
++			if (lookup_flags & LOOKUP_DIRECTORY) {
++				err = -ENOTDIR; 
++				if (!nd->dentry->d_inode->i_op ||
++				    (!nd->dentry->d_inode->i_op->lookup &&
++				     !nd->dentry->d_inode->i_op->lookup_it))
++					break;
++			}
 +		} else
  		if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  			err = -ESTALE;

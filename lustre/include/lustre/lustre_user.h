@@ -23,7 +23,13 @@
 
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
+
+#ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
+#else
+#include "types.h"
+#endif
+
 #ifdef __KERNEL__
 #include <linux/string.h>
 #else
