@@ -83,9 +83,9 @@ inline void lustre_put_page(struct page *page)
 	page_cache_release(page);
 }
 
-struct page * lustre_get_page(struct inode *dir, unsigned long n)
+struct page * lustre_get_page(struct inode *inode, unsigned long n)
 {
-	struct address_space *mapping = dir->i_mapping;
+	struct address_space *mapping = inode->i_mapping;
 	struct page *page = read_cache_page(mapping, n,
 				(filler_t*)mapping->a_ops->readpage, NULL);
 	if (!IS_ERR(page)) {
@@ -109,23 +109,24 @@ int lustre_prepare_page(unsigned from, unsigned to, struct page *page)
 
 	lock_page(page);
 	err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
-	if (err) { 
-                CERROR("page index %ld from %d to %d err %d\n", 
-                                page->index, from, to, err); 
+        if (err) {
+                unlock_page(page);
+                CERROR("page index %ld from %d to %d err %d\n",
+                                page->index, from, to, err);
         }
         return err;
 }
 
 int lustre_commit_page(struct page *page, unsigned from, unsigned to)
 {
-	struct inode *dir = page->mapping->host;
+        struct inode *inode = page->mapping->host;
 	int err = 0;
 
 	SetPageUptodate(page);
 	set_page_clean(page);
 
 	page->mapping->a_ops->commit_write(NULL, page, from, to);
-	if (IS_SYNC(dir))
+        if (IS_SYNC(inode))
 		err = waitfor_one_page(page);
 	UnlockPage(page);
 	lustre_put_page(page);
