@@ -251,12 +251,10 @@ static int osccd_main(void *arg)
                         spin_unlock(&osccd->osccd_lock);
                         EXIT;
                         break;
-                } else {
-                        osccd->osccd_flags &= ~OSCCD_KICKED;
-                        spin_unlock(&osccd->osccd_lock);
-                        osccd_do_create(osccd);
                 }
+                osccd->osccd_flags &= ~OSCCD_KICKED;
                 spin_unlock(&osccd->osccd_lock);
+                osccd_do_create(osccd);
         }
 
         osccd->osccd_thread = NULL;
