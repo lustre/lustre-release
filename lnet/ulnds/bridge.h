@@ -19,7 +19,7 @@
 
 typedef struct bridge {
     int alive;
-    nal_cb_t *nal_cb;
+    lib_nal_t *lib_nal;
     void *lower;
     void *local;
     void (*shutdown)(struct bridge *);
