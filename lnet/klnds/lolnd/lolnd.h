@@ -33,6 +33,7 @@
 #include <linux/stat.h>
 #include <linux/errno.h>
 #include <linux/uio.h>
+#include <linux/init.h>
 
 #define DEBUG_SUBSYSTEM S_LONAL
 
