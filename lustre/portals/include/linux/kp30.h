@@ -7,12 +7,6 @@
 #include <linux/libcfs.h>
 #define PORTAL_DEBUG
 
-#ifndef offsetof
-# define offsetof(typ,memb)     ((int)((char *)&(((typ *)0)->memb)))
-#endif
-
-#define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
-
 #ifdef __KERNEL__
 # include <linux/vmalloc.h>
 # include <linux/time.h>
@@ -300,7 +294,6 @@ extern void kportal_blockallsigs (void);
 # include <unistd.h>
 # include <time.h>
 # include <limits.h>
-# include <asm/types.h>
 # ifndef DEBUG_SUBSYSTEM
 #  define DEBUG_SUBSYSTEM S_UNDEFINED
 # endif
@@ -308,7 +301,12 @@ extern void kportal_blockallsigs (void);
 #  undef NDEBUG
 #  include <assert.h>
 #  define LASSERT(e)     assert(e)
-#  define LASSERTF(cond, args...)     assert(cond)
+#  define LASSERTF(cond, args...)                                              \
+do {                                                                           \
+          if (!(cond))                                                         \
+                CERROR(args);                                                  \
+          assert(cond);                                                        \
+} while (0)
 # else
 #  define LASSERT(e)
 #  define LASSERTF(cond, args...) do { } while (0)
@@ -330,6 +328,7 @@ void portals_debug_dumplog(void);
 
 /* support decl needed both by kernel and liblustre */
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
+char *portals_id2str(int nal, ptl_process_id_t nid, char *str);
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
@@ -340,25 +339,37 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
  * Support for temporary event tracing with minimal Heisenberg effect. */
 #define LWT_SUPPORT  0
 
-#define LWT_MEMORY   (64<<20)
-#define LWT_MAX_CPUS 4
+#define LWT_MEMORY   (16<<20)
 
+#if !KLWT_SUPPORT
+# if defined(__KERNEL__)
+#  if !defined(BITS_PER_LONG)
+#   error "BITS_PER_LONG not defined"
+#  endif
+# elif !defined(__WORDSIZE)
+#  error "__WORDSIZE not defined"
+# else
+#  define BITS_PER_LONG __WORDSIZE
+# endif
+
+/* kernel hasn't defined this? */
 typedef struct {
-        cycles_t    lwte_when;
+        long long   lwte_when;
         char       *lwte_where;
         void       *lwte_task;
         long        lwte_p1;
         long        lwte_p2;
         long        lwte_p3;
         long        lwte_p4;
-#if BITS_PER_LONG > 32
+# if BITS_PER_LONG > 32
         long        lwte_pad;
-#endif
+# endif
 } lwt_event_t;
+#endif /* !KLWT_SUPPORT */
 
 #if LWT_SUPPORT
-#ifdef __KERNEL__
-#define LWT_EVENTS_PER_PAGE (PAGE_SIZE / sizeof (lwt_event_t))
+# ifdef __KERNEL__
+#  if !KLWT_SUPPORT
 
 typedef struct _lwt_page {
         struct list_head     lwtp_list;
@@ -374,20 +385,13 @@ typedef struct {
 extern int       lwt_enabled;
 extern lwt_cpu_t lwt_cpus[];
 
-extern int  lwt_init (void);
-extern void lwt_fini (void);
-extern int  lwt_lookup_string (int *size, char *knlptr,
-                               char *usrptr, int usrsize);
-extern int  lwt_control (int enable, int clear);
-extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
-                          void *user_ptr, int user_size);
-
 /* Note that we _don't_ define LWT_EVENT at all if LWT_SUPPORT isn't set.
  * This stuff is meant for finding specific problems; it never stays in
  * production code... */
 
 #define LWTSTR(n)       #n
 #define LWTWHERE(f,l)   f ":" LWTSTR(l)
+#define LWT_EVENTS_PER_PAGE (PAGE_SIZE / sizeof (lwt_event_t))
 
 #define LWT_EVENT(p1, p2, p3, p4)                                       \
 do {                                                                    \
@@ -396,9 +400,9 @@ do {                                                                    \
         lwt_page_t      *p;                                             \
         lwt_event_t     *e;                                             \
                                                                         \
-        local_irq_save (flags);                                         \
-                                                                        \
         if (lwt_enabled) {                                              \
+                local_irq_save (flags);                                 \
+                                                                        \
                 cpu = &lwt_cpus[smp_processor_id()];                    \
                 p = cpu->lwtc_current_page;                             \
                 e = &p->lwtp_events[cpu->lwtc_current_index++];         \
@@ -417,13 +421,23 @@ do {                                                                    \
                 e->lwte_p2    = (long)(p2);                             \
                 e->lwte_p3    = (long)(p3);                             \
                 e->lwte_p4    = (long)(p4);                             \
-        }                                                               \
                                                                         \
-        local_irq_restore (flags);                                      \
+                local_irq_restore (flags);                              \
+        }                                                               \
 } while (0)
-#else  /* __KERNEL__ */
-#define LWT_EVENT(p1,p2,p3,p4)     /* no userland implementation yet */
-#endif /* __KERNEL__ */
+
+#endif /* !KLWT_SUPPORT */
+
+extern int  lwt_init (void);
+extern void lwt_fini (void);
+extern int  lwt_lookup_string (int *size, char *knlptr,
+                               char *usrptr, int usrsize);
+extern int  lwt_control (int enable, int clear);
+extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
+                          void *user_ptr, int user_size);
+# else  /* __KERNEL__ */
+#  define LWT_EVENT(p1,p2,p3,p4)     /* no userland implementation yet */
+# endif /* __KERNEL__ */
 #endif /* LWT_SUPPORT */
 
 struct portals_device_userstate
@@ -572,49 +586,42 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
         data = (struct portal_ioctl_data *)buf;
 
         err = copy_from_user(buf, (void *)arg, sizeof(*hdr));
-        if ( err ) {
-                EXIT;
-                return err;
-        }
+        if (err)
+                RETURN(err);
 
         if (hdr->ioc_version != PORTAL_IOCTL_VERSION) {
-                CERROR ("PORTALS: version mismatch kernel vs application\n");
-                return -EINVAL;
+                CERROR("PORTALS: version mismatch kernel vs application\n");
+                RETURN(-EINVAL);
         }
 
         if (hdr->ioc_len + buf >= end) {
-                CERROR ("PORTALS: user buffer exceeds kernel buffer\n");
-                return -EINVAL;
+                CERROR("PORTALS: user buffer exceeds kernel buffer\n");
+                RETURN(-EINVAL);
         }
 
 
         if (hdr->ioc_len < sizeof(struct portal_ioctl_data)) {
-                CERROR ("PORTALS: user buffer too small for ioctl\n");
-                return -EINVAL;
+                CERROR("PORTALS: user buffer too small for ioctl\n");
+                RETURN(-EINVAL);
         }
 
         err = copy_from_user(buf, (void *)arg, hdr->ioc_len);
-        if ( err ) {
-                EXIT;
-                return err;
-        }
+        if (err)
+                RETURN(err);
 
         if (portal_ioctl_is_invalid(data)) {
-                CERROR ("PORTALS: ioctl not correctly formatted\n");
-                return -EINVAL;
+                CERROR("PORTALS: ioctl not correctly formatted\n");
+                RETURN(-EINVAL);
         }
 
-        if (data->ioc_inllen1) {
+        if (data->ioc_inllen1)
                 data->ioc_inlbuf1 = &data->ioc_bulk[0];
-        }
 
-        if (data->ioc_inllen2) {
+        if (data->ioc_inllen2)
                 data->ioc_inlbuf2 = &data->ioc_bulk[0] +
                         size_round(data->ioc_inllen1);
-        }
 
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 #endif
 
@@ -643,21 +650,13 @@ enum {
         GMNAL     = 3,
         /*          4 unused */
         TCPNAL    = 5,
-        SCIMACNAL = 6,
-        ROUTER    = 7,
-        IBNAL     = 8,
+        ROUTER    = 6,
+        OPENIBNAL = 7,
+        IIBNAL    = 8,
         NAL_ENUM_END_MARKER
 };
 
-#ifdef __KERNEL__
-extern ptl_handle_ni_t  kqswnal_ni;
-extern ptl_handle_ni_t  ksocknal_ni;
-extern ptl_handle_ni_t  kgmnal_ni;
-extern ptl_handle_ni_t  kibnal_ni;
-extern ptl_handle_ni_t  kscimacnal_ni;
-#endif
-
-#define PTL_NALFMT_SIZE               26 /* %u:%u.%u.%u.%u (10+4+4+4+3+1) */
+#define PTL_NALFMT_SIZE             32 /* %u:%u.%u.%u.%u,%u (10+4+4+4+3+5+1) */
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 
@@ -666,14 +665,18 @@ extern ptl_handle_ni_t  kscimacnal_ni;
 #define NAL_CMD_REGISTER_MYNID       102
 #define NAL_CMD_PUSH_CONNECTION      103
 #define NAL_CMD_GET_CONN             104
-#define NAL_CMD_DEL_AUTOCONN         105
-#define NAL_CMD_ADD_AUTOCONN         106
-#define NAL_CMD_GET_AUTOCONN         107
+#define NAL_CMD_DEL_PEER             105
+#define NAL_CMD_ADD_PEER             106
+#define NAL_CMD_GET_PEER             107
 #define NAL_CMD_GET_TXDESC           108
 #define NAL_CMD_ADD_ROUTE            109
 #define NAL_CMD_DEL_ROUTE            110
 #define NAL_CMD_GET_ROUTE            111
 #define NAL_CMD_NOTIFY_ROUTER        112
+#define NAL_CMD_ADD_INTERFACE        113
+#define NAL_CMD_DEL_INTERFACE        114
+#define NAL_CMD_GET_INTERFACE        115
+
 
 enum {
         DEBUG_DAEMON_START       =  1,
@@ -682,16 +685,6 @@ enum {
         DEBUG_DAEMON_CONTINUE    =  4,
 };
 
-/* XXX remove to lustre ASAP */
-struct lustre_peer {
-        ptl_nid_t       peer_nid;
-        ptl_handle_ni_t peer_ni;
-};
-
-/* module.c */
-typedef int (*nal_cmd_handler_t)(struct portals_cfg *, void * private);
-int kportal_nal_register(int nal, nal_cmd_handler_t handler, void * private);
-int kportal_nal_unregister(int nal);
 
 enum cfg_record_type {
         PORTALS_CFG_TYPE = 1,
@@ -699,10 +692,6 @@ enum cfg_record_type {
 };
 
 typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
-int kportal_nal_cmd(struct portals_cfg *);
-
-ptl_handle_ni_t *kportal_get_ni (int nal);
-void kportal_put_ni (int nal);
 
 #ifdef __CYGWIN__
 # ifndef BITS_PER_LONG

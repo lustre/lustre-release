@@ -20,12 +20,14 @@ ac_default_prefix=/usr
 # mount.lustre
 rootsbindir='/sbin'
 AC_SUBST(rootsbindir)
+sysconfdir='/etc'
+AC_SUBST(sysconfdir)
 # Directories for documentation and demos.
 docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
-pkgexampledir='${pkglibdir}/examples'
+pkgexampledir='${pkgdatadir}/examples'
 AC_SUBST(pkgexampledir)
 pymoddir='${pkglibdir}/python/Lustre'
 AC_SUBST(pymoddir)
@@ -57,6 +59,13 @@ case "$CC_VERSION" in
 	# mandrake's similar sub 0xc compiler bug
 	# http://marc.theaimsgroup.com/?l=linux-kernel&m=104748366226348&w=2
 	"gcc version 2.96 20000731 (Mandrake Linux 8.1 2.96-0.62mdk)")
+		bad_cc
+		;;
+	# unpatched 'gcc' on rh9.  miscompiles a
+	# 	 struct = (type) { .member = value, };
+	# asignment in the iibnal where the struct is a mix
+	# of u64 and u32 bit-fields.
+	"gcc version 3.2.2 20030222 (Red Hat Linux 3.2.2-5)")
 		bad_cc
 		;;
 	*)
@@ -114,3 +123,5 @@ else
 	LIBWRAP=""
 fi
 AC_SUBST(LIBWRAP)
+
+AC_SUBST(LIBS)

@@ -92,9 +92,9 @@ static inline struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal
 
         spin_lock_init(&desc->bd_lock);
         init_waitqueue_head(&desc->bd_waitq);
-        desc->bd_max_pages = npages;
-        desc->bd_page_count = 0;
-        desc->bd_md_h = PTL_HANDLE_NONE;
+        desc->bd_max_iov = npages;
+        desc->bd_iov_count = 0;
+        desc->bd_md_h = PTL_INVALID_HANDLE;
         desc->bd_portal = portal;
         desc->bd_type = type;
         
@@ -152,27 +152,15 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp (struct ptlrpc_request *req,
 void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
                            struct page *page, int pageoffset, int len)
 {
-#ifdef __KERNEL__
-        ptl_kiov_t *kiov = &desc->bd_iov[desc->bd_page_count];
-#else
-        struct iovec *iov = &desc->bd_iov[desc->bd_page_count];
-#endif
-        LASSERT(desc->bd_page_count < desc->bd_max_pages);
+        LASSERT(desc->bd_iov_count < desc->bd_max_iov);
         LASSERT(page != NULL);
         LASSERT(pageoffset >= 0);
         LASSERT(len > 0);
         LASSERT(pageoffset + len <= PAGE_SIZE);
 
-#ifdef __KERNEL__
-        kiov->kiov_page   = page;
-        kiov->kiov_offset = pageoffset;
-        kiov->kiov_len    = len;
-#else
-        iov->iov_base = page->addr + pageoffset;
-        iov->iov_len  = len;
-#endif
-        desc->bd_page_count++;
         desc->bd_nob += len;
+
+        ptlrpc_add_bulk_page(desc, page, pageoffset, len);
 }
 
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
@@ -180,7 +168,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         ENTRY;
 
         LASSERT(desc != NULL);
-        LASSERT(desc->bd_page_count != LI_POISON); /* not freed already */
+        LASSERT(desc->bd_iov_count != LI_POISON); /* not freed already */
         LASSERT(!desc->bd_network_rw);         /* network hands off or */
         LASSERT((desc->bd_export != NULL) ^ (desc->bd_import != NULL));
         if (desc->bd_export)
@@ -188,8 +176,8 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         else
                 class_import_put(desc->bd_import);
 
-        OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,
-                                bd_iov[desc->bd_max_pages]));
+        OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc, 
+                                bd_iov[desc->bd_max_iov]));
         EXIT;
 }
 
@@ -535,6 +523,7 @@ static int after_reply(struct ptlrpc_request *req)
 
 static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 {
+        char                   str[PTL_NALFMT_SIZE];
         struct obd_import     *imp;
         unsigned long          flags;
         int rc;
@@ -579,11 +568,11 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
         req->rq_reqmsg->status = current->pid;
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:ni:nid:opc"
-               " %s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               " %s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid, req->rq_reqmsg->status,
                req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         rc = ptl_send_rpc(req);
@@ -597,6 +586,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
 int ptlrpc_check_set(struct ptlrpc_request_set *set)
 {
+        char str[PTL_NALFMT_SIZE];
         unsigned long flags;
         struct list_head *tmp;
         int force_timer_recalc = 0;
@@ -797,11 +787,11 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:"
-                       "opc %s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+                       "opc %s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                        imp->imp_obd->obd_uuid.uuid, req->rq_reqmsg->status,
                        req->rq_xid,
                        imp->imp_connection->c_peer.peer_ni->pni_name,
-                       imp->imp_connection->c_peer.peer_nid,
+                       ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                        req->rq_reqmsg->opc);
 
                 set->set_remaining--;
@@ -1123,13 +1113,10 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         if (!ptlrpc_client_receiving_reply(request))
                 return;
 
-        rc = PtlMDUnlink (request->rq_reply_md_h);
-        if (rc == PTL_INV_MD) {
-                LASSERT (!ptlrpc_client_receiving_reply(request));
-                return;
-        }
-        
-        LASSERT (rc == PTL_OK);
+        PtlMDUnlink (request->rq_reply_md_h);
+
+        /* We have to l_wait_event() whatever the result, to give liblustre
+         * a chance to run reply_in_callback() */
 
         if (request->rq_set != NULL)
                 wq = &request->rq_set->set_waitq;
@@ -1320,6 +1307,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
+        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         int brc;
         struct l_wait_info lwi;
@@ -1336,11 +1324,11 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         req->rq_reqmsg->status = current->pid;
         LASSERT(imp->imp_obd != NULL);
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:ni:nid:opc "
-               "%s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               "%s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid,
                req->rq_reqmsg->status, req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         /* Mark phase here for a little debug help */
@@ -1423,11 +1411,11 @@ restart:
         DEBUG_REQ(D_NET, req, "-- done sleeping");
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:opc "
-               "%s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               "%s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid,
                req->rq_reqmsg->status, req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         spin_lock_irqsave(&imp->imp_lock, flags);

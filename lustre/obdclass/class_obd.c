@@ -285,10 +285,11 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
 
         case OBD_IOC_CLOSE_UUID: {
-                struct lustre_peer peer;
+                ptl_nid_t       peer_nid;
+                __u32           peer_nal;
                 CDEBUG(D_IOCTL, "closing all connections to uuid %s\n",
                        data->ioc_inlbuf1);
-                lustre_uuid_to_peer(data->ioc_inlbuf1, &peer);
+                lustre_uuid_to_peer(data->ioc_inlbuf1, &peer_nal, &peer_nid);
                 GOTO(out, err = 0);
         }
 
@@ -438,7 +439,8 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", BUILD_VERSION);
 }
 
-int obd_proc_read_kernel_version(char *page, char **start, off_t off, int count,                                 int *eof, void *data)
+int obd_proc_read_kernel_version(char *page, char **start, off_t off, int count,
+                                 int *eof, void *data)
 {
         *eof = 1;
         return snprintf(page, count, "%u\n", LUSTRE_KERNEL_VERSION);

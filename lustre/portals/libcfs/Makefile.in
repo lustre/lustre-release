@@ -1,9 +1,4 @@
-MODULES = portals
+MODULES = libcfs
 libcfs-objs := debug.o lwt.o module.o proc.o tracefile.o
-
-api-sources := $(wildcard @LUSTRE@/portals/portals/api-*.c)
-lib-sources := $(wildcard @LUSTRE@/portals/portals/lib-*.c)
-
-portals-objs += $(libcfs-objs) $(patsubst %.c,%.o,$(notdir $(api-sources) $(lib-sources)))
 
 @INCLUDE_RULES@

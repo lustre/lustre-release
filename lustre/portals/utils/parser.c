@@ -642,68 +642,6 @@ int Parser_arg2int(const char *inp, long *result, int base)
                 return 1;
 }
 
-/* Convert human readable size string to and int; "1k" -> 1000 */
-int Parser_size (int *sizep, char *str) {
-        int size;
-        char mod[32];
-
-        switch (sscanf (str, "%d%1[gGmMkK]", &size, mod)) {
-        default:
-                return (-1);
-
-        case 1:
-                *sizep = size;
-                return (0);
-
-        case 2:
-                switch (*mod) {
-                case 'g':
-                case 'G':
-                        *sizep = size << 30;
-                        return (0);
-
-                case 'm':
-                case 'M':
-                        *sizep = size << 20;
-                        return (0);
-
-                case 'k':
-                case 'K':
-                        *sizep = size << 10;
-                        return (0);
-
-                default:
-                        *sizep = size;
-                        return (0);
-                }
-        }
-}
-
-/* Convert a string boolean to an int; "enable" -> 1 */
-int Parser_bool (int *b, char *str) {
-        if (!strcasecmp (str, "no") ||
-            !strcasecmp (str, "n") ||
-            !strcasecmp (str, "off") ||
-            !strcasecmp (str, "down") ||
-            !strcasecmp (str, "disable"))
-        {
-                *b = 0;
-                return (0);
-        }
-        
-        if (!strcasecmp (str, "yes") ||
-            !strcasecmp (str, "y") ||
-            !strcasecmp (str, "on") ||
-            !strcasecmp (str, "up") ||
-            !strcasecmp (str, "enable"))
-        {
-                *b = 1;
-                return (0);
-        }
-        
-        return (-1);
-}
-
 int Parser_quit(int argc, char **argv)
 {
         argc = argc;

@@ -250,21 +250,16 @@ class DaemonHandler:
             log(self.pidfile(), e)
             
 class AcceptorHandler(DaemonHandler):
-    def __init__(self, port, net_type, send_mem, recv_mem, irq_aff):
+    def __init__(self, port, net_type):
         DaemonHandler.__init__(self, "acceptor")
         self.port = port
         self.flags = ''
-        self.send_mem = send_mem
-        self.recv_mem = recv_mem
-
-        if irq_aff:
-            self.flags = self.flags + ' -i'
 
     def pidfile(self):
         return "/var/run/%s-%d.pid" % (self.command, self.port)
 
     def command_line(self):
-        return string.join(map(str,('-s', self.send_mem, '-r', self.recv_mem, self.flags, self.port)))
+        return string.join(map(str,(self.flags, self.port)))
     
 acceptors = {}
 
@@ -418,33 +413,51 @@ class LCTLInterface:
   quit """ % (net, nid)
         self.run(cmds)
 
+    # add an interface
+    def add_interface(self, net, ip, netmask = ""):
+        """ add an interface """
+        cmds = """
+  network %s
+  add_interface %s %s
+  quit """ % (net, ip, netmask)
+        self.run(cmds)
+
+    # delete an interface
+    def del_interface(self, net, ip):
+        """ delete an interface """
+        cmds = """
+  network %s
+  del_interface %s
+  quit """ % (net, ip)
+        self.run(cmds)
+
     # create a new connection
     def add_uuid(self, net_type, uuid, nid):
         cmds = "\n  add_uuid %s %s %s" %(uuid, nid, net_type)
         self.run(cmds)
 
-    def add_autoconn(self, net_type, send_mem, recv_mem, nid, hostaddr,
-                     port, flags):
+    def add_peer(self, net_type, nid, hostaddr, port):
         if net_type  in ('tcp',) and not config.lctl_dump:
             cmds =  """
   network %s
-  send_mem %d
-  recv_mem %d
-  add_autoconn %s %s %d %s
+  add_peer %s %s %d
   quit""" % (net_type,
-             send_mem,
-             recv_mem,
-             nid, hostaddr, port, flags )
+             nid, hostaddr, port )
+            self.run(cmds)
+        elif net_type in ('openib','iib',) and not config.lctl_dump:
+            cmds =  """
+  network %s
+  add_peer %s
+  quit""" % (net_type,
+             nid )
             self.run(cmds)
     
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-        if srv.net_type  in ('tcp',) and not config.lctl_dump:
-            flags = 'se'
-            if srv.irq_affinity:
-                flags = flags + 'i'
-            self.add_autoconn(srv.net_type, srv.send_mem, srv.recv_mem,
-                 srv.nid, srv.hostaddr, srv.port, flags)
+        if srv.net_type  in ('tcp','openib','iib',) and not config.lctl_dump:
+            if srv.hostaddr[0]:
+                hostaddr = string.split(srv.hostaddr[0], '/')[0]
+            self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
 
     # Recover a device
     def recover(self, dev_name, new_conn):
@@ -499,21 +512,31 @@ class LCTLInterface:
         self.run(cmds)
 
 
-    def del_autoconn(self, net_type, nid, hostaddr):
+    def del_peer(self, net_type, nid, hostaddr):
         if net_type  in ('tcp',) and not config.lctl_dump:
                 cmds =  """
   ignore_errors
   network %s
-  del_autoconn %s %s s
+  del_peer %s %s single_share
   quit""" % (net_type,
              nid, hostaddr)
+                self.run(cmds)
+        elif net_type  in ('openib','iib',) and not config.lctl_dump:
+                cmds =  """
+  ignore_errors
+  network %s
+  del_peer %s single_share
+  quit""" % (net_type,
+             nid)
                 self.run(cmds)
         
     # disconnect one connection
     def disconnect(self, srv):
         self.del_uuid(srv.nid_uuid)
-        if srv.net_type  in ('tcp',) and not config.lctl_dump:
-            self.del_autoconn(srv.net_type, srv.nid, srv.hostaddr)
+        if srv.net_type  in ('tcp','openib','iib',) and not config.lctl_dump:
+            if srv.hostaddr[0]:
+                hostaddr = string.split(srv.hostaddr[0], '/')[0]
+            self.del_peer(srv.net_type, srv.nid, hostaddr)
 
     def del_uuid(self, uuid):
         cmds =  """
@@ -928,7 +951,7 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
 def sys_get_local_address(net_type, wildcard, cluster_id):
     """Return the local address for the network type."""
     local = ""
-    if net_type in ('tcp',):
+    if net_type in ('tcp','openib','iib',):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -1124,9 +1147,6 @@ class Network(Module):
         self.nid = self.db.get_val('nid', '*')
         self.cluster_id = self.db.get_val('clusterid', "0")
         self.port = self.db.get_val_int('port', 0)
-        self.send_mem = self.db.get_val_int('sendmem', DEFAULT_TCPBUF)
-        self.recv_mem = self.db.get_val_int('recvmem', DEFAULT_TCPBUF)
-        self.irq_affinity = self.db.get_val_int('irqaffinity', 0)
 
         if '*' in self.nid:
             self.nid = sys_get_local_nid(self.net_type, self.nid, self.cluster_id)
@@ -1139,14 +1159,17 @@ class Network(Module):
 
         self.nid_uuid = self.nid_to_uuid(self.nid)
 
-        self.hostaddr = self.db.get_val('hostaddr', self.nid)
-        if '*' in self.hostaddr:
-            self.hostaddr = sys_get_local_address(self.net_type, self.hostaddr, self.cluster_id)
-            if not self.hostaddr:
-                panic("unable to set hostaddr for", self.net_type, self.hostaddr, self.cluster_id)
-            debug("hostaddr:", self.hostaddr)
+        self.hostaddr = self.db.get_hostaddr()
+        if len(self.hostaddr) == 0:
+            self.hostaddr.append(self.nid)
+        if '*' in self.hostaddr[0]:
+            self.hostaddr[0] = sys_get_local_address(self.net_type, self.hostaddr[0], self.cluster_id)
+            if not self.hostaddr[0]:
+                panic("unable to set hostaddr for", self.net_type, self.hostaddr[0], self.cluster_id)
+            debug("hostaddr:", self.hostaddr[0])
 
-        self.add_portals_module("libcfs", 'portals')
+        self.add_portals_module("libcfs", 'libcfs')
+        self.add_portals_module("portals", 'portals')
         if node_needs_router():
             self.add_portals_module("router", 'kptlrouter')
         if self.net_type == 'tcp':
@@ -1155,6 +1178,10 @@ class Network(Module):
             self.add_portals_module("knals/qswnal", 'kqswnal')
         if self.net_type == 'gm':
             self.add_portals_module("knals/gmnal", 'kgmnal')
+        if self.net_type == 'openib':
+            self.add_portals_module("knals/openibnal", 'kopenibnal')
+        if self.net_type == 'iib':
+            self.add_portals_module("knals/iibnal", 'kiibnal')
 
     def nid_to_uuid(self, nid):
         return "NID_%s_UUID" %(nid,)
@@ -1167,6 +1194,13 @@ class Network(Module):
             lctl.network(self.net_type, self.nid)
         if self.net_type == 'tcp':
             sys_tweak_socknal()
+            for hostaddr in self.db.get_hostaddr():
+                ip = string.split(hostaddr, '/')[0]
+                if len(string.split(hostaddr, '/')) == 2:
+                    netmask = string.split(hostaddr, '/')[1]
+                else:
+                    netmask = ""
+                lctl.add_interface(self.net_type, ip, netmask)
         if self.net_type == 'elan':
             sys_optimize_elan()
         if self.port and  node_is_router():
@@ -1209,6 +1243,10 @@ class Network(Module):
             stop_acceptor(self.port)
         if  node_is_router():
             self.disconnect_peer_gateways()
+        if self.net_type == 'tcp':
+            for hostaddr in self.db.get_hostaddr():
+                ip = string.split(hostaddr, '/')[0]
+                lctl.del_interface(self.net_type, ip)
 
 class RouteTable(Module):
     def __init__(self,db):
@@ -1216,9 +1254,9 @@ class RouteTable(Module):
 
     def server_for_route(self, net_type, gw, gw_cluster_id, tgt_cluster_id,
                          lo, hi):
-        # only setup connections for tcp NALs
+        # only setup connections for tcp, openib, and iib NALs
         srvdb = None
-        if not net_type in ('tcp',):
+        if not net_type in ('tcp','openib','iib',):
             return None
 
         # connect to target if route is to single node and this node is the gw
@@ -2104,9 +2142,7 @@ def find_local_clusters(node_db):
         if srv.port > 0:
             if acceptors.has_key(srv.port):
                 panic("duplicate port:", srv.port)
-            acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type,
-                                                  srv.send_mem, srv.recv_mem,
-                                                  srv.irq_affinity)
+            acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
 
 # This node is a gateway.
 is_router = 0

@@ -53,7 +53,7 @@
 
 #define STDSIZE (sizeof(int) + sizeof(int) + 4)
 
-static int nal  = 0;                            // Your NAL,
+static int nal  = PTL_IFACE_DEFAULT;            // Your NAL,
 static unsigned long packets_valid = 0;         // Valid packets 
 static int running = 1;
 atomic_t pkt;
@@ -86,7 +86,7 @@ static void *pingsrv_shutdown(int err)
                                         PDEBUG ("PtlMEUnlink", rc);
 
                 case 3:
-                        kportal_put_ni (nal);
+                        PtlNIFini(server->ni);
 
                 case 4:
                         
@@ -121,13 +121,13 @@ int pingsrv_thread(void *arg)
                 server->mdout.start     = server->in_buf;
                 server->mdout.length    = STDSIZE;
                 server->mdout.threshold = 1; 
-                server->mdout.options   = PTL_MD_OP_PUT;
+                server->mdout.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
                 server->mdout.user_ptr  = NULL;
-                server->mdout.eventq    = PTL_EQ_NONE;
+                server->mdout.eq_handle = PTL_EQ_NONE;
        
                 /* Bind the outgoing buffer */
                 if ((rc = PtlMDBind (server->ni, server->mdout, 
-                                                &server->mdout_h))) {
+                                     PTL_UNLINK, &server->mdout_h))) {
                          PDEBUG ("PtlMDBind", rc);
                          pingsrv_shutdown (1);
                          return 1;
@@ -137,9 +137,9 @@ int pingsrv_thread(void *arg)
                 server->mdin.start     = server->in_buf;
                 server->mdin.length    = STDSIZE;
                 server->mdin.threshold = 1; 
-                server->mdin.options   = PTL_MD_OP_PUT;
+                server->mdin.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
                 server->mdin.user_ptr  = NULL;
-                server->mdin.eventq    = server->eq;
+                server->mdin.eq_handle = server->eq;
         
                 if ((rc = PtlMDAttach (server->me, server->mdin,
                         PTL_UNLINK, &server->mdin_h))) {
@@ -159,46 +159,45 @@ int pingsrv_thread(void *arg)
         return 0;    
 }
 
-static int pingsrv_packet(ptl_event_t *ev)
+static void pingsrv_packet(ptl_event_t *ev)
 {
         atomic_inc (&pkt);
         wake_up_process (server->tsk);
-        return 1;
 } /* pingsrv_head() */
 
-static int pingsrv_callback(ptl_event_t *ev)
+static void pingsrv_callback(ptl_event_t *ev)
 {
         
         if (ev == NULL) {
                 CERROR ("null in callback, ev=%p\n", ev);
-                return 0;
+                return;
         }
         server->evnt = *ev;
         
-        printk ("Lustre: received ping from nid "LPX64" "
-               "(off=%u rlen=%u mlen=%u head=%x)\n",
-               ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
-               *((int *)(ev->mem_desc.start + ev->offset)));
+        CWARN("Lustre: received ping from nid "LPX64" "
+              "(off=%u rlen=%u mlen=%u head=%x)\n",
+              ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
+              *((int *)(ev->md.start + ev->offset)));
         
         packets_valid++;
 
-        return pingsrv_packet(ev);
+        pingsrv_packet(ev);
         
 } /* pingsrv_callback() */
 
 
 static struct pingsrv_data *pingsrv_setup(void)
 {
-        ptl_handle_ni_t *nip;
         int rc;
 
        /* Aquire and initialize the proper nal for portals. */
-        if ((nip = kportal_get_ni (nal)) == NULL) {
+        server->ni = PTL_INVALID_HANDLE;
+
+        rc = PtlNIInit(nal, 0, NULL, NULL, &server->ni);
+        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
                 CDEBUG (D_OTHER, "Nal %d not loaded.\n", nal);
                 return pingsrv_shutdown (4);
         }
-
-        server->ni= *nip;
 
         /* Based on the initialization aquire our unique portal ID. */
         if ((rc = PtlGetId (server->ni, &server->my_id))) {
@@ -234,9 +233,9 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->mdin.start     = server->in_buf;
         server->mdin.length    = STDSIZE;
         server->mdin.threshold = 1; 
-        server->mdin.options   = PTL_MD_OP_PUT;
+        server->mdin.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         server->mdin.user_ptr  = NULL;
-        server->mdin.eventq    = server->eq;
+        server->mdin.eq_handle = server->eq;
         memset (server->in_buf, 0, STDSIZE);
         
         if ((rc = PtlMDAttach (server->me, server->mdin,
@@ -285,7 +284,7 @@ static void /*__exit*/ pingsrv_cleanup(void)
 
 MODULE_PARM(nal, "i");
 MODULE_PARM_DESC(nal, "Use the specified NAL "
-                "(6-kscimacnal, 2-ksocknal, 1-kqswnal)");
+                "(2-ksocknal, 1-kqswnal)");
  
 MODULE_AUTHOR("Brian Behlendorf (LLNL)");
 MODULE_DESCRIPTION("A kernel space ping server for portals testing");

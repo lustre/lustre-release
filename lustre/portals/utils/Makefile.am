@@ -9,14 +9,22 @@
 
 if LIBLUSTRE
 noinst_LIBRARIES = libuptlctl.a
-libuptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
-libuptlctl_a_CPPFLAGS = $(LLCPPFLAGS)
-libuptlctl_a_CFLAGS = $(LLCFLAGS)
 endif
 
-if UTILS
-sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck gmnalnid
+libuptlctl_a_SOURCES = portals.c debug.c l_ioctl.c
+libuptlctl_a_CPPFLAGS = $(LLCPPFLAGS)
+libuptlctl_a_CFLAGS = $(LLCFLAGS)
+
+sbin_PROGRAMS = debugctl
+
 lib_LIBRARIES = libptlctl.a
+
+libptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
+
+if UTILS
+if !CRAY_PORTALS
+sbin_PROGRAMS += acceptor ptlctl routerstat wirecheck gmnalnid
+endif
 endif
 
 acceptor_SOURCES = acceptor.c
@@ -24,16 +32,15 @@ acceptor_LDADD = $(LIBWRAP)
 
 wirecheck_SOURCES = wirecheck.c
 
-libptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
-
 gmnalnid_SOURCES = gmnalnid.c
 
 ptlctl_SOURCES = ptlctl.c
 ptlctl_LDADD =  -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
 ptlctl_DEPENDENCIES = libptlctl.a
 
+routerstat_SOURCES = routerstat.c
+
 debugctl_SOURCES = debugctl.c
 debugctl_LDADD = -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
 debugctl_DEPENDENCIES = libptlctl.a
 
-routerstat_SOURCES = routerstat.c

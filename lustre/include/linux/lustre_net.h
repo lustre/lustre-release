@@ -35,32 +35,52 @@
 #include <linux/kp30.h>
 // #include <linux/obd.h>
 #include <portals/p30.h>
-#include <portals/lib-types.h>                  /* FIXME (for PTL_MD_MAX_IOV) */
 #include <linux/lustre_idl.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_import.h>
 #include <linux/lprocfs_status.h>
 
-/* Define some large-ish defaults for MTU and MAX_IOV if portals ones
- * aren't defined (i.e. no limits) or too large */
-#if (defined(PTL_MTU) && (PTL_MTU <= (1 << 20)))
-# define PTLRPC_MTU  PTL_MTU
+/* MD flags we _always_ use */
+#define PTLRPC_MD_OPTIONS  (PTL_MD_EVENT_START_DISABLE | \
+                            PTL_MD_LUSTRE_COMPLETION_SEMANTICS)
+
+/* Define some large-ish maxima for bulk I/O 
+ * CAVEAT EMPTOR, with multinet (i.e. gateways forwarding between networks)
+ * these limits are system wide and not interface-local. */
+#define PTLRPC_MAX_BRW_SIZE     (1 << 20)
+#define PTLRPC_MAX_BRW_PAGES    512
+
+/* ...reduce to fit... */
+
+#if CRAY_PORTALS
+/* include a cray header here if relevant
+ * NB liblustre SIZE/PAGES is affected too, but it merges contiguous
+ * chunks, so FTTB, it always used contiguous MDs */
 #else
-# define PTLRPC_MTU  (1 << 20)
-#endif
-#if (defined(PTL_MAX_IOV) && (PTL_MAX_IOV <= 512))
-# define PTLRPC_MAX_IOV PTL_MAX_IOV
-#else
-# define PTLRPC_MAX_IOV 512
+# include <portals/lib-types.h>
 #endif
 
-/* Define consistent max bulk size/pages */
-#if (PTLRPC_MTU > PTLRPC_MAX_IOV * PAGE_SIZE)
-# define PTLRPC_MAX_BRW_PAGES   PTLRPC_MAX_IOV
-# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_IOV * PAGE_SIZE)
+#if (defined(PTL_MTU) && (PTL_MTU < PTLRPC_MAX_BRW_SIZE))
+# undef  PTLRPC_MAX_BRW_SIZE
+# define PTLRPC_MAX_BRW_SIZE  PTL_MTU
+#endif
+#if (defined(PTL_MD_MAX_IOV) && (PTL_MD_MAX_IOV < PTLRPC_MAX_BRW_PAGES ))
+# undef  PTLRPC_MAX_BRW_PAGES
+# define PTLRPC_MAX_BRW_PAGES PTL_MD_MAX_IOV
+#endif
+
+/* ...and make consistent... */
+
+#if (PTLRPC_MAX_BRW_SIZE > PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
+# undef  PTLRPC_MAX_BRW_SIZE
+# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
 #else
-# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MTU / PAGE_SIZE)
-# define PTLRPC_MAX_BRW_SIZE    PTLRPC_MTU
+# undef  PTLRPC_MAX_BRW_PAGES
+# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MAX_BRW_SIZE / PAGE_SIZE)
+#endif
+
+#if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
+#error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
 #endif
 
 /* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
@@ -126,7 +146,7 @@
 #define PTLBD_MAXREQSIZE 1024
 
 struct ptlrpc_peer {
-        ptl_nid_t         peer_nid;
+        ptl_process_id_t  peer_id;
         struct ptlrpc_ni *peer_ni;
 };
 
@@ -304,6 +324,7 @@ struct ptlrpc_request {
         struct ptlrpc_cb_id  rq_reply_cbid;
         
         struct ptlrpc_peer rq_peer; /* XXX see service.c can this be factored away? */
+        char               rq_peerstr[PTL_NALFMT_SIZE];
         struct obd_export *rq_export;
         struct obd_import *rq_import;
         
@@ -390,8 +411,8 @@ struct ptlrpc_bulk_desc {
         __u32 bd_portal;
         struct ptlrpc_request *bd_req;          /* associated request */
         wait_queue_head_t      bd_waitq;        /* server side only WQ */
-        int                    bd_page_count;   /* # pages (== entries in bd_iov) */
-        int                    bd_max_pages;    /* allocated size of bd_iov */
+        int                    bd_iov_count;    /* # entries in bd_iov */
+        int                    bd_max_iov;      /* allocated size of bd_iov */
         int                    bd_nob;          /* # bytes covered */
         int                    bd_nob_transferred; /* # bytes GOT/PUT */
 
@@ -400,10 +421,10 @@ struct ptlrpc_bulk_desc {
         struct ptlrpc_cb_id    bd_cbid;         /* network callback info */
         ptl_handle_md_t        bd_md_h;         /* associated MD */
         
-#ifdef __KERNEL__
-        ptl_kiov_t bd_iov[PTL_MD_MAX_IOV];
+#if (!CRAY_PORTALS && defined(__KERNEL__))
+        ptl_kiov_t             bd_iov[0];
 #else
-        struct iovec bd_iov[PTL_MD_MAX_IOV];
+        ptl_md_iovec_t         bd_iov[0];
 #endif
 };
 
@@ -484,6 +505,18 @@ struct ptlrpc_service {
         struct ptlrpc_srv_ni srv_interfaces[0];
 };
 
+static inline char *ptlrpc_peernid2str(struct ptlrpc_peer *p, char *str)
+{
+        LASSERT(p->peer_ni != NULL);
+        return (portals_nid2str(p->peer_ni->pni_number, p->peer_id.nid, str));
+}
+
+static inline char *ptlrpc_id2str(struct ptlrpc_peer *p, char *str)
+{
+        LASSERT(p->peer_ni != NULL);
+        return (portals_id2str(p->peer_ni->pni_number, p->peer_id, str));
+}
+
 /* ptlrpc/events.c */
 extern struct ptlrpc_ni ptlrpc_interfaces[];
 extern int              ptlrpc_ninterfaces;
@@ -494,6 +527,7 @@ extern void client_bulk_callback (ptl_event_t *ev);
 extern void request_in_callback(ptl_event_t *ev);
 extern void reply_out_callback(ptl_event_t *ev);
 extern void server_bulk_callback (ptl_event_t *ev);
+extern int ptlrpc_default_nal(void);
 
 /* ptlrpc/connection.c */
 void ptlrpc_dump_connections(void);
@@ -504,6 +538,7 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 void ptlrpc_init_connection(void);
 void ptlrpc_cleanup_connection(void);
+extern ptl_pid_t ptl_get_pid(void);
 
 /* ptlrpc/niobuf.c */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc);

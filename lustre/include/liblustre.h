@@ -25,14 +25,18 @@
 #define LIBLUSTRE_H__
 
 #include <sys/mman.h>
-#include <asm/byteorder.h>
-#ifndef  __CYGWIN__
-#include <stdint.h>
-#include <asm/page.h>
-#else
-#include <sys/types.h>
-#include "ioctl.h"
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
 #endif
+#ifdef HAVE_ASM_PAGE_H
+# include <asm/page.h>
+#endif
+#ifdef HAVE_SYS_USER_H
+# include <sys/user.h>
+#endif
+
+#include "ioctl.h"
+
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <stdlib.h>
@@ -116,9 +120,6 @@ static inline void *kmalloc(int size, int prot)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
-#define capable(foo) 1
-#define CAP_SYS_ADMIN 1
-
 typedef struct {
         void *cwd;
 }mm_segment_t;
@@ -130,19 +131,12 @@ struct file; /* forward ref */
 typedef int (write_proc_t)(struct file *file, const char *buffer,
                            unsigned long count, void *data);
 
-# define le16_to_cpu(x) __le16_to_cpu(x)
-# define cpu_to_le16(x) __cpu_to_le16(x)
-# define le32_to_cpu(x) __le32_to_cpu(x)
-# define cpu_to_le32(x) __cpu_to_le32(x)
-# define le64_to_cpu(x) __le64_to_cpu(x)
-# define cpu_to_le64(x) __cpu_to_le64(x)
-
 #define NIPQUAD(addr) \
         ((unsigned char *)&addr)[0], \
         ((unsigned char *)&addr)[1], \
         ((unsigned char *)&addr)[2], \
         ((unsigned char *)&addr)[3]
-                                                                                                                        
+
 #if defined(__LITTLE_ENDIAN)
 #define HIPQUAD(addr) \
         ((unsigned char *)&addr)[3], \
@@ -362,9 +356,9 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define kmem_cache_alloc(cache, prio) malloc(cache->size)
 #define kmem_cache_free(cache, obj) free(obj)
 
-#define PAGE_CACHE_SIZE PAGE_SIZE
-#define PAGE_CACHE_SHIFT 12
-#define PAGE_CACHE_MASK PAGE_MASK
+#define PAGE_CACHE_SIZE  PAGE_SIZE
+#define PAGE_CACHE_SHIFT PAGE_SHIFT
+#define PAGE_CACHE_MASK  PAGE_MASK
 
 /* XXX
  * for this moment, liblusre will not rely OST for non-page-aligned write
@@ -644,7 +638,7 @@ static inline int schedule_timeout(signed long t)
                 _ret = tv.tv_sec;               \
         _ret;                                   \
 })
-#define time_after(a, b) ((long)(b) - (long)(a) > 0)
+#define time_after(a, b) ((long)(b) - (long)(a) < 0)
 #define time_before(a, b) time_after(b,a)
 
 struct timer_list {

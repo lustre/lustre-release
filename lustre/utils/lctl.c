@@ -27,7 +27,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <portals/api-support.h>
 #include <portals/ptlctl.h>
 #include "obdctl.h"
 #include "parser.h"
@@ -68,14 +67,20 @@ command_t cmdlist[] = {
          "usage: --net <tcp/elan/myrinet> <command>"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
          "usage: network <tcp/elan/myrinet>"},
-        {"autoconn_list", jt_ptl_print_autoconnects, 0, "print autoconnect entries\n"
-         "usage: print_autoconns"},
-        {"add_autoconn", jt_ptl_add_autoconnect, 0, "add an autoconnect entry\n"
-         "usage: add_autoconn <nid> <host> <port> [ise]"},
-        {"del_autoconn",jt_ptl_del_autoconnect,0,"remove an autoconnect entry\n"
+        {"interface_list", jt_ptl_print_interfaces,0,"print interface entries\n"
+         "usage: interface_list"},
+        {"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
+         "usage: add_interface ip [netmask]"},
+        {"del_interface", jt_ptl_del_interface, 0, "del interface entry\n"
+         "usage: del_interface [ip]"},
+        {"peer_list", jt_ptl_print_peers, 0, "print peer entries\n"
+         "usage: peer_list"},
+        {"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
+         "usage: add_peer <nid> <host> <port>"},
+        {"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
          "usage: del_autoconn [<nid>] [<host>] [ks]"},
-        {"conn_list", jt_ptl_print_connections, 0, "connect to a remote nid\n"
-         "usage: print_conns"},
+        {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
+         "usage: conn_list"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
          "usage: connect <host> <port> [iIOC]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
@@ -91,7 +96,7 @@ command_t cmdlist[] = {
         {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid> <net_type>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
-         "usage: close_uuid <uuid> <net-type>)"},
+         "usage: close_uuid <uuid> <net_type>"},
         {"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_ptl_add_route, 0,
@@ -109,15 +114,6 @@ command_t cmdlist[] = {
         {"show_route", jt_ptl_print_routes, 0,
          "print the portals routing table, same as route_list\n"
          "usage: show_route"},
-        {"recv_mem", jt_ptl_rxmem, 0, "set socket receive buffer size, "
-         "if size is omited the current size is reported.\n"
-         "usage: recv_mem [size]"},
-        {"send_mem", jt_ptl_txmem, 0, "set socket send buffer size, "
-         "if size is omited the current size is reported.\n"
-         "usage: send_mem [size]"},
-        {"nagle", jt_ptl_nagle, 0, "enable/disable nagle, omitting the "
-         "argument will cause the current nagle setting to be reported.\n"
-         "usage: nagle [on/off]"},
         {"fail", jt_ptl_fail_nid, 0, "fail/restore communications.\n"
          "Omitting the count means indefinitely, 0 means restore, "
          "otherwise fail 'count' messages.\n"
@@ -286,7 +282,7 @@ command_t cmdlist[] = {
          "usage: mark <text>"},
         {"filter", jt_dbg_filter, 0, "filter message type\n"
          "usage: filter <subsystem id/debug mask>"},
-        {"show", jt_dbg_show, 0, "show type of messages\n"
+        {"show", jt_dbg_show, 0, "Show specific type of messages\n"
          "usage: show <subsystem id/debug mask>"},
         {"debug_list", jt_dbg_list, 0, "list subsystem and debug types\n"
          "usage: debug_list <subs/types>"},

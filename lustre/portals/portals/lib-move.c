@@ -31,37 +31,32 @@
 #endif
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
-#include <portals/arg-blocks.h>
 
-/*
- * Right now it does not check access control lists.
- *
- * We only support one MD per ME, which is how the Portals 3.1 spec is written.
- * All previous complication is removed.
- */
+/* forward ref */
+static void lib_commit_md (lib_nal_t *nal, lib_md_t *md, lib_msg_t *msg);
 
-static lib_me_t *
-lib_find_me(nal_cb_t *nal, int index, int op_mask, ptl_nid_t src_nid,
-            ptl_pid_t src_pid, ptl_size_t rlength, ptl_size_t roffset,
-            ptl_match_bits_t match_bits, ptl_size_t *mlength_out,
-            ptl_size_t *offset_out, int *unlink_out)
+static lib_md_t *
+lib_match_md(lib_nal_t *nal, int index, int op_mask, 
+             ptl_nid_t src_nid, ptl_pid_t src_pid, 
+             ptl_size_t rlength, ptl_size_t roffset,
+             ptl_match_bits_t match_bits, lib_msg_t *msg,
+             ptl_size_t *mlength_out, ptl_size_t *offset_out)
 {
-        lib_ni_t         *ni = &nal->ni;
-        struct list_head *match_list = &ni->tbl.tbl[index];
+        lib_ni_t         *ni = &nal->libnal_ni;
+        struct list_head *match_list = &ni->ni_portals.tbl[index];
         struct list_head *tmp;
         lib_me_t         *me;
         lib_md_t         *md;
         ptl_size_t        mlength;
         ptl_size_t        offset;
-
         ENTRY;
 
         CDEBUG (D_NET, "Request from "LPU64".%d of length %d into portal %d "
                 "MB="LPX64"\n", src_nid, src_pid, rlength, index, match_bits);
 
-        if (index < 0 || index >= ni->tbl.size) {
+        if (index < 0 || index >= ni->ni_portals.size) {
                 CERROR("Invalid portal %d not in [0-%d]\n",
-                       index, ni->tbl.size);
+                       index, ni->ni_portals.size);
                 goto failed;
         }
 
@@ -75,18 +70,21 @@ lib_find_me(nal_cb_t *nal, int index, int op_mask, ptl_nid_t src_nid,
 
                 LASSERT (me == md->me);
 
-                /* MD deactivated */
-                if (md->threshold == 0)
-                        continue;
-
                 /* mismatched MD op */
                 if ((md->options & op_mask) == 0)
+                        continue;
+
+                /* MD exhausted */
+                if (lib_md_exhausted(md))
                         continue;
 
                 /* mismatched ME nid/pid? */
                 if (me->match_id.nid != PTL_NID_ANY &&
                     me->match_id.nid != src_nid)
                         continue;
+                
+                CDEBUG(D_NET, "match_id.pid [%x], src_pid [%x]\n",
+                       me->match_id.pid, src_pid);
 
                 if (me->match_id.pid != PTL_PID_ANY &&
                     me->match_id.pid != src_pid)
@@ -103,10 +101,12 @@ lib_find_me(nal_cb_t *nal, int index, int op_mask, ptl_nid_t src_nid,
                 else
                         offset = roffset;
 
-                mlength = md->length - offset;
-                if ((md->options & PTL_MD_MAX_SIZE) != 0 &&
-                    mlength > md->max_size)
+                if ((md->options & PTL_MD_MAX_SIZE) != 0) {
                         mlength = md->max_size;
+                        LASSERT (md->offset + mlength <= md->length);
+                } else {
+                        mlength = md->length - offset;
+                }
 
                 if (rlength <= mlength) {        /* fits in allowed space */
                         mlength = rlength;
@@ -118,78 +118,103 @@ lib_find_me(nal_cb_t *nal, int index, int op_mask, ptl_nid_t src_nid,
                         goto failed;
                 }
 
+                /* Commit to this ME/MD */
+                CDEBUG(D_NET, "Incoming %s index %x from "LPU64"/%u of "
+                       "length %d/%d into md "LPX64" [%d] + %d\n", 
+                       (op_mask == PTL_MD_OP_PUT) ? "put" : "get",
+                       index, src_nid, src_pid, mlength, rlength, 
+                       md->md_lh.lh_cookie, md->md_niov, offset);
+
+                lib_commit_md(nal, md, msg);
                 md->offset = offset + mlength;
+
+                /* NB Caller sets ev.type and ev.hdr_data */
+                msg->ev.initiator.nid = src_nid;
+                msg->ev.initiator.pid = src_pid;
+                msg->ev.pt_index = index;
+                msg->ev.match_bits = match_bits;
+                msg->ev.rlength = rlength;
+                msg->ev.mlength = mlength;
+                msg->ev.offset = offset;
+
+                lib_md_deconstruct(nal, md, &msg->ev.md);
+                ptl_md2handle(&msg->ev.md_handle, nal, md);
 
                 *offset_out = offset;
                 *mlength_out = mlength;
-                *unlink_out = ((md->options & PTL_MD_AUTO_UNLINK) != 0 &&
-                               md->offset >= (md->length - md->max_size));
-                RETURN (me);
+
+                /* Auto-unlink NOW, so the ME gets unlinked if required.
+                 * We bumped md->pending above so the MD just gets flagged
+                 * for unlink when it is finalized. */
+                if ((md->md_flags & PTL_MD_FLAG_AUTO_UNLINK) != 0 &&
+                    lib_md_exhausted(md))
+                        lib_md_unlink(nal, md);
+
+                RETURN (md);
         }
 
  failed:
         CERROR (LPU64": Dropping %s from "LPU64".%d portal %d match "LPX64
                 " offset %d length %d: no match\n",
-                ni->nid, (op_mask == PTL_MD_OP_GET) ? "GET" : "PUT",
+                ni->ni_pid.nid, (op_mask == PTL_MD_OP_GET) ? "GET" : "PUT",
                 src_nid, src_pid, index, match_bits, roffset, rlength);
         RETURN(NULL);
 }
 
-int do_PtlFailNid (nal_cb_t *nal, void *private, void *v_args, void *v_ret)
+int lib_api_fail_nid (nal_t *apinal, ptl_nid_t nid, unsigned int threshold)
 {
-        PtlFailNid_in     *args = v_args;
-        PtlFailNid_out    *ret  = v_ret;
+        lib_nal_t         *nal = apinal->nal_data;
         lib_test_peer_t   *tp;
         unsigned long      flags;
         struct list_head  *el;
         struct list_head  *next;
         struct list_head   cull;
         
-        if (args->threshold != 0) {
+        if (threshold != 0) {
                 /* Adding a new entry */
-                tp = (lib_test_peer_t *)nal->cb_malloc (nal, sizeof (*tp));
+                PORTAL_ALLOC(tp, sizeof(*tp));
                 if (tp == NULL)
-                        return (ret->rc = PTL_FAIL);
+                        return PTL_NO_SPACE;
                 
-                tp->tp_nid = args->nid;
-                tp->tp_threshold = args->threshold;
+                tp->tp_nid = nid;
+                tp->tp_threshold = threshold;
                 
-                state_lock (nal, &flags);
-                list_add (&tp->tp_list, &nal->ni.ni_test_peers);
-                state_unlock (nal, &flags);
-                return (ret->rc = PTL_OK);
+                LIB_LOCK(nal, flags);
+                list_add_tail (&tp->tp_list, &nal->libnal_ni.ni_test_peers);
+                LIB_UNLOCK(nal, flags);
+                return PTL_OK;
         }
         
         /* removing entries */
         INIT_LIST_HEAD (&cull);
         
-        state_lock (nal, &flags);
+        LIB_LOCK(nal, flags);
 
-        list_for_each_safe (el, next, &nal->ni.ni_test_peers) {
+        list_for_each_safe (el, next, &nal->libnal_ni.ni_test_peers) {
                 tp = list_entry (el, lib_test_peer_t, tp_list);
                 
                 if (tp->tp_threshold == 0 ||    /* needs culling anyway */
-                    args->nid == PTL_NID_ANY || /* removing all entries */
-                    tp->tp_nid == args->nid)    /* matched this one */
+                    nid == PTL_NID_ANY ||       /* removing all entries */
+                    tp->tp_nid == nid)          /* matched this one */
                 {
                         list_del (&tp->tp_list);
                         list_add (&tp->tp_list, &cull);
                 }
         }
         
-        state_unlock (nal, &flags);
+        LIB_UNLOCK(nal, flags);
                 
         while (!list_empty (&cull)) {
                 tp = list_entry (cull.next, lib_test_peer_t, tp_list);
 
                 list_del (&tp->tp_list);
-                nal->cb_free (nal, tp, sizeof (*tp));
+                PORTAL_FREE(tp, sizeof (*tp));
         }
-        return (ret->rc = PTL_OK);
+        return PTL_OK;
 }
 
 static int
-fail_peer (nal_cb_t *nal, ptl_nid_t nid, int outgoing) 
+fail_peer (lib_nal_t *nal, ptl_nid_t nid, int outgoing) 
 {
         lib_test_peer_t  *tp;
         struct list_head *el;
@@ -200,9 +225,9 @@ fail_peer (nal_cb_t *nal, ptl_nid_t nid, int outgoing)
 
         INIT_LIST_HEAD (&cull);
         
-        state_lock (nal, &flags);
+        LIB_LOCK (nal, flags);
 
-        list_for_each_safe (el, next, &nal->ni.ni_test_peers) {
+        list_for_each_safe (el, next, &nal->libnal_ni.ni_test_peers) {
                 tp = list_entry (el, lib_test_peer_t, tp_list);
 
                 if (tp->tp_threshold == 0) {
@@ -234,13 +259,13 @@ fail_peer (nal_cb_t *nal, ptl_nid_t nid, int outgoing)
                 }
         }
         
-        state_unlock (nal, &flags);
+        LIB_UNLOCK (nal, flags);
 
         while (!list_empty (&cull)) {
                 tp = list_entry (cull.next, lib_test_peer_t, tp_list);
                 list_del (&tp->tp_list);
                 
-                nal->cb_free (nal, tp, sizeof (*tp));
+                PORTAL_FREE(tp, sizeof (*tp));
         }
 
         return (fail);
@@ -531,52 +556,52 @@ lib_extract_kiov (int dst_niov, ptl_kiov_t *dst,
 #endif
 
 ptl_err_t
-lib_recv (nal_cb_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
+lib_recv (lib_nal_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
           ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen)
 {
         if (mlen == 0)
-                return (nal->cb_recv(nal, private, msg,
-                                     0, NULL,
-                                     offset, mlen, rlen));
+                return (nal->libnal_recv(nal, private, msg,
+                                         0, NULL,
+                                         offset, mlen, rlen));
 
         if ((md->options & PTL_MD_KIOV) == 0)
-                return (nal->cb_recv(nal, private, msg,
-                                     md->md_niov, md->md_iov.iov, 
-                                     offset, mlen, rlen));
+                return (nal->libnal_recv(nal, private, msg,
+                                         md->md_niov, md->md_iov.iov, 
+                                         offset, mlen, rlen));
 
-        return (nal->cb_recv_pages(nal, private, msg, 
-                                   md->md_niov, md->md_iov.kiov,
-                                   offset, mlen, rlen));
+        return (nal->libnal_recv_pages(nal, private, msg, 
+                                       md->md_niov, md->md_iov.kiov,
+                                       offset, mlen, rlen));
 }
 
 ptl_err_t
-lib_send (nal_cb_t *nal, void *private, lib_msg_t *msg,
+lib_send (lib_nal_t *nal, void *private, lib_msg_t *msg,
           ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
           lib_md_t *md, ptl_size_t offset, ptl_size_t len) 
 {
         if (len == 0)
-                return (nal->cb_send(nal, private, msg,
-                                     hdr, type, nid, pid,
-                                     0, NULL,
-                                     offset, len));
+                return (nal->libnal_send(nal, private, msg,
+                                         hdr, type, nid, pid,
+                                         0, NULL,
+                                         offset, len));
         
         if ((md->options & PTL_MD_KIOV) == 0)
-                return (nal->cb_send(nal, private, msg, 
-                                     hdr, type, nid, pid,
-                                     md->md_niov, md->md_iov.iov,
-                                     offset, len));
+                return (nal->libnal_send(nal, private, msg, 
+                                         hdr, type, nid, pid,
+                                         md->md_niov, md->md_iov.iov,
+                                         offset, len));
 
-        return (nal->cb_send_pages(nal, private, msg, 
-                                   hdr, type, nid, pid,
-                                   md->md_niov, md->md_iov.kiov,
-                                   offset, len));
+        return (nal->libnal_send_pages(nal, private, msg, 
+                                       hdr, type, nid, pid,
+                                       md->md_niov, md->md_iov.kiov,
+                                       offset, len));
 }
 
 static void
-lib_commit_md (nal_cb_t *nal, lib_md_t *md, lib_msg_t *msg)
+lib_commit_md (lib_nal_t *nal, lib_md_t *md, lib_msg_t *msg)
 {
-        /* ALWAYS called holding the state_lock */
-        lib_counters_t *counters = &nal->ni.counters;
+        /* ALWAYS called holding the LIB_LOCK */
+        lib_counters_t *counters = &nal->libnal_ni.ni_counters;
 
         /* Here, we commit the MD to a network OP by marking it busy and
          * decrementing its threshold.  Come what may, the network "owns"
@@ -593,11 +618,11 @@ lib_commit_md (nal_cb_t *nal, lib_md_t *md, lib_msg_t *msg)
         if (counters->msgs_alloc > counters->msgs_max)
                 counters->msgs_max = counters->msgs_alloc;
 
-        list_add (&msg->msg_list, &nal->ni.ni_active_msgs);
+        list_add (&msg->msg_list, &nal->libnal_ni.ni_active_msgs);
 }
 
 static void
-lib_drop_message (nal_cb_t *nal, void *private, ptl_hdr_t *hdr)
+lib_drop_message (lib_nal_t *nal, void *private, ptl_hdr_t *hdr)
 {
         unsigned long flags;
 
@@ -605,10 +630,10 @@ lib_drop_message (nal_cb_t *nal, void *private, ptl_hdr_t *hdr)
          * to receive (init_msg() not called) and therefore can't cause an
          * event. */
         
-        state_lock(nal, &flags);
-        nal->ni.counters.drop_count++;
-        nal->ni.counters.drop_length += hdr->payload_length;
-        state_unlock(nal, &flags);
+        LIB_LOCK(nal, flags);
+        nal->libnal_ni.ni_counters.drop_count++;
+        nal->libnal_ni.ni_counters.drop_length += hdr->payload_length;
+        LIB_UNLOCK(nal, flags);
 
         /* NULL msg => if NAL calls lib_finalize it will be a noop */
         (void) lib_recv(nal, private, NULL, NULL, 0, 0, hdr->payload_length);
@@ -622,146 +647,98 @@ lib_drop_message (nal_cb_t *nal, void *private, ptl_hdr_t *hdr)
  *
  */
 static ptl_err_t
-parse_put(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
+parse_put(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 {
-        lib_ni_t        *ni = &nal->ni;
+        lib_ni_t        *ni = &nal->libnal_ni;
         ptl_size_t       mlength = 0;
         ptl_size_t       offset = 0;
-        int              unlink = 0;
         ptl_err_t        rc;
-        lib_me_t        *me;
         lib_md_t        *md;
         unsigned long    flags;
                 
         /* Convert put fields to host byte order */
-        hdr->msg.put.match_bits = NTOH__u64 (hdr->msg.put.match_bits);
-        hdr->msg.put.ptl_index = NTOH__u32 (hdr->msg.put.ptl_index);
-        hdr->msg.put.offset = NTOH__u32 (hdr->msg.put.offset);
+        hdr->msg.put.match_bits = le64_to_cpu(hdr->msg.put.match_bits);
+        hdr->msg.put.ptl_index = le32_to_cpu(hdr->msg.put.ptl_index);
+        hdr->msg.put.offset = le32_to_cpu(hdr->msg.put.offset);
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
-        me = lib_find_me(nal, hdr->msg.put.ptl_index, PTL_MD_OP_PUT,
-                         hdr->src_nid, hdr->src_pid,
-                         hdr->payload_length, hdr->msg.put.offset,
-                         hdr->msg.put.match_bits,
-                         &mlength, &offset, &unlink);
-        if (me == NULL) {
-                state_unlock(nal, &flags);
+        md = lib_match_md(nal, hdr->msg.put.ptl_index, PTL_MD_OP_PUT,
+                          hdr->src_nid, hdr->src_pid,
+                          hdr->payload_length, hdr->msg.put.offset,
+                          hdr->msg.put.match_bits, msg,
+                          &mlength, &offset);
+        if (md == NULL) {
+                LIB_UNLOCK(nal, flags);
                 return (PTL_FAIL);
         }
 
-        md = me->md;
-        CDEBUG(D_NET, "Incoming put index %x from "LPU64"/%u of length %d/%d "
-               "into md "LPX64" [%d] + %d\n", hdr->msg.put.ptl_index,
-               hdr->src_nid, hdr->src_pid, mlength, hdr->payload_length, 
-               md->md_lh.lh_cookie, md->md_niov, offset);
-
-        lib_commit_md(nal, md, msg);
-
-        msg->ev.type = PTL_EVENT_PUT;
-        msg->ev.initiator.nid = hdr->src_nid;
-        msg->ev.initiator.pid = hdr->src_pid;
-        msg->ev.portal = hdr->msg.put.ptl_index;
-        msg->ev.match_bits = hdr->msg.put.match_bits;
-        msg->ev.rlength = hdr->payload_length;
-        msg->ev.mlength = mlength;
-        msg->ev.offset = offset;
+        msg->ev.type = PTL_EVENT_PUT_END;
         msg->ev.hdr_data = hdr->msg.put.hdr_data;
-
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
 
         if (!ptl_is_wire_handle_none(&hdr->msg.put.ack_wmd) &&
             !(md->options & PTL_MD_ACK_DISABLE)) {
                 msg->ack_wmd = hdr->msg.put.ack_wmd;
         }
 
-        ni->counters.recv_count++;
-        ni->counters.recv_length += mlength;
+        ni->ni_counters.recv_count++;
+        ni->ni_counters.recv_length += mlength;
 
-        /* only unlink after MD's pending count has been bumped in
-         * lib_commit_md() otherwise lib_me_unlink() will nuke it */
-        if (unlink)
-                lib_me_unlink (nal, me);
-
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
 
         rc = lib_recv(nal, private, msg, md, offset, mlength,
                       hdr->payload_length);
         if (rc != PTL_OK)
                 CERROR(LPU64": error on receiving PUT from "LPU64": %d\n",
-                       ni->nid, hdr->src_nid, rc);
+                       ni->ni_pid.nid, hdr->src_nid, rc);
 
         return (rc);
 }
 
 static ptl_err_t
-parse_get(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
+parse_get(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 {
-        lib_ni_t        *ni = &nal->ni;
+        lib_ni_t        *ni = &nal->libnal_ni;
         ptl_size_t       mlength = 0;
         ptl_size_t       offset = 0;
-        int              unlink = 0;
-        lib_me_t        *me;
         lib_md_t        *md;
         ptl_hdr_t        reply;
         unsigned long    flags;
         int              rc;
 
         /* Convert get fields to host byte order */
-        hdr->msg.get.match_bits = NTOH__u64 (hdr->msg.get.match_bits);
-        hdr->msg.get.ptl_index = NTOH__u32 (hdr->msg.get.ptl_index);
-        hdr->msg.get.sink_length = NTOH__u32 (hdr->msg.get.sink_length);
-        hdr->msg.get.src_offset = NTOH__u32 (hdr->msg.get.src_offset);
+        hdr->msg.get.match_bits = le64_to_cpu(hdr->msg.get.match_bits);
+        hdr->msg.get.ptl_index = le32_to_cpu(hdr->msg.get.ptl_index);
+        hdr->msg.get.sink_length = le32_to_cpu(hdr->msg.get.sink_length);
+        hdr->msg.get.src_offset = le32_to_cpu(hdr->msg.get.src_offset);
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
-        me = lib_find_me(nal, hdr->msg.get.ptl_index, PTL_MD_OP_GET,
-                         hdr->src_nid, hdr->src_pid,
-                         hdr->msg.get.sink_length, hdr->msg.get.src_offset,
-                         hdr->msg.get.match_bits,
-                         &mlength, &offset, &unlink);
-        if (me == NULL) {
-                state_unlock(nal, &flags);
+        md = lib_match_md(nal, hdr->msg.get.ptl_index, PTL_MD_OP_GET,
+                          hdr->src_nid, hdr->src_pid,
+                          hdr->msg.get.sink_length, hdr->msg.get.src_offset,
+                          hdr->msg.get.match_bits, msg,
+                          &mlength, &offset);
+        if (md == NULL) {
+                LIB_UNLOCK(nal, flags);
                 return (PTL_FAIL);
         }
 
-        md = me->md;
-        CDEBUG(D_NET, "Incoming get index %d from "LPU64".%u of length %d/%d "
-               "from md "LPX64" [%d] + %d\n", hdr->msg.get.ptl_index,
-               hdr->src_nid, hdr->src_pid, mlength, hdr->payload_length, 
-               md->md_lh.lh_cookie, md->md_niov, offset);
-
-        lib_commit_md(nal, md, msg);
-
-        msg->ev.type = PTL_EVENT_GET;
-        msg->ev.initiator.nid = hdr->src_nid;
-        msg->ev.initiator.pid = hdr->src_pid;
-        msg->ev.portal = hdr->msg.get.ptl_index;
-        msg->ev.match_bits = hdr->msg.get.match_bits;
-        msg->ev.rlength = hdr->payload_length;
-        msg->ev.mlength = mlength;
-        msg->ev.offset = offset;
+        msg->ev.type = PTL_EVENT_GET_END;
         msg->ev.hdr_data = 0;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        ni->ni_counters.send_count++;
+        ni->ni_counters.send_length += mlength;
 
-        ni->counters.send_count++;
-        ni->counters.send_length += mlength;
-
-        /* only unlink after MD's refcount has been bumped in
-         * lib_commit_md() otherwise lib_me_unlink() will nuke it */
-        if (unlink)
-                lib_me_unlink (nal, me);
-
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
 
         memset (&reply, 0, sizeof (reply));
-        reply.type     = HTON__u32 (PTL_MSG_REPLY);
-        reply.dest_nid = HTON__u64 (hdr->src_nid);
-        reply.src_nid  = HTON__u64 (ni->nid);
-        reply.dest_pid = HTON__u32 (hdr->src_pid);
-        reply.src_pid  = HTON__u32 (ni->pid);
-        reply.payload_length = HTON__u32 (mlength);
+        reply.type     = cpu_to_le32(PTL_MSG_REPLY);
+        reply.dest_nid = cpu_to_le64(hdr->src_nid);
+        reply.dest_pid = cpu_to_le32(hdr->src_pid);
+        reply.src_nid  = cpu_to_le64(ni->ni_pid.nid);
+        reply.src_pid  = cpu_to_le32(ni->ni_pid.pid);
+        reply.payload_length = cpu_to_le32(mlength);
 
         reply.msg.reply.dst_wmd = hdr->msg.get.return_wmd;
 
@@ -772,7 +749,7 @@ parse_get(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
                        hdr->src_nid, hdr->src_pid, md, offset, mlength);
         if (rc != PTL_OK)
                 CERROR(LPU64": Unable to send REPLY for GET from "LPU64": %d\n",
-                       ni->nid, hdr->src_nid, rc);
+                       ni->ni_pid.nid, hdr->src_nid, rc);
 
         /* Discard any junk after the hdr */
         (void) lib_recv(nal, private, NULL, NULL, 0, 0, hdr->payload_length);
@@ -781,27 +758,27 @@ parse_get(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 }
 
 static ptl_err_t
-parse_reply(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
+parse_reply(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 {
-        lib_ni_t        *ni = &nal->ni;
+        lib_ni_t        *ni = &nal->libnal_ni;
         lib_md_t        *md;
         int              rlength;
         int              length;
         unsigned long    flags;
         ptl_err_t        rc;
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
         /* NB handles only looked up by creator (no flips) */
         md = ptl_wire_handle2md(&hdr->msg.reply.dst_wmd, nal);
         if (md == NULL || md->threshold == 0) {
                 CERROR (LPU64": Dropping REPLY from "LPU64" for %s MD "LPX64"."LPX64"\n",
-                        ni->nid, hdr->src_nid,
+                        ni->ni_pid.nid, hdr->src_nid,
                         md == NULL ? "invalid" : "inactive",
                         hdr->msg.reply.dst_wmd.wh_interface_cookie,
                         hdr->msg.reply.dst_wmd.wh_object_cookie);
 
-                state_unlock(nal, &flags);
+                LIB_UNLOCK(nal, flags);
                 return (PTL_FAIL);
         }
 
@@ -813,10 +790,10 @@ parse_reply(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
                 if ((md->options & PTL_MD_TRUNCATE) == 0) {
                         CERROR (LPU64": Dropping REPLY from "LPU64
                                 " length %d for MD "LPX64" would overflow (%d)\n",
-                                ni->nid, hdr->src_nid, length,
+                                ni->ni_pid.nid, hdr->src_nid, length,
                                 hdr->msg.reply.dst_wmd.wh_object_cookie,
                                 md->length);
-                        state_unlock(nal, &flags);
+                        LIB_UNLOCK(nal, flags);
                         return (PTL_FAIL);
                 }
                 length = md->length;
@@ -828,56 +805,57 @@ parse_reply(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 
         lib_commit_md(nal, md, msg);
 
-        msg->ev.type = PTL_EVENT_REPLY;
+        msg->ev.type = PTL_EVENT_REPLY_END;
         msg->ev.initiator.nid = hdr->src_nid;
         msg->ev.initiator.pid = hdr->src_pid;
         msg->ev.rlength = rlength;
         msg->ev.mlength = length;
         msg->ev.offset = 0;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, md, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, md);
 
-        ni->counters.recv_count++;
-        ni->counters.recv_length += length;
+        ni->ni_counters.recv_count++;
+        ni->ni_counters.recv_length += length;
 
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
 
         rc = lib_recv(nal, private, msg, md, 0, length, rlength);
         if (rc != PTL_OK)
                 CERROR(LPU64": error on receiving REPLY from "LPU64": %d\n",
-                       ni->nid, hdr->src_nid, rc);
+                       ni->ni_pid.nid, hdr->src_nid, rc);
 
         return (rc);
 }
 
 static ptl_err_t
-parse_ack(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
+parse_ack(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 {
-        lib_ni_t      *ni = &nal->ni;
+        lib_ni_t      *ni = &nal->libnal_ni;
         lib_md_t      *md;
         unsigned long  flags;
 
         /* Convert ack fields to host byte order */
-        hdr->msg.ack.match_bits = NTOH__u64 (hdr->msg.ack.match_bits);
-        hdr->msg.ack.mlength = NTOH__u32 (hdr->msg.ack.mlength);
+        hdr->msg.ack.match_bits = le64_to_cpu(hdr->msg.ack.match_bits);
+        hdr->msg.ack.mlength = le32_to_cpu(hdr->msg.ack.mlength);
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
         /* NB handles only looked up by creator (no flips) */
         md = ptl_wire_handle2md(&hdr->msg.ack.dst_wmd, nal);
         if (md == NULL || md->threshold == 0) {
                 CDEBUG(D_INFO, LPU64": Dropping ACK from "LPU64" to %s MD "
-                       LPX64"."LPX64"\n", ni->nid, hdr->src_nid, 
+                       LPX64"."LPX64"\n", ni->ni_pid.nid, hdr->src_nid, 
                        (md == NULL) ? "invalid" : "inactive",
                        hdr->msg.ack.dst_wmd.wh_interface_cookie,
                        hdr->msg.ack.dst_wmd.wh_object_cookie);
 
-                state_unlock(nal, &flags);
+                LIB_UNLOCK(nal, flags);
                 return (PTL_FAIL);
         }
 
         CDEBUG(D_NET, LPU64": ACK from "LPU64" into md "LPX64"\n",
-               ni->nid, hdr->src_nid, 
+               ni->ni_pid.nid, hdr->src_nid, 
                hdr->msg.ack.dst_wmd.wh_object_cookie);
 
         lib_commit_md(nal, md, msg);
@@ -888,11 +866,12 @@ parse_ack(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
         msg->ev.mlength = hdr->msg.ack.mlength;
         msg->ev.match_bits = hdr->msg.ack.match_bits;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, md, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, md);
 
-        ni->counters.recv_count++;
+        ni->ni_counters.recv_count++;
 
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
         
         /* We have received and matched up the ack OK, create the
          * completion event now... */
@@ -923,128 +902,153 @@ hdr_type_string (ptl_hdr_t *hdr)
         }
 }
 
-void print_hdr(nal_cb_t * nal, ptl_hdr_t * hdr)
+void print_hdr(lib_nal_t *nal, ptl_hdr_t * hdr)
 {
         char *type_str = hdr_type_string (hdr);
 
-        nal->cb_printf(nal, "P3 Header at %p of type %s\n", hdr, type_str);
-        nal->cb_printf(nal, "    From nid/pid %Lu/%Lu", hdr->src_nid,
-                       hdr->src_pid);
-        nal->cb_printf(nal, "    To nid/pid %Lu/%Lu\n", hdr->dest_nid,
-                       hdr->dest_pid);
+        CWARN("P3 Header at %p of type %s\n", hdr, type_str);
+        CWARN("    From nid/pid "LPX64"/%u", hdr->src_nid, hdr->src_pid);
+        CWARN("    To nid/pid "LPX64"/%u\n", hdr->dest_nid, hdr->dest_pid);
 
         switch (hdr->type) {
         default:
                 break;
 
         case PTL_MSG_PUT:
-                nal->cb_printf(nal,
-                               "    Ptl index %d, ack md "LPX64"."LPX64", "
-                               "match bits "LPX64"\n",
-                               hdr->msg.put.ptl_index,
-                               hdr->msg.put.ack_wmd.wh_interface_cookie,
-                               hdr->msg.put.ack_wmd.wh_object_cookie,
-                               hdr->msg.put.match_bits);
-                nal->cb_printf(nal,
-                               "    Length %d, offset %d, hdr data "LPX64"\n",
-                               hdr->payload_length, hdr->msg.put.offset,
-                               hdr->msg.put.hdr_data);
+                CWARN("    Ptl index %d, ack md "LPX64"."LPX64", "
+                      "match bits "LPX64"\n",
+                      hdr->msg.put.ptl_index,
+                      hdr->msg.put.ack_wmd.wh_interface_cookie,
+                      hdr->msg.put.ack_wmd.wh_object_cookie,
+                      hdr->msg.put.match_bits);
+                CWARN("    Length %d, offset %d, hdr data "LPX64"\n",
+                      hdr->payload_length, hdr->msg.put.offset,
+                      hdr->msg.put.hdr_data);
                 break;
 
         case PTL_MSG_GET:
-                nal->cb_printf(nal,
-                               "    Ptl index %d, return md "LPX64"."LPX64", "
-                               "match bits "LPX64"\n", hdr->msg.get.ptl_index,
-                               hdr->msg.get.return_wmd.wh_interface_cookie,
-                               hdr->msg.get.return_wmd.wh_object_cookie,
-                               hdr->msg.get.match_bits);
-                nal->cb_printf(nal,
-                               "    Length %d, src offset %d\n",
-                               hdr->msg.get.sink_length,
-                               hdr->msg.get.src_offset);
+                CWARN("    Ptl index %d, return md "LPX64"."LPX64", "
+                      "match bits "LPX64"\n", hdr->msg.get.ptl_index,
+                      hdr->msg.get.return_wmd.wh_interface_cookie,
+                      hdr->msg.get.return_wmd.wh_object_cookie,
+                      hdr->msg.get.match_bits);
+                CWARN("    Length %d, src offset %d\n",
+                      hdr->msg.get.sink_length,
+                      hdr->msg.get.src_offset);
                 break;
 
         case PTL_MSG_ACK:
-                nal->cb_printf(nal, "    dst md "LPX64"."LPX64", "
-                               "manipulated length %d\n",
-                               hdr->msg.ack.dst_wmd.wh_interface_cookie,
-                               hdr->msg.ack.dst_wmd.wh_object_cookie,
-                               hdr->msg.ack.mlength);
+                CWARN("    dst md "LPX64"."LPX64", "
+                      "manipulated length %d\n",
+                      hdr->msg.ack.dst_wmd.wh_interface_cookie,
+                      hdr->msg.ack.dst_wmd.wh_object_cookie,
+                      hdr->msg.ack.mlength);
                 break;
 
         case PTL_MSG_REPLY:
-                nal->cb_printf(nal, "    dst md "LPX64"."LPX64", "
-                               "length %d\n",
-                               hdr->msg.reply.dst_wmd.wh_interface_cookie,
-                               hdr->msg.reply.dst_wmd.wh_object_cookie,
-                               hdr->payload_length);
+                CWARN("    dst md "LPX64"."LPX64", "
+                      "length %d\n",
+                      hdr->msg.reply.dst_wmd.wh_interface_cookie,
+                      hdr->msg.reply.dst_wmd.wh_object_cookie,
+                      hdr->payload_length);
         }
 
 }                               /* end of print_hdr() */
 
 
-void 
-lib_parse(nal_cb_t *nal, ptl_hdr_t *hdr, void *private)
+ptl_err_t
+lib_parse(lib_nal_t *nal, ptl_hdr_t *hdr, void *private)
 {
         unsigned long  flags;
         ptl_err_t      rc;
         lib_msg_t     *msg;
+
+        /* NB we return PTL_OK if we manage to parse the header and believe
+         * it looks OK.  Anything that goes wrong with receiving the
+         * message after that point is the responsibility of the NAL */
         
         /* convert common fields to host byte order */
-        hdr->dest_nid = NTOH__u64 (hdr->dest_nid);
-        hdr->src_nid = NTOH__u64 (hdr->src_nid);
-        hdr->dest_pid = NTOH__u32 (hdr->dest_pid);
-        hdr->src_pid = NTOH__u32 (hdr->src_pid);
-        hdr->type = NTOH__u32 (hdr->type);
-        hdr->payload_length = NTOH__u32(hdr->payload_length);
-#if 0
-        nal->cb_printf(nal, "%d: lib_parse: nal=%p hdr=%p type=%d\n",
-                       nal->ni.nid, nal, hdr, hdr->type);
-        print_hdr(nal, hdr);
-#endif
-        if (hdr->type == PTL_MSG_HELLO) {
+        hdr->type = le32_to_cpu(hdr->type);
+        hdr->src_nid = le64_to_cpu(hdr->src_nid);
+        hdr->src_pid = le32_to_cpu(hdr->src_pid);
+        hdr->dest_pid = le32_to_cpu(hdr->dest_pid);
+        hdr->payload_length = le32_to_cpu(hdr->payload_length);
+
+        switch (hdr->type) {
+        case PTL_MSG_HELLO: {
                 /* dest_nid is really ptl_magicversion_t */
                 ptl_magicversion_t *mv = (ptl_magicversion_t *)&hdr->dest_nid;
 
-                CERROR (LPU64": Dropping unexpected HELLO message: "
+                mv->magic = le32_to_cpu(mv->magic);
+                mv->version_major = le16_to_cpu(mv->version_major);
+                mv->version_minor = le16_to_cpu(mv->version_minor);
+
+                if (mv->magic == PORTALS_PROTO_MAGIC &&
+                    mv->version_major == PORTALS_PROTO_VERSION_MAJOR &&
+                    mv->version_minor == PORTALS_PROTO_VERSION_MINOR) {
+                        CWARN (LPU64": Dropping unexpected HELLO message: "
+                               "magic %d, version %d.%d from "LPD64"\n",
+                               nal->libnal_ni.ni_pid.nid, mv->magic, 
+                               mv->version_major, mv->version_minor,
+                               hdr->src_nid);
+
+                        /* it's good but we don't want it */
+                        lib_drop_message(nal, private, hdr);
+                        return PTL_OK;
+                }
+
+                /* we got garbage */
+                CERROR (LPU64": Bad HELLO message: "
                         "magic %d, version %d.%d from "LPD64"\n",
-                        nal->ni.nid, mv->magic, 
+                        nal->libnal_ni.ni_pid.nid, mv->magic, 
                         mv->version_major, mv->version_minor,
                         hdr->src_nid);
-                lib_drop_message(nal, private, hdr);
-                return;
-        }
-        
-        if (hdr->dest_nid != nal->ni.nid) {
-                CERROR(LPU64": Dropping %s message from "LPU64" to "LPU64
-                       " (not me)\n", nal->ni.nid, hdr_type_string (hdr),
-                       hdr->src_nid, hdr->dest_nid);
-                lib_drop_message(nal, private, hdr);
-                return;
+                return PTL_FAIL;
         }
 
-        if (!list_empty (&nal->ni.ni_test_peers) && /* normally we don't */
+        case PTL_MSG_ACK:
+        case PTL_MSG_PUT:
+        case PTL_MSG_GET:
+        case PTL_MSG_REPLY:
+                hdr->dest_nid = le64_to_cpu(hdr->dest_nid);
+                if (hdr->dest_nid != nal->libnal_ni.ni_pid.nid) {
+                        CERROR(LPU64": BAD dest NID in %s message from"
+                               LPU64" to "LPU64" (not me)\n", 
+                               nal->libnal_ni.ni_pid.nid, hdr_type_string (hdr),
+                               hdr->src_nid, hdr->dest_nid);
+                        return PTL_FAIL;
+                }
+                break;
+
+        default:
+                CERROR(LPU64": Bad message type 0x%x from "LPU64"\n",
+                       nal->libnal_ni.ni_pid.nid, hdr->type, hdr->src_nid);
+                return PTL_FAIL;
+        }
+
+        /* We've decided we're not receiving garbage since we can parse the
+         * header.  We will return PTL_OK come what may... */
+
+        if (!list_empty (&nal->libnal_ni.ni_test_peers) && /* normally we don't */
             fail_peer (nal, hdr->src_nid, 0))      /* shall we now? */
         {
                 CERROR(LPU64": Dropping incoming %s from "LPU64
                        ": simulated failure\n",
-                       nal->ni.nid, hdr_type_string (hdr), 
+                       nal->libnal_ni.ni_pid.nid, hdr_type_string (hdr), 
                        hdr->src_nid);
                 lib_drop_message(nal, private, hdr);
-                return;
+                return PTL_OK;
         }
 
         msg = lib_msg_alloc(nal);
         if (msg == NULL) {
                 CERROR(LPU64": Dropping incoming %s from "LPU64
                        ": can't allocate a lib_msg_t\n",
-                       nal->ni.nid, hdr_type_string (hdr), 
+                       nal->libnal_ni.ni_pid.nid, hdr_type_string (hdr), 
                        hdr->src_nid);
                 lib_drop_message(nal, private, hdr);
-                return;
+                return PTL_OK;
         }
-
-        do_gettimeofday(&msg->ev.arrival_time);
 
         switch (hdr->type) {
         case PTL_MSG_ACK:
@@ -1060,10 +1064,8 @@ lib_parse(nal_cb_t *nal, ptl_hdr_t *hdr, void *private)
                 rc = parse_reply(nal, hdr, private, msg);
                 break;
         default:
-                CERROR(LPU64": Dropping <unknown> message from "LPU64
-                       ": Bad type=0x%x\n",  nal->ni.nid, hdr->src_nid,
-                       hdr->type);
-                rc = PTL_FAIL;
+                LASSERT(0);
+                rc = PTL_FAIL;                  /* no compiler warning please */
                 break;
         }
                 
@@ -1072,138 +1074,129 @@ lib_parse(nal_cb_t *nal, ptl_hdr_t *hdr, void *private)
                         /* committed... */
                         lib_finalize(nal, private, msg, rc);
                 } else {
-                        state_lock(nal, &flags);
-                        lib_msg_free(nal, msg); /* expects state_lock held */
-                        state_unlock(nal, &flags);
+                        LIB_LOCK(nal, flags);
+                        lib_msg_free(nal, msg); /* expects LIB_LOCK held */
+                        LIB_UNLOCK(nal, flags);
 
                         lib_drop_message(nal, private, hdr);
                 }
         }
+
+        return PTL_OK;
+        /* That's "OK I can parse it", not "OK I like it" :) */
 }
 
 int 
-do_PtlPut(nal_cb_t *nal, void *private, void *v_args, void *v_ret)
+lib_api_put(nal_t *apinal, ptl_handle_md_t *mdh, 
+            ptl_ack_req_t ack, ptl_process_id_t *id,
+            ptl_pt_index_t portal, ptl_ac_index_t ac,
+            ptl_match_bits_t match_bits, 
+            ptl_size_t offset, ptl_hdr_data_t hdr_data)
 {
-        /*
-         * Incoming:
-         *      ptl_handle_md_t md_in
-         *      ptl_ack_req_t ack_req_in
-         *      ptl_process_id_t target_in
-         *      ptl_pt_index_t portal_in
-         *      ptl_ac_index_t cookie_in
-         *      ptl_match_bits_t match_bits_in
-         *      ptl_size_t offset_in
-         *
-         * Outgoing:
-         */
-
-        PtlPut_in        *args = v_args;
-        ptl_process_id_t *id = &args->target_in;
-        PtlPut_out       *ret = v_ret;
-        lib_ni_t         *ni = &nal->ni;
+        lib_nal_t        *nal = apinal->nal_data;
+        lib_ni_t         *ni = &nal->libnal_ni;
         lib_msg_t        *msg;
         ptl_hdr_t         hdr;
         lib_md_t         *md;
         unsigned long     flags;
         int               rc;
         
-        if (!list_empty (&nal->ni.ni_test_peers) && /* normally we don't */
+        if (!list_empty (&ni->ni_test_peers) && /* normally we don't */
             fail_peer (nal, id->nid, 1))           /* shall we now? */
         {
-                CERROR(LPU64": Dropping PUT to "LPU64": simulated failure\n",
-                       nal->ni.nid, id->nid);
-                return (ret->rc = PTL_INV_PROC);
+                CERROR("Dropping PUT to "LPU64": simulated failure\n",
+                       id->nid);
+                return PTL_PROCESS_INVALID;
         }
 
         msg = lib_msg_alloc(nal);
         if (msg == NULL) {
                 CERROR(LPU64": Dropping PUT to "LPU64": ENOMEM on lib_msg_t\n",
-                       ni->nid, id->nid);
-                return (ret->rc = PTL_NOSPACE);
+                       ni->ni_pid.nid, id->nid);
+                return PTL_NO_SPACE;
         }
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
-        md = ptl_handle2md(&args->md_in, nal);
+        md = ptl_handle2md(mdh, nal);
         if (md == NULL || md->threshold == 0) {
                 lib_msg_free(nal, msg);
-                state_unlock(nal, &flags);
+                LIB_UNLOCK(nal, flags);
         
-                return (ret->rc = PTL_INV_MD);
+                return PTL_MD_INVALID;
         }
 
-        CDEBUG(D_NET, "PtlPut -> %Lu: %lu\n", (unsigned long long)id->nid,
-               (unsigned long)id->pid);
+        CDEBUG(D_NET, "PtlPut -> "LPX64"\n", id->nid);
 
         memset (&hdr, 0, sizeof (hdr));
-        hdr.type     = HTON__u32 (PTL_MSG_PUT);
-        hdr.dest_nid = HTON__u64 (id->nid);
-        hdr.src_nid  = HTON__u64 (ni->nid);
-        hdr.dest_pid = HTON__u32 (id->pid);
-        hdr.src_pid  = HTON__u32 (ni->pid);
-        hdr.payload_length = HTON__u32 (md->length);
+        hdr.type     = cpu_to_le32(PTL_MSG_PUT);
+        hdr.dest_nid = cpu_to_le64(id->nid);
+        hdr.dest_pid = cpu_to_le32(id->pid);
+        hdr.src_nid  = cpu_to_le64(ni->ni_pid.nid);
+        hdr.src_pid  = cpu_to_le32(ni->ni_pid.pid);
+        hdr.payload_length = cpu_to_le32(md->length);
 
         /* NB handles only looked up by creator (no flips) */
-        if (args->ack_req_in == PTL_ACK_REQ) {
+        if (ack == PTL_ACK_REQ) {
                 hdr.msg.put.ack_wmd.wh_interface_cookie = ni->ni_interface_cookie;
                 hdr.msg.put.ack_wmd.wh_object_cookie = md->md_lh.lh_cookie;
         } else {
                 hdr.msg.put.ack_wmd = PTL_WIRE_HANDLE_NONE;
         }
 
-        hdr.msg.put.match_bits = HTON__u64 (args->match_bits_in);
-        hdr.msg.put.ptl_index = HTON__u32 (args->portal_in);
-        hdr.msg.put.offset = HTON__u32 (args->offset_in);
-        hdr.msg.put.hdr_data = args->hdr_data_in;
+        hdr.msg.put.match_bits = cpu_to_le64(match_bits);
+        hdr.msg.put.ptl_index = cpu_to_le32(portal);
+        hdr.msg.put.offset = cpu_to_le32(offset);
+        hdr.msg.put.hdr_data = hdr_data;
 
         lib_commit_md(nal, md, msg);
         
-        msg->ev.type = PTL_EVENT_SENT;
-        msg->ev.initiator.nid = ni->nid;
-        msg->ev.initiator.pid = ni->pid;
-        msg->ev.portal = args->portal_in;
-        msg->ev.match_bits = args->match_bits_in;
+        msg->ev.type = PTL_EVENT_SEND_END;
+        msg->ev.initiator.nid = ni->ni_pid.nid;
+        msg->ev.initiator.pid = ni->ni_pid.pid;
+        msg->ev.pt_index = portal;
+        msg->ev.match_bits = match_bits;
         msg->ev.rlength = md->length;
         msg->ev.mlength = md->length;
-        msg->ev.offset = args->offset_in;
-        msg->ev.hdr_data = args->hdr_data_in;
+        msg->ev.offset = offset;
+        msg->ev.hdr_data = hdr_data;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, md, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, md);
 
-        ni->counters.send_count++;
-        ni->counters.send_length += md->length;
+        ni->ni_counters.send_count++;
+        ni->ni_counters.send_length += md->length;
 
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
         
-        rc = lib_send (nal, private, msg, &hdr, PTL_MSG_PUT,
+        rc = lib_send (nal, NULL, msg, &hdr, PTL_MSG_PUT,
                        id->nid, id->pid, md, 0, md->length);
         if (rc != PTL_OK) {
-                CERROR(LPU64": error sending PUT to "LPU64": %d\n",
-                       ni->nid, id->nid, rc);
-                lib_finalize (nal, private, msg, rc);
+                CERROR("Error sending PUT to "LPX64": %d\n",
+                       id->nid, rc);
+                lib_finalize (nal, NULL, msg, rc);
         }
         
         /* completion will be signalled by an event */
-        return ret->rc = PTL_OK;
+        return PTL_OK;
 }
 
 lib_msg_t * 
-lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, lib_md_t *getmd)
+lib_create_reply_msg (lib_nal_t *nal, ptl_nid_t peer_nid, lib_msg_t *getmsg)
 {
         /* The NAL can DMA direct to the GET md (i.e. no REPLY msg).  This
-         * returns a msg the NAL can pass to lib_finalize() so that a REPLY
-         * event still occurs. 
+         * returns a msg for the NAL to pass to lib_finalize() when the sink
+         * data has been received.
          *
-         * CAVEAT EMPTOR: 'getmd' is passed by pointer so it MUST be valid.
-         * This can only be guaranteed while a lib_msg_t holds a reference
-         * on it (ie. pending > 0), so best call this before the
-         * lib_finalize() of the original GET. */
+         * CAVEAT EMPTOR: 'getmsg' is the original GET, which is freed when
+         * lib_finalize() is called on it, so the NAL must call this first */
 
-        lib_ni_t        *ni = &nal->ni;
+        lib_ni_t        *ni = &nal->libnal_ni;
         lib_msg_t       *msg = lib_msg_alloc(nal);
+        lib_md_t        *getmd = getmsg->md;
         unsigned long    flags;
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
         LASSERT (getmd->pending > 0);
 
@@ -1225,143 +1218,132 @@ lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, lib_md_t *getmd)
 
         lib_commit_md (nal, getmd, msg);
 
-        msg->ev.type = PTL_EVENT_REPLY;
+        msg->ev.type = PTL_EVENT_REPLY_END;
         msg->ev.initiator.nid = peer_nid;
         msg->ev.initiator.pid = 0;      /* XXX FIXME!!! */
         msg->ev.rlength = msg->ev.mlength = getmd->length;
         msg->ev.offset = 0;
 
-        lib_md_deconstruct(nal, getmd, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, getmd, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, getmd);
 
-        ni->counters.recv_count++;
-        ni->counters.recv_length += getmd->length;
+        ni->ni_counters.recv_count++;
+        ni->ni_counters.recv_length += getmd->length;
 
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
 
         return msg;
 
  drop_msg:
         lib_msg_free(nal, msg);
  drop:
-        nal->ni.counters.drop_count++;
-        nal->ni.counters.drop_length += getmd->length;
+        nal->libnal_ni.ni_counters.drop_count++;
+        nal->libnal_ni.ni_counters.drop_length += getmd->length;
 
-        state_unlock (nal, &flags);
+        LIB_UNLOCK (nal, flags);
 
         return NULL;
 }
 
 int 
-do_PtlGet(nal_cb_t *nal, void *private, void *v_args, void *v_ret)
+lib_api_get(nal_t *apinal, ptl_handle_md_t *mdh, ptl_process_id_t *id,
+            ptl_pt_index_t portal, ptl_ac_index_t ac,
+            ptl_match_bits_t match_bits, ptl_size_t offset)
 {
-        /*
-         * Incoming:
-         *      ptl_handle_md_t md_in
-         *      ptl_process_id_t target_in
-         *      ptl_pt_index_t portal_in
-         *      ptl_ac_index_t cookie_in
-         *      ptl_match_bits_t match_bits_in
-         *      ptl_size_t offset_in
-         *
-         * Outgoing:
-         */
-
-        PtlGet_in        *args = v_args;
-        ptl_process_id_t *id = &args->target_in;
-        PtlGet_out       *ret = v_ret;
-        lib_ni_t         *ni = &nal->ni;
+        lib_nal_t        *nal = apinal->nal_data;
+        lib_ni_t         *ni = &nal->libnal_ni;
         lib_msg_t        *msg;
         ptl_hdr_t         hdr;
         lib_md_t         *md;
         unsigned long     flags;
         int               rc;
         
-        if (!list_empty (&nal->ni.ni_test_peers) && /* normally we don't */
+        if (!list_empty (&ni->ni_test_peers) && /* normally we don't */
             fail_peer (nal, id->nid, 1))           /* shall we now? */
         {
-                CERROR(LPU64": Dropping PUT to "LPU64": simulated failure\n",
-                       nal->ni.nid, id->nid);
-                return (ret->rc = PTL_INV_PROC);
+                CERROR("Dropping PUT to "LPX64": simulated failure\n",
+                       id->nid);
+                return PTL_PROCESS_INVALID;
         }
 
         msg = lib_msg_alloc(nal);
         if (msg == NULL) {
-                CERROR(LPU64": Dropping GET to "LPU64": ENOMEM on lib_msg_t\n",
-                       ni->nid, id->nid);
-                return (ret->rc = PTL_NOSPACE);
+                CERROR("Dropping GET to "LPU64": ENOMEM on lib_msg_t\n",
+                       id->nid);
+                return PTL_NO_SPACE;
         }
 
-        state_lock(nal, &flags);
+        LIB_LOCK(nal, flags);
 
-        md = ptl_handle2md(&args->md_in, nal);
+        md = ptl_handle2md(mdh, nal);
         if (md == NULL || !md->threshold) {
                 lib_msg_free(nal, msg);
-                state_unlock(nal, &flags);
+                LIB_UNLOCK(nal, flags);
 
-                return ret->rc = PTL_INV_MD;
+                return PTL_MD_INVALID;
         }
 
         CDEBUG(D_NET, "PtlGet -> %Lu: %lu\n", (unsigned long long)id->nid,
                (unsigned long)id->pid);
 
         memset (&hdr, 0, sizeof (hdr));
-        hdr.type     = HTON__u32 (PTL_MSG_GET);
-        hdr.dest_nid = HTON__u64 (id->nid);
-        hdr.src_nid  = HTON__u64 (ni->nid);
-        hdr.dest_pid = HTON__u32 (id->pid);
-        hdr.src_pid  = HTON__u32 (ni->pid);
+        hdr.type     = cpu_to_le32(PTL_MSG_GET);
+        hdr.dest_nid = cpu_to_le64(id->nid);
+        hdr.dest_pid = cpu_to_le32(id->pid);
+        hdr.src_nid  = cpu_to_le64(ni->ni_pid.nid);
+        hdr.src_pid  = cpu_to_le32(ni->ni_pid.pid);
         hdr.payload_length = 0;
 
         /* NB handles only looked up by creator (no flips) */
         hdr.msg.get.return_wmd.wh_interface_cookie = ni->ni_interface_cookie;
         hdr.msg.get.return_wmd.wh_object_cookie = md->md_lh.lh_cookie;
 
-        hdr.msg.get.match_bits = HTON__u64 (args->match_bits_in);
-        hdr.msg.get.ptl_index = HTON__u32 (args->portal_in);
-        hdr.msg.get.src_offset = HTON__u32 (args->offset_in);
-        hdr.msg.get.sink_length = HTON__u32 (md->length);
+        hdr.msg.get.match_bits = cpu_to_le64(match_bits);
+        hdr.msg.get.ptl_index = cpu_to_le32(portal);
+        hdr.msg.get.src_offset = cpu_to_le32(offset);
+        hdr.msg.get.sink_length = cpu_to_le32(md->length);
 
         lib_commit_md(nal, md, msg);
 
-        msg->ev.type = PTL_EVENT_SENT;
-        msg->ev.initiator.nid = ni->nid;
-        msg->ev.initiator.pid = ni->pid;
-        msg->ev.portal = args->portal_in;
-        msg->ev.match_bits = args->match_bits_in;
+        msg->ev.type = PTL_EVENT_SEND_END;
+        msg->ev.initiator = ni->ni_pid;
+        msg->ev.pt_index = portal;
+        msg->ev.match_bits = match_bits;
         msg->ev.rlength = md->length;
         msg->ev.mlength = md->length;
-        msg->ev.offset = args->offset_in;
+        msg->ev.offset = offset;
         msg->ev.hdr_data = 0;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, md, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, md);
 
-        ni->counters.send_count++;
+        ni->ni_counters.send_count++;
 
-        state_unlock(nal, &flags);
+        LIB_UNLOCK(nal, flags);
 
-        rc = lib_send (nal, private, msg, &hdr, PTL_MSG_GET,
+        rc = lib_send (nal, NULL, msg, &hdr, PTL_MSG_GET,
                        id->nid, id->pid, NULL, 0, 0);
         if (rc != PTL_OK) {
                 CERROR(LPU64": error sending GET to "LPU64": %d\n",
-                       ni->nid, id->nid, rc);
-                lib_finalize (nal, private, msg, rc);
+                       ni->ni_pid.nid, id->nid, rc);
+                lib_finalize (nal, NULL, msg, rc);
         }
         
         /* completion will be signalled by an event */
-        return ret->rc = PTL_OK;
+        return PTL_OK;
 }
 
 void lib_assert_wire_constants (void)
 {
         /* Wire protocol assertions generated by 'wirecheck'
-         * running on Linux robert.bartonsoftware.com 2.4.20-18.9 #1 Thu May 29 06:54:41 EDT 2003 i68
-         * with gcc version 3.2.2 20030222 (Red Hat Linux 3.2.2-5) */
+         * running on Linux mdevi 2.4.21-p4smp-55chaos #1 SMP Tue Jun 8 14:38:44 PDT 2004 i686 i686 i
+         * with gcc version 3.2.3 20030502 (Red Hat Linux 3.2.3-34) */
 
 
         /* Constants... */
         LASSERT (PORTALS_PROTO_MAGIC == 0xeebc0ded);
-        LASSERT (PORTALS_PROTO_VERSION_MAJOR == 0);
-        LASSERT (PORTALS_PROTO_VERSION_MINOR == 3);
+        LASSERT (PORTALS_PROTO_VERSION_MAJOR == 1);
+        LASSERT (PORTALS_PROTO_VERSION_MINOR == 0);
         LASSERT (PTL_MSG_ACK == 0);
         LASSERT (PTL_MSG_PUT == 1);
         LASSERT (PTL_MSG_GET == 2);
@@ -1370,76 +1352,76 @@ void lib_assert_wire_constants (void)
 
         /* Checks for struct ptl_handle_wire_t */
         LASSERT ((int)sizeof(ptl_handle_wire_t) == 16);
-        LASSERT (offsetof(ptl_handle_wire_t, wh_interface_cookie) == 0);
+        LASSERT ((int)offsetof(ptl_handle_wire_t, wh_interface_cookie) == 0);
         LASSERT ((int)sizeof(((ptl_handle_wire_t *)0)->wh_interface_cookie) == 8);
-        LASSERT (offsetof(ptl_handle_wire_t, wh_object_cookie) == 8);
+        LASSERT ((int)offsetof(ptl_handle_wire_t, wh_object_cookie) == 8);
         LASSERT ((int)sizeof(((ptl_handle_wire_t *)0)->wh_object_cookie) == 8);
 
         /* Checks for struct ptl_magicversion_t */
         LASSERT ((int)sizeof(ptl_magicversion_t) == 8);
-        LASSERT (offsetof(ptl_magicversion_t, magic) == 0);
+        LASSERT ((int)offsetof(ptl_magicversion_t, magic) == 0);
         LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->magic) == 4);
-        LASSERT (offsetof(ptl_magicversion_t, version_major) == 4);
+        LASSERT ((int)offsetof(ptl_magicversion_t, version_major) == 4);
         LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->version_major) == 2);
-        LASSERT (offsetof(ptl_magicversion_t, version_minor) == 6);
+        LASSERT ((int)offsetof(ptl_magicversion_t, version_minor) == 6);
         LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->version_minor) == 2);
 
         /* Checks for struct ptl_hdr_t */
         LASSERT ((int)sizeof(ptl_hdr_t) == 72);
-        LASSERT (offsetof(ptl_hdr_t, dest_nid) == 0);
+        LASSERT ((int)offsetof(ptl_hdr_t, dest_nid) == 0);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->dest_nid) == 8);
-        LASSERT (offsetof(ptl_hdr_t, src_nid) == 8);
+        LASSERT ((int)offsetof(ptl_hdr_t, src_nid) == 8);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->src_nid) == 8);
-        LASSERT (offsetof(ptl_hdr_t, dest_pid) == 16);
+        LASSERT ((int)offsetof(ptl_hdr_t, dest_pid) == 16);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->dest_pid) == 4);
-        LASSERT (offsetof(ptl_hdr_t, src_pid) == 20);
+        LASSERT ((int)offsetof(ptl_hdr_t, src_pid) == 20);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->src_pid) == 4);
-        LASSERT (offsetof(ptl_hdr_t, type) == 24);
+        LASSERT ((int)offsetof(ptl_hdr_t, type) == 24);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->type) == 4);
-        LASSERT (offsetof(ptl_hdr_t, payload_length) == 28);
+        LASSERT ((int)offsetof(ptl_hdr_t, payload_length) == 28);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->payload_length) == 4);
-        LASSERT (offsetof(ptl_hdr_t, msg) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg) == 40);
 
         /* Ack */
-        LASSERT (offsetof(ptl_hdr_t, msg.ack.dst_wmd) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.ack.dst_wmd) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.dst_wmd) == 16);
-        LASSERT (offsetof(ptl_hdr_t, msg.ack.match_bits) == 48);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.ack.match_bits) == 48);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.match_bits) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.ack.mlength) == 56);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.ack.mlength) == 56);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.mlength) == 4);
 
         /* Put */
-        LASSERT (offsetof(ptl_hdr_t, msg.put.ack_wmd) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.ack_wmd) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.ack_wmd) == 16);
-        LASSERT (offsetof(ptl_hdr_t, msg.put.match_bits) == 48);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.match_bits) == 48);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.match_bits) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.put.hdr_data) == 56);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.hdr_data) == 56);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.hdr_data) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.put.ptl_index) == 64);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.ptl_index) == 64);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.ptl_index) == 4);
-        LASSERT (offsetof(ptl_hdr_t, msg.put.offset) == 68);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.offset) == 68);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.offset) == 4);
 
         /* Get */
-        LASSERT (offsetof(ptl_hdr_t, msg.get.return_wmd) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.return_wmd) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.return_wmd) == 16);
-        LASSERT (offsetof(ptl_hdr_t, msg.get.match_bits) == 48);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.match_bits) == 48);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.match_bits) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.get.ptl_index) == 56);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.ptl_index) == 56);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.ptl_index) == 4);
-        LASSERT (offsetof(ptl_hdr_t, msg.get.src_offset) == 60);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.src_offset) == 60);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.src_offset) == 4);
-        LASSERT (offsetof(ptl_hdr_t, msg.get.sink_length) == 64);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.sink_length) == 64);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.sink_length) == 4);
 
         /* Reply */
-        LASSERT (offsetof(ptl_hdr_t, msg.reply.dst_wmd) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.reply.dst_wmd) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.reply.dst_wmd) == 16);
 
         /* Hello */
-        LASSERT (offsetof(ptl_hdr_t, msg.hello.incarnation) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.hello.incarnation) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.hello.incarnation) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.hello.type) == 40);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.hello.type) == 40);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.hello.type) == 4);
 }

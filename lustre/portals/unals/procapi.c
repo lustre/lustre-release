@@ -60,34 +60,6 @@ void procbridge_wakeup_nal(procbridge p)
     syscall(SYS_write, p->notifier[0], buf, sizeof(buf));
 }
 
-/* Function: forward
- * Arguments: nal_t *nal: pointer to my top-side nal structure
- *            id: the command to pass to the lower layer
- *            args, args_len:pointer to and length of the request
- *            ret, ret_len:  pointer to and size of the result
- * Returns: a portals status code
- *
- * forwards a packaged api call from the 'api' side to the 'library'
- *   side, and collects the result
- */
-static int procbridge_forward(nal_t *n, int id, void *args, size_t args_len,
-			      void *ret, size_t ret_len)
-{
-    bridge b = (bridge) n->nal_data;
-
-    if (id == PTL_FINI) {
-            lib_fini(b->nal_cb);
-
-            if (b->shutdown)
-                (*b->shutdown)(b);
-    }
-
-    lib_dispatch(b->nal_cb, NULL, id, args, ret);
-
-    return (PTL_OK);
-}
-
-
 /* Function: shutdown
  * Arguments: nal: a pointer to my top side nal structure
  *            ni: my network interface index
@@ -95,9 +67,10 @@ static int procbridge_forward(nal_t *n, int id, void *args, size_t args_len,
  * cleanup nal state, reclaim the lower side thread and
  *   its state using PTL_FINI codepoint
  */
-static int procbridge_shutdown(nal_t *n, int ni)
+static void procbridge_shutdown(nal_t *n)
 {
-    bridge b=(bridge)n->nal_data;
+    lib_nal_t *nal = n->nal_data;
+    bridge b=(bridge)nal->libnal_data;
     procbridge p=(procbridge)b->local;
 
     p->nal_flags |= NAL_FLAG_STOPPING;
@@ -114,77 +87,31 @@ static int procbridge_shutdown(nal_t *n, int ni)
     } while (1);
 
     free(p);
-    return(0);
 }
 
 
-/* Function: validate
- *    useless stub
- */
-static int procbridge_validate(nal_t *nal, void *base, size_t extent)
-{
-    return(0);
-}
+/* forward decl */
+extern int procbridge_startup (nal_t *, ptl_pid_t,
+                               ptl_ni_limits_t *, ptl_ni_limits_t *);
 
-
-/* FIXME cfs temporary workaround! FIXME
- * global time out value
- */
-int __tcpnal_eqwait_timeout_value = 0;
-int __tcpnal_eqwait_timedout = 0;
-
-/* Function: yield
- * Arguments:  pid:
- *
- *  this function was originally intended to allow the
- *   lower half thread to be scheduled to allow progress. we
- *   overload it to explicitly block until signalled by the
- *   lower half.
- */
-static void procbridge_yield(nal_t *n)
-{
-    bridge b=(bridge)n->nal_data;
-    procbridge p=(procbridge)b->local;
-
-    pthread_mutex_lock(&p->mutex);
-    if (!__tcpnal_eqwait_timeout_value) {
-        pthread_cond_wait(&p->cond,&p->mutex);
-    } else {
-        struct timeval now;
-        struct timespec timeout;
-
-        gettimeofday(&now, NULL);
-        timeout.tv_sec = now.tv_sec + __tcpnal_eqwait_timeout_value;
-        timeout.tv_nsec = now.tv_usec * 1000;
-
-        __tcpnal_eqwait_timedout =
-                pthread_cond_timedwait(&p->cond, &p->mutex, &timeout);
-    }
-    pthread_mutex_unlock(&p->mutex);
-}
-
-
-static void procbridge_lock(nal_t * nal, unsigned long *flags){}
-static void procbridge_unlock(nal_t * nal, unsigned long *flags){}
 /* api_nal
  *  the interface vector to allow the generic code to access
- *  this nal. this is seperate from the library side nal_cb.
+ *  this nal. this is seperate from the library side lib_nal.
  *  TODO: should be dyanmically allocated
  */
-static nal_t api_nal = {
-    ni:       {0},
+nal_t procapi_nal = {
     nal_data: NULL,
-    forward:  procbridge_forward,
-    shutdown: procbridge_shutdown,
-    validate: procbridge_validate,
-    yield:    procbridge_yield,
-    lock:     procbridge_lock,
-    unlock:   procbridge_unlock
+    nal_ni_init: procbridge_startup,
+    nal_ni_fini: procbridge_shutdown,
 };
 
 ptl_nid_t tcpnal_mynid;
 
-/* Function: procbridge_interface
+#ifdef ENABLE_SELECT_DISPATCH
+procbridge __global_procbridge = NULL;
+#endif
+
+/* Function: procbridge_startup
  *
  * Arguments:  pid: requested process id (port offset)
  *                  PTL_ID_ANY not supported.
@@ -192,65 +119,62 @@ ptl_nid_t tcpnal_mynid;
  *                      and effectively ignored
  *             actual:  limits actually allocated and returned
  *
- * Returns: a pointer to my statically allocated top side NAL
- *          structure
+ * Returns: portals rc
  *
  * initializes the tcp nal. we define unix_failure as an
  * error wrapper to cut down clutter.
  */
-nal_t *procbridge_interface(int num_interface,
-                            ptl_pt_index_t ptl_size,
-                            ptl_ac_index_t acl_size,
-                            ptl_pid_t requested_pid)
+int procbridge_startup (nal_t *nal, ptl_pid_t requested_pid,
+                        ptl_ni_limits_t *requested_limits,
+                        ptl_ni_limits_t *actual_limits)
 {
     nal_init_args_t args;
+
     procbridge p;
     bridge b;
-    static int initialized=0;
-    ptl_ni_limits_t limits = {-1,-1,-1,-1,-1};
+    /* XXX nal_type is purely private to tcpnal here */
     int nal_type = PTL_IFACE_TCP;/* PTL_IFACE_DEFAULT FIXME hack */
 
-    if(initialized) return (&api_nal);
+    LASSERT(nal == &procapi_nal);
 
     init_unix_timer();
 
     b=(bridge)malloc(sizeof(struct bridge));
     p=(procbridge)malloc(sizeof(struct procbridge));
-    api_nal.nal_data=b;
     b->local=p;
 
-    if (ptl_size)
-	    limits.max_ptable_index = ptl_size;
-    if (acl_size)
-	    limits.max_atable_index = acl_size;
-
     args.nia_requested_pid = requested_pid;
-    args.nia_limits = &limits;
+    args.nia_requested_limits = requested_limits;
+    args.nia_actual_limits = actual_limits;
     args.nia_nal_type = nal_type;
     args.nia_bridge = b;
+    args.nia_apinal = nal;
 
     /* init procbridge */
     pthread_mutex_init(&p->mutex,0);
     pthread_cond_init(&p->cond, 0);
     p->nal_flags = 0;
-    pthread_mutex_init(&p->nal_cb_lock, 0);
 
     /* initialize notifier */
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, p->notifier)) {
         perror("socketpair failed");
-        return NULL;
+        return PTL_FAIL;
     }
 
     if (!register_io_handler(p->notifier[1], READ_HANDLER,
                 procbridge_notifier_handler, p)) {
         perror("fail to register notifier handler");
-        return NULL;
+        return PTL_FAIL;
     }
+
+#ifdef ENABLE_SELECT_DISPATCH
+    __global_procbridge = p;
+#endif
 
     /* create nal thread */
     if (pthread_create(&p->t, NULL, nal_thread, &args)) {
         perror("nal_init: pthread_create");
-        return(NULL);
+        return PTL_FAIL;
     }
 
     do {
@@ -264,10 +188,9 @@ nal_t *procbridge_interface(int num_interface,
     } while (1);
 
     if (p->nal_flags & NAL_FLAG_STOPPED)
-        return (NULL);
+        return PTL_FAIL;
 
-    b->nal_cb->ni.nid = tcpnal_mynid;
-    initialized = 1;
+    b->lib_nal->libnal_ni.ni_pid.nid = tcpnal_mynid;
 
-    return (&api_nal);
+    return PTL_OK;
 }

@@ -24,17 +24,20 @@
  */
 
 #define __USE_FILE_OFFSET64
+#define  _GNU_SOURCE
 
 #include <portals/list.h>
 
 #include <stdio.h>
+#ifdef HAVE_NETDB_H
 #include <netdb.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
+#include "ioctl.h"
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
-#include <time.h>
 #ifndef __CYGWIN__
 # include <syscall.h>
 #endif
@@ -45,36 +48,47 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+#ifdef HAVE_LINUX_VERSION_H
 #include <linux/version.h>
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define BUG()                            /* workaround for module.h includes */
 #include <linux/module.h>
 #endif
+#endif /* !HAVE_LINUX_VERSION_H */
+
+#include <sys/utsname.h>
 
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
 #include "parser.h"
 
+#include <time.h>
+
 static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = 8192;
-//static int g_pfd = -1;
+/*static int g_pfd = -1;*/
 static int subsystem_mask = ~0;
 static int debug_mask = ~0;
 
 #define MAX_MARK_SIZE 100
 
 static const char *portal_debug_subsystems[] =
-        {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
-         "rpc", "mgmt", "portals", "socknal", "qswnal", "pinger", "filter",
-         "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd", "ibnal",
-         NULL};
+        {"undefined", "mdc", "mds", "osc", 
+         "ost", "class", "log", "llite",
+         "rpc", "mgmt", "portals", "socknal", 
+         "qswnal", "pinger", "filter", "ptlbd", 
+         "echo", "ldlm", "lov", "gmnal",
+         "router", "cobd", "ibnal", "sm",
+         "asobd", "confobd", NULL};
 static const char *portal_debug_masks[] =
-        {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
-         "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
-         "page", "dlmtrace", "error", "emerg", "ha", "rpctrace", "vfstrace",
-         "reada", NULL};
+        {"trace", "inode", "super", "ext2", 
+         "malloc", "cache", "info", "ioctl",
+         "blocks", "net", "warning", "buffs", 
+         "other", "dentry", "portals", "page", 
+         "dlmtrace", "error", "emerg", "ha", 
+         "rpctrace", "vfstrace", "reada", NULL};
 
 struct debug_daemon_cmd {
         char *cmd;
@@ -183,9 +197,6 @@ static int applymask(char* procpath, int value)
         return 0;
 }
 
-extern char *dump_filename;
-extern int dump(int dev_id, int opc, void *buf);
-
 static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 {
         if (!dump_filename) {
@@ -243,7 +254,7 @@ struct dbg_line {
 static void list_add_ordered(struct dbg_line *new, struct list_head *head)
 {
         struct list_head *pos;
-        struct dbg_line *curr, *next;
+        struct dbg_line *curr;
 
         list_for_each(pos, head) {
                 curr = list_entry(pos, struct dbg_line, chain);
@@ -289,7 +300,7 @@ static int parse_buffer(FILE *in, FILE *out)
         char buf[4097], *p;
         int rc;
         unsigned long dropped = 0, kept = 0;
-        struct list_head chunk_list, *pos;
+        struct list_head chunk_list;
 
         INIT_LIST_HEAD(&chunk_list);
 
@@ -371,15 +382,24 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                 fprintf(stderr, "usage: %s [file] [raw]\n", argv[0]);
                 return 0;
         }
-        sprintf(filename, "%s.%lu.%u", argc > 1 ? argv[1] : "/tmp/lustre-log",
-                time(NULL), getpid());
 
-        if (argc > 2)
+        if (argc > 2) {
                 raw = atoi(argv[2]);
+        } else if (argc > 1 && (argv[1][0] == '0' || argv[1][0] == '1')) {
+                raw = atoi(argv[1]);
+                argc--;
+        } else {
+                sprintf(filename, "%s.%lu.%u", argc > 1 ? argv[1] :
+                        "/tmp/lustre-log", time(NULL), getpid());
+        }
+
         unlink(filename);
 
         fd = open("/proc/sys/portals/dump_kernel", O_WRONLY);
         if (fd < 0) {
+                if (errno == ENOENT) /* no dump file created */
+                        return 0;
+
                 fprintf(stderr, "open(dump_kernel) failed: %s\n",
                         strerror(errno));
                 return 1;
@@ -411,11 +431,15 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                 if (out == NULL) {
                         fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
                                 strerror(errno));
+                        fclose(in);
                         return 1;
                 }
         }
 
         rc = parse_buffer(in, out);
+        fclose(in);
+        if (argc > 1)
+                fclose(out);
         if (rc) {
                 fprintf(stderr, "parse_buffer failed; leaving tmp file %s "
                         "behind.\n", filename);
@@ -431,23 +455,40 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 
 int jt_dbg_debug_file(int argc, char **argv)
 {
+        int fdin,fdout;
         FILE *in, *out = stdout;
         if (argc > 3 || argc < 2) {
                 fprintf(stderr, "usage: %s <input> [output]\n", argv[0]);
                 return 0;
         }
 
-        in = fopen(argv[1], "r");
-        if (in == NULL) {
-                fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
+        fdin = open(argv[1], O_RDONLY | O_LARGEFILE);
+        if (fdin == -1) {
+                fprintf(stderr, "open(%s) failed: %s\n", argv[1],
                         strerror(errno));
                 return 1;
         }
+        in = fdopen(fdin, "r");
+        if (in == NULL) {
+                fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
+                        strerror(errno));
+                close(fdin);
+                return 1;
+        }
         if (argc > 2) {
-                out = fopen(argv[2], "w");
+                fdout = open(argv[2], O_CREAT | O_WRONLY | O_LARGEFILE);
+                if (fdout == -1) {
+                        fprintf(stderr, "open(%s) failed: %s\n", argv[2],
+                                strerror(errno));
+                        fclose(in);
+                        return 1;
+                }
+                out = fdopen(fdout, "w");
                 if (out == NULL) {
                         fprintf(stderr, "fopen(%s) failed: %s\n", argv[2],
                                 strerror(errno));
+                        fclose(in);
+                        close(fdout);
                         return 1;
                 }
         }
@@ -489,7 +530,8 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                                 strncat(size, argv[3], sizeof(size) - 6);
                                 rc = write(fd, size, strlen(size));
                                 if (rc != strlen(size)) {
-                                        fprintf(stderr, "set %s failed: %s\n",                                                 size, strerror(errno));
+                                        fprintf(stderr, "set %s failed: %s\n",
+                                                size, strerror(errno));
                                 }
                         }
                 }
@@ -590,7 +632,8 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 static struct mod_paths {
         char *name, *path;
 } mod_paths[] = {
-        {"portals", "lustre/portals/libcfs"},
+        {"libcfs", "lustre/portals/libcfs"},
+        {"portals", "lustre/portals/portals"},
         {"ksocknal", "lustre/portals/knals/socknal"},
         {"kptlrouter", "lustre/portals/router"},
         {"lvfs", "lustre/lvfs"},
@@ -603,6 +646,7 @@ static struct mod_paths {
         {"mds", "lustre/mds"},
         {"mdc", "lustre/mdc"},
         {"llite", "lustre/llite"},
+        {"smfs", "lustre/smfs"},
         {"obdecho", "lustre/obdecho"},
         {"ldlm", "lustre/ldlm"},
         {"obdfilter", "lustre/obdfilter"},
@@ -611,18 +655,22 @@ static struct mod_paths {
         {"fsfilt_ext3", "lustre/lvfs"},
         {"fsfilt_extN", "lustre/lvfs"},
         {"fsfilt_reiserfs", "lustre/lvfs"},
+        {"fsfilt_smfs", "lustre/lvfs"},
+        {"fsfilt_ldiskfs", "lustre/lvfs"},
         {"mds_ext2", "lustre/mds"},
         {"mds_ext3", "lustre/mds"},
         {"mds_extN", "lustre/mds"},
         {"ptlbd", "lustre/ptlbd"},
         {"mgmt_svc", "lustre/mgmt"},
         {"mgmt_cli", "lustre/mgmt"},
+        {"conf_obd", "lustre/obdclass"},
         {NULL, NULL}
 };
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-int jt_dbg_modules(int argc, char **argv)
+static int jt_dbg_modules_2_4(int argc, char **argv)
 {
+#ifdef HAVE_LINUX_VERSION_H
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct mod_paths *mp;
         char *path = "..";
         char *kernel = "linux";
@@ -657,9 +705,12 @@ int jt_dbg_modules(int argc, char **argv)
         }
 
         return 0;
+#endif /* Headers are 2.6-only */
+#endif /* !HAVE_LINUX_VERSION_H */
+        return -EINVAL;
 }
-#else
-int jt_dbg_modules(int argc, char **argv)
+
+static int jt_dbg_modules_2_5(int argc, char **argv)
 {
         struct mod_paths *mp;
         char *path = "..";
@@ -699,7 +750,26 @@ int jt_dbg_modules(int argc, char **argv)
 
         return 0;
 }
-#endif /* linux 2.5 */
+
+int jt_dbg_modules(int argc, char **argv)
+{
+        int rc = 0;
+        struct utsname sysinfo;
+
+        rc = uname(&sysinfo);
+        if (rc) {
+                printf("uname() failed: %s\n", strerror(errno));
+                return 0;
+        }
+
+        if (sysinfo.release[2] > '4') {
+                return jt_dbg_modules_2_5(argc, argv);
+        } else {
+                return jt_dbg_modules_2_4(argc, argv);
+        }
+
+        return 0;
+}
 
 int jt_dbg_panic(int argc, char **argv)
 {

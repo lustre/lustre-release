@@ -41,19 +41,26 @@
 #ifndef PTL_USE_LIB_FREELIST
 
 int
-kportal_descriptor_setup (nal_cb_t *nal)
+kportal_descriptor_setup (lib_nal_t *nal,
+                          ptl_ni_limits_t *requested_limits,
+                          ptl_ni_limits_t *actual_limits)
 {
+        /* Ignore requested limits! */
+        actual_limits->max_mes = INT_MAX;
+        actual_limits->max_mds = INT_MAX;
+        actual_limits->max_eqs = INT_MAX;
+
         return PTL_OK;
 }
 
 void
-kportal_descriptor_cleanup (nal_cb_t *nal)
+kportal_descriptor_cleanup (lib_nal_t *nal)
 {
 }
 #else
 
 int
-lib_freelist_init (nal_cb_t *nal, lib_freelist_t *fl, int n, int size)
+lib_freelist_init (lib_nal_t *nal, lib_freelist_t *fl, int n, int size)
 {
         char *space;
 
@@ -61,9 +68,9 @@ lib_freelist_init (nal_cb_t *nal, lib_freelist_t *fl, int n, int size)
 
         size += offsetof (lib_freeobj_t, fo_contents);
 
-        space = nal->cb_malloc (nal, n * size);
+        PORTAL_ALLOC(space, n * size);
         if (space == NULL)
-                return (PTL_NOSPACE);
+                return (PTL_NO_SPACE);
 
         INIT_LIST_HEAD (&fl->fl_list);
         fl->fl_objs = space;
@@ -81,7 +88,7 @@ lib_freelist_init (nal_cb_t *nal, lib_freelist_t *fl, int n, int size)
 }
 
 void
-lib_freelist_fini (nal_cb_t *nal, lib_freelist_t *fl)
+lib_freelist_fini (lib_nal_t *nal, lib_freelist_t *fl)
 {
         struct list_head *el;
         int               count;
@@ -95,55 +102,67 @@ lib_freelist_fini (nal_cb_t *nal, lib_freelist_t *fl)
 
         LASSERT (count == fl->fl_nobjs);
 
-        nal->cb_free (nal, fl->fl_objs, fl->fl_nobjs * fl->fl_objsize);
+        PORTAL_FREE(fl->fl_objs, fl->fl_nobjs * fl->fl_objsize);
         memset (fl, 0, sizeof (fl));
 }
 
 int
-kportal_descriptor_setup (nal_cb_t *nal)
+kportal_descriptor_setup (lib_nal_t *nal,
+                          ptl_ni_limits_t *requested_limits,
+                          ptl_ni_limits_t *actual_limits)
 {
         /* NB on failure caller must still call kportal_descriptor_cleanup */
         /*               ******                                            */
-        int rc;
+        lib_ni_t  *ni = &nal->libnal_ni;
+        int        rc;
 
-        memset (&nal->ni.ni_free_mes,  0, sizeof (nal->ni.ni_free_mes));
-        memset (&nal->ni.ni_free_msgs, 0, sizeof (nal->ni.ni_free_msgs));
-        memset (&nal->ni.ni_free_mds,  0, sizeof (nal->ni.ni_free_mds));
-        memset (&nal->ni.ni_free_eqs,  0, sizeof (nal->ni.ni_free_eqs));
+        memset (&ni->ni_free_mes,  0, sizeof (ni->ni_free_mes));
+        memset (&ni->ni_free_msgs, 0, sizeof (ni->ni_free_msgs));
+        memset (&ni->ni_free_mds,  0, sizeof (ni->ni_free_mds));
+        memset (&ni->ni_free_eqs,  0, sizeof (ni->ni_free_eqs));
 
-        rc = lib_freelist_init (nal, &nal->ni.ni_free_mes,
+        /* Ignore requested limits! */
+        actual_limits->max_mes = MAX_MES;
+        actual_limits->max_mds = MAX_MDS;
+        actual_limits->max_eqs = MAX_EQS;
+        /* Hahahah what a load of bollocks.  There's nowhere to
+         * specify the max # messages in-flight */
+
+        rc = lib_freelist_init (nal, &ni->ni_free_mes,
                                 MAX_MES, sizeof (lib_me_t));
         if (rc != PTL_OK)
                 return (rc);
 
-        rc = lib_freelist_init (nal, &nal->ni.ni_free_msgs,
+        rc = lib_freelist_init (nal, &ni->ni_free_msgs,
                                 MAX_MSGS, sizeof (lib_msg_t));
         if (rc != PTL_OK)
                 return (rc);
 
-        rc = lib_freelist_init (nal, &nal->ni.ni_free_mds,
+        rc = lib_freelist_init (nal, &ni->ni_free_mds,
                                 MAX_MDS, sizeof (lib_md_t));
         if (rc != PTL_OK)
                 return (rc);
 
-        rc = lib_freelist_init (nal, &nal->ni.ni_free_eqs,
+        rc = lib_freelist_init (nal, &ni->ni_free_eqs,
                                 MAX_EQS, sizeof (lib_eq_t));
         return (rc);
 }
 
 void
-kportal_descriptor_cleanup (nal_cb_t *nal)
+kportal_descriptor_cleanup (lib_nal_t *nal)
 {
-        lib_freelist_fini (nal, &nal->ni.ni_free_mes);
-        lib_freelist_fini (nal, &nal->ni.ni_free_msgs);
-        lib_freelist_fini (nal, &nal->ni.ni_free_mds);
-        lib_freelist_fini (nal, &nal->ni.ni_free_eqs);
+        lib_ni_t   *ni = &nal->libnal_ni;
+        
+        lib_freelist_fini (nal, &ni->ni_free_mes);
+        lib_freelist_fini (nal, &ni->ni_free_msgs);
+        lib_freelist_fini (nal, &ni->ni_free_mds);
+        lib_freelist_fini (nal, &ni->ni_free_eqs);
 }
 
 #endif
 
 __u64
-lib_create_interface_cookie (nal_cb_t *nal)
+lib_create_interface_cookie (lib_nal_t *nal)
 {
         /* NB the interface cookie in wire handles guards against delayed
          * replies and ACKs appearing valid in a new instance of the same
@@ -164,9 +183,9 @@ lib_create_interface_cookie (nal_cb_t *nal)
 }
 
 int
-lib_setup_handle_hash (nal_cb_t *nal) 
+lib_setup_handle_hash (lib_nal_t *nal) 
 {
-        lib_ni_t *ni = &nal->ni;
+        lib_ni_t *ni = &nal->libnal_ni;
         int       i;
         
         /* Arbitrary choice of hash table size */
@@ -175,11 +194,10 @@ lib_setup_handle_hash (nal_cb_t *nal)
 #else
         ni->ni_lh_hash_size = (MAX_MES + MAX_MDS + MAX_EQS)/4;
 #endif
-        ni->ni_lh_hash_table = 
-                (struct list_head *)nal->cb_malloc (nal, ni->ni_lh_hash_size
-                                                    * sizeof (struct list_head));
+        PORTAL_ALLOC(ni->ni_lh_hash_table,
+                     ni->ni_lh_hash_size * sizeof (struct list_head));
         if (ni->ni_lh_hash_table == NULL)
-                return (PTL_NOSPACE);
+                return (PTL_NO_SPACE);
         
         for (i = 0; i < ni->ni_lh_hash_size; i++)
                 INIT_LIST_HEAD (&ni->ni_lh_hash_table[i]);
@@ -190,22 +208,22 @@ lib_setup_handle_hash (nal_cb_t *nal)
 }
 
 void
-lib_cleanup_handle_hash (nal_cb_t *nal)
+lib_cleanup_handle_hash (lib_nal_t *nal)
 {
-        lib_ni_t *ni = &nal->ni;
+        lib_ni_t *ni = &nal->libnal_ni;
 
         if (ni->ni_lh_hash_table == NULL)
                 return;
         
-        nal->cb_free (nal, ni->ni_lh_hash_table,
-                      ni->ni_lh_hash_size * sizeof (struct list_head));
+        PORTAL_FREE(ni->ni_lh_hash_table,
+                    ni->ni_lh_hash_size * sizeof (struct list_head));
 }
 
 lib_handle_t *
-lib_lookup_cookie (nal_cb_t *nal, __u64 cookie, int type) 
+lib_lookup_cookie (lib_nal_t *nal, __u64 cookie, int type) 
 {
         /* ALWAYS called with statelock held */
-        lib_ni_t            *ni = &nal->ni;
+        lib_ni_t            *ni = &nal->libnal_ni;
         struct list_head    *list;
         struct list_head    *el;
         unsigned int         hash;
@@ -227,10 +245,10 @@ lib_lookup_cookie (nal_cb_t *nal, __u64 cookie, int type)
 }
 
 void
-lib_initialise_handle (nal_cb_t *nal, lib_handle_t *lh, int type) 
+lib_initialise_handle (lib_nal_t *nal, lib_handle_t *lh, int type) 
 {
         /* ALWAYS called with statelock held */
-        lib_ni_t       *ni = &nal->ni;
+        lib_ni_t       *ni = &nal->libnal_ni;
         unsigned int    hash;
 
         LASSERT (type >= 0 && type < PTL_COOKIE_TYPES);
@@ -242,99 +260,131 @@ lib_initialise_handle (nal_cb_t *nal, lib_handle_t *lh, int type)
 }
 
 void
-lib_invalidate_handle (nal_cb_t *nal, lib_handle_t *lh)
+lib_invalidate_handle (lib_nal_t *nal, lib_handle_t *lh)
 {
         list_del (&lh->lh_hash_chain);
 }
 
 int
-lib_init(nal_cb_t * nal, ptl_nid_t nid, ptl_pid_t pid, int gsize,
-         ptl_pt_index_t ptl_size, ptl_ac_index_t acl_size)
+lib_init(lib_nal_t *libnal, nal_t *apinal, 
+         ptl_process_id_t process_id,
+         ptl_ni_limits_t *requested_limits,
+         ptl_ni_limits_t *actual_limits)
 {
         int       rc = PTL_OK;
-        lib_ni_t *ni = &nal->ni;
-        int i;
+        lib_ni_t *ni = &libnal->libnal_ni;
+        int       ptl_size;
+        int       i;
         ENTRY;
 
         /* NB serialised in PtlNIInit() */
 
-        if (ni->refcnt != 0) {                       /* already initialised */
-                ni->refcnt++;
-                goto out;
-        }
-
         lib_assert_wire_constants ();
-        
-        /*
-         * Allocate the portal table for this interface
-         * and all per-interface objects.
-         */
-        memset(&ni->counters, 0, sizeof(lib_counters_t));
 
-        rc = kportal_descriptor_setup (nal);
+        /* Setup the API nal with the lib API handling functions */
+        apinal->nal_get_id    = lib_api_get_id;
+        apinal->nal_ni_status = lib_api_ni_status;
+        apinal->nal_ni_dist   = lib_api_ni_dist;
+        apinal->nal_fail_nid  = lib_api_fail_nid;
+        apinal->nal_me_attach = lib_api_me_attach;
+        apinal->nal_me_insert = lib_api_me_insert;
+        apinal->nal_me_unlink = lib_api_me_unlink;
+        apinal->nal_md_attach = lib_api_md_attach;
+        apinal->nal_md_bind   = lib_api_md_bind;
+        apinal->nal_md_unlink = lib_api_md_unlink;
+        apinal->nal_md_update = lib_api_md_update;
+        apinal->nal_eq_alloc  = lib_api_eq_alloc;
+        apinal->nal_eq_free   = lib_api_eq_free;
+        apinal->nal_eq_poll   = lib_api_eq_poll;
+        apinal->nal_put       = lib_api_put;
+        apinal->nal_get       = lib_api_get;
+
+        apinal->nal_data      = libnal;
+        ni->ni_api            = apinal;
+
+        rc = kportal_descriptor_setup (libnal, requested_limits, 
+                                       &ni->ni_actual_limits);
         if (rc != PTL_OK)
                 goto out;
+
+        memset(&ni->ni_counters, 0, sizeof(lib_counters_t));
 
         INIT_LIST_HEAD (&ni->ni_active_msgs);
         INIT_LIST_HEAD (&ni->ni_active_mds);
         INIT_LIST_HEAD (&ni->ni_active_eqs);
-
         INIT_LIST_HEAD (&ni->ni_test_peers);
 
-        ni->ni_interface_cookie = lib_create_interface_cookie (nal);
+#ifdef __KERNEL__
+        spin_lock_init (&ni->ni_lock);
+        init_waitqueue_head (&ni->ni_waitq);
+#else
+        pthread_mutex_init(&ni->ni_mutex, NULL);
+        pthread_cond_init(&ni->ni_cond, NULL);
+#endif
+
+        ni->ni_interface_cookie = lib_create_interface_cookie (libnal);
         ni->ni_next_object_cookie = 0;
-        rc = lib_setup_handle_hash (nal);
+        rc = lib_setup_handle_hash (libnal);
         if (rc != PTL_OK)
                 goto out;
         
-        ni->nid = nid;
-        ni->pid = pid;
+        ni->ni_pid = process_id;
 
-        ni->num_nodes = gsize;
-        ni->tbl.size = ptl_size;
+        if (requested_limits != NULL)
+                ptl_size = requested_limits->max_pt_index + 1;
+        else
+                ptl_size = 64;
 
-        ni->tbl.tbl = nal->cb_malloc(nal, sizeof(struct list_head) * ptl_size);
-        if (ni->tbl.tbl == NULL) {
-                rc = PTL_NOSPACE;
+        ni->ni_portals.size = ptl_size;
+        PORTAL_ALLOC(ni->ni_portals.tbl,
+                     ptl_size * sizeof(struct list_head));
+        if (ni->ni_portals.tbl == NULL) {
+                rc = PTL_NO_SPACE;
                 goto out;
         }
 
         for (i = 0; i < ptl_size; i++)
-                INIT_LIST_HEAD(&(ni->tbl.tbl[i]));
+                INIT_LIST_HEAD(&(ni->ni_portals.tbl[i]));
 
-        ni->debug = PTL_DEBUG_NONE;
-        ni->up = 1;
-        ni->refcnt++;
+        /* max_{mes,mds,eqs} set in kportal_descriptor_setup */
+
+        /* We don't have an access control table! */
+        ni->ni_actual_limits.max_ac_index = -1;
+
+        ni->ni_actual_limits.max_pt_index = ptl_size - 1;
+        ni->ni_actual_limits.max_md_iovecs = PTL_MD_MAX_IOV;
+        ni->ni_actual_limits.max_me_list = INT_MAX;
+
+        /* We don't support PtlGetPut! */
+        ni->ni_actual_limits.max_getput_md = 0;
+
+        if (actual_limits != NULL)
+                *actual_limits = ni->ni_actual_limits;
 
  out:
         if (rc != PTL_OK) {
-                lib_cleanup_handle_hash (nal);
-                kportal_descriptor_cleanup (nal);
+                lib_cleanup_handle_hash (libnal);
+                kportal_descriptor_cleanup (libnal);
         }
 
         RETURN (rc);
 }
 
 int
-lib_fini(nal_cb_t * nal)
+lib_fini(lib_nal_t *nal)
 {
-        lib_ni_t *ni = &nal->ni;
+        lib_ni_t *ni = &nal->libnal_ni;
         int       idx;
 
-        ni->refcnt--;
-
-        if (ni->refcnt != 0)
-                goto out;
-
-        /* NB no stat_lock() since this is the last reference.  The NAL
+        /* NB no state_lock() since this is the last reference.  The NAL
          * should have shut down already, so it should be safe to unlink
          * and free all descriptors, even those that appear committed to a
          * network op (eg MD with non-zero pending count)
          */
 
-        for (idx = 0; idx < ni->tbl.size; idx++)
-                while (!list_empty (&ni->tbl.tbl[idx])) {
-                        lib_me_t *me = list_entry (ni->tbl.tbl[idx].next,
+        for (idx = 0; idx < ni->ni_portals.size; idx++)
+                while (!list_empty (&ni->ni_portals.tbl[idx])) {
+                        lib_me_t *me = list_entry (ni->ni_portals.tbl[idx].next,
                                                    lib_me_t, me_list);
 
                         CERROR ("Active me %p on exit\n", me);
@@ -369,12 +419,16 @@ lib_fini(nal_cb_t * nal)
                 lib_msg_free (nal, msg);
         }
 
-        nal->cb_free(nal, ni->tbl.tbl, sizeof(struct list_head) * ni->tbl.size);
-        ni->up = 0;
+        PORTAL_FREE(ni->ni_portals.tbl,  
+                    ni->ni_portals.size * sizeof(struct list_head));
 
         lib_cleanup_handle_hash (nal);
         kportal_descriptor_cleanup (nal);
 
- out:
+#ifndef __KERNEL__
+        pthread_mutex_destroy(&ni->ni_mutex);
+        pthread_cond_destroy(&ni->ni_cond);
+#endif
+
         return (PTL_OK);
 }

@@ -191,7 +191,8 @@ int portals_debug_mark_buffer(char *text)
 
 void portals_debug_set_level(unsigned int debug_level)
 {
-        printk("Lustre: Setting portals debug level to %08x\n", debug_level);
+        printk(KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
+               debug_level);
         portal_debug = debug_level;
 }
 
@@ -250,28 +251,44 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
 
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
+        if (nid == PTL_NID_ANY) {
+                snprintf(str, PTL_NALFMT_SIZE, "%s", "PTL_NID_ANY");
+                return str;
+        }
+
         switch(nal){
 /* XXX this could be a nal method of some sort, 'cept it's config
  * dependent whether (say) socknal NIDs are actually IP addresses... */
-#ifndef CRAY_PORTALS 
+#if !CRAY_PORTALS 
         case TCPNAL:
                 /* userspace NAL */
+        case IIBNAL:
+        case OPENIBNAL:
         case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
+                snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
                          (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
-        case IBNAL:
-        case SCIMACNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
+                snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
                 break;
 #endif
         default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
+                snprintf(str, PTL_NALFMT_SIZE, "?%x? %llx",
                          nal, (long long)nid);
+                break;
         }
+        return str;
+}
+
+char *portals_id2str(int nal, ptl_process_id_t id, char *str)
+{
+        int   len;
+        
+        portals_nid2str(nal, id.nid, str);
+        len = strlen(str);
+        snprintf(str + len, PTL_NALFMT_SIZE, "-%u", id.pid);
         return str;
 }
 
@@ -350,7 +367,9 @@ out:
 
 char *portals_debug_dumpstack(void)
 {
-        return "dump_stack\n";
+        char *buf = stack_backtrace;
+        buf[0] = '\0';
+        return buf;
 }
 
 #endif /* __arch_um__ */
@@ -370,3 +389,4 @@ EXPORT_SYMBOL(portals_debug_set_level);
 EXPORT_SYMBOL(portals_run_upcall);
 EXPORT_SYMBOL(portals_run_lbug_upcall);
 EXPORT_SYMBOL(portals_nid2str);
+EXPORT_SYMBOL(portals_id2str);

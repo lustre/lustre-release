@@ -107,6 +107,11 @@ enum {
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
+/* pers.c */
+void ptlrpc_fill_bulk_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc);
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page, 
+                          int pageoffset, int len);
+
 /* pinger.c */
 int ptlrpc_start_pinger(void);
 int ptlrpc_stop_pinger(void);

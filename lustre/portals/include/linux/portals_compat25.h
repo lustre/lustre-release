@@ -30,6 +30,7 @@
 # define CURRENT_SECONDS           get_seconds()
 # define smp_num_cpus              NR_CPUS
 
+
 #elif defined(CONFIG_RH_2_4_20) /* RH 2.4.x */
 
 # define SIGNAL_MASK_LOCK(task, flags)                                  \

@@ -43,94 +43,27 @@
 /* the following functions are stubs to satisfy the nal definition
    without doing anything particularily useful*/
 
-static ptl_err_t nal_write(nal_cb_t *nal,
-                           void *private,
-                           user_ptr dst_addr,
-                           void *src_addr,
-                           size_t len)
-{
-    memcpy(dst_addr, src_addr, len);
-    return PTL_OK;
-}
-
-static ptl_err_t nal_read(nal_cb_t * nal,
-                          void *private,
-                          void *dst_addr,
-                          user_ptr src_addr,
-                          size_t len)
-{
-	memcpy(dst_addr, src_addr, len);
-	return PTL_OK;
-}
-
-static void *nal_malloc(nal_cb_t *nal,
-                        size_t len)
-{
-    void *buf =  malloc(len);
-    return buf;
-}
-
-static void nal_free(nal_cb_t *nal,
-                     void *buf,
-                     size_t len)
-{
-    free(buf);
-}
-
-static void nal_printf(nal_cb_t *nal,
-                       const char *fmt,
-                       ...)
-{
-    va_list        ap;
-
-    va_start(ap, fmt);
-    vprintf(fmt, ap);
-    va_end(ap);
-}
-
-
-static void nal_cli(nal_cb_t *nal,
-                    unsigned long *flags)
-{
-    bridge b = (bridge) nal->nal_data;
-    procbridge p = (procbridge) b->local;
-
-    pthread_mutex_lock(&p->nal_cb_lock);
-}
-
-
-static void nal_sti(nal_cb_t *nal,
-                    unsigned long *flags)
-{
-    bridge b = (bridge)nal->nal_data;
-    procbridge p = (procbridge) b->local;
-
-    pthread_mutex_unlock(&p->nal_cb_lock);
-}
-
-
-static int nal_dist(nal_cb_t *nal,
+static int nal_dist(lib_nal_t *nal,
                     ptl_nid_t nid,
                     unsigned long *dist)
 {
     return 0;
 }
 
-static void wakeup_topside(void *z)
+static void check_stopping(void *z)
 {
     bridge b = z;
     procbridge p = b->local;
-    int stop;
 
+    if ((p->nal_flags & NAL_FLAG_STOPPING) == 0)
+            return;
+    
     pthread_mutex_lock(&p->mutex);
-    stop = p->nal_flags & NAL_FLAG_STOPPING;
-    if (stop)
-        p->nal_flags |= NAL_FLAG_STOPPED;
+    p->nal_flags |= NAL_FLAG_STOPPED;
     pthread_cond_broadcast(&p->cond);
     pthread_mutex_unlock(&p->mutex);
 
-    if (stop)
-        pthread_exit(0);
+    pthread_exit(0);
 }
 
 
@@ -146,9 +79,6 @@ static void wakeup_topside(void *z)
  *  We define a limit macro to place a ceiling on limits
  *   for syntactic convenience
  */
-#define LIMIT(x,y,max)\
-     if ((unsigned int)x > max) y = max;
-
 extern int tcpnal_init(bridge);
 
 nal_initialize nal_table[PTL_IFACE_MAX]={0,tcpnal_init,0};
@@ -159,46 +89,30 @@ void *nal_thread(void *z)
     bridge b = args->nia_bridge;
     procbridge p=b->local;
     int rc;
-    ptl_pid_t pid_request;
+    ptl_process_id_t process_id;
     int nal_type;
-    ptl_ni_limits_t desired;
-    ptl_ni_limits_t actual;
     
-    b->nal_cb=(nal_cb_t *)malloc(sizeof(nal_cb_t));
-    b->nal_cb->nal_data=b;
-    b->nal_cb->cb_read=nal_read;
-    b->nal_cb->cb_write=nal_write;
-    b->nal_cb->cb_malloc=nal_malloc;
-    b->nal_cb->cb_free=nal_free;
-    b->nal_cb->cb_map=NULL;
-    b->nal_cb->cb_unmap=NULL;
-    b->nal_cb->cb_printf=nal_printf;
-    b->nal_cb->cb_cli=nal_cli;
-    b->nal_cb->cb_sti=nal_sti;
-    b->nal_cb->cb_dist=nal_dist;
+    b->lib_nal=(lib_nal_t *)malloc(sizeof(lib_nal_t));
+    b->lib_nal->libnal_data=b;
+    b->lib_nal->libnal_map=NULL;
+    b->lib_nal->libnal_unmap=NULL;
+    b->lib_nal->libnal_dist=nal_dist;
 
-    pid_request = args->nia_requested_pid;
-    desired = *args->nia_limits;
     nal_type = args->nia_nal_type;
 
-    actual = desired;
-    LIMIT(desired.max_match_entries,actual.max_match_entries,MAX_MES);
-    LIMIT(desired.max_mem_descriptors,actual.max_mem_descriptors,MAX_MDS);
-    LIMIT(desired.max_event_queues,actual.max_event_queues,MAX_EQS);
-    LIMIT(desired.max_atable_index,actual.max_atable_index,MAX_ACLS);
-    LIMIT(desired.max_ptable_index,actual.max_ptable_index,MAX_PTLS);
+    /* Wierd, but this sets b->lib_nal->libnal_ni.ni_pid.{nid,pid}, which
+     * lib_init() is about to do from the process_id passed to it...*/
+    set_address(b,args->nia_requested_pid);
 
-    set_address(b,pid_request);
-
+    process_id = b->lib_nal->libnal_ni.ni_pid;
+    
     if (nal_table[nal_type]) rc=(*nal_table[nal_type])(b);
     /* initialize the generic 'library' level code */
 
-    rc = lib_init(b->nal_cb, 
-                  b->nal_cb->ni.nid,
-                  b->nal_cb->ni.pid,
-		  10,
-		  actual.max_ptable_index,
-		  actual.max_atable_index);
+    rc = lib_init(b->lib_nal, args->nia_apinal, 
+                  process_id, 
+                  args->nia_requested_limits, 
+                  args->nia_actual_limits);
 
     /*
      * Whatever the initialization returned is passed back to the
@@ -207,18 +121,17 @@ void *nal_thread(void *z)
      */
     /* this should perform error checking */
     pthread_mutex_lock(&p->mutex);
-    p->nal_flags |= rc ? NAL_FLAG_STOPPED : NAL_FLAG_RUNNING;
+    p->nal_flags |= (rc != PTL_OK) ? NAL_FLAG_STOPPED : NAL_FLAG_RUNNING;
     pthread_cond_broadcast(&p->cond);
     pthread_mutex_unlock(&p->mutex);
 
-    if (!rc) {
+    if (rc == PTL_OK) {
         /* the thunk function is called each time the timer loop
            performs an operation and returns to blocking mode. we
            overload this function to inform the api side that
            it may be interested in looking at the event queue */
-        register_thunk(wakeup_topside,b);
+        register_thunk(check_stopping,b);
         timer_loop();
     }
     return(0);
 }
-#undef LIMIT

@@ -278,6 +278,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
         struct ptlrpc_reply_state *oldrep;
         struct ptlrpc_service     *svc;
         unsigned long              flags;
+        char                       str[PTL_NALFMT_SIZE];
         int                        i;
 
         /* CAVEAT EMPTOR: spinlock order */
@@ -299,10 +300,10 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                 list_del_init (&oldrep->rs_exp_list);
 
                 CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
-                      " o%d NID"LPX64"\n",
+                      " o%d NID %s\n",
                       oldrep->rs_nlocks, oldrep,
                       oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_msg.opc,
-                      exp->exp_connection->c_peer.peer_nid);
+                      ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)
                         ptlrpc_save_lock(req,

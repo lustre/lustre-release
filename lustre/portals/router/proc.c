@@ -42,7 +42,7 @@ struct name2num {
         { "elan",        QSWNAL},
         { "tcp",         SOCKNAL},
         { "gm",          GMNAL},
-        { "ib",          IBNAL},
+        { "ib",          OPENIBNAL},
         { NULL,          -1}
 };
 

@@ -74,8 +74,8 @@ Object creation command summary:
   --node node_name
   --nid nid
   --cluster_id 
-  --nettype tcp|elan|gm
-  --hostaddr addr
+  --nettype tcp|elan|gm|openib|iib
+  --hostaddr ip[/netmask]
   --port port
   --tcpbuf size
   --irq_affinity 0|1
@@ -108,7 +108,7 @@ Object creation command summary:
   --fstype extN|ext3
   --journal_size size
   --inode_size size
-  --obdtype obdecho|obdfilter
+  --osdtype obdecho|obdfilter
   --ostuuid uuid
  
 --add mtpt  - Mountpoint
@@ -119,8 +119,10 @@ Object creation command summary:
 
 --add route
   --node nodename
+  --router
   --gw nid
-  --tgt nid
+  --gateway_cluster_id nid
+  --target_cluster_id nid
   --lo nid
   --hi nid
 
@@ -133,6 +135,7 @@ Object creation command summary:
 """
 
 PARAM = Lustre.Options.PARAM
+PARAMLIST = Lustre.Options.PARAMLIST
 lmc_options = [
     # lmc input/output options
     ('reference', "Print short reference for commands."), 
@@ -155,12 +158,10 @@ lmc_options = [
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
     # network 
-    ('nettype', "Specify the network type. This can be tcp/elan/gm.", PARAM),
+    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
-    ('tcpbuf', "Optional argument to specify the TCP buffer size.", PARAM, "0"),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
-    ('irq_affinity', "Optional argument.", PARAM, 0),
-    ('hostaddr', "", PARAM,""),
+    ('hostaddr', "Optional argument to specify the host address.", PARAMLIST),
     ('cluster_id', "Specify the cluster ID", PARAM, "0"),
 
     # routes
@@ -317,21 +318,16 @@ class GenConfig:
         return new
 
     def network(self, name, uuid, nid, cluster_id, net, hostaddr="",
-                port=0, tcpbuf=0, irq_aff=0):
+                port=0):
         """create <network> node"""
         network = self.newService("network", name, uuid)
         network.setAttribute("nettype", net);
         self.addElement(network, "nid", nid)
         self.addElement(network, "clusterid", cluster_id)
-        if hostaddr:
-            self.addElement(network, "hostaddr", hostaddr)
+        for host in  hostaddr:
+            self.addElement(network, "hostaddr", host)
         if port:
             self.addElement(network, "port", "%d" %(port))
-        if tcpbuf:
-            self.addElement(network, "sendmem", "%d" %(tcpbuf))
-            self.addElement(network, "recvmem", "%d" %(tcpbuf))
-        if irq_aff:
-            self.addElement(network, "irqaffinity", "%d" %(irq_aff))
             
         return network
 
@@ -637,12 +633,8 @@ def add_net(gen, lustre, options):
 
     if net_type in ('tcp',):
         port = get_option_int(options, 'port')
-        tcpbuf = get_option_int(options, 'tcpbuf')
-        irq_aff = get_option_int(options, 'irq_affinity')
-    elif net_type in ('elan', 'gm'):
+    elif net_type in ('elan', 'gm', 'openib','iib'):
         port = 0
-        tcpbuf = 0
-        irq_aff = 0
     else:
         print "Unknown net_type: ", net_type
         sys.exit(2)
@@ -657,7 +649,7 @@ def add_net(gen, lustre, options):
     net_name = new_name('NET_'+ node_name +'_'+ net_type)
     net_uuid = new_uuid(net_name)
     node.appendChild(gen.network(net_name, net_uuid, nid, cluster_id, net_type,
-                                 hostaddr, port, tcpbuf, irq_aff))
+                                 hostaddr, port))
     node_add_profile(gen, node, "network", net_uuid)
 
 

@@ -21,12 +21,15 @@
  *
  */
 
-#include "openibnal.h"
+#include "iibnal.h"
 
 nal_t                   kibnal_api;
 ptl_handle_ni_t         kibnal_ni;
-kib_data_t              kibnal_data;
 kib_tunables_t          kibnal_tunables;
+
+kib_data_t              kibnal_data = {
+        .kib_service_id = IBNAL_SERVICE_NUMBER,
+};
 
 #ifdef CONFIG_SYSCTL
 #define IBNAL_SYSCTL             202
@@ -41,13 +44,14 @@ static ctl_table kibnal_ctl_table[] = {
 };
 
 static ctl_table kibnal_top_ctl_table[] = {
-        {IBNAL_SYSCTL, "openibnal", NULL, 0, 0555, kibnal_ctl_table},
+        {IBNAL_SYSCTL, "iibnal", NULL, 0, 0555, kibnal_ctl_table},
         { 0 }
 };
 #endif
 
+#ifdef unused
 void
-print_service(struct ib_common_attrib_service *service, char *tag, int rc)
+print_service(IB_SERVICE_RECORD *service, char *tag, int rc)
 {
         char name[32];
 
@@ -57,7 +61,7 @@ print_service(struct ib_common_attrib_service *service, char *tag, int rc)
                       "status    : %d (NULL)\n", tag, rc);
                 return;
         }
-        strncpy (name, service->service_name, sizeof(name)-1);
+        strncpy (name, service->ServiceName, sizeof(name)-1);
         name[sizeof(name)-1] = 0;
         
         CWARN("tag       : %s\n"
@@ -65,184 +69,185 @@ print_service(struct ib_common_attrib_service *service, char *tag, int rc)
               "service id: "LPX64"\n"
               "name      : %s\n"
               "NID       : "LPX64"\n", tag, rc,
-              service->service_id, name, 
+              service->RID.ServiceID, name,
               *kibnal_service_nid_field(service));
 }
+#endif
 
-void
-kibnal_service_setunset_done (tTS_IB_CLIENT_QUERY_TID tid, int status,
-                               struct ib_common_attrib_service *service, void *arg)
+static void
+kibnal_service_setunset_done (void *arg, FABRIC_OPERATION_DATA *fod,
+                              FSTATUS frc, uint32 madrc)
 {
-        *(int *)arg = status;
+        *(FSTATUS *)arg = frc;
         up (&kibnal_data.kib_nid_signal);
 }
 
 #if IBNAL_CHECK_ADVERT
-void
+static void
+kibnal_service_query_done (void *arg, QUERY *qry, 
+                           QUERY_RESULT_VALUES *qry_result)
+{
+        FSTATUS frc = qry_result->Status;
+
+        if (frc != FSUCCESS &&
+            qry_result->ResultDataSize == 0)
+                frc = FERROR;
+        
+        *(FSTATUS *)arg = frc;
+        up (&kibnal_data.kib_nid_signal);
+}
+
+static void
 kibnal_check_advert (void)
 {
-        struct ib_common_attrib_service *svc;
-        __u64   tid;
-        int     rc;
-        int     rc2;
+        QUERY                  *qry;
+        IB_SERVICE_RECORD      *svc;
+        FSTATUS                 frc;
+        FSTATUS                 frc2;
 
-        PORTAL_ALLOC(svc, sizeof(*svc));
-        if (svc == NULL)
+        PORTAL_ALLOC(qry, sizeof(*qry));
+        if (qry == NULL)
                 return;
 
-        memset (svc, 0, sizeof (*svc));
+        memset (qry, 0, sizeof(*qry));
+        qry->InputType = InputTypeServiceRecord;
+        qry->OutputType = OutputTypeServiceRecord;
+        qry->InputValue.ServiceRecordValue.ComponentMask = KIBNAL_SERVICE_KEY_MASK;
+        svc = &qry->InputValue.ServiceRecordValue.ServiceRecord;
         kibnal_set_service_keys(svc, kibnal_data.kib_nid);
 
-        rc = ib_service_get (kibnal_data.kib_device, 
-                             kibnal_data.kib_port,
-                             svc,
-                             KIBNAL_SERVICE_KEY_MASK,
-                             kibnal_tunables.kib_io_timeout * HZ,
-                             kibnal_service_setunset_done, &rc2, 
-                             &tid);
-
-        if (rc != 0) {
-                CERROR ("Immediate error %d checking SM service\n", rc);
+        frc = iibt_sd_query_port_fabric_information(kibnal_data.kib_sd,
+                                                    kibnal_data.kib_port_guid,
+                                                    qry,
+                                                    kibnal_service_query_done,
+                                                    NULL, &frc2);
+        if (frc != FSUCCESS && frc != FPENDING) {
+                CERROR ("Immediate error %d checking SM service\n", frc);
         } else {
                 down (&kibnal_data.kib_nid_signal);
-                rc = rc2;
+                frc = frc2;
 
-                if (rc != 0)
+                if (frc != 0)
                         CERROR ("Error %d checking SM service\n", rc);
         }
 
-        PORTAL_FREE(svc, sizeof(*svc));
+        return (rc);
 }
 #endif
 
-int
-kibnal_advertise (void)
+static void fill_fod(FABRIC_OPERATION_DATA *fod, FABRIC_OPERATION_TYPE type)
 {
-        struct ib_common_attrib_service *svc;
-        __u64   tid;
-        int     rc;
-        int     rc2;
+        IB_SERVICE_RECORD     *svc;
 
-        LASSERT (kibnal_data.kib_nid != PTL_NID_ANY);
+        memset (fod, 0, sizeof(*fod));
+        fod->Type = type;
 
-        PORTAL_ALLOC(svc, sizeof(*svc));
-        if (svc == NULL)
-                return (-ENOMEM);
-
-        memset (svc, 0, sizeof (*svc));
-        
-        svc->service_id = kibnal_data.kib_service_id;
-
-        rc = ib_cached_gid_get(kibnal_data.kib_device,
-                               kibnal_data.kib_port,
-                               0,
-                               svc->service_gid);
-        if (rc != 0) {
-                CERROR ("Can't get port %d GID: %d\n",
-                        kibnal_data.kib_port, rc);
-                goto out;
-        }
-        
-        rc = ib_cached_pkey_get(kibnal_data.kib_device,
-                                kibnal_data.kib_port,
-                                0,
-                                &svc->service_pkey);
-        if (rc != 0) {
-                CERROR ("Can't get port %d PKEY: %d\n",
-                        kibnal_data.kib_port, rc);
-                goto out;
-        }
-        
-        svc->service_lease = 0xffffffff;
+        svc = &fod->Value.ServiceRecordValue.ServiceRecord;
+        svc->RID.ServiceID = kibnal_data.kib_service_id;
+        svc->RID.ServiceGID.Type.Global.InterfaceID = kibnal_data.kib_port_guid;
+        svc->RID.ServiceGID.Type.Global.SubnetPrefix = DEFAULT_SUBNET_PREFIX;
+        svc->RID.ServiceP_Key = kibnal_data.kib_port_pkey;
+        svc->ServiceLease = 0xffffffff;
 
         kibnal_set_service_keys(svc, kibnal_data.kib_nid);
-
-        CDEBUG(D_NET, "Advertising service id "LPX64" %s:"LPX64"\n", 
-               svc->service_id, 
-               svc->service_name, *kibnal_service_nid_field(svc));
-
-        rc = ib_service_set (kibnal_data.kib_device,
-                             kibnal_data.kib_port,
-                             svc,
-                             IB_SA_SERVICE_COMP_MASK_ID |
-                             IB_SA_SERVICE_COMP_MASK_GID |
-                             IB_SA_SERVICE_COMP_MASK_PKEY |
-                             IB_SA_SERVICE_COMP_MASK_LEASE |
-                             KIBNAL_SERVICE_KEY_MASK,
-                             kibnal_tunables.kib_io_timeout * HZ,
-                             kibnal_service_setunset_done, &rc2, &tid);
-
-        if (rc != 0) {
-                CERROR ("Immediate error %d advertising NID "LPX64"\n",
-                        rc, kibnal_data.kib_nid);
-                goto out;
-        }
-
-        down (&kibnal_data.kib_nid_signal);
-
-        rc = rc2;
-        if (rc != 0)
-                CERROR ("Error %d advertising NID "LPX64"\n", 
-                        rc, kibnal_data.kib_nid);
- out:
-        PORTAL_FREE(svc, sizeof(*svc));
-        return (rc);
 }
 
-void
-kibnal_unadvertise (int expect_success)
+static int
+kibnal_advertise (void)
 {
-        struct ib_common_attrib_service *svc;
-        __u64   tid;
-        int     rc;
-        int     rc2;
+        FABRIC_OPERATION_DATA *fod;
+        IB_SERVICE_RECORD     *svc;
+        FSTATUS                frc;
+        FSTATUS                frc2;
 
         LASSERT (kibnal_data.kib_nid != PTL_NID_ANY);
 
-        PORTAL_ALLOC(svc, sizeof(*svc));
-        if (svc == NULL)
-                return;
+        PORTAL_ALLOC(fod, sizeof(*fod));
+        if (fod == NULL)
+                return (-ENOMEM);
 
-        memset (svc, 0, sizeof(*svc));
+        fill_fod(fod, FabOpSetServiceRecord);
+        svc = &fod->Value.ServiceRecordValue.ServiceRecord;
 
-        kibnal_set_service_keys(svc, kibnal_data.kib_nid);
+        CDEBUG(D_NET, "Advertising service id "LPX64" %s:"LPX64"\n", 
+               svc->RID.ServiceID, 
+               svc->ServiceName, *kibnal_service_nid_field(svc));
 
-        CDEBUG(D_NET, "Unadvertising service %s:"LPX64"\n",
-               svc->service_name, *kibnal_service_nid_field(svc));
+        frc = iibt_sd_port_fabric_operation(kibnal_data.kib_sd,
+                                            kibnal_data.kib_port_guid,
+                                            fod, kibnal_service_setunset_done, 
+                                            NULL, &frc2);
 
-        rc = ib_service_delete (kibnal_data.kib_device,
-                                kibnal_data.kib_port,
-                                svc,
-                                KIBNAL_SERVICE_KEY_MASK,
-                                kibnal_tunables.kib_io_timeout * HZ,
-                                kibnal_service_setunset_done, &rc2, &tid);
-        if (rc != 0) {
-                CERROR ("Immediate error %d unadvertising NID "LPX64"\n",
-                        rc, kibnal_data.kib_nid);
+        if (frc != FSUCCESS && frc != FPENDING) {
+                CERROR ("Immediate error %d advertising NID "LPX64"\n",
+                        frc, kibnal_data.kib_nid);
                 goto out;
         }
 
         down (&kibnal_data.kib_nid_signal);
+
+        frc = frc2;
+        if (frc != FSUCCESS)
+                CERROR ("Error %d advertising BUD "LPX64"\n",
+                        frc, kibnal_data.kib_nid);
+out:
+        PORTAL_FREE(fod, sizeof(*fod));
+        return (frc == FSUCCESS) ? 0 : -EINVAL;
+}
+
+static void
+kibnal_unadvertise (int expect_success)
+{
+        FABRIC_OPERATION_DATA *fod;
+        IB_SERVICE_RECORD     *svc;
+        FSTATUS                frc;
+        FSTATUS                frc2;
+
+        LASSERT (kibnal_data.kib_nid != PTL_NID_ANY);
+
+        PORTAL_ALLOC(fod, sizeof(*fod));
+        if (fod == NULL)
+                return;
+
+        fill_fod(fod, FabOpDeleteServiceRecord);
+        svc = &fod->Value.ServiceRecordValue.ServiceRecord;
+
+        CDEBUG(D_NET, "Unadvertising service %s:"LPX64"\n",
+               svc->ServiceName, *kibnal_service_nid_field(svc));
         
-        if ((rc2 == 0) == !!expect_success)
-                goto out;                       /* success: rc == 0 */
+        frc = iibt_sd_port_fabric_operation(kibnal_data.kib_sd,
+                                            kibnal_data.kib_port_guid,
+                                            fod, kibnal_service_setunset_done, 
+                                            NULL, &frc2);
+
+        if (frc != FSUCCESS && frc != FPENDING) {
+                CERROR ("Immediate error %d unadvertising NID "LPX64"\n",
+                        frc, kibnal_data.kib_nid);
+                goto out;
+        }
+
+        down (&kibnal_data.kib_nid_signal);
+
+        if ((frc2 == FSUCCESS) == !!expect_success)
+                goto out;
 
         if (expect_success)
                 CERROR("Error %d unadvertising NID "LPX64"\n",
-                       rc, kibnal_data.kib_nid);
+                       frc2, kibnal_data.kib_nid);
         else
                 CWARN("Removed conflicting NID "LPX64"\n",
                       kibnal_data.kib_nid);
  out:
-        PORTAL_FREE(svc, sizeof(*svc));
+        PORTAL_FREE(fod, sizeof(*fod));
 }
 
-int
+static int
 kibnal_set_mynid(ptl_nid_t nid)
 {
         struct timeval tv;
         lib_ni_t      *ni = &kibnal_lib.libnal_ni;
         int            rc;
+        FSTATUS        frc;
 
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
                nid, ni->ni_pid.nid);
@@ -264,9 +269,15 @@ kibnal_set_mynid(ptl_nid_t nid)
 
                 kibnal_unadvertise (1);
 
-                rc = ib_cm_listen_stop (kibnal_data.kib_listen_handle);
-                if (rc != 0)
-                        CERROR ("Error %d stopping listener\n", rc);
+                frc = iibt_cm_cancel(kibnal_data.kib_cep);
+                if (frc != FSUCCESS && frc != FPENDING)
+                        CERROR ("Error %d stopping listener\n", frc);
+
+                frc = iibt_cm_destroy_cep(kibnal_data.kib_cep);
+                if (frc != FSUCCESS)
+                        CERROR ("Error %d destroying CEP\n", frc);
+
+                kibnal_data.kib_cep = NULL;
         }
         
         kibnal_data.kib_nid = ni->ni_pid.nid = nid;
@@ -282,18 +293,29 @@ kibnal_set_mynid(ptl_nid_t nid)
                 up (&kibnal_data.kib_nid_mutex);
                 return (0);
         }
-        
+
         /* remove any previous advert (crashed node etc) */
         kibnal_unadvertise(0);
 
-        /* Assign new service number */
-        kibnal_data.kib_service_id = ib_cm_service_assign();
-        CDEBUG(D_NET, "service_id "LPX64"\n", kibnal_data.kib_service_id);
+        kibnal_data.kib_cep = iibt_cm_create_cep(CM_RC_TYPE);
+        if (kibnal_data.kib_cep == NULL) {
+                CERROR ("Can't create CEP\n");
+                rc = -ENOMEM;
+        } else {
+                CM_LISTEN_INFO info;
+                memset (&info, 0, sizeof(info));
+                info.ListenAddr.EndPt.SID = kibnal_data.kib_service_id;
+
+                frc = iibt_cm_listen(kibnal_data.kib_cep, &info,
+                                     kibnal_listen_callback, NULL);
+                if (frc != FSUCCESS && frc != FPENDING) {
+                        CERROR ("iibt_cm_listen error: %d\n", frc);
+                        rc = -EINVAL;
+                } else {
+                        rc = 0;
+                }
+        }
         
-        rc = ib_cm_listen(kibnal_data.kib_service_id,
-                          TS_IB_CM_SERVICE_EXACT_MASK,
-                          kibnal_passive_conn_callback, NULL,
-                          &kibnal_data.kib_listen_handle);
         if (rc == 0) {
                 rc = kibnal_advertise();
                 if (rc == 0) {
@@ -303,13 +325,14 @@ kibnal_set_mynid(ptl_nid_t nid)
                         up (&kibnal_data.kib_nid_mutex);
                         return (0);
                 }
-
-                ib_cm_listen_stop(kibnal_data.kib_listen_handle);
+                
+                iibt_cm_cancel (kibnal_data.kib_cep);
+                iibt_cm_destroy_cep (kibnal_data.kib_cep);
                 /* remove any peers that sprung up while I failed to
                  * advertise myself */
                 kibnal_del_peer (PTL_NID_ANY, 0);
         }
-        
+
         kibnal_data.kib_nid = PTL_NID_ANY;
         up (&kibnal_data.kib_nid_mutex);
         return (rc);
@@ -345,7 +368,6 @@ kibnal_create_peer (ptl_nid_t nid)
 void
 kibnal_destroy_peer (kib_peer_t *peer)
 {
-        CDEBUG (D_NET, "peer "LPX64" %p deleted\n", peer->ibp_nid, peer);
 
         LASSERT (atomic_read (&peer->ibp_refcount) == 0);
         LASSERT (peer->ibp_persistence == 0);
@@ -363,20 +385,8 @@ kibnal_destroy_peer (kib_peer_t *peer)
         atomic_dec (&kibnal_data.kib_npeers);
 }
 
-void
-kibnal_put_peer (kib_peer_t *peer)
-{
-        CDEBUG (D_OTHER, "putting peer[%p] -> "LPX64" (%d)\n",
-                peer, peer->ibp_nid,
-                atomic_read (&peer->ibp_refcount));
-
-        LASSERT (atomic_read (&peer->ibp_refcount) > 0);
-        if (!atomic_dec_and_test (&peer->ibp_refcount))
-                return;
-
-        kibnal_destroy_peer (peer);
-}
-
+/* the caller is responsible for accounting for the additional reference
+ * that this creates */
 kib_peer_t *
 kibnal_find_peer_locked (ptl_nid_t nid)
 {
@@ -410,7 +420,7 @@ kibnal_get_peer (ptl_nid_t nid)
         read_lock (&kibnal_data.kib_global_lock);
         peer = kibnal_find_peer_locked (nid);
         if (peer != NULL)                       /* +1 ref for caller? */
-                atomic_inc (&peer->ibp_refcount);
+                kib_peer_addref(peer);
         read_unlock (&kibnal_data.kib_global_lock);
 
         return (peer);
@@ -425,10 +435,10 @@ kibnal_unlink_peer_locked (kib_peer_t *peer)
         LASSERT (kibnal_peer_active(peer));
         list_del_init (&peer->ibp_list);
         /* lose peerlist's ref */
-        kibnal_put_peer (peer);
+        kib_peer_decref(peer);
 }
 
-int
+static int
 kibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
 {
         kib_peer_t        *peer;
@@ -440,7 +450,7 @@ kibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
         for (i = 0; i < kibnal_data.kib_peer_hash_size; i++) {
 
                 list_for_each (ptmp, &kibnal_data.kib_peers[i]) {
-                        
+
                         peer = list_entry (ptmp, kib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence != 0 ||
                                  peer->ibp_connecting != 0 ||
@@ -451,7 +461,7 @@ kibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
 
                         *nidp = peer->ibp_nid;
                         *persistencep = peer->ibp_persistence;
-                        
+
                         read_unlock (&kibnal_data.kib_global_lock);
                         return (0);
                 }
@@ -461,7 +471,7 @@ kibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
         return (-ENOENT);
 }
 
-int
+static int
 kibnal_add_persistent_peer (ptl_nid_t nid)
 {
         unsigned long      flags;
@@ -479,7 +489,7 @@ kibnal_add_persistent_peer (ptl_nid_t nid)
 
         peer2 = kibnal_find_peer_locked (nid);
         if (peer2 != NULL) {
-                kibnal_put_peer (peer);
+                kib_peer_decref (peer);
                 peer = peer2;
         } else {
                 /* peer table takes existing ref on peer */
@@ -493,7 +503,7 @@ kibnal_add_persistent_peer (ptl_nid_t nid)
         return (0);
 }
 
-void
+static void
 kibnal_del_peer_locked (kib_peer_t *peer, int single_share)
 {
         struct list_head *ctmp;
@@ -561,7 +571,7 @@ kibnal_del_peer (ptl_nid_t nid, int single_share)
         return (rc);
 }
 
-kib_conn_t *
+static kib_conn_t *
 kibnal_get_conn_by_idx (int index)
 {
         kib_peer_t        *peer;
@@ -609,9 +619,10 @@ kibnal_create_conn (void)
         int          page_offset;
         int          ipage;
         int          rc;
+        FSTATUS      frc;
         union {
-                struct ib_qp_create_param  qp_create;
-                struct ib_qp_attribute     qp_attr;
+                IB_QP_ATTRIBUTES_CREATE    qp_create;
+                IB_QP_ATTRIBUTES_MODIFY    qp_attr;
         } params;
         
         PORTAL_ALLOC (conn, sizeof (*conn));
@@ -635,9 +646,7 @@ kibnal_create_conn (void)
                 goto failed;
         memset (conn->ibc_rxs, 0, IBNAL_RX_MSGS * sizeof(kib_rx_t));
 
-        rc = kibnal_alloc_pages(&conn->ibc_rx_pages,
-                                IBNAL_RX_MSG_PAGES,
-                                IB_ACCESS_LOCAL_WRITE);
+        rc = kibnal_alloc_pages(&conn->ibc_rx_pages, IBNAL_RX_MSG_PAGES, 1);
         if (rc != 0)
                 goto failed;
 
@@ -648,8 +657,15 @@ kibnal_create_conn (void)
                 kib_rx_t   *rx = &conn->ibc_rxs[i];
 
                 rx->rx_conn = conn;
-                rx->rx_vaddr = vaddr;
-                rx->rx_msg = (kib_msg_t *)(((char *)page_address(page)) + page_offset);
+                rx->rx_msg = (kib_msg_t *)(((char *)page_address(page)) + 
+                             page_offset);
+
+                if (kibnal_whole_mem()) 
+                        rx->rx_vaddr = kibnal_page2phys(page) + 
+                                       page_offset + 
+                                       kibnal_data.kib_md.md_addr;
+                else
+                        rx->rx_vaddr = vaddr;
                 
                 vaddr += IBNAL_MSG_SIZE;
                 LASSERT (vaddr <= vaddr_base + IBNAL_RX_MSG_BYTES);
@@ -664,44 +680,43 @@ kibnal_create_conn (void)
                 }
         }
 
-        params.qp_create = (struct ib_qp_create_param) {
-                .limit = {
-                        /* Sends have an optional RDMA */
-                        .max_outstanding_send_request    = 2 * IBNAL_MSG_QUEUE_SIZE,
-                        .max_outstanding_receive_request = IBNAL_MSG_QUEUE_SIZE,
-                        .max_send_gather_element         = 1,
-                        .max_receive_scatter_element     = 1,
-                },
-                .pd              = kibnal_data.kib_pd,
-                .send_queue      = kibnal_data.kib_cq,
-                .receive_queue   = kibnal_data.kib_cq,
-                .send_policy     = IB_WQ_SIGNAL_SELECTABLE,
-                .receive_policy  = IB_WQ_SIGNAL_SELECTABLE,
-                .rd_domain       = 0,
-                .transport       = IB_TRANSPORT_RC,
-                .device_specific = NULL,
+        params.qp_create = (IB_QP_ATTRIBUTES_CREATE) {
+                .Type                    = QPTypeReliableConnected,
+                .SendQDepth              = IBNAL_TX_MAX_SG * 
+                                           IBNAL_MSG_QUEUE_SIZE,
+                .RecvQDepth              = IBNAL_MSG_QUEUE_SIZE,
+                .SendDSListDepth         = 1,
+                .RecvDSListDepth         = 1,
+                .SendCQHandle            = kibnal_data.kib_cq,
+                .RecvCQHandle            = kibnal_data.kib_cq,
+                .PDHandle                = kibnal_data.kib_pd,
+                .SendSignaledCompletions = TRUE,
         };
-        
-        rc = ib_qp_create (&params.qp_create, &conn->ibc_qp, &conn->ibc_qpn);
+        frc = iibt_qp_create(kibnal_data.kib_hca, &params.qp_create, NULL,
+                             &conn->ibc_qp, &conn->ibc_qp_attrs);
         if (rc != 0) {
                 CERROR ("Failed to create queue pair: %d\n", rc);
                 goto failed;
         }
-        
+
         /* Mark QP created */
         conn->ibc_state = IBNAL_CONN_INIT_QP;
 
-        params.qp_attr = (struct ib_qp_attribute) {
-                .state             = IB_QP_STATE_INIT,
-                .port              = kibnal_data.kib_port,
-                .enable_rdma_read  = 1,
-                .enable_rdma_write = 1,
-                .valid_fields      = (IB_QP_ATTRIBUTE_STATE |
-                                      IB_QP_ATTRIBUTE_PORT |
-                                      IB_QP_ATTRIBUTE_PKEY_INDEX |
-                                      IB_QP_ATTRIBUTE_RDMA_ATOMIC_ENABLE),
+        params.qp_attr = (IB_QP_ATTRIBUTES_MODIFY) {
+                .RequestState             = QPStateInit,
+                .Attrs                    = (IB_QP_ATTR_PORTGUID |
+                                             IB_QP_ATTR_PKEYINDEX |
+                                             IB_QP_ATTR_ACCESSCONTROL),
+                .PortGUID                 = kibnal_data.kib_port_guid,
+                .PkeyIndex                = 0,
+                .AccessControl = {
+                        .s = {
+                                .RdmaWrite = 1,
+                                .RdmaRead  = 1,
+                        },
+                },
         };
-        rc = ib_qp_modify(conn->ibc_qp, &params.qp_attr);
+        rc = iibt_qp_modify(conn->ibc_qp, &params.qp_attr, NULL);
         if (rc != 0) {
                 CERROR ("Failed to modify queue pair: %d\n", rc);
                 goto failed;
@@ -720,6 +735,7 @@ void
 kibnal_destroy_conn (kib_conn_t *conn)
 {
         int    rc;
+        FSTATUS frc;
         
         CDEBUG (D_NET, "connection %p\n", conn);
 
@@ -730,11 +746,14 @@ kibnal_destroy_conn (kib_conn_t *conn)
         LASSERT (conn->ibc_connreq == NULL);
 
         switch (conn->ibc_state) {
-        case IBNAL_CONN_ZOMBIE:
+        case IBNAL_CONN_DISCONNECTED:
                 /* called after connection sequence initiated */
+                /* fall through */
 
         case IBNAL_CONN_INIT_QP:
-                rc = ib_qp_destroy(conn->ibc_qp);
+                /* _destroy includes an implicit Reset of the QP which 
+                 * discards posted work */
+                rc = iibt_qp_destroy(conn->ibc_qp);
                 if (rc != 0)
                         CERROR("Can't destroy QP: %d\n", rc);
                 /* fall through */
@@ -746,6 +765,13 @@ kibnal_destroy_conn (kib_conn_t *conn)
                 LASSERT (0);
         }
 
+        if (conn->ibc_cep != NULL) {
+                frc = iibt_cm_destroy_cep(conn->ibc_cep);
+                if (frc != 0)
+                        CERROR("Can't destroy CEP %p: %d\n", conn->ibc_cep, 
+                               frc);
+        }
+
         if (conn->ibc_rx_pages != NULL) 
                 kibnal_free_pages(conn->ibc_rx_pages);
         
@@ -754,7 +780,7 @@ kibnal_destroy_conn (kib_conn_t *conn)
                             IBNAL_RX_MSGS * sizeof(kib_rx_t));
 
         if (conn->ibc_peer != NULL)
-                kibnal_put_peer(conn->ibc_peer);
+                kib_peer_decref(conn->ibc_peer);
 
         PORTAL_FREE(conn, sizeof (*conn));
 
@@ -782,8 +808,8 @@ kibnal_put_conn (kib_conn_t *conn)
         if (!atomic_dec_and_test (&conn->ibc_refcount))
                 return;
 
-        /* last ref only goes on zombies */
-        LASSERT (conn->ibc_state == IBNAL_CONN_ZOMBIE);
+        /* must disconnect before dropping the final ref */
+        LASSERT (conn->ibc_state == IBNAL_CONN_DISCONNECTED);
 
         spin_lock_irqsave (&kibnal_data.kib_connd_lock, flags);
 
@@ -793,7 +819,7 @@ kibnal_put_conn (kib_conn_t *conn)
         spin_unlock_irqrestore (&kibnal_data.kib_connd_lock, flags);
 }
 
-int
+static int
 kibnal_close_peer_conns_locked (kib_peer_t *peer, int why)
 {
         kib_conn_t         *conn;
@@ -835,7 +861,7 @@ kibnal_close_stale_conns_locked (kib_peer_t *peer, __u64 incarnation)
         return (count);
 }
 
-int
+static int
 kibnal_close_matching_conns (ptl_nid_t nid)
 {
         unsigned long       flags;
@@ -880,10 +906,11 @@ kibnal_close_matching_conns (ptl_nid_t nid)
         return (count == 0 ? -ENOENT : 0);
 }
 
-int
+static int
 kibnal_cmd(struct portals_cfg *pcfg, void * private)
 {
         int rc = -EINVAL;
+        ENTRY;
 
         LASSERT (pcfg != NULL);
 
@@ -940,7 +967,7 @@ kibnal_cmd(struct portals_cfg *pcfg, void * private)
         }
         }
 
-        return rc;
+        RETURN(rc);
 }
 
 void
@@ -951,7 +978,7 @@ kibnal_free_pages (kib_pages_t *p)
         int     i;
         
         if (p->ibp_mapped) {
-                rc = ib_memory_deregister(p->ibp_handle);
+                rc = iibt_deregister_memory(p->ibp_handle);
                 if (rc != 0)
                         CERROR ("Deregister error: %d\n", rc);
         }
@@ -964,12 +991,19 @@ kibnal_free_pages (kib_pages_t *p)
 }
 
 int
-kibnal_alloc_pages (kib_pages_t **pp, int npages, int access)
+kibnal_alloc_pages (kib_pages_t **pp, int npages, int allow_write)
 {
         kib_pages_t                *p;
-        struct ib_physical_buffer  *phys_pages;
+        __u64                      *phys_pages;
         int                         i;
-        int                         rc;
+        FSTATUS                     frc;
+        IB_ACCESS_CONTROL           access;
+
+        memset(&access, 0, sizeof(access));
+        access.s.MWBindable = 1;
+        access.s.LocalWrite = 1;
+        access.s.RdmaRead = 1;
+        access.s.RdmaWrite = 1;
 
         PORTAL_ALLOC(p, offsetof(kib_pages_t, ibp_pages[npages]));
         if (p == NULL) {
@@ -989,43 +1023,51 @@ kibnal_alloc_pages (kib_pages_t **pp, int npages, int access)
                 }
         }
 
+        if (kibnal_whole_mem())
+                goto out;
+
         PORTAL_ALLOC(phys_pages, npages * sizeof(*phys_pages));
         if (phys_pages == NULL) {
                 CERROR ("Can't allocate physarray for %d pages\n", npages);
+                /* XXX free ibp_pages? */
                 kibnal_free_pages(p);
                 return (-ENOMEM);
         }
 
-        for (i = 0; i < npages; i++) {
-                phys_pages[i].size = PAGE_SIZE;
-                phys_pages[i].address =
-                        kibnal_page2phys(p->ibp_pages[i]);
-        }
+        /* if we were using the _contig_ registration variant we would have
+         * an array of PhysAddr/Length pairs, but the discontiguous variant
+         * just takes the PhysAddr */
+        for (i = 0; i < npages; i++)
+                phys_pages[i] = kibnal_page2phys(p->ibp_pages[i]);
 
-        p->ibp_vaddr = 0;
-        rc = ib_memory_register_physical(kibnal_data.kib_pd,
-                                         phys_pages, npages,
-                                         &p->ibp_vaddr,
-                                         npages * PAGE_SIZE, 0,
-                                         access,
-                                         &p->ibp_handle,
-                                         &p->ibp_lkey,
-                                         &p->ibp_rkey);
+        frc = iibt_register_physical_memory(kibnal_data.kib_hca,
+                                            0,          /* requested vaddr */
+                                            phys_pages, npages,
+                                            0,          /* offset */
+                                            kibnal_data.kib_pd,
+                                            access,
+                                            &p->ibp_handle, &p->ibp_vaddr,
+                                            &p->ibp_lkey, &p->ibp_rkey);
         
         PORTAL_FREE(phys_pages, npages * sizeof(*phys_pages));
         
-        if (rc != 0) {
-                CERROR ("Error %d mapping %d pages\n", rc, npages);
+        if (frc != FSUCCESS) {
+                CERROR ("Error %d mapping %d pages\n", frc, npages);
                 kibnal_free_pages(p);
-                return (rc);
+                return (-ENOMEM);
         }
+
+        CDEBUG(D_NET, "registered %d pages; handle: %p vaddr "LPX64" "
+                      "lkey %x rkey %x\n", npages, p->ibp_handle,
+                      p->ibp_vaddr, p->ibp_lkey, p->ibp_rkey);
         
         p->ibp_mapped = 1;
+out:
         *pp = p;
         return (0);
 }
 
-int
+static int
 kibnal_setup_tx_descs (void)
 {
         int           ipage = 0;
@@ -1043,12 +1085,12 @@ kibnal_setup_tx_descs (void)
         /* No fancy arithmetic when we do the buffer calculations */
         LASSERT (PAGE_SIZE % IBNAL_MSG_SIZE == 0);
 
-        rc = kibnal_alloc_pages(&kibnal_data.kib_tx_pages,
-                                IBNAL_TX_MSG_PAGES, 
-                                0);            /* local read access only */
+        rc = kibnal_alloc_pages(&kibnal_data.kib_tx_pages, IBNAL_TX_MSG_PAGES, 
+                                0);
         if (rc != 0)
                 return (rc);
 
+        /* ignored for the whole_mem case */
         vaddr = vaddr_base = kibnal_data.kib_tx_pages->ibp_vaddr;
 
         for (i = 0; i < IBNAL_TX_MSGS; i++) {
@@ -1057,8 +1099,16 @@ kibnal_setup_tx_descs (void)
 
                 memset (tx, 0, sizeof(*tx));    /* zero flags etc */
                 
-                tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) + page_offset);
-                tx->tx_vaddr = vaddr;
+                tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) + 
+                                            page_offset);
+
+                if (kibnal_whole_mem()) 
+                        tx->tx_vaddr = kibnal_page2phys(page) + 
+                                       page_offset + 
+                                       kibnal_data.kib_md.md_addr;
+                else
+                        tx->tx_vaddr = vaddr;
+
                 tx->tx_isnblk = (i >= IBNAL_NTX);
                 tx->tx_mapped = KIB_TX_UNMAPPED;
 
@@ -1088,7 +1138,7 @@ kibnal_setup_tx_descs (void)
         return (0);
 }
 
-void
+static void
 kibnal_api_shutdown (nal_t *nal)
 {
         int   i;
@@ -1112,27 +1162,27 @@ kibnal_api_shutdown (nal_t *nal)
 
         case IBNAL_INIT_ALL:
                 /* stop calls to nal_cmd */
-                libcfs_nal_cmd_unregister(OPENIBNAL);
+                libcfs_nal_cmd_unregister(IIBNAL);
                 /* No new peers */
 
                 /* resetting my NID to unadvertises me, removes my
                  * listener and nukes all current peers */
                 kibnal_set_mynid (PTL_NID_ANY);
 
-                /* Wait for all peer state to clean up */
+                /* Wait for all peer state to clean up (crazy) */
                 i = 2;
                 while (atomic_read (&kibnal_data.kib_npeers) != 0) {
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
-                               "waiting for %d peers to close down\n",
+                               "waiting for %d peers to disconnect (can take a few seconds)\n",
                                atomic_read (&kibnal_data.kib_npeers));
-                        set_current_state (TASK_INTERRUPTIBLE);
+                        set_current_state (TASK_UNINTERRUPTIBLE);
                         schedule_timeout (HZ);
                 }
                 /* fall through */
 
         case IBNAL_INIT_CQ:
-                rc = ib_cq_destroy (kibnal_data.kib_cq);
+                rc = iibt_cq_destroy(kibnal_data.kib_cq);
                 if (rc != 0)
                         CERROR ("Destroy CQ error: %d\n", rc);
                 /* fall through */
@@ -1140,6 +1190,15 @@ kibnal_api_shutdown (nal_t *nal)
         case IBNAL_INIT_TXD:
                 kibnal_free_pages (kibnal_data.kib_tx_pages);
                 /* fall through */
+
+        case IBNAL_INIT_MR:
+                if (kibnal_data.kib_md.md_handle != NULL) {
+                        rc = iibt_deregister_memory(kibnal_data.kib_md.md_handle);
+                        if (rc != FSUCCESS)
+                                CERROR ("Deregister memory: %d\n", rc);
+                }
+                /* fall through */
+
 #if IBNAL_FMR
         case IBNAL_INIT_FMR:
                 rc = ib_fmr_pool_destroy (kibnal_data.kib_fmr_pool);
@@ -1148,9 +1207,30 @@ kibnal_api_shutdown (nal_t *nal)
                 /* fall through */
 #endif
         case IBNAL_INIT_PD:
-                rc = ib_pd_destroy(kibnal_data.kib_pd);
+                rc = iibt_pd_free(kibnal_data.kib_pd);
                 if (rc != 0)
                         CERROR ("Destroy PD error: %d\n", rc);
+                /* fall through */
+
+        case IBNAL_INIT_SD:
+                rc = iibt_sd_deregister(kibnal_data.kib_sd);
+                if (rc != 0)
+                        CERROR ("Deregister SD error: %d\n", rc);
+                /* fall through */
+
+        case IBNAL_INIT_PORT:
+                /* XXX ??? */
+                /* fall through */
+
+        case IBNAL_INIT_PORTATTRS:
+                PORTAL_FREE(kibnal_data.kib_hca_attrs.PortAttributesList,
+                            kibnal_data.kib_hca_attrs.PortAttributesListSize);
+                /* fall through */
+
+        case IBNAL_INIT_HCA:
+                rc = iibt_close_hca(kibnal_data.kib_hca);
+                if (rc != 0)
+                        CERROR ("Close HCA  error: %d\n", rc);
                 /* fall through */
 
         case IBNAL_INIT_LIB:
@@ -1202,21 +1282,43 @@ kibnal_api_shutdown (nal_t *nal)
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
-        printk(KERN_INFO "Lustre: OpenIB NAL unloaded (final mem %d)\n",
+        printk(KERN_INFO "Lustre: Infinicon IB NAL unloaded (final mem %d)\n",
                atomic_read(&portal_kmemory));
 
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
 }
 
-int
+#define roundup_power(val, power) \
+        ( (val + (__u64)(power - 1)) & ~((__u64)(power - 1)) )
+
+/* this isn't very portable or sturdy in the face of funny mem/bus configs */
+static __u64 max_phys_mem(IB_CA_ATTRIBUTES *ca_attr)
+{
+        struct sysinfo si;
+        __u64 ret;
+
+        /* XXX we don't bother with first-gen cards */
+        if (ca_attr->VendorId == 0xd0b7 && ca_attr->DeviceId == 0x3101)
+                return 0ULL;
+
+        si_meminfo(&si);
+        ret = (__u64)max(si.totalram, max_mapnr) * si.mem_unit;
+        return roundup_power(ret, 128 * 1024 * 1024);
+} 
+#undef roundup_power
+
+static int
 kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                      ptl_ni_limits_t *requested_limits,
                      ptl_ni_limits_t *actual_limits)
 {
-        ptl_process_id_t  process_id;
-        int               pkmem = atomic_read(&portal_kmemory);
-        int               rc;
-        int               i;
+        ptl_process_id_t    process_id;
+        int                 pkmem = atomic_read(&portal_kmemory);
+        IB_PORT_ATTRIBUTES *pattr;
+        FSTATUS             frc;
+        int                 rc;
+        int                 n;
+        int                 i;
 
         LASSERT (nal == &kibnal_api);
 
@@ -1230,7 +1332,13 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         LASSERT (kibnal_data.kib_init == IBNAL_INIT_NOTHING);
 
-        memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
+        frc = IbtGetInterfaceByVersion(IBT_INTERFACE_VERSION_2, 
+                                       &kibnal_data.kib_interfaces);
+        if (frc != FSUCCESS) {
+                CERROR("IbtGetInterfaceByVersion(IBT_INTERFACE_VERSION_2) = %d\n",
+                        frc);
+                return -ENOSYS;
+        }
 
         init_MUTEX (&kibnal_data.kib_nid_mutex);
         init_MUTEX_LOCKED (&kibnal_data.kib_nid_signal);
@@ -1273,8 +1381,7 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         kibnal_data.kib_init = IBNAL_INIT_DATA;
         /*****************************************************/
 
-
-        process_id.pid = requested_pid;
+        process_id.pid = 0;
         process_id.nid = kibnal_data.kib_nid;
         
         rc = lib_init(&kibnal_lib, nal, process_id,
@@ -1291,7 +1398,7 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         for (i = 0; i < IBNAL_N_SCHED; i++) {
                 rc = kibnal_thread_start (kibnal_scheduler, (void *)i);
                 if (rc != 0) {
-                        CERROR("Can't spawn openibnal scheduler[%d]: %d\n",
+                        CERROR("Can't spawn iibnal scheduler[%d]: %d\n",
                                i, rc);
                         goto failed;
                 }
@@ -1299,44 +1406,113 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         rc = kibnal_thread_start (kibnal_connd, NULL);
         if (rc != 0) {
-                CERROR ("Can't spawn openibnal connd: %d\n", rc);
+                CERROR ("Can't spawn iibnal connd: %d\n", rc);
                 goto failed;
         }
 
-        kibnal_data.kib_device = ib_device_get_by_index(0);
-        if (kibnal_data.kib_device == NULL) {
-                CERROR ("Can't open ib device 0\n");
+        n = sizeof(kibnal_data.kib_hca_guids) /
+            sizeof(kibnal_data.kib_hca_guids[0]);
+        frc = iibt_get_hca_guids(&n, kibnal_data.kib_hca_guids);
+        if (frc != FSUCCESS) {
+                CERROR ("Can't get channel adapter guids: %d\n", frc);
+                goto failed;
+        }
+        if (n == 0) {
+                CERROR ("No channel adapters found\n");
+                goto failed;
+        }
+
+        /* Infinicon has per-HCA rather than per CQ completion handlers */
+        frc = iibt_open_hca(kibnal_data.kib_hca_guids[0],
+                            kibnal_ca_callback,
+                            kibnal_ca_async_callback,
+                            &kibnal_data.kib_hca,
+                            &kibnal_data.kib_hca);
+        if (frc != FSUCCESS) {
+                CERROR ("Can't open CA[0]: %d\n", frc);
                 goto failed;
         }
         
-        rc = ib_device_properties_get(kibnal_data.kib_device,
-                                      &kibnal_data.kib_device_props);
-        if (rc != 0) {
-                CERROR ("Can't get device props: %d\n", rc);
+        /* Channel Adapter opened */
+        kibnal_data.kib_init = IBNAL_INIT_HCA;
+        /*****************************************************/
+
+        kibnal_data.kib_hca_attrs.PortAttributesList = NULL;
+        kibnal_data.kib_hca_attrs.PortAttributesListSize = 0;
+        frc = iibt_query_hca(kibnal_data.kib_hca,
+                             &kibnal_data.kib_hca_attrs, NULL);
+        if (frc != FSUCCESS) {
+                CERROR ("Can't size port attrs: %d\n", frc);
+                goto failed;
+        }
+        
+        PORTAL_ALLOC(kibnal_data.kib_hca_attrs.PortAttributesList,
+                     kibnal_data.kib_hca_attrs.PortAttributesListSize);
+        if (kibnal_data.kib_hca_attrs.PortAttributesList == NULL)
+                goto failed;
+
+        /* Port attrs allocated */
+        kibnal_data.kib_init = IBNAL_INIT_PORTATTRS;
+        /*****************************************************/
+        
+        frc = iibt_query_hca(kibnal_data.kib_hca, &kibnal_data.kib_hca_attrs,
+                             NULL);
+        if (frc != FSUCCESS) {
+                CERROR ("Can't get port attrs for CA 0: %d\n", frc);
                 goto failed;
         }
 
-        CDEBUG(D_NET, "Max Initiator: %d Max Responder %d\n", 
-               kibnal_data.kib_device_props.max_initiator_per_qp,
-               kibnal_data.kib_device_props.max_responder_per_qp);
-
-        kibnal_data.kib_port = 0;
-        for (i = 1; i <= 2; i++) {
-                rc = ib_port_properties_get(kibnal_data.kib_device, i,
-                                            &kibnal_data.kib_port_props);
-                if (rc == 0) {
+        for (i = 0, pattr = kibnal_data.kib_hca_attrs.PortAttributesList;
+             pattr != NULL;
+             i++, pattr = pattr->Next) {
+                switch (pattr->PortState) {
+                default:
+                        CERROR("Unexpected port[%d] state %d\n",
+                               i, pattr->PortState);
+                        continue;
+                case PortStateDown:
+                        CDEBUG(D_NET, "port[%d] Down\n", i);
+                        continue;
+                case PortStateInit:
+                        CDEBUG(D_NET, "port[%d] Init\n", i);
+                        continue;
+                case PortStateArmed:
+                        CDEBUG(D_NET, "port[%d] Armed\n", i);
+                        continue;
+                        
+                case PortStateActive:
+                        CDEBUG(D_NET, "port[%d] Active\n", i);
                         kibnal_data.kib_port = i;
+                        kibnal_data.kib_port_guid = pattr->GUID;
+                        kibnal_data.kib_port_pkey = pattr->PkeyTable[0];
                         break;
                 }
+                break;
         }
-        if (kibnal_data.kib_port == 0) {
-                CERROR ("Can't find a port\n");
+
+        if (pattr == NULL) {
+                CERROR ("Can't find an active port\n");
                 goto failed;
         }
 
-        rc = ib_pd_create(kibnal_data.kib_device,
-                          NULL, &kibnal_data.kib_pd);
-        if (rc != 0) {
+        CDEBUG(D_NET, "got guid "LPX64"\n", kibnal_data.kib_port_guid);
+        
+        /* Active port found */
+        kibnal_data.kib_init = IBNAL_INIT_PORT;
+        /*****************************************************/
+
+        frc = iibt_sd_register(&kibnal_data.kib_sd, NULL);
+        if (frc != FSUCCESS) {
+                CERROR ("Can't register with SD: %d\n", frc);
+                goto failed;
+        }
+        
+        /* Registered with SD OK */
+        kibnal_data.kib_init = IBNAL_INIT_SD;
+        /*****************************************************/
+
+        frc = iibt_pd_allocate(kibnal_data.kib_hca, 0, &kibnal_data.kib_pd);
+        if (frc != FSUCCESS) {
                 CERROR ("Can't create PD: %d\n", rc);
                 goto failed;
         }
@@ -1344,6 +1520,7 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         /* flag PD initialised */
         kibnal_data.kib_init = IBNAL_INIT_PD;
         /*****************************************************/
+
 #if IBNAL_FMR
         {
                 const int pool_size = IBNAL_NTX + IBNAL_NTX_NBLK;
@@ -1371,6 +1548,47 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         kibnal_data.kib_init = IBNAL_INIT_FMR;
 #endif
         /*****************************************************/
+        if (IBNAL_WHOLE_MEM) {
+                IB_MR_PHYS_BUFFER phys;
+                IB_ACCESS_CONTROL access;
+                kib_md_t *md = &kibnal_data.kib_md;
+
+                memset(&access, 0, sizeof(access));
+                access.s.MWBindable = 1;
+                access.s.LocalWrite = 1;
+                access.s.RdmaRead = 1;
+                access.s.RdmaWrite = 1;
+
+                phys.PhysAddr = 0;
+                phys.Length = max_phys_mem(&kibnal_data.kib_hca_attrs);
+                if (phys.Length == 0) {
+                        CERROR ("couldn't determine the end of phys mem\n");
+                        goto failed;
+                }
+       
+                rc = iibt_register_contig_physical_memory(kibnal_data.kib_hca,
+                                                          0,
+                                                          &phys, 1,
+                                                          0,
+                                                          kibnal_data.kib_pd,
+                                                          access,
+                                                          &md->md_handle,
+                                                          &md->md_addr,
+                                                          &md->md_lkey,
+                                                          &md->md_rkey);
+                if (rc != FSUCCESS) {
+                        CERROR("registering physical memory failed: %d\n", 
+                               rc);
+                        CERROR("falling back to registration per-rdma\n");
+                        md->md_handle = NULL;
+                } else {
+                        CDEBUG(D_NET, "registered "LPU64" bytes of mem\n",
+                               phys.Length);
+                        kibnal_data.kib_init = IBNAL_INIT_MR;
+                }
+        }
+
+        /*****************************************************/
 
         rc = kibnal_setup_tx_descs();
         if (rc != 0) {
@@ -1383,34 +1601,35 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         /*****************************************************/
         
         {
-                struct ib_cq_callback callback = {
-                        .context        = IBNAL_CALLBACK_CTXT,
-                        .policy         = IB_CQ_PROVIDER_REARM,
-                        .function       = {
-                                .entry  = kibnal_callback,
-                        },
-                        .arg            = NULL,
-                };
-                int  nentries = IBNAL_CQ_ENTRIES;
-                
-                rc = ib_cq_create (kibnal_data.kib_device, 
-                                   &nentries, &callback, NULL,
-                                   &kibnal_data.kib_cq);
-                if (rc != 0) {
-                        CERROR ("Can't create CQ: %d\n", rc);
+                uint32 nentries;
+
+                frc = iibt_cq_create(kibnal_data.kib_hca, IBNAL_CQ_ENTRIES,
+                                     &kibnal_data.kib_cq, &kibnal_data.kib_cq,
+                                     &nentries);
+                if (frc != FSUCCESS) {
+                        CERROR ("Can't create RX CQ: %d\n", frc);
                         goto failed;
                 }
 
-                /* I only want solicited events */
-                rc = ib_cq_request_notification(kibnal_data.kib_cq, 1);
-                LASSERT (rc == 0);
+                /* flag CQ initialised */
+                kibnal_data.kib_init = IBNAL_INIT_CQ;
+
+                if (nentries < IBNAL_CQ_ENTRIES) {
+                        CERROR ("CQ only has %d entries, need %d\n", 
+                                nentries, IBNAL_CQ_ENTRIES);
+                        goto failed;
+                }
+
+                rc = iibt_cq_rearm(kibnal_data.kib_cq, CQEventSelNextWC);
+                if (rc != 0) {
+                        CERROR ("Failed to re-arm completion queue: %d\n", rc);
+                        goto failed;
+                }
         }
         
-        /* flag CQ initialised */
-        kibnal_data.kib_init = IBNAL_INIT_CQ;
         /*****************************************************/
-        
-        rc = libcfs_nal_cmd_register(OPENIBNAL, &kibnal_cmd, NULL);
+
+        rc = libcfs_nal_cmd_register(IIBNAL, &kibnal_cmd, NULL);
         if (rc != 0) {
                 CERROR ("Can't initialise command interface (rc = %d)\n", rc);
                 goto failed;
@@ -1420,7 +1639,7 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         kibnal_data.kib_init = IBNAL_INIT_ALL;
         /*****************************************************/
 
-        printk(KERN_INFO "Lustre: OpenIB NAL loaded "
+        printk(KERN_INFO "Lustre: Infinicon IB NAL loaded "
                "(initial mem %d)\n", pkmem);
 
         return (PTL_OK);
@@ -1439,7 +1658,7 @@ kibnal_module_fini (void)
 #endif
         PtlNIFini(kibnal_ni);
 
-        ptl_unregister_nal(OPENIBNAL);
+        ptl_unregister_nal(IIBNAL);
 }
 
 int __init
@@ -1447,8 +1666,16 @@ kibnal_module_init (void)
 {
         int    rc;
 
+        if (sizeof(kib_wire_connreq_t) > CM_REQUEST_INFO_USER_LEN) {
+                CERROR("sizeof(kib_wire_connreq_t) > CM_REQUEST_INFO_USER_LEN\n");
+                return -EINVAL;
+        }
+
         /* the following must be sizeof(int) for proc_dointvec() */
-        LASSERT(sizeof (kibnal_tunables.kib_io_timeout) == sizeof (int));
+        if (sizeof (kibnal_tunables.kib_io_timeout) != sizeof (int)) {
+                CERROR("sizeof (kibnal_tunables.kib_io_timeout) != sizeof (int)\n");
+                return -EINVAL;
+        }
 
         kibnal_api.nal_ni_init = kibnal_api_startup;
         kibnal_api.nal_ni_fini = kibnal_api_shutdown;
@@ -1456,16 +1683,16 @@ kibnal_module_init (void)
         /* Initialise dynamic tunables to defaults once only */
         kibnal_tunables.kib_io_timeout = IBNAL_IO_TIMEOUT;
 
-        rc = ptl_register_nal(OPENIBNAL, &kibnal_api);
+        rc = ptl_register_nal(IIBNAL, &kibnal_api);
         if (rc != PTL_OK) {
                 CERROR("Can't register IBNAL: %d\n", rc);
                 return (-ENOMEM);               /* or something... */
         }
 
         /* Pure gateways want the NAL started up at module load time... */
-        rc = PtlNIInit(OPENIBNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kibnal_ni);
+        rc = PtlNIInit(IIBNAL, 0, NULL, NULL, &kibnal_ni);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                ptl_unregister_nal(OPENIBNAL);
+                ptl_unregister_nal(IIBNAL);
                 return (-ENODEV);
         }
         
@@ -1478,7 +1705,7 @@ kibnal_module_init (void)
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel OpenIB NAL v0.01");
+MODULE_DESCRIPTION("Kernel Infinicon IB NAL v0.01");
 MODULE_LICENSE("GPL");
 
 module_init(kibnal_module_init);

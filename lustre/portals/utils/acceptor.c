@@ -69,83 +69,31 @@ int pidfile_exists(char *name, int port)
         return (0);
 }
 
-int
-parse_size (int *sizep, char *str)
-{
-        int             size;
-        char            mod[32];
-
-        switch (sscanf (str, "%d%1[gGmMkK]", &size, mod))
-        {
-        default:
-                return (-1);
-
-        case 1:
-                *sizep = size;
-                return (0);
-
-        case 2:
-                switch (*mod)
-                {
-                case 'g':
-                case 'G':
-                        *sizep = size << 30;
-                        return (0);
-
-                case 'm':
-                case 'M':
-                        *sizep = size << 20;
-                        return (0);
-
-                case 'k':
-                case 'K':
-                        *sizep = size << 10;
-                        return (0);
-
-                default:
-                        *sizep = size;
-                        return (0);
-                }
-        }
-}
-
 void
 show_connection (int fd, __u32 net_ip)
 {
         struct hostent *h = gethostbyaddr ((char *)&net_ip, sizeof net_ip, AF_INET);
         __u32 host_ip = ntohl (net_ip);
-        int  rxmem = 0;
-        int  txmem = 0;
-        int  nonagle = 0;
         int  len;
         char host[1024];
         
-        len = sizeof (txmem);
-        if (getsockopt (fd, SOL_SOCKET, SO_SNDBUF, &txmem, &len) != 0)
-                perror ("Cannot get write buffer size");
-        
-        len = sizeof (rxmem);
-        if (getsockopt (fd, SOL_SOCKET, SO_RCVBUF, &rxmem, &len) != 0)
-                perror ("Cannot get read buffer size");
-        
-        len = sizeof (nonagle);
-        if (getsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &nonagle, &len) != 0)
-                perror ("Cannot get nagle");
-
         if (h == NULL)
                 snprintf (host, sizeof(host), "%d.%d.%d.%d", (host_ip >> 24) & 0xff,
                                     (host_ip >> 16) & 0xff, (host_ip >> 8) & 0xff, host_ip & 0xff);
         else
                 snprintf (host, sizeof(host), "%s", h->h_name);
                 
-        syslog (LOG_INFO, "Accepted host: %s snd: %d rcv %d nagle: %s\n", 
-                host, txmem, rxmem, nonagle ? "disabled" : "enabled");
+        syslog (LOG_INFO, "Accepted host: %s\n", host);
 }
 
 void
 usage (char *myname)
 {
-        fprintf (stderr, "Usage: %s [-r recv_mem] [-s send_mem] [-n] [-p] [-N nal_id] port\n", myname);
+        fprintf (stderr, 
+                 "Usage: %s [-N nal_id] [-p] [-l] port\n\n"
+                 " -l\tKeep stdin/stdout open\n"
+                 " -p\tAllow connections from non-privileged ports\n",
+                 myname);
         exit (1);
 }
 
@@ -154,52 +102,29 @@ int main(int argc, char **argv)
         int o, fd, rc, port, pfd;
         struct sockaddr_in srvaddr;
         int c;
-        int rxmem = 0;
-        int txmem = 0;
         int noclose = 0;
-        int nonagle = 1;
         int nal = SOCKNAL;
-        int bind_irq = 0; 
         int rport;
         int require_privports = 1;
         
-        while ((c = getopt (argc, argv, "N:pr:s:nli")) != -1)
-                switch (c)
-                {
-                case 'r':
-                        if (parse_size (&rxmem, optarg) != 0 || rxmem < 0)
-                                usage (argv[0]);
+        while ((c = getopt (argc, argv, "N:lp")) != -1) {
+                switch (c) {
+                case 'N':
+                        if (sscanf(optarg, "%d", &nal) != 1 ||
+                            nal < 0 || nal > NAL_MAX_NR)
+                                usage(argv[0]);
                         break;
-                        
-                case 's':
-                        if (parse_size (&txmem, optarg) != 0 || txmem < 0)
-                                usage (argv[0]);
-                        break;
-
-                case 'n':
-                        nonagle = 0;
-                        break;
-
                 case 'l':
                         noclose = 1;
-                        break;
-
-                case 'i':
-                        bind_irq = 1;
                         break;
                 case 'p':
                         require_privports = 0;
                         break;
-                case 'N':
-                        if (parse_size(&nal, optarg) != 0 || 
-                            nal < 0 || nal > NAL_MAX_NR)
-                                usage(argv[0]);
-                        break;
-                        
                 default:
                         usage (argv[0]);
                         break;
                 }
+        }
 
         if (optind >= argc)
                 usage (argv[0]);
@@ -226,37 +151,6 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        if (nonagle)
-        {
-                o = 1;
-                rc = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &o, sizeof (o));
-                if (rc != 0) 
-                { 
-                        perror ("Cannot disable nagle");
-                        exit (1);
-                }
-        }
-
-        if (txmem != 0)
-        {
-                rc = setsockopt (fd, SOL_SOCKET, SO_SNDBUF, &txmem, sizeof (txmem));
-                if (rc != 0)
-                {
-                        perror ("Cannot set write buffer size");
-                        exit (1);
-                }
-        }
-        
-        if (rxmem != 0)
-        {
-                rc = setsockopt (fd, SOL_SOCKET, SO_RCVBUF, &rxmem, sizeof (rxmem));
-                if (rc != 0)
-                {
-                        perror ("Cannot set read buffer size");
-                        exit (1);
-               }
-        }
-                
         rc = bind(fd, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
         if ( rc == -1 ) {
                 perror("bind: ");
@@ -291,12 +185,11 @@ int main(int argc, char **argv)
                 int cfd;
                 struct portal_ioctl_data data;
                 struct portals_cfg pcfg;
-                int    privileged = 0;
-                char addrstr[INET_ADDRSTRLEN];
 #ifdef HAVE_LIBWRAP
                 struct request_info request;
 #endif
-
+                char addrstr[INET_ADDRSTRLEN];
+               
                 cfd = accept(fd, (struct sockaddr *)&clntaddr, &len);
                 if ( cfd < 0 ) {
                         perror("accept");
@@ -304,7 +197,6 @@ int main(int argc, char **argv)
                         continue;
                 }
 
-                rport = ntohs(clntaddr.sin_port);
 #ifdef HAVE_LIBWRAP
                 /* libwrap access control */
                 request_init(&request, RQ_DAEMON, "lustre", RQ_FILE, cfd, 0);
@@ -313,18 +205,20 @@ int main(int argc, char **argv)
                         inet_ntop(AF_INET, &clntaddr.sin_addr,
                                   addrstr, INET_ADDRSTRLEN);
                         syslog(LOG_WARNING, "Unauthorized access from %s:%hd\n",
-                               addrstr, rport);
+                               addrstr, ntohs(clntaddr.sin_port));
                         close (cfd);
                         continue;
                 }
 #endif
 
-                if (require_privports && rport >= IPPORT_RESERVED) {
+                if (require_privports && ntohs(clntaddr.sin_port) >= IPPORT_RESERVED) {
                         inet_ntop(AF_INET, &clntaddr.sin_addr,
                                   addrstr, INET_ADDRSTRLEN);
-                        syslog(LOG_ERR,  "Closing non-privileged connection from %s:%d\n",
-                               addrstr, rport);
-                        close(cfd);
+                        syslog(LOG_ERR, "Closing non-privileged connection from %s:%d\n",
+                               addrstr, ntohs(clntaddr.sin_port));
+                        rc = close(cfd);
+                        if (rc)
+                                perror ("close un-privileged client failed");
                         continue;
                 }
 
@@ -333,13 +227,12 @@ int main(int argc, char **argv)
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
                 pcfg.pcfg_nal = nal;
                 pcfg.pcfg_fd = cfd;
-                pcfg.pcfg_flags = bind_irq;
                 pcfg.pcfg_misc = SOCKNAL_CONN_NONE; /* == incoming connection */
-
+                
                 PORTAL_IOC_INIT(data);
                 data.ioc_pbuf1 = (char*)&pcfg;
                 data.ioc_plen1 = sizeof(pcfg);
-
+                
                 if (ioctl(pfd, IOC_PORTAL_NAL_CMD, &data) < 0) {
                         perror("ioctl failed");
                 } else {

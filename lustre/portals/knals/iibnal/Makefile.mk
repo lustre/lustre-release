@@ -3,4 +3,8 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-SUBDIRS = gmnal iibnal openibnal qswnal socknal 
+include $(src)/../../Kernelenv
+
+obj-y += kiibnal.o
+kiibnal-objs := iibnal.o iibnal_cb.o
+

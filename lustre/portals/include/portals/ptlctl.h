@@ -23,6 +23,10 @@
 #ifndef _PTLCTL_H_
 #define _PTLCTL_H_
 
+#include <portals/types.h>
+#include <linux/kp30.h>
+#include <linux/libcfs.h>
+
 #define PORTALS_DEV_ID 0
 #define PORTALS_DEV_PATH "/dev/portals"
 #define OBD_DEV_ID 1
@@ -35,9 +39,12 @@ char * ptl_nid2str (char *buffer, ptl_nid_t nid);
 
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
-int jt_ptl_print_autoconnects (int argc, char **argv);
-int jt_ptl_add_autoconnect (int argc, char **argv);
-int jt_ptl_del_autoconnect (int argc, char **argv);
+int jt_ptl_print_interfaces(int argc, char **argv);
+int jt_ptl_add_interface(int argc, char **argv);
+int jt_ptl_del_interface(int argc, char **argv);
+int jt_ptl_print_peers (int argc, char **argv);
+int jt_ptl_add_peer (int argc, char **argv);
+int jt_ptl_del_peer (int argc, char **argv);
 int jt_ptl_print_connections (int argc, char **argv);
 int jt_ptl_connect(int argc, char **argv);
 int jt_ptl_disconnect(int argc, char **argv);
@@ -50,9 +57,6 @@ int jt_ptl_add_uuid(int argc, char **argv);
 int jt_ptl_add_uuid_old(int argc, char **argv); /* backwards compatibility  */
 int jt_ptl_close_uuid(int argc, char **argv);
 int jt_ptl_del_uuid(int argc, char **argv);
-int jt_ptl_rxmem (int argc, char **argv);
-int jt_ptl_txmem (int argc, char **argv);
-int jt_ptl_nagle (int argc, char **argv);
 int jt_ptl_add_route (int argc, char **argv);
 int jt_ptl_del_route (int argc, char **argv);
 int jt_ptl_notify_router (int argc, char **argv);
@@ -76,13 +80,15 @@ int jt_dbg_panic(int argc, char **argv);
 int ptl_set_cfg_record_cb(cfg_record_cb_t cb);
 
 /* l_ioctl.c */
-typedef int (ioc_handler_t)(int dev_id, int opc, void *buf);
+typedef int (ioc_handler_t)(int dev_id, unsigned int opc, void *buf);
 void set_ioc_handler(ioc_handler_t *handler);
 int register_ioc_dev(int dev_id, const char * dev_name);
 void unregister_ioc_dev(int dev_id);
 int set_ioctl_dump(char * file);
-int l_ioctl(int dev_id, int opc, void *buf);
-int parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *));
+int l_ioctl(int dev_id, unsigned int opc, void *buf);
+int parse_dump(char * dump_file, ioc_handler_t ioc_func);
 int jt_ioc_dump(int argc, char **argv);
+extern char *dump_filename;
+int dump(int dev_id, unsigned int opc, void *buf);
 
 #endif

@@ -189,6 +189,7 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	unsigned int snode, sport, type, length;
 	gmnal_msghdr_t	*gmnal_msghdr;
 	ptl_hdr_t	*portals_hdr;
+        int              rc;
 
 	CDEBUG(D_INFO, "nal_data [%p], we[%p] type [%d]\n", 
 	       nal_data, we, gmnal_type);
@@ -219,10 +220,12 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	 */
 	srxd = gmnal_rxbuffer_to_srxd(nal_data, buffer);
 	CDEBUG(D_INFO, "Back from gmnal_rxbuffer_to_srxd\n");
-	srxd->nal_data = nal_data;
 	if (!srxd) {
 		CDEBUG(D_ERROR, "Failed to get receive descriptor\n");
-		lib_parse(nal_data->nal_cb, portals_hdr, srxd);
+                /* I think passing a NULL srxd to lib_parse will crash
+                 * gmnal_recv() */
+                LBUG();
+		lib_parse(nal_data->libnal, portals_hdr, srxd);
 		return(GMNAL_STATUS_FAIL);
 	}
 
@@ -234,6 +237,7 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 		return(GMNAL_STATUS_OK);
 	}
 
+	srxd->nal_data = nal_data;
 	srxd->type = gmnal_type;
 	srxd->nsiov = gmnal_msghdr->niov;
 	srxd->gm_source_node = gmnal_msghdr->sender_node_id;
@@ -245,7 +249,12 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	 *	cb_recv is responsible for returning the buffer 
 	 *	for future receive
 	 */
-	lib_parse(nal_data->nal_cb, portals_hdr, srxd);
+	rc = lib_parse(nal_data->libnal, portals_hdr, srxd);
+
+        if (rc != PTL_OK) {
+                /* I just received garbage; take appropriate action... */
+                LBUG();
+        }
 
 	return(GMNAL_STATUS_OK);
 }
@@ -309,19 +318,19 @@ gmnal_rx_bad(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, gmnal_srxd_t *srxd)
  *	Call lib_finalize
  */
 int
-gmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
-		unsigned int niov, struct iovec *iov, size_t mlen, size_t rlen)
+gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
+		unsigned int niov, struct iovec *iov, size_t offset, size_t mlen, size_t rlen)
 {
 	gmnal_srxd_t	*srxd = NULL;
 	void	*buffer = NULL;
-	gmnal_data_t	*nal_data = (gmnal_data_t*)nal_cb->nal_data;
+	gmnal_data_t	*nal_data = (gmnal_data_t*)libnal->libnal_data;
 
 
 	CDEBUG(D_TRACE, "niov [%d] mlen["LPSZ"]\n", niov, mlen);
 
 	if (!private) {
 		CDEBUG(D_ERROR, "gmnal_small_rx no context\n");
-		lib_finalize(nal_cb, private, cookie, PTL_FAIL);
+		lib_finalize(libnal, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 	}
 
@@ -331,11 +340,24 @@ gmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	buffer += sizeof(ptl_hdr_t);
 
 	while(niov--) {
-		CDEBUG(D_INFO, "processing [%p] len ["LPSZ"]\n", iov, 
-		       iov->iov_len);
-		gm_bcopy(buffer, iov->iov_base, iov->iov_len);			
-		buffer += iov->iov_len;
-		iov++;
+                if (offset >= iov->iov_len) {
+                        offset -= iov->iov_len;
+                } else if (offset > 0) {
+		        CDEBUG(D_INFO, "processing [%p] base [%p] len %d, "
+                               "offset %d, len ["LPSZ"]\n", iov,
+		               iov->iov_base + offset, iov->iov_len, offset,
+                               iov->iov_len - offset);
+		        gm_bcopy(buffer, iov->iov_base + offset,
+                                 iov->iov_len - offset);
+                        offset = 0;
+                        buffer += iov->iov_len - offset;
+                } else {
+		        CDEBUG(D_INFO, "processing [%p] len ["LPSZ"]\n", iov,
+		               iov->iov_len);
+		        gm_bcopy(buffer, iov->iov_base, iov->iov_len);
+		        buffer += iov->iov_len;
+                }
+                iov++;
 	}
 
 
@@ -343,7 +365,7 @@ gmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
  	 *	let portals library know receive is complete
 	 */
 	CDEBUG(D_PORTALS, "calling lib_finalize\n");
-	lib_finalize(nal_cb, private, cookie, PTL_OK);
+	lib_finalize(libnal, private, cookie, PTL_OK);
 	/*
 	 *	return buffer so it can be used again
 	 */
@@ -365,11 +387,11 @@ gmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
  *	The callback function informs when the send is complete.
  */
 int
-gmnal_small_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
 		ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid, 
-		unsigned int niov, struct iovec *iov, int size)
+		unsigned int niov, struct iovec *iov, size_t offset, int size)
 {
-	gmnal_data_t	*nal_data = (gmnal_data_t*)nal_cb->nal_data;
+	gmnal_data_t	*nal_data = (gmnal_data_t*)libnal->libnal_data;
 	gmnal_stxd_t	*stxd = NULL;
 	void		*buffer = NULL;
 	gmnal_msghdr_t	*msghdr = NULL;
@@ -377,9 +399,9 @@ gmnal_small_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	unsigned int	local_nid;
 	gm_status_t	gm_status = GM_SUCCESS;
 
-	CDEBUG(D_TRACE, "gmnal_small_tx nal_cb [%p] private [%p] cookie [%p] "
+	CDEBUG(D_TRACE, "gmnal_small_tx libnal [%p] private [%p] cookie [%p] "
 	       "hdr [%p] type [%d] global_nid ["LPU64"] pid [%d] niov [%d] "
-	       "iov [%p] size [%d]\n", nal_cb, private, cookie, hdr, type, 
+	       "iov [%p] size [%d]\n", libnal, private, cookie, hdr, type, 
 	       global_nid, pid, niov, iov, size);
 
 	CDEBUG(D_INFO, "portals_hdr:: dest_nid ["LPU64"], src_nid ["LPU64"]\n",
@@ -428,11 +450,21 @@ gmnal_small_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	buffer += sizeof(ptl_hdr_t);
 
 	while(niov--) {
-		CDEBUG(D_INFO, "processing iov [%p] len ["LPSZ"] to [%p]\n", 
-		       iov, iov->iov_len, buffer);
-		gm_bcopy(iov->iov_base, buffer, iov->iov_len);
-		buffer+= iov->iov_len;
-		iov++;
+                if (offset >= iov->iov_len) {
+                        offset -= iov->iov_len;
+                } else if (offset > 0) {
+		        CDEBUG(D_INFO, "processing iov [%p] base [%p] len ["LPSZ"] to [%p]\n", 
+		                iov, iov->iov_base + offset, iov->iov_len - offset, buffer);
+		        gm_bcopy(iov->iov_base + offset, buffer, iov->iov_len - offset);
+		        buffer+= iov->iov_len - offset;
+                        offset = 0;
+                } else {
+		        CDEBUG(D_INFO, "processing iov [%p] len ["LPSZ"] to [%p]\n", 
+		                iov, iov->iov_len, buffer);
+		        gm_bcopy(iov->iov_base, buffer, iov->iov_len);
+		        buffer+= iov->iov_len;
+                } 
+                iov++;
 	}
 
 	CDEBUG(D_INFO, "sending\n");
@@ -472,7 +504,7 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 	gmnal_stxd_t	*stxd = (gmnal_stxd_t*)context;
 	lib_msg_t	*cookie = stxd->cookie;
 	gmnal_data_t	*nal_data = (gmnal_data_t*)stxd->nal_data;
-	nal_cb_t	*nal_cb = nal_data->nal_cb;
+	lib_nal_t	*libnal = nal_data->libnal;
 
 	if (!stxd) {
 		CDEBUG(D_TRACE, "send completion event for unknown stxd\n");
@@ -592,7 +624,7 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		return;
 	}
 	gmnal_return_stxd(nal_data, stxd);
-	lib_finalize(nal_cb, stxd, cookie, PTL_OK);
+	lib_finalize(libnal, stxd, cookie, PTL_OK);
 	return;
 }
 
@@ -645,9 +677,9 @@ void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
  *	this ack, deregister the memory. Only 1 send token is required here.
  */
 int
-gmnal_large_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
 	        ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid, 
-		unsigned int niov, struct iovec *iov, int size)
+		unsigned int niov, struct iovec *iov, size_t offset, int size)
 {
 
 	gmnal_data_t	*nal_data;
@@ -661,15 +693,15 @@ gmnal_large_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	int		niov_dup;
 
 
-	CDEBUG(D_TRACE, "gmnal_large_tx nal_cb [%p] private [%p], cookie [%p] "
+	CDEBUG(D_TRACE, "gmnal_large_tx libnal [%p] private [%p], cookie [%p] "
 	       "hdr [%p], type [%d] global_nid ["LPU64"], pid [%d], niov [%d], "
-	       "iov [%p], size [%d]\n", nal_cb, private, cookie, hdr, type, 
+	       "iov [%p], size [%d]\n", libnal, private, cookie, hdr, type, 
 	       global_nid, pid, niov, iov, size);
 
-	if (nal_cb)
-		nal_data = (gmnal_data_t*)nal_cb->nal_data;
+	if (libnal)
+		nal_data = (gmnal_data_t*)libnal->libnal_data;
 	else  {
-		CDEBUG(D_ERROR, "no nal_cb.\n");
+		CDEBUG(D_ERROR, "no libnal.\n");
 		return(GMNAL_STATUS_FAIL);
 	}
 	
@@ -712,30 +744,39 @@ gmnal_large_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	mlen += sizeof(ptl_hdr_t); 
 	CDEBUG(D_INFO, "mlen is [%d]\n", mlen);
 
+        while (offset >= iov->iov_len) {
+                offset -= iov->iov_len;
+                niov--;
+                iov++;
+        } 
+
+        LASSERT(offset >= 0);
+        /*
+	 *	Store the iovs in the stxd for we can get 
+	 *	them later if we need them
+	 */
+        stxd->iov[0].iov_base = iov->iov_base + offset; 
+        stxd->iov[0].iov_len = iov->iov_len - offset; 
+	CDEBUG(D_NET, "Copying iov [%p] to [%p], niov=%d\n", iov, stxd->iov, niov);
+        if (niov > 1)
+	        gm_bcopy(&iov[1], &stxd->iov[1], (niov-1)*sizeof(struct iovec));
+	stxd->niov = niov;
+
 	/*
 	 *	copy the iov to the buffer so target knows 
 	 *	where to get the data from
 	 */
 	CDEBUG(D_INFO, "processing iov to [%p]\n", buffer);
-	gm_bcopy(iov, buffer, niov*sizeof(struct iovec));
-	mlen += niov*(sizeof(struct iovec));
+	gm_bcopy(stxd->iov, buffer, stxd->niov*sizeof(struct iovec));
+	mlen += stxd->niov*(sizeof(struct iovec));
 	CDEBUG(D_INFO, "mlen is [%d]\n", mlen);
-
-
-	/*
-	 *	Store the iovs in the stxd for we can get 
-	 *	them later if we need them
-	 */
-	CDEBUG(D_NET, "Copying iov [%p] to [%p]\n", iov, stxd->iov);
-	gm_bcopy(iov, stxd->iov, niov*sizeof(struct iovec));
-	stxd->niov = niov;
 	
-
 	/*
 	 *	register the memory so the NIC can get hold of the data
 	 *	This is a slow process. it'd be good to overlap it 
 	 *	with something else.
 	 */
+        iov = stxd->iov;
 	iov_dup = iov;
 	niov_dup = niov;
 	while(niov--) {
@@ -811,11 +852,11 @@ gmnal_large_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
  *	data from the sender.
  */
 int
-gmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
-		unsigned int nriov, struct iovec *riov, size_t mlen, 
-		size_t rlen)
+gmnal_large_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
+		unsigned int nriov, struct iovec *riov, size_t offset, 
+		size_t mlen, size_t rlen)
 {
-	gmnal_data_t	*nal_data = nal_cb->nal_data;
+	gmnal_data_t	*nal_data = libnal->libnal_data;
 	gmnal_srxd_t	*srxd = (gmnal_srxd_t*)private;
 	void		*buffer = NULL;
 	struct	iovec	*riov_dup;
@@ -823,13 +864,13 @@ gmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	gmnal_msghdr_t	*msghdr = NULL;
 	gm_status_t	gm_status;
 
-	CDEBUG(D_TRACE, "gmnal_large_rx :: nal_cb[%p], private[%p], "
+	CDEBUG(D_TRACE, "gmnal_large_rx :: libnal[%p], private[%p], "
 	       "cookie[%p], niov[%d], iov[%p], mlen["LPSZ"], rlen["LPSZ"]\n",
-		nal_cb, private, cookie, nriov, riov, mlen, rlen);
+		libnal, private, cookie, nriov, riov, mlen, rlen);
 
 	if (!srxd) {
 		CDEBUG(D_ERROR, "gmnal_large_rx no context\n");
-		lib_finalize(nal_cb, private, cookie, PTL_FAIL);
+		lib_finalize(libnal, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 	}
 
@@ -854,6 +895,25 @@ gmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	 *	If the iovecs match, could interleave 
 	 *	gm_registers and gm_gets for each element
 	 */
+        while (offset >= riov->iov_len) {
+                offset -= riov->iov_len;
+                riov++;
+                nriov--;
+        } 
+        LASSERT (nriov >= 0);
+        LASSERT (offset >= 0);
+	/*
+	 *	do this so the final gm_get callback can deregister the memory
+	 */
+	PORTAL_ALLOC(srxd->riov, nriov*(sizeof(struct iovec)));
+
+        srxd->riov[0].iov_base = riov->iov_base + offset;
+        srxd->riov[0].iov_len = riov->iov_len - offset;
+        if (nriov > 1)
+	        gm_bcopy(&riov[1], &srxd->riov[1], (nriov-1)*(sizeof(struct iovec)));
+	srxd->nriov = nriov;
+        
+        riov = srxd->riov;
 	nriov_dup = nriov;
 	riov_dup = riov;
 	while(nriov--) {
@@ -879,17 +939,12 @@ gmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 			/*
 			 *	give back srxd and buffer. Send NACK to sender
 			 */
+                        PORTAL_FREE(srxd->riov, nriov_dup*(sizeof(struct iovec)));
 			return(PTL_FAIL);
 		}
 		GMNAL_GM_UNLOCK(nal_data);
 		riov++;
 	}
-	/*
-	 *	do this so the final gm_get callback can deregister the memory
-	 */
-	PORTAL_ALLOC(srxd->riov, nriov_dup*(sizeof(struct iovec)));
-	gm_bcopy(riov_dup, srxd->riov, nriov_dup*(sizeof(struct iovec)));
-	srxd->nriov = nriov_dup;
 
 	/*
 	 *	now do gm_get to get the data
@@ -1092,7 +1147,7 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 
 	gmnal_ltxd_t	*ltxd = (gmnal_ltxd_t*)context;
 	gmnal_srxd_t	*srxd = ltxd->srxd;
-	nal_cb_t	*nal_cb = srxd->nal_data->nal_cb;
+	lib_nal_t	*libnal = srxd->nal_data->libnal;
 	int		lastone;
 	struct	iovec	*riov;
 	int		nriov;
@@ -1126,7 +1181,7 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 	 *	Let our client application proceed
 	 */	
 	CDEBUG(D_ERROR, "final callback context[%p]\n", srxd);
-	lib_finalize(nal_cb, srxd, srxd->cookie, PTL_OK);
+	lib_finalize(libnal, srxd, srxd->cookie, PTL_OK);
 
 	/*
 	 *	send an ack to the sender to let him know we got the data
@@ -1276,7 +1331,7 @@ gmnal_large_tx_ack_callback(gm_port_t *gm_port, void *context,
 void 
 gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 {
-	nal_cb_t	*nal_cb = nal_data->nal_cb;
+	lib_nal_t	*libnal = nal_data->libnal;
 	gmnal_stxd_t	*stxd = NULL;
 	gmnal_msghdr_t	*msghdr = NULL;
 	void		*buffer = NULL;
@@ -1291,7 +1346,7 @@ gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 
 	CDEBUG(D_INFO, "gmnal_large_tx_ack_received stxd [%p]\n", stxd);
 
-	lib_finalize(nal_cb, stxd, stxd->cookie, PTL_OK);
+	lib_finalize(libnal, stxd, stxd->cookie, PTL_OK);
 
 	/*
 	 *	extract the iovec from the stxd, deregister the memory.

@@ -231,8 +231,10 @@ portals/knals/Makefile
 portals/knals/autoMakefile
 portals/knals/gmnal/Makefile
 portals/knals/gmnal/autoMakefile
-portals/knals/ibnal/Makefile
-portals/knals/ibnal/autoMakefile
+portals/knals/iibnal/Makefile
+portals/knals/iibnal/autoMakefile
+portals/knals/openibnal/Makefile
+portals/knals/openibnal/autoMakefile
 portals/knals/qswnal/Makefile
 portals/knals/qswnal/autoMakefile
 portals/knals/socknal/Makefile

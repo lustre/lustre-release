@@ -4,13 +4,59 @@
 #ifndef _LIBCFS_H
 #define _LIBCFS_H
 
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#else
+#include "types.h"
+#endif
+
+#ifdef __KERNEL__
+# include <linux/time.h>
+# include <asm/timex.h>
+#else
+# include <sys/time.h>
+# define do_gettimeofday(tv) gettimeofday(tv, NULL);
+typedef unsigned long long cycles_t;
+#endif
+
 #define PORTAL_DEBUG
 
 #ifndef offsetof
-# define offsetof(typ,memb)     ((int)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
+
+#ifndef __KERNEL__
+/* Userpace byte flipping */
+# include <endian.h>
+# include <byteswap.h>
+# define __swab16(x) bswap_16(x)
+# define __swab32(x) bswap_32(x)
+# define __swab64(x) bswap_64(x)
+# define __swab16s(x) do {*(x) = bswap_16(*(x));} while (0)
+# define __swab32s(x) do {*(x) = bswap_32(*(x));} while (0)
+# define __swab64s(x) do {*(x) = bswap_64(*(x));} while (0)
+# if __BYTE_ORDER == __LITTLE_ENDIAN
+#  define le16_to_cpu(x) (x)
+#  define cpu_to_le16(x) (x)
+#  define le32_to_cpu(x) (x)
+#  define cpu_to_le32(x) (x)
+#  define le64_to_cpu(x) (x)
+#  define cpu_to_le64(x) (x)
+# else
+#  if __BYTE_ORDER == __BIG_ENDIAN
+#   define le16_to_cpu(x) bswap_16(x)
+#   define cpu_to_le16(x) bswap_16(x)
+#   define le32_to_cpu(x) bswap_32(x)
+#   define cpu_to_le32(x) bswap_32(x)
+#   define le64_to_cpu(x) bswap_64(x)
+#   define cpu_to_le64(x) bswap_64(x)
+#  else
+#   error "Unknown byte order"
+#  endif /* __BIG_ENDIAN */
+# endif /* __LITTLE_ENDIAN */
+#endif /* ! __KERNEL__ */
 
 /*
  *  Debugging
@@ -20,7 +66,6 @@ extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
 
-#include <asm/types.h>
 struct ptldebug_header {
         __u32 ph_len;
         __u32 ph_flags;
@@ -60,7 +105,10 @@ struct ptldebug_header {
 #define S_GMNAL       0x00080000
 #define S_PTLROUTER   0x00100000
 #define S_COBD        0x00200000
-#define S_IBNAL       0x00400000
+#define S_IBNAL       0x00400000 /* All IB NALs */
+#define S_SM          0x00800000
+#define S_ASOBD       0x01000000
+#define S_CONFOBD     0x02000000
 
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */
@@ -109,7 +157,7 @@ struct ptldebug_header {
 #  define CDEBUG_STACK (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_frame_address(0) &       \
                          (THREAD_SIZE - 1)))
-# endif
+# endif /* __ia64__ */
 
 #define CHECK_STACK(stack)                                                    \
         do {                                                                  \
@@ -121,7 +169,7 @@ struct ptldebug_header {
                       /*panic("LBUG");*/                                      \
                 }                                                             \
         } while (0)
-#else /* __KERNEL__ */
+#else /* !__KERNEL__ */
 #define CHECK_STACK(stack) do { } while(0)
 #define CDEBUG_STACK (0L)
 #endif /* __KERNEL__ */
@@ -152,14 +200,14 @@ do {                                                                          \
                 if (cdebug_count) {                                           \
                         portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
                                           __FILE__, __FUNCTION__, __LINE__,   \
-                                          0, cdebug_format, ## a);            \
+                                          CDEBUG_STACK, cdebug_format, ## a); \
                         cdebug_count = 0;                                     \
                 }                                                             \
                 if (time_after(jiffies, cdebug_next+(CDEBUG_MAX_LIMIT+10)*HZ))\
                         cdebug_delay = cdebug_delay > 8 ? cdebug_delay/8 : 1; \
                 else                                                          \
-                        cdebug_delay = cdebug_delay*2 >= CDEBUG_MAX_LIMIT*HZ? \
-                                CDEBUG_MAX_LIMIT * HZ : cdebug_delay*2;       \
+                        cdebug_delay = cdebug_delay*2 >= CDEBUG_MAX_LIMIT*HZ ?\
+                                        CDEBUG_MAX_LIMIT*HZ : cdebug_delay*2; \
                 cdebug_next = jiffies + cdebug_delay;                         \
         } else {                                                              \
                 portals_debug_msg(DEBUG_SUBSYSTEM,                            \
@@ -202,14 +250,32 @@ do {                                                                    \
 } while(0)
 #else
 #define CDEBUG(mask, format, a...)      do { } while (0)
-#define CWARN(format, a...)             do { } while (0)
-#define CERROR(format, a...)            printk("<3>" format, ## a)
-#define CEMERG(format, a...)            printk("<0>" format, ## a)
+#define CWARN(format, a...)             printk(KERN_WARNING format, ## a)
+#define CERROR(format, a...)            printk(KERN_ERR format, ## a)
+#define CEMERG(format, a...)            printk(KERN_EMERG format, ## a)
 #define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
 #define RETURN(rc)                      return (rc)
 #define ENTRY                           do { } while (0)
 #define EXIT                            do { } while (0)
 #endif
+
+/* initial pid  */
+# if CRAY_PORTALS
+/* 
+ * 1) ptl_pid_t in cray portals is only 16 bits, not 32 bits, therefore this
+ *    is too big.
+ *
+ * 2) the implementation of ernal in cray portals further restricts the pid
+ *    space that may be used to 0 <= pid <= 255 (an 8 bit value).  Returns
+ *    an error at nal init time for any pid outside this range.  Other nals
+ *    in cray portals don't have this restriction.
+ * */
+#define LUSTRE_PTL_PID          9
+# else
+#define LUSTRE_PTL_PID          12345
+# endif
+
+#define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID    
 
 #define PORTALS_CFG_VERSION 0x00010001;
 
@@ -245,6 +311,11 @@ do {                                                    \
                                                         \
 } while (0)
 
+typedef int (nal_cmd_handler_fn)(struct portals_cfg *, void *);
+int libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *arg);
+int libcfs_nal_cmd(struct portals_cfg *pcfg);
+void libcfs_nal_cmd_unregister(int nal);
+
 struct portal_ioctl_data {
         __u32 ioc_len;
         __u32 ioc_version;
@@ -276,6 +347,7 @@ struct portal_ioctl_data {
 
         char ioc_bulk[0];
 };
+
 
 #ifdef __KERNEL__
 

@@ -35,24 +35,12 @@ extern int getpid(void);
 #       include <unistd.h>
 #endif
 #include <portals/lib-p30.h>
-#include <portals/arg-blocks.h>
 
-int do_PtlGetId(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+int
+lib_api_get_id(nal_t *apinal, ptl_process_id_t *pid)
 {
-        /*
-         * Incoming:
-         *      ptl_handle_ni_t handle_in
-         *
-         * Outgoing:
-         *      ptl_process_id_t        * id_out
-         *      ptl_id_t                * gsize_out
-         */
-
-        PtlGetId_out *ret = v_ret;
-        lib_ni_t *ni = &nal->ni;
-
-        ret->id_out.nid = ni->nid;
-        ret->id_out.pid = ni->pid;
-
-        return ret->rc = PTL_OK;
+        lib_nal_t *nal = apinal->nal_data;
+        
+        *pid = nal->libnal_ni.ni_pid;
+        return PTL_OK;
 }

@@ -40,7 +40,7 @@ if !LINUX25
 DEP = dep
 dep: .depend
 
-.depend: $(LDISKFS) lvfs-sources libcfs-sources
+.depend: $(LDISKFS) lvfs-sources
 	$(MAKE) $(ARCH_UM) -C $(LINUX) -f $(PWD)/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) -o scripts -o include/config/MARKER _sfdep_$(PWD) _FASTDEP_ALL_SUB_DIRS="$(PWD)"
 
 CLEANFILES = .depend
@@ -55,10 +55,7 @@ endif
 lvfs-sources:
 	$(MAKE) sources -C lvfs
 
-libcfs-sources:
-	$(MAKE) sources -C portals/libcfs
-
-modules: lustre_build_version $(DEP) $(LDISKFS) lvfs-sources libcfs-sources
+modules: lustre_build_version $(DEP) $(LDISKFS) lvfs-sources
 	$(MAKE) $(ARCH_UM) -C $(LINUX) -f $(PWD)/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) $(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o include/config/MARKER $@
 
 endif # MODULES

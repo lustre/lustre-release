@@ -1,10 +1,10 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- *  * vim:expandtab:shiftwidth=8:tabstop=8:
- *   */
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
 #ifndef _KPR_H
 #define _KPR_H
 
-# include <portals/lib-nal.h> /* for ptl_hdr_t */
+# include <portals/lib-types.h> /* for ptl_hdr_t */
 
 /******************************************************************************/
 /* Kernel Portals Router interface */
@@ -81,21 +81,6 @@ typedef struct {
         void                    *kpr_arg;
 } kpr_router_t;
 
-/* Router's control interface (Kernel Portals Routing Control Interface) */
-typedef const struct {
-        int     (*kprci_add_route)(int gateway_nal, ptl_nid_t gateway_nid,
-                                   ptl_nid_t lo_nid, ptl_nid_t hi_nid);
-        int     (*kprci_del_route)(int gateway_nal, ptl_nid_t gateway_nid,
-                                   ptl_nid_t lo_nid, ptl_nid_t hi_nid);
-        int     (*kprci_get_route)(int index, int *gateway_nal,
-                                   ptl_nid_t *gateway,
-                                   ptl_nid_t *lo_nid, ptl_nid_t *hi_nid,
-                                   int *alive);
-        int     (*kprci_notify)(int gateway_nal, ptl_nid_t gateway_nid,
-                                int alive, time_t when);
-} kpr_control_interface_t;
-
-extern kpr_control_interface_t  kpr_control_interface;
 extern kpr_router_interface_t   kpr_router_interface;
 
 static inline int

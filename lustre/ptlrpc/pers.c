@@ -35,7 +35,8 @@
 #include "ptlrpc_internal.h"
 
 #ifdef __KERNEL__
-#ifndef CRAY_PORTALS
+#if !CRAY_PORTALS
+
 void ptlrpc_fill_bulk_md (ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
 {
         LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
@@ -57,11 +58,16 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
 
         desc->bd_iov_count++;
 }
-#else
+
+#else  /* CRAY_PORTALS */
+#ifdef PTL_MD_KIOV
+#error "Conflicting compilation directives"
+#endif
+
 void ptlrpc_fill_bulk_md (ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
 {
         LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
-        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_KIOV | PTL_MD_PHYS)));
+        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_PHYS)));
         
         md->options |= (PTL_MD_IOVEC | PTL_MD_PHYS);
         md->start = &desc->bd_iov[0];
@@ -79,22 +85,24 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
 
         desc->bd_iov_count++;
 }
-#endif
 
+#endif /* CRAY_PORTALS */
 #else /* !__KERNEL__ */
+
 void ptlrpc_fill_bulk_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
 {
+#if CRAY_PORTALS
+        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_PHYS)));
+        LASSERT (desc->bd_iov_count == 1);
+#else
         LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_KIOV | PTL_MD_PHYS)));
-
+#endif
         if (desc->bd_iov_count == 1) {
                 md->start = desc->bd_iov[0].iov_base;
                 md->length = desc->bd_iov[0].iov_len;
                 return;
         }
         
-#if CRAY_PORTALS
-        LBUG();
-#endif
         md->options |= PTL_MD_IOVEC;
         md->start = &desc->bd_iov[0];
         md->length = desc->bd_iov_count;
@@ -104,14 +112,12 @@ static int can_merge_iovs(ptl_md_iovec_t *existing, ptl_md_iovec_t *candidate)
 {
         if (existing->iov_base + existing->iov_len == candidate->iov_base) 
                 return 1;
-        /* XXX it's good to have an warning here, but user-level echo_client
-         * will hit this. reenable it when we fixed echo_client.
-         */
 #if 0
+        /* Enable this section to provide earlier evidence of fragmented bulk */
         CERROR("Can't merge iovs %p for %x, %p for %x\n",
                existing->iov_base, existing->iov_len,
                candidate->iov_base, candidate->iov_len);
-#endif        
+#endif
         return 0;
 }
 
@@ -129,4 +135,5 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
                 desc->bd_iov_count++;
         }
 }
-#endif
+
+#endif /* !__KERNEL__ */

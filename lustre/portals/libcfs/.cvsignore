@@ -4,7 +4,6 @@ link-stamp
 .*.cmd
 autoMakefile.in
 autoMakefile
-sources
 *.ko
 *.mod.c
 .*.flags

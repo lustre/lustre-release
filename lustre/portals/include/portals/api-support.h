@@ -1,5 +1,5 @@
-# define DEBUG_SUBSYSTEM S_PORTALS
-# define PORTAL_DEBUG
+
+#include "build_check.h"
 
 #ifndef __KERNEL__
 # include <stdio.h>
@@ -19,9 +19,4 @@
 
 #include <portals/internal.h>
 #include <portals/nal.h>
-#include <portals/arg-blocks.h>
 
-/* Hack for 2.4.18 macro name collision */
-#ifdef yield
-#undef yield
-#endif

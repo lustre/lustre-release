@@ -345,7 +345,7 @@ obd_count ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
         obd_count cksum = 0;
         int i;
 
-        for (i = 0; i < desc->bd_page_count; i++) {
+        for (i = 0; i < desc->bd_iov_count; i++) {
                 struct page *page = desc->bd_iov[i].kiov_page;
                 char *ptr = kmap(page);
                 int psum, off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
@@ -377,7 +377,6 @@ static int ost_brw_read(struct ptlrpc_request *req)
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
         struct obd_trans_info    oti = { 0 };
-        char                     str[PTL_NALFMT_SIZE];
         int                      size[1] = { sizeof(*body) };
         int                      comms_error = 0;
         int                      niocount;
@@ -529,23 +528,17 @@ static int ost_brw_read(struct ptlrpc_request *req)
         } else {
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
-                               "evicting %s@%s nid "LPX64" (%s)\n",
+                               "evicting %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               req->rq_peerstr);
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s nid "LPX64" (%s)\n",  
+                               "client reconnected %s@%s id %s\n",  
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               req->rq_peerstr);
                 }
         }
 
@@ -566,7 +559,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int                      objcount, niocount, npages;
         int                      comms_error = 0;
         int                      rc, swab, i, j;
-        char                     str[PTL_NALFMT_SIZE];
+        struct timeval           start;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
@@ -678,20 +671,19 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 obd_count client_cksum = body->oa.o_cksum;
                 obd_count cksum = ost_checksum_bulk(desc);
 
-                portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                req->rq_peer.peer_nid, str);
                 if (client_cksum != cksum) {
-                        CERROR("Bad checksum: client %x, server %x, client NID "
-                               LPX64" (%s)\n", client_cksum, cksum,
-                               req->rq_peer.peer_nid, str);
+                        CERROR("Bad checksum: client %x, server %x id %s\n",
+                               client_cksum, cksum,
+                               req->rq_peerstr);
                         cksum_counter = 1;
                         repbody->oa.o_cksum = cksum;
                 } else {
                         cksum_counter++;
                         if ((cksum_counter & (-cksum_counter)) == cksum_counter)
-                                CWARN("Checksum %u from "LPX64" (%s): %x OK\n",
-                                      cksum_counter, req->rq_peer.peer_nid,
-                                      str, cksum);
+                                CWARN("Checksum %u from %s: %x OK\n",
+                                      cksum_counter,
+                                      req->rq_peerstr,
+                                      cksum);
                 }
         }
 #endif
@@ -733,25 +725,19 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 ptlrpc_error(req);
         } else {
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
-                        CERROR("bulk IO comms error: "
-                               "evicting %s@%s nid "LPX64" (%s)\n",
+                        CERROR("%s: bulk IO comm error evicting %s@%s id %s\n",
+                               req->rq_export->exp_obd->obd_name,
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               req->rq_peerstr);
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s nid "LPX64" (%s)\n",
+                               "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
-                }        
+                               req->rq_peerstr);
+                }
         }
         RETURN(rc);
 }

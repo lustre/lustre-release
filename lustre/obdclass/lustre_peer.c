@@ -42,7 +42,6 @@ struct uuid_nid_data {
         ptl_nid_t nid;
         char *uuid;
         __u32 nal;
-        ptl_handle_ni_t ni;
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
@@ -61,7 +60,7 @@ void class_exit_uuidlist(void)
         class_del_uuid(NULL);
 }
 
-int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
+int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid)
 {
         struct list_head *tmp;
 
@@ -72,8 +71,8 @@ int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
                         list_entry(tmp, struct uuid_nid_data, head);
 
                 if (strcmp(data->uuid, uuid) == 0) {
-                        peer->peer_nid = data->nid;
-                        peer->peer_ni = data->ni;
+                        *peer_nid = data->nid;
+                        *peer_nal = data->nal;
 
                         spin_unlock (&g_uuid_lock);
                         return 0;
@@ -86,7 +85,6 @@ int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
 
 int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
 {
-        const ptl_handle_ni_t *nip;
         struct uuid_nid_data *data;
         int rc;
         int nob = strnlen (uuid, PAGE_SIZE) + 1;
@@ -94,26 +92,21 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
         if (nob > PAGE_SIZE)
                 return -EINVAL;
 
-        nip = kportal_get_ni (nal);
-        if (nip == NULL) {
-                CERROR("get_ni failed: is the NAL module loaded?\n");
-                return -EIO;
-        }
-
         rc = -ENOMEM;
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
-                goto fail_0;
+                return -ENOMEM;
 
         OBD_ALLOC(data->uuid, nob);
-        if (data == NULL)
-                goto fail_1;
+        if (data == NULL) {
+                OBD_FREE(data, sizeof(*data));
+                return -ENOMEM;
+        }
 
         CDEBUG(D_INFO, "add uuid %s "LPX64" %u\n", uuid, nid, nal);
         memcpy(data->uuid, uuid, nob);
         data->nid = nid;
         data->nal = nal;
-        data->ni  = *nip;
 
         spin_lock (&g_uuid_lock);
 
@@ -122,12 +115,6 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
         spin_unlock (&g_uuid_lock);
 
         return 0;
-
- fail_1:
-        OBD_FREE (data, sizeof (*data));
- fail_0:
-        kportal_put_ni (nal);
-        return (rc);
 }
 
 /* delete only one entry if uuid is specified, otherwise delete all */
@@ -166,7 +153,6 @@ int class_del_uuid (char *uuid)
 
                 list_del (&data->head);
 
-                kportal_put_ni (data->nal);
                 OBD_FREE(data->uuid, strlen(data->uuid) + 1);
                 OBD_FREE(data, sizeof(*data));
         } while (!list_empty (&deathrow));

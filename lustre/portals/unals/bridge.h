@@ -10,10 +10,16 @@
 #define TCPNAL_PROCBRIDGE_H
 
 #include <portals/lib-p30.h>
+#include <portals/nal.h>
+
+#define PTL_IFACE_TCP 1
+#define PTL_IFACE_ER 2
+#define PTL_IFACE_SS 3
+#define PTL_IFACE_MAX 4
 
 typedef struct bridge {
     int alive;
-    nal_cb_t *nal_cb;
+    lib_nal_t *lib_nal;
     void *lower;
     void *local;
     void (*shutdown)(struct bridge *);
@@ -21,12 +27,6 @@ typedef struct bridge {
     unsigned char iptop8;
 } *bridge;
 
-
-nal_t *bridge_init(ptl_interface_t nal,
-                   ptl_pid_t pid_request,
-                   ptl_ni_limits_t *desired,
-                   ptl_ni_limits_t *actual,
-                   int *rc);
 
 typedef int (*nal_initialize)(bridge);
 extern nal_initialize nal_table[PTL_IFACE_MAX];

@@ -10,7 +10,10 @@
 #ifndef _LIB_TYPES_H_
 #define _LIB_TYPES_H_
 
+#include "build_check.h"
+
 #include <portals/types.h>
+#include <portals/nal.h>
 #ifdef __KERNEL__
 # include <linux/uio.h>
 # include <linux/smp_lock.h>
@@ -19,9 +22,6 @@
 # define PTL_USE_LIB_FREELIST
 # include <sys/types.h>
 #endif
-
-/* struct nal_cb_t is defined in lib-nal.h */
-typedef struct nal_cb_t nal_cb_t;
 
 typedef char *user_ptr;
 typedef struct lib_msg_t lib_msg_t;
@@ -124,8 +124,8 @@ typedef struct {
 
 #define PORTALS_PROTO_MAGIC                0xeebc0ded
 
-#define PORTALS_PROTO_VERSION_MAJOR        0
-#define PORTALS_PROTO_VERSION_MINOR        3
+#define PORTALS_PROTO_VERSION_MAJOR        1
+#define PORTALS_PROTO_VERSION_MINOR        0
 
 typedef struct {
         long recv_count, recv_length, send_count, send_length, drop_count,
@@ -133,8 +133,8 @@ typedef struct {
 } lib_counters_t;
 
 /* temporary expedient: limit number of entries in discontiguous MDs */
-#define PTL_MTU        (512<<10)
-#define PTL_MD_MAX_IOV 128
+#define PTL_MTU        (1<<20)
+#define PTL_MD_MAX_IOV 256
 
 struct lib_msg_t {
         struct list_head  msg_list;
@@ -163,11 +163,12 @@ typedef struct {
 struct lib_eq_t {
         struct list_head  eq_list;
         lib_handle_t      eq_lh;
-        ptl_seq_t         sequence;
-        ptl_size_t        size;
-        ptl_event_t      *base;
+        ptl_seq_t         eq_enq_seq;
+        ptl_seq_t         eq_deq_seq;
+        ptl_size_t        eq_size;
+        ptl_event_t      *eq_events;
         int               eq_refcount;
-        int (*event_callback) (ptl_event_t * event);
+        ptl_eq_handler_t  eq_callback;
         void             *eq_addrkey;
 };
 
@@ -190,7 +191,6 @@ struct lib_md_t {
         ptl_size_t        max_size;
         int               threshold;
         int               pending;
-        ptl_unlink_t      unlink;
         unsigned int      options;
         unsigned int      md_flags;
         void             *user_ptr;
@@ -203,7 +203,15 @@ struct lib_md_t {
         } md_iov;
 };
 
-#define PTL_MD_FLAG_UNLINK            (1 << 0)
+#define PTL_MD_FLAG_ZOMBIE            (1 << 0)
+#define PTL_MD_FLAG_AUTO_UNLINK       (1 << 1)
+
+static inline int lib_md_exhausted (lib_md_t *md) 
+{
+        return (md->threshold == 0 ||
+                ((md->options & PTL_MD_MAX_SIZE) != 0 &&
+                 md->offset + md->max_size > md->length));
+}
 
 #ifdef PTL_USE_LIB_FREELIST
 typedef struct
@@ -235,33 +243,117 @@ typedef struct {
 /* PTL_COOKIE_TYPES must be a power of 2, so the cookie type can be
  * extracted by masking with (PTL_COOKIE_TYPES - 1) */
 
-typedef struct {
-        int up;
-        int refcnt;
-        ptl_nid_t nid;
-        ptl_pid_t pid;
-        int num_nodes;
-        unsigned int debug;
-        lib_ptl_t tbl;
-        lib_ac_t ac;
-        lib_counters_t counters;
+typedef struct lib_ni 
+{
+        nal_t            *ni_api;
+        ptl_process_id_t  ni_pid;
+        lib_ptl_t         ni_portals;
+        lib_counters_t    ni_counters;
+        ptl_ni_limits_t   ni_actual_limits;
 
         int               ni_lh_hash_size;      /* size of lib handle hash table */
         struct list_head *ni_lh_hash_table;     /* all extant lib handles, this interface */
         __u64             ni_next_object_cookie; /* cookie generator */
         __u64             ni_interface_cookie;  /* uniquely identifies this ni in this epoch */
         
-        struct list_head ni_test_peers;
+        struct list_head  ni_test_peers;
         
 #ifdef PTL_USE_LIB_FREELIST
-        lib_freelist_t   ni_free_mes;
-        lib_freelist_t   ni_free_msgs;
-        lib_freelist_t   ni_free_mds;
-        lib_freelist_t   ni_free_eqs;
+        lib_freelist_t    ni_free_mes;
+        lib_freelist_t    ni_free_msgs;
+        lib_freelist_t    ni_free_mds;
+        lib_freelist_t    ni_free_eqs;
 #endif
-        struct list_head ni_active_msgs;
-        struct list_head ni_active_mds;
-        struct list_head ni_active_eqs;
+
+        struct list_head  ni_active_msgs;
+        struct list_head  ni_active_mds;
+        struct list_head  ni_active_eqs;
+
+#ifdef __KERNEL__
+        spinlock_t        ni_lock;
+        wait_queue_head_t ni_waitq;
+#else
+        pthread_mutex_t   ni_mutex;
+        pthread_cond_t    ni_cond;
+#endif
 } lib_ni_t;
+
+
+typedef struct lib_nal
+{
+	/* lib-level interface state */
+	lib_ni_t libnal_ni;
+
+	/* NAL-private data */
+	void *libnal_data;
+
+	/*
+	 * send: Sends a preformatted header and payload data to a
+	 * specified remote process. The payload is scattered over 'niov'
+	 * fragments described by iov, starting at 'offset' for 'mlen'
+	 * bytes.  
+	 * NB the NAL may NOT overwrite iov.  
+	 * PTL_OK on success => NAL has committed to send and will call
+	 * lib_finalize on completion
+	 */
+	ptl_err_t (*libnal_send) 
+                (struct lib_nal *nal, void *private, lib_msg_t *cookie, 
+                 ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid, 
+                 unsigned int niov, struct iovec *iov, 
+                 size_t offset, size_t mlen);
+        
+	/* as send, but with a set of page fragments (NULL if not supported) */
+	ptl_err_t (*libnal_send_pages)
+                (struct lib_nal *nal, void *private, lib_msg_t * cookie, 
+                 ptl_hdr_t * hdr, int type, ptl_nid_t nid, ptl_pid_t pid, 
+                 unsigned int niov, ptl_kiov_t *iov, 
+                 size_t offset, size_t mlen);
+	/*
+	 * recv: Receives an incoming message from a remote process.  The
+	 * payload is to be received into the scattered buffer of 'niov'
+	 * fragments described by iov, starting at 'offset' for 'mlen'
+	 * bytes.  Payload bytes after 'mlen' up to 'rlen' are to be
+	 * discarded.  
+	 * NB the NAL may NOT overwrite iov.
+	 * PTL_OK on success => NAL has committed to receive and will call
+	 * lib_finalize on completion
+	 */
+	ptl_err_t (*libnal_recv) 
+                (struct lib_nal *nal, void *private, lib_msg_t * cookie,
+                 unsigned int niov, struct iovec *iov, 
+                 size_t offset, size_t mlen, size_t rlen);
+
+	/* as recv, but with a set of page fragments (NULL if not supported) */
+	ptl_err_t (*libnal_recv_pages) 
+                (struct lib_nal *nal, void *private, lib_msg_t * cookie,
+                 unsigned int niov, ptl_kiov_t *iov, 
+                 size_t offset, size_t mlen, size_t rlen);
+
+	/*
+	 * (un)map: Tell the NAL about some memory it will access.
+	 * *addrkey passed to libnal_unmap() is what libnal_map() set it to.
+	 * type of *iov depends on options.
+	 * Set to NULL if not required.
+	 */
+	ptl_err_t (*libnal_map)
+                (struct lib_nal *nal, unsigned int niov, struct iovec *iov, 
+                 void **addrkey);
+	void (*libnal_unmap)
+                (struct lib_nal *nal, unsigned int niov, struct iovec *iov, 
+                 void **addrkey);
+
+	/* as (un)map, but with a set of page fragments */
+	ptl_err_t (*libnal_map_pages)
+                (struct lib_nal *nal, unsigned int niov, ptl_kiov_t *iov, 
+                 void **addrkey);
+	void (*libnal_unmap_pages)
+                (struct lib_nal *nal, unsigned int niov, ptl_kiov_t *iov, 
+                 void **addrkey);
+
+	void (*libnal_printf)(struct lib_nal *nal, const char *fmt, ...);
+
+	/* Calculate a network "distance" to given node */
+	int (*libnal_dist) (struct lib_nal *nal, ptl_nid_t nid, unsigned long *dist);
+} lib_nal_t;
 
 #endif

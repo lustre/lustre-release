@@ -22,13 +22,17 @@
 
 #include <stdio.h>
 #include <sys/types.h>
+#ifdef HAVE_NETDB_H
 #include <netdb.h>
+#endif
 #include <sys/socket.h>
+#ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h>
-#include <netdb.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include "ioctl.h"
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <unistd.h>
@@ -39,15 +43,6 @@
 #ifdef __CYGWIN__
 
 #include <netinet/in.h>
-
-#warning assuming little endian
-
-#define __cpu_to_le64(x) ((__u64)(x))
-#define __le64_to_cpu(x) ((__u64)(x))
-#define __cpu_to_le32(x) ((__u32)(x))
-#define __le32_to_cpu(x) ((__u32)(x))
-#define __cpu_to_le16(x) ((__u16)(x))
-#define __le16_to_cpu(x) ((__u16)(x))
 
 #endif /* __CYGWIN__ */
  
@@ -60,13 +55,8 @@
 
 unsigned int portal_debug;
 unsigned int portal_printk;
-unsigned int portal_stack;
 
 static unsigned int g_nal = 0;
-
-static int g_socket_txmem = 0;
-static int g_socket_rxmem = 0;
-static int g_socket_nonagle = 1;
 
 typedef struct
 {
@@ -79,12 +69,74 @@ static name2num_t nalnames[] = {
         {"tcp",		SOCKNAL},
         {"elan",	QSWNAL},
         {"gm",	        GMNAL},
-        {"ib",	        IBNAL},
-        {"scimac",      SCIMACNAL},
+        {"openib",      OPENIBNAL},
+        {"iib",         IIBNAL},
         {NULL,		-1}
 };
 
 static cfg_record_cb_t g_record_cb;
+
+/* Convert a string boolean to an int; "enable" -> 1 */
+int ptl_parse_bool (int *b, char *str) {
+        if (!strcasecmp (str, "no") ||
+            !strcasecmp (str, "n") ||
+            !strcasecmp (str, "off") ||
+            !strcasecmp (str, "down") ||
+            !strcasecmp (str, "disable"))
+        {
+                *b = 0;
+                return (0);
+        }
+        
+        if (!strcasecmp (str, "yes") ||
+            !strcasecmp (str, "y") ||
+            !strcasecmp (str, "on") ||
+            !strcasecmp (str, "up") ||
+            !strcasecmp (str, "enable"))
+        {
+                *b = 1;
+                return (0);
+        }
+        
+        return (-1);
+}
+
+/* Convert human readable size string to and int; "1k" -> 1000 */
+int ptl_parse_size (int *sizep, char *str) {
+        int size;
+        char mod[32];
+
+        switch (sscanf (str, "%d%1[gGmMkK]", &size, mod)) {
+        default:
+                return (-1);
+
+        case 1:
+                *sizep = size;
+                return (0);
+
+        case 2:
+                switch (*mod) {
+                case 'g':
+                case 'G':
+                        *sizep = size << 30;
+                        return (0);
+
+                case 'm':
+                case 'M':
+                        *sizep = size << 20;
+                        return (0);
+
+                case 'k':
+                case 'K':
+                        *sizep = size << 10;
+                        return (0);
+
+                default:
+                        *sizep = size;
+                        return (0);
+                }
+        }
+}
 
 int 
 ptl_set_cfg_record_cb(cfg_record_cb_t cb)
@@ -158,6 +210,7 @@ nal2name (int nal)
         return ((e == NULL) ? "???" : e->name);
 }
 
+#ifdef HAVE_GETHOSTBYNAME
 static struct hostent *
 ptl_gethostbyname(char * hname) {
         struct hostent *he;
@@ -178,6 +231,7 @@ ptl_gethostbyname(char * hname) {
         }
         return he;
 }
+#endif
 
 int
 ptl_parse_port (int *port, char *str)
@@ -223,19 +277,12 @@ ptl_parse_time (time_t *t, char *str)
 }
 
 int
-ptl_parse_ipaddr (__u32 *ipaddrp, char *str)
+ptl_parse_ipquad (__u32 *ipaddrp, char *str)
 {
-        struct hostent *he;
         int             a;
         int             b;
         int             c;
         int             d;
-
-        if (!strcmp (str, "_all_")) 
-        {
-                *ipaddrp = 0;
-                return (0);
-        }
 
         if (sscanf (str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4 &&
             (a & ~0xff) == 0 && (b & ~0xff) == 0 &&
@@ -244,7 +291,27 @@ ptl_parse_ipaddr (__u32 *ipaddrp, char *str)
                 *ipaddrp = (a<<24)|(b<<16)|(c<<8)|d;
                 return (0);
         }
-        
+
+        return (-1);
+}
+
+int
+ptl_parse_ipaddr (__u32 *ipaddrp, char *str)
+{
+#ifdef HAVE_GETHOSTBYNAME
+        struct hostent *he;
+#endif
+
+        if (!strcmp (str, "_all_")) 
+        {
+                *ipaddrp = 0;
+                return (0);
+        }
+
+        if (ptl_parse_ipquad(ipaddrp, str) == 0)
+                return (0);
+
+#if HAVE_GETHOSTBYNAME        
         if ((('a' <= str[0] && str[0] <= 'z') ||
              ('A' <= str[0] && str[0] <= 'Z')) &&
              (he = ptl_gethostbyname (str)) != NULL)
@@ -254,21 +321,28 @@ ptl_parse_ipaddr (__u32 *ipaddrp, char *str)
                 *ipaddrp = ntohl(addr);         /* HOST byte order */
                 return (0);
         }
+#endif
 
         return (-1);
 }
 
 char *
-ptl_ipaddr_2_str (__u32 ipaddr, char *str)
+ptl_ipaddr_2_str (__u32 ipaddr, char *str, int lookup)
 {
+#ifdef HAVE_GETHOSTBYNAME
         __u32           net_ip;
         struct hostent *he;
-        
-        net_ip = htonl (ipaddr);
-        he = gethostbyaddr (&net_ip, sizeof (net_ip), AF_INET);
-        if (he != NULL)
-                return (he->h_name);
-        
+
+        if (lookup) {
+                net_ip = htonl (ipaddr);
+                he = gethostbyaddr (&net_ip, sizeof (net_ip), AF_INET);
+                if (he != NULL) {
+                        strcpy(str, he->h_name);
+                        return (str);
+                }
+        }
+#endif
+
         sprintf (str, "%d.%d.%d.%d",
                  (ipaddr >> 24) & 0xff, (ipaddr >> 16) & 0xff,
                  (ipaddr >> 8) & 0xff, ipaddr & 0xff);
@@ -302,22 +376,42 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
         return (-1);
 }
 
+__u64 ptl_nid2u64(ptl_nid_t nid)
+{
+        switch (sizeof (nid)) {
+        case 8:
+                return (nid);
+        case 4:
+                return ((__u32)nid);
+        default:
+                fprintf(stderr, "Unexpected sizeof(ptl_nid_t) == %u\n", sizeof(nid));
+                abort();
+                /* notreached */
+                return (-1);
+        }
+}
+
 char *
 ptl_nid2str (char *buffer, ptl_nid_t nid)
 {
-        struct hostent *he = NULL;
+        __u64           nid64 = ptl_nid2u64(nid);
+#ifdef HAVE_GETHOSTBYNAME
+        struct hostent *he = 0;
 
         /* Don't try to resolve NIDs that are e.g. Elan host IDs.  Assume
          * TCP addresses in the 0.x.x.x subnet are not in use.  This can
          * happen on routers and slows things down a _lot_.  Bug 3442. */
         if (nid & 0xff000000) {
                 __u32 addr = htonl((__u32)nid); /* back to NETWORK byte order */
-                he = gethostbyaddr((const char *)&addr, sizeof(addr), AF_INET);
+
+                he = gethostbyaddr ((const char *)&addr, sizeof (addr), AF_INET);
         }
+
         if (he != NULL)
-                sprintf(buffer, "%#x:%s", (int)(nid >> 32), he->h_name);
+                sprintf(buffer, "%#x:%s", (int)(nid64 >> 32), he->h_name);
         else
-                sprintf(buffer, LPX64, nid);
+#endif /* HAVE_GETHOSTBYNAME */
+                sprintf(buffer, LPX64, nid64);
 
         return (buffer);
 }
@@ -441,11 +535,11 @@ int jt_ptl_network(int argc, char **argv)
         return (-1);
 }
 
-int 
-jt_ptl_print_autoconnects (int argc, char **argv)
+int
+jt_ptl_print_interfaces (int argc, char **argv)
 {
-        struct portals_cfg        pcfg;
-        char                     buffer[64];
+        struct portals_cfg       pcfg;
+        char                     buffer[3][64];
         int                      index;
         int                      rc;
 
@@ -453,47 +547,166 @@ jt_ptl_print_autoconnects (int argc, char **argv)
                 return -1;
 
         for (index = 0;;index++) {
-                PCFG_INIT (pcfg, NAL_CMD_GET_AUTOCONN);
+                PCFG_INIT (pcfg, NAL_CMD_GET_INTERFACE);
+                pcfg.pcfg_count = index;
+
+                rc = pcfg_ioctl (&pcfg);
+                if (rc != 0)
+                        break;
+
+                printf ("%s: (%s/%s) npeer %d nroute %d\n",
+                        ptl_ipaddr_2_str(pcfg.pcfg_id, buffer[2], 1),
+                        ptl_ipaddr_2_str(pcfg.pcfg_id, buffer[0], 0),
+                        ptl_ipaddr_2_str(pcfg.pcfg_misc, buffer[1], 0),
+                        pcfg.pcfg_fd, pcfg.pcfg_count);
+        }
+
+        if (index == 0)
+                printf ("<no interfaces>\n");
+        return 0;
+}
+
+int
+jt_ptl_add_interface (int argc, char **argv)
+{
+        struct portals_cfg       pcfg;
+        __u32                    ipaddr;
+        int                      rc;
+        __u32                    netmask = 0xffffff00;
+        int                      i;
+        int                      count;
+        char                    *end;
+
+        if (argc < 2 || argc > 3) {
+                fprintf (stderr, "usage: %s ipaddr [netmask]\n", argv[0]);
+                return 0;
+        }
+
+        if (!g_nal_is_compatible(argv[0], SOCKNAL, 0))
+                return -1;
+
+        if (ptl_parse_ipaddr(&ipaddr, argv[1]) != 0) {
+                fprintf (stderr, "Can't parse ip: %s\n", argv[1]);
+                return -1;
+        }
+
+        if (argc > 2 ) {
+                count = strtol(argv[2], &end, 0);
+                if (count > 0 && count < 32 && *end == 0) {
+                        netmask = 0;
+                        for (i = count; i > 0; i--)
+                                netmask = netmask|(1<<(32-i));
+                } else if (ptl_parse_ipquad(&netmask, argv[2]) != 0) {
+                        fprintf (stderr, "Can't parse netmask: %s\n", argv[2]);
+                        return -1;
+                }
+        }
+
+        PCFG_INIT(pcfg, NAL_CMD_ADD_INTERFACE);
+        pcfg.pcfg_id     = ipaddr;
+        pcfg.pcfg_misc   = netmask;
+
+        rc = pcfg_ioctl (&pcfg);
+        if (rc != 0) {
+                fprintf (stderr, "failed to add interface: %s\n",
+                         strerror (errno));
+                return -1;
+        }
+
+        return 0;
+}
+
+int
+jt_ptl_del_interface (int argc, char **argv)
+{
+        struct portals_cfg       pcfg;
+        int                      rc;
+        __u32                    ipaddr = 0;
+
+        if (argc > 2) {
+                fprintf (stderr, "usage: %s [ipaddr]\n", argv[0]);
+                return 0;
+        }
+
+        if (!g_nal_is_compatible(argv[0], SOCKNAL, 0))
+                return -1;
+
+        if (argc == 2 &&
+            ptl_parse_ipaddr(&ipaddr, argv[1]) != 0) {
+                fprintf (stderr, "Can't parse ip: %s\n", argv[1]);
+                return -1;
+        }
+        
+        PCFG_INIT(pcfg, NAL_CMD_DEL_INTERFACE);
+        pcfg.pcfg_id = ipaddr;
+
+        rc = pcfg_ioctl (&pcfg);
+        if (rc != 0) {
+                fprintf (stderr, "failed to delete interface: %s\n",
+                         strerror (errno));
+                return -1;
+        }
+
+        return 0;
+}
+
+int
+jt_ptl_print_peers (int argc, char **argv)
+{
+        struct portals_cfg       pcfg;
+        char                     buffer[2][64];
+        int                      index;
+        int                      rc;
+
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, 0))
+                return -1;
+
+        for (index = 0;;index++) {
+                PCFG_INIT (pcfg, NAL_CMD_GET_PEER);
                 pcfg.pcfg_count   = index;
 
                 rc = pcfg_ioctl (&pcfg);
                 if (rc != 0)
                         break;
 
-                printf (LPX64"@%s:%d #%d buffer %d "
-                        "nonagle %s affinity %s eager %s share %d\n",
-                        pcfg.pcfg_nid, ptl_ipaddr_2_str (pcfg.pcfg_id, buffer),
-                        pcfg.pcfg_misc, pcfg.pcfg_count, pcfg.pcfg_size, 
-                        (pcfg.pcfg_flags & 1) ? "on" : "off",
-                        (pcfg.pcfg_flags & 2) ? "on" : "off",
-                        (pcfg.pcfg_flags & 4) ? "on" : "off",
-                        pcfg.pcfg_wait);
+                if (g_nal_is_compatible(NULL, SOCKNAL, 0))
+                        printf (LPX64"[%d]%s@%s:%d #%d\n",
+                                pcfg.pcfg_nid, pcfg.pcfg_wait,
+                                ptl_ipaddr_2_str (pcfg.pcfg_size, buffer[0], 1),
+                                ptl_ipaddr_2_str (pcfg.pcfg_id, buffer[1], 1),
+                                pcfg.pcfg_misc, pcfg.pcfg_count);
+                else
+                        printf (LPX64"[%d]\n",
+                                pcfg.pcfg_nid, pcfg.pcfg_wait);
         }
 
         if (index == 0)
-                printf ("<no autoconnect routes>\n");
+                printf ("<no peers>\n");
         return 0;
 }
 
 int 
-jt_ptl_add_autoconnect (int argc, char **argv)
+jt_ptl_add_peer (int argc, char **argv)
 {
-        struct portals_cfg        pcfg;
+        struct portals_cfg       pcfg;
         ptl_nid_t                nid;
-        __u32                    ip;
-        int                      port;
-        int                      irq_affinity = 0;
-        int                      share = 0;
-        int                      eager = 0;
+        __u32                    ip = 0;
+        int                      port = 0;
         int                      rc;
 
-        if (argc < 4 || argc > 5) {
-                fprintf (stderr, "usage: %s nid ipaddr port [ise]\n", argv[0]);
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, 0))
+                return -1;
+
+        if (g_nal_is_compatible(NULL, SOCKNAL, 0)) {
+                if (argc != 4) {
+                        fprintf (stderr, "usage(tcp): %s nid ipaddr port\n", 
+                                 argv[0]);
+                        return 0;
+                }
+        } else if (argc != 2) {
+                fprintf (stderr, "usage(openib,iib): %s nid\n", argv[0]);
                 return 0;
         }
-
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, 0))
-                return -1;
 
         if (ptl_parse_nid (&nid, argv[1]) != 0 ||
                 nid == PTL_NID_ANY) {
@@ -501,51 +714,26 @@ jt_ptl_add_autoconnect (int argc, char **argv)
                 return -1;
         }
 
-        if (ptl_parse_ipaddr (&ip, argv[2]) != 0) {
-                fprintf (stderr, "Can't parse ip addr: %s\n", argv[2]);
-                return -1;
+        if (g_nal_is_compatible (NULL, SOCKNAL, 0)) {
+                if (ptl_parse_ipaddr (&ip, argv[2]) != 0) {
+                        fprintf (stderr, "Can't parse ip addr: %s\n", argv[2]);
+                        return -1;
+                }
+
+                if (ptl_parse_port (&port, argv[3]) != 0) {
+                        fprintf (stderr, "Can't parse port: %s\n", argv[3]);
+                        return -1;
+                }
         }
 
-        if (ptl_parse_port (&port, argv[3]) != 0) {
-                fprintf (stderr, "Can't parse port: %s\n", argv[3]);
-                return -1;
-        }
-
-        if (argc > 4) {
-                char *opts = argv[4];
-                
-                while (*opts != 0)
-                        switch (*opts++) {
-                        case 'i':
-                                irq_affinity = 1;
-                                break;
-                        case 's':
-                                share = 1;
-                                break;
-                        case 'e':
-                                eager = 1;
-                                break;
-                        default:
-                                fprintf (stderr, "Can't parse options: %s\n",
-                                         argv[4]);
-                                return -1;
-                        }
-        }
-
-        PCFG_INIT(pcfg, NAL_CMD_ADD_AUTOCONN);
+        PCFG_INIT(pcfg, NAL_CMD_ADD_PEER);
         pcfg.pcfg_nid     = nid;
         pcfg.pcfg_id      = ip;
         pcfg.pcfg_misc    = port;
-        /* only passing one buffer size! */
-        pcfg.pcfg_size    = MAX (g_socket_rxmem, g_socket_txmem);
-        pcfg.pcfg_flags   = (g_socket_nonagle ? 0x01 : 0) |
-                            (irq_affinity     ? 0x02 : 0) |
-                            (share            ? 0x04 : 0) |
-                            (eager            ? 0x08 : 0);
 
         rc = pcfg_ioctl (&pcfg);
         if (rc != 0) {
-                fprintf (stderr, "failed to enable autoconnect: %s\n",
+                fprintf (stderr, "failed to add peer: %s\n",
                          strerror (errno));
                 return -1;
         }
@@ -554,63 +742,63 @@ jt_ptl_add_autoconnect (int argc, char **argv)
 }
 
 int 
-jt_ptl_del_autoconnect (int argc, char **argv)
+jt_ptl_del_peer (int argc, char **argv)
 {
         struct portals_cfg       pcfg;
         ptl_nid_t                nid = PTL_NID_ANY;
-        __u32                    ip  = 0;
-        int                      share = 0;
-        int                      keep_conn = 0;
+        __u32                    ip = 0;
+        int                      single_share = 0;
+        int                      argidx;
         int                      rc;
 
-        if (argc > 4) {
-                fprintf (stderr, "usage: %s [nid] [ipaddr] [sk]\n",
-                         argv[0]);
-                return 0;
-        }
-
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, 0))
                 return -1;
 
+        if (g_nal_is_compatible(NULL, SOCKNAL, 0)) {
+                if (argc > 4) {
+                        fprintf (stderr, "usage: %s [nid] [ipaddr] [single_share]\n",
+                                 argv[0]);
+                        return 0;
+                }
+        } else if (argc > 3) {
+                fprintf (stderr, "usage: %s [nid] [single_share]\n", argv[0]);
+                return 0;
+        }
+                
         if (argc > 1 &&
             ptl_parse_nid (&nid, argv[1]) != 0) {
                 fprintf (stderr, "Can't parse nid: %s\n", argv[1]);
                 return -1;
         }
 
-        if (argc > 2 &&
-            ptl_parse_ipaddr (&ip, argv[2]) != 0) {
-                fprintf (stderr, "Can't parse ip addr: %s\n", argv[2]);
-                return -1;
+        argidx = 2;
+        if (g_nal_is_compatible(NULL, SOCKNAL, 0)) {
+                if (argc > argidx &&
+                    ptl_parse_ipaddr (&ip, argv[argidx]) != 0) {
+                        fprintf (stderr, "Can't parse ip addr: %s\n",
+                                 argv[argidx]);
+                        return -1;
+                }
+                argidx++;
+        }
+        
+        if (argc > argidx) {
+                if (!strcmp (argv[argidx], "single_share")) {
+                        single_share = 1;
+                } else {
+                        fprintf (stderr, "Unrecognised arg %s'\n", argv[3]);
+                        return -1;
+                }
         }
 
-        if (argc > 3) {
-                char *opts = argv[3];
-                
-                while (*opts != 0)
-                        switch (*opts++) {
-                        case 's':
-                                share = 1;
-                                break;
-                        case 'k':
-                                keep_conn = 1;
-                                break;
-                        default:
-                                fprintf (stderr, "Can't parse flags: %s\n", 
-                                         argv[3]);
-                                return -1;
-                        }
-        }
-
-        PCFG_INIT(pcfg, NAL_CMD_DEL_AUTOCONN);
-        pcfg.pcfg_nid     = nid;
-        pcfg.pcfg_id      = ip;
-        pcfg.pcfg_flags   = (share     ? 1 : 0) |
-                           (keep_conn ? 2 : 0);
+        PCFG_INIT(pcfg, NAL_CMD_DEL_PEER);
+        pcfg.pcfg_nid = nid;
+        pcfg.pcfg_id = ip;
+        pcfg.pcfg_flags = single_share;
 
         rc = pcfg_ioctl (&pcfg);
         if (rc != 0) {
-                fprintf (stderr, "failed to remove autoconnect route: %s\n",
+                fprintf (stderr, "failed to remove peer: %s\n",
                          strerror (errno));
                 return -1;
         }
@@ -622,11 +810,11 @@ int
 jt_ptl_print_connections (int argc, char **argv)
 {
         struct portals_cfg       pcfg;
-        char                     buffer[64];
+        char                     buffer[2][64];
         int                      index;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -637,14 +825,23 @@ jt_ptl_print_connections (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                printf (LPX64"@%s:%d:%s\n",
-                        pcfg.pcfg_nid, 
-                        ptl_ipaddr_2_str (pcfg.pcfg_id, buffer),
-                        pcfg.pcfg_misc,
-                        (pcfg.pcfg_flags == SOCKNAL_CONN_ANY) ? "A" :
-                        (pcfg.pcfg_flags == SOCKNAL_CONN_CONTROL) ? "C" :
-                        (pcfg.pcfg_flags == SOCKNAL_CONN_BULK_IN) ? "I" :
-                        (pcfg.pcfg_flags == SOCKNAL_CONN_BULK_OUT) ? "O" : "?");
+                if (g_nal_is_compatible (NULL, SOCKNAL, 0))
+                        printf ("[%d]%s:"LPX64"@%s:%d:%s %d/%d %s\n",
+                                pcfg.pcfg_gw_nal,       /* scheduler */
+                                ptl_ipaddr_2_str (pcfg.pcfg_fd, buffer[0], 1), /* local IP addr */
+                                pcfg.pcfg_nid, 
+                                ptl_ipaddr_2_str (pcfg.pcfg_id, buffer[1], 1), /* remote IP addr */
+                                pcfg.pcfg_misc,         /* remote port */
+                                (pcfg.pcfg_flags == SOCKNAL_CONN_ANY) ? "A" :
+                                (pcfg.pcfg_flags == SOCKNAL_CONN_CONTROL) ? "C" :
+                                (pcfg.pcfg_flags == SOCKNAL_CONN_BULK_IN) ? "I" :
+                                (pcfg.pcfg_flags == SOCKNAL_CONN_BULK_OUT) ? "O" : "?",
+                                pcfg.pcfg_count,        /* tx buffer size */
+                                pcfg.pcfg_size,         /* rx buffer size */
+                                pcfg.pcfg_wait ? "nagle" : "nonagle");
+                else
+                        printf (LPX64"\n",
+                                pcfg.pcfg_nid);
         }
 
         if (index == 0)
@@ -654,23 +851,22 @@ jt_ptl_print_connections (int argc, char **argv)
 
 int jt_ptl_connect(int argc, char **argv)
 {
+#ifndef HAVE_CONNECT
+        /* no connect() support */
+        return -1;
+#else /* HAVE_CONNECT */
         struct portals_cfg pcfg;
         struct sockaddr_in srvaddr;
         struct sockaddr_in locaddr;
         __u32 ipaddr;
         char *flag;
         int fd, rc;
-        int nonagle = 0;
-        int rxmem = 0;
-        int txmem = 0;
-        int bind_irq = 0;
         int type = SOCKNAL_CONN_ANY;
         int port, rport;
         int o;
-        int olen;
 
         if (argc < 3) {
-                fprintf(stderr, "usage: %s ip port [xibctr]\n", argv[0]);
+                fprintf(stderr, "usage: %s ip port [type]\n", argv[0]);
                 return 0;
         }
 
@@ -692,10 +888,6 @@ int jt_ptl_connect(int argc, char **argv)
                 for (flag = argv[3]; *flag != 0; flag++)
                         switch (*flag)
                         {
-                        case 'i':
-                                bind_irq = 1;
-                                break;
-                                
                         case 'I':
                                 if (type != SOCKNAL_CONN_ANY) {
                                         fprintf(stderr, "Can't flag type twice\n");
@@ -726,14 +918,15 @@ int jt_ptl_connect(int argc, char **argv)
                                 return (-1);
                         }
 
-        memset(&locaddr, 0, sizeof(locaddr));
-        locaddr.sin_family = AF_INET;
+        memset(&locaddr, 0, sizeof(locaddr)); 
+        locaddr.sin_family = AF_INET; 
         locaddr.sin_addr.s_addr = INADDR_ANY;
 
         memset(&srvaddr, 0, sizeof(srvaddr));
         srvaddr.sin_family = AF_INET;
         srvaddr.sin_port = htons(port);
         srvaddr.sin_addr.s_addr = htonl(ipaddr);
+
 
         for (rport = IPPORT_RESERVED - 1; rport > IPPORT_RESERVED / 2; --rport) {
                 fd = socket(PF_INET, SOCK_STREAM, 0); 
@@ -745,35 +938,6 @@ int jt_ptl_connect(int argc, char **argv)
                 o = 1;
                 rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 
                                 &o, sizeof(o));
-
-                if (g_socket_nonagle) {
-                        o = 1;
-                        rc = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &o, sizeof (o));
-                        if (rc != 0) {
-                                fprintf(stderr, "cannot disable nagle: %s\n",
-                                        strerror(errno));
-                                return (-1);
-                        }
-                }
-                
-                if (g_socket_rxmem != 0) {
-                        o = g_socket_rxmem;
-                        rc = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &o, sizeof (o));
-                        if (rc != 0) {
-                                fprintf(stderr, "cannot set receive buffer size: %s\n",
-                                        strerror(errno));
-                                return (-1);
-                        }
-                }
-                
-                if (g_socket_txmem != 0) {
-                        o = g_socket_txmem;
-                        rc = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &o, sizeof (o));
-                        if (rc != 0) {
-                                fprintf(stderr, "cannot set send buffer size: %s\n", strerror(errno));
-                                return (-1);
-                        }
-                }
                 
                 locaddr.sin_port = htons(rport);
                 rc = bind(fd, (struct sockaddr *)&locaddr, sizeof(locaddr)); 
@@ -799,18 +963,8 @@ int jt_ptl_connect(int argc, char **argv)
                 return -1;
         }
 
-        olen = sizeof (txmem);
-        if (getsockopt (fd, SOL_SOCKET, SO_SNDBUF, &txmem, &olen) != 0)
-                fprintf (stderr, "Can't get send buffer size: %s\n", strerror (errno));
-        olen = sizeof (rxmem);
-        if (getsockopt (fd, SOL_SOCKET, SO_RCVBUF, &rxmem, &olen) != 0)
-                fprintf (stderr, "Can't get receive buffer size: %s\n", strerror (errno));
-        olen = sizeof (nonagle);
-        if (getsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &nonagle, &olen) != 0)
-                fprintf (stderr, "Can't get nagle: %s\n", strerror (errno));
-
-        printf("Connected host: %s snd: %d rcv: %d nagle: %s type: %s\n", 
-               argv[1], txmem, rxmem, nonagle ? "Disabled" : "Enabled",
+        printf("Connected host: %s type: %s\n", 
+               argv[1],
                (type == SOCKNAL_CONN_ANY) ? "A" :
                (type == SOCKNAL_CONN_CONTROL) ? "C" :
                (type == SOCKNAL_CONN_BULK_IN) ? "I" :
@@ -819,7 +973,6 @@ int jt_ptl_connect(int argc, char **argv)
         PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
         pcfg.pcfg_nal = g_nal;
         pcfg.pcfg_fd = fd;
-        pcfg.pcfg_flags = bind_irq;
         pcfg.pcfg_misc = type;
         
         rc = pcfg_ioctl(&pcfg);
@@ -837,11 +990,12 @@ int jt_ptl_connect(int argc, char **argv)
                 fprintf(stderr, "close failed: %d\n", rc);
 
         return 0;
+#endif /* HAVE_CONNECT */
 }
 
 int jt_ptl_disconnect(int argc, char **argv)
 {
-        struct portals_cfg        pcfg;
+        struct portals_cfg       pcfg;
         ptl_nid_t                nid = PTL_NID_ANY;
         __u32                    ipaddr = 0;
         int                      rc;
@@ -851,7 +1005,7 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_nal_is_compatible (NULL, SOCKNAL, 0))
+        if (!g_nal_is_compatible (NULL, SOCKNAL, OPENIBNAL, IIBNAL, 0))
                 return 0;
 
         if (argc >= 2 &&
@@ -860,7 +1014,8 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return -1;
         }
 
-        if (argc >= 3 &&
+        if (g_nal_is_compatible (NULL, SOCKNAL, 0) &&
+            argc >= 3 &&
             ptl_parse_ipaddr (&ipaddr, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse ip addr %s\n", argv[2]);
                 return -1;
@@ -882,7 +1037,7 @@ int jt_ptl_disconnect(int argc, char **argv)
 
 int jt_ptl_push_connection (int argc, char **argv)
 {
-        struct portals_cfg        pcfg;
+        struct portals_cfg       pcfg;
         int                      rc;
         ptl_nid_t                nid = PTL_NID_ANY;
         __u32                    ipaddr = 0;
@@ -923,7 +1078,7 @@ int jt_ptl_push_connection (int argc, char **argv)
 int 
 jt_ptl_print_active_txs (int argc, char **argv)
 {
-        struct portals_cfg        pcfg;
+        struct portals_cfg       pcfg;
         int                      index;
         int                      rc;
 
@@ -1045,7 +1200,7 @@ int jt_ptl_mynid(int argc, char **argv)
         char *nidstr;
         struct portals_cfg pcfg;
         ptl_nid_t mynid;
-        
+
         if (argc > 2) {
                 fprintf(stderr, "usage: %s [NID]\n", argv[0]);
                 fprintf(stderr, "NID defaults to the primary IP address of the machine.\n");
@@ -1079,7 +1234,8 @@ int jt_ptl_mynid(int argc, char **argv)
                 fprintf(stderr, "setting my NID failed: %s\n",
                        strerror(errno));
         else
-                printf("registered my nid "LPX64" (%s)\n", mynid, hostname);
+                printf("registered my nid "LPX64" (%s)\n", 
+                       ptl_nid2u64(mynid), hostname);
         return 0;
 }
 
@@ -1127,61 +1283,6 @@ jt_ptl_fail_nid (int argc, char **argv)
         else
                 printf ("%s %s\n", threshold == 0 ? "Unfailing" : "Failing", argv[1]);
         
-        return (0);
-}
-
-int
-jt_ptl_rxmem (int argc, char **argv)
-{
-        int   size;
-        
-        if (argc > 1)
-        {
-                if (Parser_size (&size, argv[1]) != 0 || size < 0)
-                {
-                        fprintf (stderr, "Can't parse size %s\n", argv[1]);
-                        return (0);
-                }
-
-                g_socket_rxmem = size;
-        }
-        printf ("Socket rmem = %d\n", g_socket_rxmem);        
-        return (0);
-}
-
-int
-jt_ptl_txmem (int argc, char **argv)
-{
-        int   size;
-        
-        if (argc > 1)
-        {
-                if (Parser_size (&size, argv[1]) != 0 || size < 0)
-                {
-                        fprintf (stderr, "Can't parse size %s\n", argv[1]);
-                        return (0);
-                }
-                g_socket_txmem = size;
-        }
-        printf ("Socket txmem = %d\n", g_socket_txmem);
-        return (0);
-}
-
-int
-jt_ptl_nagle (int argc, char **argv)
-{
-        int enable;
-
-        if (argc > 1)
-        {
-                if (Parser_bool (&enable, argv[1]) != 0)
-                {
-                        fprintf (stderr, "Can't parse boolean %s\n", argv[1]);
-                        return (-1);
-                }
-                g_socket_nonagle = !enable;
-        }
-        printf ("Nagle %s\n", g_socket_nonagle ? "disabled" : "enabled");
         return (0);
 }
 
@@ -1297,7 +1398,8 @@ jt_ptl_del_route (int argc, char **argv)
         rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
-                fprintf (stderr, "NAL_CMD_DEL_ROUTE ("LPX64") failed: %s\n", nid, strerror (errno));
+                fprintf (stderr, "NAL_CMD_DEL_ROUTE ("LPX64") failed: %s\n", 
+                         ptl_nid2u64(nid), strerror (errno));
                 return (-1);
         }
         
@@ -1327,7 +1429,7 @@ jt_ptl_notify_router (int argc, char **argv)
                 return (-1);
         }
 
-        if (Parser_bool (&enable, argv[2]) != 0) {
+        if (ptl_parse_bool (&enable, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse boolean %s\n", argv[2]);
                 return (-1);
         }
@@ -1359,7 +1461,7 @@ jt_ptl_notify_router (int argc, char **argv)
         if (rc != 0) 
         {
                 fprintf (stderr, "NAL_CMD_NOTIFY_ROUTER ("LPX64") failed: %s\n",
-                         nid, strerror (errno));
+                         ptl_nid2u64(nid), strerror (errno));
                 return (-1);
         }
         
@@ -1442,9 +1544,19 @@ lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize,
                 return (-1);
         }
 
+        /* crappy overloads */
+        if (data.ioc_nid2 != sizeof(lwt_event_t) ||
+            data.ioc_nid3 != offsetof(lwt_event_t, lwte_where)) {
+                fprintf(stderr,"kernel/user LWT event mismatch %d(%d),%d(%d)\n",
+                        (int)data.ioc_nid2, sizeof(lwt_event_t),
+                        (int)data.ioc_nid3,
+                        (int)offsetof(lwt_event_t, lwte_where));
+                return (-1);
+        }
+
         LASSERT (data.ioc_count != 0);
         LASSERT (data.ioc_misc != 0);
-        
+
         if (now != NULL)
                 *now = data.ioc_nid;
 
@@ -1515,15 +1627,21 @@ lwt_put_string(char *ustr)
 static int
 lwt_print(FILE *f, cycles_t t0, cycles_t tlast, double mhz, int cpu, lwt_event_t *e)
 {
-        char            whenstr[32];
+#ifndef __WORDSIZE
+# error "__WORDSIZE not defined"
+#elif __WORDSIZE == 32
+# define XFMT "%#010lx"
+#elif __WORDSIZE== 64
+# define XFMT "%#018lx"
+#else
+# error "Unexpected __WORDSIZE"
+#endif
         char           *where = lwt_get_string(e->lwte_where);
 
         if (where == NULL)
                 return (-1);
 
-        sprintf(whenstr, LPD64, e->lwte_when - t0);
-
-        fprintf(f, "%#010lx %#010lx %#010lx %#010lx: %#010lx %1d %10.6f %10.2f %s\n",
+        fprintf(f, XFMT" "XFMT" "XFMT" "XFMT": "XFMT" %2d %10.6f %10.2f %s\n",
                 e->lwte_p1, e->lwte_p2, e->lwte_p3, e->lwte_p4,
                 (long)e->lwte_task, cpu, (e->lwte_when - t0) / (mhz * 1000000.0),
                 (t0 == e->lwte_when) ? 0.0 : (e->lwte_when - tlast) / mhz,
@@ -1532,6 +1650,7 @@ lwt_print(FILE *f, cycles_t t0, cycles_t tlast, double mhz, int cpu, lwt_event_t
         lwt_put_string(where);
 
         return (0);
+#undef XFMT
 }
 
 double
@@ -1557,13 +1676,14 @@ get_cycles_per_usec ()
 int
 jt_ptl_lwt(int argc, char **argv)
 {
+        const int       lwt_max_cpus = 32;
         int             ncpus;
         int             totalspace;
         int             nevents_per_cpu;
         lwt_event_t    *events;
-        lwt_event_t    *cpu_event[LWT_MAX_CPUS + 1];
-        lwt_event_t    *next_event[LWT_MAX_CPUS];
-        lwt_event_t    *first_event[LWT_MAX_CPUS];
+        lwt_event_t    *cpu_event[lwt_max_cpus + 1];
+        lwt_event_t    *next_event[lwt_max_cpus];
+        lwt_event_t    *first_event[lwt_max_cpus];
         int             cpu;
         lwt_event_t    *e;
         int             rc;
@@ -1574,6 +1694,7 @@ jt_ptl_lwt(int argc, char **argv)
         cycles_t        tnow;
         struct timeval  tvnow;
         int             printed_date = 0;
+        int             nlines = 0;
         FILE           *f = stdout;
 
         if (argc < 2 ||
@@ -1604,9 +1725,9 @@ jt_ptl_lwt(int argc, char **argv)
         if (lwt_snapshot(NULL, &ncpus, &totalspace, NULL, 0) != 0)
                 return (-1);
 
-        if (ncpus > LWT_MAX_CPUS) {
+        if (ncpus > lwt_max_cpus) {
                 fprintf(stderr, "Too many cpus: %d (%d)\n", 
-                        ncpus, LWT_MAX_CPUS);
+                        ncpus, lwt_max_cpus);
                 return (-1);
         }
 
@@ -1723,6 +1844,12 @@ jt_ptl_lwt(int argc, char **argv)
                         rc = lwt_print(f, t0, tlast, mhz, cpu, next_event[cpu]);
                         if (rc != 0)
                                 break;
+
+                        if (++nlines % 10000 == 0 && f != stdout) {
+                                /* show some activity... */
+                                printf(".");
+                                fflush (stdout);
+                        }
                 }
 
                 tlast = next_event[cpu]->lwte_when;
@@ -1736,8 +1863,10 @@ jt_ptl_lwt(int argc, char **argv)
                         next_event[cpu] = NULL;
         }
 
-        if (f != stdout)
+        if (f != stdout) {
+                printf("\n");
                 fclose(f);
+        }
 
         free(events);
         return (0);
