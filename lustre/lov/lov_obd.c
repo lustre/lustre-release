@@ -374,7 +374,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 loi->loi_ost_idx = ost_idx;
         }
 
-        spin_unlock(&lov->lov->lock);
+        spin_unlock(&lov->lov_lock);
 
         CDEBUG(D_INODE, "allocating %d subobjs for objid "LPX64" at idx %d\n",
                lsm->lsm_stripe_count,lsm->lsm_object_id,lsm->lsm_stripe_offset);
