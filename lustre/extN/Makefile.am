@@ -42,30 +42,26 @@ include $(top_srcdir)/Rules
 # set works for nearly everybody.  This is mainly for damage control.
 diff:
 	$(RM) extN.patchT
-	l='$(EXTNC)'; for f in $$l; do \
-	  echo "$$f"; \
-	  (cd $(top_srcdir) && \
-	    diff -u extN/extN.orig/$$f extN/$$f) >> extN.patchT; \
-	  test $$? -le 1 || exit 1; \
+	l='$(EXTNC)'; for f in $$l; do                                        \
+	  echo "$$f";                                                         \
+	  (cd $(top_srcdir) &&                                                \
+	    diff -u extN/extN.orig/$$f extN/$$f) >> extN.patchT;              \
+	  test $$? -le 1 || exit 1;                                           \
 	done
-	l='$(EXTNI)'; for f in $$l; do \
-	  echo "$$f"; \
-	  (cd $(top_srcdir) && \
-	    diff -u extN/extN-include.orig/$$f include/linux/$$f) >> extN.patchT; \
-	  test $$? -le 1 || exit 1; \
+	l='$(EXTNI)'; for f in $$l; do                                        \
+	  echo "$$f";                                                         \
+	  (cd $(top_srcdir) &&                                                \
+	    diff -u extN/extN-include.orig/$$f include/linux/$$f)>>extN.patchT;\
+	  test $$? -le 1 || exit 1;                                           \
 	done
-	l='$(EXTN_EXTRA)'; for f in $$l; do \
-	  f=`echo "$$f" | sed 's%^fs/%%'`; \
-	  echo "$$f"; \
-	  (cd $(top_srcdir) && \
-	    diff -u /dev/null $$f) >> extN.patchT; \
-	  test $$? -le 1 || exit 1; \
+	l='$(EXTN_EXTRA)'; for f in $$l; do                                   \
+	  f=`echo "$$f" | sed 's%^fs/%%'`;                                    \
+	  echo "$$f";                                                         \
+	  (cd $(top_srcdir) &&                                                \
+	    diff -u /dev/null $$f) >> extN.patchT;                            \
+	  test $$? -le 1 || exit 1;                                           \
 	done
 	mv -f extN.patchT $(srcdir)/extN.patch-$(RELEASE)
-	f=extN.patch-$(RELEASE); \
-	if cvs update $$f 2>&1 | grep 'cvs add' >/dev/null; then \
-	  cvs add $$f; \
-	fi
 .PHONY: diff
 
 # Just do the SUB transformation on all our source files.
@@ -73,15 +69,14 @@ sed-stamp:
 	$(RM) $@
 	rm -rf extN.orig extN-include.orig
 	mkdir extN.orig extN-include.orig
-	set -vx;                                                              \
 	list='$(EXTNC)'; for f in $$list; do                                  \
-	sed $(SUB) $(LINUX)/fs/ext3/$$f > extN.orig/$$f;	          \
+	  echo "creating extN.orig/$$f";                                      \
+	  sed $(SUB) $(LINUX)/fs/ext3/$$f > extN.orig/$$f;                    \
 	done
-	set -vx;                                                              \
 	list='$(EXTNI)'; for i in $$list; do                                  \
-	s=`echo $$i | sed "s/extN/ext3/"`;                                    \
-	sed $(SUB) $(LINUX)/include/linux/$$s >                               \
-		extN-include.orig/$$i;                              \
+	  s=`echo $$i | sed "s/extN/ext3/"`;                                  \
+	  echo "creating extN.orig-include/$$i";                              \
+	  sed $(SUB) $(LINUX)/include/linux/$$s > extN-include.orig/$$i;      \
 	done
 	echo timestamp > $@
 
@@ -95,17 +90,24 @@ patch-stamp: sed-stamp $(EXTNP)
 	cp -a extN.orig/* $(srcdir)
 	cp -a extN-include.orig/* $(top_srcdir)/include/linux
 	test -e $(top_srcdir)/fs || ln -s . $(top_srcdir)/fs
-	set -vx;                                                              \
+	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(top_srcdir)/$$f; done
 	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then                       \
-		(cd $(top_srcdir) && patch -p0) < $(srcdir)/extN.patch-$(RELEASE);                  \
+	  echo "applying patch $(srcdir)/extN.patch-$(RELEASE)";              \
+	  (cd $(top_srcdir) && patch -p0) < $(srcdir)/extN.patch-$(RELEASE);  \
 	else                                                                  \
-		echo "If first patch fails, read NOTE in extN/Makefile.am";   \
-		list='$(EXTNP)'; for p in $$list; do                          \
-		sed $(SUB) $(srcdir)/$$p | (cd $(top_srcdir) && patch -p1) || exit $$?;\
-		done;                                                         \
-		echo "It is OK if the following patch fails";		      \
-		(cd $(top_srcdir) && patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff; \
-		(cd $(top_srcdir) && patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff || exit $$?; \
+	  echo "If first patch fails, read NOTE in extN/Makefile.am";         \
+	  list='$(EXTNP)'; for p in $$list; do                                \
+	    echo "applying patch $$p";                                        \
+	    sed $(SUB) $(srcdir)/$$p |                                        \
+	      (cd $(top_srcdir) && patch -p1) || exit $$?;                    \
+	  done;                                                               \
+	  echo "It is OK if the next patch says it is already applied";       \
+	  echo "applying patch $(srcdir)/extN-2.4.18-exports.diff";           \
+	  (cd $(top_srcdir) &&                                                \
+	    patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff;               \
+	  echo "applying patch $(srcdir)/extN-2.4.18-ino_sb_fix.diff";        \
+	  (cd $(top_srcdir) &&                                                \
+	    patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff || exit $$?; \
 	fi
 	echo timestamp > $@
 
@@ -116,6 +118,6 @@ dist-hook:
 	$(RM) $(top_srcdir)/fs
 	list='$(EXTNC)'; for f in $$list; do $(RM) $(distdir)/$$f; done
 	list='$(EXTNI)'; for i in $$list; do                                  \
-		$(RM) $(distdir)/../include/linux/$$i;                        \
+	  $(RM) $(distdir)/../include/linux/$$i;                              \
 	done
 	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(distdir)/../$$f; done
