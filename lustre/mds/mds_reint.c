@@ -399,8 +399,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                   rec->ur_iattr.ia_valid);
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
-
-        MDS_UPDATE_COUNTER(mds, MDS_SETATTR_COUNT);
+        MD_COUNTER_INCREMENT(obd, setattr);
 
         if (rec->ur_iattr.ia_valid & ATTR_FROM_OPEN) {
                 de = mds_id2dentry(obd, rec->ur_id1, NULL);
@@ -984,7 +983,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
                 else
-                        MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
+                        MD_COUNTER_INCREMENT(obd, create);
 
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
                 mds_pack_inode2body(obd, body, inode, 1);
@@ -1900,7 +1899,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                        req->rq_repmsg->buflens[2]);
         }
 
-        MDS_UPDATE_COUNTER(mds, MDS_UNLINK_COUNT);
+        MD_COUNTER_INCREMENT(obd, unlink);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 GOTO(cleanup, rc = -ENOENT);
@@ -2353,7 +2352,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                   rec->ur_name);
 
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
-        MDS_UPDATE_COUNTER(mds, MDS_LINK_COUNT);
+        MD_COUNTER_INCREMENT(obd, link);
         
 //      memset(tgt_dir_lockh, 0, 2*sizeof(tgt_dir_lockh[0]));
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
@@ -3140,7 +3139,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                        req->rq_repmsg->buflens[2]);
         }
 
-        MDS_UPDATE_COUNTER(mds, MDS_RENAME_COUNT);
+        MD_COUNTER_INCREMENT(obd, rename);
 
         if (rec->ur_namelen == 1) {
                 rc = mds_reint_rename_create_name(rec, offset, req);

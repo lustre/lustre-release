@@ -861,12 +861,12 @@ static inline int obd_brw_async(int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline  int obd_prep_async_page(struct obd_export *exp,
-                                       struct lov_stripe_md *lsm,
-                                       struct lov_oinfo *loi,
-                                       struct page *page, obd_off offset,
-                                       struct obd_async_page_ops *ops,
-                                       void *data, void **res)
+static inline int obd_prep_async_page(struct obd_export *exp,
+                                      struct lov_stripe_md *lsm,
+                                      struct lov_oinfo *loi,
+                                      struct page *page, obd_off offset,
+                                      struct obd_async_page_ops *ops,
+                                      void *data, void **res)
 {
         int ret;
         ENTRY;

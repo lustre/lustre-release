@@ -870,7 +870,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
 
         MDS_CHECK_RESENT(req, reconstruct_open(rec, offset, req, child_lockh));
-        MDS_UPDATE_COUNTER(mds, MDS_OPEN_COUNT);
 
         /*
          * Step 0: If we are passed a id, then we assume the client already
@@ -1097,8 +1096,9 @@ got_child:
                 rc = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
-                else
-                        MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
+                else {
+                        MD_COUNTER_INCREMENT(obd, create);
+                }
 
                 down(&dchild->d_inode->i_sem);
                 if (ino) {
@@ -1184,9 +1184,9 @@ got_child:
                         /*we are trying to create or write a exist dir*/
                         GOTO(cleanup, rc = -EISDIR);
                 }
-                if (ll_permission(dchild->d_inode, acc_mode, NULL)) {
+                if (ll_permission(dchild->d_inode, acc_mode, NULL))
                         GOTO(cleanup, rc = -EACCES);
-                }
+
                 if (is_mount_object(dchild)) {
                         CERROR("Found possible GNS mount object %*s; not "
                                "opening.\n", dchild->d_name.len,
@@ -1448,8 +1448,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
                               obd->u.mds.mds_max_mdsize,
                               obd->u.mds.mds_max_cookiesize};
         ENTRY;
-
-        MDS_UPDATE_COUNTER((&obd->u.mds), MDS_CLOSE_COUNT);
+        MD_COUNTER_INCREMENT(obd, close);
 
         rc = lustre_pack_reply(req, 3, repsize, NULL);
         if (rc) {

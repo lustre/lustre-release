@@ -368,7 +368,6 @@ struct mds_obd {
         struct semaphore                 mds_orphan_recovery_sem;
         
         int                              mds_num;
-        struct lprocfs_stats            *mds_counters;
         int                              mds_config_version;
 
         char                            *mds_lmv_name;

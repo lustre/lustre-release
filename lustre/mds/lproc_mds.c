@@ -31,68 +31,16 @@
 #include "mds_internal.h"
 
 #ifndef LPROCFS
+
 struct lprocfs_vars lprocfs_mds_obd_vars[]  = { {0} };
 struct lprocfs_vars lprocfs_mds_module_vars[] = { {0} };
 struct lprocfs_vars lprocfs_mdt_obd_vars[] = { {0} };
 struct lprocfs_vars lprocfs_mdt_module_vars[] = { {0} };
 
-atomic_t * lprocfs_alloc_mds_counters()
-{
-        return NULL;
-}
-void lprocfs_free_mds_counters(atomic_t *ptr)
-{
-        return;
-}
-
 #else
 
-struct ll_mdscounters_opcode {
-     __u32       opcode;
-     const char *opname;
-} ll_mdscounters_opcode_table[MDS_LAST_OPC_COUNT] = {
-       { MDS_OPEN_COUNT,          "mds_open" },
-       { MDS_CREATE_COUNT,        "mds_create" },
-       { MDS_CLOSE_COUNT,         "mds_close" },
-       { MDS_LINK_COUNT,          "mds_link" },
-       { MDS_UNLINK_COUNT,        "mds_unlink" },
-       { MDS_GETATTR_COUNT,       "mds_getattr" },
-       { MDS_GETATTR_LOCK_COUNT,  "mds_getattr_lock" },
-       { MDS_SETATTR_COUNT,       "mds_setattr" },
-       { MDS_RENAME_COUNT,        "mds_rename" },
-       { MDS_STATFS_COUNT,        "mds_statfs" },
-};
-
-const char* ll_mds_count_opcode2str(__u32 opcode)
-{
-        __u32 offset = opcode;
-
-        LASSERT(offset < MDS_LAST_OPC_COUNT);
-        LASSERT(ll_mdscounters_opcode_table[offset].opcode == opcode);
-        return ll_mdscounters_opcode_table[offset].opname;
-}
-
-struct lprocfs_stats * lprocfs_alloc_mds_counters()
-{
-        struct lprocfs_stats *counters;
-        int i;
-
-        counters = lprocfs_alloc_stats(MDS_LAST_OPC_COUNT);
-
-        for (i = 0; i < MDS_LAST_OPC_COUNT; i ++) {         
-            lprocfs_counter_init(counters, i, 0, 
-                                 (char *)ll_mds_count_opcode2str(i), "reqs");
-        }
-        return counters;
-}
-
-void lprocfs_free_mds_counters(struct lprocfs_stats *ptr)
-{
-        lprocfs_free_stats(ptr);
-}
-
-static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
-                                 int *eof, void *data)
+static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
 {
         struct obd_device* obd = (struct obd_device *)data;
 
@@ -100,52 +48,8 @@ static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
         LASSERT(obd->u.mds.mds_vfsmnt->mnt_devname);
         *eof = 1;
 
-        return snprintf(page, count, "%s\n",obd->u.mds.mds_vfsmnt->mnt_devname);
-}
-
-static int lprocfs_rd_mds_counters(char *page, char **start, off_t off,
-                                          int count, int *eof, void *data)
-{
-        struct obd_device* obd = (struct obd_device *)data;
-        int len = 0, n, i, j;
-        struct lprocfs_counter  t, ret = { .lc_min = ~(__u64)0 };
-        struct lprocfs_stats *stats;
-        struct timeval now;
-
-        LASSERT(obd != NULL);
-        if (obd->u.mds.mds_counters == NULL)
-                return 0;
-
-        do_gettimeofday(&now);
-
-        n = snprintf(page, count, "%-25s %lu.%lu secs.usecs\n",
-                               "snapshot_time", now.tv_sec, now.tv_usec);
-        page += n; len +=n; count -=n;
-
-        stats = obd->u.mds.mds_counters;
-
-        *eof = 1;
-        for (i = 0; i < MDS_LAST_OPC_COUNT; i ++) {
-                ret.lc_count = 0; 
-                for (j = 0; j < num_online_cpus(); j++) {
-                        struct lprocfs_counter *percpu_cntr =
-                                &(stats->ls_percpu[j])->lp_cntr[i];
-                        int centry;
-                        do {
-                                centry = 
-                                   atomic_read(&percpu_cntr->lc_cntl.la_entry); 
-                                t.lc_count = percpu_cntr->lc_count;
-                        } while (centry != 
-                                 atomic_read(&percpu_cntr->lc_cntl.la_entry) &&
-                                 centry != 
-                                 atomic_read(&percpu_cntr->lc_cntl.la_exit));
-                        ret.lc_count += t.lc_count;
-               } 
-                n = snprintf(page, count, "%-25s "LPU64" \n", 
-                                   ll_mds_count_opcode2str(i), ret.lc_count);
-                page += n; len +=n; count -=n;
-        }
-        return (len);
+        return snprintf(page, count, "%s\n",
+                        obd->u.mds.mds_vfsmnt->mnt_devname);
 }
 
 static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
@@ -192,6 +96,32 @@ static int lprocfs_mds_wr_config_update(struct file *file, const char *buffer,
         RETURN(mds_lov_update_config(obd, 0));
 }
 
+static int lprocfs_rd_last_fid(char *page, char **start, off_t off,
+                               unsigned long count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct mds_obd *mds = &obd->u.mds;
+        __u64 last_fid;
+
+        down(&mds->mds_last_fid_sem);
+        last_fid = mds->mds_last_fid;
+        up(&mds->mds_last_fid_sem);
+
+        *eof = 1;
+        return snprintf(page, count, LPD64"\n", last_fid);
+}
+
+static int lprocfs_rd_group(char *page, char **start, off_t off,
+                            unsigned long count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct mds_obd *mds = &obd->u.mds;
+        __u64 last_fid;
+
+        *eof = 1;
+        return snprintf(page, count, LPD64"\n", mds->mds_num);
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { "blocksize",    lprocfs_rd_blksize,     0, 0 },
@@ -202,11 +132,12 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "filestotal",   lprocfs_rd_filestotal,  0, 0 },
         { "filesfree",    lprocfs_rd_filesfree,   0, 0 },
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
+        { "last_fid",     lprocfs_rd_last_fid,    0, 0 },
+        { "group",        lprocfs_rd_group,       0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
         { "evict_client", 0, lprocfs_mds_wr_evict_client, 0 },
         { "config_update", 0, lprocfs_mds_wr_config_update, 0 },
         { "num_exports",  lprocfs_rd_num_exports, 0, 0 },
-        { "counters", lprocfs_rd_mds_counters, 0, 0 },
         { 0 }
 };
 
@@ -262,6 +193,7 @@ out:
                 OBD_FREE(gids, param.ngroups * sizeof(gid_t));
         return count;
 }
+
 static int lprocfs_rd_expire(char *page, char **start, off_t off, int count,
                              int *eof, void *data)
 {
@@ -270,6 +202,7 @@ static int lprocfs_rd_expire(char *page, char **start, off_t off, int count,
         *eof = 1;
         return snprintf(page, count, "%d\n", hash->gh_entry_expire);
 }
+
 static int lprocfs_wr_expire(struct file *file, const char *buffer,
                              unsigned long count, void *data)
 {
@@ -282,6 +215,7 @@ static int lprocfs_wr_expire(struct file *file, const char *buffer,
         sscanf(buf, "%d", &hash->gh_entry_expire);
         return count;
 }
+
 static int lprocfs_rd_ac_expire(char *page, char **start, off_t off, int count,
                                 int *eof, void *data)
 {
@@ -290,6 +224,7 @@ static int lprocfs_rd_ac_expire(char *page, char **start, off_t off, int count,
         *eof = 1;
         return snprintf(page, count, "%d\n", hash->gh_acquire_expire);
 }
+
 static int lprocfs_wr_ac_expire(struct file *file, const char *buffer,
                                 unsigned long count, void *data)
 {
@@ -302,6 +237,7 @@ static int lprocfs_wr_ac_expire(struct file *file, const char *buffer,
         sscanf(buf, "%d", &hash->gh_acquire_expire);
         return count;
 }
+
 static int lprocfs_rd_hash_upcall(char *page, char **start, off_t off, int count,
                                 int *eof, void *data)
 {
@@ -310,6 +246,7 @@ static int lprocfs_rd_hash_upcall(char *page, char **start, off_t off, int count
         *eof = 1;
         return snprintf(page, count, "%s\n", hash->gh_upcall);
 }
+
 static int lprocfs_wr_hash_upcall(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 {
@@ -321,12 +258,14 @@ static int lprocfs_wr_hash_upcall(struct file *file, const char *buffer,
         }
         return count;
 }
+
 static int lprocfs_wr_hash_flush(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 {
         mds_group_hash_flush_idle();
         return count;
 }
+
 static int lprocfs_rd_allow_setgroups(char *page, char **start, off_t off,
                                       int count, int *eof, void *data)
 {
@@ -335,6 +274,7 @@ static int lprocfs_rd_allow_setgroups(char *page, char **start, off_t off,
         *eof = 1;
         return snprintf(page, count, "%d\n", hash->gh_allow_setgroups);
 }
+
 static int lprocfs_wr_allow_setgroups(struct file *file, const char *buffer,
                                       unsigned long count, void *data)
 {
@@ -351,15 +291,17 @@ static int lprocfs_wr_allow_setgroups(struct file *file, const char *buffer,
 }
 
 struct lprocfs_vars lprocfs_mds_module_vars[] = {
-        { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
-        { "grp_hash_expire_interval", lprocfs_rd_expire, lprocfs_wr_expire, 0},
+        { "num_refs", lprocfs_rd_numrefs, 0, 0 },
+        { "grp_hash_expire_interval",lprocfs_rd_expire,
+          lprocfs_wr_expire, 0},
         { "grp_hash_acquire_expire", lprocfs_rd_ac_expire,
-                                     lprocfs_wr_ac_expire, 0},
-        { "grp_hash_upcall", lprocfs_rd_hash_upcall, lprocfs_wr_hash_upcall, 0},
+          lprocfs_wr_ac_expire, 0},
+        { "grp_hash_upcall", lprocfs_rd_hash_upcall,
+          lprocfs_wr_hash_upcall, 0},
         { "grp_hash_flush", 0, lprocfs_wr_hash_flush, 0},
-        { "group_info", 0,  lprocfs_wr_group_info,   0 },
+        { "group_info", 0, lprocfs_wr_group_info, 0 },
         { "allow_setgroups", lprocfs_rd_allow_setgroups,
-                             lprocfs_wr_allow_setgroups, 0},
+          lprocfs_wr_allow_setgroups, 0},
         { 0 }
 };
 
@@ -372,7 +314,6 @@ struct lprocfs_vars lprocfs_mdt_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
-
 #endif /* LPROCFS */
 
 struct lprocfs_static_vars lprocfs_array_vars[] = { {lprocfs_mds_module_vars,

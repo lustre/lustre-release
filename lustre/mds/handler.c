@@ -939,7 +939,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         ENTRY;
 
         LASSERT(!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME));
-        MDS_UPDATE_COUNTER((&obd->u.mds), MDS_GETATTR_LOCK_COUNT);
+        MD_COUNTER_INCREMENT(obd, getattr_lock);
 
         rsd = lustre_swab_mds_secdesc(req, MDS_REQ_SECDESC_OFF);
         if (!rsd) {
@@ -1144,7 +1144,6 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
 static int mds_getattr(struct ptlrpc_request *req, int offset)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct mds_obd *mds = &obd->u.mds;
         struct lvfs_run_ctxt saved;
         struct dentry *de;
         struct mds_req_sec_desc *rsd;
@@ -1166,7 +1165,7 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
                 RETURN (-EFAULT);
         }
 
-        MDS_UPDATE_COUNTER(mds, MDS_GETATTR_COUNT);
+        MD_COUNTER_INCREMENT(obd, getattr);
 
         rc = mds_init_ucred(&uc, rsd);
         if (rc) {
@@ -1225,7 +1224,7 @@ static int mds_statfs(struct ptlrpc_request *req)
                 GOTO(out, rc);
         }
 
-        MDS_UPDATE_COUNTER((&obd->u.mds), MDS_STATFS_COUNT);
+        OBD_COUNTER_INCREMENT(obd, statfs);
 
         /* We call this so that we can cache a bit - 1 jiffie worth */
         rc = mds_obd_statfs(obd, lustre_msg_buf(req->rq_repmsg, 0, size),
@@ -2053,6 +2052,7 @@ static int mds_msg_check_version(struct lustre_msg *msg)
 }
 
 static char str[PTL_NALFMT_SIZE];
+
 int mds_handle(struct ptlrpc_request *req)
 {
         int should_process, fail = OBD_FAIL_MDS_ALL_REPLY_NET;
@@ -2775,8 +2775,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                            "mds_ldlm_client", &obd->obd_ldlm_client);
         obd->obd_replayable = 1;
 
-        mds->mds_counters = lprocfs_alloc_mds_counters();
-
         rc = mds_postsetup(obd);
         if (rc)
                 GOTO(err_fs, rc);
@@ -3001,10 +2999,6 @@ static int mds_cleanup(struct obd_device *obd, int flags)
 
         ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
 
-        if (mds->mds_counters) {
-                lprocfs_free_mds_counters(mds->mds_counters);
-        }
-
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {
                 target_cancel_recovery_timer(obd);
@@ -3104,6 +3098,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         ENTRY;
 
         LASSERT(req != NULL);
+        MD_COUNTER_INCREMENT(req->rq_export->exp_obd, intent_lock);
 
         if (req->rq_reqmsg->bufcount <= MDS_REQ_INTENT_IT_OFF) {
                 /* No intent was provided */
