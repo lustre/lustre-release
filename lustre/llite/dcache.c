@@ -46,6 +46,9 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
         struct lustre_handle *handle;
         ENTRY;
 
+        /* XXX the check for RENAME2 is a workaround for old kernels 
+           which call intent_release twice in rename 
+        */
         if (it == NULL || it->it_op == IT_RENAME2) {
                 EXIT;
                 return;
@@ -57,23 +60,25 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
                 handle = (struct lustre_handle *)it->it_lock_handle;
                 if (it->it_op == IT_SETATTR) {
                         int rc;
-                        struct inode *inode = de->d_inode;
                         ldlm_lock_decref(handle, it->it_lock_mode);
                         rc = ldlm_cli_cancel(handle);
                         if (rc < 0)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
-                        /* XXX should we only do this when the last lock goes? */
-                        LASSERT(igrab(inode) == inode);
-                        d_delete_aliases(inode);
-                        iput(inode);
                 } else
                         ldlm_lock_decref(handle, it->it_lock_mode);
         }
 
-        if (it->it_op != IT_RELEASED_MAGIC) {
+        if (it->it_op == IT_RELEASED_MAGIC) {
+                EXIT; 
+                return;
+        }
+
+        if (de->d_it && de->d_it == it) { 
+                de->d_it = NULL;
                 up(&ll_d2d(de)->lld_it_sem);
                 it->it_op = IT_RELEASED_MAGIC;
         }
+
         EXIT;
 }
 
@@ -115,11 +120,8 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         spin_unlock(&dcache_lock);
         d_rehash(de);
 
-        if (it != NULL) { 
-                LL_SAVE_INTENT(de, it);
-        } else {
+        if (!it)
                 de->d_it = NULL;
-        }
 
         RETURN(1);
 }

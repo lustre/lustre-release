@@ -204,17 +204,18 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
 
         request = (struct ptlrpc_request *)it->it_data;
+        /* it_disposition == 1 indicates that the server performed the
+         * intent on our behalf. */
         if (it->it_disposition) {
                 struct mds_body *mds_body;
                 int mode, symlen = 0;
                 obd_flag valid;
 
-                /* it_disposition == 1 indicates that the server performed the
-                 * intent on our behalf.  This long block is all about fixing up
-                 * the local state so that it is correct as of the moment
-                 * _before_ the operation was applied; that way, the VFS will
-                 * think that everything is normal and call Lustre's regular
-                 * FS function.
+                /* This long block is all about fixing up the local
+                 * state so that it is correct as of the moment
+                 * _before_ the operation was applied; that way, the
+                 * VFS will think that everything is normal and call
+                 * Lustre's regular FS function.
                  *
                  * If we're performing a creation, that means that unless the
                  * creation failed with EEXIST, we should fake up a negative
@@ -222,19 +223,21 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                  *
                  * For everything else, we want to lookup to succeed. */
 
-                /* One additional note: we add an extra reference to the request
-                 * because we need to keep it around until ll_create gets
-                 * called.  For anything else which results in
-                 * LL_LOOKUP_POSITIVE, we can do the iget() immediately with the
-                 * contents of the reply (in the intent_finish callback).  In
-                 * the create case, however, we need to wait until
-                 * ll_create_node to do the iget() or the VFS will abort with
-                 * -EEXISTS. */
+                /* One additional note: we add an extra reference to
+                 * the request because we need to keep it around until
+                 * ll_create gets called.  For anything else which
+                 * results in LL_LOOKUP_POSITIVE, we can do the iget()
+                 * immediately with the contents of the reply (in the
+                 * intent_finish callback).  In the create case,
+                 * however, we need to wait until ll_create_node to do
+                 * the iget() or the VFS will abort with -EEXISTS. 
+                 */
 
                 offset = 1;
                 mds_body = lustre_msg_buf(request->rq_repmsg, offset);
                 ino = mds_body->fid1.id;
                 mode = mds_body->mode;
+
                 if (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) {
                         mdc_store_inode_generation(request, 2, 1);
                         /* For create ops, we want the lookup to be negative,
@@ -244,7 +247,10 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                                 atomic_inc(&request->rq_refcount);
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
                         }
-                        /* Fall through to update attibutes. */
+                        /*
+                         * Fall through to update attibutes: it may already
+                         * have appeared in the namespace of another client
+                         */
                 } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP |
                                         IT_READLINK)) {
                         /* For check ops, we want the lookup to succeed */
@@ -333,7 +339,28 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 ptlrpc_req_finished(request);
         }
 
-        if (it->it_op == IT_LOOKUP || rc < 0)
+        /* this places the intent in the dentry so that the vfs_xxx
+         *  operation can lay its hands on it; but that is not 
+         *  always needed...
+         */
+        if (it->it_status == 0 && 
+            it->it_op != IT_RENAME2 && 
+            it->it_op != IT_SETATTR &&
+            it->it_op != IT_GETATTR &&
+            it->it_op != IT_READDIR &&
+            it->it_op != IT_LOOKUP) {
+                LL_SAVE_INTENT(dentry, it);
+        } else {
+                dentry->d_it = NULL;
+                CDEBUG(D_DENTRY,
+                       "D_IT dentry %p fsdata %p intent: %s status %d\n",
+                       dentry, ll_d2d(dentry), ldlm_it2str(it->it_op),
+                       it->it_status);
+        }
+
+        if (rc < 0 || 
+            it->it_op == IT_LOOKUP
+            )
                 ll_intent_release(dentry, it);
 
         return rc;
@@ -441,16 +468,6 @@ lookup2_finish(int flag, struct ptlrpc_request *request, struct dentry **de,
 
         if (dentry == saved)
                 d_add(dentry, inode);
-
-        if (it->it_status == 0 && it->it_op != IT_RENAME2) {
-                LL_SAVE_INTENT(dentry, it);
-        } else {
-                dentry->d_it = NULL;
-                CDEBUG(D_DENTRY,
-                       "D_IT dentry %p fsdata %p intent: %s status %d\n",
-                       dentry, ll_d2d(dentry), ldlm_it2str(it->it_op),
-                       it->it_status);
-        }
 
         RETURN(0);
 }

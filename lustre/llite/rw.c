@@ -75,12 +75,12 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct brw_cb_data *cbd = ll_init_brw_cb_data();
+        struct brw_cb_data *brw_cbd = ll_init_brw_cb_data();
         struct brw_page pg;
         int err;
         ENTRY;
 
-        if (!cbd)
+        if (!brw_cbd)
                 RETURN(-ENOMEM);
 
         pg.pg = page;
@@ -93,7 +93,8 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
-        err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_brw_cb, cbd);
+        err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_brw_cb,
+                      brw_cbd);
 
         RETURN(err);
 } /* ll_brw */
