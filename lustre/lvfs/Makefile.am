@@ -29,5 +29,7 @@ EXTRA_PROGRAMS = lvfs $(FSMOD) fsfilt_reiserfs
 lvfs_SOURCES = lvfs_common.c lvfs_linux.c fsfilt.c lvfs_internal.h
 endif
 
+fsfilt_extN.c: fsfilt_ext3.c
+	sed -e "s/EXT3/EXTN/g" -e "s/ext3/extN/g" $< > $@
 
 include $(top_srcdir)/Rules
