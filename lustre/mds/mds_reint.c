@@ -466,6 +466,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 rc = vfs_unlink(dir, dchild);
                 break;
         default:
+                handle = NULL;
                 LBUG();
         }
 
