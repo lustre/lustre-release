@@ -7,7 +7,7 @@ PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 
 . $LUSTRE/../ltest/functional/llite/common/common.sh
 
-PDSH='pdsh -w'
+PDSH='pdsh -S -w'
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
 MDSNODE=${MDSNODE:-dev2}
@@ -22,15 +22,15 @@ MDSSIZE=100000
 OSTSIZE=100000
 
 do_mds() {
-    $PDSH $MDSNODE "PATH=\$PATH:$PATH; cd $PWD; $@"
+    $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
 }
 
 do_client() {
-    $PDSH $CLIENT "PATH=\$PATH:$PATH; cd $PWD; $@"
+    $PDSH $CLIENT "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
 }
 
 do_ost() {
-    $PDSH $OSTNODE "PATH=\$PATH:$PATH; cd $PWD; $@"
+    $PDSH $OSTNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
 }
 
 drop_request() {
@@ -93,9 +93,9 @@ setup() {
 }
 
 cleanup() {
-    unmount_client
-    shutdown_mds
-    shutdown_ost
+    unmount_client || true
+    shutdown_mds || true
+    shutdown_ost || true
 }
 
 replay() {
@@ -104,14 +104,20 @@ replay() {
         shift
     fi
     do_mds "sync"
-    echo -e 'device $mds1\nreadonly' | do_mds "lctl"
+    do_mds 'echo -e "device \$mds1\\nprobe\\nnotransno\\nreadonly" | lctl'
     do_client "$1" &
     shutdown_mds -f
     start_mds
     wait
 }
 
+if [ ! -z "$ONLY" ]; then
+    eval "$ONLY"
+    exit $?
+fi
+
 setup
 drop_request "mcreate /mnt/lustre/1"
 drop_reply "mcreate /mnt/lustre/2"
 replay "mcreate /mnt/lustre/3"
+cleanup
