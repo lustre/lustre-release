@@ -24,12 +24,13 @@
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
 
-/*
- * Common STATUS namespace
- */
-
-static int rd_target (char *page, char **start, off_t off, int count,
-                      int *eof, void *data)
+#ifndef LPROCFS
+struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
+struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+#else
+/* Common STATUS namespace */
+static int rd_target(char *page, char **start, off_t off, int count,
+                     int *eof, void *data)
 {
         struct obd_device    *dev = (struct obd_device*)data;
 	struct lustre_handle *conn = &dev->u.cobd.cobd_target;
@@ -64,10 +65,6 @@ static int rd_cache(char *page, char **start, off_t off, int count,
 	return (rc);
 }
 
-#ifndef LPROCFS
-struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-#else
 struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",        lprocfs_rd_uuid,    0, 0 },
         { "target_uuid", rd_target,          0, 0 },
