@@ -121,6 +121,15 @@ setup
 drop_request "mcreate /mnt/lustre/1"
 drop_reply "mcreate /mnt/lustre/2"
 # replay "mcreate /mnt/lustre/3"
+
 drop_request "tchmod 111 /mnt/lustre/2"
 drop_reply "tchmod 666 /mnt/lustre/2"
+# replay "tchmod 444 /mnt/lustre/2"
+
+drop_request "statone /mnt/lustre/2"
+drop_reply "statone /mnt/lustre/2"
+# replay "statone /mnt/lustre/2"
+
+drop_request "opendelay /mnt/lustre/2"
+drop_reply "opendelay /mnt/lustre/2"
 cleanup
