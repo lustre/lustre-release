@@ -35,6 +35,21 @@
 #include <time.h>
 #include <asm/byteorder.h>
 
+#ifdef __CYGWIN__
+
+#include <netinet/in.h>
+
+#warning assuming little endian
+
+#define __cpu_to_le64(x) ((__u64)(x))
+#define __le64_to_cpu(x) ((__u64)(x))
+#define __cpu_to_le32(x) ((__u32)(x))
+#define __le32_to_cpu(x) ((__u32)(x))
+#define __cpu_to_le16(x) ((__u16)(x))
+#define __le16_to_cpu(x) ((__u16)(x))
+
+#endif /* __CYGWIN__ */
+ 
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
 #include <portals/list.h>

@@ -23,7 +23,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -34,6 +33,13 @@
 
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
+
+#ifndef __CYGWIN__
+ #include <syscall.h>
+#else
+ #include <windows.h>
+ #include <windef.h>
+#endif
 
 struct ioc_dev {
 	const char * dev_name;
@@ -207,17 +213,24 @@ l_ioctl(int dev_id, int opc, void *buf)
 int 
 parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 {
-	int fd, line =0;
+	int line =0;
 	struct stat st;
-	char *buf, *end;
+	char *start, *buf, *end;
+#ifndef __CYGWIN__
+        int fd;
+#else
+        HANDLE fd, hmap;
+        DWORD size;
+#endif
 	
+#ifndef __CYGWIN__
 	fd = syscall(SYS_open, dump_file, O_RDONLY);
 
 #warning FIXME: cleanup fstat issue here
 #ifndef SYS_fstat64
-#define __SYS_fstat__ SYS_fstat
+# define __SYS_fstat__ SYS_fstat
 #else
-#define __SYS_fstat__ SYS_fstat64
+# define __SYS_fstat__ SYS_fstat64
 #endif
 	if (syscall(__SYS_fstat__, fd, &st)) { 
 		perror("stat fails");
@@ -229,9 +242,32 @@ parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 		exit(1);
 	}
 
-	buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE , fd, 0);
-	end = buf + st.st_size;
+	start = buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE , fd, 0);
+	end = start + st.st_size;
 	close(fd);
+        if (start == MAP_FAILED) {
+		fprintf(stderr, "can't create file mapping\n");
+		exit(1);
+        }
+#else
+        fd = CreateFile(dump_file, GENERIC_READ, FILE_SHARE_READ, NULL,
+                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        size = GetFileSize(fd, NULL);
+        if (size < 1) {
+		fprintf(stderr, "KML is empty\n");
+		exit(1);
+	}
+
+        hmap = CreateFileMapping(fd, NULL, PAGE_READONLY, 0,0, NULL);
+        start = buf = MapViewOfFile(hmap, FILE_MAP_READ, 0, 0, 0);
+        end = buf + size;
+        CloseHandle(fd);
+        if (start == NULL) {
+		fprintf(stderr, "can't create file mapping\n");
+		exit(1);
+        }
+#endif /* __CYGWIN__ */
+
 	while (buf < end) {
 		struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
 		struct portal_ioctl_hdr * data;
@@ -264,6 +300,14 @@ parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 
 		buf += data->ioc_len + sizeof(*dump_hdr);
 	}
+
+#ifndef __CYGWIN__
+        munmap(start, end - start);
+#else
+        UnmapViewOfFile(start);
+        CloseHandle(hmap);
+#endif
+
 	return 0;
 }
 

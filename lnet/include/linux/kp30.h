@@ -595,6 +595,8 @@ extern void kportal_blockallsigs (void);
 # include <stdlib.h>
 #ifndef __CYGWIN__
 # include <stdint.h>
+#else
+# include <cygwin-ioctl.h>
 #endif
 # include <unistd.h>
 # include <time.h>

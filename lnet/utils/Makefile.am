@@ -7,7 +7,11 @@
 COMPILE = $(CC) -Wall -g -I$(srcdir)/../include
 LINK = $(CC) -o $@
 
+if LIBLUSTRE
+sbin_PROGRAMS = ptlctl debugctl routerstat wirecheck
+else
 sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck
+endif
 lib_LIBRARIES = libptlctl.a
 
 acceptor_SOURCES = acceptor.c # -lefence
