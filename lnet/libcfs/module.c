@@ -83,6 +83,115 @@ kportal_daemonize (char *str)
 }
 
 void
+kportal_memhog_free (struct portals_device_userstate *pdu)
+{
+        struct page **level0p = &pdu->pdu_memhog_root_page;
+        struct page **level1p;
+        struct page **level2p;
+        int           count1;
+        int           count2;
+        
+        if (*level0p != NULL) {
+
+                level1p = (struct page **)page_address(*level0p);
+                count1 = 0;
+                
+                while (count1 < PAGE_SIZE/sizeof(struct page *) &&
+                       *level1p != NULL) {
+
+                        level2p = (struct page **)page_address(*level1p);
+                        count2 = 0;
+                        
+                        while (count2 < PAGE_SIZE/sizeof(struct page *) &&
+                               *level2p != NULL) {
+                                
+                                __free_page(*level2p);
+                                pdu->pdu_memhog_pages--;
+                                level2p++;
+                                count2++;
+                        }
+                        
+                        __free_page(*level1p);
+                        pdu->pdu_memhog_pages--;
+                        level1p++;
+                        count1++;
+                }
+                
+                __free_page(*level0p);
+                pdu->pdu_memhog_pages--;
+
+                *level0p = NULL;
+        }
+        
+        LASSERT (pdu->pdu_memhog_pages == 0);
+}
+
+int
+kportal_memhog_alloc (struct portals_device_userstate *pdu, int npages, int flags)
+{
+        struct page **level0p;
+        struct page **level1p;
+        struct page **level2p;
+        int           count1;
+        int           count2;
+        
+        LASSERT (pdu->pdu_memhog_pages == 0);
+        LASSERT (pdu->pdu_memhog_root_page == NULL);
+
+        if (npages < 0)
+                return -EINVAL;
+
+        if (npages == 0)
+                return 0;
+        
+        level0p = &pdu->pdu_memhog_root_page;
+        *level0p = alloc_page(flags);
+        if (*level0p == NULL)
+                return -ENOMEM;
+        pdu->pdu_memhog_pages++;
+
+        level1p = (struct page **)page_address(*level0p);
+        count1 = 0;
+        memset(level1p, 0, PAGE_SIZE);
+        
+        while (pdu->pdu_memhog_pages < npages &&
+               count1 < PAGE_SIZE/sizeof(struct page *)) {
+
+                if (signal_pending(current))
+                        return (-EINTR);
+                
+                *level1p = alloc_page(flags);
+                if (*level1p == NULL)
+                        return -ENOMEM;
+                pdu->pdu_memhog_pages++;
+
+                level2p = (struct page **)page_address(*level1p);
+                count2 = 0;
+                memset(level2p, 0, PAGE_SIZE);
+                
+                while (pdu->pdu_memhog_pages < npages &&
+                       count2 < PAGE_SIZE/sizeof(struct page *)) {
+                        
+                        if (signal_pending(current))
+                                return (-EINTR);
+
+                        *level2p = alloc_page(flags);
+                        if (*level2p == NULL)
+                                return (-ENOMEM);
+                        pdu->pdu_memhog_pages++;
+                        
+                        level2p++;
+                        count2++;
+                }
+                
+                level1p++;
+                count1++;
+        }
+
+        return 0;
+}
+
+void
 kportal_blockallsigs ()
 {
         unsigned long  flags;
@@ -96,22 +205,39 @@ kportal_blockallsigs ()
 /* called when opening /dev/device */
 static int kportal_psdev_open(struct inode * inode, struct file * file)
 {
+        struct portals_device_userstate *pdu;
         ENTRY;
-
+        
         if (!inode)
                 RETURN(-EINVAL);
+
         PORTAL_MODULE_USE;
+
+        PORTAL_ALLOC(pdu, sizeof(*pdu));
+        if (pdu != NULL) {
+                pdu->pdu_memhog_pages = 0;
+                pdu->pdu_memhog_root_page = NULL;
+        }
+        file->private_data = pdu;
+        
         RETURN(0);
 }
 
 /* called when closing /dev/device */
 static int kportal_psdev_release(struct inode * inode, struct file * file)
 {
+        struct portals_device_userstate *pdu;
         ENTRY;
 
         if (!inode)
                 RETURN(-EINVAL);
 
+        pdu = file->private_data;
+        if (pdu != NULL) {
+                kportal_memhog_free(pdu);
+                PORTAL_FREE(pdu, sizeof(*pdu));
+        }
+        
         PORTAL_MODULE_UNUSE;
         RETURN(0);
 }
@@ -529,7 +655,22 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                     copy_to_user((char *)arg, data, sizeof (*data)))
                         err = -EFAULT;
                 break;
-#endif                        
+#endif
+        case IOC_PORTAL_MEMHOG:
+                if (!capable (CAP_SYS_ADMIN))
+                        err = -EPERM;
+                else if (file->private_data == NULL) {
+                        err = -EINVAL;
+                } else {
+                        kportal_memhog_free(file->private_data);
+                        err = kportal_memhog_alloc(file->private_data,
+                                                   data->ioc_count,
+                                                   GFP_NOFS);
+                        if (err != 0)
+                                kportal_memhog_free(file->private_data);
+                }
+                break;
+
         default:
                 err = -EINVAL;
                 break;
@@ -613,8 +754,8 @@ static int init_kportals_module(void)
  cleanup_lwt:
 #if LWT_SUPPORT
         lwt_fini();
-#endif
  cleanup_debug:
+#endif
         portals_debug_cleanup();
         return rc;
 }

@@ -377,16 +377,13 @@ ksocknal_sendmsg (ksock_conn_t *conn, ksock_tx_t *tx)
         }
 
         rc = ksocknal_getconnsock (conn);
-        if (rc != 0)
+        if (rc != 0) {
+                LASSERT (conn->ksnc_closing);
                 return (rc);
+        }
 
         for (;;) {
                 LASSERT (tx->tx_resid != 0);
-
-                if (conn->ksnc_closing) {
-                        rc = -ESHUTDOWN;
-                        break;
-                }
 
                 if (tx->tx_niov != 0)
                         rc = ksocknal_send_iov (conn, tx);
@@ -568,15 +565,12 @@ ksocknal_recvmsg (ksock_conn_t *conn)
         }
 
         rc = ksocknal_getconnsock (conn);
-        if (rc != 0)
+        if (rc != 0) {
+                LASSERT (conn->ksnc_closing);
                 return (rc);
+        }
 
         for (;;) {
-                if (conn->ksnc_closing) {
-                        rc = -ESHUTDOWN;
-                        break;
-                }
-
                 if (conn->ksnc_rx_niov != 0)
                         rc = ksocknal_recv_iov (conn);
                 else
@@ -840,8 +834,12 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         unsigned long  flags;
         ksock_sched_t *sched = conn->ksnc_scheduler;
 
-        /* called holding global lock (read or irq-write) */
-
+        /* called holding global lock (read or irq-write) and caller may
+         * not have dropped this lock between finding conn and calling me,
+         * so we don't need the {get,put}connsock dance to deref
+         * ksnc_sock... */
+        LASSERT(!conn->ksnc_closing);
+        
         CDEBUG (D_NET, "Sending to "LPX64" on port %d\n", 
                 conn->ksnc_peer->ksnp_nid, conn->ksnc_port);
 
@@ -854,7 +852,6 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         /* NB this sets 1 ref on zccd, so the callback can only occur after
          * I've released this ref. */
 #endif
-
         spin_lock_irqsave (&sched->kss_lock, flags);
 
         conn->ksnc_tx_deadline = jiffies + 
@@ -1528,6 +1525,8 @@ ksocknal_process_receive (ksock_conn_t *conn)
         rc = ksocknal_recvmsg(conn);
 
         if (rc <= 0) {
+                LASSERT (rc != -EAGAIN);
+
                 if (rc == 0)
                         CWARN ("[%p] EOF from "LPX64" ip %08x:%d\n",
                                conn, conn->ksnc_peer->ksnp_nid,
@@ -1766,9 +1765,9 @@ int ksocknal_scheduler (void *arg)
                          * kss_lock. */
                         conn->ksnc_tx_ready = 0;
                         spin_unlock_irqrestore (&sched->kss_lock, flags);
-                        
+
                         rc = ksocknal_process_transmit(conn, tx);
-                        
+
                         spin_lock_irqsave (&sched->kss_lock, flags);
 
                         if (rc != -EAGAIN) {
@@ -1851,7 +1850,7 @@ ksocknal_data_ready (struct sock *sk, int n)
         read_lock (&ksocknal_data.ksnd_global_lock);
 
         conn = sk->sk_user_data;
-        if (conn == NULL) {             /* raced with ksocknal_close_sock */
+        if (conn == NULL) {             /* raced with ksocknal_terminate_conn */
                 LASSERT (sk->sk_data_ready != &ksocknal_data_ready);
                 sk->sk_data_ready (sk, n);
         } else {
@@ -1900,7 +1899,7 @@ ksocknal_write_space (struct sock *sk)
                (conn == NULL) ? "" : (list_empty (&conn->ksnc_tx_queue) ?
                                       " empty" : " queued"));
 
-        if (conn == NULL) {             /* raced with ksocknal_close_sock */
+        if (conn == NULL) {             /* raced with ksocknal_terminate_conn */
                 LASSERT (sk->sk_write_space != &ksocknal_write_space);
                 sk->sk_write_space (sk);
 
@@ -2136,7 +2135,7 @@ ksocknal_setup_sock (struct socket *sock)
         int             option;
         struct linger   linger;
 
-        sock->sk->allocation = GFP_NOFS;
+        sock->sk->allocation = GFP_MEMALLOC;
 
         /* Ensure this socket aborts active sends immediately when we close
          * it. */
@@ -2421,6 +2420,8 @@ ksocknal_autoconnectd (void *arg)
         kportal_daemonize (name);
         kportal_blockallsigs ();
 
+        current->flags |= PF_MEMALLOC;
+
         spin_lock_irqsave (&ksocknal_data.ksnd_autoconnectd_lock, flags);
 
         while (!ksocknal_data.ksnd_shuttingdown) {
@@ -2547,6 +2548,8 @@ ksocknal_reaper (void *arg)
         kportal_blockallsigs ();
 
         init_waitqueue_entry (&wait, current);
+
+        current->flags |= PF_MEMALLOC;
 
         spin_lock_irqsave (&ksocknal_data.ksnd_reaper_lock, flags);
 

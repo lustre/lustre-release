@@ -784,6 +784,11 @@ do {                                                                    \
 #endif /* __KERNEL__ */
 #endif /* LWT_SUPPORT */
 
+struct portals_device_userstate
+{
+        int          pdu_memhog_pages;
+        struct page *pdu_memhog_root_page;
+};
 
 #include <linux/portals_lib.h>
 
@@ -1053,7 +1058,8 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, long)
 #define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, long)
 #define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, long)
-#define IOC_PORTAL_MAX_NR                             41
+#define IOC_PORTAL_MEMHOG                  _IOWR('e', 42, long)
+#define IOC_PORTAL_MAX_NR                             42
 
 enum {
         QSWNAL  =  1,

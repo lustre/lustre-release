@@ -1688,3 +1688,35 @@ jt_ptl_lwt(int argc, char **argv)
         free(events);
         return (0);
 }
+
+int jt_ptl_memhog(int argc, char **argv)
+{
+        struct portal_ioctl_data  data;
+        int                       rc;
+        int                       count;
+        char                     *end;
+        
+        if (argc != 2)  {
+                fprintf(stderr, "usage: %s <npages>\n", argv[0]);
+                return 0;
+        }
+
+        count = strtol(argv[1], &end, 0);
+        if (count < 0 || *end != 0) {
+                fprintf(stderr, "Can't parse page count '%s'\n", argv[1]);
+                return -1;
+        }
+
+        PORTAL_IOC_INIT(data);
+        data.ioc_count = count;
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_MEMHOG, &data);
+
+        if (rc != 0) {
+                fprintf(stderr, "memhog %d failed: %s\n", count, strerror(errno));
+                return -1;
+        }
+        
+        printf("memhog %d OK\n", count);
+        return 0;
+}
+
