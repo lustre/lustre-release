@@ -280,6 +280,9 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
          * it can use the obd_recovering flag to determine when the
          * the OBD is full available. */
         if (!obd->obd_recovering) {
+                rc = mds_cleanup_orphans(obd);
+                LASSERT(rc == 0);
+
                 rc = mds_lov_set_nextid(obd);
                 if (rc)
                         GOTO(err_llog, rc);
