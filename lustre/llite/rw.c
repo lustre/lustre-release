@@ -608,14 +608,10 @@ static void ll_readahead(struct ll_readahead_state *ras,
                 if (page == NULL)
                        break;
 
-                /* Don't try to readahead beyond the end of the lock extent */
-                if (ll_page_matches(page) <= 0)
-                       break;
-
                 /* the book-keeping above promises that we've tried
                  * all the indices from start to end, so we don't
                  * stop if anyone returns an error. This may not be good. */
-                if (Page_Uptodate(page))
+                if (Page_Uptodate(page) || ll_page_matches(page) <= 0)
                         goto next_page;
 
                 llap = llap_from_page(page);
