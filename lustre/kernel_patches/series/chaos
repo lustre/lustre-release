@@ -11,7 +11,7 @@ linux-2.4.18ea-0.8.26.patch
 ext3-2.4-ino_t.patch
 ext3-2.4.18-ino_sb_macro.patch
 ext3-orphan_lock.patch
-extN-delete_thread.patch
+ext3-delete_thread-2.4.18.patch
 extN-misc-fixup.patch
 extN-noread.patch
 extN-wantedi.patch
