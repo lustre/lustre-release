@@ -187,7 +187,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 err_import:
         class_destroy_import(imp);
 err_ldlm:
-        ldlm_put_ref();
+        ldlm_put_ref(0);
 err:
         RETURN(rc);
 
@@ -209,7 +209,7 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
         class_destroy_import(cli->cl_import);
         cli->cl_import = NULL;
 
-        ldlm_put_ref();
+        ldlm_put_ref(flags & OBD_OPT_FORCE);
 
         RETURN(0);
 }
@@ -267,7 +267,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 
         if (rc) {
 out_ldlm:
-                ldlm_namespace_free(obd->obd_namespace);
+                ldlm_namespace_free(obd->obd_namespace, 0);
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
@@ -313,7 +313,7 @@ int client_disconnect_export(struct obd_export *exp, int failover)
                 /* obd_no_recov == local only */
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
                                        obd->obd_no_recov, NULL);
-                ldlm_namespace_free(obd->obd_namespace);
+                ldlm_namespace_free(obd->obd_namespace, obd->obd_no_recov);
                 obd->obd_namespace = NULL;
         }
 
@@ -639,7 +639,10 @@ void target_abort_recovery(void *data)
         /* when recovery was abort, cleanup orphans for mds */
         if (OBT(obd) && OBP(obd, postrecov)) {
                 rc = OBP(obd, postrecov)(obd);
-                CERROR("Cleanup %d orphans after recovery was abort!\n", rc);
+                if (rc >= 0)
+                        CERROR("Cleanup %d orphans after recovery was aborted\n", rc);
+                else
+                        CERROR("postrecov failed %d\n", rc);
         }
 
         abort_delayed_replies(obd);
@@ -926,11 +929,14 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                        obd->obd_name);
                 obd->obd_recovering = 0;
 
-                /* when recovering finished, cleanup orphans for mds       */
+                /* when recovering finished, cleanup orphans for mds */
                 if (OBT(obd) && OBP(obd, postrecov)) {
                         rc2 = OBP(obd, postrecov)(obd);
-                        CERROR("%s: all clients recovered, %d MDS orphans "
-                               "deleted\n", obd->obd_name, rc2);
+                        if (rc2 >= 0)
+                                CERROR("%s: all clients recovered, %d MDS orphans "
+                                       "deleted\n", obd->obd_name, rc2);
+                        else
+                                CERROR("postrecov failed %d\n", rc2);
                 }
 
                 list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
