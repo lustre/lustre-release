@@ -122,9 +122,9 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         fed = &exp->exp_filter_data;
 
         CDEBUG(oa->o_grant > fed->fed_grant ? D_ERROR : D_CACHE,
-               "client %s reports granted: "LPU64" dropped: %u, local: %lu\n",
-               exp->exp_client_uuid.uuid, oa->o_grant, oa->o_dropped,
-               fed->fed_grant);
+               "%s: cli %p reports granted: "LPU64" dropped: %u, local: %lu\n",
+               obd->obd_name, exp, oa->o_grant,
+               oa->o_dropped, fed->fed_grant);
 
         /* Update our accounting now so that statfs takes it into account.
          * Note that fed_dirty is only approximate and can become incorrect
@@ -172,12 +172,17 @@ restat:
         if (left >= tot_granted) {
                 left -= tot_granted;
         } else {
-                static long next;
-                if (time_after(jiffies, next)) {
-                CERROR("granted space "LPU64" more than available "LPU64"\n",
-                       tot_granted, left);
-                portals_debug_dumplog();
-                next = jiffies + 20 * HZ;
+                static unsigned long next;
+                if (left < tot_granted - obd->u.filter.fo_tot_pending &&
+                    time_after(jiffies, next)) {
+                        spin_unlock(&obd->obd_osfs_lock);
+                        CERROR("%s: cli %p granted "LPU64" more than available "
+                               LPU64" and pending "LPU64"\n", obd->obd_name, exp,
+                               tot_granted, left, obd->u.filter.fo_tot_pending);
+                        if (next == 0)
+                                portals_debug_dumplog();
+                        next = jiffies + 20 * HZ;
+                        spin_lock(&obd->obd_osfs_lock);
                 }
                 left = 0;
         }
@@ -188,10 +193,11 @@ restat:
                 goto restat;
         }
 
-        CDEBUG(D_CACHE,
-               "free: "LPU64" avail: "LPU64" granted "LPU64" left: "LPU64"\n",
+        CDEBUG(D_CACHE, "%s: cli %p free: "LPU64" avail: "LPU64" grant "LPU64
+               " left: "LPU64" pending: "LPU64"\n", obd->obd_name, exp,
                obd->obd_osfs.os_bfree << blockbits,
-               obd->obd_osfs.os_bavail << blockbits, tot_granted, left);
+               obd->obd_osfs.os_bavail << blockbits, tot_granted, left,
+               obd->u.filter.fo_tot_pending);
 
         return left;
 }
@@ -230,9 +236,11 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                 }
         }
 
-        CDEBUG(D_CACHE,"cli %s wants: "LPU64" granting: "LPU64"\n",
-               exp->exp_client_uuid.uuid, want, grant);
-        CDEBUG(D_CACHE, "tot cached:"LPU64" granted:"LPU64" num_exports: %d\n",
+        CDEBUG(D_CACHE,"%s: cli %p wants: "LPU64" granting: "LPU64"\n",
+               obd->obd_name, exp, want, grant);
+        CDEBUG(D_CACHE,
+               "%s: cli %p tot cached:"LPU64" granted:"LPU64
+               " num_exports: %d\n", obd->obd_name, exp,
                obd->u.filter.fo_tot_dirty,
                obd->u.filter.fo_tot_granted, obd->obd_num_exports);
 
@@ -451,7 +459,8 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                          * ignore this error. */
                         lnb[n].rc = -ENOSPC;
                         rnb[n].flags &= OBD_BRW_GRANTED;
-                        CDEBUG(D_INODE, "idx %d no space for %d\n", n, bytes);
+                        CDEBUG(D_INODE, "%s: idx %d no space for %d\n",
+                               exp->exp_obd->obd_name, n, bytes);
                 }
         }
 
@@ -464,9 +473,12 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         fed->fed_dirty -= used;
         fed->fed_grant -= used;
         fed->fed_pending += used;
+        exp->exp_obd->u.filter.fo_tot_pending += used;
 
-        CDEBUG(D_CACHE, "used: %ld ungranted: %ld grant: %ld dirty: %ld\n",
-               used, ungranted, fed->fed_grant, fed->fed_dirty);
+        CDEBUG(D_CACHE,
+               "%s: cli %p used: %ld ungranted: %ld grant: %ld dirty: %ld\n",
+               exp->exp_obd->obd_name, exp, used,
+               ungranted, fed->fed_grant, fed->fed_dirty);
 
         return rc;
 }
@@ -691,6 +703,7 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res)
 {
+        struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct niobuf_local *lnb = res;
         long i, pending = 0;
 
@@ -699,13 +712,17 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
                 pending += lnb->lnb_grant_used;
 
         LASSERTF(exp->exp_filter_data.fed_pending >= pending,
-                 "fed_pending: %lu pending: %lu\n",
+                 "fed_pending: %lu grant_used: %lu\n",
                  exp->exp_filter_data.fed_pending, pending);
         exp->exp_filter_data.fed_pending -= pending;
-        LASSERTF(exp->exp_obd->u.filter.fo_tot_granted >= pending,
-                 "tot_granted: "LPU64" pending: %lu\n",
+        LASSERTF(filter->fo_tot_granted >= pending,
+                 "tot_granted: "LPU64" grant_used: %lu\n",
                  exp->exp_obd->u.filter.fo_tot_granted, pending);
-        exp->exp_obd->u.filter.fo_tot_granted -= pending;
+        filter->fo_tot_granted -= pending;
+        LASSERTF(filter->fo_tot_pending >= pending,
+                 "fed_pending: %lu grant_used: %lu\n",
+                 exp->exp_filter_data.fed_pending, pending);
+        filter->fo_tot_pending -= pending;
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
 }
