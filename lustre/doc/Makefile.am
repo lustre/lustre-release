@@ -1,4 +1,4 @@
-# Copyright (C) 2001  Cluster File Systems, Inc.
+# Copyright (C) 2001, 2002 Cluster File Systems, Inc.
 #
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
@@ -12,18 +12,21 @@ IMAGES =  cache1.eps cache2.eps intermezzocache.eps intermezzofilesys.eps meta.e
 LYXFILES= master.lyx evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
 	fs.lyx         lustre-HOWTO.lyx      namespace.lyx\
 	glossary.lyx   lustre-debugging.lyx  network.lyx\
-	intro.lyx      obdspec.lyx
+	intro.lyx      obdspec.lyx recovery.lyx
 
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) lustre-HOWTO.lyx
 CLEANFILES = *.lyxT
 
-EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES)
+EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) DOCVERSION
 
 all: $(DOCS)
 
 # update date and version in document
 tag := $(shell cat $(srcdir)/CVS/Tag 2>/dev/null || echo HEAD)
-addstamp = sed "s|^Date:.*|Date: `date +%D`|g; s|^Version:.*|Version: $(tag)|g"
+addstamp = sed "s|^Date:.*|Date: `date +%x`|g; s|^Version:.*|Version: $(tag)|g"
+
+DOCVERSION:
+	echo $(tag) > DOCVERSION
 
 .lyx.pdf:
 	rm -f $<T
@@ -46,11 +49,11 @@ addstamp = sed "s|^Date:.*|Date: `date +%D`|g; s|^Version:.*|Version: $(tag)|g"
 .fig.eps:
 	-fig2dev -L eps $< > $@
 
-lustre.lyx: master.lyx $(IMAGES)
-	(ver="`cat CVS/Tag`"  ; if [ ! "$$ver" ]; then ver=HEAD ; fi ;\
+lustre.lyx: master.lyx $(IMAGES) DOCVERSION
+	(ver="`cat DOCVERSION`" ;\
 	echo "version for $< is $$ver";\
 	sed "s/VERSION/version $$ver/" < $< > lustre.lyx.tmp ;\
-	thedate=`date` ; sed "s/DATE/$$thedate/" < lustre.lyx.tmp > lustre.lyx ;\
+	thedate=`date +%x` ; sed "s/DATE/$$thedate, /" < lustre.lyx.tmp > lustre.lyx ;\
 	)
 
 syncweb: lustre.pdf
