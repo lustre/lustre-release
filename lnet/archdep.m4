@@ -11,8 +11,13 @@ AC_ARG_WITH(lib, [  --with-lib compile lustre library], host_cpu="lib")
 
 AC_ARG_WITH(linux, [  --with-linux=[path] set path to Linux source (default=/usr/src/linux)],LINUX=$with_linux,LINUX=/usr/src/linux)
 AC_SUBST(LINUX)
+if test x$enable_inkernel = xyes ; then
+        echo ln -s `pwd` $LINUX/fs/lustre
+        rm $LINUX/fs/lustre
+        ln -s `pwd` $LINUX/fs/lustre
+fi
 
-# --------- UML?  --------------------
+#  --------------------
 AC_MSG_CHECKING(if you are running user mode linux for $host_cpu ...)
 if test $host_cpu = "lib" ; then 
         host_cpu="lib"
