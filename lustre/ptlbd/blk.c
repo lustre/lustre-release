@@ -174,6 +174,7 @@ static void ptlbd_request(request_queue_t *q)
         struct ptlbd_obd *ptlbd;
         struct request *req;
         ptlbd_cmd_t cmd;
+        int     errors = 0;
         ENTRY;
 
         while ( !QUEUE_EMPTY ) {
@@ -190,18 +191,17 @@ static void ptlbd_request(request_queue_t *q)
 
                 spin_unlock_irq(&io_request_lock);
 
-                /* XXX dunno if we're supposed to get this or not.. */
-                /* __make_request() changes READA to READ - Kris */
-                LASSERT(req->cmd != READA);
-
                 if ( req->cmd == READ )
                         cmd = PTLBD_READ;
                 else 
                         cmd = PTLBD_WRITE;
 
-                ptlbd_send_req(ptlbd, cmd, req);
+                errors = ptlbd_send_req(ptlbd, cmd, req->bh);
 
                 spin_lock_irq(&io_request_lock);
+
+                if (errors)
+                        req->errors += errors;
 
                 ptlbd_end_request_havelock(req);
         }
@@ -238,7 +238,7 @@ int ptlbd_blk_init(void)
                 /* avoid integer overflow */
                 ptlbd_size[i] = (16*1024*((1024*1024) >> BLOCK_SIZE_BITS));
                 ptlbd_hardsect_size[i] = 4096;
-                ptlbd_max_sectors[i] = 2;
+                ptlbd_max_sectors[i] = PTL_MD_MAX_IOV * (4096/512);
                 //RHism ptlbd_dev_varyio[i] = 0;
                 /* XXX register_disk? */
         }
