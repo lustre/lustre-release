@@ -40,6 +40,9 @@ const char *ptl_err_str[] = {
 
         "PTL_EQ_IN_USE",
 
+        "PTL_NI_INVALID",
+        "PTL_MD_ILLEGAL",
+
         "PTL_MAX_ERRNO"
 };
 /* If you change these, you must update the number table in portals/errno.h */

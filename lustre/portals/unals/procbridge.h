@@ -30,7 +30,6 @@ typedef struct procbridge {
 
     int nal_flags;
 
-    pthread_mutex_t nal_cb_lock;
 } *procbridge;
 
 typedef struct nal_init_args {
@@ -39,6 +38,7 @@ typedef struct nal_init_args {
     ptl_ni_limits_t *nia_actual_limits;
     int              nia_nal_type;
     bridge           nia_bridge;
+    nal_t           *nia_apinal;
 } nal_init_args_t;
 
 extern void *nal_thread(void *);

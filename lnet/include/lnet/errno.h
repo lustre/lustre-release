@@ -41,7 +41,10 @@ typedef enum {
 
 	PTL_EQ_IN_USE		= 21,
 
-        PTL_MAX_ERRNO		= 22
+	PTL_NI_INVALID          = 22,
+	PTL_MD_ILLEGAL          = 23,
+	
+        PTL_MAX_ERRNO		= 24
 } ptl_err_t;
 /* If you change these, you must update the string table in api-errno.c */
 
