@@ -9,6 +9,10 @@ TBD
 	    pressure (201)
 	  - fix inode pointer in lock data (285)
 	  - partial support for multiple MDS on a single host (623279, 241)
+	  - data locks weren't cancelled at clear_inode time (290, 311)
+	  - intent locks could lead to unbounded lock growth (205)
+	* protocol change
+	  - LDLM cancellations and callbacks on different portals
 
 2002-10-28  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_16
