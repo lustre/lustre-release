@@ -137,7 +137,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct ll_fid rootfid;
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
-        struct ptlrpc_connection *mdc_conn;
         struct lustre_md md;
         class_uuid_t uuid;
 
@@ -195,8 +194,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
-
-        mdc_conn = sbi2mdc(sbi)->cl_import->imp_connection;
 
         obd = class_name2obd(osc);
         if (!obd) {
