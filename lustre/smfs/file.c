@@ -12,80 +12,6 @@
 #include <linux/unistd.h>
 #include <linux/pagemap.h>
 #include "smfs_internal.h" 
-
-static int smfs_readpage(struct file *file, 
-			 struct page *page)
-{
-	struct  inode *inode = page->mapping->host;
-	struct	inode *cache_inode;
-	struct page *cache_page = NULL;
-	int rc = 0; 
-
-	ENTRY;
-	
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-	
-	cache_page = grab_cache_page(cache_inode->i_mapping, page->index);
-
-	if (!cache_page) 
-		GOTO(exit_release, rc = -ENOMEM);
-
-	if ((rc = cache_inode->i_mapping->a_ops->readpage(file, cache_page)))
-		GOTO(exit_release, 0);
-	
-	wait_on_page(cache_page);
-
-	if (!Page_Uptodate(cache_page))
-		GOTO(exit_release, rc = -EIO);
-
-	memcpy(kmap(page), kmap(cache_page), PAGE_CACHE_SIZE);
-
-	flush_dcache_page(page);
-
-	kunmap(cache_page);
-	page_cache_release(cache_page);
-
-exit:	
-	kunmap(page);
-	SetPageUptodate(page);
-	UnlockPage(page);
-
-	RETURN(rc);
-
-exit_release:
-	if (cache_page) 
-		page_cache_release(cache_page);
-	UnlockPage(page);
-	RETURN(rc);
-}
-
-static int smfs_writepage(struct page *page)
-{
-
-	struct  inode *inode = page->mapping->host;
-	struct	inode *cache_inode;
-	int 	rc;
-	
-	ENTRY;
-	
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->writepage)
-		rc = cache_inode->i_mapping->a_ops->writepage(page);
-		
-        RETURN(rc);
-}
-
-struct address_space_operations smfs_file_aops = {
-	readpage:   smfs_readpage,
-	writepage:  smfs_writepage,
-};
         
 /* instantiate a file handle to the cache file */
 void smfs_prepare_cachefile(struct inode *inode,
@@ -169,6 +95,7 @@ static ssize_t smfs_write (struct file *filp, const char *buf,
 
 	RETURN(rc);
 }
+
 int smfs_ioctl(struct inode * inode, struct file * filp, 
 	       unsigned int cmd, unsigned long arg)
 {
@@ -264,8 +191,7 @@ static loff_t smfs_llseek(struct file *file,
 
 static int smfs_mmap(struct file * file, struct vm_area_struct * vma)
 {
-	struct address_space *mapping = file->f_dentry->d_inode->i_mapping;
-        struct inode *inode = mapping->host;
+        struct inode *inode = file->f_dentry->d_inode;
         struct inode *cache_inode = NULL;
         struct  file open_file;
 	struct  dentry open_dentry;
@@ -277,10 +203,13 @@ static int smfs_mmap(struct file * file, struct vm_area_struct * vma)
 
 	smfs_prepare_cachefile(inode, file, cache_inode, 
 			       &open_file, &open_dentry);
-	
+  
+	if (cache_inode->i_mapping == &cache_inode->i_data)
+                inode->i_mapping = cache_inode->i_mapping;
+
 	if (cache_inode->i_fop->mmap)
 		rc = cache_inode->i_fop->mmap(&open_file, vma);
-       
+      
 	duplicate_inode(cache_inode, inode);
 	smfs_update_file(file, &open_file);
 	
@@ -417,6 +346,8 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->setattr(&open_dentry, attr);
 
+	duplicate_inode(cache_inode, dentry->d_inode);		
+	
 	RETURN(rc);
 } 
   
@@ -437,6 +368,7 @@ int smfs_setxattr(struct dentry *dentry, const char *name,
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->setxattr(&open_dentry, name, value, size, flags);
 
+	duplicate_inode(cache_inode, dentry->d_inode);		
 	RETURN(rc);
 } 
                         
@@ -457,6 +389,7 @@ int smfs_getxattr(struct dentry *dentry, const char *name,
 	if (cache_inode->i_op->setattr)
 		rc = cache_inode->i_op->getxattr(&open_dentry, name, buffer, size);
 
+	duplicate_inode(cache_inode, dentry->d_inode);		
 	RETURN(rc);
 }
 
@@ -476,6 +409,7 @@ ssize_t smfs_listxattr(struct dentry *dentry, char *buffer, size_t size)
 	if (cache_inode->i_op->listxattr)
 		rc = cache_inode->i_op->listxattr(&open_dentry, buffer, size);
 
+	duplicate_inode(cache_inode, dentry->d_inode);		
 	RETURN(rc);
 }                                                                                                                                                           
 
@@ -495,6 +429,7 @@ int smfs_removexattr(struct dentry *dentry, const char *name)
 	if (cache_inode->i_op->removexattr)
 		rc = cache_inode->i_op->removexattr(&open_dentry, name);
 
+	duplicate_inode(cache_inode, dentry->d_inode);		
 	RETURN(rc);
 }
 
