@@ -4,15 +4,15 @@ set -e
 
 export PATH=`dirname $0`/../utils:$PATH
 
-config=${1:-lmv.xml}
+config=${1:-mdsadd.xml}
 
 LMC=${LMC:-lmc}
 TMP=${TMP:-/r/tmp}
 
 MDSSIZE=${MDSSIZE:-100000}
 FSTYPE=${FSTYPE:-ext3}
-MDSCOUNT=${MDSCOUNT:-2}
 NODECOUNT=${NODECOUNT:-3}
+MDSPERNODE=${MDSPERNODE:-2}
 
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-200000}
@@ -32,51 +32,42 @@ JARG=""
 
 rm -f $config
 
-upcall="/r/home/umka/work/cfs/lustre/tests/upcall"
-
 # configuring nodes
-nodes_with_client=$NODECOUNT
+node_count=$NODECOUNT
 if test $NODECOUNT -le 2; then
-        let nodes_with_client=nodes_with_client+1
+        let node_count=node_count+1
 fi
 
-for nodenum in `seq $nodes_with_client`; do 
-        options=""
+for nodenum in `seq $node_count`; do 
         nodename=uml$nodenum
-        
-#        if test $nodenum -eq $nodes_with_client; then
-#                options="--lustre_upcall $upcall"
-#        fi
-        
+
         ${LMC} -m $config --add node --node $nodename || exit 10
         ${LMC} -m $config --add net --node $nodename --nid $nodename \
-        --nettype tcp $options || exit 11
+        --nettype tcp || exit 11
 done
 
 # configuring metadata bits
 ${LMC} -m $config --add lmv --lmv lmv1 || exit 12
 
-fonum=1
+wanum=1
 
 for nodenum in `seq $NODECOUNT`; do
         nodename=uml$nodenum
-        for mdsnum in `seq $MDSCOUNT`; do
-                options=""
+        for mdsnum in `seq $MDSPERNODE`; do
                 mdsid=mds$mdsnum
                 
                 if test $mdsnum -le 2 && test $nodenum -le 2; then
                         mdsname="$nodename-$mdsid"
                         mdsdev=$TMP/$nodename-$mdsid
                 else
-                        options="--failover"
-                        mdsname="failover$fonum"
-                        mdsdev="$TMP/failover$fonum"
-                        let fonum=fonum+1
+                        mdsname="wandering$wanum"
+                        mdsdev="$TMP/wandering$wanum"
+                        let wanum=wanum+1
                 fi
                 
                 ${LMC} -m $config --format --add mds --node $nodename \
                 --mds $mdsname --lmv lmv1 --fstype $FSTYPE --dev $mdsdev \
-                --size $MDSSIZE $options || exit 13
+                --size $MDSSIZE || exit 13
         done
 done
 
