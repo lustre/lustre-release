@@ -280,14 +280,14 @@ void ll_truncate(struct inode *inode)
 int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                  unsigned long blocknr, int blocksize)
 {
-        int i;
         obd_count        num_obdo = 1;
         obd_count        bufs_per_obdo = iobuf->nr_pages;
-        struct obdo     *oa = NULL;
+        struct obdo      *oa = NULL;
         obd_size         *count = NULL;
         obd_off          *offset = NULL;
         obd_flag         *flags = NULL;
         int              rc = 0;
+        int              i;
 
         ENTRY;
         if (blocksize != PAGE_SIZE) {
@@ -295,9 +295,9 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 RETURN(-EINVAL);
         }
 
-        OBD_ALLOC(count, sizeof(obd_size) * bufs_per_obdo);
-        OBD_ALLOC(offset, sizeof(obd_off) * bufs_per_obdo);
-        OBD_ALLOC(flags, sizeof(obd_flag) * bufs_per_obdo);
+        OBD_ALLOC(count, sizeof(*count) * bufs_per_obdo);
+        OBD_ALLOC(offset, sizeof(*offset) * bufs_per_obdo);
+        OBD_ALLOC(flags, sizeof(*flags) * bufs_per_obdo);
         if (!count || !offset || !flags)
                 GOTO(out, rc = -ENOMEM);
 
