@@ -608,7 +608,7 @@
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
 --- lum-pristine/fs/namei.c	Mon Feb 25 12:38:09 2002
-+++ lum/fs/namei.c	Sat Jul 13 12:14:38 2002
++++ lum/fs/namei.c	Sun Jul 14 21:06:07 2002
 @@ -94,6 +94,14 @@
   * XEmacs seems to be relying on it...
   */
@@ -624,7 +624,7 @@
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
   * kernel data space before using them..
-@@ -260,10 +268,18 @@
+@@ -260,10 +268,17 @@
   * Internal lookup() using the new generic dcache.
   * SMP-safe
   */
@@ -639,12 +639,11 @@
 +			dentry = NULL;
 +		}
 +		return dentry; 
-+	}
-+
++	} else 
  	if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  		if (!dentry->d_op->d_revalidate(dentry, flags) && !d_invalidate(dentry)) {
  			dput(dentry);
-@@ -281,7 +297,7 @@
+@@ -281,7 +296,7 @@
   * make sure that nobody added the entry to the dcache in the meantime..
   * SMP-safe
   */
@@ -653,7 +652,7 @@
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
-@@ -300,6 +316,9 @@
+@@ -300,6 +315,9 @@
  		result = ERR_PTR(-ENOMEM);
  		if (dentry) {
  			lock_kernel();
@@ -663,20 +662,19 @@
  			result = dir->i_op->lookup(dir, dentry);
  			unlock_kernel();
  			if (result)
-@@ -322,6 +341,12 @@
+@@ -321,6 +339,11 @@
+ 			dput(result);
  			result = ERR_PTR(-ENOENT);
  		}
- 	}
-+	if (result->d_op && result->d_op->d_revalidate2) {
++	} else if (result->d_op && result->d_op->d_revalidate2) {
 +		if (!result->d_op->d_revalidate2(result, flags, it) && !d_invalidate(result)) {
 +			dput(result);
 +			result = ERR_PTR(-ENOENT);
 +		}
-+	}
+ 	}
  	return result;
  }
- 
-@@ -445,7 +470,7 @@
+@@ -445,7 +468,7 @@
   *
   * We expect 'base' to be positive and a directory.
   */
@@ -685,7 +683,7 @@
  {
  	struct dentry *dentry;
  	struct inode *inode;
-@@ -518,9 +543,9 @@
+@@ -518,9 +541,9 @@
  				break;
  		}
  		/* This does the actual lookups.. */
@@ -697,7 +695,7 @@
  			err = PTR_ERR(dentry);
  			if (IS_ERR(dentry))
  				break;
-@@ -554,7 +579,7 @@
+@@ -554,7 +577,7 @@
  			nd->dentry = dentry;
  		}
  		err = -ENOTDIR; 
@@ -706,7 +704,7 @@
  			break;
  		continue;
  		/* here ends the main loop */
-@@ -581,9 +606,9 @@
+@@ -581,9 +604,9 @@
  			if (err < 0)
  				break;
  		}
@@ -718,7 +716,7 @@
  			err = PTR_ERR(dentry);
  			if (IS_ERR(dentry))
  				break;
-@@ -607,7 +632,8 @@
+@@ -607,7 +630,8 @@
  			goto no_inode;
  		if (lookup_flags & LOOKUP_DIRECTORY) {
  			err = -ENOTDIR; 
@@ -728,7 +726,7 @@
  				break;
  		}
  		goto return_base;
-@@ -626,6 +652,7 @@
+@@ -626,6 +650,7 @@
  		else if (this.len == 2 && this.name[1] == '.')
  			nd->last_type = LAST_DOTDOT;
  return_base:
@@ -736,7 +734,7 @@
  		return 0;
  out_dput:
  		dput(dentry);
-@@ -633,15 +660,29 @@
+@@ -633,15 +658,29 @@
  	}
  	path_release(nd);
  return_err:
@@ -767,7 +765,7 @@
  /* SMP-safe */
  /* returns 1 if everything is done */
  static int __emul_lookup_dentry(const char *name, struct nameidata *nd)
-@@ -742,7 +783,8 @@
+@@ -742,7 +781,8 @@
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
   */
@@ -777,7 +775,7 @@
  {
  	struct dentry * dentry;
  	struct inode *inode;
-@@ -765,13 +807,16 @@
+@@ -765,13 +805,16 @@
  			goto out;
  	}
  
@@ -795,7 +793,7 @@
  		dentry = inode->i_op->lookup(inode, new);
  		unlock_kernel();
  		if (!dentry)
-@@ -783,6 +828,12 @@
+@@ -783,6 +826,12 @@
  	return dentry;
  }
  
@@ -808,7 +806,7 @@
  /* SMP-safe */
  struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
  {
-@@ -804,7 +855,7 @@
+@@ -804,7 +853,7 @@
  	}
  	this.hash = end_name_hash(hash);
  
@@ -817,7 +815,7 @@
  access:
  	return ERR_PTR(-EACCES);
  }
-@@ -836,6 +887,22 @@
+@@ -836,6 +885,22 @@
  	return err;
  }
  
@@ -840,7 +838,7 @@
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -970,7 +1037,8 @@
+@@ -970,7 +1035,8 @@
   * for symlinks (where the permissions are checked later).
   * SMP-safe
   */
@@ -850,7 +848,7 @@
  {
  	int acc_mode, error = 0;
  	struct inode *inode;
-@@ -984,17 +1052,23 @@
+@@ -984,17 +1050,23 @@
  	 * The simplest case - just a plain lookup.
  	 */
  	if (!(flag & O_CREAT)) {
@@ -875,7 +873,7 @@
  	if (path_init(pathname, LOOKUP_PARENT, nd))
  		error = path_walk(pathname, nd);
  	if (error)
-@@ -1011,7 +1085,7 @@
+@@ -1011,7 +1083,7 @@
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -884,7 +882,7 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1020,6 +1094,8 @@
+@@ -1020,6 +1092,8 @@
  		goto exit;
  	}
  
@@ -893,7 +891,7 @@
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
  		error = vfs_create(dir->d_inode, dentry,
-@@ -1136,9 +1212,11 @@
+@@ -1136,9 +1210,11 @@
  		if (flag & FMODE_WRITE)
  			DQUOT_INIT(inode);
  
@@ -905,7 +903,7 @@
  	dput(dentry);
  exit:
  	path_release(nd);
-@@ -1181,13 +1259,20 @@
+@@ -1181,13 +1257,20 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -928,7 +926,7 @@
  {
  	struct dentry *dentry;
  
-@@ -1195,7 +1280,7 @@
+@@ -1195,7 +1278,7 @@
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -937,7 +935,7 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1241,6 +1326,7 @@
+@@ -1241,6 +1324,7 @@
  	char * tmp;
  	struct dentry * dentry;
  	struct nameidata nd;
@@ -945,7 +943,7 @@
  
  	if (S_ISDIR(mode))
  		return -EPERM;
-@@ -1252,11 +1338,12 @@
+@@ -1252,11 +1336,12 @@
  		error = path_walk(tmp, &nd);
  	if (error)
  		goto out;
@@ -959,7 +957,7 @@
  		switch (mode & S_IFMT) {
  		case 0: case S_IFREG:
  			error = vfs_create(nd.dentry->d_inode,dentry,mode);
-@@ -1270,6 +1357,7 @@
+@@ -1270,6 +1355,7 @@
  		default:
  			error = -EINVAL;
  		}
@@ -967,7 +965,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1310,6 +1398,7 @@
+@@ -1310,6 +1396,7 @@
  {
  	int error = 0;
  	char * tmp;
@@ -975,7 +973,7 @@
  
  	tmp = getname(pathname);
  	error = PTR_ERR(tmp);
-@@ -1321,11 +1410,13 @@
+@@ -1321,11 +1408,13 @@
  			error = path_walk(tmp, &nd);
  		if (error)
  			goto out;
@@ -990,7 +988,7 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
-@@ -1407,6 +1498,7 @@
+@@ -1407,6 +1496,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -998,7 +996,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1429,10 +1521,12 @@
+@@ -1429,10 +1519,12 @@
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -1012,7 +1010,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1476,6 +1570,7 @@
+@@ -1476,6 +1568,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -1020,7 +1018,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1489,14 +1584,16 @@
+@@ -1489,14 +1582,16 @@
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
  	down(&nd.dentry->d_inode->i_sem);
@@ -1038,7 +1036,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1543,6 +1640,7 @@
+@@ -1543,6 +1638,7 @@
  	int error = 0;
  	char * from;
  	char * to;
@@ -1046,7 +1044,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1557,10 +1655,12 @@
+@@ -1557,10 +1653,12 @@
  			error = path_walk(to, &nd);
  		if (error)
  			goto out;
@@ -1060,7 +1058,7 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
-@@ -1626,6 +1726,7 @@
+@@ -1626,6 +1724,7 @@
  	int error;
  	char * from;
  	char * to;
@@ -1068,7 +1066,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1648,10 +1749,12 @@
+@@ -1648,10 +1747,12 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -1082,7 +1080,7 @@
  			dput(new_dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
-@@ -1694,7 +1797,8 @@
+@@ -1694,7 +1795,8 @@
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -1092,7 +1090,7 @@
  {
  	int error;
  	struct inode *target;
-@@ -1748,12 +1852,14 @@
+@@ -1748,12 +1850,14 @@
  	} else
  		double_down(&old_dir->i_zombie,
  			    &new_dir->i_zombie);
@@ -1107,7 +1105,7 @@
  	if (target) {
  		if (!error)
  			target->i_flags |= S_DEAD;
-@@ -1775,7 +1881,8 @@
+@@ -1775,7 +1879,8 @@
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -1117,7 +1115,7 @@
  {
  	int error;
  
-@@ -1802,10 +1909,12 @@
+@@ -1802,10 +1907,12 @@
  	DQUOT_INIT(old_dir);
  	DQUOT_INIT(new_dir);
  	double_down(&old_dir->i_zombie, &new_dir->i_zombie);
@@ -1130,7 +1128,7 @@
  	double_up(&old_dir->i_zombie, &new_dir->i_zombie);
  	if (error)
  		return error;
-@@ -1817,13 +1926,14 @@
+@@ -1817,13 +1924,14 @@
  }
  
  int vfs_rename(struct inode *old_dir, struct dentry *old_dentry,
@@ -1148,7 +1146,7 @@
  	if (!error) {
  		if (old_dir == new_dir)
  			inode_dir_notify(old_dir, DN_RENAME);
-@@ -1841,6 +1951,7 @@
+@@ -1841,6 +1949,7 @@
  	struct dentry * old_dir, * new_dir;
  	struct dentry * old_dentry, *new_dentry;
  	struct nameidata oldnd, newnd;
@@ -1156,7 +1154,7 @@
  
  	if (path_init(oldname, LOOKUP_PARENT, &oldnd))
  		error = path_walk(oldname, &oldnd);
-@@ -1868,7 +1979,9 @@
+@@ -1868,7 +1977,9 @@
  
  	double_lock(new_dir, old_dir);
  
@@ -1167,7 +1165,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -1884,18 +1997,21 @@
+@@ -1884,18 +1995,21 @@
  		if (newnd.last.name[newnd.last.len])
  			goto exit4;
  	}

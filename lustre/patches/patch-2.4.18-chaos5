@@ -502,7 +502,7 @@
 +			dentry = NULL;
 +		}
 +		return dentry; 
-+	}
++	} else
 +
  	if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  		if (!dentry->d_op->d_revalidate(dentry, flags) && !d_invalidate(dentry)) {
@@ -530,7 +530,7 @@
  			result = ERR_PTR(-ENOENT);
  		}
  	}
-+	if (result->d_op && result->d_op->d_revalidate2) {
++	else if (result->d_op && result->d_op->d_revalidate2) {
 +		if (!result->d_op->d_revalidate2(result, flags, it) && !d_invalidate(result)) {
 +			dput(result);
 +			result = ERR_PTR(-ENOENT);
