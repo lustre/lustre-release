@@ -249,18 +249,16 @@ LB_LINUX_TRY_COMPILE([
 # check for our patched grab_cache_page_nowait_gfp() function
 #
 AC_DEFUN([LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP],
-[
-LB_LINUX_TRY_COMPILE([
-	#include <linux/pagemap.h>
-],[
-	grab_cache_page_nowait_gfp(NULL, 0, 0);
-],[
-	AC_MSG_RESULT([yes])
+[AC_MSG_CHECKING([if kernel defines grab_cache_page_nowait_gfp()])
+HAVE_GCPN_GFP="`grep -c 'grab_cache_page_nowait_gfp' $LINUX/mm/filemap.c`"
+if test "$HAVE_GCPN_GFP" != 0 ; then
 	AC_DEFINE(HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP, 1,
 		[kernel has grab_cache_page_nowait_gfp()])
-],[
-	AC_MSG_RESULT([no])
-])])
+	AC_MSG_RESULT(yes)
+else
+	AC_MSG_RESULT(no)
+fi
+])
 
 #
 # LC_CONFIG_BACKINGFS

@@ -256,7 +256,8 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         it->it_op_release = ll_intent_release;
 }
 
-int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
+int ll_revalidate_it(struct dentry *de, int lookup_flags,
+                     struct lookup_intent *it)
 {
         int rc;
         struct ll_fid pfid, cfid;
@@ -293,7 +294,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
 
         rc = mdc_intent_lock(exp, &ctxt, &pfid, de->d_name.name, de->d_name.len,
                              NULL, 0,
-                             &cfid, it, flags, &req, ll_mdc_blocking_ast);
+                             &cfid, it, lookup_flags, &req,ll_mdc_blocking_ast);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)

@@ -309,8 +309,9 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                  * need to be set up like real exports as mds_connect() does.
                  */
                 CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-                       " srv lr: "LPU64"\n", mcd->mcd_uuid, cl_idx,
-                       last_transno, le64_to_cpu(msd->msd_last_transno));
+                       " srv lr: "LPU64" lx: "LPU64"\n", mcd->mcd_uuid, cl_idx,
+                       last_transno, le64_to_cpu(msd->msd_last_transno),
+                       le64_to_cpu(mcd->mcd_last_xid));
 
                 exp = class_new_export(obd);
                 if (exp == NULL)

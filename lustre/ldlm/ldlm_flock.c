@@ -424,7 +424,6 @@ ldlm_flock_interrupted_wait(void *data)
 {
         struct ldlm_lock *lock;
         struct lustre_handle lockh;
-        int rc;
         ENTRY;
 
         lock = ((struct ldlm_flock_wait_data *)data)->fwd_lock;
@@ -434,7 +433,7 @@ ldlm_flock_interrupted_wait(void *data)
 
         ldlm_lock_decref_internal(lock, lock->l_req_mode);
         ldlm_lock2handle(lock, &lockh);
-        rc = ldlm_cli_cancel(&lockh);
+        ldlm_cli_cancel(&lockh);
         EXIT;
 }
 
@@ -549,7 +548,7 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         LASSERT(flag == LDLM_CB_CANCELING);
 
         ns = lock->l_resource->lr_namespace;
-        
+
         /* take lock off the deadlock detection waitq. */
         l_lock(&ns->ns_lock);
         list_del_init(&lock->l_flock_waitq);

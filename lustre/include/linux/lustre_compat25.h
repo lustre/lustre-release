@@ -256,6 +256,12 @@ static inline int mapping_has_pages(struct address_space *mapping)
 }
 #endif
 
+#ifdef HAVE_KIOBUF_KIO_BLOCKS
+#define KIOBUF_GET_BLOCKS(k) ((k)->kio_blocks)
+#else
+#define KIOBUF_GET_BLOCKS(k) ((k)->blocks)
+#endif
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
 #define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
 #define ll_vfs_symlink(dir, dentry, path, mode) vfs_symlink(dir, dentry, path)
@@ -295,7 +301,7 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #endif
 
 #ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP
-#define grab_cache_page_nowait_gfp(x, y, z) (grab_cache_page_nowait((x), (y)))
+#define grab_cache_page_nowait_gfp(x, y, z) grab_cache_page_nowait((x), (y))
 #endif
 
 #endif /* __KERNEL__ */

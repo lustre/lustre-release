@@ -759,7 +759,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 child_fid.id = res->lr_name.name[0];
                 child_fid.generation = res->lr_name.name[1];
                 dchild = mds_fid2dentry(&obd->u.mds, &child_fid, NULL);
-                LASSERT(dchild);
+                LASSERT(!IS_ERR(dchild));
                 LDLM_LOCK_PUT(granted_lock);
         }
 

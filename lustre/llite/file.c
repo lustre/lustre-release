@@ -1083,10 +1083,10 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_lov_recreate_obj(inode, file, arg));
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
-                RETURN( ll_iocontrol(inode, file, cmd, arg) );
+                RETURN(ll_iocontrol(inode, file, cmd, arg));
         case EXT3_IOC_GETVERSION_OLD:
         case EXT3_IOC_GETVERSION:
-                return put_user(inode->i_generation, (int *) arg);
+                RETURN(put_user(inode->i_generation, (int *) arg));
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.
@@ -1094,8 +1094,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case EXT2_IOC_SETVERSION_NEW:
         */
         default:
-                RETURN( obd_iocontrol(cmd, ll_i2obdexp(inode), 0, NULL,
-                                      (void *)arg) );
+                RETURN(obd_iocontrol(cmd, ll_i2obdexp(inode), 0, NULL,
+                                     (void *)arg));
         }
 }
 

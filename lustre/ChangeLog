@@ -20,6 +20,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- look up hostnames for IB nals (5602)
 	- 2.6 changed lock ordering of 2 semaphores, caused deadlock (5654)
 	- don't start multiple acceptors for the same port (5277)
+	- fix incorrect LASSERT in mds_getattr_name (5635)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)
@@ -207,7 +208,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't do DNS lookups on NIDs too small for IP addresses (3442)
 	- re-awaken ptlrpcd if new requests arrive during check_set  (3554)
 	- fix cond_resched  (3554)
-	- only evict unfinished clients after recovery   (3515)
+	- only evict unfinished clients after recovery (3515)
 	- allow bulk resend, prevent data loss (3570)
 	- dynamic ptlrpc request buffer allocation (2102)
 	- don't allow unlinking open directory if it isn't empty (2904)

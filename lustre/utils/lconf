@@ -1189,7 +1189,7 @@ class Network(Module):
         if '*' in self.nid:
             self.nid = sys_get_local_nid(self.net_type, self.nid, self.cluster_id)
             if not self.nid:
-                panic("unable to set nid for", self.net_type, self.nid, cluster_id)
+                panic("unable to set nid for", self.net_type, self.nid, self.cluster_id)
             self.generic_nid = 1
             debug("nid:", self.nid)
         else:

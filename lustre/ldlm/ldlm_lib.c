@@ -404,7 +404,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (!target) {
                 target = class_name2obd(str);
         }
-        
+
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 CERROR("UUID '%s' is not available for connect\n", str);
                 GOTO(out, rc = -ENODEV);
@@ -936,7 +936,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
         /* A resent, replayed request that is still on the queue; just drop it.
            The queued request will handle this. */
-        if ((lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) ==
+        if ((lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT|MSG_REPLAY)) ==
             (MSG_RESENT | MSG_REPLAY)) {
                 DEBUG_REQ(D_ERROR, req, "dropping resent queued req");
                 spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -1179,7 +1179,7 @@ void target_committed_to_req(struct ptlrpc_request *req)
                 DEBUG_REQ(D_IOCTL, req,
                           "not sending last_committed update");
 
-        CDEBUG(D_INFO, "last_committed "LPU64", xid "LPX64"\n",
+        CDEBUG(D_INFO, "last_committed "LPU64", xid "LPU64"\n",
                obd->obd_last_committed, req->rq_xid);
 }
 EXPORT_SYMBOL(target_committed_to_req);

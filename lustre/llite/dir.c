@@ -385,6 +385,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
+        case EXT3_IOC_GETVERSION_OLD:
+        case EXT3_IOC_GETVERSION:
+                RETURN(put_user(inode->i_generation, (int *)arg));
+        /* We need to special case any other ioctls we want to handle,
+         * to send them to the MDS/OST as appropriate and to properly
+         * network encode the arg field.
+        case EXT3_IOC_SETVERSION_OLD:
+        case EXT3_IOC_SETVERSION:
+        */
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
                 struct ll_fid fid;
@@ -491,7 +500,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 EXIT;
         out_get:
                 ptlrpc_req_finished(request);
-                RETURN(rc);
+                return rc;
         }
         case IOC_MDC_GETFILEINFO:
         case IOC_MDC_GETSTRIPE: {

@@ -130,6 +130,7 @@ int lov_update_enqueue_set(struct lov_request_set *set,
 
                 LASSERT(lock != NULL);
                 loi->loi_rss = tmp;
+                loi->loi_mtime = req->rq_md->lsm_oinfo->loi_mtime;
                 loi->loi_blocks = req->rq_md->lsm_oinfo->loi_blocks;
                 /* Extend KMS up to the end of this lock and no further
                  * A lock on [x,y] means a KMS of up to y + 1 bytes! */
@@ -151,6 +152,7 @@ int lov_update_enqueue_set(struct lov_request_set *set,
         } else if (rc == ELDLM_LOCK_ABORTED && flags & LDLM_FL_HAS_INTENT) {
                 memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                 loi->loi_rss = req->rq_md->lsm_oinfo->loi_rss;
+                loi->loi_mtime = req->rq_md->lsm_oinfo->loi_mtime;
                 loi->loi_blocks = req->rq_md->lsm_oinfo->loi_blocks;
                 CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
                        " kms="LPU64"\n", loi->loi_rss, loi->loi_kms);
@@ -286,6 +288,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                 req->rq_md->lsm_oinfo->loi_rss = loi->loi_rss;
                 req->rq_md->lsm_oinfo->loi_kms = loi->loi_kms;
                 req->rq_md->lsm_oinfo->loi_blocks = loi->loi_blocks;
+                req->rq_md->lsm_oinfo->loi_mtime = loi->loi_mtime;
 
                 lov_set_add_req(req, set);
         }

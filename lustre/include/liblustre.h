@@ -293,8 +293,9 @@ static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 #endif
 
 /* registering symbols */
-
+#ifndef ERESTARTSYS
 #define ERESTARTSYS ERESTART
+#endif
 #define HZ 1
 
 /* random */
