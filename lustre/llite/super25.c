@@ -496,6 +496,7 @@ int ll_read_inode2(struct inode *inode, void *opaque)
                         CERROR("ll_file_size: %d\n", rc);
                         /* FIXME: need to somehow prevent inode creation */
                         LBUG();
+                        make_bad_inode(inode);
                 }
         }
 
