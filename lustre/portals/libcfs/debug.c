@@ -778,7 +778,7 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                         ap = NULL;
                         format = "DEBUG MARKER: Debug buffer overlapped\n";
                         printk(KERN_ERR "LustreError: debug daemon buffer "
-                               "overlapped");
+                               "overlapped\n");
                 } else  /* More space just became available */
                         debug_daemon_state.overlapped = 0;
         }
@@ -786,7 +786,8 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         max_nob = debug_size - debug_off + DEBUG_OVERFLOW;
         if (max_nob <= 0) {
                 spin_unlock_irqrestore(&portals_debug_lock, flags);
-                printk("LustreError: logic error in portals_debug_msg: <0 bytes to write\n");
+                printk("LustreError: logic error in portals_debug_msg: <0 bytes"
+                       " to write\n");
                 return;
         }
 
