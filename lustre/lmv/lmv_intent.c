@@ -499,7 +499,7 @@ repeat:
                         lmv_put_obj(obj);
                 }
         }
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, pfid, name,
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpfid, name,
                             len, lmm, lmmsize, cfid, it, flags, reqp, 
                             cb_blocking);
         if (rc > 0) {
