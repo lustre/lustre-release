@@ -58,7 +58,8 @@
  * Unset cookies should be all-zero (which will never occur naturally). */
 static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                                void *buf, struct llog_cookie *logcookies, 
-                               int numcookies, void *data)
+                               int numcookies, void *data,
+                               struct rw_semaphore **lock, int *lock_count)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
@@ -86,7 +87,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 lur->lur_ogen = loi->loi_gr;
                 LASSERT(lsm->lsm_object_gr == loi->loi_gr);
                 rc += llog_add(cctxt, &lur->lur_hdr, NULL, logcookies + rc,
-                               numcookies - rc, NULL);
+                               numcookies - rc, NULL,
+                               lock != NULL ? lock + rc : NULL, lock_count);
         }
         OBD_FREE(lur, sizeof(*lur));
 

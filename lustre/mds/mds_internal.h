@@ -68,7 +68,8 @@ int mds_cleanup_orphans(struct obd_device *obd);
 /* mds/mds_log.c */
 int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
-                      struct llog_cookie *logcookies, int cookies_size);
+                      struct llog_cookie *logcookies, int cookies_size,
+                      struct llog_create_locks **res);
 int mds_llog_init(struct obd_device *obd, struct obd_llogs *,
                   struct obd_device *tgt, int count, struct llog_catid *logid);
 int mds_llog_finish(struct obd_device *obd, struct obd_llogs *, int count);

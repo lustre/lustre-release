@@ -284,7 +284,8 @@ int smfs_process_rec(struct super_block *sb,
                         lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
                         lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
                         lgr->lgr_gen = ctxt->loc_gen;
-                        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1, NULL);
+                        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1,
+                                      NULL, NULL, NULL);
                         OBD_FREE(lgr, sizeof(*lgr));
                         if (rc != 1)
                                 RETURN(rc);

@@ -608,12 +608,51 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         unsigned int tmpname = ll_insecure_random_int();
         struct file *filp;
-        struct dentry *new_child;
+        struct dentry *dchild;
         struct lvfs_run_ctxt saved;
         char fidname[LL_FID_NAMELEN];
         void *handle;
         int rc = 0, err, namelen;
         ENTRY;
+
+        if (oa->o_id) {
+                push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+                                                                                                                             
+                namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
+ 
+                down(&parent_inode->i_sem);
+                dchild = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
+                if (IS_ERR(dchild)) {
+                        up(&parent_inode->i_sem);
+                        GOTO(out_pop, rc = PTR_ERR(dchild));
+                }
+                if (dchild->d_inode == NULL) {
+                        struct dentry_params dp;
+                        struct inode *inode;
+                                                                                                                             
+                        dchild->d_fsdata = (void *) &dp;
+                        dp.p_ptr = NULL;
+                        dp.p_inum = oa->o_id;
+                        rc = ll_vfs_create(parent_inode, dchild, S_IFREG, NULL);
+                        if (dchild->d_fsdata == (void *)(unsigned long)oa->o_id)
+                                dchild->d_fsdata = NULL;
+                        if (rc) {
+                                CDEBUG(D_INODE, "err during create: %d\n", rc);
+                                dput(dchild);
+                                up(&parent_inode->i_sem);
+                                GOTO(out_pop, rc);
+                        }
+                        inode = dchild->d_inode;
+                        LASSERT(inode->i_ino == oa->o_id);
+                        inode->i_generation = oa->o_generation;
+                        CDEBUG(D_HA, "recreated ino %lu with gen %u\n",
+                               inode->i_ino, inode->i_generation);
+                        mark_inode_dirty(inode);
+                } else {
+                        CWARN("it should be here!\n");
+                }
+                GOTO(out_pop, rc);
+        }
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         
@@ -637,13 +676,13 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
         down(&parent_inode->i_sem);
-        new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
+        dchild = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
 
-        if (IS_ERR(new_child)) {
+        if (IS_ERR(dchild)) {
                 CERROR("getting neg dentry for obj rename: %d\n", rc);
-                GOTO(out_close, rc = PTR_ERR(new_child));
+                GOTO(out_close, rc = PTR_ERR(dchild));
         }
-        if (new_child->d_inode != NULL) {
+        if (dchild->d_inode != NULL) {
                 CERROR("impossible non-negative obj dentry " LPU64":%u!\n",
                        oa->o_id, oa->o_generation);
                 LBUG();
@@ -656,7 +695,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         lock_kernel();
         rc = vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
-                        mds->mds_objects_dir->d_inode, new_child);
+                        mds->mds_objects_dir->d_inode, dchild);
         unlock_kernel();
         if (rc)
                 CERROR("error renaming new object "LPU64":%u: rc %d\n",
@@ -671,7 +710,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         else if (!rc)
                 rc = err;
 out_dput:
-        dput(new_child);
+        dput(dchild);
 out_close:
         up(&parent_inode->i_sem);
         err = filp_close(filp, 0);

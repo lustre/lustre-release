@@ -174,7 +174,7 @@ int smfs_llog_add_rec(struct smfs_super_info * sinfo, void *data, int data_size)
         rec.lrh_len = size_round(data_size);
         rec.lrh_type = SMFS_UPDATE_REC;
 
-        rc = llog_add(sinfo->smsi_rec_log, &rec, data, NULL, 0, NULL);
+        rc = llog_add(sinfo->smsi_rec_log, &rec, data, NULL, 0, NULL, NULL, NULL);
         if (rc != 1) {
                 CERROR("error adding kml rec: %d\n", rc);
                 RETURN(-EINVAL);

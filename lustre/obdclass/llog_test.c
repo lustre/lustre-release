@@ -254,7 +254,7 @@ static int llog_test_4(struct obd_device *obd)
         cat_logid = cath->lgh_id;
 
         CWARN("4b: write 1 record into the catalog\n");
-        rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, &cookie, NULL);
+        rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, &cookie, NULL, NULL, NULL);
         if (rc != 1) {
                 CERROR("4b: write 1 catalog record failed at: %d\n", rc);
                 GOTO(out, rc);
@@ -279,7 +279,7 @@ static int llog_test_4(struct obd_device *obd)
 
         CWARN("4d: write 40,000 more log records\n");
         for (i = 0; i < 40000; i++) {
-                rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, NULL, NULL);
+                rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, NULL, NULL, NULL, NULL);
                 if (rc) {
                         CERROR("4d: write 40000 records failed at #%d: %d\n",
                                i + 1, rc);
@@ -297,7 +297,7 @@ static int llog_test_4(struct obd_device *obd)
         for (i = 0; i < 5; i++) {
                 rec.lrh_len = buflen;
                 rec.lrh_type = OBD_CFG_REC;
-                rc = llog_cat_add_rec(cath, &rec, NULL, buf);
+                rc = llog_cat_add_rec(cath, &rec, NULL, buf, NULL, NULL);
                 if (rc) {
                         CERROR("4e: write 5 records failed at #%d: %d\n",
                                i + 1, rc);
@@ -403,7 +403,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CWARN("5d: add 1 record to the log with many canceled empty pages\n");
-        rc = llog_cat_add_rec(llh, &lmr.lmr_hdr, NULL, NULL);
+        rc = llog_cat_add_rec(llh, &lmr.lmr_hdr, NULL, NULL, NULL, NULL);
         if (rc) {
                 CERROR("5d: add record to the log with many canceled empty\
                        pages failed\n");

@@ -1779,9 +1779,9 @@ int mds_handle(struct ptlrpc_request *req)
 
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
-                if (opc == REINT_UNLINK)
+                if (opc == REINT_UNLINK || opc == REINT_RENAME)
                         bufcount = 3;
-                else if (opc == REINT_OPEN || opc == REINT_RENAME)
+                else if (opc == REINT_OPEN)
                         bufcount = 2;
                 else
                         bufcount = 1;
@@ -2427,7 +2427,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
 
-        rc = lustre_pack_reply(req, 3, repsize, NULL);
+        rc = lustre_pack_reply(req, it->opc == IT_UNLINK ? 4 : 3, repsize, NULL);
         if (rc)
                 RETURN(req->rq_status = rc);
 

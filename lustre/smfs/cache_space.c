@@ -324,7 +324,8 @@ insert:
                 llr->llr_pfid.generation = parent->i_generation;
                 llr->llr_pfid.f_type = parent->i_mode & S_IFMT;
 
-                rc = llog_add(ctxt, &llr->llr_hdr, NULL, logcookie, 1, NULL);
+                rc = llog_add(ctxt, &llr->llr_hdr, NULL, logcookie, 1,
+                              NULL, NULL, NULL);
                 if (rc != 1) {
                         CERROR("failed at llog_add: %d\n", rc);
                         GOTO(out, rc);

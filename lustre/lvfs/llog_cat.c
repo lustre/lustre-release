@@ -46,7 +46,8 @@
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
-static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
+static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
+                                            struct llog_cookie *logcookie)
 {
         struct llog_handle *loghandle;
         struct llog_log_hdr *llh;
@@ -76,8 +77,12 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 llh->llh_tail.lrt_index = cpu_to_le32(index);
         }
 
-        rc = llog_open(cathandle->lgh_ctxt, &loghandle, NULL, NULL,
-                       OBD_LLOG_FL_CREATE);
+        if (logcookie && llog_cookie_get_flags(logcookie) & LLOG_COOKIE_REPLAY_NEW)
+                rc = llog_open(cathandle->lgh_ctxt, &loghandle,
+                               &logcookie->lgc_lgl, NULL, OBD_LLOG_FL_CREATE);
+        else
+                rc = llog_open(cathandle->lgh_ctxt, &loghandle, NULL, NULL,
+                               OBD_LLOG_FL_CREATE);
         if (rc) {
                 CERROR("cannot create new log, error = %d\n", rc);
                 RETURN(ERR_PTR(rc));
@@ -112,8 +117,14 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
 
  out_destroy:
-        if (rc < 0)
+        if (rc < 0) 
                 llog_destroy(loghandle);
+        else if (logcookie) {
+                if (llog_cookie_get_flags(logcookie) & LLOG_COOKIE_REPLAY_NEW)
+                        LASSERT(EQ_LOGID(loghandle->lgh_id, logcookie->lgc_lgl));
+                else
+                        llog_cookie_set_flags(logcookie, LLOG_COOKIE_REPLAY_NEW);
+        }
 
         RETURN(loghandle);
 }
@@ -201,7 +212,9 @@ EXPORT_SYMBOL(llog_cat_put);
  * NOTE: loghandle is write-locked upon successful return
  */
 static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
-                                                int create)
+                                                int create,
+                                                struct llog_cookie *logcookie,
+                                                struct rw_semaphore **lock)
 {
         struct llog_handle *loghandle = NULL;
         ENTRY;
@@ -210,12 +223,20 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap)*8) - 1) {
+                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap)*8) - 1 &&
+                    (!logcookie ||
+                     !(llog_cookie_get_flags(logcookie) & LLOG_COOKIE_REPLAY) ||
+                     EQ_LOGID(loghandle->lgh_id, logcookie->lgc_lgl))) {
                         down_write(&loghandle->lgh_lock);
                         up_read(&cathandle->lgh_lock);
                         RETURN(loghandle);
                 }
         }
+
+        LASSERT(!logcookie ||
+                !(llog_cookie_get_flags(logcookie) & LLOG_COOKIE_REPLAY) ||
+                llog_cookie_get_flags(logcookie) & LLOG_COOKIE_REPLAY_NEW);
+
         if (!create) {
                 if (loghandle)
                         down_write(&loghandle->lgh_lock);
@@ -231,7 +252,10 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap)*8) - 1) {
+                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap)*8) - 1 &&
+                    (!logcookie ||
+                     !(llog_cookie_get_flags(logcookie) & LLOG_COOKIE_REPLAY) ||
+                     EQ_LOGID(loghandle->lgh_id, logcookie->lgc_lgl))) {
                         down_write(&loghandle->lgh_lock);
                         up_write(&cathandle->lgh_lock);
                         RETURN(loghandle);
@@ -239,9 +263,13 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         }
 
         CDEBUG(D_INODE, "creating new log\n");
-        loghandle = llog_cat_new_log(cathandle);
-        if (!IS_ERR(loghandle))
+        loghandle = llog_cat_new_log(cathandle, logcookie);
+        if (!IS_ERR(loghandle)) {
                 down_write(&loghandle->lgh_lock);
+                if (lock != NULL)
+                        *lock = &loghandle->lgh_lock;
+        }
+
         up_write(&cathandle->lgh_lock);
         RETURN(loghandle);
 }
@@ -252,19 +280,25 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
  * Assumes caller has already pushed us into the kernel context.
  */
 int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
-                     struct llog_cookie *reccookie, void *buf)
+                     struct llog_cookie *reccookie, void *buf,
+                     struct rw_semaphore **lock, int *lock_count)
 {
         struct llog_handle *loghandle;
         int rc;
         ENTRY;
 
         LASSERT(le32_to_cpu(rec->lrh_len) <= LLOG_CHUNK_SIZE);
-        loghandle = llog_cat_current_log(cathandle, 1);
+        loghandle = llog_cat_current_log(cathandle, 1, reccookie, lock);
         if (IS_ERR(loghandle))
                 RETURN(PTR_ERR(loghandle));
         /* loghandle is already locked by llog_cat_current_log() for us */
         rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
-        up_write(&loghandle->lgh_lock);
+        if (!lock || *lock == NULL) {
+                up_write(&loghandle->lgh_lock);
+        } else {
+                LASSERT(lock_count != NULL);
+                *lock_count += 1;
+        }
 
         RETURN(rc);
 }
@@ -480,7 +514,8 @@ EXPORT_SYMBOL(llog_cat_set_first_idx);
 
 int llog_catalog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec, 
                      void *buf, struct llog_cookie *logcookies, 
-                     int numcookies, void *data)
+                     int numcookies, void *data, 
+                     struct rw_semaphore **lock, int *lock_count)
 {
         struct llog_handle *cathandle;
         int rc;
@@ -489,7 +524,7 @@ int llog_catalog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         cathandle = ctxt->loc_handle;
         LASSERT(cathandle != NULL);
         
-        rc = llog_cat_add_rec(cathandle, rec, logcookies, buf);
+        rc = llog_cat_add_rec(cathandle, rec, logcookies, buf, lock, lock_count);
         if (rc != 1)
                 CERROR("write one catalog record failed: %d\n", rc);
         RETURN(rc);
@@ -577,42 +612,17 @@ EXPORT_SYMBOL(llog_catalog_setup);
 
 int llog_catalog_cleanup(struct llog_ctxt *ctxt)
 {
-        struct llog_handle *cathandle, *n, *loghandle;
-        struct llog_log_hdr *llh;
-        int rc, index;
+        struct llog_handle *cathandle;
         ENTRY;
 
         if (!ctxt)
                 return 0;
 
         cathandle = ctxt->loc_handle;
-        if (cathandle) {
-                list_for_each_entry_safe(loghandle, n,
-                                         &cathandle->u.chd.chd_head,
-                                         u.phd.phd_entry) {
-                        llh = loghandle->lgh_hdr;
-                        if ((le32_to_cpu(llh->llh_flags) &
-                                LLOG_F_ZAP_WHEN_EMPTY) &&
-                            (le32_to_cpu(llh->llh_count) == 1)) {
-                                rc = llog_destroy(loghandle);
-                                if (rc)
-                                        CERROR("failure destroying log during "
-                                               "cleanup: %d\n", rc);
-                                LASSERT(rc == 0);
-                                index = loghandle->u.phd.phd_cookie.lgc_index;
-                                llog_free_handle(loghandle);
-
-                                LASSERT(index);
-                                llog_cat_set_first_idx(cathandle, index);
-                                rc = llog_cancel_rec(cathandle, index);
-                                if (rc == 0)
-                                        CDEBUG(D_HA, "cancel plain log at index"
-                                               " %u of catalog "LPX64"\n",
-                                               index,cathandle->lgh_id.lgl_oid);
-                        }
-                }
+        if (cathandle)
                 llog_cat_put(ctxt->loc_handle);
-        }
+ 
+//        OBD_FREE(ctxt, sizeof(*ctxt));
         return 0;
 }
 EXPORT_SYMBOL(llog_catalog_cleanup);

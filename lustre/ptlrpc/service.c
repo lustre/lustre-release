@@ -28,6 +28,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_log.h>
 #include <portals/types.h>
 #include "ptlrpc_internal.h"
 
@@ -117,6 +118,17 @@ ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
 }
 
 void
+ptlrpc_save_llog_lock (struct ptlrpc_request *req,
+                       struct llog_create_locks *lcl)
+{
+        struct ptlrpc_reply_state *rs = req->rq_reply_state;
+        LASSERT (rs != NULL);
+        LASSERT (rs->rs_llog_locks == NULL);
+
+        rs->rs_llog_locks = lcl;
+}
+
+void
 ptlrpc_save_lock (struct ptlrpc_request *req, 
                   struct lustre_handle *lock, int mode)
 {
@@ -171,7 +183,9 @@ ptlrpc_commit_replies (struct obd_device *obd)
         list_for_each_safe (tmp, nxt, &obd->obd_uncommitted_replies) {
                 struct ptlrpc_reply_state *rs =
                         list_entry (tmp, struct ptlrpc_reply_state, rs_obd_list);
+                struct llog_create_locks *lcl = rs->rs_llog_locks;
 
+                rs->rs_llog_locks = NULL; 
                 LASSERT (rs->rs_difficult);
 
                 if (rs->rs_transno <= obd->obd_last_committed) {
@@ -181,6 +195,9 @@ ptlrpc_commit_replies (struct obd_device *obd)
                         list_del_init (&rs->rs_obd_list);
                         ptlrpc_schedule_difficult_reply (rs);
                         spin_unlock (&svc->srv_lock);
+
+                        if (lcl != NULL)
+                                llog_create_lock_free(lcl);
                 }
         }
         
@@ -510,6 +527,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         unsigned long              flags;
         struct obd_export         *exp;
         struct obd_device         *obd;
+        struct llog_create_locks  *lcl;
         int                        nlocks;
         int                        been_handled;
         char                       str[PTL_NALFMT_SIZE];
@@ -553,6 +571,9 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         nlocks = rs->rs_nlocks;                 /* atomic "steal", but */
         rs->rs_nlocks = 0;                      /* locks still on rs_locks! */
 
+        lcl = rs->rs_llog_locks;
+        rs->rs_llog_locks = NULL;
+
         if (nlocks == 0 && !been_handled) {
                 /* If we see this, we should already have seen the warning
                  * in mds_steal_ack_locks()  */
@@ -565,7 +586,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         }
 
         if ((!been_handled && rs->rs_on_net) || 
-            nlocks > 0) {
+            nlocks > 0 || lcl != NULL) {
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
                 
                 if (!been_handled && rs->rs_on_net) {
@@ -577,6 +598,9 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                 while (nlocks-- > 0)
                         ldlm_lock_decref(&rs->rs_locks[nlocks], 
                                          rs->rs_modes[nlocks]);
+
+                if (lcl != NULL)
+                        llog_create_lock_free(lcl);         
 
                 spin_lock_irqsave(&svc->srv_lock, flags);
         }

@@ -977,6 +977,16 @@ test_48() {
 }
 run_test 48 "Don't lose transno when client is evicted (2525)"
 
+# b=3550 - replay of unlink
+test_49() {
+    replay_barrier mds
+    createmany -o $DIR/$tfile-%d 400 || return 1
+    unlinkmany $DIR/$tfile-%d 0 400 || return 2
+    fail mds
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
+}
+run_test 49 "re-write records to llog as written during fail"
+
 equals_msg test complete, cleaning up
 $CLEANUP
 

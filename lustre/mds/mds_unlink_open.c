@@ -226,7 +226,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 if (logcookies == NULL)
                         rc = -ENOMEM;
                 else if (mds_log_op_unlink(obd, inode, lmm,lmm_size,logcookies,
-                                           mds->mds_max_cookiesize) > 0)
+                                           mds->mds_max_cookiesize, NULL) > 0)
                         log_unlink = 1;
         }
         err = fsfilt_commit(obd, mds->mds_sb, pending_dir, handle, 0);

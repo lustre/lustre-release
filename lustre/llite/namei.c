@@ -683,7 +683,8 @@ static int ll_rmdir_raw(struct nameidata *nd)
         RETURN(rc);
 }
 
-int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
+int ll_objects_destroy(struct ptlrpc_request *request,
+                       struct inode *dir, int offset)
 {
         struct mds_body *body;
         struct lov_mds_md *eadata;
@@ -732,14 +733,22 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
         if (body->valid & OBD_MD_FLCOOKIE) {
+                int length = sizeof(struct llog_cookie) *
+                                lsm->lsm_stripe_count;
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies =
-                        lustre_msg_buf(request->rq_repmsg, 2,
-                                       sizeof(struct llog_cookie) *
-                                       lsm->lsm_stripe_count);
+                        lustre_msg_buf(request->rq_repmsg, 2, length);
                 if (oti.oti_logcookies == NULL) {
                         oa->o_valid &= ~OBD_MD_FLCOOKIE;
                         body->valid &= ~OBD_MD_FLCOOKIE;
+                } else {
+                        /* copy llog cookies to request to replay unlink
+                         * so that the same llog file and records as those created
+                         * during fail can be re-created while doing replay 
+                         */
+                        if (offset >= 0)
+                                memcpy(lustre_msg_buf(request->rq_reqmsg, offset, 0),
+                                       oti.oti_logcookies, length);
                 }
         }
 
@@ -771,7 +780,7 @@ static int ll_unlink_raw(struct nameidata *nd)
         if (rc)
                 GOTO(out, rc);
 
-        rc = ll_objects_destroy(request, dir);
+        rc = ll_objects_destroy(request, dir, 2);
  out:
         ptlrpc_req_finished(request);
         RETURN(rc);
@@ -798,7 +807,7 @@ static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
         err = md_rename(sbi->ll_mdc_exp, &op_data,
                         oldname, oldlen, newname, newlen, &request);
         if (!err) {
-                err = ll_objects_destroy(request, src);
+                err = ll_objects_destroy(request, src, 3);
         }
 
         ptlrpc_req_finished(request);

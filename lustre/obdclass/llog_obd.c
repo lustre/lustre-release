@@ -100,15 +100,14 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
 {
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
         struct llog_handle *loghandle;
-        struct llog_log_hdr *llh;
-        int rc, index;
+        int rc;
         ENTRY;
 
         if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
-        CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n",
+        CDEBUG(D_HA, "processing log "LPX64":%x at index %u of catalog "LPX64"\n",
                lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
                rec->lrh_index, cathandle->lgh_id.lgl_oid);
 
@@ -119,26 +118,8 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
                 RETURN(rc);
         }
 
-        llh = loghandle->lgh_hdr;
-        if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
-            (llh->llh_count == 1)) {
-                rc = llog_destroy(loghandle);
-                if (rc)
-                        CERROR("failure destroying log in postsetup: %d\n", rc);
-                LASSERT(rc == 0);
-
-                index = loghandle->u.phd.phd_cookie.lgc_index;
-                llog_free_handle(loghandle);
-
-                LASSERT(index);
-                llog_cat_set_first_idx(cathandle, index);
-                rc = llog_cancel_rec(cathandle, index);
-                if (rc == 0)
-                        CWARN("cancel log "LPX64":%x at index %u of catalog "
-                              LPX64"\n", lir->lid_id.lgl_oid,
-                              lir->lid_id.lgl_ogen, rec->lrh_index,
-                              cathandle->lgh_id.lgl_oid);
-        }
+        if (cathandle->lgh_last_idx == loghandle->u.phd.phd_cookie.lgc_index)
+                cathandle->u.chd.chd_current_log = loghandle;
 
         RETURN(rc);
 }
@@ -192,67 +173,6 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llogs *llogs,
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
-
-int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
-{
-        struct llog_handle *cathandle, *n, *loghandle;
-        struct llog_log_hdr *llh;
-        int rc, index;
-        ENTRY;
-
-        if (!ctxt)
-                return 0;
-
-        cathandle = ctxt->loc_handle;
-        if (cathandle) {
-                list_for_each_entry_safe(loghandle, n,
-                                         &cathandle->u.chd.chd_head,
-                                         u.phd.phd_entry) {
-                        llh = loghandle->lgh_hdr;
-                        if ((llh->llh_flags &
-                                LLOG_F_ZAP_WHEN_EMPTY) &&
-                            (llh->llh_count == 1)) {
-                                rc = llog_destroy(loghandle);
-                                if (rc)
-                                        CERROR("failure destroying log during "
-                                               "cleanup: %d\n", rc);
-                                LASSERT(rc == 0);
-
-                                index = loghandle->u.phd.phd_cookie.lgc_index;
-                                llog_free_handle(loghandle);
-
-                                LASSERT(index);
-                                llog_cat_set_first_idx(cathandle, index);
-                                rc = llog_cancel_rec(cathandle, index);
-                                if (rc == 0)
-                                        CDEBUG(D_HA, "cancel plain log at index"
-                                               " %u of catalog "LPX64"\n",
-                                               index,cathandle->lgh_id.lgl_oid);
-                        }
-                }
-                llog_cat_put(ctxt->loc_handle);
-        }
-        return 0;
-}
-EXPORT_SYMBOL(llog_obd_origin_cleanup);
-
-/* add for obdfilter/sz and mds/unlink */
-int llog_obd_origin_add(struct llog_ctxt *ctxt,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
-{
-        struct llog_handle *cathandle;
-        int rc;
-        ENTRY;
-
-        cathandle = ctxt->loc_handle;
-        LASSERT(cathandle != NULL);
-        rc = llog_cat_add_rec(cathandle, rec, logcookies, NULL);
-        if (rc != 1)
-                CERROR("write one catalog record failed: %d\n", rc);
-        RETURN(rc);
-}
-EXPORT_SYMBOL(llog_obd_origin_add);
 
 int obd_llog_cat_initialize(struct obd_device *obd, struct obd_llogs *llogs, 
                             int count, char *name)

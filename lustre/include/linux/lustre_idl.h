@@ -1047,7 +1047,7 @@ struct llog_cookie {
         struct llog_logid       lgc_lgl;
         __u32                   lgc_subsys;
         __u32                   lgc_index;
-        __u32                   lgc_padding;
+        __u32                   lgc_flags;
 } __attribute__((packed));
 
 /* llog protocol */

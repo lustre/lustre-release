@@ -134,6 +134,7 @@ EXPORT_SYMBOL(ptlrpc_disconnect_import);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_save_lock);
+EXPORT_SYMBOL(ptlrpc_save_llog_lock);
 EXPORT_SYMBOL(ptlrpc_schedule_difficult_reply);
 EXPORT_SYMBOL(ptlrpc_commit_replies);
 EXPORT_SYMBOL(ptlrpc_init_svc);

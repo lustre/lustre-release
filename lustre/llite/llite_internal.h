@@ -130,7 +130,8 @@ extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
 
 /* llite/namei.c */
-int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
+int ll_objects_destroy(struct ptlrpc_request *request, 
+                       struct inode *dir, int offset);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
 struct dentry *ll_find_alias(struct inode *, struct dentry *);

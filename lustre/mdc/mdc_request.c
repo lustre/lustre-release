@@ -486,7 +486,8 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        int reqsize = sizeof(struct mds_body);
+        int reqsize[2] = {sizeof(struct mds_body),
+                          obd->u.cli.cl_max_mds_cookiesize};
         int rc, repsize[3] = {sizeof(struct mds_body),
                               obd->u.cli.cl_max_mds_easize,
                               obd->u.cli.cl_max_mds_cookiesize};
@@ -495,7 +496,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         struct l_wait_info lwi;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_CLOSE, 1, &reqsize,
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_CLOSE, 2, reqsize,
                               NULL);
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);

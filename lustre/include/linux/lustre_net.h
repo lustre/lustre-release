@@ -274,6 +274,8 @@ struct ptlrpc_reply_state {
         int                   rs_nlocks;
         struct lustre_handle  rs_locks[RS_MAX_LOCKS];
         ldlm_mode_t           rs_modes[RS_MAX_LOCKS];
+        struct llog_create_locks *rs_llog_locks;
+
         /* last member: variable sized reply message */
         struct lustre_msg     rs_msg;
 };
@@ -639,6 +641,8 @@ __u64 ptlrpc_next_xid(void);
 /* ptlrpc/service.c */
 void ptlrpc_save_lock (struct ptlrpc_request *req, 
                        struct lustre_handle *lock, int mode);
+void ptlrpc_save_llog_lock (struct ptlrpc_request *req, 
+                            struct llog_create_locks *lcl);
 void ptlrpc_commit_replies (struct obd_device *obd);
 void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
 struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,

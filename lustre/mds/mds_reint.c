@@ -281,6 +281,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
         struct list_head          *tmp;
         struct ptlrpc_reply_state *oldrep;
         struct ptlrpc_service     *svc;
+        struct llog_create_locks  *lcl;
         unsigned long              flags;
         char                       str[PTL_NALFMT_SIZE];
         int                        i;
@@ -314,6 +315,11 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                                          &oldrep->rs_locks[i],
                                          oldrep->rs_modes[i]);
                 oldrep->rs_nlocks = 0;
+
+                lcl = oldrep->rs_llog_locks;
+                oldrep->rs_llog_locks = NULL;
+                if (lcl != NULL)
+                        ptlrpc_save_llog_lock(req, lcl);
 
                 DEBUG_REQ(D_HA, req, "stole locks for");
                 ptlrpc_schedule_difficult_reply (oldrep);
@@ -1618,6 +1624,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct lustre_handle child_reuse_lockh = {0};
 #endif
         struct lustre_handle * slave_lockh = NULL;
+        struct llog_create_locks *lcl = NULL;
         char fidname[LL_FID_NAMELEN];
         void *handle = NULL;
         int rc = 0, log_unlink = 0, cleanup_phase = 0;
@@ -1631,6 +1638,13 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                   rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name);
 
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
+
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                DEBUG_REQ(D_HA, req, "unlink replay\n");
+                memcpy(lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
+                       lustre_msg_buf(req->rq_reqmsg, 2, 0),
+                       req->rq_repmsg->buflens[offset + 2]);
+        }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 GOTO(cleanup, rc = -ENOENT);
@@ -1791,7 +1805,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                 lustre_msg_buf(req->rq_repmsg, offset + 1, 0),
                                 req->rq_repmsg->buflens[offset + 1],
                                 lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
-                                req->rq_repmsg->buflens[offset + 2]) > 0)
+                                req->rq_repmsg->buflens[offset + 2], &lcl) > 0)
                                 body->valid |= OBD_MD_FLCOOKIE;
                 break;
         }
@@ -1849,6 +1863,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 if (!rc)
                         (void)obd_set_info(mds->mds_osc_exp, strlen("unlinked"),
                                            "unlinked", 0, NULL);
+                if (lcl != NULL)
+                        ptlrpc_save_llog_lock(req, lcl);
         case 3: /* child ino-reuse lock */
 #if 0
                 if (rc && body != NULL) {
@@ -2707,7 +2723,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct lustre_handle dlm_handles[7] = {{0},{0},{0},{0},{0},{0},{0}};
         struct mds_body *body = NULL;
-        int rc = 0, lock_count = 3;
+        struct llog_create_locks *lcl = NULL;
+        int rc = 0, log_unlink = 0, lock_count = 3;
         int cleanup_phase = 0;
         void *handle = NULL;
         ENTRY;
@@ -2719,6 +2736,13 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                   rec->ur_fid2->id, rec->ur_fid2->generation, rec->ur_tgt);
 
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
+
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                DEBUG_REQ(D_HA, req, "rename replay\n");
+                memcpy(lustre_msg_buf(req->rq_repmsg, 2, 0),
+                       lustre_msg_buf(req->rq_reqmsg, 3, 0),
+                       req->rq_repmsg->buflens[2]);
+        }
 
         if (rec->ur_namelen == 1) {
                 rc = mds_reint_rename_create_name(rec, offset, req);
@@ -2774,7 +2798,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
                 } else {
-                        /* XXX need log unlink? */
+                        log_unlink = 1; 
                 }
         }
 
@@ -2803,6 +2827,16 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
         unlock_kernel();
 
+        if (!rc && log_unlink) {
+                if (mds_log_op_unlink(obd, de_tgtdir->d_inode,
+                                lustre_msg_buf(req->rq_repmsg, 1, 0),
+                                req->rq_repmsg->buflens[1],
+                                lustre_msg_buf(req->rq_repmsg, 2, 0),
+                                req->rq_repmsg->buflens[2], &lcl) > 0) {
+                        body->valid |= OBD_MD_FLCOOKIE;
+                }
+        }
+
         GOTO(cleanup, rc);
 cleanup:
         rc = mds_finish_transno(mds, de_tgtdir ? de_tgtdir->d_inode : NULL,
@@ -2815,6 +2849,9 @@ cleanup:
                 if (dlm_handles[6].cookie != 0)
                         ldlm_lock_decref(&(dlm_handles[6]), LCK_PW);
 #endif
+                if (lcl != NULL)
+                        ptlrpc_save_llog_lock(req, lcl);
+
                 if (rc) {
                         if (lock_count == 4)
                                 ldlm_lock_decref(&(dlm_handles[3]), LCK_EX);

@@ -1178,6 +1178,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         struct mds_body *request_body = NULL, *reply_body = NULL;
         struct dentry_params dp;
         struct iattr iattr = { 0 };
+        struct llog_create_locks *lcl = NULL;
         ENTRY;
 
         if (req && req->rq_reqmsg != NULL)
@@ -1239,15 +1240,6 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                         GOTO(cleanup, rc);
                 }
 
-                if (req != NULL && req->rq_repmsg != NULL &&
-                    (reply_body->valid & OBD_MD_FLEASIZE) &&
-                    mds_log_op_unlink(obd, pending_child->d_inode, lmm,
-                                      req->rq_repmsg->buflens[1],
-                                      lustre_msg_buf(req->rq_repmsg, 2, 0),
-                                      req->rq_repmsg->buflens[2]) > 0) {
-                        reply_body->valid |= OBD_MD_FLCOOKIE;
-                }
-
                 pending_child->d_fsdata = (void *) &dp;
                 dp.p_inum = 0;
                 dp.p_ptr = req;
@@ -1257,6 +1249,15 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                         rc = vfs_unlink(pending_dir, pending_child);
                 if (rc)
                         CERROR("error unlinking orphan %s: rc %d\n",fidname,rc);
+
+                if (req != NULL && req->rq_repmsg != NULL &&
+                    (reply_body->valid & OBD_MD_FLEASIZE) &&
+                    mds_log_op_unlink(obd, pending_child->d_inode,
+                                                lmm, req->rq_repmsg->buflens[1],
+                                                lustre_msg_buf(req->rq_repmsg, 2, 0),
+                                                req->rq_repmsg->buflens[2], &lcl) > 0) {
+                        reply_body->valid |= OBD_MD_FLCOOKIE;
+                }
 
                 goto out; /* Don't bother updating attrs on unlinked inode */
         }
@@ -1337,6 +1338,8 @@ out:
 
         switch (cleanup_phase) {
         case 2:
+                if (lcl != NULL)
+                        ptlrpc_save_llog_lock(req, lcl);
                 dput(pending_child);
         case 1:
                 up(&pending_dir->i_sem);
@@ -1363,6 +1366,13 @@ int mds_close(struct ptlrpc_request *req)
                 req->rq_status = rc;
         } else {
                 MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
+        }
+
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                DEBUG_REQ(D_HA, req, "close replay\n");
+                memcpy(lustre_msg_buf(req->rq_repmsg, 2, 0),
+                       lustre_msg_buf(req->rq_reqmsg, 1, 0),
+                       req->rq_repmsg->buflens[2]);
         }
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);

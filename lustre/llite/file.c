@@ -74,7 +74,7 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                        inode->i_ino, rc);
         }
         if (rc == 0) {
-                rc = ll_objects_destroy(req, file->f_dentry->d_inode);
+                rc = ll_objects_destroy(req, file->f_dentry->d_inode, 1);
                 if (rc)
                         CERROR("inode %lu ll_objects destroy: rc = %d\n",
                                inode->i_ino, rc);
