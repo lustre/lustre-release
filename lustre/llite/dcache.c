@@ -167,6 +167,7 @@ int ll_have_md_lock(struct dentry *de)
         struct lustre_handle lockh;
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obddev;
+        int flags;
         ENTRY;
 
         if (!de->d_inode)
@@ -178,14 +179,15 @@ int ll_have_md_lock(struct dentry *de)
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
-        if (ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                            &res_id, LDLM_PLAIN, NULL, 0, LCK_PR, &lockh)) {
+        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_MATCH_DATA;
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
+                            NULL, 0, LCK_PR, de->d_inode, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PR);
                 RETURN(1);
         }
 
-        if (ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                            &res_id, LDLM_PLAIN, NULL, 0, LCK_PW, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
+                            NULL, 0, LCK_PW, de->d_inode, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PW);
                 RETURN(1);
         }
@@ -217,9 +219,11 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 struct ldlm_res_id res_id =
                         { .name = {inode->i_ino, (__u64)inode->i_generation} };
                 struct lustre_handle lockh;
-                rc = ldlm_lock_match(obddev->obd_namespace,
-                                     LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_PLAIN, NULL, 0, LCK_PR, &lockh);
+                int flags;
+                flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_MATCH_DATA;
+                rc = ldlm_lock_match(obddev->obd_namespace, flags, &res_id,
+                                     LDLM_PLAIN, NULL, 0, LCK_PR, inode,
+                                     &lockh);
                 if (rc) {
                         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
                         if (it && it->it_op == IT_GETATTR) {
@@ -232,9 +236,9 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                         }
                         RETURN(1);
                 }
-                rc = ldlm_lock_match(obddev->obd_namespace,
-                                     LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_PLAIN, NULL, 0, LCK_PW, &lockh);
+                rc = ldlm_lock_match(obddev->obd_namespace, flags, &res_id,
+                                     LDLM_PLAIN, NULL, 0, LCK_PW, inode,
+                                     &lockh);
                 if (rc) {
                         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
                         if (it && it->it_op == IT_GETATTR) {

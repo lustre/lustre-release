@@ -968,7 +968,7 @@ int jt_obd_setup(int argc, char **argv)
 
         IOC_INIT(data);
 
-        if (argc > 4)
+        if (argc > 5)
                 return CMD_HELP;
 
         data.ioc_dev = -1;
@@ -986,6 +986,10 @@ int jt_obd_setup(int argc, char **argv)
         if (argc > 3) {
                 data.ioc_inllen3 = strlen(argv[3]) + 1;
                 data.ioc_inlbuf3 = argv[3];
+        }
+        if (argc > 4) {
+                data.ioc_inllen4 = strlen(argv[4]) + 1;
+                data.ioc_inlbuf4 = argv[4];
         }
 
         IOC_PACK(argv[0], data);

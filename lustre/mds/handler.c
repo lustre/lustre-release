@@ -1477,6 +1477,18 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (IS_ERR(obddev->obd_fsops))
                 RETURN(rc = PTR_ERR(obddev->obd_fsops));
 
+
+        if (data->ioc_inllen3 > 0 && data->ioc_inlbuf3) {
+                if (*data->ioc_inlbuf3 == '/') {
+                        CERROR("mds namespace mount: %s\n", 
+                               data->ioc_inlbuf3);
+//                        mds->mds_nspath = strdup(ioc->inlbuf4);
+                } else {
+                        CERROR("namespace mount must be absolute path: '%s'\n",
+                               data->ioc_inlbuf3);
+                }
+        }
+
 	if (!(page = __get_free_page(GFP_KERNEL)))
 		return -ENOMEM;
 

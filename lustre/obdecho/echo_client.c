@@ -750,10 +750,10 @@ echo_enqueue (struct obd_export *exp, struct obdo *oa,
         ecl->ecl_extent.end = (nob == 0) ? ((obd_off) -1) : (offset + nob - 1);
 
         flags = 0;
-        rc = obd_enqueue (&ec->ec_conn, eco->eco_lsm, NULL, LDLM_EXTENT,
-                          &ecl->ecl_extent,sizeof(ecl->ecl_extent), mode,
-                          &flags, echo_ldlm_callback, eco, sizeof (*eco),
-                          &ecl->ecl_lock_handle);
+        rc = obd_enqueue(&ec->ec_conn, eco->eco_lsm, NULL, LDLM_EXTENT,
+                         &ecl->ecl_extent,sizeof(ecl->ecl_extent), mode,
+                         &flags, echo_ldlm_callback, eco,
+                         &ecl->ecl_lock_handle);
         if (rc != 0)
                 goto failed_1;
 

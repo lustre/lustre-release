@@ -407,7 +407,7 @@
  #define EXT3_MOUNT_INDEX		0x4000  /* Enable directory index */
 +#define EXT3_MOUNT_IOPEN		0x8000	/* Allow access via iopen */
 +#define EXT3_MOUNT_IOPEN_NOPRIV		0x10000	/* Make iopen world-readable */
- #define EXT3_MOUNT_ASYNCDEL	       0x20000  /* Delayed deletion */
+ #define EXT3_MOUNT_ASYNCDEL		0x20000	/* Delayed deletion */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
 

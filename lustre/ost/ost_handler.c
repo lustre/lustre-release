@@ -411,8 +411,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
                 GOTO(out, rc = -EIO);
 
-        body = lustre_swab_reqbuf (req, 0, sizeof (*body),
-                                   lustre_swab_ost_body);
+        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
         if (body == NULL) {
                 CERROR ("Missing/short ost_body\n");
                 GOTO (out, rc = -EFAULT);
@@ -499,8 +498,10 @@ static int ost_brw_read(struct ptlrpc_request *req)
                                 CERROR ("timeout waiting for bulk PUT\n");
                                 ptlrpc_abort_bulk (desc);
                         }
-                }
-                comms_error = rc != 0;
+                } else {
+                        CERROR("ptlrpc_bulk_put failed RC: %d\n", rc);
+		}
+		comms_error = rc != 0;
         }
 
         /* Must commit after prep above in all cases */
@@ -564,6 +565,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
                 GOTO(out, rc = -EIO);
+
+        /* pause before transaction has been started */
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE, 
+                         obd_timeout +1);
 
         swab = lustre_msg_swabbed (req->rq_reqmsg);
         body = lustre_swab_reqbuf (req, 0, sizeof (*body),
@@ -649,8 +654,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                 CERROR ("timeout waiting for bulk GET\n");
                                 ptlrpc_abort_bulk (desc);
                         }
-                }
-                comms_error = rc != 0;
+                } else {
+			CERROR("ptlrpc_bulk_get failed RC: %d\n", rc);
+		}
+		comms_error = rc != 0;
         }
 
 #if CHECKSUM_BULK

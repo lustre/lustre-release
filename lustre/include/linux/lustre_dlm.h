@@ -63,6 +63,7 @@ typedef enum {
 #define LDLM_FL_CANCELING      (1 << 13) /* lock cancel has already been sent */
 #define LDLM_FL_LOCAL          (1 << 14) // a local lock (ie, no srv/cli split)
 #define LDLM_FL_WARN           (1 << 15) /* see ldlm_cli_cancel_unused */
+#define LDLM_FL_MATCH_DATA     (1 << 16) /* see ldlm_lock_match */
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -371,7 +372,7 @@ void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
 void ldlm_grant_lock(struct ldlm_lock *lock, void *data, int datalen);
 int ldlm_lock_match(struct ldlm_namespace *ns, int flags, struct ldlm_res_id *,
                     __u32 type, void *cookie, int cookielen, ldlm_mode_t mode,
-                    struct lustre_handle *);
+                    void *data, struct lustre_handle *);
 struct ldlm_lock *
 ldlm_lock_create(struct ldlm_namespace *ns,
                  struct lustre_handle *parent_lock_handle, struct ldlm_res_id,
@@ -440,19 +441,6 @@ int ldlm_cli_enqueue(struct lustre_handle *conn,
                      ldlm_blocking_callback callback,
                      void *data,
                      struct lustre_handle *lockh);
-int ldlm_match_or_enqueue(struct lustre_handle *connh,
-                          struct ptlrpc_request *req,
-                          struct ldlm_namespace *ns,
-                          struct lustre_handle *parent_lock_handle,
-                          struct ldlm_res_id,
-                          __u32 type,
-                          void *cookie, int cookielen,
-                          ldlm_mode_t mode,
-                          int *flags,
-                          ldlm_completion_callback completion,
-                          ldlm_blocking_callback callback,
-                          void *data,
-                          struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);

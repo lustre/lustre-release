@@ -412,8 +412,8 @@ struct ptlrpc_service {
         struct list_head srv_threads;
         int (*srv_handler)(struct ptlrpc_request *req);
         char *srv_name;  /* only statically allocated strings here; we don't clean them */
-        struct proc_dir_entry   *svc_procroot;    
-        struct lprocfs_counters *svc_counters;
+        struct proc_dir_entry *svc_procroot;
+        struct lprocfs_stats  *svc_stats;
 
         int                  srv_interface_rover;
         struct ptlrpc_srv_ni srv_interfaces[0];

@@ -57,6 +57,14 @@ typedef unsigned short umode_t;
 
 #endif
 
+/* This is because lprocfs_status.h gets included here indirectly.  It would
+ * be much better to just avoid lprocfs being included into liblustre entirely
+ * but that requires more header surgery than I can handle right now.
+ */
+#ifndef smp_processor_id
+#define smp_processor_id() 0
+#endif
+
 /* always adopt 2.5 definitions */
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
 #define LINUX_VERSION_CODE (2*200+5*10+0)

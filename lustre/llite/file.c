@@ -132,6 +132,7 @@ int ll_file_release(struct inode *inode, struct file *file)
         if (inode->i_sb->s_root == file->f_dentry)
                 RETURN(0);
 
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_RELEASE);
         fd = (struct ll_file_data *)file->private_data;
         if (!fd) /* no process opened the file after an mcreate */
                 RETURN(rc = 0);
@@ -345,6 +346,7 @@ int ll_file_open(struct inode *inode, struct file *file)
         if (inode->i_sb->s_root == file->f_dentry)
                 RETURN(0);
 
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
         LL_GET_INTENT(file->f_dentry, it);
         rc = ll_it_open_error(IT_OPEN_OPEN, it);
         if (rc)
@@ -495,8 +497,8 @@ int ll_extent_lock_no_validate(struct ll_file_data *fd, struct inode *inode,
                inode->i_ino, extent->start, extent->end);
 
         rc = obd_enqueue(&sbi->ll_osc_conn, lsm, NULL, LDLM_EXTENT, extent,
-                         sizeof(extent), mode, &flags, ll_lock_callback,
-                         inode, sizeof(*inode), lockh);
+                         sizeof(extent), mode, &flags, ll_extent_lock_callback,
+                         inode, lockh);
 
         RETURN(rc);
 }
@@ -506,15 +508,13 @@ int ll_extent_lock_no_validate(struct ll_file_data *fd, struct inode *inode,
  * the OST is returning the file size with each lock acquisition.
  */
 int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
-                   struct lov_stripe_md *lsm,
-                   int mode, struct ldlm_extent *extent,
-                   struct lustre_handle *lockh)
+                   struct lov_stripe_md *lsm, int mode,
+                   struct ldlm_extent *extent, struct lustre_handle *lockh)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ldlm_extent size_lock;
         struct lustre_handle match_lockh = {0};
-        int flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
-        int rc, matched;
+        int flags, rc, matched;
         ENTRY;
 
         rc = ll_extent_lock_no_validate(fd, inode, lsm, mode, extent, lockh);
@@ -534,9 +534,10 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         size_lock.end = OBD_OBJECT_EOF;
 
         /* XXX I bet we should be checking the lock ignore flags.. */
+        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED | LDLM_FL_MATCH_DATA;
         matched = obd_match(&ll_i2sbi(inode)->ll_osc_conn, lsm, LDLM_EXTENT,
-                       &size_lock, sizeof(size_lock), LCK_PR, &flags,
-                       &match_lockh);
+                            &size_lock, sizeof(size_lock), LCK_PR, &flags,
+                            inode, &match_lockh);
 
         /* hey, alright, we hold a size lock that covers the size we
          * just found, its not going to change for a while.. */
@@ -756,8 +757,8 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         EXIT;
 }
 
-int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
-                     void *data, int flag)
+int ll_extent_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
+                            void *data, int flag)
 {
         struct inode *inode = data;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -811,6 +812,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (count == 0)
                 RETURN(0);
 
+        lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_READ_BYTES,
+                            count);
         /* grab a -> eof extent to push extending writes out of node's caches
          * so we can see them at the getattr after lock acquisition.  this will
          * turn into a seperate [*ppos + count, EOF] 'size intent' lock attempt
@@ -916,6 +919,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
 out:
         /* XXX errors? */
+        lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
+                            retval);
         ll_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
         RETURN(retval);
 }
@@ -983,6 +988,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         if ((cmd & 0xffffff00) == ((int)'T') << 8) /* tty ioctls */
                 return -ENOTTY;
 
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_IOCTL);
         switch(cmd) {
         case LL_IOC_GETFLAGS:
                 /* Get the current value of the file flags */
@@ -1034,6 +1040,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
                inode->i_generation, inode,
                offset + ((origin==2) ? inode->i_size : file->f_pos));
 
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */
                 ldlm_error_t err;
                 struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
@@ -1071,6 +1078,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_FSYNC);
         /*
          * filemap_fdata{sync,wait} are also called at PW lock cancelation so
          * we know that they can only find data to writeback here if we are
@@ -1096,6 +1104,9 @@ int ll_inode_revalidate(struct dentry *dentry)
         }
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_REVALIDATE);
+#endif
 
         /* this is very tricky.  it is unsafe to call ll_have_md_lock
            when we have a referenced lock: because it may cause an RPC
@@ -1160,7 +1171,7 @@ int ll_inode_revalidate(struct dentry *dentry)
                                 ptlrpc_req_finished(req);
                                 RETURN(rc);
                         }
-                        LASSERT(rc >= sizeof (*lsm));
+                        LASSERT(rc >= sizeof(*lsm));
                 }
 
                 ll_update_inode(inode, body, lsm);
@@ -1201,6 +1212,7 @@ static int ll_getattr(struct vfsmount *mnt, struct dentry *de,
         int res = 0;
         struct inode *inode = de->d_inode;
 
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_GETATTR);
         res = ll_inode_revalidate(de);
         if (res)
                 return res;

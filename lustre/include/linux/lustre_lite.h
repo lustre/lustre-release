@@ -98,32 +98,6 @@ struct ll_read_extent {
 int ll_check_dirty( struct super_block *sb );
 int ll_batch_writepage( struct inode *inode, struct page *page );
 
-struct file_io_stats {
-        spinlock_t     fis_lock;
-        __u64   fis_dirty_pages;
-        __u64   fis_dirty_hits;
-        __u64   fis_dirty_misses;
-        __u64   fis_forced_pages;
-        __u64   fis_writepage_pages;
-        __u64   fis_wb_ok;
-        __u64   fis_wb_fail;
-        __u64   fis_wb_from_writepage;
-        __u64   fis_wb_from_pressure;
-};
-
-#define IO_STAT_ADD(FIS, STAT, VAL) do {        \
-        struct file_io_stats *_fis_ = (FIS);    \
-        spin_lock(&_fis_->fis_lock);            \
-        _fis_->fis_##STAT += VAL;               \
-        spin_unlock(&_fis_->fis_lock);          \
-} while (0)
-
-#define INODE_IO_STAT_ADD(INODE, STAT, VAL)        \
-        IO_STAT_ADD(&ll_i2sbi(INODE)->ll_iostats, STAT, VAL)
-
-#define PAGE_IO_STAT_ADD(PAGE, STAT, VAL)               \
-        INODE_IO_STAT_ADD((PAGE)->mapping, STAT, VAL)
-
 /* interpet return codes from intent lookup */
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
@@ -155,7 +129,7 @@ struct ll_sb_info {
 
         struct list_head          ll_orphan_dentry_list; /*please don't ask -p*/
 
-        struct  file_io_stats     ll_iostats;
+        struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 };
 
 static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
@@ -306,6 +280,40 @@ do {                                                                           \
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 
+enum {
+         LPROC_LL_DIRTY_PAGES       = 0,
+         LPROC_LL_DIRTY_HITS,
+         LPROC_LL_DIRTY_MISSES,
+         LPROC_LL_WB_WRITEPAGE,
+         LPROC_LL_WB_PRESSURE,
+         LPROC_LL_WB_OK,
+         LPROC_LL_WB_FAIL,
+         LPROC_LL_READ_BYTES,
+         LPROC_LL_WRITE_BYTES,
+         LPROC_LL_BRW_READ,
+         LPROC_LL_BRW_WRITE,
+         LPROC_LL_IOCTL,
+         LPROC_LL_OPEN,
+         LPROC_LL_RELEASE,
+         LPROC_LL_MAP,
+         LPROC_LL_LLSEEK,
+         LPROC_LL_FSYNC,
+         LPROC_LL_SETATTR_RAW,
+         LPROC_LL_SETATTR,
+         LPROC_LL_TRUNC,
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+         LPROC_LL_GETATTR,
+#else
+         LPROC_LL_REVALIDATE,
+#endif
+         LPROC_LL_STAFS,
+         LPROC_LL_ALLOC_INODE,
+
+         LPROC_LL_DIRECT_READ,
+         LPROC_LL_DIRECT_WRITE,
+         LPROC_LL_FILE_OPCODES
+};
 /* dcache.c */
 int ll_have_md_lock(struct dentry *de);
 
@@ -318,8 +326,8 @@ extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
 extern struct inode_operations ll_special_inode_operations;
 struct ldlm_lock;
-int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data,
-                     int flag);
+int ll_extent_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *,
+                            void *data, int flag);
 int ll_extent_lock_no_validate(struct ll_file_data *fd, struct inode *inode,
                    struct lov_stripe_md *lsm, int mode,
                    struct ldlm_extent *extent, struct lustre_handle *lockh);

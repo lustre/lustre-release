@@ -56,14 +56,14 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
 }
 
 int lprocfs_filter_rd_mntdev(char *page, char **start, off_t off, int count,
-                    int *eof, void *data)
+                             int *eof, void *data)
 {
         struct obd_device* obd = (struct obd_device *)data;
 
         LASSERT(obd != NULL);
         LASSERT(obd->u.filter.fo_vfsmnt->mnt_devname);
         *eof = 1;
-        return snprintf(page, count, "%s\n", 
+        return snprintf(page, count, "%s\n",
                         obd->u.filter.fo_vfsmnt->mnt_devname);
 }
 

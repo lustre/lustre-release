@@ -43,6 +43,7 @@ struct super_operations ll_super_operations;
 /* /proc/lustre/llite root that tracks llite mount points */
 struct proc_dir_entry *proc_lustre_fs_root = NULL;
 /* lproc_llite.c */
+extern void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 extern int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                        struct super_block *sb,
                                        char *osc, char *mdc);
@@ -141,7 +142,6 @@ static struct super_block *ll_read_super(struct super_block *sb,
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
         generate_random_uuid(uuid);
-        spin_lock_init(&sbi->ll_iostats.fis_lock);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
         sb->u.generic_sbp = sbi;
@@ -266,6 +266,7 @@ out_osc:
 out_mdc:
         obd_disconnect(&sbi->ll_mdc_conn, 0);
 out_free:
+        lprocfs_unregister_mountpoint(sbi);
         OBD_FREE(sbi, sizeof(*sbi));
 
         goto out_dev;
@@ -293,6 +294,7 @@ static void ll_put_super(struct super_block *sb)
         if (!obd->obd_no_recov)
                 mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
 
+        lprocfs_unregister_mountpoint(sbi);
         if (sbi->ll_proc_root) {
                 lprocfs_remove(sbi->ll_proc_root);
                 sbi->ll_proc_root = NULL;
@@ -585,6 +587,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s\n", de->d_name.name);
         if (rc)
                 return rc;
+        lprocfs_counter_incr(ll_i2sbi(de->d_inode)->ll_stats, LPROC_LL_SETATTR);
 
         return ll_inode_setattr(de->d_inode, attr, 1);
 }
@@ -597,6 +600,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
+        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_STAFS);
         memset(sfs, 0, sizeof(*sfs));
         rc = obd_statfs(&sbi->ll_mdc_conn, &osfs);
         statfs_unpack(sfs, &osfs);

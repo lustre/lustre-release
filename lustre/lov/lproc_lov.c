@@ -27,6 +27,7 @@
 #endif
 #include <linux/lprocfs_status.h>
 #include <linux/obd_class.h>
+#include <linux/seq_file.h>
 
 #ifndef LPROCFS
 struct lprocfs_vars lprocfs_module_vars[] = { {0} };
@@ -113,31 +114,6 @@ int rd_activeobd(char *page, char **start, off_t off, int count, int *eof,
         return snprintf(page, count, "%u\n", desc->ld_active_tgt_count);
 }
 
-int rd_target(char *page, char **start, off_t off, int count, int *eof,
-              void *data)
-{
-        struct obd_device *dev = (struct obd_device*) data;
-        int len = 0, i;
-        struct lov_obd *lov;
-        struct lov_tgt_desc *tgts;
-        
-        LASSERT(dev != NULL);
-        lov = &dev->u.lov;
-        tgts = lov->tgts;
-        LASSERT(tgts != NULL);
-
-        for (i = 0; i < lov->desc.ld_tgt_count; i++, tgts++) {
-                int cur;
-                cur = snprintf(&page[len], count, "%d: %s %sACTIVE\n",
-                                i, tgts->uuid.uuid, tgts->active ? "" : "IN");
-                len += cur;
-                count -= cur;
-        }
-
-        *eof = 1;
-        return len;
-}
-
 int rd_mdc(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
         struct obd_device *dev = (struct obd_device*) data;
@@ -149,6 +125,59 @@ int rd_mdc(char *page, char **start, off_t off, int count, int *eof, void *data)
         return snprintf(page, count, "%s\n", lov->mdcobd->obd_uuid.uuid);
 }
 
+static void *ll_tgt_seq_start(struct seq_file *p, loff_t *pos)
+{
+        struct obd_device *dev = p->private;
+        struct lov_obd *lov = &dev->u.lov;
+
+        return (*pos >= lov->desc.ld_tgt_count) ? NULL : &(lov->tgts[*pos]);
+
+}
+static void ll_tgt_seq_stop(struct seq_file *p, void *v)
+{
+
+}
+
+static void *ll_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+        struct obd_device *dev = p->private;
+        struct lov_obd *lov = &dev->u.lov;
+
+        ++*pos;
+        return (*pos >=lov->desc.ld_tgt_count) ? NULL : &(lov->tgts[*pos]);
+}
+
+static int ll_tgt_seq_show(struct seq_file *p, void *v)
+{
+        struct lov_tgt_desc *tgt = v;
+        struct obd_device *dev = p->private;
+        struct lov_obd *lov = &dev->u.lov;
+        int idx = tgt - &(lov->tgts[0]);
+        return seq_printf(p, "%d: %s %sACTIVE\n", idx+1, tgt->uuid.uuid,
+                          tgt->active ? "" : "IN");
+}
+
+struct seq_operations ll_tgt_sops = {
+        .start = ll_tgt_seq_start,
+        .stop = ll_tgt_seq_stop,
+        .next = ll_tgt_seq_next,
+        .show = ll_tgt_seq_show,
+};
+
+static int ll_target_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct seq_file *seq;
+        int rc = seq_open(file, &ll_tgt_sops);
+
+        if (rc)
+                return rc;
+
+        seq = file->private_data;
+        seq->private = dp->data;
+
+        return 0;
+}
 struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid, 0, 0 },
         { "stripesize",   rd_stripesize,   0, 0 },
@@ -163,7 +192,6 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { "blocksize",    rd_blksize,      0, 0 },
         { "kbytestotal",  rd_kbytestotal,  0, 0 },
         { "kbytesfree",   rd_kbytesfree,   0, 0 },
-        { "target_obd",   rd_target,       0, 0 },
         { "target_mdc",   rd_mdc,          0, 0 },
         { 0 }
 };
@@ -171,6 +199,13 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
 struct lprocfs_vars lprocfs_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs, 0, 0 },
         { 0 }
+};
+
+struct file_operations ll_proc_target_fops = {
+        .open = ll_target_seq_open,
+        .read = seq_read,
+        .llseek = seq_lseek,
+        .release = seq_release,
 };
 
 #endif /* LPROCFS */

@@ -96,6 +96,7 @@ extern unsigned long obd_sync_filter;
 #define OBD_FAIL_OST_ALL_REPLY_NET       0x211
 #define OBD_FAIL_OST_ALL_REQUESTS_NET    0x212
 #define OBD_FAIL_OST_LDLM_REPLY_NET      0x213
+#define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -146,6 +147,19 @@ do {                                                                         \
         }                                                                    \
 } while(0)
 
+#define OBD_FAIL_TIMEOUT(id, secs)                                           \
+do {                                                                         \
+        if  (OBD_FAIL_CHECK_ONCE(id)) {                                      \
+                CERROR("obd_fail_timeout id %x sleeping for %ld secs\n",     \
+                       (id), (secs));                                        \
+                set_current_state(TASK_UNINTERRUPTIBLE);                     \
+                schedule_timeout((secs) * HZ);                               \
+                set_current_state(TASK_RUNNING);                             \
+                CERROR("obd_fail_timeout id %x awake\n",                     \
+                       (id));                                                \
+       }                                                                     \
+} while(0)
+
 #define fixme() CDEBUG(D_OTHER, "FIXME\n");
 
 #ifdef __KERNEL__
@@ -194,47 +208,39 @@ static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
 #define LTIME_S(time) (time)
 #endif  /* __KERNEL__ */
 
-#define OBD_ALLOC(ptr, size)                                            \
-do {                                                                    \
-        void *lptr;                                                     \
-        int s = (size);                                                 \
-        (ptr) = lptr = kmalloc(s, GFP_KERNEL);                          \
-        if (lptr == NULL) {                                             \
-                CERROR("kmalloc of '" #ptr "' (%d bytes) failed "       \
-                       "at %s:%d\n", s, __FILE__, __LINE__);            \
-        } else {                                                        \
-                int obd_curmem;                                         \
-                memset(lptr, 0, s);                                     \
-                atomic_add(s, &obd_memory);                             \
-                obd_curmem = atomic_read(&obd_memory);                  \
-                if (obd_curmem > obd_memmax)                            \
-                        obd_memmax = obd_curmem;                        \
-                CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p "      \
-                       "(tot %d)\n", s, lptr, obd_curmem);              \
-        }                                                               \
+#define OBD_ALLOC(ptr, size)                                                  \
+do {                                                                          \
+        (ptr) = kmalloc(size, GFP_KERNEL);                                    \
+        if ((ptr) == NULL) {                                                  \
+                CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
+                       (int)(size), __FILE__, __LINE__);                      \
+        } else {                                                              \
+                memset(ptr, 0, size);                                         \
+                atomic_add(size, &obd_memory);                                \
+                if (atomic_read(&obd_memory) > obd_memmax)                    \
+                        obd_memmax = atomic_read(&obd_memory);                \
+                CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d)\n", \
+                       (int)(size), ptr, atomic_read(&obd_memory));           \
+        }                                                                     \
 } while (0)
 
 #ifdef __arch_um__
 # define OBD_VMALLOC(ptr, size) OBD_ALLOC(ptr, size)
 #else
-# define OBD_VMALLOC(ptr, size)                                         \
-do {                                                                    \
-        void *lptr;                                                     \
-        int s = (size);                                                 \
-        (ptr) = lptr = vmalloc(s);                                      \
-        if (lptr == NULL) {                                             \
-                CERROR("vmalloc of '" #ptr "' (%d bytes) failed "       \
-                       "at %s:%d\n", s, __FILE__, __LINE__);            \
-        } else {                                                        \
-                int obd_curmem;                                         \
-                memset(lptr, 0, s);                                     \
-                atomic_add(s, &obd_memory);                             \
-                obd_curmem = atomic_read(&obd_memory);                  \
-                if (obd_curmem > obd_memmax)                            \
-                        obd_memmax = obd_curmem;                        \
-                CDEBUG(D_MALLOC, "vmalloced '" #ptr "': %d at %p "      \
-                       "(tot %d)\n", s, lptr, obd_curmem);              \
-        }                                                               \
+# define OBD_VMALLOC(ptr, size)                                               \
+do {                                                                          \
+        (ptr) = vmalloc(size);                                                \
+        if ((ptr) == NULL) {                                                  \
+                CERROR("vmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
+                       (int)(size), __FILE__, __LINE__);                      \
+        } else {                                                              \
+                memset(ptr, 0, size);                                         \
+                atomic_add(size, &obd_memory);                                \
+                if (atomic_read(&obd_memory) > obd_memmax)                    \
+                        obd_memmax = atomic_read(&obd_memory);                \
+                CDEBUG(D_MALLOC, "vmalloced '" #ptr "': %d at %p (tot %d)\n", \
+                       (int)(size), ptr, atomic_read(&obd_memory));           \
+        }                                                                     \
 } while (0)
 #endif
 
@@ -244,68 +250,58 @@ do {                                                                    \
 #define POISON(lptr, c, s) memset(lptr, c, s)
 #endif
 
-#define OBD_FREE(ptr, size)                                             \
-do {                                                                    \
-        void *lptr = (ptr);                                             \
-        int s = (size);                                                 \
-        LASSERT(lptr);                                                  \
-        POISON(lptr, 0x5a, s);                                          \
-        kfree(lptr);                                                    \
-        atomic_sub(s, &obd_memory);                                     \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
-               s, lptr, atomic_read(&obd_memory));                      \
-        (ptr) = (void *)0xdeadbeef;                                     \
+#define OBD_FREE(ptr, size)                                                   \
+do {                                                                          \
+        LASSERT(ptr);                                                         \
+        atomic_sub(size, &obd_memory);                                        \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",           \
+               (int)(size), ptr, atomic_read(&obd_memory));                   \
+        POISON(ptr, 0x5a, size);                                              \
+        kfree(ptr);                                                           \
+        (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
 
 #ifdef __arch_um__
 # define OBD_VFREE(ptr, size) OBD_FREE(ptr, size)
 #else
-# define OBD_VFREE(ptr, size)                                           \
-do {                                                                    \
-        void *lptr = (ptr);                                             \
-        int s = (size);                                                 \
-        LASSERT(lptr);                                                  \
-        POISON(lptr, 0x5a, s);                                          \
-        vfree(lptr);                                                    \
-        atomic_sub(s, &obd_memory);                                     \
-        CDEBUG(D_MALLOC, "vfreed '" #ptr "': %d at %p (tot %d).\n",     \
-               s, lptr, atomic_read(&obd_memory));                      \
-        (ptr) = (void *)0xdeadbeef;                                     \
+# define OBD_VFREE(ptr, size)                                                 \
+do {                                                                          \
+        LASSERT(ptr);                                                         \
+        atomic_sub(size, &obd_memory);                                        \
+        CDEBUG(D_MALLOC, "vfreed '" #ptr "': %d at %p (tot %d).\n",           \
+               (int)(size), ptr, atomic_read(&obd_memory));                   \
+        POISON(ptr, 0x5a, size);                                              \
+        vfree(ptr);                                                           \
+        (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
 #endif
 
-#define OBD_SLAB_ALLOC(ptr, slab, type, size)                             \
-do {                                                                      \
-        long s = (size);                                                  \
-        void *lptr;                                                       \
-        LASSERT (!in_interrupt());                                        \
-        (ptr) = lptr = kmem_cache_alloc((slab), type);                    \
-        if (lptr == NULL) {                                               \
-                CERROR("slab-alloc of '" #ptr "' (%ld bytes) failed "     \
-                       "at %s:%d\n", s, __FILE__, __LINE__);              \
-        } else {                                                          \
-                int obd_curmem;                                           \
-                memset(lptr, 0, s);                                       \
-                atomic_add(s, &obd_memory);                               \
-                obd_curmem = atomic_read(&obd_memory);                    \
-                if (obd_curmem > obd_memmax)                              \
-                        obd_memmax = obd_curmem;                          \
-                CDEBUG(D_MALLOC, "slab-alloced '" #ptr "': %ld at %p "    \
-                       "(tot %d)\n", s, lptr, obd_curmem);                \
-        }                                                                 \
+#define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
+do {                                                                          \
+        LASSERT (!in_interrupt());                                            \
+        (ptr) = kmem_cache_alloc(slab, type);                                 \
+        if ((ptr) == NULL) {                                                  \
+                CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n", \
+                       (int)(size), __FILE__, __LINE__);                      \
+        } else {                                                              \
+                memset(ptr, 0, size);                                         \
+                atomic_add(size, &obd_memory);                                \
+                if (atomic_read(&obd_memory) > obd_memmax)                    \
+                        obd_memmax = atomic_read(&obd_memory);                \
+                CDEBUG(D_MALLOC, "slab-alloced '"#ptr"': %d at %p (tot %d)\n",\
+                       (int)(size), ptr, atomic_read(&obd_memory));           \
+        }                                                                     \
 } while (0)
 
-#define OBD_SLAB_FREE(ptr, slab, size)                                    \
-do {                                                                      \
-        long s = (size);                                                  \
-        void *lptr = (ptr);                                               \
-        LASSERT(lptr);                                                    \
-        POISON(lptr, 0x5a, s);                                            \
-        CDEBUG(D_MALLOC, "slab-freed '" #ptr "': %ld at %p (tot %d).\n",  \
-               s, lptr, atomic_read(&obd_memory));                        \
-        kmem_cache_free((slab), lptr);                                    \
-        atomic_sub(s, &obd_memory);                                       \
-        (ptr) = (void *)0xdeadbeef;                                       \
+#define OBD_SLAB_FREE(ptr, slab, size)                                        \
+do {                                                                          \
+        LASSERT(ptr);                                                         \
+        CDEBUG(D_MALLOC, "slab-freed '" #ptr "': %d at %p (tot %d).\n",       \
+               (int)(size), ptr, atomic_read(&obd_memory));                   \
+        atomic_sub(size, &obd_memory);                                        \
+        POISON(ptr, 0x5a, size);                                              \
+        kmem_cache_free(slab, ptr);                                           \
+        (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
 
 #endif

@@ -29,7 +29,7 @@
 #include "ptlrpc_internal.h"
 
 
-struct ll_rpc_opcode { 
+struct ll_rpc_opcode {
      __u32       opcode;
      const char *opname;
 } ll_rpc_opcode_table[LUSTRE_MAX_OPCODES] = {
@@ -69,6 +69,8 @@ struct ll_rpc_opcode {
         { PTLBD_READ,       "ptlbd_read" },
         { PTLBD_WRITE,      "ptlbd_write" },
         { PTLBD_FLUSH,      "ptlbd_flush" },
+        { PTLBD_CONNECT,    "ptlbd_connect" },
+        { PTLBD_DISCONNECT, "ptlbd_disconnect" },
         { OBD_PING,         "obd_ping" }
 };
 
@@ -77,8 +79,8 @@ const char* ll_opcode2str(__u32 opcode)
         /* When one of the assertions below fail, chances are that:
          *     1) A new opcode was added in lustre_idl.h, but was
          *        is missing from the table above.
-         * or  2) The opcode space was renumbered or rearranged, 
-         *        and the opcode_offset() function in 
+         * or  2) The opcode space was renumbered or rearranged,
+         *        and the opcode_offset() function in
          *        ptlrpc_internals.h needs to be modified.
          */
         __u32 offset = opcode_offset(opcode);
@@ -96,51 +98,50 @@ void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc) { return; }
 void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                                      struct ptlrpc_service *svc)
 {
-        struct proc_dir_entry   *svc_procroot;
-        struct lprocfs_counters *svc_cntrs;
+        struct proc_dir_entry *svc_procroot;
+        struct lprocfs_stats *svc_stats;
         int i, rc;
-        unsigned int svc_counter_config = LPROCFS_CNTR_EXTERNALLOCK | 
+        unsigned int svc_counter_config = LPROCFS_CNTR_EXTERNALLOCK |
                 LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV;
 
         LASSERT(svc->svc_procroot == NULL);
-        LASSERT(svc->svc_counters == NULL);
+        LASSERT(svc->svc_stats == NULL);
 
         svc_procroot = lprocfs_register(svc->srv_name, obddev->obd_proc_entry,
                                         NULL, NULL);
-        if (svc_procroot == NULL) 
+        if (svc_procroot == NULL)
                 return;
-        
-        svc_cntrs = 
-                lprocfs_alloc_counters(PTLRPC_LAST_CNTR+LUSTRE_MAX_OPCODES);
-        if (svc_cntrs == NULL) {
+
+        svc_stats = lprocfs_alloc_stats(PTLRPC_LAST_CNTR + LUSTRE_MAX_OPCODES);
+        if (svc_stats == NULL) {
                 lprocfs_remove(svc_procroot);
                 return;
         }
- 
-        LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_REQWAIT_CNTR], 
-                             svc_counter_config, &svc->srv_lock, 
-                             "req_waittime", "cycles");
-        LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_SVCEQDEPTH_CNTR], 
-                             svc_counter_config, &svc->srv_lock, 
-                             "svc_eqdepth", "reqs");
+
+        lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
+                             svc_counter_config, "req_waittime", "cycles");
+        /* Wait for b_eq branch
+        lprocfs_counter_init(svc_stats, PTLRPC_SVCEQDEPTH_CNTR,
+                             svc_counter_config, "svc_eqdepth", "reqs");
+         */
         /* no stddev on idletime */
-        LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_SVCIDLETIME_CNTR],
-                             (LPROCFS_CNTR_EXTERNALLOCK | LPROCFS_CNTR_AVGMINMAX),
-                             &svc->srv_lock, "svc_idletime", "cycles");
-        for (i=0; i < LUSTRE_MAX_OPCODES; i++) {
+        lprocfs_counter_init(svc_stats, PTLRPC_SVCIDLETIME_CNTR,
+                             (LPROCFS_CNTR_EXTERNALLOCK|LPROCFS_CNTR_AVGMINMAX),
+                             "svc_idletime", "cycles");
+        for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
-                LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_LAST_CNTR+i], 
-                                     svc_counter_config, &svc->srv_lock,
-                                     ll_opcode2str(opcode), "cycles");
+                lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
+                                     svc_counter_config, ll_opcode2str(opcode),
+                                     "cycles");
         }
-        rc = lprocfs_register_counters(svc_procroot, "service_stats", 
-                                       svc_cntrs);
+
+        rc = lprocfs_register_stats(svc_procroot, "stats", svc_stats);
         if (rc < 0) {
                 lprocfs_remove(svc_procroot);
-                lprocfs_free_counters(svc_cntrs);
+                lprocfs_free_stats(svc_stats);
         } else {
                 svc->svc_procroot = svc_procroot;
-                svc->svc_counters = svc_cntrs;
+                svc->svc_stats = svc_stats;
         }
 }
 
@@ -150,9 +151,9 @@ void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
                 lprocfs_remove(svc->svc_procroot);
                 svc->svc_procroot = NULL;
         }
-        if (svc->svc_counters) {
-                lprocfs_free_counters(svc->svc_counters);
-                svc->svc_counters = NULL;
+        if (svc->svc_stats) {
+                lprocfs_free_stats(svc->svc_stats);
+                svc->svc_stats = NULL;
         }
 }
 #endif /* LPROCFS */

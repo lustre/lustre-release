@@ -1398,7 +1398,7 @@ static int sanosc_brw(int cmd, struct lustre_handle *conn,
 static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
                        struct lustre_handle *parent_lock,
                        __u32 type, void *extentp, int extent_len, __u32 mode,
-                       int *flags, void *callback, void *data, int datalen,
+                       int *flags, void *callback, void *data,
                        struct lustre_handle *lockh)
 {
         struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
@@ -1413,8 +1413,8 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
         extent->end |= ~PAGE_MASK;
 
         /* Next, search for already existing extent locks that will cover us */
-        rc = ldlm_lock_match(obddev->obd_namespace, 0, &res_id, type, extent,
-                             sizeof(extent), mode, lockh);
+        rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_MATCH_DATA, &res_id,
+                             type, extent, sizeof(extent), mode, data, lockh);
         if (rc == 1)
                 /* We already have a lock, and it's referenced */
                 RETURN(ELDLM_OK);
@@ -1432,8 +1432,9 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
          * locks out from other users right now, too. */
 
         if (mode == LCK_PR) {
-                rc = ldlm_lock_match(obddev->obd_namespace, 0, &res_id, type,
-                                     extent, sizeof(extent), LCK_PW, lockh);
+                rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_MATCH_DATA,
+                                     &res_id, type, extent, sizeof(extent),
+                                     LCK_PW, data, lockh);
                 if (rc == 1) {
                         /* FIXME: This is not incredibly elegant, but it might
                          * be more elegant than adding another parameter to
@@ -1453,7 +1454,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
 
 static int osc_match(struct lustre_handle *connh, struct lov_stripe_md *lsm,
                        __u32 type, void *extentp, int extent_len, __u32 mode,
-                       int *flags, struct lustre_handle *lockh)
+                       int *flags, void *data, struct lustre_handle *lockh)
 {
         struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
         struct obd_device *obddev = class_conn2obd(connh);
@@ -1468,7 +1469,7 @@ static int osc_match(struct lustre_handle *connh, struct lov_stripe_md *lsm,
 
         /* Next, search for already existing extent locks that will cover us */
         rc = ldlm_lock_match(obddev->obd_namespace, *flags, &res_id, type,
-                             extent, sizeof(extent), mode, lockh);
+                             extent, sizeof(extent), mode, data, lockh);
         if (rc)
                 RETURN(rc);
 
@@ -1478,7 +1479,7 @@ static int osc_match(struct lustre_handle *connh, struct lov_stripe_md *lsm,
         if (mode == LCK_PR) {
                 rc = ldlm_lock_match(obddev->obd_namespace, *flags, &res_id,
                                      type, extent, sizeof(extent), LCK_PW,
-                                     lockh);
+                                     data, lockh);
                 if (rc == 1) {
                         /* FIXME: This is not incredibly elegant, but it might
                          * be more elegant than adding another parameter to

@@ -216,27 +216,29 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
  */
 
 /* opcodes */
-#define OST_REPLY       0        /* reply ? */
-#define OST_GETATTR     1
-#define OST_SETATTR     2
-#define OST_READ        3
-#define OST_WRITE       4
-#define OST_CREATE      5
-#define OST_DESTROY     6
-#define OST_GET_INFO    7
-#define OST_CONNECT     8
-#define OST_DISCONNECT  9
-#define OST_PUNCH      10
-#define OST_OPEN       11
-#define OST_CLOSE      12
-#define OST_STATFS     13
-#define OST_SAN_READ   14
-#define OST_SAN_WRITE  15
-#define OST_SYNCFS     16
+typedef enum {
+        OST_REPLY      =  0,       /* reply ? */
+        OST_GETATTR    =  1,
+        OST_SETATTR    =  2,
+        OST_READ       =  3,
+        OST_WRITE      =  4,
+        OST_CREATE     =  5,
+        OST_DESTROY    =  6,
+        OST_GET_INFO   =  7,
+        OST_CONNECT    =  8,
+        OST_DISCONNECT =  9,
+        OST_PUNCH      = 10,
+        OST_OPEN       = 11,
+        OST_CLOSE      = 12,
+        OST_STATFS     = 13,
+        OST_SAN_READ   = 14,
+        OST_SAN_WRITE  = 15,
+        OST_SYNCFS     = 16,
+        OST_LAST_OPC
+} ost_cmd_t;
+#define OST_FIRST_OPC  OST_REPLY
 /* When adding OST RPC opcodes, please update 
  * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
-#define OST_LAST_OPC   (OST_SYNCFS+1)
-#define OST_FIRST_OPC  OST_REPLY
 
 
 typedef uint64_t        obd_id;
@@ -385,20 +387,23 @@ extern void lustre_swab_ost_body (struct ost_body *b);
  */
 
 /* opcodes */
-#define MDS_GETATTR      33
-#define MDS_GETATTR_NAME 34
-#define MDS_CLOSE        35
-#define MDS_REINT        36
-#define MDS_READPAGE     37
-#define MDS_CONNECT      38
-#define MDS_DISCONNECT   39
-#define MDS_GETSTATUS    40
-#define MDS_STATFS       41
-#define MDS_GETLOVINFO   42
+typedef enum {
+        MDS_GETATTR      = 33,
+        MDS_GETATTR_NAME = 34,
+        MDS_CLOSE        = 35,
+        MDS_REINT        = 36,
+        MDS_READPAGE     = 37,
+        MDS_CONNECT      = 38,
+        MDS_DISCONNECT   = 39,
+        MDS_GETSTATUS    = 40,
+        MDS_STATFS       = 41,
+        MDS_GETLOVINFO   = 42,
+        MDS_LAST_OPC
+} mds_cmd_t;
+#define MDS_FIRST_OPC    MDS_GETATTR
 /* When adding MDS RPC opcodes, please update 
  * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
-#define MDS_LAST_OPC     (MDS_GETLOVINFO+1)
-#define MDS_FIRST_OPC    MDS_GETATTR
+
 /*
  * Do not exceed 63 
  */
@@ -586,15 +591,17 @@ extern void lustre_swab_lov_desc (struct lov_desc *ld);
  *   LDLM requests:
  */
 /* opcodes -- MUST be distinct from OST/MDS opcodes */
-#define LDLM_ENQUEUE       101
-#define LDLM_CONVERT       102
-#define LDLM_CANCEL        103
-#define LDLM_BL_CALLBACK   104
-#define LDLM_CP_CALLBACK   105
+typedef enum {
+        LDLM_ENQUEUE     = 101,
+        LDLM_CONVERT     = 102,
+        LDLM_CANCEL      = 103,
+        LDLM_BL_CALLBACK = 104,
+        LDLM_CP_CALLBACK = 105,
+        LDLM_LAST_OPC
+} ldlm_cmd_t;
+#define LDLM_FIRST_OPC LDLM_ENQUEUE
 /* When adding LDLM RPC opcodes, please update 
  * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
-#define LDLM_LAST_OPC      (LDLM_CP_CALLBACK+1)
-#define LDLM_FIRST_OPC     LDLM_ENQUEUE
 
 #define RES_NAME_SIZE 3
 #define RES_VERSION_SIZE 4
@@ -679,11 +686,11 @@ typedef enum {
         PTLBD_FLUSH = 203,
         PTLBD_CONNECT = 204,
         PTLBD_DISCONNECT = 205,
+        PTLBD_LAST_OPC
 } ptlbd_cmd_t;
+#define PTLBD_FIRST_OPC PTLBD_QUERY
 /* When adding PTLBD RPC opcodes, please update 
  * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
-#define PTLBD_LAST_OPC  (PTLBD_FLUSH+1)
-#define PTLBD_FIRST_OPC PTLBD_QUERY
 
 struct ptlbd_op {
         __u16 op_cmd;

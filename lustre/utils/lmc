@@ -74,6 +74,7 @@ Object creation command summary:
   --dev path
   --fstype extN|ext3
   --size size
+  --nspath
 
 --add lov
   --lov lov_name
@@ -90,6 +91,7 @@ Object creation command summary:
   --size size
   --fstype extN|ext3
   --ostuuid uuid
+  --nspath
   
 --add mtpt  - Mountpoint
   --node node_name
@@ -148,6 +150,7 @@ lmc_options = [
     ('journal_size', "", PARAM, 0),
     ('fstype', "", PARAM, "ext3"),
     ('ostuuid', "", PARAM, ""),
+    ('nspath', "Local mount point of server namespace.", PARAM, ""),
     ('format', ""),
 
     # clients: mountpoint and echo
@@ -319,7 +322,7 @@ class GenConfig:
         return ldlm
 
     def osd(self, name, uuid, fs, osdtype, devname, format, ost_uuid,
-            node_uuid, dev_size=0, journal_size=0):
+            node_uuid, dev_size=0, journal_size=0, nspath=""):
         osd = self.newService("osd", name, uuid)
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
@@ -333,6 +336,8 @@ class GenConfig:
                 self.addElement(osd, "devsize", "%s" % (dev_size))
             if journal_size:
                 self.addElement(osd, "journalsize", "%s" % (journal_size))
+        if nspath:
+            self.addElement(osd, "nspath", nspath)
         return osd
 
     def cobd(self, name, uuid, real_uuid, cache_uuid):
@@ -373,7 +378,7 @@ class GenConfig:
         return mds
 
     def mdsdev(self, name, uuid, fs, devname, format, node_uuid,
-            mds_uuid, dev_size=0, journal_size=0):
+            mds_uuid, dev_size=0, journal_size=0, nspath=""):
         mdd = self.newService("mdsdev", name, uuid)
         self.addElement(mdd, "fstype", fs)
         dev = self.addElement(mdd, "devpath", devname)
@@ -382,6 +387,8 @@ class GenConfig:
                 self.addElement(mdd, "devsize", "%s" % (dev_size))
         if journal_size:
             self.addElement(mdd, "journalsize", "%s" % (journal_size))
+        if nspath:
+            self.addElement(mdd, "nspath", nspath)
         mdd.appendChild(self.ref("node", node_uuid))
         mdd.appendChild(self.ref("target", mds_uuid))
         return mdd
@@ -637,6 +644,7 @@ def add_mds(gen, lustre, options):
     size = get_option(options, 'size')
     fstype = get_option(options, 'fstype')
     journal_size = get_option(options, 'journal_size')
+    nspath = get_option(options, 'nspath')
 
     node_uuid = name2uuid(lustre, node_name, 'node')
 
@@ -648,7 +656,7 @@ def add_mds(gen, lustre, options):
 
     mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname,
                      get_format_flag(options), node_uuid, mds_uuid,
-                     dev_size=size, journal_size=journal_size)
+                     size, journal_size, nspath)
     lustre.appendChild(mdd)
                    
 
@@ -671,6 +679,8 @@ def add_ost(gen, lustre, options):
         fstype = get_option(options, 'fstype')
         journal_size = get_option(options, 'journal_size')
         
+    nspath = get_option(options, 'nspath')
+
     ostname = get_option(options, 'ost')
     if not ostname:
         ostname = new_name('OST_'+ node_name)
@@ -703,7 +713,7 @@ def add_ost(gen, lustre, options):
 
     osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname,
                   get_format_flag(options), ost_uuid, node_uuid, size,
-                  journal_size)
+                  journal_size, nspath)
 
     node = findByName(lustre, node_name, "node")
 

@@ -52,144 +52,11 @@
 #define ECHO_OBJECT0_NPAGES  16
 static struct page *echo_object0_pages[ECHO_OBJECT0_NPAGES];
 
-/* should be generic per-obd stats... */
-struct xprocfs_io_stat {
-        __u64    st_read_bytes;
-        __u64    st_read_reqs;
-        __u64    st_write_bytes;
-        __u64    st_write_reqs;
-        __u64    st_getattr_reqs;
-        __u64    st_setattr_reqs;
-        __u64    st_create_reqs;
-        __u64    st_destroy_reqs;
-        __u64    st_statfs_reqs;
-        __u64    st_syncfs_reqs;
-        __u64    st_open_reqs;
-        __u64    st_close_reqs;
-        __u64    st_punch_reqs;
+enum {
+        LPROC_ECHO_READ_BYTES = 1,
+        LPROC_ECHO_WRITE_BYTES = 2,
+        LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
 };
-
-static struct xprocfs_io_stat xprocfs_iostats[NR_CPUS];
-static struct proc_dir_entry *xprocfs_dir;
-
-#define XPROCFS_BUMP_MYCPU_IOSTAT(field, count)                 \
-do {                                                            \
-        xprocfs_iostats[smp_processor_id()].field += (count);   \
-} while (0)
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define DECLARE_XPROCFS_SUM_STAT(field)                 \
-static long long                                        \
-xprocfs_sum_##field (void)                              \
-{                                                       \
-        long long stat = 0;                             \
-        int       i;                                    \
-                                                        \
-        for (i = 0; i < smp_num_cpus; i++)              \
-                stat += xprocfs_iostats[i].field;       \
-        return (stat);                                  \
-}
-
-DECLARE_XPROCFS_SUM_STAT (st_read_bytes)
-DECLARE_XPROCFS_SUM_STAT (st_read_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_write_bytes)
-DECLARE_XPROCFS_SUM_STAT (st_write_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_getattr_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_setattr_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_create_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_destroy_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_statfs_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_syncfs_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_open_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_close_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_punch_reqs)
-#endif
-
-static int
-xprocfs_rd_stat (char *page, char **start, off_t off, int count,
-                 int  *eof, void *data)
-{
-        long long (*fn)(void) = (long long(*)(void))data;
-        int         len;
-
-        *eof = 1;
-        if (off != 0)
-                return (0);
-
-        len = snprintf (page, count, "%Ld\n", fn());
-        *start = page;
-        return (len);
-}
-
-
-static void
-xprocfs_add_stat(char *name, long long (*fn)(void))
-{
-        struct proc_dir_entry *entry;
-
-        entry = create_proc_entry (name, S_IFREG|S_IRUGO, xprocfs_dir);
-        if (entry == NULL) {
-                CERROR ("Can't add procfs stat %s\n", name);
-                return;
-        }
-
-        entry->data = fn;
-        entry->read_proc = xprocfs_rd_stat;
-        entry->write_proc = NULL;
-}
-
-static void
-xprocfs_init (char *name)
-{
-        char  dirname[64];
-
-        snprintf (dirname, sizeof (dirname), "sys/%s", name);
-
-        xprocfs_dir = proc_mkdir (dirname, NULL);
-        if (xprocfs_dir == NULL) {
-                CERROR ("Can't make procfs dir %s\n", dirname);
-                return;
-        }
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        xprocfs_add_stat ("read_bytes",   xprocfs_sum_st_read_bytes);
-        xprocfs_add_stat ("read_reqs",    xprocfs_sum_st_read_reqs);
-        xprocfs_add_stat ("write_bytes",  xprocfs_sum_st_write_bytes);
-        xprocfs_add_stat ("write_reqs",   xprocfs_sum_st_write_reqs);
-        xprocfs_add_stat ("getattr_reqs", xprocfs_sum_st_getattr_reqs);
-        xprocfs_add_stat ("setattr_reqs", xprocfs_sum_st_setattr_reqs);
-        xprocfs_add_stat ("create_reqs",  xprocfs_sum_st_create_reqs);
-        xprocfs_add_stat ("destroy_reqs", xprocfs_sum_st_destroy_reqs);
-        xprocfs_add_stat ("statfs_reqs",  xprocfs_sum_st_statfs_reqs);
-        xprocfs_add_stat ("syncfs_reqs",  xprocfs_sum_st_syncfs_reqs);
-        xprocfs_add_stat ("open_reqs",    xprocfs_sum_st_open_reqs);
-        xprocfs_add_stat ("close_reqs",   xprocfs_sum_st_close_reqs);
-        xprocfs_add_stat ("punch_reqs",   xprocfs_sum_st_punch_reqs);
-#endif
-}
-
-void xprocfs_fini (void)
-{
-        if (xprocfs_dir == NULL)
-                return;
-
-        remove_proc_entry ("read_bytes",   xprocfs_dir);
-        remove_proc_entry ("read_reqs",    xprocfs_dir);
-        remove_proc_entry ("write_bytes",  xprocfs_dir);
-        remove_proc_entry ("write_reqs",   xprocfs_dir);
-        remove_proc_entry ("getattr_reqs", xprocfs_dir);
-        remove_proc_entry ("setattr_reqs", xprocfs_dir);
-        remove_proc_entry ("create_reqs",  xprocfs_dir);
-        remove_proc_entry ("destroy_reqs", xprocfs_dir);
-        remove_proc_entry ("statfs_reqs",  xprocfs_dir);
-        remove_proc_entry ("syncfs_reqs",  xprocfs_dir);
-        remove_proc_entry ("open_reqs",    xprocfs_dir);
-        remove_proc_entry ("close_reqs",   xprocfs_dir);
-        remove_proc_entry ("punch_reqs",   xprocfs_dir);
-
-        remove_proc_entry (xprocfs_dir->name, xprocfs_dir->parent);
-        xprocfs_dir = NULL;
-}
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
                         struct obd_uuid *cluuid)
@@ -224,8 +91,6 @@ int echo_create(struct lustre_handle *conn, struct obdo *oa,
 {
         struct obd_device *obd = class_conn2obd(conn);
 
-        XPROCFS_BUMP_MYCPU_IOSTAT (st_create_reqs, 1);
-
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
@@ -252,8 +117,6 @@ int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
                  struct lov_stripe_md *ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
-
-        XPROCFS_BUMP_MYCPU_IOSTAT (st_destroy_reqs, 1);
 
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n", conn->cookie);
@@ -282,8 +145,6 @@ static int echo_open(struct lustre_handle *conn, struct obdo *oa,
         struct lustre_handle *fh = obdo_handle (oa);
         struct obd_device    *obd = class_conn2obd (conn);
 
-        XPROCFS_BUMP_MYCPU_IOSTAT (st_open_reqs, 1);
-
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return (-EINVAL);
@@ -305,8 +166,6 @@ static int echo_close(struct lustre_handle *conn, struct obdo *oa,
 {
         struct lustre_handle *fh = obdo_handle (oa);
         struct obd_device    *obd = class_conn2obd(conn);
-
-        XPROCFS_BUMP_MYCPU_IOSTAT (st_close_reqs, 1);
 
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n", conn->cookie);
@@ -332,8 +191,6 @@ static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
         struct obd_device *obd = class_conn2obd(conn);
         obd_id id = oa->o_id;
 
-        XPROCFS_BUMP_MYCPU_IOSTAT (st_getattr_reqs, 1);
-
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 RETURN(-EINVAL);
@@ -354,8 +211,6 @@ static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
                         struct lov_stripe_md *md, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
-
-        XPROCFS_BUMP_MYCPU_IOSTAT (st_setattr_reqs, 1);
 
         if (!obd) {
                 CERROR("invalid client cookie "LPX64"\n", conn->cookie);
@@ -384,14 +239,10 @@ int echo_preprw(int cmd, struct obd_export *export, int objcount,
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
+        int tot_bytes = 0;
         int rc = 0;
         int i;
         ENTRY;
-
-        if ((cmd & OBD_BRW_WRITE) != 0)
-                XPROCFS_BUMP_MYCPU_IOSTAT (st_write_reqs, 1);
-        else
-                XPROCFS_BUMP_MYCPU_IOSTAT (st_read_reqs, 1);
 
         obd = export->exp_obd;
         if (obd == NULL)
@@ -428,6 +279,8 @@ int echo_preprw(int cmd, struct obd_export *export, int objcount,
                                 }
                         }
 
+                        tot_bytes += r->len;
+
                         atomic_inc(&obd->u.echo.eo_prep);
 
                         r->offset = nb->offset;
@@ -437,9 +290,8 @@ int echo_preprw(int cmd, struct obd_export *export, int objcount,
                         CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
                                r->page, r->offset, r->len);
 
-                        if (cmd == OBD_BRW_READ) {
+                        if (cmd & OBD_BRW_READ) {
                                 r->rc = r->len;
-                                XPROCFS_BUMP_MYCPU_IOSTAT(st_read_bytes,r->len);
                                 if (verify) {
                                         page_debug_setup(kmap (r->page), r->len,
                                                          r->offset,obj->ioo_id);
@@ -447,8 +299,6 @@ int echo_preprw(int cmd, struct obd_export *export, int objcount,
                                 }
                                 r->rc = r->len;
                         } else {
-                                XPROCFS_BUMP_MYCPU_IOSTAT(st_write_bytes,
-                                                          r->len);
                                 if (verify) {
                                         page_debug_setup(kmap (r->page), r->len,
                                                          0xecc0ecc0ecc0ecc0,
@@ -458,6 +308,13 @@ int echo_preprw(int cmd, struct obd_export *export, int objcount,
                         }
                 }
         }
+        if (cmd & OBD_BRW_READ)
+                lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_READ_BYTES,
+                                    tot_bytes);
+        else
+                lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
+                                    tot_bytes);
+
         CDEBUG(D_PAGE, "%d pages allocated after prep\n",
                atomic_read(&obd->u.echo.eo_prep));
 
@@ -518,14 +375,12 @@ int echo_commitrw(int cmd, struct obd_export *export, int objcount,
                         struct page *page = r->page;
                         void *addr;
 
-                        kmap (page);
-                        
-                        if (!page || !(addr = page_address(page)) ||
+                        if (!page || !(addr = kmap(page)) ||
                             !kern_addr_valid(addr)) {
 
                                 CERROR("bad page objid "LPU64":%p, buf %d/%d\n",
                                        obj->ioo_id, page, j, obj->ioo_bufcnt);
-                                kunmap (page);
+                                kunmap(page);
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
@@ -593,16 +448,29 @@ static int echo_cleanup(struct obd_device *obddev, int force, int failover)
         RETURN(0);
 }
 
-int echo_attach(struct obd_device *dev, obd_count len, void *data)
+int echo_attach(struct obd_device *obd, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
+        int rc;
 
         lprocfs_init_vars(&lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
+        rc = lprocfs_obd_attach(obd, lvars.obd_vars);
+        if (rc != 0)
+                return rc;
+        rc = lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST);
+        if (rc != 0)
+                return rc;
+
+        lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
+                             LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
+        lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
+                             LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
+        return rc;
 }
 
 int echo_detach(struct obd_device *dev)
 {
+        lprocfs_free_obd_stats(dev);
         return lprocfs_obd_detach(dev);
 }
 
@@ -673,8 +541,6 @@ static int __init obdecho_init(void)
 
         lprocfs_init_vars(&lvars);
 
-        xprocfs_init ("echo");
-
         rc = echo_object0_pages_init ();
         if (rc != 0)
                 goto failed_0;
@@ -692,8 +558,6 @@ static int __init obdecho_init(void)
  failed_1:
         echo_object0_pages_fini ();
  failed_0:
-        xprocfs_fini ();
-
         RETURN(rc);
 }
 
@@ -702,7 +566,6 @@ static void __exit obdecho_exit(void)
         echo_client_cleanup();
         class_unregister_type(OBD_ECHO_DEVICENAME);
         echo_object0_pages_fini ();
-        xprocfs_fini ();
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

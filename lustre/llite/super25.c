@@ -271,6 +271,7 @@ out_osc:
 out_mdc:
         obd_disconnect(&sbi->ll_mdc_conn, 0);
 out_free:
+        lprocfs_unregister_mountpoint(sbi);
         OBD_FREE(sbi, sizeof(*sbi));
 
         goto out_dev;
@@ -286,6 +287,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
 
+        LPROC_COUNTER_INODE_INCBY1(inode, LPROC_LL_SETATTR);
         if ((attr->ia_valid & ATTR_SIZE)) {
                 /* writeback uses inode->i_size to determine how far out
                  * its cached pages go.  ll_truncate gets a PW lock, canceling
@@ -368,6 +370,7 @@ static void ll_put_super(struct super_block *sb)
          */
         mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
 
+        lprocfs_unregister_mountpoint(sbi);
         if (sbi->ll_proc_root) {
                 lprocfs_remove(sbi->ll_proc_root);
         sbi->ll_proc_root = NULL;
@@ -562,6 +565,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         if (rc)
                 return rc;
 
+        LPROC_COUNTER_INODE_INCBY1((de->d_inode), LPROC_LL_SETATTR);
         return ll_inode_setattr(de->d_inode, attr, 1);
 }
 
@@ -573,6 +577,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
 
+        LPROC_COUNTER_SBI_INCBY1(sbi, LPROC_LL_STAFS);
         memset(sfs, 0, sizeof(*sfs));
         rc = obd_statfs(&sbi->ll_mdc_conn, &osfs);
         statfs_unpack(sfs, &osfs);
@@ -745,6 +750,7 @@ static kmem_cache_t *ll_inode_cachep;
 static struct inode *ll_alloc_inode(struct super_block *sb)
 {
         struct ll_inode_info *lli;
+        LPROC_COUNTER_SBI_INCBY1((ll_s2sbi(sb)), LL_ALLOC_INODE);
         OBD_SLAB_ALLOC(lli, ll_inode_cachep, SLAB_KERNEL, sizeof *lli);
         if (lli == NULL)
                 return NULL;

@@ -290,7 +290,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr);
+        rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
         if (rc == 0 &&
             S_ISREG(inode->i_mode) &&
             rec->ur_eadata != NULL) {
@@ -494,7 +494,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                inode->i_ino, inode->i_generation);
                 }
 
-                rc = fsfilt_setattr(obd, dchild, handle, &iattr);
+                rc = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
                 if (rc) {
                         CERROR("error on setattr: rc = %d\n", rc);
                         /* XXX should we abort here in case of error? */
@@ -715,9 +715,15 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
          * (bug 72) */
         switch (rec->ur_mode & S_IFMT) {
         case S_IFDIR:
+                /* Drop any lingering child directories before we start our
+                 * transaction, to avoid doing multiple inode dirty/delete
+                 * in our compound transaction (bug 1321).
+                 */
+                shrink_dcache_parent(dchild);
                 handle = fsfilt_start(obd, dir_inode, FSFILT_OP_RMDIR);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                cleanup_phase = 4;
                 rc = vfs_rmdir(dir_inode, dchild);
                 break;
         case S_IFREG:
@@ -740,21 +746,24 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir_inode, FSFILT_OP_UNLINK);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                cleanup_phase = 4;
                 rc = vfs_unlink(dir_inode, dchild);
                 break;
         default:
-                CERROR("bad file type %o unlinking %s\n", rec->ur_mode, rec->ur_name);
+                CERROR("bad file type %o unlinking %s\n", rec->ur_mode,
+                       rec->ur_name);
                 LBUG();
                 GOTO(cleanup, rc = -EINVAL);
         }
 
  cleanup:
-        rc = mds_finish_transno(mds, dir_inode, handle, req, rc, 0);
-        if (rc && body) {
-                /* Don't unlink the OST objects if the MDS unlink failed */
-                body->valid = 0;
-        }
         switch(cleanup_phase) {
+            case 4:
+                rc = mds_finish_transno(mds, dir_inode, handle, req, rc, 0);
+                if (rc && body) {
+                        /* Don't unlink the OST objects if the MDS unlink failed */
+                        body->valid = 0;
+                }
             case 3: /* child lock */
                 if (rc != 0 || return_lock == 0)
                         ldlm_lock_decref(child_lockh, LCK_EX);

@@ -29,8 +29,10 @@ for NAME in $CONFIGS; do
 		sh runtests
 	fi
 
-	[ "$SANITY" != "no" ] && sh sanity.sh
-	[ "$SANITY" != "no" ] && START=" " CLEAN=" " sh sanity.sh
+	#[ "$SANITY" != "no" ] && sh sanity.sh
+	if [ "$SANITY" != "no" ]; then
+		START=: CLEAN=: sh sanity.sh
+	fi
 
 	if [ "$DBENCH" != "no" ]; then
 		mount | grep $MNT || sh llmount.sh

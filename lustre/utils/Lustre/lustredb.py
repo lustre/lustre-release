@@ -37,7 +37,7 @@ class LustreDB:
                 return int(str)
             return default
         except ValueError:
-            raise LconfError("text value is not integer:", str)
+            raise Lustre.LconfError("text value is not integer: " + str)
             
     def get_first_ref(self, tag):
         """ Get the first uuidref of the type TAG. Only
@@ -70,7 +70,7 @@ class LustreDB:
         node_db = self.lookup_name(node_name)
         if not node_db:
             return None
-        return self.get_tgt_dev(target_uuid)
+        return node_db.get_tgt_dev(target_uuid)
 
     # get all network uuids for this node
     def get_networks(self):
@@ -264,7 +264,7 @@ class LustreDB_XML(LustreDB):
         return ret
 
     def _update_active(self, tgt, new):
-        raise LconfError("updates not implemented for XML")
+        raise Lustre.LconfError("updates not implemented for XML")
 
 # ================================================================    
 # LDAP Support
@@ -274,7 +274,7 @@ class LustreDB_LDAP(LustreDB):
                  parent = None,
                  url  = "ldap://localhost",
                  user = "cn=Manager, fs=lustre",
-                 pw   = "secret"
+                 pw   = ""
                  ):
         self._name = name
         self._attrs = attrs

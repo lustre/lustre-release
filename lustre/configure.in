@@ -15,7 +15,7 @@ AC_ARG_ENABLE(extN, [  --enable-extN use extN instead of ext3 for lustre backend
 AM_CONDITIONAL(EXTN, test x$enable_extN = xyes)
 
 AC_ARG_WITH(obd-buffer-size, [  --with-obd-buffer-size=[size] set lctl ioctl maximum (default=8K)],OBD_BUFFER_SIZE=$with_obd_buffer_size,OBD_BUFFER_SIZE=8192)
-AC_SUBST(OBD_BUFFER_SIZE)
+AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 
 sinclude(portals/build.m4)
 sinclude(portals/archdep.m4)

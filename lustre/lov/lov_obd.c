@@ -43,6 +43,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
+#include <linux/seq_file.h>
 #include <linux/lprocfs_status.h>
 
 struct lov_file_handles {
@@ -169,9 +170,22 @@ static void lov_llh_destroy(struct lov_lock_handles *llh)
 int lov_attach(struct obd_device *dev, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
+        struct proc_dir_entry *entry;
+        int rc;
 
         lprocfs_init_vars(&lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
+        rc = lprocfs_obd_attach(dev, lvars.obd_vars);
+        if (rc) 
+                return rc;
+
+        entry = create_proc_entry("target_obd", 0444, dev->obd_proc_entry);
+        if (entry == NULL) 
+                RETURN(-ENOMEM);
+        entry->proc_fops = &ll_proc_target_fops;
+        entry->data = dev;
+        
+        return rc;
+        
 }
 
 int lov_detach(struct obd_device *dev)
@@ -645,9 +659,9 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                                                "err %d\n", err);
                                         err = -EIO;
                                 }
-                                if (!rc)
-                                        rc = err;
                         }
+                        if (!rc)
+                                rc = err;
                         continue;
                 }
                 loi->loi_id = tmp->o_id;
@@ -663,13 +677,15 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 ++loi;
 
                 /* If we have allocated enough objects, we are OK */
-                if (obj_alloc == lsm->lsm_stripe_count) {
-                        rc = 0;
-                        GOTO(out_done, rc);
-                }
+                if (obj_alloc == lsm->lsm_stripe_count)
+                        GOTO(out_done, rc = 0);
         }
 
         if (*ea != NULL) {
+                CERROR("can't lstripe objid "LPX64": have %u want %u, rc %d\n",
+                       lsm->lsm_object_id, obj_alloc, lsm->lsm_stripe_count,rc);
+                if (rc == 0)
+                        rc = -EFBIG;
                 GOTO(out_cleanup, rc);
         } else {
                 struct lov_stripe_md *lsm_new;
@@ -687,6 +703,8 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 /* XXX LOV STACKING call into osc for sizes */
                 OBD_FREE(lsm, lov_stripe_md_size(lsm->lsm_stripe_count));
                 lsm = lsm_new;
+
+                rc = 0;
         }
  out_done:
         *ea = lsm;
@@ -1700,7 +1718,7 @@ static int lov_brw_async(int cmd, struct lustre_handle *conn,
 static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                        struct lustre_handle *parent_lock,
                        __u32 type, void *cookie, int cookielen, __u32 mode,
-                       int *flags, void *cb, void *data, int datalen,
+                       int *flags, void *cb, void *data,
                        struct lustre_handle *lockh)
 {
         struct obd_export *export = class_conn2export(conn);
@@ -1764,7 +1782,7 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 *flags = 0;
                 rc = obd_enqueue(&(lov->tgts[loi->loi_ost_idx].conn), &submd,
                                   parent_lock, type, &sub_ext, sizeof(sub_ext),
-                                  mode, flags, cb, data, datalen, lov_lockhp);
+                                  mode, flags, cb, data, lov_lockhp);
 
                 // XXX add a lock debug statement here
                 if (rc != ELDLM_OK) {
@@ -1812,8 +1830,8 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
 }
 
 static int lov_match(struct lustre_handle *conn, struct lov_stripe_md *lsm,
-                       __u32 type, void *cookie, int cookielen, __u32 mode,
-                       int *flags, struct lustre_handle *lockh)
+                     __u32 type, void *cookie, int cookielen, __u32 mode,
+                     int *flags, void *data, struct lustre_handle *lockh)
 {
         struct obd_export *export = class_conn2export(conn);
         struct lov_lock_handles *lov_lockh = NULL;
@@ -1874,7 +1892,7 @@ static int lov_match(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 /* XXX submd is not fully initialized here */
                 rc = obd_match(&(lov->tgts[loi->loi_ost_idx].conn), &submd,
                                type, &sub_ext, sizeof(sub_ext), mode,
-                               &lov_flags, lov_lockhp);
+                               &lov_flags, data, lov_lockhp);
                 if (rc != 1)
                         break;
         }

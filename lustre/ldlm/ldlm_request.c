@@ -60,6 +60,7 @@ int ldlm_expired_completion_wait(void *data)
 
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
+        /* XXX ALLOCATE - 160 mytes */
         struct lock_wait_data lwd;
         unsigned long irqflags;
         struct obd_device *obd;
@@ -373,43 +374,6 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         return rc;
 }
 
-int ldlm_match_or_enqueue(struct lustre_handle *connh,
-                          struct ptlrpc_request *req,
-                          struct ldlm_namespace *ns,
-                          struct lustre_handle *parent_lock_handle,
-                          struct ldlm_res_id res_id,
-                          __u32 type,
-                          void *cookie, int cookielen,
-                          ldlm_mode_t mode,
-                          int *flags,
-                          ldlm_completion_callback completion,
-                          ldlm_blocking_callback blocking,
-                          void *data,
-                          struct lustre_handle *lockh)
-{
-        int rc;
-        ENTRY;
-        if (connh == NULL) {
-                /* Just to make sure that I understand things --phil */
-                LASSERT(*flags & LDLM_FL_LOCAL_ONLY);
-        }
-
-        LDLM_DEBUG_NOLOCK("resource "LPU64"/"LPU64, res_id.name[0],
-                          res_id.name[1]);
-        rc = ldlm_lock_match(ns, *flags, &res_id, type, cookie, cookielen, mode,
-                             lockh);
-        if (rc == 0) {
-                rc = ldlm_cli_enqueue(connh, req, ns, parent_lock_handle,
-                                      res_id, type, cookie, cookielen, mode,
-                                      flags, completion, blocking, data,
-                                      lockh);
-                if (rc != ELDLM_OK)
-                        CERROR("ldlm_cli_enqueue: err: %d\n", rc);
-                RETURN(rc);
-        }
-        RETURN(0);
-}
-
 int ldlm_cli_replay_enqueue(struct ldlm_lock *lock)
 {
         struct lustre_handle lockh;
@@ -666,16 +630,20 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
+                if (opaque != NULL && lock->l_data != opaque) {
+                        LDLM_ERROR(lock, "data %p doesn't match opaque %p res"
+				   LPU64":"LPU64, lock->l_data, opaque,
+				   res_id.name[0], res_id.name[1]);
+                        //LBUG();
+                        continue;
+                }
+
                 if (lock->l_readers || lock->l_writers) {
                         if (flags & LDLM_FL_WARN) {
                                 LDLM_ERROR(lock, "lock in use");
-                                LBUG();
+                                //LBUG();
                         }
-                }
-                if (opaque != NULL && lock->l_data != opaque) {
-                        LDLM_ERROR(lock, "data %p doesn't match opaque %p",
-                                   lock->l_data, opaque);
-                        LBUG();
+                        continue;
                 }
 
                 /* See CBPENDING comment in ldlm_cancel_lru */

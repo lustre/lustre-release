@@ -74,25 +74,26 @@ struct brw_page {
 struct ost_server_data;
 
 struct filter_obd {
-        char *fo_fstype;
-        struct super_block *fo_sb;
-        struct vfsmount *fo_vfsmnt;
-        struct obd_run_ctxt fo_ctxt;
-        struct dentry *fo_dentry_O;
-        struct dentry *fo_dentry_O_mode[16];
-        struct dentry **fo_dentry_O_sub;
-        spinlock_t fo_objidlock;        /* protects fo_lastobjid increment */
-        spinlock_t fo_translock;        /* protects fsd_last_rcvd increment */
-        struct file *fo_rcvd_filp;
+        const char          *fo_fstype;
+        char *fo_nspath;
+        struct super_block  *fo_sb;
+        struct vfsmount     *fo_vfsmnt;
+        struct obd_run_ctxt  fo_ctxt;
+        struct dentry       *fo_dentry_O;
+        struct dentry       *fo_dentry_O_mode[16];
+        struct dentry      **fo_dentry_O_sub;
+        spinlock_t           fo_objidlock; /* protect fo_lastobjid increment */
+        spinlock_t           fo_translock; /* protect fsd_last_rcvd increment */
+        struct file         *fo_rcvd_filp;
         struct filter_server_data *fo_fsd;
-        unsigned long *fo_last_rcvd_slots;
+        unsigned long       *fo_last_rcvd_slots;
 
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
         struct address_space_operations *fo_aops;
-        struct list_head fo_export_list;
-        spinlock_t fo_fddlock;          /* protects setting dentry->d_fsdata */
-        int fo_subdir_count;
+        struct list_head     fo_export_list;
+        spinlock_t           fo_fddlock; /* protect setting dentry->d_fsdata */
+        int                  fo_subdir_count;
 };
 
 struct mds_server_data;
@@ -223,6 +224,7 @@ struct niobuf_local {
         __u32 rc;
         struct page *page;
         struct dentry *dentry;
+        unsigned long start;
 };
 
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
@@ -287,8 +289,8 @@ struct obd_device {
                 struct ptlbd_obd ptlbd;
         } u;
        /* Fields used by LProcFS */
-        unsigned int cntr_base;
-        void *counters;
+        unsigned int           obd_cntr_base;
+        struct lprocfs_stats  *obd_stats;
 };
 
 struct obd_ops {
@@ -364,11 +366,11 @@ struct obd_ops {
         int (*o_enqueue)(struct lustre_handle *conn, struct lov_stripe_md *md,
                          struct lustre_handle *parent_lock,
                          __u32 type, void *cookie, int cookielen, __u32 mode,
-                         int *flags, void *cb, void *data, int datalen,
+                         int *flags, void *cb, void *data,
                          struct lustre_handle *lockh);
         int (*o_match)(struct lustre_handle *conn, struct lov_stripe_md *md,
                          __u32 type, void *cookie, int cookielen, __u32 mode,
-                         int *flags, struct lustre_handle *lockh);
+                         int *flags, void *data, struct lustre_handle *lockh);
         int (*o_cancel)(struct lustre_handle *, struct lov_stripe_md *md,
                         __u32 mode, struct lustre_handle *);
         int (*o_cancel_unused)(struct lustre_handle *, struct lov_stripe_md *,

@@ -79,12 +79,11 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
         return rc;
 }
 
-struct ptlrpc_service *
-ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
-                __u32 bufsize, __u32 max_req_size,
-                int req_portal, int rep_portal,
-                svc_handler_t handler, char *name,
-                struct obd_device *obddev)
+struct ptlrpc_service * ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
+                                        __u32 bufsize, __u32 max_req_size,
+                                        int req_portal, int rep_portal,
+                                        svc_handler_t handler, char *name,
+                                        struct obd_device *obddev)
 {
         int i, j, ssize, rc;
         struct ptlrpc_service *service;
@@ -300,8 +299,8 @@ static int ptlrpc_main(void *arg)
         ptl_event_t *event;
         int rc = 0;
         unsigned long flags;
-        cycles_t workdone_time;
-        cycles_t svc_workcycles;
+        cycles_t workdone_time = -1;
+        cycles_t svc_workcycles = -1;
         ENTRY;
 
         lock_kernel();
@@ -331,7 +330,6 @@ static int ptlrpc_main(void *arg)
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
-        svc_workcycles = workdone_time = 0;
         wake_up(&thread->t_ctl_waitq);
 
         /* XXX maintain a list of all managed devices: insert here */
@@ -353,34 +351,42 @@ static int ptlrpc_main(void *arg)
 
                 if (thread->t_flags & SVC_EVENT) {
                         cycles_t  workstart_time;
+
                         spin_lock(&svc->srv_lock);
                         thread->t_flags &= ~SVC_EVENT;
                         /* Update Service Statistics */
                         workstart_time = get_cycles();
-                        if (workdone_time && (svc->svc_counters != NULL)) {
+                        if (workdone_time != -1 && svc->svc_stats != NULL) {
                                 /* Stats for req(n) are updated just before
                                  * req(n+1) is executed. This avoids need to
                                  * reacquire svc->srv_lock after
                                  * call to handling_request().
                                  */
-                                int opc_offset;
+                                int opc;
+
                                 /* req_waittime */
-                                LPROCFS_COUNTER_INCR(&svc->svc_counters->cntr[PTLRPC_REQWAIT_CNTR],
-                                                     (workstart_time -
-                                                      event->arrival_time));
+                                lprocfs_counter_add(svc->svc_stats,
+                                                    PTLRPC_REQWAIT_CNTR,
+                                                    (workstart_time -
+                                                     event->arrival_time));
                                 /* svc_eqdepth */
-                                LPROCFS_COUNTER_INCR(&svc->svc_counters->cntr[PTLRPC_SVCEQDEPTH_CNTR],
-                                                     0); /* Wait for b_eq branch */
+                                /* Wait for b_eq branch
+                                lprocfs_counter_add(svc->svc_stats,
+                                                    PTLRPC_SVCEQDEPTH_CNTR,
+                                                    0);
+                                */
                                 /* svc_idletime */
-                                LPROCFS_COUNTER_INCR(&svc->svc_counters->cntr[PTLRPC_SVCIDLETIME_CNTR],
-                                                     (workstart_time -
-                                                      workdone_time));
+                                lprocfs_counter_add(svc->svc_stats,
+                                                    PTLRPC_SVCIDLETIME_CNTR,
+                                                    (workstart_time -
+                                                     workdone_time));
                                 /* previous request */
-                                opc_offset = 
-                                        opcode_offset(request->rq_reqmsg->opc);
-                                if (opc_offset >= 0) {
-                                        LASSERT(opc_offset < LUSTRE_MAX_OPCODES);
-                                        LPROCFS_COUNTER_INCR(&svc->svc_counters->cntr[PTLRPC_LAST_CNTR+opc_offset], svc_workcycles);
+                                opc = opcode_offset(request->rq_reqmsg->opc);
+                                if (opc > 0) {
+                                        LASSERT(opc < LUSTRE_MAX_OPCODES);
+                                        lprocfs_counter_add(svc->svc_stats, opc,
+                                                            PTLRPC_LAST_CNTR +
+                                                            svc_workcycles);
                                 }
                         }
                         spin_unlock(&svc->srv_lock);

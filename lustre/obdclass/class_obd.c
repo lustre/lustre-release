@@ -73,6 +73,9 @@ int obd_memmax;
 
 /* Root for /proc/lustre */
 struct proc_dir_entry *proc_lustre_root = NULL;
+int obd_proc_read_version(char *page, char **start, off_t off, int count, int *eof, void *data);
+struct lprocfs_vars lprocfs_version[] = {{"version", obd_proc_read_version, NULL, NULL },{NULL,NULL,NULL,NULL}};
+int proc_version;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned long obd_fail_loc;
@@ -244,7 +247,8 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         case OBD_IOC_DEVICE: {
                 CDEBUG(D_IOCTL, "\n");
                 if (data->ioc_dev >= MAX_OBD_DEVICES || data->ioc_dev < 0) {
-                        CERROR("OBD ioctl: DEVICE insufficient devices\n");
+                        CERROR("OBD ioctl: DEVICE invalid device %d\n",
+                               data->ioc_dev);
                         GOTO(out, err = -EINVAL);
                 }
                 CDEBUG(D_IOCTL, "device %d\n", data->ioc_dev);
@@ -851,11 +855,22 @@ int init_obdclass(void)
         proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
         if (!proc_lustre_root)
                 printk(KERN_ERR "error registering /proc/fs/lustre\n");
+        proc_version = lprocfs_add_vars(proc_lustre_root,lprocfs_version,NULL);
 #else
         proc_lustre_root = NULL;
+        proc_version = -1;
 #endif
         return 0;
 }
+
+#ifdef LPROCFS
+int obd_proc_read_version(char *page, char **start, off_t off, int count, int *eof, void *data) {
+        *eof = 1;
+        return snprintf(page, count, "%s\n", BUILD_VERSION);
+}
+#else
+int obd_proc_read_version(char *page, char **start, off_t off, int count, int *eof, void *data) { return 0; }
+#endif
 
 #ifdef __KERNEL__
 static void __exit cleanup_obdclass(void)

@@ -35,7 +35,7 @@
 #include <asm/uaccess.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/locks.h>   // for wait_on_buffer
-#else 
+#else
 #include <linux/buffer_head.h>   // for wait_on_buffer
 #endif
 
@@ -117,7 +117,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
                 LASSERT (body != NULL);         /* checked by mdc_readpage() */
                 LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_readpage() */
-                
+
                 inode->i_size = body->size;
         }
         ptlrpc_req_finished(request);
@@ -770,6 +770,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%u\n", inode->i_ino,
                inode->i_generation, inode, cmd);
 
+        if ((cmd & 0xffffff00) == ((int)'T') << 8) /* tty ioctls */
+                return -ENOTTY;
+
         switch(cmd) {
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
@@ -803,9 +806,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 }
 
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
-                LASSERT (body != NULL);         /* checked by mdc_getattr_name() */
-                LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_getattr_name() */
-                
+                LASSERT(body != NULL);         /* checked by mdc_getattr_name */
+                LASSERT_REPSWABBED(request, 0);/* swabbed by mdc_getattr_name */
+
                 /* surely there's a better way -phik */
                 data->ioc_obdo1.o_mode = body->mode;
                 data->ioc_obdo1.o_uid = body->uid;

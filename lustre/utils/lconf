@@ -1010,7 +1010,6 @@ class Network(Module):
                             gw_nid = my_int(gw.nid)
                             self_nid = my_int(self.nid)
                         except ValueError, e:
-                            print "Error!", str(e)
                             gw_nid = gw.nid
                             self_nid = self.nid
                         if gw_nid < self_nid:
@@ -1021,6 +1020,9 @@ class Network(Module):
             if router.get_val_int('router', 0):
                 # if this is a peer with a nid less than mine,
                 # then connect.
+                for netuuid in router.get_networks():
+                    net = self.db.lookup(netuuid)
+                    gw = Network(net)
                     if (gw.cluster_id == self.cluster_id and
                         gw.net_type == self.net_type):
                         # hack: compare as numbers if possible, this should all
@@ -1030,7 +1032,6 @@ class Network(Module):
                             gw_nid = my_int(gw.nid)
                             self_nid = my_int(self.nid)
                         except ValueError, e:
-                            print "Error!", str(e)
                             gw_nid = gw.nid
                             self_nid = self.nid
                         if gw_nid < self_nid:
@@ -1209,6 +1210,7 @@ class MDSDEV(Module):
         self.size = self.db.get_val_int('devsize', 0)
         self.journal_size = self.db.get_val_int('journalsize', 0)
         self.fstype = self.db.get_val('fstype', '')
+        self.nspath = self.db.get_val('nspath', '')
         # overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
         target_uuid = self.db.get_first_ref('target')
         mds = self.db.lookup(target_uuid)
@@ -1220,7 +1222,7 @@ class MDSDEV(Module):
         if mds.get_val('failover', 0):
             self.failover_mds = 'f'
         else:
-            self.failover_mds = ''
+            self.failover_mds = 'n'
         active_uuid = get_active_target(mds)
         if not active_uuid:
             panic("No target device found:", target_uuid)
@@ -1255,8 +1257,10 @@ class MDSDEV(Module):
         if not is_prepared('MDT_UUID'):
             lctl.newdev(attach="mdt %s %s" % ('MDT', 'MDT_UUID'),
                         setup ="")
+        if self.nspath:
+            run ("mkdir", self.nspath)
         lctl.newdev(attach="mds %s %s" % (self.name, self.uuid),
-                    setup ="%s %s" %(blkdev, self.fstype))
+                    setup ="%s %s %s" %(blkdev, self.fstype, self.nspath))
         for uuid in self.lovconfig_uuids:
             db = self.db.lookup(uuid)
             lovconfig = LOVConfig(db)
@@ -1322,6 +1326,7 @@ class OSD(Module):
         self.size = self.db.get_val_int('devsize', 0)
         self.journal_size = self.db.get_val_int('journalsize', 0)
         self.fstype = self.db.get_val('fstype', '')
+        self.nspath = self.db.get_val('nspath', '')
         target_uuid = self.db.get_first_ref('target')
         ost = self.db.lookup(target_uuid)
         self.name = ost.getName()
@@ -1329,7 +1334,7 @@ class OSD(Module):
         if ost.get_val('failover', 0):
             self.failover_ost = 'f'
         else:
-            self.failover_ost = ''
+            self.failover_ost = 'n'
 
         active_uuid = get_active_target(ost)
         if not active_uuid:
@@ -1371,9 +1376,11 @@ class OSD(Module):
         else:
             blkdev = block_dev(self.devpath, self.size, self.fstype,
                                self.format, self.journal_size)
+        if self.nspath:
+            run ("mkdir", self.nspath)
         lctl.newdev(attach="%s %s %s" % (self.osdtype, self.name, self.uuid),
-                    setup ="%s %s %s" %(blkdev, self.fstype,
-                                        self.failover_ost))
+                    setup ="%s %s %s %s" %(blkdev, self.fstype,
+                                           self.failover_ost, self.nspath))
         if not is_prepared('OSS_UUID'):
             lctl.newdev(attach="ost %s %s" % ('OSS', 'OSS_UUID'),
                         setup ="")
@@ -1461,7 +1468,7 @@ class Client(Module):
             else:
                 srv, r =  find_route(self.get_servers())
                 if srv:
-                    lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
+                    lctl.add_route_host(r[0], srv.uuid, r[1], r[3])
                 else:
                     panic ("no route to",  self.target_uuid)
         except CommandError, e:
@@ -1818,7 +1825,7 @@ def get_active_target(db):
     target_name = db.getName()
     node_name = get_select(target_name)
     if node_name:
-        tgt_dev_uuid = db.get_target_device(target_uuid, node_name)
+        tgt_dev_uuid = db.get_node_tgt_dev(node_name, target_uuid)
     else:
         tgt_dev_uuid = db.get_first_ref('active')
     return tgt_dev_uuid
@@ -2127,10 +2134,11 @@ tgt_select = {}
 def init_select(arg):
     # arg = "service=nodeA,service2=nodeB"
     global tgt_select
-    list = string.split(arg, ',')
-    for entry in list:
-        srv, node = string.split(entry, '=')
-        tgt_select[srv] = node
+    if arg:
+        list = string.split(arg, ',')
+        for entry in list:
+            srv, node = string.split(entry, '=')
+            tgt_select[srv] = node
 
 def get_select(srv):
     if tgt_select.has_key(srv):
@@ -2224,6 +2232,8 @@ def main():
     random.seed(seed)
 
     sanitise_path()
+    
+    init_select(config.select)
 
     if len(args) > 0:
         if not os.access(args[0], os.R_OK):

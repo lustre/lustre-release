@@ -217,9 +217,6 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock,
                 struct inode *inode = lock->l_data;
                 LASSERT(inode != NULL);
 
-                //if (inode->i_state & I_FREEING)
-                //        break;
-
                 if (S_ISDIR(inode->i_mode)) {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
@@ -227,6 +224,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock,
                         ll_invalidate_inode_pages(inode);
                 }
 
+#warning FIXME: we should probably free this inode if there are no aliases
                 if (inode->i_sb->s_root &&
                     inode != inode->i_sb->s_root->d_inode)
                         d_unhash_aliases(inode);
@@ -375,7 +373,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
 
                 /*We were called from revalidate2: did we find the same inode?*/
                 if (inode && (ino != inode->i_ino ||
-                   mds_body->fid1.generation != inode->i_generation)) {
+                    mds_body->fid1.generation != inode->i_generation)) {
                         it->it_disposition |= IT_ENQ_COMPLETE;
                         RETURN(-ESTALE);
                 }

@@ -612,7 +612,8 @@ void ldlm_grant_lock(struct ldlm_lock *lock, void *data, int datalen)
  * comment above ldlm_lock_match */
 static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                                       struct ldlm_extent *extent,
-                                      struct ldlm_lock *old_lock, int flags)
+                                      struct ldlm_lock *old_lock, void *data,
+                                      int flags)
 {
         struct ldlm_lock *lock;
         struct list_head *tmp;
@@ -651,6 +652,9 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                     !(lock->l_flags & LDLM_FL_LOCAL))
                         continue;
 
+                if ((flags & LDLM_FL_MATCH_DATA) && lock->l_data != data)
+                        continue;
+
                 ldlm_lock_addref_internal(lock, mode);
                 return lock;
         }
@@ -672,13 +676,16 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
  * If 'flags' contains LDLM_FL_CBPENDING, then locks that have been marked
  *     to be canceled can still be matched as long as they still have reader
  *     or writer refernces
+ * If 'flags' contains LDLM_FL_MATCH_DATA, then only match a lock if the opaque
+ *     data is the same.
  *
  * Returns 1 if it finds an already-existing lock that is compatible; in this
  * case, lockh is filled in with a addref()ed lock
  */
 int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                     struct ldlm_res_id *res_id, __u32 type, void *cookie,
-                    int cookielen, ldlm_mode_t mode,struct lustre_handle *lockh)
+                    int cookielen, ldlm_mode_t mode, void *data,
+                    struct lustre_handle *lockh)
 {
         struct ldlm_resource *res;
         struct ldlm_lock *lock, *old_lock = NULL;
@@ -703,15 +710,18 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 
         l_lock(&ns->ns_lock);
 
-        lock = search_queue(&res->lr_granted, mode, cookie, old_lock, flags);
+        lock = search_queue(&res->lr_granted, mode, cookie, old_lock, data,
+                            flags);
         if (lock != NULL)
                 GOTO(out, rc = 1);
         if (flags & LDLM_FL_BLOCK_GRANTED)
                 GOTO(out, rc = 0);
-        lock = search_queue(&res->lr_converting, mode, cookie, old_lock, flags);
+        lock = search_queue(&res->lr_converting, mode, cookie, old_lock, data,
+                            flags);
         if (lock != NULL)
                 GOTO(out, rc = 1);
-        lock = search_queue(&res->lr_waiting, mode, cookie, old_lock, flags);
+        lock = search_queue(&res->lr_waiting, mode, cookie, old_lock, data,
+                            flags);
         if (lock != NULL)
                 GOTO(out, rc = 1);
 

@@ -130,14 +130,14 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
                 CERROR ("rcp failed\n");
                 GOTO (failed, rc);
         }
-        
+
         desc = lustre_swab_repbuf (req, 0, sizeof (*desc),
                                    lustre_swab_lov_desc);
         if (desc == NULL) {
                 CERROR ("Can't unpack lov_desc\n");
                 GOTO (failed, rc = -EPROTO);
         }
-        
+
         LASSERT_REPSWAB (req, 1);
         /* array of uuids byte-sex insensitive; just verify they are all
          * there and terminated */
@@ -150,7 +150,7 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
 
         for (i = 0; i < desc->ld_tgt_count; i++) {
                 int uid_len = strnlen (uuids[i].uuid, sizeof (uuids[i].uuid));
-                
+
                 if (uid_len == sizeof (uuids[i].uuid)) {
                         CERROR ("Unterminated uuid %d:%*s\n",
                                 i, (int)sizeof (uuids[i].uuid), uuids[i].uuid);
@@ -169,7 +169,7 @@ int mdc_getattr_common (struct lustre_handle *conn,
 {
         struct mds_body *body;
         void            *eadata;
-        int              rc; 
+        int              rc;
         int              size[2] = {sizeof(*body), 0};
         int              bufcount = 1;
         ENTRY;
@@ -188,7 +188,7 @@ int mdc_getattr_common (struct lustre_handle *conn,
         mdc_put_rpc_lock(&mdc_rpc_lock, NULL);
         if (rc != 0)
                 RETURN (rc);
-        
+
         body = lustre_swab_repbuf (req, 0, sizeof (*body),
                                    lustre_swab_mds_body);
         if (body == NULL) {
@@ -210,7 +210,7 @@ int mdc_getattr_common (struct lustre_handle *conn,
 
         RETURN (0);
 }
-                        
+
 int mdc_getattr(struct lustre_handle *conn, struct ll_fid *fid,
                 unsigned long valid, unsigned int ea_size,
                 struct ptlrpc_request **request)
@@ -289,7 +289,7 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
 
         LASSERT (rec != NULL);
         LASSERT (body != NULL);
-        
+
         memcpy(&rec->cr_replayfid, &body->fid1, sizeof rec->cr_replayfid);
         DEBUG_REQ(D_HA, req, "storing generation %x for ino "LPD64,
                   rec->cr_replayfid.generation, rec->cr_replayfid.id);
@@ -451,8 +451,10 @@ int mdc_enqueue(struct lustre_handle *conn,
                 LDLM_DEBUG(lock, "matching against this");
 
                 memcpy(&lockh2, lockh, sizeof(lockh2));
-                if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
-                                    LDLM_PLAIN, NULL, 0, LCK_NL, &lockh2)) {
+                if (ldlm_lock_match(NULL,
+                                    LDLM_FL_BLOCK_GRANTED | LDLM_FL_MATCH_DATA,
+                                    NULL, LDLM_PLAIN, NULL, 0, LCK_NL, cb_data,
+                                    &lockh2)) {
                         /* We already have a lock; cancel the new one */
                         ldlm_lock_decref_and_cancel(lockh, lock_mode);
                         memcpy(lockh, &lockh2, sizeof(lockh2));
@@ -463,7 +465,7 @@ int mdc_enqueue(struct lustre_handle *conn,
         dlm_rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*dlm_rep));
         LASSERT (dlm_rep != NULL);           /* checked by ldlm_cli_enqueue() */
         LASSERT_REPSWABBED (req, 0);         /* swabbed by ldlm_cli_enqueue() */
-        
+
         it->it_disposition = (int) dlm_rep->lock_policy_res1;
         it->it_status = (int) dlm_rep->lock_policy_res2;
         it->it_lock_mode = lock_mode;
@@ -485,7 +487,7 @@ int mdc_enqueue(struct lustre_handle *conn,
                         /* The eadata is opaque; just check that it is
                          * there.  Eventually, obd_unpackmd() will check
                          * the contents */
-                        eadata = lustre_swab_repbuf (req, 2, body->eadatasize, 
+                        eadata = lustre_swab_repbuf (req, 2, body->eadatasize,
                                                      NULL);
                         if (eadata == NULL) {
                                 CERROR ("Missing/short eadata\n");
@@ -493,7 +495,7 @@ int mdc_enqueue(struct lustre_handle *conn,
                         }
                 }
         }
-        
+
         RETURN(rc);
 }
 
@@ -507,7 +509,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
         body = lustre_swab_repbuf (req, 1, sizeof (*body),
                                    lustre_swab_mds_body);
         LASSERT (body != NULL);
-        
+
         memcpy(&old, file_fh, sizeof(old));
         CDEBUG(D_HA, "updating handle from "LPD64" to "LPD64"\n",
                file_fh->cookie, body->handle.cookie);
@@ -675,7 +677,7 @@ static int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
                 CERROR ("Can't unpack obd_statfs\n");
                 GOTO (out, rc = -EPROTO);
         }
-        
+
         memcpy (osfs, msfs, sizeof (*msfs));
         EXIT;
 out:

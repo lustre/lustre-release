@@ -118,6 +118,12 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int flags)
 
         pg.flag = flags;
 
+        if (cmd == OBD_BRW_WRITE)
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_BRW_WRITE, pg.count);
+        else
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_BRW_READ, pg.count);
         rc = obd_brw(cmd, ll_i2obdconn(inode), lsm, 1, &pg, NULL);
         if (rc)
                 CERROR("error from obd_brw: rc = %d\n", rc);
@@ -446,9 +452,11 @@ static int ll_commit_write(struct file *file, struct page *page,
         /* mark the page dirty, put it on mapping->dirty,
          * mark the inode PAGES_DIRTY, put it on sb->dirty */
         if (!PageDirty(page))
-                INODE_IO_STAT_ADD(inode, dirty_misses, 1);
+                lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
+                                     LPROC_LL_DIRTY_MISSES);
         else
-                INODE_IO_STAT_ADD(inode, dirty_hits, 1);
+                lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
+                                     LPROC_LL_DIRTY_HITS);
 
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
         if (size > inode->i_size)
@@ -531,6 +539,12 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 }
         }
 
+        if (rw == WRITE)
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_DIRECT_WRITE, iobuf->length);
+        else
+                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
+                                    LPROC_LL_DIRECT_READ, iobuf->length);
         rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                            ll_i2obdconn(inode), lsm, iobuf->nr_pages, pga, set,
                            NULL);
