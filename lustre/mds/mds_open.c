@@ -142,12 +142,13 @@ int mds_open(struct mds_update_record *rec, int offset,
         } else if (!dchild->d_inode) {
                 up(&dir->i_sem);
                 GOTO(out_ldput, rc = -ENOENT);
+        } else {
+                up(&dir->i_sem);
         }
 
         /*
          * It already exists.
          */
-        up(&dir->i_sem);
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
 
@@ -185,8 +186,8 @@ int mds_open(struct mds_update_record *rec, int offset,
         body->handle.addr = (__u64)(unsigned long)mfd;
         body->handle.cookie = mfd->mfd_servercookie;
         if (mfd)
-                CDEBUG(D_INODE, "file "LPX64": addr %p, cookie "LPX64"\n",
-                       mfd->mfd_clienthandle.addr, mfd, mfd->mfd_servercookie);
+                CDEBUG(D_INODE, "file %p: mfd %p, cookie "LPX64"\n",
+                       mfd->mfd_file, mfd, mfd->mfd_servercookie);
         RETURN(0);
 
  out_ldput:
