@@ -127,7 +127,6 @@ int mds_client_free(struct obd_export *exp, int clear_client)
         int rc;
         unsigned long *bitmap = mds->mds_client_bitmap;
 
-        LASSERT(bitmap);
         if (!med->med_mcd)
                 RETURN(0);
 
@@ -138,6 +137,7 @@ int mds_client_free(struct obd_export *exp, int clear_client)
         CDEBUG(D_INFO, "freeing client at idx %u (%lld)with UUID '%s'\n",
                med->med_idx, med->med_off, med->med_mcd->mcd_uuid);
 
+        LASSERT(bitmap);
         /* Clear the bit _after_ zeroing out the client so we don't
            race with mds_client_add and zero out new clients.*/
         if (!test_bit(med->med_idx, bitmap)) {
