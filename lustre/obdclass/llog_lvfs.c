@@ -505,12 +505,6 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                 GOTO(out, rc = -ENOENT);
         }
 
-        rc = fsfilt_journal_data(disk_obd, file);
-        if (rc) {
-                CERROR("cannot journal data on %s: rc = %d\n", name, rc);
-                GOTO(out, rc);
-        }
-
         rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);
         if (rc) {
                 CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
@@ -550,12 +544,6 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                 CERROR("%s is not a regular file!: mode = %o\n", name,
                        file->f_dentry->d_inode->i_mode);
                 GOTO(out, rc = -ENOENT);
-        }
-
-        rc = fsfilt_journal_data(disk_obd, file);
-        if (rc) {
-                CERROR("cannot journal data on %s: rc = %d\n", name, rc);
-                GOTO(out, rc);
         }
 
         rc = fsfilt_write_record(disk_obd, file, idarray, size, &off, 1);

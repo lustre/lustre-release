@@ -500,16 +500,6 @@ static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
         return 0;
 }
 
-static int fsfilt_ext3_journal_data(struct file *filp)
-{
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        /* bug 1576: enable data journaling on 2.5 when appropriate */
-        struct inode *inode = filp->f_dentry->d_inode;
-        EXT3_I(inode)->i_flags |= EXT3_JOURNAL_DATA_FL;
-#endif
-        return 0;
-}
-
 /*
  * We need to hack the return value for the free inode counts because
  * the current EA code requires one filesystem block per inode with EAs,
@@ -675,7 +665,6 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         fs_set_md:              fsfilt_ext3_set_md,
         fs_get_md:              fsfilt_ext3_get_md,
         fs_readpage:            fsfilt_ext3_readpage,
-        fs_journal_data:        fsfilt_ext3_journal_data,
         fs_set_last_rcvd:       fsfilt_ext3_set_last_rcvd,
         fs_statfs:              fsfilt_ext3_statfs,
         fs_sync:                fsfilt_ext3_sync,

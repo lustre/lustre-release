@@ -156,12 +156,6 @@ static int fsfilt_reiserfs_set_last_rcvd(struct obd_device *obd,
         return 0;
 }
 
-static int fsfilt_reiserfs_journal_data(struct file *filp)
-{
-        CERROR("not implemented yet\n");
-        return 0;
-}
-
 static int fsfilt_reiserfs_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
         struct statfs sfs;
@@ -173,8 +167,7 @@ static int fsfilt_reiserfs_statfs(struct super_block *sb, struct obd_statfs *osf
 
 static int fsfilt_reiserfs_sync(struct super_block *sb)
 {
-        CERROR("not implemented yet\n");
-        return -ENOSYS;
+        return fsync_super(sb);
 }
 
 static struct fsfilt_operations fsfilt_reiserfs_ops = {
@@ -187,7 +180,6 @@ static struct fsfilt_operations fsfilt_reiserfs_ops = {
         fs_set_md:              fsfilt_reiserfs_set_md,
         fs_get_md:              fsfilt_reiserfs_get_md,
         fs_readpage:            fsfilt_reiserfs_readpage,
-        fs_journal_data:        fsfilt_reiserfs_journal_data,
         fs_set_last_rcvd:       fsfilt_reiserfs_set_last_rcvd,
         fs_statfs:              fsfilt_reiserfs_statfs,
         fs_sync:                fsfilt_reiserfs_sync,
