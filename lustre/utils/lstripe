@@ -1,9 +1,0 @@
-#!/bin/bash
-PATH=`dirname $0`:$PATH
-
-if [ $# -eq 0 ] || [ "$1" == "-h" -o "$1" == "--help" ]; then
-	lfs help setstripe 2>&1 | sed "s/setstripe/lstripe/g"
-	exit 0
-fi
-
-lfs setstripe "$@"
