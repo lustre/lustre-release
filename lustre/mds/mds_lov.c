@@ -535,9 +535,12 @@ int mds_lov_synchronize(void *data)
         struct obd_uuid *uuid;
         unsigned long flags;
         int rc;
+        int valsize;
+        __u32 group;
 
         lock_kernel();
         ptlrpc_daemonize();
+        snprintf (current->comm, sizeof (current->comm), "%s", "mds_lov_sync");
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -549,13 +552,18 @@ int mds_lov_synchronize(void *data)
 
         OBD_FREE(mlsi, sizeof(*mlsi));
 
+
         LASSERT(obd != NULL);
         LASSERT(uuid != NULL);
 
+        group = FILTER_GROUP_FIRST_MDS + obd->u.mds.mds_num;
+        valsize = sizeof(group);
         rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"), 
-                          "mds_conn", 0, uuid);
-        if (rc != 0)
+                          "mds_conn", valsize, &group);
+        if (rc != 0) {
+                CERROR("obd_set_info(mds_conn) failed %d\n", rc);
                 RETURN(rc);
+        }
         
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_UNLINK_ORIG_CTXT);
         LASSERT(ctxt != NULL);
