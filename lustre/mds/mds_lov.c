@@ -123,13 +123,13 @@ int mds_get_lovtgts(struct obd_device *obd, int tgt_count, uuid_t *uuidarray)
                 GOTO(out, rc = PTR_ERR(f));
         }
 
-        rc = lustre_fread(f, (char *)uuidarray, tgt_count * sizeof(uuid_t),
+        rc = lustre_fread(f, (char *)uuidarray, tgt_count * sizeof(*uuidarray),
                           &f->f_pos);
         rc2 = filp_close(f, 0);
         if (rc2)
                 CERROR("Error closing LOVTGTS file: rc = %d\n", rc2);
 
-        if (rc != tgt_count * sizeof(uuid_t)) {
+        if (rc != tgt_count * sizeof(*uuidarray)) {
                 CERROR("Error reading LOVTGTS file: rc = %d\n", rc);
                 if (rc >= 0)
                         rc = -EIO;
