@@ -378,6 +378,7 @@ translate_lookup_intent(struct intent *intent, const char *path)
          * symlink: INT_CREAT
          * unlink: INT_UPDPARENT
          * rmdir: INT_UPDPARENT
+         * mknod: INT_CREAT
          * stat: INT_GETATTR
          * setattr: NULL
          *
