@@ -142,17 +142,13 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
 };
 
 /*
- * group hash proc entries handler
+ * LSD proc entry handlers
  */
-static int lprocfs_wr_group_info(struct file *file, const char *buffer,
-                                 unsigned long count, void *data)
+static int lprocfs_wr_lsd_downcall(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
 {
-        struct {
-                int             err;
-                uid_t           uid;
-                uint32_t        ngroups;
-                gid_t          *groups;
-        } param;
+        struct upcall_cache *cache = __mds_get_global_lsd_cache();
+        struct lsd_downcall_args param;
         gid_t   gids_local[NGROUPS_SMALL];
         gid_t  *gids = NULL;
 
@@ -164,9 +160,16 @@ static int lprocfs_wr_group_info(struct file *file, const char *buffer,
                 CERROR("broken downcall\n");
                 return count;
         }
+
+        if (param.err) {
+                CERROR("LSD downcall indicate error %d\n", param.err);
+                goto do_downcall;
+        }
+
         if (param.ngroups > NGROUPS_MAX) {
                 CERROR("%d groups?\n", param.ngroups);
-                return count;
+                param.err = -EINVAL;
+                goto do_downcall;
         }
 
         if (param.ngroups <= NGROUPS_SMALL)
@@ -176,132 +179,119 @@ static int lprocfs_wr_group_info(struct file *file, const char *buffer,
                 if (!gids) {
                         CERROR("fail to alloc memory for %d gids\n",
                                 param.ngroups);
-                        return count;
+                        param.err = -ENOMEM;
+                        goto do_downcall;
                 }
         }
         if (copy_from_user(gids, param.groups,
                            param.ngroups * sizeof(gid_t))) {
                 CERROR("broken downcall\n");
-                goto out;
+                param.err = -EFAULT;
+                goto do_downcall;
         }
 
-        mds_handle_group_downcall(param.err, param.uid,
-                                  param.ngroups, gids);
+        param.groups = gids;
 
-out:
+do_downcall:
+        upcall_cache_downcall(cache, (__u64) param.uid, param.err, &param);
+
         if (gids && gids != gids_local)
                 OBD_FREE(gids, param.ngroups * sizeof(gid_t));
         return count;
 }
 
-static int lprocfs_rd_expire(char *page, char **start, off_t off, int count,
-                             int *eof, void *data)
+static int lprocfs_rd_lsd_expire(char *page, char **start, off_t off, int count,
+                                 int *eof, void *data)
 {
-        struct mds_grp_hash *hash = __mds_get_global_group_hash();
+        struct upcall_cache *cache= __mds_get_global_lsd_cache();
 
         *eof = 1;
-        return snprintf(page, count, "%d\n", hash->gh_entry_expire);
+        return snprintf(page, count, "%lu\n", cache->uc_entry_expire);
 }
-
-static int lprocfs_wr_expire(struct file *file, const char *buffer,
-                             unsigned long count, void *data)
+static int lprocfs_wr_lsd_expire(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
 {
-        struct mds_grp_hash *hash = __mds_get_global_group_hash();
+        struct upcall_cache *cache= __mds_get_global_lsd_cache();
         char buf[32];
 
         if (copy_from_user(buf, buffer, min(count, 32UL)))
                 return count;
         buf[31] = 0;
-        sscanf(buf, "%d", &hash->gh_entry_expire);
+        sscanf(buf, "%lu", &cache->uc_entry_expire);
         return count;
 }
 
-static int lprocfs_rd_ac_expire(char *page, char **start, off_t off, int count,
-                                int *eof, void *data)
+static int lprocfs_rd_lsd_ac_expire(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
 {
-        struct mds_grp_hash *hash = __mds_get_global_group_hash();
+        struct upcall_cache *cache= __mds_get_global_lsd_cache();
 
         *eof = 1;
-        return snprintf(page, count, "%d\n", hash->gh_acquire_expire);
+        return snprintf(page, count, "%lu\n", cache->uc_acquire_expire);
 }
-
-static int lprocfs_wr_ac_expire(struct file *file, const char *buffer,
-                                unsigned long count, void *data)
+static int lprocfs_wr_lsd_ac_expire(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
 {
-        struct mds_grp_hash *hash = __mds_get_global_group_hash();
+        struct upcall_cache *cache= __mds_get_global_lsd_cache();
         char buf[32];
 
         if (copy_from_user(buf, buffer, min(count, 32UL)))
                 return count;
         buf[31] = 0;
-        sscanf(buf, "%d", &hash->gh_acquire_expire);
+        sscanf(buf, "%lu", &cache->uc_acquire_expire);
         return count;
 }
 
-static int lprocfs_rd_hash_upcall(char *page, char **start, off_t off, int count,
-                                int *eof, void *data)
+static int lprocfs_rd_lsd_upcall(char *page, char **start, off_t off, int count,
+                                 int *eof, void *data)
 {
-        struct mds_grp_hash *hash = __mds_get_global_group_hash();
+        struct upcall_cache *cache= __mds_get_global_lsd_cache();
 
         *eof = 1;
-        return snprintf(page, count, "%s\n", hash->gh_upcall);
+        return snprintf(page, count, "%s\n", cache->uc_upcall);
 }
-
-static int lprocfs_wr_hash_upcall(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
+static int lprocfs_wr_lsd_upcall(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
 {
-        struct mds_grp_hash *hash = __mds_get_global_group_hash();
+        struct upcall_cache *cache= __mds_get_global_lsd_cache();
 
-        if (count < MDSGRP_UPCALL_MAXPATH) {
-                sscanf(buffer, "%1024s", hash->gh_upcall);
-                hash->gh_upcall[MDSGRP_UPCALL_MAXPATH-1] = 0;
+        if (count < UC_CACHE_UPCALL_MAXPATH) {
+                sscanf(buffer, "%1024s", cache->uc_upcall);
+                cache->uc_upcall[UC_CACHE_UPCALL_MAXPATH - 1] = 0;
         }
         return count;
 }
 
-static int lprocfs_wr_hash_flush(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
+extern void lgss_svc_cache_flush(__u32 uid);
+static int lprocfs_wr_lsd_flush(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
 {
-        mds_group_hash_flush_idle();
-        return count;
-}
+        char buf[32];
+        __u32 uid;
 
-static int lprocfs_rd_allow_setgroups(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data)
-{
-        struct mds_grp_hash *hash = __mds_get_global_group_hash();
-
-        *eof = 1;
-        return snprintf(page, count, "%d\n", hash->gh_allow_setgroups);
-}
-
-static int lprocfs_wr_allow_setgroups(struct file *file, const char *buffer,
-                                      unsigned long count, void *data)
-{
-        struct mds_grp_hash *hash = __mds_get_global_group_hash();
-        char buf[8];
-        int val;
-
-        if (copy_from_user(buf, buffer, min(count, 8UL)))
+        if (copy_from_user(buf, buffer, min(count, 32UL)))
                 return count;
-        buf[7] = 0;
-        sscanf(buf, "%d", &val);
-        hash->gh_allow_setgroups = (val != 0);
+        buf[31] = 0;
+        sscanf(buf, "%d", &uid);
+
+        mds_flush_lsd(uid);
+#ifdef ENABLE_GSS
+        lgss_svc_cache_flush(uid);
+#endif
         return count;
 }
 
 struct lprocfs_vars lprocfs_mds_module_vars[] = {
-        { "num_refs", lprocfs_rd_numrefs, 0, 0 },
-        { "grp_hash_expire_interval",lprocfs_rd_expire,
-          lprocfs_wr_expire, 0},
-        { "grp_hash_acquire_expire", lprocfs_rd_ac_expire,
-          lprocfs_wr_ac_expire, 0},
-        { "grp_hash_upcall", lprocfs_rd_hash_upcall,
-          lprocfs_wr_hash_upcall, 0},
-        { "grp_hash_flush", 0, lprocfs_wr_hash_flush, 0},
-        { "group_info", 0, lprocfs_wr_group_info, 0 },
-        { "allow_setgroups", lprocfs_rd_allow_setgroups,
-          lprocfs_wr_allow_setgroups, 0},
+        { "num_refs",                   lprocfs_rd_numrefs, 0, 0 },
+        /* LSD stuff */
+        { "lsd_expire_interval",        lprocfs_rd_lsd_expire,
+                                        lprocfs_wr_lsd_expire, 0},
+        { "lsd_acquire_expire",         lprocfs_rd_lsd_ac_expire,
+                                        lprocfs_wr_lsd_ac_expire, 0},
+        { "lsd_upcall",                 lprocfs_rd_lsd_upcall,
+                                        lprocfs_wr_lsd_upcall, 0},
+        { "lsd_flush",                  0, lprocfs_wr_lsd_flush, 0},
+        { "lsd_downcall",               0, lprocfs_wr_lsd_downcall, 0},
         { 0 }
 };
 

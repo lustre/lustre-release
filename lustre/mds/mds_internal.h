@@ -97,7 +97,15 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
 void groups_from_buffer(struct group_info *ginfo, __u32 *gids);
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
-int mds_init_ucred(struct lvfs_ucred *ucred, struct mds_req_sec_desc *rsd);
+int mds_idmap_set(struct mds_export_data *med, __u32 id1, __u32 id2,
+                  int is_uid_mapping);
+__u32 mds_idmap_get(struct mds_export_data *med, __u32 id,
+                    int is_uid_mapping);
+void mds_idmap_cleanup(struct mds_export_data *med);
+void mds_reverse_map_ugid(struct ptlrpc_request *req,
+                          struct mds_body *body);
+int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
+                   struct mds_req_sec_desc *rsd);
 void mds_exit_ucred(struct lvfs_ucred *ucred);
 
 /* mds/mds_unlink_open.c */
@@ -205,7 +213,14 @@ int mds_get_md(struct obd_device *, struct inode *, void *md,
 
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);
-
+int mds_pack_link(struct dentry *dentry, struct ptlrpc_request *req,
+                  struct mds_body *repbody, int reply_off);
+int mds_pack_ea(struct dentry *dentry, struct ptlrpc_request *req,
+                struct mds_body *repbody, int req_off, int reply_off);
+int mds_pack_ealist(struct dentry *dentry, struct ptlrpc_request *req,
+                    struct mds_body *repbody, int reply_off);
+int mds_pack_acl(struct obd_device *, struct lustre_msg *, int offset,
+                 struct mds_body *, struct inode *);
 int mds_pack_inode2id(struct obd_device *, struct lustre_id *,
                       struct inode *, int);
 
@@ -238,19 +253,12 @@ int mds_lock_and_check_slave(int, struct ptlrpc_request *, struct lustre_handle 
 int mds_convert_mea_ea(struct obd_device *, struct inode *, struct lov_mds_md *, int);
 int mds_is_dir_empty(struct obd_device *, struct dentry *);
 
-/* mds_groups.c */
-int mds_group_hash_init(void);
-void mds_group_hash_cleanup(void);
-void mds_group_hash_flush_idle(void);
-int mds_allow_setgroups(void);
-
-extern char mds_getgroups_upcall[PATH_MAX];
-extern int mds_grp_hash_entry_expire;
-extern int mds_grp_hash_acquire_expire;
-
-struct mds_grp_hash *__mds_get_global_group_hash(void);
-struct mds_grp_hash_entry * mds_get_group_entry(struct mds_obd *mds, uid_t uid);
-void mds_put_group_entry(struct mds_obd *mds, struct mds_grp_hash_entry *entry);
-int mds_handle_group_downcall(int err, uid_t uid, __u32 ngroups, gid_t *groups);
+/* mds_lsd.c */
+struct upcall_cache *__mds_get_global_lsd_cache(void);
+int mds_init_lsd_cache(void);
+void mds_cleanup_lsd_cache(void);
+struct lustre_sec_desc * mds_get_lsd(__u32 uid);
+void mds_put_lsd(struct lustre_sec_desc *lsd);
+void mds_flush_lsd(__u32 id);
 
 #endif /* _MDS_INTERNAL_H */

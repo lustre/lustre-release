@@ -34,7 +34,7 @@ rm -f $config
 
 # create nodes
 ${LMC} -m $config --add node --node localhost || exit 10
-${LMC} -m $config --add net --node localhost --nid localhost --nettype tcp || exit 11
+${LMC} -m $config --add net --node localhost --nid `hostname` --nettype tcp || exit 11
 
 # configure mds server
 ${LMC} -m $config --add lmv --lmv lmv1 || exit 12

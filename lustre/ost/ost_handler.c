@@ -1005,6 +1005,11 @@ int ost_msg_check_version(struct lustre_msg *msg)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
                                msg->opc, msg->version, LUSTRE_LOG_VERSION);
                 break;
+        case SEC_INIT:
+        case SEC_INIT_CONTINUE:
+        case SEC_FINI:
+                rc = 0;
+                break;
         default:
                 CERROR("OST unexpected opcode %d\n", msg->opc);
                 rc = -ENOTSUPP;
@@ -1027,6 +1032,13 @@ int ost_handle(struct ptlrpc_request *req)
         if (rc) {
                 CERROR("OST drop mal-formed request\n");
                 RETURN(rc);
+        }
+
+        /* Security opc should NOT trigger any recovery events */
+        if (req->rq_reqmsg->opc == SEC_INIT ||
+            req->rq_reqmsg->opc == SEC_INIT_CONTINUE ||
+            req->rq_reqmsg->opc == SEC_FINI) {
+                GOTO(out, rc = 0);
         }
 
         /* XXX identical to MDS */

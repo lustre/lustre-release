@@ -37,17 +37,19 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_acl.h>
+#include <linux/lustre_lite.h>
 #include "mdc_internal.h"
 
 int it_disposition(struct lookup_intent *it, int flag)
 {
-        return it->d.lustre.it_disposition & flag;
+        return LUSTRE_IT(it)->it_disposition & flag;
 }
 EXPORT_SYMBOL(it_disposition);
 
 void it_set_disposition(struct lookup_intent *it, int flag)
 {
-        it->d.lustre.it_disposition |= flag;
+        LUSTRE_IT(it)->it_disposition |= flag;
 }
 EXPORT_SYMBOL(it_set_disposition);
 
@@ -88,33 +90,33 @@ int it_open_error(int phase, struct lookup_intent *it)
 {
         if (it_disposition(it, DISP_OPEN_OPEN)) {
                 if (phase == DISP_OPEN_OPEN)
-                        return it->d.lustre.it_status;
+                        return LUSTRE_IT(it)->it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_OPEN_CREATE)) {
                 if (phase == DISP_OPEN_CREATE)
-                        return it->d.lustre.it_status;
+                        return LUSTRE_IT(it)->it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_LOOKUP_EXECD)) {
                 if (phase == DISP_LOOKUP_EXECD)
-                        return it->d.lustre.it_status;
+                        return LUSTRE_IT(it)->it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_IT_EXECD)) {
                 if (phase == DISP_IT_EXECD)
-                        return it->d.lustre.it_status;
+                        return LUSTRE_IT(it)->it_status;
                 else
                         return 0;
         }
-        CERROR("it disp: %X, status: %d\n", it->d.lustre.it_disposition,
-               it->d.lustre.it_status);
+        CERROR("it disp: %X, status: %d\n", LUSTRE_IT(it)->it_disposition,
+               LUSTRE_IT(it)->it_status);
         LBUG();
         return 0;
 }
@@ -199,10 +201,9 @@ int mdc_enqueue(struct obd_export *exp,
         int reqsize[6] = {[MDS_REQ_SECDESC_OFF] = 0,
                           [MDS_REQ_INTENT_LOCKREQ_OFF] = sizeof(*lockreq),
                           [MDS_REQ_INTENT_IT_OFF] = sizeof(*lit)};
-        int repsize[4] = {sizeof(struct ldlm_reply),
+        int repsize[5] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
-                          obddev->u.cli.cl_max_mds_easize,
-                          obddev->u.cli.cl_max_mds_cookiesize};
+                          obddev->u.cli.cl_max_mds_easize};
         int req_buffers = 3, reply_buffers = 0;
         int rc, flags = LDLM_FL_HAS_INTENT;
         void *eadata;
@@ -240,10 +241,13 @@ int mdc_enqueue(struct obd_export *exp,
                               it->it_create_mode, 0, it->it_flags,
                               lmm, lmmsize);
                 /* get ready for the reply */
-                reply_buffers = 3;
-                req->rq_replen = lustre_msg_size(3, repsize);
+                repsize[3] = 4;
+                repsize[4] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+                reply_buffers = 5;
+                req->rq_replen = lustre_msg_size(5, repsize);
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR)) {
-                __u64 valid = data->valid | OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
+                __u64 valid = data->valid | OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE |
+                            OBD_MD_FLACL_ACCESS;
 
                 reqsize[req_buffers++] = sizeof(struct mds_body);
                 reqsize[req_buffers++] = data->namelen + 1;
@@ -267,8 +271,10 @@ int mdc_enqueue(struct obd_export *exp,
                                  valid, it->it_flags, data);
                 
                 /* get ready for the reply */
-                reply_buffers = 3;
-                req->rq_replen = lustre_msg_size(3, repsize);
+                repsize[3] = 4;
+                repsize[4] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+                reply_buffers = 5;
+                req->rq_replen = lustre_msg_size(5, repsize);
         } else if (it->it_op == IT_READDIR) {
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
@@ -353,12 +359,12 @@ int mdc_enqueue(struct obd_export *exp,
         LASSERT(dlm_rep != NULL);           /* checked by ldlm_cli_enqueue() */
         LASSERT_REPSWABBED(req, 0);         /* swabbed by ldlm_cli_enqueue() */
 
-        it->d.lustre.it_disposition = (int) dlm_rep->lock_policy_res1;
-        it->d.lustre.it_status = (int) dlm_rep->lock_policy_res2;
-        it->d.lustre.it_lock_mode = lock_mode;
-        it->d.lustre.it_data = req;
+        LUSTRE_IT(it)->it_disposition = (int) dlm_rep->lock_policy_res1;
+        LUSTRE_IT(it)->it_status = (int) dlm_rep->lock_policy_res2;
+        LUSTRE_IT(it)->it_lock_mode = lock_mode;
+        LUSTRE_IT(it)->it_data = req;
 
-        if (it->d.lustre.it_status < 0 && req->rq_replay) {
+        if (LUSTRE_IT(it)->it_status < 0 && req->rq_replay) {
                 LASSERT(req->rq_transno == 0);
                 /* Don't hold error requests for replay. */
                 spin_lock(&req->rq_lock);
@@ -367,10 +373,11 @@ int mdc_enqueue(struct obd_export *exp,
         }
 
         DEBUG_REQ(D_RPCTRACE, req, "disposition: %x, status: %d",
-                  it->d.lustre.it_disposition, it->d.lustre.it_status);
+                  LUSTRE_IT(it)->it_disposition, LUSTRE_IT(it)->it_status);
 
         /* We know what to expect, so we do any byte flipping required here */
-        LASSERT(reply_buffers == 4 || reply_buffers == 3 || reply_buffers == 1);
+        LASSERT(reply_buffers == 5 || reply_buffers == 4 || 
+                reply_buffers == 3 || reply_buffers == 1);
         if (reply_buffers >= 3) {
                 struct mds_body *body;
 
@@ -427,15 +434,15 @@ EXPORT_SYMBOL(mdc_enqueue);
  * ll_create/ll_open gets called.
  *
  * The server will return to us, in it_disposition, an indication of
- * exactly what d.lustre.it_status refers to.
+ * exactly what d.lustre->it_status refers to.
  *
- * If DISP_OPEN_OPEN is set, then d.lustre.it_status refers to the open() call,
+ * If DISP_OPEN_OPEN is set, then d.lustre->it_status refers to the open() call,
  * otherwise if DISP_OPEN_CREATE is set, then it status is the
  * creation failure mode.  In either case, one of DISP_LOOKUP_NEG or
  * DISP_LOOKUP_POS will be set, indicating whether the child lookup
  * was successful.
  *
- * Else, if DISP_LOOKUP_EXECD then d.lustre.it_status is the rc of the
+ * Else, if DISP_LOOKUP_EXECD then d.lustre->it_status is the rc of the
  * child lookup.
  */
 int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid, 
@@ -486,9 +493,9 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
                                              &lockh);
                 }
                 if (rc) {
-                        memcpy(&it->d.lustre.it_lock_handle, &lockh,
+                        memcpy(&LUSTRE_IT(it)->it_lock_handle, &lockh,
                                sizeof(lockh));
-                        it->d.lustre.it_lock_mode = mode;
+                        LUSTRE_IT(it)->it_lock_mode = mode;
                 }
 
                 /* Only return failure if it was not GETATTR by cid (from
@@ -524,9 +531,9 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
                 if (rc < 0)
                         RETURN(rc);
                 
-                memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
+                memcpy(&LUSTRE_IT(it)->it_lock_handle, &lockh, sizeof(lockh));
         }
-        request = *reqp = it->d.lustre.it_data;
+        request = *reqp = LUSTRE_IT(it)->it_data;
         LASSERT(request != NULL);
         
         /* If we're doing an IT_OPEN which did not result in an actual
@@ -538,7 +545,7 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
          * 3440) */
         if (it->it_op & IT_OPEN) {
                 if (!it_disposition(it, DISP_OPEN_OPEN) ||
-                    it->d.lustre.it_status != 0) {
+                    LUSTRE_IT(it)->it_status != 0) {
                         unsigned long irqflags;
 
                         spin_lock_irqsave(&request->rq_lock, irqflags);
@@ -549,8 +556,8 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
         if (!it_disposition(it, DISP_IT_EXECD)) {
                 /* The server failed before it even started executing the
                  * intent, i.e. because it couldn't unpack the request. */
-                LASSERT(it->d.lustre.it_status != 0);
-                RETURN(it->d.lustre.it_status);
+                LASSERT(LUSTRE_IT(it)->it_status != 0);
+                RETURN(LUSTRE_IT(it)->it_status);
         }
         rc = it_open_error(DISP_IT_EXECD, it);
         if (rc)
@@ -620,15 +627,15 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
                                     LDLM_IBITS, &policy, LCK_NL, &old_lock)) {
                         ldlm_lock_decref_and_cancel(&lockh,
-                                                    it->d.lustre.it_lock_mode);
+                                                    LUSTRE_IT(it)->it_lock_mode);
                         memcpy(&lockh, &old_lock, sizeof(old_lock));
-                        memcpy(&it->d.lustre.it_lock_handle, &lockh,
+                        memcpy(&LUSTRE_IT(it)->it_lock_handle, &lockh,
                                sizeof(lockh));
                 }
         }
         CDEBUG(D_DENTRY, "D_IT dentry %*s intent: %s status %d disp %x rc %d\n",
-               len, name, ldlm_it2str(it->it_op), it->d.lustre.it_status,
-               it->d.lustre.it_disposition, rc);
+               len, name, ldlm_it2str(it->it_op), LUSTRE_IT(it)->it_status,
+               LUSTRE_IT(it)->it_disposition, rc);
 
         RETURN(rc);
 }

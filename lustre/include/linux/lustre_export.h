@@ -14,6 +14,7 @@
 #include <linux/lustre_dlm.h>
 
 struct mds_client_data;
+struct mds_idmap_table;
 
 struct mds_export_data {
         struct list_head        med_open_head;
@@ -21,6 +22,12 @@ struct mds_export_data {
         struct mds_client_data *med_mcd;
         loff_t                  med_off;
         int                     med_idx;
+        unsigned int            med_local:1;
+        __u32                   med_nllu;
+        __u32                   med_nllg;
+        /* simple idmapping */
+        spinlock_t              med_idmap_lock;
+        struct mds_idmap_table *med_idmap;
 };
 
 struct osc_creator {

@@ -32,9 +32,11 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_acl.h>
 #include "llite_internal.h"
 
 kmem_cache_t *ll_file_data_slab;
+kmem_cache_t *ll_intent_slab;
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
@@ -63,13 +65,28 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
         INIT_LIST_HEAD(&sbi->ll_mnt_list);
+	
         sema_init(&sbi->ll_gns_sem, 1);
-        init_completion(&sbi->ll_gns_completion);
-        sbi->ll_gns_state = LL_GNS_STATE_IDLE;
+        spin_lock_init(&sbi->ll_gns_lock);
+        INIT_LIST_HEAD(&sbi->ll_gns_sbi_head);
+        init_waitqueue_head(&sbi->ll_gns_waitq);
+        init_completion(&sbi->ll_gns_mount_finished);
+
+        /* this later may be reset via /proc/fs/... */
+        memcpy(sbi->ll_gns_oname, ".mntinfo", strlen(".mntinfo"));
+        sbi->ll_gns_oname[strlen(sbi->ll_gns_oname) - 1] = '\0';
+        
+        /* this later may be reset via /proc/fs/... */
+        memset(sbi->ll_gns_upcall, 0, sizeof(sbi->ll_gns_upcall));
+
+        /* default values, may be changed via /proc/fs/... */
+        sbi->ll_gns_state = LL_GNS_IDLE;
+        sbi->ll_gns_tick = GNS_TICK_TIMEOUT;
+        sbi->ll_gns_timeout = GNS_MOUNT_TIMEOUT;
+
         sbi->ll_gns_timer.data = (unsigned long)sbi;
         sbi->ll_gns_timer.function = ll_gns_timer_callback;
         init_timer(&sbi->ll_gns_timer);
-        INIT_LIST_HEAD(&sbi->ll_gns_sbi_head);
 
         ll_set_sbi(sb, sbi);
 
@@ -104,7 +121,10 @@ int lustre_init_dt_desc(struct ll_sb_info *sbi)
         RETURN(rc);
 }
 
-int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov)
+extern struct dentry_operations ll_d_ops;
+
+int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
+                             char *security, __u32 *nllu)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct ptlrpc_request *request = NULL;
@@ -122,6 +142,25 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov)
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", lmv);
                 RETURN(-EINVAL);
+        }
+
+        if (security == NULL)
+                security = "null";
+
+        err = obd_set_info(obd->obd_self_export, strlen("sec"), "sec",
+                           strlen(security), security);
+        if (err) {
+                CERROR("LMV %s: failed to set security %s, err %d\n",
+                        lmv, security, err);
+                RETURN(err);
+        }
+
+        err = obd_set_info(obd->obd_self_export, strlen("nllu"), "nllu",
+                           sizeof(__u32) * 2, nllu);
+        if (err) {
+                CERROR("LMV %s: failed to set NLLU, err %d\n",
+                        lmv, err);
+                RETURN(err);
         }
 
         if (proc_lustre_fs_root) {
@@ -199,7 +238,7 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov)
         /* make root inode
          * XXX: move this to after cbd setup? */
         err = md_getattr(sbi->ll_md_exp, &sbi->ll_rootid,
-                         (OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS | OBD_MD_FID),
+                         (OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS | OBD_MD_FID), NULL, 0,
                          0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
@@ -241,6 +280,7 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov)
 #endif
 
         sb->s_root = d_alloc_root(root);
+        sb->s_root->d_op = &ll_d_ops;
 
 #ifdef S_PDIROPS
         CWARN("Enabling PDIROPS\n");
@@ -327,7 +367,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
                 RETURN(fl);
 }
 
-void ll_options(char *options, char **lov, char **lmv, int *flags)
+void ll_options(char *options, char **lov, char **lmv, char **sec, int *flags)
 {
         char *this_char;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -351,6 +391,8 @@ void ll_options(char *options, char **lov, char **lmv, int *flags)
                 if (!*lov && (*lov = ll_read_opt("osc", this_char)))
                         continue;
                 if (!*lmv && (*lmv = ll_read_opt("mdc", this_char)))
+                        continue;
+                if (!*sec && (*sec = ll_read_opt("sec", this_char)))
                         continue;
                 if (!(*flags & LL_SBI_NOLCK) &&
                     ((*flags) = (*flags) |
@@ -378,6 +420,8 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct ll_sb_info *sbi;
         char *lov = NULL;
         char *lmv = NULL;
+        char *sec = NULL;
+        __u32 nllu[2] = { 99, 99 };
         int err;
         ENTRY;
 
@@ -388,7 +432,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 RETURN(-ENOMEM);
 
         sbi->ll_flags |= LL_SBI_READAHEAD;
-        ll_options(data, &lov, &lmv, &sbi->ll_flags);
+        ll_options(data, &lov, &lmv, &sec, &sbi->ll_flags);
 
         if (!lov) {
                 CERROR("no osc\n");
@@ -400,12 +444,14 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out, err = -EINVAL);
         }
 
-        err = lustre_common_fill_super(sb, lmv, lov);
+        err = lustre_common_fill_super(sb, lmv, lov, sec, nllu);
         EXIT;
 out:
         if (err)
                 lustre_free_sbi(sb);
 
+        if (sec)
+                OBD_FREE(sec, strlen(sec) + 1);
         if (lmv)
                 OBD_FREE(lmv, strlen(lmv) + 1);
         if (lov)
@@ -426,8 +472,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         class_uuid_t uuid;
         struct obd_uuid lmv_uuid;
         struct llog_ctxt *ctxt;
-        int rc = 0;
-        int err;
+        int rc, err = 0;
         ENTRY;
 
         if (lmd_bad_magic(lmd))
@@ -440,9 +485,9 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
                 pcfg.pcfg_nal = lmd->lmd_nal;
                 pcfg.pcfg_nid = lmd->lmd_local_nid;
-                err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
-                        GOTO(out, err);
+                rc = libcfs_nal_cmd(&pcfg);
+                if (rc < 0)
+                        GOTO(out, rc);
         }
 
         if (lmd->lmd_nal == SOCKNAL ||
@@ -455,9 +500,9 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
                 pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
                 pcfg.pcfg_misc    = lmd->lmd_port;
-                err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
-                        GOTO(out, err);
+                rc = libcfs_nal_cmd(&pcfg);
+                if (rc < 0)
+                        GOTO(out, rc);
         }
 
         LCFG_INIT(lcfg, LCFG_ADD_UUID, name);
@@ -465,9 +510,9 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         lcfg.lcfg_inllen1 = strlen(peer) + 1;
         lcfg.lcfg_inlbuf1 = peer;
         lcfg.lcfg_nal = lmd->lmd_nal;
-        err = class_process_config(&lcfg);
-        if (err < 0)
-                GOTO(out_del_conn, err);
+        rc = class_process_config(&lcfg);
+        if (rc < 0)
+                GOTO(out_del_conn, rc);
 
         LCFG_INIT(lcfg, LCFG_ATTACH, name);
         lcfg.lcfg_inlbuf1 = "mdc";
@@ -475,33 +520,38 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         lcfg.lcfg_inlbuf2 = lmv_uuid.uuid;
         lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
         err = class_process_config(&lcfg);
-        if (err < 0)
-                GOTO(out_del_uuid, err);
+        if (rc < 0)
+                GOTO(out_del_uuid, rc);
 
         LCFG_INIT(lcfg, LCFG_SETUP, name);
         lcfg.lcfg_inlbuf1 = lmd->lmd_mds;
         lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
         lcfg.lcfg_inlbuf2 = peer;
         lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        err = class_process_config(&lcfg);
-        if (err < 0)
-                GOTO(out_detach, err);
+        rc = class_process_config(&lcfg);
+        if (rc < 0)
+                GOTO(out_detach, rc);
 
         obd = class_name2obd(name);
         if (obd == NULL)
-                GOTO(out_cleanup, err = -EINVAL);
+                GOTO(out_cleanup, rc = -EINVAL);
+
+        rc = obd_set_info(obd->obd_self_export, strlen("sec"), "sec",
+                          strlen(lmd->lmd_security), lmd->lmd_security);
+        if (rc)
+                GOTO(out_cleanup, rc);
 
         /* Disable initial recovery on this import */
-        err = obd_set_info(obd->obd_self_export,
-                           strlen("initial_recov"), "initial_recov",
-                           sizeof(allow_recov), &allow_recov);
-        if (err)
-                GOTO(out_cleanup, err);
+        rc = obd_set_info(obd->obd_self_export,
+                          strlen("initial_recov"), "initial_recov",
+                          sizeof(allow_recov), &allow_recov);
+        if (rc)
+                GOTO(out_cleanup, rc);
 
-        err = obd_connect(&md_conn, obd, &lmv_uuid, 0);
-        if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, err);
-                GOTO(out_cleanup, err);
+        rc = obd_connect(&md_conn, obd, &lmv_uuid, 0);
+        if (rc) {
+                CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, rc);
+                GOTO(out_cleanup, rc);
         }
 
         exp = class_conn2export(&md_conn);
@@ -511,7 +561,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         if (rc)
                 CERROR("class_config_process_llog failed: rc = %d\n", rc);
 
-        err = obd_disconnect(exp, 0);
+        rc = obd_disconnect(exp, 0);
         
         EXIT;
 out_cleanup:
@@ -538,12 +588,16 @@ out_del_conn:
             lmd->lmd_nal == IIBNAL ||
             lmd->lmd_nal == VIBNAL ||
             lmd->lmd_nal == RANAL) {
+                int err2;
+
                 PCFG_INIT(pcfg, NAL_CMD_DEL_PEER);
                 pcfg.pcfg_nal     = lmd->lmd_nal;
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
                 pcfg.pcfg_flags   = 1;          /* single_share */
-                err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
+                err2 = libcfs_nal_cmd(&pcfg);
+                if (err2 && !err)
+                        err = err2;
+                if (err < 0)
                         GOTO(out, err);
         }
 out:
@@ -580,6 +634,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                         CERROR("no mds name\n");
                         GOTO(out_free, err = -EINVAL);
                 }
+                lmd->lmd_security[sizeof(lmd->lmd_security) - 1] = 0;
 
                 OBD_ALLOC(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
                 if (sbi->ll_lmd == NULL)
@@ -631,7 +686,8 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_free, err = -EINVAL);
         }
 
-        err = lustre_common_fill_super(sb, lmv, lov);
+        err = lustre_common_fill_super(sb, lmv, lov, lmd->lmd_security,
+                                       &lmd->lmd_nllu);
 
         if (err)
                 GOTO(out_free, err);
@@ -957,7 +1013,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         /* If only OST attributes being set on objects, don't do MDS RPC.
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
-        if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
+        if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN /*| ATTR_RAW*/) : ~0)) {
                 struct lustre_md md;
 
                 OBD_ALLOC(op_data, sizeof(*op_data));
@@ -1094,8 +1150,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
-        LBUG(); /* code is unused, but leave this in case of VFS changes */
-        RETURN(-ENOSYS);
+        LASSERT(de->d_inode);
+        return ll_setattr_raw(de->d_inode, attr);
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
@@ -1184,10 +1240,12 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         struct lov_stripe_md *lsm = md->lsm;
         struct mds_body *body = md->body;
         struct mea *mea = md->mea;
+        struct posix_acl *ll_acl_access = md->acl_access;
         ENTRY;
 
         LASSERT((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         LASSERT((mea != NULL) == ((body->valid & OBD_MD_FLDIREA) != 0));
+
         if (lsm != NULL) {
                 LASSERT(lsm->lsm_object_gr > 0);
                 if (lli->lli_smd == NULL) {
@@ -1250,6 +1308,14 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 	if (body->valid & OBD_MD_FLGENER)
 		id_gen(&lli->lli_id) = id_gen(&body->id1);
 
+        spin_lock(&lli->lli_lock);
+        if (ll_acl_access != NULL) {
+                if (lli->lli_acl_access != NULL)
+                        posix_acl_release(lli->lli_acl_access);
+                lli->lli_acl_access = ll_acl_access;
+        }
+        spin_unlock(&lli->lli_lock);
+ 
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = id_ino(&body->id1);
         if (body->valid & OBD_MD_FLGENER)
@@ -1415,7 +1481,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 struct mds_body *body;
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr(sbi->ll_md_exp, &id, valid, 0, &req);
+                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, 0, 0, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));

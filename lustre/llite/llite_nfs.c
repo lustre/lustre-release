@@ -61,7 +61,8 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         id_ino(&id) = (__u64)ino;
         id_gen(&id) = generation;
 
-        rc = md_getattr(sbi->ll_md_exp, &id, valid, eadatalen, &req);
+        rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, 0, 
+                        eadatalen, &req);
         if (rc) {
                 CERROR("failure %d inode %lu\n", rc, ino);
                 return ERR_PTR(rc);

@@ -85,6 +85,14 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < SEC_LAST_OPC) {
+                /* Security negotiate */
+                return (opc - SEC_FIRST_OPC +
+                        (PTLBD_LAST_OPC - PTLBD_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
@@ -95,7 +103,8 @@ static inline int opcode_offset(__u32 opc) {
                             (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
                             (OST_LAST_OPC - OST_FIRST_OPC)     + \
-                            (OBD_LAST_OPC - OBD_FIRST_OPC))
+                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
+                            (SEC_LAST_OPC - SEC_FIRST_OPC))
 
 enum {
         PTLRPC_REQWAIT_CNTR = 0,

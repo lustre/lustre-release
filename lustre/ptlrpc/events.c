@@ -88,9 +88,9 @@ void reply_in_callback(ptl_event_t *ev)
         LASSERT (ev->type == PTL_EVENT_PUT_END ||
                  ev->type == PTL_EVENT_UNLINK);
         LASSERT (ev->unlinked);
-        LASSERT (ev->md.start == req->rq_repmsg);
+        LASSERT (ev->md.start == req->rq_repbuf);
         LASSERT (ev->offset == 0);
-        LASSERT (ev->mlength <= req->rq_replen);
+        LASSERT (ev->mlength <= req->rq_repbuf_len);
         
         DEBUG_REQ((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->ni_fail_type);
@@ -207,10 +207,10 @@ void request_in_callback(ptl_event_t *ev)
          * flags are reset and scalars are zero.  We only set the message
          * size to non-zero if this was a successful receive. */
         req->rq_xid = ev->match_bits;
-        req->rq_reqmsg = ev->md.start + ev->offset;
+        req->rq_reqbuf = ev->md.start + ev->offset;
         if (ev->type == PTL_EVENT_PUT_END &&
             ev->ni_fail_type == PTL_NI_OK)
-                req->rq_reqlen = ev->mlength;
+                req->rq_reqbuf_len = ev->mlength;
         do_gettimeofday(&req->rq_arrival_time);
         req->rq_peer.peer_id = ev->initiator;
         req->rq_peer.peer_ni = rqbd->rqbd_srv_ni->sni_ni;

@@ -5,9 +5,14 @@ export PATH=`dirname $0`/../utils:$PATH
 LCONF=${LCONF:-lconf}
 NAME=${NAME:-local}
 LLMOUNT=${LLMOUNT:-llmount}
+SECURITY=${SECURITY:-"null"}
 
 config=$NAME.xml
 mkconfig=$NAME.sh
+
+. krb5_env.sh
+
+start_krb5_kdc || exit 1
 
 if [ "$PORTALS" ]; then
   portals_opt="--portals=$PORTALS"
@@ -21,16 +26,23 @@ if [ "$LDAPURL" ]; then
     conf_opt="--ldapurl $LDAPURL --config $NAME"
 else
     if [ ! -f $config -o $mkconfig -nt $config ]; then
-	sh $mkconfig $config || exit 1
+	sh $mkconfig $config || exit 2
     fi
     conf_opt="$config"
 fi    
 
 [ "$NODE" ] && node_opt="--node $NODE"
 
-${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt $@ $conf_opt || exit 2
+# We'd better start lsvcgssd after gss modules loaded.
+# remove this if we don't depend on lsvcgssd in the future
+${LCONF} --nosetup --sec $SECURITY $portals_opt $node_opt $@ $conf_opt || exit 3
+start_lsvcgssd || exit 4
+start_lgssd || exit 5
+
+${LCONF} $NOMOD --sec $SECURITY $portals_opt $lustre_opt $node_opt \
+         $@ $conf_opt  || exit 6
 
 if [ "$MOUNT2" ]; then
-       $LLMOUNT -v `hostname`:/mds1/client $MOUNT2 || exit 3
+       $LLMOUNT -v -o sec=$SECURITY `hostname`:/mds1/client $MOUNT2 || exit 7
 fi
 

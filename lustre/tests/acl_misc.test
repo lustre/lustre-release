@@ -1,0 +1,386 @@
+!
+! Pretty comprehensive ACL tests.
+!
+! This must be run on a filesystem with ACL support. Also, you will need
+! two dummy users (lisa and joe) and a dummy group (toolies).
+!
+$ umask 027
+$ touch f
+! Only change a base ACL:
+$ setfacl -m u::r f
+$ setfacl -m u::rw,u:lisa:rw f
+$ acl_mode f
+-rw-rw----+
+$ getfacl --omit-header f
+user::rw-
+user:lisa:rw-
+group::r--
+mask::rw-
+other::---
+
+$ rm f
+$ umask 022
+$ touch f
+$ setfacl -m u:lisa:rw f
+$ acl_mode f
+-rw-rw-r--+
+$ getfacl --omit-header f
+user::rw-
+user:lisa:rw-
+group::r--
+mask::rw-
+other::r--
+
+$rm f
+$ umask 027
+$ mkdir d
+$ setfacl -m u:lisa:rwx d
+$ acl_mode d
+drwxrwx---+
+$ getfacl --omit-header d
+user::rwx
+user:lisa:rwx
+group::r-x
+mask::rwx
+other::---
+
+$ rmdir d
+$ umask 022
+$ mkdir d
+$ setfacl -m u:lisa:rwx d
+$ acl_mode d
+drwxrwxr-x+
+$ getfacl --omit-header d
+user::rwx
+user:lisa:rwx
+group::r-x
+mask::rwx
+other::r-x
+
+$ rmdir d
+!
+! Multiple users
+!
+$ umask 022
+$ touch f
+$ setfacl -m u:lisa:rw,u:joe:r f
+$ acl_mode f
+-rw-rw-r--+
+$ getfacl --omit-header f
+user::rw-
+user:joe:r--
+user:lisa:rw-
+group::r--
+mask::rw-
+other::r--
+
+!
+! Multiple groups
+!
+$ setfacl -m g:users:rw,g:toolies:r f
+$ acl_mode f
+-rw-rw-r--+
+$ getfacl --omit-header f
+user::rw-
+user:joe:r--
+user:lisa:rw-
+group::r--
+group:users:rw-
+group:toolies:r--
+mask::rw-
+other::r--
+
+!
+! Remove one group
+!
+$ setfacl -x g:users f
+$ acl_mode f
+-rw-rw-r--+
+$ getfacl --omit-header f
+user::rw-
+user:joe:r--
+user:lisa:rw-
+group::r--
+group:toolies:r--
+mask::rw-
+other::r--
+
+!
+! Remove one user
+!
+$ setfacl -x u:joe f
+$ acl_mode f
+-rw-rw-r--+
+$ getfacl --omit-header f
+user::rw-
+user:lisa:rw-
+group::r--
+group:toolies:r--
+mask::rw-
+other::r--
+
+$ rm f
+!
+! Default ACL
+!
+$ umask 027
+$ mkdir d
+$ setfacl -m u:lisa:rwx,u:joe:rw,d:u:lisa:rwx,d:m:rx d
+$ acl_mode d
+drwxrwx---+
+$ getfacl --omit-header d
+user::rwx
+user:joe:rw-
+user:lisa:rwx
+group::r-x
+mask::rwx
+other::---
+default:user::rwx
+default:user:lisa:rwx	#effective:r-x
+default:group::r-x
+default:mask::r-x
+default:other::---
+
+!
+! Umask now ignored?
+!
+$ umask 027
+$ touch d/f
+$ acl_mode d/f
+-rw-r-----+
+$ getfacl --omit-header d/f
+user::rw-
+user:lisa:rwx	#effective:r--
+group::r-x	#effective:r--
+mask::r--
+other::---
+
+$ rm d/f
+$ umask 022
+$ touch d/f
+$ acl_mode d/f
+-rw-r-----+
+$ getfacl --omit-header d/f
+user::rw-
+user:lisa:rwx	#effective:r--
+group::r-x	#effective:r--
+mask::r--
+other::---
+
+$ rm d/f
+!
+! Default ACL copying
+!
+$ umask 000
+$ mkdir d/d
+$ acl_mode d/d
+drwxr-x---+
+$ getfacl --omit-header d/d
+user::rwx
+user:lisa:rwx	#effective:r-x
+group::r-x
+mask::r-x
+other::---
+default:user::rwx
+default:user:lisa:rwx	#effective:r-x
+default:group::r-x
+default:mask::r-x
+default:other::---
+
+$ rmdir d/d
+$ umask 022
+$ mkdir d/d
+$ acl_mode d/d
+drwxr-x---+
+$ getfacl --omit-header d/d
+user::rwx
+user:lisa:rwx	#effective:r-x
+group::r-x
+mask::r-x
+other::---
+default:user::rwx
+default:user:lisa:rwx	#effective:r-x
+default:group::r-x
+default:mask::r-x
+default:other::---
+
+!
+! Add some users and groups
+!
+$ setfacl -nm u:joe:rx,d:u:joe:rx,g:users:rx,g:toolies:rwx d/d
+$ acl_mode d/d
+drwxr-x---+
+$ getfacl --omit-header d/d
+user::rwx
+user:joe:r-x
+user:lisa:rwx	#effective:r-x
+group::r-x
+group:users:r-x
+group:toolies:rwx	#effective:r-x
+mask::r-x
+other::---
+default:user::rwx
+default:user:joe:r-x
+default:user:lisa:rwx	#effective:r-x
+default:group::r-x
+default:mask::r-x
+default:other::---
+
+!
+! symlink in directory with default ACL?
+!
+$ ln -s d d/l
+$ acl_mode d/l
+lrwxrwxrwx
+$ acl_mode -L d/l
+drwxr-x---+
+$ getfacl --omit-header d/l
+user::rwx
+user:joe:r-x
+user:lisa:rwx	#effective:r-x
+group::r-x
+group:users:r-x
+group:toolies:rwx	#effective:r-x
+mask::r-x
+other::---
+default:user::rwx
+default:user:joe:r-x
+default:user:lisa:rwx	#effective:r-x
+default:group::r-x
+default:mask::r-x
+default:other::---
+
+$ rm d/l
+!
+! Does mask manipulation work?
+!
+$ setfacl -m g:toolies:rx,u:lisa:rx d/d
+$ acl_mode d/d
+drwxr-x---+
+$ getfacl --omit-header d/d
+user::rwx
+user:joe:r-x
+user:lisa:r-x
+group::r-x
+group:users:r-x
+group:toolies:r-x
+mask::r-x
+other::---
+default:user::rwx
+default:user:joe:r-x
+default:user:lisa:rwx	#effective:r-x
+default:group::r-x
+default:mask::r-x
+default:other::---
+
+$ setfacl -m d:u:lisa:rwx d/d
+$ acl_mode d/d
+drwxr-x---+
+$ getfacl --omit-header d/d
+user::rwx
+user:joe:r-x
+user:lisa:r-x
+group::r-x
+group:users:r-x
+group:toolies:r-x
+mask::r-x
+other::---
+default:user::rwx
+default:user:joe:r-x
+default:user:lisa:rwx
+default:group::r-x
+default:mask::rwx
+default:other::---
+
+$ rmdir d/d
+!
+! Remove the default ACL
+!
+$ setfacl -k d
+$ acl_mode d
+drwxrwx---+
+$ getfacl --omit-header d
+user::rwx
+user:joe:rw-
+user:lisa:rwx
+group::r-x
+mask::rwx
+other::---
+
+!
+! Reset to base entries
+!
+$ setfacl -b d
+$ acl_mode d
+drwxr-x---
+$ getfacl --omit-header d
+user::rwx
+group::r-x
+other::---
+
+!
+! Now, chmod should change the group_obj entry
+!
+$ chmod 775 d
+$ acl_mode d
+drwxrwxr-x
+$ getfacl --omit-header d
+user::rwx
+group::rwx
+other::r-x
+
+$ rmdir d
+$ umask 002
+$ mkdir d
+$ setfacl -m u:joe:rwx,u:lisa:rx,d:u:joe:rwx,d:u:lisa:rx d
+$ acl_mode d
+drwxrwxr-x+
+$ getfacl --omit-header d
+user::rwx
+user:joe:rwx
+user:lisa:r-x
+group::rwx
+mask::rwx
+other::r-x
+default:user::rwx
+default:user:joe:rwx
+default:user:lisa:r-x
+default:group::rwx
+default:mask::rwx
+default:other::r-x
+
+$ chmod 750 d
+$ acl_mode d
+drwxr-x---+
+$ getfacl --omit-header d
+user::rwx
+user:joe:rwx	#effective:r-x
+user:lisa:r-x
+group::rwx	#effective:r-x
+mask::r-x
+other::---
+default:user::rwx
+default:user:joe:rwx
+default:user:lisa:r-x
+default:group::rwx
+default:mask::rwx
+default:other::r-x
+
+$ chmod 750 d
+$ acl_mode d
+drwxr-x---+
+$ getfacl --omit-header d
+user::rwx
+user:joe:rwx	#effective:r-x
+user:lisa:r-x
+group::rwx	#effective:r-x
+mask::r-x
+other::---
+default:user::rwx
+default:user:joe:rwx
+default:user:lisa:r-x
+default:group::rwx
+default:mask::rwx
+default:other::r-x
+
+$ rmdir d

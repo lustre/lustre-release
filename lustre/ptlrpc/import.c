@@ -36,6 +36,7 @@
 #include <linux/lustre_export.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
+#include <linux/lustre_sec.h>
 
 #include "ptlrpc_internal.h"
 
@@ -273,10 +274,15 @@ static int import_select_connection(struct obd_import *imp)
                 list_add_tail(&tmp->oic_item, &imp->imp_conn_list);
         }
 
-        /* switch connection, don't mind if it's same as the current one */
-        if (imp->imp_connection)
-                ptlrpc_put_connection(imp->imp_connection);
-        imp->imp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
+        /* switch connection if we chose a new one */
+        if (imp->imp_connection != imp_conn->oic_conn) {
+                if (imp->imp_connection) {
+                        ptlrpcs_sec_invalidate_cache(imp->imp_sec);
+                        ptlrpc_put_connection(imp->imp_connection);
+                }
+                imp->imp_connection =
+                        ptlrpc_connection_addref(imp_conn->oic_conn);
+        }
 
         dlmexp =  class_conn2export(&imp->imp_dlm_handle);
         LASSERT(dlmexp != NULL);
@@ -304,13 +310,15 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
         int size[] = {sizeof(imp->imp_target_uuid),
-                                 sizeof(obd->obd_uuid),
-                                 sizeof(imp->imp_dlm_handle),
-                                 sizeof(unsigned long)};
+                      sizeof(obd->obd_uuid),
+                      sizeof(imp->imp_dlm_handle),
+                      sizeof(unsigned long),
+                      sizeof(__u32) * 2};
         char *tmp[] = {imp->imp_target_uuid.uuid,
                        obd->obd_uuid.uuid,
                        (char *)&imp->imp_dlm_handle,
-                       (char *)&imp->imp_connect_flags}; /* XXX: make this portable! */
+                       (char *)&imp->imp_connect_flags, /* XXX: make this portable! */
+                       (char*) &obd->u.cli.cl_nllu};
         struct ptlrpc_connect_async_args *aa;
         unsigned long flags;
 
@@ -356,8 +364,10 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         if (rc)
                 GOTO(out, rc);
 
+        LASSERT(imp->imp_sec);
+
         request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION,
-                                  imp->imp_connect_op, 4, size, tmp);
+                                  imp->imp_connect_op, 5, size, tmp);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 

@@ -31,6 +31,7 @@
 #include <linux/pagemap.h>
 #include <asm/div64.h>
 #include <linux/seq_file.h>
+#include <linux/namei.h>
 #else
 #include <liblustre.h>
 #endif
@@ -47,6 +48,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd_lmv.h>
+#include <linux/lustre_lite.h>
 #include "lmv_internal.h"
 
 /* object cache. */
@@ -675,8 +677,8 @@ static int lmv_getstatus(struct obd_export *exp, struct lustre_id *id)
 }
 
 static int lmv_getattr(struct obd_export *exp, struct lustre_id *id,
-                       __u64 valid, unsigned int ea_size,
-                       struct ptlrpc_request **request)
+                       __u64 valid, const char *ea_name, int ea_namelen,
+                       unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -690,8 +692,9 @@ static int lmv_getattr(struct obd_export *exp, struct lustre_id *id,
 
         LASSERT(i < lmv->desc.ld_tgt_count);
 
+
         rc = md_getattr(lmv->tgts[i].ltd_exp, id, valid,
-                        ea_size, request);
+                        ea_name, ea_namelen, ea_size, request);
         if (rc)
                 RETURN(rc);
         
@@ -860,7 +863,7 @@ int lmv_get_mea_and_update_object(struct obd_export *exp,
 
         /* time to update mea of parent id */
         rc = md_getattr(lmv->tgts[id_group(id)].ltd_exp,
-                        id, valid, mealen, &req);
+                        id, valid, NULL, 0, mealen, &req);
         if (rc) {
                 CERROR("md_getattr() failed, error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -994,17 +997,17 @@ int lmv_enqueue_slaves(struct obd_export *exp, int locktype,
                                 cb_compl, cb_blocking, cb_data);
                 
                 CDEBUG(D_OTHER, "take lock on slave "DLID4" -> %d/%d\n",
-                       OLID4(&mea->mea_ids[i]), rc, it->d.lustre.it_status);
+                       OLID4(&mea->mea_ids[i]), rc, LUSTRE_IT(it)->it_status);
                 if (rc)
                         GOTO(cleanup, rc);
-                if (it->d.lustre.it_data) {
+                if (LUSTRE_IT(it)->it_data) {
                         struct ptlrpc_request *req;
-                        req = (struct ptlrpc_request *)it->d.lustre.it_data;
+                        req = (struct ptlrpc_request *) LUSTRE_IT(it)->it_data;
                         ptlrpc_req_finished(req);
                 }
                 
-                if (it->d.lustre.it_status)
-                        GOTO(cleanup, rc = it->d.lustre.it_status);
+                if (LUSTRE_IT(it)->it_status)
+                        GOTO(cleanup, rc = LUSTRE_IT(it)->it_status);
         }
         
         OBD_FREE(data2, sizeof(*data2));
@@ -1827,7 +1830,46 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                 lmv_set_timeouts(obd);
                 RETURN(0);
         }
-        
+
+        /* maybe this could be default */
+        if ((keylen == strlen("sec") && strcmp(key, "sec") == 0) ||
+            (keylen == strlen("nllu") && strcmp(key, "nllu") == 0)) {
+                struct lmv_tgt_desc *tgt;
+                struct obd_export *exp;
+                int rc = 0, err, i;
+
+                spin_lock(&lmv->lmv_lock);
+                for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count;
+                     i++, tgt++) {
+                        exp = tgt->ltd_exp;
+                        /* during setup time the connections to mdc might
+                         * haven't been established.
+                         */
+                        if (exp == NULL) {
+                                struct obd_device *tgt_obd;
+
+                                tgt_obd = class_find_client_obd(&tgt->uuid,
+                                                                LUSTRE_MDC_NAME,
+                                                                &obd->obd_uuid);
+                                if (!tgt_obd) {
+                                        CERROR("can't set info %s, "
+                                               "device %s not attached?\n",
+                                                (char *) key, tgt->uuid.uuid);
+                                        rc = -EINVAL;
+                                        continue;
+                                }
+                                exp = tgt_obd->obd_self_export;
+                        }
+
+                        err = obd_set_info(exp, keylen, key, vallen, val);
+                        if (!rc)
+                                rc = err;
+                }
+                spin_unlock(&lmv->lmv_lock);
+
+                RETURN(rc);
+        }
+
         RETURN(-EINVAL);
 }
 

@@ -64,8 +64,7 @@ static struct super_block *lustre_read_super(struct super_block *sb,
 static void ll_umount_lustre(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        ll_gns_umount_all(sbi, 0);
+        ll_gns_check_all(sbi, LL_GNS_UMOUNT);
 }
 
 static struct file_system_type lustre_lite_fs_type = {
@@ -108,6 +107,16 @@ static int __init init_lustre_lite(void)
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
 
+        ll_intent_slab = kmem_cache_create("lustre_intent_data",
+                                              sizeof(struct lustre_intent_data),
+                                              0, SLAB_HWCACHE_ALIGN, NULL,
+                                              NULL);
+        if (ll_intent_slab == NULL) {
+                kmem_cache_destroy(ll_file_data_slab);
+                return -ENOMEM;
+        }
+
+
         proc_lustre_fs_root = proc_lustre_root ? proc_mkdir("llite", proc_lustre_root) : NULL;
 
         rc = register_filesystem(&lustre_lite_fs_type);
@@ -146,6 +155,8 @@ static void __exit exit_lustre_lite(void)
 
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
                  "couldn't destroy ll_file_data slab\n");
+        LASSERTF(kmem_cache_destroy(ll_intent_slab) == 0,
+                 "couldn't destroy ll_intent_slab slab\n");
 
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);

@@ -45,10 +45,12 @@ gen_second_config() {
 start_mds() {
 	echo "start mds1 service on `facet_active_host mds1`"
 	start mds1 --reformat $MDSLCONFARGS  || return 94
+	start_lsvcgssd || return 501
 }
 stop_mds() {
 	echo "stop mds1 service on `facet_active_host mds1`"
 	stop mds1 $@  || return 97
+	stop_lsvcgssd
 }
 
 start_ost() {
@@ -63,6 +65,7 @@ stop_ost() {
 
 mount_client() {
 	local MOUNTPATH=$1
+	start_lgssd || return 502
 	echo "mount lustre on ${MOUNTPATH}....."
 	zconf_mount `hostname`  $MOUNTPATH  || return 96
 }
@@ -71,11 +74,13 @@ umount_client() {
 	local MOUNTPATH=$1
 	echo "umount lustre on ${MOUNTPATH}....."
 	zconf_umount `hostname`  $MOUNTPATH || return 97
+	stop_lgssd
 }
 
 manual_umount_client(){
 	echo "manual umount lustre on ${MOUNTPATH}...."
 	do_facet  client "umount $MOUNT"
+	stop_lgssd
 }
 
 setup() {
@@ -115,6 +120,7 @@ build_test_filter
 #create single point mountpoint
 
 gen_config
+start_krb5_kdc || exit 1
 
 
 test_0() {
@@ -189,6 +195,7 @@ test_5() {
 	kill -TERM $UMOUNT_PID
 	echo "waiting for umount to finish"
 	wait $UMOUNT_PID
+	stop_lgssd
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -209,10 +216,12 @@ test_5b() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
+	start_lgssd || return 1
 	llmount $mds_HOST://mds1_svc/client_facet $MOUNT  && exit 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
+	stop_lgssd
 	
 	# stop_mds is a no-op here, and should not fail
 	stop_mds || return 2
@@ -230,15 +239,17 @@ test_5c() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-        llmount $mds_HOST://wrong_mds1_svc/client_facet $MOUNT  && return 1
+	start_lgssd || return 1
+        llmount $mds_HOST://wrong_mds1_svc/client_facet $MOUNT  && return 2
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
+	stop_lgssd
 	
-	stop_mds || return 2
-	stop_ost || return 3
+	stop_mds || return 3
+	stop_ost || return 4
 
-	lsmod | grep -q portals && return 4
+	lsmod | grep -q portals && return 5
 	return 0
 
 }
@@ -251,11 +262,13 @@ test_5d() {
 
        [ -d $MOUNT ] || mkdir -p $MOUNT
        $LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
+       start_lgssd || return 1
        llmount $mds_HOST://mds1_svc/client_facet $MOUNT  || return 1
 
        umount $MOUNT || return 2
        # cleanup client modules
        $LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
+       stop_lgssd
 
        stop_mds || return 3
 

@@ -33,6 +33,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_sec.h>
 #include <linux/fcntl.h>
 
 
@@ -76,14 +77,15 @@ void lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
 int lustre_pack_request (struct ptlrpc_request *req,
                          int count, int *lens, char **bufs)
 {
+        int rc;
         ENTRY;
 
-        req->rq_reqlen = lustre_msg_size (count, lens);
-        OBD_ALLOC(req->rq_reqmsg, req->rq_reqlen);
-        if (req->rq_reqmsg == NULL)
-                RETURN(-ENOMEM);
+        req->rq_reqlen = lustre_msg_size(count, lens);
+        rc = ptlrpcs_cli_alloc_reqbuf(req, req->rq_reqlen);
+        if (rc)
+                RETURN(rc);
 
-        lustre_init_msg (req->rq_reqmsg, count, lens, bufs);
+        lustre_init_msg(req->rq_reqmsg, count, lens, bufs);
         RETURN (0);
 }
 
@@ -117,29 +119,29 @@ int lustre_pack_reply (struct ptlrpc_request *req,
                        int count, int *lens, char **bufs)
 {
         struct ptlrpc_reply_state *rs;
-        int                        msg_len;
-        int                        size;
+        int                        rc;
         ENTRY;
 
-        LASSERT (req->rq_reply_state == NULL);
+        LASSERT(req->rq_reply_state == NULL);
+        LASSERT(req->rq_svcsec);
+        LASSERT(req->rq_repmsg == NULL);
 
-        msg_len = lustre_msg_size (count, lens);
-        size = offsetof (struct ptlrpc_reply_state, rs_msg) + msg_len;
-        OBD_ALLOC (rs, size);
-        if (rs == NULL)
-                RETURN (-ENOMEM);
-
+        req->rq_replen = lustre_msg_size(count, lens);
+        rc = svcsec_alloc_repbuf(req->rq_svcsec, req, req->rq_replen);
+        if (rc)
+                RETURN(rc);
+        LASSERT(req->rq_reply_state);
+        LASSERT(req->rq_repmsg == req->rq_reply_state->rs_msg);
+                                                                                                    
+        rs = req->rq_reply_state;
+        rs->rs_svcsec = svcsec_get(req->rq_svcsec);
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
         rs->rs_srv_ni = req->rq_rqbd->rqbd_srv_ni;
-        rs->rs_size = size;
         INIT_LIST_HEAD(&rs->rs_exp_list);
         INIT_LIST_HEAD(&rs->rs_obd_list);
 
-        req->rq_replen = msg_len;
-        req->rq_reply_state = rs;
-        req->rq_repmsg = &rs->rs_msg;
-        lustre_init_msg (&rs->rs_msg, count, lens, bufs);
+        lustre_init_msg(rs->rs_msg, count, lens, bufs);
 
         PTLRPC_RS_DEBUG_LRU_ADD(rs);
 
@@ -148,6 +150,8 @@ int lustre_pack_reply (struct ptlrpc_request *req,
 
 void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
 {
+        struct ptlrpc_svcsec *svcsec = rs->rs_svcsec;
+
         PTLRPC_RS_DEBUG_LRU_DEL(rs);
 
         LASSERT (!rs->rs_difficult || rs->rs_handled);
@@ -157,8 +161,14 @@ void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
         LASSERT (rs->rs_nlocks == 0);
         LASSERT (list_empty(&rs->rs_exp_list));
         LASSERT (list_empty(&rs->rs_obd_list));
+        LASSERT (svcsec);
 
-        OBD_FREE (rs, rs->rs_size);
+        if (svcsec->free_repbuf)
+                svcsec->free_repbuf(svcsec, rs);
+        else
+                svcsec_free_reply_state(rs);
+
+        svcsec_put(svcsec);
 }
 
 /* This returns the size of the buffer that is required to hold a lustre_msg
@@ -616,6 +626,11 @@ struct mds_req_sec_desc *lustre_swab_mds_secdesc(struct ptlrpc_request *req,
                 __swab32s(&rsd->rsd_fsgid);
                 __swab32s(&rsd->rsd_cap);
                 __swab32s(&rsd->rsd_ngroups);
+        }
+
+        if (rsd->rsd_ngroups > LUSTRE_MAX_GROUPS) {
+                CERROR("%u groups is not allowed\n", rsd->rsd_ngroups);
+                return NULL;
         }
 
         if (m->buflens[offset] !=

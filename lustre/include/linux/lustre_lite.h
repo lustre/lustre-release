@@ -36,6 +36,8 @@
 #include <linux/rbtree.h>
 #include <linux/lustre_compat25.h>
 #include <linux/pagemap.h>
+#include <linux/namei.h>
+
 
 /* careful, this is easy to screw up */
 #define PAGE_CACHE_MAXBYTES ((__u64)(~0UL) << PAGE_CACHE_SHIFT)
@@ -45,7 +47,7 @@
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-        return &nd->intent;
+        return &nd->intent.open;
 #else
         return nd->intent;
 #endif
@@ -96,6 +98,7 @@ struct ll_inode_info {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
+        struct posix_acl       *lli_acl_access;
 };
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff
@@ -140,8 +143,19 @@ enum {
 
          LPROC_LL_DIRECT_READ,
          LPROC_LL_DIRECT_WRITE,
-         LPROC_LL_FILE_OPCODES
+         LPROC_LL_SETXATTR,
+         LPROC_LL_GETXATTR,
+         LPROC_LL_FILE_OPCODES,
 };
+
+struct lustre_intent_data {
+        int     it_disposition;
+        int     it_status;
+        __u64   it_lock_handle;
+        void    *it_data;
+        int     it_lock_mode;
+};
+#define LUSTRE_IT(it) ((struct lustre_intent_data *)((it)->d.fs_data))
 
 static inline void
 ll_inode2id(struct lustre_id *id, struct inode *inode)

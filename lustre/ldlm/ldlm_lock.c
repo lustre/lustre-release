@@ -25,6 +25,8 @@
 
 #ifdef __KERNEL__
 # include <linux/slab.h>
+# include <linux/dcache.h>
+# include <linux/namei.h>
 # include <linux/module.h>
 # include <linux/lustre_dlm.h>
 #else

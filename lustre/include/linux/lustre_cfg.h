@@ -40,6 +40,7 @@ enum lcfg_command_type {
         LCFG_LOV_DEL_OBD    = 0x00cf00c,
         LCFG_ADD_CONN       = 0x00cf00d,
         LCFG_DEL_CONN       = 0x00cf00e,
+        LCFG_SET_SECURITY   = 0x00cf00f,
 };
 
 struct lustre_cfg {
@@ -279,6 +280,9 @@ struct lustre_mount_data {
         uint32_t lmd_nal;
         uint32_t lmd_server_ipaddr;
         uint32_t lmd_port;
+        uint32_t lmd_nllu;
+        uint32_t lmd_nllg;
+        char     lmd_security[16];
         char     lmd_mds[64];
         char     lmd_profile[64];
 };

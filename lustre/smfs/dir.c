@@ -169,7 +169,6 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
                 d_add(dentry, inode);
         
         SMFS_POST_HOOK(dir, HOOK_LOOKUP, &msg, rc);
-exit:        
         post_smfs_dentry(cache_dentry);
         post_smfs_dentry(cache_parent);
         RETURN(ERR_PTR(rc));
@@ -688,7 +687,6 @@ static int smfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
         SMFS_POST_HOOK(dentry->d_inode, HOOK_READDIR, &msg, rc);
         duplicate_file(filp, sfi->c_file);
 
-exit:
         if (rc > 0)
                 rc = 0;
 

@@ -254,7 +254,7 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                         list_del_init(&dentry->d_lru);
 
                 hlist_del_init(&dentry->d_hash);
-                __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
+                __d_rehash(dentry); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
                 atomic_inc(&dentry->d_count);
                 iput(inode);
@@ -294,7 +294,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
                 
-                mdc_set_lock_data(NULL, &it->d.lustre.it_lock_handle, inode);
+                mdc_set_lock_data(NULL, &LUSTRE_IT(it)->it_lock_handle, inode);
                 
                 /* If this is a stat, get the authoritative file size */
                 if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
@@ -329,19 +329,16 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 }
 
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
-                                   struct nameidata *nd, struct lookup_intent *it,
-                                   int flags)
+                                   struct nameidata *nd, int flags)
 {
         struct dentry *save = dentry, *retval;
+        struct lookup_intent *it = flags ? &nd->intent.open : NULL;
         struct lustre_id pid;
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
-        int rc;
+        int rc, orig_it;
         ENTRY;
-
-        if (dentry->d_name.len > EXT3_NAME_LEN)
-                RETURN(ERR_PTR(-ENAMETOOLONG));
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
                dentry->d_name.name, parent->i_ino, parent->i_generation,
@@ -353,6 +350,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (nd != NULL)
                 nd->mnt->mnt_last_used = jiffies;
 
+        orig_it = it ? it->it_op : IT_OPEN;
         ll_frob_intent(&it, &lookup_it);
 
         icbd.icbd_childp = &dentry;
@@ -376,8 +374,12 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (nd &&
             dentry->d_inode != NULL && dentry->d_inode->i_mode & S_ISUID &&
             S_ISDIR(dentry->d_inode->i_mode) &&
-            (flags & LOOKUP_CONTINUE || (it->it_op & (IT_CHDIR | IT_OPEN))))
-                ll_dir_process_mount_object(dentry, nd->mnt);
+            ((flags & LOOKUP_CONTINUE) || (orig_it & (IT_CHDIR | IT_OPEN))))
+        {
+                spin_lock(&dentry->d_lock);
+                dentry->d_flags |= DCACHE_GNS_PENDING;
+                spin_unlock(&dentry->d_lock);
+        }
 
         if (dentry == save)
                 GOTO(out, retval = NULL);
@@ -386,6 +388,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
  out:
         if (req)
                 ptlrpc_req_finished(req);
+        if (it == &lookup_it)
+                ll_intent_release(it);
         if (dentry->d_inode)
                 CDEBUG(D_INODE, "lookup 0x%p in %lu/%lu: %*s -> %lu/%lu\n",
                        dentry,
@@ -411,9 +415,9 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
         ENTRY;
 
         if (nd && nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
-                de = ll_lookup_it(parent, dentry, nd, &nd->intent, nd->flags);
+                de = ll_lookup_it(parent, dentry, nd, nd->flags);
         else
-                de = ll_lookup_it(parent, dentry, nd, NULL, 0);
+                de = ll_lookup_it(parent, dentry, nd, 0);
 
         RETURN(de);
 }
@@ -431,9 +435,10 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         int rc;
         ENTRY;
 
-        LASSERT(it && it->d.lustre.it_disposition);
 
-        request = it->d.lustre.it_data;
+        LASSERT(it && LUSTRE_IT(it)->it_disposition);
+  
+        request = LUSTRE_IT(it)->it_data;
         rc = ll_prep_inode(sbi->ll_dt_exp, sbi->ll_md_exp,
                            &inode, request, 1, dir->i_sb);
         if (rc)
@@ -446,7 +451,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
          * stuff it in the lock. */
         CDEBUG(D_DLMTRACE, "setting l_ast_data to inode %p (%lu/%u)\n",
                inode, inode->i_ino, inode->i_generation);
-        mdc_set_lock_data(NULL, &it->d.lustre.it_lock_handle, inode);
+        mdc_set_lock_data(NULL, &LUSTRE_IT(it)->it_lock_handle, inode);
         EXIT;
  out:
         ptlrpc_req_finished(request);
@@ -471,7 +476,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
                         struct lookup_intent *it)
 {
         struct inode *inode;
-        struct ptlrpc_request *request = it->d.lustre.it_data;
+        struct ptlrpc_request *request = LUSTRE_IT(it)->it_data;
         struct obd_export *md_exp = ll_i2mdexp(dir); 
         int rc = 0;
         ENTRY;
@@ -497,7 +502,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
-        return ll_create_it(dir, dentry, mode, &nd->intent);
+        return ll_create_it(dir, dentry, mode, &nd->intent.open);
 }
 #endif
 
@@ -532,9 +537,6 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
                name, dir->i_ino, dir->i_generation, dir);
-
-        if (dir->i_nlink >= EXT3_LINK_MAX)
-                RETURN(err);
 
         mode &= ~current->fs->umask;
 
@@ -581,9 +583,6 @@ static int ll_mknod(struct inode *dir, struct dentry *child,
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
                name, dir->i_ino, dir->i_generation, dir);
-
-        if (dir->i_nlink >= EXT3_LINK_MAX)
-                RETURN(err);
 
         mode &= ~current->fs->umask;
 
@@ -640,14 +639,12 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),target=%s\n",
                name, dir->i_ino, dir->i_generation, dir, tgt);
-
-        if (dir->i_nlink >= EXT3_LINK_MAX)
-                RETURN(err);
-
+        
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
+        LASSERT(tgt);
         err = md_create(sbi->ll_md_exp, op_data,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                         current->fsuid, current->fsgid, 0, &request);
@@ -883,17 +880,53 @@ static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
         RETURN(err);
 }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#define LLITE_IT_RAWOPS (IT_MKNOD|IT_MKDIR|IT_SYMLINK|IT_LINK|IT_UNLINK|IT_RMDIR|IT_RENAME)
+static int ll_rawop_from_intent(struct nameidata *nd)
+{
+        int error = 0;
+
+        if (!nd || !(nd->intent.open.op & LLITE_IT_RAWOPS))
+                return 0;
+
+        switch (nd->intent.open.op) {
+        case IT_MKNOD:
+                error = ll_mknod_raw(nd, nd->intent.open.create_mode,
+                                     nd->intent.open.create.dev);
+                break;
+        case IT_MKDIR:
+                error = ll_mkdir_raw(nd, nd->intent.open.create_mode);
+                break;
+        case IT_RMDIR:
+                error = ll_rmdir_raw(nd);
+                break;
+        case IT_UNLINK:
+                error = ll_unlink_raw(nd);
+                break;
+        case IT_SYMLINK:
+                LASSERT(nd->intent.open.create.link);
+                error = ll_symlink_raw(nd, nd->intent.open.create.link);
+                break;
+        case IT_LINK:
+                error = ll_link_raw(nd->intent.open.create.source_nd, nd);
+                break;
+        case IT_RENAME:
+                LASSERT(nd->intent.open.create.source_nd);
+                error = ll_rename_raw(nd->intent.open.create.source_nd, nd);
+                break;
+        default:
+                LBUG();
+        }
+        if (error != -EOPNOTSUPP)
+                nd->intent.open.flags |= IT_STATUS_RAW;
+
+        return error;
+}
+#endif
+
 struct inode_operations ll_dir_inode_operations = {
-        .link_raw           = ll_link_raw,
-        .unlink_raw         = ll_unlink_raw,
-        .symlink_raw        = ll_symlink_raw,
-        .mkdir_raw          = ll_mkdir_raw,
-        .rmdir_raw          = ll_rmdir_raw,
-        .mknod_raw          = ll_mknod_raw,
         .mknod              = ll_mknod,
-        .rename_raw         = ll_rename_raw,
         .setattr            = ll_setattr,
-        .setattr_raw        = ll_setattr_raw,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         .create_it          = ll_create_it,
         .lookup_it          = ll_lookup_it,
@@ -901,6 +934,12 @@ struct inode_operations ll_dir_inode_operations = {
 #else
         .lookup             = ll_lookup_nd,
         .create             = ll_create_nd,
-        .getattr_it         = ll_getattr,
+        .getattr            = ll_getattr,
+        .endparentlookup    = ll_rawop_from_intent,
 #endif
+        .setxattr           = ll_setxattr,
+        .getxattr           = ll_getxattr,
+        .listxattr          = ll_listxattr,
+        .removexattr        = ll_removexattr,
+        .permission         = ll_inode_permission,
 };

@@ -2,6 +2,7 @@
 
 subdir-m += lvfs
 subdir-m += obdclass
+subdir-m += sec
 subdir-m += lov
 subdir-m += lmv
 subdir-m += ptlrpc

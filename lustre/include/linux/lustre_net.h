@@ -241,6 +241,9 @@ struct ptlrpc_cb_id {
         void    *cbid_arg;                      /* additional arg */
 };
 
+struct ptlrpc_cred;
+struct ptlrpc_svcsec;
+
 #define RS_MAX_LOCKS 4
 #define RS_DEBUG     1
 
@@ -259,7 +262,15 @@ struct ptlrpc_reply_state {
         unsigned int          rs_handled:1;     /* been handled yet? */
         unsigned int          rs_on_net:1;      /* reply_out_callback pending? */
 
-        int                   rs_size;
+        struct ptlrpc_svcsec *rs_svcsec;
+        char                 *rs_buf;           /* backend buffer */
+        int                   rs_buf_len;       /* backend buffer length */
+        char                 *rs_repbuf;        /* will be sent on wire */
+        int                   rs_repbuf_len;    /* max on-wire data length */
+        int                   rs_repdata_len;   /* actual on-wire data length */
+        struct lustre_msg    *rs_msg;           /* lustre msg pointer */
+        int                   rs_msg_len;       /* length of lustre msg */
+
         __u64                 rs_transno;
         __u64                 rs_xid;
         struct obd_export    *rs_export;
@@ -271,9 +282,6 @@ struct ptlrpc_reply_state {
         struct lustre_handle  rs_locks[RS_MAX_LOCKS];
         ldlm_mode_t           rs_modes[RS_MAX_LOCKS];
         struct llog_create_locks *rs_llog_locks;
-
-        /* last member: variable sized reply message */
-        struct lustre_msg     rs_msg;
 };
 
 struct ptlrpc_request {
@@ -285,7 +293,8 @@ struct ptlrpc_request {
         unsigned int rq_intr:1, rq_replied:1, rq_err:1,
                 rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
-                rq_no_delay:1, rq_net_err:1;
+                rq_no_delay:1, rq_net_err:1, rq_req_wrapped:1,
+                rq_ptlrpcs_restart:1;
         int rq_phase;
         /* client-side refcount for SENT race */
         atomic_t rq_refcount;
@@ -305,6 +314,20 @@ struct ptlrpc_request {
         __u64 rq_transno;
         __u64 rq_xid;
         struct list_head rq_replay_list;
+
+        struct ptlrpc_cred   *rq_cred;        /* client side credit */
+        struct ptlrpc_svcsec *rq_svcsec;      /* server side security */
+        /* XXX temporarily put here XXX */
+        void                 *rq_sec_svcdata; /* server security data */
+        unsigned int          rq_remote;      /* from remote client */
+        uid_t                 rq_auth_uid;
+
+        char *rq_reqbuf;       /* backend request buffer */
+        int   rq_reqbuf_len;   /* backend request buffer length */
+        int   rq_reqdata_len;  /* actual request data length */
+        char *rq_repbuf;       /* backend reply buffer */
+        int   rq_repbuf_len;   /* backend reply buffer length */
+        int   rq_repdata_len;  /* actual reply data length, not used yet */
 
 #if SWAB_PARANOIA
         __u32 rq_req_swab_mask;
@@ -574,6 +597,8 @@ int ptlrpc_error(struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptl_send_rpc(struct ptlrpc_request *request);
 int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd);
+int ptlrpc_do_rawrpc(struct obd_import *imp, char *reqbuf, int reqlen,
+                     char *repbuf, int *replenp, int timeout);
 
 /* ptlrpc/client.c */
 void ptlrpc_init_client(int req_portal, int rep_portal, char *name,

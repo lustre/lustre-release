@@ -32,6 +32,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_import.h>
+#include <linux/lustre_sec.h>
 
 #include "ptlrpc_internal.h"
 
@@ -181,6 +182,9 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         EXIT;
 }
 
+/* FIXME prep_req now should return error code other than NULL. but
+ * this is called everywhere :(
+ */
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                                        int opcode, int count, int *lengths,
                                        char **bufs)
@@ -197,11 +201,25 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                 RETURN(NULL);
         }
 
+        request->rq_import = class_import_get(imp);
+
+        rc = ptlrpcs_req_get_cred(request);
+        if (rc) {
+                CDEBUG(D_SEC, "failed to get credential\n");
+                GOTO(out_free, rc);
+        }
+
+        /* just a try on refresh, but we proceed even if it failed */
+        rc = ptlrpcs_cred_refresh(request->rq_cred);
+        if (!ptlrpcs_cred_is_uptodate(request->rq_cred)) {
+                CERROR("req %p: failed to refresh cred %p, rc %d, continue\n",
+                       request, request->rq_cred, rc);
+        }
+
         rc = lustre_pack_request(request, count, lengths, bufs);
         if (rc) {
                 CERROR("cannot pack request %d\n", rc);
-                OBD_FREE(request, sizeof(*request));
-                RETURN(NULL);
+                GOTO(out_cred, rc);
         }
         request->rq_reqmsg->version |= version;
 
@@ -212,7 +230,6 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
 
         request->rq_send_state = LUSTRE_IMP_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
-        request->rq_import = class_import_get(imp);
 
         request->rq_req_cbid.cbid_fn  = request_out_callback;
         request->rq_req_cbid.cbid_arg = request;
@@ -237,6 +254,12 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
         request->rq_reqmsg->opc = opcode;
         request->rq_reqmsg->flags = 0;
         RETURN(request);
+out_cred:
+        ptlrpcs_req_drop_cred(request);
+out_free:
+        class_import_put(imp);
+        OBD_FREE(request, sizeof(*request));
+        RETURN(NULL);
 }
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void)
@@ -469,8 +492,22 @@ static int after_reply(struct ptlrpc_request *req)
         /* Clear reply swab mask; this is a new reply in sender's byte order */
         req->rq_rep_swab_mask = 0;
 #endif
-        LASSERT (req->rq_nob_received <= req->rq_replen);
-        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
+        LASSERT (req->rq_nob_received <= req->rq_repbuf_len);
+        rc = ptlrpcs_cli_unwrap_reply(req);
+        if (rc) {
+                CERROR("verify reply error: %d\n", rc);
+                RETURN(rc);
+        }
+        /* unwrap_reply may request rpc be resend */
+        if (req->rq_ptlrpcs_restart) {
+                req->rq_resend = 1;
+                RETURN(0);
+        }
+
+        /* unwrap_reply will set rq_replen as the actual received
+         * lustre_msg length
+         */
+        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_replen);
         if (rc) {
                 CERROR("unpack_rep failed: %d\n", rc);
                 RETURN(-EPROTO);
@@ -696,8 +733,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
 
                                 req->rq_waiting = 0;
                                 if (req->rq_resend) {
-                                        lustre_msg_add_flags(req->rq_reqmsg,
-                                                             MSG_RESENT);
+                                        if (!req->rq_ptlrpcs_restart)
+                                                lustre_msg_add_flags(
+                                                        req->rq_reqmsg,
+                                                        MSG_RESENT);
                                         if (req->rq_bulk) {
                                                 __u64 old_xid = req->rq_xid;
 
@@ -1022,6 +1061,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         LASSERTF(request->rq_rqbd == NULL, "req %p\n",request);/* client-side */
         LASSERTF(list_empty(&request->rq_list), "req %p\n", request);
         LASSERTF(list_empty(&request->rq_set_chain), "req %p\n", request);
+        LASSERT(request->rq_cred);
 
         /* We must take it off the imp_replay_list first.  Otherwise, we'll set
          * request->rq_reqmsg to NULL while osc_close is dereferencing it. */
@@ -1042,14 +1082,11 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
                 LBUG();
         }
 
-        if (request->rq_repmsg != NULL) {
-                OBD_FREE(request->rq_repmsg, request->rq_replen);
-                request->rq_repmsg = NULL;
-        }
-        if (request->rq_reqmsg != NULL) {
-                OBD_FREE(request->rq_reqmsg, request->rq_reqlen);
-                request->rq_reqmsg = NULL;
-        }
+        if (request->rq_repbuf != NULL)
+                ptlrpcs_cli_free_repbuf(request);
+        if (request->rq_reqbuf != NULL)
+                ptlrpcs_cli_free_reqbuf(request);
+
         if (request->rq_export != NULL) {
                 class_export_put(request->rq_export);
                 request->rq_export = NULL;
@@ -1061,6 +1098,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         if (request->rq_bulk != NULL)
                 ptlrpc_free_bulk(request->rq_bulk);
 
+        ptlrpcs_req_drop_cred(request);
         OBD_FREE(request, sizeof(*request));
         EXIT;
 }
@@ -1399,7 +1437,8 @@ restart:
         }
 
         if (req->rq_resend) {
-                lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
+                if (!req->rq_ptlrpcs_restart)
+                        lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
 
                 if (req->rq_bulk != NULL)
                         ptlrpc_unregister_bulk (req);
@@ -1537,8 +1576,8 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         /* Clear reply swab mask; this is a new reply in sender's byte order */
         req->rq_rep_swab_mask = 0;
 #endif
-        LASSERT (req->rq_nob_received <= req->rq_replen);
-        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
+        LASSERT (req->rq_nob_received <= req->rq_repbuf_len);
+        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_replen);
         if (rc) {
                 CERROR("unpack_rep failed: %d\n", rc);
                 GOTO(out, rc = -EPROTO);
@@ -1655,6 +1694,18 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                         ptlrpc_wake_client_req(req);
                 }
                 spin_unlock (&req->rq_lock);
+        }
+
+        list_for_each_safe(tmp, n, &imp->imp_rawrpc_list) {
+                struct ptlrpc_request *req =
+                        list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                DEBUG_REQ(D_HA, req, "aborting raw rpc");
+
+                spin_lock(&req->rq_lock);
+                req->rq_err = 1;
+                ptlrpc_wake_client_req(req);
+                spin_unlock(&req->rq_lock);
         }
 
         /* Last chance to free reqs left on the replay list, but we

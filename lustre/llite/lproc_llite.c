@@ -35,7 +35,6 @@ struct file_operations llite_dump_pgcache_fops;
 struct file_operations ll_ra_stats_fops;
 struct file_operations llite_wait_times_fops;
 
-
 #ifndef LPROCFS
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc)
@@ -263,6 +262,126 @@ static int ll_wr_max_read_ahead_mb(struct file *file, const char *buffer,
         return count;
 }
 
+static int ll_rd_gns_upcall(char *page, char **start, off_t off,
+                            int count, int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int len;
+
+        down(&sbi->ll_gns_sem);
+        len = snprintf(page, count, "%s\n", sbi->ll_gns_upcall);
+        up(&sbi->ll_gns_sem);
+
+        return len;
+}
+
+static int ll_wr_gns_upcall(struct file *file, const char *buffer,
+                            unsigned long count, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        down(&sbi->ll_gns_sem);
+        snprintf(sbi->ll_gns_upcall, count, "%s", buffer);
+        up(&sbi->ll_gns_sem);
+
+        return count;
+}
+
+static int ll_rd_gns_object_name(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int len;
+
+        down(&sbi->ll_gns_sem);
+        len = snprintf(page, count, "%s\n", sbi->ll_gns_oname);
+        up(&sbi->ll_gns_sem);
+
+        return len;
+}
+
+static int ll_wr_gns_object_name(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        down(&sbi->ll_gns_sem);
+        snprintf(sbi->ll_gns_oname, count, "%s", buffer);
+        up(&sbi->ll_gns_sem);
+
+        return count;
+}
+
+static int ll_rd_gns_timeout(char *page, char **start, off_t off,
+                             int count, int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int len;
+
+        down(&sbi->ll_gns_sem);
+        len = snprintf(page, count, "%lu\n",
+                       (unsigned long)sbi->ll_gns_timeout);
+        up(&sbi->ll_gns_sem);
+
+        return len;
+}
+
+static int ll_wr_gns_timeout(struct file *file, const char *buffer,
+                             unsigned long count, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        down(&sbi->ll_gns_sem);
+        sbi->ll_gns_timeout = val;
+        up(&sbi->ll_gns_sem);
+
+        return count;
+}
+
+static int ll_rd_gns_tick(char *page, char **start, off_t off,
+                          int count, int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int len;
+
+        down(&sbi->ll_gns_sem);
+        len = snprintf(page, count, "%lu\n",
+                       (unsigned long)sbi->ll_gns_tick);
+        up(&sbi->ll_gns_sem);
+
+        return len;
+}
+
+static int ll_wr_gns_tick(struct file *file, const char *buffer,
+                          unsigned long count, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        down(&sbi->ll_gns_sem);
+        if (sbi->ll_gns_tick < sbi->ll_gns_timeout)
+                sbi->ll_gns_tick = val;
+        up(&sbi->ll_gns_sem);
+
+        return count;
+}
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -278,6 +397,19 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "config_update", 0, ll_wr_config_update, 0 },
         { "max_read_ahead_mb", ll_rd_max_read_ahead_mb,
                                ll_wr_max_read_ahead_mb, 0 },
+
+        { "gns_upcall", ll_rd_gns_upcall,
+          ll_wr_gns_upcall, 0 },
+        
+        { "gns_timeout", ll_rd_gns_timeout,
+          ll_wr_gns_timeout, 0 },
+        
+        { "gns_tick", ll_rd_gns_tick,
+          ll_wr_gns_tick, 0 },
+        
+        { "gns_object_name", ll_rd_gns_object_name,
+          ll_wr_gns_object_name, 0 },
+        
         { 0 }
 };
 
@@ -329,7 +461,8 @@ struct llite_file_opcode {
                                    "direct_read" },
         { LPROC_LL_DIRECT_WRITE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
                                    "direct_write" },
-
+        { LPROC_LL_SETXATTR,       LPROCFS_TYPE_REGS, "setxattr" },
+        { LPROC_LL_GETXATTR,       LPROCFS_TYPE_REGS, "getxattr" },
 };
 
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,

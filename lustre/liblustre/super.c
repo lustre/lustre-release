@@ -181,8 +181,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_valid valid)
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, 
+                CDEBUG(D_INODE, "valid %llx, cur time %lu/%lu, new %lu/%lu\n",
+                       (unsigned long long)src->o_valid, 
                        LTIME_S(lli->lli_st_mtime), LTIME_S(lli->lli_st_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
 
@@ -221,8 +221,8 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_valid valid)
         obd_valid newvalid = 0;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, LTIME_S(lli->lli_st_mtime), 
+                CDEBUG(D_INODE, "valid %llx, new time %lu/%lu\n",
+                       (unsigned long long)valid, LTIME_S(lli->lli_st_mtime), 
                        LTIME_S(lli->lli_st_ctime));
 
         if (valid & OBD_MD_FLATIME) {
@@ -438,7 +438,8 @@ static int llu_inode_revalidate(struct inode *inode)
                         valid |= OBD_MD_FLEASIZE;
                 }
                 ll_inode2id(&id, inode);
-                rc = mdc_getattr(sbi->ll_md_exp, &id, valid, ealen, &req);
+                rc = mdc_getattr(sbi->ll_md_exp, &id, valid, NULL, 0,
+                                 ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, lli->lli_st_ino);
                         RETURN(-abs(rc));
@@ -869,7 +870,7 @@ static int llu_readlink_internal(struct inode *inode,
 
         ll_inode2id(&id, inode);
         rc = mdc_getattr(sbi->ll_md_exp, &id,
-                         OBD_MD_LINKNAME, symlen, request);
+                         OBD_MD_LINKNAME, NULL, 0, symlen, request);
         if (rc) {
                 CERROR("inode %lu: rc = %d\n", lli->lli_st_ino, rc);
                 RETURN(rc);
@@ -1355,7 +1356,8 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         if ((md->body->valid &
              (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) !=
             (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) {
-                CERROR("bad md body valid mask 0x%x\n", md->body->valid);
+                CERROR("bad md body valid mask 0x%llx\n", 
+		       (unsigned long long)md->body->valid);
                 LBUG();
                 return ERR_PTR(-EPERM);
         }
@@ -1522,7 +1524,8 @@ llu_fsswop_mount(const char *source,
 
         /* fetch attr of root inode */
         err = mdc_getattr(sbi->ll_md_exp, &rootid,
-                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
+                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, NULL, 0,
+                          0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lov, err);

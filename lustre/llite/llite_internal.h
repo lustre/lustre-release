@@ -34,6 +34,15 @@ struct ll_ra_info {
         unsigned long             ra_stats[_NR_RA_STAT];
 };
 
+/* after roughly how long should we remove an inactive mount? */
+#define GNS_MOUNT_TIMEOUT 120
+
+/* how often should the GNS timer look for mounts to cleanup? */
+#define GNS_TICK_TIMEOUT  1
+
+/* how many times GNS will try to wait for 1 second for mount */
+#define GNS_WAIT_ATTEMPTS 10
+
 struct ll_sb_info {
         /* this protects pglist and max_r_a_pages.  It isn't safe to grab from
          * interrupt contexts. */
@@ -78,16 +87,36 @@ struct ll_sb_info {
         struct list_head          ll_mnt_list;
 
         struct semaphore          ll_gns_sem;
+        spinlock_t                ll_gns_lock;
         wait_queue_head_t         ll_gns_waitq;
-        struct completion         ll_gns_completion;
         int                       ll_gns_state;
         struct timer_list         ll_gns_timer;
         struct list_head          ll_gns_sbi_head;
+
+        unsigned long             ll_gns_tick;
+        unsigned long             ll_gns_timeout;
+        struct completion         ll_gns_mount_finished;
+
+        /* path to upcall */
+        char                      ll_gns_upcall[PATH_MAX];
+
+        /* mount object entry name */
+        char                      ll_gns_oname[PATH_MAX];
 };
 
-#define LL_GNS_STATE_IDLE     1100
-#define LL_GNS_STATE_MOUNTING 1101
-#define LL_GNS_STATE_FINISHED 1102
+struct ll_gns_ctl {
+        struct completion gc_starting;
+        struct completion gc_finishing;
+};
+
+/* mounting states */
+#define LL_GNS_IDLE               (1 << 0)
+#define LL_GNS_MOUNTING           (1 << 1)
+#define LL_GNS_FINISHED           (1 << 2)
+
+/* mounts checking flags */
+#define LL_GNS_UMOUNT             (1 << 0)
+#define LL_GNS_CHECK              (1 << 1)
 
 struct ll_readahead_state {
         spinlock_t      ras_lock;
@@ -98,6 +127,7 @@ struct ll_readahead_state {
 };
 
 extern kmem_cache_t *ll_file_data_slab;
+extern kmem_cache_t *ll_intent_slab;
 struct lustre_handle;
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
@@ -192,7 +222,13 @@ void ll_truncate(struct inode *inode);
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
-extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
+extern int ll_inode_revalidate_it(struct dentry *);
+extern int ll_setxattr(struct dentry *, const char *, const void *,
+                       size_t, int);
+extern int ll_getxattr(struct dentry *, const char *, void *, size_t);
+extern int ll_listxattr(struct dentry *, char *, size_t);
+extern int ll_removexattr(struct dentry *, const char *);
+extern int ll_inode_permission(struct inode *, int, struct nameidata *);
 int ll_refresh_lsm(struct inode *inode, struct lov_stripe_md *lsm);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
@@ -208,8 +244,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it);
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                  struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-int ll_getattr(struct vfsmount *mnt, struct dentry *de,
-               struct lookup_intent *it, struct kstat *stat);
+int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
 void ll_stime_record(struct ll_sb_info *sbi, struct timeval *start,
                      struct obd_service_time *stime);
@@ -217,6 +252,8 @@ void ll_stime_record(struct ll_sb_info *sbi, struct timeval *start,
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
+int ll_intent_alloc(struct lookup_intent *);
+void ll_intent_free(struct lookup_intent *it);
 extern void ll_set_dd(struct dentry *de);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
@@ -226,22 +263,26 @@ int revalidate_it_finish(struct ptlrpc_request *request, int offset,
 
 
 /* llite/llite_gns.c */
-int ll_finish_gns(struct ll_sb_info *sbi);
-int fill_page_with_path(struct dentry *, struct vfsmount *, char **pagep);
-int ll_dir_process_mount_object(struct dentry *, struct vfsmount *);
-int ll_gns_umount_all(struct ll_sb_info *sbi, int timeout);
+int ll_gns_start_thread(void);
+void ll_gns_stop_thread(void);
+
+int ll_gns_mount_object(struct dentry *dentry,
+                        struct vfsmount *mnt);
+int ll_gns_umount_object(struct vfsmount *mnt);
+
+int ll_gns_check_mounts(struct ll_sb_info *sbi,
+                        int flags);
+
 void ll_gns_timer_callback(unsigned long data);
 void ll_gns_add_timer(struct ll_sb_info *sbi);
 void ll_gns_del_timer(struct ll_sb_info *sbi);
-int ll_gns_start_thread(void);
-void ll_gns_stop_thread(void);
 
 /* llite/llite_lib.c */
 extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
-void ll_options(char *options, char **ost, char **mds, int *flags);
+void ll_options(char *options, char **ost, char **mds, char **sec, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
 int lustre_fill_super(struct super_block *sb, void *data, int silent);
@@ -335,7 +376,6 @@ int ll_get_fid(struct obd_export *exp, struct lustre_id *idp,
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #define    ll_s2sbi(sb)        ((struct ll_sb_info *)((sb)->s_fs_info))
 #define    ll_set_sbi(sb, sbi) ((sb)->s_fs_info = sbi)
-void __d_rehash(struct dentry * entry, int lock);
 static inline __u64 ll_ts2u64(struct timespec *time)
 {
         __u64 t = time->tv_sec;

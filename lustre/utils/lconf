@@ -587,6 +587,13 @@ class LCTLInterface:
   quit""" % (type, name, uuid)
         self.run(cmds)
         
+    def set_security(self, name, key, value):
+        cmds = """
+  cfg_device %s
+  set_security %s %s
+  quit""" % (name, key, value)
+        self.run(cmds)
+
     def setup(self, name, setup = ""):
         cmds = """
   cfg_device %s
@@ -1177,6 +1184,8 @@ class kmod:
         self.dev_dir = dev_dir
         self.name = name
 
+    # FIXME we ignore the failure of loading gss module, because we might
+    # don't need it at all.
     def load(self):
         """Load module"""
         log ('loading module:', self.name, 'srcdir',
@@ -1184,15 +1193,21 @@ class kmod:
         if self.src_dir:
             module = kmod_find(self.src_dir, self.dev_dir,
                                self.name)
-            if not module:
+            if not module and self.name != 'ptlrpcs_gss':
                 panic('module not found:', self.name)
             (rc, out)  = run('/sbin/insmod', module)
             if rc:
-                raise CommandError('insmod', out, rc)
+                if self.name == 'ptlrpcs_gss':
+                    print "Warning: not support gss security!"
+                else:
+                    raise CommandError('insmod', out, rc)
         else:
             (rc, out) = run('/sbin/modprobe', self.name)
             if rc:
-                raise CommandError('modprobe', out, rc)
+                if self.name == 'ptlrpcs_gss':
+                    print "Warning: not support gss security!"
+                else:
+                    raise CommandError('modprobe', out, rc)
 
     def cleanup(self):
 	"""Unload module"""
@@ -1545,7 +1560,9 @@ class LDLM(Module):
     def add_module(self, manager):
         manager.add_lustre_module('lvfs', 'lvfs')
         manager.add_lustre_module('obdclass', 'obdclass')
+        manager.add_lustre_module('sec', 'ptlrpcs')
         manager.add_lustre_module('ptlrpc', 'ptlrpc')
+	manager.add_lustre_module('sec/gss', 'ptlrpcs_gss')
 
     def prepare(self):
         return
@@ -1892,16 +1909,21 @@ class MDSDEV(Module):
     	    self.info("mds", realdev, mountfsoptions, self.fstype, self.size, 
 		      self.format, master_name, profile_name, self.obdtype)
 	    
-	    lctl.newdev("mds", self.name, self.uuid,
-            		setup = "%s %s %s %s %s %s" %(realdev, 
+            lctl.attach("mds", self.name, self.uuid)
+            if config.mds_mds_sec:
+                lctl.set_security(self.name, "mds_mds_sec", config.mds_mds_sec)
+            if config.mds_ost_sec:
+                lctl.set_security(self.name, "mds_ost_sec", config.mds_ost_sec)
+
+            lctl.setup(self.name, setup = "%s %s %s %s %s %s" %(realdev, 
 			    self.fstype, profile_name, mountfsoptions,
                             master_name, self.obdtype))
 
             if development_mode():
-                procentry = "/proc/fs/lustre/mds/grp_hash_upcall"
-                upcall = os.path.abspath(os.path.dirname(sys.argv[0]) + "/l_getgroups")
+                procentry = "/proc/fs/lustre/mds/lsd_upcall"
+                upcall = os.path.abspath(os.path.dirname(sys.argv[0]) + "/lsd_upcall")
                 if not (os.access(procentry, os.R_OK) and os.access(upcall, os.R_OK)):
-                    print "MDS Warning: failed to set group-hash upcall"
+                    print "MDS Warning: failed to set lsd cache upcall"
                 else:
                     run("echo ", upcall, " > ", procentry)
 
@@ -2686,8 +2708,10 @@ class Mountpoint(Module):
             self.clientoptions = string.replace(self.clientoptions, "async", 
 						"lasync")
 
-        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s%s %s %s" % \
-              (self.vosc.get_name(), vmdc_name, self.clientoptions, 
+        if not config.sec:
+            config.sec = "null"
+        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s,sec=%s%s %s %s" % \
+              (self.vosc.get_name(), vmdc_name, config.sec, self.clientoptions,
 	       config.config, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
@@ -3483,6 +3507,9 @@ lconf_options = [
     ('config', "Cluster config name used for LDAP query", PARAM),
     ('select', "service=nodeA,service2=nodeB ", PARAMLIST),
     ('node',   "Load config for <nodename>", PARAM),
+    ('sec',    "security flavor <null|krb5i|krb5p> of client", PARAM),
+    ('mds_mds_sec', "security flavor <null|krb5i|krb5p> of inter mds's", PARAM),
+    ('mds_ost_sec', "security flavor <null|krb5i|krb5p> of mds's-ost's", PARAM),
     ('cleanup,d', "Cleans up config. (Shutdown)"),
     ('force,f', "Forced unmounting and/or obd detach during cleanup",
                FLAG, 0),

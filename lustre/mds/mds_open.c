@@ -111,7 +111,7 @@ static void mds_mfd_destroy(struct mds_file_data *mfd)
         mds_mfd_put(mfd);
 }
 
-
+#ifdef IFILTERDATA_ACTUALLY_USED
 /* Caller must hold mds->mds_epoch_sem */
 static int mds_alloc_filterdata(struct inode *inode)
 {
@@ -131,6 +131,7 @@ static void mds_free_filterdata(struct inode *inode)
         inode->i_filterdata = NULL;
         iput(inode);
 }
+#endif /*IFILTERDATA_ACTUALLY_USED*/
 
 /* Write access to a file: executors cause a negative count,
  * writers a positive count.  The semaphore is needed to perform
@@ -155,7 +156,7 @@ static int mds_get_write_access(struct mds_obd *mds, struct inode *inode,
                 RETURN(-ETXTBSY);
         }
 
-
+#ifdef IFILTERDATA_ACTUALLY_USED
         if (MDS_FILTERDATA(inode) && MDS_FILTERDATA(inode)->io_epoch != 0) {
                 CDEBUG(D_INODE, "continuing MDS epoch "LPU64" for ino %lu/%u\n",
                        MDS_FILTERDATA(inode)->io_epoch, inode->i_ino,
@@ -169,14 +170,17 @@ static int mds_get_write_access(struct mds_obd *mds, struct inode *inode,
                 rc = -ENOMEM;
                 goto out;
         }
+#endif /*IFILTERDATA_ACTUALLY_USED*/
         if (epoch > mds->mds_io_epoch)
                 mds->mds_io_epoch = epoch;
         else
                 mds->mds_io_epoch++;
+#ifdef IFILTERDATA_ACTUALLY_USED
         MDS_FILTERDATA(inode)->io_epoch = mds->mds_io_epoch;
         CDEBUG(D_INODE, "starting MDS epoch "LPU64" for ino %lu/%u\n",
                mds->mds_io_epoch, inode->i_ino, inode->i_generation);
  out:
+#endif /*IFILTERDATA_ACTUALLY_USED*/
         if (rc == 0)
                 atomic_inc(&inode->i_writecount);
         up(&mds->mds_epoch_sem);
@@ -201,7 +205,9 @@ static int mds_put_write_access(struct mds_obd *mds, struct inode *inode,
         if (!unlinking && !(body->valid & OBD_MD_FLSIZE))
                 GOTO(out, rc = EAGAIN);
 #endif
+#ifdef IFILTERDATA_ACTUALLY_USED
         mds_free_filterdata(inode);
+#endif
  out:
         up(&mds->mds_epoch_sem);
         return rc;
@@ -257,7 +263,9 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
                 error = mds_get_write_access(mds, dentry->d_inode, 0);
                 if (error)
                         GOTO(cleanup_mfd, error);
+#ifdef IFILTERDATA_ACTUALLY_USED
                 body->io_epoch = MDS_FILTERDATA(dentry->d_inode)->io_epoch;
+#endif /*IFILTERDATA_ACTUALLY_USED*/
         } else if (flags & FMODE_EXEC) {
                 error = mds_deny_write_access(mds, dentry->d_inode);
                 if (error)
@@ -666,6 +674,13 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         }
                 }
         }
+        rc = mds_pack_acl(obd, req->rq_repmsg, 3, body, dchild->d_inode);
+        if (rc < 0) {
+                CERROR("mds_pack_acl: rc = %d\n", rc);
+                up(&dchild->d_inode->i_sem);
+                RETURN(rc);
+        }
+
         /* If the inode has no EA data, then MDSs hold size, mtime */
         if (S_ISREG(dchild->d_inode->i_mode) &&
             !(body->valid & OBD_MD_FLEASIZE)) {

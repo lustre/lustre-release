@@ -1,0 +1,2 @@
+#!/bin/sh
+ls -dl $* | awk -- '!/^total/ { print $1; }'

@@ -14,6 +14,7 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+export SECURITY=${SECURITY:-"null"}
 
 TMP=${TMP:-/tmp}
 FSTYPE=${FSTYPE:-ext3}
@@ -36,12 +37,21 @@ SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
 
+. krb5_env.sh
+
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
 	RUNAS=""
 else
 	RUNAS_ID=${RUNAS_ID:-500}
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+fi
+
+if [ `using_krb5_sec $SECURITY` == 'y' ] ; then
+    start_krb5_kdc || exit 1
+    if [ $RUNAS_ID -ne $UID ]; then
+        $RUNAS ./krb5_refresh_cache.sh || exit 2
+    fi
 fi
 
 export NAME=${NAME:-local}
@@ -255,6 +265,67 @@ EOF
 }
 
 run_test 1 "test root_squash ============================"
+
+test_2() {
+        touch $DIR/f2
+                                                                                                                             
+        #test set/get xattr
+        setfattr -n trusted.name1 -v value1 $DIR/f2 || error
+        [ "`getfattr -n trusted.name1 $DIR/f2 2> /dev/null | \
+        grep "trusted.name1"`" == "trusted.name1=\"value1\"" ] || error
+                                                                                                                             
+        setfattr -n user.author1 -v author1 $DIR/f2 || error
+        [ "`getfattr -n user.author1 $DIR/f2 2> /dev/null | \
+        grep "user.author1"`" == "user.author1=\"author1\"" ] || error
+
+        # test listxattr
+        setfattr -n trusted.name2 -v value2 $DIR/f2 || error
+        setfattr -n trusted.name3 -v value3 $DIR/f2 || error
+        [ `getfattr -d -m "^trusted" $DIR/f2 2> /dev/null | \
+        grep "trusted" | wc -l` -eq 5 ] || error
+
+                                                                                                                             
+        setfattr -n user.author2 -v author2 $DIR/f2 || error
+        setfattr -n user.author3 -v author3 $DIR/f2 || error
+        [ `getfattr -d -m "^user" $DIR/f2 2> /dev/null | \
+        grep "user" | wc -l` -eq 3 ] || error
+        #test removexattr
+        setfattr -x trusted.name1 $DIR/f2 2> /dev/null || error
+        getfattr -d -m trusted $DIR/f2 2> /dev/null | \
+        grep "trusted.name1" && error || true
+
+        setfattr -x user.author1 $DIR/f2 2> /dev/null || error
+        getfattr -d -m user $DIR/f2 2> /dev/null | \
+        grep "user.author1" && error || true
+}
+run_test 2 "set/get xattr test (trusted xattr only) ============"
+
+test_3 () {
+        SAVE_UMASK=`umask`
+        umask 022
+        USER1=rpm
+        USER2=vsx2
+        GROUP1=nobody
+        GROUP2=users
+
+        chmod +x runacltest
+        chmod +x acl_mode
+        cd $DIR
+
+       #sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/setfacl.test | runacltest ||
+#error "$? setfacl tests failed"
+
+        #sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/acl_asroot.test | runacltest || error "$? acl_asroot tests failed"
+
+        #sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/acl_perm.test | runacltest || error "$? acl_perm tests failed"
+
+        #sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/acl_misc.test | runacltest || error "$? acl_misc tests failed"
+
+        sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/acl_fileutil.test | runacltest || error "$? acl_fileutil tests failed"
+
+        umask $SAVE_UMASK
+}
+run_test 3 "==============acl test ============="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

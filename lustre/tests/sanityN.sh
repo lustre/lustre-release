@@ -366,6 +366,39 @@ test_18() {
 }
 run_test 18 "mmap sanity check ================================="
 
+test_19() {     # bug 2441
+        touch $DIR1/f2b
+                                                                                                                             
+        #test set/get xattr
+        setfattr -n trusted.name1 -v value1 $DIR1/f2b || error
+        [ "`getfattr -n trusted.name1 $DIR2/f2b 2> /dev/null | \
+        grep "trusted.name1"`" == "trusted.name1=\"value1\"" ] || error
+                                                                                                                             
+        setfattr -n user.author1 -v author1 $DIR/f2b || error
+        [ "`getfattr -n user.author1 $DIR/f2b 2> /dev/null | \
+        grep "user.author1"`" == "user.author1=\"author1\"" ] || error
+
+        # test listxattr
+        setfattr -n trusted.name2 -v value2 $DIR2/f2b || error
+        setfattr -n trusted.name3 -v value3 $DIR1/f2b || error
+        [ `getfattr -d -m "^trusted" $DIR2/f2b 2> /dev/null | \
+        grep "trusted" | wc -l` -eq 5 ] || error
+                                                                                                                             
+        setfattr -n user.author2 -v author2 $DIR/f2b || error
+        setfattr -n user.author3 -v author3 $DIR/f2b || error
+        [ `getfattr -d -m "^user" $DIR/f2b 2> /dev/null | \
+        grep "user" | wc -l` -eq 3 ] || error
+        #test removexattr
+        setfattr -x trusted.name1 $DIR2/f2b 2> /dev/null || error
+        getfattr -d -m trusted $DIR2/f2b 2> /dev/null | \
+        grep "trusted.name1" && error || true
+
+        setfattr -x user.author1 $DIR/f2b 2> /dev/null || error
+        getfattr -d -m user $DIR/f2b 2> /dev/null | \
+        grep "user.author1" && error || true
+}
+run_test 19 "test set/get xattr on multiple mounts ============"
+
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

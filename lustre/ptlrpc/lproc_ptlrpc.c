@@ -78,6 +78,9 @@ struct ll_rpc_opcode {
         { PTLBD_DISCONNECT, "ptlbd_disconnect" },
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel"},
+        { SEC_INIT,         "sec_init"},
+        { SEC_INIT_CONTINUE,"sec_init_continue"},
+        { SEC_FINI,         "sec_fini"},
 };
 
 const char* ll_opcode2str(__u32 opcode)

@@ -28,15 +28,21 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#include <linux/dcache.h>
+#include <linux/namei.h>
+#include <linux/obd_support.h>
+#include <linux/obd_class.h>
+#include <linux/obd.h>
+#include <linux/lustre_lib.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_idl.h>
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_lite.h>
 
 #include "mds_internal.h"
-
 
 /*
  * TODO:
@@ -109,6 +115,13 @@ int mds_md_connect(struct obd_device *obd, char *md_name)
                           "inter_mds", 0, NULL);
         if (rc)
                 GOTO(err_reg, rc);
+
+        if (mds->mds_mds_sec) {
+                rc = obd_set_info(mds->mds_md_exp, strlen("sec"), "sec",
+                                  strlen(mds->mds_mds_sec), mds->mds_mds_sec);
+                if (rc)
+                        GOTO(err_reg, rc);
+        }
 
         mds->mds_md_connected = 1;
         up(&mds->mds_md_sem);
@@ -952,10 +965,13 @@ int mds_lock_slave_objs(struct obd_device *obd, struct dentry *dentry,
         op_data->mea1 = mea;
         it.it_op = IT_UNLINK;
 
+        OBD_ALLOC(it.d.fs_data, sizeof(struct lustre_intent_data));
+
         rc = md_enqueue(mds->mds_md_exp, LDLM_IBITS, &it, LCK_EX,
                         op_data, *rlockh, NULL, 0, ldlm_completion_ast,
                         mds_blocking_ast, NULL);
         OBD_FREE(op_data, sizeof(*op_data));
+        OBD_FREE(it.d.fs_data, sizeof(struct lustre_intent_data));
         EXIT;
 cleanup:
         OBD_FREE(mea, mea_size);
@@ -1133,7 +1149,6 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
                 CERROR("Can't unpack security desc\n");
                 GOTO(cleanup, rc = -EFAULT);
         }
-        mds_squash_root(&obd->u.mds, rsd, &req->rq_peer.peer_id.nid); 
 
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
@@ -1162,7 +1177,7 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
 	if (!S_ISDIR(dentry->d_inode->i_mode))
 		GOTO(cleanup, rc = 0);
 
-        rc = mds_init_ucred(&uc, rsd);
+        rc = mds_init_ucred(&uc, req, rsd);
         if (rc) {
                 CERROR("can't init ucred\n");
                 GOTO(cleanup, rc);

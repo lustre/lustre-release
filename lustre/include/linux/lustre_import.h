@@ -46,13 +46,14 @@ enum obd_import_event {
         IMP_EVENT_ACTIVE     = 0x808004,
 };
 
+struct ptlrpc_sec;
+
 struct obd_import_conn {
         struct list_head          oic_item;
         struct ptlrpc_connection *oic_conn;
         struct obd_uuid           oic_uuid;
         unsigned long             oic_last_attempt; /* in jiffies */
 };
-
 
 struct obd_import {
         struct portals_handle     imp_handle;
@@ -70,7 +71,11 @@ struct obd_import {
         struct list_head          imp_sending_list;
         struct list_head          imp_delayed_list;
 
+        /* list of ongoing raw rpcs (only used by gss) */
+        struct list_head          imp_rawrpc_list;
+
         struct obd_device        *imp_obd;
+        struct ptlrpc_sec        *imp_sec;
         wait_queue_head_t         imp_recovery_waitq;
         __u64                     imp_last_replay_transno;
         atomic_t                  imp_inflight;

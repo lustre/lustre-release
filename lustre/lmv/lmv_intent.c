@@ -46,14 +46,16 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd_lmv.h>
+#include <linux/namei.h>
+#include <linux/lustre_lite.h>
 #include "lmv_internal.h"
 
 
 static inline void lmv_drop_intent_lock(struct lookup_intent *it)
 {
-        if (it->d.lustre.it_lock_mode != 0)
-                ldlm_lock_decref((void *)&it->d.lustre.it_lock_handle,
-                                 it->d.lustre.it_lock_mode);
+        if (LUSTRE_IT(it)->it_lock_mode != 0)
+                ldlm_lock_decref((void *)&LUSTRE_IT(it)->it_lock_handle,
+                                 LUSTRE_IT(it)->it_lock_mode);
 }
 
 int lmv_handle_remote_inode(struct obd_export *exp, void *lmm,
@@ -89,17 +91,17 @@ int lmv_handle_remote_inode(struct obd_export *exp, void *lmm,
                 }
 
                 /* we got LOOKUP lock, but we really need attrs */
-                pmode = it->d.lustre.it_lock_mode;
+                pmode = LUSTRE_IT(it)->it_lock_mode;
                 if (pmode) {
-                        memcpy(&plock, &it->d.lustre.it_lock_handle,
+                        memcpy(&plock, &LUSTRE_IT(it)->it_lock_handle,
                                sizeof(plock));
-                        it->d.lustre.it_lock_mode = 0;
+                        LUSTRE_IT(it)->it_lock_mode = 0;
                 }
 
                 LASSERT((body->valid & OBD_MD_FID) != 0);
                 
                 nid = body->id1;
-                it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
+                LUSTRE_IT(it)->it_disposition &= ~DISP_ENQ_COMPLETE;
                 rc = md_intent_lock(lmv->tgts[id_group(&nid)].ltd_exp, &nid, NULL,
                                     0, lmm, lmmsize, NULL, it, flags, &req, cb_blocking);
 
@@ -110,9 +112,9 @@ int lmv_handle_remote_inode(struct obd_export *exp, void *lmm,
                  */
                 if (rc == 0) {
                         lmv_drop_intent_lock(it);
-                        memcpy(&it->d.lustre.it_lock_handle, &plock,
+                        memcpy(&LUSTRE_IT(it)->it_lock_handle, &plock,
                                sizeof(plock));
-                        it->d.lustre.it_lock_mode = pmode;
+                        LUSTRE_IT(it)->it_lock_mode = pmode;
                 } else if (pmode)
                         ldlm_lock_decref(&plock, pmode);
 
@@ -194,7 +196,7 @@ repeat:
          * nothing is found, do not access body->id1 as it is zero and thus
          * pointless.
          */
-        if (it->d.lustre.it_disposition & DISP_LOOKUP_NEG)
+        if (LUSTRE_IT(it)->it_disposition & DISP_LOOKUP_NEG)
                 RETURN(0);
 
         /* caller may use attrs MDS returns on IT_OPEN lock request so, we have
@@ -317,7 +319,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
          * nothing is found, do not access body->id1 as it is zero and thus
          * pointless.
          */
-        if (it->d.lustre.it_disposition & DISP_LOOKUP_NEG)
+        if (LUSTRE_IT(it)->it_disposition & DISP_LOOKUP_NEG)
                 RETURN(0);
                 
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
@@ -406,11 +408,13 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 /* is obj valid? */
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
+                OBD_ALLOC(it.d.fs_data, sizeof(struct lustre_intent_data));
+
                 rc = md_intent_lock(lmv->tgts[id_group(&id)].ltd_exp, &id,
                                     NULL, 0, NULL, 0, &id, &it, 0, &req,
                                     lmv_dirobj_blocking_ast);
                 
-                lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
+                lockh = (struct lustre_handle *)&LUSTRE_IT(&it)->it_lock_handle;
                 if (rc > 0 && req == NULL) {
                         /* nice, this slave is valid */
                         LASSERT(req == NULL);
@@ -418,10 +422,11 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                         goto release_lock;
                 }
 
-                if (rc < 0)
+                if (rc < 0) {
+                        OBD_FREE(it.d.fs_data, sizeof(struct lustre_intent_data));
                         /* error during lookup */
                         GOTO(cleanup, rc);
-                
+                } 
                 lock = ldlm_handle2lock(lockh);
                 LASSERT(lock);
 
@@ -442,8 +447,9 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 release_lock:
                 lmv_update_body_from_obj(body, obj->objs + i);
 
-                if (it.d.lustre.it_lock_mode)
-                        ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
+                if (LUSTRE_IT(&it)->it_lock_mode)
+                        ldlm_lock_decref(lockh, LUSTRE_IT(&it)->it_lock_mode);
+                OBD_FREE(it.d.fs_data, sizeof(struct lustre_intent_data));
         }
 
         EXIT;
@@ -655,8 +661,10 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
+
                 cb = lmv_dirobj_blocking_ast;
 
+                OBD_ALLOC(it.d.fs_data, sizeof(struct lustre_intent_data));
                 if (id_equal_fid(&id, &obj->id)) {
                         if (master_valid) {
                                 /* lmv_intent_getattr() already checked
@@ -678,11 +686,12 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                         cb = cb_blocking;
                 }
 
+               
                 /* is obj valid? */
                 rc = md_intent_lock(lmv->tgts[id_group(&id)].ltd_exp,
                                     &id, NULL, 0, NULL, 0, &id, &it, 0, 
                                     &req, cb);
-                lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
+                lockh = (struct lustre_handle *) &LUSTRE_IT(&it)->it_lock_handle;
                 if (rc > 0 && req == NULL) {
                         /* nice, this slave is valid */
                         LASSERT(req == NULL);
@@ -690,17 +699,18 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                         goto release_lock;
                 }
 
-                if (rc < 0)
+                if (rc < 0) {
+                        OBD_FREE(it.d.fs_data, sizeof(struct lustre_intent_data));
                         /* error during revalidation */
                         GOTO(cleanup, rc);
-
+                }
                 if (master) {
                         LASSERT(master_valid == 0);
                         /* save lock on master to be returned to the caller */
                         CDEBUG(D_OTHER, "no lock on master yet\n");
                         memcpy(&master_lockh, lockh, sizeof(master_lockh));
-                        master_lock_mode = it.d.lustre.it_lock_mode;
-                        it.d.lustre.it_lock_mode = 0;
+                        master_lock_mode = LUSTRE_IT(&it)->it_lock_mode;
+                        LUSTRE_IT(&it)->it_lock_mode = 0;
                 } else {
                         /* this is slave. we want to control it */
                         lock = ldlm_handle2lock(lockh);
@@ -726,14 +736,15 @@ update:
                 
                 CDEBUG(D_OTHER, "fresh: %lu\n",
                        (unsigned long)obj->objs[i].size);
-
+                
                 if (req)
                         ptlrpc_req_finished(req);
 release_lock:
                 size += obj->objs[i].size;
 
-                if (it.d.lustre.it_lock_mode)
-                        ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
+                if (LUSTRE_IT(&it)->it_lock_mode)
+                        ldlm_lock_decref(lockh, LUSTRE_IT(&it)->it_lock_mode);
+                OBD_FREE(it.d.fs_data, sizeof(struct lustre_intent_data));
         }
 
         if (*reqp) {
@@ -757,16 +768,16 @@ release_lock:
 //                        body->mds = id_group(&obj->id);
                 }
                 if (master_valid == 0) {
-                        memcpy(&oit->d.lustre.it_lock_handle,
+                        memcpy(&LUSTRE_IT(oit)->it_lock_handle,
                                &master_lockh, sizeof(master_lockh));
-                        oit->d.lustre.it_lock_mode = master_lock_mode;
+                        LUSTRE_IT(oit)->it_lock_mode = master_lock_mode;
                 }
                 rc = 0;
         } else {
                 /* it seems all the attrs are fresh and we did no request */
                 CDEBUG(D_OTHER, "all the attrs were fresh\n");
                 if (master_valid == 0)
-                        oit->d.lustre.it_lock_mode = master_lock_mode;
+                        LUSTRE_IT(oit)->it_lock_mode = master_lock_mode;
                 rc = 1;
         }
 

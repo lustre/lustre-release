@@ -459,12 +459,37 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
                        );
 }
 
+#if ENABLE_GSS
+/* FIXME move these staff to proper place */
+int (*lustre_secinit_downcall_handler)(const char *buffer,
+                                       long count) = NULL;
+EXPORT_SYMBOL(lustre_secinit_downcall_handler);
+
+int obd_proc_write_secinit(struct file *file, const char *buffer,
+                           unsigned long count, void *data)
+{
+        int rc = 0;
+
+        if (lustre_secinit_downcall_handler) {
+                rc = (*lustre_secinit_downcall_handler)((char *)buffer, count);
+                if (rc) {
+                        LASSERT(rc < 0);
+                        return rc;
+                }
+        }
+        return (int)count;
+}
+#endif
+
 /* Root for /proc/fs/lustre */
 struct proc_dir_entry *proc_lustre_root = NULL;
 struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
         { "kernel_version", obd_proc_read_kernel_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
+#if ENABLE_GSS
+        { "secinit", NULL, obd_proc_write_secinit, NULL },
+#endif
         { 0 }
 };
 

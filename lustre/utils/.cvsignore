@@ -18,5 +18,6 @@ lfs
 llmount
 mount.lustre
 wiretest
+lsd_upcall
 .*.cmd
 .*.d

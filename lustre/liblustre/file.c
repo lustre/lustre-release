@@ -90,7 +90,7 @@ void obdo_refresh_inode(struct inode *dst,
 
 static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 {
-        struct ptlrpc_request *req = it->d.lustre.it_data;
+        struct ptlrpc_request *req = LUSTRE_IT(it)->it_data;
         struct ll_file_data *fd;
         struct mds_body *body;
         ENTRY;
@@ -114,7 +114,7 @@ static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
         lli->lli_file_data = fd;
 
-        mdc_set_open_replay_data(NULL, &fd->fd_mds_och, it->d.lustre.it_data);
+        mdc_set_open_replay_data(NULL, &fd->fd_mds_och, LUSTRE_IT(it)->it_data);
 
         RETURN(0);
 }
@@ -139,9 +139,8 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", lli->lli_st_ino);
         LL_GET_INTENT(inode, it);
 
-        if (!it->d.lustre.it_disposition) {
+        if (!LUSTRE_IT(it)->it_disposition)
                 LBUG();
-        }
 
         rc = it_open_error(DISP_OPEN_OPEN, it);
         if (rc)
@@ -168,7 +167,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         lli->lli_open_flags = flags & ~(O_CREAT | O_EXCL | O_TRUNC);
 
  out_release:
-        request = it->d.lustre.it_data;
+        request = LUSTRE_IT(it)->it_data;
         ptlrpc_req_finished(request);
 
         it->it_op_release(it);

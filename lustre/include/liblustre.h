@@ -197,16 +197,17 @@ struct module {
         int count;
 };
 
-static inline void MODULE_AUTHOR(char *name)
-{
-        printf("%s\n", name);
-}
-#define MODULE_DESCRIPTION(name) MODULE_AUTHOR(name)
-#define MODULE_LICENSE(name) MODULE_AUTHOR(name)
+#define MODULE_AUTHOR(name)
+#define MODULE_DESCRIPTION(name)
+#define MODULE_LICENSE(name)
+
+#define module_init(init)
+#define module_exit(exit)
 
 #define THIS_MODULE NULL
 #define __init
 #define __exit
+#define __user
 
 /* devices */
 
@@ -275,6 +276,14 @@ static inline void spin_unlock_bh(spinlock_t *l) {}
 static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b) {}
 static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
+typedef struct { } rwlock_t;
+#define rwlock_init(x) do {} while(0)
+#define RW_LOCK_UNLOCKED (rwlock_t) {}
+#define read_lock(l)
+#define read_unlock(l)
+#define write_lock(l)
+#define write_unlock(l)
+
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
 
@@ -286,6 +295,10 @@ static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 #define max_t(type,x,y) \
 	({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
+
+#define container_of(ptr, type, member) ({                      \
+        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
+        (type *)( (char *)__mptr - offsetof(type,member) );})
 
 /* registering symbols */
 
@@ -313,6 +326,12 @@ static inline int copy_to_user(void *a,void *b, int c)
         return 0;
 }
 
+static inline long strncpy_from_user(char *dest, const char *src, long n)
+{
+        char *s;
+        s = strncpy(dest, src, n);
+        return strnlen(s, n);
+}
 
 /* slabs */
 typedef struct {
@@ -427,7 +446,7 @@ static inline struct page* __grab_cache_page(unsigned long index)
 #define ATTR_ATTR_FLAG  0x0400
 #define ATTR_RAW        0x0800  /* file system, not vfs will massage attrs */
 #define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
-#define ATTR_CTIME_SET  0x2000
+/* ATTR_CTIME_SET has been defined in lustre_idl.h */
 
 struct iattr {
         unsigned int    ia_valid;
@@ -457,24 +476,27 @@ struct iattr {
 
 #define INTENT_MAGIC 0x19620323
 
-struct lustre_intent_data {
-        int       it_disposition;
-        int       it_status;
-        __u64     it_lock_handle;
-        void     *it_data;
-        int       it_lock_mode;
-        int it_int_flags;
-};
 struct lookup_intent {
         int     it_magic;
         void    (*it_op_release)(struct lookup_intent *);
         int     it_op;
         int     it_flags;
         int     it_create_mode;
-        union {
-                struct lustre_intent_data lustre;
-        } d;
+	union {
+		void *fs_data; /* FS-specific intent data */
+	} d;
 };
+
+struct lustre_intent_data {
+        int     it_disposition;
+        int     it_status;
+        __u64   it_lock_handle;
+        void    *it_data;
+        int     it_lock_mode;
+        int     it_int_flags;
+};
+
+#define LUSTRE_IT(it) ((struct lustre_intent_data *)((it)->d.fs_data))
 
 static inline void intent_init(struct lookup_intent *it, int op, int flags)
 {
@@ -543,6 +565,8 @@ struct task_struct {
         struct signal pending;
         char comm[32];
         int pid;
+        uid_t uid;
+        gid_t gid;
         int fsuid;
         int fsgid;
         int max_groups;
@@ -624,6 +648,14 @@ static inline int schedule_timeout(signed long t)
 })
 #define time_after(a, b) ((long)(b) - (long)(a) < 0)
 #define time_before(a, b) time_after(b,a)
+
+static inline unsigned long get_seconds(void)
+{
+        struct timeval tv;
+
+        gettimeofday(&tv, NULL);
+        return (tv.tv_sec + tv.tv_usec / 1000000);
+}
 
 struct timer_list {
         struct list_head tl_list;

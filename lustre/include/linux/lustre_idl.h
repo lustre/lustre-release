@@ -361,6 +361,7 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLUID    (0x0000000000000200LL)    /* user ID */
 #define OBD_MD_FLGID    (0x0000000000000400LL)    /* group ID */
 #define OBD_MD_FLFLAGS  (0x0000000000000800LL)    /* flags word */
+#define OBD_MD_FLEA     (0x0000000000001000LL)    /* extended attributes */
 #define OBD_MD_FLNLINK  (0x0000000000002000LL)    /* link count */
 #define OBD_MD_FLGENER  (0x0000000000004000LL)    /* generation number */
 #define OBD_MD_FLINLINE (0x0000000000008000LL)    /* inline data */
@@ -380,12 +381,15 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLDIREA  (0x0000000020000000LL)    /* dir's extended attribute data */
 #define OBD_MD_REINT    (0x0000000040000000LL)    /* reintegrate oa */
 #define OBD_MD_FID      (0x0000000080000000LL)    /* lustre_id data */
+#define OBD_MD_FLEALIST (0x0000000100000000LL)    /* list extended attributes */
+#define OBD_MD_FLACL_ACCESS (0x0000000200000000LL) /*access acl*/
 
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
                            OBD_MD_FLCKSUM | OBD_MD_FLQOS |              \
                            OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE |          \
-                           OBD_MD_MDS))
+                           OBD_MD_FLEA | OBD_MD_FLEALIST |              \
+                           OBD_MD_FLACL_ACCESS | OBD_MD_MDS))
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
 {
@@ -487,10 +491,6 @@ extern void lustre_swab_ost_lvb(struct ost_lvb *);
 
 /* 
  * security descriptor in mds request
- *
- * note gid & cap might need be removed later:
- *  - cap should be obtained on mds
- *  - gid is actually not used.
  */
 struct mds_req_sec_desc {
         __u32           rsd_uid;
@@ -635,6 +635,7 @@ struct lustre_md {
         struct mds_body *body;
         struct lov_stripe_md *lsm;
         struct mea *mea;
+        struct posix_acl *acl_access;
 };
 
 struct mdc_op_data {
@@ -666,10 +667,20 @@ struct mds_rec_setattr {
         __u64            sa_ctime;
 };
 
-/* Remove this once we declare it in include/linux/fs.h (v21 kernel patch?) */
-#ifndef ATTR_CTIME_SET
-#define ATTR_CTIME_SET 0x2000
+/* XXX Following ATTR_XXX should go to vfs patch...  */
+#ifdef ATTR_CTIME_SET
+#error "ATTR_CTIME_SET has been defined somewhere else"
 #endif
+#ifdef ATTR_EA
+#error "ATTR_EA has been defined somewhere else"
+#endif
+#ifdef ATTR_EA_RM
+#error "ATTR_EA_RM has been defined somewhere else"
+#endif
+
+#define ATTR_CTIME_SET  0x00002000
+#define ATTR_EA         0x00040000
+#define ATTR_EA_RM      0x00080000
 
 extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
@@ -1115,5 +1126,14 @@ static inline struct lustre_id *obdo_id(struct obdo *oa)
         
         return (struct lustre_id *)raw_id;
 }
+
+/* security negotiate */
+typedef enum {
+        SEC_INIT                = 600,
+        SEC_INIT_CONTINUE       = 601,
+        SEC_FINI                = 602,
+        SEC_LAST_OPC
+} sec_cmd_t;
+#define SEC_FIRST_OPC SEC_INIT
 
 #endif

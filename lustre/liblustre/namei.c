@@ -46,15 +46,15 @@ static void ll_intent_drop_lock(struct lookup_intent *it)
 {
         struct lustre_handle *handle;
 
-        if (it->it_op && it->d.lustre.it_lock_mode) {
-                handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
+        if (it->it_op && LUSTRE_IT(it)->it_lock_mode) {
+                handle = (struct lustre_handle *)&LUSTRE_IT(it)->it_lock_handle;
                 CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
                        " from it %p\n", handle->cookie, it);
-                ldlm_lock_decref(handle, it->d.lustre.it_lock_mode);
+                ldlm_lock_decref(handle, LUSTRE_IT(it)->it_lock_mode);
 
                 /* bug 494: intent_release may be called multiple times, from
                  * this thread and we don't want to double-decref this lock */
-                it->d.lustre.it_lock_mode = 0;
+                LUSTRE_IT(it)->it_lock_mode = 0;
         }
 }
 
@@ -65,8 +65,8 @@ static void ll_intent_release(struct lookup_intent *it)
         ll_intent_drop_lock(it);
         it->it_magic = 0;
         it->it_op_release = 0;
-        it->d.lustre.it_disposition = 0;
-        it->d.lustre.it_data = NULL;
+        LUSTRE_IT(it)->it_disposition = 0;
+        LUSTRE_IT(it)->it_data = NULL;
         EXIT;
 }
 
@@ -107,7 +107,7 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%lu)\n",
                        inode, llu_i2info(inode)->lli_st_ino,
                        llu_i2info(inode)->lli_st_generation);
-                mdc_set_lock_data(NULL, &it->d.lustre.it_lock_handle, inode);
+                mdc_set_lock_data(NULL, &LUSTRE_IT(it)->it_lock_handle, inode);
         }
 
         /* drop lookup/getattr locks */

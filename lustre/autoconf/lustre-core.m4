@@ -317,6 +317,23 @@ AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 ])
 
 #
+# LC_CONFIG_GSS
+#
+# whether build-in gss/krb5 capability
+#
+AC_DEFUN([LC_CONFIG_GSS],
+[AC_MSG_CHECKING([whether to enable gss/krb5 support])
+AC_ARG_ENABLE([gss],
+	AC_HELP_STRING([--enable-gss],
+			[enable gss/krb5 support]),
+	[],[enable_gss='yes'])
+AC_MSG_RESULT([$enable_gss])
+if test x$enable_gss != xno ; then
+  AC_DEFINE(ENABLE_GSS, 1, Support GSS/krb5)
+fi
+])
+
+#
 # LC_CONFIG_SNAPFS
 #
 # Whether snapfs is desired
@@ -353,6 +370,7 @@ AC_MSG_RESULT([$enable_smfs])
 AC_DEFUN([LC_PROG_LINUX],
 [LC_CONFIG_BACKINGFS
 LC_CONFIG_PINGER
+LC_CONFIG_GSS
 LC_CONFIG_SNAPFS
 LC_CONFIG_SMFS
 
@@ -423,6 +441,7 @@ AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
 AM_CONDITIONAL(SMFS, test x$enable_smfs = xyes)
+AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 ])
@@ -450,7 +469,6 @@ lustre/ldiskfs/Makefile
 lustre/ldiskfs/autoMakefile
 lustre/ldlm/Makefile
 lustre/liblustre/Makefile
-lustre/liblustre/tests/Makefile
 lustre/llite/Makefile
 lustre/llite/autoMakefile
 lustre/lmv/Makefile
@@ -479,6 +497,10 @@ lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
+lustre/sec/Makefile
+lustre/sec/autoMakefile
+lustre/sec/gss/Makefile
+lustre/sec/gss/autoMakefile
 lustre/smfs/Makefile
 lustre/smfs/autoMakefile
 lustre/snapfs/Makefile

@@ -36,7 +36,9 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_sec.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_acl.h>
 #include "mdc_internal.h"
 
 #define REQUEST_MINOR 244
@@ -159,10 +161,10 @@ int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid)
 int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                        struct ptlrpc_request *req)
 {
-        struct mds_body *body;
+        struct mds_body *body, *reqbody;
         void            *eadata;
         int              rc;
-        int              repsize[2] = {sizeof(*body), 0};
+        int              repsize[4] = {sizeof(*body)};
         int              bufcount = 1;
         ENTRY;
 
@@ -173,6 +175,14 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                 CDEBUG(D_INODE, "reserved %u bytes for MD/symlink in packet\n",
                        ea_size);
         }
+
+        reqbody = lustre_msg_buf(req->rq_reqmsg, 1, sizeof(*reqbody));
+
+        if (reqbody->valid & OBD_MD_FLACL_ACCESS) {
+                repsize[bufcount++] = 4;
+                repsize[bufcount++] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+        }
+
         req->rq_replen = lustre_msg_size(bufcount, repsize);
 
         mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
@@ -191,25 +201,32 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
         LASSERT_REPSWAB (req, 1);
-        if (body->eadatasize != 0) {
+
+        /* Skip the check if getxattr/listxattr are called with no buffers */
+        if ((reqbody->valid & (OBD_MD_FLEA | OBD_MD_FLEALIST)) &&
+            (reqbody->eadatasize != 0)){
+                if (body->eadatasize != 0) {
                 /* reply indicates presence of eadata; check it's there... */
-                eadata = lustre_msg_buf (req->rq_repmsg, 1, body->eadatasize);
-                if (eadata == NULL) {
-                        CERROR ("Missing/short eadata\n");
-                        RETURN (-EPROTO);
-                }
-        }
+                        eadata = lustre_msg_buf (req->rq_repmsg, 1,
+                                                 body->eadatasize);
+                        if (eadata == NULL) {
+                                CERROR ("Missing/short eadata\n");
+                                RETURN (-EPROTO);
+                        }
+                 }
+         }
 
         RETURN (0);
 }
 
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
-                __u64 valid, unsigned int ea_size,
-                struct ptlrpc_request **request)
+                __u64 valid, const char *ea_name, int ea_namelen,
+                unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        int size[2] = {0, sizeof(*body)};
+        int bufcount = 2;
+        int size[3] = {0, sizeof(*body)};
         int rc;
         ENTRY;
 
@@ -218,8 +235,14 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
          */
         size[0] = mdc_get_secdesc_size();
 
+        LASSERT((ea_name != NULL) == (ea_namelen != 0));
+        if (valid & (OBD_MD_FLEA | OBD_MD_FLEALIST)) {
+                size[bufcount] = ea_namelen;
+                bufcount++;
+        }
+
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_GETATTR, 2, size, NULL);
+                              MDS_GETATTR, bufcount, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -229,6 +252,13 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
         memcpy(&body->id1, id, sizeof(*id));
         body->valid = valid;
         body->eadatasize = ea_size;
+
+
+        if (valid & OBD_MD_FLEA) {
+                LASSERT(strnlen(ea_name, ea_namelen) == (ea_namelen - 1));
+                memcpy(lustre_msg_buf(req->rq_reqmsg, 2, ea_namelen),
+                       ea_name, ea_namelen);
+        }
 
         rc = mdc_getattr_common(exp, ea_size, req);
         if (rc != 0) {
@@ -304,6 +334,9 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
                       unsigned int offset, struct obd_export *exp_lov, 
                       struct lustre_md *md)
 {
+        void *buf;
+        int size, acl_off;
+        struct posix_acl *acl;
         int rc = 0;
         ENTRY;
 
@@ -378,8 +411,38 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
                 CERROR("Detected invalid mea, which does not "
                        "support neither old either new format.\n");
         } else {
-                LASSERT(0);
+                LASSERT(S_ISCHR(md->body->mode) ||
+                        S_ISBLK(md->body->mode) ||
+                        S_ISFIFO(md->body->mode)||
+                        S_ISLNK(md->body->mode) ||
+                        S_ISSOCK(md->body->mode));
         }
+
+        acl_off = (md->body->valid & OBD_MD_FLEASIZE) ? (offset + 2) :
+                  (offset + 1);
+
+        if (md->body->valid & OBD_MD_FLACL_ACCESS) {
+                size = le32_to_cpu(*(__u32 *) lustre_msg_buf(req->rq_repmsg, 
+                                   acl_off, 4));
+                buf = lustre_msg_buf(req->rq_repmsg, acl_off + 1, size);
+
+                acl = posix_acl_from_xattr(buf, size);
+                if (IS_ERR(acl)) {
+                        rc = PTR_ERR(acl);
+                        CERROR("convert xattr to acl failed: %d\n", rc);
+                        RETURN(rc);
+                } else if (acl) {
+                        rc = posix_acl_valid(acl);
+                        if (rc) {
+                                CERROR("acl valid error: %d\n", rc);
+                                posix_acl_release(acl);
+                                RETURN(rc);
+                        }
+                }
+
+                md->acl_access = acl;
+        }
+
         RETURN(rc);
 }
 
@@ -844,7 +907,38 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 imp->imp_server_timeout = 1;
                 CDEBUG(D_OTHER, "%s: timeout / 2\n", exp->exp_obd->obd_name);
                 RETURN(0);
+        } else if (keylen == strlen("sec") && memcmp(key, "sec", keylen) == 0) {
+                struct client_obd *cli = &exp->exp_obd->u.cli;
+
+                if (vallen == strlen("null") &&
+                    memcmp(val, "null", vallen) == 0) {
+                        cli->cl_sec_flavor = PTLRPC_SEC_NULL;
+                        cli->cl_sec_subflavor = 0;
+                        RETURN(0);
+                }
+                if (vallen == strlen("krb5i") &&
+                    memcmp(val, "krb5i", vallen) == 0) {
+                        cli->cl_sec_flavor = PTLRPC_SEC_GSS;
+                        cli->cl_sec_subflavor = PTLRPC_SEC_GSS_KRB5I;
+                        RETURN(0);
+                }
+                if (vallen == strlen("krb5p") &&
+                    memcmp(val, "krb5p", vallen) == 0) {
+                        cli->cl_sec_flavor = PTLRPC_SEC_GSS;
+                        cli->cl_sec_subflavor = PTLRPC_SEC_GSS_KRB5P;
+                        RETURN(0);
+                }
+                CERROR("unrecognized security type %s\n", (char*) val);
+                rc = -EINVAL;
+        } else if (keylen == strlen("nllu") && memcmp(key, "nllu", keylen) == 0) {
+                struct client_obd *cli = &exp->exp_obd->u.cli;
+
+                LASSERT(vallen == sizeof(__u32) * 2);
+                cli->cl_nllu = ((__u32 *) val)[0];
+                cli->cl_nllg = ((__u32 *) val)[1];
+                RETURN(0);
         }
+
         RETURN(rc);
 }
 

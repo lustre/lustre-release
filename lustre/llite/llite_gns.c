@@ -31,199 +31,252 @@
 #include <linux/lustre_lite.h>
 #include "llite_internal.h"
 
-/* After roughly how long should we remove an inactive mount? */
-#define GNS_MOUNT_TIMEOUT 120
-/* How often should the GNS timer look for mounts to cleanup? */
-#define GNS_TICK 30
+static struct list_head gns_sbi_list = LIST_HEAD_INIT(gns_sbi_list);
+static spinlock_t gns_lock = SPIN_LOCK_UNLOCKED;
+static struct ptlrpc_thread gns_thread;
+static struct ll_gns_ctl gns_ctl;
 
-int ll_finish_gns(struct ll_sb_info *sbi)
+/*
+ * waits until passed dentry gets mountpoint or timeout and attempts are
+ * exhausted. Returns 1 if dentry became mountpoint and 0 otherwise.
+ */
+static int
+ll_gns_wait_for_mount(struct dentry *dentry,
+                      int timeout, int tries)
 {
-        down(&sbi->ll_gns_sem);
-        if (sbi->ll_gns_state != LL_GNS_STATE_MOUNTING) {
-                up(&sbi->ll_gns_sem);
-                CERROR("FINISH_GNS called on mount which was not expecting "
-                       "completion.\n");
-                return -EINVAL;
-        }
-
-        sbi->ll_gns_state = LL_GNS_STATE_FINISHED;
-        up(&sbi->ll_gns_sem);
-        complete(&sbi->ll_gns_completion);
-
-        return 0;
-}
-
-/* Pass exactly one (1) page in; when this function returns "page" will point
- * somewhere into the middle of the page. */
-int fill_page_with_path(struct dentry *dentry, struct vfsmount *mnt,
-                        char **pagep)
-{
-        char *path = *pagep, *p;
-
-        path[PAGE_SIZE - 1] = '\0';
-        p = path + PAGE_SIZE - 1;
-
-        while (1) {
-                if (p - path < dentry->d_name.len + 1)
-                        return -ENAMETOOLONG;
-                if (dentry->d_name.name[0] != '/') {
-                        p -= dentry->d_name.len;
-                        memcpy(p, dentry->d_name.name, dentry->d_name.len);
-                        p--;
-                        *p = '/';
-                }
-
-                dentry = dentry->d_parent;
-                if (dentry->d_parent == dentry) {
-                        if (mnt->mnt_parent == mnt)
-                                break; /* finished walking up */
-                        mnt = mntget(mnt);
-                        dget(dentry);
-                        while (dentry->d_parent == dentry &&
-                               follow_up(&mnt, &dentry))
-                                ;
-                        mntput(mnt);
-                        dput(dentry);
-                }
-        }
-        *pagep = p;
-        return 0;
-}
-
-int ll_dir_process_mount_object(struct dentry *dentry, struct vfsmount *mnt)
-{
+        struct l_wait_info lwi;
         struct ll_sb_info *sbi;
-        struct file *mntinfo_fd = NULL;
-        struct page *datapage = NULL, *pathpage;
-        struct address_space *mapping;
+        int rc;
+        ENTRY;
+
+        LASSERT(dentry != NULL);
+        LASSERT(!IS_ERR(dentry));
+        sbi = ll_s2sbi(dentry->d_sb);
+        
+        for (; !d_mountpoint(dentry) && tries > 0; tries--) {
+                lwi = LWI_TIMEOUT(timeout * HZ, NULL, NULL);
+                l_wait_event(sbi->ll_gns_waitq, d_mountpoint(dentry), &lwi);
+        }
+
+        if ((rc = d_mountpoint(dentry) ? 1 : 0)) {
+                spin_lock(&sbi->ll_gns_lock);
+                LASSERT(sbi->ll_gns_state == LL_GNS_MOUNTING);
+                sbi->ll_gns_state = LL_GNS_FINISHED;
+                spin_unlock(&sbi->ll_gns_lock);
+        }
+
+        complete(&sbi->ll_gns_mount_finished);
+        RETURN(rc);
+}
+
+/*
+ * tries to mount the mount object under passed @dentry. In the case of success
+ * @dentry will become mount point and 0 will be retuned. Error code will be
+ * returned otherwise.
+ */
+int ll_gns_mount_object(struct dentry *dentry,
+                        struct vfsmount *mnt)
+{
         struct ll_dentry_data *lld = dentry->d_fsdata;
-        struct dentry *dchild, *tmp_dentry;
-        struct vfsmount *tmp_mnt;
-        char *p, *path, *argv[4];
-        int stage = 0, rc = 0;
+        char *p, *path, *pathpage, *argv[4];
+        struct file *mntinfo_fd = NULL;
+        struct address_space *mapping;
+        int cleanup_phase = 0, rc = 0;
+        struct ll_sb_info *sbi;
+        struct dentry *dchild;
+        struct page *datapage;
+        filler_t *filler;
         ENTRY;
 
         if (mnt == NULL) {
-                CERROR("suid directory found, but no vfsmount available.\n");
-                RETURN(-1);
+                CERROR("suid directory found, but no "
+                       "vfsmount available.\n");
+                RETURN(-EINVAL);
         }
+
+        CDEBUG(D_INODE, "mounting dentry %p\n", dentry);
 
         LASSERT(dentry->d_inode != NULL);
         LASSERT(S_ISDIR(dentry->d_inode->i_mode));
         LASSERT(lld != NULL);
+        
         sbi = ll_i2sbi(dentry->d_inode);
         LASSERT(sbi != NULL);
 
-        down(&sbi->ll_gns_sem);
-        if (sbi->ll_gns_state == LL_GNS_STATE_MOUNTING) {
-                up(&sbi->ll_gns_sem);
-                wait_for_completion(&sbi->ll_gns_completion);
+        /* another thead is in progress of mouning some entry */
+        spin_lock(&sbi->ll_gns_lock);
+        if (sbi->ll_gns_state == LL_GNS_MOUNTING) {
+                spin_unlock(&sbi->ll_gns_lock);
+
+                wait_for_completion(&sbi->ll_gns_mount_finished);
                 if (d_mountpoint(dentry))
                         RETURN(0);
-                RETURN(-1);
         }
-        if (sbi->ll_gns_state == LL_GNS_STATE_FINISHED) {
+
+        /* another thread mounted it already */
+        if (sbi->ll_gns_state == LL_GNS_FINISHED) {
+                spin_unlock(&sbi->ll_gns_lock);
+
                 /* we lost a race; just return */
-                up(&sbi->ll_gns_sem);
                 if (d_mountpoint(dentry))
                         RETURN(0);
-                RETURN(-1);
         }
-        LASSERT(sbi->ll_gns_state == LL_GNS_STATE_IDLE);
-        sbi->ll_gns_state = LL_GNS_STATE_MOUNTING;
+        LASSERT(sbi->ll_gns_state == LL_GNS_IDLE);
+
+        spin_lock(&dentry->d_lock);
+        dentry->d_flags |= DCACHE_GNS_MOUNTING;
+        spin_unlock(&dentry->d_lock);
+        
+        /* mounting started */
+        sbi->ll_gns_state = LL_GNS_MOUNTING;
+        spin_unlock(&sbi->ll_gns_lock);
+
+        /* we need to build an absolute pathname to pass to mount */
+        pathpage = (char *)__get_free_page(GFP_KERNEL);
+        if (!pathpage)
+                GOTO(cleanup, rc = -ENOMEM);
+        cleanup_phase = 1;
+
+        /* getting @dentry path stored in @pathpage. */
+        path = d_path(dentry, mnt, pathpage, PAGE_SIZE);
+        if (IS_ERR(path)) {
+                CERROR("can't build mount object path, err %d\n",
+                       (int)PTR_ERR(dchild));
+                GOTO(cleanup, rc = PTR_ERR(dchild));
+        }
+
+        /* sychronizing with possible /proc/fs/...write */
+        down(&sbi->ll_gns_sem);
+        
+        /* 
+         * mount object name is taken from sbi, where it is set in mount time or
+         * via /proc/fs... tunable. It may be ".mntinfo" or so.
+         */
+        dchild = ll_d_lookup(sbi->ll_gns_oname, dentry,
+                             strlen(sbi->ll_gns_oname));
         up(&sbi->ll_gns_sem);
 
-        /* We need to build an absolute pathname to pass to mount */
-        pathpage = alloc_pages(GFP_HIGHUSER, 0);
-        if (pathpage == NULL)
-                GOTO(cleanup, rc = -ENOMEM);
-        path = kmap(pathpage);
-        LASSERT(path != NULL);
-        stage = 1;
-        fill_page_with_path(dentry, mnt, &path);
-
-        dchild = lookup_one_len(".mntinfo", dentry, strlen(".mntinfo"));
-        if (dchild == NULL || IS_ERR(dchild)) {
-                CERROR("Directory %*s is setuid, but without a mount object.\n",
-                       dentry->d_name.len, dentry->d_name.name);
-                GOTO(cleanup, rc = -1);
+        if (!dchild)
+                GOTO(cleanup, rc = -ENOENT);
+        
+        if (IS_ERR(dchild)) {
+                CERROR("can't find mount object %*s/%*s err = %d.\n",
+                       (int)dentry->d_name.len, dentry->d_name.name,
+                       (int)dchild->d_name.len, dchild->d_name.name,
+                       (int)PTR_ERR(dchild));
+                GOTO(cleanup, rc = PTR_ERR(dchild));
         }
 
         mntget(mnt);
 
+        /* ok, mount object if found, opening it. */
         mntinfo_fd = dentry_open(dchild, mnt, 0);
         if (IS_ERR(mntinfo_fd)) {
+                CERROR("can't open mount object %*s/%*s err = %d.\n",
+                       (int)dentry->d_name.len, dentry->d_name.name,
+                       (int)dchild->d_name.len, dchild->d_name.name,
+                       (int)PTR_ERR(mntinfo_fd));
                 dput(dchild);
                 mntput(mnt);
                 GOTO(cleanup, rc = PTR_ERR(mntinfo_fd));
         }
-        stage = 2;
+        cleanup_phase = 2;
 
         if (mntinfo_fd->f_dentry->d_inode->i_size > PAGE_SIZE) {
-                CERROR("Mount object file is too big (%Ld)\n",
+                CERROR("mount object %*s/%*s is too big (%Ld)\n",
+                       (int)dentry->d_name.len, dentry->d_name.name,
+                       (int)dchild->d_name.len, dchild->d_name.name,
                        mntinfo_fd->f_dentry->d_inode->i_size);
-                GOTO(cleanup, rc = -1);
+                GOTO(cleanup, rc = -EFBIG);
         }
+
+        /* read data from mount object. */
         mapping = mntinfo_fd->f_dentry->d_inode->i_mapping;
-        datapage = read_cache_page(mapping, 0,
-                                   (filler_t *)mapping->a_ops->readpage,
+        filler = (filler_t *)mapping->a_ops->readpage;
+        datapage = read_cache_page(mapping, 0, filler,
                                    mntinfo_fd);
-        if (IS_ERR(datapage))
+        if (IS_ERR(datapage)) {
+                CERROR("can't read data from mount object %*s/%*s\n",
+                       (int)dentry->d_name.len, dentry->d_name.name,
+                       (int)dchild->d_name.len, dchild->d_name.name);
                 GOTO(cleanup, rc = PTR_ERR(datapage));
+        }
 
         p = kmap(datapage);
         LASSERT(p != NULL);
-        stage = 3;
-
         p[PAGE_SIZE - 1] = '\0';
+        cleanup_phase = 3;
 
         fput(mntinfo_fd);
         mntinfo_fd = NULL;
 
-        argv[0] = "/usr/lib/lustre/gns-upcall.sh";
+        /* sychronizing with possible /proc/fs/...write */
+        down(&sbi->ll_gns_sem);
+
+        /*
+         * upcall is initialized in mount time or via /proc/fs/... tuneable and
+         * may be /usr/lib/lustre/gns-upcall.sh
+         */
+        argv[0] = sbi->ll_gns_upcall;
         argv[1] = p;
         argv[2] = path;
         argv[3] = NULL;
-        rc = USERMODEHELPER(argv[0], argv, NULL);
+        
+        up(&sbi->ll_gns_sem);
 
-        if (rc != 0) {
-                CERROR("GNS mount failed: %d\n", rc);
+        rc = USERMODEHELPER(argv[0], argv, NULL);
+        if (rc) {
+                CERROR("failed to call GNS upcall %s, err = %d\n",
+                       sbi->ll_gns_upcall, rc);
                 GOTO(cleanup, rc);
         }
 
-        wait_for_completion(&sbi->ll_gns_completion);
-        LASSERT(sbi->ll_gns_state == LL_GNS_STATE_FINISHED);
+        /*
+         * wait for mount completion. This is actually not need, because
+         * USERMODEHELPER() returns only when usermode process finishes. But we
+         * doing this just for case USERMODEHELPER() semanthics will be changed
+         * or usermode upcall program will start mounting in backgound and
+         * return instantly. --umka
+         */
+        if (ll_gns_wait_for_mount(dentry, 1, GNS_WAIT_ATTEMPTS)) {
+                struct dentry *rdentry;
+                struct vfsmount *rmnt;
+                
+                /* mount is successful */
+                LASSERT(sbi->ll_gns_state == LL_GNS_FINISHED);
 
-        if (d_mountpoint(dentry)) {
-                /* successful follow_down will mntput and dput */
-                tmp_mnt = mntget(mnt);
-                tmp_dentry = dget(dentry);
-                rc = follow_down(&tmp_mnt, &tmp_dentry);
-                if (rc == 1) {
-                        struct ll_sb_info *sbi = ll_s2sbi(dentry->d_sb);
+                rmnt = mntget(mnt);
+                rdentry = dget(dentry);
+                
+                if (follow_down(&rmnt, &rdentry)) {
+                        /* 
+                         * registering new mount in GNS mounts list and thus
+                         * make it accessible from GNS control thread.
+                         */
                         spin_lock(&dcache_lock);
-                        LASSERT(list_empty(&tmp_mnt->mnt_lustre_list));
-                        list_add_tail(&tmp_mnt->mnt_lustre_list,
+                        LASSERT(list_empty(&rmnt->mnt_lustre_list));
+                        list_add_tail(&rmnt->mnt_lustre_list,
                                       &sbi->ll_mnt_list);
                         spin_unlock(&dcache_lock);
-
-                        tmp_mnt->mnt_last_used = jiffies;
-
-                        mntput(tmp_mnt);
-                        dput(tmp_dentry);
-                        rc = 0;
+                        rmnt->mnt_last_used = jiffies;
+                        mntput(rmnt);
+                        dput(rdentry);
                 } else {
                         mntput(mnt);
                         dput(dentry);
                 }
+                spin_lock(&dentry->d_lock);
+                dentry->d_flags &= ~DCACHE_GNS_PENDING;
+                spin_unlock(&dentry->d_lock);
         } else {
-                CERROR("Woke up from GNS mount, but no mountpoint in place.\n");
-                rc = -1;
+                CERROR("usermode upcall %s failed to mount %s\n",
+                       sbi->ll_gns_upcall, path);
+                rc = -ETIME;
         }
 
         EXIT;
 cleanup:
-        switch (stage) {
+        switch (cleanup_phase) {
         case 3:
                 kunmap(datapage);
                 page_cache_release(datapage);
@@ -231,82 +284,87 @@ cleanup:
                 if (mntinfo_fd != NULL)
                         fput(mntinfo_fd);
         case 1:
-                kunmap(pathpage);
-                __free_pages(pathpage, 0);
+                free_page((unsigned long)pathpage);
         case 0:
-                down(&sbi->ll_gns_sem);
-                sbi->ll_gns_state = LL_GNS_STATE_IDLE;
-                up(&sbi->ll_gns_sem);
+                spin_lock(&sbi->ll_gns_lock);
+                sbi->ll_gns_state = LL_GNS_IDLE;
+                spin_unlock(&sbi->ll_gns_lock);
+
+                spin_lock(&dentry->d_lock);
+                dentry->d_flags &= ~DCACHE_GNS_MOUNTING;
+                spin_unlock(&dentry->d_lock);
         }
         return rc;
 }
 
-/* If timeout == 1, only remove the mounts which are properly aged.
- *
- * If timeout == 0, we are unmounting -- remove them all. */
-int ll_gns_umount_all(struct ll_sb_info *sbi, int timeout)
+/* tries to umount passed @mnt. */
+int ll_gns_umount_object(struct vfsmount *mnt)
 {
-        struct list_head kill_list = LIST_HEAD_INIT(kill_list);
-        struct page *page = NULL;
-        char *kpage = NULL, *path;
-        int rc;
+        int rc = 0;
+        ENTRY;
+        
+        CDEBUG(D_INODE, "unmounting mnt %p\n", mnt);
+        rc = do_umount(mnt, 0);
+        if (rc) {
+                CDEBUG(D_INODE, "can't umount 0x%p, err = %d\n",
+                       mnt, rc);
+        }
+        
+        RETURN(rc);
+}
+
+int ll_gns_check_mounts(struct ll_sb_info *sbi, int flags)
+{
+        struct list_head check_list = LIST_HEAD_INIT(check_list);
+        struct vfsmount *mnt;
+        unsigned long pass;
         ENTRY;
 
-        if (timeout == 0) {
-                page = alloc_pages(GFP_HIGHUSER, 0);
-                if (page == NULL)
-                        RETURN(-ENOMEM);
-                kpage = kmap(page);
-                LASSERT(kpage != NULL);
-        }
-
         spin_lock(&dcache_lock);
-        list_splice_init(&sbi->ll_mnt_list, &kill_list);
+        list_splice_init(&sbi->ll_mnt_list, &check_list);
 
-        /* Walk the list in reverse order, and put them on the front of the
-         * sbi list each iteration; this avoids list-ordering problems if we
-         * race with another gns-mounting thread */
-        while (!list_empty(&kill_list)) {
-                struct vfsmount *mnt =
-                        list_entry(kill_list.prev, struct vfsmount,
-                                   mnt_lustre_list);
+        /*
+         * walk the list in reverse order, and put them on the front of the sbi
+         * list each iteration; this avoids list-ordering problems if we race
+         * with another gns-mounting thread.
+         */
+        while (!list_empty(&check_list)) {
+                mnt = list_entry(check_list.prev,
+                                 struct vfsmount,
+                                 mnt_lustre_list);
+
                 mntget(mnt);
-                list_del_init(&mnt->mnt_lustre_list);
-                list_add(&mnt->mnt_lustre_list, &sbi->ll_mnt_list);
 
-                if (timeout &&
-                    jiffies - mnt->mnt_last_used < GNS_MOUNT_TIMEOUT * HZ) {
+                list_del_init(&mnt->mnt_lustre_list);
+
+                list_add(&mnt->mnt_lustre_list,
+                         &sbi->ll_mnt_list);
+
+                /* check for timeout if needed */
+                pass = jiffies - mnt->mnt_last_used;
+                
+                if (flags == LL_GNS_CHECK &&
+                    pass < sbi->ll_gns_timeout * HZ)
+                {
                         mntput(mnt);
                         continue;
                 }
                 spin_unlock(&dcache_lock);
 
-                CDEBUG(D_INODE, "unmounting mnt %p from sbi %p\n", mnt, sbi);
+                /* umounting @mnt */
+                ll_gns_umount_object(mnt);
 
-                rc = do_umount(mnt, 0);
-                if (rc != 0 && page != NULL) {
-                        int rc2;
-                        path = kpage;
-                        rc2 = fill_page_with_path(mnt->mnt_root, mnt, &path);
-                        CERROR("GNS umount(%s): %d\n", rc2 == 0 ? path : "",
-                               rc);
-                }
                 mntput(mnt);
                 spin_lock(&dcache_lock);
         }
         spin_unlock(&dcache_lock);
-
-        if (page != NULL) {
-                kunmap(page);
-                __free_pages(page, 0);
-        }
         RETURN(0);
 }
 
-static struct list_head gns_sbi_list = LIST_HEAD_INIT(gns_sbi_list);
-static spinlock_t gns_lock = SPIN_LOCK_UNLOCKED;
-static struct ptlrpc_thread gns_thread;
-
+/*
+ * GNS timer callback function. It restarts gns timer and wakes up GNS cvontrol
+ * thread to process mounts list.
+ */
 void ll_gns_timer_callback(unsigned long data)
 {
         struct ll_sb_info *sbi = (void *)data;
@@ -316,27 +374,35 @@ void ll_gns_timer_callback(unsigned long data)
         if (list_empty(&sbi->ll_gns_sbi_head))
                 list_add(&sbi->ll_gns_sbi_head, &gns_sbi_list);
         spin_unlock(&gns_lock);
+        
         wake_up(&gns_thread.t_ctl_waitq);
-        mod_timer(&sbi->ll_gns_timer, jiffies + GNS_TICK * HZ);
+        mod_timer(&sbi->ll_gns_timer,
+                  jiffies + sbi->ll_gns_tick * HZ);
 }
 
-static int gns_check_event(void)
+/* this function checks if something new happened to exist in gns list. */
+static int inline ll_gns_check_event(void)
 {
         int rc;
+        
         spin_lock(&gns_lock);
         rc = !list_empty(&gns_sbi_list);
         spin_unlock(&gns_lock);
+
         return rc;
 }
 
-static int inline gns_check_stopping(void)
+/* should we staop GNS control thread? */
+static int inline ll_gns_check_stop(void)
 {
         mb();
         return (gns_thread.t_flags & SVC_STOPPING) ? 1 : 0;
 }
 
+/* GNS control thread function. */
 static int ll_gns_thread_main(void *arg)
 {
+        struct ll_gns_ctl *ctl = arg;
         unsigned long flags;
         ENTRY;
 
@@ -345,42 +411,57 @@ static int ll_gns_thread_main(void *arg)
                 snprintf(name, sizeof(name) - 1, "ll_gns");
                 kportal_daemonize(name);
         }
+        
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
+        /*
+         * letting starting function know, that we are ready and control may be
+         * returned.
+         */
         gns_thread.t_flags = SVC_RUNNING;
-        wake_up(&gns_thread.t_ctl_waitq);
+        complete(&ctl->gc_starting);
 
-        while (!gns_check_stopping()) {
+        while (!ll_gns_check_stop()) {
                 struct l_wait_info lwi = { 0 };
 
-                l_wait_event(gns_thread.t_ctl_waitq, gns_check_event() ||
-                             gns_check_stopping(), &lwi);
-
+                l_wait_event(gns_thread.t_ctl_waitq,
+                             (ll_gns_check_event() ||
+                              ll_gns_check_stop()), &lwi);
+                
                 spin_lock(&gns_lock);
                 while (!list_empty(&gns_sbi_list)) {
-                        struct ll_sb_info *sbi =
-                                list_entry(gns_sbi_list.prev, struct ll_sb_info,
-                                           ll_gns_sbi_head);
+                        struct ll_sb_info *sbi;
+
+                        sbi = list_entry(gns_sbi_list.prev,
+                                         struct ll_sb_info,
+                                         ll_gns_sbi_head);
+                        
                         list_del_init(&sbi->ll_gns_sbi_head);
                         spin_unlock(&gns_lock);
-                        ll_gns_umount_all(sbi, 1);
+                        ll_gns_check_mounts(sbi, LL_GNS_CHECK);
                         spin_lock(&gns_lock);
                 }
                 spin_unlock(&gns_lock);
         }
 
+        /* 
+         * letting know stop function know that thread is stoped and it may
+         * return.
+         */
+        EXIT;
         gns_thread.t_flags = SVC_STOPPED;
-        wake_up(&gns_thread.t_ctl_waitq);
 
-        RETURN(0);
+        /* this is SMP-safe way to finish thread. */
+        complete_and_exit(&ctl->gc_finishing, 0);
 }
 
 void ll_gns_add_timer(struct ll_sb_info *sbi)
 {
-        mod_timer(&sbi->ll_gns_timer, jiffies + GNS_TICK * HZ);
+        mod_timer(&sbi->ll_gns_timer,
+                  jiffies + sbi->ll_gns_tick * HZ);
 }
 
 void ll_gns_del_timer(struct ll_sb_info *sbi)
@@ -388,32 +469,40 @@ void ll_gns_del_timer(struct ll_sb_info *sbi)
         del_timer(&sbi->ll_gns_timer);
 }
 
+/*
+ * starts GNS control thread and waits for a signal it is up and work may be
+ * continued.
+ */
 int ll_gns_start_thread(void)
 {
-        struct l_wait_info lwi = { 0 };
         int rc;
+        ENTRY;
 
         LASSERT(gns_thread.t_flags == 0);
-
+        init_completion(&gns_ctl.gc_starting);
+        init_completion(&gns_ctl.gc_finishing);
         init_waitqueue_head(&gns_thread.t_ctl_waitq);
-        rc = kernel_thread(ll_gns_thread_main, NULL, CLONE_VM | CLONE_FILES);
+        
+        rc = kernel_thread(ll_gns_thread_main, &gns_ctl,
+                           (CLONE_VM | CLONE_FILES));
         if (rc < 0) {
-                CERROR("cannot start thread: %d\n", rc);
-                return rc;
+                CERROR("cannot start GNS control thread, "
+                       "err = %d\n", rc);
+                RETURN(rc);
         }
-        l_wait_event(gns_thread.t_ctl_waitq, gns_thread.t_flags & SVC_RUNNING,
-                     &lwi);
-        return 0;
+        wait_for_completion(&gns_ctl.gc_starting);
+        LASSERT(gns_thread.t_flags == SVC_RUNNING);
+        RETURN(0);
 }
 
+/* stops GNS control thread and waits its actual stop. */
 void ll_gns_stop_thread(void)
 {
-        struct l_wait_info lwi = { 0 };
-
+        ENTRY;
         gns_thread.t_flags = SVC_STOPPING;
-
         wake_up(&gns_thread.t_ctl_waitq);
-        l_wait_event(gns_thread.t_ctl_waitq, gns_thread.t_flags & SVC_STOPPED,
-                     &lwi);
+        wait_for_completion(&gns_ctl.gc_finishing);
+        LASSERT(gns_thread.t_flags == SVC_STOPPED);
         gns_thread.t_flags = 0;
+        EXIT;
 }

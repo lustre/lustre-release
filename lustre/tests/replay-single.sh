@@ -20,6 +20,11 @@ assert_env MDSCOUNT
 # Skip these tests
 ALWAYS_EXCEPT=""
 
+if [ `using_krb5_sec $SECURITY` == 'n' ] ; then
+    ALWAYS_EXCEPT="0c $ALWAYS_EXCEPT"
+fi
+
+
 gen_config() {
     rm -f $XMLCONFIG
 
@@ -60,6 +65,8 @@ cleanup() {
     for mds in `mds_list`; do
 	stop $mds ${FORCE} $MDSLCONFARGS
     done
+    stop_lgssd
+    stop_lsvcgssd
     stop ost2 ${FORCE} --dump cleanup.log
     stop ost ${FORCE} --dump cleanup.log
 }
@@ -76,8 +83,11 @@ CLEANUP=${CLEANUP:-"cleanup"}
 setup() {
     gen_config
 
+    start_krb5_kdc || exit 1
     start ost --reformat $OSTLCONFARGS 
     start ost2 --reformat $OSTLCONFARGS 
+    start_lsvcgssd || exit 2
+    start_lgssd || exit 3
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     for mds in `mds_list`; do
 	start $mds --reformat $MDSLCONFARGS
@@ -107,6 +117,17 @@ test_0b() {
     unlinkmany $DIR/$tfile 20 || return 2
 }
 run_test 0b "ensure object created after recover exists. (3284)"
+
+test_0c() {
+    # drop gss error notification
+    replay_barrier mds1
+    fail_drop mds1 0x760
+
+    # drop gss init request
+    replay_barrier mds1
+    fail_drop mds1 0x780
+}
+run_test 0c "empty replay with gss init failures"
 
 test_1() {
     replay_barrier mds1

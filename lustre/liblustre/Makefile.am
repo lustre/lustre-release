@@ -1,5 +1,7 @@
 ## Liblustre excecutables & libraries Makefile
-SUBDIRS = . tests
+
+# FIXME: we disable building any executables for this moment.
+#SUBDIRS = . tests
 
 AM_CPPFLAGS = $(HAVE_EFENCE) -I$(SYSIO)/include -D_LARGEFILE64_SOURCE=1 \
               $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
@@ -13,6 +15,7 @@ LUSTRE_LIBS = liblutils.a libllite.a \
               $(top_builddir)/lustre/osc/libosc.a \
               $(top_builddir)/lustre/mdc/libmdc.a \
               $(top_builddir)/lustre/ptlrpc/libptlrpc.a \
+              $(top_builddir)/lustre/sec/libptlrpcs.a \
               $(top_builddir)/lustre/obdclass/liblustreclass.a \
               $(top_builddir)/lustre/lvfs/liblvfs.a
 

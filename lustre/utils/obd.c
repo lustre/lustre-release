@@ -2005,36 +2005,6 @@ int jt_obd_mdc_lookup(int argc, char **argv)
         return rc;
 }
 
-int jt_obd_finish_gns(int argc, char **argv)
-{
-        char *mtpt;
-        int rc, fd;
-        struct obd_ioctl_data data;
-
-        if (argc != 2)
-                return CMD_HELP;
-
-        mtpt = argv[1];
-
-        fd = open(mtpt, O_RDONLY);
-        if (fd < 0) {
-                fprintf(stderr, "open \"%s\" failed: %s\n", mtpt,
-                        strerror(errno));
-                return -1;
-        }
-
-        IOC_INIT(data);
-        IOC_PACK(argv[0], data);
-        rc = ioctl(fd, IOC_MDC_FINISH_GNS, buf);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s(%s) ioctl error: %s\n",
-                        jt_cmdname(argv[0]), mtpt, strerror(rc = errno));
-        }
-        close(fd);
-
-        return rc;
-}
-
 int jt_obd_close_uuid(int argc, char **argv)
 {
         int rc, nal;

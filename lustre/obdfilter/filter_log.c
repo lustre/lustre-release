@@ -43,11 +43,14 @@ int filter_log_sz_change(struct llog_handle *cathandle,
                          struct inode *inode)
 {
         struct llog_size_change_rec *lsc;
-        int rc;
+#ifdef IFILTERDATA_ACTUALLY_USED
         struct ost_filterdata *ofd;
+#endif
+        int rc;
         ENTRY;
 
         down(&inode->i_sem);
+#ifdef IFILTERDATA_ACTUALLY_USED
         ofd = inode->i_filterdata;
         
         if (ofd && ofd->ofd_epoch >= io_epoch) {
@@ -68,6 +71,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
                 inode->i_filterdata = ofd;
                 ofd->ofd_epoch = io_epoch;
         }
+#endif
         /* the decision to write a record is now made, unlock */
         up(&inode->i_sem);
 
@@ -88,7 +92,9 @@ int filter_log_sz_change(struct llog_handle *cathandle,
                 rc = 0;
         }
 
-        out:
+#ifdef IFILTERDATA_ACTUALLY_USED
+out:
+#endif
         RETURN(rc);
 }
 struct obd_llogs * filter_grab_llog_for_group(struct obd_device *,

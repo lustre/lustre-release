@@ -40,11 +40,15 @@ static void ll_release(struct dentry *de)
         struct ll_dentry_data *lld;
         ENTRY;
         LASSERT(de != NULL);
+
+        CDEBUG(D_DENTRY, "releasing dentry %p\n", de);
+
         lld = ll_d2d(de);
-        LASSERT(lld != NULL);
-        LASSERT(lld->lld_cwd_count == 0);
-        LASSERT(lld->lld_mnt_count == 0);
-        OBD_FREE(de->d_fsdata, sizeof(struct ll_dentry_data));
+        if (lld) { /* Root dentry does not have ll_dentry_data */
+                LASSERT(lld->lld_cwd_count == 0);
+                LASSERT(lld->lld_mnt_count == 0);
+                OBD_FREE(de->d_fsdata, sizeof(struct ll_dentry_data));
+        }
 
         EXIT;
 }
@@ -82,16 +86,17 @@ void ll_set_dd(struct dentry *de)
 void ll_intent_drop_lock(struct lookup_intent *it)
 {
         struct lustre_handle *handle;
+        struct lustre_intent_data *itdata = LUSTRE_IT(it);
 
-        if (it->it_op && it->d.lustre.it_lock_mode) {
-                handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
+        if (it->it_op && itdata && itdata->it_lock_mode) {
+                handle = (struct lustre_handle *)&itdata->it_lock_handle;
                 CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
                        " from it %p\n", handle->cookie, it);
-                ldlm_lock_decref(handle, it->d.lustre.it_lock_mode);
+                ldlm_lock_decref(handle, itdata->it_lock_mode);
 
                 /* bug 494: intent_release may be called multiple times, from
                  * this thread and we don't want to double-decref this lock */
-                it->d.lustre.it_lock_mode = 0;
+                itdata->it_lock_mode = 0;
         }
 }
 
@@ -102,9 +107,17 @@ void ll_intent_release(struct lookup_intent *it)
         ll_intent_drop_lock(it);
         it->it_magic = 0;
         it->it_op_release = 0;
-        it->d.lustre.it_disposition = 0;
-        it->d.lustre.it_data = NULL;
+        ll_intent_free(it);
         EXIT;
+}
+
+void ll_intent_free(struct lookup_intent *it)
+{
+        if (it->d.fs_data) {
+                OBD_SLAB_FREE(it->d.fs_data, ll_intent_slab,
+                               sizeof(struct lustre_intent_data));
+                it->d.fs_data = NULL;
+        }
 }
 
 void ll_unhash_aliases(struct inode *inode)
@@ -180,11 +193,11 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
         LASSERT(it != NULL);
         LASSERT(dentry != NULL);
 
-        if (it->d.lustre.it_lock_mode && dentry->d_inode != NULL) {
+        if (LUSTRE_IT(it)->it_lock_mode && dentry->d_inode != NULL) {
                 struct inode *inode = dentry->d_inode;
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
-                mdc_set_lock_data(NULL, &it->d.lustre.it_lock_handle, inode);
+                mdc_set_lock_data(NULL, &LUSTRE_IT(it)->it_lock_handle, inode);
         }
 
         /* drop lookup or getattr locks immediately */
@@ -206,7 +219,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
-        
+
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         if (it) {
                 LASSERTF(it->it_magic == INTENT_MAGIC, "bad intent magic: %x\n",
@@ -217,7 +230,34 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         if (!it || it->it_op == IT_GETXATTR)
                 it = *itp = deft;
 
+        if (it->d.fs_data)
+                return;
+
+        if (ll_intent_alloc(it)) {
+                CERROR("Failed to allocate memory for lustre specific intent "
+                       "data\n");
+                /* XXX: we cannot return status just yet */
+                LBUG();
+        }
+}
+
+int ll_intent_alloc(struct lookup_intent *it)
+{
+        if (it->d.fs_data) {
+                CERROR("Intent alloc on already allocated intent\n");
+                return 0;
+        }
+        OBD_SLAB_ALLOC(it->d.fs_data, ll_intent_slab, SLAB_KERNEL,
+                        sizeof(struct lustre_intent_data));
+        if (!it->d.fs_data) {
+                CERROR("Failed to allocate memory for lustre specific intent "
+                       "data\n");
+                return -ENOMEM;
+        }
+
         it->it_op_release = ll_intent_release;
+
+        return 0;
 }
 
 int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
@@ -229,15 +269,37 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         struct obd_export *exp;
         struct lustre_id pid;
         struct lustre_id cid;
-        int rc;
+        int orig_it, rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s, intent=%s\n", de->d_name.name,
-               LL_IT2STR(it));
+        spin_lock(&de->d_lock);
+
+        if ((de->d_flags & DCACHE_GNS_PENDING) &&
+            !(de->d_flags & DCACHE_GNS_MOUNTING))
+        {
+                spin_unlock(&de->d_lock);
+                        
+                if (nd) {
+                        int err = ll_gns_mount_object(de, nd->mnt);
+                        if (err)
+                                CERROR("can't mount %s, err = %d\n",
+                                       de->d_name.name, err);
+                }
+                RETURN(1);
+        }
+        spin_unlock(&de->d_lock);
+
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s (%p), intent=%s\n", de->d_name.name,
+               de, LL_IT2STR(it));
 
         /* Cached negative dentries are unsafe for now - look them up again */
         if (de->d_inode == NULL)
                 RETURN(0);
+
+        /* Root of the tree is always valid, attributes would be fixed in
+          ll_inode_revalidate_it */
+        if (de->d_sb->s_root == de)
+                RETURN(1);
 
         CDEBUG(D_INODE, "revalidate 0x%p: %*s -> %lu/%lu\n",
                de, de->d_name.len, de->d_name.name,
@@ -262,11 +324,17 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         if (nd != NULL)
                 nd->mnt->mnt_last_used = jiffies;
 
+        orig_it = it ? it->it_op : IT_OPEN;
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it != NULL);
 
         if (it->it_op == IT_GETATTR) { /* We need to check for LOOKUP lock as
                                           well */
+                rc = ll_intent_alloc(&lookup_it);
+                if (rc)
+                        LBUG(); /* Can't think of better idea just yet */
+
+
                 rc = md_intent_lock(exp, &pid, de->d_name.name,
                                     de->d_name.len, NULL, 0, &cid, &lookup_it,
                                     flags, &req, ll_mdc_blocking_ast);
@@ -274,11 +342,15 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                    UPDATE lock */
                 if (!rc) {
                         it = &lookup_it;
+                        if (!req) {
+                                ll_intent_free(it);
+                                goto do_lookup;
+                        }
                         GOTO(out, rc);
                 }
                 if (it_disposition(&lookup_it, DISP_LOOKUP_NEG)) {
-                        ll_intent_release(&lookup_it);
                         it = &lookup_it;
+                        ll_intent_free(it);
                         GOTO(out, rc = 0);
                 }
 
@@ -286,6 +358,8 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                         ptlrpc_req_finished(req);
                 req = NULL;
                 ll_lookup_finish_locks(&lookup_it, de);
+                /* XXX: on 2.6 ll_lookup_finish_locks does not call ll_intent_release */
+                ll_intent_release(&lookup_it);
         }
 
         rc = md_intent_lock(exp, &pid, de->d_name.name, de->d_name.len,
@@ -294,17 +368,20 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
-        if (req == NULL && rc >= 0)
+        if (req == NULL && rc >= 0) {
+                if (!rc)
+                        goto do_lookup;
                 GOTO(out, rc);
+        }
 
         if (rc < 0) {
                 if (rc != -ESTALE) {
                         CDEBUG(D_INFO, "ll_intent_lock(): rc %d : it->it_status "
-                               "%d\n", rc, it->d.lustre.it_status);
+                               "%d\n", rc, LUSTRE_IT(it)->it_status);
                 }
                 GOTO(out, rc = 0);
         }
-
+revalidate_finish:
         rc = revalidate_it_finish(req, 1, it, de);
         if (rc != 0) {
                 ll_intent_release(it);
@@ -316,14 +393,21 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
            dentry */
         spin_lock(&dcache_lock);
         hlist_del_init(&de->d_hash);
-        __d_rehash(de, 0);
+        __d_rehash(de);
         spin_unlock(&dcache_lock);
 
         GOTO(out, rc);
 out:
         if (req != NULL && rc == 1)
                 ptlrpc_req_finished(req);
+
         if (rc == 0) {
+                if (it == &lookup_it) {
+                        ll_intent_release(it);
+                        if (req) /* Special case: We did lookup and it failed,
+                                    need to free request */
+                                ptlrpc_req_finished(req);
+                }
                 ll_unhash_aliases(de->d_inode);
                 return rc;
         }
@@ -334,13 +418,37 @@ out:
                atomic_read(&de->d_count));
         ll_lookup_finish_locks(it, de);
         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
-        if (!((de->d_inode->i_mode & S_ISUID) &&S_ISDIR(de->d_inode->i_mode)) ||
-            !(flags & LOOKUP_CONTINUE || (it->it_op & (IT_CHDIR | IT_OPEN))))
+        if (it == &lookup_it)
+                ll_intent_release(it);
+    
+        if (!((de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode)) ||
+            !(flags & LOOKUP_CONTINUE || (orig_it & (IT_CHDIR | IT_OPEN))))
                 return rc;
 
-        if (nd)
-                (void)ll_dir_process_mount_object(de, nd->mnt);
+        if (nd && !(de->d_flags & DCACHE_GNS_MOUNTING)) {
+                int err = ll_gns_mount_object(de, nd->mnt);
+                if (err)
+                        CERROR("can't mount %s, err = %d\n",
+                               de->d_name.name, err);
+        }
         return rc;
+do_lookup:
+        it = &lookup_it;
+        if (ll_intent_alloc(it))
+                LBUG();
+// We did that already, right?  ll_inode2id(&pid, de->d_parent->d_inode);
+        rc = md_intent_lock(exp, &pid, de->d_name.name,
+                            de->d_name.len, NULL, 0, NULL,
+                            it, 0, &req, ll_mdc_blocking_ast);
+        if (rc >= 0) {
+                struct mds_body *mds_body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*mds_body));
+
+                /* See if we got same inode, if not - return error */
+                if (id_equal_stc(&cid, &mds_body->id1))
+                        goto revalidate_finish;
+        }
+
+        GOTO(out, rc = 0);
 }
 
 /*static*/ void ll_pin(struct dentry *de, struct vfsmount *mnt, int flag)
@@ -433,7 +541,7 @@ static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
         ENTRY;
 
         if (nd && nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
-                rc = ll_revalidate_it(dentry, nd->flags, nd, &nd->intent);
+                rc = ll_revalidate_it(dentry, nd->flags, nd, &nd->intent.open);
         else
                 rc = ll_revalidate_it(dentry, 0, nd, NULL);
 
@@ -462,14 +570,18 @@ static void ll_dentry_iput(struct dentry *dentry, struct inode *inode)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct lustre_id parent, child;
 
-        LASSERT(dentry->d_parent && dentry->d_parent->d_inode);
-        ll_inode2id(&parent, dentry->d_parent->d_inode);
-        ll_inode2id(&child, inode);
-        md_change_cbdata_name(sbi->ll_md_exp, &parent,
-                              (char *)dentry->d_name.name, 
-                              dentry->d_name.len, &child, 
-                              null_if_equal, inode);
+        if (dentry->d_parent != dentry) {
+                /* Do not do this for root of the tree */
+                LASSERT(dentry->d_parent && dentry->d_parent->d_inode);
+                ll_inode2id(&parent, dentry->d_parent->d_inode);
+                ll_inode2id(&child, inode);
+                md_change_cbdata_name(sbi->ll_md_exp, &parent,
+                                      (char *)dentry->d_name.name,
+                                      dentry->d_name.len, &child,
+                                      null_if_equal, inode);
+        }
         iput(inode);
+
 }
 #endif
 

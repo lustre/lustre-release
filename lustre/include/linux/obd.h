@@ -20,7 +20,6 @@
 #define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
 /* Moved to lustre_user.h
 #define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *) */
-#define IOC_MDC_FINISH_GNS   _IOWR(IOC_MDC_TYPE, 22, struct obd_device *)
 #define IOC_MDC_MAX_NR       50
 
 #ifdef __KERNEL__
@@ -275,6 +274,12 @@ struct client_obd {
         int                      cl_max_mds_cookiesize;
         kdev_t                   cl_sandev;
 
+        /* security flavors */
+        __u32                    cl_sec_flavor;
+        __u32                    cl_sec_subflavor;
+        __u32                    cl_nllu; /* non lustre local user */
+        __u32                    cl_nllg; /* non lustre local group */
+
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
 
@@ -386,6 +391,10 @@ struct mds_obd {
         struct dentry                   *mds_id_dir;
         int                              mds_obd_type;
         struct dentry                   *mds_unnamed_dir; /* for mdt_obd_create only */
+
+        /* security related */
+        char                            *mds_mds_sec;
+        char                            *mds_ost_sec;
 };
 
 struct echo_obd {
@@ -850,8 +859,8 @@ struct md_ops {
                          void *, int, ldlm_completion_callback,
                          ldlm_blocking_callback, void *);
         int (*m_getattr)(struct obd_export *, struct lustre_id *,
-                         __u64, unsigned int,
-                         struct ptlrpc_request **);
+                         __u64, const char *, int,
+                         unsigned int, struct ptlrpc_request **);
         int (*m_getattr_lock)(struct obd_export *, struct lustre_id *,
                               char *, int, __u64,
                               unsigned int, struct ptlrpc_request **);

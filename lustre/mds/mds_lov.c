@@ -242,6 +242,16 @@ int mds_dt_connect(struct obd_device *obd, char * lov_name)
                 RETURN(-ENOTCONN);
         }
 
+        if (mds->mds_ost_sec) {
+                rc = obd_set_info(mds->mds_dt_obd->obd_self_export,
+                                  strlen("sec"), "sec",
+                                  strlen(mds->mds_ost_sec), mds->mds_ost_sec);
+                if (rc) {
+                        mds->mds_dt_obd = ERR_PTR(rc);
+                        RETURN(rc);
+                }
+        }
+
         CDEBUG(D_HA, "obd: %s osc: %s lov_name: %s\n",
                obd->obd_name, mds->mds_dt_obd->obd_name, lov_name);
 

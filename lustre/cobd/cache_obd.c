@@ -351,7 +351,7 @@ static int cobd_precleanup(struct obd_device *obd, int flags)
 }
 
 static int cobd_getattr(struct obd_export *exp, struct obdo *oa,
-                        struct lov_stripe_md *lsm)
+                        struct lov_stripe_md *ea)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -362,7 +362,7 @@ static int cobd_getattr(struct obd_export *exp, struct obdo *oa,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_getattr(cobd_exp, oa, lsm);
+        return obd_getattr(cobd_exp, oa, ea);
 }
 
 static int cobd_getattr_async(struct obd_export *exp,
@@ -870,8 +870,8 @@ static int  cobd_import_event(struct obd_device *obd,
 }
 
 static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
-                           __u64 valid, unsigned int ea_size,
-                           struct ptlrpc_request **request)
+                    	   __u64 valid, const char *ea_name, int ea_namelen,
+                           unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -882,7 +882,7 @@ static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr(cobd_exp, id, valid, ea_size, request);
+        return md_getattr(cobd_exp, id, valid, NULL, 0, ea_size, request);
 }
 
 static int cobd_md_req2lustre_md (struct obd_export *mdc_exp, 

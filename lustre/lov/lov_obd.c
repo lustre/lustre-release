@@ -3116,6 +3116,41 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         } else if (KEY_IS("unlinked") || KEY_IS("unrecovery")) {
                 if (vallen != 0)
                         RETURN(-EINVAL);
+        } else if (KEY_IS("sec")) {
+                struct lov_tgt_desc *tgt;
+                struct obd_export *exp;
+                int rc = 0, err, i;
+
+                spin_lock(&lov->lov_lock);
+                for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count;
+                     i++, tgt++) {
+                        exp = tgt->ltd_exp;
+                        /* during setup time the connections to osc might
+                         * haven't been established.
+                         */
+                        if (exp == NULL) {
+                                struct obd_device *tgt_obd;
+
+                                tgt_obd = class_find_client_obd(&tgt->uuid,
+                                                                LUSTRE_OSC_NAME,
+                                                                &obddev->obd_uuid);
+                                if (!tgt_obd) {
+                                        CERROR("can't set security flavor, "
+                                               "device %s not attached?\n",
+                                                tgt->uuid.uuid);
+                                        rc = -EINVAL;
+                                        continue;
+                                }
+                                exp = tgt_obd->obd_self_export;
+                        }
+
+                        err = obd_set_info(exp, keylen, key, vallen, val);
+                        if (!rc)
+                                rc = err;
+                }
+                spin_unlock(&lov->lov_lock);
+
+                RETURN(rc);
         } else {
                 RETURN(-EINVAL);
         }

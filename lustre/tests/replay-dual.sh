@@ -54,6 +54,8 @@ cleanup() {
     for mds in `mds_list`; do
 	stop $mds ${FORCE} $MDSLCONFARGS
     done
+    stop_lgssd
+    stop_lsvcgssd
     stop ost2 ${FORCE}
     stop ost ${FORCE}  --dump cleanup-dual.log
 }
@@ -66,6 +68,8 @@ fi
 
 setup() {
     gen_config
+
+    start_krb5_kdc || exit 1
     start ost --reformat $OSTLCONFARGS 
     PINGER=`cat /proc/fs/lustre/pinger`
 
@@ -76,6 +80,8 @@ setup() {
     fi
 
     start ost2 --reformat $OSTLCONFARGS 
+    start_lsvcgssd || exit 2
+    start_lgssd || exit 3
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     for mds in `mds_list`; do
 	start $mds --reformat $MDSLCONFARGS

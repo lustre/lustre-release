@@ -74,7 +74,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
                                  &data, &lockh, NULL, 0,
                                  ldlm_completion_ast, llu_mdc_blocking_ast,
                                  inode);
-                request = (struct ptlrpc_request *)it.d.lustre.it_data;
+                request = (struct ptlrpc_request *)LUSTRE_IT(&it)->it_data;
                 if (request)
                         ptlrpc_req_finished(request);
                 if (rc < 0) {

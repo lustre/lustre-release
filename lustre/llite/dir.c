@@ -232,12 +232,18 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
                 ll_prepare_mdc_data(op_data, dir, NULL, NULL, 0, 0);
 
+                rc = ll_intent_alloc(&it);
+                if (rc)
+                        return ERR_PTR(rc);
+
                 rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
                                 LCK_PR, op_data, &lockh, NULL, 0,
                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir);
                 OBD_FREE(op_data, sizeof(*op_data));
 
-                request = (struct ptlrpc_request *)it.d.lustre.it_data;
+                request = (struct ptlrpc_request *)LUSTRE_IT(&it)->it_data;
+                ll_intent_free(&it);
+
                 if (request)
                         ptlrpc_req_finished(request);
                 if (rc < 0) {
@@ -479,8 +485,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case LL_IOC_MDC_MKDIRSTRIPE:
                 RETURN(ll_mkdir_stripe(inode, arg));
-        case IOC_MDC_FINISH_GNS:
-                RETURN(ll_finish_gns(sbi));
         case LL_IOC_LOV_SETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct mdc_op_data *op_data;
@@ -527,7 +531,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 valid |= OBD_MD_FLDIREA;
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr(sbi->ll_md_exp, &id, valid,
+                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, 0,
                                 obd_size_diskmd(sbi->ll_dt_exp, NULL),
                                 &request);
                 if (rc < 0) {

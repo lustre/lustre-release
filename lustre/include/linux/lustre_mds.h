@@ -38,6 +38,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_export.h>
+#include <linux/lustre_ucache.h>
 
 struct ldlm_lock_desc;
 struct mds_obd;
@@ -62,8 +63,10 @@ struct mds_update_record {
         char               *ur_tgt;
         int                 ur_eadatalen;
         void               *ur_eadata;
-        int                 ur_cookielen;
-        struct llog_cookie *ur_logcookies;
+        int                 ur_ea2datalen;
+        void               *ur_ea2data;
+        int                 ur_cookielen;       /* obsolete? */
+        struct llog_cookie *ur_logcookies;      /* obsolete? */
         struct iattr        ur_iattr;
         struct lvfs_ucred   ur_uc;
         __u64               ur_rdev;
@@ -130,6 +133,19 @@ struct mds_client_data {
         __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 64];
 };
 
+/* simple uid/gid mapping hash table */
+struct mds_idmap_item {
+        struct list_head        hash;
+        __u32                   id1;
+        __u32                   id2;
+};
+
+#define MDS_IDMAP_HASHSIZE      (32)
+struct mds_idmap_table {
+        struct list_head uidmap[MDS_IDMAP_HASHSIZE];
+        struct list_head gidmap[MDS_IDMAP_HASHSIZE];
+};
+
 /* file data for open files on MDS */
 struct mds_file_data {
         struct portals_handle mfd_handle; /* must be first */
@@ -164,6 +180,32 @@ struct mds_grp_hash {
         int                     gh_entry_expire;
         int                     gh_acquire_expire;
         unsigned int            gh_allow_setgroups:1;
+};
+
+/* lustre security descriptor */
+struct lustre_sec_desc {
+        uid_t                   lsd_uid;
+        gid_t                   lsd_gid;
+        struct group_info      *lsd_ginfo;
+        unsigned int            lsd_allow_setuid:1,
+                                lsd_allow_setgid:1,
+                                lsd_allow_setgrp:1;
+};
+
+struct lsd_cache_entry {
+        struct upcall_cache_entry     base;
+        struct lustre_sec_desc        lsd;
+};
+
+struct lsd_downcall_args {
+        int     err;
+        uid_t   uid;
+        gid_t   gid;
+        __u32   ngroups;
+        gid_t  *groups;
+        __u32   allow_setuid;
+        __u32   allow_setgid;
+        __u32   allow_setgrp;
 };
 
 /* mds/mds_reint.c  */
@@ -224,8 +266,8 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
                       struct lustre_md *md);
 int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid);
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
-                __u64 valid, unsigned int ea_size,
-                struct ptlrpc_request **request);
+                __u64 valid, const char *ea_name, int ea_namelen,
+                unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                      char *filename, int namelen, __u64 valid,
                      unsigned int ea_size, struct ptlrpc_request **request);

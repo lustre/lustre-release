@@ -74,7 +74,6 @@ int jt_obd_activate(int argc, char **argv);
 int jt_obd_deactivate(int argc, char **argv);
 int jt_obd_recover(int argc, char **argv);
 int jt_obd_mdc_lookup(int argc, char **argv);
-int jt_obd_finish_gns(int argc, char **argv);
 int jt_get_version(int argc, char **argv);
 int jt_obd_close_uuid(int argc, char **argv);
 int jt_cfg_record(int argc, char **argv);
@@ -115,6 +114,7 @@ int jt_lcfg_set_timeout(int argc, char **argv);
 int jt_lcfg_set_lustre_upcall(int argc, char **argv);
 int jt_lcfg_add_conn(int argc, char **argv);
 int jt_lcfg_del_conn(int argc, char **argv);
+int jt_lcfg_set_security(int argc, char **argv);
 
 int obd_add_uuid(char *uuid, ptl_nid_t nid, int nal);
 

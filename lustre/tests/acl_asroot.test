@@ -1,0 +1,46 @@
+!
+! Test that can only be run as root as it uses mknod.
+!
+$mkdir asroot
+$ umask 027
+$ mknod asroot/null c 1 3
+$ acl_mode asroot/null
+crw-r-----
+$ setfacl -m u:joe:rw,u:lisa:- asroot/null
+$ acl_mode asroot/null
+crw-rw----+
+$ setfacl -m u:lisa:r asroot/null
+$ getfacl --omit-header asroot/null
+user::rw-
+user:joe:rw-
+user:lisa:r--
+group::r--
+mask::rw-
+other::---
+
+$ su - lisa -c chmod\ +rw\ /mnt/lustre/asroot/null
+chmod: changing permissions of `/mnt/lustre/asroot/null': Operation not permitted
+$ rm -f asroot/null
+$ mkfifo asroot/fifo
+$ acl_mode asroot/fifo
+prw-r-----
+$ setfacl -m u:joe:- asroot/fifo
+$ getfacl --omit-header asroot/fifo
+user::rw-
+user:joe:---
+group::r--
+mask::r--
+other::---
+
+$ rm asroot/fifo
+$ mknod asroot/block b 1 1
+$ setfacl -m u:joe:- asroot/block
+$ getfacl --omit-header asroot/block
+user::rw-
+user:joe:---
+group::r--
+mask::r--
+other::---
+
+$ rm asroot/block
+$ rmdir asroot

@@ -1,3 +1,6 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */ 
 #ifndef __LVFS_H__
 #define __LVFS_H__
 
@@ -6,6 +9,8 @@
 #define LL_ID_NAMELEN (16 + 1 + 8 + 1)
 
 #if defined __KERNEL__
+#include <linux/dcache.h>
+#include <linux/namei.h>
 #include <linux/lustre_compat25.h>
 #include <linux/lvfs_linux.h>
 #endif 
@@ -18,13 +23,13 @@ struct mds_grp_hash_entry;
 
 /* simple.c */
 struct lvfs_ucred {
-        struct mds_grp_hash_entry *luc_ghash;
-        struct group_info *luc_ginfo;
+        struct lustre_sec_desc *luc_lsd;
+        struct group_info      *luc_ginfo;
         __u32 luc_fsuid;
         __u32 luc_fsgid;
         __u32 luc_cap;
         __u32 luc_uid;
-	__u32 luc_umask;
+        __u32 luc_umask;
 };
 
 struct lvfs_callback_ops {
@@ -100,11 +105,11 @@ ll_lookup_one_len(const char *name, struct dentry *dparent, int namelen)
 {
         struct dentry *dchild;
 #ifdef S_PDIROPS
-	struct qstr qstr;
-	void *lock;
-	qstr.name = name;
-	qstr.len = namelen;
-	lock = lock_dir(dparent->d_inode, &qstr);
+        struct qstr qstr;
+        void *lock;
+        qstr.name = name;
+        qstr.len = namelen;
+        lock = lock_dir(dparent->d_inode, &qstr);
 #else
         down(&dparent->d_inode->i_sem);
 #endif
@@ -112,7 +117,7 @@ ll_lookup_one_len(const char *name, struct dentry *dparent, int namelen)
         dchild = lookup_one_len(name, dparent, namelen);
 
 #ifdef S_PDIROPS
-	unlock_dir(dparent->d_inode, lock);
+        unlock_dir(dparent->d_inode, lock);
 #else
         up(&dparent->d_inode->i_sem);
 #endif
@@ -124,6 +129,18 @@ static inline void ll_sleep(int t)
         set_current_state(TASK_INTERRUPTIBLE);
         schedule_timeout(t * HZ);
         set_current_state(TASK_RUNNING);
+}
+
+static inline struct dentry *
+ll_d_lookup(const char *name,
+	    struct dentry *dparent, int len)
+{
+	struct qstr qstr;
+
+	qstr.len = len;
+	qstr.name = name;
+	qstr.hash = full_name_hash(name, len);
+	return d_lookup(dparent, &qstr);
 }
 #endif
 

@@ -5,7 +5,7 @@
 
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = include ldiskfs lvfs obdclass lov ldlm ptlrpc      \
+SUBDIRS = include ldiskfs lvfs obdclass lov ldlm sec ptlrpc      \
 	obdecho osc mdc lmv  mds obdfilter ost llite cobd ptlbd smfs snapfs \
 	cmobd liblustre doc utils tests conf scripts autoconf
 

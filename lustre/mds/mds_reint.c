@@ -32,6 +32,7 @@
 
 #include <linux/fs.h>
 #include <linux/jbd.h>
+#include <linux/namei.h>
 #include <linux/ext3_fs.h>
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
@@ -42,6 +43,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_lite.h>
 #include "mds_internal.h"
 
 struct mds_logcancel_data {
@@ -191,6 +193,10 @@ out_commit:
  * chown_common and inode_setattr
  * utimes and inode_setattr
  */
+#ifndef ATTR_RAW
+/* Just for the case if we have some clients that know about ATTR_RAW */
+#define ATTR_RAW 8192
+#endif
 int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
 {
         time_t now = LTIME_S(CURRENT_TIME);
@@ -200,6 +206,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
         ENTRY;
 
         /* only fix up attrs if the client VFS didn't already */
+
         if (!(ia_valid & ATTR_RAW))
                 RETURN(0);
 
@@ -296,10 +303,10 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                 if (oldrep->rs_xid != req->rq_xid)
                         continue;
 
-                if (oldrep->rs_msg.opc != req->rq_reqmsg->opc)
+                if (oldrep->rs_msg->opc != req->rq_reqmsg->opc)
                         CERROR ("Resent req xid "LPX64" has mismatched opc: "
                                 "new %d old %d\n", req->rq_xid,
-                                req->rq_reqmsg->opc, oldrep->rs_msg.opc);
+                                req->rq_reqmsg->opc, oldrep->rs_msg->opc);
 
                 svc = oldrep->rs_srv_ni->sni_service;
                 spin_lock (&svc->srv_lock);
@@ -308,7 +315,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
 
                 CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n", oldrep->rs_nlocks, oldrep,
-                      oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_msg.opc,
+                      oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_msg->opc,
                       ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)
@@ -444,25 +451,40 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         else                                            /* setattr */
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
 
-        if (rc == 0 && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
-            rec->ur_eadata != NULL) {
-                struct lov_stripe_md *lsm = NULL;
+        if (rc == 0) {
+                if (rec->ur_iattr.ia_valid & ATTR_EA) {
+                        int flags = (int)rec->ur_iattr.ia_attr_flags;
 
-                rc = ll_permission(inode, MAY_WRITE, NULL);
-                if (rc < 0)
-                        GOTO(cleanup, rc);
+                        rc = -EOPNOTSUPP;
+                        if (inode->i_op && inode->i_op->setxattr) 
+                                rc = inode->i_op->setxattr(de, rec->ur_eadata,
+                                       rec->ur_ea2data, rec->ur_ea2datalen,
+                                       flags);
+                } else if (rec->ur_iattr.ia_valid & ATTR_EA_RM) {
+                        rc = -EOPNOTSUPP;
+                        if (inode->i_op && inode->i_op->removexattr) 
+                                rc = inode->i_op->removexattr(de,
+                                                    rec->ur_eadata);
+                } else if ((S_ISREG(inode->i_mode) ||
+                           S_ISDIR(inode->i_mode)) && rec->ur_eadata != NULL) {
+                         struct lov_stripe_md *lsm = NULL;
 
-                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, mds->mds_dt_exp,
-                                   0, &lsm, rec->ur_eadata);
-                if (rc)
-                        GOTO(cleanup, rc);
+                        rc = ll_permission(inode, MAY_WRITE, NULL);
+                        if (rc < 0)
+                                GOTO(cleanup, rc);
 
-                obd_free_memmd(mds->mds_dt_exp, &lsm);
+                        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, mds->mds_dt_exp,
+                                           0, &lsm, rec->ur_eadata);
+                        if (rc)
+                                GOTO(cleanup, rc);
 
-                rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
-                                   rec->ur_eadatalen);
-                if (rc)
-                        GOTO(cleanup, rc);
+                        obd_free_memmd(mds->mds_dt_exp, &lsm);
+
+                        rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
+                                           rec->ur_eadatalen);
+                        if (rc)
+                                GOTO(cleanup, rc);
+                }    
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
@@ -476,6 +498,10 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (rec->ur_iattr.ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 body->valid |= OBD_MD_FLATIME;
 
+        /* The logcookie should be no use anymore, why nobody remove
+         * following code block?
+         */
+        LASSERT(rec->ur_cookielen == 0);
         if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_dt_obd)) {
                 OBD_ALLOC(mlcd, sizeof(*mlcd) + rec->ur_cookielen +
                           rec->ur_eadatalen);
@@ -2845,24 +2871,31 @@ static int mds_check_for_rename(struct obd_device *obd,
                 mds_pack_dentry2id(obd, &op_data->id1, dentry, 1);
 
                 it.it_op = IT_UNLINK;
+                OBD_ALLOC(it.d.fs_data, sizeof(struct lustre_intent_data));
+                if (!it.d.fs_data)
+                        RETURN(-ENOMEM);
                 rc = md_enqueue(mds->mds_md_exp, LDLM_IBITS, &it, LCK_EX,
                                 op_data, rlockh, NULL, 0, ldlm_completion_ast,
                                 mds_blocking_ast, NULL);
                 OBD_FREE(op_data, sizeof(*op_data));
 
-                if (rc)
-                        RETURN(rc);
 
+                if (rc) {
+                        OBD_FREE(it.d.fs_data,
+                                 sizeof(struct lustre_intent_data));
+                        RETURN(rc);
+                }
                 if (rlockh->cookie != 0)
                         ldlm_lock_decref(rlockh, LCK_EX);
                 
-                if (it.d.lustre.it_data) {
-                        req = (struct ptlrpc_request *)it.d.lustre.it_data;
+                if (LUSTRE_IT(&it)->it_data) {
+                        req = (struct ptlrpc_request *)LUSTRE_IT(&it)->it_data;
                         ptlrpc_req_finished(req);
                 }
 
-                if (it.d.lustre.it_status)
-                        rc = it.d.lustre.it_status;
+                if (LUSTRE_IT(&it)->it_status)
+                        rc = LUSTRE_IT(&it)->it_status;
+                OBD_FREE(it.d.fs_data, sizeof(struct lustre_intent_data));
                 OBD_FREE(rlockh, handle_size);
         }
         RETURN(rc);

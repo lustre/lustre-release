@@ -30,6 +30,11 @@
 #include <pwd.h>
 #include <grp.h>
 
+#include <liblustre.h>
+#include <linux/lustre_idl.h>
+#include <linux/obd.h>
+#include <linux/lustre_mds.h>
+
 /*
  * return:
  *  0:      fail to insert (found identical)
@@ -55,7 +60,7 @@ int insert_sort(gid_t *groups, int size, gid_t grp)
         return 1;
 }
 
-int get_groups_local(uid_t uid, int *ngroups, gid_t **groups)
+int get_groups_local(uid_t uid, gid_t *gid, int *ngroups, gid_t **groups)
 {
         int     maxgroups;
         int     i, size = 0;
@@ -72,6 +77,8 @@ int get_groups_local(uid_t uid, int *ngroups, gid_t **groups)
         pw = getpwuid(uid);
         if (!pw)
                 return -errno;
+
+        *gid = pw->pw_gid;
 
         while ((gr = getgrent())) {
                 if (!gr->gr_mem)
@@ -92,14 +99,9 @@ int get_groups_local(uid_t uid, int *ngroups, gid_t **groups)
 
 int main (int argc, char **argv)
 {
+        char   *pathname = "/proc/fs/lustre/mds/lsd_downcall";
         int     fd, rc;
-        struct {
-                uint32_t err;
-                uint32_t uid;
-                uint32_t ngroups;
-                gid_t   *groups;
-        } ioc_data;
-        char    *pathname = "/proc/fs/lustre/mds/group_info";
+        struct lsd_downcall_args ioc_data;
 
         if (argc != 2) {
                 printf("bad parameter\n");
@@ -115,7 +117,13 @@ int main (int argc, char **argv)
                 return rc;
         }
 
-        ioc_data.err = get_groups_local(ioc_data.uid, &ioc_data.ngroups, &ioc_data.groups);
+        ioc_data.err = get_groups_local(ioc_data.uid, &ioc_data.gid,
+                                        &ioc_data.ngroups, &ioc_data.groups);
+
+        /* FIXME get these from config file */
+        ioc_data.allow_setuid = 1;
+        ioc_data.allow_setgid = 1;
+        ioc_data.allow_setgrp = 1;
 
         rc = write(fd, &ioc_data, sizeof(ioc_data));
         return (rc != sizeof(ioc_data));

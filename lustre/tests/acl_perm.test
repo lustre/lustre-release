@@ -1,0 +1,18 @@
+!
+! Test whether ACL permissions work
+!
+$ umask 022
+$ mkdir dir
+$ umask 077
+$ touch dir/file
+$ setfacl -m u:joe:rw,u:lisa:- dir/file
+$ su - lisa -c cat\ /mnt/lustre/dir/file
+cat: /mnt/lustre/dir/file: Permission denied
+$ su - joe -c cat\ /mnt/lustre/dir/file
+$ su - joe -c touch\ /mnt/lustre/dir/file
+$ cat dir/file
+$ setfacl -m g:users:-  dir/file
+$ su - nobody -c cat\ /mnt/lustre/dir/file
+cat: /mnt/lustre/dir/file: Permission denied
+$ rm dir/file
+$ rmdir dir

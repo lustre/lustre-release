@@ -28,6 +28,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_sec.h>
 #include <linux/lustre_log.h>
 #include <portals/types.h>
 #include "ptlrpc_internal.h"
@@ -42,6 +43,12 @@ static spinlock_t ptlrpc_all_services_lock = SPIN_LOCK_UNLOCKED;
 static void
 ptlrpc_free_server_req (struct ptlrpc_request *req)
 {
+        if (req->rq_svcsec) {
+                svcsec_cleanup_req(req);
+                svcsec_put(req->rq_svcsec);
+                req->rq_svcsec = NULL;
+        }
+
         /* The last request to be received into a request buffer uses space
          * in the request buffer descriptor, otherwise requests are
          * allocated dynamically in the incoming reply event handler */
@@ -408,7 +415,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         struct timeval         work_start;
         struct timeval         work_end;
         long                   timediff;
-        int                    rc;
+        enum ptlrpcs_error     sec_err;
+        int                    secrc, rc;
         ENTRY;
 
         spin_lock_irqsave (&svc->srv_lock, flags);
@@ -445,12 +453,32 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         /* Clear request swab mask; this is a new request */
         request->rq_req_swab_mask = 0;
 #endif
-        rc = lustre_unpack_msg (request->rq_reqmsg, request->rq_reqlen);
+
+        /* go through security check/transform */
+        request->rq_auth_uid = -1;
+        secrc = svcsec_accept(request, &sec_err);
+        switch(secrc) {
+        case SVC_OK:
+                CDEBUG(D_SEC, "request accepted ok\n");
+                break;
+        case SVC_COMPLETE:
+                target_send_reply(request, 0, OBD_FAIL_MDS_ALL_REPLY_NET);
+                goto put_conn;
+        case SVC_DROP:
+                goto out;
+        case SVC_LOGIN:
+        case SVC_LOGOUT:
+                break;
+        default:
+                LBUG();
+        }
+
+        rc = lustre_unpack_msg(request->rq_reqmsg, request->rq_reqlen);
         if (rc != 0) {
                 CERROR ("error unpacking request: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
                         ptlrpc_peernid2str(&request->rq_peer, str),
-                       request->rq_xid);
+                        request->rq_xid);
                 goto out;
         }
 
@@ -530,11 +558,12 @@ put_conn:
 
         CDEBUG((timediff / 1000000 > (long)obd_timeout) ? D_ERROR : D_HA,
                "request "LPU64" opc %u from NID %s processed in %ldus "
-               "(%ldus total)\n", request->rq_xid, request->rq_reqmsg->opc,
+               "(%ldus total)\n", request->rq_xid,
+               request->rq_reqmsg ? request->rq_reqmsg->opc : 0,
                ptlrpc_peernid2str(&request->rq_peer, str),
                timediff, timeval_sub(&work_end, &request->rq_arrival_time));
 
-        if (svc->srv_stats != NULL) {
+        if (svc->srv_stats != NULL && request->rq_reqmsg != NULL) {
                 int opc = opcode_offset(request->rq_reqmsg->opc);
                 if (opc > 0) {
                         LASSERT(opc < LUSTRE_MAX_OPCODES);
@@ -612,7 +641,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                       " o%d NID %s\n",
                       rs, 
                       rs->rs_xid, rs->rs_transno,
-                      rs->rs_msg.opc, 
+                      rs->rs_msg->opc, 
                       ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
 #endif
         }

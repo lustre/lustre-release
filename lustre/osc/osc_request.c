@@ -51,6 +51,7 @@
 #include <linux/lustre_dlm.h>
 #include <libcfs/kp30.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_sec.h>
 #include <lustre/lustre_user.h>
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
@@ -2878,6 +2879,31 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name,
                        imp->imp_initial_recov);
                 RETURN(0);
+        }
+
+        if (keylen == strlen("sec") && memcmp(key, "sec", keylen) == 0) {
+                struct client_obd *cli = &exp->exp_obd->u.cli;
+
+                if (vallen == strlen("null") &&
+                    memcmp(val, "null", vallen) == 0) {
+                        cli->cl_sec_flavor = PTLRPC_SEC_NULL;
+                        cli->cl_sec_subflavor = 0;
+                        RETURN(0);
+                }
+                if (vallen == strlen("krb5i") &&
+                    memcmp(val, "krb5i", vallen) == 0) {
+                        cli->cl_sec_flavor = PTLRPC_SEC_GSS;
+                        cli->cl_sec_subflavor = PTLRPC_SEC_GSS_KRB5I;
+                        RETURN(0);
+                }
+                if (vallen == strlen("krb5p") &&
+                    memcmp(val, "krb5p", vallen) == 0) {
+                        cli->cl_sec_flavor = PTLRPC_SEC_GSS;
+                        cli->cl_sec_subflavor = PTLRPC_SEC_GSS_KRB5P;
+                        RETURN(0);
+                }
+                CERROR("unrecognized security type %s\n", (char*) val);
+                RETURN(-EINVAL);
         }
 
         if (keylen < strlen("mds_conn") ||

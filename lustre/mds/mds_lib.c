@@ -286,11 +286,11 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         }
 
         if (req->rq_reqmsg->bufcount > offset + 2) {
-                r->ur_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
-                if (r->ur_eadata == NULL)
+                r->ur_ea2data = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
+                if (r->ur_ea2data == NULL)
                         RETURN (-EFAULT);
 
-                r->ur_cookielen = req->rq_reqmsg->buflens[offset + 2];
+                r->ur_ea2datalen = req->rq_reqmsg->buflens[offset + 2];
         }
 
         RETURN(0);
@@ -504,6 +504,195 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         RETURN(rc);
 }
 
+static
+struct mds_idmap_table *__get_idmap_table(struct mds_export_data *med,
+                                          int create)
+{
+        struct mds_idmap_table *new;
+        int i;
+
+        if (!create || med->med_idmap)
+                return med->med_idmap;
+
+        spin_unlock(&med->med_idmap_lock);
+        OBD_ALLOC(new, sizeof(*new));
+        spin_lock(&med->med_idmap_lock);
+
+        if (!new) {
+                CERROR("fail to alloc %d\n", sizeof(*new));
+                return NULL;
+        }
+
+        if (med->med_idmap) {
+                OBD_FREE(new, sizeof(*new));
+                return med->med_idmap;
+        }
+
+        for (i = 0; i < MDS_IDMAP_HASHSIZE; i++) {
+                INIT_LIST_HEAD(&new->uidmap[i]);
+                INIT_LIST_HEAD(&new->gidmap[i]);
+        }
+
+        CDEBUG(D_SEC, "allocate idmap table for med %p\n", med);
+        med->med_idmap = new;
+        return new;
+}
+
+static void __flush_mapping_table(struct list_head *table)
+{
+        struct mds_idmap_item *item;
+        int i;
+
+        for (i = 0; i < MDS_IDMAP_HASHSIZE; i++) {
+                while (!list_empty(&table[i])) {
+                        item = list_entry(table[i].next, struct mds_idmap_item,
+                                          hash);
+                        list_del(&item->hash);
+                        OBD_FREE(item, sizeof(*item));
+                }
+        }
+}
+
+void mds_idmap_cleanup(struct mds_export_data *med)
+{
+        ENTRY;
+
+        if (!med->med_idmap) {
+                EXIT;
+                return;
+        }
+
+        spin_lock(&med->med_idmap_lock);
+        __flush_mapping_table(med->med_idmap->uidmap);
+        __flush_mapping_table(med->med_idmap->gidmap);
+        OBD_FREE(med->med_idmap, sizeof(struct mds_idmap_table));
+        spin_unlock(&med->med_idmap_lock);
+}
+
+static inline int idmap_hash(__u32 id)
+{
+        return (id & (MDS_IDMAP_HASHSIZE - 1));
+}
+
+static
+int __idmap_set_item(struct mds_export_data *med,
+                     struct list_head *table,
+                     __u32 id1, __u32 id2)
+{
+        struct list_head *head;
+        struct mds_idmap_item *item, *new = NULL;
+        int found = 0;
+
+        head = table + idmap_hash(id1);
+again:
+        list_for_each_entry(item, head, hash) {
+                if (item->id1 == id1) {
+                        found = 1;
+                        break;
+                }
+        }
+
+        if (!found) {
+                if (new == NULL) {
+                        spin_unlock(&med->med_idmap_lock);
+                        OBD_ALLOC(new, sizeof(*new));
+                        spin_lock(&med->med_idmap_lock);
+                        if (!new) {
+                                CERROR("fail to alloc %d\n", sizeof(*new));
+                                return -ENOMEM;
+                        }
+                        goto again;
+                }
+                new->id1 = id1;
+                new->id2 = id2;
+                list_add(&new->hash, head);
+        } else {
+                if (new)
+                        OBD_FREE(new, sizeof(*new));
+                if (item->id2 != id2) {
+                        CWARN("mapping changed: %u ==> (%u -> %u)\n",
+                               id1, item->id2, id2);
+                        item->id2 = id2;
+                }
+                list_move(&item->hash, head);
+        }
+
+        return 0;
+}
+
+int mds_idmap_set(struct mds_export_data *med, __u32 id1, __u32 id2,
+                  int is_uid_mapping)
+{
+        struct mds_idmap_table *idmap;
+        int rc;
+        ENTRY;
+
+        spin_lock(&med->med_idmap_lock);
+
+        idmap = __get_idmap_table(med, 1);
+        if (!idmap)
+                GOTO(out, rc = -ENOMEM);
+
+        if (is_uid_mapping)
+                rc = __idmap_set_item(med, idmap->uidmap, id1, id2);
+        else
+                rc = __idmap_set_item(med, idmap->gidmap, id1, id2);
+
+out:
+        spin_unlock(&med->med_idmap_lock);
+        RETURN(rc);
+}
+
+__u32 mds_idmap_get(struct mds_export_data *med, __u32 id,
+                    int is_uid_mapping)
+{
+        struct mds_idmap_table *idmap;
+        struct list_head *table;
+        struct list_head *head;
+        struct mds_idmap_item *item;
+        int found = 0;
+        __u32 res;
+
+        spin_lock(&med->med_idmap_lock);
+        idmap = __get_idmap_table(med, 0);
+        if (!idmap)
+                goto nllu;
+
+        table = is_uid_mapping ? idmap->uidmap : idmap->gidmap;
+        head = table + idmap_hash(id);
+
+        list_for_each_entry(item, head, hash) {
+                if (item->id1 == id) {
+                        found = 1;
+                        break;
+                }
+        }
+        if (!found)
+                goto nllu;
+
+        res = item->id2;
+out:
+        spin_unlock(&med->med_idmap_lock);
+        return res;
+nllu:
+        res = is_uid_mapping ? med->med_nllu : med->med_nllg;
+        goto out;
+}
+
+void mds_reverse_map_ugid(struct ptlrpc_request *req,
+                          struct mds_body *body)
+{
+        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
+
+        LASSERT(req->rq_remote);
+
+        if (body->valid & OBD_MD_FLUID)
+                body->uid = mds_idmap_get(med, body->uid, 1);
+
+        if (body->valid & OBD_MD_FLGID)
+                body->gid = mds_idmap_get(med, body->gid, 0);
+}
+
 static inline void drop_ucred_ginfo(struct lvfs_ucred *ucred)
 {
         if (ucred->luc_ginfo) {
@@ -512,42 +701,163 @@ static inline void drop_ucred_ginfo(struct lvfs_ucred *ucred)
         }
 }
 
+static inline void drop_ucred_lsd(struct lvfs_ucred *ucred)
+{
+        if (ucred->luc_lsd) {
+                mds_put_lsd(ucred->luc_lsd);
+                ucred->luc_lsd = NULL;
+        }
+}
+
 /*
+ * the heart of the uid/gid handling and security checking.
+ *
  * root could set any group_info if we allowed setgroups, while
  * normal user only could 'reduce' their group members -- which
  * is somewhat expensive.
  */
-int mds_init_ucred(struct lvfs_ucred *ucred, struct mds_req_sec_desc *rsd)
+int mds_init_ucred(struct lvfs_ucred *ucred,
+                   struct ptlrpc_request *req,
+                   struct mds_req_sec_desc *rsd)
 {
+        struct mds_obd *mds = &req->rq_export->exp_obd->u.mds;
+        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
+        struct lustre_sec_desc *lsd;
+        ptl_nid_t peernid = req->rq_peer.peer_id.nid;
         struct group_info *gnew;
-
+        unsigned int setuid, setgid, strong_sec;
         ENTRY;
+
         LASSERT(ucred);
         LASSERT(rsd);
+        LASSERT(rsd->rsd_ngroups <= LUSTRE_MAX_GROUPS);
 
+        strong_sec = (req->rq_auth_uid != -1);
+        LASSERT(!(req->rq_remote && !strong_sec));
+
+        /* sanity check & set local/remote flag */
+        if (req->rq_remote) {
+                if (med->med_local) {
+                        CWARN("exp %p: client on nid "LPX64" was local, "
+                              "set to remote\n", req->rq_export, peernid);
+                        med->med_local = 0;
+                }
+        } else {
+                if (!med->med_local) {
+                        CWARN("exp %p: client on nid "LPX64" was remote, "
+                              "set to local\n", req->rq_export, peernid);
+                        med->med_local = 1;
+                }
+        }
+
+        setuid = (rsd->rsd_fsuid != rsd->rsd_uid);
+        setgid = (rsd->rsd_fsgid != rsd->rsd_gid);
+
+        /* deny setuid/setgid for remote client */
+        if ((setuid || setgid) && !med->med_local) {
+                CWARN("deny setxid (%u/%u) from remote client "LPX64"\n",
+                      setuid, setgid, peernid);
+                RETURN(-EPERM);
+        }
+
+        /* take care of uid/gid mapping for client in remote realm */
+        if (req->rq_remote) {
+                /* record the uid mapping here */
+                mds_idmap_set(med, req->rq_auth_uid, rsd->rsd_uid, 1);
+
+                /* now we act as the authenticated user */
+                rsd->rsd_uid = rsd->rsd_fsuid = req->rq_auth_uid;
+        } else if (strong_sec && req->rq_auth_uid != rsd->rsd_uid) {
+                /* if we use strong authentication on this request, we
+                 * expect the uid which client claimed is true.
+                 *
+                 * FIXME root's machine_credential in krb5 will be interpret
+                 * as "nobody", which is not good for mds-mds and mds-ost
+                 * connection.
+                 */
+                CWARN("nid "LPX64": UID %u was authenticated while client "
+                      "claimed %u, set %u by force\n",
+                      peernid, req->rq_auth_uid, rsd->rsd_uid,
+                      req->rq_auth_uid);
+                rsd->rsd_uid = req->rq_auth_uid;
+        }
+
+        /* now lsd come into play */
+        ucred->luc_ginfo = NULL;
+        ucred->luc_lsd = lsd = mds_get_lsd(rsd->rsd_uid);
+
+        if (lsd) {
+                if (req->rq_remote) {
+                        /* record the gid mapping here */
+                        mds_idmap_set(med, lsd->lsd_gid, rsd->rsd_gid, 0);
+                        /* now we act as the authenticated group */
+                        rsd->rsd_gid = rsd->rsd_fsgid = lsd->lsd_gid;
+                } else if (rsd->rsd_gid != lsd->lsd_gid) {
+                        /* verify gid which client declared is true */
+                        CWARN("GID: %u while client declare %u, "
+                              "set %u by force\n",
+                              lsd->lsd_gid, rsd->rsd_gid,
+                              lsd->lsd_gid);
+                        rsd->rsd_gid = lsd->lsd_gid;
+                }
+
+                if (lsd->lsd_ginfo) {
+                        ucred->luc_ginfo = lsd->lsd_ginfo;
+                        get_group_info(ucred->luc_ginfo);
+                }
+
+                /* check permission of setuid */
+                if (setuid) {
+                        if (!lsd->lsd_allow_setuid) {
+                                CWARN("mds blocked setuid attempt: %u -> %u\n",
+                                      rsd->rsd_uid, rsd->rsd_fsuid);
+                                RETURN(-EPERM);
+                        }
+                }
+
+                /* check permission of setgid */
+                if (setgid) {
+                        if (!lsd->lsd_allow_setgid) {
+                                CWARN("mds blocked setgid attempt: %u -> %u\n",
+                                      rsd->rsd_gid, rsd->rsd_fsgid);
+                                RETURN(-EPERM);
+                        }
+                }
+        } else {
+                /* failed to get lsd, right now we simply deny any access
+                 * if strong authentication is used,
+                 */
+                if (strong_sec) {
+                        CWARN("mds deny access without LSD\n");
+                        RETURN(-EPERM);
+                }
+
+                /* and otherwise deny setuid/setgid attempt */
+                if (setuid || setgid) {
+                        CWARN("mds deny setuid/setgid without LSD\n");
+                        RETURN(-EPERM);
+                }
+        }
+
+        /* NOTE: we have already obtained supplementary groups,
+         * it will be retained across root_squash. will it be a
+         * security problem??
+         */
+        mds_squash_root(mds, rsd, &peernid); 
+
+        /* remove privilege for non-root user */
+        if (rsd->rsd_fsuid)
+                rsd->rsd_cap &= ~CAP_FS_MASK;
+
+        /* by now every fields in rsd have been granted */
         ucred->luc_fsuid = rsd->rsd_fsuid;
         ucred->luc_fsgid = rsd->rsd_fsgid;
         ucred->luc_cap = rsd->rsd_cap;
         ucred->luc_uid = rsd->rsd_uid;
-        ucred->luc_ghash = mds_get_group_entry(NULL, rsd->rsd_uid);
-        ucred->luc_ginfo = NULL;
 
-        if (ucred->luc_ghash && ucred->luc_ghash->ge_group_info) {
-                ucred->luc_ginfo = ucred->luc_ghash->ge_group_info;
-                get_group_info(ucred->luc_ginfo);
-        }
-
-        /* everything is done if we don't allow set groups */
-        if (!mds_allow_setgroups())
+        /* everything is done if we don't allow setgroups */
+        if (!lsd || !lsd->lsd_allow_setgrp)
                 RETURN(0);
-
-        if (rsd->rsd_ngroups > LUSTRE_MAX_GROUPS) {
-                CERROR("client provide too many groups: %d\n",
-                rsd->rsd_ngroups);
-                drop_ucred_ginfo(ucred);
-                mds_put_group_entry(NULL, ucred->luc_ghash);
-                RETURN(-EFAULT);
-        }
 
         if (ucred->luc_uid == 0) {
                 if (rsd->rsd_ngroups == 0) {
@@ -559,12 +869,11 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct mds_req_sec_desc *rsd)
                 if (!gnew) {
                         CERROR("out of memory\n");
                         drop_ucred_ginfo(ucred);
-                        mds_put_group_entry(NULL, ucred->luc_ghash);
+                        drop_ucred_lsd(ucred);
                         RETURN(-ENOMEM);
                 }
                 groups_from_buffer(gnew, rsd->rsd_groups);
-                /* can't rely on client to sort them */
-                groups_sort(gnew);
+                groups_sort(gnew); /* can't rely on client */
 
                 drop_ucred_ginfo(ucred);
                 ucred->luc_ginfo = gnew;
@@ -586,7 +895,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct mds_req_sec_desc *rsd)
                 if (!gnew) {
                         CERROR("out of memory\n");
                         drop_ucred_ginfo(ucred);
-                        mds_put_group_entry(NULL, ucred->luc_ghash);
+                        drop_ucred_lsd(ucred);
                         RETURN(-ENOMEM);
                 }
 
@@ -594,8 +903,8 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct mds_req_sec_desc *rsd)
                 while (cur < rsd->rsd_ngroups) {
                         if (groups_search(ginfo, rsd->rsd_groups[cur])) {
                                 GROUP_AT(gnew, set) = rsd->rsd_groups[cur];
-				set++;
-			}
+                                set++;
+                        }
                         cur++;
                 }
                 gnew->ngroups = set;
@@ -609,11 +918,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct mds_req_sec_desc *rsd)
 void mds_exit_ucred(struct lvfs_ucred *ucred)
 {
         ENTRY;
-
-        if (ucred->luc_ginfo)
-                put_group_info(ucred->luc_ginfo);
-        if (ucred->luc_ghash)
-                mds_put_group_entry(NULL, ucred->luc_ghash);
-
+        drop_ucred_ginfo(ucred);
+        drop_ucred_lsd(ucred);
         EXIT;
 }

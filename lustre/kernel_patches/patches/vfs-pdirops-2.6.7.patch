@@ -46,14 +46,12 @@ Index: linux-2.6.7/fs/namei.c
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
   * kernel data space before using them..
-@@ -362,10 +394,11 @@
+@@ -362,8 +394,9 @@
+ {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
- 	int counter = 0;
 +	void *lock;
  
- again:
- 	counter++;
 -	down(&dir->i_sem);
 +	lock = lock_dir(dir, name);
  	/*
@@ -149,10 +147,10 @@ Index: linux-2.6.7/fs/namei.c
  out2:
  		path_release(&nd);
  out:
-@@ -1765,14 +1798,14 @@
-  			goto exit1;
-  	}
-  
+@@ -1735,14 +1735,14 @@
+ 			error = -EBUSY;
+ 			goto exit1;
+ 	}
 -	down(&nd.dentry->d_inode->i_sem);
 +	nd.lock = lock_dir(nd.dentry->d_inode, &nd.last);
  	dentry = lookup_hash(&nd.last, nd.dentry);
@@ -166,10 +164,10 @@ Index: linux-2.6.7/fs/namei.c
  exit1:
  	path_release(&nd);
  exit:
-@@ -1842,7 +1875,7 @@
-  		if (error != -EOPNOTSUPP)
-  			goto exit1;
-  	}
+@@ -1808,7 +1808,7 @@
+ 	error = -EISDIR;
+ 	if (nd.last_type != LAST_NORM)
+ 		goto exit1;
 -	down(&nd.dentry->d_inode->i_sem);
 +	nd.lock = lock_dir(nd.dentry->d_inode, &nd.last);
  	dentry = lookup_hash(&nd.last, nd.dentry);
@@ -257,8 +255,8 @@ Index: linux-2.6.7/include/linux/namei.h
 @@ -52,6 +52,7 @@
  	unsigned int	flags;
  	int		last_type;
- 	struct lookup_intent intent;
 +	void *lock;
- };
  
- /*
+ 	/* Intent data */
+ 	union {
+ 		struct open_intent open;

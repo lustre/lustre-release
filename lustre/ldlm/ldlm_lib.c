@@ -35,6 +35,8 @@
 #include <linux/lustre_mgmt.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_sec.h>
+
 /* @priority: if non-zero, move the selected to the list head
  * @nocreate: if non-zero, only search in existed connections
  */
@@ -344,6 +346,7 @@ err:
 int client_obd_cleanup(struct obd_device *obddev, int flags)
 {
         struct client_obd *cli = &obddev->u.cli;
+        ENTRY;
 
         if (!cli->cl_import)
                 RETURN(-EINVAL);
@@ -354,7 +357,14 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
                 dereg_f(cli->cl_mgmtcli_obd, obddev);
                 inter_module_put("mgmtcli_deregister_for_events");
         }
+
+        /* Here we try to drop the security structure after destroy import,
+         * to avoid issue of "sleep in spinlock".
+         */
+        class_import_get(cli->cl_import);
         class_destroy_import(cli->cl_import);
+        ptlrpcs_import_drop_sec(cli->cl_import);
+        class_import_put(cli->cl_import);
         cli->cl_import = NULL;
 
         ldlm_put_ref(flags & OBD_OPT_FORCE);
@@ -389,6 +399,10 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                                                 LDLM_NAMESPACE_CLIENT);
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
+
+        rc = ptlrpcs_import_get_sec(imp);
+        if (rc != 0)
+                GOTO(out_ldlm, rc);
 
         imp->imp_dlm_handle = *dlm_handle;
         rc = ptlrpc_init_import(imp);
@@ -721,15 +735,38 @@ int target_handle_connect(struct ptlrpc_request *req)
         memcpy(&conn, lustre_msg_buf(req->rq_reqmsg, 2, sizeof conn),
                sizeof conn);
 
-        if (export->exp_imp_reverse != NULL)
+        if (export->exp_imp_reverse != NULL) {
+                /* same logic as client_obd_cleanup */
+                class_import_get(export->exp_imp_reverse);
                 class_destroy_import(export->exp_imp_reverse);
+                ptlrpcs_import_drop_sec(export->exp_imp_reverse);
+                class_import_put(export->exp_imp_reverse);
+        }
+
+        /* for the rest part, we return -ENOTCONN in case of errors
+         * in order to let client initialize connection again.
+         */
         revimp = export->exp_imp_reverse = class_new_import();
+        if (!revimp) {
+                CERROR("fail to alloc new reverse import.\n");
+                GOTO(out, rc = -ENOTCONN);
+        }
+
         revimp->imp_connection = ptlrpc_connection_addref(export->exp_connection);
         revimp->imp_client = &export->exp_obd->obd_ldlm_client;
         revimp->imp_remote_handle = conn;
         revimp->imp_obd = target;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
+
+        rc = ptlrpcs_import_get_sec(revimp);
+        if (rc) {
+                CERROR("reverse import can not get sec: %d\n", rc);
+                class_destroy_import(revimp);
+                export->exp_imp_reverse = NULL;
+                GOTO(out, rc = -ENOTCONN);
+        }
+
         class_import_put(revimp);
 
         rc = obd_connect_post(export, connect_flags);
@@ -759,8 +796,10 @@ void target_destroy_export(struct obd_export *exp)
 {
         /* exports created from last_rcvd data, and "fake"
            exports created by lctl don't have an import */
-        if (exp->exp_imp_reverse != NULL)
+        if (exp->exp_imp_reverse != NULL) {
+                ptlrpcs_import_drop_sec(exp->exp_imp_reverse);
                 class_destroy_import(exp->exp_imp_reverse);
+        }
 
         /* We cancel locks at disconnect time, but this will catch any locks
          * granted in a race with recovery-induced disconnect. */
@@ -789,8 +828,9 @@ ptlrpc_clone_req( struct ptlrpc_request *orig_req)
 
         memcpy(copy_req, orig_req, sizeof *copy_req);
         memcpy(copy_reqmsg, orig_req->rq_reqmsg, orig_req->rq_reqlen);
-        /* the copied req takes over the reply state */
+        /* the copied req takes over the reply state and security data */
         orig_req->rq_reply_state = NULL;
+        orig_req->rq_sec_svcdata = NULL;
 
         copy_req->rq_reqmsg = copy_reqmsg;
         class_export_get(copy_req->rq_export);
@@ -800,6 +840,9 @@ ptlrpc_clone_req( struct ptlrpc_request *orig_req)
 }
 void ptlrpc_free_clone( struct ptlrpc_request *req) 
 {
+        if (req->rq_svcsec)
+                svcsec_cleanup_req(req);
+
         class_export_put(req->rq_export);
         list_del(&req->rq_list);
         OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
@@ -810,6 +853,9 @@ void ptlrpc_free_clone( struct ptlrpc_request *req)
 
 static void target_release_saved_req(struct ptlrpc_request *req)
 {
+        if (req->rq_svcsec)
+                svcsec_cleanup_req(req);
+
         class_export_put(req->rq_export);
         OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
         OBD_FREE(req, sizeof *req);

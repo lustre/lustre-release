@@ -9,6 +9,8 @@ TMP=${TMP:-/tmp}
 config=$NAME.xml
 mkconfig=$NAME.sh
 
+. krb5_env.sh
+
 if [ "$PORTALS" ]; then
   portals_opt="--portals=$PORTALS"
 fi
@@ -36,6 +38,9 @@ ${LCONF} $NOMOD $portals_opt $lustre_opt $node_opt --cleanup $@ \
     --dump $TMP/debug $conf_opt
 rc=$?
 echo "lconf DONE"
+stop_lsvcgssd
+stop_lgssd
+
 BUSY=`dmesg | grep -i destruct`
 if [ "$BUSY" ]; then
 	echo "$BUSY" 1>&2

@@ -706,3 +706,46 @@ int jt_lcfg_del_conn(int argc, char **argv)
         return rc;
 }
 
+int jt_lcfg_set_security(int argc, char **argv)
+{
+        struct lustre_cfg lcfg;
+        int rc;
+
+        if (argc != 3)
+                return CMD_HELP;
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
+               return -EINVAL;
+        }
+
+        LCFG_INIT(lcfg, LCFG_SET_SECURITY, lcfg_devname);
+
+        /* currently only used to set on mds */
+        if (strcmp(argv[1], "mds_mds_sec") && strcmp(argv[1], "mds_ost_sec")) {
+                fprintf(stderr, "%s: invalid security key %s\n",
+                        jt_cmdname(argv[0]), argv[1]);
+                return -EINVAL;
+        }
+        if (strcmp(argv[2], "null") && strcmp(argv[2], "krb5")) {
+                fprintf(stderr, "%s: invalid security value %s\n",
+                        jt_cmdname(argv[0]), argv[2]);
+                return -EINVAL;
+        }
+
+        /* connection uuid */
+        lcfg.lcfg_inllen1 = strlen(argv[1]) + 1;
+        lcfg.lcfg_inlbuf1 = argv[1];
+        lcfg.lcfg_inllen2 = strlen(argv[2]) + 1;
+        lcfg.lcfg_inlbuf2 = argv[2];
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}

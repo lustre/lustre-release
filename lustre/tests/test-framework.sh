@@ -39,6 +39,7 @@ init_test_env() {
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ext3"}
+    export SECURITY=${SECURITY:-"null"}
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
@@ -63,6 +64,8 @@ init_test_env() {
 #    echo "CONFIG=`canonical_path $CONFIG`"  > $LUSTRE/tests/CONFIG
 }
 
+. krb5_env.sh
+
 # Facet functions
 start() {
     facet=$1
@@ -70,7 +73,7 @@ start() {
     active=`facet_active $facet`
     do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
         --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
-        $@ $XMLCONFIG
+        --sec $SECURITY $@ $XMLCONFIG
 }
 
 stop() {
@@ -89,11 +92,13 @@ zconf_mount() {
     do_node $client mkdir $mnt 2> /dev/null || :
 
     if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre -o nettype=$NETTYPE `facet_active_host mds1`:/mds1_svc/client_facet $mnt || return 1
+	do_node $client mount -t lustre -o sec=$SECURITY,nettype=$NETTYPE \
+                `facet_active_host mds1`:/mds1_svc/client_facet $mnt || return 2
     else
        # this is so cheating
        do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG  > /dev/null || return 2
-       do_node $client $LLMOUNT `facet_active_host mds1`:/mds1_svc/client_facet $mnt -o nettype=$NETTYPE|| return 4
+       do_node $client $LLMOUNT `facet_active_host mds1`:/mds1_svc/client_facet $mnt \
+               -o sec=$SECURITY,nettype=$NETTYPE|| return 4
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -178,6 +183,16 @@ fail() {
     local facet=$1
     facet_failover $facet
     df $MOUNT || error "post-failover df: $?"
+}
+
+fail_drop() {
+    local facet=$1
+    local failcode=$2
+    facet_failover $facet
+    do_facet mds "echo $failcode > /proc/sys/lustre/fail_loc"
+    cat /proc/sys/lustre/fail_loc
+    df $MOUNT || error "post-failover df: $?"
+    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
 }
 
 fail_abort() {

@@ -99,6 +99,16 @@ static inline int cleanup_group_info(void)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
+/* New (actually old) intent naming */
+#define lookup_intent open_intent
+
+/* And internals */
+#define it_flags flags
+#define it_op op
+#define it_magic magic
+#define it_op_release op_release
+#define it_create_mode create_mode
+
 /*
  * OBD need working random driver, thus all our
  * initialization routines must be called after device

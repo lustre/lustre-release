@@ -145,6 +145,14 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701
 
+#define OBD_FAIL_SVCSEC_ACCEPT_BEG       0x750
+#define OBD_FAIL_SVCSEC_ACCEPT_END       0x751
+#define OBD_FAIL_SVCSEC_WRAP_BEG         0x752
+#define OBD_FAIL_SVCSEC_WRAP_END         0x753
+#define OBD_FAIL_SVCGSS_ERR_NOTIFY       0x760
+#define OBD_FAIL_SVCGSS_INIT_REQ         0x780
+#define OBD_FAIL_SVCGSS_INIT_REP         0x781
+
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
 #define OBD_FAIL_MASK_LOC    (0x000000FF | OBD_FAIL_MASK_SYS)

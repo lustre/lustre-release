@@ -33,6 +33,8 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 #include <sys/utsname.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include "obdctl.h"
 #include <portals/ptlctl.h>
@@ -117,6 +119,9 @@ init_options(struct lustre_mount_data *lmd)
         lmd->lmd_local_nid = PTL_NID_ANY;
         lmd->lmd_port = 988;    /* XXX define LUSTRE_DEFAULT_PORT */
         lmd->lmd_nal = SOCKNAL;
+        lmd->lmd_nllu = 99;
+        lmd->lmd_nllg = 99;
+        strncpy(lmd->lmd_security, "null", sizeof(lmd->lmd_security));
         return 0;
 }
 
@@ -127,6 +132,7 @@ print_options(struct lustre_mount_data *lmd)
 
         printf("mds:             %s\n", lmd->lmd_mds);
         printf("profile:         %s\n", lmd->lmd_profile);
+        printf("sec_flavor:      %s\n", lmd->lmd_security);
         printf("server_nid:      "LPX64"\n", lmd->lmd_server_nid);
         printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
         printf("nal:             %d\n", lmd->lmd_nal);
@@ -199,6 +205,60 @@ static int parse_route(char *opteq, char *opttgts)
         return(0);
 }
 
+/*
+ * here all what we do is gurantee the result is exactly
+ * what user intend to get, no ambiguous. maybe there have
+ * simpler library call could do the same job for us?
+ */
+static int parse_u32(char *str, uint32_t *res)
+{
+        unsigned long id;
+        char *endptr = NULL;
+
+        id = strtol(str, &endptr, 0);
+        if (endptr && *endptr != 0)
+                return -1;
+
+        if (id == LONG_MAX || id == LONG_MIN)
+                return -1;
+
+        if ((uint32_t)id != id)
+                return -1;
+
+        *res = (uint32_t) id;
+        return 0;
+}
+
+static int parse_nllu(struct lustre_mount_data *lmd, char *str_nllu)
+{
+        struct passwd *pass;
+
+        if (parse_u32(str_nllu, &lmd->lmd_nllu) == 0)
+                return 0;
+
+        pass = getpwnam(str_nllu);
+        if (pass == NULL)
+                return -1;
+
+        lmd->lmd_nllu = pass->pw_uid;
+        return 0;
+}
+
+static int parse_nllg(struct lustre_mount_data *lmd, char *str_nllg)
+{
+        struct group *grp;
+
+        if (parse_u32(str_nllg, &lmd->lmd_nllg) == 0)
+                return 0;
+
+        grp = getgrnam(str_nllg);
+        if (grp == NULL)
+                return -1;
+
+        lmd->lmd_nllg = grp->gr_gid;
+        return 0;
+}
+
 int parse_options(char * options, struct lustre_mount_data *lmd)
 {
         ptl_nid_t nid = 0, cluster_id = 0;
@@ -247,6 +307,23 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                 lmd->lmd_server_nid = nid;
                         } else if (!strcmp(opt, "port")) {
                                 lmd->lmd_port = val;
+                        } else if (!strcmp(opt, "sec")) {
+                                strncpy(lmd->lmd_security, opteq + 1,
+                                        sizeof(lmd->lmd_security));
+                        } else if (!strcmp(opt, "nllu")) {
+                                if (parse_nllu(lmd, opteq + 1)) {
+                                        fprintf(stderr, "%s: "
+                                                "can't parse user: %s\n",
+                                                progname, opteq + 1);
+                                        return (-1);
+                                }
+                        } else if (!strcmp(opt, "nllg")) {
+                                if (parse_nllg(lmd, opteq + 1)) {
+                                        fprintf(stderr, "%s: "
+                                                "can't parse group: %s\n",
+                                                progname, opteq + 1);
+                                        return (-1);
+                                }
                         }
                 } else {
                         val = 1;

@@ -10,13 +10,15 @@ ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 2739
 # 51b and 51c depend on kernel
 # 65* fixes in b_hd_cray_merge3
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"51b 51c 65a 65b 65c 65d 65e 65f"}
+# the new kernel api make 48 not valid anymore
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"48 51b 51c 65a 65b 65c 65d 65e 65f"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+export SECURITY=${SECURITY:-"null"}
 
 TMP=${TMP:-/tmp}
 FSTYPE=${FSTYPE:-ext3}
@@ -40,12 +42,21 @@ IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
 MEMHOG=${MEMHOG:-memhog}
 
+. krb5_env.sh
+
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
 	RUNAS=""
 else
 	RUNAS_ID=${RUNAS_ID:-500}
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+fi
+
+if [ `using_krb5_sec $SECURITY` == 'y' ] ; then
+    start_krb5_kdc || exit 1
+    if [ $RUNAS_ID -ne $UID ]; then
+        $RUNAS ./krb5_refresh_cache.sh || exit 2
+    fi
 fi
 
 export NAME=${NAME:-local}

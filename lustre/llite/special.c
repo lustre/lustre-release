@@ -320,7 +320,7 @@ static int ll_special_open(struct inode *inode, struct file *filp)
                 rc = err;
         }
 
-        req = it->d.lustre.it_data;
+        req = LUSTRE_IT(it)->it_data;
         if (req)
                 ptlrpc_req_finished(req);
 
@@ -338,13 +338,18 @@ static int ll_special_file_release(struct inode *inode, struct file *filp)
 }
 
 struct inode_operations ll_special_inode_operations = {
-        .setattr_raw    = ll_setattr_raw,
         .setattr        = ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        .getattr_it     = ll_getattr,
+        .getattr        = ll_getattr,
 #else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
+        .setxattr       = ll_setxattr,
+        .getxattr       = ll_getxattr,
+        .listxattr      = ll_listxattr,
+        .removexattr    = ll_removexattr,
+        .permission     = ll_inode_permission,
+        
 };
 
 struct file_operations ll_special_chr_inode_fops = {

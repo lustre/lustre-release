@@ -114,7 +114,7 @@ struct file_system_type lustre_lite_fs_type = {
         .name         = "lustre_lite",
         .get_sb       = ll_get_sb,
         .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA,
+        .fs_flags     = FS_REVAL_DOT|FS_BINARY_MOUNTDATA,
 };
 
 struct file_system_type lustre_fs_type = {
@@ -122,7 +122,7 @@ struct file_system_type lustre_fs_type = {
         .name         = "lustre",
         .get_sb       = lustre_get_sb,
         .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA,
+        .fs_flags     = FS_REVAL_DOT|FS_BINARY_MOUNTDATA,
 };
 
 static int __init init_lustre_lite(void)
@@ -143,6 +143,16 @@ static int __init init_lustre_lite(void)
                 rc = -ENOMEM;
                 goto out;
         }
+        ll_intent_slab = kmem_cache_create("lustre_intent_data",
+                                              sizeof(struct lustre_intent_data),
+                                              0, SLAB_HWCACHE_ALIGN, NULL,
+                                              NULL);
+        if (ll_intent_slab == NULL) {
+                kmem_cache_destroy(ll_file_data_slab);
+                ll_destroy_inodecache();
+                return -ENOMEM;
+        }
+
 
         proc_lustre_fs_root = proc_lustre_root ?
                               proc_mkdir("llite", proc_lustre_root) : NULL;
@@ -178,9 +188,13 @@ static void __exit exit_lustre_lite(void)
         unregister_filesystem(&lustre_fs_type);
         unregister_filesystem(&lustre_lite_fs_type);
         ll_destroy_inodecache();
+
+        ll_gns_stop_thread();
         
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
                  "couldn't destroy ll_file_data slab\n");
+        LASSERTF(kmem_cache_destroy(ll_intent_slab) == 0,
+                 "couldn't destroy ll_intent_slab slab\n");
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);
                 proc_lustre_fs_root = NULL;

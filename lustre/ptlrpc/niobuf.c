@@ -24,10 +24,12 @@
 #ifndef __KERNEL__
 #include <liblustre.h>
 #endif
+#include <linux/obd_class.h>
 #include <linux/obd_support.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_lib.h>
 #include <linux/obd.h>
+#include <linux/lustre_sec.h>
 #include "ptlrpc_internal.h"
 
 static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len, 
@@ -311,14 +313,15 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
         int                        rc;
 
         /* We must already have a reply buffer (only ptlrpc_error() may be
-         * called without one).  We must also have a request buffer which
+         * called without one).  We usually also have a request buffer which
          * is either the actual (swabbed) incoming request, or a saved copy
-         * if this is a req saved in target_queue_final_reply(). */
-        LASSERT (req->rq_reqmsg != NULL);
+         * if this is a req saved in target_queue_final_reply(). but this
+         * will not be true since some security handling may skip the reqmsg
+         * setting and prepare reply under normal ptlrpc layer */
         LASSERT (rs != NULL);
         LASSERT (req->rq_repmsg != NULL);
         LASSERT (may_be_difficult || !rs->rs_difficult);
-        LASSERT (req->rq_repmsg == &rs->rs_msg);
+        LASSERT (req->rq_repmsg == rs->rs_msg);
         LASSERT (rs->rs_cb_id.cbid_fn == reply_out_callback);
         LASSERT (rs->rs_cb_id.cbid_arg == rs);
 
@@ -328,7 +331,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
 
         req->rq_repmsg->type   = req->rq_type;
         req->rq_repmsg->status = req->rq_status;
-        req->rq_repmsg->opc    = req->rq_reqmsg->opc;
+        req->rq_repmsg->opc    = req->rq_reqmsg ? req->rq_reqmsg->opc : 0;
 
         if (req->rq_export == NULL) 
                 conn = ptlrpc_get_connection(&req->rq_peer, NULL);
@@ -337,10 +340,17 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
 
         atomic_inc (&svc->srv_outstanding_replies);
 
-        rc = ptl_send_buf (&rs->rs_md_h, req->rq_repmsg, req->rq_replen,
+        rc = svcsec_authorize(req);
+        if (rc) {
+                CERROR("Error wrap reply message "LPX64"\n", req->rq_xid);
+                goto out;
+        }
+
+        rc = ptl_send_buf (&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,
                            rs->rs_difficult ? PTL_ACK_REQ : PTL_NOACK_REQ,
                            &rs->rs_cb_id, conn,
                            svc->srv_rep_portal, req->rq_xid);
+out:
         if (rc != 0) {
                 atomic_dec (&svc->srv_outstanding_replies);
 
@@ -405,12 +415,21 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
         request->rq_reqmsg->type = PTL_RPC_MSG_REQUEST;
         request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
-                
+
+        /* wrap_request might need to refresh gss cred, if this is called
+         * in ptlrpcd then the whole daemon thread will be waiting on
+         * gss negotiate rpc. FIXME
+         */
+        rc = ptlrpcs_cli_wrap_request(request);
+        if (rc)
+                GOTO(cleanup_bulk, rc);
+
         LASSERT (request->rq_replen != 0);
-        if (request->rq_repmsg == NULL)
-                OBD_ALLOC(request->rq_repmsg, request->rq_replen);
-        if (request->rq_repmsg == NULL)
-                GOTO(cleanup_bulk, rc = -ENOMEM);
+        if (request->rq_repbuf == NULL) {
+                rc = ptlrpcs_cli_alloc_repbuf(request, request->rq_replen);
+                if (rc)
+                        GOTO(cleanup_bulk, rc);
+        }
 
         rc = PtlMEAttach(connection->c_peer.peer_ni->pni_ni_h,
                          request->rq_reply_portal, /* XXX FIXME bug 249 */
@@ -431,11 +450,12 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_timedout = 0;
         request->rq_net_err = 0;
         request->rq_resend = 0;
+        request->rq_ptlrpcs_restart = 0;
         request->rq_restart = 0;
         spin_unlock_irqrestore (&request->rq_lock, flags);
 
-        reply_md.start     = request->rq_repmsg;
-        reply_md.length    = request->rq_replen;
+        reply_md.start     = request->rq_repbuf;
+        reply_md.length    = request->rq_repbuf_len;
         reply_md.threshold = 1;
         reply_md.options   = PTLRPC_MD_OPTIONS | PTL_MD_OP_PUT;
         reply_md.user_ptr  = &request->rq_reply_cbid;
@@ -460,7 +480,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_sent = LTIME_S(CURRENT_TIME);
         ptlrpc_pinger_sending_on_import(request->rq_import);
         rc = ptl_send_buf(&request->rq_req_md_h, 
-                          request->rq_reqmsg, request->rq_reqlen,
+                          request->rq_reqbuf, request->rq_reqdata_len,
                           PTL_NOACK_REQ, &request->rq_req_cbid, 
                           connection,
                           request->rq_request_portal,
@@ -482,8 +502,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         LASSERT (!request->rq_receiving_reply);
 
  cleanup_repmsg:
-        OBD_FREE(request->rq_repmsg, request->rq_replen);
-        request->rq_repmsg = NULL;
+        ptlrpcs_cli_free_repbuf(request);
 
  cleanup_bulk:
         if (request->rq_bulk != NULL)
@@ -536,4 +555,164 @@ int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         rqbd->rqbd_refcount = 0;
         
         return (-ENOMEM);
+}
+
+static int rawrpc_timedout(void *data)
+{
+        struct ptlrpc_request *req = (struct ptlrpc_request *) data;
+        unsigned long flags;
+
+        spin_lock_irqsave(&req->rq_lock, flags);
+        if (!req->rq_replied)
+                req->rq_timedout = 1;
+        spin_unlock_irqrestore(&req->rq_lock, flags);
+
+        return 1;
+}
+
+/* to make things as simple as possible */
+static int rawrpc_check_reply(struct ptlrpc_request *req)
+{
+        unsigned long flags;
+        int rc;
+
+        spin_lock_irqsave (&req->rq_lock, flags);
+        rc = req->rq_replied || req->rq_net_err || req->rq_err ||
+             req->rq_resend || req->rq_restart;
+        spin_unlock_irqrestore(&req->rq_lock, flags);
+        return rc;
+}
+
+/*
+ * Construct a fake ptlrpc_request to do the work, in order to
+ * user the existing callback/wakeup facilities
+ */
+int ptlrpc_do_rawrpc(struct obd_import *imp,
+                     char *reqbuf, int reqlen,
+                     char *repbuf, int *replenp,
+                     int timeout)
+{
+        struct ptlrpc_connection *conn;
+        struct ptlrpc_request request; /* just a fake one */
+        ptl_handle_me_t reply_me_h;
+        ptl_md_t reply_md, req_md;
+        struct l_wait_info lwi;
+        unsigned long irq_flags;
+        int rc;
+        ENTRY;
+
+        LASSERT(imp);
+        class_import_get(imp);
+        if (imp->imp_state == LUSTRE_IMP_CLOSED) {
+                CWARN("raw rpc on closed imp(=>%s)? send anyway\n",
+                       imp->imp_target_uuid.uuid);
+        }
+
+        conn = imp->imp_connection;
+
+        /* initialize request */
+        memset(&request, 0, sizeof(request));
+        request.rq_req_cbid.cbid_fn = request_out_callback;
+        request.rq_req_cbid.cbid_arg = &request;
+        request.rq_reply_cbid.cbid_fn  = reply_in_callback;
+        request.rq_reply_cbid.cbid_arg = &request;
+        request.rq_reqbuf = reqbuf;
+        request.rq_reqbuf_len = reqlen;
+        request.rq_repbuf = repbuf;
+        request.rq_repbuf_len = *replenp;
+        request.rq_set = NULL;
+        spin_lock_init(&request.rq_lock);
+        init_waitqueue_head(&request.rq_reply_waitq);
+        atomic_set(&request.rq_refcount, 1000000); /* never be droped */
+        request.rq_xid = ptlrpc_next_xid();
+
+        /* add into sending list */
+        spin_lock_irqsave(&imp->imp_lock, irq_flags);
+        list_add_tail(&request.rq_list, &imp->imp_rawrpc_list);
+        spin_unlock_irqrestore(&imp->imp_lock, irq_flags);
+
+        /* prepare reply buffer */
+        rc = PtlMEAttach(conn->c_peer.peer_ni->pni_ni_h,
+                         imp->imp_client->cli_reply_portal,
+                         conn->c_peer.peer_id, request.rq_xid, 0, PTL_UNLINK,
+                         PTL_INS_AFTER, &reply_me_h);
+        if (rc != PTL_OK) {
+                CERROR("PtlMEAttach failed: %d\n", rc);
+                LASSERT (rc == PTL_NO_SPACE);
+                GOTO(cleanup_imp, rc = -ENOMEM);
+        }
+
+        spin_lock_irqsave(&request.rq_lock, irq_flags);
+        request.rq_receiving_reply = 1;
+        spin_unlock_irqrestore(&request.rq_lock, irq_flags);
+
+        reply_md.start          = repbuf;
+        reply_md.length         = *replenp;
+        reply_md.threshold      = 1;
+        reply_md.options        = PTLRPC_MD_OPTIONS | PTL_MD_OP_PUT;
+        reply_md.user_ptr       = &request.rq_reply_cbid;
+        reply_md.eq_handle      = conn->c_peer.peer_ni->pni_eq_h;
+
+        rc = PtlMDAttach(reply_me_h, reply_md, PTL_UNLINK,
+                         &request.rq_reply_md_h);
+        if (rc != PTL_OK) {
+                CERROR("PtlMDAttach failed: %d\n", rc);
+                LASSERT (rc == PTL_NO_SPACE);
+                GOTO(cleanup_me, rc = -ENOMEM);
+        }
+
+        /* prepare request buffer */
+        req_md.start            = reqbuf;
+        req_md.length           = reqlen;
+        req_md.threshold        = 1;
+        req_md.options          = PTLRPC_MD_OPTIONS;
+        req_md.user_ptr         = &request.rq_req_cbid;
+        req_md.eq_handle        = conn->c_peer.peer_ni->pni_eq_h;
+
+        rc = PtlMDBind(conn->c_peer.peer_ni->pni_ni_h,
+                       req_md, PTL_UNLINK, &request.rq_req_md_h);
+        if (rc != PTL_OK) {
+                CERROR("PtlMDBind failed %d\n", rc);
+                LASSERT (rc == PTL_NO_SPACE);
+                GOTO(cleanup_me, rc = -ENOMEM);
+        }
+
+        rc = PtlPut(request.rq_req_md_h, PTL_NOACK_REQ, conn->c_peer.peer_id,
+                    imp->imp_client->cli_request_portal,
+                    0, request.rq_xid, 0, 0);
+        if (rc != PTL_OK) {
+                CERROR("PtlPut failed %d\n", rc);
+                GOTO(cleanup_md, rc);
+        }
+
+        lwi = LWI_TIMEOUT(timeout * HZ, rawrpc_timedout, &request);
+        l_wait_event(request.rq_reply_waitq,
+                     rawrpc_check_reply(&request), &lwi);
+
+        ptlrpc_unregister_reply(&request);
+
+        if (request.rq_err || request.rq_resend || request.rq_intr ||
+            request.rq_timedout || !request.rq_replied) {
+                CERROR("secinit rpc error: err %d, resend %d, "
+                       "intr %d, timeout %d, replied %d\n",
+                        request.rq_err, request.rq_resend, request.rq_intr,
+                        request.rq_timedout, request.rq_replied);
+                rc = -EINVAL;
+        } else {
+                *replenp = request.rq_nob_received;
+                rc = 0;
+        }
+        GOTO(cleanup_imp, rc);
+
+cleanup_md:
+        PtlMDUnlink(request.rq_req_md_h);
+cleanup_me:
+        PtlMEUnlink(reply_me_h);
+cleanup_imp:
+        spin_lock_irqsave(&imp->imp_lock, irq_flags);
+        list_del_init(&request.rq_list);
+        spin_unlock_irqrestore(&imp->imp_lock, irq_flags);
+
+        class_import_put(imp);
+        RETURN(rc);
 }

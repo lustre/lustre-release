@@ -131,6 +131,8 @@ int mds_client_free(struct obd_export *exp, int clear_client)
         struct lvfs_run_ctxt saved;
         int rc;
 
+        mds_idmap_cleanup(med);
+
         if (!med->med_mcd)
                 RETURN(0);
 

@@ -548,6 +548,7 @@ void class_import_put(struct obd_import *import)
         if (import->imp_connection)
                 ptlrpc_put_connection_superhack(import->imp_connection);
 
+        LASSERT(!import->imp_sec);
         while (!list_empty(&import->imp_conn_list)) {
                 struct obd_import_conn *imp_conn;
 
@@ -575,6 +576,7 @@ struct obd_import *class_new_import(void)
         INIT_LIST_HEAD(&imp->imp_replay_list);
         INIT_LIST_HEAD(&imp->imp_sending_list);
         INIT_LIST_HEAD(&imp->imp_delayed_list);
+        INIT_LIST_HEAD(&imp->imp_rawrpc_list);
         spin_lock_init(&imp->imp_lock);
         imp->imp_conn_cnt = 0;
         imp->imp_max_transno = 0;

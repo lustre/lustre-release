@@ -26,6 +26,7 @@
 #ifndef __LUSTRE_SMFS_H
 #define __LUSTRE_SMFS_H
 
+#include <linux/namei.h>
 struct snap_inode_info {
 	int sn_flags;		/*the flags indicated inode type */
 	int sn_gen; 	        /*the inode generation*/

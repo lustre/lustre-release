@@ -27,12 +27,14 @@
 #include <linux/lustre_lite.h>
 #include <linux/pagemap.h>
 #include <linux/file.h>
+#include <linux/lustre_acl.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/lustre_compat25.h>
 #endif
 #include "llite_internal.h"
 #include <linux/obd_lov.h>
 
+#define XATTR_NAME_MAX  255
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file)
 {
@@ -144,9 +146,10 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                         ll_mdc_blocking_ast, NULL);
         OBD_FREE(op_data, sizeof(*op_data));
         if (rc == 0) {
-                if (itp->d.lustre.it_lock_mode)
-                        memcpy(&itp->d.lustre.it_lock_handle,
+                if (LUSTRE_IT(itp)->it_lock_mode)
+                        memcpy(&LUSTRE_IT(itp)->it_lock_handle,
                                &lockh, sizeof(lockh));
+
         } else if (rc < 0) {
                 CERROR("lock enqueue: err: %d\n", rc);
         }
@@ -156,7 +159,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
 int ll_local_open(struct file *file, struct lookup_intent *it)
 {
-        struct ptlrpc_request *req = it->d.lustre.it_data;
+        struct ptlrpc_request *req = LUSTRE_IT(it)->it_data;
         struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
         struct obd_export *md_exp = ll_i2mdexp(file->f_dentry->d_inode);
         struct ll_file_data *fd;
@@ -189,8 +192,8 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
 
         lli->lli_io_epoch = body->io_epoch;
 
-        mdc_set_open_replay_data(md_exp, &fd->fd_mds_och, it->d.lustre.it_data);
-
+        mdc_set_open_replay_data(md_exp, &fd->fd_mds_och, LUSTRE_IT(it)->it_data);
+        
         RETURN(0);
 }
 
@@ -228,12 +231,16 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         it = file->f_it;
 
-        if (!it || !it->d.lustre.it_disposition) {
+        if (!it || !LUSTRE_IT(it) || !LUSTRE_IT(it)->it_disposition) {
                 it = &oit;
+                rc = ll_intent_alloc(it);
+                if (rc)
+                        GOTO(out, rc);
                 rc = ll_intent_file_open(file, NULL, 0, it);
                 if (rc)
                         GOTO(out, rc);
         }
+
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
         /* mdc_intent_lock() didn't get a request ref if there was an open
@@ -260,7 +267,9 @@ int ll_file_open(struct inode *inode, struct file *file)
         file->f_flags &= ~O_LOV_DELAY_CREATE;
         GOTO(out, rc);
  out:
-        req = it->d.lustre.it_data;
+        req = LUSTRE_IT(it)->it_data;
+        ll_intent_release(it);
+
         ptlrpc_req_finished(req);
         if (rc == 0)
                 ll_open_complete(inode);
@@ -1010,13 +1019,18 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         f->f_dentry = file->f_dentry;
         f->f_vfsmnt = file->f_vfsmnt;
 
+        rc = ll_intent_alloc(&oit);
+        if (rc)
+                GOTO(out, rc);
+
         rc = ll_intent_file_open(f, lum, lum_size, &oit);
         if (rc)
                 GOTO(out, rc);
         if (it_disposition(&oit, DISP_LOOKUP_NEG))
                 GOTO(out, -ENOENT);
-        req = oit.d.lustre.it_data;
-        rc = oit.d.lustre.it_status;
+        
+        req = LUSTRE_IT(&oit)->it_data;
+        rc = LUSTRE_IT(&oit)->it_status;
 
         if (rc < 0)
                 GOTO(out, rc);
@@ -1034,6 +1048,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         rc = ll_file_release(f->f_dentry->d_inode, f);
         EXIT;
  out:
+        ll_intent_release(&oit);
         if (f)
                 put_filp(f);
         up(&lli->lli_open_sem);
@@ -1438,7 +1453,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         RETURN(rc);
 }
 
-int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
+int ll_inode_revalidate_it(struct dentry *dentry)
 {
         struct lookup_intent oit = { .it_op = IT_GETATTR };
         struct inode *inode = dentry->d_inode;
@@ -1448,7 +1463,6 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         struct ll_sb_info *sbi;
         struct lustre_id id;
         int rc;
-        
         ENTRY;
 
         if (!inode) {
@@ -1462,13 +1476,17 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         lli = ll_i2info(inode);
         LASSERT(id_fid(&id) != 0);
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), name=%s, intent=%s\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), name=%s(%p)\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name,
-               LL_IT2STR(it));
+               dentry);
 
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_REVALIDATE);
 #endif
+
+        rc = ll_intent_alloc(&oit);
+        if (rc)
+                RETURN(-ENOMEM);
 
         rc = md_intent_lock(sbi->ll_md_exp, &id, NULL, 0, NULL, 0, &id,
                             &oit, 0, &req, ll_mdc_blocking_ast);
@@ -1477,7 +1495,6 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 
         rc = revalidate_it_finish(req, 1, &oit, dentry);
         if (rc) {
-                ll_intent_release(&oit);
                 GOTO(out, rc);
         }
 
@@ -1494,19 +1511,19 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         rc = ll_glimpse_size(inode);
         EXIT;
 out:
+        ll_intent_release(&oit);
         if (req)
                 ptlrpc_req_finished(req);
         return rc;
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-int ll_getattr(struct vfsmount *mnt, struct dentry *de,
-               struct lookup_intent *it, struct kstat *stat)
+int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 {
         int res = 0;
         struct inode *inode = de->d_inode;
 
-        res = ll_inode_revalidate_it(de, it);
+        res = ll_inode_revalidate_it(de);
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_GETATTR);
 
         if (res)
@@ -1529,6 +1546,237 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
 }
 #endif
 
+static
+int ll_setxattr_internal(struct inode *inode, const char *name,
+                         const void *value, size_t size, int flags, 
+                         __u64 valid)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ptlrpc_request *request = NULL;
+        struct mdc_op_data op_data;
+        struct iattr attr;
+        int rc = 0;
+        ENTRY;
+
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETXATTR);
+
+        memset(&attr, 0x0, sizeof(attr));
+        attr.ia_valid |= valid;
+        attr.ia_attr_flags = flags;
+
+        ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
+
+        rc = md_setattr(sbi->ll_md_exp, &op_data, &attr,
+                        (void*) name, strnlen(name, XATTR_NAME_MAX)+1, 
+                        (void*) value, size, &request);
+        if (rc) {
+                CERROR("md_setattr fails: rc = %d\n", rc);
+                GOTO(out, rc);
+        }
+
+ out:
+        ptlrpc_req_finished(request);
+        RETURN(rc);
+}
+
+int ll_setxattr(struct dentry *dentry, const char *name, const void *value,
+                size_t size, int flags)
+{
+        int rc, error;
+        struct posix_acl *acl;
+        struct ll_inode_info *lli;
+        ENTRY;
+
+        rc = ll_setxattr_internal(dentry->d_inode, name, value, size, 
+                                  flags, ATTR_EA);
+        
+        /* update inode's acl info */
+        if (rc == 0 && strcmp(name, XATTR_NAME_ACL_ACCESS) == 0) {
+                if (value) {
+                        acl = posix_acl_from_xattr(value, size);
+                        if (IS_ERR(acl)) {
+                                CERROR("convert from xattr to acl error: %ld",
+                                        PTR_ERR(acl));
+                                GOTO(out, rc);
+                        } else if (acl) {
+                                error = posix_acl_valid(acl);
+                                if (error) {
+                                        CERROR("acl valid error: %d", error);
+                                        posix_acl_release(acl);
+                                        GOTO(out, rc);
+                                }
+                        }
+                } else {
+                        acl = NULL;
+                }
+                                        
+                lli = ll_i2info(dentry->d_inode);
+                spin_lock(&lli->lli_lock);
+                if (lli->lli_acl_access != NULL)
+                        posix_acl_release(lli->lli_acl_access);
+                lli->lli_acl_access = acl;
+                spin_unlock(&lli->lli_lock);
+        }
+        EXIT;
+out:
+        return(rc);
+}
+
+int ll_removexattr(struct dentry *dentry, const char *name)
+{
+        return ll_setxattr_internal(dentry->d_inode, name, NULL, 0, 0,
+                                    ATTR_EA_RM);
+}
+
+static
+int ll_getxattr_internal(struct inode *inode, const char *name, int namelen,
+                         void *value, size_t size, __u64 valid)
+{
+        struct ptlrpc_request *request = NULL;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct lustre_id id;
+        struct mds_body *body;
+        void *ea_data; 
+        int rc, ea_size;
+        ENTRY;
+
+        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_GETXATTR);
+
+        ll_inode2id(&id, inode);
+        rc = md_getattr(sbi->ll_md_exp, &id, valid, name, namelen,
+                         size, &request);
+        if (rc) {
+                if (rc != -ENODATA && rc != -EOPNOTSUPP)
+                        CERROR("md_getattr fails: rc = %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
+        LASSERT(body != NULL);
+        LASSERT_REPSWABBED(request, 0);
+
+        ea_size = body->eadatasize;
+        LASSERT(ea_size <= request->rq_repmsg->buflens[0]);
+
+        if (size == 0) 
+                GOTO(out, rc = ea_size);
+
+        ea_data = lustre_msg_buf(request->rq_repmsg, 1, ea_size);
+        LASSERT(ea_data != NULL);
+        LASSERT_REPSWABBED(request, 1);
+
+        if (value)
+                memcpy(value, ea_data, ea_size);
+        rc = ea_size;
+ out:
+        ptlrpc_req_finished(request);
+        RETURN(rc);
+}
+
+int ll_getxattr(struct dentry *dentry, const char *name, void *value,
+                size_t size)
+{
+        return ll_getxattr_internal(dentry->d_inode, name, strlen(name) + 1, 
+                                    value, size, OBD_MD_FLEA);
+}
+
+int ll_listxattr(struct dentry *dentry, char *list, size_t size)
+{
+        return ll_getxattr_internal(dentry->d_inode, NULL, 0, list, size,
+                                    OBD_MD_FLEALIST);
+}
+
+int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+{
+        struct lookup_intent it = { .it_op = IT_GETATTR };
+        int mode = inode->i_mode;
+        struct dentry de;
+        struct ll_sb_info *sbi;
+        struct lustre_id id;
+        struct ptlrpc_request *req = NULL;
+        int rc;
+        ENTRY;
+
+        sbi = ll_i2sbi(inode);
+        ll_inode2id(&id, inode);
+
+        /* Nobody gets write access to a read-only fs */
+        if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
+            (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))
+                return -EROFS;
+        /* Nobody gets write access to an immutable file */
+        if ((mask & MAY_WRITE) && IS_IMMUTABLE(inode))
+                return -EACCES;
+        if (current->fsuid == inode->i_uid) {
+                mode >>= 6;
+        } else if (1) {
+                struct ll_inode_info *lli = ll_i2info(inode);
+                struct posix_acl *acl;
+
+                /* The access ACL cannot grant access if the group class
+                   permission bits don't contain all requested permissions. */
+                if (((mode >> 3) & mask & S_IRWXO) != mask)
+                        goto check_groups;
+
+                if (ll_intent_alloc(&it))
+                        return -EACCES;
+
+                de.d_inode = inode;
+                rc = md_intent_lock(sbi->ll_md_exp, &id, NULL, 0, NULL, 0, &id,
+                                    &it, 0, &req, ll_mdc_blocking_ast);
+                if (rc < 0) {
+                        ll_intent_free(&it);
+                        GOTO(out, rc);
+                }
+
+                rc = revalidate_it_finish(req, 1, &it, &de);
+                if (rc) {
+                        ll_intent_release(&it);
+                        GOTO(out, rc);
+                }
+
+                ll_lookup_finish_locks(&it, &de);
+                ll_intent_free(&it);
+
+                spin_lock(&lli->lli_lock);
+                acl = posix_acl_dup(ll_i2info(inode)->lli_acl_access);
+                spin_unlock(&lli->lli_lock);
+
+                if (!acl)
+                        goto check_groups;
+
+                rc = posix_acl_permission(inode, acl, mask);
+                posix_acl_release(acl);
+                if (rc == -EACCES)
+                        goto check_capabilities;
+                GOTO(out, rc);
+        } else {
+check_groups:
+                if (in_group_p(inode->i_gid))
+                        mode >>= 3;
+        }
+        if ((mode & mask & S_IRWXO) == mask)
+                GOTO(out, rc = 0);
+
+check_capabilities:
+        rc = -EACCES; 
+        /* Allowed to override Discretionary Access Control? */
+        if (!(mask & MAY_EXEC) ||
+            (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
+                if (capable(CAP_DAC_OVERRIDE))
+                        GOTO(out, rc = 0);
+       /* Read and search granted if capable(CAP_DAC_READ_SEARCH) */
+        if (capable(CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
+            (S_ISDIR(inode->i_mode) && !(mask & MAY_WRITE))))
+                GOTO(out, rc = 0);
+out:
+        if (req)
+                ptlrpc_req_finished(req);
+
+        return rc;
+}
+
 struct file_operations ll_file_operations = {
         .read           = ll_file_read,
         .write          = ll_file_write,
@@ -1545,13 +1793,17 @@ struct file_operations ll_file_operations = {
 };
 
 struct inode_operations ll_file_inode_operations = {
-        .setattr_raw    = ll_setattr_raw,
         .setattr        = ll_setattr,
         .truncate       = ll_truncate,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        .getattr_it     = ll_getattr,
+        .getattr        = ll_getattr,
 #else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
+        .setxattr       = ll_setxattr,
+        .getxattr       = ll_getxattr,
+        .listxattr      = ll_listxattr,
+        .removexattr    = ll_removexattr,
+        .permission     = ll_inode_permission,
 };
 
