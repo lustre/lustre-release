@@ -22,9 +22,9 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
-#include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_ext2.h>
+#include <linux/obd_filter.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 long filter_memory;
@@ -60,7 +60,7 @@ static struct file *filter_parent(obd_id id, obd_mode mode)
 	return file;
 }
 
-void push_ctxt(struct run_ctxt *save, struct run_ctxt *new)
+void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
 { 
 	save->fs = get_fs();
 	save->pwd = dget(current->fs->pwd);
@@ -70,7 +70,7 @@ void push_ctxt(struct run_ctxt *save, struct run_ctxt *new)
 	set_fs_pwd(current->fs, new->pwdmnt, new->pwd);
 }
 
-void pop_ctxt(struct run_ctxt *saved)
+void pop_ctxt(struct obd_run_ctxt *saved)
 {
 	set_fs(saved->fs);
 	set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
@@ -131,7 +131,7 @@ static int simple_unlink(struct dentry *dir, char *name)
 
 static void filter_prep(struct obd_device *obddev)
 {
-	struct run_ctxt saved;
+	struct obd_run_ctxt saved;
 	struct file *file;
 	struct inode *inode;
 	loff_t off;
@@ -202,7 +202,7 @@ static void filter_prep(struct obd_device *obddev)
 
 static void filter_post(struct obd_device *obddev)
 {
-	struct run_ctxt saved;
+	struct obd_run_ctxt saved;
 	long rc;
 	struct file *file;
 	loff_t off = 0; 
@@ -328,7 +328,7 @@ static struct file *filter_obj_open(struct obd_device *obddev,
 	struct file *file;
 	int error = 0;
 	char id[24];
-	struct run_ctxt saved;
+	struct obd_run_ctxt saved;
 	struct super_block *sb;
 
 	sb = obddev->u.filter.fo_sb;
@@ -480,7 +480,7 @@ static int filter_setattr(struct obd_conn *conn, struct obdo *oa)
 static int filter_create (struct obd_conn* conn, struct obdo *oa)
 {
 	char name[64];
-	struct run_ctxt saved;
+	struct obd_run_ctxt saved;
 	struct file *file;
 	int mode;
 	struct obd_device *obddev = conn->oc_dev;
@@ -527,7 +527,7 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         struct inode * inode;
 	struct file *dir;
 	int rc;
-	struct run_ctxt saved;
+	struct obd_run_ctxt saved;
 	char id[128];
 
         if (!(cli = gen_client(conn))) {

@@ -11,11 +11,12 @@
 
 #ifndef _LL_H
 #define _LL_H
-#include <linux/obd_class.h>
-#include <linux/obdo.h>
-#include <linux/list.h>
-#include <linux/lustre_net.h>
 
+#include <linux/ext2_fs.h>
+
+#include <linux/lustre_net.h>
+#include <linux/lustre_mds.h>
+#include <linux/obdo.h>
 
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data { 
@@ -88,8 +89,8 @@ extern struct list_head ll_super_list;       /* list of all LL superblocks */
 #define EXT2_NAME_LEN 255
 
 int ll_check_dir_entry (const char * function, struct inode * dir,
-                          struct ext2_dir_entry_2 * de, struct page * page,
-                          unsigned long offset);
+                        struct ext2_dir_entry_2 * de, struct page * page,
+                        unsigned long offset);
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
 

@@ -35,79 +35,26 @@
 #include <linux/fs.h>
 #include <linux/time.h>
 
+#include <linux/obd_support.h>
+#include <linux/obd.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
-#include <linux/obd.h>
 #endif
 
 /*
  *  ======== OBD Device Declarations ===========
  */
 #define MAX_OBD_DEVICES 8
-#define MAX_MULTI       16
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 #define OBD_ATTACHED 0x1
 #define OBD_SET_UP   0x2
 
-struct obd_conn {
-        struct obd_device *oc_dev;
-        uint32_t oc_id;
-};
-
-#include <linux/lustre_net.h>
-
-typedef struct {
-	uint32_t len;
-	char *   name;
-        struct dentry *dentry;   /* file system obd device names */
-        __u8           _uuid[16]; /* uuid obd device names */
-} obd_devicename;
-
-#include <linux/obd_ext2.h>
-#include <linux/obd_filter.h>
-#include <linux/lustre_mds.h>
-#include <linux/lustre_net.h>
-#include <linux/lustre_dlm.h>
-#include <linux/obd_snap.h>
-#include <linux/obd_trace.h>
-/* #include <linux/obd_fc.h> */
-#include <linux/obd_raid1.h>
-#include <linux/obd_ost.h>
-#include <linux/obd_osc.h>
-
-#ifdef __KERNEL__
-/* corresponds to one of the obd's */
-struct obd_device {
-        struct obd_type *obd_type;
-        int obd_minor;
-        int obd_flags;
-        int obd_refcnt; 
-        obd_devicename obd_fsname; 
-	struct proc_dir_entry *obd_proc_entry;
-        int obd_multi_count;
-        struct obd_conn obd_multi_conn[MAX_MULTI];
-        unsigned int obd_gen_last_id;
-        unsigned long obd_gen_prealloc_quota;
-        struct list_head obd_gen_clients;
-        struct list_head obd_req_list;
-        wait_queue_head_t obd_req_waitq;
-        union {
-                struct ext2_obd ext2;
-                struct filter_obd filter;
-                struct mds_obd mds;
-                struct raid1_obd raid1;
-                struct snap_obd snap;
-	        struct trace_obd trace;
-                struct ost_obd ost;
-                struct osc_obd osc;
-                struct ldlm_obd ldlm;
-        } u;
-};
-
-extern struct proc_dir_entry *proc_lustre_register_obd_device(struct obd_device *obd);
+extern struct proc_dir_entry *
+proc_lustre_register_obd_device(struct obd_device *obd);
 extern void proc_lustre_release_obd_device(struct obd_device *obd);
-extern void proc_lustre_remove_obd_entry(const char* name, struct obd_device *obd);
+extern void proc_lustre_remove_obd_entry(const char* name,
+                                         struct obd_device *obd);
 
 /*
  *  ======== OBD Operations Declarations ===========
@@ -118,54 +65,7 @@ extern void proc_lustre_remove_obd_entry(const char* name, struct obd_device *ob
 #define OBD_BRW_RWMASK  OBD_BRW_READ | OBD_BRW_WRITE
 #define OBD_BRW_CREATE  4
 
-struct obd_ops {
-        int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg,
-                           void *uarg);
-        int (*o_get_info)(struct obd_conn *, obd_count keylen, void *key,
-                          obd_count *vallen, void **val);
-        int (*o_set_info)(struct obd_conn *, obd_count keylen, void *key,
-                          obd_count vallen, void *val);
-        int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
-        int (*o_detach)(struct obd_device *dev);
-        int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
-        int (*o_cleanup)(struct obd_device *dev);
-        int (*o_connect)(struct obd_conn *conn);
-        int (*o_disconnect)(struct obd_conn *conn);
-        int (*o_statfs)(struct obd_conn *conn, struct statfs *statfs);
-        int (*o_preallocate)(struct obd_conn *, obd_count *req, obd_id *ids);
-        int (*o_create)(struct obd_conn *conn,  struct obdo *oa);
-        int (*o_destroy)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_setattr)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_getattr)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_open)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_close)(struct obd_conn *conn, struct obdo *oa);
-        int (*o_read)(struct obd_conn *conn, struct obdo *oa, char *buf,
-                      obd_size *count, obd_off offset);
-        int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
-                       obd_size *count, obd_off offset);
-        int (*o_brw)(int rw, struct obd_conn *conn, obd_count num_oa,
-                     struct obdo **oa, obd_count *oa_bufs, struct page **buf,
-                     obd_size *count, obd_off *offset, obd_flag *flags);
-        int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
-                       obd_off offset);
-        int (*o_sync)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
-                      obd_off offset);
-        int (*o_migrate)(struct obd_conn *conn, struct obdo *dst,
-                         struct obdo *src, obd_size count, obd_off offset);
-        int (*o_copy)(struct obd_conn *dstconn, struct obdo *dst,
-                      struct obd_conn *srconn, struct obdo *src,
-                      obd_size count, obd_off offset);
-        int (*o_iterate)(struct obd_conn *conn, int (*)(obd_id, obd_gr, void *),
-                         obd_id *startid, obd_gr group, void *data);
-	int (*o_preprw)(int cmd, struct obd_conn *conn, 
-			int objcount, struct obd_ioobj *obj, 
-			int niocount, struct niobuf *nb, 
-			struct niobuf *res);
-	int (*o_commitrw)(int cmd, struct obd_conn *conn, 
-			  int objcount, struct obd_ioobj *obj, 
-			  int niocount, struct niobuf *res);
-};
-
+#ifdef __KERNEL__
 struct obd_request {
 	struct obdo *oa;
 	struct obd_conn *conn;
@@ -187,7 +87,7 @@ static inline int obd_check_conn(struct obd_conn *conn)
 	}
 
 	if (!obd->obd_flags & OBD_ATTACHED ) {
-		printk("obd_check_conn: obd %d not attached\n", obd->obd_minor); 
+		printk("obd_check_conn: obd %d not attached\n", obd->obd_minor);
 		return -ENODEV;
 	}
 
@@ -202,7 +102,8 @@ static inline int obd_check_conn(struct obd_conn *conn)
 	}
 
 	if (!obd->obd_type->typ_ops) {
-		printk("obd_check_conn: obd %d no operations\n", obd->obd_minor);
+		printk("obd_check_conn: obd %d no operations\n",
+                       obd->obd_minor);
 		return -EOPNOTSUPP;
 	}
 	return 0;
@@ -211,22 +112,23 @@ static inline int obd_check_conn(struct obd_conn *conn)
 #define OBT(dev)        dev->obd_type
 #define OBP(dev,op)     dev->obd_type->typ_ops->o_ ## op
 
-#define OBD_CHECK_SETUP(conn)                                                   \
-do {                                                                            \
-        if (!(conn)) {                                                            \
-                CERROR("NULL connection\n");                                    \
-                return -EINVAL;                                                 \
-        }                                                                       \
-                                                                                \
-        if (!((conn)->oc_dev)) {                                                    \
-                CERROR("NULL device\n");                                        \
-                return -EINVAL;                                                 \
-        }                                                                       \
-                                                                                \
-        if ( !((conn)->oc_dev->obd_flags & OBD_SET_UP) ) {                        \
-                CERROR("Device %d not setup\n", (conn)->oc_dev->obd_minor);       \
-                return -EINVAL;                                                 \
-        }                                                                       \
+#define OBD_CHECK_SETUP(conn)                                   \
+do {                                                            \
+        if (!(conn)) {                                          \
+                CERROR("NULL connection\n");                    \
+                return -EINVAL;                                 \
+        }                                                       \
+                                                                \
+        if (!((conn)->oc_dev)) {                                \
+                CERROR("NULL device\n");                        \
+                return -EINVAL;                                 \
+        }                                                       \
+                                                                \
+        if ( !((conn)->oc_dev->obd_flags & OBD_SET_UP) ) {      \
+                CERROR("Device %d not setup\n",                 \
+                       (conn)->oc_dev->obd_minor);              \
+                return -EINVAL;                                 \
+        }                                                       \
 } while (0)
 
 #define OBD_CHECK_OP(conn,op)                                   \
@@ -243,8 +145,8 @@ do {                                                            \
 	}                                                       \
 } while (0)
 
-static inline int obd_get_info(struct obd_conn *conn, obd_count keylen, void *key,
-                          obd_count *vallen, void **val)
+static inline int obd_get_info(struct obd_conn *conn, obd_count keylen,
+                               void *key, obd_count *vallen, void **val)
 {
 	int rc;
         OBD_CHECK_SETUP(conn);
@@ -255,8 +157,8 @@ static inline int obd_get_info(struct obd_conn *conn, obd_count keylen, void *ke
 	return rc;
 }
 
-static inline int obd_set_info(struct obd_conn *conn, obd_count keylen, void *key,
-                          obd_count vallen, void *val)
+static inline int obd_set_info(struct obd_conn *conn, obd_count keylen,
+                               void *key, obd_count vallen, void *val)
 {
 	int rc;
         OBD_CHECK_SETUP(conn);
@@ -392,7 +294,8 @@ static inline int obd_statfs(struct obd_conn *conn, struct statfs *buf)
 	return rc;
 }
 
-static inline int obd_punch(struct obd_conn *conn, struct obdo *tgt, obd_size count, obd_off offset)
+static inline int obd_punch(struct obd_conn *conn, struct obdo *tgt,
+                            obd_size count, obd_off offset)
 {
 	int rc;
         OBD_CHECK_SETUP(conn);
@@ -404,8 +307,9 @@ static inline int obd_punch(struct obd_conn *conn, struct obdo *tgt, obd_size co
 }
 
 static inline int obd_brw(int rw, struct obd_conn *conn, obd_count num_oa,
-                     struct obdo **oa, obd_count *oa_bufs, struct page **buf,
-                     obd_size *count, obd_off *offset, obd_flag *flags)
+                          struct obdo **oa, obd_count *oa_bufs,
+                          struct page **buf, obd_size *count, obd_off *offset,
+                          obd_flag *flags)
 {
 	int rc;
         OBD_CHECK_SETUP(conn);
@@ -426,7 +330,8 @@ static inline int obd_preprw(int cmd, struct obd_conn *conn,
         OBD_CHECK_SETUP(conn);
 	OBD_CHECK_OP(conn, preprw);
 	
-	rc = OBP(conn->oc_dev, preprw)(cmd, conn, objcount, obj, niocount, nb, res);
+	rc = OBP(conn->oc_dev, preprw)(cmd, conn, objcount, obj, niocount, nb,
+                                       res);
 	EXIT;
 	return rc;
 }
@@ -439,11 +344,23 @@ static inline int obd_commitrw(int cmd, struct obd_conn *conn,
         OBD_CHECK_SETUP(conn);
 	OBD_CHECK_OP(conn, commitrw);
 	
-	rc = OBP(conn->oc_dev, commitrw)(cmd, conn, objcount, obj, niocount, res);
+	rc = OBP(conn->oc_dev, commitrw)(cmd, conn, objcount, obj, niocount,
+                                         res);
 	EXIT;
 	return rc;
 }
 
+static inline int obd_iocontrol(int cmd, struct obd_conn *conn, 
+                                int len, void *karg, void *uarg)
+{
+	int rc;
+        OBD_CHECK_SETUP(conn);
+	OBD_CHECK_OP(conn, iocontrol);
+	
+	rc = OBP(conn->oc_dev, iocontrol)(cmd, conn, len, karg, uarg);
+	EXIT;
+	return rc;
+}
 
 #endif 
 

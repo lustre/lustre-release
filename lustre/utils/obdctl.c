@@ -31,8 +31,11 @@
 #include <stdio.h>
 #include <signal.h>
 #define printk printf
+
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
+#include <linux/lustre_dlm.h>
+
 #include <unistd.h>
 #include <sys/un.h>
 #include <time.h>
@@ -40,7 +43,6 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
-#include <linux/module.h>
 
 #define __KERNEL__
 #include <linux/list.h>
@@ -440,7 +442,7 @@ static int jt_getattr(int argc, char **argv)
                 data.ioc_obdo1.o_valid = 0xffffffff;
                 printf("getting attr for %Ld\n", data.ioc_obdo1.o_id);
         } else {
-                printf("usage: %s id\n", argv[0]);
+                fprintf(stderr, "usage: %s id\n", argv[0]);
                 return 0;
         }
 
@@ -474,7 +476,7 @@ static int jt_test_getattr(int argc, char **argv)
                 printf("getting %d attrs (testing only): %s", count,
                        ctime(&start.tv_sec));
         } else {
-                printf("usage: %s count [silent]\n", argv[0]);
+                fprintf(stderr, "usage: %s count [silent]\n", argv[0]);
                 return 0;
         }
 
@@ -526,8 +528,9 @@ static int jt_test_brw(int argc, char **argv)
 
                 bulk = malloc(2 * len);
                 if (!bulk) {
-                        printf("%s: out of memory allocating 2x%d pages\n",
-                               argv[0], pages);
+                        fprintf(stderr,
+                                "%s: out of memory allocating 2x%d pages\n",
+                                argv[0], pages);
                         return 0;
                 }
                 IOCINIT(data);
@@ -576,6 +579,23 @@ static int jt_test_brw(int argc, char **argv)
         return 0;
 }
 
+static int jt_test_ldlm(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        IOCINIT(data);
+        if (argc != 1) {
+                fprintf(stderr, "usage: %s\n", argv[0]);
+                return 0;
+        }
+
+        rc = ioctl(fd, IOC_LDLM_TEST, &data);
+        if (rc)
+                fprintf(stderr, "LDLM test failed: %s\n", strerror(errno));
+        return rc;
+}
+
 command_t list[] = {
         {"device", jt_device, 0, "set current device (args device no)"},
         {"attach", jt_attach, 0, "name the typed of device (args: type data"},
@@ -591,6 +611,7 @@ command_t list[] = {
                 "disconnect - break connection to device"},
         {"test_getattr", jt_test_getattr, 0, "test_getattr count [silent]"},
         {"test_brw", jt_test_brw, 0, "test_brw count [write [silent]]"},
+        {"test_ldlm", jt_test_ldlm, 0, "test lock manager (no args)"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},

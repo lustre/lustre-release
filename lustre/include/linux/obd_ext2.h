@@ -13,12 +13,6 @@
 #define OBD_EXT2_DEVICENAME "obdext2"
 #endif
 
-struct ext2_obd {
-        struct super_block * e2_sb;
-	struct vfsmount *e2_vfsmnt;
-};
-
-
 /* development definitions */
 extern struct obdfs_sb_info *obd_sbi;
 extern struct file_operations *obd_fso;

@@ -26,10 +26,9 @@
 #ifndef _LUSTRE_MDS_H
 #define _LUSTRE_MDS_H
 
-
-#include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_idl.h>
+#include <linux/lustre_net.h>
 
 static inline void l_dput(struct dentry *de) 
 {
@@ -38,26 +37,7 @@ static inline void l_dput(struct dentry *de)
         dput(de); 
 }
 
-struct mds_run_ctxt { 
-	struct vfsmount *pwdmnt;
-	struct dentry   *pwd;
-	mm_segment_t     fs;
-};
-
 #define LUSTRE_MDS_NAME "mds"
-
-struct mds_obd {
-        struct ptlrpc_service *mds_service;
-
-	char *mds_fstype;
-        struct super_block * mds_sb;
-	struct vfsmount *mds_vfsmnt;
-	struct mds_run_ctxt  mds_ctxt;
-	struct file_operations *mds_fop; 
-	struct inode_operations *mds_iop;
-	struct address_space_operations *mds_aops;
-
-};
 
 struct mds_update_record { 
         __u32 ur_reclen;

@@ -30,14 +30,8 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/obd.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
-#include <linux/lustre_net.h>
-#include <linux/obd_class.h>
+#include <linux/lustre_lib.h>
 
 int mds_sendpage(struct ptlrpc_request *req, struct file *file, 
                  __u64 offset, struct niobuf *dst)

@@ -33,8 +33,8 @@
 
 #define DEBUG_SUBSYSTEM S_OBDFS
 
-#include <linux/obd_support.h>
 #include <linux/obdfs.h>
+#include <linux/lustre_light.h>
 extern struct address_space_operations obdfs_aops;
 
 /* from super.c */

@@ -39,16 +39,15 @@
 
 #define DEBUG_SUBSYSTEM S_OSC
 
-#include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
+#include <linux/lustre_net.h>
+#include <linux/obd_ost.h>
 
 struct ptlrpc_client *osc_con2cl(struct obd_conn *conn)
 {
 	struct osc_obd *osc = &conn->oc_dev->u.osc;
-	return &osc->osc_peer;
-
+	return osc->osc_peer;
 }
 
 static int osc_connect(struct obd_conn *conn)
@@ -578,12 +577,16 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
 	int dev = data->ioc_dev;
         ENTRY;
 
-	rc = ptlrpc_connect_client(dev, "ost", 
-				   OST_REQUEST_PORTAL, 
-				   OSC_REPLY_PORTAL,    
-				   ost_pack_req, 
-				   ost_unpack_rep,
-				   &osc->osc_peer); 
+        OBD_ALLOC(osc->osc_peer, sizeof(*osc->osc_peer));
+        if (osc->osc_peer == NULL)
+                return -ENOMEM;
+
+        rc = ptlrpc_connect_client(dev, "ost",
+                                   OST_REQUEST_PORTAL,
+                                   OSC_REPLY_PORTAL,  
+                                   ost_pack_req,
+                                   ost_unpack_rep,
+                                   osc->osc_peer);
 
         MOD_INC_USE_COUNT;
         EXIT;
@@ -592,6 +595,11 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
 
 static int osc_cleanup(struct obd_device * obddev)
 {
+	struct osc_obd *osc = &obddev->u.osc;
+
+        if (osc->osc_peer != NULL)
+                OBD_FREE(osc->osc_peer, sizeof(*osc->osc_peer));
+
         MOD_DEC_USE_COUNT;
         return 0;
 }

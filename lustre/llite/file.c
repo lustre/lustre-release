@@ -91,7 +91,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
 
 static int ll_file_release(struct inode *inode, struct file *file)
 {
-	int rc; 
+	int rc;
 	struct ptlrpc_request *req;
 	struct ll_file_data *fd;
 	struct obdo oa; 
@@ -101,6 +101,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
 	fd = (struct ll_file_data *)file->private_data;
 	if (!fd) { 
 		BUG();
+                rc = -EINVAL;
 		goto out;
 	}
 

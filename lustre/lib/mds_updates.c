@@ -31,8 +31,7 @@
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_light.h>
+#include <linux/lustre_mds.h>
 
 /* packing of MDS records */
 void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time, const char *tgt, int tgtlen)
@@ -124,7 +123,8 @@ void mds_rename_pack(struct mds_rec_rename *rec, struct inode *srcdir, struct in
 
 /* unpacking */
 
-static int mds_update_hdr_unpack(char *buf, int len, struct mds_update_record *r)
+static int mds_update_hdr_unpack(char *buf, int len,
+                                 struct mds_update_record *r)
 {
 	struct mds_update_record_hdr *hdr = (struct mds_update_record_hdr *)buf;
 	

@@ -4,11 +4,11 @@
 # See the file COPYING in this distribution
 
 DEFS:= 
-MODULE = llockd
-modulefs_DATA = llockd.o
-EXTRA_PROGRAMS = llockd
+MODULE = ldlm
+modulefs_DATA = ldlm.o
+EXTRA_PROGRAMS = ldlm
 
-llockd_SOURCES = resource.c
+ldlm_SOURCES = ldlm_lock.c resource.c ldlm_test.c
 
 include $(top_srcdir)/Rules
 

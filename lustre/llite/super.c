@@ -32,8 +32,6 @@
 
 #define DEBUG_SUBSYSTEM S_LLIGHT
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
 #include <linux/lustre_light.h>
 
 kmem_cache_t *ll_file_data_slab;
@@ -113,7 +111,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 		return NULL;
 	}
         memset(sbi, 0, sizeof(*sbi));
-	sb->u.generic_sbp = (struct ll_sb_info *) sbi;
+	sb->u.generic_sbp = sbi;
 
         ll_options(data, &device, &version);
 
@@ -398,7 +396,7 @@ struct super_operations ll_super_operations =
 };
 
 struct file_system_type lustre_light_fs_type = {
-   "lustre_light", 0, ll_read_super, NULL
+        "lustre_light", 0, ll_read_super, NULL
 };
 
 static int __init init_lustre_light(void)

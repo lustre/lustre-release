@@ -15,11 +15,6 @@
 #ifndef __OBD_TRACE_H
 #define __OBD_TRACE_H
 
-struct obd_device;
-struct obdtrace_opstats;
-
-struct trace_obd {
-  struct obdtrace_opstats *stats;
-};
+#include <class/obd_class.h>
 
 #endif

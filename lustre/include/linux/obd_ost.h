@@ -27,17 +27,10 @@
 #ifndef _LUSTRE_OST_H
 #define _LUSTRE_OST_H
 
-#include <linux/obd_support.h>
+#include <linux/obd_class.h>
 
 #define LUSTRE_OST_NAME "ost"
 #define LUSTRE_OSC_NAME "osc"
-
-struct ost_obd {
-        struct ptlrpc_service *ost_service;
-
-	struct obd_device *ost_tgt;
-	struct obd_conn ost_conn;
-};
 
 /* ost/ost_pack.c */
 int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2, struct ptlreq_hdr **hdr, union ptl_req *req, int *len, char **buf);
@@ -57,8 +50,4 @@ void *ost_req_buf1(struct ost_req *req);
 void *ost_rep_buf2(struct ost_rep *rep);
 void *ost_rep_buf1(struct ost_rep *rep);
 
-
-
 #endif
-
-

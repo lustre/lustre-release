@@ -25,7 +25,6 @@ losetup ${LOOP}1 /tmp/mds || exit -1
 
 mknod /dev/obd c 10 241
 echo 8191 > /proc/sys/portals/debug
-echo 8191 > /proc/sys/portals/trace
 
 $R/usr/src/obd/utils/obdctl <<EOF
 device 0

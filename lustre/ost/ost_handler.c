@@ -43,15 +43,8 @@
 
 #define DEBUG_SUBSYSTEM S_OST
 
-#include <linux/obd_support.h>
-#include <linux/obd.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_mds.h>
-#include <linux/obd_class.h>
-
-
+#include <linux/obd_ost.h>
+#include <linux/lustre_net.h>
 
 static int ost_destroy(struct ost_obd *ost, struct ptlrpc_request *req)
 {

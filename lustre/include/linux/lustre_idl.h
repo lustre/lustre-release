@@ -315,7 +315,8 @@ struct mds_rec_rename {
 
 #ifdef __KERNEL__ 
 
-static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation, int type)
+static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation,
+                              int type)
 {
         fid->id = HTON__u64((__u64)ino);
         fid->generation = HTON__u32(generation);
@@ -443,7 +444,8 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 }
 
 #ifndef __KERNEL__
-static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max)
+static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
+                                 int max)
 {
 	char *ptr;
 	struct obd_ioctl_data *overlay;
@@ -571,6 +573,5 @@ union ptl_req {
         struct mds_req *mds;
         struct ost_req *ost;
 };
-
 
 #endif
