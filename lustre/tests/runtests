@@ -104,6 +104,12 @@ rm $HOSTS || fail "can't remove $HOSTS again" 36
 echo "removing $DST"
 rm -r $V $DST || fail "can't remove $DST" 37
 
+# mkdirmany test (bug 589)
+echo "running mkdirmany $OSCMT/base$$ 100"
+./mkdirmany $OSCMT/base$$ 100 || fail "mkdirmany failed"
+echo "removing mkdirmany directories"
+rmdir $OSCMT/base$$* || fail "mkdirmany cleanup failed"
+
 NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
 if [ $NOWUSED -gt $USED ]; then
 	echo "Space not all freed: now ${NOWUSED}kB, was ${USED}kB." 1>&2
