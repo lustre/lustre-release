@@ -47,6 +47,7 @@
 #include <linux/obd.h>
 #include <linux/obd_class.h>
 #include <linux/module.h>
+#include <linux/init.h>
 
 static void *fsfilt_reiserfs_start(struct inode *inode, int op,
                                    void *desc_private)

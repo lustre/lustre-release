@@ -42,6 +42,7 @@
 #include <linux/obd.h>
 #include <linux/obd_class.h>
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/lustre_compat25.h>
 #include <linux/lvfs.h>
 #include "lvfs_internal.h"
