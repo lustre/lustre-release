@@ -3,7 +3,10 @@
 #include <portals/api-support.h> /* needed for ptpctl.h */
 #include <portals/ptlctl.h>	/* needed for parse_dump */
 
+
 #include <liblustre.h>
+#include <linux/obd.h>
+#include <linux/obd_class.h>
 #include <../user/procbridge/procbridge.h>
 
 ptl_handle_ni_t         tcpnal_ni;
@@ -17,6 +20,8 @@ struct pingcli_args {
 };
 
 struct task_struct *current;
+
+struct obd_class_user_state ocus;
 
 /* portals interfaces */
 inline const ptl_handle_ni_t *
@@ -55,12 +60,15 @@ int init_lib_portals(struct pingcli_args *args)
         return rc;
 }
 
+extern int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd, unsigned long arg);
+
+
 int lib_ioctl(int dev_id, int opc, void * ptr)
 {
+
 	if (dev_id == OBD_DEV_ID) {
-		struct obd_ioctl_data *ioc = ptr;
-		/* call class_obd_ioctl function here */
-		/* class_obd_ioctl(inode, filp, opc, (unsigned long) ioc); */
+                struct obd_ioctl_data *ioc = ptr;
+		class_handle_ioctl(&ocus, opc, (unsigned long)ptr);
 
 		/* you _may_ need to call obd_ioctl_unpack or some
 		   other verification function if you want to use ioc
@@ -92,9 +100,10 @@ int main(int arc, char **argv)
         ldlm_init();
         osc_init();
         echo_client_init();
-        /* XXX  lov and mdc are next */
+        /* XXX  need mdc_getlovinfo before lov_init can work.. */
+        //        lov_init();
 
-	parse_dump("DUMP_FILE", lib_ioctl);
+	parse_dump("/tmp/DUMP_FILE", lib_ioctl);
 
         printf("Hello\n");
         return 0;
