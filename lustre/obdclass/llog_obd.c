@@ -285,6 +285,11 @@ int obd_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
 {
         return 0;
 }
+int llog_obd_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count, struct llog_logid *logid)
+{
+        return 0;
+}
 int llog_obd_cleanup(struct obd_device *obd)
 {
         return 0;
