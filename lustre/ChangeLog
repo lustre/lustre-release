@@ -1,12 +1,17 @@
 2005-03-31  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2
+       NOTE: Lustre 1.4.2 uses an incompatible network protocol than previous
+	     versions of Lustre.  Please update all servers and clients to
+	     version 1.4.2 or later at the same time.  You must also run
+	     "lconf --write-conf {config}.xml" on the MDS while it is stopped
+	     to update the configuration logs.
        * bug fixes
-	- fix deadlock in obdfilter statistics vs. object create (5811)
 	- fix for HPUX NFS client breakage when NFS exporting Lustre (5781)
 	- mdc_enqueue does not need max_mds_easize request buffer on send (5707)
 	- swab llog records of type '0' so we get proper header size/idx (5861)
 	- send llog cancel req to DLM cancel portal instead of cb portal (5515)
-        - avoid SetPageDirty on 2.6 (5981)
+	- fix rename of one directory over another leaking an inode (5953)
+	- avoid SetPageDirty on 2.6 (5981)
 	- don't re-add just-being-destroyed locks to the waiting list (5653)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
@@ -46,7 +51,7 @@
 	- change obd_increase_kms to obd_adjust_kms (up or down) (5654)
 	- lconf, lmc search both /usr/lib and /usr/lib64 for Python libs (5800)
 	- support for RHEL4 kernel on i686 (5773)
-        - provide error messages when incompatible logs are encountered (5898)
+	- provide error messages when incompatible logs are encountered (5898)
 
 2005-02-18  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0.10 (1.4.1 release candidate 1)
