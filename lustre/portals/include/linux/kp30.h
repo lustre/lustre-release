@@ -279,10 +279,6 @@ do {                                                                          \
 
 #define PORTAL_VMALLOC_SIZE        16384
 
-#ifndef GFP_MEMALLOC
-#define GFP_MEMALLOC 0
-#endif
-
 #define PORTAL_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
         LASSERT (!in_interrupt());                                        \
@@ -304,10 +300,10 @@ do {                                                                      \
 } while (0)
 
 #define PORTAL_ALLOC(ptr, size) \
-        PORTAL_ALLOC_GFP(ptr, size, (GFP_KERNEL | GFP_MEMALLOC))
+        PORTAL_ALLOC_GFP(ptr, size, GFP_NOFS)
 
 #define PORTAL_ALLOC_ATOMIC(ptr, size) \
-        PORTAL_ALLOC_GFP(ptr, size, (GFP_ATOMIC | GFP_MEMALLOC))
+        PORTAL_ALLOC_GFP(ptr, size, GFP_ATOMIC)
 
 #define PORTAL_FREE(ptr, size)                                          \
 do {                                                                    \
@@ -326,14 +322,10 @@ do {                                                                    \
                s, (ptr), atomic_read(&portal_kmemory));                 \
 } while (0)
 
-#ifndef SLAB_MEMALLOC
-#define SLAB_MEMALLOC 0
-#endif
-
 #define PORTAL_SLAB_ALLOC(ptr, slab, size)                                \
 do {                                                                      \
         LASSERT(!in_interrupt());                                         \
-        (ptr) = kmem_cache_alloc((slab), (SLAB_KERNEL | SLAB_MEMALLOC));  \
+        (ptr) = kmem_cache_alloc((slab), SLAB_NOFS);                      \
         if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \

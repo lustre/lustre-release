@@ -1679,8 +1679,6 @@ int ksocknal_scheduler (void *arg)
         kportal_daemonize (name);
         kportal_blockallsigs ();
 
-        current->flags |= PF_MEMALLOC;
-
 #if (CONFIG_SMP && CPU_AFFINITY)
         if ((cpu_online_map & (1 << id)) != 0) {
 #if 1
@@ -2139,7 +2137,7 @@ ksocknal_setup_sock (struct socket *sock)
         int             option;
         struct linger   linger;
 
-        sock->sk->allocation = GFP_MEMALLOC;
+        sock->sk->allocation = GFP_NOFS;
 
         /* Ensure this socket aborts active sends immediately when we close
          * it. */
@@ -2424,8 +2422,6 @@ ksocknal_autoconnectd (void *arg)
         kportal_daemonize (name);
         kportal_blockallsigs ();
 
-        current->flags |= PF_MEMALLOC;
-
         spin_lock_irqsave (&ksocknal_data.ksnd_autoconnectd_lock, flags);
 
         while (!ksocknal_data.ksnd_shuttingdown) {
@@ -2556,8 +2552,6 @@ ksocknal_reaper (void *arg)
 
         INIT_LIST_HEAD(&enomem_conns);
         init_waitqueue_entry (&wait, current);
-
-        current->flags |= PF_MEMALLOC;
 
         spin_lock_irqsave (&ksocknal_data.ksnd_reaper_lock, flags);
 

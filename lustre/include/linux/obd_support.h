@@ -211,10 +211,6 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 # endif
 #endif  /* __KERNEL__ */
 
-#ifndef GFP_MEMALLOC
-#define GFP_MEMALLOC 0
-#endif
-
 extern atomic_t portal_kmemory;
 
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
@@ -236,7 +232,7 @@ do {                                                                          \
 } while (0)
 
 #ifndef OBD_GFP_MASK
-# define OBD_GFP_MASK (GFP_KERNEL | GFP_MEMALLOC)
+# define OBD_GFP_MASK GFP_NOFS
 #endif
 
 #define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, OBD_GFP_MASK)
@@ -303,17 +299,13 @@ do {                                                                          \
 } while (0)
 #endif
 
-#ifndef SLAB_MEMALLOC
-#define SLAB_MEMALLOC 0
-#endif
-
 /* we memset() the slab object to 0 when allocation succeeds, so DO NOT
  * HAVE A CTOR THAT DOES ANYTHING.  its work will be cleared here.  we'd
  * love to assert on that, but slab.c keeps kmem_cache_s all to itself. */
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
         LASSERT(!in_interrupt());                                             \
-        (ptr) = kmem_cache_alloc(slab, (type | SLAB_MEMALLOC));               \
+        (ptr) = kmem_cache_alloc(slab, (type));                               \
         if ((ptr) == NULL) {                                                  \
                 CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n", \
                        (int)(size), __FILE__, __LINE__);                      \
