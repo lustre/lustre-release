@@ -106,7 +106,7 @@ Index: linux-2.6.5-12.1/fs/namei.c
 +		return 0;
 +	if (!dentry->d_op->d_revalidate(dentry, nd)) {
 +		struct dentry *new;
-+		if ((err = permission(dentry->d_parent->d_inode, MAY_EXEC,nd)))
++		if ((err = permission(dentry->d_parent->d_inode, MAY_EXEC, nd)))
 +			return err;
 +		new = real_lookup(dentry->d_parent, &dentry->d_name, nd);
 +		if (IS_ERR(new))
@@ -140,14 +140,14 @@ Index: linux-2.6.5-12.1/fs/namei.c
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
-+ 				nd->flags |= LOOKUP_LAST;
-+ 				err = revalidate_special(nd);
-+ 				nd->flags &= ~LOOKUP_LAST;
++				nd->flags |= LOOKUP_LAST;
++				err = revalidate_special(nd);
++				nd->flags &= ~LOOKUP_LAST;
 +				if (!nd->dentry->d_inode)
 +					err = -ENOENT;
 +				if (err) {
 +					path_release(nd);
-+ 					goto return_err;
++					goto return_err;
 +				}
 +				if (lookup_flags & LOOKUP_DIRECTORY) {
 +					err = -ENOTDIR;
@@ -679,7 +679,7 @@ Index: linux-2.6.5-12.1/include/linux/fs.h
  	spinlock_t		f_ep_lock;
  #endif /* #ifdef CONFIG_EPOLL */
  	struct address_space	*f_mapping;
-+ 	struct lookup_intent    *f_it;
++	struct lookup_intent    *f_it;
  };
  extern spinlock_t files_lock;
  #define file_list_lock() spin_lock(&files_lock);
