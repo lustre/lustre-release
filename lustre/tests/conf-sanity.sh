@@ -295,8 +295,8 @@ run_test 11 "use default lov configuration (should return error)"
 
 test_12() {
 	setup
-	$LCTL --device 1 probe
-	$LCTL --device 2 probe
+	$LCTL --device 1 probe	# enable OST local rpc
+	$LCTL --device 2 probe	# enable MDS local rpc
 	check_mount
 	cleanup
 }
