@@ -116,7 +116,7 @@ def error(*args):
 def warning(*args):
     msg = string.join(map(str,args))
     print "Warning: ", msg
-    
+
 #
 # manage names and uuids
 # need to initialize this by walking tree to ensure
@@ -249,7 +249,7 @@ class GenConfig:
 
     def osc(self, name, uuid, obd_uuid, net_uuid):
         osc = self.newService("osc", name, uuid)
-        osc.appendChild(self.ref("ost", net_uuid))
+        osc.appendChild(self.ref("network", net_uuid))
         osc.appendChild(self.ref("obd", obd_uuid))
         return osc
 
@@ -287,9 +287,15 @@ class GenConfig:
             mds.appendChild(self.ref("failover", failover_uuid))
         return mds
 
-    def mountpoint(self, name, uuid, mds_uuid, osc_uuid, path):
+    def mdc(self, name, uuid, mds_uuid, net_uuid):
+        mdc = self.newService("mdc",name,uuid)
+        mdc.appendChild(self.ref("mds",mds_uuid))
+        mdc.appendChild(self.ref("network",net_uuid))
+        return mdc
+ 
+    def mountpoint(self, name, uuid, mdc_uuid, osc_uuid, path):
         mtpt = self.newService("mountpoint", name, uuid)
-        mtpt.appendChild(self.ref("mds", mds_uuid))
+        mtpt.appendChild(self.ref("mdc", mdc_uuid))
         mtpt.appendChild(self.ref("osc", osc_uuid))
         self.addElement(mtpt, "path", path)
         return mtpt
@@ -526,6 +532,7 @@ def add_ost(gen, lustre, options, args):
 
     if options.has_key('obdtype'):
         obdtype = options['obdtype']
+
     if obdtype == 'obdecho':
         fstype = ''
     else:
@@ -554,7 +561,7 @@ def add_ost(gen, lustre, options, args):
     
     obd = gen.obd(obdname, obd_uuid, fstype, obdtype, devname, get_format_flag(options), size)
     ost = gen.ost(ostname, ost_uuid, obd_uuid, net_uuid)
-    osc = gen.osc(oscname, osc_uuid, obd_uuid, ost_uuid)
+    osc = gen.osc(oscname, osc_uuid, obd_uuid, net_uuid)
     
     if lovname:
         lov = findByName(lustre, lovname, "lov")
@@ -645,7 +652,24 @@ def add_mtpt(gen, lustre, options, args):
         lov_uuid = name2uuid(lustre, lov_name, tag='osc', fatal=1)
 
     uuid = new_uuid(name)
-    mtpt = gen.mountpoint(name, uuid, mds_uuid, lov_uuid, path)
+    mdc_name = new_name('MDC_'+mds_name)
+    mdc_uuid = new_uuid(mdc_name)
+    lovnode = lookup(lustre,lov_uuid)
+
+
+    mdsnode = lookup(lustre,mds_uuid) 
+    ref = mdsnode.getElementsByTagName('network_ref')
+    net_uuid = ref[0].getAttribute('uuidref')
+
+    mdc = gen.mdc(mdc_name,mdc_uuid,mds_uuid,net_uuid)
+    lustre.appendChild(mdc)
+
+     
+    lovnode.appendChild(gen.ref("mdc",mdc_uuid))
+
+ 
+    mtpt = gen.mountpoint(name, uuid, mdc_uuid, lov_uuid, path)
+
     node = findByName(lustre, node_name, "node")
     if not node:
             error('node:',  node_name, "not found.")
