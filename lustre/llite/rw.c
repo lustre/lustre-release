@@ -360,7 +360,7 @@ struct ll_async_page *llap_cast_private(struct page *page)
 }
 
 /* XXX have the exp be an argument? */
-struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
+struct ll_async_page *llap_from_page(struct page *page)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -369,11 +369,9 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         int rc;
         ENTRY;
 
-        LASSERTF(origin < LLAP__ORIGIN_MAX, "%u\n", origin);
-
         llap = llap_cast_private(page);
         if (llap != NULL)
-                GOTO(out, llap);
+                RETURN(llap);
 
         exp = ll_i2obdexp(page->mapping->host);
         if (exp == NULL)
@@ -391,8 +389,6 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
                 RETURN(ERR_PTR(rc));
         }
 
-        LL_CDEBUG_PAGE(D_PAGE, page, "obj off "LPU64"\n", 
-                       (obd_off)page->index << PAGE_SHIFT);
         CDEBUG(D_CACHE, "llap %p page %p cookie %p obj off "LPU64"\n", llap,
                page, llap->llap_cookie, (obd_off)page->index << PAGE_SHIFT);
         /* also zeroing the PRIVBITS low order bitflags */
@@ -404,8 +400,6 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         list_add_tail(&llap->llap_proc_item, &sbi->ll_pglist);
         spin_unlock(&sbi->ll_lock);
 
-out:
-        llap->llap_origin = origin;
         RETURN(llap);
 }
 
@@ -498,7 +492,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         CDEBUG(D_INODE, "inode %p is writing page %p from %d to %d at %lu\n",
                inode, page, from, to, page->index);
 
-        llap = llap_from_page(page, LLAP_ORIGIN_COMMIT_WRITE);
+        llap = llap_from_page(page);
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
@@ -564,43 +558,6 @@ static void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long len)
                  ra->ra_cur_pages, len);
         ra->ra_cur_pages -= len;
         spin_unlock(&sbi->ll_lock);
-}
-
-int ll_writepage(struct page *page)
-{
-        struct inode *inode = page->mapping->host;
-        struct obd_export *exp;
-        struct ll_async_page *llap;
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(!PageDirty(page));
-        LASSERT(PageLocked(page));
-
-        exp = ll_i2obdexp(inode);
-        if (exp == NULL)
-                GOTO(out, rc = -EINVAL);
-
-        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
-        if (IS_ERR(llap))
-                GOTO(out, rc = PTR_ERR(llap));
-
-        page_cache_get(page);
-        if (llap->llap_write_queued) {
-                LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
-                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
-                                         llap->llap_cookie,
-                                         ASYNC_READY | ASYNC_URGENT);
-        } else {
-                rc = queue_or_sync_write(exp, inode, llap, PAGE_SIZE,
-                                         ASYNC_READY | ASYNC_URGENT);
-        }
-        if (rc)
-                page_cache_release(page);
-out:
-        if (rc)
-                unlock_page(page);
-        RETURN(rc);
 }
 
 /* called for each page in a completed rpc.*/
@@ -683,7 +640,7 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        llap = llap_from_page(page, 0);
+        llap = llap_from_page(page);
         if (IS_ERR(llap)) {
                 CERROR("page %p ind %lu couldn't find llap: %ld\n", page,
                        page->index, PTR_ERR(llap));
@@ -770,7 +727,7 @@ void ll_ra_accounting(struct page *page, struct address_space *mapping)
 {
         struct ll_async_page *llap;
 
-        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
+        llap = llap_from_page(page);
         if (IS_ERR(llap))
                 return;
 
@@ -847,7 +804,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
                 /* we do this first so that we can see the page in the /proc
                  * accounting */
-                llap = llap_from_page(page, LLAP_ORIGIN_READAHEAD);
+                llap = llap_from_page(page);
                 if (IS_ERR(llap) || llap->llap_defer_uptodate)
                         goto next_page;
 
@@ -1026,7 +983,7 @@ int ll_readpage(struct file *filp, struct page *page)
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
-        llap = llap_from_page(page, LLAP_ORIGIN_READPAGE);
+        llap = llap_from_page(page);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
 
@@ -1054,10 +1011,12 @@ int ll_readpage(struct file *filp, struct page *page)
         }
 
         if (rc == 0) {
+#if 0
                 CWARN("ino %lu page %lu (%llu) not covered by "
                       "a lock (mmap?).  check debug logs.\n",
                       inode->i_ino, page->index,
                       (long long)page->index << PAGE_CACHE_SHIFT);
+#endif
         }
 
         rc = ll_issue_page_read(exp, llap, oig, 0);

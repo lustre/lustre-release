@@ -346,7 +346,7 @@ test_15() {	# bug 974 - ENOSPC
 run_test 15 "test out-of-space with multiple writers ==========="
 
 test_16() {
-	fsx -c 50 -p 100 -N 2500 $MOUNT1/fsxfile $MOUNT2/fsxfile
+	fsx -R -W -c 50 -p 100 -N 2500 $MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
 
@@ -375,7 +375,7 @@ test_18() {
 	./mmap_sanity -d $MOUNT1 -m $MOUNT2
 	sync; sleep 1; sync
 }
-run_test 18 "mmap sanity check ================================="
+#run_test 18 "mmap sanity check ================================="
 
 test_19() { # bug3811
 	[ -d /proc/fs/lustre/obdfilter ] || return 0

@@ -134,18 +134,8 @@ struct ll_async_page {
          /* only trust these if the page lock is providing exclusion */
         unsigned         llap_write_queued:1,
                          llap_defer_uptodate:1,
-                         llap_origin:3,
                          llap_ra_used:1;
         struct list_head llap_proc_item;
-};
-
-enum {
-        LLAP_ORIGIN_UNKNOWN = 0,
-        LLAP_ORIGIN_READPAGE,
-        LLAP_ORIGIN_READAHEAD,
-        LLAP_ORIGIN_COMMIT_WRITE,
-        LLAP_ORIGIN_WRITEPAGE,
-        LLAP__ORIGIN_MAX,
 };
 
 /* llite/lproc_llite.c */
@@ -173,13 +163,12 @@ void ll_prepare_mdc_op_data(struct mdc_op_data *,
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
-int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
-struct ll_async_page *llap_from_page(struct page *page, unsigned origin);
+struct ll_async_page *llap_from_page(struct page *page);
 struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 void ll_ra_accounting(struct page *page, struct address_space *mapping);
@@ -276,28 +265,6 @@ void ll_try_done_writing(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
-
-/* llite/llite_mmap.c */
-#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-typedef struct rb_root  rb_root_t;
-typedef struct rb_node  rb_node_t;
-#endif
-
-struct ll_lock_tree_node;
-struct ll_lock_tree {
-        rb_root_t                       lt_root;
-        struct list_head                lt_locked_list;
-        struct ll_file_data             *lt_fd;
-};
-int ll_teardown_mmaps(struct address_space *mapping, __u64 first, 
-                      __u64 last);
-int ll_file_mmap(struct file * file, struct vm_area_struct * vma);
-struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
-                                              __u64 end, ldlm_mode_t mode);
-int ll_tree_lock(struct ll_lock_tree *tree, 
-                 struct ll_lock_tree_node *first_node, struct inode *inode,
-                 const char *buf, size_t count, int ast_flags);
-int ll_tree_unlock(struct ll_lock_tree *tree, struct inode *inode);
 
 #define LL_SBI_NOLCK            0x1
 #define LL_SBI_READAHEAD        0x2
