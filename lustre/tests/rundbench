@@ -1,7 +1,6 @@
 #!/bin/sh
 
-echo 0 > /proc/sys/obd/trace 
-echo 0 > /proc/sys/obd/debug 
+[ -e /proc/sys/portals/debug ] && echo 0 > /proc/sys/portals/debug 
 cd /mnt/obd
 cp /usr/src/obd/demos/dbench/client.txt .
 /usr/src/obd/demos/dbench/dbench $1
