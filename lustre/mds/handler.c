@@ -913,21 +913,32 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 goto fill_inode;
         }
         
+#if HAVE_LOOKUP_RAW
         /* FIXME: handle raw lookup */
-#if 0
         if (body->valid == OBD_MD_FLID) {
+                struct mds_obd *mds = &obd->u.mds;
                 struct mds_body *mds_reply;
                 int size = sizeof(*mds_reply);
+                struct inode *dir;
                 ino_t inum;
+                dparent = mds_fid2dentry(mds, &body->fid1, NULL);
+                if (IS_ERR(dparent)) {
+                        rc = PTR_ERR(dparent);
+                        GOTO(cleanup, rc);
+                }
+                LASSERT(dparent != NULL);
+                LASSERT(dparent->d_inode != NULL);
                 // The user requested ONLY the inode number, so do a raw lookup
                 rc = lustre_pack_reply(req, 1, &size, NULL);
                 if (rc) {
                         CERROR("out of memory\n");
+                        l_dput(dparent);
                         GOTO(cleanup, rc);
                 }
-
+                dir  = dparent->d_inode;
+                LASSERT(dir->i_op->lookup_raw != NULL);
                 rc = dir->i_op->lookup_raw(dir, name, namesize - 1, &inum);
-
+                l_dput(dparent);
                 mds_reply = lustre_msg_buf(req->rq_repmsg, offset,
                                            sizeof(*mds_reply));
                 mds_reply->fid1.id = inum;

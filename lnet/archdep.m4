@@ -545,6 +545,17 @@ if test x$enable_modules != xno ; then
 	fi # BACKINGFS = ext3
 fi
 
+# ---------- check ->lookup_raw() support --------
+
+AC_MSG_CHECKING([if kernel supports ->lookup_raw()])
+HAVE_LOOKUP_RAW="`grep -c 'lookup_raw.*struct inode' $LINUX/include/linux/proc_fs.h`"
+if test "$HAVE_LOOKUP_RAW" != 0 ; then
+	AC_DEFINE(HAVE_LOOKUP_RAW, 1, [the kernel supports ->lookup_raw()])
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_RESULT([no])
+fi
+
 CPPFLAGS="-include \$(top_builddir)/include/config.h $CPPFLAGS"
 EXTRA_KCFLAGS="-include $PWD/include/config.h $EXTRA_KCFLAGS"
 AC_SUBST(EXTRA_KCFLAGS)
