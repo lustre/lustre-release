@@ -325,21 +325,19 @@ depend_kernel()
     cp "$CONFIG_FILE" .config
     for oc in oldconfig_nonint silentoldconfig oldconfig ; do
 	if grep -q "$oc" Makefile ; then
-	    OLDCONFIG="$oc"
+	    $MAKE $oc || fatal 1 "Error running make oldconfig"
 	    break
 	fi
     done
-    $MAKE $OLDCONFIG || fatal 1 "Error running make oldconfig"
     case "$VERSION" in
 	2.6*)
-            SYMLINKS="include/asm"
+            $MAKE include/asm
             ;;
         2.4*)
-	    SYMLINKS="symlinks"
+	    $MAKE symlinks
+	    $MAKE dep || fatal 1 "Error running make dep"
 	    ;;
     esac
-    $MAKE $SYMLINKS
-    $MAKE_J dep || fatal 1 "Error running make dep"
     $MAKE include/linux/version.h || fatal 1 "Error making include/linux/version.h"
 }
 
