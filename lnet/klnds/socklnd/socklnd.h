@@ -44,6 +44,7 @@
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
+#include <asm/irq.h>
 
 #include <linux/init.h>
 #include <linux/fs.h>
@@ -59,6 +60,7 @@
 #define DEBUG_SUBSYSTEM S_SOCKNAL
 
 #include <linux/kp30.h>
+#include <linux/portals_compat25.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/socknal.h>
@@ -88,7 +90,7 @@
 
 #define SOCKNAL_SMALL_FWD_PAGES	1               /* # pages in a small message fwd buffer */
 
-#define SOCKNAL_LARGE_FWD_PAGES (PAGE_ALIGN (sizeof (ptl_hdr_t) + PTL_MTU) >> PAGE_SHIFT)
+#define SOCKNAL_LARGE_FWD_PAGES (PAGE_ALIGN(PTL_MTU) >> PAGE_SHIFT)
 						/* # pages in a large message fwd buffer */
 
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
@@ -115,6 +117,7 @@ typedef struct                                  /* pool of forwarding buffers */
         struct list_head  fmp_idle_fmbs;        /* free buffers */
         struct list_head  fmp_blocked_conns;    /* connections waiting for a buffer */
         int               fmp_nactive_fmbs;     /* # buffers in use */
+        int               fmp_buff_pages;       /* # pages per buffer */
 } ksock_fmb_pool_t;
 
 
@@ -193,18 +196,13 @@ typedef struct {
 #define SOCKNAL_INIT_ALL        3
 
 /* A packet just assembled for transmission is represented by 1 or more
- * struct iovec fragments and 0 or more ptl_kiov_t fragments.  Forwarded
- * messages, or messages from an MD with PTL_MD_KIOV _not_ set have 0
- * ptl_kiov_t fragments.  Messages from an MD with PTL_MD_KIOV set, have 1
- * struct iovec fragment (the header) and up to PTL_MD_MAX_IOV ptl_kiov_t
- * fragments.
+ * struct iovec fragments (the first frag contains the portals header),
+ * followed by 0 or more ptl_kiov_t fragments.
  *
  * On the receive side, initially 1 struct iovec fragment is posted for
- * receive (the header).  Once the header has been received, if the message
- * requires forwarding or will be received into mapped memory, up to
- * PTL_MD_MAX_IOV struct iovec fragments describe the target memory.
- * Otherwise up to PTL_MD_MAX_IOV ptl_kiov_t fragments are used.
- */
+ * receive (the header).  Once the header has been received, the payload is
+ * received into either struct iovec or ptl_kiov_t fragments, depending on
+ * what the header matched or whether the message needs forwarding. */
 
 struct ksock_conn;                              /* forward ref */
 struct ksock_peer;                              /* forward ref */
@@ -226,6 +224,12 @@ typedef struct                                  /* transmit packet */
         zccd_t                  tx_zccd;        /* zero copy callback descriptor */
 #endif
 } ksock_tx_t;
+
+typedef struct                                  /* forwarded packet */
+{
+        ksock_tx_t             ftx_tx;          /* send info */
+        struct iovec           ftx_iov;         /* hdr iovec */
+} ksock_ftx_t;
 
 #define KSOCK_ZCCD_2_TX(ptr)	list_entry (ptr, ksock_tx_t, tx_zccd)
 /* network zero copy callback descriptor embedded in ksock_tx_t */
@@ -254,15 +258,14 @@ typedef struct                                  /* Kernel portals Socket Forward
 {                                               /* (socknal->router) */
         struct list_head        fmb_list;       /* queue idle */
         kpr_fwd_desc_t          fmb_fwd;        /* router's descriptor */
-        int                     fmb_npages;     /* # pages allocated */
         ksock_fmb_pool_t       *fmb_pool;       /* owning pool */
         struct ksock_peer      *fmb_peer;       /* peer received from */
-        struct page            *fmb_pages[SOCKNAL_LARGE_FWD_PAGES];
-        struct iovec            fmb_iov[SOCKNAL_LARGE_FWD_PAGES];
+        ptl_hdr_t               fmb_hdr;        /* message header */
+        ptl_kiov_t              fmb_kiov[0];    /* payload frags */
 } ksock_fmb_t;
 
 /* space for the rx frag descriptors; we either read a single contiguous
- * header, or PTL_MD_MAX_IOV frags of payload of either type. */
+ * header, or up to PTL_MD_MAX_IOV frags of payload of either type. */
 typedef union {
         struct iovec    iov[PTL_MD_MAX_IOV];
         ptl_kiov_t      kiov[PTL_MD_MAX_IOV];
