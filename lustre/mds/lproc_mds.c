@@ -114,11 +114,11 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         struct obd_export *doomed_exp = NULL;
         struct obd_uuid doomed;
         struct list_head *p;
-        char tmpbuf[37];
+        char tmpbuf[sizeof(doomed)];
 
-        sscanf(buffer, "%37s", tmpbuf);
+        sscanf(buffer, "%40s", tmpbuf);
         obd_str2uuid(&doomed, tmpbuf);
-        
+
         spin_lock(&obd->obd_dev_lock);
         list_for_each(p, &obd->obd_exports) {
                 doomed_exp = list_entry(p, struct obd_export, exp_obd_chain);
