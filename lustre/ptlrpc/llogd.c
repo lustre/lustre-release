@@ -447,4 +447,10 @@ int llogd_client_next_block(struct llog_handle *loghandle,
         return 0;
 }
 
+struct llog_operations llogd_client_ops = {
+        lop_next_block:  llogd_client_next_block,
+        lop_read_header: NULL,
+        lop_create:      llogd_client_create,
+        lop_close:       llogd_client_close,
+};
 #endif
