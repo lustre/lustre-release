@@ -347,8 +347,6 @@ extern struct task_struct *current;
 
 #define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->sleepers)
 #define wake_up(l) do { int a; a++; } while (0)
-#define wait_event(l,m) do { int a; a++; } while (0)
-#define l_wait_event(l,m,i) do { int a; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0
 #define TASK_UNINTERRUPTIBLE 1
 #define TASK_RUNNING 2
