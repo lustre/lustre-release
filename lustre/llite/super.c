@@ -149,24 +149,27 @@ static struct super_block * ll_read_super(struct super_block *sb,
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
                             &last_rcvd, &last_xid, &request);
+        ptlrpc_req_finished(request);
         if (err) {
-                CERROR("cannot mdc_connect: rc = %d\n", err);
-                GOTO(out_request, sb = NULL);
+                CERROR("cannot mds_connect: rc = %d\n", err);
+                GOTO(out_mdc, sb = NULL);
         }
         CDEBUG(D_SUPER, "rootfid %Ld\n", (unsigned long long)rootfid.id);
         sbi->ll_rootino = rootfid.id;
 
         memset(&sfs, 0, sizeof(sfs));
+        request = NULL;
         err = mdc_statfs(&sbi->ll_mdc_conn, &sfs, &request);
+        ptlrpc_req_finished(request);
         sb->s_blocksize = sfs.f_bsize;
         sb->s_blocksize_bits = log2(sfs.f_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = (1ULL << (32 + 9)) - sfs.f_bsize;
-        ptlrpc_req_finished(request);
 
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
+        request = NULL;
         err = mdc_getattr(&sbi->ll_mdc_conn, sbi->ll_rootino, S_IFDIR,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
@@ -196,7 +199,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_cdb, sb = NULL);
         }
 
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
 
 out_dev:
         if (mdc)
@@ -209,7 +212,7 @@ out_dev:
 out_cdb:
         ll_commitcbd_cleanup(sbi);
 out_request:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         obd_disconnect(&sbi->ll_osc_conn);
 out_mdc:
         obd_disconnect(&sbi->ll_mdc_conn);
@@ -255,21 +258,29 @@ static void ll_delete_inode(struct inode *inode)
 {
         if (S_ISREG(inode->i_mode)) {
                 int err;
-                struct obdo oa;
+                struct obdo *oa;
                 struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
 
-               if (!md)
+                if (!md)
                         GOTO(out, -EINVAL);
 
-                oa.o_id = md->lmd_object_id;
-                oa.o_easize = md->lmd_easize;
-                if (oa.o_id == 0) {
+                if (md->lmd_object_id == 0) {
                         CERROR("This really happens\n");
                         /* No obdo was ever created */
                         GOTO(out, 0);
                 }
 
-                err = obd_destroy(ll_i2obdconn(inode), &oa, md);
+                oa = obdo_alloc();
+                if (oa == NULL)
+                        GOTO(out, -ENOMEM);
+
+                oa->o_id = md->lmd_object_id;
+                oa->o_easize = md->lmd_easize;
+                oa->o_mode = inode->i_mode;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLMODE;
+
+                err = obd_destroy(ll_i2obdconn(inode), oa, md);
+                obdo_free(oa);
                 CDEBUG(D_SUPER, "obd destroy of %Ld error %d\n",
                        md->lmd_object_id, err);
         }
@@ -416,6 +427,7 @@ static void ll_to_inode(struct inode *dst, struct ll_inode_md *md)
                 dst->i_generation = body->generation;
         if (body->valid & OBD_MD_FLRDEV)
                 dst->i_rdev = body->extra;
+        //if (body->valid & OBD_MD_FLEASIZE)
         if (md && md->md && md->md->lmd_stripe_count) { 
                 struct lov_stripe_md *smd = md->md;
                 int size = ll_stripe_md_size(dst->i_sb);

@@ -116,10 +116,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 /* a name was supplied by the client; fid1 is the directory */
                 dir = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_PR,
                                             &dir_lockh);
-                if (!dir || IS_ERR(dir)) {
-                        l_dput(dir);
+                if (IS_ERR(dir)) {
                         LBUG();
-                        GOTO(out_setattr, rc = -ESTALE);
+                        GOTO(out_setattr, rc = PTR_ERR(dir));
                 }
 
                 name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
@@ -127,9 +126,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 de = mds_name2locked_dentry(obd, dir, NULL, name, namelen,
                                             0, &child_lockh, LCK_PR);
                 l_dput(dir);
-                if (!de || IS_ERR(de)) {
+                if (IS_ERR(de)) {
                         LBUG();
-                        GOTO(out_setattr_de, rc = -ESTALE);
+                        GOTO(out_setattr_de, rc = PTR_ERR(de));
                 }
         } else {
                 de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -228,8 +227,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct inode *dir;
         void *handle;
         struct lustre_handle lockh;
-        int rc = 0, err, flags, lock_mode, type = rec->ur_mode & S_IFMT;
-        __u64 res_id[3] = {0,0,0};
+        int rc = 0, err, lock_mode, type = rec->ur_mode & S_IFMT;
         ENTRY;
 
         /* requests were at offset 2, replies go back at 1 */
@@ -239,40 +237,30 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds") != 0)
                 LBUG();
 
-        de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE)) {
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
+                GOTO(out_create, rc = -ESTALE);
+
+        de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, lock_mode, &lockh);
+        if (IS_ERR(de)) {
+                rc = PTR_ERR(de);
+                CERROR("parent lookup error %d\n", rc);
                 LBUG();
-                GOTO(out_create_de, rc = -ESTALE);
+                GOTO(out_create, rc);
         }
         dir = de->d_inode;
         CDEBUG(D_INODE, "parent ino %ld name %s mode %o\n",
                dir->i_ino, rec->ur_name, rec->ur_mode);
 
-        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
-        res_id[0] = dir->i_ino;
-
-        rc = ldlm_lock_match(obd->obd_namespace, res_id, LDLM_PLAIN,
-                             NULL, 0, lock_mode, &lockh);
-        if (rc == 0) {
-                LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, NULL,
-                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, ldlm_completion_ast, (void *)mds_lock_callback, NULL,
-                                      0, &lockh);
-                if (rc != ELDLM_OK) {
-                        CERROR("lock enqueue: err: %d\n", rc);
-                        GOTO(out_create_de, rc = -EIO);
-                }
-        }
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
-                up(&dir->i_sem);
                 LBUG();
-                GOTO(out_create_dchild, rc = -ESTALE);
+                GOTO(out_create_de, rc = -ESTALE);
         }
 
         if (dchild->d_inode) {
@@ -285,12 +273,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 body = lustre_msg_buf(req->rq_repmsg, offset);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
-#warning FIXME: This ext3/N-specific code does not belong here
-                /* If i_file_acl is set, this inode has an EA */
-                if (S_ISREG(inode->i_mode) && inode->u.ext3_i.i_file_acl) {
+                if (S_ISREG(inode->i_mode)) {
                         md = lustre_msg_buf(req->rq_repmsg, offset + 1);
                         md->lmd_easize = mds->mds_max_mdsize;
-                        mds_fs_get_md(mds, inode, md);
+
+                        if (mds_fs_get_md(mds, inode, md) < 0)
+                                memset(md, 0, md->lmd_easize);
                 }
                 /* now a normal case for intent locking */
                 GOTO(out_create_dchild, rc = -EEXIST);
@@ -362,7 +350,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         md = lustre_msg_buf(req->rq_reqmsg, 2);
                         rc = mds_fs_set_md(mds, inode, handle, md);
                         if (rc) {
-                                CERROR("error %d setting obdo for %ld\n",
+                                CERROR("error %d setting LOV MD for %ld\n",
                                        rc, inode->i_ino);
                                 GOTO(out_create_unlink, rc);
                         }
@@ -391,6 +379,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 body = lustre_msg_buf(req->rq_repmsg, offset);
                 body->ino = inode->i_ino;
                 body->generation = inode->i_generation;
+                body->valid = OBD_MD_FLID | OBD_MD_FLGENER;
         }
         EXIT;
 out_create_commit:
@@ -402,10 +391,11 @@ out_create_commit:
         }
 out_create_dchild:
         l_dput(dchild);
-        up(&dir->i_sem);
         ldlm_lock_decref(&lockh, lock_mode);
 out_create_de:
+        up(&dir->i_sem);
         l_dput(de);
+out_create:
         req->rq_status = rc;
         return 0;
 
@@ -455,7 +445,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 RETURN(PTR_ERR(de));
         }
 
-
         name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
         dchild = mds_name2locked_dentry(obd, de, NULL, name, namelen,
@@ -483,6 +472,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
 
+#warning FIXME: the file type needs to match the original requested operation
         switch (inode->i_mode & S_IFMT) {
         case S_IFDIR:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_RMDIR);
@@ -491,16 +481,18 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 rc = vfs_rmdir(dir, dchild);
                 break;
         case S_IFREG:
-                if (inode->u.ext3_i.i_file_acl && offset) {
+                if (offset) {
                         struct lov_stripe_md *md;
-                        md = lustre_msg_buf(req->rq_repmsg, 2); 
-                        rc = mds_fs_get_md(mds, inode, md);
-                        if (rc < 0) { 
-                                CDEBUG(D_INFO, "No md for ino %ld err %d\n",
+
+                        md = lustre_msg_buf(req->rq_repmsg, 2);
+                        md->lmd_easize = mds->mds_max_mdsize;
+                        if ((rc = mds_fs_get_md(mds, inode, md)) < 0) {
+                                CDEBUG(D_INFO, "No md for ino %ld: rc = %d\n",
                                        inode->i_ino, rc);
-                                memset(md, 0, md->lmd_easize); 
+                                memset(md, 0, md->lmd_easize);
                         }
                 }
+                /* No break */
         default:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_UNLINK);
                 if (!handle)

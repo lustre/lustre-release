@@ -57,9 +57,9 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 if (!oa) { 
                         RETURN(-ENOMEM);
                 }
-                oa->o_valid = OBD_MD_FLMODE;
                 oa->o_mode = S_IFREG | 0600;
                 oa->o_easize = mdc->cl_max_mdsize;
+                oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLEASIZE;
                 rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
                 if (rc)
                         RETURN(rc);
@@ -86,13 +86,12 @@ static int ll_file_open(struct inode *inode, struct file *file)
         if (!fd->fd_mdshandle)
                 CERROR("mdc_open didn't assign fd_mdshandle\n");
 
-        if (oa == NULL) {
-                oa =  obdo_alloc();
-                if (!oa)
-                        GOTO(out_mdc, rc = -EINVAL);
-        }
+        if (oa == NULL && (oa = obdo_alloc()) == NULL)
+                GOTO(out_mdc, rc = -EINVAL);
+
         oa->o_id = lli->lli_smd->lmd_object_id;
         oa->o_mode = S_IFREG | inode->i_mode;
+        oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLID;
         rc = obd_open(ll_i2obdconn(inode), oa, lli->lli_smd);
         obdo_free(oa);
         oa = NULL;
@@ -111,8 +110,7 @@ out_mdc:
 out_req:
         ptlrpc_free_req(req);
 //out_fd:
-        if (oa)
-                obdo_free(oa);
+        obdo_free(oa);
         kmem_cache_free(ll_file_data_slab, fd);
         file->private_data = NULL;
 out:
@@ -141,8 +139,11 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 LBUG();
                 GOTO(out_fd, rc = -ENOENT);
         }
+        oa->o_id = lli->lli_smd->lmd_object_id;
+        oa->o_mode = S_IFREG;
+        oa->o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
         rc = obd_close(ll_i2obdconn(inode), oa, lli->lli_smd);
-        obdo_free(oa); 
+        obdo_free(oa);
         if (rc)
                 GOTO(out_fd, abs(rc));
 

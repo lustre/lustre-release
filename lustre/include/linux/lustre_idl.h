@@ -121,8 +121,8 @@ struct lustre_msg {
         __u64 last_committed;
         __u64 transno;
         __u32 status;
-        __u32   bufcount;
-        __u32   buflens[0];
+        __u32 bufcount;
+        __u32 buflens[0];
 };
 
 #define CONNMGR_REPLY	0
@@ -168,7 +168,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_CREATEONOPEN     (0x00000004)
 
 #define OBD_INLINESZ    60
-#define OBD_OBDMDSZ     60
+
 /* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
         obd_id                  o_id;
@@ -188,7 +188,7 @@ struct obdo {
         obd_count               o_generation;
         obd_flag                o_valid;        /* hot fields in this obdo */
         obd_flag                o_obdflags;
-        __u32                   o_easize; 
+        __u32                   o_easize;
         char                    o_inline[OBD_INLINESZ];
 };
 
@@ -227,7 +227,7 @@ struct lov_stripe_md {
 #define OBD_MD_FLGENER  (0x00004000)
 #define OBD_MD_FLINLINE (0x00008000)
 #define OBD_MD_FLRDEV   (0x00010000)
-#define OBD_MD_FLOBJID  (0x00020000)
+#define OBD_MD_FLEASIZE (0x00020000)
 #define OBD_MD_LINKNAME (0x00040000)
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME))
 

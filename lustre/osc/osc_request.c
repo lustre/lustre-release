@@ -41,8 +41,8 @@ static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
+#warning FIXME: pack only valid fields instead of memcpy, endianness
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->oa.o_valid = ~0;
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -77,8 +77,8 @@ static int osc_open(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
+#warning FIXME: pack only valid fields instead of memcpy, endianness
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->oa.o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -110,10 +110,8 @@ static int osc_close(struct lustre_handle *conn, struct obdo *oa,
         if (!request)
                 RETURN(-ENOMEM);
 
-        oa->o_id = md->lmd_object_id;
-        oa->o_mode = S_IFREG;
-        oa->o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
         body = lustre_msg_buf(request->rq_reqmsg, 0);
+#warning FIXME: pack only valid fields instead of memcpy, endianness
         memcpy(&body->oa, oa, sizeof(*oa));
 
         request->rq_replen = lustre_msg_size(1, &size);
@@ -228,9 +226,11 @@ static int osc_punch(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
+#warning FIXME: pack only valid fields instead of memcpy, endianness, valid
         memcpy(&body->oa, oa, sizeof(*oa));
 
         /* overload the blocks and size fields in the oa with start/end */ 
+#warning FIXME: endianness, size=start, blocks=end?
         body->oa.o_blocks = start;
         body->oa.o_size = end;
         body->oa.o_valid |= OBD_MD_FLBLOCKS | OBD_MD_FLSIZE;
@@ -268,8 +268,8 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
+#warning FIXME: pack only valid fields instead of memcpy, endianness
         memcpy(&body->oa, oa, sizeof(*oa));
-        body->oa.o_valid = ~0;
 
         request->rq_replen = lustre_msg_size(1, &size);
 

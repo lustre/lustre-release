@@ -520,7 +520,10 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         body->size = inode->i_size;
         body->mode = inode->i_mode;
         body->nlink = inode->i_nlink;
-        body->valid = ~0; /* FIXME: should be more selective */
+        body->valid = (OBD_MD_FLID | OBD_MD_FLATIME | OBD_MD_FLCTIME |
+                       OBD_MD_FLMTIME | OBD_MD_FLSIZE | OBD_MD_FLUID |
+                       OBD_MD_FLGID | OBD_MD_FLNLINK | OBD_MD_FLGENER |
+                       OBD_MD_FLMODE);
 
         if (S_ISREG(inode->i_mode)) {
                 rc = mds_fs_get_md(mds, inode,
@@ -529,7 +532,10 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                         CERROR("mds_fs_get_md failed: %d\n", rc);
                         GOTO(out, rc);
                 }
-        }
+                body->valid |= OBD_MD_FLEASIZE;
+        } else if (S_ISLNK(inode->i_mode))
+                body->valid |= OBD_MD_LINKNAME;
+
 out:
         l_dput(de);
 out_pop:
@@ -791,8 +797,7 @@ int mds_handle(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 
-        if (req->rq_reqmsg->opc != MDS_CONNECT &&
-            req->rq_export == NULL)
+        if (req->rq_reqmsg->opc != MDS_CONNECT && req->rq_export == NULL)
                 GOTO(out, rc = -ENOTCONN);
 
         if (strcmp(req->rq_obd->obd_type->typ_name, "mds") != 0)
@@ -857,7 +862,7 @@ int mds_handle(struct ptlrpc_request *req)
                 rc = mds_reint(0, req);
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET_REP, 0);
                 break;
-        }
+                }
 
         case MDS_OPEN:
                 CDEBUG(D_INODE, "open\n");

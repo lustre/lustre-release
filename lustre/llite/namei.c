@@ -110,9 +110,10 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                 lock_mode = LCK_CR;
         else {
                 LBUG();
-                RETURN(-1);
+                RETURN(-EINVAL);
         }
 
+#warning FIXME: add symlink tgt to intent and as a parameter here
         err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, it, lock_mode, dir,
                           dentry, lockh, 0, NULL, 0, dir, sizeof(*dir));
 
@@ -158,36 +159,45 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 RETURN(ERR_PTR(err));
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
 
-        if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) &&
-            it->it_disposition && !it->it_status)
-                GOTO(negative, NULL);
-
-        if ((it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK | IT_RMDIR |
-                          IT_SETATTR | IT_LOOKUP)) &&
-            it->it_disposition && it->it_status)
-                GOTO(negative, NULL);
-
-        request = (struct ptlrpc_request *)it->it_data;
-        if (!it->it_disposition) {
+        if (it->it_disposition) {
+                offset = 1;
+                if (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) {
+                        /* For create ops, we want the lookup to be negative */
+                        request = (struct ptlrpc_request *)it->it_data;
+                        if (!it->it_status)
+                                GOTO(negative, NULL);
+                        //else
+                        //        GOTO(err, it->it_status);
+                } else if (it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK |
+                                        IT_RMDIR | IT_SETATTR | IT_LOOKUP |
+                                        IT_OPEN)) {
+                        /* For remove/check, we want the lookup to succeed */
+                        request = (struct ptlrpc_request *)it->it_data;
+                        if (it->it_status)
+                                GOTO(negative, NULL);
+                        //else
+                        //        GOTO(err, it->it_status);
+                } else if (it->it_op == IT_RENAME2) {
+                        /* Set below to be a dentry from the IT_RENAME op */
+                        inode = ((struct dentry *)(it->it_data))->d_inode;
+                        GOTO(out_req, NULL);
+                }
+        } else {
                 struct ll_inode_info *lli = ll_i2info(dir);
+                request = (struct ptlrpc_request *)it->it_data;
                 memcpy(&lli->lli_intent_lock_handle, &lockh, sizeof(lockh));
+                offset = 0;
 
                 ino = ll_inode_by_name(dir, dentry, &type);
 #warning FIXME: handle negative inode case (see old ll_lookup)
 
                 err = mdc_getattr(&sbi->ll_mdc_conn, ino, type,
-                                  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
+                                  OBD_MD_FLNOTOBD|OBD_MD_FLEASIZE, 0, &request);
                 if (err) {
                         CERROR("failure %d inode %Ld\n", err, (long long)ino);
                         ptlrpc_free_req(request);
                         RETURN(ERR_PTR(-abs(err)));
                 }
-                offset = 0;
-        } else if (it->it_op == IT_RENAME2) {
-                inode = ((struct dentry *)(it->it_data))->d_inode;
-                GOTO(out_req, NULL);
-        } else {
-                offset = 1;
         }
 
         md.body = lustre_msg_buf(request->rq_repmsg, offset);
@@ -205,6 +215,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
 
  out_req:
         ptlrpc_free_req(request);
+        request = NULL;
         if (!inode || IS_ERR(inode)) {
                 ll_intent_release(dentry);
                 RETURN(ERR_PTR(-ENOMEM));
@@ -213,8 +224,10 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
  negative:
         dentry->d_op = &ll_d_ops;
         d_add(dentry, inode);
-        if (it->it_op == IT_LOOKUP)
+        if (it->it_op == IT_LOOKUP || (it->it_op == IT_OPEN && it->it_status)) {
                 ll_intent_release(dentry);
+                ptlrpc_free_req(request);
+        }
 
         return NULL;
 }
@@ -357,18 +370,19 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         struct inode *inode;
         struct lov_stripe_md *smd;
         struct ll_inode_info *ii = NULL;
+        ENTRY;
 
         if (dentry->d_it->it_disposition == 0) {
                 memset(&oa, 0, sizeof(oa));
                 oa.o_valid = OBD_MD_FLMODE;
                 oa.o_mode = S_IFREG | 0600;
                 rc = obd_create(ll_i2obdconn(dir), &oa, &smd);
+                CDEBUG(D_DENTRY, "name %s mode %o o_id %lld: rc = %d\n",
+                       dentry->d_name.name, mode, (long long)oa.o_id, rc);
                 if (rc)
                         RETURN(rc);
         }
 
-        CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n",
-               dentry->d_name.name, mode, (unsigned long long)oa.o_id);
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, mode, 0, dentry->d_it, smd);
 
@@ -395,6 +409,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         RETURN(rc);
 
 out_destroy:
+#warning FIXME: what about ii???
         oa.o_easize = ii->lli_smd->lmd_easize;
         err = obd_destroy(ll_i2obdconn(dir), &oa, ii->lli_smd);
         if (err)

@@ -201,12 +201,11 @@ void ll_truncate(struct inode *inode)
         CDEBUG(D_INFO, "calling punch for %ld (all bytes after %Ld)\n",
                (long)oa.o_id, (unsigned long long)oa.o_size);
 
-        oa.o_size = inode->i_size;
         oa.o_id = md->lmd_object_id;
         oa.o_valid = OBD_MD_FLID;
         /* truncate == punch to/from start from/to end:
            set end to -1 for that. */
-        err = obd_punch(ll_i2obdconn(inode), &oa, md, oa.o_size, 
+        err = obd_punch(ll_i2obdconn(inode), &oa, md, inode->i_size,
                         0xffffffffffffffff);
         if (err)
                 CERROR("obd_truncate fails (%d)\n", err);

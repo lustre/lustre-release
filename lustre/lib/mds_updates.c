@@ -46,18 +46,20 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
 
 void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
 {
-        b->valid = OBD_MD_FLID | OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLNLINK | OBD_MD_FLGENER | OBD_MD_FLSIZE | OBD_MD_FLOBJID;
-        b->size = HTON__u64(inode->i_size);
-        b->mode = HTON__u32(inode->i_mode);
-        b->uid = HTON__u32(inode->i_uid);
-        b->gid = HTON__u32(inode->i_gid);
+        b->valid = OBD_MD_FLID | OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                OBD_MD_FLCTIME | OBD_MD_FLMODE | OBD_MD_FLSIZE | OBD_MD_FLUID |
+                OBD_MD_FLGID | OBD_MD_FLNLINK | OBD_MD_FLGENER;
+        b->ino = HTON__u32(inode->i_ino);
+        b->atime = HTON__u32(inode->i_atime);
         b->mtime = HTON__u32(inode->i_mtime);
         b->ctime = HTON__u32(inode->i_ctime);
-        b->atime = HTON__u32(inode->i_atime);
+        b->mode = HTON__u32(inode->i_mode);
+        b->size = HTON__u64(inode->i_size);
+        b->uid = HTON__u32(inode->i_uid);
+        b->gid = HTON__u32(inode->i_gid);
         b->flags = HTON__u32(inode->i_flags);
         //b->major = HTON__u32(inode->i_major);
         //b->minor = HTON__u32(inode->i_minor);
-        b->ino = HTON__u32(inode->i_ino);
         b->nlink = HTON__u32(inode->i_nlink);
         b->generation = HTON__u32(inode->i_generation);
 }

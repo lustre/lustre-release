@@ -203,6 +203,7 @@ static int mdc_lock_callback(struct lustre_handle *lockh,
                 CERROR("data_len should be %d, but is %d\n", sizeof(*inode),
                        data_len);
                 LBUG();
+                RETURN(-EINVAL);
         }
 
         /* FIXME: do something better than throwing away everything */
@@ -335,7 +336,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 req->rq_replen = lustre_msg_size(1, repsize);
         } else {
                 LBUG();
-                RETURN(-1);
+                RETURN(-EINVAL);
         }
 #warning FIXME: the data here needs to be different if a lock was granted for a different inode
         rc = ldlm_cli_enqueue(conn, req, obddev->obd_namespace, NULL, res_id, lock_type,
@@ -344,6 +345,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         if (rc == -ENOENT || rc == ELDLM_LOCK_ABORTED) {
                 lock_mode = 0;
                 memset(lockh, 0, sizeof(*lockh));
+                /* rc = 0 */
         } else if (rc != 0) {
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
                 RETURN(rc);
