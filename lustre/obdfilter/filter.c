@@ -2057,7 +2057,7 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
         } else {
                 /* only precreate if group == 0 and o_id is specfied */
                 if (!(oa->o_valid & OBD_FL_DELORPHAN) &&
-                    (group != 0 || oa->o_id == 0))
+                    (/*group != 0 ||*/ oa->o_id == 0))
                         RETURN(1);
 
                 LASSERT(diff >= 0);
