@@ -65,7 +65,9 @@
 #define try_module_get                  __MOD_INC_USE_COUNT
 #define module_put                      __MOD_DEC_USE_COUNT
 #define LTIME_S(time)                   (time)
+#ifndef CONFIG_RH_2_4_20
 #define cpu_online(cpu)                 (cpu_online_map & (1<<cpu))
+#endif
 #define USERMODEHELPER(path, argv, envp) \
                                         call_usermodehelper(path, argv, envp)
 static inline int ll_path_lookup(const char *path, unsigned flags, 
