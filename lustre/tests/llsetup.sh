@@ -8,5 +8,5 @@ setup_opts "$@"
 setup_portals
 setup_lustre
 
-setup_server
+setup_server new_fs
 setup_client
