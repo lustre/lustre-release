@@ -1,7 +1,8 @@
 kgdb-ga.patch
 kgdb-use-ggdb.patch
+lustre_build.patch
 lustre_version.patch
-vfs_intent_2.5.69_rev1.patch
+vfs_intent_2.5.72_rev1.patch
 vfs_nointent_2.5.69_rev1.patch
 vfs_races_2.5.69_rev1.patch
 ext3-san-jdike-2.5.69.patch
