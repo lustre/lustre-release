@@ -219,6 +219,7 @@ int llu_glimpse_size(struct inode *inode)
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
+        struct ost_lvb *lvb;
         int rc, flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 
