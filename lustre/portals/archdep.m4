@@ -262,21 +262,6 @@ if test -d $LINUX/drivers/net/qsnet ; then
 	with_quadrics="-I$LINUX/drivers/net/qsnet/include"
   fi
   :
-elif test -d $LINUX/drivers/qsnet1 ; then
-  AC_MSG_RESULT(yes)
-  QSWNAL="qswnal"
-  with_quadrics="-I$LINUX/drivers/qsnet1/include -DPROPRIETARY_ELAN"
-  :
-elif test -d $LINUX/drivers/quadrics ; then
-  AC_MSG_RESULT(yes)
-  QSWNAL="qswnal"
-  with_quadrics="-I$LINUX/drivers/quadrics/include -DPROPRIETARY_ELAN"
-  :
-#elif test -d /usr/include/elan3 ; then
-#  AC_MSG_RESULT(yes)
-#  QSWNAL="qswnal"
-#  with_quadrics=""
-#  :
 else
   AC_MSG_RESULT(no)
   QSWNAL=""
