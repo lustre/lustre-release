@@ -58,7 +58,6 @@
 
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
-#include <portals/lib-types.h> /* for PTL_MD_MAX_IOV */
 #include <linux/lprocfs_status.h>
 
 #define LIOD_STOP 0
@@ -109,7 +108,7 @@ static int osc_rpcd_check(struct osc_rpcd_ctl *orc)
                 /* XXX our set never completes, so we prune the completed
                  * reqs after each iteration. boy could this be smarter. */
                 list_for_each_safe(pos, tmp, &orc->orc_set->set_requests) {
-                        req = list_entry(pos, struct ptlrpc_request, 
+                        req = list_entry(pos, struct ptlrpc_request,
                                          rq_set_chain);
                         if (req->rq_phase != RQ_PHASE_COMPLETE)
                                 continue;
@@ -122,7 +121,7 @@ static int osc_rpcd_check(struct osc_rpcd_ctl *orc)
 
         RETURN(rc);
 }
-             
+
 /* ptlrpc's code paths like to execute in process context, so we have this
  * thread which spins on a set which contains the io rpcs.  llite specifies
  * osc_rpcd's set when it pushes pages down into the oscs */
