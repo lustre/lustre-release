@@ -132,7 +132,8 @@ struct proc_dir_entry *lprocfs_register(const char *name,
 
         newchild = lprocfs_srch(parent, name);
         if (newchild) {
-                CERROR(" Lproc: Attempting to register %s more than once \n", name); 
+                CERROR(" Lproc: Attempting to register %s more than once \n", 
+                                name); 
                 return NULL;
         }
         
