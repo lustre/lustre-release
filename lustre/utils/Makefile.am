@@ -8,6 +8,7 @@ CPPFLAGS = $(HAVE_LIBREADLINE)
 lctl_LDADD := $(LIBREADLINE) -lptlctl
 lfs_LDADD := $(LIBREADLINE) parser.o liblustreapi.a
 lload_LDADD := -lptlctl
+rootsbin_SCRIPTS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest lfs llmount
 sbin_SCRIPTS = lconf lmc llanalyze llstat.pl llobdstat.pl lactive load_ldap.sh
 sbin_SCRIPTS += lwizard
@@ -31,3 +32,6 @@ include $(top_srcdir)/Rules
 newwiretest: wirehdr.c wirecheck
 	cp wirehdr.c wiretest.c
 	./wirecheck >> wiretest.c
+
+mount.lustre$(EXEEXT): llmount
+	cp llmount mount.lustre
