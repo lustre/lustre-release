@@ -20,8 +20,10 @@ TMP=${TMP:-/tmp}
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
-LFIND=${LFIND:-lfind}
-LSTRIPE=${LSTRIPE:-lstripe}
+LFS=${LFS:-lfs}
+LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
+LFIND=${LFIND:-"$LFS find"}
+LVERIFY=${LVERIFY:-ll_dirstripe_verify}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
@@ -782,6 +784,13 @@ test_27k() { # bug 2844
 	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "$BLKSIZE > $LL_MAX_BLKSIZE"
 }
 run_test 27k "limit i_blksize for broken user apps ============="
+
+test_27l() {
+	mcreate $DIR/f27l || error "creating file"
+	$RUNAS $LSTRIPE $DIR/f27l 65536 -1 1 && \
+		error "lstripe should have failed" || true
+}
+run_test 27l "check setstripe permissions (should return error)"
 
 test_28() {
 	mkdir $DIR/d28
@@ -1823,49 +1832,63 @@ test_64a () {
 	df $DIR
 	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/cur*
 }
-run_test 64a "verify filter grant calculations (in kernel) ======"
+run_test 64a "verify filter grant calculations (in kernel) ====="
 
 test_64b () {
 	sh oos.sh $MOUNT
 }
-run_test 64b "check out-of-space detection on client ============"
+run_test 64b "check out-of-space detection on client ==========="
 
 # bug 1414 - set/get directories' stripe info
-test_65() {
-	LFS=${LFS:-lfs}
-	LVERIFY=${LVERIFY:-ll_dirstripe_verify}
-
-        echo "dir has no stripe info"
-        mkdir $DIR/d65
+test_65a() {
+        mkdir -p $DIR/d65
         touch $DIR/d65/f1
-        $LVERIFY $DIR/d65 $DIR/d65/f1 || error
-
-	echo "setstripe $(($STRIPESIZE * 2)) 0 1"
-       	$LFS setstripe $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error
-        touch $DIR/d65/f2
-        $LVERIFY $DIR/d65 $DIR/d65/f2 || error
-
-        if [ $ostcount -gt 1 ]; then
-		echo "setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
-    		$LFS setstripe $DIR/d65 $(($STRIPESIZE * 4)) 1 \
-			$(($OSTCOUNT - 1)) || error
-                touch $DIR/d65/f3
-                $LVERIFY $DIR/d65 $DIR/d65/f3 || error
-        fi
-
-        [ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
-
-        echo "setstripe  $STRIPESIZE -1 $sc"
-        $LFS setstripe $DIR/d65 $STRIPESIZE -1 $sc || error
-        touch $DIR/d65/f4 $DIR/d65/f5
-        $LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error
-
-	echo "setstripe 0 -1 0 (default)"
-        $LFS setstripe $DIR/d65 0 -1 0 || error
-        touch $DIR/d65/f6
-        $LVERIFY $DIR/d65 $DIR/d65/f6 || error
+        $LVERIFY $DIR/d65 $DIR/d65/f1 || error "lverify failed"
 }
-run_test 65 "Verify that the files are created using parent dir's stripe info"
+run_test 65a "directory with no stripe info ===================="
+
+test_65b() {
+        mkdir -p $DIR/d65
+       	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        touch $DIR/d65/f2
+        $LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
+}
+run_test 65b "directory setstripe $(($STRIPESIZE * 2)) 0 1 ==============="
+
+test_65c() {
+        if [ $OSTCOUNT -gt 1 ]; then
+		mkdir -p $DIR/d65
+    		$LSTRIPE DIR/d65 $(($STRIPESIZE * 4)) 1 \
+			$(($OSTCOUNT - 1)) || error "setstripe"
+                touch $DIR/d65/f3
+                $LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
+        fi
+}
+run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
+
+[ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
+
+test_65d() {
+        mkdir -p $DIR/d65
+        $LSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
+        touch $DIR/d65/f4 $DIR/d65/f5
+        $LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
+}
+run_test 65d "directory setstripe $STRIPESIZE -1 $sc ======================"
+
+test_65e() {
+        mkdir -p $DIR/d65
+        $LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
+        touch $DIR/d65/f6
+        $LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
+}
+run_test 65e "directory setstripe 0 -1 0 (default) ============="
+
+test_65f() {
+        mkdir -p $DIR/d65f
+        $RUNAS $LSTRIPE $DIR/d65f 0 -1 0 && error "setstripe succeeded" || true
+}
+run_test 65f "dir setstripe permission (should return error) ==="
 
 # bug 2543 - update blocks count on client
 test_66() {

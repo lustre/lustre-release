@@ -75,10 +75,6 @@ static void save_fops(struct file *filp, struct inode *inode,
                         filp->f_op = &ll_special_chr_file_fops;
                 else if (S_ISFIFO(inode->i_mode))
                         filp->f_op = &ll_special_fifo_file_fops;
-
-                CWARN("saved %p, replaced with %p\n", *pfop, filp->f_op);
-                if ((*pfop)->owner)
-                        CWARN("%p has owner %p\n", *pfop,(*pfop)->owner);
         }
 }
 

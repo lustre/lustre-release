@@ -385,7 +385,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         switch(cmd) {
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
-                RETURN( ll_iocontrol(inode, file, cmd, arg) );
+                RETURN(ll_iocontrol(inode, file, cmd, arg));
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
                 struct ll_fid fid;
@@ -426,17 +426,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case LL_IOC_LOV_SETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct mdc_op_data op_data;
-                struct iattr attr;
+                struct iattr attr = { 0 };
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
                 int rc = 0;
 
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
-                memset(&attr, 0x0, sizeof(attr));
-
                 LASSERT(sizeof(lum) == sizeof(*lump));
-                LASSERT(sizeof(lum.lmm_objects[0])
-                        == sizeof(lump->lmm_objects[0]));
+                LASSERT(sizeof(lum.lmm_objects[0]) ==
+                        sizeof(lump->lmm_objects[0]));
                 rc = copy_from_user(&lum, lump, sizeof(lum));
                 if (rc)
                         return(-EFAULT);
@@ -455,7 +453,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ptlrpc_req_finished(request);
 
                 return rc;
-        }        
+        }
         case LL_IOC_LOV_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct lov_user_md *lump = (struct lov_user_md *)arg;

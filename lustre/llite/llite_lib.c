@@ -1171,11 +1171,6 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                         inode->i_fop = &ll_special_fifo_inode_fops;
                 else if (S_ISSOCK(inode->i_mode))
                         inode->i_fop = &ll_special_sock_inode_fops;
-                CWARN("saved %p, replaced with %p\n", lli->ll_save_ifop,
-                      inode->i_fop);
-                if (lli->ll_save_ifop->owner)
-                        CWARN("%p has owner %p\n", lli->ll_save_ifop,
-                              lli->ll_save_ifop->owner);
 #endif
                 EXIT;
         }

@@ -52,7 +52,7 @@
 
 #define LTIME_S(time)                   (time.tv_sec)
 #define ll_path_lookup                  path_lookup
-#define ll_permission                   permission
+#define ll_permission(a,b,c)            permission(a,b,c)
 
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
