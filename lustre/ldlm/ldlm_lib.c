@@ -743,6 +743,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         } else {
                 CERROR("%s: %d recoverable clients remain\n",
                        obd->obd_name, obd->obd_recoverable_clients);
+                wake_up(&obd->obd_next_transno_waitq);
         }
 
         return 1;
