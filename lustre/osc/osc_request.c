@@ -19,6 +19,7 @@
 #define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_OSC
 
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
