@@ -102,8 +102,8 @@ extern void _sysio_fgone(struct file *fil);
 extern void _sysio_fcompletio(struct ioctx *ioctx, struct file *fil);
 extern int _sysio_fd_close(int fd);
 extern struct file *_sysio_fd_find(int fd);
-extern int _sysio_fd_set(struct file *fil, int fd);
-extern int _sysio_fd_dup2(int oldfd, int newfd);
+extern int _sysio_fd_set(struct file *fil, int fd, int force);
+extern int _sysio_fd_dup(int oldfd, int newfd, int force);
 extern int _sysio_fd_close_all(void);
 #if ZERO_SUM_MEMORY
 extern void _sysio_fd_shutdown(void);

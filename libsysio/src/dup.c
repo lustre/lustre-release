@@ -69,7 +69,7 @@ SYSIO_INTERFACE_NAME(dup2)(int oldfd, int newfd)
 		SYSIO_INTERFACE_RETURN(newfd, 0);
 	}
 
-	fd = _sysio_fd_dup2(oldfd, newfd);
+	fd = _sysio_fd_dup(oldfd, newfd, 1);
 	SYSIO_INTERFACE_RETURN(fd < 0 ? -1 : fd, fd < 0 ? fd : 0);
 }
 
@@ -86,7 +86,7 @@ SYSIO_INTERFACE_NAME(dup)(int oldfd)
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
-	fd = _sysio_fd_dup2(oldfd, -1);
+	fd = _sysio_fd_dup(oldfd, -1, 0);
 	SYSIO_INTERFACE_RETURN(fd < 0 ? -1 : fd, fd < 0 ? fd : 0);
 }
 

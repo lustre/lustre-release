@@ -48,10 +48,10 @@
 #include <errno.h>
 #include <sys/syscall.h>
 #include <unistd.h>
-#include <sys/uio.h>
 #include <sys/types.h>
 #include <sys/queue.h>
 
+#include "xtio.h"
 #include "sysio.h"
 #include "inode.h"
 #include "dev.h"

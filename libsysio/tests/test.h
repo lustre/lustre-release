@@ -44,3 +44,5 @@
 extern int (*drvinits[])(void);
 
 extern int drv_init_all(void);
+extern int _test_sysio_startup(void);
+extern void _test_sysio_shutdown(void);

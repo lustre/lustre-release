@@ -44,21 +44,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef REDSTORM
-#include <getopt.h>
-#endif
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/queue.h>
 #if 0
 #include <dirent.h>
 #endif
+#include <sys/uio.h>
+#include <sys/queue.h>
 
-#include "sysio.h"
-#include "mount.h"
-
+#include "xtio.h"
 #include "test.h"
 
 /*
@@ -123,7 +119,7 @@ main(int argc, char *const argv[])
 	/*
 	 * Clean up.
 	 */
-	_sysio_shutdown();
+	_test_sysio_shutdown();
 
 	return err ? -1 : 0;
 }

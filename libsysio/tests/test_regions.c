@@ -58,19 +58,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#ifndef REDSTORM
-#include <getopt.h>
-#endif
 #include <limits.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/queue.h>
+#include <sys/uio.h>
 
-#include "sysio.h"
-#include "mount.h"
-
+#include "xtio.h"
 #include "test.h"
 
 /*
@@ -278,7 +273,7 @@ error:
 		perror(path);
 	free(buf);
 out:
-	_sysio_shutdown();
+	_test_sysio_shutdown();
 
 	return err;
 }

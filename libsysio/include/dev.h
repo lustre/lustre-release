@@ -100,7 +100,7 @@ extern const struct inode_ops _sysio_nodev_ops;
 #define _sysio_nodev_inop_open \
 	(int (*)(struct pnode *, \
 		 int, \
-		 mode_t))_sysio_do_enoent
+		 mode_t))_sysio_do_enodev
 #define _sysio_nodev_inop_close \
 	(int (*)(struct inode *))_sysio_do_ebadf
 #define _sysio_nodev_inop_link \
@@ -122,7 +122,8 @@ extern const struct inode_ops _sysio_nodev_ops;
 #define _sysio_nodev_inop_fcntl \
 	(int (*)(struct inode *, \
 		 int, \
-		 va_list))_sysio_do_ebadf
+		 va_list, \
+		 int *))_sysio_do_ebadf
 #define _sysio_nodev_inop_sync \
 	(int (*)(struct inode *))_sysio_do_ebadf
 #define _sysio_nodev_inop_datasync \

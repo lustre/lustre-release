@@ -51,6 +51,9 @@
 #include <string.h>
 #endif
 #include <unistd.h>
+#if !(defined(REDSTORM) || defined(MAX_IOVEC))
+#include <limits.h>
+#endif
 #include <errno.h>
 #include <assert.h>
 #include <syscall.h>
@@ -65,16 +68,14 @@
 #include <sys/statfs.h>
 #endif
 #include <utime.h>
+#include <sys/uio.h>
 #include <sys/queue.h>
-#if !(defined(REDSTORM) || defined(MAX_IOVEC))
-#include <limits.h>
-#endif
 
+#include "xtio.h"
 #include "sysio.h"
 #include "fs.h"
 #include "mount.h"
 #include "inode.h"
-#include "xtio.h"
 
 #include "fs_native.h"
 
@@ -209,6 +210,7 @@ struct native_inode {
 	int	ni_oflags;				/* flags, from open */
 	unsigned ni_nopens;				/* soft ref count */
 	_SYSIO_OFF_T ni_fpos;				/* current pos */
+	struct intnl_stat ni_stat;			/* cached attrs */
 };
 
 /*
@@ -247,7 +249,7 @@ static int native_inop_read(struct inode *ino, struct ioctx *ioctx);
 static int native_inop_write(struct inode *ino, struct ioctx *ioctx);
 static _SYSIO_OFF_T native_inop_pos(struct inode *ino, _SYSIO_OFF_T off);
 static int native_inop_iodone(struct ioctx *ioctx);
-static int native_inop_fcntl(struct inode *ino, int cmd, va_list ap);
+static int native_inop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn);
 static int native_inop_sync(struct inode *ino);
 static int native_inop_datasync(struct inode *ino);
 static int native_inop_ioctl(struct inode *ino,
@@ -327,16 +329,25 @@ static struct mount *native_internal_mount = NULL;
  * stat -- by path.
  */
 static int
-native_stat(const char *path, struct intnl_stat *buf)
+native_stat(const char *path, struct native_inode *nino, struct intnl_stat *buf)
 {
 	int	err;
 	struct __native_stat stbuf;
 
 	err = syscall(__SYS_STAT, path, &stbuf);
-	if (err)
+	if (err) {
 		err = -errno;
-	COPY_STAT(&stbuf, buf);
+		goto out;
+	}
+	if (!nino) {
+		COPY_STAT(&stbuf, buf);
+		goto out;
+	}
+	COPY_STAT(&stbuf, &nino->ni_stat);
+	if (&nino->ni_stat != buf)
+		(void )memcpy(buf, &nino->ni_stat, sizeof(struct intnl_stat));
 
+out:
 	return err;
 }
 
@@ -344,16 +355,25 @@ native_stat(const char *path, struct intnl_stat *buf)
  * stat -- by fildes
  */
 static int
-native_fstat(int fd, struct intnl_stat *buf)
+native_fstat(int fd, struct native_inode *nino, struct intnl_stat *buf)
 {
 	int	err;
 	struct __native_stat stbuf;
 
 	err = syscall(__SYS_FSTAT, fd, &stbuf);
-	if (err)
+	if (err) {
 		err = -errno;
-	COPY_STAT(&stbuf, buf);
+		goto out;
+	}
+	if (!nino) {
+		COPY_STAT(&stbuf, buf);
+		goto out;
+	}
+	COPY_STAT(&stbuf, &nino->ni_stat);
+	if (&nino->ni_stat != buf)
+		(void )memcpy(buf, &nino->ni_stat, sizeof(struct intnl_stat));
 
+out:
 	return err;
 }
 
@@ -381,6 +401,7 @@ native_i_new(struct filesys *fs, struct intnl_stat *buf)
 	nino->ni_oflags = 0;
 	nino->ni_nopens = 0;
 	nino->ni_fpos = 0;
+	(void )memcpy(&nino->ni_stat, buf, sizeof(struct intnl_stat));
 	ino =
 	    _sysio_i_new(fs,
 			 &nino->ni_fileid,
@@ -389,7 +410,7 @@ native_i_new(struct filesys *fs, struct intnl_stat *buf)
 #else
 			 buf->st_mode,			/* all of the bits! */
 #endif
-			 0,
+			 buf->st_rdev,
 			 0,
 			 &native_i_ops,
 			 nino);
@@ -453,7 +474,7 @@ create_internal_namespace()
 	/*
 	 * Get root i-node.
 	 */
-	err = native_stat("/", &stbuf);
+	err = native_stat("/", NULL, &stbuf);
 	if (err)
 		goto error;
 	rootino = native_i_new(fs, &stbuf);
@@ -596,7 +617,7 @@ native_iget(struct filesys *fs,
 	/*
 	 * Get file status.
 	 */
-	err = native_stat(path, &stbuf);
+	err = native_stat(path, *inop ? I2NI(*inop) : NULL, &stbuf);
 	if (err) {
 		*inop = NULL;
 		return err;
@@ -626,9 +647,10 @@ native_iget(struct filesys *fs,
 	fileid.fid_data = &ident;
 	fileid.fid_len = sizeof(ident);
 	ino = _sysio_i_find(fs, &fileid);
-	if (ino && forced) {
+	if (ino &&
+	    (forced || (ino->i_mode & S_IFMT) != (stbuf.st_mode & S_IFMT))) {
 		/*
-		 * Insertion was forced but it's already present!
+		 * Insertion was forced or dup inum but it's already present!
 		 */
 		if (native_i_invalid(ino, stbuf)) {
 			/* 
@@ -709,23 +731,36 @@ native_inop_lookup(struct pnode *pno,
 }
 
 static int
-native_inop_getattr(struct pnode *pno, struct inode *ino, struct intnl_stat *stbuf)
+native_inop_getattr(struct pnode *pno,
+		    struct inode *ino,
+		    struct intnl_stat *stbuf)
 {
 	char	*path;
+	struct native_inode *nino;
 	int	err;
 
-	path = NULL;
-	if (!ino || I2NI(ino)->ni_fd < 0) {
+	nino = ino ? I2NI(ino) : NULL;
+	err = 0;					/* compiler cookie */
+	if (!ino) {
 		path = _sysio_pb_path(pno->p_base, '/');
 		if (!path)
 			return -ENOMEM;
-	}
-	err =
-	    path
-	      ? native_stat(path, stbuf)
-	      : native_fstat(I2NI(ino)->ni_fd, stbuf);
-	if (path)
+		err = native_stat(path, nino, stbuf);
 		free(path);
+	} else if (nino->ni_fd >= 0)
+		err = native_fstat(nino->ni_fd, nino, stbuf);
+	else {
+		/*
+		 * Dev inodes don't open in this driver. We won't have
+		 * a file descriptor with which to do the deed then. Satisfy
+		 * the request from the cached copy of the attributes.
+		 */
+		(void )memcpy(stbuf,
+			      &nino->ni_stat,
+			      sizeof(struct intnl_stat));
+		err = 0;
+	}
+	
 	return err;
 }
 
@@ -736,12 +771,19 @@ native_inop_setattr(struct pnode *pno,
 		    struct intnl_stat *stbuf)
 {
 	char	*path;
+	struct native_inode *nino;
 	int	fd;
-	struct intnl_stat st;
+	struct intnl_stat *stbp, _stbuf;
 	int	err;
 
 	path = NULL;
-	fd = ino ? I2NI(ino)->ni_fd : -1;
+	nino = ino ? I2NI(ino) : NULL;
+	fd = -1;
+	stbp = &_stbuf;
+	if (nino) {
+		fd = nino->ni_fd;
+		stbp = &nino->ni_stat;
+	}
 	if (fd < 0 || mask & (SETATTR_MTIME|SETATTR_ATIME)) {
 		if (!pno)
 			return -EEXIST;
@@ -755,8 +797,8 @@ native_inop_setattr(struct pnode *pno,
 	 */
 	err =
 	    fd < 0
-	      ? native_stat(path, &st)
-	      : native_fstat(fd, &st);
+	      ? native_stat(path, nino, stbp)
+	      : native_fstat(fd, nino, stbp);
 	if (err)
 		goto out;
 
@@ -782,8 +824,8 @@ native_inop_setattr(struct pnode *pno,
 		/*
 		 * Alter access and/or modify time attributes.
 		 */
-		ut.actime = st.st_atime;
-		ut.modtime = st.st_mtime;
+		ut.actime = stbuf->st_atime;
+		ut.modtime = stbuf->st_mtime;
 		if (mask & SETATTR_MTIME)
 			ut.modtime = stbuf->st_mtime;
 		if (mask & SETATTR_ATIME)
@@ -841,33 +883,40 @@ native_inop_setattr(struct pnode *pno,
 			   ? syscall(SYS_chown,
 				     path,
 				     mask & SETATTR_UID
-				       ? st.st_uid
+				       ? stbp->st_uid
 				       : (uid_t )-1,
 				     mask & SETATTR_GID
-				       ? st.st_gid
+				       ? stbp->st_gid
 				       : (gid_t )-1)
 			   : syscall(SYS_fchown,
 				     fd,
 				     mask & SETATTR_UID
-				       ? st.st_uid
+				       ? stbp->st_uid
 				       : (uid_t )-1,
 				     mask & SETATTR_GID
-				       ? st.st_gid
+				       ? stbp->st_gid
 				       : (gid_t )-1));
 	}
 	if (mask & (SETATTR_MTIME|SETATTR_ATIME)) {
 		struct utimbuf ut;
 
-		ut.actime = st.st_atime;
-		ut.modtime = st.st_mtime;
+		ut.actime = stbp->st_atime;
+		ut.modtime = stbp->st_mtime;
 		(void )syscall(__SYS_UTIME, path, &ut);
 	}
 	if (mask & SETATTR_MODE) {
 		fd < 0
-		  ? syscall(SYS_chmod, path, st.st_mode & 07777)
-		  : syscall(SYS_fchmod, fd, st.st_mode & 07777);
+		  ? syscall(SYS_chmod, path, stbp->st_mode & 07777)
+		  : syscall(SYS_fchmod, stbp->st_mode & 07777);
 	}
 out:
+	/*
+	 * We must refresh the cached attributes on success.
+	 */
+	if (!err && (fd < 0
+		       ? native_stat(path, nino, stbp)
+		       : native_fstat(fd, nino, stbp)) != 0)
+		abort();
 	if (path)
 		free(path);
 	return err;
@@ -1565,7 +1614,8 @@ native_inop_iodone(struct ioctx *ioctxp __IS_UNUSED)
 static int
 native_inop_fcntl(struct inode *ino,
 		  int cmd,
-		  va_list ap)
+		  va_list ap,
+		  int *rtn)
 {
 	struct native_inode *nino = I2NI(ino);
 	long	arg;
@@ -1574,25 +1624,33 @@ native_inop_fcntl(struct inode *ino,
 	if (nino->ni_fd < 0)
 		abort();
 
+	err = 0;
 	switch (cmd) {
 	case F_GETFD:
 	case F_GETFL:
+#ifdef F_GETOWN
 	case F_GETOWN:
-		err = syscall(SYS_fcntl, nino->ni_fd, cmd);
-		if (err < 0)
+#endif
+		*rtn = syscall(SYS_fcntl, nino->ni_fd, cmd);
+		if (*rtn == -1)
 			err = -errno;
+		break;
 	case F_DUPFD:
 	case F_SETFD:
 	case F_SETFL:
 	case F_GETLK:
 	case F_SETLK:
 	case F_SETLKW:
+#ifdef F_SETOWN
 	case F_SETOWN:
+#endif
 		arg = va_arg(ap, long);
-		err = syscall(SYS_fcntl, nino->ni_fd, cmd, arg);
-		if (err)
+		*rtn = syscall(SYS_fcntl, nino->ni_fd, cmd, arg);
+		if (*rtn == -1)
 			err = -errno;
+		break;
 	default:
+		*rtn = -1;
 		err = -EINVAL;
 	}
 	return err;
@@ -1688,6 +1746,25 @@ native_inop_datasync(struct inode *ino)
 	return err;
 }
 
+#ifdef HAVE_LUSTRE_HACK
+static int
+native_inop_ioctl(struct inode *ino,
+		  unsigned long int request,
+		  va_list ap)
+{
+	long arg1, arg2, arg3, arg4;
+
+	assert(I2NI(ino)->ni_fd >= 0);
+
+	arg1 = va_arg(ap, long);
+	arg2 = va_arg(ap, long);
+	arg3 = va_arg(ap, long);
+	arg4 = va_arg(ap, long);
+
+	return syscall(SYS_ioctl, I2NI(ino)->ni_fd, request,
+		       arg1, arg2, arg3, arg4);
+}
+#else
 static int
 native_inop_ioctl(struct inode *ino __IS_UNUSED,
 		  unsigned long int request __IS_UNUSED,
@@ -1700,6 +1777,7 @@ native_inop_ioctl(struct inode *ino __IS_UNUSED,
 	errno = ENOTTY;
 	return -1;
 }
+#endif
 
 static void
 native_inop_gone(struct inode *ino)
@@ -1708,6 +1786,7 @@ native_inop_gone(struct inode *ino)
 
 	if (nino->ni_fd >= 0)
 		(void )syscall(SYS_close, nino->ni_fd);
+
 	free(ino->i_private);
 }
 

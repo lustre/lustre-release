@@ -53,13 +53,11 @@
 #endif
 #include <sys/queue.h>
 
+#include "xtio.h"
 #include "sysio.h"
 #include "fs.h"
 #include "mount.h"
 #include "inode.h"
-#ifdef AUTOMOUNT_FILE_NAME
-#include "xtio.h"
-#endif
 
 /*
  * File system and volume mount support.
@@ -618,7 +616,6 @@ _sysio_automount(struct pnode *mntpno)
 	xtvec.xtv_len = stbuf.st_size;
 	IOCTX_INIT(&iocontext,
 		   1,
-		   (ioid_t )&iocontext,
 		   0,
 		   ino,
 		   &iovec, 1,

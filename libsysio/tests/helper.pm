@@ -26,7 +26,10 @@ sub print_and_exit
   print $cmdfh $cmdstr;
 
   my $res = <$outfh>;
-  chop($res);
+	if (defined $res) {
+		chop($res);
+	} 
+
 
   print $cmdfh "exit\n";
   close $outfh;
@@ -47,7 +50,12 @@ sub send_cmd
   print $cmdfh $cmdstr;
 
   my $res = <$outfh>;
-  chop($res);
+	if (defined $res) {
+		chop($res);
+	} else {
+		print_and_exit($cmdfh, $outfh, 1, "ERROR! Cmd $cmdstr returned null value!\n");
+	}
+
   if ($res ne "0000 ") {
     print_and_exit($cmdfh, $outfh, 1, "ERROR! Command $cmd failed with code $res\n");
   }
@@ -65,7 +73,11 @@ sub verify_cmd
   send_cmd($cmdfh, $outfh, "PRINT", $cmdstr);  
 
   my $res = <$outfh>;
-  chop($res);
+	if (defined $res) {
+		chop($res);
+	} else {
+		print_and_exit($cmdfh, $outfh, 1, "ERROR! Cmd $cmdstr returned null value!\n");
+	}
 
   if ($res eq "0xffffffff") {
      
@@ -75,7 +87,12 @@ sub verify_cmd
     send_cmd($cmdfh, $outfh, "PRINT", $cmdstr);
     
     my $err = <$outfh>;
-    chop($err);
+		if (defined $err) {
+			chop($err);
+		} else {
+			print_and_exit($cmdfh, $outfh, 1, "ERROR! Cmd $cmdstr returned null value!\n");
+		}
+
     print_and_exit($cmdfh, $outfh, 1, "ERROR!  $cmd returned $err\n");
   }
   return $res;

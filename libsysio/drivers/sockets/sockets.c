@@ -57,11 +57,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/fcntl.h>
-#include <sys/queue.h>
 #include <sys/syscall.h>
 #include <sys/socket.h>
 #include <linux/net.h>
+#include <sys/uio.h>
+#include <sys/queue.h>
 
+#include "xtio.h"
 #include "sysio.h"
 #include "fs.h"
 #include "inode.h"
@@ -98,7 +100,7 @@ static _SYSIO_OFF_T sockets_inop_pos(struct inode *ino,
 static int sockets_inop_iodone(struct ioctx *ioctx);
 static int sockets_inop_sync(struct inode *ino);
 static int sockets_inop_datasync(struct inode *ino);
-static int sockets_inop_fcntl(struct inode *ino, int cmd, va_list ap);
+static int sockets_inop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn);
 static int sockets_inop_ioctl(struct inode *ino,
 			     unsigned long int request,
 			     va_list ap);
@@ -234,7 +236,7 @@ sockets_inop_write(struct inode *ino,
 }
 
 static _SYSIO_OFF_T
-sockets_inop_pos(struct inode *ino, _SYSIO_OFF_T off)
+sockets_inop_pos(struct inode *ino __IS_UNUSED, _SYSIO_OFF_T off __IS_UNUSED)
 {
 	return -EINVAL;
 }
@@ -252,7 +254,8 @@ sockets_inop_iodone(struct ioctx *ioctxp __IS_UNUSED)
 static int
 sockets_inop_fcntl(struct inode *ino __IS_UNUSED,
 		  int cmd __IS_UNUSED,
-		  va_list ap __IS_UNUSED)
+		  va_list ap __IS_UNUSED,
+		  int *rtn)
 {
 	long arg;
 
@@ -262,7 +265,8 @@ sockets_inop_fcntl(struct inode *ino __IS_UNUSED,
 	case F_GETFD:
 	case F_GETFL:
 	case F_GETOWN:
-		return syscall(SYS_fcntl, I2SKI(ino)->ski_fd, cmd);
+		*rtn = syscall(SYS_fcntl, I2SKI(ino)->ski_fd, cmd);
+		break;
 	case F_DUPFD:
 	case F_SETFD:
 	case F_SETFL:
@@ -271,12 +275,13 @@ sockets_inop_fcntl(struct inode *ino __IS_UNUSED,
 	case F_SETLKW:
 	case F_SETOWN:
 		arg = va_arg(ap, long);
-		return syscall(SYS_fcntl, I2SKI(ino)->ski_fd, cmd, arg);
+		*rtn = syscall(SYS_fcntl, I2SKI(ino)->ski_fd, cmd, arg);
+		break;
 	default:
-		printf("uncatched cmd %d\n", cmd);
-		abort();
+		*rtn = -1;
+		errno = EINVAL;
 	}
-	return -1;
+	return *rtn == -1 ? -errno : 0;
 }
 
 static int
@@ -297,6 +302,29 @@ sockets_inop_datasync(struct inode *ino)
 	return syscall(SYS_fdatasync, I2SKI(ino)->ski_fd);
 }
 
+#ifdef HAVE_LUSTRE_HACK
+/*
+ * we blindly extract 4 params and pass to host kernel, the stack
+ * should be ok. hope no ioctl will consume more then 4 params...
+ */
+static int
+sockets_inop_ioctl(struct inode *ino,
+		  unsigned long int request,
+		  va_list ap)
+{
+	long arg1, arg2, arg3, arg4;
+
+	assert(I2SKI(ino)->ski_fd >= 0);
+
+	arg1 = va_arg(ap, long);
+	arg2 = va_arg(ap, long);
+	arg3 = va_arg(ap, long);
+	arg4 = va_arg(ap, long);
+
+	return syscall(SYS_ioctl, I2SKI(ino)->ski_fd, request,
+		       arg1, arg2, arg3, arg4);
+}
+#else
 static int
 sockets_inop_ioctl(struct inode *ino __IS_UNUSED,
 		  unsigned long int request __IS_UNUSED,
@@ -307,6 +335,7 @@ sockets_inop_ioctl(struct inode *ino __IS_UNUSED,
 	 */
 	return -ENOTTY;
 }
+#endif
 
 static void
 sockets_inop_gone(struct inode *ino)
@@ -389,7 +418,11 @@ socket(int domain, int type, int protocol)
 		goto error;
 	}
 
-	err = _sysio_fd_set(fil, ski->ski_fd);
+#ifdef HAVE_LUSTRE_HACK
+	err = _sysio_fd_set(fil, ski->ski_fd, 1);
+#else
+	err = _sysio_fd_set(fil, -1, 0);
+#endif
 	if (err < 0)
 		goto error;
 
@@ -453,7 +486,11 @@ accept(int s, struct sockaddr *addr, socklen_t *addrlen)
 		goto error;
 	}
 
-	err = _sysio_fd_set(nfil, ski->ski_fd);
+#ifdef HAVE_LUSTRE_HACK
+	err = _sysio_fd_set(nfil, ski->ski_fd, 1);
+#else
+	err = _sysio_fd_set(nfil, -1, 0);
+#endif
 	if (err < 0)
 		goto error;
 

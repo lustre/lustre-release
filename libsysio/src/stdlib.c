@@ -215,6 +215,7 @@ void rewinddir(DIR *dir)
 	dir->effective = 0;
 }
 
+#if 0
 int scandir(const char *dir, struct dirent ***namelist,
             int(*select)(const struct dirent *),
             int(*compar)(const void *, const void *))
@@ -230,6 +231,7 @@ int scandir64(const char *dir, struct dirent64 ***namelist,
 	errno = ENOSYS;
 	return -1;
 }
+#endif
 
 /***********************************************************
  * FIXME workaround for linux only                         *

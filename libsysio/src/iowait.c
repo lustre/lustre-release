@@ -56,7 +56,7 @@
  * Poll status of asynch IO request.
  */
 int
-SYSIO_INTERFACE_NAME(iodone)(ioid_t ioid)
+SYSIO_INTERFACE_NAME(iodone)(void *ioid)
 {
 	struct ioctx *ioctx;
 	int rc;
@@ -81,7 +81,7 @@ SYSIO_INTERFACE_NAME(iodone)(ioid_t ioid)
  * The identifier is no longer valid after return.
  */
 ssize_t
-SYSIO_INTERFACE_NAME(iowait)(ioid_t ioid)
+SYSIO_INTERFACE_NAME(iowait)(void *ioid)
 {
 	struct ioctx *ioctx;
 	ssize_t	cc;

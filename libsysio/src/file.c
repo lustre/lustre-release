@@ -50,7 +50,6 @@
 #include "sysio.h"
 #include "file.h"
 #include "inode.h"
-#include "xtio.h"
 
 /*
  * Support for file IO.
@@ -119,29 +118,27 @@ _sysio_fcompletio(struct ioctx *ioctx, struct file *fil)
 static int
 fd_grow(size_t n)
 {
-	int	fd;
 	size_t	count;
 	struct file **noftab, **filp;
 
 	/*
 	 * Sanity check the new size.
 	 */
-	fd = (int )n;
-	if ((size_t )fd != n)
+	if ((int )n < 0)
 		return -EMFILE;
 
-	if (n < 8)
-		n = 8;
-	if (n >= _sysio_oftab_size && n - _sysio_oftab_size < _sysio_oftab_size)
-		n = (n + 1) * 2;
+	/*
+	 * We never shrink the table.
+	 */
+	if (n <= _sysio_oftab_size)
+		return 0;
+
 	noftab = realloc(_sysio_oftab, n * sizeof(struct file *));
 	if (!noftab)
 		return -ENOMEM;
 	_sysio_oftab = noftab;
 	count = _sysio_oftab_size;
 	_sysio_oftab_size = n;
-	if (n < count)
-		return 0;
 	filp = _sysio_oftab + count;
 	n -= count;
 	while (n--)
@@ -160,21 +157,24 @@ _sysio_fd_shutdown()
 #endif
 
 /*
- * Find a free slot in the open files table.
+ * Find a free slot in the open files table greater than or equal to the
+ * argument.
  */
 static int
-find_free_fildes()
+find_free_fildes(int low)
 {
-	size_t	n;
+	int	n;
 	int	err;
 	struct file **filp;
 
-	for (n = 0, filp = _sysio_oftab;
-	     n < _sysio_oftab_size && *filp;
+	for (n = low, filp = _sysio_oftab + low;
+	     n >= 0 && (unsigned )n < _sysio_oftab_size && *filp;
 	     n++, filp++)
 		;
-	if (n >= _sysio_oftab_size) {
-		err = fd_grow(n);
+	if (n < 0)
+		return -ENFILE;
+	if ((unsigned )n >= _sysio_oftab_size) {
+		err = fd_grow((unsigned )n + 1);
 		if (err)
 			return err;
 		filp = &_sysio_oftab[n];
@@ -216,26 +216,29 @@ _sysio_fd_close(int fd)
 }
 
 /*
- * Associate open file record with given file descriptor or any available
- * file descriptor if less than zero.
+ * Associate open file record with given file descriptor (if forced), or any
+ * available file descriptor if less than zero, or any available descriptor
+ * greater than or equal to the given one if not forced.
  */
 int
-_sysio_fd_set(struct file *fil, int fd)
+_sysio_fd_set(struct file *fil, int fd, int force)
 {
 	int	err;
 	struct file *ofil;
 
 	/*
-	 * New fd < 0 => any available descriptor.
+	 * Search for a free descriptor if needed.
 	 */
-	if (fd < 0) {
-		fd = find_free_fildes();
+	if (fd < 0 || !force) {
+		if (fd < 0)
+			fd = 0;
+		fd = find_free_fildes(fd);
 		if (fd < 0)
 			return fd;
 	}
 
 	if ((unsigned )fd >= _sysio_oftab_size) {
-		err = fd_grow(fd);
+		err = fd_grow((unsigned )fd + 1);
 		if (err)
 			return err;
 	}
@@ -258,22 +261,24 @@ _sysio_fd_set(struct file *fil, int fd)
  * Duplicate old file descriptor.
  *
  * If the new file descriptor is less than zero, the new file descriptor
- * is chosen freely.
+ * is chosen freely. Otherwise, choose an available descriptor greater
+ * than or equal to the new, if not forced. Otherwise, if forced, (re)use
+ * the new.
  */
 int
-_sysio_fd_dup2(int oldfd, int newfd)
+_sysio_fd_dup(int oldfd, int newfd, int force)
 {
 	struct file *fil;
 	int	fd;
 
 	if (oldfd == newfd)
-		return 0;
+		return newfd;
 
 	fil = _sysio_fd_find(oldfd);
 	if (!fil)
 		return -EBADF;
 
-	fd = _sysio_fd_set(fil, newfd);
+	fd = _sysio_fd_set(fil, newfd, force);
 	if (fd >= 0)
 		F_REF(fil);
 	return fd;

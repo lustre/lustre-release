@@ -61,6 +61,7 @@
 #endif
 #include <sys/queue.h>
 
+#include "xtio.h"
 #include "sysio.h"
 #include "fs.h"
 #include "mount.h"
@@ -147,7 +148,8 @@ static int _sysio_incore_filop_write(struct inode *ino, struct ioctx *ioctx);
 static _SYSIO_OFF_T _sysio_incore_filop_pos(struct inode *ino,
 					    _SYSIO_OFF_T off);
 static int _sysio_incore_filop_iodone(struct ioctx *ioctx);
-static int _sysio_incore_filop_fcntl(struct inode *ino, int cmd, va_list ap);
+static int _sysio_incore_filop_fcntl(struct inode *ino, 
+				     int cmd, va_list ap, int *rtn);
 static int _sysio_incore_inop_sync(struct inode *ino);
 static int _sysio_incore_filop_ioctl(struct inode *ino,
 				    unsigned long int request,
@@ -176,7 +178,7 @@ static void _sysio_incore_inop_gone(struct inode *ino);
 #define _sysio_incore_dirop_iodone \
 	(int (*)(struct ioctx *))_sysio_do_illop
 #define _sysio_incore_dirop_fcntl \
-	(int (*)(struct inode *, int, va_list))_sysio_do_eisdir
+	(int (*)(struct inode *, int, va_list, int *))_sysio_do_eisdir
 #define _sysio_incore_dirop_ioctl \
 	(int (*)(struct inode *, \
 		 unsigned long int, \
@@ -1573,12 +1575,14 @@ _sysio_incore_filop_iodone(struct ioctx *iocp __IS_UNUSED)
 static int
 _sysio_incore_filop_fcntl(struct inode *ino __IS_UNUSED,
 			  int cmd __IS_UNUSED,
-			  va_list ap __IS_UNUSED)
+			  va_list ap __IS_UNUSED,
+			  int *rtn)
 {
 
 	/*
 	 * No fcntl's supported.
 	 */
+	*rtn = -1;
 	return -ENOTTY;
 }
 

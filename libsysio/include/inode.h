@@ -103,7 +103,7 @@ struct inode_ops {
     int (*inop_write)(struct inode *ino, struct ioctx *ioctx);
     _SYSIO_OFF_T (*inop_pos)(struct inode *ino, _SYSIO_OFF_T off);
     int (*inop_iodone)(struct ioctx *iocp);
-    int (*inop_fcntl)(struct inode *ino, int cmd, va_list ap);
+    int (*inop_fcntl)(struct inode *ino, int cmd, va_list ap, int *rtn);
     int (*inop_sync)(struct inode *ino);
     int (*inop_datasync)(struct inode *ino);
     int (*inop_ioctl)(struct inode *ino, unsigned long int request, va_list ap);
@@ -370,7 +370,6 @@ struct ioctx {
         ioctx_fast                      : 1,		/* from stack space */
 	ioctx_done			: 1,		/* transfer complete */
 	ioctx_write			: 1;		/* op is a write */
-    ioid_t  ioctx_id;                                   /* unique ident */
     struct inode *ioctx_ino;                            /* i-node */
     const struct iovec *ioctx_iov;                      /* scatter/gather vec */
     size_t  ioctx_iovlen;                               /* iovec length */
@@ -385,12 +384,11 @@ struct ioctx {
 /*
  * Init IO context record.
  */
-#define IOCTX_INIT(ioctx, fast, id, wr, ino, iov, iovlen, xtv, xtvlen) \
+#define IOCTX_INIT(ioctx, fast, wr, ino, iov, iovlen, xtv, xtvlen) \
     do { \
 	(ioctx)->ioctx_fast = (fast); \
 	(ioctx)->ioctx_done = 0; \
 	(ioctx)->ioctx_write = (wr) ? 1 : 0; \
-        (ioctx)->ioctx_id = (id); \
         (ioctx)->ioctx_ino = (ino); \
         (ioctx)->ioctx_iov = (iov); \
         (ioctx)->ioctx_iovlen = (iovlen); \
@@ -460,6 +458,7 @@ extern void _sysio_do_illop(void);
 extern int _sysio_do_ebadf(void);
 extern int _sysio_do_einval(void);
 extern int _sysio_do_enoent(void);
+extern int _sysio_do_enodev(void);
 extern int _sysio_do_espipe(void);
 extern int _sysio_do_eisdir(void);
 extern int _sysio_do_enosys(void);
@@ -485,7 +484,7 @@ extern int _sysio_ioctx_cb(struct ioctx *ioctx,
 			   void (*f)(struct ioctx *, void *),
 			   void *data);
 extern void _sysio_ioctx_cb_free(struct ioctx_callback *cb);
-extern struct ioctx *_sysio_ioctx_find(ioid_t id);
+extern struct ioctx *_sysio_ioctx_find(void *id);
 extern ssize_t _sysio_ioctx_wait(struct ioctx *ioctx);
 extern void _sysio_ioctx_complete(struct ioctx *ioctx);
 extern ssize_t _sysio_validx(const struct intnl_xtvec *xtv, size_t xtvlen,

@@ -45,13 +45,19 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include <sys/types.h>
 #include <sys/uio.h>
+#include <sys/types.h>
 #include <sys/queue.h>
 
+#include "xtio.h"
 #include "sysio.h"
 #include "inode.h"
-#include "xtio.h"
+
+
+#if defined(REDSTORM)
+#include <catamount/do_iostats.h>
+#endif
+
 
 /*
  * Asynchronous IO context support.
@@ -119,7 +125,6 @@ _sysio_ioctx_new(struct inode *ino,
 
 	IOCTX_INIT(ioctx,
 		   0,
-		   (ioid_t )ioctx,
 		   wr,
 		   ino,
 		   iov, iovlen,
@@ -166,12 +171,12 @@ _sysio_ioctx_cb(struct ioctx *ioctx,
  * this implementation.
  */
 struct ioctx *
-_sysio_ioctx_find(ioid_t id)
+_sysio_ioctx_find(void *id)
 {
 	struct ioctx *ioctx;
 
 	for (ioctx = aioq.lh_first; ioctx; ioctx = ioctx->ioctx_link.le_next)
-		if (ioctx->ioctx_id == id)
+		if (ioctx == id)
 			return ioctx;
 
 	return NULL;
@@ -228,6 +233,10 @@ void
 _sysio_ioctx_complete(struct ioctx *ioctx)
 {
 	struct ioctx_callback *entry;
+
+
+	/* update IO stats */
+	_SYSIO_UPDACCT(ioctx->ioctx_write, ioctx);
 
 	/*
 	 * Run the call-back queue.
@@ -375,9 +384,8 @@ _sysio_enumerate_extents(const struct intnl_xtvec *xtv, size_t xtvlen,
 		while (xtvec.xtv_len) {
 			if (iovec.iov_len) {
 				tmp = iovec.iov_len; 
-				if (iovec.iov_len > xtvec.xtv_len) {
+				if (iovec.iov_len > xtvec.xtv_len)
 					iovec.iov_len = xtvec.xtv_len;
-				} 
 				cc =
 				    (*f)(&iovec, 1,
 					 xtvec.xtv_off,
@@ -394,7 +402,7 @@ _sysio_enumerate_extents(const struct intnl_xtvec *xtv, size_t xtvlen,
 				if (acc && tmp <= acc)
 					abort();		/* paranoia */
 				acc = tmp;
-			} else {
+			} else if (iovlen) {
 				start = iov;
 				n = xtvec.xtv_len;
 				do {
@@ -409,18 +417,14 @@ _sysio_enumerate_extents(const struct intnl_xtvec *xtv, size_t xtvlen,
 				} while (--iovlen);
 				if (iov == start) {
 					iovec = *iov++;
-#if 0
-					if (iovec.iov_len > n) {
-						iovec.iov_len = n;
-					} 
-#endif
+					iovlen--;
 					continue;
 				}
 				remain = xtvec.xtv_len - n;
 				cc =
 				    (*f)(start, iov - start,
-								 xtvec.xtv_off,
-								 xtvec.xtv_len - n,
+					 xtvec.xtv_off,
+					 remain,
 					 arg);
 				if (cc <= 0) {
 					if (acc)
@@ -432,14 +436,12 @@ _sysio_enumerate_extents(const struct intnl_xtvec *xtv, size_t xtvlen,
 				if (acc && tmp <= acc)
 					abort();		/* paranoia */
 				acc = tmp;
-				
-				if (remain && !iovlen) 
-					return acc;
-				
+
 				remain -= cc;
 				if (remain)
 					return acc;		/* short */
-			}
+			} else
+				return acc;			/* short out */
 			xtvec.xtv_off += cc;
 			xtvec.xtv_len -= cc;
 		}

@@ -43,12 +43,13 @@
 
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#include <sys/queue.h>
 
-#include "sysio-symbols.h"
 #include "sysio.h"
+#include "sysio-symbols.h"
 
 int
 SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
@@ -62,6 +63,12 @@ SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
 
 	SYSIO_INTERFACE_ENTER;
 	err = 0;
+
+	/*
+	 * Check amode.
+	 */
+	if ((amode & (R_OK|W_OK|X_OK)) != amode)
+		SYSIO_INTERFACE_RETURN(-1, -EINVAL);
 
 	n = getgroups(0, NULL);
 	list = NULL;
@@ -81,6 +88,9 @@ SYSIO_INTERFACE_NAME(access)(const char *path, int amode)
 		err = -errno;
 		goto out;
 	}
+	if (!amode)
+		SYSIO_INTERFACE_RETURN(0, 0);
+
 
 	mask = 0;
 	if (amode & R_OK)

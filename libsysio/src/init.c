@@ -51,19 +51,17 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/queue.h>
-#include <sys/uio.h>
-
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/uio.h>
+#include <sys/queue.h>
 
+#include "xtio.h"
 #include "sysio.h"
 #include "inode.h"
 #include "fs.h"
 #include "mount.h"
 #include "file.h"
 #include "dev.h"
-#include "xtio.h"
 
 #ifdef STDFD_DEV
 #include "stdfd.h"
@@ -394,7 +392,6 @@ do_creat(char *args)
 			xtvec.xtv_len = iovec.iov_len;
 			IOCTX_INIT(&io_context,
 				   1,
-				   (ioid_t )&io_context,
 				   1,
 				   ino,
 				   &iovec, 1,
@@ -549,6 +546,69 @@ do_chmd(char *args)
 	return err;
 }
 
+static int
+do_open(char *args)
+{
+	size_t	len;
+	struct named_argument v[] = {
+		{ "nm",	NULL },			/* path */
+		{ "fd",		NULL },			/* fildes */
+		{ "m",		NULL },			/* mode */
+		{ NULL,		NULL }
+	};
+	char	*cp;
+	int	fd;
+	mode_t	m;
+	struct pnode *dir, *pno;
+	struct intent intent;
+	int	err;
+	struct file *fil;
+
+	len = strlen(args);
+	if (get_args(args, v) - args != (ssize_t )len ||
+	    !(v[0].value && v[1].value && v[2].value))
+		return -EINVAL;
+	fd = strtol(v[1].value, (char **)&cp, 0);
+	if (*cp ||
+	    (((fd == LONG_MIN || fd == LONG_MAX) && errno == ERANGE)) ||
+	     fd < 0)
+		return -EINVAL;
+	m = strtoul(v[1].value, (char **)&cp, 0);
+	if (*cp ||
+	    (m == LONG_MAX && errno == ERANGE))
+		return -EINVAL;
+	m &= O_RDONLY|O_WRONLY|O_RDWR;
+
+	if (!(dir = _sysio_cwd) && !(dir = _sysio_root))
+		return -ENOENT;
+	INTENT_INIT(&intent, INT_OPEN, &m, NULL);
+	pno = NULL;
+	err = _sysio_namei(dir, v[0].value, 0, &intent, &pno);
+	if (err)
+		return err;
+	fil = NULL;
+	do {
+		err = _sysio_open(pno, m, 0);
+		if (err)
+			break;
+		fil = _sysio_fnew(pno->p_base->pb_ino, m);
+		if (!fil) {
+			err = -ENOMEM;
+			break;
+		}
+		err = _sysio_fd_set(fil, fd, 1);
+		if (err < 0)
+			break;
+		P_RELE(pno);
+		return 0;
+	} while (0);
+	if (fil)
+		F_RELE(fil);
+	if (pno)
+		P_RELE(pno);
+	return err;
+}
+
 /*
  * Execute the given cmd.
  *
@@ -571,6 +631,8 @@ do_command(char *buf)
 			return do_cd(args);
 		if (strcmp("chmd", cmd) == 0)
 			return do_chmd(args);
+		if (strcmp("open", cmd) == 0)
+			return do_open(args);
 	}
 	return -EINVAL;
 }

@@ -6,7 +6,7 @@ use strict;
 use FindBin;
 use lib "$FindBin::Bin";
 use helper;
-use Fcntl ':mode';
+use Fcntl;
 
 
 sub usage

@@ -51,7 +51,6 @@
 #include "sysio.h"
 #include "file.h"
 #include "inode.h"
-#include "xtio.h"
 
 /*
  * Support for file IO.
@@ -204,24 +203,27 @@ _sysio_fd_shutdown()
 #endif
 
 /*
- * Find a free slot in the open files table.
- * target < 0: any free slot
- * target >= 0: get slot [target]
+ * Find a free slot in the open files table which >= @low
+ * low < 0 means any
  */
 static int
-find_free_fildes(oftab_t *oftab, int target)
+find_free_fildes(oftab_t *oftab, int low)
  {
 	int	n;
  	int	err;
  	struct file **filp;
  
-	if (target < 0) {
-		for (n = 0, filp = oftab->table;
-		     n < oftab->size && *filp;
-		     n++, filp++)
-			;
-	} else
-		n = target - oftab->offset;
+	if (low < 0)
+		low = oftab->offset;
+
+	n = low - oftab->offset;
+	if (n < 0)
+		return -ENFILE;
+
+	for (filp = oftab->table + n;
+	     n < oftab->size && *filp;
+	     n++, filp++)
+		;
 
 	if (n >= oftab->size) {
 		err = fd_grow(oftab, n);
@@ -231,18 +233,6 @@ find_free_fildes(oftab_t *oftab, int target)
  		assert(!*filp);
  	}
  
-#ifdef HAVE_LUSTRE_HACK
-	/* FIXME sometimes we could intercept open/socket to create
-	 * a fd, but missing close()? currently we have this problem
-         * with resolv lib. as a workaround simply destroy the file
-	 * struct here.
-	 */
-	if (oftab->table[n]) {
-		free(oftab->table[n]);
-		oftab->table[n] = NULL;
-	}
-#endif
-
 	return oftab->offset + n;
 }
 
@@ -299,35 +289,55 @@ _sysio_fd_close(int fd)
 }
 
 /*
- * Associate open file record with given file descriptor or any available
- * file descriptor if less than zero.
+ * Associate open file record with given file descriptor (if forced), or any
+ * available file descriptor if less than zero, or any available descriptor
+ * greater than or equal to the given one if not forced.
  */
 int
-_sysio_fd_set(struct file *fil, int fd)
+_sysio_fd_set(struct file *fil, int fd, int force)
 {
 	int	err;
 	struct file *ofil;
 	oftab_t *oftab;
+
+	if (force && fd < 0)
+		abort();
 
 	init_oftab();
 
 	oftab = select_oftab(fd);
 
 	/*
-	 * New fd < 0 => any available descriptor.
+	 * Search for a free descriptor if needed.
 	 */
-	fd = find_free_fildes(oftab, fd);
-	if (fd < 0)
-		return fd;
+	if (!force) {
+		fd = find_free_fildes(oftab, fd);
+		if (fd < 0)
+			return fd;
+	}
 
-	assert(fd < oftab->offset + oftab->size);
+	if (fd - oftab->offset >= oftab->size) {
+		err = fd_grow(oftab, fd - oftab->offset);
+		if (err)
+			return err;
+	}
 
 	/*
 	 * Remember old.
 	 */
 	ofil = __sysio_fd_get(fd, 1);
-	if (ofil)
-		F_RELE(ofil);
+	if (ofil) {
+		/* FIXME sometimes we could intercept open/socket to create
+		 * a fd, but missing close()? currently we have this problem
+		 * with resolv lib. as a workaround simply destroy the file
+		 * struct here. And this hack will break the behavior of
+		 * DUPFD.
+		 */
+		if (fd >= 0 && oftab == &_sysio_oftab[0])
+			free(ofil);
+		else
+			F_RELE(ofil);
+	}
 
 	oftab->table[fd - oftab->offset] = fil;
 
@@ -338,10 +348,12 @@ _sysio_fd_set(struct file *fil, int fd)
  * Duplicate old file descriptor.
  *
  * If the new file descriptor is less than zero, the new file descriptor
- * is chosen freely.
+ * is chosen freely. Otherwise, choose an available descriptor greater
+ * than or equal to the new, if not forced. Otherwise, if forced, (re)use
+ * the new.
  */
 int
-_sysio_fd_dup2(int oldfd, int newfd)
+_sysio_fd_dup(int oldfd, int newfd, int force)
 {
 	struct file *fil;
 	int	fd;
@@ -359,7 +371,7 @@ _sysio_fd_dup2(int oldfd, int newfd)
 	if (select_oftab(oldfd) != select_oftab(newfd))
 		return -EINVAL;
 
-	fd = _sysio_fd_set(fil, newfd);
+	fd = _sysio_fd_set(fil, newfd, force);
 	if (fd >= 0)
 		F_REF(fil);
 	return fd;
