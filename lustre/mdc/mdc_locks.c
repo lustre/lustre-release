@@ -320,6 +320,7 @@ int mdc_enqueue(struct obd_export *exp,
                         lock_mode = lock->l_req_mode;
                 }
 
+                ldlm_lock_allow_match(lock);
                 LDLM_LOCK_PUT(lock);
         }
 
