@@ -39,3 +39,13 @@
  	return((struct page *) page_region(page, NULL)->mem_map);
  }
  
+--- lum/arch/um/kernel/mem.c~   Wed Jul 17 11:23:15 2002
++++ lum/arch/um/kernel/mem.c    Wed Jul 17 11:28:48 2002
+@@ -582,7 +582,7 @@
+                   (addr <= region->start + region->len))
+                        return(mk_phys(addr - region->start, i));
+        }
+-       panic("region_pa : no region for virtual address");
++       //panic("region_pa : no region for virtual address");
+        return(0);
+ }

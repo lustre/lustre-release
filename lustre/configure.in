@@ -30,6 +30,7 @@ bindir='${exec_prefix}/usr/bin'
 sbindir='${exec_prefix}/usr/sbin'
 
 linuxdir_def=/usr/src/linux
+AC_ARG_WITH(linux, [  --with-linux[[=PATH]]     set path to Linux source (default=/usr/src/linux)],enable_linuxdir="$with_linux", enable_linuxdir="$linuxdir_def")
 AC_ARG_ENABLE(linuxdir, [  --enable-linuxdir=[path] set path to Linux source (default=/usr/src/linux)],, enable_linuxdir=$linuxdir_def)
 
 LINUX=$enable_linuxdir
@@ -41,6 +42,8 @@ KINCFLAGS='-I. -I$(top_srcdir)/include -I$(PORTALS)/include -I$(LINUX)/include'
 CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 
 portalsdir_def='$(top_srcdir)/../portals'
+AC_ARG_WITH(portals, [  --with-portals[[=PATH]]   set path to Portals source (default=../portals)], enable_portalsdir="$with_portals", enable_portalsdir=$portalsdir_def)
+PORTALS=$enable_portalsdir
 AC_ARG_ENABLE(portalsdir, [  --enable-portalsdir=[path] set path to Portals source (default=../portals)],, enable_portalsdir=$portalsdir_def)
 PORTALS=$enable_portalsdir
 AC_SUBST(PORTALS)
