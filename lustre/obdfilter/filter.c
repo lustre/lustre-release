@@ -1352,6 +1352,7 @@ static int filter_cleanup(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
         ll_sbdev_type save_dev;
+        int must_relock = 0;
         ENTRY;
         
         if (obd->obd_fail)
@@ -1385,7 +1386,13 @@ static int filter_cleanup(struct obd_device *obd)
                        obd->obd_name, filter->fo_vfsmnt,
                        atomic_read(&filter->fo_vfsmnt->mnt_count));
 
-        unlock_kernel();
+        /* We can only unlock kernel if we are in the context of sys_ioctl,
+           otherwise we never called lock_kernel */
+        if (kernel_locked()) {
+                unlock_kernel();
+                must_relock++;
+        }
+        
         mntput(filter->fo_vfsmnt);
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;
@@ -1394,8 +1401,10 @@ static int filter_cleanup(struct obd_device *obd)
 
         ll_clear_rdonly(save_dev);
         
+        if (must_relock)
+                lock_kernel();
+
         fsfilt_put_ops(obd->obd_fsops);
-        lock_kernel();
 
         LCONSOLE_INFO("OST %s has stopped.\n", obd->obd_name);
         

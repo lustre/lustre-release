@@ -513,6 +513,7 @@ int mds_lov_synchronize(void *data)
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
+        unlock_kernel();
 
         obd = mlsi->mlsi_obd;
         uuid = mlsi->mlsi_uuid;

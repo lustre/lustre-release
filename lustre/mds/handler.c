@@ -1674,6 +1674,7 @@ static int mds_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         ll_sbdev_type save_dev;
+        int must_relock = 0;
         ENTRY;
 
         if (mds->mds_sb == NULL)
@@ -1694,7 +1695,12 @@ static int mds_cleanup(struct obd_device *obd)
         }
         mds_fs_cleanup(obd);
 
-        unlock_kernel();
+        /* We can only unlock kernel if we are in the context of sys_ioctl,
+           otherwise we never called lock_kernel */
+        if (kernel_locked()) {
+                unlock_kernel();
+                must_relock++;
+        }
 
         /* 2 seems normal on mds, (may_umount() also expects 2
           fwiw), but we only see 1 at this point in obdfilter. */
@@ -1718,7 +1724,9 @@ static int mds_cleanup(struct obd_device *obd)
 
         ll_clear_rdonly(save_dev);
         
-        lock_kernel();
+        if (must_relock)
+                lock_kernel();
+
         fsfilt_put_ops(obd->obd_fsops);
 
         LCONSOLE_INFO("MDT %s has stopped.\n", obd->obd_name);
