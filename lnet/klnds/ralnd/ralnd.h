@@ -48,6 +48,8 @@
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
 
+#include <net/sock.h>
+
 #define DEBUG_SUBSYSTEM S_NAL
 
 #include <linux/kp30.h>
@@ -79,7 +81,7 @@
 #define RANAL_NTX             64                /* # tx descs */
 #define RANAL_NTX_NBLK        256               /* # reserved tx descs */
 
-#define RANAL_RX_CQ_SIZE      1024              /* # entries in receive CQ 
+#define RANAL_FMA_CQ_SIZE     8192              /* # entries in receive CQ 
                                                  * (overflow is a performance hit) */
 
 #define RANAL_RESCHED         100               /* # scheduler loops before reschedule */
@@ -159,8 +161,8 @@ typedef struct
 
 #define RANAL_INIT_NOTHING         0
 #define RANAL_INIT_DATA            1
-
-#define RANAL_INIT_ALL             7
+#define RANAL_INIT_LIB             2
+#define RANAL_INIT_ALL             3
 
 /************************************************************************
  * Wire message structs.  These are sent in sender's byte order
@@ -339,10 +341,25 @@ typedef struct kra_peer
         unsigned long       rap_reconnect_interval; /* exponential backoff */
 } kra_peer_t;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
+# define sk_allocation  allocation
+# define sk_data_ready	data_ready
+# define sk_write_space write_space
+# define sk_user_data   user_data
+# define sk_prot        prot
+# define sk_sndbuf      sndbuf
+# define sk_socket      socket
+# define sk_wmem_queued wmem_queued
+# define sk_err         err
+# define sk_sleep       sleep
+#endif
 
 extern lib_nal_t       kranal_lib;
 extern kra_data_t      kranal_data;
 extern kra_tunables_t  kranal_tunables;
+
+extern void __kranal_peer_decref(kra_peer_t *peer);
+extern void __kranal_conn_decref(kra_conn_t *conn);
 
 static inline void
 kranal_peer_addref(kra_peer_t *peer)
@@ -404,8 +421,9 @@ kranal_cqid2connlist (__u32 cqid)
 static inline kra_conn_t *
 kranal_cqid2conn_locked (__u32 cqid) 
 {
-        struct list_head  conns = kranal_cqid2connlist(cqid);
+        struct list_head *conns = kranal_cqid2connlist(cqid);
         struct list_head *tmp;
+        kra_conn_t       *conn;
         
         list_for_each(tmp, conns) {
                 conn = list_entry(tmp, kra_conn_t, rac_hashlist);
@@ -436,3 +454,24 @@ kranal_page2phys (struct page *p)
 # error "no page->phys"
 #endif
 
+extern int kranal_listener_procint(ctl_table *table, 
+                                   int write, struct file *filp, 
+                                   void *buffer, size_t *lenp);
+extern int kranal_close_stale_conns_locked (kra_peer_t *peer, 
+                                            __u64 incarnation);
+extern void kranal_update_reaper_timeout(long timeout);
+extern void kranal_tx_done (kra_tx_t *tx, int completion);
+extern void kranal_unlink_peer_locked (kra_peer_t *peer);
+extern void kranal_schedule_conn(kra_conn_t *conn);
+extern kra_peer_t *kranal_create_peer (ptl_nid_t nid);
+extern kra_peer_t *kranal_find_peer_locked (ptl_nid_t nid);
+extern void kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx);
+extern int kranal_del_peer (ptl_nid_t nid, int single_share);
+extern void kranal_device_callback(RAP_INT32 devid);
+extern int kranal_thread_start (int(*fn)(void *arg), void *arg);
+extern int kranal_connd (void *arg);
+extern int kranal_reaper (void *arg);
+extern int kranal_scheduler (void *arg);
+extern void kranal_close_conn_locked (kra_conn_t *conn, int error);
+extern void kranal_terminate_conn_locked (kra_conn_t *conn);
+extern void kranal_connect (kra_peer_t *peer);
