@@ -29,12 +29,12 @@ static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 static struct lprocfs_vars lprocfs_obd_vars[] = {
-        { "uuid",        lprocfs_rd_uuid,   0, 0 },
+        { "uuid",            lprocfs_rd_uuid,   0, 0 },
         { 0 }
 };
 
 static struct lprocfs_vars lprocfs_module_vars[] = {
-        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
+        { "num_refs",       lprocfs_rd_numrefs, 0, 0 },
         { 0 }
 };
 
