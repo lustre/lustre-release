@@ -409,7 +409,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
          */
         rc = ptlrpc_register_bulk(desc);
         if (rc)
-                GOTO(out_desc, rc);
+                GOTO(out_unmap, rc);
 
         request->rq_replen = lustre_msg_size(1, size);
         rc = ptlrpc_queue_wait(request);
@@ -439,12 +439,12 @@ out_req:
         RETURN(rc);
 
         /* Clean up on error. */
-out_desc:
-        ptlrpc_bulk_decref(desc);
 out_unmap:
         while (mapped-- > 0)
                 kunmap(page_array[mapped]);
         OBD_FREE(cb_data, sizeof(*cb_data));
+out_desc:
+        ptlrpc_bulk_decref(desc);
         goto out_req;
 }
 
