@@ -36,7 +36,6 @@ static int ptlbd_sv_already_setup = 1;
 
 static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
-        struct obd_uuid self_uuid = { "self" };
         struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
         int rc;
         ENTRY;
@@ -49,7 +48,7 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
         ptlbd->ptlbd_service =
                 ptlrpc_init_svc(PTLBD_NEVENTS, PTLBD_NBUFS, PTLBD_BUFSIZE,
                                 PTLBD_MAXREQSIZE, PTLBD_REQUEST_PORTAL,
-                                PTLBD_REPLY_PORTAL, &self_uuid,
+                                PTLBD_REPLY_PORTAL,
                                 ptlbd_parse_req, "ptlbd_sv");
 
         if (ptlbd->ptlbd_service == NULL) 
