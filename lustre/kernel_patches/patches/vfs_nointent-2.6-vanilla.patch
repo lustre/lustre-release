@@ -51,7 +51,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	if (!IS_ERR(tmp)) {
  		struct dentry *dentry;
  		struct nameidata nd;
-+                intent_init(&nd.intent, IT_LOOKUP);
++		intent_init(&nd.intent, IT_LOOKUP);
  
  		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  		if (error)
@@ -78,7 +78,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
-+        intent_init(&nd.intent, IT_LOOKUP);
++	intent_init(&nd.intent, IT_LOOKUP);
  
  	name = getname(pathname);
  	if(IS_ERR(name))
@@ -103,7 +103,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	struct dentry *dentry;
  	struct nameidata nd;
  	struct inode *inode = NULL;
-+        intent_init(&nd.intent, IT_LOOKUP);
++	intent_init(&nd.intent, IT_LOOKUP);
  
  	name = getname(pathname);
  	if(IS_ERR(name))
@@ -125,7 +125,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	if (!IS_ERR(to)) {
  		struct dentry *dentry;
  		struct nameidata nd;
-+                intent_init(&nd.intent, IT_LOOKUP);
++		intent_init(&nd.intent, IT_LOOKUP);
  
  		error = path_lookup(to, LOOKUP_PARENT, &nd);
  		if (error)
@@ -152,8 +152,8 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	struct nameidata nd, old_nd;
  	int error;
  	char * to;
-+        intent_init(&nd.intent, IT_LOOKUP);
-+        intent_init(&old_nd.intent, IT_LOOKUP);
++	intent_init(&nd.intent, IT_LOOKUP);
++	intent_init(&old_nd.intent, IT_LOOKUP);
  
  	to = getname(newname);
  	if (IS_ERR(to))
@@ -161,13 +161,13 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	error = -EXDEV;
  	if (old_nd.mnt != nd.mnt)
  		goto out_release;
-+        if (nd.dentry->d_inode->i_op->link_raw) {
-+                struct inode_operations *op = nd.dentry->d_inode->i_op;
-+                error = op->link_raw(&old_nd, &nd);
-+                /* the file system wants to use normal vfs path now */
-+                if (error != -EOPNOTSUPP)
-+                        goto out_release;
-+        }
++	if (nd.dentry->d_inode->i_op->link_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->link_raw(&old_nd, &nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto out_release;
++	}
  	new_dentry = lookup_create(&nd, 0);
  	error = PTR_ERR(new_dentry);
  	if (!IS_ERR(new_dentry)) {
@@ -176,7 +176,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
 -	       struct inode *new_dir, struct dentry *new_dentry)
-+                   struct inode *new_dir, struct dentry *new_dentry)
++		   struct inode *new_dir, struct dentry *new_dentry)
  {
  	int error = 0;
  	struct inode *target;
@@ -185,7 +185,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
 -	       struct inode *new_dir, struct dentry *new_dentry)
-+                     struct inode *new_dir, struct dentry *new_dentry)
++		     struct inode *new_dir, struct dentry *new_dentry)
  {
  	struct inode *target;
  	int error;
@@ -193,8 +193,8 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	struct dentry * old_dentry, *new_dentry;
  	struct dentry * trap;
  	struct nameidata oldnd, newnd;
-+        intent_init(&oldnd.intent, IT_LOOKUP);
-+        intent_init(&newnd.intent, IT_LOOKUP);
++	intent_init(&oldnd.intent, IT_LOOKUP);
++	intent_init(&newnd.intent, IT_LOOKUP);
  
  	error = path_lookup(oldname, LOOKUP_PARENT, &oldnd);
  	if (error)
@@ -288,10 +288,10 @@ Index: linux-2.6.4-51.0/fs/open.c
 +		if (error != -EOPNOTSUPP)
 +			goto dput_and_out;
 +	} else {
-+                down(&inode->i_sem);
-+                error = notify_change(nd.dentry, &newattrs);
-+                up(&inode->i_sem);
-+        }
++		down(&inode->i_sem);
++		error = notify_change(nd.dentry, &newattrs);
++		up(&inode->i_sem);
++	}
  dput_and_out:
  	path_release(&nd);
  out:
@@ -311,10 +311,10 @@ Index: linux-2.6.4-51.0/fs/open.c
 +		if (error != -EOPNOTSUPP)
 +			goto dput_and_out;
 +	} else {
-+                down(&inode->i_sem);
-+                error = notify_change(nd.dentry, &newattrs);
-+                up(&inode->i_sem);
-+        }
++		down(&inode->i_sem);
++		error = notify_change(nd.dentry, &newattrs);
++		up(&inode->i_sem);
++	}
  dput_and_out:
  	path_release(&nd);
  out:
