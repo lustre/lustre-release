@@ -1,3 +1,4 @@
+uml-2.6.7-01-bb2.patch
 lustre_version.patch
 vfs_intent-2.6-vanilla.patch
 vfs_nointent-2.6-vanilla.patch
