@@ -25,7 +25,8 @@
  */
 #define nr_free_buffer_pages() 32768
 
-struct {
+/* Defines for page buf daemon */
+struct pupd_prm {
         int nfract;  /* Percentage of buffer cache dirty to 
                         activate bdflush */
         int ndirty;  /* Maximum number of dirty blocks to write out per
@@ -37,7 +38,19 @@ struct {
         int interval; /* jiffies delay between pupdate flushes */
         int age_buffer;  /* Time for normal buffer to age before we flush it */
         int age_super;  /* Time for superblock to age before we flush it */
-} pupd_prm = {40, 1024, 64, 256, 1*HZ, 30*HZ, 5*HZ };
+};
+
+
+static struct pupdated {
+	int active;
+	wait_queue_head_t waitq;
+	struct timer_list timer;
+	struct pupd_prm parms;
+} pupdated = {
+	active: -1,
+	parms: {40, 1024, 64, 256, 1*HZ, 30*HZ, 5*HZ }
+};
+
 
 /* Called with the superblock list lock held */
 static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
@@ -183,7 +196,7 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
         }
 
         /* If we are forcing a write, write out all dirty pages */
-        max_io = check_time == ~0UL ? 1<<31 : pupd_prm.ndirty;
+        max_io = check_time == ~0UL ? 1<<31 : pupdated.parms.ndirty;
         CDEBUG(D_INFO, "max_io = %lu\n", max_io);
 
         /* Add each inode's dirty pages to a write vector, and write it.
@@ -331,83 +344,82 @@ int obdfs_flush_dirty_pages(unsigned long check_time)
 } /* obdfs_flush_dirty_pages */
 
 
-/* Defines for page buf daemon */
-DECLARE_WAIT_QUEUE_HEAD(pupd_waitq);
-
-static void pupd_wakeup(unsigned long l)
+static void pupdate_wakeup(unsigned long l)
 {
-	wake_up_interruptible(&pupd_waitq);
+	wake_up_interruptible(&pupdated.waitq);
 }
 
-static int pupd_active = -1;
 
 static int pupdate(void *unused) 
 {
-	struct task_struct *pupdated;
 	u_long flags;
-        int interval = pupd_prm.interval;
-        long age = pupd_prm.age_buffer;
+        int interval = pupdated.parms.interval;
+        long age = pupdated.parms.age_buffer;
         int wrote = 0;
-	struct timer_list pupd_timer;
 
-	init_timer(&pupd_timer);
-	pupd_timer.function = pupd_wakeup;
+	if (pupdated.active >= 0) {
+		CDEBUG(D_CACHE, "attempted to run multiple pupdates\n");
+		return 1;
+	}
+
+	init_timer(&pupdated.timer);
+	init_waitqueue_head(&pupdated.waitq);
+	pupdated.timer.function = pupdate_wakeup;
         
         exit_files(current);
         exit_mm(current);
 	daemonize();
 
-        pupdated = current;
-        pupdated->session = 1;
-        pupdated->pgrp = 1;
-        strcpy(pupdated->comm, "pupdated");
+        current->session = 1;
+        current->pgrp = 1;
+        strcpy(current->comm, "pupdated");
 
         printk("pupdated activated...\n");
-	pupd_active = 1;
+	pupdated.active = 1;
 
-        spin_lock_irqsave(&pupdated->sigmask_lock, flags);
-	flush_signals(pupdated);
-        sigfillset(&pupdated->blocked);
-        recalc_sigpending(pupdated);
-        spin_unlock_irqrestore(&pupdated->sigmask_lock, flags);
+        spin_lock_irqsave(&current->sigmask_lock, flags);
+	flush_signals(current);
+        sigfillset(&current->blocked);
+        recalc_sigpending(current);
+        spin_unlock_irqrestore(&current->sigmask_lock, flags);
 
         do {
                 long dirty_limit;
 
                 /* update interval */
-                if (pupd_active == 1 && interval) {
-			mod_timer(&pupd_timer, jiffies + interval);
-			interruptible_sleep_on(&pupd_waitq);
+                if (pupdated.active == 1 && interval) {
+			mod_timer(&pupdated.timer, jiffies + interval);
+			interruptible_sleep_on(&pupdated.waitq);
                 }
-                if (pupd_active == 0) {
-			del_timer(&pupd_timer);
+                if (pupdated.active == 0) {
+			del_timer(&pupdated.timer);
 			/* If stopped, we flush one last time... */
 		}
 
                 /* asynchronous setattr etc for the future ...
-                obdfs_flush_dirty_inodes(jiffies - pupd_prm.age_super);
+                obdfs_flush_dirty_inodes(jiffies - pupdated.parms.age_super);
                  */
-                dirty_limit = nr_free_buffer_pages() * pupd_prm.nfract / 100;
+                dirty_limit = nr_free_buffer_pages() * pupdated.parms.nfract / 100;
 
                 if (obdfs_cache_count > dirty_limit) {
                         interval = 0;
-                        if (wrote < pupd_prm.ndirty)
+                        if (wrote < pupdated.parms.ndirty)
                                 age >>= 1;
                         if (wrote) 
 			  CDEBUG(D_CACHE, "wrote %d, age %ld, interval %d\n",
                                 wrote, age, interval);
                 } else {
-                        if (wrote < pupd_prm.ndirty >> 1 &&
+                        if (wrote < pupdated.parms.ndirty >> 1 &&
 			    obdfs_cache_count < dirty_limit / 2) {
-                                interval = pupd_prm.interval;
-                                age = pupd_prm.age_buffer;
+                                interval = pupdated.parms.interval;
+                                age = pupdated.parms.age_buffer;
                                 if (wrote) 
 				  CDEBUG(D_INFO,
                                        "wrote %d, age %ld, interval %d\n",
                                        wrote, age, interval);
                         } else if (obdfs_cache_count > dirty_limit / 2) {
                                 interval >>= 1;
-                                if (wrote < pupd_prm.ndirty)
+                                if (wrote < pupdated.parms.ndirty)
                                         age >>= 1;
                                 if (wrote) 
 				  CDEBUG(D_CACHE,
@@ -423,11 +435,11 @@ static int pupdate(void *unused)
                                dirty_limit, obdfs_cache_count, wrote);
 			run_task_queue(&tq_disk);
 		}
-        } while (pupd_active == 1);
+        } while (pupdated.active == 1);
 
 	CDEBUG(D_CACHE, "pupdated stopped...\n");
-	pupd_active = -1;
-	wake_up_interruptible (&pupd_waitq);
+	pupdated.active = -1;
+	wake_up_interruptible (&pupdated.waitq);
 	return 0;
 }
 
@@ -447,14 +459,14 @@ int obdfs_flushd_cleanup(void)
         ENTRY;
 
 	/* Shut down pupdated. */
-        if (pupd_active > 0) {
+        if (pupdated.active > 0) {
                 CDEBUG(D_CACHE, "inform pupdated\n");
-		pupd_active = 0;
-		wake_up_interruptible(&pupd_waitq);
+		pupdated.active = 0;
+		wake_up_interruptible(&pupdated.waitq);
 
                 CDEBUG(D_CACHE, "wait for pupdated\n");
-		while (pupd_active == 0) {
-			interruptible_sleep_on(&pupd_waitq);
+		while (pupdated.active == 0) {
+			interruptible_sleep_on(&pupdated.waitq);
 		}
                 CDEBUG(D_CACHE, "done waiting for pupdated\n");
 	}		
