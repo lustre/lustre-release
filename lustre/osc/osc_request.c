@@ -21,7 +21,9 @@
 
 #include <linux/module.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/obd_ost.h>
+#include <linux/obd_lov.h>
 
 static void osc_con2cl(struct obd_conn *conn, struct ptlrpc_client **cl,
                        struct ptlrpc_connection **connection)
@@ -155,8 +157,7 @@ static int osc_open(struct obd_conn *conn, struct obdo *oa)
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
         body->connid = conn->oc_id;
-        if (body->oa.o_valid != (OBD_MD_FLMODE | OBD_MD_FLID))
-                LBUG();
+        body->oa.o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -247,6 +248,8 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
         struct ost_body *body;
+        struct mds_objid *objid;
+        struct lov_object_id *lov_id;
         int rc, size = sizeof(*body);
         ENTRY;
 
@@ -273,6 +276,14 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
 
         body = lustre_msg_buf(request->rq_repmsg, 0);
         memcpy(oa, &body->oa, sizeof(*oa));
+
+        memset(oa->o_inline, 0, sizeof(oa->o_inline));
+        objid = (struct mds_objid *)oa->o_inline;
+        objid->mo_lov_md.lmd_object_id = oa->o_id;
+        objid->mo_lov_md.lmd_stripe_count = 1;
+        lov_id = (struct lov_object_id *)(oa->o_inline + sizeof(*objid));
+        lov_id->l_device_id = 0;
+        lov_id->l_object_id = oa->o_id;
 
         EXIT;
  out:

@@ -34,11 +34,6 @@ struct mds_cb_data {
         __u64 cb_last_rcvd;
 };
 
-struct mds_objid {
-        __u64 mo_magic;
-        struct lov_md mo_lov_md;
-};
-
 #define EXTN_XATTR_INDEX_LUSTRE         5
 #define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
 
@@ -130,47 +125,35 @@ static int mds_extN_set_obdo(struct inode *inode, void *handle,
 
 static int mds_extN_get_obdo(struct inode *inode, struct obdo *obdo)
 {
-        char *buf;
-        struct mds_objid data;
-        struct lov_object_id *lov_ids;
-        int rc, size;
+        struct mds_objid *data;
+        int rc;
 
         lock_kernel();
         down(&inode->i_sem);
         rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, &data,
-                            sizeof(struct mds_objid));
-        size = sizeof(struct mds_objid) + data.mo_lov_md.lmd_stripe_count *
-                sizeof(*lov_ids);
-        OBD_ALLOC(buf, size);
-        if (buf == NULL)
-                LBUG();
-        rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, buf, size);
+                            XATTR_LUSTRE_MDS_OBJID, obdo->o_inline,
+                            OBD_INLINESZ);
+        data = (struct mds_objid *)obdo->o_inline;
+
         up(&inode->i_sem);
         unlock_kernel();
-
-        if (size > OBD_INLINESZ)
-                LBUG();
 
         if (rc < 0) {
                 CERROR("error getting EA %s from MDS inode %ld: rc = %d\n",
                        XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
                 obdo->o_id = 0;
-        } else if (data.mo_magic != cpu_to_le64(XATTR_MDS_MO_MAGIC)) {
+        } else if (data->mo_magic != cpu_to_le64(XATTR_MDS_MO_MAGIC)) {
                 CERROR("MDS object id %Ld has bad magic %Lx\n",
                        (unsigned long long)obdo->o_id,
-                       (unsigned long long)le64_to_cpu(data.mo_magic));
+                       (unsigned long long)le64_to_cpu(data->mo_magic));
                 rc = -EINVAL;
         } else {
                 /* This field is byteswapped because it appears in the
                  * catalogue.  All others are opaque to the MDS */
-                obdo->o_id = le64_to_cpu(data.mo_lov_md.lmd_object_id);
-                memcpy(obdo->o_inline, buf + sizeof(data), size);
+                obdo->o_id = le64_to_cpu(data->mo_lov_md.lmd_object_id);
         }
 
 #warning FIXME: pass this buffer to caller for transmission when size exceeds OBD_INLINESZ
-        OBD_FREE(buf, size);
         return rc;
 }
 

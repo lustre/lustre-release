@@ -31,6 +31,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
+#include <linux/obd_lov.h> /* for lov_md */
 
 #define LUSTRE_MDS_NAME "mds"
 
@@ -48,7 +49,12 @@ struct mds_update_record {
         __u32 ur_uid;
         __u32 ur_gid;
         __u64 ur_time;
-}; 
+};
+
+struct mds_objid {
+        __u64 mo_magic;
+        struct lov_md mo_lov_md;
+};
 
 #define MDS_LR_CLIENT  8192
 #define MDS_LR_SIZE     128
