@@ -21,7 +21,6 @@
 #include <portals/types.h>
 #include <portals/nal.h>
 #include <portals/api.h>
-#include <portals/errno.h>
 #include <portals/nalids.h>
 
 extern int __p30_initialized;	/* for libraries & test codes  */

@@ -50,9 +50,8 @@ typedef enum {
         PTL_IOV_TOO_SMALL   = 31,
 
 	PTL_EQ_INUSE        = 32,
-	PTL_MD_INUSE        = 33,
 
-        PTL_MAX_ERRNO       = 33
+        PTL_MAX_ERRNO       = 32
 } ptl_err_t;
 /* If you change these, you must update the string table in api-errno.c */
 

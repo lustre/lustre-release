@@ -6,6 +6,9 @@
  *   This file is part of Portals, http://www.sf.net/projects/sandiaportals/
  */
 
+#ifndef TCPNAL_PROCBRIDGE_H
+#define TCPNAL_PROCBRIDGE_H
+
 #include <portals/lib-p30.h>
 
 typedef struct bridge {
@@ -27,3 +30,5 @@ nal_t *bridge_init(ptl_interface_t nal,
 
 typedef int (*nal_initialize)(bridge);
 extern nal_initialize nal_table[PTL_IFACE_MAX];
+
+#endif
