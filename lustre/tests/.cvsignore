@@ -60,3 +60,5 @@ iopentest2
 XMLCONFIG
 *.log
 logs
+ostactive
+ll_dirstripe_verify
