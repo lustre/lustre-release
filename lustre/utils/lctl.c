@@ -60,9 +60,11 @@ command_t cmdlist[] = {
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet networks.\n"
          "usage: mynid [nid]"},
-        {"add_uuid", jt_ptl_add_uuid, 0, "associate a uuid with a nid\n"
+        {"add_uuid", jt_ptl_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid>"},
-        {"del_uuid", jt_ptl_del_uuid, 0, "delete a uuid association\n"
+        {"close_uuid", jt_ptl_close_uuid, 0, "disconnect a UUID\n"
+         "usage: close_uuid <uuid>)"},
+        {"del_uuid", jt_ptl_del_uuid, 0, "delete a UUID association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_ptl_add_route, 0,
          "add an entry to the routing table\n"
