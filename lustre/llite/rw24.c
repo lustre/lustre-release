@@ -286,7 +286,7 @@ static int ll_writepage_24(struct page *page)
         ocp->ocp_flag = OBD_BRW_CREATE|OBD_BRW_FROM_GRANT;
 
         rc = obd_brw_async_ocp(OBD_BRW_WRITE, exp, &oa, 
-                               ll_i2info(inode)->lli_smd, ocp, NULL);
+                               ll_i2info(inode)->lli_smd, NULL, ocp, NULL);
 
 out:
         class_export_put(exp);
