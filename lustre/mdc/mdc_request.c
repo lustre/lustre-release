@@ -829,25 +829,23 @@ int mdc_init_ea_size(struct obd_device *obd, char *lov_name)
 
         lov_obd = class_name2obd(lov_name);
         if (!lov_obd) {
-                CERROR("MDC cannot locate LOV %s!\n",
-                       lov_name);
+                CERROR("MDC cannot locate LOV %s!\n", lov_name);
                 RETURN(-ENOTCONN);
         }
 
         rc = obd_connect(&conn, lov_obd, &obd->obd_uuid);
         if (rc) {
-                CERROR("MDS cannot connect to LOV %s (%d) - no logging!\n",
-                       lov_name, rc);
+                CERROR("MDC failed connect to LOV %s (%d)\n", lov_name, rc);
                 RETURN(rc);
         }
         exp = class_conn2export(&conn);
 
         valsize = sizeof(desc);
-        rc = obd_get_info(exp, strlen("lovdesc") + 1, "lovdesc", 
+        rc = obd_get_info(exp, strlen("lovdesc") + 1, "lovdesc",
                           &valsize, &desc);
         if (rc == 0) {
                 cli->cl_max_mds_easize = obd_size_diskmd(exp, NULL);
-                cli->cl_max_mds_cookiesize = desc.ld_tgt_count * 
+                cli->cl_max_mds_cookiesize = desc.ld_tgt_count *
                         sizeof(struct llog_cookie);
         }
         obd_disconnect(exp, 0);
