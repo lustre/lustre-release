@@ -435,7 +435,7 @@ void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
         if (ealen == 0)
                 return (void*)tmp;
 
-        memcpy(lustre_msg_buf(msg, 2, ealen), ea, ealen);
+        memcpy(lustre_msg_buf(msg, offset + 1, ealen), ea, ealen);
         
         tmp += size_round(ealen);
 
@@ -443,7 +443,7 @@ void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
                 return (void*)tmp;
 
         tmp += size_round(ea2len);
-        memcpy(lustre_msg_buf(msg, 3, ea2len), ea2, ea2len);
+        memcpy(lustre_msg_buf(msg, offset + 2, ea2len), ea2, ea2len);
         
         return (void*)tmp;
 }
