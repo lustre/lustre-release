@@ -32,7 +32,12 @@
 #define EXPORT_SYMTAB
 #endif
 
+#ifdef __KERNEL__
 #include <linux/fs.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <portals/list.h>

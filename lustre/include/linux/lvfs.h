@@ -47,12 +47,13 @@ struct obd_run_ctxt {
 /* lvfs_common.c */
 struct dentry *lvfs_fid2dentry(struct obd_run_ctxt *, __u64, __u32, __u64 ,void *data);
 
-#ifdef __KERNEL__
-
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                struct obd_ucred *cred);
 void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
               struct obd_ucred *cred);
+
+#ifdef __KERNEL__
+
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
 struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);

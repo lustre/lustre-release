@@ -32,12 +32,14 @@
 # define EXPORT_SYMTAB
 #endif
 
-#ifndef __KERNEL__
+#ifdef __KERNEL__
+#include <linux/fs.h>
+#else
 # include <portals/list.h>
 # include <liblustre.h>
 #endif
+
 #include <linux/kp30.h>
-#include <linux/fs.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_commit_confd.h>
 #include <linux/obd_support.h>
@@ -47,6 +49,8 @@
 #include <portals/list.h>
 #include <linux/lustre_log.h>
 #include "ptlrpc_internal.h"
+
+#ifdef __KERNEL__
 
 static struct llog_commit_master lustre_lcm;
 static struct llog_commit_master *lcm = &lustre_lcm;
@@ -551,3 +555,13 @@ int llog_repl_connect(struct llog_ctxt *ctxt, int count,
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_repl_connect);
+
+#else /* !__KERNEL__ */
+
+int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
+                         struct lov_stripe_md *lsm, int count,
+                         struct llog_cookie *cookies, int flags)
+{
+        return 0;
+}
+#endif

@@ -32,7 +32,12 @@
 #define EXPORT_SYMTAB
 #endif
 
+#ifdef __KERNEL__
 #include <linux/fs.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <linux/obd.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
@@ -41,6 +46,8 @@
 #include <linux/lvfs.h>
 #include <linux/lustre_fsfilt.h>
 #include "llog_internal.h"
+
+#ifdef __KERNEL__
 
 static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
                                 int len, int index)
@@ -639,3 +646,67 @@ struct llog_operations llog_lvfs_ops = {
 };
 
 EXPORT_SYMBOL(llog_lvfs_ops);
+
+#else /* !__KERNEL__ */
+
+static int llog_lvfs_read_header(struct llog_handle *handle)
+{
+        LBUG();
+        return 0;
+}
+static int llog_lvfs_write_rec(struct llog_handle *loghandle,
+                               struct llog_rec_hdr *rec,
+                               struct llog_cookie *reccookie, int cookiecount, 
+                               void *buf, int idx)
+{
+        LBUG();
+        return 0;
+}
+static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
+                                int next_idx, __u64 *cur_offset, void *buf,
+                                int len)
+{
+        LBUG();
+        return 0;
+}
+static int llog_lvfs_create(struct llog_obd_ctxt *ctxt, struct llog_handle **res,
+                            struct llog_logid *logid, char *name)
+{
+        LBUG();
+        return 0;
+}
+static int llog_lvfs_close(struct llog_handle *handle)
+{
+        LBUG();
+        return 0;
+}
+static int llog_lvfs_destroy(struct llog_handle *handle)
+{
+        LBUG();
+        return 0;
+}
+
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd, 
+                      char *name, int count, struct llog_logid *idarray)
+{
+        LBUG();
+        return 0;
+}
+
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd, 
+                      char *name, int count, struct llog_logid *idarray)
+{
+        LBUG();
+        return 0;
+}
+
+struct llog_operations llog_lvfs_ops = {
+        lop_write_rec:   llog_lvfs_write_rec,
+        lop_next_block:  llog_lvfs_next_block,
+        lop_read_header: llog_lvfs_read_header,
+        lop_create:      llog_lvfs_create,
+        lop_destroy:     llog_lvfs_destroy,
+        lop_close:       llog_lvfs_close,
+//        lop_cancel:      llog_lvfs_cancel,
+};
+#endif
