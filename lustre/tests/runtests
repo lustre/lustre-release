@@ -12,23 +12,26 @@ export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
 ERROR=
 
-[ "`mount | grep /mnt/lustre`" ] || echo | sh llsetup.sh $@ || exit 1
+setup_opts $@
+
+[ "`mount | grep $OSCMT`" ] || echo | sh llsetup.sh $@ || exit 1
 
 # let's start slowly here...
-touch /mnt/lustre || fail "can't touch /mnt/lustre" 2
-echo "copying /etc/hosts to /mnt/lustre/hosts"
-cp /etc/hosts /mnt/lustre || fail "can't cp /etc/hosts" 3
-echo "comparing /etc/hosts and /mnt/lustre/hosts"
-diff -u /etc/hosts /mnt/lustre/hosts || fail "/etc/hosts copy different" 4
+echo "touching $OSCMT"
+touch $OSCMT || fail "can't touch $OSCMT" 2
+echo "copying /etc/hosts to $OSCMT/hosts"
+cp /etc/hosts $OSCMT || fail "can't cp /etc/hosts to $OSCMT/hosts" 3
+echo "comparing /etc/hosts and $OSCMT/hosts"
+diff -u /etc/hosts $OSCMT/hosts || fail "$OSCMT/hosts different" 4
 
 # ok, that hopefully worked, so let's do a little more
 FILES=`find /etc -type f`
-echo "copying files from /etc to /mnt/lustre"
-tar cf - $FILES | tar xf - -C /mnt/lustre || fail "copying /etc" 10
+echo "copying files from /etc to $OSCMT/etc"
+tar cf - $FILES | tar xvf - -C $OSCMT || fail "copying /etc" 10
 
 echo "comparing newly copied files"
 for f in $FILES; do
-	diff -q $f /mnt/lustre/$f || ERROR=11
+	diff -q $f $OSCMT/$f || ERROR=11
 done
 
 [ "$ERROR" ] && fail "old and new files are different" 11
@@ -37,10 +40,10 @@ sh llcleanup.sh $@
 
 echo | sh llrsetup.sh $@ || exit 20
 echo "comparing previously copied files"
-diff -u /etc/hosts /mnt/lustre/hosts || fail "/etc/hosts is now different" 21
+diff -u /etc/hosts $OSCMT/hosts || fail "$OSCMT/hosts is now different" 21
 
 for f in $FILES; do
-	diff -q $f /mnt/lustre/$f || ERROR=22
+	diff -q $f $OSCMT/$f || ERROR=22
 done
 
 [ "$ERROR" ] && fail "old and new files are different on second diff" 23
@@ -48,9 +51,12 @@ done
 sh llcleanup.sh $@
 echo | sh llrsetup.sh $@ || exit 24
 
-echo "removing files from /mnt/lustre/etc"
-rm /mnt/lustre/hosts || fail "can't remove /mnt/lustre/hosts" 25
+echo "truncating $OSCMT/hosts"
+> $OSCMT/hosts || fail "can't truncate $OSTMT/hosts" 25
+echo "removing $OSCMT/hosts"
+rm $OSCMT/hosts || fail "can't remove $OSCMT/hosts" 26
 
-rm -r /mnt/lustre/etc || fail "can't remove /mnt/lustre/etc" 26
+echo "removing $OSCMT/etc"
+rm -r $OSCMT/etc || fail "can't remove $OSCMT/etc" 27
 
 sh llcleanup.sh $@
