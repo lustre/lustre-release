@@ -118,7 +118,7 @@ static void lcw_cb(unsigned long data)
 
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
 
-        CWARN("Watchdog triggered for pid %d: it was inactive for %dus\n",
+        CWARN("Watchdog triggered for pid %d: it was inactive for %dms\n",
               lcw->lcw_pid, (lcw->lcw_time * 1000) / HZ);
 
         tsk = lcw_lookup_task(lcw);
