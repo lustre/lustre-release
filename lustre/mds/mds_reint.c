@@ -35,10 +35,9 @@ extern struct ptlrpc_request *mds_prep_req(int size, int opcode, int namelen, ch
 
 static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_request *req)
 {
-	struct vfsmount *mnt;
 	struct dentry *de;
 
-	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, &mnt);
+	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
 	if (IS_ERR(de)) { 
 		req->rq_rephdr->status = -ESTALE;
 		return 0;
@@ -87,7 +86,6 @@ static inline void mds_store_objid(struct inode *inode, __u64 *id)
 static int mds_reint_create(struct mds_update_record *rec, 
 			    struct ptlrpc_request *req)
 {
-	struct vfsmount *mnt;
 	int type = rec->ur_mode & S_IFMT;
 	struct dentry *de;
 	struct mds_rep *rep = req->rq_rep.mds;
@@ -95,7 +93,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 	int rc;
 	ENTRY;
 
-	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, &mnt);
+	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
 	if (IS_ERR(de)) { 
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
@@ -171,13 +169,12 @@ static int mds_reint_create(struct mds_update_record *rec,
 static int mds_reint_unlink(struct mds_update_record *rec, 
 			    struct ptlrpc_request *req)
 {
-	struct vfsmount *mnt;
 	struct dentry *de;
 	struct dentry *dchild; 
 	int rc;
 	ENTRY;
 
-	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, &mnt);
+	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
 	if (IS_ERR(de)) { 
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
@@ -226,7 +223,6 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 static int mds_reint_link(struct mds_update_record *rec, 
 			    struct ptlrpc_request *req)
 {
-	struct vfsmount *mnt;
 	struct dentry *de_src = NULL;
 	struct dentry *de_tgt_dir = NULL;
 	struct dentry *dchild = NULL; 
@@ -234,13 +230,13 @@ static int mds_reint_link(struct mds_update_record *rec,
 	ENTRY;
 
 	rc = -ESTALE;
-	de_src = mds_fid2dentry(req->rq_obd, rec->ur_fid1, &mnt);
+	de_src = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
 	if (IS_ERR(de_src)) { 
 		EXIT;
 		goto out_link;
 	}
 
-	de_tgt_dir = mds_fid2dentry(req->rq_obd, rec->ur_fid2, &mnt);
+	de_tgt_dir = mds_fid2dentry(req->rq_obd, rec->ur_fid2, NULL);
 	if (IS_ERR(de_tgt_dir)) { 
 		rc = -ESTALE;
 		EXIT;
@@ -276,7 +272,6 @@ static int mds_reint_link(struct mds_update_record *rec,
 static int mds_reint_rename(struct mds_update_record *rec, 
 			    struct ptlrpc_request *req)
 {
-	struct vfsmount *mnt;
 	struct dentry *de_srcdir = NULL;
 	struct dentry *de_tgtdir = NULL;
 	struct dentry *de_old = NULL; 
@@ -285,13 +280,13 @@ static int mds_reint_rename(struct mds_update_record *rec,
 	ENTRY;
 
 	rc = -ESTALE;
-	de_srcdir = mds_fid2dentry(req->rq_obd, rec->ur_fid1, &mnt);
+	de_srcdir = mds_fid2dentry(req->rq_obd, rec->ur_fid1, NULL);
 	if (IS_ERR(de_srcdir)) { 
 		EXIT;
 		goto out_rename;
 	}
 
-	de_tgtdir = mds_fid2dentry(req->rq_obd, rec->ur_fid2, &mnt);
+	de_tgtdir = mds_fid2dentry(req->rq_obd, rec->ur_fid2, NULL);
 	if (IS_ERR(de_tgtdir)) { 
 		rc = -ESTALE;
 		EXIT;

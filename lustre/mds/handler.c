@@ -209,6 +209,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 	/* now to find a dentry.
 	 * If possible, get a well-connected one
 	 */
+	if (mnt)
+		*mnt = mds->mds_vfsmnt;
 	spin_lock(&dcache_lock);
 	for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
 		result = list_entry(lp,struct dentry, d_alias);
@@ -217,6 +219,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 			result->d_vfs_flags |= DCACHE_REFERENCED;
 			spin_unlock(&dcache_lock);
 			iput(inode);
+			if (mnt)
+				mntget(*mnt);
 			return result;
 		}
 	}
@@ -226,6 +230,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 		iput(inode);
 		return ERR_PTR(-ENOMEM);
 	}
+	if (mnt)
+		mntget(*mnt);
 	result->d_flags |= DCACHE_NFSD_DISCONNECTED;
 	return result;
 }
