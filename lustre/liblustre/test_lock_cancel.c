@@ -78,6 +78,7 @@ int main(int argc, char *argv[])
 {
 	int fd;
         long time1, time2;
+        struct stat statbuf;
 
         __liblustre_setup_();
 
@@ -103,23 +104,34 @@ int main(int argc, char *argv[])
         if (rank == 1) {
                 printf("Node 1: creating file %s ...\n", test_file_name);
                 fflush(stdout);
+
                 fd = open(test_file_name, O_CREAT|O_RDWR, 0755);
                 if (fd < 0) {
                         printf("Node %d: creat file err: %d", rank, fd);
                         fflush(stdout);
                         goto cleanup;
                 }
-                printf("Node %d: done create file\n", rank);
+                close(fd);
+                printf("Node 1: done creation. perform stat on file %s ...\n", test_file_name);
+                fflush(stdout);
+
+                if (stat(test_file_name, &statbuf)) {
+                        printf("Node %d: stat file err: %d", rank, fd);
+                        fflush(stdout);
+                        goto cleanup;
+                }
+
+                printf("Node %d: done stat on file\n", rank);
                 fflush(stdout);
         } else {
-                printf("Node %d: waiting node 1 create file\n", rank);
+                printf("Node %d: waiting node 1 create & stat file\n", rank);
                 fflush(stdout);
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
         
         if (rank == 1) {
-                printf("Node 1: file has been created, abort excution here!!!!!!!\n");
+                printf("Node 1: file has been create+stat, abort excution here!!!!!!!\n");
                 fflush(stdout);
                 exit(0);
         }
@@ -128,21 +140,19 @@ int main(int argc, char *argv[])
         printf("Node %d: synced with Node 1. sleep 5 seconds...\n", rank);
         fflush(stdout);
         sleep(5);
-        printf("Node %d: wakeup from sleep. perform open()...\n", rank);
+        printf("Node %d: wakeup from sleep. perform unlink()...\n", rank);
         fflush(stdout);
 
         time1 = time(NULL);
-        fd = open(test_file_name, O_RDWR);
-        if (fd < 0) {
-                printf("Node %d: error open existed file: %d\n", rank, fd);
+        if (unlink(test_file_name)) {
+                printf("Node %d: error unlink file: %d\n", rank, fd);
                 fflush(stdout);
                 goto cleanup;
         }
         time2 = time(NULL);
-        printf("Node %d: successfully opened file, cost %ld seconds.\n",
+        printf("Node %d: successfully unlink file, cost %ld seconds.\n",
                 rank, time2 - time1);
         fflush(stdout);
-        close(fd);
 
 cleanup:
         __liblustre_cleanup_();
