@@ -701,11 +701,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
                                                 &extent, &lockh, ast_flags);
                 down(&inode->i_sem);
-                if (rc != ELDLM_OK) {
-                        if (rc > 0)
-                                RETURN(-ENOLCK);
+                if (rc != ELDLM_OK)
                         RETURN(rc);
-                }
 
                 rc = vmtruncate(inode, attr->ia_size);
                 if (rc == 0)
