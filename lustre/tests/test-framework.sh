@@ -232,6 +232,7 @@ add_facet() {
 add_mds() {
     facet=$1
     shift
+    rm -f ${facet}active
     add_facet $facet 
     do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
 }
@@ -246,6 +247,7 @@ add_mdsfailover() {
 add_ost() {
     facet=$1
     shift
+    rm -f ${facet}active
     add_facet $facet
     do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc $*
 }
