@@ -156,6 +156,7 @@ static int handle_incoming_request(struct obd_device *obddev,
                 CERROR("incomplete request: ptl %d from %Lx xid %Ld\n",
                        svc->srv_req_portal, event->initiator.nid,
                        request.rq_xid);
+                spin_unlock(&svc->srv_lock);
                 return -EINVAL;
         }
 
@@ -163,6 +164,7 @@ static int handle_incoming_request(struct obd_device *obddev,
                 CERROR("wrong lustre_msg magic: ptl %d from %Lx xid %Ld\n",
                        svc->srv_req_portal, event->initiator.nid,
                        request.rq_xid);
+                spin_unlock(&svc->srv_lock);
                 return -EINVAL;
         }
 
@@ -170,6 +172,7 @@ static int handle_incoming_request(struct obd_device *obddev,
                 CERROR("wrong lustre_msg version: ptl %d from %Lx xid %Ld\n",
                        svc->srv_req_portal, event->initiator.nid,
                        request.rq_xid);
+                spin_unlock(&svc->srv_lock);
                 return -EINVAL;
         }
 
