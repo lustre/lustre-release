@@ -110,8 +110,7 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
         if (rc != PTL_OK) {
                 CERROR("PtlPut(%d, %d, %d) failed: %d\n", remote_id.nid,
                        portal, request->rq_xid, rc);
-                /* FIXME: tear down md */
-                BUG();
+                PtlMDUnlink(md_h);
         }
 
         return rc;
