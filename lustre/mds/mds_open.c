@@ -119,7 +119,7 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
                 int err;
                 void *handle;
                 mds_start_transno(mds);
-                handle = fsfilt_start(obd, dir, FSFILT_OP_SETATTR);
+                handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE);
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
                         mds_finish_transno(mds, handle, req, rc);
@@ -184,7 +184,8 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
  out_pack:
         body->handle.addr = (__u64)(unsigned long)mfd;
         body->handle.cookie = mfd->mfd_servercookie;
-        CDEBUG(D_INODE, "llite file "LPX64": addr %p, cookie "LPX64"\n",
-               mfd->mfd_clienthandle.addr, mfd, mfd->mfd_servercookie);
+        if (mfd)
+                CDEBUG(D_INODE, "file "LPX64": addr %p, cookie "LPX64"\n",
+                       mfd->mfd_clienthandle.addr, mfd, mfd->mfd_servercookie);
         RETURN(0);
 }
