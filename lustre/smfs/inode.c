@@ -10,6 +10,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <linux/lustre_idl.h>
 #include "smfs_internal.h" 
 
 void duplicate_inode(struct inode *cache_inode, struct inode *inode)
@@ -144,6 +145,7 @@ static void smfs_write_inode(struct inode *inode, int wait)
 	if (!cache_inode || !cache_sb)
 		return;
 		
+	duplicate_inode(inode, cache_inode); 
 	if (cache_sb->s_op->write_inode)
 		cache_sb->s_op->write_inode(cache_inode, wait);
 

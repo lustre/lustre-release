@@ -14,7 +14,7 @@
 #include <linux/stat.h>
 #include <linux/unistd.h>
 #include <linux/miscdevice.h>
-                                                                                                                                                                                                     
+#include <linux/lustre_idl.h>                                                                                                                                                                                                     
 #include "smfs_internal.h" 
 
 int sm_stack = 0;

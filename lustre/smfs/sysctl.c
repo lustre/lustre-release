@@ -14,7 +14,7 @@
 #include <linux/string.h>
 #include <linux/sysctl.h>
 #include <linux/proc_fs.h>
-
+#include <linux/lustre_idl.h>
 #include "smfs_internal.h" 
 
 

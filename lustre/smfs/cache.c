@@ -9,7 +9,9 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <linux/lustre_idl.h>
 #include <portals/list.h>
+
 #include "smfs_internal.h" 
 struct sm_ops smfs_operations;
  
@@ -18,6 +20,8 @@ extern struct file_operations  smfs_file_fops;
 extern struct inode_operations smfs_sym_iops; 
 extern struct file_operations smfs_sym_fops;
 extern struct super_operations smfs_super_ops;
+extern struct journal_operations smfs_journal_ops;
+
 
 inline struct super_operations *cache_sops(struct sm_ops *smfs_ops)
 {
@@ -57,6 +61,11 @@ inline struct file_operations *cache_sfops(struct sm_ops *smfs_ops)
 inline struct dentry_operations *cache_dops(struct sm_ops *smfs_ops)
 {
 	return &smfs_ops->sm_dentry_ops;
+}
+
+inline struct journal_operations *journal_ops(struct sm_ops *smfs_ops)
+{
+	return &smfs_ops->sm_journal_ops;
 }
 
 void init_smfs_cache()
@@ -357,5 +366,23 @@ void sm_set_sb_ops (struct super_block *cache_sb,
 	
 	sb->s_op = cache_sops(&smfs_operations);
 	return;	
+}
+
+void setup_sm_journal_ops(char *cache_type)
+{
+	struct journal_operations *jops;
+
+	jops = journal_ops(&smfs_operations); 
+        
+	if (strlen(cache_type) == strlen("ext3") &&
+            memcmp(cache_type, "ext3", strlen("ext3")) == 0 ) {
+#if defined(CONFIG_EXT3_FS) || defined (CONFIG_EXT3_FS_MODULE)
+		memcpy(jops, &smfs_ext3_journal_ops, 
+		       sizeof(struct journal_operations)); 
+#else
+		memset(jops, 0, sizeof(journal_operations));
+#endif
+                CDEBUG(D_SUPER, "ops at %p\n", jops);
+        }
 }
 

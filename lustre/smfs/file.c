@@ -11,6 +11,7 @@
 #include <linux/stat.h>
 #include <linux/unistd.h>
 #include <linux/pagemap.h>
+#include <linux/lustre_idl.h>
 #include "smfs_internal.h" 
         
 /* instantiate a file handle to the cache file */
