@@ -1,12 +1,9 @@
-uml-vanilla-2.6.6-p1.patch
-uml-vanilla-2.6.6-p2.patch
-uml-vanilla-2.6.6-p3.patch
 lustre_version.patch
 vfs_intent-2.6-vanilla.patch
 vfs_nointent-2.6-vanilla.patch
-vfs_races-2.6-suse.patch
+vfs_races-2.6-vanilla.patch
 ext3-wantedi-misc-2.6-suse.patch 
-nfs-cifs-intent-2.6-suse.patch 
+nfs-cifs-intent-2.6-vanilla.patch 
 iopen-misc-2.6-suse.patch 
 export-truncate-2.6-suse.patch 
 export_symbols-2.6-suse.patch 

@@ -326,7 +326,7 @@ static void put_pages_back_on_cpu(void *info)
 
                 page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
-                LASSERT(atomic_read(&page->count) > 0);
+                LASSERT(page_count(page) > 0);
 
                 if ((unsigned long)page->mapping != smp_processor_id())
                         continue;
@@ -366,7 +366,7 @@ static void put_pages_on_daemon_list_on_cpu(void *info)
 
                 page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
-                LASSERT(atomic_read(&page->count) > 0);
+                LASSERT(page_count(page) > 0);
                 if ((unsigned long)page->mapping != smp_processor_id())
                         continue;
 
@@ -380,7 +380,7 @@ static void put_pages_on_daemon_list_on_cpu(void *info)
                                           struct page, PAGE_LIST_ENTRY);
 
                         LASSERT(page->index <= PAGE_SIZE);
-                        LASSERT(atomic_read(&page->count) > 0);
+                        LASSERT(page_count(page) > 0);
 
                         page->index = 0;
                         list_del(&PAGE_LIST(page));
@@ -414,7 +414,7 @@ void trace_debug_print(void)
 
                 page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
-                LASSERT(atomic_read(&page->count) > 0);
+                LASSERT(page_count(page) > 0);
 
                 p = page_address(page);
                 while (p < ((char *)page_address(page) + PAGE_SIZE)) {
@@ -471,7 +471,7 @@ int tracefile_dump_all_pages(char *filename)
 
                 page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
-                LASSERT(atomic_read(&page->count) > 0);
+                LASSERT(page_count(page) > 0);
 
                 rc = filp->f_op->write(filp, page_address(page), page->index,
                                        &filp->f_pos);
@@ -509,7 +509,7 @@ void trace_flush_pages(void)
 
                 page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
-                LASSERT(atomic_read(&page->count) > 0);
+                LASSERT(page_count(page) > 0);
 
                 list_del(&PAGE_LIST(page));
                 page->mapping = NULL;
@@ -611,7 +611,7 @@ static int tracefiled(void *arg)
                 page = list_entry(pc.pc_pages.next, struct page,
                                   PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
-                LASSERT(atomic_read(&page->count) > 0);
+                LASSERT(page_count(page) > 0);
 
                 hdr = page_address(page);
                 hdr->ph_flags |= PH_FLAG_FIRST_RECORD;
@@ -619,7 +619,7 @@ static int tracefiled(void *arg)
                 list_for_each_safe(pos, tmp, &pc.pc_pages) {
                         page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                         LASSERT(page->index <= PAGE_SIZE);
-                        LASSERT(atomic_read(&page->count) > 0);
+                        LASSERT(page_count(page) > 0);
 
                         rc = filp->f_op->write(filp, page_address(page),
                                         page->index, &filp->f_pos);
@@ -813,7 +813,7 @@ static void trace_cleanup_on_cpu(void *info)
 
                 page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 LASSERT(page->index <= PAGE_SIZE);
-                LASSERT(atomic_read(&page->count) > 0);
+                LASSERT(page_count(page) > 0);
 
                 list_del(&PAGE_LIST(page));
                 page->mapping = NULL;
