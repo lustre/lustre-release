@@ -35,6 +35,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
         { "kbytestotal",     lprocfs_rd_kbytestotal, 0, 0 },
         { "kbytesfree",      lprocfs_rd_kbytesfree,  0, 0 },
+        { "kbytesavail",     lprocfs_rd_kbytesavail, 0, 0 },
         { "filestotal",      lprocfs_rd_filestotal,  0, 0 },
         { "filesfree",       lprocfs_rd_filesfree,   0, 0 },
         //{ "filegroups",      lprocfs_rd_filegroups,  0, 0 },
