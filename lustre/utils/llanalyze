@@ -5,6 +5,7 @@ use Term::ANSIColor;
 
 GetOptions("pid=i" => \$pid, 
            "trace!" => \$trace, 
+           "silent!" => \$silent, 
            "rpctrace!" => \$rpctrace, 
            "nodlm!" => \$nodlm,
            "noclass!" => \$noclass,
@@ -107,6 +108,104 @@ sub setcolor
     }
 }
 
+sub study_lock
+{
+    $_ = shift;
+    my $rc;
+
+    $rc = /completion callback handler START ns: (.*) lock: (.*) lrc: (.*) mode/;
+    if ($rc) {
+        $completion_callbacks{$1}->{$2} = $3;
+#         print color("white");
+#         print "---CP CB START: $1 $2 $3\n";
+#         print color("reset");
+    }
+    $rc = /callback handler finished.* ns: (.*) lock: (.*) lrc: (.*) mode/;
+    if ($rc) {
+#         print color("white");
+#         print "---CP CB END: $1 $2 $3 deleting $completion_callbacks{$1}->{$2}\n";
+#         print color("reset");
+        delete $completion_callbacks{$1}->{$2};
+    }
+
+    if ($rc) {
+        $rc = /client blocking AST callback handler START ns: (.*) lock: (.*) lrc: (.*) mode/;
+        $blocking_callbacks{$1}->{$2} = $3;
+#         print color("white");
+#         print "---BL CB START: $1 $2\n";
+#         print color("reset");
+    }
+    $rc = /client blocking callback handler END ns: (.*) lock: (.*) lrc: (.*) mode/;
+    if ($rc) {
+#         print color("white");
+#         print "---BL CB END: $1 $2 $3 deleting $blocking_callbacks{$1}->{$2}\n";
+#         print color("reset");
+        delete $blocking_callbacks{$1}->{$2};
+    }
+
+    $rc = /ldlm_lock_addref.*ns: (.*) lock: (.*) lrc: (.*) mode/;
+#     print color("white");
+#     print "------>addref ns: $1 lock: $2 lrc: $3\n" if ($rc);
+#     print color("reset");
+    $locks{$1}->{$2} = {$3} if ($rc);
+    $rc = /ldlm_lock_decref.*ns: (.*) lock: (.*) lrc: (.*) mode/;
+#     print color("white");
+#     print "------>decref ns: $1 lock: $2 lrc: $3\n" if ($rc);
+#     print color("reset");
+    $locks{$1}->{$2} = {$3} if ($rc);
+}
+
+sub hanging_locks 
+{
+    my $found; 
+    my $ns;
+
+    foreach (keys %completion_callbacks) {
+        $ns = $_;
+        $found = 0;
+        foreach (keys %{$completion_callbacks{$ns}}) {
+            if (!$found) {
+                print "Unfinished completions in ns $ns: \n";
+                $found =1;
+            }
+            print "  lock: $_ lrc: $completion_callbacks{$ns}->{$_}\n";
+        }
+    }
+    foreach (keys %blocking_callbacks) {
+        $ns = $_;
+        $found = 0;
+        foreach (keys %{$blocking_callbacks{$ns}}) {
+            if (!$found) {
+                print "Unfinished blocking in ns $ns: \n";
+                $found =1;
+            }
+            printf("  lock: $_ lrc: %s\n", $blocking_callbacks{$ns}->{$_});
+        }
+    }
+
+}
+
+sub study_intent 
+{
+    $_ = shift;
+    my $rc;
+
+    $rc = /D_IT UP dentry (.*) fsdata/;
+    delete $it{$1} if ($rc);
+    $rc = /D_IT DOWN dentry (.*) fsdata/;
+    $it{$1} = "yes"  if ($rc);
+}
+
+sub unmatched_intents { 
+    my $found;
+    foreach (keys %it) {
+        if (!$found) {
+            print "Unmatched intents: \n";
+            $found =1;
+        }
+        print "  $_\n";
+    }
+}
 
 while (<STDIN>) {
     $linepid = extractpid($_);
@@ -119,6 +218,14 @@ while (<STDIN>) {
         chop $prefix->{$linepid};
         chop $prefix->{$linepid};
     }
+
+    if ($linemask == $masks->{DENTRY}) {
+        study_intent($_);
+    }
+    if ($linemask == $masks->{DLMTRACE}) {
+        study_lock($_);
+    }
+
     if ( !$pid || $linepid == $pid) {
         next if ($rpctrace && $linemask != $masks->{RPCTRACE});
         next if ($trace && $linemask != $masks->{TRACE});
@@ -129,7 +236,7 @@ while (<STDIN>) {
         next if ($noclass && 
                  (  $linesubsys == $subsys->{CLASS}));
 
-       next if ($nonet && 
+        next if ($nonet && 
                  (  $linesubsys == $subsys->{RPC} ||
                     $linesubsys == $subsys->{NET} ||
                     $linesubsys == $subsys->{PORTALS} ||
@@ -137,15 +244,21 @@ while (<STDIN>) {
                     $linesubsys == $subsys->{QSWNAL} ||
                     $linesubsys == $subsys->{GMNAL}));
 
+
 #        printf "sub/mask: %s - %s\n", getsubsys($_), getmask($_);
-        setcolor($linemask);
-        printf "%s%s", $prefix->{$linepid}, $_;
-        print color("reset");
-#        last if $count++ > 100;
+        if (!$silent) { 
+            setcolor($linemask);
+            printf("%s%s", $prefix->{$linepid}, $_);
+            print color("reset");
+        }
+            #        last if $count++ > 100;
     }
     if (entering($_)) {
         $prefix->{$linepid} .= '  ';
     } 
 }
 
+
+unmatched_intents();
+hanging_locks();
 # printf "argv %s pid %d\n", $ARGV[0], extractpid($ARGV[0]);
