@@ -100,7 +100,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	err = mdc_getattr(&sbi->ll_mds_client, ino, type,
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if ( err ) {
-                CERROR("obdo_fromid failed\n");
+                CERROR("failure %d inode %ld\n", err, ino);
                 ptlrpc_free_req(request);
                 EXIT;
                 return ERR_PTR(-abs(err)); 

@@ -9,12 +9,16 @@ MODULE = mds
 modulefs_DATA = mds.o
 EXTRA_PROGRAMS = mds
 
+LINX=mds_pack.c mds_updates.c
 mds_pack.c: 
 	ln -s ../lib/mds_pack.c .
 mds_updates.c: 
 	ln -s ../lib/mds_updates.c .
 
-mds_SOURCES = mds_pack.c handler.c mds_reint.c mds_updates.c
+mds_SOURCES = handler.c mds_reint.c $(LINX)
+
+dist-hook:
+	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
 
 include $(top_srcdir)/Rules
 

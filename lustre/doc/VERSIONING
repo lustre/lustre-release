@@ -2,6 +2,7 @@ Lustre versioning
 =================
 
 0.0.1  2/19/2002 <braam@clusterfs.com>
+0.0.2  3/14/2002 <braam@clusterfs.com> describe branches / stable tag
 
 This document describes versioning of source and binaries for Lustre.
 
@@ -34,9 +35,33 @@ New numbers are used as follows:
 4. test: 
  - when developers feel it is time to exchange a named version
 
-What will run, what won't:
+What will run, what won't ? 
+---------------------------
 
 1. If the test level is non-zero no guarantees of any kind are made. 
+
 2. For three digit releases/tags the code should perform 
    according to the announcement.
 
+Moving tags
+-----------
+
+The last stable release will be tagged:            CVS tag "stable"
+The last operational development snapshot will be  CVS tag "dstable"
+
+Branches
+--------
+
+For even minor releases a branch tag will be created.  The branch tag
+will be of the form: 
+
+bmajor_minor
+
+Note that the CVS head is where development is going.  If developers
+use a branch they must eventually merge that back into the head.
+Typically this is done by importing changes into the branch and
+removing the sticky tags:
+
+cvs update -A
+
+fixing any conflicts and then committing. 

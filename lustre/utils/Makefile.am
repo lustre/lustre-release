@@ -1,5 +1,6 @@
 DEFS:=
 
+EXTRA_DIST = parser.h
 CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I$(PORTALS)/include \
 -I/usr/lib/glib/include -I$(srcdir)/../include -Wall
 KFLAGS:=

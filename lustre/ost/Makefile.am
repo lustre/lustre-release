@@ -8,12 +8,15 @@ MODULE = ost
 modulefs_DATA = ost.o
 EXTRA_PROGRAMS = ost
 
+LINX=page.c obd_pack.c
 obd_pack.c: 
 	ln -s ../lib/obd_pack.c .
 page.c:
 	ln -s ../lib/page.c
 
-ost_SOURCES = page.c obd_pack.c ost_handler.c
+ost_SOURCES = $(LINX) ost_handler.c
+dist-hook:
+	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
 
 include $(top_srcdir)/Rules
 

@@ -1,16 +1,17 @@
 # obd.spec
-%define version 0.007
-%define kversion 2.4.9
-%define aclevel ac10
-%define izolevel 2
+%define linuxdir @LINUX@
+%define version 0.3.2.0
+%define kversion @KVERSION@
+%define extra_version @EXTRAVERSION@
+%define module_dir @moduledir@
 Release: 0
-%define extraversion -%{aclevel}
+%define extraversion -%{extra_version}
 %define kuname %{kversion}%{extraversion}
 %define knamever %{kversion}_%{aclevel}
-%define bdir $RPM_BUILD_DIR/obd-%{version}-%{knamever}
+%define bdir $RPM_BUILD_DIR/%{module_dir}/fs
 
-Summary: Object-Based Disk utility programs
-Name: lustre
+Summary: Lustre Lite File System
+Name: lustre-lite
 Version: %{version}
 Copyright: GPL
 Group: Utilities/System
@@ -19,22 +20,22 @@ BuildRoot: /var/tmp/obd-%{version}-root
 Source: ftp://ftp.lustre.com/pub/lustre/obd-%{version}.tar.gz
 
 %description
-Object-Based Disk utilities and demonstration scripts.
+The Lustre Lite Cluster File System: kernel drivers for file system,
+servers and utilities.
 
 %package -n lustre-modules
-Summary: Object-Based Disk storage drivers for Linux %{kuname}
+Summary: Kernel Lustre drivers for Linux %{kuname}
 Group: Development/Kernel
-#Requires: kernel-intermezzo = %{knamever}_%{izolevel}
 
 %description -n lustre-modules
-Object-Based Disk storage drivers for Linux %{kuname}.
+Lustre file System, server and network drivers for Linux %{kuname}.
 
 %package -n lustre-source
 Summary: Object-Based Disk storage driver source
 Group: Development/Kernel
 
 %description -n lustre-source
-Object-Based Disk storage driver source.
+Lustre Lite Source for further development
 
 %prep
 %setup -n obd-%{version}
@@ -47,10 +48,7 @@ mkdir -p $RPM_BUILD_ROOT/usr/src/obd-%{version}
 tar -cf - . | (cd $RPM_BUILD_ROOT/usr/src/obd-%{version} && tar -xvBpf -)
 
 # Set an explicit path to our Linux tree, if we can.
-enable=
-linuxdir=/usr/src/linux-%{kuname}
-test -d $linuxdir && enable=--enable-linuxdir=$linuxdir
-./configure $enable
+./configure --enable-linuxdir=$linuxdir
 make
 
 %install
@@ -65,7 +63,16 @@ make install prefix=$RPM_BUILD_ROOT
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) /lib/modules/%{kuname}/fs/obd*.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/llight.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/ptlrpc.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/mds.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/mdc.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/ost.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/osc.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/obdclass.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/obdfilter.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/obdecho.o
+%attr(-, root, root) /lib/modules/%{kuname}/fs/obdext2.o
 
 %files -n lustre-source
 %attr(-, root, root) /usr/src/obd-%{version}

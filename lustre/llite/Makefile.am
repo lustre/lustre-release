@@ -13,6 +13,10 @@ page.c:
 	-ln -s ../lib/page.c
 
 
+LINX=page.c
 llight_SOURCES =  page.c super.c rw.c file.c dir.c sysctl.c namei.c symlink.c
+
+dist-hook:
+	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
 
 include $(top_srcdir)/Rules
