@@ -34,7 +34,7 @@ rmmod obdclass
 
 $PTLCTL <<EOF
 setup tcp
-disconnect localhost
+disconnect
 del_uuid self
 del_uuid mds
 del_uuid ost
