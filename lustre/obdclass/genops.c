@@ -25,6 +25,81 @@ kmem_cache_t *obdo_cachep = NULL;
 kmem_cache_t *export_cachep = NULL;
 kmem_cache_t *import_cachep = NULL;
 
+/* I would prefer if these next four functions were in ptlrpc, to be honest,
+ * but obdclass uses them for the netregression ioctls. -phil */
+static int sync_io_timeout(void *data)
+{
+        struct io_cb_data *cbd = data;
+        struct ptlrpc_bulk_desc *desc = cbd->desc;
+
+        ENTRY;
+        desc->bd_connection->c_level = LUSTRE_CONN_RECOVD;
+        desc->bd_flags |= PTL_RPC_FL_TIMEOUT;
+        if (desc->bd_connection && class_signal_connection_failure) {
+
+                /* XXXshaver Do we need a resend strategy, or do we just
+                 * XXXshaver return -ERESTARTSYS and punt it?
+                 */
+                CERROR("signalling failure of conn %p\n", desc->bd_connection);
+                class_signal_connection_failure(desc->bd_connection);
+
+                /* We go back to sleep, until we're resumed or interrupted. */
+                RETURN(0);
+        }
+
+        /* If we can't be recovered, just abort the syscall with -ETIMEDOUT. */
+        RETURN(1);
+}
+
+static int sync_io_intr(void *data)
+{
+        struct io_cb_data *cbd = data;
+        struct ptlrpc_bulk_desc *desc = cbd->desc;
+
+        ENTRY;
+        desc->bd_flags |= PTL_RPC_FL_INTR;
+        RETURN(1); /* ignored, as of this writing */
+}
+
+int ll_sync_io_cb(struct io_cb_data *data, int err, int phase)
+{
+        int ret;
+        ENTRY;
+
+        if (phase == CB_PHASE_START) {
+                struct l_wait_info lwi;
+                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, sync_io_timeout,
+                                       sync_io_intr, data);
+                ret = l_wait_event(data->waitq, data->complete, &lwi);
+                if (atomic_dec_and_test(&data->refcount))
+                        OBD_FREE(data, sizeof(*data));
+                if (ret == -ERESTARTSYS)
+                        return ret;
+        } else if (phase == CB_PHASE_FINISH) {
+                data->err = err;
+                data->complete = 1;
+                wake_up(&data->waitq);
+                if (atomic_dec_and_test(&data->refcount))
+                        OBD_FREE(data, sizeof(*data));
+                return err;
+        } else
+                LBUG();
+        EXIT;
+        return 0;
+}
+
+struct io_cb_data *ll_init_cb(void)
+{
+        struct io_cb_data *d;
+
+        OBD_ALLOC(d, sizeof(*d));
+        if (d) {
+                init_waitqueue_head(&d->waitq);
+                atomic_set(&d->refcount, 2);
+        }
+        RETURN(d);
+}
+
 /*
  * support functions: we could use inter-module communication, but this
  * is more portable to other OS's

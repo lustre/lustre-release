@@ -171,8 +171,6 @@ static int obdfs_brw(int rw, struct inode *inode2,
         return err;
 } /* obdfs_brw */
 
-extern void set_page_clean(struct page *);
-
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
 static int obdfs_commit_page(struct page *page, int create, int from, int to)
 {

@@ -645,6 +645,8 @@ EXPORT_SYMBOL(class_uuid_unparse);
 EXPORT_SYMBOL(class_signal_connection_failure);
 EXPORT_SYMBOL(mds_destroy_export);
 EXPORT_SYMBOL(ldlm_destroy_export);
+EXPORT_SYMBOL(ll_sync_io_cb);
+EXPORT_SYMBOL(ll_init_cb);
 
 static int __init init_obdclass(void)
 {

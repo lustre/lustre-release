@@ -30,7 +30,7 @@
 #include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
 #include <linux/lustre_lite.h> /* for ll_i2info */
 
-static int osc_getattr(struct lustre_handle *conn, struct obdo *oa, 
+static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *md)
 {
         struct ptlrpc_request *request;
@@ -38,8 +38,8 @@ static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_GETATTR, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_GETATTR, 1,
+                                  &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -145,8 +145,8 @@ static int osc_setattr(struct lustre_handle *conn, struct obdo *oa,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_SETATTR, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_SETATTR, 1,
+                                  &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -157,9 +157,7 @@ static int osc_setattr(struct lustre_handle *conn, struct obdo *oa,
 
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
-        GOTO(out, rc);
 
- out:
         ptlrpc_free_req(request);
         return rc;
 }
@@ -237,7 +235,7 @@ static int osc_punch(struct lustre_handle *conn, struct obdo *oa,
 #warning FIXME: pack only valid fields instead of memcpy, endianness, valid
         memcpy(&body->oa, oa, sizeof(*oa));
 
-        /* overload the blocks and size fields in the oa with start/end */ 
+        /* overload the blocks and size fields in the oa with start/end */
 #warning FIXME: endianness, size=start, blocks=end?
         body->oa.o_blocks = start;
         body->oa.o_size = end;
@@ -271,8 +269,8 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
                 CERROR("oa NULL\n");
                 RETURN(-EINVAL);
         }
-        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_DESTROY, 1, &size,
-                                  NULL);
+        request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_DESTROY, 1,
+                                  &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -329,7 +327,7 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
         ENTRY;
 
         if (desc->bd_flags & PTL_RPC_FL_TIMEOUT) {
-                err = (desc->bd_flags & PTL_RPC_FL_INTR ? -ERESTARTSYS : 
+                err = (desc->bd_flags & PTL_RPC_FL_INTR ? -ERESTARTSYS :
                        -ETIMEDOUT);
         }
 
@@ -437,18 +435,19 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
          *      such as a timeout in a sleep that it performs, brw_finish
          *      will never get called, and we'll leak the desc, fail to kunmap
          *      things, cats will live with dogs.  One solution would be to
-         *      export brw_finish as osc_brw_finish, so that the timeout case and
-         *      its kin could call it for proper cleanup.  An alternative would
-         *      be for an error return from the callback to cause us to clean up,
-         *      but that doesn't help the truly async cases (like LOV), which
-         *      will immediately return from their PHASE_START callback, before
-         *      any such cleanup-requiring error condition can be detected.
+         *      export brw_finish as osc_brw_finish, so that the timeout case
+         *      and its kin could call it for proper cleanup.  An alternative
+         *      would be for an error return from the callback to cause us to
+         *      clean up, but that doesn't help the truly async cases (like
+         *      LOV), which will immediately return from their PHASE_START
+         *      callback, before any such cleanup-requiring error condition can
+         *      be detected.
          */
         if (rc)
                 GOTO(out_req, rc);
 
         /* Callbacks cause asynchronous handling. */
-        rc = callback(data, 0, CB_PHASE_START); 
+        rc = callback(data, 0, CB_PHASE_START);
 
 out_req:
         ptlrpc_req_finished(request);
@@ -601,8 +600,8 @@ static int osc_brw(int cmd, struct lustre_handle *conn,
                 return osc_brw_read(conn, md, page_count, pga, callback, data);
 }
 
-static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md, 
-                       struct lustre_handle *parent_lock, 
+static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
+                       struct lustre_handle *parent_lock,
                        __u32 type, void *extentp, int extent_len, __u32 mode,
                        int *flags, void *callback, void *data, int datalen,
                        struct lustre_handle *lockh)
@@ -711,10 +710,10 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
         int err = 0;
         ENTRY;
 
-        if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE || _IOC_NR(cmd) < 
-                        IOC_LDLM_MIN_NR || _IOC_NR(cmd) > IOC_LDLM_MAX_NR) {
+        if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE ||
+            _IOC_NR(cmd) < IOC_LDLM_MIN_NR || _IOC_NR(cmd) > IOC_LDLM_MAX_NR) {
                 CDEBUG(D_IOCTL, "invalid ioctl (type %ld, nr %ld, size %ld)\n",
-                        _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
+                       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
                 RETURN(-EINVAL);
         }
 
@@ -725,12 +724,12 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 GOTO(out, err);
         }
         case IOC_LDLM_REGRESS_START: {
-                unsigned int numthreads = 1; 
-                unsigned int numheld = 10; 
-                unsigned int numres = 10; 
+                unsigned int numthreads = 1;
+                unsigned int numheld = 10;
+                unsigned int numres = 10;
                 unsigned int numext = 10;
                 char *parse;
-                
+
                 if (data->ioc_inllen1) {
                         parse = data->ioc_inlbuf1;
                         if (*parse != '\0') {
@@ -755,7 +754,7 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
                         }
                 }
 
-                err = ldlm_regression_start(obddev, conn, numthreads, 
+                err = ldlm_regression_start(obddev, conn, numthreads,
                                 numheld, numres, numext);
 
                 CERROR("-- done err %d\n", err);

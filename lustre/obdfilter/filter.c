@@ -960,6 +960,94 @@ static int filter_journal_stop(void *journal_save, struct filter_obd *filter,
         return rc;
 }
 
+static inline void lustre_put_page(struct page *page)
+{
+        kunmap(page);
+        page_cache_release(page);
+}
+
+static struct page *
+lustre_get_page_read(struct inode *inode, unsigned long index)
+{
+        struct address_space *mapping = inode->i_mapping;
+        struct page *page;
+        int rc;
+
+        page = read_cache_page(mapping, index,
+                               (filler_t*)mapping->a_ops->readpage, NULL);
+        if (!IS_ERR(page)) {
+                wait_on_page(page);
+                kmap(page);
+                if (!Page_Uptodate(page)) {
+                        CERROR("page index %lu not uptodate\n", index);
+                        GOTO(err_page, rc = -EIO);
+                }
+                if (PageError(page)) {
+                        CERROR("page index %lu has error\n", index);
+                        GOTO(err_page, rc = -EIO);
+                }
+        }
+        return page;
+
+err_page:
+        lustre_put_page(page);
+        return ERR_PTR(rc);
+}
+
+static struct page *
+lustre_get_page_write(struct inode *inode, unsigned long index)
+{
+        struct address_space *mapping = inode->i_mapping;
+        struct page *page;
+        int rc;
+
+        page = grab_cache_page(mapping, index); /* locked page */
+
+        if (!IS_ERR(page)) {
+                kmap(page);
+                /* Note: Called with "O" and "PAGE_SIZE" this is essentially
+                 * a no-op for most filesystems, because we write the whole
+                 * page.  For partial-page I/O this will read in the page.
+                 */
+                rc = mapping->a_ops->prepare_write(NULL, page, 0, PAGE_SIZE);
+                if (rc) {
+                        CERROR("page index %lu, rc = %d\n", index, rc);
+                        if (rc != -ENOSPC)
+                                LBUG();
+                        GOTO(err_unlock, rc);
+                }
+                /* XXX not sure if we need this if we are overwriting page */
+                if (PageError(page)) {
+                        CERROR("error on page index %lu, rc = %d\n", index, rc);
+                        LBUG();
+                        GOTO(err_unlock, rc = -EIO);
+                }
+        }
+        return page;
+
+err_unlock:
+        unlock_page(page);
+        lustre_put_page(page);
+        return ERR_PTR(rc);
+}
+
+static int lustre_commit_write(struct page *page, unsigned from, unsigned to)
+{
+        struct inode *inode = page->mapping->host;
+        int err;
+
+        err = page->mapping->a_ops->commit_write(NULL, page, from, to);
+        if (!err && IS_SYNC(inode))
+                err = waitfor_one_page(page);
+
+        //SetPageUptodate(page); // the client commit_write will do this
+
+        SetPageReferenced(page);
+        unlock_page(page);
+        lustre_put_page(page);
+        return err;
+}
+
 struct page *filter_get_page_write(struct inode *inode, unsigned long index,
                                    struct niobuf_local *lnb, int *pglocked)
 {

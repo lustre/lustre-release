@@ -33,6 +33,42 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_lib.h>
 
+/*
+ * Remove page from dirty list
+ */
+static void __set_page_clean(struct page *page)
+{
+        struct address_space *mapping = page->mapping;
+        struct inode *inode;
+
+        if (!mapping)
+                return;
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,9))
+        spin_lock(&pagecache_lock);
+#endif
+
+        list_del(&page->list);
+        list_add(&page->list, &mapping->clean_pages);
+
+        inode = mapping->host;
+        if (list_empty(&mapping->dirty_pages)) {
+                CDEBUG(D_INODE, "inode clean\n");
+                inode->i_state &= ~I_DIRTY_PAGES;
+        }
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,10))
+        spin_unlock(&pagecache_lock);
+#endif
+        EXIT;
+}
+
+inline void set_page_clean(struct page *page)
+{
+        if (PageDirty(page)) {
+                ClearPageDirty(page);
+                __set_page_clean(page);
+        }
+}
 
 /* SYNCHRONOUS I/O to object storage for an inode */
 static int ll_brw(int rw, struct inode *inode, struct page *page, int create)

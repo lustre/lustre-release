@@ -1003,7 +1003,6 @@ int jt_obd_test_brw(int argc, char **argv)
         struct timeval start, next_time;
         int pages = 1, objid = 3, count, next_count;
         int verbose = 1, write = 0, rw;
-        long long offset;
         char *end;
         int i;
         int len;

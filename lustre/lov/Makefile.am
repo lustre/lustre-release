@@ -10,12 +10,9 @@ modulefs_DATA = lov.o
 EXTRA_PROGRAMS = lov
 LINX= lov_pack.c
 
-lov_SOURCES = lov_obd.c page.c  $(LINX)
+lov_SOURCES = lov_obd.c $(LINX)
 
 lov_pack.c: 
 	test -e lov_pack.c || ln -sf $(top_srcdir)/lib/lov_pack.c
-
-page.c: 
-	test -e page.c || ln -sf $(top_srcdir)/lib/page.c
 
 include $(top_srcdir)/Rules

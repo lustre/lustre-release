@@ -52,10 +52,10 @@ static struct timer_list waiting_locks_timer;
 /*
  * Indicate that we're waiting for a client to call us back cancelling a given
  * lock.  We add it to the pending-callback chain, and schedule the lock-timeout
- * timer to fire appropriately.  (We round up to the next second, to avoid floods
- * of timer firings during periods of high lock contention and traffic.
+ * timer to fire appropriately.  (We round up to the next second, to avoid
+ * floods of timer firings during periods of high lock contention and traffic.
  */
-int ldlm_add_waiting_lock(struct ldlm_lock *lock)
+static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
         unsigned long timeout_rounded;
         ENTRY;
@@ -81,7 +81,7 @@ int ldlm_add_waiting_lock(struct ldlm_lock *lock)
  * callback arrive without incident.  This adjusts the lock-timeout timer if
  * needed.  Returns 0 if the lock wasn't pending after all, 1 if it was.
  */
-int ldlm_del_waiting_lock(struct ldlm_lock *lock)
+static int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 {
         struct list_head *list_next;
 

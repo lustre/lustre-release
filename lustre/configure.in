@@ -95,10 +95,8 @@ AC_SUBST(demodir)
 # not needed until the AC_CHECK_LIB(readline) above works
 # AM_CONFIG_HEADER(include/config.h)
 
-AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile \
-         obdecho/Makefile ptlrpc/Makefile \
-	lov/Makefile osc/Makefile mdc/Makefile mds/Makefile ost/Makefile utils/Makefile \
-	tests/Makefile obdfilter/Makefile obdclass/Makefile \
-	llite/Makefile obdfs/Makefile demos/Makefile \
-	doc/Makefile scripts/Makefile scripts/lustre.spec \
-	extN/Makefile)
+AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile obdecho/Makefile ptlrpc/Makefile \
+	lov/Makefile osc/Makefile mdc/Makefile mds/Makefile ost/Makefile \
+	utils/Makefile tests/Makefile obdfilter/Makefile obdclass/Makefile \
+	llite/Makefile demos/Makefile doc/Makefile scripts/Makefile \
+	scripts/lustre.spec extN/Makefile)

@@ -64,8 +64,8 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
 }
 
 struct ptlrpc_service *
-ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal, char *uuid,
-                svc_handler_t handler, char *name)
+ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal,
+                char *uuid, svc_handler_t handler, char *name)
 {
         int err;
         int rc, i;
@@ -98,7 +98,7 @@ ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal, char 
         }
 
         /* NB We need exactly 1 event for each buffer we queue */
-        rc = PtlEQAlloc(service->srv_self.peer_ni, service->srv_nbuffs, 
+        rc = PtlEQAlloc(service->srv_self.peer_ni, service->srv_nbuffs,
                         request_in_callback, &(service->srv_eq_h));
 
         if (rc != PTL_OK) {
@@ -108,17 +108,17 @@ ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal, char 
                 RETURN(NULL);
         }
 
-        OBD_ALLOC(service->srv_rqbds, 
-                  service->srv_nbuffs * sizeof (struct ptlrpc_request_buffer_desc));
+        OBD_ALLOC(service->srv_rqbds, service->srv_nbuffs *
+                  sizeof(struct ptlrpc_request_buffer_desc));
         if (service->srv_rqbds == NULL) {
                 CERROR("no memory\n");
                 LBUG();
                 GOTO(failed, NULL);
         }
-        
+
         for (i = 0; i < service->srv_nbuffs; i++) {
-                struct ptlrpc_request_buffer_desc *rqbd = &service->srv_rqbds[i];
-                
+                struct ptlrpc_request_buffer_desc *rqbd =&service->srv_rqbds[i];
+
                 rqbd->rqbd_service = service;
                 ptl_set_inv_handle (&rqbd->rqbd_me_h);
                 OBD_ALLOC(rqbd->rqbd_buffer, service->srv_buf_size);
@@ -153,7 +153,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         LASSERT (rqbd->rqbd_service == svc);
         LASSERT (rqbd->rqbd_buffer == event->mem_desc.start);
         LASSERT (event->offset == 0);
-        
+
         memset(&request, 0, sizeof(request));
         request.rq_svc = svc;
         request.rq_obd = obddev;
@@ -200,7 +200,8 @@ static int handle_incoming_request(struct obd_device *obddev,
          * We don't know how to find that from here. */
         request.rq_peer.peer_ni = svc->srv_self.peer_ni;
 
-        request.rq_export = class_conn2export((struct lustre_handle *) request.rq_reqmsg);
+        request.rq_export = class_conn2export((struct lustre_handle *)
+                                              request.rq_reqmsg);
 
         if (request.rq_export) {
                 request.rq_connection = request.rq_export->exp_connection;
@@ -344,27 +345,25 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
 {
         int rc, i;
 
-        if (service->srv_rqbds != NULL)
-        {
-                for (i = 0; i < service->srv_nbuffs; i++) {
-                        struct ptlrpc_request_buffer_desc *rqbd = &service->srv_rqbds[i];
-                        
-                        if (rqbd->rqbd_buffer == NULL)  /* no buffer allocated */
-                                continue;               /* => never initialised */
+        for (i = 0; i < service->srv_nbuffs; i++) {
+                struct ptlrpc_request_buffer_desc *rqbd =&service->srv_rqbds[i];
 
-                        /* Buffer allocated => got linked */
-                        LASSERT (ptl_is_valid_handle (&rqbd->rqbd_me_h));
-                        
-                        rc = PtlMEUnlink(rqbd->rqbd_me_h);
-                        if (rc)
-                                CERROR("PtlMEUnlink failed: %d\n", rc);
-                        
-                        OBD_FREE(rqbd->rqbd_buffer, service->srv_buf_size);
-                }
+                if (rqbd->rqbd_buffer == NULL) /* no buffer allocated */
+                        continue;             /* => never initialised */
 
-                OBD_FREE(service->srv_rqbds,
-                         service->srv_nbuffs * sizeof (struct ptlrpc_request_buffer_desc));
+                /* Buffer allocated => got linked */
+                LASSERT (ptl_is_valid_handle (&rqbd->rqbd_me_h));
+
+                rc = PtlMEUnlink(rqbd->rqbd_me_h);
+                if (rc)
+                        CERROR("PtlMEUnlink failed: %d\n", rc);
+
+                OBD_FREE(rqbd->rqbd_buffer, service->srv_buf_size);
         }
+
+        if (service->srv_rqbds != NULL)
+                OBD_FREE(service->srv_rqbds, service->srv_nbuffs *
+                         sizeof (struct ptlrpc_request_buffer_desc));
 
         rc = PtlEQFree(service->srv_eq_h);
         if (rc)
@@ -377,7 +376,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         }
 
         OBD_FREE(service, sizeof(*service));
-        if (rc) 
+        if (rc)
                 LBUG();
         return rc;
 }

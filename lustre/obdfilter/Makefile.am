@@ -8,11 +8,9 @@ MODULE = obdfilter
 modulefs_DATA = obdfilter.o
 EXTRA_PROGRAMS = obdfilter
 
-LINX=page.c simple.c
+LINX=simple.c
 simple.c:
 	test -e simple.c || ln -sf $(top_srcdir)/lib/simple.c
-page.c:
-	test -e page.c || ln -sf $(top_srcdir)/lib/page.c
 
 FILTERC = filter.c
 obdfilter_SOURCES = $(FILTERC) $(LINX)

@@ -87,12 +87,6 @@ struct io_cb_data {
 
 int ll_sync_io_cb(struct io_cb_data *data, int err, int phase);
 struct  io_cb_data *ll_init_cb(void);
-inline void lustre_put_page(struct page *page);
-struct page *lustre_get_page_read(struct inode *dir, unsigned long index);
-struct page *lustre_get_page_write(struct inode *dir, unsigned long index);
-int lustre_commit_write(struct page *page, unsigned from, unsigned to);
-void set_page_clean(struct page *page);
-void set_page_dirty(struct page *page);
 
 /* simple.c */
 struct obd_run_ctxt;
