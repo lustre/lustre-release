@@ -52,7 +52,7 @@
 static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
                                 int len, int index)
 {
-        struct llog_rec_hdr rec;
+        struct llog_rec_hdr rec = { 0 };
         struct llog_rec_tail tail;
         int rc;
         ENTRY;
@@ -193,8 +193,8 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 
         /* record length should not bigger than LLOG_CHUNK_SIZE */
         if (buf)
-                rc = (reclen > LLOG_CHUNK_SIZE - sizeof(struct llog_rec_hdr)
-                      - sizeof(struct llog_rec_tail)) ? -E2BIG : 0;
+                rc = (reclen > LLOG_CHUNK_SIZE - sizeof(struct llog_rec_hdr) -
+                      sizeof(struct llog_rec_tail)) ? -E2BIG : 0;
         else
                 rc = (reclen > LLOG_CHUNK_SIZE) ? -E2BIG : 0;
         if (rc)
@@ -242,10 +242,14 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         /* NOTE: padding is a record, but no bit is set */
         if (left != 0 && left != reclen &&
             left < (reclen + LLOG_MIN_REC_SIZE)) {
+                int bitmap_size = sizeof(llh->llh_bitmap) * 8;
                 loghandle->lgh_last_idx++;
                 rc = llog_lvfs_pad(obd, file, left, loghandle->lgh_last_idx);
                 if (rc)
                         RETURN(rc);
+                /* if it's the last idx in log file, then return -ENOSPC */
+                if (loghandle->lgh_last_idx == bitmap_size - 1)
+                        RETURN(-ENOSPC);
         }
 
         loghandle->lgh_last_idx++;
@@ -554,7 +558,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 
 /* reads the catalog list */
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_logid *idarray)
+                      char *name, int count, struct llog_catid *idarray)
 {
         struct obd_run_ctxt saved;
         struct l_file *file;
@@ -596,7 +600,7 @@ EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_logid *idarray)
+                      char *name, int count, struct llog_catid *idarray)
 {
         struct obd_run_ctxt saved;
         struct l_file *file;
