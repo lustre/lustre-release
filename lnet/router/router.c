@@ -99,15 +99,17 @@ kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 }
 
 int
-kpr_do_notify (int gateway_nalid, ptl_nid_t gateway_nid,
-               int alive, struct timeval when, int byNal)
+kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
+               int alive, struct timeval when)
 {
-	unsigned long	   flags;
-        int                rc = -ENOENT;
-	struct list_head  *e;
-	struct list_head  *n;
+	unsigned long	     flags;
+        int                  rc = -ENOENT;
+        kpr_nal_entry_t     *ne = NULL;
+        kpr_gateway_entry_t *ge = NULL;
+	struct list_head    *e;
+	struct list_head    *n;
 
-        CDEBUG (D_NET, "%s notifying [%d] "LPX64": %s\n", 
+        CDEBUG (D_ERROR, "%s notifying [%d] "LPX64": %s\n", 
                 byNal ? "NAL" : "userspace", 
                 gateway_nalid, gateway_nid, alive ? "up" : "down");
 
@@ -115,46 +117,77 @@ kpr_do_notify (int gateway_nalid, ptl_nid_t gateway_nid,
 	write_lock_irqsave(&kpr_rwlock, flags);
 
         list_for_each_safe (e, n, &kpr_gateways) {
-                kpr_gateway_entry_t *ge = list_entry(e, kpr_gateway_entry_t,
-                                                     kpge_list);
-                if (ge->kpge_nid != gateway_nid) 
+
+                ge = list_entry(e, kpr_gateway_entry_t, kpge_list);
+                if (ge->kpge_nalid != gateway_nalid ||
+                    ge->kpge_nid != gateway_nid)
                         continue;
 
-                if (when.tv_sec < ge->kpge_timestamp.tv_sec ||
-                    (when.tv_sec == ge->kpge_timestamp.tv_sec &&
-                     when.tv_usec < ge->kpge_timestamp.tv_usec) ||
-                    (!ge->kpge_alive) == (!alive)) {
-                        /* out-of-date or nothing new */
-                        write_unlock_irqrestore (&kpr_rwlock, flags);
-                        return (0);
-                }
-                
                 rc = 0;
-                ge->kpge_alive = alive;
-                ge->kpge_timestamp = when;
-                CDEBUG(D_NET, "set "LPX64" [%p] %d\n", gateway_nid, ge, alive);
+                break;
         }
 
-        if (rc == 0 && alive) {
+        if (rc != 0) {
+                /* gateway not found */
+                write_unlock_irqrestore(&kpr_rwlock, flags);
+                return (rc);
+        }
+        
+        if (when.tv_sec < ge->kpge_timestamp.tv_sec ||
+            (when.tv_sec == ge->kpge_timestamp.tv_sec &&
+             when.tv_usec < ge->kpge_timestamp.tv_usec) ||
+            (!ge->kpge_alive) == (!alive)) {
+                /* out-of-date or nothing new */
+                write_unlock_irqrestore (&kpr_rwlock, flags);
+                return (0);
+        }
+
+        ge->kpge_alive = alive;
+        ge->kpge_timestamp = when;
+        CDEBUG(D_NET, "set "LPX64" [%p] %d\n", gateway_nid, ge, alive);
+
+        if (alive) {
                 /* Reset all gateway weights so the newly-enabled gateway
                  * doesn't have to play catch-up */
                 list_for_each_safe (e, n, &kpr_gateways) {
                         kpr_gateway_entry_t *ge = list_entry(e, kpr_gateway_entry_t,
                                                              kpge_list);
-
                         atomic_set (&ge->kpge_weight, 0);
+                }
+        }
+
+        if (!byNal) {
+                /* userland notified me: notify NAL? */
+                ne = kpr_find_nal_entry_locked (ge->kpge_nalid);
+                if (ne != NULL) {
+                        if (ne->kpne_shutdown ||
+                            ne->kpne_interface.kprni_notify == NULL) {
+                                /* no need to notify */
+                                ne = NULL;
+                        } else {
+                                /* take a ref on this NAL until notifying
+                                 * it has completed... */
+                                atomic_inc (&ne->kpne_refcount);
+                        }
                 }
         }
 
         write_unlock_irqrestore(&kpr_rwlock, flags);
 
-        if (rc != 0 || !byNal)
-                return (rc);
+        if (ne != NULL) {
+                ne->kpne_interface.kprni_notify (ne->kpne_interface.kprni_arg,
+                                                 gateway_nid, alive);
+                /* 'ne' can disappear now... */
+                atomic_dec (&ne->kpne_refcount);
+        }
         
-        /* We make an upcall to notify the rest of the world about the
-         * failure of a gateway if it's new-news from the NAL */
-
-        //        do upcall;
+        if (byNal) {
+                /* It wasn't userland that notified me: upcall... */
+                //        do upcall;
+                CERROR ("UPCALL [%d] "LPX64" is %s\n", 
+                        gateway_nalid, gateway_nid,
+                        alive ? "up" : "down");
+        }
         
         return (0);
 }
@@ -164,7 +197,7 @@ kpr_nal_notify (void *arg, ptl_nid_t peer, int alive, struct timeval when)
 {
         kpr_nal_entry_t *ne = (kpr_nal_entry_t *)arg;
         
-        kpr_do_notify (ne->kpne_interface.kprni_nalid, peer, alive, when, 1);
+        kpr_do_notify (1, ne->kpne_interface.kprni_nalid, peer, alive, when);
 }
 
 void
@@ -525,7 +558,7 @@ int
 kpr_sys_notify (int gateway_nalid, ptl_nid_t gateway_nid,
             int alive, struct timeval when)
 {
-        return (kpr_do_notify (gateway_nalid, gateway_nid, alive, when, 0));
+        return (kpr_do_notify (0, gateway_nalid, gateway_nid, alive, when));
 }
 
 int
