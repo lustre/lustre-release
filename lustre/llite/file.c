@@ -50,6 +50,9 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 GOTO(out, rc = -ENOMEM);
         memset(fd, 0, sizeof(*fd));
 
+        /* XXX temporary until LDLM is working */
+        fd->fd_flags |= LL_FILE_IGNORE_LOCK;
+
         rc = mdc_open(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
                       S_IFREG, file->f_flags, (__u64)(unsigned long)file, 
                       &fd->fd_mdshandle, &req); 
@@ -223,8 +226,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         ENTRY;
 
-        if (0) { 
-        //        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 extent.start = *ppos;
                 extent.end = *ppos + count;
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
@@ -245,8 +247,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (retval > 0)
                 ll_update_atime(inode);
 
-        if (0) { 
-                //        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_conn, LCK_PR, &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock cancel: err: %d\n", err);
@@ -272,8 +273,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         ssize_t retval;
         ENTRY;
 
-        if (0) { 
-                //        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 /* FIXME: this should check whether O_APPEND is set and adjust
                  * extent.start accordingly */
                 extent.start = *ppos;
@@ -295,8 +295,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         retval = generic_file_write(file, buf, count, ppos);
 
-        if (0) { 
-                //        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_conn, LCK_PW, &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock cancel: err: %d\n", err);
