@@ -8,8 +8,10 @@ MODULE = extN
 modulefs_DATA = extN.o
 EXTRA_PROGRAMS = extN
 
-# NOTE: if you are not using a RedHat 12.5 or later kernel, then you need to
+# NOTE: If you are not using a RedHat 12.5 or later kernel, then you need to
 #       apply the following patch first, as it fixes a number of bugs in ext3.
+#       You can either apply it as part of the extN build by uncommenting the
+#       line below, or apply it to the source kernel tree and fix ext3 also.
 # EXTNP = ext3-2.4.18-fixes.diff
 EXTNP+= htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
@@ -40,26 +42,27 @@ diff:
 patch-stamp: $(EXTNP)
 	$(RM) $@
 	test -e $(top_srcdir)/fs || ln -sf . $(top_srcdir)/fs
-	set -vx;\
+	set -vx;                                                              \
 	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(top_srcdir)/$$f; done
-	set -vx;\
+	set -vx;                                                              \
 	list='$(EXTNC)'; for f in $$list; do                                  \
 	sed $(SUB) $(LINUX)/fs/ext3/$$f > $(top_srcdir)/fs/extN/$$f;          \
 	done
-	set -vx;\
+	set -vx;                                                              \
 	list='$(EXTNI)'; for i in $$list; do                                  \
 	s=`echo $$i | sed "s/extN/ext3/"`;                                    \
 	sed $(SUB) $(LINUX)/include/linux/$$s >                               \
 		$(top_srcdir)/include/linux/$$i;                              \
 	done
-	set -vx;\
-	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then \
-		patch -p0 < $(srcdir)/extN.patch-$(RELEASE); \
-	else \
-		list='$(EXTNP)'; for p in $$list; do                        \
+	set -vx;                                                              \
+	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then                       \
+		patch -p0 < $(srcdir)/extN.patch-$(RELEASE);                  \
+	else                                                                  \
+		echo "If first patch fails, read NOTE in extN/Makefile.am"    \
+		list='$(EXTNP)'; for p in $$list; do                          \
 		sed $(SUB) $(srcdir)/$$p|(cd $(top_srcdir);patch -p1)||exit -1;\
-		done;  \
-		echo "It is OK if the following patch fails";		    \
+		done;                                                         \
+		echo "It is OK if the following patch fails";		      \
 		(cd $(top_srcdir); patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff; \
 		(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff; \
 	fi
