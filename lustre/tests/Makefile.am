@@ -24,7 +24,8 @@ noinst_SCRIPTS = fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 pkglib_SCRIPTS = common.sh
 pkgcfg_DATA = lustre.cfg
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme mcreate
-noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose #ldaptest 
+noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose createdestroy
+# noinst_PROGRAMS += ldaptest 
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
@@ -40,5 +41,6 @@ writeme_SOURCES = writeme.c
 fsx_SOURCES = fsx.c
 test_brw_SOURCES = test_brw.c
 openclose_SOURCES = openclose.c
+createdestroy_SOURCES = createdestroy.c
 
 include $(top_srcdir)/Rules
