@@ -1022,7 +1022,8 @@ class MDS(Module):
         if self.fstype == 'extN':
             self.add_lustre_module('extN', 'extN') 
         self.add_lustre_module('mds', 'mds')
-        self.add_lustre_module('obdclass', 'fsfilt_%s'%(self.fstype))
+        if self.fstype:
+            self.add_lustre_module('obdclass', 'fsfilt_%s' % (self.fstype))
             
     def prepare(self):
         if is_prepared(self.uuid):
