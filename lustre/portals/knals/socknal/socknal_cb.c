@@ -720,7 +720,7 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
         ksocknal_close_conn_and_siblings (conn, rc);
         ksocknal_tx_launched (tx);
 
-        return (-EAGAIN);
+        return (rc);
 } 
 
 void
