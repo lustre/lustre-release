@@ -55,7 +55,6 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
         struct dentry *cache_parent = NULL;
         void *handle = NULL;
         struct hook_msg msg = {
-                .dir = dir,
                 .dentry = dentry,
         };
         int rc = 0;
@@ -80,7 +79,7 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
                 goto exit;
         }
         
-        SMFS_PRE_HOOK(dir->i_sb, HOOK_CREATE, &msg);
+        SMFS_PRE_HOOK(dir, HOOK_CREATE, &msg);
 
         pre_smfs_inode(dir, cache_dir);
 
@@ -97,7 +96,7 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
                         rc = -ENOENT;
         }
         
-        SMFS_POST_HOOK(dir->i_sb, HOOK_CREATE, &msg, rc); 
+        SMFS_POST_HOOK(dir, HOOK_CREATE, &msg, rc); 
 
         post_smfs_inode(dir, cache_dir);
         smfs_trans_commit(dir, handle, 0);
@@ -124,7 +123,6 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
         struct dentry *rdentry = NULL;
         int rc = 0;
         struct hook_msg msg = {
-                .dir = dir,
                 .dentry = dentry,
         };
 
@@ -142,7 +140,7 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
         if (!cache_dentry || !cache_parent) 
                 RETURN(ERR_PTR(-ENOMEM));
         
-        SMFS_PRE_HOOK(dir->i_sb, HOOK_LOOKUP, &msg); 
+        SMFS_PRE_HOOK(dir, HOOK_LOOKUP, &msg); 
 
         /* perform lookup in backing fs. */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -170,7 +168,7 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
         if (!rc)
                 d_add(dentry, inode);
         
-        SMFS_POST_HOOK(dir->i_sb, HOOK_LOOKUP, &msg, rc);
+        SMFS_POST_HOOK(dir, HOOK_LOOKUP, &msg, rc);
 exit:        
         post_smfs_dentry(cache_dentry);
         post_smfs_dentry(cache_parent);
@@ -189,7 +187,6 @@ static int smfs_link(struct dentry *old_dentry,
         void *handle = NULL;
         int rc = 0;
         struct hook_msg msg = {
-                .dir = dir,
                 .dentry = old_dentry,
         };
 
@@ -222,7 +219,7 @@ static int smfs_link(struct dentry *old_dentry,
         pre_smfs_inode(old_inode, cache_old_inode);
 
         //lock_kernel();
-        SMFS_PRE_HOOK(dir->i_sb, HOOK_LINK, &msg); 
+        SMFS_PRE_HOOK(dir, HOOK_LINK, &msg); 
 
         rc = cache_dir->i_op->link(cache_old_dentry, cache_dir, cache_dentry);
         if (!rc) {
@@ -230,7 +227,7 @@ static int smfs_link(struct dentry *old_dentry,
                 d_instantiate(dentry, old_inode);
         }
 
-        SMFS_POST_HOOK(dir->i_sb, HOOK_LINK, &msg, rc); 
+        SMFS_POST_HOOK(dir, HOOK_LINK, &msg, rc); 
         
         post_smfs_inode(old_inode, cache_old_inode);
         post_smfs_inode(dir, cache_dir);
@@ -256,7 +253,6 @@ static int smfs_unlink(struct inode * dir, struct dentry *dentry)
         int    rc = 0;
         //int    mode = 0;
         struct hook_unlink_msg msg = {
-                .dir = dir,
                 .dentry = dentry,
                 .mode = 0
         };
@@ -283,11 +279,11 @@ static int smfs_unlink(struct inode * dir, struct dentry *dentry)
         pre_smfs_inode(dir, cache_dir);
         pre_smfs_inode(dentry->d_inode, cache_inode);
 
-        SMFS_PRE_HOOK(dir->i_sb, HOOK_UNLINK, &msg); 
+        SMFS_PRE_HOOK(dir, HOOK_UNLINK, &msg); 
         
         rc = cache_dir->i_op->unlink(cache_dir, cache_dentry);
                 
-        SMFS_POST_HOOK(dir->i_sb, HOOK_UNLINK, &msg, rc); 
+        SMFS_POST_HOOK(dir, HOOK_UNLINK, &msg, rc); 
 
         post_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
         post_smfs_inode(dir, cache_dir);
@@ -310,7 +306,6 @@ static int smfs_symlink(struct inode *dir, struct dentry *dentry,
         void   *handle = NULL;
         int    rc = 0;
         struct hook_symlink_msg msg = {
-                .dir = dir,
                 .dentry = dentry,
                 .tgt_len = strlen(symname) + 1,
                 .symname = (char*)symname
@@ -337,7 +332,7 @@ static int smfs_symlink(struct inode *dir, struct dentry *dentry,
         //lock_kernel();
         pre_smfs_inode(dir, cache_dir);
 
-        SMFS_PRE_HOOK(dir->i_sb, HOOK_SYMLINK, &msg); 
+        SMFS_PRE_HOOK(dir, HOOK_SYMLINK, &msg); 
         
         rc = cache_dir->i_op->symlink(cache_dir, cache_dentry, symname);
         if (!rc) {        
@@ -349,7 +344,7 @@ static int smfs_symlink(struct inode *dir, struct dentry *dentry,
                         rc = -ENOENT;
         }
         
-        SMFS_POST_HOOK(dir->i_sb, HOOK_SYMLINK, &msg, rc);
+        SMFS_POST_HOOK(dir, HOOK_SYMLINK, &msg, rc);
         
         post_smfs_inode(dir, cache_dir);
         smfs_trans_commit(dir, handle, 0);
@@ -371,7 +366,6 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry,
         void   *handle = NULL;
         int    rc = 0;
         struct hook_msg msg = {
-                .dir = dir,
                 .dentry = dentry,
         };
 
@@ -395,7 +389,7 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry,
         }
         
         pre_smfs_inode(dir, cache_dir);
-        SMFS_PRE_HOOK(dir->i_sb, HOOK_MKDIR, &msg); 
+        SMFS_PRE_HOOK(dir, HOOK_MKDIR, &msg); 
         
         rc = cache_dir->i_op->mkdir(cache_dir, cache_dentry, mode);
         if (!rc) {
@@ -407,7 +401,7 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry,
                         rc = -ENOENT;
         }
 
-        SMFS_POST_HOOK(dir->i_sb, HOOK_MKDIR, &msg, rc); 
+        SMFS_POST_HOOK(dir, HOOK_MKDIR, &msg, rc); 
         post_smfs_inode(dir, cache_dir);
         smfs_trans_commit(dir, handle, 0);
 
@@ -426,7 +420,6 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
         void *handle = NULL;
         int    rc = 0;
         struct hook_unlink_msg msg = {
-                .dir = dir,
                 .dentry = dentry,
                 .mode = S_IFDIR
         };
@@ -452,11 +445,11 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
         pre_smfs_inode(dir, cache_dir);
         pre_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
         
-        SMFS_PRE_HOOK(dir->i_sb, HOOK_RMDIR, &msg); 
+        SMFS_PRE_HOOK(dir, HOOK_RMDIR, &msg); 
 
         rc = cache_dir->i_op->rmdir(cache_dir, cache_dentry);
               
-        SMFS_POST_HOOK(dir->i_sb, HOOK_RMDIR, &msg, rc); 
+        SMFS_POST_HOOK(dir, HOOK_RMDIR, &msg, rc); 
         
         post_smfs_inode(dir, cache_dir);
         post_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
@@ -484,7 +477,6 @@ static int smfs_mknod(struct inode *dir, struct dentry *dentry,
         void *handle = NULL;
         int rc = 0;
         struct hook_msg msg = {
-                .dir = dir,
                 .dentry = dentry,
         };
  
@@ -509,7 +501,7 @@ static int smfs_mknod(struct inode *dir, struct dentry *dentry,
         pre_smfs_inode(dir, cache_dir);
         pre_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
 
-        SMFS_PRE_HOOK(dir->i_sb, HOOK_MKNOD, &msg); 
+        SMFS_PRE_HOOK(dir, HOOK_MKNOD, &msg); 
         
         rc = cache_dir->i_op->mknod(cache_dir, cache_dentry, mode, rdev);
         if (!rc) {
@@ -521,7 +513,7 @@ static int smfs_mknod(struct inode *dir, struct dentry *dentry,
                         rc = -ENOENT;
         }
 
-        SMFS_POST_HOOK(dir->i_sb, HOOK_MKNOD, &msg, rc); 
+        SMFS_POST_HOOK(dir, HOOK_MKNOD, &msg, rc); 
         
         post_smfs_inode(dir, cache_dir);
         post_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
@@ -547,7 +539,6 @@ static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
         void *handle = NULL;
         int    rc = 0;
         struct hook_rename_msg msg = {
-                .dir = old_dir,
                 .dentry = old_dentry,
                 .new_dir = new_dir,
                 .new_dentry = new_dentry
@@ -591,12 +582,12 @@ static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
         if (new_dentry->d_inode)
                 pre_smfs_inode(new_dentry->d_inode, cache_new_dentry->d_inode);
 
-        SMFS_PRE_HOOK(old_dir->i_sb, HOOK_RENAME, &msg); 
+        SMFS_PRE_HOOK(old_dir, HOOK_RENAME, &msg); 
         
         rc = cache_old_dir->i_op->rename(cache_old_dir, cache_old_dentry,
                                          cache_new_dir, cache_new_dentry);
         
-        SMFS_POST_HOOK(old_dir->i_sb, HOOK_RENAME, &msg, rc); 
+        SMFS_POST_HOOK(old_dir, HOOK_RENAME, &msg, rc); 
 
         post_smfs_inode(old_dir, cache_old_dir);
         post_smfs_inode(new_dir, cache_new_dir);
@@ -675,7 +666,6 @@ static int smfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
         struct smfs_file_info *sfi = NULL;
         int    rc = 0;
         struct hook_readdir_msg msg = {
-                .dir = dentry->d_inode,
                 .dentry = dentry,
                 .filp = filp,
                 .dirent = dirent,
@@ -691,11 +681,11 @@ static int smfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
         sfi = F2SMFI(filp);
         if (sfi->magic != SMFS_FILE_MAGIC) BUG();
 
-        SMFS_PRE_HOOK(dentry->d_inode->i_sb, HOOK_READDIR, &msg); 
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_READDIR, &msg); 
         
         rc = cache_inode->i_fop->readdir(sfi->c_file, dirent, filldir);
         
-        SMFS_POST_HOOK(dentry->d_inode->i_sb, HOOK_READDIR, &msg, rc);
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_READDIR, &msg, rc);
         duplicate_file(filp, sfi->c_file);
 
 exit:

@@ -51,7 +51,6 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
         loff_t *cache_ppos = NULL;
         int rc = 0;
         struct hook_write_msg msg = {
-                .inode = filp->f_dentry->d_inode,
                 .dentry = filp->f_dentry,
                 .count = count,
                 .pos = *ppos
@@ -73,7 +72,7 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
         
         pre_smfs_inode(filp->f_dentry->d_inode, cache_inode);
 
-        SMFS_PRE_HOOK(filp->f_dentry->d_sb, HOOK_WRITE, &msg);
+        SMFS_PRE_HOOK(filp->f_dentry->d_inode, HOOK_WRITE, &msg);
 
         if (ppos != &(filp->f_pos)) {
                 cache_ppos = &msg.pos;
@@ -86,7 +85,7 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
         rc = cache_inode->i_fop->write(sfi->c_file, buf, count,
                                        cache_ppos);
         
-        SMFS_POST_HOOK(filp->f_dentry->d_sb, HOOK_WRITE, &msg, rc);
+        SMFS_POST_HOOK(filp->f_dentry->d_inode, HOOK_WRITE, &msg, rc);
         
         post_smfs_inode(filp->f_dentry->d_inode, cache_inode);
         *ppos = *cache_ppos;
@@ -403,7 +402,6 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
         void  *handle = NULL;
         int rc = 0;
         struct hook_setattr_msg msg = {
-                .inode = dentry->d_inode,
                 .dentry = dentry,
                 .attr = attr
         };
@@ -425,11 +423,11 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
 
         pre_smfs_inode(dentry->d_inode, cache_inode);
         
-        SMFS_PRE_HOOK(dentry->d_sb, HOOK_SETATTR, &msg); 
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_SETATTR, &msg); 
                   
         rc = cache_inode->i_op->setattr(cache_dentry, attr);
         
-        SMFS_POST_HOOK(dentry->d_sb, HOOK_SETATTR, &msg, rc);
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_SETATTR, &msg, rc);
         
         post_smfs_inode(dentry->d_inode, cache_inode);
         smfs_trans_commit(dentry->d_inode, handle, 0);
