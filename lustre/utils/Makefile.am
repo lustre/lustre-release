@@ -1,6 +1,7 @@
 DEFS:=
 
-CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I$(PORTALS)/include -I/usr/lib/glib/include -I../include -Wall
+CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I$(PORTALS)/include \
+-I/usr/lib/glib/include -I$(srcdir)/../include -Wall
 KFLAGS:=
 CPPFLAGS :=
 LDADD := -lreadline -ltermcap # -lefence
