@@ -150,6 +150,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
 
+        /* need to do a statfs to initialize the per-OSC osfs cache -
+         * that is used by the OSC IO code to know the blocksize */
+        err = obd_statfs(obd, &osfs, jiffies - HZ);
+        if (err)
+                GOTO(out_mdc, err);
+
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
@@ -720,9 +726,10 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
                         inode = igrab(lock->l_ast_data);
                 } else {
                         inode = lock->l_ast_data;
-                        CDEBUG(inode->i_state & I_FREEING ? D_INFO : D_WARNING,
-                               "l_ast_data %p is bogus: magic %0x8\n",
-                               lock->l_ast_data, lli->lli_inode_magic);
+                        __LDLM_DEBUG(inode->i_state & I_FREEING ?
+                                     D_INFO : D_WARNING, lock,
+                                     "l_ast_data %p is bogus: magic %08x\n",
+                                     lock->l_ast_data, lli->lli_inode_magic);
                         inode = NULL;
                 }
         }
@@ -833,7 +840,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
-                       LTIME_S(CURRENT_TIME));
+                       CURRENT_SECONDS);
         if (lsm)
                 attr->ia_valid &= ~ATTR_SIZE;
 

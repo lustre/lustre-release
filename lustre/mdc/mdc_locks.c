@@ -68,7 +68,7 @@ static void mdc_fid2mdc_op_data(struct mdc_op_data *data, struct ll_uctxt *ctxt,
         data->name = name;
         data->namelen = namelen;
         data->create_mode = mode;
-        data->mod_time = LTIME_S(CURRENT_TIME);
+        data->mod_time = CURRENT_SECONDS;
 }
 
 static int it_to_lock_mode(struct lookup_intent *it)

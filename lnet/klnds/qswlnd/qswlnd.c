@@ -193,6 +193,9 @@ kqswnal_cmd (struct portals_cfg *pcfg, void *private)
 void __exit
 kqswnal_finalise (void)
 {
+	kqswnal_tx_t *ktx;
+	kqswnal_rx_t *krx;
+
 	switch (kqswnal_data.kqn_init)
 	{
 	default:
@@ -325,45 +328,33 @@ kqswnal_finalise (void)
 	 * ep_dvma_release() get fixed (and releases any mappings in the
 	 * region), we can delete all the code from here -------->  */
 
-	if (kqswnal_data.kqn_txds != NULL) {
-	        int  i;
+	for (ktx = kqswnal_data.kqn_txds; ktx != NULL; ktx =ktx->ktx_alloclist){
+		/* If ktx has a buffer, it got mapped; unmap now.  NB only
+		 * the pre-mapped stuff is still mapped since all tx descs
+		 * must be idle */
 
-		for (i = 0; i < KQSW_NTXMSGS + KQSW_NNBLK_TXMSGS; i++) {
-			kqswnal_tx_t *ktx = &kqswnal_data.kqn_txds[i];
-
-			/* If ktx has a buffer, it got mapped; unmap now.
-			 * NB only the pre-mapped stuff is still mapped
-			 * since all tx descs must be idle */
-
-			if (ktx->ktx_buffer != NULL)
-				ep_dvma_unload(kqswnal_data.kqn_ep,
-					       kqswnal_data.kqn_ep_tx_nmh,
-					       &ktx->ktx_ebuffer);
-		}
+		if (ktx->ktx_buffer != NULL)
+			ep_dvma_unload(kqswnal_data.kqn_ep,
+				       kqswnal_data.kqn_ep_tx_nmh,
+				       &ktx->ktx_ebuffer);
 	}
 
-	if (kqswnal_data.kqn_rxds != NULL) {
-	        int   i;
+	for (krx = kqswnal_data.kqn_rxds; krx != NULL; krx =krx->krx_alloclist){
+		/* If krx_kiov[0].kiov_page got allocated, it got mapped.
+		 * NB subsequent pages get merged */
 
-		for (i = 0; i < KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE; i++) {
-			kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
-
-			/* If krx_kiov[0].kiov_page got allocated, it got mapped.  
-			 * NB subsequent pages get merged */
-
-			if (krx->krx_kiov[0].kiov_page != NULL)
-				ep_dvma_unload(kqswnal_data.kqn_ep,
-					       kqswnal_data.kqn_ep_rx_nmh,
-					       &krx->krx_elanbuffer);
-		}
+		if (krx->krx_kiov[0].kiov_page != NULL)
+			ep_dvma_unload(kqswnal_data.kqn_ep,
+				       kqswnal_data.kqn_ep_rx_nmh,
+				       &krx->krx_elanbuffer);
 	}
 	/* <----------- to here */
 
 	if (kqswnal_data.kqn_ep_rx_nmh != NULL)
-		ep_dvma_release(kqswnal_data.kqn_ep, kqswnal_data.kqn_ep_rx_nmh);
+		ep_dvma_release(kqswnal_data.kqn_ep,kqswnal_data.kqn_ep_rx_nmh);
 
 	if (kqswnal_data.kqn_ep_tx_nmh != NULL)
-		ep_dvma_release(kqswnal_data.kqn_ep, kqswnal_data.kqn_ep_tx_nmh);
+		ep_dvma_release(kqswnal_data.kqn_ep,kqswnal_data.kqn_ep_tx_nmh);
 #else
 	if (kqswnal_data.kqn_eprxdmahandle != NULL)
 	{
@@ -388,41 +379,26 @@ kqswnal_finalise (void)
 	}
 #endif
 
-	if (kqswnal_data.kqn_txds != NULL)
-	{
-		int   i;
+	while (kqswnal_data.kqn_txds != NULL) {
+		ktx = kqswnal_data.kqn_txds;
 
-		for (i = 0; i < KQSW_NTXMSGS + KQSW_NNBLK_TXMSGS; i++)
-		{
-			kqswnal_tx_t *ktx = &kqswnal_data.kqn_txds[i];
+		if (ktx->ktx_buffer != NULL)
+			PORTAL_FREE(ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE);
 
-			if (ktx->ktx_buffer != NULL)
-				PORTAL_FREE(ktx->ktx_buffer,
-					    KQSW_TX_BUFFER_SIZE);
-		}
-
-		PORTAL_FREE(kqswnal_data.kqn_txds,
-			    sizeof (kqswnal_tx_t) * (KQSW_NTXMSGS +
-						     KQSW_NNBLK_TXMSGS));
+		kqswnal_data.kqn_txds = ktx->ktx_alloclist;
+		PORTAL_FREE(ktx, sizeof(*ktx));
 	}
 
-	if (kqswnal_data.kqn_rxds != NULL)
-	{
-		int   i;
-		int   j;
+	while (kqswnal_data.kqn_rxds != NULL) {
+		int           i;
 
-		for (i = 0; i < KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE; i++)
-		{
-			kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
+		krx = kqswnal_data.kqn_rxds;
+		for (i = 0; i < krx->krx_npages; i++)
+			if (krx->krx_kiov[i].kiov_page != NULL)
+				__free_page (krx->krx_kiov[i].kiov_page);
 
-			for (j = 0; j < krx->krx_npages; j++)
-				if (krx->krx_kiov[j].kiov_page != NULL)
-					__free_page (krx->krx_kiov[j].kiov_page);
-		}
-
-		PORTAL_FREE(kqswnal_data.kqn_rxds,
-			    sizeof(kqswnal_rx_t) * (KQSW_NRXMSGS_SMALL +
-						    KQSW_NRXMSGS_LARGE));
+		kqswnal_data.kqn_rxds = krx->krx_alloclist;
+		PORTAL_FREE(krx, sizeof (*krx));
 	}
 
 	/* resets flags, pointers to NULL etc */
@@ -444,6 +420,8 @@ kqswnal_initialise (void)
 #endif
 	int               rc;
 	int               i;
+	kqswnal_rx_t     *krx;
+	kqswnal_tx_t     *ktx;
 	int               elan_page_idx;
 	int               pkmem = atomic_read(&portal_kmemory);
 
@@ -620,22 +598,20 @@ kqswnal_initialise (void)
 	/**********************************************************************/
 	/* Allocate/Initialise transmit descriptors */
 
-	PORTAL_ALLOC(kqswnal_data.kqn_txds,
-		     sizeof(kqswnal_tx_t) * (KQSW_NTXMSGS + KQSW_NNBLK_TXMSGS));
-	if (kqswnal_data.kqn_txds == NULL)
-	{
-		kqswnal_finalise ();
-		return (-ENOMEM);
-	}
-
-	/* clear flags, null pointers etc */
-	memset(kqswnal_data.kqn_txds, 0,
-	       sizeof(kqswnal_tx_t) * (KQSW_NTXMSGS + KQSW_NNBLK_TXMSGS));
+	kqswnal_data.kqn_txds = NULL;
 	for (i = 0; i < (KQSW_NTXMSGS + KQSW_NNBLK_TXMSGS); i++)
 	{
 		int           premapped_pages;
-		kqswnal_tx_t *ktx = &kqswnal_data.kqn_txds[i];
 		int           basepage = i * KQSW_NTXMSGPAGES;
+
+		PORTAL_ALLOC (ktx, sizeof(*ktx));
+		if (ktx == NULL) {
+			kqswnal_finalise ();
+			return (-ENOMEM);
+		}
+
+		ktx->ktx_alloclist = kqswnal_data.kqn_txds;
+		kqswnal_data.kqn_txds = ktx;
 
 		PORTAL_ALLOC (ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE);
 		if (ktx->ktx_buffer == NULL)
@@ -673,17 +649,7 @@ kqswnal_initialise (void)
 	/**********************************************************************/
 	/* Allocate/Initialise receive descriptors */
 
-	PORTAL_ALLOC (kqswnal_data.kqn_rxds,
-		      sizeof (kqswnal_rx_t) * (KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE));
-	if (kqswnal_data.kqn_rxds == NULL)
-	{
-		kqswnal_finalise ();
-		return (-ENOMEM);
-	}
-
-	memset(kqswnal_data.kqn_rxds, 0, /* clear flags, null pointers etc */
-	       sizeof(kqswnal_rx_t) * (KQSW_NRXMSGS_SMALL+KQSW_NRXMSGS_LARGE));
-
+	kqswnal_data.kqn_rxds = NULL;
 	elan_page_idx = 0;
 	for (i = 0; i < KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE; i++)
 	{
@@ -693,7 +659,15 @@ kqswnal_initialise (void)
 		E3_Addr       elanbuffer;
 #endif
 		int           j;
-		kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
+
+		PORTAL_ALLOC(krx, sizeof(*krx));
+		if (krx == NULL) {
+			kqswnal_finalise();
+			return (-ENOSPC);
+		}
+
+		krx->krx_alloclist = kqswnal_data.kqn_rxds;
+		kqswnal_data.kqn_rxds = krx;
 
 		if (i < KQSW_NRXMSGS_SMALL)
 		{
@@ -770,10 +744,7 @@ kqswnal_initialise (void)
 	/**********************************************************************/
 	/* Queue receives, now that it's OK to run their completion callbacks */
 
-	for (i = 0; i < KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE; i++)
-	{
-		kqswnal_rx_t *krx = &kqswnal_data.kqn_rxds[i];
-
+	for (krx = kqswnal_data.kqn_rxds; krx != NULL; krx =krx->krx_alloclist){
 		/* NB this enqueue can allocate/sleep (attr == 0) */
 #if MULTIRAIL_EKC
 		rc = ep_queue_receive(krx->krx_eprx, kqswnal_rxhandler, krx,

@@ -12,10 +12,10 @@ int trace_write_daemon_file(struct file *file, const char *buffer,
 			    unsigned long count, void *data);
 int trace_read_daemon_file(char *page, char **start, off_t off, int count,
 			   int *eof, void *data);
-int trace_write_debug_size(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int trace_read_debug_size(char *page, char **start, off_t off, int count,
-                          int *eof, void *data);
+int trace_write_debug_mb(struct file *file, const char *buffer,
+			 unsigned long count, void *data);
+int trace_read_debug_mb(char *page, char **start, off_t off, int count,
+			int *eof, void *data);
 int trace_dk(struct file *file, const char *buffer, unsigned long count,
              void *data);
 

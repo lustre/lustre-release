@@ -143,9 +143,10 @@ typedef struct
 #endif
 } kqswnal_remotemd_t;
 
-typedef struct 
+typedef struct kqswnal_rx
 {
         struct list_head krx_list;              /* enqueue -> thread */
+        struct kqswnal_rx *krx_alloclist;       /* stack in kqn_rxds */
         EP_RCVR         *krx_eprx;              /* port to post receives to */
         EP_RXD          *krx_rxd;               /* receive descriptor (for repost) */
 #if MULTIRAIL_EKC
@@ -162,10 +163,11 @@ typedef struct
         ptl_kiov_t       krx_kiov[KQSW_NRXMSGPAGES_LARGE]; /* buffer frags */
 }  kqswnal_rx_t;
 
-typedef struct
+typedef struct kqswnal_tx
 {
         struct list_head  ktx_list;             /* enqueue idle/active */
         struct list_head  ktx_delayed_list;     /* enqueue delayedtxds */
+        struct kqswnal_tx *ktx_alloclist;       /* stack in kqn_txds */
         unsigned int      ktx_isnblk:1;         /* reserved descriptor? */
         unsigned int      ktx_state:7;          /* What I'm doing */
         unsigned int      ktx_firsttmpfrag:1;   /* ktx_frags[0] is in my ebuffer ? 0 : 1 */
@@ -210,8 +212,8 @@ typedef struct
 #if CONFIG_SYSCTL
         struct ctl_table_header *kqn_sysctl;    /* sysctl interface */
 #endif        
-        kqswnal_rx_t      *kqn_rxds;            /* all the receive descriptors */
-        kqswnal_tx_t      *kqn_txds;            /* all the transmit descriptors */
+        kqswnal_rx_t      *kqn_rxds;            /* stack of all the receive descriptors */
+        kqswnal_tx_t      *kqn_txds;            /* stack of all the transmit descriptors */
 
         struct list_head   kqn_idletxds;        /* transmit descriptors free to use */
         struct list_head   kqn_nblk_idletxds;   /* reserved free transmit descriptors */

@@ -457,8 +457,7 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                         goto put_conn;
                 }
 
-                request->rq_export->exp_last_request_time =
-                        LTIME_S(CURRENT_TIME);
+                request->rq_export->exp_last_request_time = CURRENT_SECONDS;
         }
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:ni:nid:opc "

@@ -618,7 +618,7 @@ static void target_finish_recovery(struct obd_device *obd)
                 ptlrpc_reply(req);
                 target_release_saved_req(req);
         }
-        obd->obd_recovery_end = LTIME_S(CURRENT_TIME);
+        obd->obd_recovery_end = CURRENT_SECONDS;
         return;
 }
 

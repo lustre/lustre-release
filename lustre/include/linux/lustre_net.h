@@ -332,8 +332,6 @@ struct ptlrpc_request {
 /* Spare the preprocessor, spoil the bugs. */
 #define FLAG(field, str) (field ? str : "")
 
-#define PTLRPC_REQUEST_COMPLETE(req) ((req)->rq_phase > RQ_PHASE_RPC)
-
 #define DEBUG_REQ_FLAGS(req)                                                    \
         ((req->rq_phase == RQ_PHASE_NEW) ? "New" :                              \
          (req->rq_phase == RQ_PHASE_RPC) ? "Rpc" :                              \

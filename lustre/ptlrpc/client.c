@@ -180,7 +180,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         ENTRY;
 
         LASSERT(desc != NULL);
-        LASSERT(desc->bd_page_count != 0x5a5a5a5a); /* not freed already */
+        LASSERT(desc->bd_page_count != LI_POISON); /* not freed already */
         LASSERT(!desc->bd_network_rw);         /* network hands off or */
         LASSERT((desc->bd_export != NULL) ^ (desc->bd_import != NULL));
         if (desc->bd_export)
@@ -188,7 +188,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         else
                 class_import_put(desc->bd_import);
 
-        OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc, 
+        OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,
                                 bd_iov[desc->bd_max_pages]));
         EXIT;
 }
@@ -493,9 +493,6 @@ static int after_reply(struct ptlrpc_request *req)
                 RETURN(-EPROTO);
         }
 
-        /* Store transno in reqmsg for replay. */
-        req->rq_reqmsg->transno = req->rq_transno = req->rq_repmsg->transno;
-
         rc = ptlrpc_check_status(req);
 
         /* Either we've been evicted, or the server has failed for
@@ -511,6 +508,9 @@ static int after_reply(struct ptlrpc_request *req)
 
                 RETURN(rc);
         }
+
+        /* Store transno in reqmsg for replay. */
+        req->rq_reqmsg->transno = req->rq_transno = req->rq_repmsg->transno;
 
         if (req->rq_import->imp_replayable) {
                 spin_lock_irqsave(&imp->imp_lock, flags);
@@ -665,7 +665,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
 
                 if (req->rq_phase == RQ_PHASE_RPC) {
-                        if (req->rq_waiting || req->rq_resend) {
+                        if (req->rq_timedout||req->rq_waiting||req->rq_resend) {
                                 int status;
 
                                 ptlrpc_unregister_reply(req);
@@ -676,7 +676,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                         spin_unlock_irqrestore(&imp->imp_lock,
                                                                flags);
                                         continue;
-                                } 
+                                }
 
                                 list_del_init(&req->rq_list);
                                 if (status != 0)  {
@@ -821,7 +821,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         ENTRY;
 
         DEBUG_REQ(D_ERROR, req, "timeout (sent at %lu, %lus ago)",
-                  (long)req->rq_sent, LTIME_S(CURRENT_TIME) - req->rq_sent);
+                  (long)req->rq_sent, CURRENT_SECONDS - req->rq_sent);
 
         spin_lock_irqsave (&req->rq_lock, flags);
         req->rq_timedout = 1;
@@ -864,7 +864,7 @@ int ptlrpc_expired_set(void *data)
 {
         struct ptlrpc_request_set *set = data;
         struct list_head          *tmp;
-        time_t                     now = LTIME_S (CURRENT_TIME);
+        time_t                     now = CURRENT_SECONDS;
         ENTRY;
 
         LASSERT(set != NULL);
@@ -925,7 +925,7 @@ void ptlrpc_interrupted_set(void *data)
 int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 {
         struct list_head      *tmp;
-        time_t                 now = LTIME_S(CURRENT_TIME);
+        time_t                 now = CURRENT_SECONDS;
         time_t                 deadline;
         int                    timeout = 0;
         struct ptlrpc_request *req;
@@ -976,7 +976,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 CDEBUG(D_HA, "set %p going to sleep for %d seconds\n",
                        set, timeout);
                 lwi = LWI_TIMEOUT_INTR((timeout ? timeout : 1) * HZ,
-                                       ptlrpc_expired_set, 
+                                       ptlrpc_expired_set,
                                        ptlrpc_interrupted_set, set);
                 rc = l_wait_event(set->set_waitq, ptlrpc_check_set(set), &lwi);
 
@@ -1375,7 +1375,7 @@ restart:
 
                 if (req->rq_err) {
                         rc = -EIO;
-                } 
+                }
                 else if (req->rq_intr) {
                         rc = -EINTR;
                 }
@@ -1386,7 +1386,7 @@ restart:
                 else {
                         GOTO(restart, rc);
                 }
-        } 
+        }
 
         if (rc != 0) {
                 list_del_init(&req->rq_list);

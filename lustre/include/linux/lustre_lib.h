@@ -475,20 +475,23 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * we define this to be 2T - 4k, which is the ext3 maxbytes. */
 #define LUSTRE_STRIPE_MAXBYTES 0x1fffffff000ULL
 
+#define CHECKSUM_CHUNK 4096
 #define CHECKSUM_BULK 0
 #define POISON_BULK 0
 
 #if CHECKSUM_BULK
-static inline void ost_checksum(obd_count *cksum, void *addr, int len)
+static inline void ost_checksum(obd_count *cksum,int *psum, void *addr, int len)
 {
         unsigned char *ptr = (unsigned char *)addr;
-        obd_count          sum = 0;
+        int sum = 0;
 
         /* very stupid, but means I don't have to think about byte order */
         while (len-- > 0)
                 sum += *ptr++;
 
         *cksum = (*cksum << 2) + sum;
+        if (psum)
+                *psum = sum;
 }
 #endif
 
@@ -608,12 +611,6 @@ do {                                                                           \
             set_current_state(TASK_INTERRUPTIBLE);                             \
             if (condition)                                                     \
                     break;                                                     \
-            if (signal_pending(current)) {                                     \
-                if (info->lwi_on_signal)                                       \
-                        info->lwi_on_signal(info->lwi_cb_data);                \
-                ret = -EINTR;                                                  \
-                break;                                                         \
-            }                                                                  \
             if (info->lwi_timeout && !__timed_out) {                           \
                 if (schedule_timeout(info->lwi_timeout) == 0) {                \
                     __timed_out = 1;                                           \
@@ -628,6 +625,14 @@ do {                                                                           \
                 }                                                              \
             } else {                                                           \
                 schedule();                                                    \
+            }                                                                  \
+            if (condition)                                                     \
+                    break;                                                     \
+            if (signal_pending(current)) {                                     \
+                if (info->lwi_on_signal)                                       \
+                        info->lwi_on_signal(info->lwi_cb_data);                \
+                ret = -EINTR;                                                  \
+                break;                                                         \
             }                                                                  \
         }                                                                      \
                                                                                \

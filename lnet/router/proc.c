@@ -132,7 +132,7 @@ static int kpr_proc_routes_read(char *page, char **start, off_t off,
         *start = page + prd->skip;
         user_len = -prd->skip;
 
-        for (; prd->curr != &kpr_routes; prd->curr = prd->curr->next) {
+        while ((prd->curr != NULL) && (prd->curr != &kpr_routes)) {
                 re = list_entry(prd->curr, kpr_route_entry_t, kpre_list);
                 ge = re->kpre_gateway;
 
@@ -144,11 +144,20 @@ static int kpr_proc_routes_read(char *page, char **start, off_t off,
                 chunk_len += line_len;
                 user_len += line_len;
 
-                /* The route table will exceed one page */
-                if ((chunk_len > (PAGE_SIZE - 80)) || (user_len > count)) {
-                        prd->curr = prd->curr->next;
-                        break;
+                /* Abort the route list changed */
+                if (prd->curr->next == NULL) {
+                        prd->curr = NULL;
+                        read_unlock(&kpr_rwlock);
+                        return sprintf(page, "\nError: Routes Changed\n");
                 }
+
+                prd->curr = prd->curr->next;
+
+                /* The route table will exceed one page, break the while loop
+                 * so the function can be re-called with a new page.
+                 */
+                if ((chunk_len > (PAGE_SIZE - 80)) || (user_len > count))
+                        break;
         }
 
         *eof = 0;

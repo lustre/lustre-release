@@ -30,7 +30,6 @@ struct osc_creator {
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
         int                     oscc_grow_count;
-        struct osc_created     *oscc_osccd;
         struct obdo             oscc_oa;
         int                     oscc_flags;
         wait_queue_head_t       oscc_waitq; /* creating procs wait on this */

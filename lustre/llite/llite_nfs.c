@@ -37,6 +37,20 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, void *opaque)
+#else
+static int ll_nfs_test_inode(struct inode *inode, void *opaque)
+#endif
+{
+        struct ll_fid *iid = opaque;
+
+        if (inode->i_ino == iid->id && inode->i_generation == iid->generation)
+                return 1;
+
+        return 0;
+}
+
 static struct inode * search_inode_for_lustre(struct super_block *sb,
                                               unsigned long ino,
                                               unsigned long generation,
@@ -48,8 +62,9 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         unsigned long valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
+        struct ll_fid iid = { .id = ino, .generation = generation };
 
-        inode = ILOOKUP(sb, ino, NULL, NULL);
+        inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
 
         if (inode)
                 return inode;
@@ -93,20 +108,17 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         if (IS_ERR(inode)) {
                 return ERR_PTR(PTR_ERR(inode));
         }
-        if (is_bad_inode(inode) 
-            || (generation && inode->i_generation != generation)
-            ){
+        if (is_bad_inode(inode) ||
+            (generation && inode->i_generation != generation)){
                 /* we didn't find the right inode.. */
-              CERROR(" Inode %lu, Bad count: %lu %d or version  %u %u\n",
-                        inode->i_ino, 
-                        (unsigned long)inode->i_nlink, 
-                        atomic_read(&inode->i_count), 
-                        inode->i_generation, 
-                        generation);
+                CERROR("Inode %lu, Bad count: %lu %d or version  %u %u\n",
+                       inode->i_ino, (unsigned long)inode->i_nlink,
+                       atomic_read(&inode->i_count), inode->i_generation,
+                       generation);
                 iput(inode);
                 return ERR_PTR(-ESTALE);
         }
-        
+
         /* now to find a dentry.
          * If possible, get a well-connected one
          */
@@ -128,7 +140,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 return ERR_PTR(-ENOMEM);
         }
         result->d_flags |= DCACHE_DISCONNECTED;
-        
+
         ll_set_dd(result);
         result->d_op = &ll_d_ops;
         return result;

@@ -94,10 +94,17 @@ int filter_log_sz_change(struct llog_handle *cathandle,
 
 /* When this (destroy) operation is committed, return the cancel cookie */
 void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
-                                     void *cb_data, int error)
+                              void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
         int rc;
+
+        if (error != 0) {
+                CDEBUG(D_INODE, "not cancelling llog cookie on error %d\n",
+                       error);
+                return;
+        }
+
         rc = llog_cancel(llog_get_context(obd, cookie->lgc_subsys + 1),
                          NULL, 1, cookie, 0);
         if (rc)

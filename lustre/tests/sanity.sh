@@ -883,18 +883,14 @@ test_27m() {
                 echo "skipping out-of-space test on OST0"
                 return
         fi
-        if [ ! -d $DIR/d27 ]; then
-                mkdir -p $DIR/d27
-        fi
+        mkdir -p $DIR/d27
         $LSTRIPE $DIR/d27/f27m_1 0 0 1
         dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
                 error "dd should fill OST0"
         i=2
         while $LSTRIPE $DIR/d27/f27m_$i  0 0 1 ; do
                 i=`expr $i + 1`
-                if [ $i -gt 2000 ] ; then
-                	break
-		fi
+                [ $i -gt 256 ] && break
         done
         i=`expr $i + 1`
         touch $DIR/d27/f27m_$i

@@ -40,6 +40,7 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_export.h>
+#include <linux/lustre_debug.h>
 #include <linux/init.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
@@ -342,12 +343,24 @@ static void free_per_page_niobufs (int npages, struct niobuf_remote *pp_rnb,
 obd_count ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
 {
         obd_count cksum = 0;
-        struct ptlrpc_bulk_page *bp;
+        int i;
 
-        list_for_each_entry(bp, &desc->bd_page_list, bp_link) {
-                ost_checksum(&cksum, kmap(bp->bp_page) + bp->bp_pageoffset,
-                             bp->bp_buflen);
-                kunmap(bp->bp_page);
+        for (i = 0; i < desc->bd_page_count; i++) {
+                struct page *page = desc->bd_iov[i].kiov_page;
+                char *ptr = kmap(page);
+                int psum, off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
+                int count = desc->bd_iov[i].kiov_len;
+
+                while (count > 0) {
+                        ost_checksum(&cksum, &psum, ptr + off,
+                                     count > CHECKSUM_CHUNK ?
+                                     CHECKSUM_CHUNK : count);
+                        LL_CDEBUG_PAGE(D_PAGE, page, "off %d checksum %x\n",
+                                       off, psum);
+                        off += CHECKSUM_CHUNK;
+                        count -= CHECKSUM_CHUNK;
+                }
+                kunmap(page);
         }
 
         return cksum;
@@ -514,10 +527,6 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 req->rq_status = rc;
                 ptlrpc_error(req);
         } else {
-                if (req->rq_reply_state != NULL) {
-                        /* reply out callback would free */
-                        lustre_free_reply_state (req->rq_reply_state);
-                }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
                                "evicting %s@%s nid "LPX64" (%s)\n",
@@ -669,21 +678,20 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 obd_count client_cksum = body->oa.o_cksum;
                 obd_count cksum = ost_checksum_bulk(desc);
 
-                portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                req->rq_connection->c_peer.peer_nid, str);
+                portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                req->rq_peer.peer_nid, str);
                 if (client_cksum != cksum) {
                         CERROR("Bad checksum: client %x, server %x, client NID "
                                LPX64" (%s)\n", client_cksum, cksum,
-                               req->rq_connection->c_peer.peer_nid, str);
+                               req->rq_peer.peer_nid, str);
                         cksum_counter = 1;
                         repbody->oa.o_cksum = cksum;
                 } else {
                         cksum_counter++;
                         if ((cksum_counter & (-cksum_counter)) == cksum_counter)
-                                CWARN("Checksum %u from "LPX64": %x OK\n",
-                                      cksum_counter,
-                                      req->rq_connection->c_peer.peer_nid,
-                                      cksum);
+                                CWARN("Checksum %u from "LPX64" (%s): %x OK\n",
+                                      cksum_counter, req->rq_peer.peer_nid,
+                                      str, cksum);
                 }
         }
 #endif
@@ -724,10 +732,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 req->rq_status = rc;
                 ptlrpc_error(req);
         } else {
-                if (req->rq_reply_state != NULL) {
-                        /* reply out callback would free */
-                        lustre_free_reply_state (req->rq_reply_state);
-                }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
                                "evicting %s@%s nid "LPX64" (%s)\n",

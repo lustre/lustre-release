@@ -128,8 +128,7 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
         ENTRY;
 
         spin_lock_irqsave(&imp->imp_lock, flags);
-        CDEBUG(D_HA, "setting import %s INVALID\n",
-               imp->imp_target_uuid.uuid);
+        CDEBUG(D_HA, "setting import %s INVALID\n", imp->imp_target_uuid.uuid);
         imp->imp_invalid = 1;
         imp->imp_generation++;
         spin_unlock_irqrestore(&imp->imp_lock, flags);

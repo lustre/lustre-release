@@ -1131,6 +1131,8 @@ static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
                         CDEBUG(D_INODE, "stripe %d has size "LPU64"/"LPU64"\n",
                                i, tmp_oa->o_size, src_oa->o_size);
                 }
+                if (src_oa->o_valid & OBD_MD_FLMTIME)
+                        loi->loi_mtime = src_oa->o_mtime;
 
                 err = obd_setattr(lov->tgts[loi->loi_ost_idx].ltd_exp, tmp_oa,
                                   NULL, NULL);
@@ -1603,9 +1605,12 @@ static int lov_brw_interpret(struct ptlrpc_request_set *set, void *data, int rc)
         int i = 0;
         ENTRY;
 
-        for (loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++)
+        for (loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++) {
                 if (obdos[i].o_valid & OBD_MD_FLBLOCKS)
                         loi->loi_blocks = obdos[i].o_blocks;
+                if (obdos[i].o_valid & OBD_MD_FLMTIME)
+                        loi->loi_mtime = obdos[i].o_mtime;
+        }
 
         OBD_FREE(obdos, lsm->lsm_stripe_count * sizeof(*obdos));
         OBD_FREE(aa->aa_ioarr, sizeof(*aa->aa_ioarr) * aa->aa_oa_bufs);
@@ -2027,7 +2032,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 submd->lsm_oinfo->loi_rss = loi->loi_rss;
                 submd->lsm_oinfo->loi_kms = loi->loi_kms;
                 submd->lsm_oinfo->loi_blocks = loi->loi_blocks;
-                loi->loi_mtime = submd->lsm_oinfo->loi_mtime;
+                submd->lsm_oinfo->loi_mtime = loi->loi_mtime;
                 /* XXX submd is not fully initialized here */
                 *flags = save_flags;
                 rc = obd_enqueue(lov->tgts[loi->loi_ost_idx].ltd_exp, submd,
@@ -2047,22 +2052,24 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                         LASSERT(lock != NULL);
                         loi->loi_rss = tmp;
+                        loi->loi_mtime = submd->lsm_oinfo->loi_mtime;
                         loi->loi_blocks = submd->lsm_oinfo->loi_blocks;
                         /* Extend KMS up to the end of this lock and no further
                          * A lock on [x,y] means a KMS of up to y + 1 bytes! */
                         if (tmp > lock->l_policy_data.l_extent.end)
                                 tmp = lock->l_policy_data.l_extent.end + 1;
                         if (tmp >= loi->loi_kms) {
-                                CDEBUG(D_DLMTRACE, "lock acquired, setting rss="
-                                       LPU64", kms="LPU64"\n", loi->loi_rss,
-                                       tmp);
+                                LDLM_DEBUG(lock, "acquired set stripe %d rss="
+                                           LPU64", kms="LPU64"\n", i,
+                                           loi->loi_rss, tmp);
                                 loi->loi_kms = tmp;
                                 loi->loi_kms_valid = 1;
                         } else {
-                                CDEBUG(D_DLMTRACE, "lock acquired, setting rss="
-                                       LPU64"; leaving kms="LPU64", end="LPU64
-                                       "\n", loi->loi_rss, loi->loi_kms,
-                                       lock->l_policy_data.l_extent.end);
+                                LDLM_DEBUG(lock, "acquired, set stripe %d rss="
+                                           LPU64"; leaving kms="LPU64", end="
+                                           LPU64"\n", i, loi->loi_rss,
+                                           loi->loi_kms,
+                                           lock->l_policy_data.l_extent.end);
                         }
                         ldlm_lock_allow_match(lock);
                         LDLM_LOCK_PUT(lock);
@@ -2070,17 +2077,18 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                            save_flags & LDLM_FL_HAS_INTENT) {
                         memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                         loi->loi_rss = submd->lsm_oinfo->loi_rss;
+                        loi->loi_mtime = submd->lsm_oinfo->loi_mtime;
                         loi->loi_blocks = submd->lsm_oinfo->loi_blocks;
-                        CDEBUG(D_DLMTRACE, "glimpsed, setting rss="LPU64
-                               "; leaving kms="LPU64"\n", loi->loi_rss,
+                        CDEBUG(D_DLMTRACE, "glimpsed, set stripe %d rss="LPU64
+                               "; leaving kms="LPU64"\n", i, loi->loi_rss,
                                loi->loi_kms);
                 } else {
                         memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                         if (lov->tgts[loi->loi_ost_idx].active) {
                                 CERROR("error: enqueue objid "LPX64" subobj "
-                                       LPX64" on OST idx %d: rc = %d\n",
+                                       LPX64" stripe %d idx %d: rc = %d\n",
                                        lsm->lsm_object_id, loi->loi_id,
-                                       loi->loi_ost_idx, rc);
+                                       i, loi->loi_ost_idx, rc);
                                 GOTO(out_locks, rc);
                         }
                 }
@@ -2673,8 +2681,7 @@ __u64 lov_merge_blocks(struct lov_stripe_md *lsm)
         __u64 blocks = 0;
         int i;
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-             i++, loi++) {
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++){
                 blocks += loi->loi_blocks;
         }
         return blocks;
@@ -2686,8 +2693,7 @@ __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time)
         struct lov_oinfo *loi;
         int i;
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-             i++, loi++) {
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++){
                 if (loi->loi_mtime > current_time)
                         current_time = loi->loi_mtime;
         }

@@ -170,6 +170,15 @@ replay_barrier() {
     $LCTL mark "REPLAY BARRIER"
 }
 
+replay_barrier_nodf() {
+    local facet=$1
+    do_facet $facet sync
+    do_facet $facet $LCTL --device %${facet}_svc readonly
+    do_facet $facet $LCTL --device %${facet}_svc notransno
+    do_facet $facet $LCTL mark "REPLAY BARRIER"
+    $LCTL mark "REPLAY BARRIER"
+}
+
 mds_evict_client() {
     UUID=`cat /proc/fs/lustre/mdc/*_MNT_*/uuid`
     do_facet mds "echo $UUID > /proc/fs/lustre/mds/mds_svc/evict_client"
@@ -215,6 +224,13 @@ h2elan() {
    fi
 }
 declare -fx h2elan
+
+h2openib() {
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+   echo $1 | sed 's/[^0-9]*//g'
+   fi
+}
+declare -fx h2openib
 
 facet_host() {
    local facet=$1
@@ -549,7 +565,7 @@ equals_msg() {
 
 log() {
 	echo "$*"
-	lctl mark "$*" 2> /dev/null || true
+	$LCTL mark "$*" 2> /dev/null || true
 }
 
 pass() {
@@ -566,7 +582,7 @@ run_one() {
     equals_msg $testnum: $message
 
     BEFORE=`date +%s`
-    log "== test $testnum: $message =========== `date +%H:%M:%S` ($BEFORE)"
+    log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
     test_${testnum} || error "test_$testnum failed with $?"
     pass "($((`date +%s` - $BEFORE))s)"
 }

@@ -611,9 +611,14 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 
         lvb = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*lvb));
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe].loi_kms;
+        lvb->lvb_mtime = LTIME_S(inode->i_mtime);
+        lvb->lvb_atime = LTIME_S(inode->i_atime);
+        lvb->lvb_ctime = LTIME_S(inode->i_ctime);
 
-        LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,
-                   inode->i_size, stripe, lvb->lvb_size);
+        LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64
+                   "atime "LPU64", mtime "LPU64", ctime "LPU64,
+                   inode->i_size, stripe, lvb->lvb_size, lvb->lvb_mtime,
+                   lvb->lvb_atime, lvb->lvb_ctime);
         GOTO(iput, 0);
  iput:
         iput(inode);
@@ -658,7 +663,7 @@ int ll_glimpse_size(struct inode *inode)
 
         inode->i_size = lov_merge_size(lli->lli_smd, 0);
         inode->i_blocks = lov_merge_blocks(lli->lli_smd);
-        //inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
+        inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
 
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
                inode->i_size, inode->i_blocks);

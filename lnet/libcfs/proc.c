@@ -276,13 +276,13 @@ int insert_proc(void)
         ent->write_proc = trace_write_daemon_file;
         ent->read_proc = trace_read_daemon_file;
 
-        ent = create_proc_entry("sys/portals/debug_size", 0, NULL);
+        ent = create_proc_entry("sys/portals/debug_mb", 0, NULL);
         if (ent == NULL) {
-                CERROR("couldn't register debug_size\n");
+                CERROR("couldn't register debug_mb\n");
                 return -1;
         }
-        ent->write_proc = trace_write_debug_size;
-        ent->read_proc = trace_read_debug_size;
+        ent->write_proc = trace_write_debug_mb;
+        ent->read_proc = trace_read_debug_mb;
 
         return 0;
 }
@@ -307,7 +307,7 @@ void remove_proc(void)
 
         remove_proc_entry("sys/portals/dump_kernel", NULL);
         remove_proc_entry("sys/portals/daemon_file", NULL);
-        remove_proc_entry("sys/portals/debug_size", NULL);
+        remove_proc_entry("sys/portals/debug_mb", NULL);
 
 #ifdef CONFIG_SYSCTL
         if (portals_table_header)

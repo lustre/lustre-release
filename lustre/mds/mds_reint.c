@@ -187,7 +187,7 @@ commit:
  */
 int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
 {
-        time_t now = LTIME_S(CURRENT_TIME);
+        time_t now = CURRENT_SECONDS;
         struct iattr *attr = &rec->ur_iattr;
         unsigned int ia_valid = attr->ia_valid;
         int error;

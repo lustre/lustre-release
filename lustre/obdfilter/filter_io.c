@@ -335,6 +335,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                         GOTO(cleanup, rc = -ENOENT);
                 }
 
+                if (oa)
+                        obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME);
                 fso[i].fso_dentry = dentry;
                 fso[i].fso_bufcnt = o->ioo_bufcnt;
         }
@@ -440,7 +442,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                 for (i = 0; i < fso[obj].fso_bufcnt; i++, n++) {
                         int tmp, bytes;
 
-                        /* FIXME: this is calculated with PAGE_SIZE on client */
+                        /* should match the code in osc_exit_cache */
                         bytes = rnb[n].len;
                         bytes += rnb[n].offset & (blocksize - 1);
                         tmp = (rnb[n].offset + rnb[n].len) & (blocksize - 1);
@@ -590,8 +592,11 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(now, obd_timeout, "preprw_write setup");
 
         spin_lock(&exp->exp_obd->obd_osfs_lock);
-        if (oa)
+        if (oa) {
                 filter_grant_incoming(exp, oa);
+                obdo_to_inode(dentry->d_inode, oa,
+                              OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        }
         cleanup_phase = 0;
 
         left = filter_grant_space_left(exp);

@@ -156,7 +156,6 @@ int class_attach(struct lustre_cfg *lcfg)
                 class_release_dev(obd);
         case 1:
                 class_put_type(type);
-                obd->obd_type = NULL;
         }
         return rc;
 }

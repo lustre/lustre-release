@@ -112,6 +112,11 @@ check_mount2() {
 
 build_test_filter
 
+if [ "$ONLY" == "cleanup" ]; then
+	cleanup
+	exit
+fi
+
 #create single point mountpoint
 
 gen_config

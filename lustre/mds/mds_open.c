@@ -450,8 +450,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         LASSERT(lsm && lsm->lsm_object_id);
         lmm = NULL;
         rc = obd_packmd(mds->mds_osc_exp, &lmm, lsm);
-        if (!rec->ur_fid2->id)
-                obd_free_memmd(mds->mds_osc_exp, &lsm);
         LASSERT(rc >= 0);
         lmm_size = rc;
         body->eadatasize = rc;
@@ -480,6 +478,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 OBD_FREE(*ids, mds->mds_lov_desc.ld_tgt_count * sizeof(**ids));
                 *ids = NULL;
         }
+        if (lsm)
+                obd_free_memmd(mds->mds_osc_exp, &lsm);
         RETURN(rc);
 }
 
@@ -531,8 +531,6 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
             req->rq_status) {
                 GOTO(out_dput, 0);
         }
-
-        /* get lock (write for O_CREAT, read otherwise) */
 
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
@@ -850,7 +848,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         acc_mode = accmode(rec->ur_flags);
 
         /* Step 1: Find and lock the parent */
-        if (rec->ur_flags & O_CREAT)
+        if (rec->ur_flags & MDS_OPEN_CREAT)
                 parent_mode = LCK_PW;
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
                                         &parent_lockh, rec->ur_name,

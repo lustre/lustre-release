@@ -297,12 +297,12 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
         struct l_wait_info       lwi;
         int                      rc;
 
-        LASSERT (!in_interrupt ());             /* might sleep */
+        LASSERT (!in_interrupt ());     /* might sleep */
 
-        if (!ptlrpc_bulk_active(desc))          /* completed or */
-                return;                         /* never registered */
-        
-        LASSERT (desc->bd_req == req);          /* bd_req NULL until registered */
+        if (!ptlrpc_bulk_active(desc))  /* completed or */
+                return;                 /* never registered */
+
+        LASSERT (desc->bd_req == req);  /* bd_req NULL until registered */
 
         /* the unlink ensures the callback happens ASAP and is the last
          * one.  If it fails, it must be because completion just
@@ -313,9 +313,9 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
                 LASSERT(!ptlrpc_bulk_active(desc));
                 return;
         }
-        
+
         LASSERT (rc == PTL_OK);
-        
+
         if (req->rq_set != NULL)
                 wq = &req->rq_set->set_waitq;
         else
@@ -328,9 +328,10 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
                 rc = l_wait_event(*wq, !ptlrpc_bulk_active(desc), &lwi);
                 if (rc == 0)
                         return;
-                
+
                 LASSERT (rc == -ETIMEDOUT);
-                CWARN("Unexpectedly long timeout: desc %p\n", desc);
+                DEBUG_REQ(D_WARNING,req,"Unexpectedly long timeout: desc %p\n",
+                          desc);
         }
 }
 
@@ -492,7 +493,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
         ptlrpc_request_addref(request);        /* +1 ref for the SENT callback */
 
-        request->rq_sent = LTIME_S(CURRENT_TIME);
+        request->rq_sent = CURRENT_SECONDS;
         ptlrpc_pinger_sending_on_import(request->rq_import);
         rc = ptl_send_buf(&request->rq_req_md_h, 
                           request->rq_reqmsg, request->rq_reqlen,

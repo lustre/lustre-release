@@ -199,7 +199,7 @@ int llu_glimpse_size(struct inode *inode)
 
         lli->lli_st_size = lov_merge_size(lli->lli_smd, 0);
         lli->lli_st_blocks = lov_merge_blocks(lli->lli_smd);
-        //lli->lli_st_mtime = lov_merge_mtime(lli->lli_smd, lli->lli_st_mtime);
+        lli->lli_st_mtime = lov_merge_mtime(lli->lli_smd, lli->lli_st_mtime);
 
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
                lli->lli_st_size, lli->lli_st_blocks);

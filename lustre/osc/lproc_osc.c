@@ -268,7 +268,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
         spin_lock_irqsave(&cli->cl_loi_list_lock, flags);
 
-        seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
         seq_printf(seq, "read RPCs in flight:  %d\n",
                    cli->cl_r_in_flight);

@@ -289,7 +289,7 @@
  
 --- linux-2.4.20-hp4-pnnl13/fs/nfsd/vfs.c~nfs_export_kernel-2.4.20-hp	2002-11-29 02:53:15.000000000 +0300
 +++ linux-2.4.20-hp4-pnnl13-alexey/fs/nfsd/vfs.c	2003-10-08 10:54:08.000000000 +0400
-@@ -77,6 +77,128 @@ struct raparms {
+@@ -77,6 +77,126 @@ struct raparms {
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -405,9 +405,7 @@
 +	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
 +		if (!dentry->d_op->d_revalidate_it(dentry, 0, it) &&
 +			!d_invalidate(dentry)) {
-+			dput(dentry);
 +			err = -EINVAL;
-+			dentry = NULL;
 +			return err;
 +		}
 +	}

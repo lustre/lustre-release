@@ -339,7 +339,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err)
                 rc = err;
-        if (obd_sync_filter)
+        if (obd_sync_filter && !err)
                 LASSERT(oti->oti_transno <= obd->obd_last_committed);
         fsfilt_check_slow(now, obd_timeout, "commitrw commit");
 

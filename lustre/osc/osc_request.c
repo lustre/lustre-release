@@ -515,7 +515,17 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
         oa->o_valid |= bits;
         spin_lock(&cli->cl_loi_list_lock);
         oa->o_dirty = cli->cl_dirty;
-        oa->o_undirty = cli->cl_dirty_max - oa->o_dirty;
+        if (cli->cl_dirty > cli->cl_dirty_max) {
+                CERROR("dirty %lu > dirty_max %lu\n",
+                       cli->cl_dirty, cli->cl_dirty_max);
+                oa->o_undirty = 0;
+        } else if (cli->cl_dirty_max - cli->cl_dirty > 0x7fffffff) {
+                CERROR("dirty %lu - dirty_max %lu too big???\n",
+                       cli->cl_dirty, cli->cl_dirty_max);
+                oa->o_undirty = 0;
+        } else {
+                oa->o_undirty = cli->cl_dirty_max - oa->o_dirty;
+        }
         oa->o_grant = cli->cl_avail_grant;
         oa->o_dropped = cli->cl_lost_grant;
         cli->cl_lost_grant = 0;
@@ -678,22 +688,30 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 }
 
 #if CHECKSUM_BULK
-static obd_count cksum_pages(int nob, obd_count page_count,
-                             struct brw_page *pga)
+static obd_count cksum_blocks(int nob, obd_count page_count,
+                              struct brw_page *pga)
 {
         obd_count cksum = 0;
-        char *ptr;
 
+        LASSERT (page_count > 0);
         while (nob > 0) {
-                LASSERT (page_count > 0);
+                char *ptr = kmap(pga->pg);
+                int psum, off = pga->off & ~PAGE_MASK;
+                int count = pga->count > nob ? nob : pga->count;
 
-                ptr = kmap(pga->pg);
-                ost_checksum(&cksum, ptr + (pga->off & (PAGE_SIZE - 1)),
-                             pga->count > nob ? nob : pga->count);
-                kunmap(pga->pg);
-
+                while (count > 0) {
+                        ost_checksum(&cksum, &psum, ptr + off,
+                                     count > CHECKSUM_CHUNK ?
+                                     CHECKSUM_CHUNK : count);
+                        LL_CDEBUG_PAGE(D_PAGE, pga->pg, "off %d checksum %x\n",
+                                       off, psum);
+                        off += CHECKSUM_CHUNK;
+                        count -= CHECKSUM_CHUNK;
+                }
                 nob -= pga->count;
                 page_count--;
+                kunmap(pga->pg);
+
                 pga++;
         }
 
@@ -879,6 +897,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                         CWARN("Checksum %u from "LPX64" (%s) OK: %x\n",
                               cksum_counter, peer->peer_nid, str, cksum);
                 }
+                CDEBUG(D_PAGE, "checksum %x\n", cksum);
         } else {
                 static int cksum_missed;
 
@@ -1175,8 +1194,12 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
                 oap->oap_request = NULL;
         }
 
-        if (rc == 0 && oa != NULL)
-                oap->oap_loi->loi_blocks = oa->o_blocks;
+        if (rc == 0 && oa != NULL) {
+                if (oa->o_valid & OBD_MD_FLBLOCKS)
+                        oap->oap_loi->loi_blocks = oa->o_blocks;
+                if (oa->o_valid & OBD_MD_FLMTIME)
+                        oap->oap_loi->loi_mtime = oa->o_mtime;
+        }
 
         if (oap->oap_oig) {
                 oig_complete_one(oap->oap_oig, &oap->oap_occ, rc);
@@ -1746,6 +1769,7 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
 static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
                            int sent)
 {
+        int blocksize = cli->cl_import->imp_obd->obd_osfs.os_bsize ? : 4096;
         ENTRY;
 
         if (!(oap->oap_brw_flags & OBD_BRW_FROM_GRANT)) {
@@ -1759,6 +1783,20 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
                 cli->cl_lost_grant += PAGE_SIZE;
                 CDEBUG(D_CACHE, "lost grant: %lu avail grant: %lu dirty: %lu\n",
                        cli->cl_lost_grant, cli->cl_avail_grant, cli->cl_dirty);
+        } else if (PAGE_SIZE != blocksize && oap->oap_count != PAGE_SIZE) {
+                /* For short writes we shouldn't count parts of pages that
+                 * span a whole block on the OST side, or our accounting goes
+                 * wrong.  Should match the code in filter_grant_check. */
+                int offset = (oap->oap_obj_off +oap->oap_page_off) & ~PAGE_MASK;
+                int count = oap->oap_count + (offset & (blocksize - 1));
+                int end = (offset + oap->oap_count) & (blocksize - 1);
+                if (end)
+                        count += blocksize - end;
+
+                cli->cl_lost_grant += PAGE_SIZE - count;
+                CDEBUG(D_CACHE, "lost %lu grant: %lu avail: %lu dirty: %lu\n",
+                       PAGE_SIZE - count, cli->cl_lost_grant,
+                       cli->cl_avail_grant, cli->cl_dirty);
         }
 
         EXIT;
@@ -2469,9 +2507,10 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         }
 
         if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc) {
-                CDEBUG(D_INODE, "received kms == "LPU64", blocks == "LPU64"\n",
-                       lvb.lvb_size, lvb.lvb_blocks);
+                CDEBUG(D_INODE,"got kms "LPU64" blocks "LPU64" mtime "LPU64"\n",
+                       lvb.lvb_size, lvb.lvb_blocks, lvb.lvb_mtime);
                 lsm->lsm_oinfo->loi_rss = lvb.lvb_size;
+                lsm->lsm_oinfo->loi_mtime = lvb.lvb_mtime;
                 lsm->lsm_oinfo->loi_blocks = lvb.lvb_blocks;
         }
 
@@ -2922,6 +2961,7 @@ static int osc_import_event(struct obd_device *obd,
                         oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                         spin_unlock(&oscc->oscc_lock);
                 }
+
                 break;
         }
         case IMP_EVENT_INACTIVE: {

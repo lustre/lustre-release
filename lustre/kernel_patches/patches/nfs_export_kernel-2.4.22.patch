@@ -292,7 +292,7 @@ Index: linux-2.4.22-vanilla/fs/nfsd/vfs.c
 ===================================================================
 --- linux-2.4.22-vanilla.orig/fs/nfsd/vfs.c	2003-11-03 23:22:11.000000000 +0300
 +++ linux-2.4.22-vanilla/fs/nfsd/vfs.c	2003-11-03 23:47:41.000000000 +0300
-@@ -77,6 +77,128 @@
+@@ -77,6 +77,126 @@
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -408,9 +408,7 @@ Index: linux-2.4.22-vanilla/fs/nfsd/vfs.c
 +	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
 +		if (!dentry->d_op->d_revalidate_it(dentry, 0, it) &&
 +			!d_invalidate(dentry)) {
-+			dput(dentry);
 +			err = -EINVAL;
-+			dentry = NULL;
 +			return err;
 +		}
 +	}

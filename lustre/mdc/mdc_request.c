@@ -451,11 +451,6 @@ static int mdc_close_check_reply(struct ptlrpc_request *req)
         return rc;
 }
 
-static int go_back_to_sleep(void *unused)
-{
-        return 0;
-}
-
 int mdc_close(struct obd_export *exp, struct obdo *oa,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
@@ -500,8 +495,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         req->rq_async_args.pointer_arg[0] = obd->u.cli.cl_rpc_lock;
         req->rq_async_args.pointer_arg[1] = obd;
         ptlrpcd_add_req(req);
-        lwi = LWI_TIMEOUT_INTR(MAX(req->rq_timeout * HZ, 1), go_back_to_sleep,
-                               NULL, NULL);
+        lwi = LWI_TIMEOUT_INTR(MAX(req->rq_timeout * HZ, 1), NULL, NULL, NULL);
         rc = l_wait_event(req->rq_reply_waitq, mdc_close_check_reply(req),
                           &lwi);
         if (req->rq_repmsg == NULL) {

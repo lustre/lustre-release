@@ -229,13 +229,15 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                        iattr.ia_size);
 
                 iattr.ia_valid |= ATTR_SIZE;
-
-                fsfilt_setattr(obd, res->dentry, oti->oti_handle,
-                               &iattr, 0);
         }
+
+        fsfilt_setattr(obd, res->dentry, oti->oti_handle, &iattr, 0);
         up(&inode->i_sem);
 
         fsfilt_check_slow(now, obd_timeout, "direct_io");
+
+        if (rc == 0)
+                obdo_from_inode(oa, inode, FILTER_VALID_FLAGS);
 
         rc = filter_finish_transno(exp, oti, rc);
 
@@ -243,7 +245,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (err)
                 rc = err;
 
-        if (obd_sync_filter)
+        if (obd_sync_filter && !err)
                 LASSERT(oti->oti_transno <= obd->obd_last_committed);
 
         fsfilt_check_slow(now, obd_timeout, "commitrw commit");

@@ -678,7 +678,7 @@ static int ll_ra_stats_seq_show(struct seq_file *seq, void *v)
 
         spin_lock(&sbi->ll_lock);
 
-        seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
         seq_printf(seq, "pending issued pages:           %lu\n",
                    ra->ra_cur_pages);

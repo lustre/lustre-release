@@ -399,6 +399,9 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 
         in = fopen(filename, "r");
         if (in == NULL) {
+                if (errno == ENOENT) /* no dump file created */
+                        return 0;
+
                 fprintf(stderr, "fopen(%s) failed: %s\n", filename,
                         strerror(errno));
                 return 1;
@@ -452,51 +455,66 @@ int jt_dbg_debug_file(int argc, char **argv)
         return parse_buffer(in, out);
 }
 
-const char debug_daemon_usage[]="usage: debug_daemon {start file [MB]|stop}\n";
+const char debug_daemon_usage[] = "usage: %s {start file [MB]|stop}\n";
+#define DAEMON_FILE "/proc/sys/portals/daemon_file"
 int jt_dbg_debug_daemon(int argc, char **argv)
 {
-        int i, rc, fd;
-        unsigned int cmd = 0;
-        struct portal_ioctl_data data;
+        int rc = 1, fd;
 
         if (argc <= 1) {
-                fprintf(stderr, debug_daemon_usage);
-                return 0;
-        }
-
-        fd = open("/proc/sys/portals/daemon_file", O_WRONLY);
-        if (fd < 0) {
-                fprintf(stderr, "open(daemon_file) failed: %s\n",
-                        strerror(errno));
+                fprintf(stderr, debug_daemon_usage, argv[0]);
                 return 1;
         }
 
-        if (strcasecmp(argv[1], "start") == 0) {
-                if (argc != 3) {
-                        fprintf(stderr, debug_daemon_usage);
-                        return 1;
+        fd = open(DAEMON_FILE, O_WRONLY);
+        if (fd < 0) {
+                fprintf(stderr, "open %s failed: %s\n", DAEMON_FILE,
+                        strerror(errno));
+        } else if (strcasecmp(argv[1], "start") == 0) {
+                if (argc < 3 || argc > 4 ||
+                    (argc == 4 && strlen(argv[3]) > 5)) {
+                        fprintf(stderr, debug_daemon_usage, argv[0]);
+                        goto out;
                 }
 
+                if (argc == 4) {
+                        char size[12] = "size=";
+                        long sizecheck;
+
+                        sizecheck = strtoul(argv[3], NULL, 0);
+                        if (sizecheck < 10 || sizecheck > 20480) {
+                                fprintf(stderr, "size %s invalid, must be in "
+                                        "the range 20-20480 MB\n", argv[3]);
+                        } else {
+                                strncat(size, argv[3], sizeof(size) - 6);
+                                rc = write(fd, size, strlen(size));
+                                if (rc != strlen(size)) {
+                                        fprintf(stderr, "set %s failed: %s\n",                                                 size, strerror(errno));
+                                }
+                        }
+                }
                 rc = write(fd, argv[2], strlen(argv[2]));
                 if (rc != strlen(argv[2])) {
-                        fprintf(stderr, "write(%s) failed: %s\n", argv[2],
-                                strerror(errno));
-                        close(fd);
-                        return 1;
+                        fprintf(stderr, "start debug_daemon on %s failed: %s\n",
+                                argv[2], strerror(errno));
+                        goto out;
                 }
+
+                rc = 0;
         } else if (strcasecmp(argv[1], "stop") == 0) {
                 rc = write(fd, "stop", 4);
                 if (rc != 4) {
-                        fprintf(stderr, "write(stop) failed: %s\n",
+                        fprintf(stderr, "stopping debug_daemon failed: %s\n",
                                 strerror(errno));
-                        close(fd);
-                        return 1;
+                        goto out;
                 }
+                rc = 0;
         } else {
-                fprintf(stderr, debug_daemon_usage);
-                return 1;
+                fprintf(stderr, debug_daemon_usage, argv[0]);
+                rc = 1;
         }
 
+out:
         close(fd);
         return 0;
 }

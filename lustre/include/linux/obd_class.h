@@ -964,21 +964,14 @@ static inline struct obdo *obdo_alloc(void)
 {
         struct obdo *oa;
 
-        oa = kmem_cache_alloc(obdo_cachep, SLAB_KERNEL);
-        if (oa == NULL)
-                LBUG();
-        CDEBUG(D_MALLOC, "kmem_cache_alloced oa at %p\n", oa);
-        memset(oa, 0, sizeof (*oa));
+        OBD_SLAB_ALLOC(oa, obdo_cachep, SLAB_KERNEL, sizeof(*oa));
 
         return oa;
 }
 
 static inline void obdo_free(struct obdo *oa)
 {
-        if (!oa)
-                return;
-        CDEBUG(D_MALLOC, "kmem_cache_freed oa at %p\n", oa);
-        kmem_cache_free(obdo_cachep, oa);
+        OBD_SLAB_FREE(oa, obdo_cachep, sizeof(*oa));
 }
 
 #if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

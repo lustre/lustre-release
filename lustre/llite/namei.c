@@ -219,7 +219,7 @@ void ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
         data->name = name;
         data->namelen = namelen;
         data->create_mode = mode;
-        data->mod_time = LTIME_S(CURRENT_TIME);
+        data->mod_time = CURRENT_SECONDS;
 }
 
 static void ll_d_add(struct dentry *de, struct inode *inode)
@@ -354,7 +354,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
 
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
-                                   struct lookup_intent *it, int flags)
+                                   struct lookup_intent *it, int lookup_flags)
 {
         struct dentry *save = dentry, *retval;
         struct ll_fid pfid;
@@ -384,7 +384,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         rc = mdc_intent_lock(ll_i2mdcexp(parent), &ctxt, &pfid,
                              dentry->d_name.name, dentry->d_name.len, NULL, 0,
-                             NULL, it, flags, &req, ll_mdc_blocking_ast);
+                             NULL, it, lookup_flags, &req, ll_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 

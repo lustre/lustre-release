@@ -281,6 +281,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
                 }
         }
 
+        /* the lock could already be expired, get the elt_lock also */
         spin_lock_bh(&expired_lock_thread.elt_lock);
         list_del_init(&lock->l_pending_chain);
         spin_unlock_bh(&expired_lock_thread.elt_lock);
@@ -385,7 +386,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         }
 
 #if 0
-        if (LTIME_S(CURRENT_TIME) - lock->l_export->exp_last_request_time > 30){
+        if (CURRENT_SECONDS - lock->l_export->exp_last_request_time > 30){
                 ldlm_failed_ast(lock, -ETIMEDOUT, "Not-attempted blocking");
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 RETURN(-ETIMEDOUT);

@@ -72,9 +72,9 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         else
                 pg.count = PAGE_SIZE;
 
-        CDEBUG(D_PAGE, "%s %d bytes ino %lu at "LPU64"/"LPX64"\n",
-               cmd & OBD_BRW_WRITE ? "write" : "read", pg.count, inode->i_ino,
-               pg.off, pg.off);
+        LL_CDEBUG_PAGE(D_PAGE, page, "%s %d bytes ino %lu at "LPU64"/"LPX64"\n",
+                       cmd & OBD_BRW_WRITE ? "write" : "read", pg.count,
+                       inode->i_ino, pg.off, pg.off);
         if (pg.count == 0) {
                 CERROR("ZERO COUNT: ino %lu: size %p:%Lu(%p:%Lu) idx %lu off "
                        LPU64"\n",
@@ -180,12 +180,15 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         if (rc)
                 RETURN(rc);
 
-        if (PageUptodate(page))
+        if (PageUptodate(page)) {
+                LL_CDEBUG_PAGE(D_PAGE, page, "uptodate\n");
                 RETURN(0);
+        }
 
         /* We're completely overwriting an existing page, so _don't_ set it up
          * to date until commit_write */
         if (from == 0 && to == PAGE_SIZE) {
+                LL_CDEBUG_PAGE(D_PAGE, page, "full page write\n");
                 POISON_PAGE(page, 0x11);
                 RETURN(0);
         }
@@ -195,6 +198,8 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
          * treat it like i_size. */
         kms = lov_merge_size(lsm, 1);
         if (kms <= offset) {
+                LL_CDEBUG_PAGE(D_PAGE, page, "kms "LPU64" <= offset "LPU64"\n",
+                               kms, offset);
                 memset(kmap(page), 0, PAGE_SIZE);
                 kunmap(page);
                 GOTO(prepare_done, rc = 0);
@@ -404,19 +409,20 @@ out:
         RETURN(llap);
 }
 
-static int queue_or_sync_write(struct obd_export *exp,
-                               struct lov_stripe_md *lsm,
+static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                struct ll_async_page *llap,
                                unsigned to, obd_flag async_flags)
 {
+        unsigned long size_index = inode->i_size >> PAGE_SHIFT;
         struct obd_io_group *oig;
         int rc;
         ENTRY;
 
         /* _make_ready only sees llap once we've unlocked the page */
         llap->llap_write_queued = 1;
-        rc = obd_queue_async_io(exp, lsm, NULL, llap->llap_cookie,
-                                OBD_BRW_WRITE, 0, 0, 0, async_flags);
+        rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL,
+                                llap->llap_cookie, OBD_BRW_WRITE, 0, 0, 0,
+                                async_flags);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "write queued\n");
                 //llap_write_pending(inode, llap);
@@ -429,14 +435,29 @@ static int queue_or_sync_write(struct obd_export *exp,
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_queue_group_io(exp, lsm, NULL, oig, llap->llap_cookie,
-                                OBD_BRW_WRITE, 0, to, 0, ASYNC_READY | 
-                                ASYNC_URGENT | ASYNC_COUNT_STABLE |
-                                ASYNC_GROUP_SYNC);
+        /* make full-page requests if we are not at EOF (bug 4410) */
+        if (llap->llap_page->index < size_index) {
+                LL_CDEBUG_PAGE(D_PAGE, llap->llap_page,
+                               "sync write before EOF: size_index %lu, to %d\n",
+                               size_index, to);
+                to = PAGE_SIZE;
+        } else if (llap->llap_page->index == size_index) {
+                int size_to = inode->i_size & ~PAGE_MASK;
+                LL_CDEBUG_PAGE(D_PAGE, llap->llap_page,
+                               "sync write at EOF: size_index %lu, to %d/%d\n",
+                               size_index, to, size_to);
+                if (to < size_to)
+                        to = size_to;
+        }
+
+        rc = obd_queue_group_io(exp, ll_i2info(inode)->lli_smd, NULL, oig,
+                                llap->llap_cookie, OBD_BRW_WRITE, 0, to, 0,
+                                ASYNC_READY | ASYNC_URGENT |
+                                ASYNC_COUNT_STABLE | ASYNC_GROUP_SYNC);
         if (rc)
                 GOTO(free_oig, rc);
 
-        rc = obd_trigger_group_io(exp, lsm, NULL, oig);
+        rc = obd_trigger_group_io(exp, ll_i2info(inode)->lli_smd, NULL, oig);
         if (rc)
                 GOTO(free_oig, rc);
 
@@ -464,7 +485,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         struct inode *inode = page->mapping->host;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct obd_export *exp = NULL;
+        struct obd_export *exp;
         struct ll_async_page *llap;
         loff_t size;
         int rc = 0;
@@ -491,12 +512,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                      LPROC_LL_DIRTY_MISSES);
 
-                exp = ll_i2obdexp(inode);
-                if (exp == NULL)
-                        RETURN(-EINVAL);
-
-                rc = queue_or_sync_write(exp, ll_i2info(inode)->lli_smd, llap,
-                                         to, 0);
+                rc = queue_or_sync_write(exp, inode, llap, to, 0);
                 if (rc)
                         GOTO(out, rc);
         } else {
@@ -513,7 +529,6 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 out:
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
         if (rc == 0) {
-                size = (((obd_off)page->index) << PAGE_SHIFT) + to;
                 obd_increase_kms(exp, lsm, size);
                 if (size > inode->i_size)
                         inode->i_size = size;
@@ -577,9 +592,8 @@ int ll_writepage(struct page *page)
                                          llap->llap_cookie,
                                          ASYNC_READY | ASYNC_URGENT);
         } else {
-                rc = queue_or_sync_write(exp, ll_i2info(inode)->lli_smd, llap,
-                                         PAGE_SIZE, ASYNC_READY | 
-                                         ASYNC_URGENT);
+                rc = queue_or_sync_write(exp, inode, llap, PAGE_SIZE,
+                                         ASYNC_READY | ASYNC_URGENT);
         }
         if (rc)
                 page_cache_release(page);

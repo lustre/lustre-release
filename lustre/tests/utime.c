@@ -27,9 +27,8 @@ int main(int argc, char *argv[])
 	struct stat st;
 	int rc;
 
-        utb.actime = 0x47114711;
-        utb.modtime = 0x11471147;
-                
+	utb.actime = 0x47114711;
+	utb.modtime = 0x11471147;
 
 	if (argc != 2)
 		usage(argv[0]);

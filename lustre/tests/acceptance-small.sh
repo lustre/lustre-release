@@ -168,3 +168,6 @@ fi
 if [ "$REPLAY_DUAL" != "no" ]; then
         sh replay-dual.sh
 fi
+
+RC=$?
+echo "completed with rc $RC" && exit $RC

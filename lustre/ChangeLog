@@ -1,9 +1,25 @@
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.8
+       * bug fixes
+	- allocate qswnal tx descriptors singly to avoid fragmentation (4504)
+	- don't LBUG on obdo_alloc() failure, use OBD_SLAB_ALLOC() (4800)
+	- fix NULL dereference in /proc/sys/portals/routes (4827)
+	- allow failed mdc_close() operations to be interrupted (4561)
+	- stop precreate on OST before MDS would time out on it (4778)
+	- don't send partial-page writes before EOF from client (4410)
+	- discard client grant for sub-page writes on large-page clients (4520)
+	- don't free dentries not owned by NFS code, check generation (4806)
+	- fix lsm leak if mds_create_objects() fails (4801)
+	- limit debug_daemon file size, always print CERROR messages (4789)
+	- use transno after validating reply (3892)
+	- process timed out requests if import state changes (3754)
+	- update mtime on OST during writes, return in glimpse (4829)
+
 2004-10-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.7
        * bug fixes
 	- ignore -ENOENT errors in osc_destroy (3639)
 	- notify osc create thread that OSC is being cleaned up (4600)
-	- bind to privileged port in socknal and tcpnal (3689)
 	- add nettype argument for llmount in #5d in conf-sanity.sh (3936)
 	- reconstruct ost_handle() like mds_handle() (4657)
 	- create a new thread to do import eviction to avoid deadlock (3969)
@@ -15,6 +31,7 @@
 	- OST returns ENOSPC from object create when no space left (4539)
 	- don't send truncate RPC if file size isn't changing (4410)
 	- limit OSC precreate to 1/2 of value OST considers bogus (4778)
+	- bind to privileged port in socknal and tcpnal (3689)
        * miscellania
 	- rate limit CERROR/CWARN console message to avoid overload (4519)
 	- GETFILEINFO dir ioctl returns LOV EA + MDS stat in 1 call (3327)
@@ -37,7 +54,7 @@
 	- revalidate should check working dir is a directory (4134)
        * miscellania
 	- don't always mark "slow" obdfilter messages as errors (4418)
-	
+
 2004-08-24  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.5
        * bug fixes

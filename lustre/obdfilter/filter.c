@@ -494,12 +494,13 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         obd->obd_last_committed = le64_to_cpu(fsd->fsd_last_transno);
 
         if (obd->obd_recoverable_clients) {
-                CWARN("RECOVERY: %d recoverable clients, last_rcvd "
-                      LPU64"\n", obd->obd_recoverable_clients,
+                CWARN("RECOVERY: service %s, %d recoverable clients, "
+                      "last_rcvd "LPU64"\n", obd->obd_name,
+                      obd->obd_recoverable_clients,
                       le64_to_cpu(fsd->fsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
-                obd->obd_recovery_start = LTIME_S(CURRENT_TIME);
+                obd->obd_recovery_start = CURRENT_SECONDS;
         }
 
 out:
@@ -987,7 +988,8 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
         }
 
         if (dchild->d_inode != NULL && is_bad_inode(dchild->d_inode)) {
-                CERROR("%s: got bad inode "LPU64"\n", obd->obd_name, id);
+                CERROR("%s: got bad object "LPU64" inode %lu\n",
+                       obd->obd_name, id, dchild->d_inode->i_ino);
                 f_dput(dchild);
                 RETURN(ERR_PTR(-ENOENT));
         }
@@ -1454,11 +1456,11 @@ static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
                         level = D_ERROR;
                 if (maxsize > 0) { /* we may not have done a statfs yet */
                         LASSERTF(fed->fed_grant + fed->fed_pending <= maxsize,
-                                 "cli %s/%p %ld+%ld > "LPU64"\n",
+                                 "%s: cli %s/%p %ld+%ld > "LPU64"\n", func,
                                  exp->exp_client_uuid.uuid, exp,
                                  fed->fed_grant, fed->fed_pending, maxsize);
                         LASSERTF(fed->fed_dirty <= maxsize,
-                                 "cli %s/%p %ld > "LPU64"\n",
+                                 "%s: cli %s/%p %ld > "LPU64"\n", func,
                                  exp->exp_client_uuid.uuid, exp,
                                  fed->fed_dirty, maxsize);
                 }
@@ -1505,18 +1507,11 @@ static void filter_grant_discard(struct obd_export *exp)
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
-        int level = D_CACHE;
 
         spin_lock(&obd->obd_osfs_lock);
         spin_lock(&obd->obd_dev_lock);
         list_del_init(&exp->exp_obd_chain);
         spin_unlock(&obd->obd_dev_lock);
-
-        if (fed->fed_dirty < 0 || fed->fed_grant < 0 || fed->fed_pending < 0)
-                level = D_ERROR;
-        CDEBUG(level, "%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
-               obd->obd_name, exp->exp_client_uuid.uuid, exp,
-               fed->fed_dirty, fed->fed_pending, fed->fed_grant);
 
         LASSERTF(filter->fo_tot_granted >= fed->fed_grant,
                  "%s: tot_granted "LPU64" cli %s/%p fed_grant %ld\n",
@@ -1844,16 +1839,16 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
                 if (diff >= 0)
                         RETURN(diff);
                 if (-diff > OST_MAX_PRECREATE) {
-                        CERROR("ignoring bogus orphan destroy request: obdid "
-                               LPU64" last_id "LPU64"\n",
+                        CERROR("%s: ignoring bogus orphan destroy request: "
+                               "obdid "LPU64" last_id "LPU64"\n", obd->obd_name,
                                oa->o_id, filter_last_id(filter, oa));
                         RETURN(-EINVAL);
                 }
                 filter_destroy_precreated(exp, oa, filter);
                 rc = filter_update_last_objid(obd, group, 0);
                 if (rc)
-                        CERROR("unable to write lastobjid, but orphans"
-                               "were deleted\n");
+                        CERROR("%s: unable to write lastobjid, but orphans"
+                               "were deleted\n", obd->obd_name);
                 RETURN(0);
         } else {
                 /* only precreate if group == 0 and o_id is specfied */
@@ -1861,8 +1856,8 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
                     (group != 0 || oa->o_id == 0))
                         RETURN(1);
 
-                LASSERTF(diff >= 0, LPU64" - "LPU64" = %d\n", oa->o_id,
-                         filter_last_id(filter, oa), diff);
+                LASSERTF(diff >= 0,"%s: "LPU64" - "LPU64" = %d\n",obd->obd_name,
+                         oa->o_id, filter_last_id(filter, oa), diff);
                 RETURN(diff);
         }
 }
@@ -1914,6 +1909,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct filter_obd *filter;
         struct obd_statfs *osfs;
         int err = 0, rc = 0, recreate_obj = 0, i;
+        unsigned long enough_time = jiffies + (obd_timeout * HZ) / 3;
         __u64 next_id;
         void *handle = NULL;
         ENTRY;
@@ -2036,6 +2032,11 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
                 if (rc)
                         break;
+                if (time_after(jiffies, enough_time)) {
+                        CDEBUG(D_INODE,"%s: precreate slow - want %d got %d \n",
+                               obd->obd_name, *num, i);
+                        break;
+                }
         }
         *num = i;
 

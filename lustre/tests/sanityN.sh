@@ -23,6 +23,7 @@ OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
+export TMP=${TMP:-/tmp}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"

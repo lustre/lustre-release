@@ -601,10 +601,19 @@ int main(int argc, char *const argv[])
                 exit(0);
         }
 
+        rc = access(target, F_OK);
+        if (rc) {
+                rc = errno;
+                fprintf(stderr, "%s: %s inaccessible: %s\n", progname, target,
+                        strerror(errno));
+                return rc;
+        }
+
         rc = mount(source, target, "lustre", 0, (void *)&lmd);
         if (rc) {
                 rc = errno;
-                perror(argv[0]);
+                fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", source,
+                        target, progname, strerror(errno));
                 if (rc == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");

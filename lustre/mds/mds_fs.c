@@ -350,7 +350,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                       obd->obd_recoverable_clients, mds->mds_last_transno);
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
-                obd->obd_recovery_start = LTIME_S(CURRENT_TIME);
+                obd->obd_recovery_start = CURRENT_SECONDS;
         }
 
         mds->mds_mount_count = mount_count + 1;

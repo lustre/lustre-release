@@ -894,7 +894,7 @@ static int mds_sync(struct ptlrpc_request *req)
         int rc, size = sizeof(*body);
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 

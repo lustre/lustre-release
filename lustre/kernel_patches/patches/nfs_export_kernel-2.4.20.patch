@@ -285,7 +285,7 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
 diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 --- linux/fs/nfsd/vfs.c	Fri Nov 29 05:23:15 2002
 +++ linux-2.4.20/fs/nfsd/vfs.c	Sun Oct  5 21:47:45 2003
-@@ -77,6 +77,128 @@ struct raparms {
+@@ -77,6 +77,126 @@ struct raparms {
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -401,9 +401,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
 +		if (!dentry->d_op->d_revalidate_it(dentry, 0, it) &&
 +			!d_invalidate(dentry)) {
-+			dput(dentry);
 +			err = -EINVAL;
-+			dentry = NULL;
 +			return err;
 +		}
 +	}
