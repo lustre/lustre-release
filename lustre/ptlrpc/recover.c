@@ -27,6 +27,7 @@
 # include <linux/config.h>
 # include <linux/module.h>
 # include <linux/kmod.h>
+# include <linux/list.h>
 #else
 # include <liblustre.h>
 #endif

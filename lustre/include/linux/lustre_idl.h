@@ -244,10 +244,10 @@ typedef uint32_t        obd_count;
 struct obdo {
         obd_id                  o_id;
         obd_gr                  o_gr;
-        obd_time                o_atime;
-        obd_time                o_mtime;
-        obd_time                o_ctime;
         obd_size                o_size;
+        obd_time                o_mtime;
+        obd_time                o_atime;
+        obd_time                o_ctime;
         obd_blocks              o_blocks;       /* brw: cli sent cached bytes */
         obd_size                o_grant;
         obd_blksize             o_blksize;      /* optimal IO blocksize */
@@ -623,6 +623,8 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
  * array of UUIDs returned by the MDS.  With the current
  * protocol, this will limit the max number of OSTs per LOV */
 
+#define LOV_DESC_MAGIC 0xB0CCDE5C
+
 struct lov_desc {
         __u32 ld_tgt_count;                /* how many OBD's */
         __u32 ld_active_tgt_count;         /* how many active */
@@ -632,6 +634,8 @@ struct lov_desc {
         __u64 ld_default_stripe_offset;    /* in bytes */
         struct obd_uuid ld_uuid;
 };
+
+#define ld_magic ld_active_tgt_count       /* for swabbing from llogs */
 
 extern void lustre_swab_lov_desc (struct lov_desc *ld);
 
@@ -827,16 +831,29 @@ struct llog_catid {
 /* Log data record types - there is no specific reason that these need to
  * be related to the RPC opcodes, but no reason not to (may be handy later?)
  */
+#define LLOG_OP_MAGIC 0x10600000
+#define LLOG_OP_MASK  0xfff00000
+
 typedef enum {
-        OST_SZ_REC       = 0x10600000 | (OST_SAN_WRITE << 8),
-        OST_RAID1_REC    = 0x10600000 | ((OST_SAN_WRITE + 1) << 8),
-        MDS_UNLINK_REC   = 0x10610000 | (MDS_REINT << 8) | REINT_UNLINK,
-        OBD_CFG_REC      = 0x10620000,
-        PTL_CFG_REC      = 0x10630000,
-        LLOG_GEN_REC     = 0x10640000,
-        LLOG_HDR_MAGIC   = 0x10645539,
-        LLOG_LOGID_MAGIC = 0x1064553b,
+        LLOG_PAD_MAGIC   = LLOG_OP_MAGIC | 0,
+        OST_SZ_REC       = LLOG_OP_MAGIC | (OST_SAN_WRITE << 8),
+        OST_RAID1_REC    = LLOG_OP_MAGIC | ((OST_SAN_WRITE + 1) << 8),
+        MDS_UNLINK_REC   = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
+        OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
+        PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000,
+        LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
+        LLOG_HDR_MAGIC   = LLOG_OP_MAGIC | 0x45539,
+        LLOG_LOGID_MAGIC = LLOG_OP_MAGIC | 0x4553b,
 } llog_op_type;
+
+/*
+ * for now, continue to support old pad records which have 0 for their
+ * type but still need to be swabbed for their length
+ */
+#define LLOG_REC_HDR_NEEDS_SWABBING(r)                                  \
+        (((r)->lrh_type & __swab32(LLOG_OP_MASK)) ==                    \
+         __swab32(LLOG_OP_MAGIC) ||                                     \
+         (((r)->lrh_type == 0) && ((r)->lrh_len > LLOG_CHUNK_SIZE)))
 
 /* Log record header - stored in little endian order.
  * Each record must start with this struct, end with a llog_rec_tail,
@@ -970,9 +987,21 @@ struct llogd_conn_body {
         __u32                   lgdc_ctxt_idx;
 } __attribute__((packed));
 
+extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
+extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);
+
+/* llog_swab.c */
 extern void lustre_swab_llogd_body (struct llogd_body *d);
 extern void lustre_swab_llog_hdr (struct llog_log_hdr *h);
 extern void lustre_swab_llogd_conn_body (struct llogd_conn_body *d);
+extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
+                                 struct llog_rec_tail *tail);
+
+struct portals_cfg;
+extern void lustre_swab_portals_cfg(struct portals_cfg *pcfg);
+
+struct lustre_cfg;
+extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 
 static inline struct ll_fid *obdo_fid(struct obdo *oa)
 {

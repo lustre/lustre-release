@@ -69,7 +69,7 @@ RECORDSOUT=$((`grep "records out" $LOG | cut -d+ -f 1` + \
               `grep "records out" $LOG2 | cut -d+ -f 1`))
 
 FILESIZE=$((`ls -l $OOS | awk '{print $5}'` + `ls -l $OOS2 | awk '{print $5}'`))
-if [ $RECORDSOUT -ne $(($FILESIZE / 1024)) ]; then
+if [ "$RECORDSOUT" -ne $(($FILESIZE / 1024)) ]; then
         echo "ERROR: blocks written by dd not equal to the size of file"
         SUCCESS=0
 fi

@@ -34,8 +34,11 @@
 #ifdef HAVE_SYS_USER_H
 # include <sys/user.h>
 #endif
-
-#include "ioctl.h"
+#ifdef HAVE_SYS_IOCTL_H
+# include <sys/ioctl.h>
+#else
+# include "ioctl.h"
+#endif /* !HAVE_SYS_IOCTL_H */
 
 #include <stdio.h>
 #include <sys/ioctl.h>

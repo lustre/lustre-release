@@ -319,7 +319,12 @@ do {                                                                          \
 # define OBD_GFP_MASK GFP_NOFS
 #endif
 
+#ifdef __KERNEL__
 #define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, OBD_GFP_MASK)
+#else
+#define OBD_ALLOC(ptr, size) (ptr = malloc(size))
+#endif
+
 #define OBD_ALLOC_WAIT(ptr, size) OBD_ALLOC_GFP(ptr, size, GFP_KERNEL)
 
 #ifdef __arch_um__
@@ -357,6 +362,7 @@ do {                                                                          \
 #define POISON_PAGE(page, val) do { } while (0)
 #endif
 
+#ifdef __KERNEL__
 #define OBD_FREE(ptr, size)                                                   \
 do {                                                                          \
         LASSERT(ptr);                                                         \
@@ -367,6 +373,9 @@ do {                                                                          \
         kfree(ptr);                                                           \
         (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
+#else
+#define OBD_FREE(ptr, size) ((void)(size), free((ptr)))
+#endif
 
 #ifdef __arch_um__
 # define OBD_VFREE(ptr, size) OBD_FREE(ptr, size)

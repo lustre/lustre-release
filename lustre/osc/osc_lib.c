@@ -58,16 +58,17 @@ int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct client_obd *cli = &obddev->u.cli;
         ENTRY;
 
-        if (lcfg->lcfg_inllen3 < 1) {
+        if (lcfg->lcfg_bufcount < 4 || LUSTRE_CFG_BUFLEN(lcfg, 3) < 1) {
                 CERROR("setup requires a SAN device pathname\n");
                 RETURN(-EINVAL);
         }
 
         client_obd_setup(obddev, len, buf);
 
-        cli->cl_sandev = path2dev(lcfg->lcfg_inlbuf3);
+        cli->cl_sandev = path2dev(lustre_cfg_string(lcfg, 3));
         if (!kdev_t_to_nr(cli->cl_sandev)) {
-                CERROR("%s seems not a valid SAN device\n", lcfg->lcfg_inlbuf3);
+                CERROR("%s seems not a valid SAN device\n",
+                       lustre_cfg_string(lcfg, 3));
                 RETURN(-EINVAL);
         }
 

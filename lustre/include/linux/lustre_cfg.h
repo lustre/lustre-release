@@ -23,7 +23,15 @@
 #ifndef _LUSTRE_CFG_H
 #define _LUSTRE_CFG_H
 
-#define LUSTRE_CFG_VERSION 0x00010001
+/*
+ * 1cf6
+ * lcfG
+ */
+#define LUSTRE_CFG_VERSION 0x1cf60001
+#define LUSTRE_CFG_MAX_BUFCOUNT 8
+
+#define LCFG_HDR_SIZE(count) \
+    size_round(offsetof (struct lustre_cfg, lcfg_buflens[(count)]))
 
 enum lcfg_command_type {
         LCFG_ATTACH         = 0x00cf001,
@@ -38,6 +46,12 @@ enum lcfg_command_type {
         LCFG_SET_UPCALL     = 0x00cf010,
 };
 
+struct lustre_cfg_bufs {
+        void    *lcfg_buf[LUSTRE_CFG_MAX_BUFCOUNT];
+        uint32_t lcfg_buflen[LUSTRE_CFG_MAX_BUFCOUNT];
+        uint32_t lcfg_bufcount;
+};
+
 struct lustre_cfg {
         uint32_t lcfg_version;
         uint32_t lcfg_command;
@@ -47,198 +61,171 @@ struct lustre_cfg {
         uint64_t lcfg_nid;
         uint32_t lcfg_nal;
 
-        /* inline buffers for various arguments */
-        uint32_t lcfg_dev_namelen;
-        char    *lcfg_dev_name;
-        uint32_t lcfg_inllen1;
-        char    *lcfg_inlbuf1;
-        uint32_t lcfg_inllen2;
-        char    *lcfg_inlbuf2;
-        uint32_t lcfg_inllen3;
-        char    *lcfg_inlbuf3;
-        uint32_t lcfg_inllen4;
-        char    *lcfg_inlbuf4;
-
-        char    lcfg_bulk[0];
-
+        uint32_t lcfg_bufcount;
+        uint32_t lcfg_buflens[0];
 };
 
-#define LCFG_INIT(l, cmd, name)                                 \
-do {                                                            \
-        memset(&(l), 0, sizeof(l));                             \
-        (l).lcfg_version = LUSTRE_CFG_VERSION;                  \
-        (l).lcfg_command = (cmd);                               \
-        if (name) {                                             \
-                (l).lcfg_dev_namelen = strlen(name) + 1;        \
-                (l).lcfg_dev_name = name;                       \
-        }                                                       \
-                                                                \
-} while (0)
+#define LUSTRE_CFG_BUFLEN(lcfg, idx)            \
+        ((lcfg)->lcfg_bufcount <= (idx)         \
+         ? 0                                    \
+         : (lcfg)->lcfg_buflens[(idx)])
 
-#ifndef __KERNEL__
-static inline int lustre_cfg_packlen(struct lustre_cfg *lcfg)
+static inline void lustre_cfg_bufs_set(struct lustre_cfg_bufs *bufs,
+                                       uint32_t                index,
+                                       void                   *buf,
+                                       uint32_t                buflen)
 {
-        int len = size_round(sizeof(struct lustre_cfg));
-        len += size_round(lcfg->lcfg_dev_namelen);
-        len += size_round(lcfg->lcfg_inllen1);
-        len += size_round(lcfg->lcfg_inllen2);
-        len += size_round(lcfg->lcfg_inllen3);
-        len += size_round(lcfg->lcfg_inllen4);
-        return size_round(len);
+        if (index >= LUSTRE_CFG_MAX_BUFCOUNT)
+                return;
+        if (bufs == NULL)
+                return;
+
+        if (bufs->lcfg_bufcount <= index)
+                bufs->lcfg_bufcount = index + 1;
+
+        bufs->lcfg_buf[index]    = buf;
+        bufs->lcfg_buflen[index] = buflen;
 }
 
-static inline int lustre_cfg_pack(struct lustre_cfg *data, char **pbuf,
-                                 int max, int *plen)
+static inline void lustre_cfg_bufs_set_string(struct lustre_cfg_bufs *bufs,
+                                              uint32_t index,
+                                              char *str)
 {
-        char *ptr;
-        struct lustre_cfg *overlay;
-	int len;
+        lustre_cfg_bufs_set(bufs, index, str, str ? strlen(str) + 1 : 0);
+}
 
-        len = lustre_cfg_packlen(data);
+static inline void lustre_cfg_bufs_reset(struct lustre_cfg_bufs *bufs, char *name)
+{
+        memset((bufs), 0, sizeof(*bufs));
+        if (name)
+                lustre_cfg_bufs_set_string(bufs, 0, name);
+}
 
-        data->lcfg_version = LUSTRE_CFG_VERSION;
+static inline void *lustre_cfg_buf(struct lustre_cfg *lcfg, int index)
+{
+        int i;
+        int offset;
+        int bufcount;
+        LASSERT (lcfg != NULL);
+        LASSERT (index >= 0);
 
-        if (*pbuf && len > max)
-                return 1;
-        if (*pbuf == NULL) {
-                *pbuf = malloc(len);
+        bufcount = lcfg->lcfg_bufcount;
+        if (index >= bufcount)
+                return NULL;
+
+        offset = LCFG_HDR_SIZE(lcfg->lcfg_bufcount);
+        for (i = 0; i < index; i++)
+                offset += size_round(lcfg->lcfg_buflens[i]);
+        return (char *)lcfg + offset;
+}
+
+static inline void lustre_cfg_bufs_init(struct lustre_cfg_bufs *bufs,
+                                        struct lustre_cfg *lcfg)
+{
+        int i;
+        bufs->lcfg_bufcount = lcfg->lcfg_bufcount;
+        for (i = 0; i < bufs->lcfg_bufcount; i++) {
+                bufs->lcfg_buflen[i] = lcfg->lcfg_buflens[i];
+                bufs->lcfg_buf[i] = lustre_cfg_buf(lcfg, i);
         }
-        if (!*pbuf)
-                return 1;
-        overlay = (struct lustre_cfg *)*pbuf;
-        memcpy(*pbuf, data, sizeof(*data));
-
-        ptr = overlay->lcfg_bulk;
-        if (data->lcfg_dev_name)
-                LOGL(data->lcfg_dev_name, data->lcfg_dev_namelen, ptr);
-        if (data->lcfg_inlbuf1)
-                LOGL(data->lcfg_inlbuf1, data->lcfg_inllen1, ptr);
-        if (data->lcfg_inlbuf2)
-                LOGL(data->lcfg_inlbuf2, data->lcfg_inllen2, ptr);
-        if (data->lcfg_inlbuf3)
-                LOGL(data->lcfg_inlbuf3, data->lcfg_inllen3, ptr);
-        if (data->lcfg_inlbuf4)
-                LOGL(data->lcfg_inlbuf4, data->lcfg_inllen4, ptr);
-
-	*plen = len;
-
-        return 0;
 }
 
-static inline int lustre_cfg_unpack(struct lustre_cfg *data, char *pbuf,
-                                   int max)
+static inline char *lustre_cfg_string(struct lustre_cfg *lcfg, int index)
 {
-        char *ptr;
-        struct lustre_cfg *overlay;
+        char *s;
 
-        if (!pbuf)
-                return 1;
-        overlay = (struct lustre_cfg *)pbuf;
+        if (!lcfg->lcfg_buflens[index])
+                return NULL;
 
-        /* Preserve the caller's buffer pointers */
-        overlay->lcfg_dev_name = data->lcfg_dev_name;
-        overlay->lcfg_inlbuf1 = data->lcfg_inlbuf1;
-        overlay->lcfg_inlbuf2 = data->lcfg_inlbuf2;
-        overlay->lcfg_inlbuf3 = data->lcfg_inlbuf3;
-        overlay->lcfg_inlbuf4 = data->lcfg_inlbuf4;
+        s = lustre_cfg_buf(lcfg, index);
+        if (!s)
+                return NULL;
 
-        memcpy(data, pbuf, sizeof(*data));
-
-        ptr = overlay->lcfg_bulk;
-        if (data->lcfg_dev_name)
-                LOGU(data->lcfg_dev_name, data->lcfg_dev_namelen, ptr);
-        if (data->lcfg_inlbuf1)
-                LOGU(data->lcfg_inlbuf1, data->lcfg_inllen1, ptr);
-        if (data->lcfg_inlbuf2)
-                LOGU(data->lcfg_inlbuf2, data->lcfg_inllen2, ptr);
-        if (data->lcfg_inlbuf3)
-                LOGU(data->lcfg_inlbuf3, data->lcfg_inllen3, ptr);
-        if (data->lcfg_inlbuf4)
-                LOGU(data->lcfg_inlbuf4, data->lcfg_inllen4, ptr);
-
-        return 0;
+        /* make sure it's NULL terminated, even if this kills a char
+         * of data
+         */
+        s[lcfg->lcfg_buflens[index] - 1] = '\0';
+        return s;
 }
-#endif
+
+static inline int lustre_cfg_len(uint32_t bufcount, uint32_t *buflens)
+{
+        int i;
+        int len;
+        ENTRY;
+
+        len = LCFG_HDR_SIZE(bufcount);
+        for (i = 0; i < bufcount; i++)
+                len += size_round(buflens[i]);
+
+        RETURN(size_round(len));
+}
+
 
 #include <linux/obd_support.h>
 
-static inline int lustre_cfg_getdata(char **buf, int len, void *arg, int kernel)
+static inline struct lustre_cfg *lustre_cfg_new(int cmd,
+                                                struct lustre_cfg_bufs *bufs)
 {
         struct lustre_cfg *lcfg;
-        int err;
-	int offset = 0;
+        char *ptr;
+        int i;
+
         ENTRY;
-        if (len > OBD_MAX_IOCTL_BUFFER) {
-                CERROR("User buffer len %d exceeds %d max buffer\n",
-                       len, OBD_MAX_IOCTL_BUFFER);
-                return -EINVAL;
+
+        OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
+                                       bufs->lcfg_buflen));
+        if (!lcfg)
+                RETURN(lcfg);
+
+        lcfg->lcfg_version = LUSTRE_CFG_VERSION;
+        lcfg->lcfg_command = cmd;
+        lcfg->lcfg_bufcount = bufs->lcfg_bufcount;
+
+        ptr = (char *)lcfg + LCFG_HDR_SIZE(lcfg->lcfg_bufcount);
+        for (i = 0; i < lcfg->lcfg_bufcount; i++) {
+                lcfg->lcfg_buflens[i] = bufs->lcfg_buflen[i];
+                LOGL((char *)bufs->lcfg_buf[i], bufs->lcfg_buflen[i], ptr);
         }
-
-        if (len < sizeof(struct lustre_cfg)) {
-                CERROR("OBD: user buffer too small for lustre_cfg\n");
-                return -EINVAL;
-        }
-
-        /* XXX allocate this more intelligently, using kmalloc when
-         * appropriate */
-        OBD_ALLOC(*buf, len);
-        if (*buf == NULL) {
-                CERROR("Cannot allocate control buffer of len %d\n", len);
-                RETURN(-EINVAL);
-        }
-
-        if (kernel) {
-                memcpy(*buf, (void *)arg, len);
-        } else {
-                err = copy_from_user(*buf, (void *)arg, len);
-                if (err) 
-                        RETURN(err);
-        }
-
-        lcfg = (struct lustre_cfg *)*buf;
-
-        if (lcfg->lcfg_version != LUSTRE_CFG_VERSION) {
-                CERROR("Version mismatch kernel: %#x application: %#x\n",
-                       LUSTRE_CFG_VERSION, lcfg->lcfg_version);
-                return -EINVAL;
-        }
-
-
-        if (lcfg->lcfg_dev_name) {
-                lcfg->lcfg_dev_name = &lcfg->lcfg_bulk[0];
-		offset += size_round(lcfg->lcfg_dev_namelen);
-        }
-
-        if (lcfg->lcfg_inllen1) {
-                lcfg->lcfg_inlbuf1 = &lcfg->lcfg_bulk[0] + offset;
-		offset += size_round(lcfg->lcfg_inllen1);
-        }
-
-        if (lcfg->lcfg_inllen2) {
-                lcfg->lcfg_inlbuf2 = &lcfg->lcfg_bulk[0] + offset;
-		offset += size_round(lcfg->lcfg_inllen2);
-        }
-
-        if (lcfg->lcfg_inllen3) {
-                lcfg->lcfg_inlbuf3 = &lcfg->lcfg_bulk[0] + offset;
-		offset += size_round(lcfg->lcfg_inllen3);
-        }
-
-        if (lcfg->lcfg_inllen4) {
-                lcfg->lcfg_inlbuf4 = &lcfg->lcfg_bulk[0] + offset;
-        }
-
-        EXIT;
-        return 0;
+        RETURN(lcfg);
 }
 
-static inline void lustre_cfg_freedata(char *buf, int len)
+static inline void lustre_cfg_free(struct lustre_cfg *lcfg)
 {
-        ENTRY;
+        int len;
 
-        OBD_FREE(buf, len);
+        len = lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens);
+
+        OBD_FREE(lcfg, len);
         EXIT;
         return;
+}
+
+static inline int lustre_cfg_sanity_check(void *buf, int len)
+{
+        struct lustre_cfg *lcfg = (struct lustre_cfg *)buf;
+        ENTRY;
+        if (!lcfg)
+                RETURN(-EINVAL);
+
+        /* check that the first bits of the struct are valid */
+        if (len < LCFG_HDR_SIZE(0))
+                RETURN(-EINVAL);
+
+        if (lcfg->lcfg_version != LUSTRE_CFG_VERSION)
+                RETURN(-EINVAL);
+        if (lcfg->lcfg_bufcount >= LUSTRE_CFG_MAX_BUFCOUNT)
+                RETURN(-EINVAL);
+
+        /* check that the buflens are valid */
+        if (len < LCFG_HDR_SIZE(lcfg->lcfg_bufcount))
+                RETURN(-EINVAL);
+
+        /* make sure all the pointers point inside the data */
+        if (len < lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens))
+                RETURN(-EINVAL);
+
+        RETURN(0);
 }
 
 /* Passed by mount */

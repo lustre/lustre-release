@@ -507,8 +507,8 @@ static int llog_test_7(struct obd_device *obd)
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
 
-        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = cpu_to_le32(sizeof(lcr));
-        lcr.lcr_hdr.lrh_type = cpu_to_le32(OST_SZ_REC);
+        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
+        lcr.lcr_hdr.lrh_type = OST_SZ_REC;
         rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
         if (rc) {
                 CERROR("7: write one log record failed: %d\n", rc);
@@ -621,15 +621,20 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 < 1) {
+        if (lcfg->lcfg_bufcount < 2) {
                 CERROR("requires a TARGET OBD name\n");
                 RETURN(-EINVAL);
         }
 
-        tgt = class_name2obd(lcfg->lcfg_inlbuf1);
+        if (lcfg->lcfg_buflens[1] < 1) {
+                CERROR("requires a TARGET OBD name\n");
+                RETURN(-EINVAL);
+        }
+
+        tgt = class_name2obd(lustre_cfg_string(lcfg, 1));
         if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
                 CERROR("target device not attached or not set up (%s)\n",
-                       lcfg->lcfg_inlbuf1);
+                       lustre_cfg_string(lcfg, 1));
                 RETURN(-EINVAL);
         }
 

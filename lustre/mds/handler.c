@@ -1386,10 +1386,13 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
-        if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
+        if (lcfg->lcfg_bufcount < 3)
                 RETURN(rc = -EINVAL);
 
-        obd->obd_fsops = fsfilt_get_ops(lcfg->lcfg_inlbuf2);
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) == 0 || LUSTRE_CFG_BUFLEN(lcfg, 2) == 0)
+                RETURN(rc = -EINVAL);
+
+        obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         if (IS_ERR(obd->obd_fsops))
                 RETURN(rc = PTR_ERR(obd->obd_fsops));
 
@@ -1399,18 +1402,18 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         options = (char *)page;
         memset(options, 0, PAGE_SIZE);
-                                                                                                                             
+
         /* here we use "iopen_nopriv" hardcoded, because it affects MDS utility
          * and the rest of options are passed by mount options. Probably this
          * should be moved to somewhere else like startup scripts or lconf. */
         sprintf(options, "iopen_nopriv");
 
-        if (lcfg->lcfg_inllen4 > 0 && lcfg->lcfg_inlbuf4)
+        if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4))
                 sprintf(options + strlen(options), ",%s",
-                        lcfg->lcfg_inlbuf4);
+                        lustre_cfg_string(lcfg, 4));
 
-        mnt = do_kern_mount(lcfg->lcfg_inlbuf2, 0,
-                            lcfg->lcfg_inlbuf1, (void *)options);
+        mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
+                            lustre_cfg_string(lcfg, 1), (void *)options);
         free_page(page);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
@@ -1418,8 +1421,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(err_ops, rc);
         }
 
-        CDEBUG(D_SUPER, "%s: mnt = %p\n", lcfg->lcfg_inlbuf1, mnt);
-        
+        CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
+
         LASSERT(!ll_check_rdonly(ll_sbdev(mnt->mnt_sb)));
         
         sema_init(&mds->mds_orphan_recovery_sem, 1);
@@ -1446,18 +1449,18 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc < 0)
                 GOTO(err_fs, rc);
 
-        if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3) {
+        if (lcfg->lcfg_bufcount >= 4 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 class_uuid_t uuid;
 
                 generate_random_uuid(uuid);
                 class_uuid_unparse(uuid, &mds->mds_lov_uuid);
 
-                OBD_ALLOC(mds->mds_profile, lcfg->lcfg_inllen3);
+                OBD_ALLOC(mds->mds_profile, LUSTRE_CFG_BUFLEN(lcfg, 3));
                 if (mds->mds_profile == NULL)
                         GOTO(err_fs, rc = -ENOMEM);
 
-                memcpy(mds->mds_profile, lcfg->lcfg_inlbuf3,
-                       lcfg->lcfg_inllen3);
+                strncpy(mds->mds_profile, lustre_cfg_string(lcfg, 3),
+                        LUSTRE_CFG_BUFLEN(lcfg, 3));
 
         }
 
@@ -1480,7 +1483,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               "Recovery progress can be monitored by watching "
                               "/proc/fs/lustre/mds/%s/recovery_status.\n",
                               obd->obd_name,
-                              lcfg->lcfg_inlbuf1,
+                              lustre_cfg_string(lcfg, 1),
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1) 
                               ? "client" : "clients",
@@ -1489,7 +1492,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("MDT %s now serving %s with recovery %s.\n",
-                              obd->obd_name, lcfg->lcfg_inlbuf1,
+                              obd->obd_name,
+                              lustre_cfg_string(lcfg, 1),
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 

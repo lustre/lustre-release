@@ -61,7 +61,7 @@ static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
 
         tail.lrt_len = rec.lrh_len = len;
         tail.lrt_index = rec.lrh_index = index;
-        rec.lrh_type = 0;
+        rec.lrh_type = LLOG_PAD_MAGIC;
 
         rc = fsfilt_write_record(obd, file, &rec, sizeof(rec), &file->f_pos, 0);
         if (rc) {
@@ -168,9 +168,10 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
                        handle->lgh_file->f_dentry->d_name.name);
         } else {
                 struct llog_rec_hdr *llh_hdr = &handle->lgh_hdr->llh_hdr;
-                /*
-                 * These need to be fixed for bug 1987
-                 */
+
+                if (LLOG_REC_HDR_NEEDS_SWABBING(llh_hdr))
+                        lustre_swab_llog_hdr(handle->lgh_hdr);
+
                 if (llh_hdr->lrh_type != LLOG_HDR_MAGIC) {
                         CERROR("bad log %.*s header magic: %#x (expected %#x)\n",
                                handle->lgh_file->f_dentry->d_name.len,
@@ -387,7 +388,13 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                         RETURN(-EINVAL);
                 }
 
-                tail = buf + rc - sizeof(struct llog_rec_tail);
+                rec = buf;
+                tail = (struct llog_rec_tail *)((char *)buf + rc - sizeof(struct llog_rec_tail));
+
+                if (LLOG_REC_HDR_NEEDS_SWABBING(rec)) {
+                        lustre_swab_llog_rec(rec, tail);
+                }
+
                 *cur_idx = tail->lrt_index;
 
                 /* this shouldn't happen */
@@ -402,7 +409,6 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 
                 /* sanity check that the start of the new buffer is no farther
                  * than the record that we wanted.  This shouldn't happen. */
-                rec = buf;
                 if (rec->lrh_index > next_idx) {
                         CERROR("missed desired record? %u > %u\n",
                                rec->lrh_index, next_idx);

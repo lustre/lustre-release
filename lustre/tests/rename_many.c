@@ -71,9 +71,9 @@ extern int optind;
 int main(int argc, char *argv[])
 {
 	unsigned long n;
-	char msg[100], c, *end = NULL;
+	char msg[100], *end = NULL;
 	int h1, h2;
-	int i;
+	int i, c;
 
 	while ((c = getopt(argc, argv, "cf:n:rs:vx")) != EOF) {
 		switch(c) {

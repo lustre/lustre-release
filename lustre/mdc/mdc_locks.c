@@ -186,6 +186,60 @@ static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
         }
 }
 
+static int round_up(int val)
+{
+        int ret = 1;
+        while (val) {
+                val >>= 1;
+                ret <<= 1;
+        }
+        return ret;
+}
+
+/* Save a large LOV EA into the request buffer so that it is available
+ * for replay.  We don't do this in the initial request because the
+ * original request doesn't need this buffer (at most it sends just the
+ * lov_mds_md) and it is a waste of RAM/bandwidth to send the empty
+ * buffer and may also be difficult to allocate and save a very large
+ * request buffer for each open. (bug 5707)
+ *
+ * OOM here may cause recovery failure if lmm is needed (only for the
+ * original open if the MDS crashed just when this client also OOM'd)
+ * but this is incredibly unlikely, and questionable whether the client
+ * could do MDS recovery under OOM anyways... */
+static void mdc_realloc_openmsg(struct ptlrpc_request *req,
+                                struct mds_body *body, int size[5])
+{
+        int new_size, old_size;
+        struct lustre_msg *new_msg;
+
+        /* save old size */
+        old_size = lustre_msg_size(5, size);
+
+        size[4] = body->eadatasize;
+        new_size = lustre_msg_size(5, size);
+        OBD_ALLOC(new_msg, new_size);
+        if (new_msg != NULL) {
+                struct lustre_msg *old_msg = req->rq_reqmsg;
+                long irqflags;
+
+                DEBUG_REQ(D_INFO, req, "replace reqmsg for larger EA %u\n",
+                          body->eadatasize);
+                memcpy(new_msg, old_msg, old_size);
+                new_msg->buflens[4] = body->eadatasize;
+
+                spin_lock_irqsave(&req->rq_lock, irqflags);
+                req->rq_reqmsg = new_msg;
+                req->rq_reqlen = new_size;
+                spin_unlock_irqrestore(&req->rq_lock, irqflags);
+
+                OBD_FREE(old_msg, old_size);
+        } else {
+                body->valid &= ~OBD_MD_FLEASIZE;
+                body->eadatasize = 0;
+        }
+}
+
 /* We always reserve enough space in the reply packet for a stripe MD, because
  * we don't know in advance the file type. */
 int mdc_enqueue(struct obd_export *exp,
@@ -204,7 +258,7 @@ int mdc_enqueue(struct obd_export *exp,
         struct obd_device *obddev = class_exp2obd(exp);
         struct ldlm_res_id res_id =
                 { .name = {data->fid1.id, data->fid1.generation} };
-        int size[6] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
+        int size[5] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
         int rc, flags = LDLM_FL_HAS_INTENT;
         int repsize[4] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
@@ -227,8 +281,18 @@ int mdc_enqueue(struct obd_export *exp,
 
                 size[2] = sizeof(struct mds_rec_create);
                 size[3] = data->namelen + 1;
-                size[4] = obddev->u.cli.cl_max_mds_easize;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 
+                /* As an optimization, we allocate an RPC request buffer for
+                 * at least a default-sized LOV EA even if we aren't sending
+                 * one.  We grow the whole request to the next power-of-two
+                 * size since we get that much from a slab allocation anyways.
+                 * This avoids an allocation below in the common case where
+                 * we need to save a default-sized LOV EA for open replay. */
+                size[4] = max(lmmsize, obddev->u.cli.cl_default_mds_easize);
+                rc = lustre_msg_size(5, size);
+                if (rc & (rc - 1))
+                        size[4] = min(size[4] + round_up(rc) - rc,
+                                      obddev->u.cli.cl_max_mds_easize);
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE,
                                       5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
@@ -367,7 +431,6 @@ int mdc_enqueue(struct obd_export *exp,
                 }
 
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
-                        void *replayea;
                         /* The eadata is opaque; just check that it is
                          * there.  Eventually, obd_unpackmd() will check
                          * the contents */
@@ -377,11 +440,19 @@ int mdc_enqueue(struct obd_export *exp,
                                 CERROR ("Missing/short eadata\n");
                                 RETURN (-EPROTO);
                         }
+                        /* We save the reply LOV EA in case we have to replay
+                         * a create for recovery.  If we didn't allocate a
+                         * large enough request buffer above we need to
+                         * reallocate it here to hold the actual LOV EA. */
                         if (it->it_op & IT_OPEN) {
-                                replayea = lustre_msg_buf(req->rq_reqmsg, 4, 
-                                                          obddev->u.cli.cl_max_mds_easize);
-                                LASSERT(replayea);
-                                memcpy(replayea, eadata, body->eadatasize);
+                                if (req->rq_reqmsg->buflens[4] <
+                                    body->eadatasize)
+                                        mdc_realloc_openmsg(req, body, size);
+
+                                lmm = lustre_msg_buf(req->rq_reqmsg, 4,
+                                                     body->eadatasize);
+                                if (lmm)
+                                        memcpy(lmm, eadata, body->eadatasize);
                         }
                 }
         }

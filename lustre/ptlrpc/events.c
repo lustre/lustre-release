@@ -359,8 +359,12 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
         ptl_nid_t           peer_nid;
         int                 i;
         char                str[PTL_NALFMT_SIZE];
-        int                 rc = lustre_uuid_to_peer(uuid->uuid, 
-                                                     &peer_nal, &peer_nid);
+        int                 rc;
+
+        ENTRY;
+        
+        rc = lustre_uuid_to_peer (uuid->uuid, &peer_nal, &peer_nid);
+
         if (rc != 0)
                 RETURN (rc);
 
@@ -371,7 +375,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
                         peer->peer_id.nid = peer_nid;
                         peer->peer_id.pid = LUSTRE_SRV_PTL_PID;
                         peer->peer_ni = pni;
-                        return (0);
+                        RETURN(0);
                 }
         }
 

@@ -145,6 +145,7 @@ static int llog_client_next_block(struct llog_handle *loghandle,
                 GOTO(out, rc =-EFAULT);
         }
 
+        /* The log records are swabbed as they are processed */
         ptr = lustre_msg_buf(req->rq_repmsg, 1, len);
         if (ptr == NULL) {
                 CERROR ("Can't unpack bitmap\n");

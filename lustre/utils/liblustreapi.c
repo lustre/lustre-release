@@ -89,8 +89,8 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
                 if (errno != EEXIST && errno != EALREADY)
                         errmsg = strerror(errno);
 
-                fprintf(stderr, "error on ioctl for '%s' (%d): %s\n",
-                        name, fd, errmsg);
+                fprintf(stderr, "error on ioctl "LPX64" for '%s' (%d): %s\n",
+                        (__u64)LL_IOC_LOV_SETSTRIPE, name, fd, errmsg);
                 rc = -errno;
         }
         if (close(fd) < 0) {
@@ -293,7 +293,8 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *dname, char *fname)
                                      (param->verbose || !param->obduuid));
                 break;
         default:
-                printf("unknown lmm_magic:  0x%08X\n", *(__u32 *)param->lum);
+                printf("unknown lmm_magic:  %#x (expecting %#x)\n",
+                       *(__u32 *)param->lum, LOV_USER_MAGIC_V1);
                 return;
         }
 }

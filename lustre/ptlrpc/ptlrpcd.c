@@ -85,12 +85,12 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
 
         if (req->rq_send_state == LUSTRE_IMP_FULL)
                 pc = &ptlrpcd_pc;
-        else 
+        else
                 pc = &ptlrpcd_recovery_pc;
 
         ptlrpc_set_add_new_req(pc->pc_set, req);
         req->rq_ptlrpcd_data = pc;
-                
+
         ptlrpcd_wake(req);
 }
 

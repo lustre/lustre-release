@@ -19,7 +19,7 @@ endif # LIBLUSTRE
 
 libtestcommon_a_SOURCES = test_common.c test_common.h
 
-echo_test_SOURCES = echo_test.c  ../../utils/parser.c ../../utils/obd.c ../../utils/lustre_cfg.c
+echo_test_SOURCES = echo_test.c $(top_srcdir)/lustre/utils/parser.c $(top_srcdir)/lustre/utils/obd.c $(top_srcdir)/lustre/utils/lustre_cfg.c
 echo_test_CFLAGS = $(LL_CFLAGS)
 echo_test_LDADD = ../liblsupport.a $(LIBREADLINE) -lpthread 
 echo_test_DEPENDENCIES=$(top_builddir)/lustre/liblustre/liblsupport.a

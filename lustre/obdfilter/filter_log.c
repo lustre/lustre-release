@@ -129,7 +129,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         int rc = 0;
         ENTRY;
 
-        if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
+        if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
@@ -141,7 +141,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
  
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_subsys = LLOG_UNLINK_ORIG_CTXT;
-        cookie.lgc_index = le32_to_cpu(rec->lrh_index);
+        cookie.lgc_index = rec->lrh_index;
 
         if (rec->lrh_type == LLOG_GEN_REC) {
                 lgr = (struct llog_gen_rec *)rec;

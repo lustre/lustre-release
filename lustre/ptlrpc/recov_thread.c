@@ -343,6 +343,9 @@ static int log_commit_thread(void *arg)
                         request = ptlrpc_prep_req(import, OBD_LOG_CANCEL, 1,
                                                   &llcd->llcd_cookiebytes,
                                                   bufs);
+                        /* XXX FIXME bug 249, 5515 */
+                        request->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
+                        request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
                         if (request == NULL) {
                                 rc = -ENOMEM;

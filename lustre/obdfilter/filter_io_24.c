@@ -38,7 +38,6 @@
 #include <linux/lustre_fsfilt.h>
 #include "filter_internal.h"
 
-
 /* We should only change the file mtime (and not the ctime, like
  * update_inode_times() in generic_file_write()) when we only change data. */
 void inode_update_time(struct inode *inode, int ctime_too)
@@ -203,7 +202,6 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
          * leaves it there, sometimes generating io from it at later truncates.
          * Someday very soon we'll be performing our brw_kiovec() IO to and
          * from the page cache. */
-
         check_pending_bhs(KIOBUF_GET_BLOCKS(iobuf), iobuf->nr_pages,
                           inode->i_dev, 1 << inode->i_blkbits);
 

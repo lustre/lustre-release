@@ -166,11 +166,13 @@ out:
         if (flags & LLOG_F_IS_CAT) {
                 INIT_LIST_HEAD(&handle->u.chd.chd_head);
                 llh->llh_size = sizeof(struct llog_logid_rec);
-        }
-        else if (flags & LLOG_F_IS_PLAIN)
+        } else if (flags & LLOG_F_IS_PLAIN) {
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
-        else
+        } else {
+                CERROR("Unknown flags: %#x (Expected %#x or %#x\n",
+                       flags, LLOG_F_IS_CAT, LLOG_F_IS_PLAIN);
                 LBUG();
+        }
 
         if (rc) {
                 OBD_FREE(llh, sizeof(*llh));
@@ -203,9 +205,9 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
 {
         struct llog_log_hdr *llh = loghandle->lgh_hdr;
         struct llog_process_cat_data *cd = catdata;
-        void *buf;
+        char *buf;
         __u64 cur_offset = LLOG_CHUNK_SIZE;
-        int rc = 0, index = 1, last_index, idx;
+        int rc = 0, index = 1, last_index;
         int saved_index = 0;
         ENTRY;
 
@@ -232,6 +234,9 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                 if (index == last_index + 1)
                         break;
 
+                CDEBUG(D_OTHER, "index: %d last_index %d\n",
+                       index, last_index);
+
                 /* get the buf with our target record; avoid old garbage */
                 memset(buf, 0, LLOG_CHUNK_SIZE);
                 rc = llog_next_block(loghandle, &saved_index, index,
@@ -239,20 +244,35 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                 if (rc)
                         GOTO(out, rc);
 
-                rec = buf;
-                idx = rec->lrh_index;
-                if (idx < index)
-                        CDEBUG(D_HA, "index %u : idx %u\n", index, idx);
-                while (idx < index) {
-                        rec = (struct llog_rec_hdr *)
-                                ((char *)rec + rec->lrh_len);
-                        idx ++;
-                }
+                /* NB: when rec->lrh_len is accessed it is already swabbed
+                 * since it is used at the "end" of the loop and the rec
+                 * swabbing is done at the beginning of the loop. */
+                for (rec = (struct llog_rec_hdr *)buf;
+                     (char *)rec < buf + LLOG_CHUNK_SIZE;
+                     rec = (struct llog_rec_hdr *)((char *)rec + rec->lrh_len)){
 
-                /* process records in buffer, starting where we found one */
-                while ((void *)rec < buf + LLOG_CHUNK_SIZE) {
+                        CDEBUG(D_OTHER, "processing rec 0x%p type %#x\n",
+                               rec, rec->lrh_type);
+
+                        if (LLOG_REC_HDR_NEEDS_SWABBING(rec))
+                                lustre_swab_llog_rec(rec, NULL);
+
+                        CDEBUG(D_OTHER, "after swabbing, type: %#x\n",
+                               rec->lrh_type);
+
                         if (rec->lrh_index == 0)
                                 GOTO(out, 0); /* no more records */
+
+                        if (rec->lrh_index < index) {
+                                CDEBUG(D_OTHER, "skipping lrh_index %d\n",
+                                       rec->lrh_index);
+                                continue;
+                        }
+
+                        CDEBUG(D_OTHER,
+                               "lrh_index: %d lrh_len: %d (%d remains)\n",
+                               rec->lrh_index, rec->lrh_len,
+                               (int)(buf + LLOG_CHUNK_SIZE - (char *)rec));
 
                         /* if set, process the callback on this record */
                         if (ext2_test_bit(index, llh->llh_bitmap)) {
@@ -266,14 +286,14 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                                 }
                                 if (rc)
                                         GOTO(out, rc);
+                        } else {
+                                CDEBUG(D_OTHER, "Skipped index %d\n", index);
                         }
 
                         /* next record, still in buffer? */
                         ++index;
                         if (index > last_index)
                                 GOTO(out, rc = 0);
-                        rec = (struct llog_rec_hdr *)
-                                ((char *)rec + rec->lrh_len);
                 }
         }
 

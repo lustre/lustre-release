@@ -238,11 +238,11 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
                 list_add (&rqbd->rqbd_list, &srv_ni->sni_active_rqbds);
 
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
-                
+
                 rc = ptlrpc_register_rqbd(rqbd);
                 if (rc != 0)
                         break;
-                
+
                 posted = 1;
         }
 

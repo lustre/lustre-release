@@ -38,22 +38,6 @@
 
 #include "mds_internal.h"
 
-void le_lov_desc_to_cpu (struct lov_desc *ld)
-{
-        ld->ld_tgt_count = le32_to_cpu (ld->ld_tgt_count);
-        ld->ld_default_stripe_count = le32_to_cpu (ld->ld_default_stripe_count);
-        ld->ld_default_stripe_size = le32_to_cpu (ld->ld_default_stripe_size);
-        ld->ld_pattern = le32_to_cpu (ld->ld_pattern);
-}
-
-void cpu_to_le_lov_desc (struct lov_desc *ld)
-{
-        ld->ld_tgt_count = cpu_to_le32 (ld->ld_tgt_count);
-        ld->ld_default_stripe_count = cpu_to_le32 (ld->ld_default_stripe_count);
-        ld->ld_default_stripe_size = cpu_to_le32 (ld->ld_default_stripe_size);
-        ld->ld_pattern = cpu_to_le32 (ld->ld_pattern);
-}
-
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -322,6 +306,9 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_ioctl_data *data = karg;
         struct obd_run_ctxt saved;
         int rc = 0;
+
+        ENTRY;
+        CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
 
         switch (cmd) {
         case OBD_IOC_RECORD: {

@@ -100,10 +100,10 @@ check_obdo(void)
         CHECK_STRUCT(obdo);
         CHECK_MEMBER(obdo, o_id);
         CHECK_MEMBER(obdo, o_gr);
-        CHECK_MEMBER(obdo, o_atime);
-        CHECK_MEMBER(obdo, o_mtime);
-        CHECK_MEMBER(obdo, o_ctime);
         CHECK_MEMBER(obdo, o_size);
+        CHECK_MEMBER(obdo, o_mtime);
+        CHECK_MEMBER(obdo, o_atime);
+        CHECK_MEMBER(obdo, o_ctime);
         CHECK_MEMBER(obdo, o_blocks);
         CHECK_MEMBER(obdo, o_grant);
         CHECK_MEMBER(obdo, o_blksize);

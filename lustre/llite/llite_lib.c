@@ -46,6 +46,32 @@ extern struct address_space_operations ll_dir_aops;
 #define log2(n) ffz(~(n))
 #endif
 
+/* We need to have some extra twiddling here because some systems have
+ * no random state when they start up. */
+static void
+lustre_generate_random_uuid(class_uuid_t uuid)
+{
+        struct timeval t;
+        int *i, j, k;
+
+        ENTRY;
+        LASSERT(sizeof(class_uuid_t) % sizeof(*i) == 0);
+
+        j = jiffies;
+        do_gettimeofday(&t);
+        k = t.tv_usec;
+
+        generate_random_uuid(uuid);
+
+        for (i = (int *)uuid; (char *)i < (char *)uuid + sizeof(class_uuid_t); i++) {
+                *i ^= j ^ k;
+                j = ((j << 8) & 0xffffff00) | ((j >> 24) & 0x000000ff);
+                k = ((k >> 8) & 0x00ffffff) | ((k << 24) & 0xff000000);
+        }
+
+        EXIT;
+}
+
 struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
 {
         struct ll_sb_info *sbi = NULL;
@@ -70,8 +96,9 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
         ll_s2sbi_nocast(sb) = sbi;
 
-        generate_random_uuid(uuid);
+        lustre_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
+        CDEBUG(D_HA, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
         spin_lock(&ll_sb_lock);
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
@@ -107,6 +134,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct lustre_md md;
         kdev_t devno;
         int err;
+        ENTRY;
 
         obd = class_name2obd(mdc);
         if (!obd) {
@@ -324,7 +352,6 @@ void lustre_common_put_super(struct super_block *sb)
         EXIT;
 }
 
-
 char *ll_read_opt(const char *opt, char *data)
 {
         char *value;
@@ -376,10 +403,11 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         for (this_char = strtok (options, ",");
              this_char != NULL;
-             this_char = strtok (NULL, ",")) {
+             this_char = strtok (NULL, ","))
 #else
-        while ((this_char = strsep (&opt_ptr, ",")) != NULL) {
+        while ((this_char = strsep (&opt_ptr, ",")) != NULL)
 #endif
+        {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
                 if (!*ost && (*ost = ll_read_opt("osc", this_char)))
                         continue;
@@ -448,7 +476,8 @@ out:
 int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                        struct config_llog_instance *cfg, int allow_recov)
 {
-        struct lustre_cfg lcfg;
+        struct lustre_cfg *lcfg = NULL;
+        struct lustre_cfg_bufs bufs;
         struct portals_cfg pcfg;
         char * peer = "MDS_PEER_UUID";
         struct obd_device *obd;
@@ -465,8 +494,9 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         if (lmd_bad_magic(lmd))
                 RETURN(-EINVAL);
 
-        generate_random_uuid(uuid);
+        lustre_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mdc_uuid);
+        CDEBUG(D_HA, "generated uuid: %s\n", mdc_uuid.uuid);
 
         if (lmd->lmd_local_nid) {
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
@@ -492,30 +522,36 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                         GOTO(out, err);
         }
 
-        LCFG_INIT(lcfg, LCFG_ADD_UUID, name);
-        lcfg.lcfg_nid = lmd->lmd_server_nid;
-        lcfg.lcfg_inllen1 = strlen(peer) + 1;
-        lcfg.lcfg_inlbuf1 = peer;
-        lcfg.lcfg_nal = lmd->lmd_nal;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, name);
+        lustre_cfg_bufs_set_string(&bufs, 1, peer);
+
+        lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
+        lcfg->lcfg_nal = lmd->lmd_nal;
+        lcfg->lcfg_nid = lmd->lmd_server_nid;
+        LASSERT(lcfg->lcfg_nal);
+        LASSERT(lcfg->lcfg_nid);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out_del_conn, err);
 
-        LCFG_INIT(lcfg, LCFG_ATTACH, name);
-        lcfg.lcfg_inlbuf1 = "mdc";
-        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = mdc_uuid.uuid;
-        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, name);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
+
+        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out_del_uuid, err);
 
-        LCFG_INIT(lcfg, LCFG_SETUP, name);
-        lcfg.lcfg_inlbuf1 = lmd->lmd_mds;
-        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = peer;
-        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, name);
+        lustre_cfg_bufs_set_string(&bufs, 1, lmd->lmd_mds);
+        lustre_cfg_bufs_set_string(&bufs, 2, peer);
+
+        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out_detach, err);
 
@@ -565,22 +601,27 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         err = obd_disconnect(exp);
 
 out_cleanup:
-        LCFG_INIT(lcfg, LCFG_CLEANUP, name);
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, name);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out, err);
 
 out_detach:
-        LCFG_INIT(lcfg, LCFG_DETACH, name);
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, name);
+        lcfg = lustre_cfg_new(LCFG_DETACH, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out, err);
 
 out_del_uuid:
-        LCFG_INIT(lcfg, LCFG_DEL_UUID, name);
-        lcfg.lcfg_inllen1 = strlen(peer) + 1;
-        lcfg.lcfg_inlbuf1 = peer;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, name);
+        lustre_cfg_bufs_set_string(&bufs, 1, peer);
+        lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
 
 out_del_conn:
         if (lmd->lmd_nal == SOCKNAL ||
@@ -605,23 +646,27 @@ out:
 
 static void lustre_manual_cleanup(struct ll_sb_info *sbi)
 {
-        struct lustre_cfg lcfg;
+        struct lustre_cfg *lcfg;
+        struct lustre_cfg_bufs bufs;
         struct obd_device *obd;
         int next = 0;
 
-        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL)
-        {
+        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL){
                 int err;
 
-                LCFG_INIT(lcfg, LCFG_CLEANUP, obd->obd_name);
-                err = class_process_config(&lcfg);
+                /* the lcfg is almost the same for both ops */
+                lustre_cfg_bufs_reset(&bufs, obd->obd_name);
+                lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+
+                err = class_process_config(lcfg);
                 if (err) {
                         CERROR("cleanup failed: %s\n", obd->obd_name);
                         //continue;
                 }
 
-                LCFG_INIT(lcfg, LCFG_DETACH, obd->obd_name);
-                err = class_process_config(&lcfg);
+                lcfg->lcfg_command = LCFG_DETACH;
+                err = class_process_config(lcfg);
+                lustre_cfg_free(lcfg);
                 if (err) {
                         CERROR("detach failed: %s\n", obd->obd_name);
                         //continue;
@@ -738,8 +783,7 @@ out_free:
                         OBD_ALLOC(cln_prof, len);
                         sprintf(cln_prof, "%s-clean", sbi->ll_lmd->lmd_profile);
 
-                        err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg,
-                                                 0);
+                        err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg,0);
                         if (err < 0) {
                                 CERROR("Unable to process log: %s\n", cln_prof);
                                 lustre_manual_cleanup(sbi);
@@ -770,6 +814,7 @@ void lustre_put_super(struct super_block *sb)
         lustre_common_put_super(sb);
 
         if (sbi->ll_lmd != NULL) {
+#if 0
                 char * cln_prof;
                 int len = strlen(sbi->ll_lmd->lmd_profile) + sizeof("-clean")+1;
                 int err;
@@ -796,6 +841,9 @@ void lustre_put_super(struct super_block *sb)
 
                 OBD_FREE(cln_prof, len);
         free_lmd:
+#else
+                lustre_manual_cleanup(sbi);
+#endif
                 OBD_FREE(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
                 OBD_FREE(sbi->ll_instance, strlen(sbi->ll_instance) + 1);
         }

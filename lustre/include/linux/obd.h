@@ -237,7 +237,8 @@ struct client_obd {
         struct semaphore         cl_sem;
         int                      cl_conn_count;
         /* max_mds_easize is purely a performance thing so we don't have to
-         * call obd_size_wiremd() all the time. */
+         * call obd_size_diskmd() all the time. */
+        int                      cl_default_mds_easize;
         int                      cl_max_mds_easize;
         int                      cl_max_mds_cookiesize;
         kdev_t                   cl_sandev;

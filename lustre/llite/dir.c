@@ -447,9 +447,18 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         return(-EFAULT);
 
+                /*
+                 * This is coming from userspace, so should be in
+                 * local endian.  But the MDS would like it in little
+                 * endian, so we swab it before we send it.
+                 */
                 if (lum.lmm_magic != LOV_USER_MAGIC)
                         RETURN(-EINVAL);
 
+                if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC))
+                        lustre_swab_lov_user_md(&lum);
+
+                /* swabbing is done in lov_setstripe() on server side */
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
                                  &attr, &lum, sizeof(lum), NULL, 0, &request);
                 if (rc) {
@@ -493,6 +502,17 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 lmm = lustre_msg_buf(request->rq_repmsg, 1, lmmsize);
                 LASSERT(lmm != NULL);
                 LASSERT_REPSWABBED(request, 1);
+
+                /*
+                 * This is coming from the MDS, so is probably in
+                 * little endian.  We convert it to host endian before
+                 * passing it to userspace.
+                 */
+                if (lmm->lmm_magic == __swab32(LOV_MAGIC)) {
+                        lustre_swab_lov_user_md((struct lov_user_md *)lmm);
+                        lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
+                }
+
                 rc = copy_to_user(lump, lmm, lmmsize);
                 if (rc)
                         GOTO(out_get, rc = -EFAULT);
@@ -542,6 +562,16 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 lmm = lustre_msg_buf(request->rq_repmsg, 1, lmmsize);
                 LASSERT(lmm != NULL);
                 LASSERT_REPSWABBED(request, 1);
+
+                /*
+                 * This is coming from the MDS, so is probably in
+                 * little endian.  We convert it to host endian before
+                 * passing it to userspace.
+                 */
+                if (lmm->lmm_magic == __swab32(LOV_MAGIC)) {
+                        lustre_swab_lov_user_md((struct lov_user_md *)lmm);
+                        lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
+                }
 
                 if (cmd == IOC_MDC_GETFILEINFO) {
                         struct lov_user_mds_data *lmdp;

@@ -36,7 +36,9 @@ FLAG_MAPPING flag_table[] = {
        {"O_NONBLOCK", O_NONBLOCK},
        {"O_NDELAY", O_NDELAY},
        {"O_SYNC", O_SYNC},
+#ifdef O_DIRECT
        {"O_DIRECT", O_DIRECT},
+#endif
        {"O_LARGEFILE", O_LARGEFILE},
        {"O_DIRECTORY", O_DIRECTORY},
        {"O_NOFOLLOW", O_NOFOLLOW},
@@ -60,7 +62,7 @@ int main(int argc, char** argv)
         int    mode_set=0;
         int    flag_set=0;
         int    file_set=0;
-        char   c;
+        int    c;
         char*  cloned_flags = NULL;
 
         if (argc == 1)

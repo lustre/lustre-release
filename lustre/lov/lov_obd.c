@@ -305,28 +305,42 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         int count;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("LOV setup requires a descriptor\n");
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen2 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1) {
                 CERROR("LOV setup requires an OST UUID list\n");
                 RETURN(-EINVAL);
         }
 
-        desc = (struct lov_desc *)lcfg->lcfg_inlbuf1;
-        if (sizeof(*desc) > lcfg->lcfg_inllen1) {
+        desc = (struct lov_desc *)lustre_cfg_buf(lcfg, 1);
+        if (sizeof(*desc) > LUSTRE_CFG_BUFLEN(lcfg, 1)) {
                 CERROR("descriptor size wrong: %d > %d\n",
-                       (int)sizeof(*desc), lcfg->lcfg_inllen1);
+                       (int)sizeof(*desc), LUSTRE_CFG_BUFLEN(lcfg, 1));
                 RETURN(-EINVAL);
         }
 
+        if (desc->ld_magic != LOV_DESC_MAGIC) {
+                if (desc->ld_magic == __swab32(LOV_DESC_MAGIC)) {
+                            CDEBUG(D_OTHER, "%s: Swabbing lov desc %p\n",
+                                   obd->obd_name, desc);
+                            lustre_swab_lov_desc(desc);
+                } else {
+                        CERROR("%s: Bad lov desc magic: %#x\n",
+                               obd->obd_name, desc->ld_magic);
+                        RETURN(-EINVAL);
+                }
+        }
+
+        desc->ld_active_tgt_count = 0;
         count = desc->ld_tgt_count;
-        uuids = (struct obd_uuid *)lcfg->lcfg_inlbuf2;
-        if (sizeof(*uuids) * count != lcfg->lcfg_inllen2) {
+        uuids = (struct obd_uuid *)lustre_cfg_buf(lcfg, 2);
+        if (sizeof(*uuids) * count != LUSTRE_CFG_BUFLEN(lcfg, 2)) {
                 CERROR("UUID array size wrong: %u * %u != %u\n",
-                       (int)sizeof(*uuids), count, lcfg->lcfg_inllen2);
+                       (int)sizeof(*uuids), count,
+                       LUSTRE_CFG_BUFLEN(lcfg, 2));
                 RETURN(-EINVAL);
         }
 

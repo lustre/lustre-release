@@ -17,6 +17,9 @@
 #include <sys/ioctl.h>
 
 #include <lustre/lustre_user.h>
+#ifndef O_DIRECT
+#define O_DIRECT 0
+#endif
 
 int main(int argc, char *argv[])
 {

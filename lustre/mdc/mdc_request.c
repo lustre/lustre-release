@@ -913,7 +913,7 @@ err_rpc_lock:
         RETURN(rc);
 }
 
-/* Initialize the maximum LOV EA and cookie sizes.  This allows
+/* Initialize the default and maximum LOV EA and cookie sizes.  This allows
  * us to make MDS RPCs with large enough reply buffers to hold the
  * maximum-sized (= maximum striped) EA and cookie without having to
  * calculate this (via a call into the LOV + OSCs) each time we make an RPC. */
@@ -921,21 +921,29 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
 {
         struct obd_device *obd = mdc_exp->exp_obd;
         struct client_obd *cli = &obd->u.cli;
-        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC };
         struct lov_desc desc;
         __u32 valsize = sizeof(desc);
         int rc, size;
         ENTRY;
 
-        rc = obd_get_info(lov_exp, strlen("lovdesc") + 1, "lovdesc",
-                          &valsize, &desc);
-        if (rc < 0)
-                RETURN(rc);
-
-        lsm.lsm_stripe_count = desc.ld_tgt_count;
-        size = obd_size_diskmd(lov_exp, &lsm);
+        size = obd_size_diskmd(lov_exp, NULL);
         if (cli->cl_max_mds_easize < size)
                 cli->cl_max_mds_easize = size;
+
+        rc = obd_get_info(lov_exp, strlen("lovdesc") + 1, "lovdesc",
+                          &valsize, &desc);
+        if (rc)
+                RETURN(rc);
+
+        /* If default_stripe_count is zero we stripe over all OSTs */
+        if (desc.ld_default_stripe_count != 0) {
+                struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC,
+                                             .lsm_stripe_count =
+                                                desc.ld_default_stripe_count };
+                size = obd_size_diskmd(lov_exp, &lsm);
+        }
+        if (cli->cl_default_mds_easize < size)
+                cli->cl_default_mds_easize = size;
 
         size = desc.ld_tgt_count * sizeof(struct llog_cookie);
         if (cli->cl_max_mds_cookiesize < size)

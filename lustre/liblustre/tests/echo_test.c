@@ -11,6 +11,7 @@
 #include <linux/obd.h>
 #include <linux/obd_class.h>
 #include <procbridge.h>
+#include <linux/obd_ost.h>
 
 #define LIBLUSTRE_TEST 1
 #include "../utils/lctl.c"
@@ -175,7 +176,8 @@ static char *echo_dev_name = "ECHO_CLIENT_DEV_NAME";
 
 static int connect_echo_client(void)
 {
-	struct lustre_cfg lcfg;
+	struct lustre_cfg *lcfg;
+        struct lustre_cfg_bufs bufs;
 	ptl_nid_t nid;
 	char *peer = "ECHO_PEER_NID";
 	class_uuid_t osc_uuid, echo_uuid;
@@ -199,60 +201,60 @@ static int connect_echo_client(void)
         }
 
 	/* add uuid */
-        LCFG_INIT(lcfg, LCFG_ADD_UUID, NULL);
-        lcfg.lcfg_nid = nid;
-        lcfg.lcfg_inllen1 = strlen(peer) + 1;
-        lcfg.lcfg_inlbuf1 = peer;
-        lcfg.lcfg_nal = nal;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lustre_cfg_bufs_set_string(&bufs, 1, peer);
+        lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
+        lcfg->lcfg_nid = nid;
+        lcfg->lcfg_nal = nal;
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0) {
 		CERROR("failed add_uuid\n");
                 RETURN(-EINVAL);
 	}
 
 	/* attach osc */
-        LCFG_INIT(lcfg, LCFG_ATTACH, osc_dev_name);
-        lcfg.lcfg_inlbuf1 = "osc";
-        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = osc_uuid_str.uuid;
-        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, LUSTRE_OSC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 2, osc_uuid_str.uuid);
+        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0) {
 		CERROR("failed attach osc\n");
                 RETURN(-EINVAL);
 	}
 
 	/* setup osc */
-        LCFG_INIT(lcfg, LCFG_SETUP, osc_dev_name);
-        lcfg.lcfg_inlbuf1 = echo_server_ostname;
-        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = peer;
-        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, osc_dev_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, echo_server_ostname);
+        lustre_cfg_bufs_set_string(&bufs, 2, peer);
+        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0) {
 		CERROR("failed setup osc\n");
                 RETURN(-EINVAL);
 	}
 
 	/* attach echo_client */
-        LCFG_INIT(lcfg, LCFG_ATTACH, echo_dev_name);
-        lcfg.lcfg_inlbuf1 = "echo_client";
-        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = echo_uuid_str.uuid;
-        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, echo_dev_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, "echo_client");
+        lustre_cfg_bufs_set_string(&bufs, 2, echo_uuid_str.uuid);
+        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0) {
 		CERROR("failed attach echo_client\n");
                 RETURN(-EINVAL);
 	}
 
 	/* setup echo_client */
-        LCFG_INIT(lcfg, LCFG_SETUP, echo_dev_name);
-        lcfg.lcfg_inlbuf1 = osc_dev_name;
-        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = NULL;
-        lcfg.lcfg_inllen2 = 0;
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, echo_dev_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, osc_dev_name);
+        lustre_cfg_bufs_set_string(&bufs, 2, NULL);
+        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0) {
 		CERROR("failed setup echo_client\n");
                 RETURN(-EINVAL);
@@ -263,37 +265,44 @@ static int connect_echo_client(void)
 
 static int disconnect_echo_client(void)
 {
-	struct lustre_cfg lcfg;
+	struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg = NULL;
 	int err;
 	ENTRY;
 
 	/* cleanup echo_client */
-        LCFG_INIT(lcfg, LCFG_CLEANUP, echo_dev_name);
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, echo_dev_name);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        err = class_process_config(lcfg);
         if (err < 0) {
+                lustre_cfg_free(lcfg);
 		CERROR("failed cleanup echo_client\n");
                 RETURN(-EINVAL);
 	}
 
 	/* detach echo_client */
-        LCFG_INIT(lcfg, LCFG_DETACH, echo_dev_name);
-        err = class_process_config(&lcfg);
+        lcfg->lcfg_command = LCFG_DETACH;
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0) {
 		CERROR("failed detach echo_client\n");
                 RETURN(-EINVAL);
 	}
 
 	/* cleanup osc */
-        LCFG_INIT(lcfg, LCFG_CLEANUP, osc_dev_name);
-        err = class_process_config(&lcfg);
+        lustre_cfg_bufs_reset(&bufs, osc_dev_name);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        err = class_process_config(lcfg);
         if (err < 0) {
+                lustre_cfg_free(lcfg);
 		CERROR("failed cleanup osc device\n");
                 RETURN(-EINVAL);
 	}
 
 	/* detach osc */
-        LCFG_INIT(lcfg, LCFG_DETACH, osc_dev_name);
-        err = class_process_config(&lcfg);
+        lcfg->lcfg_command = LCFG_DETACH;
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0) {
 		CERROR("failed detach osc device\n");
                 RETURN(-EINVAL);

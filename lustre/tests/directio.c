@@ -14,6 +14,7 @@
 
 int main(int argc, char **argv)
 {
+#ifdef O_DIRECT
         int fd;
         char *wbuf;
         int blocks, seek_blocks;
@@ -113,4 +114,9 @@ int main(int argc, char **argv)
 
         printf("PASS\n");
         return 0;
+#else /* !O_DIRECT */
+#warning O_DIRECT not defined, directio test will fail
+        printf("O_DIRECT not defined\n");
+        return 1;
+#endif /* !O_DIRECT */
 }

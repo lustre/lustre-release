@@ -1186,34 +1186,38 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         struct lustre_cfg* lcfg = buf;
         struct filter_obd *filter = &obd->u.filter;
         struct vfsmount *mnt;
+        char *str;
         char ns_name[48];
         int rc = 0;
         ENTRY;
 
-        if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
+        if (lcfg->lcfg_bufcount < 3 ||
+            LUSTRE_CFG_BUFLEN(lcfg, 1) < 1 ||
+            LUSTRE_CFG_BUFLEN(lcfg, 2) < 1)
                 RETURN(-EINVAL);
 
-        obd->obd_fsops = fsfilt_get_ops(lcfg->lcfg_inlbuf2);
+        obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         if (IS_ERR(obd->obd_fsops))
                 RETURN(PTR_ERR(obd->obd_fsops));
 
-        mnt = do_kern_mount(lcfg->lcfg_inlbuf2, MS_NOATIME | MS_NODIRATIME,
-                            lcfg->lcfg_inlbuf1, (void *)option);
+        mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), MS_NOATIME | MS_NODIRATIME,
+                            lustre_cfg_string(lcfg, 1), (void *)option);
         rc = PTR_ERR(mnt);
         if (IS_ERR(mnt))
                 GOTO(err_ops, rc);
 
         LASSERT(!ll_check_rdonly(ll_sbdev(mnt->mnt_sb)));
 
-        if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3) {
-                if (*lcfg->lcfg_inlbuf3 == 'f') {
+        if (lcfg->lcfg_bufcount > 3 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
+                str = lustre_cfg_string(lcfg, 3);
+                if (*str == 'f') {
                         obd->obd_replayable = 1;
                         obd_sync_filter = 1;
                         CWARN("%s: recovery enabled\n", obd->obd_name);
                 } else {
-                        if (*lcfg->lcfg_inlbuf3 != 'n') {
+                        if (*str != 'n') {
                                 CERROR("unrecognised flag '%c'\n",
-                                       *lcfg->lcfg_inlbuf3);
+                                       *str);
                         }
                         // XXX Robert? Why do we get errors here
                         // GOTO(err_mntput, rc = -EINVAL);
@@ -1282,7 +1286,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               "Recovery progress can be monitored by watching "
                               "/proc/fs/lustre/obdfilter/%s/recovery_status.\n",
                               obd->obd_name,
-                              lcfg->lcfg_inlbuf1,
+                              lustre_cfg_string(lcfg, 1),
                               obd->obd_recoverable_clients,
                               (obd->obd_recoverable_clients == 1) 
                               ? "client" : "clients",
@@ -1291,7 +1295,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("OST %s now serving %s with recovery %s.\n",
-                              obd->obd_name, lcfg->lcfg_inlbuf1,
+                              obd->obd_name,
+                              lustre_cfg_string(lcfg, 1),
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
@@ -1315,10 +1320,10 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lustre_cfg* lcfg = buf;
         int rc;
 
-        if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
+        if (!LUSTRE_CFG_BUFLEN(lcfg, 1) || !LUSTRE_CFG_BUFLEN(lcfg, 2))
                 RETURN(-EINVAL);
 
-        rc = filter_common_setup(obd, len, buf, lcfg->lcfg_inlbuf4);
+        rc = filter_common_setup(obd, len, buf, lustre_cfg_buf(lcfg, 4));
 
         lprocfs_init_vars(filter, &lvars);
         if (rc == 0 && lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&

@@ -71,30 +71,31 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen1 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("requires a TARGET UUID\n");
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen1 > 37) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) > 37) {
                 CERROR("client UUID must be less than 38 characters\n");
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen2 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1) {
                 CERROR("setup requires a SERVER UUID\n");
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen2 > 37) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 2) > 37) {
                 CERROR("target UUID must be less than 38 characters\n");
                 RETURN(-EINVAL);
         }
 
         sema_init(&cli->cl_sem, 1);
         cli->cl_conn_count = 0;
-        memcpy(server_uuid.uuid, lcfg->lcfg_inlbuf2,
-               min_t(unsigned int, lcfg->lcfg_inllen2, sizeof(server_uuid)));
+        memcpy(server_uuid.uuid, lustre_cfg_buf(lcfg, 2),
+               min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),
+                     sizeof(server_uuid)));
 
         cli->cl_dirty = 0;
         cli->cl_avail_grant = 0;
@@ -151,8 +152,8 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_generation = 0;
         imp->imp_initial_recov = 1;
         INIT_LIST_HEAD(&imp->imp_pinger_chain);
-        memcpy(imp->imp_target_uuid.uuid, lcfg->lcfg_inlbuf1,
-              lcfg->lcfg_inllen1);
+        memcpy(imp->imp_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
+               LUSTRE_CFG_BUFLEN(lcfg, 1));
         class_import_put(imp);
 
         cli->cl_import = imp;
@@ -161,17 +162,17 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
         cli->cl_sandev = to_kdev_t(0);
 
-        if (lcfg->lcfg_inllen3 != 0) {
-                if (!strcmp(lcfg->lcfg_inlbuf3, "inactive")) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
+                if (!strcmp(lustre_cfg_string(lcfg, 3), "inactive")) {
                         CDEBUG(D_HA, "marking %s %s->%s as inactive\n",
                                name, obddev->obd_name,
                                imp->imp_target_uuid.uuid);
                         imp->imp_invalid = 1;
 
-                        if (lcfg->lcfg_inllen4 != 0)
-                                mgmt_name = lcfg->lcfg_inlbuf4;
+                        if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0)
+                                mgmt_name = lustre_cfg_string(lcfg, 4);
                 } else {
-                        mgmt_name = lcfg->lcfg_inlbuf3;
+                        mgmt_name = lustre_cfg_string(lcfg, 3);
                 }
         }
 

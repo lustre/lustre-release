@@ -1103,7 +1103,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         case LDLM_GL_CALLBACK:
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_GL_CALLBACK, 0);
                 break;
-        case OBD_LOG_CANCEL:
+        case OBD_LOG_CANCEL: /* remove this eventually - for 1.4.0 compat */
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = llog_origin_handle_cancel(req);
                 ldlm_callback_reply(req, rc);
@@ -1200,15 +1200,16 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
 
         if (req->rq_export == NULL) {
                 struct ldlm_request *dlm_req;
-                CERROR("operation %d with bad export from %s\n",
-                       req->rq_reqmsg->opc,
-                       req->rq_peerstr);
-                CERROR("--> export cookie: "LPX64"\n",
+
+                CERROR("operation %d from %s with bad export cookie "LPU64"\n",
+                       req->rq_reqmsg->opc, req->rq_peerstr,
                        req->rq_reqmsg->handle.cookie);
+
                 dlm_req = lustre_swab_reqbuf(req, 0, sizeof (*dlm_req),
                                              lustre_swab_ldlm_request);
                 if (dlm_req != NULL)
                         ldlm_lock_dump_handle(D_ERROR, &dlm_req->lock_handle1);
+
                 ldlm_callback_reply(req, -ENOTCONN);
                 RETURN(0);
         }
@@ -1223,7 +1224,11 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                 if (rc)
                         break;
                 RETURN(0);
-
+        case OBD_LOG_CANCEL:
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
+                rc = llog_origin_handle_cancel(req);
+                ldlm_callback_reply(req, rc);
+                RETURN(0);
         default:
                 CERROR("invalid opcode %d\n", req->rq_reqmsg->opc);
                 ldlm_callback_reply(req, -EINVAL);

@@ -1,0 +1,46 @@
+ include/linux/socket.h |    4 ++++
+ net/netsyms.c          |    2 ++
+ net/socket.c           |    2 +-
+ 3 files changed, 7 insertions(+), 1 deletion(-)
+
+Index: linux-DRV401/include/linux/socket.h
+===================================================================
+--- linux-DRV401.orig/include/linux/socket.h	2004-10-15 10:26:20.000000000 -0700
++++ linux-DRV401/include/linux/socket.h	2004-10-15 11:11:09.000000000 -0700
+@@ -260,6 +260,10 @@
+ extern int move_addr_to_user(void *kaddr, int klen, void *uaddr, int *ulen);
+ extern int move_addr_to_kernel(void *uaddr, int ulen, void *kaddr);
+ extern int put_cmsg(struct msghdr*, int level, int type, int len, void *data);
++struct socket;
++extern int sock_map_fd(struct socket *sock);
++extern struct socket *sockfd_lookup(int fd, int *err);
++
+ #endif
+ #endif /* not kernel and not glibc */
+ #endif /* _LINUX_SOCKET_H */
+Index: linux-DRV401/net/netsyms.c
+===================================================================
+--- linux-DRV401.orig/net/netsyms.c	2004-10-15 11:10:52.000000000 -0700
++++ linux-DRV401/net/netsyms.c	2004-10-15 11:11:09.000000000 -0700
+@@ -159,6 +159,8 @@
+ EXPORT_SYMBOL(put_cmsg);
+ EXPORT_SYMBOL(sock_kmalloc);
+ EXPORT_SYMBOL(sock_kfree_s);
++EXPORT_SYMBOL(sockfd_lookup);
++EXPORT_SYMBOL(sock_map_fd);
+ 
+ #ifdef CONFIG_FILTER
+ EXPORT_SYMBOL(sk_run_filter);
+Index: linux-DRV401/net/socket.c
+===================================================================
+--- linux-DRV401.orig/net/socket.c	2004-10-15 10:24:16.000000000 -0700
++++ linux-DRV401/net/socket.c	2004-10-15 11:11:09.000000000 -0700
+@@ -326,7 +326,7 @@
+  *	but we take care of internal coherence yet.
+  */
+ 
+-static int sock_map_fd(struct socket *sock)
++int sock_map_fd(struct socket *sock)
+ {
+ 	int fd;
+ 	struct qstr this;

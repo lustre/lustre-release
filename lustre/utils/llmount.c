@@ -231,10 +231,10 @@ static int parse_route(char *opteq, char *opttgts)
  *
  ****************************************************************************/
 struct opt_map {
-  const char *opt;              /* option name */
-  int  skip;                    /* skip in mtab option string */
-  int  inv;                     /* true if flag value should be inverted */
-  int  mask;                    /* flag mask value */
+        const char *opt;        /* option name */
+        int skip;               /* skip in mtab option string */
+        int inv;                /* true if flag value should be inverted */
+        int mask;               /* flag mask value */
 };
 
 static const struct opt_map opt_map[] = {
@@ -382,6 +382,8 @@ set_local(struct lustre_mount_data *lmd)
                 return 1;
 
         case SOCKNAL:
+                /* We need to do this before the mount is started if routing */
+                system("/sbin/modprobe ksocknal");
         case TCPNAL:
         case OPENIBNAL:
         case IIBNAL:
@@ -401,6 +403,8 @@ set_local(struct lustre_mount_data *lmd)
                                   NULL};
                 int   i = 0;
 
+                /* We need to do this before the mount is started if routing */
+                system("/sbin/modprobe kqswnal");
                 do {
                         rc = get_local_elan_id(pfiles[i], buf);
                 } while (rc != 0 && pfiles[++i] != NULL);

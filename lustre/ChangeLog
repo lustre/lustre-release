@@ -3,8 +3,14 @@
        * bug fixes
 	- fix deadlock in obdfilter statistics vs. object create (5811)
 	- fix for HPUX NFS client breakage when NFS exporting Lustre (5781)
+	- mdc_enqueue does not need max_mds_easize request buffer on send (5707)
+	- swab llog records of type '0' so we get proper header size/idx (5861)
+	- send llog cancel req to DLM cancel portal instead of cb portal (5515)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
+	- allow --write-conf on an MDS with different nettype than client (5619)
+	- don't write config llogs to MDS for mounts not from that MDS (5617)
+	- lconf should create multiple TCP connections from a client (5201)
 	- init scripts are now turned off by default; run chkconfig --on
 	  lustre and chkconfig --on lustrefs to use them
 

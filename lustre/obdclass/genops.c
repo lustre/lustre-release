@@ -311,7 +311,7 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 
 /* Iterate the obd_device list looking devices have grp_uuid. Start
    searching at *next, and if a device is found, the next index to look
-   it is saved in *next. If next is NULL, then the first matching device
+   at is saved in *next. If next is NULL, then the first matching device
    will always be returned. */
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 {

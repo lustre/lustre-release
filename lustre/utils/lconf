@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+# vim:expandtab:shiftwidth=8:tabstop=8:
 #
 #  Copyright (C) 2002-2003 Cluster File Systems, Inc.
 #   Authors: Robert Read <rread@clusterfs.com>
@@ -985,18 +987,13 @@ def sys_get_elan_position_file():
     return ""
 
 def sys_get_local_nid(net_type, wildcard, cluster_id):
-    """Return the local nid."""
-    local = ""
-    if sys_get_elan_position_file() and net_type == 'elan':
-        local = sys_get_local_address('elan', '*', cluster_id)
-    else:
-        local = sys_get_local_address(net_type, wildcard, cluster_id)
-    return local
-
-def sys_get_local_address(net_type, wildcard, cluster_id):
     """Return the local address for the network type."""
     local = ""
-    if net_type in ('tcp','openib','iib','vib','ra'):
+
+    # don't need a real nid for config log - client will replace (bug5619)
+    if config.record:
+        local = "54321"
+    elif net_type in ('tcp','openib','iib','vib','ra'):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -1234,7 +1231,7 @@ class Network(Module):
         if len(self.hostaddr) == 0:
             self.hostaddr.append(self.nid)
         if '*' in self.hostaddr[0]:
-            self.hostaddr[0] = sys_get_local_address(self.net_type, self.hostaddr[0], self.cluster_id)
+            self.hostaddr[0] = sys_get_local_nid(self.net_type, self.hostaddr[0], self.cluster_id)
             if not self.hostaddr[0]:
                 panic("unable to set hostaddr for", self.net_type, self.hostaddr[0], self.cluster_id)
             debug("hostaddr:", self.hostaddr[0])
@@ -1672,10 +1669,14 @@ class MDSDEV(Module):
             client_name = node_db.getName()
             for prof_uuid in node_db.get_refs('profile'):
                 prof_db = node_db.lookup(prof_uuid)
-                # refactor this into a funtion to test "clientness"
-                # of a node.
+                # refactor this into a funtion to test "clientness" of a node.
                 for ref_class, ref_uuid in prof_db.get_all_refs():
                     if ref_class in ('mountpoint','echoclient'):
+                        thing = self.db.lookup(ref_uuid);
+                        fs_uuid = thing.get_first_ref('filesystem')
+                        if not fs_uuid in self.filesystem_uuids:
+                            continue;
+
                         debug("recording", client_name)
                         old_noexec = config.noexec
                         config.noexec = 0
@@ -1947,20 +1948,23 @@ class Client(Module):
         if is_prepared(self.name):
             self.cleanup()
         try:
-            srv = choose_local_server(self.get_servers())
-            if srv:
+            srv_list = find_local_servers(self.get_servers())
+            for srv in srv_list:
                 lctl.connect(srv)
-            else:
-                routes = find_route(self.get_servers())
-                if len(routes) == 0:
-                    panic("no route to",  self.target_uuid)
-                for (srv, r) in routes:
-                    lctl.add_route_host(r[0], srv.nid_uuid, r[1], r[3])
+
+            routes = find_route(self.get_servers())
+            for (srv, r) in routes:
+                lctl.add_route_host(r[0], srv.nid_uuid, r[1], r[3])
+                srv_list.append(srv)
+
+            if len(srv_list) == 0:
+                panic("no local servers and no route to", self.target_uuid)
         except CommandError, e:
             if not ignore_connect_failure:
                 raise e
 
-        if srv:
+        if srv_list[0]:
+            srv = srv_list[0]
             if self.target_uuid in config.inactive and self.permits_inactive():
                 debug("%s inactive" % self.target_uuid)
                 inactive_p = "inactive"
@@ -1970,17 +1974,20 @@ class Client(Module):
             lctl.newdev(self.module, self.name, self.uuid,
                         setup ="%s %s %s %s" % (self.target_uuid, srv.nid_uuid,
                                                 inactive_p, self.mgmt_name))
+        else:
+            panic("Unable to create OSC for ", self.target_uuid)
 
     def cleanup(self):
         if is_prepared(self.name):
             Module.cleanup(self)
             try:
-                srv = choose_local_server(self.get_servers())
-                if srv:
+                srv_list = find_local_servers(self.get_servers())
+                for srv in srv_list:
                     lctl.disconnect(srv)
-                else:
-                    for (srv, r) in find_route(self.get_servers()):
-                        lctl.del_route_host(r[0], srv.nid_uuid, r[1], r[3])
+
+                routes = find_route(self.get_servers())
+                for (srv, r) in routes:
+                    lctl.del_route_host(r[0], srv.nid_uuid, r[1], r[3])
             except CommandError, e:
                 log(self.module_name, "cleanup failed: ", self.name)
                 e.dump()
@@ -2342,10 +2349,13 @@ def find_local_routes(lustre):
     debug("find_local_routes:", local_routes)
 
 
-def choose_local_server(srv_list):
+def find_local_servers(srv_list):
+    result = []
+
     for srv in srv_list:
         if local_cluster(srv.net_type, srv.cluster_id):
-            return srv
+            result.append(srv)
+    return result
 
 def local_cluster(net_type, cluster_id):
     for cluster in local_clusters:
@@ -2581,27 +2591,28 @@ def doRecovery(lustreDB, lctl, tgt_uuid, client_uuid, nid_uuid):
     if not new_uuid:
         raise Lustre.LconfError("doRecovery: no active target found for: " +
                                 tgt_uuid)
-    net = choose_local_server(get_ost_net(lustreDB, new_uuid))
-    if not net:
+    srv_list = find_local_servers(get_ost_net(lustreDB, new_uuid))
+    if not srv_list[0]:
         raise Lustre.LconfError("Unable to find a connection to:" + new_uuid)
 
-    log("Reconnecting", tgt_uuid, " to ",  net.nid_uuid);
-    try:
-        oldnet = get_server_by_nid_uuid(lustreDB, nid_uuid)
-        lustreDB.close()
-        if oldnet:
-            lctl.disconnect(oldnet)
-    except CommandError, e:
-        log("recover: disconnect", nid_uuid, "failed: ")
-        e.dump()
+    for srv in srv_list:
+        log("Reconnecting", tgt_uuid, " to ",  srv.nid_uuid);
+        try:
+            oldsrv = get_server_by_nid_uuid(lustreDB, nid_uuid)
+            lustreDB.close()
+            if oldsrv:
+                lctl.disconnect(oldsrv)
+        except CommandError, e:
+            log("recover: disconnect", nid_uuid, "failed: ")
+            e.dump()
 
-    try:
-        lctl.connect(net)
-    except CommandError, e:
-        log("recover: connect failed")
-        e.dump()
+        try:
+            lctl.connect(srv)
+        except CommandError, e:
+            log("recover: connect failed")
+            e.dump()
 
-    lctl.recover(client_uuid, net.nid_uuid)
+        lctl.recover(client_uuid, srv.nid_uuid)
 
 
 def setupModulePath(cmd, portals_dir = PORTALS_DIR):

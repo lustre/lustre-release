@@ -46,7 +46,8 @@ endif
 libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c llite_lib.h
 
 # for make rpms -- need cleanup
-liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c
+liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
+		     llite_lib.h
 
 liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
 	$(srcdir)/genlib.sh $(SYSIO) $(AR) $(LINK) || ( rm -f $@; exit 1 )

@@ -343,9 +343,14 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 RETURN(-EFAULT);
 
         if (lum.lmm_magic != LOV_USER_MAGIC) {
-                CDEBUG(D_IOCTL, "bad userland LOV MAGIC: %#08x != %#08x\n",
-                       lum.lmm_magic, LOV_USER_MAGIC);
-                RETURN(-EINVAL);
+                if (lum.lmm_magic == __swab32(LOV_USER_MAGIC)) {
+                        lustre_swab_lov_user_md(&lum);
+                } else {
+                        CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
+                               " %#08x != %#08x\n",
+                               lum.lmm_magic, LOV_USER_MAGIC);
+                        RETURN(-EINVAL);
+                }
         }
 
         if (lum.lmm_pattern == 0) {

@@ -654,6 +654,9 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #warning "kernel code has old extents/mballoc patch, disabling"
 #undef EXT3_MULTIBLOCK_ALLOCATOR
 #endif
+#ifndef EXT3_EXTENTS_FL
+#define EXT3_EXTENTS_FL			0x00080000 /* Inode uses extents */
+#endif
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -771,7 +774,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         ext3_up_truncate_sem(inode);
 
         lock_24kernel();
-        handle = journal_start(EXT3_JOURNAL(inode), count + EXT3_ALLOC_NEEDED + 1);
+        handle = journal_start(EXT3_JOURNAL(inode), count+EXT3_ALLOC_NEEDED+1);
         unlock_24kernel();
         if (IS_ERR(handle)) {
                 ext3_down_truncate_sem(inode);

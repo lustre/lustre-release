@@ -136,33 +136,22 @@ int obd_record(enum cfg_record_type type, int len, void *ptr)
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg)
 {
         int opc;
-        char lcfg_rawbuf[8192];
-        char * lcfg_buf= lcfg_rawbuf;
         struct obd_ioctl_data data;
-        int len;
         int rc;
-
-        memset(lcfg_buf, 0, sizeof(lcfg_rawbuf));
-        if (lustre_cfg_pack(lcfg, &lcfg_buf, sizeof(lcfg_rawbuf), &len)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(func));
-                return -2;
-        }
 
         IOC_INIT(data);
         data.ioc_type = LUSTRE_CFG_TYPE;
-        data.ioc_plen1 = len;
-        data.ioc_pbuf1 = lcfg_buf;
+        data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
+                                        lcfg->lcfg_buflens);
+        data.ioc_pbuf1 = (void *)lcfg;
         IOC_PACK(func, data);
 
-        if (jt_recording)
+        if (jt_recording) {
                 opc = OBD_IOC_DORECORD;
-        else
+        } else {
                 opc = OBD_IOC_PROCESS_CFG;
-
+        }
         rc =  l_ioctl(dev_id, opc, buf);
-        if (rc == 0)
-                rc = lustre_cfg_unpack(lcfg, lcfg_buf, sizeof(lcfg_rawbuf));
 
         return rc;
 }

@@ -44,10 +44,10 @@ static int usage(char *prog, FILE *out)
 
 int main(int argc, char ** argv)
 {
-        long i, count, iter = LONG_MAX, mode = 0, offset;
+        long i, c, count, iter = LONG_MAX, mode = 0, offset;
         long int start, length = LONG_MAX, last, rc = 0;
         char parent[4096], *t;
-	char c, *prog = argv[0], *base;
+	char *prog = argv[0], *base;
 	int seed = 0;
 	int fd = -1;
 
