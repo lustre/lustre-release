@@ -41,6 +41,12 @@ Options:
 	size (in KB) of each stripe on an OST (default: 64)
     --stripe_count=COUNT
 	the number of OSTs files are striped to (default: 1)
+    --lustre_upcall=LUSTRE_UPCALL
+	Set location of lustre upcall script	
+    --portals_upcall=PORTALS_UPCALL
+	Set location of portals upcall script	
+    --upcall=UPCALL
+	Set both lustre and portals upcall script	
 EOF
 
     exit 0     
@@ -63,7 +69,7 @@ RM_BATCH_FILE=1
 FORCE=0
 get_option()
 {
-    local long_options="batch:,file:,force:,help,stripe_size:,stripe_count:"
+    local long_options="batch:,file:,force:,help,stripe_size:,stripe_count:,lustre_upcall:,portals_upcall:,upcall:"
     local options
 
     options=$(getopt -o o:hf --long "$long_options" -- "$@")
@@ -100,6 +106,18 @@ get_option()
 		    fatal 1 "Stripe size should be a number."
 		shift 2
 		;;
+            --lustre_upcall)
+		LUSTRE_UPCALL=$2
+		shift 2
+		;;	
+            --portals_upcall)
+		PORTALS_UPCALL=$2
+		shift 2
+		;;	
+            --upcall)
+		UPCALL=$2
+		shift 2
+		;;	
 	    -h | --help)
 		usage
 		;;
@@ -184,8 +202,19 @@ add_device()
 	    while ! get_device_size ; do
 	       echo -n "Please enter the device size or 0 to use entire device: "
 	    done
+	    echo -n "Do you want to configure failover $1$2?"
+	    read answer
+	    if [ "${answer:0:1}" = "y" -o "${answer:0:1}" = "Y" ] ; then
+		echo -n "Please enter the hostname(s) for failover $1$2 : "
+		read failoverhostname
+		echo -n "Please enter the device for failover $1$2 on ${failoverhostname}: "
+		read failoverdevice
+	    else
+		failoverhostname=
+		failovedevice=
+	    fi
 	done
-	newdev="$hostname:$device:$2:$1$2:$CURRENT_MDS:$CURRENT_LOV:$device_size"
+	newdev="$hostname:$device:$2:$1$2:$CURRENT_MDS:$CURRENT_LOV:$device_size:$failoverhostname:$failoverdevice"
 	DEVICE_LIST="$DEVICE_LIST $newdev"
     done
 
@@ -246,17 +275,44 @@ add_client()
 add_node()
 {
     local node=$1
+    local lustre_upcall=$LUSTRE_UPCALL
+    local portals_upcall=$PORTALS_UPCALL
+    local upcall=$UPCALL
     local nettype=$DEFAULT_NETTYPE
+    local extraopt=""
 
     in_list "$node" "$NODE_LIST" && return 0 
     NODE_LIST="$NODE_LIST $node" 
-
-    run_lmc --add node --node "$node"
+    if [ $lustre_upcall != "0" ] ; then
+	extraopt="--lustre_upcall $lustre_upcall "
+    fi
+    if [ $portals_upcall != "0" ] ; then
+	extraopt="$extraopt --portals_upcall $portals_upcall"
+    fi
+    if [ $upcall != "0" ] ; then
+	extraopt="$extraopt --upcall $upcall"
+    fi
+    run_lmc --add node --node "$node" "$extraopt"
     run_lmc --add net --node "$node" --nid "$node"  \
 	--nettype "$nettype"
 
     return 0 
 } 
+
+# save client node config into config file
+add_client_node()
+{
+    local node=$1
+    local nettype=$DEFAULT_NETTYPE
+
+    in_list "$node" "$NODE_LIST" && return 0
+    NODE_LIST="$NODE_LIST $node"
+    run_lmc --add node --node "$node"
+    run_lmc --add net --node "$node" --nid "*"  \
+        --nettype "$nettype"
+
+    return 0
+}
 
 # get hostname, device , device_id and device name 
 # from mds node 
@@ -269,6 +325,8 @@ get_name_in_list()
     DEVICE_MDS=$(echo $1 | awk -F: '{ print $5 }')
     DEVICE_LOV=$(echo $1 | awk -F: '{ print $6 }')
     DEVICE_SIZE=$(echo $1 | awk -F: '{ print $7 }')
+    FAILOVER_HOST=$(echo $1 | awk -F: '{ print $8 }')
+    FAILOVER_DEVICE=$(echo $1 | awk -F: '{ print $9 }')
 }
 
 # save command to file and do the command 
@@ -280,18 +338,36 @@ run_lmc()
 # following user input to create xml config file 
 create_config()
 {
+    local extraopt=""
+
     for device in $DEVICE_LIST ; do
 	get_name_in_list $device
 	echo -n " $DEVICE_NAME"
+
 	case $DEVICE_NAME in
 	    mds*)
 		add_node "$HOST_NAME"
+		extraopt=""
+		if [ "$FAILOVER_HOST" != "" ] ; then
+		    extraopt=" --failover --group $HOST_NAME"
+		fi
 		run_lmc --add mds \
 		    --node "$HOST_NAME" \
 		    --mds "$DEVICE_NAME" \
 		    --fstype "$DEFAULT_FSTYPE" \
 		    --dev "$DEVICE" \
-		    --size "$DEVICE_SIZE"
+		    --size "$DEVICE_SIZE" \
+		    $extraopt
+		if [ "$FAILOVER_HOST" != "" ] ; then 
+		    add_node "$FAILOVER_HOST"
+		    run_lmc --add mds \
+			--node "$FAILOVER_HOST" \
+			--mds "$DEVICE_NAME" \
+			--dev "$FAILOVER_DEVICE" \
+			--fstype "$DEFAULT_FSTYPE" \
+			--failover \
+			--group "$HOST_NAME"
+		fi
 		;;
 	    lov*)
 		run_lmc --add lov \
@@ -303,23 +379,42 @@ create_config()
 		;;
 	    ost*)
 		add_node "$HOST_NAME"
+		extraopt=""
+		if [ "$FAILOVER_HOST" != "" ] ; then
+                    extraopt=" --failover --group $HOST_NAME"
+		fi
 		run_lmc --add ost \
 		    --node "$HOST_NAME" \
+		    --ost "$DEVICE_NAME" \
 		    --lov "$DEVICE_LOV" \
 		    --fstype "$DEFAULT_FSTYPE" \
 		    --dev "$DEVICE" \
-		    --size "$DEVICE_SIZE"
+		    --size "$DEVICE_SIZE" \
+		    $extraopt
+		if [ "$FAILOVER_HOST" != "" ] ; then
+		    add_node "$FAILOVER_HOST"
+		    run_lmc --add ost \
+			--node "$FAILOVER_HOST" \
+			--ost "$DEVICE_NAME" \
+			--dev "$FAILOVER_DEVICE" \
+			--lov "$DEVICE_LOV" \
+			--fstype "$DEFAULT_FSTYPE" \
+			--failover \
+			--group "$HOST_NAME"
+                 fi
 		;;
 	    client*)
-		add_node "$DEVICE_NAME"
+		add_client_node "$DEVICE_NAME"
 		run_lmc --add mtpt \
 		    --node "$DEVICE_NAME" \
 		    --mds "$DEVICE_MDS" \
 		    --lov "$DEVICE_LOV" \
-		    --path "$DEVICE"
+		    --path "$DEVICE" \
+		    --clientoptions "async"
 		;;
 	esac
     done
+
     echo
     return 0
 }
@@ -363,6 +458,9 @@ DEFAULT_MNTPT=${DEFAULT_MNTPT:-"/mnt/lustre"}
 STRIPE_SIZE=${STRIPE_SIZE:-$((1 * 1024 * 1024))}
 STRIPE_CNT=${STRIPE_CNT:-1}
 STRIPE_PATTERN=${STRIPE_PATTERN:-0}
+LUSTRE_UPCALL=${LUSTRE_UPCALL:-"0"}
+PORTALS_UPCALL=${PORTALS_UPCALL:-"0"}
+UPCALL=${UPCALL:-"0"}
 
 ANSWER="yes no"
 
