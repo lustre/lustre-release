@@ -173,6 +173,7 @@ struct page *lustre_get_page_write(struct inode *inode, unsigned long index)
         page = grab_cache_page(mapping, index); /* locked page */
 
         if (!IS_ERR(page)) {
+                kmap(page);
                 /* Note: Called with "O" and "PAGE_SIZE" this is essentially
                  * a no-op for most filesystems, because we write the whole
                  * page.  For partial-page I/O this will read in the page.
@@ -190,8 +191,6 @@ struct page *lustre_get_page_write(struct inode *inode, unsigned long index)
                         LBUG();
                         GOTO(err_unlock, rc = -EIO);
                 }
-
-                kmap(page);
         }
         return page;
 
