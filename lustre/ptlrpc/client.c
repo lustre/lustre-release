@@ -441,7 +441,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
-        CERROR("subsys: %s req %Ld opc %d level %d, conn level %d\n", 
+        CDEBUG(D_NET, "subsys: %s req %Ld opc %d level %d, conn level %d\n",
                cli->cli_name, req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
                req->rq_connection->c_level);
 
