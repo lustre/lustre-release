@@ -232,17 +232,17 @@ test_0() {
     echo "Failover MDS"
     facet_failover mds
     echo "Waiting for df pid: $DFPID"
-    wait $DFPID || return 1
+    wait $DFPID || echo "df returned $?" && return 1
 
     echo "Failing OST1"
     facet_failover ost1
     echo "Waiting for df pid: $DFPID"
-    wait $DFPID || return 2
+    wait $DFPID || echo "df returned $?" && return 2
 
     echo "Failing OST2"
     facet_failover ost2
     echo "Waiting for df pid: $DFPID"
-    wait $DFPID || return 3
+    wait $DFPID || echo "df returned $?" && return 3
     return 0
 }
 run_test 0 "Fail all nodes, independently"
