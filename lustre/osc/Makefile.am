@@ -7,7 +7,7 @@ DEFS=
 
 if LIBLUSTRE
 lib_LIBRARIES = libosc.a
-libosc_a_SOURCES = osc_request.c
+libosc_a_SOURCES = osc_request.c osc_lib.c osc_create.c osc_rpcd.c osc_internal.h
 else
 MODULE = osc
 modulefs_DATA = osc.o
