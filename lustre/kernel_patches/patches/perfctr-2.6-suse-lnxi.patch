@@ -1,7 +1,7 @@
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/CREDITS
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/CREDITS	2004-11-11 10:28:48.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/CREDITS	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/CREDITS	2004-11-18 20:59:11.000000000 -0500
 @@ -2522,6 +2522,7 @@
  E: mikpe@csd.uu.se
  W: http://www.csd.uu.se/~mikpe/
@@ -13,7 +13,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/CREDITS
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/Documentation/ioctl-number.txt
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/Documentation/ioctl-number.txt	2004-04-03 22:38:18.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/Documentation/ioctl-number.txt	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/Documentation/ioctl-number.txt	2004-11-18 20:59:11.000000000 -0500
 @@ -187,5 +187,7 @@
  0xB1	00-1F	PPPoX			<mailto:mostrows@styx.uwaterloo.ca>
  0xCB	00-1F	CBM serial IEC bus	in development:
@@ -25,7 +25,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/Documentation/ioctl-number.
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/MAINTAINERS
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/MAINTAINERS	2004-11-11 10:28:39.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/MAINTAINERS	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/MAINTAINERS	2004-11-18 20:59:11.000000000 -0500
 @@ -1608,6 +1608,12 @@
  L:	linux-net@vger.kernel.org
  S:	Supported
@@ -42,7 +42,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/MAINTAINERS
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/Kconfig
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/i386/Kconfig	2004-11-11 10:28:16.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/Kconfig	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/Kconfig	2004-11-18 20:59:11.000000000 -0500
 @@ -857,6 +857,8 @@
  	generate incorrect output with certain kernel constructs when
  	-mregparm=3 is used.
@@ -55,7 +55,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/Kconfig
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/entry.S
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/i386/kernel/entry.S	2004-11-11 10:28:47.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/entry.S	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/entry.S	2004-11-18 20:59:11.000000000 -0500
 @@ -444,6 +444,16 @@
  /* The include is where all of the SMP etc. interrupts come from */
  #include "entry_arch.h"
@@ -76,7 +76,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/entry.S
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/i8259.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/i386/kernel/i8259.c	2004-11-11 10:27:12.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/i8259.c	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/i8259.c	2004-11-18 20:59:11.000000000 -0500
 @@ -23,6 +23,7 @@
  #include <asm/apic.h>
  #include <asm/arch_hooks.h>
@@ -97,7 +97,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/i8259.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/process.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/i386/kernel/process.c	2004-11-11 10:28:16.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/process.c	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/process.c	2004-11-18 20:59:11.000000000 -0500
 @@ -32,6 +32,7 @@
  #include <linux/delay.h>
  #include <linux/reboot.h>
@@ -145,7 +145,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/i386/kernel/process.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/ppc/Kconfig
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/ppc/Kconfig	2004-11-11 10:28:15.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/ppc/Kconfig	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/ppc/Kconfig	2004-11-18 20:59:11.000000000 -0500
 @@ -214,6 +214,8 @@
  	depends on 4xx || 8xx
  	default y
@@ -158,7 +158,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/ppc/Kconfig
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/ppc/kernel/process.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/ppc/kernel/process.c	2004-11-11 10:28:48.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/ppc/kernel/process.c	2004-11-18 18:40:51.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/ppc/kernel/process.c	2004-11-18 20:59:11.000000000 -0500
 @@ -37,6 +37,7 @@
  #include <linux/module.h>
  #include <linux/kallsyms.h>
@@ -197,7 +197,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/ppc/kernel/process.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/Kconfig
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/Kconfig	2004-11-11 10:28:39.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/Kconfig	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/Kconfig	2004-11-18 20:59:11.000000000 -0500
 @@ -319,6 +319,8 @@
  	bool
  	default y
@@ -210,7 +210,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/Kconfig
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/entry.S
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/entry.S	2004-04-03 22:36:56.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/entry.S	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/entry.S	2004-11-18 20:59:11.000000000 -0500
 @@ -556,6 +556,11 @@
  	apicinterrupt SPURIOUS_APIC_VECTOR,smp_spurious_interrupt
  #endif
@@ -226,7 +226,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/entry.S
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/i8259.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/i8259.c	2004-04-03 22:36:25.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/i8259.c	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/i8259.c	2004-11-18 20:59:11.000000000 -0500
 @@ -23,6 +23,7 @@
  #include <asm/delay.h>
  #include <asm/desc.h>
@@ -247,7 +247,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/i8259.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/process.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/arch/x86_64/kernel/process.c	2004-11-11 10:27:51.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/process.c	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/process.c	2004-11-18 20:59:11.000000000 -0500
 @@ -32,6 +32,7 @@
  #include <linux/delay.h>
  #include <linux/irq.h>
@@ -293,8 +293,8 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/arch/x86_64/kernel/process.
  
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Makefile
 ===================================================================
---- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/Makefile	2004-11-18 18:38:03.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Makefile	2004-11-18 18:40:28.000000000 -0500
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/Makefile	2004-11-18 20:59:08.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Makefile	2004-11-18 20:59:11.000000000 -0500
 @@ -51,6 +51,7 @@
  obj-$(CONFIG_MCA)		+= mca/
  obj-$(CONFIG_EISA)		+= eisa/
@@ -306,7 +306,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Makefile
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_compat.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_64_compat.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_compat.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_compat.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,25 @@
 +/* $Id: x86_64_compat.h,v 1.1 2003/05/14 21:51:57 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -336,7 +336,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_comp
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Makefile
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/Makefile	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Makefile	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Makefile	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,46 @@
 +# $Id: Makefile,v 1.20.2.2 2004/08/02 22:24:58 mikpe Exp $
 +# Makefile for the Performance-monitoring counters driver.
@@ -387,7 +387,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Makefile
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/RELEASE-NOTES
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/RELEASE-NOTES	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/RELEASE-NOTES	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/RELEASE-NOTES	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,1357 @@
 +$Id: RELEASE-NOTES,v 1.234.2.28 2004/10/19 16:22:47 mikpe Exp $
 +
@@ -1749,7 +1749,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/RELEASE-NOT
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/compat24.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/compat24.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/compat24.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/compat24.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,97 @@
 +/* $Id: compat24.h,v 1.22.2.1 2004/07/26 14:05:49 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -1851,7 +1851,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/compat24.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/init.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/init.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/init.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/init.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,216 @@
 +/* $Id: init.c,v 1.68 2004/01/11 22:12:09 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -2072,7 +2072,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/init.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/virtual.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,15 @@
 +/* $Id: virtual.h,v 1.11 2003/10/04 20:29:43 mikpe Exp $
 + * Virtual per-process performance counters.
@@ -2092,7 +2092,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/marshal.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/marshal.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/marshal.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/marshal.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,722 @@
 +/* $Id: marshal.c,v 1.6.2.1 2004/08/02 22:24:58 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -2819,7 +2819,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/marshal.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_compat.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/ppc_compat.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_compat.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_compat.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,62 @@
 +/* $Id: ppc_compat.h,v 1.1.2.1 2004/06/21 22:32:14 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -2886,7 +2886,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_compat.
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/compat.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/compat.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/compat.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/compat.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,23 @@
 +/* $Id: compat.h,v 1.42 2004/05/02 22:52:13 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -2914,7 +2914,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/compat.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Config.in
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/Config.in	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Config.in	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Config.in	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,15 @@
 +# $Id: Config.in,v 1.15 2002/11/25 13:01:46 mikpe Exp $
 +# Performance-monitoring counters driver configuration
@@ -2934,7 +2934,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Config.in
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/global.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/global.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/global.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/global.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,244 @@
 +/* $Id: global.c,v 1.38 2004/01/25 14:45:35 mikpe Exp $
 + * Global-mode performance-monitoring counters via /dev/perfctr.
@@ -3183,7 +3183,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/global.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_tests.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_64_tests.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_tests.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_tests.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,14 @@
 +/* $Id: x86_64_tests.h,v 1.1 2003/05/14 21:51:57 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -3202,7 +3202,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_test
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Kconfig
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/Kconfig	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Kconfig	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Kconfig	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,79 @@
 +# $Id: Kconfig,v 1.7 2003/05/14 21:51:32 mikpe Exp $
 +# Performance-monitoring counters driver configuration
@@ -3286,7 +3286,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Kconfig
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/marshal.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/marshal.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/marshal.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/marshal.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,104 @@
 +/* $Id: marshal.h,v 1.1 2003/08/19 13:37:07 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -3395,8 +3395,8 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/marshal.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual_stub.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/virtual_stub.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual_stub.c	2004-11-18 18:42:20.000000000 -0500
-@@ -0,0 +1,68 @@
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual_stub.c	2004-11-18 23:52:29.000000000 -0500
+@@ -0,0 +1,67 @@
 +/* $Id: virtual_stub.c,v 1.26 2003/10/04 22:53:42 mikpe Exp $
 + * Kernel stub used to support virtual perfctrs when the
 + * perfctr driver is built as a module.
@@ -3460,7 +3460,6 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual_stu
 +}
 +
 +EXPORT_SYMBOL(vperfctr_stub);
-+EXPORT_SYMBOL___put_task_struct;
 +
 +#include <linux/mm.h> /* for 2.4.15 and up, except 2.4.20-8-redhat */
 +#include <linux/ptrace.h> /* for 2.5.32 and up, and 2.4.20-8-redhat */
@@ -3468,7 +3467,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual_stu
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_tests.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/ppc_tests.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_tests.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_tests.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,292 @@
 +/* $Id: ppc_tests.c,v 1.1.2.3 2004/07/27 16:42:03 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -3765,7 +3764,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_tests.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_setup.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_setup.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_setup.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_setup.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,116 @@
 +/* $Id: x86_setup.c,v 1.47.2.2 2004/08/02 19:38:51 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -3886,7 +3885,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_setup.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/global.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/global.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/global.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/global.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,17 @@
 +/* $Id: global.h,v 1.7 2003/10/02 20:04:35 mikpe Exp $
 + * Global-mode performance-monitoring counters.
@@ -3908,7 +3907,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/global.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/cpumask.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/cpumask.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/cpumask.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/cpumask.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,81 @@
 +/* $Id: cpumask.h,v 1.6.2.1 2004/07/12 21:09:45 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -3994,7 +3993,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/cpumask.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_compat.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_compat.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_compat.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_compat.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,41 @@
 +/* $Id: x86_compat.h,v 1.33 2004/02/29 16:03:03 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -4040,7 +4039,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_compat.
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Makefile24
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/Makefile24	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Makefile24	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Makefile24	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,39 @@
 +# $Id: Makefile24,v 1.7.2.1 2004/08/02 22:24:58 mikpe Exp $
 +# Performance-monitoring counters driver Makefile for 2.4 kernels.
@@ -4084,7 +4083,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/Makefile24
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_tests.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_tests.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_tests.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_tests.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,310 @@
 +/* $Id: x86_tests.c,v 1.23.2.5 2004/08/02 22:24:58 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -4399,7 +4398,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_tests.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/ppc.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,925 @@
 +/* $Id: ppc.c,v 1.3.2.8 2004/10/19 15:18:21 mikpe Exp $
 + * PPC32 performance-monitoring counters driver.
@@ -5329,7 +5328,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/virtual.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,1049 @@
 +/* $Id: virtual.c,v 1.88.2.2 2004/10/19 15:23:43 mikpe Exp $
 + * Virtual per-process performance counters.
@@ -6383,7 +6382,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/virtual.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_tests.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_tests.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_tests.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_tests.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,30 @@
 +/* $Id: x86_tests.h,v 1.8.2.2 2004/08/02 15:53:19 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -6418,7 +6417,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_tests.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_setup.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/ppc_setup.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_setup.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_setup.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,40 @@
 +/* $Id: ppc_setup.c,v 1.1 2004/01/12 01:59:11 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -6463,7 +6462,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_setup.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_tests.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/ppc_tests.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_tests.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_tests.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,12 @@
 +/* $Id: ppc_tests.h,v 1.1.2.1 2004/06/21 22:33:35 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -6480,13 +6479,13 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/ppc_tests.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/version.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/version.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/version.h	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/version.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1 @@
 +#define VERSION "2.6.10.2"
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_tests.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_64_tests.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_tests.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_tests.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,174 @@
 +/* $Id: x86_64_tests.c,v 1.3 2004/02/21 11:04:46 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -6665,7 +6664,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_test
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_setup.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_64_setup.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_setup.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_setup.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,63 @@
 +/* $Id: x86_64_setup.c,v 1.9 2004/02/21 11:56:53 mikpe Exp $
 + * Performance-monitoring counters driver.
@@ -6733,7 +6732,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64_setu
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86_64.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,776 @@
 +/* $Id: x86_64.c,v 1.22.2.1 2004/05/29 22:25:22 mikpe Exp $
 + * x86_64 performance-monitoring counters driver.
@@ -7514,7 +7513,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86_64.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/perfctr/x86.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86.c	2004-11-18 18:42:20.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86.c	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,1720 @@
 +/* $Id: x86.c,v 1.127.2.13 2004/09/14 17:56:42 mikpe Exp $
 + * x86/x86_64 performance-monitoring counters driver.
@@ -9239,7 +9238,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/perfctr/x86.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/apic.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-i386/apic.h	2004-04-03 22:38:23.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/apic.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/apic.h	2004-11-18 20:59:11.000000000 -0500
 @@ -99,6 +99,8 @@
  #define NMI_LOCAL_APIC	2
  #define NMI_INVALID	3
@@ -9252,7 +9251,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/apic.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-default/irq_vectors.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-i386/mach-default/irq_vectors.h	2004-11-11 10:27:51.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-default/irq_vectors.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-default/irq_vectors.h	2004-11-18 20:59:11.000000000 -0500
 @@ -59,14 +59,15 @@
   * sources per level' errata.
   */
@@ -9274,7 +9273,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-defau
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-pc9800/irq_vectors.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-i386/mach-pc9800/irq_vectors.h	2004-04-03 22:36:16.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-pc9800/irq_vectors.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-pc9800/irq_vectors.h	2004-11-18 20:59:11.000000000 -0500
 @@ -59,14 +59,15 @@
   * sources per level' errata.
   */
@@ -9296,7 +9295,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-pc980
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-visws/irq_vectors.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-i386/mach-visws/irq_vectors.h	2004-04-03 22:36:18.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-visws/irq_vectors.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-visws/irq_vectors.h	2004-11-18 20:59:11.000000000 -0500
 @@ -35,14 +35,15 @@
   * sources per level' errata.
   */
@@ -9318,7 +9317,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/mach-visws
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/processor.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-i386/processor.h	2004-11-11 10:27:40.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/processor.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/processor.h	2004-11-18 20:59:11.000000000 -0500
 @@ -427,6 +427,8 @@
  	unsigned int		saved_fs, saved_gs;
  /* IO permissions */
@@ -9331,7 +9330,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/processor.
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/perfctr.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-i386/perfctr.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/perfctr.h	2004-11-18 18:42:48.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/perfctr.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,189 @@
 +/* $Id: perfctr.h,v 1.48.2.4 2004/08/02 22:24:58 mikpe Exp $
 + * x86/x86_64 Performance-Monitoring Counters driver
@@ -9525,7 +9524,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-i386/perfctr.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-ppc/processor.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-ppc/processor.h	2004-11-11 10:27:19.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-ppc/processor.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-ppc/processor.h	2004-11-18 20:59:11.000000000 -0500
 @@ -119,6 +119,7 @@
  	unsigned long	vrsave;
  	int		used_vr;	/* set if process has used altivec */
@@ -9537,7 +9536,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-ppc/processor.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-ppc/perfctr.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-ppc/perfctr.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-ppc/perfctr.h	2004-11-18 18:42:40.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-ppc/perfctr.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,171 @@
 +/* $Id: perfctr.h,v 1.3.2.2 2004/06/21 22:38:30 mikpe Exp $
 + * PPC32 Performance-Monitoring Counters driver
@@ -9713,7 +9712,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-ppc/perfctr.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/apic.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-x86_64/apic.h	2004-11-11 10:28:46.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/apic.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/apic.h	2004-11-18 20:59:11.000000000 -0500
 @@ -96,6 +96,8 @@
  #define NMI_LOCAL_APIC	2
  #define NMI_INVALID	3
@@ -9726,7 +9725,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/apic.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/hw_irq.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-x86_64/hw_irq.h	2004-11-11 10:28:31.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/hw_irq.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/hw_irq.h	2004-11-18 20:59:11.000000000 -0500
 @@ -65,14 +65,15 @@
   * sources per level' errata.
   */
@@ -9748,7 +9747,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/hw_irq.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/irq.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-x86_64/irq.h	2004-11-11 10:28:46.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/irq.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/irq.h	2004-11-18 20:59:11.000000000 -0500
 @@ -29,7 +29,7 @@
   */
  #define NR_VECTORS 256
@@ -9761,7 +9760,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/irq.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/processor.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-x86_64/processor.h	2004-11-11 10:27:40.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/processor.h	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/processor.h	2004-11-18 20:59:11.000000000 -0500
 @@ -258,6 +258,8 @@
  	unsigned long	*io_bitmap_ptr;
  /* cached TLS descriptors. */
@@ -9774,13 +9773,13 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/processo
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/perfctr.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/asm-x86_64/perfctr.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/perfctr.h	2004-11-18 18:42:58.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/asm-x86_64/perfctr.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1 @@
 +#include <asm-i386/perfctr.h>
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/perfctr.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/linux/perfctr.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/perfctr.h	2004-11-18 18:43:06.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/perfctr.h	2004-11-18 20:59:11.000000000 -0500
 @@ -0,0 +1,246 @@
 +/* $Id: perfctr.h,v 1.69 2004/02/20 21:31:02 mikpe Exp $
 + * Performance-Monitoring Counters driver
@@ -10031,7 +10030,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/perfctr.h
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/sched.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/kernel/sched.c	2004-11-11 10:28:49.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/sched.c	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/sched.c	2004-11-18 20:59:11.000000000 -0500
 @@ -39,6 +39,7 @@
  #include <linux/rcupdate.h>
  #include <linux/cpu.h>
@@ -10052,7 +10051,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/sched.c
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/timer.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/kernel/timer.c	2004-11-11 10:28:46.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/timer.c	2004-11-18 18:40:28.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/kernel/timer.c	2004-11-18 20:59:11.000000000 -0500
 @@ -31,6 +31,7 @@
  #include <linux/time.h>
  #include <linux/jiffies.h>
