@@ -77,7 +77,7 @@ struct ll_sb_info {
         obd_uuid_t                ll_sb_uuid;
         struct lustre_handle      ll_mdc_conn;
         struct lustre_handle      ll_osc_conn;
-        struct proc_dir_entry*    ll_mnt_root;
+        struct proc_dir_entry*    ll_proc_root;
         obd_id                    ll_rootino; /* number of root inode */
 
         int                       ll_flags;

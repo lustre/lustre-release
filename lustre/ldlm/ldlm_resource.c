@@ -19,45 +19,55 @@ kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 spinlock_t ldlm_namespace_lock = SPIN_LOCK_UNLOCKED;
 struct list_head ldlm_namespace_list = LIST_HEAD_INIT(ldlm_namespace_list);
 static struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
-extern struct proc_dir_entry proc_root;
 
 int ldlm_proc_setup(struct obd_device *obd)
 {
         ENTRY;
-
         LASSERT(ldlm_ns_proc_dir == NULL);
-
-        ldlm_ns_proc_dir = proc_mkdir("ldlm", &proc_root);
-        if (ldlm_ns_proc_dir == NULL) {
-                CERROR("Couldn't create /proc/ldlm\n");
-                RETURN(-EPERM);
-        }
+        ldlm_ns_proc_dir=obd->obd_type->typ_procroot;
         RETURN(0);
 }
 
 void ldlm_proc_cleanup(struct obd_device *obd)
 {
-        remove_proc_entry("ldlm", &proc_root);
+        ldlm_ns_proc_dir = NULL;
 }
 
-/* FIXME: This can go away when we start to really use lprocfs */
-static int ldlm_proc_ll_rd(char *page, char **start, off_t off,
-                         int count, int *eof, void *data)
+#define MAX_STRING_SIZE 100
+void ldlm_proc_namespace(struct ldlm_namespace *ns)
 {
-        int len;
-        __u64 *temp = (__u64 *)data;
+        struct lprocfs_vars lock_vars[2];
+        char lock_names[MAX_STRING_SIZE];
 
-        len = snprintf(page, count, "%Lu\n", *temp);
+        memset(lock_vars, 0, sizeof(lock_vars));
+        snprintf(lock_names, MAX_STRING_SIZE, "%s/resource_count", 
+                 ns->ns_name);
+        lock_names[MAX_STRING_SIZE] = '\0';
+        lock_vars[0].name = lock_names;
+        lock_vars[0].read_fptr = lprocfs_ll_rd;
+        lock_vars[0].write_fptr = NULL;
+        lock_vars[0].data = &ns->ns_resources;
+        lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
-        return len;
+        memset(lock_vars, 0, sizeof(lock_vars));
+        snprintf(lock_names, MAX_STRING_SIZE, "%s/lock_count", ns->ns_name);
+        lock_names[MAX_STRING_SIZE] = '\0';
+        lock_vars[0].name = lock_names;
+        lock_vars[0].read_fptr = lprocfs_ll_rd;
+        lock_vars[0].write_fptr = NULL;
+        lock_vars[0].data = &ns->ns_locks;
+        lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
 }
+#undef MAX_STRING_SIZE
 
 #define LDLM_MAX_UNUSED 20
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
-        struct proc_dir_entry *proc_entry;
+
+       
 
         OBD_ALLOC(ns, sizeof(*ns));
         if (!ns) {
@@ -98,17 +108,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         spin_lock(&ldlm_namespace_lock);
         list_add(&ns->ns_list_chain, &ldlm_namespace_list);
         spin_unlock(&ldlm_namespace_lock);
-
-        ns->ns_proc_dir = proc_mkdir(ns->ns_name, ldlm_ns_proc_dir);
-        if (ns->ns_proc_dir == NULL)
-                CERROR("Unable to create proc directory for namespace.\n");
-        proc_entry = create_proc_entry("resource_count", 0444, ns->ns_proc_dir);
-        proc_entry->read_proc = ldlm_proc_ll_rd;
-        proc_entry->data = &ns->ns_resources;
-        proc_entry = create_proc_entry("lock_count", 0444, ns->ns_proc_dir);
-        proc_entry->read_proc = ldlm_proc_ll_rd;
-        proc_entry->data = &ns->ns_locks;
-
+        ldlm_proc_namespace(ns);
         RETURN(ns);
 
  out:
@@ -207,9 +207,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         spin_lock(&ldlm_namespace_lock);
         list_del(&ns->ns_list_chain);
-        remove_proc_entry("resource_count", ns->ns_proc_dir);
-        remove_proc_entry("lock_count", ns->ns_proc_dir);
-        remove_proc_entry(ns->ns_name, ldlm_ns_proc_dir);
+
         spin_unlock(&ldlm_namespace_lock);
 
         ldlm_namespace_cleanup(ns, 0);

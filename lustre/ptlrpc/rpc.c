@@ -169,18 +169,12 @@ static int connmgr_connect(struct lustre_handle *conn, struct obd_device *src,
 int connmgr_attach(struct obd_device *dev, 
                    obd_count len, void *data)
 {
-        int rc;
-        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
-                             (void*)dev);
-        return rc; 
+        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
 int conmgr_detach(struct obd_device *dev)
 {
-        int rc;
-        rc = lprocfs_dereg_obd(dev);
-        return rc;
-
+        return lprocfs_dereg_obd(dev);
 }
 /* use obd ops to offer management infrastructure */
 static struct obd_ops recovd_obd_ops = {
@@ -201,15 +195,11 @@ static int __init ptlrpc_init(void)
                 RETURN(rc);
         ptlrpc_init_connection();
         rc = class_register_type(&recovd_obd_ops, 
-                                 (struct lprocfs_vars*)status_class_var,
+                                 status_class_var,
                                  LUSTRE_HA_NAME);
         if (rc) 
                 RETURN(rc);
         ptlrpc_put_connection_superhack = ptlrpc_put_connection;
-
-        if (rc)
-                RETURN(rc);
-                
         return 0;
 }
 

@@ -1454,18 +1454,12 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 int mds_attach(struct obd_device *dev,
                obd_count len, void *data)
 {
-        int rc;
-        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1,
-                             (void*)dev);
-        return rc;
+        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
 int mds_detach(struct obd_device *dev)
 {
-        int rc;
-        rc = lprocfs_dereg_obd(dev);
-        return rc;
-
+        return lprocfs_dereg_obd(dev);
 }
 
 static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
@@ -1549,13 +1543,9 @@ static int __init mds_init(void)
         if (mds_file_cache == NULL)
                 return -ENOMEM;
 
-        class_register_type(&mds_obd_ops,
-                            (struct lprocfs_vars*)status_class_var,
-                            LUSTRE_MDS_NAME);
+        class_register_type(&mds_obd_ops, status_class_var, LUSTRE_MDS_NAME);
         class_register_type(&mdt_obd_ops, 0, LUSTRE_MDT_NAME);
-
         ldlm_register_intent(ldlm_intent_policy);
-
         return 0;
 
 }

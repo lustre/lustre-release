@@ -1359,19 +1359,13 @@ static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
 int lov_attach(struct obd_device *dev,
                obd_count len, void *data)
 {
-        int rc;
-        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1,
-                             (void*)dev);
-        return rc;
+        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
 int lov_detach(struct obd_device *dev)
 {
-        int rc;
-        rc = lprocfs_dereg_obd(dev);
-        return rc;
-
- }
+        return lprocfs_dereg_obd(dev);
+}
 
 struct obd_ops lov_obd_ops = {
         o_attach:      lov_attach,
@@ -1400,7 +1394,6 @@ struct obd_ops lov_obd_ops = {
 static int __init lov_init(void)
 {
         int rc;
-
         printk(KERN_INFO "Lustre Logical Object Volume driver " LOV_VERSION
                ", info@clusterfs.com\n");
         lov_file_cache = kmem_cache_create("ll_lov_file_data",
@@ -1408,14 +1401,9 @@ static int __init lov_init(void)
                                            0, 0, NULL, NULL);
         if (!lov_file_cache)
                 RETURN(-ENOMEM);
-
-        rc = class_register_type(&lov_obd_ops,
-                                 (struct lprocfs_vars*)status_class_var,
+        rc = class_register_type(&lov_obd_ops, status_class_var,
                                  OBD_LOV_DEVICENAME);
-        if (rc)
-                RETURN(rc);
-
-        return 0;
+        RETURN(rc);
 }
 
 static void __exit lov_exit(void)

@@ -871,18 +871,12 @@ out:
 int osc_attach(struct obd_device *dev, 
                    obd_count len, void *data)
 {
-        int rc;
-        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
-                             (void*)dev);
-        return rc; 
+        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
 int osc_detach(struct obd_device *dev)
 {
-        int rc;
-        rc = lprocfs_dereg_obd(dev);
-        return rc;
-
+        return lprocfs_dereg_obd(dev);
 }
 struct obd_ops osc_obd_ops = {
         o_attach:       osc_attach,
@@ -909,14 +903,10 @@ struct obd_ops osc_obd_ops = {
 static int __init osc_init(void)
 {
         int rc;
-        
-        rc = class_register_type(&osc_obd_ops,
-                                 (struct lprocfs_vars*)status_class_var, 
+        rc = class_register_type(&osc_obd_ops, status_class_var, 
                                  LUSTRE_OSC_NAME);
-        if (rc)
-                RETURN(rc);
-        return 0;
-       
+        RETURN(rc);
+               
 }
 
 static void __exit osc_exit(void)

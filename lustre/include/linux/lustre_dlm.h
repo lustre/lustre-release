@@ -101,7 +101,9 @@ struct ldlm_namespace {
         struct list_head       ns_root_list; /* all root resources in ns */
         struct lustre_lock     ns_lock; /* protects hash, refcount, list */
         struct list_head       ns_list_chain; /* position in global NS list */
+        /* 
         struct proc_dir_entry *ns_proc_dir;
+        */
 
         struct list_head       ns_unused_list; /* all root resources in ns */
         unsigned int           ns_nr_unused;

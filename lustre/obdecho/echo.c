@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.46 2002/11/08 19:02:41 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.46 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.47 2002/11/13 02:46:41 thantry Exp $";
+#define OBDECHO_VERSION "$Revision: 1.47 $"
 
 #define EXPORT_SYMTAB
 
@@ -437,18 +437,12 @@ static int echo_cleanup(struct obd_device *obddev)
 int echo_attach(struct obd_device *dev, 
                    obd_count len, void *data)
 {
-        int rc;
-        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
-                             (void*)dev);
-        return rc; 
+        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
 int echo_detach(struct obd_device *dev)
 {
-        int rc;
-        rc = lprocfs_dereg_obd(dev);
-        return rc;
-
+        return lprocfs_dereg_obd(dev);
 }
 
 
@@ -478,12 +472,10 @@ static int __init obdecho_init(void)
                " info@clusterfs.com\n");
 
         echo_proc_init();
-        rc = class_register_type(&echo_obd_ops, 
-                                 (struct lprocfs_vars*)status_class_var, 
+        rc = class_register_type(&echo_obd_ops, status_class_var, 
                                  OBD_ECHO_DEVICENAME);
-        if (rc) RETURN(rc);
+        RETURN(rc);
         
-        return 0;
 
 }
 
@@ -491,7 +483,6 @@ static void __exit obdecho_exit(void)
 {
                 
         echo_proc_fini();
-
         class_unregister_type(OBD_ECHO_DEVICENAME);
 }
 

@@ -22,7 +22,6 @@
 #include <linux/fs.h>
 #include <linux/lprocfs_status.h>
 
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
@@ -33,14 +32,7 @@ extern int ll_recover(struct recovd_data *, int);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 
-extern int rd_dev_uuid(char* page, char **start, off_t off,
-                           int count, int *eof, void *data);
-
-extern int rd_dev_name(char* page, char **start, off_t off,
-                    int count, int *eof, void *data);
-
-
-extern struct lprocfs_vars status_var_nm_1[];
+extern void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc);
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -120,10 +112,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
 
-        /* Lprocfs variables */
-        char mnt_name[100];
-        char uuid_name[100];
-        struct lprocfs_vars d_vars[3];
+     
 
         ENTRY;
         MOD_INC_USE_COUNT;
@@ -234,63 +223,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         ptlrpc_req_finished(request);
         request = NULL;
-
-        /* Register this mount instance with LProcFS */
-        snprintf(mnt_name, 100, "mount_%s", sbi->ll_sb_uuid);
-        sbi->ll_mnt_root = lprocfs_reg_mnt(mnt_name);
-        if (!sbi->ll_mnt_root)
-                goto out_dev;
-
-        /* Add the static configuration info */
-        err = lprocfs_add_vars(sbi->ll_mnt_root,
-                               (struct lprocfs_vars *)status_var_nm_1, sb);
-        if (err)
-                CDEBUG(D_OTHER, "Unable to add procfs variables\n");
-
-        /* MDC */
-        obd = class_uuid2obd(mdc);
-
-        /* Reuse mnt_name */
-        sprintf(mnt_name, "status/%s/common_name", obd->obd_type->typ_name);
-
-        memset(d_vars, 0, sizeof(d_vars));
-        d_vars[0].read_fptr = rd_dev_name;
-        d_vars[0].write_fptr = NULL;
-        d_vars[0].name = mnt_name;
-
-        snprintf(uuid_name, strlen(uuid_name), "status/%s/uuid",
-                 obd->obd_type->typ_name);
-        d_vars[1].read_fptr = rd_dev_uuid;
-        d_vars[1].write_fptr = NULL;
-        d_vars[1].name = uuid_name;
-
-        err = lprocfs_add_vars(sbi->ll_mnt_root, (struct lprocfs_vars *)d_vars,
-                               obd);
-        if (err)
-                CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables\n");
-
-        /* OSC or LOV*/
-        obd = class_uuid2obd(osc);
-
-        /* Reuse mnt_name */
-        snprintf(mnt_name, strlen(mnt_name), "status/%s/common_name",
-                 obd->obd_type->typ_name);
-
-        memset(d_vars, 0, sizeof(d_vars));
-        d_vars[0].read_fptr = rd_dev_name;
-        d_vars[0].write_fptr = NULL;
-        d_vars[0].name = mnt_name;
-
-        snprintf(uuid_name, strlen(uuid_name), "status/%s/uuid",
-                 obd->obd_type->typ_name);
-        d_vars[1].read_fptr = rd_dev_uuid;
-        d_vars[1].write_fptr = NULL;
-        d_vars[1].name = uuid_name;
-
-        err = lprocfs_add_vars(sbi->ll_mnt_root, (struct lprocfs_vars *)d_vars,
-                               obd);
-        if (err)
-                CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables\n");
+        ll_proc_namespace(sb, osc, mdc);
 
 out_dev:
         if (mdc)
@@ -333,7 +266,9 @@ static void ll_put_super(struct super_block *sb)
          */
         mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
 
-        lprocfs_dereg_mnt(sbi->ll_mnt_root);
+        lprocfs_dereg_mnt(sbi->ll_proc_root);
+        sbi->ll_proc_root=0;
+        
         obd_disconnect(&sbi->ll_mdc_conn);
 
         spin_lock(&dcache_lock);

@@ -1767,19 +1767,12 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
 int filter_attach(struct obd_device *dev, 
                    obd_count len, void *data)
 {
-
-        int rc;
-        rc = lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
-                             (void*)dev);
-        return rc; 
+        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
 int filter_detach(struct obd_device *dev)
 {
-        int rc;
-        rc = lprocfs_dereg_obd(dev);
-        return rc;
-
+        return lprocfs_dereg_obd(dev);
 }
 static struct obd_ops filter_obd_ops = {
         o_attach:      filter_attach,
@@ -1826,8 +1819,7 @@ static int __init obdfilter_init(void)
                 RETURN(-ENOMEM);
         }
 
-        return class_register_type(&filter_obd_ops, 
-                                   (struct lprocfs_vars*)status_class_var,
+        return class_register_type(&filter_obd_ops, status_class_var,
                                    OBD_FILTER_DEVICENAME);
 }
 

@@ -664,20 +664,13 @@ static int ost_cleanup(struct obd_device * obddev)
 int ost_attach(struct obd_device *dev, 
                    obd_count len, void *data)
 {
-        /*  lprocfs_reg_dev(dev, (lprocfs_group_t*)lprocfs_ptlrpc_nm,
-                        sizeof(struct lprofiler_ptlrpc));
-        */
-        lprocfs_reg_obd(dev, (struct lprocfs_vars*)status_var_nm_1, 
-                        (void*)dev);
-        return 0; 
+        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
 
 int ost_detach(struct obd_device *dev)
 {
-        /* lprocfs_dereg_dev(dev); */
-        lprocfs_dereg_obd(dev);
-        return 0;
-
+        return lprocfs_dereg_obd(dev);
+       
 }
 
 
@@ -694,12 +687,9 @@ static int __init ost_init(void)
 {
         int rc;
 
-        rc = class_register_type(&ost_obd_ops,
-                                 (struct lprocfs_vars*)status_class_var, 
+        rc = class_register_type(&ost_obd_ops, status_class_var, 
                                  LUSTRE_OST_NAME);
-        if (rc) RETURN(rc);
-
-        return 0;
+        RETURN(rc);
 
 }
 

@@ -25,43 +25,43 @@
 #include <linux/lprocfs_status.h>
 
 
-int rd_uuid(char* page, char **start, off_t off,
-               int count, int *eof, void *data)
+int rd_uuid(char* page, char **start, off_t off, int count, int *eof, 
+            void *data)
 {
-        int len=0;
-        struct obd_device* dev=(struct obd_device*)data;
-        len+=snprintf(page, count, "%s\n", dev->obd_uuid);
+        int len = 0;
+        struct obd_device* dev = (struct obd_device*)data;
+        len += snprintf(page, count, "%s\n", dev->obd_uuid);
         return len;
 
 }
 
-int rd_fstype(char* page, char **start, off_t off,
-               int count, int *eof, void *data)
+int rd_fstype(char* page, char **start, off_t off, int count, int *eof, 
+              void *data)
 {
-        int len=0;
-        struct obd_device* dev=(struct obd_device*)data;
-        len+=snprintf(page, count, "%s\n", dev->u.echo.eo_fstype);
+        int len = 0;
+        struct obd_device* dev = (struct obd_device*)data;
+        len += snprintf(page, count, "%s\n", dev->u.echo.eo_fstype);
         return len;
 
 }
 
 
-struct lprocfs_vars status_var_nm_1[]={
-        {"status/uuid", rd_uuid, 0},
-        {"status/fstype", rd_fstype, 0},
+struct lprocfs_vars status_var_nm_1[] = {
+        {"status/uuid", rd_uuid, 0, 0},
+        {"status/fstype", rd_fstype, 0, 0},
         {0}
 };
 
-int rd_numdevices(char* page, char **start, off_t off,
-                  int count, int *eof, void *data)
+int rd_numrefs(char* page, char **start, off_t off, int count, int *eof, 
+               void *data)
 {
-        struct obd_type* class=(struct obd_type*)data;
-        int len=0;
-        len+=snprintf(page, count, "%d\n", class->typ_refcnt);
+        struct obd_type* class = (struct obd_type*)data;
+        int len = 0;
+        len += snprintf(page, count, "%d\n", class->typ_refcnt);
         return len;
 }
 
-struct lprocfs_vars status_class_var[]={
-        {"status/num_devices", rd_numdevices, 0},
+struct lprocfs_vars status_class_var[] = {
+        {"status/num_refs", rd_numrefs, 0, 0},
         {0}
 };
