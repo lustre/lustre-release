@@ -12,6 +12,7 @@
 
   <profile name="local-profile" uuid="local-profile-UUID">
     <service_ref uuidref="lov1-UUID"></service_ref>
+    <service_ref uuidref="mtpt1-UUID"></service_ref>
     <service_ref uuidref="mdc1-UUID"></service_ref>
     <service_ref uuidref="mds1-UUID"></service_ref>
     <service_ref uuidref="net-UUID"></service_ref>
@@ -74,5 +75,11 @@
     <device size="10000">/tmp/obd2</device>
     <autoformat>yes</autoformat>
   </obd>
+
+  <mountpoint name="mtpt1" uuid="mtpt1-UUID">
+    <path>/mnt/lov1</path>
+    <mds_ref uuidref="mds1-UUID"/>
+    <lov_ref uuidref="lov1-UUID"/>
+  </mountpoint>
 
 </lustre>

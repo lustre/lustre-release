@@ -316,7 +316,7 @@ def prepare_ldlm(node):
     
 def prepare_lov(node):
     (name, uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist, mdsname) = getLOVInfo(node)
-    print 'LOV:', name, uuid
+    print 'LOV:', name, uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist, mdsname
     lctl.lovconfig(uuid, mdsname, stripe_cnt, strip_sz, pattern, devlist)
     lctl.newdev(attach="lov %s %s" % (name, uuid),
                 setup ="%s" % (mdcuuid))
@@ -370,8 +370,12 @@ def prepare_mdc(node):
                 setup ="%s %s" %(mdsuuid, netuuid))
 
 def prepare_mountpoint(node):
-    print 'MTPT:'
-
+    name, uuid, oscuuid, mdsuuid, mtpt = getMTPTInfo(node)
+    print 'MTPT:', name, uuid, oscuuid, mdsuuid, mtpt
+    cmd = "mount -t lustre_lite -o ost=%s,mds=%s none %s" % \
+          (oscuuid, mdsuuid, mtpt)
+    run("mkdir", mtpt)
+    run(cmd)
 # ============================================================
 # Functions to cleanup the various objects
 
@@ -384,10 +388,12 @@ def cleanup_ldlm(node):
         print "cleanup failed: ", name
 
 def cleanup_lov(node):
-    (name, uuid) = getNodeAttr(node)
-    print 'LOV:', name, uuid
-
-    #lctl.cleanup(name, uuid)
+    (name, uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist, mdsname) = getLOVInfo(node)
+    print 'LOV:', name, uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist, mdsname
+    try:
+        lctl.cleanup(name, uuid)
+    except CommandError:
+        print "cleanup failed: ", name
 
 def cleanup_network(node):
     (name, uuid, type, nid, port) = getNetworkInfo(node)
@@ -445,7 +451,9 @@ def cleanup_osc(node):
         print "cleanup failed: ", name
 
 def cleanup_mountpoint(node):
-    print 'MTPT:'
+    name, uuid, oscuuid, mdsuuid, mtpt = getMTPTInfo(node)
+    print 'MTPT:', name, uuid, oscuuid, mdsuuid, mtpt
+    run("umount", mtpt)
 
 # ============================================================
 # XML processing and query
@@ -540,6 +548,16 @@ def getOSCInfo(node):
     ref = node.getElementsByTagName('network_ref')[0]
     ostuuid = ref.getAttribute('uuidref')
     return (name, uuid, obduuid, ostuuid)
+
+# extract device attributes for an obd
+def getMTPTInfo(node):
+    name, uuid = getNodeAttr(node)
+    path = getText(node, 'path')
+    ref = node.getElementsByTagName('mds_ref')[0]
+    mdsuuid = ref.getAttribute('uuidref')
+    ref = node.getElementsByTagName('lov_ref')[0]
+    lovuuid = ref.getAttribute('uuidref')
+    return (name, uuid, mdsuuid, lovuuid, path)
 
     
 # Get the text content from the first matching child
