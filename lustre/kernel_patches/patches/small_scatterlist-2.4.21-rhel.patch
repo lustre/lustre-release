@@ -1,7 +1,7 @@
 Index: linux-2.4.21/crypto/cipher.c
 ===================================================================
---- linux-2.4.21.orig/crypto/cipher.c	2004-09-11 07:16:20.000000000 -0700
-+++ linux-2.4.21/crypto/cipher.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/crypto/cipher.c	2004-12-21 13:51:10.000000000 -0500
++++ linux-2.4.21/crypto/cipher.c	2004-12-21 13:58:10.000000000 -0500
 @@ -88,12 +88,21 @@
  
  	walk->sg = sg;
@@ -26,8 +26,8 @@ Index: linux-2.4.21/crypto/cipher.c
  static void scatterwalk_map(struct scatter_walk *walk, int out)
 Index: linux-2.4.21/crypto/digest.c
 ===================================================================
---- linux-2.4.21.orig/crypto/digest.c	2004-09-11 07:16:20.000000000 -0700
-+++ linux-2.4.21/crypto/digest.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/crypto/digest.c	2004-12-21 13:51:10.000000000 -0500
++++ linux-2.4.21/crypto/digest.c	2004-12-21 13:58:10.000000000 -0500
 @@ -29,7 +29,11 @@
  	unsigned int i;
  	
@@ -54,8 +54,8 @@ Index: linux-2.4.21/crypto/digest.c
  		crypto_kunmap(p, 0);
 Index: linux-2.4.21/crypto/hmac.c
 ===================================================================
---- linux-2.4.21.orig/crypto/hmac.c	2004-09-11 07:16:20.000000000 -0700
-+++ linux-2.4.21/crypto/hmac.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/crypto/hmac.c	2004-12-21 13:51:10.000000000 -0500
++++ linux-2.4.21/crypto/hmac.c	2004-12-21 13:58:10.000000000 -0500
 @@ -25,8 +25,14 @@
  {
  	struct scatterlist tmp;
@@ -116,8 +116,8 @@ Index: linux-2.4.21/crypto/hmac.c
  	crypto_digest_update(tfm, &tmp, 1);
 Index: linux-2.4.21/crypto/tcrypt.c
 ===================================================================
---- linux-2.4.21.orig/crypto/tcrypt.c	2004-09-11 07:16:20.000000000 -0700
-+++ linux-2.4.21/crypto/tcrypt.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/crypto/tcrypt.c	2004-12-21 13:51:10.000000000 -0500
++++ linux-2.4.21/crypto/tcrypt.c	2004-12-21 13:58:10.000000000 -0500
 @@ -24,6 +24,15 @@
  #include <linux/highmem.h>
  #include "tcrypt.h"
@@ -1189,8 +1189,8 @@ Index: linux-2.4.21/crypto/tcrypt.c
  		printk("%s\n", memcmp(q, c5_tv[i].ciphertext,
 Index: linux-2.4.21/drivers/ide/ide-dma.c
 ===================================================================
---- linux-2.4.21.orig/drivers/ide/ide-dma.c	2004-09-11 07:16:39.000000000 -0700
-+++ linux-2.4.21/drivers/ide/ide-dma.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/ide/ide-dma.c	2004-12-21 13:51:31.000000000 -0500
++++ linux-2.4.21/drivers/ide/ide-dma.c	2004-12-21 13:58:10.000000000 -0500
 @@ -280,14 +280,25 @@
  		memset(&sg[nents], 0, sizeof(*sg));
  
@@ -1244,9 +1244,9 @@ Index: linux-2.4.21/drivers/ide/ide-dma.c
  #else
 Index: linux-2.4.21/drivers/scsi/dpt_i2o.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/dpt_i2o.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/dpt_i2o.c	2004-11-03 15:51:25.000000000 -0800
-@@ -2151,7 +2151,13 @@
+--- linux-2.4.21.orig/drivers/scsi/dpt_i2o.c	2004-12-21 13:51:20.000000000 -0500
++++ linux-2.4.21/drivers/scsi/dpt_i2o.c	2004-12-21 13:58:10.000000000 -0500
+@@ -2152,7 +2152,13 @@
  		for(i = 0 ; i < cmd->use_sg; i++) {
  			*mptr++ = direction|0x10000000|sg->length;
  			len+=sg->length;
@@ -1262,8 +1262,8 @@ Index: linux-2.4.21/drivers/scsi/dpt_i2o.c
  		/* Make this an end of list */
 Index: linux-2.4.21/drivers/scsi/scsi_debug.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/scsi_debug.c	2002-11-28 15:53:14.000000000 -0800
-+++ linux-2.4.21/drivers/scsi/scsi_debug.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/scsi_debug.c	2002-11-28 18:53:14.000000000 -0500
++++ linux-2.4.21/drivers/scsi/scsi_debug.c	2004-12-21 13:58:10.000000000 -0500
 @@ -186,7 +186,13 @@
  		struct scatterlist *sgpnt = (struct scatterlist *)
  						SCpnt->request_buffer;
@@ -1336,9 +1336,9 @@ Index: linux-2.4.21/drivers/scsi/scsi_debug.c
  		} else if (nbytes > 0)
 Index: linux-2.4.21/drivers/scsi/scsi_lib.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/scsi_lib.c	2004-09-11 07:16:39.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/scsi_lib.c	2004-11-03 15:51:25.000000000 -0800
-@@ -549,7 +549,13 @@
+--- linux-2.4.21.orig/drivers/scsi/scsi_lib.c	2004-12-21 13:51:31.000000000 -0500
++++ linux-2.4.21/drivers/scsi/scsi_lib.c	2004-12-21 13:58:10.000000000 -0500
+@@ -554,7 +554,13 @@
  		if (bbpnt) {
  			for (i = 0; i < SCpnt->use_sg; i++) {
  				if (bbpnt[i])
@@ -1352,7 +1352,7 @@ Index: linux-2.4.21/drivers/scsi/scsi_lib.c
  			}
  		}
  		scsi_free(SCpnt->request_buffer, SCpnt->sglist_len);
-@@ -625,12 +631,23 @@
+@@ -630,12 +636,23 @@
  		if (bbpnt) {
  			for (i = 0; i < SCpnt->use_sg; i++) {
  				if (bbpnt[i]) {
@@ -1378,8 +1378,8 @@ Index: linux-2.4.21/drivers/scsi/scsi_lib.c
  		}
 Index: linux-2.4.21/drivers/scsi/scsi_merge.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/scsi_merge.c	2004-09-11 07:16:18.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/scsi_merge.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/scsi_merge.c	2004-12-21 13:51:06.000000000 -0500
++++ linux-2.4.21/drivers/scsi/scsi_merge.c	2004-12-21 13:58:10.000000000 -0500
 @@ -144,11 +144,21 @@
  	 */
  	for(jj=0; jj < SCpnt->use_sg; jj++)
@@ -1500,9 +1500,9 @@ Index: linux-2.4.21/drivers/scsi/scsi_merge.c
  
 Index: linux-2.4.21/drivers/scsi/sg.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/sg.c	2004-09-11 07:16:20.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/sg.c	2004-11-03 15:51:25.000000000 -0800
-@@ -1068,7 +1068,11 @@
+--- linux-2.4.21.orig/drivers/scsi/sg.c	2004-12-21 13:51:21.000000000 -0500
++++ linux-2.4.21/drivers/scsi/sg.c	2004-12-21 13:58:10.000000000 -0500
+@@ -1077,7 +1077,11 @@
  
          for (k = 0; k < rsv_schp->k_use_sg; ++k, ++sclp) {
  	    for (m = PAGE_SIZE; m < sclp->length; m += PAGE_SIZE) {
@@ -1514,7 +1514,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
  		page = virt_to_page(page_ptr);
  		if (startFinish)
  		    get_page(page);	/* increment page count */
-@@ -1121,7 +1125,11 @@
+@@ -1130,7 +1134,11 @@
              len = vma->vm_end - sa;
              len = (len < sclp->length) ? len : sclp->length;
  	    if (offset < len) {
@@ -1526,7 +1526,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
  		page = virt_to_page(page_ptr);
  		get_page(page);	/* increment page count */
  		break;
-@@ -1166,8 +1174,13 @@
+@@ -1175,8 +1183,13 @@
  
  	for (k = 0; (k < rsv_schp->k_use_sg) && (sa < vma->vm_end); 
  	     ++k, ++sclp) {
@@ -1540,7 +1540,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
  	    len = vma->vm_end - sa;
  	    len = (len < sclp->length) ? len : sclp->length;
  	    sa += len;
-@@ -1716,16 +1729,27 @@
+@@ -1725,16 +1738,27 @@
  	offset = (0 == k) ? kp->offset : 0;
  	num = (rem_sz > (PAGE_SIZE - offset)) ? (PAGE_SIZE - offset) :
  						rem_sz;
@@ -1568,7 +1568,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
      }
      schp->k_use_sg = k;
      SCSI_LOG_TIMEOUT(5,
-@@ -1805,16 +1829,27 @@
+@@ -1814,16 +1838,27 @@
                  if (! p)
                      break;
              }
@@ -1596,7 +1596,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
          } /* end of for loop */
  	schp->k_use_sg = k;
  	SCSI_LOG_TIMEOUT(5,
-@@ -1879,13 +1914,21 @@
+@@ -1888,13 +1923,21 @@
  	struct scatterlist * sclp = (struct scatterlist *)schp->buffer;
  	char * mem_src_arr = sg_get_sgat_msa(schp);
  	ksglen = (int)sclp->length;
@@ -1618,7 +1618,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
  		ok = (SG_USER_MEM != mem_src_arr[k]);
  		if (usglen <= 0)
  		    break;
-@@ -1962,6 +2005,18 @@
+@@ -1971,6 +2014,18 @@
          struct scatterlist * sclp = (struct scatterlist *)schp->buffer;
  	char * mem_src_arr = sg_get_sgat_msa(schp);
  
@@ -1637,7 +1637,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
  	for (k = 0; (k < schp->k_use_sg) && sclp->address; ++k, ++sclp) {
  	    mem_src = mem_src_arr[k];
  	    SCSI_LOG_TIMEOUT(5,
-@@ -1974,6 +2029,7 @@
+@@ -1983,6 +2038,7 @@
  #endif
              sclp->length = 0;
          }
@@ -1645,7 +1645,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
  	sg_free(schp->buffer, schp->sglist_len, schp->buffer_mem_src);
      }
      else if (schp->buffer)
-@@ -2034,13 +2090,21 @@
+@@ -2043,13 +2099,21 @@
  	struct scatterlist * sclp = (struct scatterlist *)schp->buffer;
  	char * mem_src_arr = sg_get_sgat_msa(schp);
  	ksglen = (int)sclp->length;
@@ -1667,7 +1667,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
  		ok = (SG_USER_MEM != mem_src_arr[k]);
  		if (usglen <= 0)
  		    break;
-@@ -2084,14 +2148,26 @@
+@@ -2093,14 +2157,26 @@
          int k, num;
          struct scatterlist * sclp = (struct scatterlist *)schp->buffer;
  
@@ -1694,7 +1694,7 @@ Index: linux-2.4.21/drivers/scsi/sg.c
                  num_read_xfer -= num;
                  if (num_read_xfer <= 0)
                      break;
-@@ -2137,7 +2213,11 @@
+@@ -2146,7 +2222,11 @@
              if (rem <= num) {
  		if (0 == k) {
  		    req_schp->k_use_sg = 0;
@@ -1708,8 +1708,8 @@ Index: linux-2.4.21/drivers/scsi/sg.c
      		    sfp->save_scat_len = num;
 Index: linux-2.4.21/drivers/scsi/sr.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/sr.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/sr.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/sr.c	2004-12-21 13:51:21.000000000 -0500
++++ linux-2.4.21/drivers/scsi/sr.c	2004-12-21 13:58:10.000000000 -0500
 @@ -343,7 +343,12 @@
  
  	i = 0;
@@ -1751,8 +1751,8 @@ Index: linux-2.4.21/drivers/scsi/sr.c
  		SCpnt->use_sg++;
 Index: linux-2.4.21/drivers/scsi/sim710.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/sim710.c	2002-08-02 17:39:44.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/sim710.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/sim710.c	2002-08-02 20:39:44.000000000 -0400
++++ linux-2.4.21/drivers/scsi/sim710.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1164,7 +1164,11 @@
  
      for (i = 0; cmd->use_sg ? (i < cmd->use_sg) : !i; i++) {
@@ -1767,8 +1767,8 @@ Index: linux-2.4.21/drivers/scsi/sim710.c
  	u32 cnt = cmd->use_sg ?
 Index: linux-2.4.21/drivers/scsi/advansys.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/advansys.c	2004-09-11 07:16:38.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/advansys.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/advansys.c	2004-12-21 13:51:30.000000000 -0500
++++ linux-2.4.21/drivers/scsi/advansys.c	2004-12-21 13:58:10.000000000 -0500
 @@ -6803,7 +6803,11 @@
          slp = (struct scatterlist *) scp->request_buffer;
          for (sgcnt = 0; sgcnt < scp->use_sg; sgcnt++, slp++) {
@@ -1795,8 +1795,8 @@ Index: linux-2.4.21/drivers/scsi/advansys.c
  
 Index: linux-2.4.21/drivers/scsi/pci2000.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/pci2000.c	2001-11-09 14:05:06.000000000 -0800
-+++ linux-2.4.21/drivers/scsi/pci2000.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/pci2000.c	2001-11-09 17:05:06.000000000 -0500
++++ linux-2.4.21/drivers/scsi/pci2000.c	2004-12-21 13:58:10.000000000 -0500
 @@ -513,7 +513,11 @@
  			
  			if ( SCpnt->use_sg )
@@ -1823,8 +1823,8 @@ Index: linux-2.4.21/drivers/scsi/pci2000.c
  			else
 Index: linux-2.4.21/drivers/scsi/pci2220i.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/pci2220i.c	2001-11-09 14:05:06.000000000 -0800
-+++ linux-2.4.21/drivers/scsi/pci2220i.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/pci2220i.c	2001-11-09 17:05:06.000000000 -0500
++++ linux-2.4.21/drivers/scsi/pci2220i.c	2004-12-21 13:58:10.000000000 -0500
 @@ -463,7 +463,11 @@
  			{
  			if ( padapter->nextSg < padapter->SCpnt->use_sg )
@@ -1851,8 +1851,8 @@ Index: linux-2.4.21/drivers/scsi/pci2220i.c
  	else
 Index: linux-2.4.21/drivers/scsi/BusLogic.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/BusLogic.c	2001-12-21 09:41:55.000000000 -0800
-+++ linux-2.4.21/drivers/scsi/BusLogic.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/BusLogic.c	2001-12-21 12:41:55.000000000 -0500
++++ linux-2.4.21/drivers/scsi/BusLogic.c	2004-12-21 13:58:10.000000000 -0500
 @@ -3402,7 +3402,12 @@
  	  CCB->ScatterGatherList[Segment].SegmentByteCount =
  	    ScatterList[Segment].length;
@@ -1868,8 +1868,8 @@ Index: linux-2.4.21/drivers/scsi/BusLogic.c
    switch (CDB[0])
 Index: linux-2.4.21/drivers/scsi/ultrastor.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/ultrastor.c	2002-08-02 17:39:44.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/ultrastor.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/ultrastor.c	2002-08-02 20:39:44.000000000 -0400
++++ linux-2.4.21/drivers/scsi/ultrastor.c	2004-12-21 13:58:10.000000000 -0500
 @@ -666,7 +666,11 @@
  	sl = (struct scatterlist *) SCpnt->request_buffer;
  	max = SCpnt->use_sg;
@@ -1884,8 +1884,8 @@ Index: linux-2.4.21/drivers/scsi/ultrastor.c
  	}
 Index: linux-2.4.21/drivers/scsi/aha152x.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/aha152x.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/aha152x.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/aha152x.c	2003-06-13 10:51:36.000000000 -0400
++++ linux-2.4.21/drivers/scsi/aha152x.c	2004-12-21 13:58:10.000000000 -0500
 @@ -603,7 +603,11 @@
  #define SCSEM(SCpnt)		SCDATA(SCpnt)->sem
  
@@ -1900,8 +1900,8 @@ Index: linux-2.4.21/drivers/scsi/aha152x.c
  #endif
 Index: linux-2.4.21/drivers/scsi/aha1542.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/aha1542.c	2001-10-12 15:35:53.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/aha1542.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/aha1542.c	2001-10-12 18:35:53.000000000 -0400
++++ linux-2.4.21/drivers/scsi/aha1542.c	2004-12-21 13:58:10.000000000 -0500
 @@ -69,8 +69,13 @@
  {
  	printk(KERN_CRIT "sgpnt[%d:%d] addr %p/0x%lx length %d\n",
@@ -1956,8 +1956,8 @@ Index: linux-2.4.21/drivers/scsi/aha1542.c
  		};
 Index: linux-2.4.21/drivers/scsi/aha1740.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/aha1740.c	2001-09-30 12:26:07.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/aha1740.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/aha1740.c	2001-09-30 15:26:07.000000000 -0400
++++ linux-2.4.21/drivers/scsi/aha1740.c	2004-12-21 13:58:10.000000000 -0500
 @@ -397,7 +397,11 @@
  	for(i=0; i<SCpnt->use_sg; i++)
  	{
@@ -1972,8 +1972,8 @@ Index: linux-2.4.21/drivers/scsi/aha1740.c
  	host->ecb[ecbno].dataptr = virt_to_bus(cptr);
 Index: linux-2.4.21/drivers/scsi/aic7xxx_old.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/aic7xxx_old.c	2004-09-11 07:16:29.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/aic7xxx_old.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/aic7xxx_old.c	2004-12-21 13:51:20.000000000 -0500
++++ linux-2.4.21/drivers/scsi/aic7xxx_old.c	2004-12-21 13:58:10.000000000 -0500
 @@ -2845,7 +2845,11 @@
            struct scatterlist *sg;
  
@@ -1988,8 +1988,8 @@ Index: linux-2.4.21/drivers/scsi/aic7xxx_old.c
          {
 Index: linux-2.4.21/drivers/scsi/fdomain.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/fdomain.c	2002-11-28 15:53:14.000000000 -0800
-+++ linux-2.4.21/drivers/scsi/fdomain.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/fdomain.c	2002-11-28 18:53:14.000000000 -0500
++++ linux-2.4.21/drivers/scsi/fdomain.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1564,7 +1564,11 @@
  	    if (current_SC->SCp.buffers_residual) {
  	       --current_SC->SCp.buffers_residual;
@@ -2028,8 +2028,8 @@ Index: linux-2.4.21/drivers/scsi/fdomain.c
     } else {
 Index: linux-2.4.21/drivers/scsi/in2000.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/in2000.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/in2000.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/in2000.c	2003-06-13 10:51:36.000000000 -0400
++++ linux-2.4.21/drivers/scsi/in2000.c	2004-12-21 13:58:10.000000000 -0500
 @@ -355,7 +355,11 @@
     if (cmd->use_sg) {
        cmd->SCp.buffer = (struct scatterlist *)cmd->buffer;
@@ -2056,8 +2056,8 @@ Index: linux-2.4.21/drivers/scsi/in2000.c
  /* Set up hardware registers */
 Index: linux-2.4.21/drivers/scsi/NCR5380.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/NCR5380.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/NCR5380.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/NCR5380.c	2003-06-13 10:51:36.000000000 -0400
++++ linux-2.4.21/drivers/scsi/NCR5380.c	2004-12-21 13:58:10.000000000 -0500
 @@ -337,7 +337,11 @@
  	if (cmd->use_sg) {
  		cmd->SCp.buffer = (struct scatterlist *) cmd->buffer;
@@ -2084,8 +2084,8 @@ Index: linux-2.4.21/drivers/scsi/NCR5380.c
  				/*
 Index: linux-2.4.21/drivers/scsi/NCR53c406a.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/NCR53c406a.c	2001-09-30 12:26:07.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/NCR53c406a.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/NCR53c406a.c	2001-09-30 15:26:07.000000000 -0400
++++ linux-2.4.21/drivers/scsi/NCR53c406a.c	2004-12-21 13:58:10.000000000 -0500
 @@ -895,7 +895,11 @@
                  sgcount = current_SC->use_sg;
                  sglist = current_SC->request_buffer;
@@ -2112,8 +2112,8 @@ Index: linux-2.4.21/drivers/scsi/NCR53c406a.c
              }
 Index: linux-2.4.21/drivers/scsi/sym53c416.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/sym53c416.c	2001-09-30 12:26:07.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/sym53c416.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/sym53c416.c	2001-09-30 15:26:07.000000000 -0400
++++ linux-2.4.21/drivers/scsi/sym53c416.c	2004-12-21 13:58:10.000000000 -0500
 @@ -448,7 +448,11 @@
  					sglist = current_command->request_buffer;
  					while(sgcount--)
@@ -2140,8 +2140,8 @@ Index: linux-2.4.21/drivers/scsi/sym53c416.c
  				}
 Index: linux-2.4.21/drivers/scsi/qlogicfas.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/qlogicfas.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/qlogicfas.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/qlogicfas.c	2003-06-13 10:51:36.000000000 -0400
++++ linux-2.4.21/drivers/scsi/qlogicfas.c	2004-12-21 13:58:10.000000000 -0500
 @@ -393,7 +393,11 @@
  					REG0;
  					return ((qabort == 1 ? DID_ABORT : DID_RESET) << 16);
@@ -2156,8 +2156,8 @@ Index: linux-2.4.21/drivers/scsi/qlogicfas.c
  			}
 Index: linux-2.4.21/drivers/scsi/qla1280.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/qla1280.c	2001-09-30 12:26:07.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/qla1280.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/qla1280.c	2001-09-30 15:26:07.000000000 -0400
++++ linux-2.4.21/drivers/scsi/qla1280.c	2004-12-21 13:58:10.000000000 -0500
 @@ -3985,8 +3985,13 @@
                      {
                          DEBUG(sprintf(debug_buff,"SG Segment ap=0x%p, len=0x%x\n\r",sg->address,sg->length));
@@ -2212,8 +2212,8 @@ Index: linux-2.4.21/drivers/scsi/qla1280.c
                          }
 Index: linux-2.4.21/drivers/scsi/seagate.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/seagate.c	2004-09-11 07:16:10.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/seagate.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/seagate.c	2004-12-21 13:51:00.000000000 -0500
++++ linux-2.4.21/drivers/scsi/seagate.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1070,7 +1070,11 @@
  
  			buffer = (struct scatterlist *) SCint->buffer;
@@ -2253,8 +2253,8 @@ Index: linux-2.4.21/drivers/scsi/seagate.c
  						 hostno, len, data);
 Index: linux-2.4.21/drivers/scsi/53c7,8xx.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/53c7,8xx.c	2002-02-25 11:38:04.000000000 -0800
-+++ linux-2.4.21/drivers/scsi/53c7,8xx.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/53c7,8xx.c	2002-02-25 14:38:04.000000000 -0500
++++ linux-2.4.21/drivers/scsi/53c7,8xx.c	2004-12-21 13:58:10.000000000 -0500
 @@ -3787,7 +3787,11 @@
      for (i = 0; cmd->use_sg ? (i < cmd->use_sg) : !i; cmd_datain += 4, 
  	cmd_dataout += 4, ++i) {
@@ -2295,8 +2295,8 @@ Index: linux-2.4.21/drivers/scsi/53c7,8xx.c
      	    	offset = ptr - (char *) (cmd->request_buffer);
 Index: linux-2.4.21/drivers/scsi/eata_dma.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/eata_dma.c	2004-09-11 07:16:38.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/eata_dma.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/eata_dma.c	2004-12-21 13:51:30.000000000 -0500
++++ linux-2.4.21/drivers/scsi/eata_dma.c	2004-12-21 13:58:10.000000000 -0500
 @@ -571,7 +571,11 @@
  	ccb->cp_datalen = htonl(cmd->use_sg * sizeof(struct eata_sg_list));
  	sl=(struct scatterlist *)cmd->request_buffer;
@@ -2311,8 +2311,8 @@ Index: linux-2.4.21/drivers/scsi/eata_dma.c
      } else {
 Index: linux-2.4.21/drivers/scsi/eata_pio.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/eata_pio.c	2001-09-30 12:26:07.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/eata_pio.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/eata_pio.c	2001-09-30 15:26:07.000000000 -0400
++++ linux-2.4.21/drivers/scsi/eata_pio.c	2004-12-21 13:58:10.000000000 -0500
 @@ -99,7 +99,11 @@
  	else
  	{
@@ -2339,8 +2339,8 @@ Index: linux-2.4.21/drivers/scsi/eata_pio.c
      cmd->SCp.Status = (cmd->SCp.this_residual != 0);  /* TRUE as long as bytes 
 Index: linux-2.4.21/drivers/scsi/wd7000.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/wd7000.c	2001-09-30 12:26:08.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/wd7000.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/wd7000.c	2001-09-30 15:26:08.000000000 -0400
++++ linux-2.4.21/drivers/scsi/wd7000.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1189,7 +1189,11 @@
  	any2scsi (scb->maxlen, SCpnt->use_sg * sizeof (Sgb));
  
@@ -2355,8 +2355,8 @@ Index: linux-2.4.21/drivers/scsi/wd7000.c
      }
 Index: linux-2.4.21/drivers/scsi/scsiiom.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/scsiiom.c	2000-12-31 11:06:00.000000000 -0800
-+++ linux-2.4.21/drivers/scsi/scsiiom.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/scsiiom.c	2000-12-31 14:06:00.000000000 -0500
++++ linux-2.4.21/drivers/scsi/scsiiom.c	2004-12-21 13:58:10.000000000 -0500
 @@ -379,7 +379,11 @@
  		pSRB->pSegmentList++;
  		psgl = pSRB->pSegmentList;
@@ -2473,8 +2473,8 @@ Index: linux-2.4.21/drivers/scsi/scsiiom.c
      pSRB->SGcount = 1;
 Index: linux-2.4.21/drivers/scsi/tmscsim.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/tmscsim.c	2001-12-21 09:41:55.000000000 -0800
-+++ linux-2.4.21/drivers/scsi/tmscsim.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/tmscsim.c	2001-12-21 12:41:55.000000000 -0500
++++ linux-2.4.21/drivers/scsi/tmscsim.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1146,7 +1146,11 @@
      {
  	pSRB->SGcount = 1;
@@ -2489,8 +2489,8 @@ Index: linux-2.4.21/drivers/scsi/tmscsim.c
      else
 Index: linux-2.4.21/drivers/scsi/AM53C974.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/AM53C974.c	2001-09-30 12:26:07.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/AM53C974.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/AM53C974.c	2001-09-30 15:26:07.000000000 -0400
++++ linux-2.4.21/drivers/scsi/AM53C974.c	2004-12-21 13:58:10.000000000 -0500
 @@ -842,7 +842,11 @@
  	if (cmd->use_sg) {
  		cmd->SCp.buffer = (struct scatterlist *) cmd->buffer;
@@ -2517,9 +2517,9 @@ Index: linux-2.4.21/drivers/scsi/AM53C974.c
  		if (cmd->SCp.this_residual) {
 Index: linux-2.4.21/drivers/scsi/megaraid2.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/megaraid2.c	2004-09-11 07:16:28.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/megaraid2.c	2004-11-03 15:51:25.000000000 -0800
-@@ -2197,7 +2197,11 @@
+--- linux-2.4.21.orig/drivers/scsi/megaraid2.c	2004-12-21 13:51:19.000000000 -0500
++++ linux-2.4.21/drivers/scsi/megaraid2.c	2004-12-21 13:58:10.000000000 -0500
+@@ -2180,7 +2180,11 @@
  			if( cmd->use_sg ) {
  				sgl = (struct scatterlist *)
  					cmd->request_buffer;
@@ -2533,8 +2533,8 @@ Index: linux-2.4.21/drivers/scsi/megaraid2.c
  				c = *(u8 *)cmd->request_buffer;
 Index: linux-2.4.21/drivers/scsi/megaraid.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/megaraid.c	2004-09-11 07:16:28.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/megaraid.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/megaraid.c	2004-12-21 13:51:19.000000000 -0500
++++ linux-2.4.21/drivers/scsi/megaraid.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1201,8 +1201,13 @@
  	case READ_CAPACITY:
  		if ( SCpnt->use_sg ) {
@@ -2564,8 +2564,8 @@ Index: linux-2.4.21/drivers/scsi/megaraid.c
  		}
 Index: linux-2.4.21/drivers/scsi/atp870u.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/atp870u.c	2002-08-02 17:39:44.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/atp870u.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/atp870u.c	2002-08-02 20:39:44.000000000 -0400
++++ linux-2.4.21/drivers/scsi/atp870u.c	2004-12-21 13:58:10.000000000 -0500
 @@ -804,7 +804,11 @@
  		sgpnt = (struct scatterlist *) workrequ->request_buffer;
  		i = 0;
@@ -2580,8 +2580,8 @@ Index: linux-2.4.21/drivers/scsi/atp870u.c
  				(unsigned short int) (((unsigned short int *) (prd))[i + 3]) = 0x0000;
 Index: linux-2.4.21/drivers/scsi/gdth.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/gdth.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/gdth.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/gdth.c	2003-06-13 10:51:36.000000000 -0400
++++ linux-2.4.21/drivers/scsi/gdth.c	2004-12-21 13:58:10.000000000 -0500
 @@ -2662,7 +2662,11 @@
              if (cpsum+cpnow > cpcount) 
                  cpnow = cpcount - cpsum;
@@ -2620,8 +2620,8 @@ Index: linux-2.4.21/drivers/scsi/gdth.c
              cmdp->u.raw.sg_ranz = (ulong32)i;
 Index: linux-2.4.21/drivers/scsi/ini9100u.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/ini9100u.c	2001-09-30 12:26:07.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/ini9100u.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/ini9100u.c	2001-09-30 15:26:07.000000000 -0400
++++ linux-2.4.21/drivers/scsi/ini9100u.c	2004-12-21 13:58:10.000000000 -0500
 @@ -489,7 +489,11 @@
  	if (SCpnt->use_sg) {
  		pSrbSG = (struct scatterlist *) SCpnt->request_buffer;
@@ -2648,8 +2648,8 @@ Index: linux-2.4.21/drivers/scsi/ini9100u.c
  			pSCB->SCB_SGLen = i;
 Index: linux-2.4.21/drivers/scsi/inia100.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/inia100.c	2001-09-30 12:26:07.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/inia100.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/inia100.c	2001-09-30 15:26:07.000000000 -0400
++++ linux-2.4.21/drivers/scsi/inia100.c	2004-12-21 13:58:10.000000000 -0500
 @@ -494,7 +494,11 @@
  			pSCB->SCB_SGLen = (U32) (SCpnt->use_sg * 8);
  			pSrbSG = (struct scatterlist *) SCpnt->request_buffer;
@@ -2664,8 +2664,8 @@ Index: linux-2.4.21/drivers/scsi/inia100.c
  			}
 Index: linux-2.4.21/drivers/scsi/ide-scsi.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/ide-scsi.c	2004-09-11 07:16:39.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/ide-scsi.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/ide-scsi.c	2004-12-21 13:51:31.000000000 -0500
++++ linux-2.4.21/drivers/scsi/ide-scsi.c	2004-12-21 13:58:10.000000000 -0500
 @@ -154,7 +154,11 @@
  			return;
  		}
@@ -2720,8 +2720,8 @@ Index: linux-2.4.21/drivers/scsi/ide-scsi.c
  			sg++;
 Index: linux-2.4.21/drivers/scsi/ppa.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/ppa.c	2004-09-11 07:16:38.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/ppa.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/ppa.c	2004-12-21 13:51:30.000000000 -0500
++++ linux-2.4.21/drivers/scsi/ppa.c	2004-12-21 13:58:10.000000000 -0500
 @@ -740,7 +740,11 @@
  	    if (cmd->SCp.buffers_residual--) {
  		cmd->SCp.buffer++;
@@ -2748,8 +2748,8 @@ Index: linux-2.4.21/drivers/scsi/ppa.c
  	    cmd->SCp.buffer = NULL;
 Index: linux-2.4.21/drivers/scsi/imm.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/imm.c	2004-09-11 07:16:38.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/imm.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/imm.c	2004-12-21 13:51:30.000000000 -0500
++++ linux-2.4.21/drivers/scsi/imm.c	2004-12-21 13:58:10.000000000 -0500
 @@ -834,7 +834,11 @@
  	    if (cmd->SCp.buffers_residual--) {
  		cmd->SCp.buffer++;
@@ -2776,9 +2776,9 @@ Index: linux-2.4.21/drivers/scsi/imm.c
  	    cmd->SCp.buffer = NULL;
 Index: linux-2.4.21/drivers/scsi/st.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/st.c	2004-09-11 07:16:35.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/st.c	2004-11-03 15:51:25.000000000 -0800
-@@ -3399,6 +3399,12 @@
+--- linux-2.4.21.orig/drivers/scsi/st.c	2004-12-21 13:51:30.000000000 -0500
++++ linux-2.4.21/drivers/scsi/st.c	2004-12-21 13:58:10.000000000 -0500
+@@ -3409,6 +3409,12 @@
  }
  
  
@@ -2791,7 +2791,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  /* Try to allocate a new tape buffer. Calling function must not hold
     dev_arr_lock. */
  static ST_buffer *
-@@ -3436,18 +3442,23 @@
+@@ -3446,18 +3452,23 @@
  		     order++, b_size *= 2)
  			;
  		for ( ; b_size >= PAGE_SIZE; order--, b_size /= 2) {
@@ -2819,7 +2819,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  
  			for (b_size = PAGE_SIZE, order=0;
  			     st_buffer_size >
-@@ -3456,10 +3467,10 @@
+@@ -3466,10 +3477,10 @@
  				;
  			for (segs = 1, got = tb->sg_lengths[0];
  			     got < st_buffer_size && segs < ST_FIRST_SG;) {
@@ -2832,7 +2832,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  					if (st_buffer_size - got <=
  					    (ST_FIRST_SG - segs) * b_size / 2) {
  						b_size /= 2; /* Large enough for the
-@@ -3475,7 +3486,11 @@
+@@ -3485,7 +3496,11 @@
  					tb = NULL;
  					break;
  				}
@@ -2844,7 +2844,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  				tb->sg_lengths[segs] = b_size;
  				got += b_size;
  				segs++;
-@@ -3489,7 +3504,7 @@
+@@ -3499,7 +3514,7 @@
  		return NULL;
  	}
  	tb->sg_segs = tb->orig_sg_segs = segs;
@@ -2853,7 +2853,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  
          DEBC(printk(ST_DEB_MSG
                      "st: Allocated tape buffer %d (%d bytes, %d segments, dma: %d, a: %p).\n",
-@@ -3535,9 +3550,9 @@
+@@ -3545,9 +3560,9 @@
  
  	for (segs = STbuffer->sg_segs, got = STbuffer->buffer_size;
  	     segs < max_segs && got < new_size;) {
@@ -2865,7 +2865,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  			if (new_size - got <= (max_segs - segs) * b_size / 2) {
  				b_size /= 2; /* Large enough for the rest of the buffers */
  				order--;
-@@ -3549,7 +3564,11 @@
+@@ -3559,7 +3574,11 @@
  			normalize_buffer(STbuffer);
  			return FALSE;
  		}
@@ -2877,7 +2877,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  		STbuffer->sg_lengths[segs] = b_size;
  		STbuffer->sg_segs += 1;
  		got += b_size;
-@@ -3573,13 +3592,13 @@
+@@ -3583,13 +3602,13 @@
  		for (b_size=PAGE_SIZE, order=0; b_size < STbuffer->sg_lengths[i];
  		     order++, b_size *= 2)
  			; /* empty */
@@ -2893,7 +2893,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  		       STbuffer->sg_segs);
          ) /* end DEB */
  	STbuffer->sg_segs = STbuffer->orig_sg_segs;
-@@ -3602,7 +3621,7 @@
+@@ -3612,7 +3631,7 @@
  	for (; i < st_bp->sg_segs && do_count > 0; i++) {
  		cnt = st_bp->sg_lengths[i] - offset < do_count ?
  		    st_bp->sg_lengths[i] - offset : do_count;
@@ -2902,7 +2902,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  		if (res)
  			return (-EFAULT);
  		do_count -= cnt;
-@@ -3635,7 +3654,7 @@
+@@ -3645,7 +3664,7 @@
  	for (; i < st_bp->sg_segs && do_count > 0; i++) {
  		cnt = st_bp->sg_lengths[i] - offset < do_count ?
  		    st_bp->sg_lengths[i] - offset : do_count;
@@ -2911,7 +2911,7 @@ Index: linux-2.4.21/drivers/scsi/st.c
  		if (res)
  			return (-EFAULT);
  		do_count -= cnt;
-@@ -3678,8 +3697,8 @@
+@@ -3688,8 +3707,8 @@
  	for (dst_seg=dst_offset=0; total > 0; ) {
  		count = min(st_bp->sg_lengths[dst_seg] - dst_offset,
  			    st_bp->sg_lengths[src_seg] - src_offset);
@@ -2924,8 +2924,8 @@ Index: linux-2.4.21/drivers/scsi/st.c
  		src_offset += count;
 Index: linux-2.4.21/drivers/scsi/osst.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/osst.c	2004-09-11 07:16:35.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/osst.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/osst.c	2004-12-21 13:51:30.000000000 -0500
++++ linux-2.4.21/drivers/scsi/osst.c	2004-12-21 13:58:10.000000000 -0500
 @@ -477,7 +477,11 @@
  	if (STp->raw) {
  		if (STp->buffer->syscall_result) {
@@ -2938,7 +2938,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  			strcpy(STp->buffer->b_data, "READ ERROR ON FRAME");
                  } else
  			STp->buffer->buffer_bytes = OS_FRAME_SIZE;
-@@ -4452,10 +4456,19 @@
+@@ -4460,10 +4464,19 @@
  		for (i = 0, b_size = 0; 
  		     i < STp->buffer->sg_segs && (b_size + STp->buffer->sg[i].length) <= OS_DATA_SIZE; 
  		     b_size += STp->buffer->sg[i++].length);
@@ -2959,7 +2959,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  		printk(OSST_DEB_MSG "osst%d:D: AUX points to %p in segment %d at %p\n", dev,
  			 STp->buffer->aux, i, STp->buffer->sg[i].address);
  #endif
-@@ -4997,6 +5010,12 @@
+@@ -5007,6 +5020,12 @@
  
  /* Memory handling routines */
  
@@ -2972,7 +2972,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  /* Try to allocate a new tape buffer */
  static OSST_buffer * new_tape_buffer( int from_initialization, int need_dma )
  {
-@@ -5025,15 +5044,19 @@
+@@ -5035,15 +5054,19 @@
  		     b_size *= 2,                 order++ );
  
  		for ( ; b_size >= PAGE_SIZE; order--, b_size /= 2) {
@@ -2995,7 +2995,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  			kfree(tb);
  			tb = NULL;
  		}
-@@ -5045,9 +5068,9 @@
+@@ -5055,9 +5078,9 @@
  
  			for (segs=1, got=tb->sg[0].length;
  			     got < osst_buffer_size && segs < OSST_FIRST_SG; ) {
@@ -3007,7 +3007,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  				if (osst_buffer_size - got <=
  				    (OSST_FIRST_SG - segs) * b_size / 2) {
  				    b_size /= 2; /* Large enough for the rest of the buffers */
-@@ -5064,7 +5087,11 @@
+@@ -5074,7 +5097,11 @@
  				tb = NULL;
  				break;
  			    }
@@ -3019,7 +3019,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  			    tb->sg[segs].length = b_size;
  			    got += b_size;
  			    segs++;
-@@ -5077,7 +5104,7 @@
+@@ -5087,7 +5114,7 @@
  		return NULL;
  	}
  	tb->sg_segs = tb->orig_sg_segs = segs;
@@ -3028,7 +3028,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  
  #if DEBUG
  	if (debugging) {
-@@ -5122,9 +5149,9 @@
+@@ -5132,9 +5159,9 @@
  
  	for (segs=STbuffer->sg_segs, got=STbuffer->buffer_size;
  	     segs < max_segs && got < new_size; ) {
@@ -3040,7 +3040,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  			if (new_size - got <= (max_segs - segs) * b_size / 2) {
  				b_size /= 2;  /* Large enough for the rest of the buffers */
  				order--;
-@@ -5138,7 +5165,11 @@
+@@ -5148,7 +5175,11 @@
  			normalize_buffer(STbuffer);
  			return FALSE;
  		}
@@ -3052,7 +3052,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  		STbuffer->sg[segs].length = b_size;
  		STbuffer->sg_segs += 1;
  		got += b_size;
-@@ -5171,8 +5202,8 @@
+@@ -5181,8 +5212,8 @@
  		for (b_size = PAGE_SIZE, order = 0;
  		     b_size < STbuffer->sg[i].length;
  		     b_size *= 2, order++);
@@ -3063,7 +3063,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  		STbuffer->buffer_size -= STbuffer->sg[i].length;
  	}
  #if DEBUG
-@@ -5200,7 +5231,7 @@
+@@ -5210,7 +5241,7 @@
  	for ( ; i < st_bp->sg_segs && do_count > 0; i++) {
  		cnt = st_bp->sg[i].length - offset < do_count ?
  		      st_bp->sg[i].length - offset : do_count;
@@ -3072,7 +3072,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  		if (res)
  			return (-EFAULT);
  		do_count -= cnt;
-@@ -5233,7 +5264,7 @@
+@@ -5243,7 +5274,7 @@
  	for ( ; i < st_bp->sg_segs && do_count > 0; i++) {
  		cnt = st_bp->sg[i].length - offset < do_count ?
  		      st_bp->sg[i].length - offset : do_count;
@@ -3081,7 +3081,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  		if (res)
  			return (-EFAULT);
  		do_count -= cnt;
-@@ -5266,7 +5297,7 @@
+@@ -5276,7 +5307,7 @@
  	     i < st_bp->sg_segs && do_count > 0; i++) {
  		cnt = st_bp->sg[i].length - offset < do_count ?
  		      st_bp->sg[i].length - offset : do_count ;
@@ -3090,7 +3090,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  		do_count -= cnt;
  		offset = 0;
  	}
-@@ -5286,7 +5317,7 @@
+@@ -5296,7 +5327,7 @@
  	for (i = 0; i < st_bp->sg_segs && do_count > 0; i++) {
  		cnt = st_bp->sg[i].length < do_count ?
  		      st_bp->sg[i].length : do_count ;
@@ -3099,7 +3099,7 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  		do_count -= cnt;
  		ptr      += cnt;
  	}
-@@ -5307,7 +5338,7 @@
+@@ -5317,7 +5348,7 @@
  	for (i = 0; i < st_bp->sg_segs && do_count > 0; i++) {
  		cnt = st_bp->sg[i].length < do_count ?
  		      st_bp->sg[i].length : do_count ;
@@ -3110,8 +3110,8 @@ Index: linux-2.4.21/drivers/scsi/osst.c
  	}
 Index: linux-2.4.21/drivers/scsi/pcmcia/nsp_cs.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/pcmcia/nsp_cs.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/pcmcia/nsp_cs.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/scsi/pcmcia/nsp_cs.c	2003-06-13 10:51:36.000000000 -0400
++++ linux-2.4.21/drivers/scsi/pcmcia/nsp_cs.c	2004-12-21 13:58:10.000000000 -0500
 @@ -201,7 +201,11 @@
  	   SCp.phase		: current state of the command */
  	if (SCpnt->use_sg) {
@@ -3150,9 +3150,9 @@ Index: linux-2.4.21/drivers/scsi/pcmcia/nsp_cs.c
  
 Index: linux-2.4.21/drivers/scsi/ips.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/ips.c	2004-09-11 07:16:28.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/ips.c	2004-11-03 15:51:25.000000000 -0800
-@@ -207,7 +207,11 @@
+--- linux-2.4.21.orig/drivers/scsi/ips.c	2004-12-21 13:51:19.000000000 -0500
++++ linux-2.4.21/drivers/scsi/ips.c	2004-12-21 13:58:10.000000000 -0500
+@@ -217,7 +217,11 @@
  #if LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0)
  #include <linux/blk.h>
  #include "sd.h"
@@ -3166,9 +3166,9 @@ Index: linux-2.4.21/drivers/scsi/ips.c
  #ifndef __devexit_p
 Index: linux-2.4.21/drivers/scsi/libata-core.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/libata-core.c	2004-09-11 07:16:34.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/libata-core.c	2004-11-03 15:51:25.000000000 -0800
-@@ -1912,8 +1912,13 @@
+--- linux-2.4.21.orig/drivers/scsi/libata-core.c	2004-12-21 13:51:26.000000000 -0500
++++ linux-2.4.21/drivers/scsi/libata-core.c	2004-12-21 13:58:10.000000000 -0500
+@@ -1915,8 +1915,13 @@
  	qc->buf_virt = buf;
  
  	sg = qc->sg;
@@ -3182,7 +3182,7 @@ Index: linux-2.4.21/drivers/scsi/libata-core.c
  	sg_dma_len(sg) = buflen;
  
  	/* WARN_ON(buflen > PAGE_SIZE); */
-@@ -2168,9 +2173,15 @@
+@@ -2143,9 +2148,15 @@
  	if (qc->cursect == (qc->nsect - 1))
  		ap->pio_task_state = PIO_ST_LAST;
  
@@ -3200,9 +3200,9 @@ Index: linux-2.4.21/drivers/scsi/libata-core.c
  	qc->cursg_ofs++;
 Index: linux-2.4.21/drivers/scsi/libata-scsi.c
 ===================================================================
---- linux-2.4.21.orig/drivers/scsi/libata-scsi.c	2004-09-11 07:16:34.000000000 -0700
-+++ linux-2.4.21/drivers/scsi/libata-scsi.c	2004-11-03 15:51:25.000000000 -0800
-@@ -400,7 +400,11 @@
+--- linux-2.4.21.orig/drivers/scsi/libata-scsi.c	2004-12-21 13:51:26.000000000 -0500
++++ linux-2.4.21/drivers/scsi/libata-scsi.c	2004-12-21 13:58:10.000000000 -0500
+@@ -686,7 +686,11 @@
  		struct scatterlist *sg;
  
  		sg = (struct scatterlist *) cmd->request_buffer;
@@ -3214,7 +3214,7 @@ Index: linux-2.4.21/drivers/scsi/libata-scsi.c
  		buflen = sg->length;
  	} else {
  		buf = cmd->request_buffer;
-@@ -428,7 +432,11 @@
+@@ -714,7 +718,11 @@
  		struct scatterlist *sg;
  
  		sg = (struct scatterlist *) cmd->request_buffer;
@@ -3228,8 +3228,8 @@ Index: linux-2.4.21/drivers/scsi/libata-scsi.c
  
 Index: linux-2.4.21/drivers/block/cpqarray.c
 ===================================================================
---- linux-2.4.21.orig/drivers/block/cpqarray.c	2004-09-11 07:16:29.000000000 -0700
-+++ linux-2.4.21/drivers/block/cpqarray.c	2004-11-03 16:26:38.000000000 -0800
+--- linux-2.4.21.orig/drivers/block/cpqarray.c	2004-12-21 13:51:20.000000000 -0500
++++ linux-2.4.21/drivers/block/cpqarray.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1003,9 +1003,14 @@
  		} else {
  			if (seg == SG_MAX)
@@ -3271,9 +3271,9 @@ Index: linux-2.4.21/drivers/block/cpqarray.c
  	c->req.hdr.sg_cnt = seg;
 Index: linux-2.4.21/drivers/block/cciss.c
 ===================================================================
---- linux-2.4.21.orig/drivers/block/cciss.c	2004-09-11 07:16:28.000000000 -0700
-+++ linux-2.4.21/drivers/block/cciss.c	2004-11-03 15:58:40.000000000 -0800
-@@ -2485,9 +2485,14 @@
+--- linux-2.4.21.orig/drivers/block/cciss.c	2004-12-21 13:51:19.000000000 -0500
++++ linux-2.4.21/drivers/block/cciss.c	2004-12-21 13:58:10.000000000 -0500
+@@ -2491,9 +2491,14 @@
  		} else {
  			if (seg == MAXSGENTRIES)
  				BUG();
@@ -3289,7 +3289,7 @@ Index: linux-2.4.21/drivers/block/cciss.c
  			lastdataend = bh_phys(bh) + bh->b_size;
  			seg++;
  		}
-@@ -2501,8 +2506,16 @@
+@@ -2507,8 +2512,16 @@
  		ddir = PCI_DMA_TODEVICE;
  	for (i=0; i<seg; i++) {
  		c->SG[i].Len = tmp_sg[i].length;
@@ -3310,8 +3310,8 @@ Index: linux-2.4.21/drivers/block/cciss.c
                  c->SG[i].Ext = 0;  /* we are not chaining */
 Index: linux-2.4.21/drivers/block/sx8.c
 ===================================================================
---- linux-2.4.21.orig/drivers/block/sx8.c	2004-09-11 07:16:34.000000000 -0700
-+++ linux-2.4.21/drivers/block/sx8.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/block/sx8.c	2004-12-21 13:51:26.000000000 -0500
++++ linux-2.4.21/drivers/block/sx8.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1103,9 +1103,15 @@
  		} else {
  			if (unlikely(n_elem == CARM_MAX_REQ_SG))
@@ -3330,8 +3330,8 @@ Index: linux-2.4.21/drivers/block/sx8.c
  		}
 Index: linux-2.4.21/drivers/ieee1394/dma.c
 ===================================================================
---- linux-2.4.21.orig/drivers/ieee1394/dma.c	2003-06-13 07:51:34.000000000 -0700
-+++ linux-2.4.21/drivers/ieee1394/dma.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/ieee1394/dma.c	2003-06-13 10:51:34.000000000 -0400
++++ linux-2.4.21/drivers/ieee1394/dma.c	2004-12-21 13:58:10.000000000 -0500
 @@ -97,8 +97,12 @@
  	/* fill scatter/gather list with pages */
  	for(i = 0; i < dma->n_pages; i++) {
@@ -3348,8 +3348,8 @@ Index: linux-2.4.21/drivers/ieee1394/dma.c
  
 Index: linux-2.4.21/drivers/ieee1394/sbp2.c
 ===================================================================
---- linux-2.4.21.orig/drivers/ieee1394/sbp2.c	2003-06-13 07:51:34.000000000 -0700
-+++ linux-2.4.21/drivers/ieee1394/sbp2.c	2004-11-03 16:24:24.000000000 -0800
+--- linux-2.4.21.orig/drivers/ieee1394/sbp2.c	2003-06-13 10:51:34.000000000 -0400
++++ linux-2.4.21/drivers/ieee1394/sbp2.c	2004-12-21 13:58:10.000000000 -0500
 @@ -2036,11 +2036,19 @@
  			command->dma_dir = dma_dir;
  			command->dma_size = sgpnt[0].length;
@@ -3372,8 +3372,8 @@ Index: linux-2.4.21/drivers/ieee1394/sbp2.c
  			command_orb->data_descriptor_hi = ORB_SET_NODE_ID(hi->host->node_id);
 Index: linux-2.4.21/drivers/message/i2o/i2o_scsi.c
 ===================================================================
---- linux-2.4.21.orig/drivers/message/i2o/i2o_scsi.c	2002-08-02 17:39:44.000000000 -0700
-+++ linux-2.4.21/drivers/message/i2o/i2o_scsi.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/message/i2o/i2o_scsi.c	2002-08-02 20:39:44.000000000 -0400
++++ linux-2.4.21/drivers/message/i2o/i2o_scsi.c	2004-12-21 13:58:10.000000000 -0500
 @@ -693,7 +693,11 @@
  			{
  				*mptr++=direction|0x10000000|sg->length;
@@ -3400,8 +3400,8 @@ Index: linux-2.4.21/drivers/message/i2o/i2o_scsi.c
  
 Index: linux-2.4.21/drivers/net/fc/iph5526.c
 ===================================================================
---- linux-2.4.21.orig/drivers/net/fc/iph5526.c	2003-06-13 07:51:34.000000000 -0700
-+++ linux-2.4.21/drivers/net/fc/iph5526.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/net/fc/iph5526.c	2003-06-13 10:51:34.000000000 -0400
++++ linux-2.4.21/drivers/net/fc/iph5526.c	2004-12-21 13:58:10.000000000 -0500
 @@ -4249,7 +4249,11 @@
  			if (Cmnd->use_sg) {
  			int count = 0, j;
@@ -3450,8 +3450,8 @@ Index: linux-2.4.21/drivers/net/fc/iph5526.c
  						update_EDB_indx(fi);
 Index: linux-2.4.21/drivers/net/wireless/airo.c
 ===================================================================
---- linux-2.4.21.orig/drivers/net/wireless/airo.c	2004-09-11 07:16:30.000000000 -0700
-+++ linux-2.4.21/drivers/net/wireless/airo.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/net/wireless/airo.c	2004-12-21 13:51:20.000000000 -0500
++++ linux-2.4.21/drivers/net/wireless/airo.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1584,11 +1584,20 @@
  		aes_counter[12] = (u8)(counter >> 24);
  		counter++;
@@ -3475,8 +3475,8 @@ Index: linux-2.4.21/drivers/net/wireless/airo.c
  			j += 4;
 Index: linux-2.4.21/drivers/usb/microtek.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/microtek.c	2002-11-28 15:53:14.000000000 -0800
-+++ linux-2.4.21/drivers/usb/microtek.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/microtek.c	2002-11-28 18:53:14.000000000 -0500
++++ linux-2.4.21/drivers/usb/microtek.c	2004-12-21 13:58:10.000000000 -0500
 @@ -623,7 +623,11 @@
  	context->fragment++;
  	mts_int_submit_urb(transfer,
@@ -3503,8 +3503,8 @@ Index: linux-2.4.21/drivers/usb/microtek.c
  
 Index: linux-2.4.21/drivers/usb/hpusbscsi.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/hpusbscsi.c	2003-06-13 07:51:36.000000000 -0700
-+++ linux-2.4.21/drivers/usb/hpusbscsi.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/hpusbscsi.c	2003-06-13 10:51:36.000000000 -0400
++++ linux-2.4.21/drivers/usb/hpusbscsi.c	2004-12-21 13:58:10.000000000 -0500
 @@ -576,6 +576,17 @@
  		hpusbscsi->state = HP_STATE_WORKING;
  	PDEBUG(2, "state= %s", states[hpusbscsi->state]);
@@ -3533,8 +3533,8 @@ Index: linux-2.4.21/drivers/usb/hpusbscsi.c
          if (res)
 Index: linux-2.4.21/drivers/usb/storage/protocol.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/protocol.c	2002-08-02 17:39:45.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/protocol.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/protocol.c	2002-08-02 20:39:45.000000000 -0400
++++ linux-2.4.21/drivers/usb/storage/protocol.c	2004-12-21 13:58:10.000000000 -0500
 @@ -72,7 +72,11 @@
  		struct scatterlist *sg;
  
@@ -3549,8 +3549,8 @@ Index: linux-2.4.21/drivers/usb/storage/protocol.c
  
 Index: linux-2.4.21/drivers/usb/storage/transport.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/transport.c	2004-09-11 07:16:25.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/transport.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/transport.c	2004-12-21 13:51:15.000000000 -0500
++++ linux-2.4.21/drivers/usb/storage/transport.c	2004-12-21 13:58:10.000000000 -0500
 @@ -592,11 +592,20 @@
  			if (transfer_amount - total_transferred >= 
  					sg[i].length) {
@@ -3575,8 +3575,8 @@ Index: linux-2.4.21/drivers/usb/storage/transport.c
  			/* if we get an error, end the loop here */
 Index: linux-2.4.21/drivers/usb/storage/usb.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/usb.c	2004-09-11 07:16:25.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/usb.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/usb.c	2004-12-21 13:51:15.000000000 -0500
++++ linux-2.4.21/drivers/usb/storage/usb.c	2004-12-21 13:58:10.000000000 -0500
 @@ -291,13 +291,21 @@
  	if (us->srb->use_sg) {
  		sg = (struct scatterlist *)us->srb->request_buffer;
@@ -3601,8 +3601,8 @@ Index: linux-2.4.21/drivers/usb/storage/usb.c
  	} else {
 Index: linux-2.4.21/drivers/usb/storage/shuttle_usbat.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/shuttle_usbat.c	2003-06-13 07:51:37.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/shuttle_usbat.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/shuttle_usbat.c	2003-06-13 10:51:37.000000000 -0400
++++ linux-2.4.21/drivers/usb/storage/shuttle_usbat.c	2004-12-21 13:58:10.000000000 -0500
 @@ -217,7 +217,11 @@
  		sg = (struct scatterlist *)data;
  		for (i=0; i<use_sg && transferred<len; i++) {
@@ -3647,8 +3647,8 @@ Index: linux-2.4.21/drivers/usb/storage/shuttle_usbat.c
  				}
 Index: linux-2.4.21/drivers/usb/storage/sddr09.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/sddr09.c	2003-06-13 07:51:37.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/sddr09.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/sddr09.c	2003-06-13 10:51:37.000000000 -0400
++++ linux-2.4.21/drivers/usb/storage/sddr09.c	2004-12-21 13:58:10.000000000 -0500
 @@ -387,7 +387,11 @@
  			unsigned char *buf;
  			unsigned int length;
@@ -3798,8 +3798,8 @@ Index: linux-2.4.21/drivers/usb/storage/sddr09.c
  }
 Index: linux-2.4.21/drivers/usb/storage/sddr55.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/sddr55.c	2003-06-13 07:51:37.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/sddr55.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/sddr55.c	2003-06-13 10:51:37.000000000 -0400
++++ linux-2.4.21/drivers/usb/storage/sddr55.c	2004-12-21 13:58:10.000000000 -0500
 @@ -402,9 +402,15 @@
  	if (use_sg) {
  		transferred = 0;
@@ -3834,8 +3834,8 @@ Index: linux-2.4.21/drivers/usb/storage/sddr55.c
  
 Index: linux-2.4.21/drivers/usb/storage/freecom.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/freecom.c	2003-06-13 07:51:37.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/freecom.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/freecom.c	2003-06-13 10:51:37.000000000 -0400
++++ linux-2.4.21/drivers/usb/storage/freecom.c	2004-12-21 13:58:10.000000000 -0500
 @@ -144,11 +144,20 @@
  			if (transfer_amount - total_transferred >= 
  					sg[i].length) {
@@ -3860,8 +3860,8 @@ Index: linux-2.4.21/drivers/usb/storage/freecom.c
  			}
 Index: linux-2.4.21/drivers/usb/storage/isd200.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/isd200.c	2003-06-13 07:51:37.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/isd200.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/isd200.c	2003-06-13 10:51:37.000000000 -0400
++++ linux-2.4.21/drivers/usb/storage/isd200.c	2004-12-21 13:58:10.000000000 -0500
 @@ -494,13 +494,21 @@
                              sg[i].length) {
                                  result = isd200_transfer_partial(us, 
@@ -3905,8 +3905,8 @@ Index: linux-2.4.21/drivers/usb/storage/isd200.c
  			} 
 Index: linux-2.4.21/drivers/usb/storage/datafab.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/datafab.c	2003-06-13 07:51:37.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/datafab.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/datafab.c	2003-06-13 10:51:37.000000000 -0400
++++ linux-2.4.21/drivers/usb/storage/datafab.c	2004-12-21 13:58:10.000000000 -0500
 @@ -265,18 +265,30 @@
  			while (sg_idx < use_sg && transferred < len) {
  				if (len - transferred >= sg[sg_idx].length - current_sg_offset) {
@@ -3971,8 +3971,8 @@ Index: linux-2.4.21/drivers/usb/storage/datafab.c
  					break;
 Index: linux-2.4.21/drivers/usb/storage/jumpshot.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/jumpshot.c	2003-06-13 07:51:37.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/jumpshot.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/drivers/usb/storage/jumpshot.c	2003-06-13 10:51:37.000000000 -0400
++++ linux-2.4.21/drivers/usb/storage/jumpshot.c	2004-12-21 13:58:10.000000000 -0500
 @@ -341,18 +341,30 @@
                          while (sg_idx < use_sg && transferred < len) {
                                  if (len - transferred >= sg[sg_idx].length - current_sg_offset) {
@@ -4038,9 +4038,9 @@ Index: linux-2.4.21/drivers/usb/storage/jumpshot.c
                                          break;
 Index: linux-2.4.21/drivers/usb/storage/scsiglue.c
 ===================================================================
---- linux-2.4.21.orig/drivers/usb/storage/scsiglue.c	2004-09-11 07:16:25.000000000 -0700
-+++ linux-2.4.21/drivers/usb/storage/scsiglue.c	2004-11-03 15:51:25.000000000 -0800
-@@ -594,7 +594,11 @@
+--- linux-2.4.21.orig/drivers/usb/storage/scsiglue.c	2004-12-21 13:51:15.000000000 -0500
++++ linux-2.4.21/drivers/usb/storage/scsiglue.c	2004-12-21 13:58:10.000000000 -0500
+@@ -606,7 +606,11 @@
  	    }
  
  	  /* copy one byte */
@@ -4052,7 +4052,7 @@ Index: linux-2.4.21/drivers/usb/storage/scsiglue.c
  
  	  /* get next destination */
  	  if ( sg[db].length-1 == di )
-@@ -632,7 +636,11 @@
+@@ -644,7 +648,11 @@
  	      break;
  	    }
  
@@ -4064,7 +4064,7 @@ Index: linux-2.4.21/drivers/usb/storage/scsiglue.c
  
  	  /* get next destination */
  	  if ( sg[db].length-1 == di )
-@@ -782,7 +790,11 @@
+@@ -794,7 +802,11 @@
  	    }
  
  	  /* copy one byte */
@@ -4076,7 +4076,7 @@ Index: linux-2.4.21/drivers/usb/storage/scsiglue.c
  
  	  /* get next destination */
  	  if ( di == 0 )
-@@ -819,7 +831,11 @@
+@@ -831,7 +843,11 @@
  	      break;
  	    }
  
@@ -4088,7 +4088,7 @@ Index: linux-2.4.21/drivers/usb/storage/scsiglue.c
  
  	  /* get next destination */
  	  if ( di == 0 )
-@@ -869,6 +885,15 @@
+@@ -881,6 +897,15 @@
  		  if ( element < USB_STOR_SCSI_SENSE_HDRSZ )
  		    {
  		      /* fill in the pointers for both header types */
@@ -4104,7 +4104,7 @@ Index: linux-2.4.21/drivers/usb/storage/scsiglue.c
  		      the6->array[element] = &(sg[i].address[j]);
  		      the10->array[element] = &(sg[i].address[j]);
  		    }
-@@ -876,6 +901,7 @@
+@@ -888,6 +913,7 @@
  		    {
  		      /* only the longer headers still cares now */
  		      the10->array[element] = &(sg[i].address[j]);
@@ -4112,27 +4112,27 @@ Index: linux-2.4.21/drivers/usb/storage/scsiglue.c
  		    }
  		  /* increase element counter */
  		  element++;
-Index: linux-2.4.21/drivers/addon/ips_61107/ips.c
+Index: linux-2.4.21/drivers/addon/ips_70015/ips.c
 ===================================================================
---- linux-2.4.21.orig/drivers/addon/ips_61107/ips.c	2004-09-11 07:16:28.000000000 -0700
-+++ linux-2.4.21/drivers/addon/ips_61107/ips.c	2004-11-03 15:51:25.000000000 -0800
-@@ -206,7 +206,11 @@
- #endif
- 
- #if LINUX_VERSION_CODE <= LinuxVersionCode(2,5,0)
-+#if SMALL_SCATTERLIST
+--- linux-2.4.21.orig/drivers/addon/ips_70015/ips.c	2004-12-21 13:51:19.000000000 -0500
++++ linux-2.4.21/drivers/addon/ips_70015/ips.c	2004-12-21 14:02:57.000000000 -0500
+@@ -207,7 +207,11 @@
+ #if LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0)
+ #include <linux/blk.h>
+ #include "sd.h"
++#ifdef SMALL_SCATTERLIST
 +#define IPS_SG_ADDRESS(sg)       ((sg)->u.address)
 +#else
  #define IPS_SG_ADDRESS(sg)       ((sg)->address)
-+#endif /* !SMALL_SCATTERLIST */
++#endif
  #define IPS_LOCK_SAVE(lock,flags) spin_lock_irqsave(&io_request_lock,flags)
  #define IPS_UNLOCK_RESTORE(lock,flags) spin_unlock_irqrestore(&io_request_lock,flags)
- #else
-Index: linux-2.4.21/drivers/addon/megaraid_2101/megaraid2.c
+ #ifndef __devexit_p
+Index: linux-2.4.21/drivers/addon/megaraid_2106/megaraid2.c
 ===================================================================
---- linux-2.4.21.orig/drivers/addon/megaraid_2101/megaraid2.c	2004-09-11 07:16:28.000000000 -0700
-+++ linux-2.4.21/drivers/addon/megaraid_2101/megaraid2.c	2004-11-03 15:51:25.000000000 -0800
-@@ -2127,7 +2127,11 @@
+--- linux-2.4.21.orig/drivers/addon/megaraid_2106/megaraid2.c	2004-12-21 13:51:19.000000000 -0500
++++ linux-2.4.21/drivers/addon/megaraid_2106/megaraid2.c	2004-12-21 14:00:26.000000000 -0500
+@@ -2198,7 +2198,11 @@
  			if( cmd->use_sg ) {
  				sgl = (struct scatterlist *)
  					cmd->request_buffer;
@@ -4144,10 +4144,146 @@ Index: linux-2.4.21/drivers/addon/megaraid_2101/megaraid2.c
  			}
  			else {
  				c = *(u8 *)cmd->request_buffer;
+Index: linux-2.4.21/drivers/addon/iscsi_sfnet/iscsi.c
+===================================================================
+--- linux-2.4.21.orig/drivers/addon/iscsi_sfnet/iscsi.c	2004-12-21 13:51:27.000000000 -0500
++++ linux-2.4.21/drivers/addon/iscsi_sfnet/iscsi.c	2004-12-21 14:37:53.000000000 -0500
+@@ -118,6 +118,16 @@
+ #include "iscsi-probe.h"
+ #include "iscsi-crc.h"
+ 
++#if SMALL_SCATTERLIST
++#define ISCSI_SG_ADDRESS(sg) (sg->u.address)
++#define ISCSI_SG_PAGE(sg)    (sg->u.page.page)
++#define ISCSI_SG_OFFSET(sg)  (sg->u.page.offset)
++#else
++#define ISCSI_SG_ADDRESS(sg) (sg->address)
++#define ISCSI_SG_PAGE(sg)    (sg->page)
++#define ISCSI_SG_OFFSET(sg)  (sg->offset)
++#endif
++
+ /*
+  *  IMPORTANT NOTE: to prevent deadlock, when holding multiple locks,
+  *  the following locking order must be followed at all times:
+@@ -2932,15 +2942,17 @@
+ #if (HAS_SCATTERLIST_PAGE && HAS_SCATTERLIST_ADDRESS)
+ 	    printk("iSCSI:   sglist %p index %02d = addr %p, page %p, "
+ 		   "offset %u, len %u\n",
+-		   sglist, i, sglist->address, sglist->page, sglist->offset,
+-		   sglist->length);
++		   sglist, i, ISCSI_SG_ADDRESS(sglist), 
++		   ISCSI_SG_PAGE(sglist),
++		   ISCSI_SG_OFFSET(sglist), sglist->length);
+ #elif HAS_SCATTERLIST_PAGE
+ 	    printk("iSCSI:   sglist %p index %02d = page %p, offset %u, "
+ 		   "len %u\n",
+-		   sglist, i, sglist->page, sglist->offset, sglist->length);
++		   sglist, i, ISCSI_SG_PAGE(sglist), ISCSI_SG_OFFSET(sglist),
++		   sglist->length);
+ #else
+ 	    printk("iSCSI:   sglist %p index %02d = addr %p, len %u\n",
+-		   sglist, i, sglist->address, sglist->length);
++		   sglist, i, ISCSI_SG_ADDRESS(sglist), sglist->length);
+ #endif
+ 	    sglist++;
+ 	}
+@@ -5306,7 +5318,7 @@
+ 		    bytes_from_segment = sg->length - segment_offset;
+ 		    if (bytes_from_segment > bytes_to_fill) {
+ 			/* only need part of this segment */
+-			iov[iovn].iov_base = sg->address + segment_offset;
++  		        iov[iovn].iov_base = ISCSI_SG_ADDRESS(sg) + segment_offset;
+ 			iov[iovn].iov_len = bytes_to_fill;
+ 			xfrlen += bytes_to_fill;
+ 			DEBUG_FLOW("iSCSI: session %p xmit_data xfrlen %d, "
+@@ -5863,21 +5875,21 @@
+ {
+ #if (HAS_SCATTERLIST_PAGE && HAS_SCATTERLIST_ADDRESS)
+     /* page may or may not be mapped */
+-    if (sg->address) {
+-	return sg->address;
+-    } else if (sg->page) {
+-	return page_address(sg->page) + sg->offset;
++    if (ISCSI_SG_ADDRESS(sg)) {
++	return ISCSI_SG_ADDRESS(sg);
++    } else if (ISCSI_SG_PAGE(sg)) {
++	return page_address(ISCSI_SG_PAGE(sg)) + ISCSI_SG_OFFSET(sg);
+     }
+     return NULL;
+ 
+ #elif HAS_SCATTERLIST_PAGE
+     /* should have already mapped the page */
+-    if (sg->page) {
+-	return page_address(sg->page) + sg->offset;
++    if (ISCSI_SG_PAGE(sg)) {
++	return page_address(ISCSI_SG_PAGE(sg)) + ISCSI_SG_OFFSET(sg);
+     }
+     return NULL;
+ #else
+-    return sg->address;
++    return ISCSI_SG_ADDRESS(sg);
+ #endif
+ 
+ }
+@@ -5900,12 +5912,12 @@
+ {
+ #if (HAS_SCATTERLIST_PAGE && HAS_SCATTERLIST_ADDRESS)
+     /* page may or may not be mapped if HIGHMEM is in use */
+-    if (sg->address) {
+-	DEBUG_FLOW("iSCSI: kmap sg %p to address %p\n", sg, sg->address);
+-	return sg->address;
+-    } else if (sg->page) {
+-	void *addr = kmap(sg->page);
+-	DEBUG_FLOW("iSCSI: kmap sg %p page %p to addr %p\n", sg, sg->page,
++    if (ISCSI_SG_ADDRESS(sg)) {
++	DEBUG_FLOW("iSCSI: kmap sg %p to address %p\n", sg, ISCSI_SG_ADDRESS(sg));
++	return ISCSI_SG_ADDRESS(sg);
++    } else if (ISCSI_SG_PAGE(sg)) {
++	void *addr = kmap(ISCSI_SG_PAGE(sg));
++	DEBUG_FLOW("iSCSI: kmap sg %p page %p to addr %p\n", sg, ISCSI_SG_PAGE(sg),
+ 		   addr);
+ 	return addr;
+     }
+@@ -5913,15 +5925,15 @@
+ 
+ #elif HAS_SCATTERLIST_PAGE
+     /* there is no address, must kmap the page */
+-    if (sg->page) {
+-	return kmap(sg->page);
++    if (ISCSI_SG_PAGE(sg)) {
++	return kmap(ISCSI_SG_PAGE(sg));
+     }
+     return NULL;
+ 
+ #else
+     /* just use the address */
+-    DEBUG_FLOW("iSCSI: kmap sg %p to address %p\n", sg, sg->address);
+-    return sg->address;
++    DEBUG_FLOW("iSCSI: kmap sg %p to address %p\n", sg, ISCSI_SG_ADDRESS(sg));
++    return ISCSI_SG_ADDRESS(sg);
+ #endif
+ }
+ 
+@@ -5933,11 +5945,11 @@
+ kunmap_sg(struct scatterlist *sg)
+ {
+ #if (HAS_SCATTERLIST_PAGE && HAS_SCATTERLIST_ADDRESS)
+-    if (!sg->address && sg->page)
+-	kunmap(sg->page);
++    if (!ISCSI_SG_ADDRESS(sg) && ISCSI_SG_PAGE(sg))
++	kunmap(ISCSI_SG_PAGE(sg));
+ #elif HAS_SCATTERLIST_PAGE
+-    if (sg->page)
+-	kunmap(sg->page);
++    if (ISCSI_SG_PAGE(sg))
++	kunmap(ISCSI_SG_PAGE(sg));
+ #endif
+     return;
+ }
 Index: linux-2.4.21/include/asm-i386/pci.h
 ===================================================================
---- linux-2.4.21.orig/include/asm-i386/pci.h	2004-09-11 07:16:18.000000000 -0700
-+++ linux-2.4.21/include/asm-i386/pci.h	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/include/asm-i386/pci.h	2004-12-21 13:51:05.000000000 -0500
++++ linux-2.4.21/include/asm-i386/pci.h	2004-12-21 14:36:22.000000000 -0500
 @@ -157,6 +157,17 @@
   	 * temporary 2.4 hack
   	 */
@@ -4176,8 +4312,8 @@ Index: linux-2.4.21/include/asm-i386/pci.h
  	flush_write_buffers();
 Index: linux-2.4.21/include/asm-i386/scatterlist.h
 ===================================================================
---- linux-2.4.21.orig/include/asm-i386/scatterlist.h	2002-11-28 15:53:15.000000000 -0800
-+++ linux-2.4.21/include/asm-i386/scatterlist.h	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/include/asm-i386/scatterlist.h	2002-11-28 18:53:15.000000000 -0500
++++ linux-2.4.21/include/asm-i386/scatterlist.h	2004-12-21 13:58:10.000000000 -0500
 @@ -19,7 +19,25 @@
   *
   * and that's it. There's no excuse for not highmem enabling YOUR driver. /jens
@@ -4214,8 +4350,8 @@ Index: linux-2.4.21/include/asm-i386/scatterlist.h
  #define ISA_DMA_THRESHOLD (0x00ffffff)
 Index: linux-2.4.21/net/xfrm/xfrm_algo.c
 ===================================================================
---- linux-2.4.21.orig/net/xfrm/xfrm_algo.c	2004-09-11 07:16:24.000000000 -0700
-+++ linux-2.4.21/net/xfrm/xfrm_algo.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/net/xfrm/xfrm_algo.c	2004-12-21 13:51:11.000000000 -0500
++++ linux-2.4.21/net/xfrm/xfrm_algo.c	2004-12-21 13:58:10.000000000 -0500
 @@ -487,9 +487,14 @@
  	if (copy > 0) {
  		if (copy > len)
@@ -4279,8 +4415,8 @@ Index: linux-2.4.21/net/xfrm/xfrm_algo.c
  			if (!(len -= copy))
 Index: linux-2.4.21/net/ipv6/addrconf.c
 ===================================================================
---- linux-2.4.21.orig/net/ipv6/addrconf.c	2004-09-11 07:16:24.000000000 -0700
-+++ linux-2.4.21/net/ipv6/addrconf.c	2004-11-03 15:51:25.000000000 -0800
+--- linux-2.4.21.orig/net/ipv6/addrconf.c	2004-12-21 13:51:11.000000000 -0500
++++ linux-2.4.21/net/ipv6/addrconf.c	2004-12-21 13:58:10.000000000 -0500
 @@ -1047,11 +1047,18 @@
  	u8 digest[16];
  	struct scatterlist sg[2];
