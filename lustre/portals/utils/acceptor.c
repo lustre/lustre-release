@@ -89,7 +89,11 @@ show_connection (int fd, __u32 net_ip)
 void
 usage (char *myname)
 {
-        fprintf (stderr, "Usage: %s [-N nal_id] port\n", myname);
+        fprintf (stderr, 
+                 "Usage: %s [-N nal_id] [-p] [-l] port\n\n"
+                 " -l\tKeep stdin/stdout open\n"
+                 " -p\tAllow connections from non-privileged ports\n",
+                 myname);
         exit (1);
 }
 
@@ -100,31 +104,27 @@ int main(int argc, char **argv)
         int c;
         int noclose = 0;
         int nal = SOCKNAL;
-        int privileged_only = 0;
         int rport;
-
+        int require_privports = 1;
         
-        while ((c = getopt (argc, argv, "N:lp")) != -1)
-                switch (c)
-                {
-                case 'l':
-                        noclose = 1;
-                        break;
-
+        while ((c = getopt (argc, argv, "N:lp")) != -1) {
+                switch (c) {
                 case 'N':
                         if (sscanf(optarg, "%d", &nal) != 1 ||
                             nal < 0 || nal > NAL_MAX_NR)
                                 usage(argv[0]);
                         break;
-
-                case 'p':
-                        privileged_only = 1;
+                case 'l':
+                        noclose = 1;
                         break;
-                        
+                case 'p':
+                        require_privports = 0;
+                        break;
                 default:
                         usage (argv[0]);
                         break;
                 }
+        }
 
         if (optind >= argc)
                 usage (argv[0]);
@@ -169,7 +169,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        rc = daemon(1, noclose);
+        rc = daemon(0, noclose);
         if (rc < 0) {
                 perror("daemon(): ");
                 exit(1);
@@ -185,26 +185,16 @@ int main(int argc, char **argv)
                 int cfd;
                 struct portal_ioctl_data data;
                 struct portals_cfg pcfg;
-                int    privileged;
 #ifdef HAVE_LIBWRAP
                 struct request_info request;
-                char addrstr[INET_ADDRSTRLEN];
 #endif
+                char addrstr[INET_ADDRSTRLEN];
                
                 cfd = accept(fd, (struct sockaddr *)&clntaddr, &len);
                 if ( cfd < 0 ) {
                         perror("accept");
                         exit(0);
                         continue;
-                }
-
-                privileged = 1;
-                if (privileged_only) {
-                        privileged = 0;
-                        rport = ntohs(clntaddr.sin_port);
-
-                        if (rport > 0 && rport < 1024) 
-                                privileged = 1; 
                 }
 
 #ifdef HAVE_LIBWRAP
@@ -220,14 +210,19 @@ int main(int argc, char **argv)
                         continue;
                 }
 #endif
-                show_connection (cfd, clntaddr.sin_addr.s_addr);
-                if (!privileged) {
-                        syslog(LOG_ERR, "un-privileged client closed. port=%d!\n", rport);
+
+                if (require_privports && ntohs(clntaddr.sin_port) >= IPPORT_RESERVED) {
+                        inet_ntop(AF_INET, &clntaddr.sin_addr,
+                                  addrstr, INET_ADDRSTRLEN);
+                        syslog(LOG_ERR, "Closing non-privileged connection from %s:%d\n",
+                               addrstr, ntohs(clntaddr.sin_port));
                         rc = close(cfd);
                         if (rc)
                                 perror ("close un-privileged client failed");
                         continue;
                 }
+
+                show_connection (cfd, clntaddr.sin_addr.s_addr);
 
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
                 pcfg.pcfg_nal = nal;
