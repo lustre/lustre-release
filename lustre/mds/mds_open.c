@@ -54,7 +54,7 @@
  * mds_mfd_close - for force closing files when a client dies
  */
 
-/* 
+/*
  * MDS file data handling: file data holds a handle for a file opened
  * by a client.
  */
@@ -132,7 +132,7 @@ static void mds_free_filterdata(struct inode *inode)
         iput(inode);
 }
 
-/* Write access to a file: executors cause a negative count, 
+/* Write access to a file: executors cause a negative count,
  * writers a positive count.  The semaphore is needed to perform
  * a check for the sign and then increment or decrement atomically.
  *
@@ -243,7 +243,7 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
         struct mds_body *body;
         int error;
         ENTRY;
-        
+
         mfd = mds_mfd_new();
         if (mfd == NULL) {
                 CERROR("mds: out of memory\n");
@@ -739,7 +739,7 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
         else if (child_lockh == &lockh)
                 ldlm_lock_decref(child_lockh, LCK_EX);
 
-        return rc;
+        RETURN(rc);
 }
 
 int mds_open(struct mds_update_record *rec, int offset,
@@ -990,7 +990,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         struct mds_obd *mds = &obd->u.mds;
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         void *handle = NULL;
-        struct mds_body *request_body = NULL, *reply_body;
+        struct mds_body *request_body = NULL, *reply_body = NULL;
         struct dentry_params dp;
         ENTRY;
 
@@ -1017,7 +1017,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         if (last_orphan && unlink_orphan) {
                 LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
 
-                CWARN("destroying orphan object %s\n", fidname);
+                CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
 
                 /* Sadly, there is no easy way to save pending_child from
                  * mds_reint_unlink() into mfd, so we need to re-lookup,
@@ -1040,14 +1040,13 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                         GOTO(cleanup, rc);
                 }
 
-#ifdef ENABLE_ORPHANS
                 if (req != NULL &&
                     (reply_body->valid & OBD_MD_FLEASIZE) &&
                     mds_log_op_unlink(obd, pending_child->d_inode,
                                       req->rq_repmsg, 1) > 0) {
                         reply_body->valid |= OBD_MD_FLCOOKIE;
                 }
-#endif
+
                 pending_child->d_fsdata = (void *) &dp;
                 dp.p_inum = 0;
                 dp.p_ptr = req;
