@@ -404,16 +404,14 @@ def do_find_file(base, mod):
             if module:
                 return module
 
-def find_module(src_dir, modname):
+def find_module(src_dir, dev_dir, modname):
     mod = '%s.o' % (modname)
-    search = (src_dir + "/lustre", src_dir + "/portals/linux")
-    for d in search:
-        try:
-            module = do_find_file(d, mod)
-            if module:
-                return module
-        except OSError:
-            pass
+    module = src_dir +'/'+ dev_dir +'/'+ mod
+    try: 
+       if os.access(module, os.R_OK):
+            return module
+    except OSError:
+        pass
     return None
 
 # is the path a block device?
@@ -594,9 +592,9 @@ class Module:
             log(self.module_name, "cleanup failed: ", self.name)
             e.dump()
 
-    def add_module(self, modname):
+    def add_module(self, dev_dir, modname):
         """Append a module to list of modules to load."""
-        self.kmodule_list.append(modname)
+        self.kmodule_list.append((dev_dir, modname))
 
     def mod_loaded(self, modname):
         """Check if a module is already loaded. Look in /proc/modules for it."""
@@ -610,13 +608,13 @@ class Module:
 
     def load_module(self):
         """Load all the modules in the list in the order they appear."""
-        for mod in self.kmodule_list:
+        for dev_dir, mod in self.kmodule_list:
             #  (rc, out) = run ('/sbin/lsmod | grep -s', mod)
             if self.mod_loaded(mod) and not config.noexec():
                 continue
             log ('loading module:', mod)
             if config.src_dir():
-                module = find_module(config.src_dir(), mod)
+                module = find_module(config.src_dir(),dev_dir,  mod)
                 if not module:
                     panic('module not found:', mod)
                 (rc, out)  = run('/sbin/insmod', module)
@@ -656,17 +654,17 @@ class Network(Module):
             if not self.nid:
                 panic("unable to set nid for", self.net_type)
 
-        self.add_module('portals')
+        self.add_module('portals/linux/oslib/', 'portals')
 	if node_needs_router():
-	    self.add_module('kptlrouter')
+	    self.add_module('portals/linux/router', 'kptlrouter')
         if self.net_type == 'tcp':
-            self.add_module('ksocknal')
+            self.add_module('portals/linux/socknal', 'ksocknal')
         if self.net_type == 'elan':
-            self.add_module('kqswnal')
+            self.add_module('portals/linux/rqswnal', 'kqswnal')
         if self.net_type == 'gm':
-            self.add_module('kgmnal')
-        self.add_module('obdclass')
-        self.add_module('ptlrpc')
+            self.add_module('portals/linux/gmnal', 'kgmnal')
+        self.add_module('lustre/obdclass', 'obdclass')
+        self.add_module('lustre/ptlrpc', 'ptlrpc')
 
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
@@ -733,7 +731,7 @@ class Network(Module):
 class LDLM(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'LDLM', dom_node)
-        self.add_module('ldlm')
+        self.add_module('lustre/ldlm', 'ldlm')
     def prepare(self):
         self.info()
         lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid),
@@ -766,9 +764,9 @@ class MDS(Module):
         self.fstype = get_text(dom_node, 'fstype')
         self.format = get_text(dom_node, 'autoformat', "no")
         if self.fstype == 'extN':
-            self.add_module('extN') 
-        self.add_module('mds')
-        self.add_module('mds_%s' % (self.fstype))
+            self.add_module('lustre/extN', 'extN') 
+        self.add_module('lustre/mds', 'mds')
+        self.add_module('lustre/mds', 'mds_%s' % (self.fstype))
             
     def prepare(self):
         self.info(self.devname, self.fstype, self.format)
@@ -784,7 +782,7 @@ class MDC(Module):
         Module.__init__(self, 'MDC', dom_node)
         self.mds_uuid = get_first_ref(dom_node, 'mds')
         self.lookup_server(self.mds_uuid)
-        self.add_module('mdc')
+        self.add_module('lustre/mdc', 'mdc')
 
     def prepare(self):
         self.info(self.mds_uuid)
@@ -801,8 +799,8 @@ class OBD(Module):
         self.fstype = get_text(dom_node, 'fstype')
         self.format = get_text(dom_node, 'autoformat', 'yes')
         if self.fstype == 'extN':
-            self.add_module('extN') 
-        self.add_module(self.obdtype)
+            self.add_module('lustre/extN', 'extN') 
+        self.add_module('lustre/' + self.obdtype, self.obdtype)
 
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
@@ -824,7 +822,7 @@ class OST(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'OST', dom_node)
         self.obd_uuid = get_first_ref(dom_node, 'obd')
-        self.add_module('ost')
+        self.add_module('lustre/ost', 'ost')
 
     def prepare(self):
         self.info(self.obd_uuid)
@@ -837,7 +835,7 @@ class OSC(Module):
         self.obd_uuid = get_first_ref(dom_node, 'obd')
         self.ost_uuid = get_first_ref(dom_node, 'ost')
         self.lookup_server(self.ost_uuid)
-        self.add_module('osc')
+        self.add_module('lustre/osc', 'osc')
 
     def prepare(self):
         self.info(self.obd_uuid, self.ost_uuid)
@@ -861,10 +859,10 @@ class Mountpoint(Module):
         self.path = get_text(dom_node, 'path')
         self.mdc_uuid = get_first_ref(dom_node, 'mdc')
         self.lov_uuid = get_first_ref(dom_node, 'osc')
-        self.add_module('osc')
+        self.add_module('lustre/osc', 'osc')
 	# should add lov only if needed
-        self.add_module('lov')
-        self.add_module('llite')
+        self.add_module('lustre/lov', 'lov')
+        self.add_module('lustre/llite', 'llite')
 
     def prepare(self):
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
@@ -1354,6 +1352,8 @@ def sys_make_devices():
 #
 def main():
     global TCP_ACCEPTOR, lctl, MAXTCPBUF
+    host = socket.gethostname()
+
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
         if not os.access(args[0], os.R_OK | os.W_OK):
@@ -1370,11 +1370,13 @@ def main():
     if config.node():
         node_list.append(config.node())
     else:
-        host = socket.gethostname()
         if len(host) > 0:
             node_list.append(host)
         node_list.append('localhost')
     debug("configuring for host: ", node_list)
+
+    if len(host) > 0:
+        config._debug_path = '/tmp/lustre-log-' + host
 
     TCP_ACCEPTOR = find_prog('acceptor')
     if not TCP_ACCEPTOR:
