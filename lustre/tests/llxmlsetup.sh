@@ -31,5 +31,5 @@ export DEBUG_WAIT=no
 
 echo
 echo "To mount the filesystem:"
-echo "mount -t lustre_lite -o ost=`$OBDCTL name2dev OSCDEV`,mds=`$OBDCTL name2dev MDCDEV` none /mnt/lustre"
+echo "mount -t lustre_lite -o ost=`$OBDCTL name2dev osc-srv`,mds=`$OBDCTL name2dev mdc-srv` none /mnt/lustre"
 

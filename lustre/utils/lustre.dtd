@@ -1,78 +1,69 @@
 <!-- Lustre Management DTD -->
 
 <!-- basic entities -->
-<!ENTITY % basic.content '#PCDATA'>
-<!ENTITY % id.content 'num | id | uuid'>
+<!ENTITY % tag.content '(#PCDATA)'>
+<!ENTITY % tag.id '(num) #CDATA #IMPLIED (name, uuid) #CDATA #REQUIRED'>
+<!ENTITY % tag.attr '(name, uuid) #CDATA #REQUIRED'>
 
 <!-- main elements -->
 <!ELEMENT lustre (node | profile | mountpoint |
                   mds | obd | ost | osc | lov | router)*>
 
 <!ELEMENT profile (mountpoint_id, service_id)>
-<!ATTLIST profile id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
-
+<!ATTLIST profile %tag.attr;>
 <!ELEMENT mountpoint (path, fileset, mds_id, lov_id)>
-<!ATTLIST mountpoint id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
-
+<!ATTLIST mountpoint %tag.attr;>
 <!ELEMENT node (profile_id)>
-<!ATTLIST node id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
-
-<!ELEMENT ldlm ()*>
-<!ATTLIST ldlm id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
-
-<!ELEMENT mds (fstype | device | server_id | failover_id)*>
-<!ATTLIST mds id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
+<!ATTLIST node %tag.attr;>
+<!ELEMENT ldlm>
+<!ATTLIST ldlm %tag.attr;>
 
 <!ELEMENT obd (fstype | device | autoformat)*>
-<!ATTLIST obd id #CDATA #REQUIRED uuid #CDATA #REQUIRED
-                type (obdfilter | obdext2 | obdecho) 'obdfilter'>
+<!ATTLIST obd %tag.attr; type (obdfilter | obdext2 | obdecho) 'obdfilter'>
+<!ELEMENT ost (network | server_id | failover_id)*>
+<!ATTLIST ost %tag.attr;>
+<!ELEMENT mds (network | fstype | device | server_id | failover_id)*>
+<!ATTLIST mds %tag.attr;>
 
-<!ELEMENT ost (server_id | failover_id)*>
-<!ATTLIST ost id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
-        
-<!ELEMENT osc (network)*>
-<!ATTLIST osc id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
-
-<!ELEMENT mdc (network)*>
-<!ATTLIST mdc id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
-
+<!ELEMENT osc (service_id)>
+<!ATTLIST osc %tag.attr;>
+<!ELEMENT mdc (service_id)>
+<!ATTLIST mdc %tag.attr;>
 <!ELEMENT lov (osc_id | obd_id | mdc_id)*>
-<!ATTLIST lov id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
-
+<!ATTLIST lov %tag.attr;>
 <!ELEMENT router (misc)*>
-<!ATTLIST router id #CDATA #REQUIRED uuid #CDATA #REQUIRED>
+<!ATTLIST router %tag.attr;>
 
 <!-- basic elements -->
-<!ELEMENT network (%basic.content;)*>
+<!ELEMENT network %tag.content;>
 <!ATTLIST network type (tcp | elan | myrinet) 'tcp'>
 
-<!ELEMENT fstype        (%basic.content;)*>
-<!ELEMENT device        (%basic.content;)*>
-<!ELEMENT server        (%basic.content;)*>
-<!ELEMENT autoformat    (%basic.content;)*>
-<!ELEMENT path          (%basic.content;)*>
-<!ELEMENT fileset       (%basic.content;)*>
+<!ELEMENT fstype        %tag.content;>
+<!ELEMENT device        %tag.content;>
+<!ELEMENT server        %tag.content;>
+<!ELEMENT autoformat    %tag.content;>
+<!ELEMENT path          %tag.content;>
+<!ELEMENT fileset       %tag.content;>
 
-<!ELEMENT profile_id    (%basic.content;)*>
-<!ATTLIST profile_id    (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT ldlm_id       (%basic.content;)*>
-<!ATTLIST ldlm_id       (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT mds_id        (%basic.content;)*>
-<!ATTLIST mds_id        (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT obd_id        (%basic.content;)*>
-<!ATTLIST obd_id        (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT osc_id        (%basic.content;)*>
-<!ATTLIST osc_id        (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT lov_id        (%basic.content;)*>
-<!ATTLIST lov_id        (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT mdc_id        (%basic.content;)*>
-<!ATTLIST mdc_id        (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT mountpoint_id (%basic.content;)*>
-<!ATTLIST mountpoint_id (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT service_id    (%basic.content;)*>
-<!ATTLIST service_id    (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT server_id     (%basic.content;)*>
-<!ATTLIST server_id     (%id.content;)* #CDATA #IMPLIED>
-<!ELEMENT failover_id   (%basic.content;)*>
-<!ATTLIST failover_id   (%id.content;)* #CDATA #IMPLIED>
+<!-- id tag elements -->
+<!ELEMENT profile_id    %tag.content;>
+<!ATTLIST profile_id    %tag.id;>
+<!ELEMENT obd_id        %tag.content;>
+<!ATTLIST obd_id        %tag.id;>
+<!ELEMENT mds_id        %tag.content;>
+<!ATTLIST mds_id        %tag.id;>
+<!ELEMENT osc_id        %tag.content;>
+<!ATTLIST osc_id        %tag.id;>
+<!ELEMENT lov_id        %tag.content;>
+<!ATTLIST lov_id        %tag.id;>
+<!ELEMENT mdc_id        %tag.content;>
+<!ATTLIST mdc_id        %tag.id;>
+<!ELEMENT mountpoint_id %tag.content;>
+<!ATTLIST mountpoint_id %tag.id;>
+<!ELEMENT service_id    %tag.content;>
+<!ATTLIST service_id    %tag.id;>
+<!ELEMENT server_id     %tag.content;>
+<!ATTLIST server_id     %tag.id;>
+<!ELEMENT failover_id   %tag.content;>
+<!ATTLIST failover_id   %tag.id;>
 
