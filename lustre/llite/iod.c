@@ -187,27 +187,29 @@ static void ll_brw_pages_unlock( struct inode *inode,
                                  struct ll_writeback_pages *llwp)
 {
         int rc, i;
-        struct obd_brw_set set;
+        struct obd_brw_set *set;
         ENTRY;
 
         sort_brw_pages(llwp->pgs, llwp->num_pages);
 
-        memset(&set, 0, sizeof(struct obd_brw_set));
-        init_waitqueue_head(&set.brw_waitq);
-        INIT_LIST_HEAD(&set.brw_desc_head);
-        atomic_set(&set.brw_refcount, 0);
-        set.brw_callback = ll_brw_sync_wait;
+        set = obd_brw_set_new();
+        if (set == NULL) {
+                EXIT;
+                return;
+        }
+        set->brw_callback = ll_brw_sync_wait;
 
         rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode),
                      ll_i2info(inode)->lli_smd, llwp->num_pages, llwp->pgs,
-                     &set, NULL);
+                     set, NULL);
         if (rc) {
                 CERROR("error from obd_brw: rc = %d\n", rc);
         } else {
-                rc = ll_brw_sync_wait(&set, CB_PHASE_START);
+                rc = ll_brw_sync_wait(set, CB_PHASE_START);
                 if (rc)
                         CERROR("error from callback: rc = %d\n", rc);
         }
+        obd_brw_set_free(set);
 
         /* XXX this doesn't make sense to me */
         rc = 0;
