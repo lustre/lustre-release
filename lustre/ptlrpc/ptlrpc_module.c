@@ -118,7 +118,9 @@ static void __exit ptlrpc_exit(void)
 {
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
-        llog_cleanup_commit_master();
+#ifdef ENABLE_ORPHANS
+        llog_cleanup_commit_master(0);
+#endif
 }
 
 /* connection.c */
