@@ -142,6 +142,8 @@ static void clonefs_put_super(struct super_block *sb)
 	clone_sb = (struct snap_clone_info *)&sb->u.generic_sbp;
 	dput(clone_sb->clone_cache->cache_sb->s_root);
 	list_del(&clone_sb->clone_list_entry);
+	
+	put_snap_current_mnt(clone_sb->clone_cache->cache_sb);
 
 	EXIT;
 }

@@ -2,8 +2,8 @@
 Index: linux-2.4.20-8/fs/ext3/snap.c
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/snap.c	2003-01-30 18:24:37.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/snap.c	2004-01-13 00:11:40.000000000 +0800
-@@ -0,0 +1,2645 @@
++++ linux-2.4.20-8/fs/ext3/snap.c	2004-01-18 01:48:54.000000000 +0800
+@@ -0,0 +1,2588 @@
 +/* fs/ext3/snap.c
 + *
 + * Copyright (c) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
@@ -47,7 +47,6 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +#define EXT3_SNAP_INDEX EXT3_XATTR_INDEX_LUSTRE
 +
 +#ifdef EXT3_SNAP_DEBUG
-+       static long snap_kmem = 0;
 +       #define snap_debug(f, a...)                             \
 +       do {                                                    \
 +               printk (KERN_INFO "SNAP DEBUG: (%s, %d): %s: ", \
@@ -482,8 +481,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +       
 +	/* we update the new cowed ino list end in memory */ 
 +	SB_LAST_COWED_INO(pri->i_sb) = cpu_to_le32(pri->i_ino);
-+        snap_debug("cowed_inode_list_end %lu, append ino=%d\n",
-+		    last_inode->i_ino, le32_to_cpu(snaps->ino[index]));
++        snap_debug("cowed_inode_list_end %lu, append ino=%lu\n",
++		    last_inode->i_ino, pri->i_ino);
 +exit:
 +	if (last_inode)
 +		iput(last_inode);
@@ -829,8 +828,7 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +
 +	ext3_copy_meta(handle, dst, src);
 +
-+	snap_debug("migrating %ld data blocks from %lu to %lu\n",
-+					blocks, src->i_ino, dst->i_ino);
++	snap_debug("migrating data blocks from %lu to %lu\n", src->i_ino, dst->i_ino);
 +	/* Can't check blocks in case of EAs */
 +        memcpy(EXT3_I(dst)->i_data, EXT3_I(src)->i_data,
 +		              sizeof(EXT3_I(src)->i_data));
@@ -858,6 +856,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +		src->i_ino, dst->i_ino);	
 +        ext3_mark_inode_dirty(handle, src);
 +        ext3_mark_inode_dirty(handle, dst);
++
++	truncate_inode_pages(src->i_mapping, 0);
 +
 +	return SNAP_ERROR(err);
 +}
@@ -976,18 +976,17 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +
 +static int ext3_copy_block (struct inode *dst, struct inode *src, int blk) 
 +{
-+	struct buffer_head *bh_dst, *bh_src;
++	struct buffer_head *bh_dst = NULL, *bh_src = NULL;
 +	int err = 0;
-+	int journal_data;
 +	handle_t *handle = NULL;
 +
-+	if (!ext3_bmap(src->i_mapping, blk))
-+		return 0;
-+
++	
++	snap_debug("copy blk %d from %lu to %lu \n", blk, src->i_ino, dst->i_ino);
 +	/* 
 +	 * ext3_getblk() require handle!=NULL
 +	 */
-+	journal_data = !S_ISREG(src->i_mode);
++	if (S_ISREG(src->i_mode))
++		return 0;
 +
 +	handle = ext3_journal_start(dst, SNAP_COPYBLOCK_TRANS_BLOCKS);
 +	if( !handle )
@@ -996,39 +995,29 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	bh_src = ext3_bread(handle, src, blk, 0, &err);
 +	if (!bh_src) {
 +		snap_err("error for src blk %d, error %d\n", blk, err);
-+		err = -1;
-+		goto exit_stop;
++		goto exit_relese;
 +	}
 +	bh_dst = ext3_getblk(handle, dst, blk, 1, &err);
 +	if (!bh_dst) {
 +		snap_err("error for dst blk %d, error %d\n", blk, err);
-+		err = -1;
-+		goto exit_rels_src;
++		err = -ENOSPC;
++		goto exit_relese;
 +	}
 +	snap_debug("copy block %lu to %lu (%ld bytes)\n",
-+			 bh_src->b_blocknr, bh_dst->b_blocknr, 
-+			src->i_sb->s_blocksize);
++		   bh_src->b_blocknr, bh_dst->b_blocknr, 
++		   src->i_sb->s_blocksize);
 +
-+	if(journal_data){
-+		ext3_journal_get_write_access(handle, bh_dst);
-+	}
++	ext3_journal_get_write_access(handle, bh_dst);
 +
 +	memcpy(bh_dst->b_data, bh_src->b_data, src->i_sb->s_blocksize);
 +
-+	if(journal_data){
-+		ext3_journal_dirty_metadata(handle, bh_dst);
-+	}else{
-+		mark_buffer_dirty(bh_dst);
-+		if (IS_SYNC(src)) {
-+			ll_rw_block (WRITE, 1, &bh_dst);
-+			wait_on_buffer (bh_dst);
-+		}
-+	}
-+	brelse(bh_dst);
-+exit_rels_src:
-+	brelse(bh_src);
-+exit_stop:
-+	ext3_journal_stop(handle, dst);
++	ext3_journal_dirty_metadata(handle, bh_dst);
++	err = 1;
++exit_relese:
++	if (bh_src) brelse(bh_src);
++	if (bh_dst) brelse(bh_dst);
++	if (handle)	
++		ext3_journal_stop(handle, dst);
 +	return err;
 +}
 +
@@ -1401,7 +1390,7 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +{
 +	struct inode *ind;
 +	handle_t *handle = NULL;
-+	int err;
++	int err = 0;
 +	int has_orphan = 0;
 +
 +	if( pri == pri->i_sb->u.ext3_sb.s_journal_inode ){
@@ -1457,8 +1446,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	}
 +
 +	if (ind && !IS_ERR(ind)) {
-+		snap_err("existing indirect ino %lu for %lu: index %d\n",
-+				ind->i_ino, pri->i_ino, index);
++		snap_debug("existing indirect ino %lu for %lu: index %d\n",
++		 	  ind->i_ino, pri->i_ino, index);
 +		err = 0;
 +		goto exit;
 +	}
@@ -1939,7 +1928,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +		pri->i_ino, (ulong)le32_to_cpu(snaps->ino[index]), index);
 +
 +	ind = iget(pri->i_sb, le32_to_cpu (snaps->ino[index]) );
-+	snap_debug("iget ind %lu, ref count = %d\n", ind->i_ino, ind->i_count);
++	snap_debug("iget ind %lu, ref count = %d\n", 
++		   ind->i_ino, atomic_read(&ind->i_count));
 +
 +	if ( !ind || IS_ERR(ind) || is_bad_inode(ind) ) {
 +		err = -EINVAL;
@@ -2004,7 +1994,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	}
 +
 +	snap_debug("delete indirect ino %lu\n", ind->i_ino);
-+	snap_debug("iput ind %lu, ref count = %d\n", ind->i_ino, ind->i_count);
++	snap_debug("iput ind %lu, ref count = %d\n", 
++		    ind->i_ino, atomic_read(&ind->i_count));
 +	ind->i_nlink = 0;
 +	iput (ind);
 +
@@ -2283,7 +2274,6 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	}
 +}
 +
-+#if 1 
 +static int find_snap_meta_index(
 +	struct table_snap_meta_data *snap_meta,
 +	char			    *name)
@@ -2294,9 +2284,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	for( i = 0; i < TABLE_ITEM_COUNT; i++){
 +		/*compare name Max name Length 15*/
 +		if (snap_meta->array[i].name[0]){
-+			if(strcmp(snap_meta->array[i].name, name))
-+				continue;
-+			return i;
++			if(!strncmp(snap_meta->array[i].name, name, strlen(name)))
++				return i;
 +		}
 +	}
 +	return -1; /* can not find */
@@ -2330,8 +2319,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +        struct inode  			*inode;
 +	struct buffer_head 		*bh = NULL;
 +	struct table_snap_meta_data     *s_attr;
-+	unsigned long			map_len = 0, index = 0, left_size;
-+        int 				i, error = 0;
++	unsigned long			map_len = 0,  left_size;
++        int 				i, error = 0, index = 0;
 +	
 +	ino = SB_SNAPTABLE_INO(sb);	
 +	if (ino == 0){
@@ -2354,8 +2343,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	s_attr = (struct table_snap_meta_data *)(bh->b_data);
 +	index = find_snap_meta_index(s_attr, name);
 +	if (index < 0) {
-+		snap_debug("not exit %s meta attr of table ino %llu \n", 
-+					name, ip->i_ino);
++		snap_debug("not exit %s meta attr of table ino %lu \n", 
++					name, inode->i_ino);
 +	        error = 0;
 +		goto out_iput;
 +	}
@@ -2445,14 +2434,15 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	s_attr = (struct table_snap_meta_data *)(bh->b_data);
 +	index = find_snap_meta_index(s_attr, name);
 +	if (index < 0 && !buf) { 	
-+		snap_debug("%s meta attr of table ino %llu do not exist\n", 
++		snap_debug("%s meta attr of table ino %lu do not exist\n", 
 +			    name, inode->i_ino);
 +                error = 0;
++		brelse(bh);
 +		goto exit;
 +	}
 +	if (!buf) {
-+		snap_debug("delete the meta attr %s in the table ino %s",
-+			   *name, inode->ino);
++		snap_debug("delete the meta attr %s in the table ino %lu",
++			   name, inode->i_ino);
 +		/*Here we only delete the entry of the attr
 +		 *FIXME, should we also delete the block of 
 +		 * this attr
@@ -2462,6 +2452,7 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	        s_attr->array[index].len = 0;
 +	        s_attr->count --;
 +		ext3_journal_dirty_metadata(handle, bh);
++		brelse(bh);
 +		goto exit;
 +	}
 +	new_len = (size + sb->s_blocksize - 1) >> sb->s_blocksize_bits;
@@ -2472,11 +2463,13 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +		if (index < 0){
 +			snap_err("table full of ino %lu \n", inode->i_ino);
 +		        error = index;
-+		        goto exit;
++		        brelse(bh);
++			goto exit;
 +		}
 +	}
 +	s_attr->array[index].len = size;
 +	journal_dirty_metadata(handle, bh);
++	brelse(bh);
 +	/*put this attr to the snap table*/
 +	left_size = size;
 +	for(i = 0; i < new_len; i++) {
@@ -2486,8 +2479,9 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +				      s_attr->array[index].start + i, 1, &error);
 +		if (!array_bh) {
 +			snap_err("inode %lu Can not get the block of attr %s\n",  
-+					inode->i_ino, name);
++				  inode->i_ino, name);
 +			error = -ENOSPC;
++			brelse(array_bh);
 +			goto exit;
 +		}
 +		ext3_journal_get_write_access(handle, array_bh);
@@ -2499,63 +2493,12 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +		left_size -= inode->i_sb->s_blocksize;
 +		brelse(array_bh);
 +	}
-+	ext3_journal_stop(handle, sb->s_root->d_inode); 
 +exit:
-+	brelse(bh);
++	if (handle)
++		ext3_journal_stop(handle, sb->s_root->d_inode); 
 +	iput(inode);
 +	return error;
 +}
-+#else
-+static int ext3_get_meta_attr(struct super_block *sb, 
-+			      char* name, char* buf, 
-+			      int *size)
-+{
-+        struct inode  *root_inode = sb->s_root->d_inode;
-+	int err = 0;
-+	
-+	if (!root_inode)
-+		return -EINVAL;
-+
-+	if (buf)
-+		err = ext3_xattr_get(root_inode, EXT3_SNAP_INDEX, name,
-+	                     buf, *size);
-+	if (err == -ERANGE || !buf){
-+		/*get the size of the buf*/
-+		*size = ext3_xattr_get(root_inode, EXT3_SNAP_INDEX, name,
-+	                       	       NULL, *size);
-+	}
-+	
-+	return err;
-+}
-+/* 
-+ * set the meta info of the snap system
-+ * argument:
-+ *	buf	== NULL  delete "name" meta attr
-+ *		!= NULL  set    "name" meta attr 
-+ * return value:
-+ *	= 0     ok;
-+ *	< 0	error;	
-+ */
-+
-+static int ext3_set_meta_attr(struct super_block *sb, char* name, 
-+			      char* buf, int size)
-+{
-+        struct inode  *root_inode = sb->s_root->d_inode;
-+        handle_t      *handle = NULL;
-+        int 	      error = 0;
-+		
-+
-+	handle = ext3_journal_start(root_inode, EXT3_XATTR_TRANS_BLOCKS);
-+	if(!handle)
-+		return -EINVAL;
-+	
-+	error = ext3_xattr_set(handle, root_inode, EXT3_SNAP_INDEX, name, buf, size, 0);	
-+	
-+	ext3_journal_stop(handle, root_inode); 
-+	
-+	return error;
-+}
-+#endif
 +
 +struct snapshot_operations ext3_snap_operations = {
 +	ops_version:		SNAP_VERSION(2,0,2),
@@ -2649,127 +2592,6 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +
 +
 +
-Index: linux-2.4.20-8/fs/ext3/ioctl.c
-===================================================================
---- linux-2.4.20-8.orig/fs/ext3/ioctl.c	2004-01-05 10:54:00.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/ioctl.c	2004-01-13 00:10:14.000000000 +0800
-@@ -13,6 +13,12 @@
- #include <linux/ext3_jbd.h>
- #include <linux/sched.h>
- #include <asm/uaccess.h>
-+#include <linux/locks.h>
-+
-+#include <linux/snap.h>
-+extern struct snapshot_operations ext3_snap_operations;
-+extern int ext3_snap_print(struct super_block *sb, int index);
-+extern int ext3_snap_delete(struct super_block *sb, int index);
- 
- 
- int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
-@@ -189,6 +195,103 @@
- 			return ret;
- 		}
- #endif
-+#if 0
-+	case EXT3_IOC_SNAP_SETFILECOW: {
-+		printk(KERN_INFO "set file cow on dev %x\n",inode->i_dev);
-+
-+		/* clear block cow feature*/
-+		if (EXT3_HAS_COMPAT_FEATURE(inode->i_sb,
-+	                             EXT3_FEATURE_COMPAT_BLOCKCOW)) {
-+			handle_t	*handle = ext3_journal_start(inode, 1);
-+			
-+			if (EXT3_HAS_COMPAT_FEATURE(inode->i_sb,
-+					EXT3_FEATURE_COMPAT_SNAPFS)) {
-+				printk(KERN_INFO "can't change cow level while  snapfs feature exist");
-+				return -EPERM;
-+			}
-+			lock_super(inode->i_sb);
-+			journal_get_write_access(handle, EXT3_SB(inode->i_sb)->s_sbh);
-+			inode->i_sb->u.ext3_sb.s_es->s_feature_compat &=
-+				cpu_to_le32(~EXT3_FEATURE_COMPAT_BLOCKCOW);
-+			inode->i_sb->s_dirt = 1;
-+			journal_dirty_metadata(handle, EXT3_SB(inode->i_sb)->s_sbh);
-+			unlock_super(inode->i_sb);
-+			ext3_journal_stop(handle, inode);
-+		}
-+		return 0;
-+	}
-+	case EXT3_IOC_CREATE_INDIR: {
-+		struct inode *ind;
-+		printk(KERN_INFO "create indirect on inode %lu\n",inode->i_ino);
-+               	ind = ext3_snap_operations.create_indirect(inode, 0, 1, 0);
-+	       	if (!ind || IS_ERR(ind))
-+			return PTR_ERR(ind);
-+		printk(KERN_INFO "got indirect inode %lu\n",ind->i_ino);
-+		put_user(ind->i_ino,(int *) arg);
-+		iput(ind);
-+		return 0;
-+	}
-+	case EXT3_IOC_GET_INDIR: {
-+		struct inode *ind;
-+		int index = 1;
-+		if (get_user(index, (int *) arg))
-+			return -EFAULT;	
-+
-+		printk(KERN_INFO "get indirect on inode %lu, index %d\n", 
-+				inode->i_ino, index);
-+		ind = ext3_snap_operations.get_indirect(inode, NULL, index);
-+		if (!ind || IS_ERR(ind)) {
-+			put_user(0,(int *) arg);
-+			return PTR_ERR(ind);
-+		}
-+		printk(KERN_INFO "got indirect inode %lu for index %d\n",
-+				ind->i_ino, index);
-+		put_user(ind->i_ino,(int *) arg);
-+		iput(ind);
-+		return 0;
-+	}
-+	case EXT3_IOC_IS_REDIR: {
-+		int is_redirector = 0;
-+		printk(KERN_INFO "checking if inode %lu is redirector via\n",
-+			inode->i_ino);
-+		is_redirector = ext3_snap_operations.is_redirector(inode);
-+		printk(KERN_INFO "redirector: %s\n",is_redirector ? "yes":"no");
-+		put_user(is_redirector,(int *) arg);
-+
-+		return 0;
-+	}
-+	case EXT3_IOC_RESTORE_INDIR: {
-+		printk(KERN_INFO "restore indirect on inode %lu\n",inode->i_ino);
-+		return ext3_snap_operations.restore_indirect(inode, 1);
-+	}
-+	case EXT3_IOC_SNAP_PRINT: {
-+		int index = 1;
-+		if (get_user(index, (int *) arg))
-+			return -EFAULT;	
-+		printk(KERN_INFO "print snap for index %d\n",index);
-+
-+		return ext3_snap_print(inode->i_sb, 1);
-+	}
-+	case EXT3_IOC_SNAP_DELETE: {
-+		int index = 1;
-+		if (get_user(index, (int *) arg))
-+			return -EFAULT;	
-+
-+		// XXX: debug code , always set index = 1
-+		if(index !=1) index=1;
-+		printk(KERN_INFO "delete all cowed inode for index %d\n",index);
-+		return ext3_snap_delete(inode->i_sb, index);
-+	}
-+
-+	case EXT3_IOC_DESTROY_INDIR: {
-+		int index = 1;
-+		if (get_user(index, (int *) arg))
-+			index = 1;
-+		printk(KERN_INFO "destroy indirect on ino %lu, index %d\n",
-+				inode->i_ino, index);
-+		return ext3_snap_operations.destroy_indirect(inode, index, NULL);
-+	}
-+#endif
- 	default:
- 		return -ENOTTY;
- 	}
 Index: linux-2.4.20-8/fs/ext3/Makefile
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/Makefile	2004-01-05 10:54:03.000000000 +0800
@@ -2786,7 +2608,7 @@ Index: linux-2.4.20-8/fs/ext3/Makefile
 Index: linux-2.4.20-8/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/inode.c	2004-01-05 10:54:03.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/inode.c	2004-01-13 00:10:14.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/inode.c	2004-01-18 01:48:19.000000000 +0800
 @@ -1191,7 +1191,7 @@
   * So, if we see any bmap calls here on a modified, data-journaled file,
   * take extra steps to flush any blocks which might be in the cache. 
@@ -2799,16 +2621,8 @@ Index: linux-2.4.20-8/fs/ext3/inode.c
 Index: linux-2.4.20-8/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/ialloc.c	2004-01-05 10:54:03.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/ialloc.c	2004-01-13 00:10:14.000000000 +0800
-@@ -78,7 +78,6 @@
- 	sb->u.ext3_sb.s_inode_bitmap[bitmap_nr] = bh;
- 	return retval;
- }
--
- /*
-  * load_inode_bitmap loads the inode bitmap for a blocks group
-  *
-@@ -160,6 +159,13 @@
++++ linux-2.4.20-8/fs/ext3/ialloc.c	2004-01-16 20:48:29.000000000 +0800
+@@ -160,6 +160,13 @@
  	return retval;
  }
  
@@ -2822,6 +2636,24 @@ Index: linux-2.4.20-8/fs/ext3/ialloc.c
  /*
   * NOTE! When we get the inode, we're the only people
   * that have access to it, and as such there are no
+Index: linux-2.4.20-8/fs/ext3/super.c
+===================================================================
+--- linux-2.4.20-8.orig/fs/ext3/super.c	2004-01-05 10:54:03.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/super.c	2004-01-18 01:40:10.000000000 +0800
+@@ -1324,6 +1324,13 @@
+ 	sbi->s_mount_state = le16_to_cpu(es->s_state);
+ 	sbi->s_addr_per_block_bits = log2(EXT3_ADDR_PER_BLOCK(sb));
+ 	sbi->s_desc_per_block_bits = log2(EXT3_DESC_PER_BLOCK(sb));
++#define EXT3_SNAP_FS
++#ifdef EXT3_SNAP_FS
++	init_MUTEX(&(sbi->s_snap_list_sem));
++	sbi->s_snaptable_ino = le32_to_cpu(es->s_snaptable_ino);
++	sbi->s_first_cowed_pri_ino = le32_to_cpu(es->s_first_cowed_pri_ino);
++	sbi->s_last_cowed_pri_ino = le32_to_cpu(es->s_last_cowed_pri_ino);
++#endif	
+ 	for (i=0; i < 4; i++)
+ 		sbi->s_hash_seed[i] = le32_to_cpu(es->s_hash_seed[i]);
+ 	sbi->s_def_hash_version = es->s_def_hash_version;
 Index: linux-2.4.20-8/include/linux/snap.h
 ===================================================================
 --- linux-2.4.20-8.orig/include/linux/snap.h	2003-01-30 18:24:37.000000000 +0800
@@ -3096,7 +2928,7 @@ Index: linux-2.4.20-8/include/linux/snap.h
 Index: linux-2.4.20-8/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.4.20-8.orig/include/linux/ext3_fs.h	2004-01-05 10:54:03.000000000 +0800
-+++ linux-2.4.20-8/include/linux/ext3_fs.h	2004-01-13 00:10:14.000000000 +0800
++++ linux-2.4.20-8/include/linux/ext3_fs.h	2004-01-16 20:45:09.000000000 +0800
 @@ -183,7 +183,13 @@
  #define EXT3_INDEX_FL			0x00001000 /* hash-indexed directory */
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
@@ -3144,15 +2976,15 @@ Index: linux-2.4.20-8/include/linux/ext3_fs.h
  	__u8	s_reserved_char_pad;
  	__u16	s_reserved_word_pad;
 -	__u32	s_reserved[192];	/* Padding to the end of the block */
-+	/* for snapfs */
 + 	__u32   s_default_mount_opts;
 +        __u32   s_first_meta_bg;        /* First metablock group */
 +	__u32   s_mkfs_time;            /* When the filesystem was created */
++	/* for snapfs */
 +	__u32   s_first_cowed_pri_ino;  /* For snapfs,the first cowed primary inode */
 +	__u32   s_last_cowed_pri_ino;     /* last cowed ino in memory */
 +	__u32   s_snaptable_ino;        /* snaptable ino in memory */
 +	__u32   s_last_snap_orphan;     /* SnapFS: start of cowing indirect inode */
-+	__u32   s_reserved[185];        /* Padding to the end of the block,originally 204 */
++	__u32   s_reserved[186];        /* Padding to the end of the block,originally 204 */
  };
  
  #ifdef __KERNEL__
@@ -3225,13 +3057,13 @@ Index: linux-2.4.20-8/include/linux/ext3_jbd.h
 
 %diffstat
  fs/ext3/Makefile           |    2 
- fs/ext3/ialloc.c           |    8 
+ fs/ext3/ialloc.c           |    7 
  fs/ext3/inode.c            |    2 
- fs/ext3/ioctl.c            |  103 +
- fs/ext3/snap.c             | 2645 +++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/snap.c             | 2588 +++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/super.c            |    7 
  include/linux/ext3_fs.h    |   38 
  include/linux/ext3_fs_sb.h |    7 
  include/linux/ext3_jbd.h   |   27 
  include/linux/snap.h       |  266 ++++
- 9 files changed, 3092 insertions(+), 6 deletions(-)
+ 9 files changed, 2939 insertions(+), 5 deletions(-)
 
