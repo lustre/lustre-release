@@ -6,7 +6,6 @@ LINUX = @LINUX@
 obj-y += portals/
 # obdclass has to come before anything that does class_register..
 obj-y += obdclass/
-obj-y += lib/
 obj-y += ptlrpc/
 obj-y += ldlm/
 obj-y += obdfilter/
