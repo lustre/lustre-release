@@ -103,7 +103,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct bio *bio = NULL;
         int blocks_per_page, err;
         struct niobuf_local *lnb;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { 0 };
         struct inode *inode = NULL;
@@ -114,6 +114,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = exp->exp_obd;
 
         ENTRY;
+
         LASSERT(oti != NULL);
         LASSERT(objcount == 1);
         LASSERT(current->journal_info == NULL);
@@ -139,7 +140,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fso.fso_dentry = res->dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso,
@@ -199,7 +200,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                         }
                 }
 
-                /* We expect these pages to be in offset order, but we'll
+                /* we expect these pages to be in offset order, but we'll
                  * be forgiving */
                 this_size = lnb->offset + lnb->len;
                 if (this_size > iattr.ia_size)
@@ -209,7 +210,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 #warning This probably needs filemap_fdatasync() like filter_io_24 (bug 2366)
         if (bio) {
                 atomic_inc(&dreq->numreqs);
-                submit_bio(WRITE, bio);
+                fsfilt_send_bio(obd, inode, bio);
         }
 
         /* time to wait for I/O completion */
@@ -254,7 +255,7 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
                 OBD_FREE(dreq, sizeof(*dreq));
