@@ -64,8 +64,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
                         oa->o_mode = S_IFREG | 0600;
                         oa->o_easize = ll_mds_easize(inode->i_sb);
                         oa->o_id = inode->i_ino;
-                        oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLEASIZE |
-                                        OBD_MD_FLID;
+                        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
+                                OBD_MD_FLMODE | OBD_MD_FLEASIZE;
                         rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
 
                         if (rc) {
@@ -101,8 +101,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 GOTO(out_mdc, rc = -EINVAL);
 
         oa->o_id = lsm->lsm_object_id;
-        oa->o_mode = S_IFREG | inode->i_mode;
-        oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLID | OBD_MD_FLSIZE;
+        oa->o_mode = S_IFREG;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
         rc = obd_open(ll_i2obdconn(inode), oa, lsm);
         obdo_free(oa);
         oa = NULL;
@@ -206,10 +206,11 @@ int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm)
 
         oa.o_id = lsm->lsm_object_id;
         oa.o_mode = S_IFREG;
-        oa.o_valid = OBD_MD_FLID|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
+        oa.o_valid = OBD_MD_FLID|OBD_MD_FLTYPE|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
         rc = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
         if (!rc)
-                obdo_to_inode(inode, &oa, oa.o_valid);
+                obdo_to_inode(inode, &oa,
+                              oa.o_valid & ~(OBD_MD_FLTYPE | OBD_MD_FLMODE));
 
         err = ll_size_unlock(inode, lsm, LCK_PR, lockhs);
         if (err != ELDLM_OK) {
@@ -239,7 +240,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         memset(&oa, 0, sizeof(oa));
         oa.o_id = lli->lli_smd->lsm_object_id;
         oa.o_mode = S_IFREG;
-        oa.o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
+        oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLID;
         rc = obd_close(ll_i2obdconn(inode), &oa, lli->lli_smd);
         if (rc)
                 GOTO(out_fd, abs(rc));
@@ -255,7 +256,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
 
                 oa.o_id = lli->lli_smd->lsm_object_id;
                 oa.o_mode = S_IFREG;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE |
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
                         OBD_MD_FLBLOCKS;
                 rc = obd_getattr(&sbi->ll_osc_conn, &oa, lli->lli_smd);
                 if (!rc) {
@@ -447,7 +448,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_mode = inode->i_mode;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE |
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
                         OBD_MD_FLBLOCKS;
                 retval = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
                 if (retval)

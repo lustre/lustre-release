@@ -150,7 +150,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 
         /* Send a hint to the create method on the type of file to create */
         oa->o_mode = mode;
-        oa->o_valid |= OBD_MD_FLMODE;
+        oa->o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE;
         CDEBUG(D_INODE, "\n");
         err = obd_create(IID(dir), oa, NULL);
         CDEBUG(D_INODE, "\n");

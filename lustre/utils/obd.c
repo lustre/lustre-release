@@ -793,6 +793,8 @@ int jt_obd_create(int argc, char **argv)
                                 cmdname(argv[0]), argv[2]);
                         return CMD_HELP;
                 }
+                if (!(mode & S_IFMT))
+                        mode |= S_IFREG;
         }
 
         if (argc > 3) {
@@ -808,7 +810,8 @@ int jt_obd_create(int argc, char **argv)
         for (i = 1, next_count = verbose; i <= count; i++) {
                 data.ioc_obdo1.o_mode = mode;
                 data.ioc_obdo1.o_id = i;
-                data.ioc_obdo1.o_valid = OBD_MD_FLMODE | OBD_MD_FLID;
+                data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                                        OBD_MD_FLID;
 
                 rc = ioctl(fd, OBD_IOC_CREATE, &data);
                 SHMEM_BUMP();
@@ -853,7 +856,7 @@ int jt_obd_setattr(int argc, char **argv)
                         cmdname(argv[0]), argv[2]);
                 return CMD_HELP;
         }
-        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
+        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
         rc = ioctl(fd, OBD_IOC_SETATTR, &data);
         if (rc < 0)
@@ -1078,7 +1081,7 @@ int jt_obd_test_brw(int argc, char **argv)
         IOCINIT(data);
         data.ioc_obdo1.o_id = objid;
         data.ioc_obdo1.o_mode = S_IFREG;
-        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
+        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
         data.ioc_count = len;
         data.ioc_offset = thr_offset * len * count;
 

@@ -43,32 +43,36 @@ int dump_rniobuf(struct niobuf_remote *nb)
 
 int dump_obdo(struct obdo *oa)
 {
-        CERROR("obdo: o_valid = %08x\n", oa->o_valid);
-        if (oa->o_valid & OBD_MD_FLID)
+        __u32 valid = oa->o_valid;
+
+        CERROR("obdo: o_valid = %08x\n", valid);
+        if (valid & OBD_MD_FLID)
                 CERROR("obdo: o_id = "LPD64"\n", oa->o_id);
-        if (oa->o_valid & OBD_MD_FLATIME)
+        if (valid & OBD_MD_FLATIME)
                 CERROR("obdo: o_atime = "LPD64"\n", oa->o_atime);
-        if (oa->o_valid & OBD_MD_FLMTIME)
+        if (valid & OBD_MD_FLMTIME)
                 CERROR("obdo: o_mtime = "LPD64"\n", oa->o_mtime);
-        if (oa->o_valid & OBD_MD_FLCTIME)
+        if (valid & OBD_MD_FLCTIME)
                 CERROR("obdo: o_ctime = "LPD64"\n", oa->o_ctime);
-        if (oa->o_valid & OBD_MD_FLSIZE)
+        if (valid & OBD_MD_FLSIZE)
                 CERROR("obdo: o_size = "LPD64"\n", oa->o_size);
-        if (oa->o_valid & OBD_MD_FLBLOCKS)   /* allocation of space */
+        if (valid & OBD_MD_FLBLOCKS)   /* allocation of space */
                 CERROR("obdo: o_blocks = "LPD64"\n", oa->o_blocks);
-        if (oa->o_valid & OBD_MD_FLBLKSZ)
+        if (valid & OBD_MD_FLBLKSZ)
                 CERROR("obdo: o_blksize = %d\n", oa->o_blksize);
-        if (oa->o_valid & OBD_MD_FLMODE)
-                CERROR("obdo: o_mode = %o\n", oa->o_mode);
-        if (oa->o_valid & OBD_MD_FLUID)
+        if (valid & (OBD_MD_FLTYPE | OBD_MD_FLMODE))
+                CERROR("obdo: o_mode = %o\n",
+                       oa->o_mode & ((valid & OBD_MD_FLTYPE ?  S_IFMT : 0) |
+                                     (valid & OBD_MD_FLMODE ? ~S_IFMT : 0)));
+        if (valid & OBD_MD_FLUID)
                 CERROR("obdo: o_uid = %d\n", oa->o_uid);
-        if (oa->o_valid & OBD_MD_FLGID)
+        if (valid & OBD_MD_FLGID)
                 CERROR("obdo: o_gid = %d\n", oa->o_gid);
-        if (oa->o_valid & OBD_MD_FLFLAGS)
+        if (valid & OBD_MD_FLFLAGS)
                 CERROR("obdo: o_flags = %x\n", oa->o_flags);
-        if (oa->o_valid & OBD_MD_FLNLINK)
+        if (valid & OBD_MD_FLNLINK)
                 CERROR("obdo: o_nlink = %d\n", oa->o_nlink);
-        if (oa->o_valid & OBD_MD_FLGENER)
+        if (valid & OBD_MD_FLGENER)
                 CERROR("obdo: o_generation = %d\n", oa->o_generation);
 
         return -EINVAL;

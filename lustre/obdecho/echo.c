@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.37 2002/09/11 05:17:03 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.37 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.38 2002/09/24 19:18:16 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.38 $"
 
 #define EXPORT_SYMTAB
 
@@ -141,7 +141,7 @@ int echo_create(struct lustre_handle *conn, struct obdo *oa,
                 return -ENOENT;
         }
 
-        if (!(oa->o_valid & OBD_MD_FLMODE)) {
+        if (!(oa->o_valid & OBD_MD_FLTYPE)) {
                 CERROR("invalid o_valid %08x\n", oa->o_valid);
                 return -EINVAL;
         }

@@ -290,7 +290,7 @@ static void ll_delete_inode(struct inode *inode)
                 oa->o_id = lsm->lsm_object_id;
                 oa->o_easize = ll_mds_easize(inode->i_sb);
                 oa->o_mode = inode->i_mode;
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLMODE;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLTYPE;
 
                 err = obd_destroy(ll_i2obdconn(inode), oa, lsm);
                 obdo_free(oa);
@@ -424,7 +424,9 @@ void ll_update_inode(struct inode *inode, struct mds_body *body)
         if (body->valid & OBD_MD_FLCTIME)
                 inode->i_ctime = body->ctime;
         if (body->valid & OBD_MD_FLMODE)
-                inode->i_mode = body->mode;
+                inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);
+        if (body->valid & OBD_MD_FLTYPE)
+                inode->i_mode = (inode->i_mode & ~S_IFMT)|(body->mode & S_IFMT);
         if (body->valid & OBD_MD_FLUID)
                 inode->i_uid = body->uid;
         if (body->valid & OBD_MD_FLGID)

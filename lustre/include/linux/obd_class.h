@@ -200,10 +200,6 @@ static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo,
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->exp_obd, create);
 
-#define OBD_MD_FLNEEDED (OBD_MD_FLID | OBD_MD_FLMODE)
-        //if (obdo->o_valid & OBD_MD_FLNEEDED != OBD_MD_FLNEEDED)
-        //        RETURN(-EINVAL);
-#undef OBD_MD_FLNEEDED
         rc = OBP(export->exp_obd, create)(conn, obdo, ea);
         RETURN(rc);
 }
@@ -478,12 +474,11 @@ static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
         }
         if (ia_valid & ATTR_MODE) {
                 oa->o_mode = attr->ia_mode;
-                oa->o_valid |= OBD_MD_FLMODE;
+                oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLMODE;
                 if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
                         oa->o_mode &= ~S_ISGID;
         }
-        if (ia_valid & ATTR_UID)
-        {
+        if (ia_valid & ATTR_UID) {
                 oa->o_uid = attr->ia_uid;
                 oa->o_valid |= OBD_MD_FLUID;
         }
@@ -514,8 +509,12 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
                 attr->ia_size = oa->o_size;
                 attr->ia_valid |= ATTR_SIZE;
         }
+        if (valid & OBD_MD_FLTYPE) {
+                attr->ia_mode = (attr->ia_mode & ~S_IFMT)|(oa->o_mode & S_IFMT);
+                attr->ia_valid |= ATTR_MODE;
+        }
         if (valid & OBD_MD_FLMODE) {
-                attr->ia_mode = oa->o_mode;
+                attr->ia_mode = (attr->ia_mode & S_IFMT)|(oa->o_mode & ~S_IFMT);
                 attr->ia_valid |= ATTR_MODE;
                 if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
                         attr->ia_mode &= ~S_ISGID;
@@ -552,8 +551,10 @@ static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
                 dst->o_blocks = src->i_blocks;
         if (valid & OBD_MD_FLBLKSZ)
                 dst->o_blksize = src->i_blksize;
+        if (valid & OBD_MD_FLTYPE)
+                dst->o_mode = (dst->o_mode & ~S_IFMT) | (src->i_mode & S_IFMT);
         if (valid & OBD_MD_FLMODE)
-                dst->o_mode = src->i_mode;
+                dst->o_mode = (dst->o_mode & S_IFMT) | (src->i_mode & ~S_IFMT);
         if (valid & OBD_MD_FLUID)
                 dst->o_uid = src->i_uid;
         if (valid & OBD_MD_FLGID)
@@ -587,8 +588,10 @@ static inline void obdo_to_inode(struct inode *dst, struct obdo *src,
                 dst->i_blocks = src->o_blocks;
         if (valid & OBD_MD_FLBLKSZ)
                 dst->i_blksize = src->o_blksize;
+        if (valid & OBD_MD_FLTYPE)
+                dst->i_mode = (dst->i_mode & ~S_IFMT) | (src->o_mode & S_IFMT);
         if (valid & OBD_MD_FLMODE)
-                dst->i_mode = src->o_mode;
+                dst->i_mode = (dst->i_mode & S_IFMT) | (src->o_mode & ~S_IFMT);
         if (valid & OBD_MD_FLUID)
                 dst->i_uid = src->o_uid;
         if (valid & OBD_MD_FLGID)
@@ -624,8 +627,10 @@ static inline void obdo_cpy_md(struct obdo *dst, struct obdo *src,
                 dst->o_blocks = src->o_blocks;
         if (valid & OBD_MD_FLBLKSZ)
                 dst->o_blksize = src->o_blksize;
+        if (valid & OBD_MD_FLTYPE)
+                dst->o_mode = (dst->o_mode & ~S_IFMT) | (src->o_mode & S_IFMT);
         if (valid & OBD_MD_FLMODE)
-                dst->o_mode = src->o_mode;
+                dst->o_mode = (dst->o_mode & S_IFMT) | (src->o_mode & ~S_IFMT);
         if (valid & OBD_MD_FLUID)
                 dst->o_uid = src->o_uid;
         if (valid & OBD_MD_FLGID)
@@ -670,8 +675,10 @@ static inline int obdo_cmp_md(struct obdo *dst, struct obdo *src,
                 res = (res || (dst->o_blocks != src->o_blocks));
         if ( compare & OBD_MD_FLBLKSZ )
                 res = (res || (dst->o_blksize != src->o_blksize));
+        if ( compare & OBD_MD_FLTYPE )
+                res = (res || (((dst->o_mode ^ src->o_mode) & S_IFMT) != 0));
         if ( compare & OBD_MD_FLMODE )
-                res = (res || (dst->o_mode != src->o_mode));
+                res = (res || (((dst->o_mode ^ src->o_mode) & ~S_IFMT) != 0));
         if ( compare & OBD_MD_FLUID )
                 res = (res || (dst->o_uid != src->o_uid));
         if ( compare & OBD_MD_FLGID )

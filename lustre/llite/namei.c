@@ -439,8 +439,8 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
 
         if (dentry->d_it->it_disposition == 0) {
                 memset(&oa, 0, sizeof(oa));
-                oa.o_valid = OBD_MD_FLMODE;
                 oa.o_mode = S_IFREG | 0600;
+                oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE;
                 rc = obd_create(ll_i2obdconn(dir), &oa, &lsm);
                 CDEBUG(D_DENTRY, "name %s mode %o o_id %lld: rc = %d\n",
                        dentry->d_name.name, mode, (long long)oa.o_id, rc);
