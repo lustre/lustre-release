@@ -512,12 +512,22 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
 
         /* policies are not executed on the client */
         if (!local && (policy = ldlm_res_policy_table[res->lr_type])) {
-                int rc = policy(lock, cookie, lock->l_req_mode, NULL);
+                int rc;
+
+                /* We do this dancing with refcounts and locks because the
+                 * policy function could send an RPC */
+                res->lr_refcount++;
+                spin_unlock(&res->lr_lock);
+
+                rc = policy(lock, cookie, lock->l_req_mode, NULL);
+
+                spin_lock(&res->lr_lock);
+                ldlm_resource_put(res);
+
                 if (rc == ELDLM_LOCK_CHANGED) {
                         res = lock->l_resource;
                         *flags |= LDLM_FL_LOCK_CHANGED;
-                }
-                if (rc == ELDLM_LOCK_ABORTED) {
+                } else if (rc == ELDLM_LOCK_ABORTED) {
                         /* Abort. */
                         ldlm_resource_put(lock->l_resource);
                         ldlm_lock_free(lock);
