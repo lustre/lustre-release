@@ -106,7 +106,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
                 last_msg = jiffies;
         }
         if ((last_count & (-last_count)) == last_count)
-                mask = D_WARNING;
+                mask = D_HA /* until bug 3273 is fixed D_WARNING */;
         last_count++;
 
         /* Add some margin, since there is a small race if other RPCs arrive
