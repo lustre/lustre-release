@@ -5,15 +5,15 @@
  fs/open.c              |  122 ++++++++++++++--
  fs/proc/base.c         |    3 
  fs/stat.c              |   27 ++-
- include/linux/dcache.h |   53 +++++++
+ include/linux/dcache.h |   54 +++++++
  include/linux/fs.h     |   31 ++++
  kernel/exit.c          |    3 
  kernel/fork.c          |    3 
  kernel/ksyms.c         |    1 
- 12 files changed, 563 insertions(+), 99 deletions(-)
+ 12 files changed, 564 insertions(+), 99 deletions(-)
 
---- linux-2.4.18-p4smp/fs/exec.c~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:41:38.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/exec.c	2003-07-08 14:45:17.000000000 -0600
+--- linux-2.4.18-p4smp/fs/exec.c~vfs_intent-2.4.18-18-chaos65	2003-07-09 12:17:30.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/exec.c	2003-07-09 13:20:37.000000000 -0600
 @@ -117,8 +117,9 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
@@ -73,8 +73,8 @@
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
---- linux-2.4.18-p4smp/fs/dcache.c~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:41:38.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/dcache.c	2003-07-08 14:45:17.000000000 -0600
+--- linux-2.4.18-p4smp/fs/dcache.c~vfs_intent-2.4.18-18-chaos65	2003-07-09 12:17:30.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/dcache.c	2003-07-09 13:20:37.000000000 -0600
 @@ -186,6 +186,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -113,7 +113,7 @@
  
  #define do_switch(x,y) do { \
 --- linux-2.4.18-p4smp/fs/namespace.c~vfs_intent-2.4.18-18-chaos65	2002-06-25 22:16:14.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/namespace.c	2003-07-08 14:45:17.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/namespace.c	2003-07-09 13:20:37.000000000 -0600
 @@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
@@ -229,8 +229,8 @@
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
---- linux-2.4.18-p4smp/fs/namei.c~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:41:38.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/namei.c	2003-07-08 14:45:17.000000000 -0600
+--- linux-2.4.18-p4smp/fs/namei.c~vfs_intent-2.4.18-18-chaos65	2003-07-09 12:17:30.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/namei.c	2003-07-09 13:20:37.000000000 -0600
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -1056,8 +1056,8 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- linux-2.4.18-p4smp/fs/open.c~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:41:38.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/open.c	2003-07-08 14:45:17.000000000 -0600
+--- linux-2.4.18-p4smp/fs/open.c~vfs_intent-2.4.18-18-chaos65	2003-07-09 12:17:30.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/open.c	2003-07-09 13:20:37.000000000 -0600
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1379,8 +1379,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.4.18-p4smp/fs/stat.c~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:41:38.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/stat.c	2003-07-08 14:45:17.000000000 -0600
+--- linux-2.4.18-p4smp/fs/stat.c~vfs_intent-2.4.18-18-chaos65	2003-07-09 12:17:30.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/stat.c	2003-07-09 13:20:37.000000000 -0600
 @@ -17,21 +17,24 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1458,8 +1458,8 @@
  			UPDATE_ATIME(inode);
  			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
  		}
---- linux-2.4.18-p4smp/fs/proc/base.c~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:45:12.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/fs/proc/base.c	2003-07-08 14:45:32.000000000 -0600
+--- linux-2.4.18-p4smp/fs/proc/base.c~vfs_intent-2.4.18-18-chaos65	2003-07-09 12:20:46.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/proc/base.c	2003-07-09 13:20:37.000000000 -0600
 @@ -465,6 +465,9 @@ static int proc_pid_follow_link(struct d
  
  	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
@@ -1470,12 +1470,14 @@
  out:
  	return error;
  }
---- linux-2.4.18-p4smp/include/linux/dcache.h~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:41:38.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/include/linux/dcache.h	2003-07-08 14:45:17.000000000 -0600
-@@ -6,6 +6,44 @@
+--- linux-2.4.18-p4smp/include/linux/dcache.h~vfs_intent-2.4.18-18-chaos65	2003-07-09 13:15:23.000000000 -0600
++++ linux-2.4.18-p4smp-braam/include/linux/dcache.h	2003-07-09 13:32:08.000000000 -0600
+@@ -6,6 +6,45 @@
  #include <asm/atomic.h>
+ #include <linux/gdb.h>
  #include <linux/mount.h>
- 
++#include <linux/string.h>
++
 +#define IT_OPEN     (1)
 +#define IT_CREAT    (1<<1)
 +#define IT_READDIR  (1<<2)
@@ -1513,11 +1515,10 @@
 +        it->it_flags = flags;
 +}
 +
-+
+ 
  /*
   * linux/include/linux/dcache.h
-  *
-@@ -91,8 +129,22 @@ struct dentry_operations {
+@@ -92,8 +131,22 @@ struct dentry_operations {
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
@@ -1540,7 +1541,7 @@
  /* the dentry parameter passed to d_hash and d_compare is the parent
   * directory of the entries to be compared. It is used in case these
   * functions need any directory specific information for determining
-@@ -124,6 +176,7 @@ d_iput:		no		no		yes
+@@ -125,6 +178,7 @@ d_iput:		no		no		yes
  					 * s_nfsd_free_path semaphore will be down
  					 */
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
@@ -1548,8 +1549,8 @@
  
  extern spinlock_t dcache_lock;
  
---- linux-2.4.18-p4smp/include/linux/fs.h~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:41:47.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/include/linux/fs.h	2003-07-08 14:45:17.000000000 -0600
+--- linux-2.4.18-p4smp/include/linux/fs.h~vfs_intent-2.4.18-18-chaos65	2003-07-09 13:20:34.000000000 -0600
++++ linux-2.4.18-p4smp-braam/include/linux/fs.h	2003-07-09 13:20:37.000000000 -0600
 @@ -339,6 +339,8 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
@@ -1666,7 +1667,7 @@
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
 --- linux-2.4.18-p4smp/kernel/fork.c~vfs_intent-2.4.18-18-chaos65	2003-03-24 11:22:37.000000000 -0700
-+++ linux-2.4.18-p4smp-braam/kernel/fork.c	2003-07-08 14:45:17.000000000 -0600
++++ linux-2.4.18-p4smp-braam/kernel/fork.c	2003-07-09 13:20:37.000000000 -0600
 @@ -399,10 +399,13 @@ static inline struct fs_struct *__copy_f
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1682,7 +1683,7 @@
  			fs->altroot = dget(old->altroot);
  		} else {
 --- linux-2.4.18-p4smp/kernel/exit.c~vfs_intent-2.4.18-18-chaos65	2002-10-29 12:27:38.000000000 -0700
-+++ linux-2.4.18-p4smp-braam/kernel/exit.c	2003-07-08 14:45:17.000000000 -0600
++++ linux-2.4.18-p4smp-braam/kernel/exit.c	2003-07-09 13:20:37.000000000 -0600
 @@ -303,11 +303,14 @@ static inline void __put_fs_struct(struc
  {
  	/* No need to hold fs->lock if we are killing it */
@@ -1698,8 +1699,8 @@
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
---- linux-2.4.18-p4smp/kernel/ksyms.c~vfs_intent-2.4.18-18-chaos65	2003-07-08 14:41:49.000000000 -0600
-+++ linux-2.4.18-p4smp-braam/kernel/ksyms.c	2003-07-08 14:45:17.000000000 -0600
+--- linux-2.4.18-p4smp/kernel/ksyms.c~vfs_intent-2.4.18-18-chaos65	2003-07-09 13:20:35.000000000 -0600
++++ linux-2.4.18-p4smp-braam/kernel/ksyms.c	2003-07-09 13:20:37.000000000 -0600
 @@ -294,6 +294,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
