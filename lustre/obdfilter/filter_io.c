@@ -360,13 +360,24 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_ioobj *o;
         struct niobuf_local *lnb;
-        int i, j;
+        int i, j, drop = 0;
         ENTRY;
+
+        if (res->dentry != NULL)
+                drop = (res->dentry->d_inode->i_size >
+                        exp->exp_obd->u.filter.fo_readcache_max_filesize);
 
         for (i = 0, o = obj, lnb = res; i < objcount; i++, o++) {
                 for (j = 0 ; j < o->ioo_bufcnt ; j++, lnb++) {
-                        if (lnb->page != NULL)
-                                page_cache_release(lnb->page);
+                        if (lnb->page == NULL)
+                                continue;
+                        /* drop from cache like truncate_list_pages() */
+                        if (drop && !TryLockPage(lnb->page)) {
+                                if (lnb->page->mapping)
+                                        truncate_complete_page(lnb->page);
+                                unlock_page(lnb->page);
+                        }
+                        page_cache_release(lnb->page);
                 }
         }
         if (res->dentry != NULL)

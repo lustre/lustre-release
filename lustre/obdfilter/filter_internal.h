@@ -90,6 +90,8 @@ enum {
         LPROC_FILTER_LAST,
 };
 
+#define FILTER_MAX_CACHE_SIZE OBD_OBJECT_EOF
+
 /* filter.c */
 struct dentry *filter_parent(struct obd_device *, obd_gr group, obd_id objid);
 struct dentry *filter_parent_lock(struct obd_device *, obd_gr, obd_id,

@@ -168,6 +168,8 @@ struct filter_obd {
         obd_size             fo_tot_granted;
         obd_size             fo_tot_cached;
 
+        obd_size             fo_readcache_max_filesize;
+
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
         struct lustre_handle fo_mdc_conn;

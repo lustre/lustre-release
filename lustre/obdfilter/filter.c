@@ -1123,6 +1123,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         spin_lock_init(&filter->fo_w_discont_pages.oh_lock);
         spin_lock_init(&filter->fo_r_discont_blocks.oh_lock);
         spin_lock_init(&filter->fo_w_discont_blocks.oh_lock);
+        filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
 
         obd->obd_namespace = ldlm_namespace_new("filter-tgt",
                                                 LDLM_NAMESPACE_SERVER);

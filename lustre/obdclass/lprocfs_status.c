@@ -684,7 +684,27 @@ int lprocfs_write_helper(const char *buffer, unsigned long count,
         return 0;
 }
 
-int lprocfs_obd_seq_create(struct obd_device *dev, char *name, mode_t mode, 
+int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
+                             __u64 *val)
+{
+        char kernbuf[22], *end;
+
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+
+        kernbuf[count] = '\0';
+
+        *val = simple_strtoull(kernbuf, &end, 0);
+        if (kernbuf == end)
+                return -EINVAL;
+
+        return 0;
+}
+
+int lprocfs_obd_seq_create(struct obd_device *dev, char *name, mode_t mode,
                            struct file_operations *seq_fops, void *data)
 {
         struct proc_dir_entry *entry;
@@ -774,3 +794,4 @@ EXPORT_SYMBOL(lprocfs_rd_filesfree);
 EXPORT_SYMBOL(lprocfs_rd_filegroups);
 
 EXPORT_SYMBOL(lprocfs_write_helper);
+EXPORT_SYMBOL(lprocfs_write_u64_helper);
