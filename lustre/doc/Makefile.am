@@ -81,15 +81,15 @@ syncweb: lustre.pdf
 # Build a changebar document from the files in doc.old and this directory.
 chbar: lustre-chbar.pdf
 
-lustre-chbar.tex: chbar.sh postbar doc.old/lustre-full.tex lustre-full.tex
-	$(SHELL) $(srcdir)/chbar.sh doc.old/lustre-full.tex lustre-full.tex | $(srcdir)/postbar > $@
+%-chbar.tex: chbar.sh postbar doc.old/%-full.tex %-full.tex
+	$(SHELL) $(srcdir)/chbar.sh doc.old/$*-full.tex $*-full.tex | $(srcdir)/postbar > $@
 
-lustre-full.tex: lustre.tex
+%-full.tex: %.tex
 	$(TEXEXPAND) -texinputs=. -texinputs=$(srcdir) -output=$@ $<
 
 doc.old/lustre.tex: doc.old/lustre-HOWTO.lyx
-doc.old/lustre-full.tex: doc.old/lustre.tex
-	cd doc.old && $(TEXEXPAND) -texinputs=. -output=lustre-full.tex lustre.tex
+doc.old/%-full.tex: doc.old/%.tex
+	cd doc.old && $(TEXEXPAND) -texinputs=. -output=$*-full.tex $*.tex
 
 # Check out the old directory if it doesn't exist.
 doc.old/lustre.lin doc.old/lustre-HOWTO.lin:
