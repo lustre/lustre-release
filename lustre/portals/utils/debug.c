@@ -543,7 +543,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                             size > max_size ||
                             *end != 0) {
                                 fprintf(stderr, "size %s invalid, must be in "
-                                        "the range %d-%d MB\n", argv[3],
+                                        "the range %ld-%ld MB\n", argv[3],
                                         min_size, max_size);
                                 goto out;
                         }
