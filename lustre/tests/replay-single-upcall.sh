@@ -9,6 +9,10 @@ mkdir -p $TESTDIR/logs
 exec >> $TESTDIR/logs/recovery-`hostname`.log
 exec 2>&1
 
+echo ==========================================
+echo "start upcall: `date`"
+echo "command line: $0 $*"
+
 set -xv
 
 failed_import() {

@@ -77,7 +77,7 @@ void llog_free_handle(struct llog_handle *loghandle)
 }
 EXPORT_SYMBOL(llog_free_handle);
 
-/* returns negative on error; 0 if success; 1 if success & log destroyed */ 
+/* returns negative on error; 0 if success; 1 if success & log destroyed */
 int llog_cancel_rec(struct llog_handle *loghandle, int index)
 {
         struct llog_log_hdr *llh = loghandle->lgh_hdr;
@@ -101,7 +101,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
 
         if ((le32_to_cpu(llh->llh_flags) & LLOG_F_ZAP_WHEN_EMPTY) &&
             (le32_to_cpu(llh->llh_count) == 1) &&
-            (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) { 
+            (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
                 rc = llog_destroy(loghandle);
                 if (rc)
                         CERROR("failure destroying log after last cancel: %d\n",
@@ -111,7 +111,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         }
 
         rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
-        if (rc) 
+        if (rc)
                 CERROR("failure re-writing header %d\n", rc);
         LASSERT(rc == 0);
         RETURN(rc);
@@ -144,16 +144,17 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 GOTO(out, rc);
         }
         rc = 0;
-        
+
         handle->lgh_last_idx = 0; /* header is record with index 0 */
         llh->llh_count = cpu_to_le32(1);         /* for the header record */
         llh->llh_hdr.lrh_type = cpu_to_le32(LLOG_HDR_MAGIC);
-        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = cpu_to_le32(LLOG_CHUNK_SIZE);
+        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len =
+                cpu_to_le32(LLOG_CHUNK_SIZE);
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
         llh->llh_timestamp = cpu_to_le64(LTIME_S(CURRENT_TIME));
         if (uuid)
                 memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
-        llh->llh_bitmap_offset = cpu_to_le32(offsetof(typeof(*llh), llh_bitmap));
+        llh->llh_bitmap_offset = cpu_to_le32(offsetof(typeof(*llh),llh_bitmap));
         ext2_set_bit(0, llh->llh_bitmap);
 
 out:
@@ -165,7 +166,7 @@ out:
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
         else
                 LBUG();
-        
+
         if (rc) {
                 OBD_FREE(llh, sizeof(*llh));
                 handle->lgh_hdr = NULL;
@@ -192,12 +193,14 @@ int llog_close(struct llog_handle *loghandle)
 }
 EXPORT_SYMBOL(llog_close);
 
-int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
+int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
+                 void *data, void *catdata)
 {
         struct llog_log_hdr *llh = loghandle->lgh_hdr;
+        struct llog_process_cat_data *cd = catdata;
         void *buf;
         __u64 cur_offset = LLOG_CHUNK_SIZE;
-        int rc = 0, index = 1;
+        int rc = 0, index = 1, last_index, idx;
         int saved_index = 0;
         ENTRY;
 
@@ -205,27 +208,41 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
         if (!buf)
                 RETURN(-ENOMEM);
 
+        if (cd != NULL)
+                index = cd->first_idx + 1;
+        if (cd != NULL && cd->last_idx)
+                last_index = cd->last_idx;
+        else
+                last_index = LLOG_BITMAP_BYTES * 8 - 1;
+
+
         while (rc == 0) {
                 struct llog_rec_hdr *rec;
-                
+
                 /* skip records not set in bitmap */
-                while (index < (LLOG_BITMAP_BYTES * 8) &&
+                while (index <= last_index &&
                        !ext2_test_bit(index, llh->llh_bitmap))
                         ++index;
 
-                LASSERT(index <= LLOG_BITMAP_BYTES * 8);
-                if (index == LLOG_BITMAP_BYTES * 8)
+                LASSERT(index <= last_index + 1);
+                if (index == last_index + 1)
                         break;
 
                 /* get the buf with our target record; avoid old garbage */
                 memset(buf, 0, LLOG_CHUNK_SIZE);
-                rc = llog_next_block(loghandle, &saved_index, index, 
+                rc = llog_next_block(loghandle, &saved_index, index,
                                      &cur_offset, buf, LLOG_CHUNK_SIZE);
                 if (rc)
                         GOTO(out, rc);
 
                 rec = buf;
-                index = le32_to_cpu(rec->lrh_index);
+                idx = le32_to_cpu(rec->lrh_index);
+                if (idx < index)
+                        CDEBUG(D_HA, "index %u : idx %u\n", index, idx);
+                while (idx < index) {
+                        rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
+                        idx ++;
+                }
 
                 /* process records in buffer, starting where we found one */
                 while ((void *)rec < buf + LLOG_CHUNK_SIZE) {
@@ -235,13 +252,20 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
                         /* if set, process the callback on this record */
                         if (ext2_test_bit(index, llh->llh_bitmap)) {
                                 rc = cb(loghandle, rec, data);
-                                if (rc) 
+                                if (rc == LLOG_PROC_BREAK) {
+                                        CWARN("recovery from log: "LPX64":%x"
+                                              " stopped\n",
+                                              loghandle->lgh_id.lgl_oid,
+                                              loghandle->lgh_id.lgl_ogen);
+                                        GOTO(out, rc);
+                                }
+                                if (rc)
                                         GOTO(out, rc);
                         }
 
                         /* next record, still in buffer? */
                         ++index;
-                        if (index > LLOG_BITMAP_BYTES * 8 - 1)
+                        if (index > last_index)
                                 GOTO(out, rc = 0);
                         rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
                 }
