@@ -488,7 +488,6 @@ int lprocfs_link_dir_counters(struct obd_device* device,
         return LPROCFS_SUCCESS;
 }
 
-
 int lprocfs_create_dir_namespace(struct proc_dir_entry* root,
                                  lprocfs_group_t* namespace,
                                  unsigned int *num_dirs)
@@ -524,8 +523,6 @@ int lprocfs_create_dir_namespace(struct proc_dir_entry* root,
 }
 
 
-
-
 int lprocfs_getclass_idx(struct groupspace_index* group, const char* classname)
 {
         unsigned int idx = 0;
@@ -543,11 +540,11 @@ struct proc_dir_entry* lprocfs_mkinitdir(struct obd_device* device)
 {
         struct proc_dir_entry* this_dev_root = 0;
         struct proc_dir_entry* temp_proc = 0;
+
         /*
          * First check if /proc/lustre exits. If it does not,
          * instantiate the same and the devices directory
          */
-
         if (!proc_lustre_root) {
                 proc_lustre_root = lprocfs_mkdir("lustre", &proc_root);
                 if (!proc_lustre_root) {
@@ -567,7 +564,6 @@ struct proc_dir_entry* lprocfs_mkinitdir(struct obd_device* device)
          * Check if this is the first instance for a device of
          * this class in the lprocfs hierarchy.
          */
-
         temp_proc = lprocfs_srch(proc_lustre_dev_root,
                                  device->obd_type->typ_name);
 
@@ -580,10 +576,8 @@ struct proc_dir_entry* lprocfs_mkinitdir(struct obd_device* device)
                         return 0;
                 }
         }
-        /*
-         * Next create the proc_dir_entry for this instance
-         */
 
+        /* Next create the proc_dir_entry for this instance */
         this_dev_root = lprocfs_mkdir(device->obd_name, temp_proc);
         if (!this_dev_root) {
                 CERROR("!Can't create proc entry for instance %s !! \n",
@@ -593,7 +587,6 @@ struct proc_dir_entry* lprocfs_mkinitdir(struct obd_device* device)
 
         return this_dev_root;
 }
-
 
 
 int lprocfs_get_idx(struct namespace_index* class, const char* dir_name)
@@ -642,7 +635,6 @@ struct proc_dir_entry* lprocfs_mkdir(const char* dname,
  * /proc/lustre.
  * Returns non-zero on success, zero on failure
  */
-
 unsigned int lprocfs_add_var(struct obd_device* device,
                              struct proc_dir_entry* root,
                              lprocfs_vars_t* variable, int dir_idx, int cnt_idx,
@@ -681,7 +673,6 @@ unsigned int lprocfs_add_var(struct obd_device* device,
 }
 
 
-
 /*
  * Tokenize name, based on tok and end-of-string. Create and return the
  * new directory entry. Set escape variable if the directory name contained
@@ -709,7 +700,7 @@ struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry *root,
                 return 0;
         }
 
-        if (strchr(string, escape_char) != NULL) {
+        if (strchr(string, escape_char)) {
                 *escape = 1;
                 strncpy(temp_string,string,strlen(string) - 1);
                 temp_string[strlen(string)] = '\0';
@@ -719,35 +710,13 @@ struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry *root,
                 temp_string[strlen(string) + 1] = '\0';
         }
 
-        
-        
-        
         new_root=root;
-        /*
-         * Obsoleted: Use of strtok
-        my_str=strtok(temp_string, tok); 
-        while (my_str != NULL) {
-                temp_entry = lprocfs_srch(new_root, my_str);
-                if (temp_entry == 0) {
-                        new_entry = lprocfs_mkdir(my_str, new_root);
-                        if (new_entry == 0) {
-                                CERROR("! Did not create new dir %s !!\n",
-                                       my_str);
-                                return 0;
-                        }
-                        return new_entry;
-                }
-                
-                new_root=temp_entry;
-                my_str=strtok(NULL, tok); 
-          
-       }
-        */
-       
+
         /* Using strsep() instead */
         mover_str=temp_string;
-        while ((my_str=strsep(&mover_str, tok))!=NULL) {
-                if(!*my_str) continue;
+        while ((my_str = strsep(&mover_str, tok))) {
+                if(!*my_str)
+                        continue;
                 temp_entry = lprocfs_srch(new_root, my_str);
                 if (temp_entry == 0) {
                         new_entry = lprocfs_mkdir(my_str, new_root);
@@ -758,14 +727,11 @@ struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry *root,
                         }
                         return new_entry;
                 }
-                
-                new_root=temp_entry;
+                new_root = temp_entry;
         }
-
 
         return new_root;
 }
-
 
 struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry* head,
                                     const char* name)
@@ -780,6 +746,7 @@ struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry* head,
                         return temp;
                 temp = temp->next;
         }
+
         return 0;
 }
 
@@ -819,6 +786,7 @@ int lprocfs_get_nm(char* name, lprocfs_obd_nm_t* collection)
 int lprocfs_dereg_dev(struct obd_device* device)
 {
         struct proc_dir_entry* temp;
+
         CDEBUG(D_OTHER, "LPROCFS removing device = %s\n", \
                device->obd_name);
 
@@ -867,73 +835,75 @@ void lprocfs_remove_all(struct proc_dir_entry* root)
                 remove_proc_entry(root->name, NULL);
 }
 
-
-
 int rd_uuid(char* page, char **start, off_t off,
-		 int count, int *eof, void *data)
+            int count, int *eof, void *data)
 {
         int len;
-        struct obd_device* temp=(struct obd_device *)data;
+        struct obd_device *temp = (struct obd_device *)data;
+
         len = sprintf(page, "%s\n", temp->obd_uuid);
+
         return len;
 }
-int wr_uuid(struct file* file, const char *buffer, 
-            unsigned long count,void *data)
+
+int wr_uuid(struct file* file, const char *buffer,
+            unsigned long count, void *data)
 {
 
         return 0;
 }
 
 int rd_blksize(char* page, char **start, off_t off,
-             int count, int *eof, void *data)
+               int count, int *eof, void *data)
 {
-        int len=0;
-        struct obd_device* temp=(struct obd_device *)data;
-        
+        //int len=0;
+        //struct obd_device *temp = (struct obd_device *)data;
+
         return 0;
 
 }
 int rd_blktotal(char* page, char **start, off_t off,
-             int count, int *eof, void *data)
+                int count, int *eof, void *data)
 {
         return 0;
 }
+
 int rd_blkfree(char* page, char **start, off_t off,
-             int count, int *eof, void *data)
+               int count, int *eof, void *data)
 {
         return 0;
 }
+
 int rd_kbfree(char* page, char **start, off_t off,
-             int count, int *eof, void *data)
+              int count, int *eof, void *data)
 {
         return 0;
 }
 
 int rd_numobjects(char* page, char **start, off_t off,
-             int count, int *eof, void *data)
+                  int count, int *eof, void *data)
 {
         return 0;
 }
+
 int rd_objfree(char* page, char **start, off_t off,
-             int count, int *eof, void *data)
+               int count, int *eof, void *data)
 {
         return 0;
 }
 
 int rd_objgroups(char* page, char **start, off_t off,
-             int count, int *eof, void *data)
+                 int count, int *eof, void *data)
 {
-
         return 0;
 }
 
 
 int lprocfs_ll_rd(char *page, char **start, off_t off,
                   int count, int *eof, void *data)
-
 {
-        int len;
         __u64 *temp = (__u64 *)data;
+        int len;
 
         len = snprintf(page, count, LPU64"\n", *temp);
 
@@ -943,14 +913,12 @@ int lprocfs_ll_rd(char *page, char **start, off_t off,
 int rd_fs_type(char* page, char **start, off_t off,
                int count, int *eof, void *data)
 {
-
         return 0;
 }
 
 int rd_other(char* page, char **start, off_t off, int count, int *eof,
              void *data)
 {
-        
         return 0;
 }
 
@@ -964,21 +932,18 @@ int rd_string(char* page, char **start, off_t off, int count, int *eof,
 int lprocfs_ll_wr(struct file* file, const char *buffer, unsigned long count,
                   void *data)
 {
-        
         return 0;
 }
 
 int wr_other(struct file* file, const char *buffer, unsigned long count,
              void *data)
 {
-        
         return 0;
 }
 
 int wr_string(struct file* file, const char *buffer, unsigned long count,
               void *data)
 {
-        
         return 0;
 }
 
