@@ -48,6 +48,61 @@ static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n",obd->u.mds.mds_vfsmnt->mnt_devname);
 }
 
+static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
+                                          int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int len = 0, n;
+
+        LASSERT(obd != NULL);
+        *eof = 1;
+
+        n = snprintf(page, count, "status: ");
+        page += n; len += n; count -= n;
+        if (obd->obd_max_recoverable_clients == 0) {
+                n = snprintf(page, count, "INACTIVE\n");
+                return len + n;
+        }
+
+        if (obd->obd_recoverable_clients == 0) {
+                n = snprintf(page, count, "COMPLETE\n");
+                page += n; len += n; count -= n;
+                n = snprintf(page, count, "recovered_clients: %d\n",
+                             obd->obd_max_recoverable_clients);
+                page += n; len += n; count -= n;
+                n = snprintf(page, count, "last_transno: "LPD64"\n",
+                             obd->obd_next_recovery_transno);
+                page += n; len += n; count -= n;
+                n = snprintf(page, count, "reintegrated_requests: "LPD64"\n",
+                             obd->obd_reintegrated_requests);
+                return len + n;
+        }
+
+        /* sampled unlocked, but really... */
+        if (obd->obd_recovering == 0) {
+                n = snprintf(page, count, "ABORTED\n");
+                return len + n;
+        }
+
+        n = snprintf(page, count, "RECOVERING\n");
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "connected_clients: %d/%d\n",
+                     obd->obd_connected_clients,
+                     obd->obd_max_recoverable_clients);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "completed_clients: %d/%d\n",
+                     (obd->obd_max_recoverable_clients - 
+                      obd->obd_recoverable_clients),
+                     obd->obd_max_recoverable_clients);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "reintegrated_requests: "LPD64"/??\n",
+                     obd->obd_reintegrated_requests);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "next_transno: "LPD64"\n",
+                     obd->obd_next_recovery_transno);
+        return len + n;
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { "blocksize",    lprocfs_rd_blksize,     0, 0 },
@@ -58,6 +113,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "filesfree",    lprocfs_rd_filesfree,   0, 0 },
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
+        { "recovery_status", lprocfs_mds_rd_recovery_status, 0, 0 },
         { 0 }
 };
 
