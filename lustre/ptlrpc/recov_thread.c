@@ -192,13 +192,13 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
         ENTRY;
 
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
+                CDEBUG(D_INFO, "reverse import disconnected, put llcd %p:%p\n",
+                       ctxt->loc_llcd, ctxt);
                 down(&ctxt->loc_sem);
                 if (ctxt->loc_llcd != NULL) {
                         llcd_put(ctxt->loc_llcd);
                         ctxt->loc_llcd = NULL;
                 }
-                CWARN("reverse import disconnected, put "
-                      "llcd %p:%p\n", ctxt->loc_llcd, ctxt);
                 ctxt->loc_imp = NULL;
                 up(&ctxt->loc_sem);
         } else {
