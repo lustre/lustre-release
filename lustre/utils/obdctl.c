@@ -6,7 +6,8 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #define printk printf
-#include <linux/obd_class.h>
+#include <linux/lustre_lib.h>
+#include <linux/lustre_idl.h>
 #include <unistd.h>
 #include <sys/un.h>
 #include <sys/time.h>
@@ -261,19 +262,20 @@ static int jt_setup(int argc, char **argv)
 		data.ioc_inlbuf2 = argv[2];
 	}
 
-	printf("attach len %d addr %p type %s data %s\n", data.ioc_len, buf, 
+	printf("setup len %d addr %p device %s type %s\n", data.ioc_len, buf, 
 	       MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
 
 	if (obd_ioctl_pack(&data, &buf, max)) { 
 		printf("invalid ioctl\n"); 
 		return 1;
 	}
-	printf("attach len %d addr %p raw %p type %s data %s and %s\n", data.ioc_len, buf, rawbuf,
-	       MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2), &buf[516]);
+	printf("setup len %d addr %p raw %p device %s type %s\n", 
+	       data.ioc_len, buf, rawbuf,
+	       MKSTR(data.ioc_inlbuf1), MKSTR(data.ioc_inlbuf2));
 
 	rc = ioctl(fd, OBD_IOC_SETUP , buf);
 	if (rc < 0) {
-		printf("Attach: %x %s\n", OBD_IOC_SETUP, strerror(errno));
+		printf("setup: %x %s\n", OBD_IOC_SETUP, strerror(errno));
 		return 1;
 	}
 	return 0;

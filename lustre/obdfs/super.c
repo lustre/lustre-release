@@ -36,7 +36,7 @@
 #include <linux/obdfs.h>
 
 struct list_head obdfs_super_list;
-struct address_space_operations obdfs_aops;
+extern struct address_space_operations obdfs_aops;
 struct super_operations obdfs_super_operations;
 long obdfs_cache_count = 0;
 long obdfs_mutex_start = 0;

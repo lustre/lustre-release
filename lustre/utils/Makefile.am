@@ -1,10 +1,10 @@
 bin_SCRIPTS = obdcontrol
 EXTRA_DIST = $(bin_SCRIPTS)
 
-CFLAGS:=-g -I. -I../include -Wall
+CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I/usr/lib/glib/include -I../include -Wall
 KFLAGS:=
 CPPFLAGS :=
-LDADD := -lreadline -ltermcap -lefence
+LDADD := -lreadline -ltermcap # -lefence
 bin_PROGRAMS = obdctl
 obdctl_SOURCES = parser.c obdctl.c
 

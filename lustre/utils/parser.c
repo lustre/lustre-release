@@ -9,6 +9,7 @@
 #define	READLINE_LIBRARY
 #include <readline/readline.h>
 
+extern char **completion_matches __P((char *, rl_compentry_func_t *));
 extern void using_history(void);
 extern void stifle_history(int);
 extern void add_history(char *);
@@ -219,7 +220,7 @@ static char **command_completion(char * text, int start, int end)
 	if (*(pos - 1) == ' ') match_tbl = table->pc_sub_cmd;
     }
 
-    return(rl_completion_matches(text, command_generator));
+    return(completion_matches(text, command_generator));
 }
 
 /* take a string and execute the function or print help */
@@ -272,8 +273,8 @@ void Parser_commands(void)
     stifle_history(HISTORY);
 
     rl_attempted_completion_function = 
-	    (rl_completion_func_t *)command_completion;
-    rl_completion_entry_function = (rl_compentry_func_t *)command_generator;
+	    (CPPFunction *)command_completion;
+    rl_completion_entry_function = (void *)command_generator;
     
     while(!done) {
 	line = readline(parser_prompt);

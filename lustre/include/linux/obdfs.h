@@ -23,7 +23,7 @@ struct obdfs_pgrq {
         struct page             *rq_page;       /* page to be written */
 };
 
-struct list_head obdfs_super_list;       /* list of all OBDFS superblocks */
+extern struct list_head obdfs_super_list;       /* list of all OBDFS superblocks */
 
 
 
