@@ -6,6 +6,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- change default debug level to reasonable production setting
 	- reduce client side cache size to reduce cache flush time
 	- reduce max RPCs in flight to avoid unnecessary file fragmentation
+	- make TCP zerocopy and pinger support enabled by default (2476)
 	- sync writes completed after process exits caused crashes (2319)
 	- maintain correct mount count on the MDS (2356)
 	- backout 1557, because 2316 wasn't really fixed

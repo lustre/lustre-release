@@ -28,8 +28,8 @@ AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
 AC_SUBST(ENABLE_DOC)
 
 # the pinger is temporary, until we have the recovery node in place
-AC_ARG_ENABLE(pinger, [  --enable-pinger recovery pinger support])
-if test x$enable_pinger = xyes ; then
+AC_ARG_ENABLE(pinger, [  --disable-pinger disable recovery pinger support])
+if test x$enable_pinger != xno ; then
   AC_DEFINE(ENABLE_PINGER, 1, Use the Pinger)
 fi
 
