@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 				argv[0], name, strerror(errno));
 			exit(11);
 		}
-		if ((st.st_mode & S_IFMT) != S_IFREG) {
+		if (!S_ISREG(st.st_mode & S_IFMT)) {
 			fprintf(stderr, "%s: ERROR mode %s: %o != %o",
 				argv[0], name, st.st_mode & S_IFMT, S_IFREG);
 			exit(12);
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 				argv[0], name, strerror(errno));
 			exit(11);
 		}
-		if ((st.st_mode & S_IFMT) != S_IFDIR) {
+		if (!S_ISDIR(st.st_mode)) {
 			fprintf(stderr, "%s: ERROR mode %s: %o != %o",
 				argv[0], name, st.st_mode & S_IFMT, S_IFDIR);
 			exit(12);
