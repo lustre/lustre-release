@@ -120,7 +120,7 @@ int waitfor_one_page(struct page *page)
 static inline unsigned ext2_chunk_size(struct inode *inode)
 {
         //return inode->i_sb->s_blocksize;
-        return PAGE_SIZE;
+        return PAGE_CACHE_SIZE;
 }
 
 static inline void ext2_put_page(struct page *page)
