@@ -106,7 +106,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_brw_in_flight = 0;
         spin_lock_init(&cli->cl_rpc_concurrency_oh.oh_lock);
         spin_lock_init(&cli->cl_pages_per_rpc_oh.oh_lock);
-        cli->cl_max_pages_per_rpc = PTL_MD_MAX_IOV;
+        cli->cl_max_pages_per_rpc = PTL_MD_MAX_PAGES;
         cli->cl_max_rpcs_in_flight = 8;
 
         conn = ptlrpc_uuid_to_connection(&server_uuid);
