@@ -149,25 +149,25 @@ static int handle_incoming_request(struct obd_device *obddev,
         request.rq_reqlen = event->mem_desc.length;
 
         if (request.rq_reqlen < sizeof(struct lustre_msg)) {
-                CERROR("incomplete request: ptl %d from %Lx xid %Ld\n",
-                       svc->srv_req_portal, event->initiator.nid,
-                       request.rq_xid);
+                CERROR("incomplete request (%d): ptl %d from %Lx xid %Ld\n",
+                       request.rq_reqlen, svc->srv_req_portal,
+                       event->initiator.nid, request.rq_xid);
                 spin_unlock(&svc->srv_lock);
                 return -EINVAL;
         }
 
         if (request.rq_reqmsg->magic != PTLRPC_MSG_MAGIC) {
-                CERROR("wrong lustre_msg magic: ptl %d from %Lx xid %Ld\n",
-                       svc->srv_req_portal, event->initiator.nid,
-                       request.rq_xid);
+                CERROR("wrong lustre_msg magic %d: ptl %d from %Lx xid %Ld\n",
+                       request.rq_reqmsg->magic, svc->srv_req_portal,
+                       event->initiator.nid, request.rq_xid);
                 spin_unlock(&svc->srv_lock);
                 return -EINVAL;
         }
 
         if (request.rq_reqmsg->version != PTLRPC_MSG_VERSION) {
-                CERROR("wrong lustre_msg version: ptl %d from %Lx xid %Ld\n",
-                       svc->srv_req_portal, event->initiator.nid,
-                       request.rq_xid);
+                CERROR("wrong lustre_msg version %d: ptl %d from %Lx xid %Ld\n",
+                       request.rq_reqmsg->version, svc->srv_req_portal,
+                       event->initiator.nid, request.rq_xid);
                 spin_unlock(&svc->srv_lock);
                 return -EINVAL;
         }
