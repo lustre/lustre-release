@@ -24,57 +24,12 @@
 #define _LUSTRE_NET_H
 
 #include <linux/kp30.h>
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
+#include <linux/obd.h>
 #include <portals/p30.h>
 #include <linux/lustre_idl.h>
 
-/* FOO_REQUEST_PORTAL is for incoming requests on the FOO
- * FOO_REPLY_PORTAL   is for incoming replies on the FOO
- * FOO_BULK_PORTAL    is for incoming bulk on the FOO
- */
-
-#define CONNMGR_REQUEST_PORTAL    1
-#define CONNMGR_REPLY_PORTAL      2
-//#define OSC_REQUEST_PORTAL      3
-#define OSC_REPLY_PORTAL        4
-#define OSC_BULK_PORTAL         5
-#define OST_REQUEST_PORTAL      6
-//#define OST_REPLY_PORTAL        7
-#define OST_BULK_PORTAL         8
-#define MDC_REQUEST_PORTAL      9
-#define MDC_REPLY_PORTAL        10
-#define MDC_BULK_PORTAL         11
-#define MDS_REQUEST_PORTAL      12
-#define MDS_REPLY_PORTAL        13
-#define MDS_BULK_PORTAL         14
-#define LDLM_REQUEST_PORTAL     15
-#define LDLM_REPLY_PORTAL       16
-#define LDLM_CLI_REQUEST_PORTAL 17
-#define LDLM_CLI_REPLY_PORTAL   18
-
 /* default rpc ring length */
 #define RPC_RING_LENGTH    10
-
-#define SVC_KILLED 1
-#define SVC_EVENT  2
-#define SVC_SIGNAL 4
-#define SVC_RUNNING 8
-#define SVC_STOPPING 16
-#define SVC_STOPPED  32
-
-#define RECOVD_STOPPING      1     /* how cleanup tells recovd to quit */
-#define RECOVD_IDLE          2     /* normal state */
-#define RECOVD_STOPPED       4     /* after recovd has stopped */
-#define RECOVD_FAIL          8     /* RPC timeout: wakeup recovd, sets flag */
-#define RECOVD_TIMEOUT       16    /* set when recovd detects a timeout */
-#define RECOVD_UPCALL_WAIT   32    /* an upcall has been placed */
-#define RECOVD_UPCALL_ANSWER 64    /* an upcall has been answered */
-
-#define LUSTRE_CONN_NEW    1
-#define LUSTRE_CONN_CON    2
-#define LUSTRE_CONN_RECOVD 3
-#define LUSTRE_CONN_FULL   4
 
 struct ptlrpc_connection {
         struct list_head c_link;
@@ -119,10 +74,6 @@ struct ptlrpc_client {
         struct recovd_obd *cli_recovd;
         char *cli_name;
 };
-
-/* packet types */
-#define PTL_RPC_TYPE_REQUEST 2
-#define PTL_RPC_TYPE_REPLY   3
 
 /* state flags of requests */
 #define PTL_RPC_FL_INTR      (1 << 0)

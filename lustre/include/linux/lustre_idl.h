@@ -21,8 +21,8 @@
  * (Un)packing of OST requests
  */
 
-#ifndef __LUSTRE_IDL_H__
-#define __LUSTRE_IDL_H__
+#ifndef _LUSTRE_IDL_H_
+#define _LUSTRE_IDL_H_
 
 #ifdef __KERNEL__
 # include <linux/ioctl.h>
@@ -48,10 +48,57 @@
  */
 typedef __u8 uuid_t[37];
 
+/* FOO_REQUEST_PORTAL is for incoming requests on the FOO
+ * FOO_REPLY_PORTAL   is for incoming replies on the FOO
+ * FOO_BULK_PORTAL    is for incoming bulk on the FOO
+ */
 
+#define CONNMGR_REQUEST_PORTAL  1
+#define CONNMGR_REPLY_PORTAL    2
+#define OSC_REQUEST_PORTAL      3
+#define OSC_REPLY_PORTAL        4
+#define OSC_BULK_PORTAL         5
+#define OST_REQUEST_PORTAL      6
+#define OST_REPLY_PORTAL        7
+#define OST_BULK_PORTAL         8
+#define MDC_REQUEST_PORTAL      9
+#define MDC_REPLY_PORTAL        10
+#define MDC_BULK_PORTAL         11
+#define MDS_REQUEST_PORTAL      12
+#define MDS_REPLY_PORTAL        13
+#define MDS_BULK_PORTAL         14
+#define LDLM_REQUEST_PORTAL     15
+#define LDLM_REPLY_PORTAL       16
+#define LDLM_CLI_REQUEST_PORTAL 17
+#define LDLM_CLI_REPLY_PORTAL   18
 
+#define SVC_KILLED               1
+#define SVC_EVENT                2
+#define SVC_SIGNAL               4
+#define SVC_RUNNING              8
+#define SVC_STOPPING            16
+#define SVC_STOPPED             32
+
+#define RECOVD_STOPPING          1  /* how cleanup tells recovd to quit */
+#define RECOVD_IDLE              2  /* normal state */
+#define RECOVD_STOPPED           4  /* after recovd has stopped */
+#define RECOVD_FAIL              8  /* RPC timeout: wakeup recovd, sets flag */
+#define RECOVD_TIMEOUT          16  /* set when recovd detects a timeout */
+#define RECOVD_UPCALL_WAIT      32  /* an upcall has been placed */
+#define RECOVD_UPCALL_ANSWER    64  /* an upcall has been answered */
+
+#define LUSTRE_CONN_NEW          1
+#define LUSTRE_CONN_CON          2
+#define LUSTRE_CONN_RECOVD       3
+#define LUSTRE_CONN_FULL         4
+
+/* packet types */
 #define PTL_RPC_MSG_REQUEST 4711
 #define PTL_RPC_MSG_ERR 4712
+#define PTL_RPC_MSG_OK           0
+
+#define PTL_RPC_TYPE_REQUEST     2
+#define PTL_RPC_TYPE_REPLY       3
 
 #define PTLRPC_MSG_MAGIC (cpu_to_le32(0x0BD00BD0))
 #define PTLRPC_MSG_VERSION (cpu_to_le32(0x00040001))
@@ -61,6 +108,7 @@ struct lustre_handle {
         __u64 cookie;
 };
 
+/* we depend on this structure to be 8-byte aligned */
 struct lustre_msg {
         __u64 addr;
         __u64 cookie; /* security token */
@@ -76,13 +124,15 @@ struct lustre_msg {
         __u32   buflens[0];
 };
 
-#define N_LOCAL_TEMP_PAGE 0x00000001
+#define CONNMGR_REPLY	0
+#define CONNMGR_CONNECT	1
 
 /*
  *   OST requests: OBDO & OBD request records
  */
 
 /* opcodes */
+#define OST_REPLY      0	/* reply ? */
 #define OST_GETATTR    1
 #define OST_SETATTR    2
 #define OST_BRW        3
@@ -175,6 +225,13 @@ struct obd_statfs {
         __u32           os_spare[12];
 };
 
+/* ost_body.data values for OST_BRW */
+
+#define OBD_BRW_READ	0x1
+#define OBD_BRW_WRITE	0x2
+#define OBD_BRW_RWMASK	(OBD_BRW_READ | OBD_BRW_WRITE)
+#define OBD_BRW_CREATE	0x4
+
 struct obd_ioobj {
         obd_id    ioo_id;
         obd_gr    ioo_gr;
@@ -189,15 +246,14 @@ struct niobuf_remote {
         __u32 flags;
 };
 
-struct niobuf_local {
-        __u64 offset;
-        __u32 len;
-        __u32 xid;
-        __u32 flags;
-        void *addr;
-        struct page *page;
-        void *target_private;
-        struct dentry *dentry;
+#define CONNMGR_REPLY	0
+#define CONNMGR_CONNECT	1
+
+struct connmgr_body {
+        __u64 conn;
+        __u64 conn_token;
+        __u32 generation;
+        __u8  conn_uuid[37];
 };
 
 /* request structure for OST's */
@@ -344,6 +400,7 @@ struct lov_desc {
  */
 
 /* opcodes */
+#define LDLM_REPLY         0
 #define LDLM_ENQUEUE       1
 #define LDLM_CONVERT       2
 #define LDLM_CANCEL        3
@@ -400,284 +457,5 @@ struct ldlm_reply {
         __u64  lock_policy_res1;
         __u64  lock_policy_res2;
 };
-
-/*
- *   OBD IOCTLS
- */
-#define OBD_IOCTL_VERSION 0x00010001
-
-struct obd_ioctl_data {
-        uint32_t ioc_len;
-        uint32_t ioc_version;
-
-        uint64_t ioc_addr;
-        uint64_t ioc_cookie;
-        uint32_t ioc_conn1;
-        uint32_t ioc_conn2;
-
-        struct obdo ioc_obdo1;
-        struct obdo ioc_obdo2;
-
-        obd_size         ioc_count;
-        obd_off          ioc_offset;
-        uint32_t         ioc_dev;
-        uint32_t         ____padding;
-
-        /* buffers the kernel will treat as user pointers */
-        uint32_t ioc_plen1;
-        char    *ioc_pbuf1;
-        uint32_t ioc_plen2;
-        char    *ioc_pbuf2;
-
-        /* two inline buffers */
-        uint32_t ioc_inllen1;
-        char    *ioc_inlbuf1;
-        uint32_t ioc_inllen2;
-        char    *ioc_inlbuf2;
-        uint32_t ioc_inllen3;
-        char    *ioc_inlbuf3;
-
-        char    ioc_bulk[0];
-};
-
-struct obd_ioctl_hdr {
-        uint32_t ioc_len;
-        uint32_t ioc_version;
-};
-
-static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
-{
-        int len = size_round(sizeof(struct obd_ioctl_data));
-        len += size_round(data->ioc_inllen1);
-        len += size_round(data->ioc_inllen2);
-        len += size_round(data->ioc_inllen3);
-        return len;
-}
-
-
-static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
-{
-        if (data->ioc_len > (1<<30)) {
-                printk("OBD ioctl: ioc_len larger than 1<<30\n");
-                return 1;
-        }
-        if (data->ioc_inllen1 > (1<<30)) {
-                printk("OBD ioctl: ioc_inllen1 larger than 1<<30\n");
-                return 1;
-        }
-        if (data->ioc_inllen2 > (1<<30)) {
-                printk("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
-                return 1;
-        }
-
-        if (data->ioc_inllen3 > (1<<30)) {
-                printk("OBD ioctl: ioc_inllen3 larger than 1<<30\n");
-                return 1;
-        }
-        if (data->ioc_inlbuf1 && !data->ioc_inllen1) {
-                printk("OBD ioctl: inlbuf1 pointer but 0 length\n");
-                return 1;
-        }
-        if (data->ioc_inlbuf2 && !data->ioc_inllen2) {
-                printk("OBD ioctl: inlbuf2 pointer but 0 length\n");
-                return 1;
-        }
-        if (data->ioc_inlbuf3 && !data->ioc_inllen3) {
-                printk("OBD ioctl: inlbuf3 pointer but 0 length\n");
-                return 1;
-        }
-        if (data->ioc_pbuf1 && !data->ioc_plen1) {
-                printk("OBD ioctl: pbuf1 pointer but 0 length\n");
-                return 1;
-        }
-        if (data->ioc_pbuf2 && !data->ioc_plen2) {
-                printk("OBD ioctl: pbuf2 pointer but 0 length\n");
-                return 1;
-        }
-        /*
-        if (data->ioc_inllen1 && !data->ioc_inlbuf1) {
-                printk("OBD ioctl: inllen1 set but NULL pointer\n");
-                return 1;
-        }
-        if (data->ioc_inllen2 && !data->ioc_inlbuf2) {
-                printk("OBD ioctl: inllen2 set but NULL pointer\n");
-                return 1;
-        }
-        if (data->ioc_inllen3 && !data->ioc_inlbuf3) {
-                printk("OBD ioctl: inllen3 set but NULL pointer\n");
-                return 1;
-        }
-        */
-        if (data->ioc_plen1 && !data->ioc_pbuf1) {
-                printk("OBD ioctl: plen1 set but NULL pointer\n");
-                return 1;
-        }
-        if (data->ioc_plen2 && !data->ioc_pbuf2) {
-                printk("OBD ioctl: plen2 set but NULL pointer\n");
-                return 1;
-        }
-        if (obd_ioctl_packlen(data) != data->ioc_len ) {
-                printk("OBD ioctl: packlen exceeds ioc_len\n");
-                return 1;
-        }
-#if 0 
-        if (data->ioc_inllen1 &&
-            data->ioc_bulk[data->ioc_inllen1 - 1] != '\0') {
-                printk("OBD ioctl: inlbuf1 not 0 terminated\n");
-                return 1;
-        }
-        if (data->ioc_inllen2 &&
-            data->ioc_bulk[size_round(data->ioc_inllen1) + data->ioc_inllen2 - 1] != '\0') {
-                printk("OBD ioctl: inlbuf2 not 0 terminated\n");
-                return 1;
-        }
-        if (data->ioc_inllen3 &&
-            data->ioc_bulk[size_round(data->ioc_inllen1) + size_round(data->ioc_inllen2) 
-                           + data->ioc_inllen3 - 1] != '\0') {
-                printk("OBD ioctl: inlbuf3 not 0 terminated\n");
-                return 1;
-        }
-#endif 
-        return 0;
-}
-
-#ifndef __KERNEL__
-static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
-                                 int max)
-{
-        char *ptr;
-        struct obd_ioctl_data *overlay;
-        data->ioc_len = obd_ioctl_packlen(data);
-        data->ioc_version = OBD_IOCTL_VERSION;
-
-        if (*pbuf && obd_ioctl_packlen(data) > max)
-                return 1;
-        if (*pbuf == NULL) {
-                *pbuf = malloc(data->ioc_len);
-        }
-        if (!*pbuf)
-                return 1;
-        overlay = (struct obd_ioctl_data *)*pbuf;
-        memcpy(*pbuf, data, sizeof(*data));
-
-        ptr = overlay->ioc_bulk;
-        if (data->ioc_inlbuf1)
-                LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
-        if (data->ioc_inlbuf2)
-                LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
-        if (data->ioc_inlbuf3)
-                LOGL(data->ioc_inlbuf3, data->ioc_inllen3, ptr);
-        if (obd_ioctl_is_invalid(overlay))
-                return 1;
-
-        return 0;
-}
-#else
-
-
-/* buffer MUST be at least the size of obd_ioctl_hdr */
-static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
-{
-        struct obd_ioctl_hdr hdr;
-        struct obd_ioctl_data *data;
-        int err;
-        ENTRY;
-
-
-        err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if ( err ) {
-                EXIT;
-                return err;
-        }
-
-        if (hdr.ioc_version != OBD_IOCTL_VERSION) {
-                printk("OBD: version mismatch kernel vs application\n");
-                return -EINVAL;
-        }
-
-        if (hdr.ioc_len > 8192) {
-                printk("OBD: user buffer exceeds 8192 max buffer\n");
-                return -EINVAL;
-        }
-
-        if (hdr.ioc_len < sizeof(struct obd_ioctl_data)) {
-                printk("OBD: user buffer too small for ioctl\n");
-                return -EINVAL;
-        }
-
-        OBD_ALLOC(*buf, hdr.ioc_len); 
-        if (!*buf) { 
-                CERROR("Cannot allocate control buffer of len %d\n",
-                       hdr.ioc_len); 
-                RETURN(-EINVAL);
-        }
-        *len = hdr.ioc_len;
-        data = (struct obd_ioctl_data *)*buf;
-
-        err = copy_from_user(*buf, (void *)arg, hdr.ioc_len);
-        if ( err ) {
-                EXIT;
-                return err;
-        }
-
-        if (obd_ioctl_is_invalid(data)) {
-                printk("OBD: ioctl not correctly formatted\n");
-                return -EINVAL;
-        }
-
-        if (data->ioc_inllen1) {
-                data->ioc_inlbuf1 = &data->ioc_bulk[0];
-        }
-
-        if (data->ioc_inllen2) {
-                data->ioc_inlbuf2 = &data->ioc_bulk[0] + size_round(data->ioc_inllen1);
-        }
-
-        if (data->ioc_inllen3) {
-                data->ioc_inlbuf3 = &data->ioc_bulk[0] + size_round(data->ioc_inllen1) + 
-                        size_round(data->ioc_inllen2);
-        }
-
-        EXIT;
-        return 0;
-}
-#endif
-
-
-#define OBD_IOC_CREATE                 _IOR ('f', 101, long)
-#define OBD_IOC_SETUP                  _IOW ('f', 102, long)
-#define OBD_IOC_CLEANUP                _IO  ('f', 103      )
-#define OBD_IOC_DESTROY                _IOW ('f', 104, long)
-#define OBD_IOC_PREALLOCATE            _IOWR('f', 105, long)
-#define OBD_IOC_DEC_USE_COUNT          _IO  ('f', 106      )
-#define OBD_IOC_SETATTR                _IOW ('f', 107, long)
-#define OBD_IOC_GETATTR                _IOR ('f', 108, long)
-#define OBD_IOC_READ                   _IOWR('f', 109, long)
-#define OBD_IOC_WRITE                  _IOWR('f', 110, long)
-#define OBD_IOC_CONNECT                _IOR ('f', 111, long)
-#define OBD_IOC_DISCONNECT             _IOW ('f', 112, long)
-#define OBD_IOC_STATFS                 _IOWR('f', 113, long)
-#define OBD_IOC_SYNC                   _IOR ('f', 114, long)
-#define OBD_IOC_READ2                  _IOWR('f', 115, long)
-#define OBD_IOC_FORMAT                 _IOWR('f', 116, long)
-#define OBD_IOC_PARTITION              _IOWR('f', 117, long)
-#define OBD_IOC_ATTACH                 _IOWR('f', 118, long)
-#define OBD_IOC_DETACH                 _IOWR('f', 119, long)
-#define OBD_IOC_COPY                   _IOWR('f', 120, long)
-#define OBD_IOC_MIGR                   _IOWR('f', 121, long)
-#define OBD_IOC_PUNCH                  _IOWR('f', 122, long)
-#define OBD_IOC_DEVICE                 _IOWR('f', 123, long)
-#define OBD_IOC_MODULE_DEBUG           _IOWR('f', 124, long)
-#define OBD_IOC_BRW_READ               _IOWR('f', 125, long)
-#define OBD_IOC_BRW_WRITE              _IOWR('f', 126, long)
-#define OBD_IOC_NAME2DEV               _IOWR('f', 127, long)
-#define OBD_IOC_NEWDEV                 _IOWR('f', 128, long)
-#define OBD_IOC_LIST                   _IOWR('f', 129, long)
-#define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
-
-#define OBD_IOC_RECOVD_NEWCONN         _IOWR('f', 131, long)
-#define OBD_IOC_LOV_CONFIG             _IOWR('f', 132, long)
-
-#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 133      )
 
 #endif

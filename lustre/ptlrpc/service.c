@@ -23,6 +23,7 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
 extern int request_in_callback(ptl_event_t *ev);

@@ -61,11 +61,6 @@ extern void proc_lustre_remove_obd_entry(const char* name,
  *  ======== OBD Operations Declarations ===========
  */
 
-#define OBD_BRW_READ    1
-#define OBD_BRW_WRITE   2
-#define OBD_BRW_RWMASK  (OBD_BRW_READ | OBD_BRW_WRITE)
-#define OBD_BRW_CREATE  4
-
 #ifdef __KERNEL__
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);

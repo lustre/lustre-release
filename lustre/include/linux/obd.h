@@ -164,6 +164,19 @@ struct lov_obd {
         struct lov_tgt_desc *tgts;
 };
 
+struct niobuf_local {
+        __u64 offset;
+        __u32 len;
+        __u32 xid;
+        __u32 flags;
+        void *addr;
+        struct page *page;
+        void *target_private;
+        struct dentry *dentry;
+};
+
+#define N_LOCAL_TEMP_PAGE 0x00000001
+
 /* corresponds to one of the obd's */
 struct obd_device {
         struct obd_type *obd_type;

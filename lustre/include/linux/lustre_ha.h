@@ -9,20 +9,11 @@
 
 #define LUSTRE_HA_NAME "ptlrpc"
 
-#define CONNMGR_CONNECT 1
-
 extern struct recovd_obd *ptlrpc_connmgr;
 
 struct connmgr_thread {
         struct recovd_obd *mgr;
         char *name;
-};
-
-struct connmgr_body {
-        __u64 conn;
-        __u64 conn_token;
-        __u32 generation;
-        __u8  conn_uuid[37];
 };
 
 int connmgr_connect(struct recovd_obd *mgr, struct ptlrpc_connection *conn);
