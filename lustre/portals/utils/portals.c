@@ -1186,7 +1186,7 @@ jt_ptl_add_route (int argc, char **argv)
                 return (-1);
         }
 
-        PCFG_INIT(pcfg, IOC_PORTAL_ADD_ROUTE);
+        PCFG_INIT(pcfg, NAL_CMD_ADD_ROUTE);
         pcfg.pcfg_nid = gateway_nid;
         pcfg.pcfg_nal = g_nal;
         pcfg.pcfg_nid2 = MIN (nid1, nid2);
@@ -1249,7 +1249,7 @@ jt_ptl_del_route (int argc, char **argv)
                 }
         }
         
-        PCFG_INIT(pcfg, IOC_PORTAL_DEL_ROUTE);
+        PCFG_INIT(pcfg, NAL_CMD_DEL_ROUTE);
         pcfg.pcfg_nal = g_nal;
         pcfg.pcfg_nid = nid;
         pcfg.pcfg_nid2 = nid1;
@@ -1308,7 +1308,7 @@ jt_ptl_notify_router (int argc, char **argv)
                 return (-1);
         }
 
-        PCFG_INIT(pcfg, IOC_PORTAL_NOTIFY_ROUTER);
+        PCFG_INIT(pcfg, NAL_CMD_NOTIFY_ROUTER);
         pcfg.pcfg_nal = g_nal;
         pcfg.pcfg_nid = nid;
         pcfg.pcfg_flags = enable;
@@ -1341,7 +1341,7 @@ jt_ptl_print_routes (int argc, char **argv)
 
         for (index = 0;;index++)
         {
-                PCFG_INIT(pcfg, IOC_PORTAL_GET_ROUTE);
+                PCFG_INIT(pcfg, NAL_CMD_GET_ROUTE);
                 pcfg.pcfg_count = index;
                 
                 rc = pcfg_ioctl(&pcfg);

@@ -236,7 +236,7 @@ int portals_do_debug_dumplog(void *arg)
         journal_info = current->journal_info;
         current->journal_info = NULL;
         sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_SECONDS);
-        file = filp_open(debug_file_name, O_CREAT|O_TRUNC|O_RDWR, 0644);
+        file = filp_open(debug_file_name, O_CREAT|O_EXCL|O_RDWR, 0644);
 
         if (!file || IS_ERR(file)) {
                 CERROR("cannot open %s for dumping: %ld\n", debug_file_name,
@@ -941,11 +941,14 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         return str;
 }
 
+#ifdef __KERNEL__
+#include <linux/lustre_version.h>
+#if (LUSTRE_KERNEL_VERSION >= 30)
+#warning "FIXME: remove workaround when l30 is widely used"
 char stack_backtrace[LUSTRE_TRACE_SIZE];
 spinlock_t stack_backtrace_lock = SPIN_LOCK_UNLOCKED;
 
 #if defined(__arch_um__)
-# warning in arch_um
 
 extern int is_kernel_text_address(unsigned long addr);
 
@@ -956,7 +959,7 @@ char *portals_debug_dumpstack(void)
         char *buf = stack_backtrace;
         char *pbuf = buf;
         unsigned long *stack = (unsigned long *)&buf;
-                                   
+
         size = sprintf(pbuf, " Call Trace: ");
         pbuf += size;
         while (((long) stack & (THREAD_SIZE-1)) != 0) {
@@ -968,44 +971,50 @@ char *portals_debug_dumpstack(void)
                                 break;
                 }
         }
-        
+
         return buf;
 }
 
 #elif defined(CONFIG_X86)
-# warning in __i386__
 
 extern int is_kernel_text_address(unsigned long addr);
 extern int lookup_symbol(unsigned long address, char *buf, int buflen);
 
 char *portals_debug_dumpstack(void)
 {
-	unsigned long esp = current->thread.esp;
+        unsigned long esp = current->thread.esp;
         unsigned long *stack = (unsigned long *)&esp;
         int size;
         unsigned long addr;
         char *buf = stack_backtrace;
         char *pbuf = buf;
         static char buffer[512];
-        
-	/* User space on another CPU? */
-	if ((esp ^ (unsigned long)current) & (PAGE_MASK<<1)){
-                memset(buf, 0x0, LUSTRE_TRACE_SIZE);
+        int rc = 0;
+
+        /* User space on another CPU? */
+        if ((esp ^ (unsigned long)current) & (PAGE_MASK<<1)){
+                buf[0] = '\0';
                 goto out;
         }
-                                    
+
         size = sprintf(pbuf, " Call Trace: ");
         pbuf += size;
         while (((long) stack & (THREAD_SIZE-1)) != 0) {
                 addr = *stack++;
                 if (is_kernel_text_address(addr)) {
-                        lookup_symbol(addr, buffer, 512);
-                        if (buf + LUSTRE_TRACE_SIZE
+                        rc = lookup_symbol(addr, buffer, 512);
+                        if (rc == -ENOSYS) {
+                                if (buf + LUSTRE_TRACE_SIZE <= pbuf + 12)
+                                        break;
+                                size = sprintf(pbuf, "[<%08lx>] ", addr);
+                        } else {
+                                if (buf + LUSTRE_TRACE_SIZE
                                             /* fix length + sizeof('\0') */
-                            <= pbuf + strlen(buffer) + 28 + 1)
-                                break;
-                        size = sprintf(pbuf, "([<%08lx>] %s (0x%x)) ",
-                                       addr, buffer, stack-1);
+                                    <= pbuf + strlen(buffer) + 28 + 1)
+                                        break;
+                                size = sprintf(pbuf, "([<%08lx>] %s (0x%x)) ",
+                                               addr, buffer, stack-1);
+                        }
                         pbuf += size;
                 }
         }
@@ -1018,11 +1027,15 @@ out:
 char *portals_debug_dumpstack(void)
 {
         char *buf = stack_backtrace;
-        memset(buf, 0x0, LUSTRE_TRACE_SIZE);
+        buf[0] = '\0';
         return buf;
 }
 
 #endif /* __arch_um__ */
+EXPORT_SYMBOL(stack_backtrace_lock);
+EXPORT_SYMBOL(portals_debug_dumpstack);
+#endif /* LUSTRE_KERNEL_VERSION < 30 */
+#endif /* __KERNEL__ */
 
 EXPORT_SYMBOL(portals_debug_dumplog);
 EXPORT_SYMBOL(portals_debug_msg);
@@ -1030,5 +1043,3 @@ EXPORT_SYMBOL(portals_debug_set_level);
 EXPORT_SYMBOL(portals_run_upcall);
 EXPORT_SYMBOL(portals_run_lbug_upcall);
 EXPORT_SYMBOL(portals_nid2str);
-EXPORT_SYMBOL(portals_debug_dumpstack);
-EXPORT_SYMBOL(stack_backtrace_lock);

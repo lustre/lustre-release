@@ -417,12 +417,11 @@ int jt_dbg_debug_file(int argc, char **argv)
         }
 
 #ifndef __CYGWIN__
-# warning FIXME: cleanup fstat issue here
 # ifndef SYS_fstat64
 #  define __SYS_fstat__ SYS_fstat
 # else
-# define __SYS_fstat__ SYS_fstat64
-#endif
+#  define __SYS_fstat__ SYS_fstat64
+# endif
         rc = syscall(__SYS_fstat__, fd, &statbuf);
 #else
         rc = fstat(fd, &statbuf);

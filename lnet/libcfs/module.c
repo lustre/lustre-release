@@ -217,7 +217,7 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
         ENTRY;
 
         switch(pcfg->pcfg_command) {
-        case IOC_PORTAL_ADD_ROUTE:
+        case NAL_CMD_ADD_ROUTE:
                 CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
                        pcfg->pcfg_nal, pcfg->pcfg_nid, 
                        pcfg->pcfg_nid2, pcfg->pcfg_nid3);
@@ -225,7 +225,7 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
                                         pcfg->pcfg_nid2, pcfg->pcfg_nid3);
                 break;
 
-        case IOC_PORTAL_DEL_ROUTE:
+        case NAL_CMD_DEL_ROUTE:
                 CDEBUG (D_IOCTL, "Removing routes via [%d] "LPU64" : "LPU64" - "LPU64"\n",
                         pcfg->pcfg_nal, pcfg->pcfg_nid, 
                         pcfg->pcfg_nid2, pcfg->pcfg_nid3);
@@ -233,7 +233,7 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
                                          pcfg->pcfg_nid2, pcfg->pcfg_nid3);
                 break;
 
-        case IOC_PORTAL_NOTIFY_ROUTER: {
+        case NAL_CMD_NOTIFY_ROUTER: {
                 CDEBUG (D_IOCTL, "Notifying peer [%d] "LPU64" %s @ %ld\n",
                         pcfg->pcfg_nal, pcfg->pcfg_nid,
                         pcfg->pcfg_flags ? "Enabling" : "Disabling",
@@ -245,7 +245,7 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
                 break;
         }
                 
-        case IOC_PORTAL_GET_ROUTE:
+        case NAL_CMD_GET_ROUTE:
                 CDEBUG (D_IOCTL, "Getting route [%d]\n", pcfg->pcfg_count);
                 err = kportal_get_route(pcfg->pcfg_count, &pcfg->pcfg_nal,
                                         &pcfg->pcfg_nid, 
@@ -412,6 +412,9 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
         char str[PTL_NALFMT_SIZE];
 
         ENTRY;
+
+        if (current->fsuid != 0)
+                RETURN(err = -EACCES);
 
         if ( _IOC_TYPE(cmd) != IOC_PORTAL_TYPE ||
              _IOC_NR(cmd) < IOC_PORTAL_MIN_NR  ||
