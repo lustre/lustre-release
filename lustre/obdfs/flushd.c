@@ -331,16 +331,31 @@ int obdfs_flush_dirty_pages(unsigned long check_time)
 } /* obdfs_flush_dirty_pages */
 
 
-static struct task_struct *pupdated;
+/* Defines for page buf daemon */
+DECLARE_WAIT_QUEUE_HEAD(pupd_waitq);
+
+static void pupd_wakeup(unsigned long l)
+{
+	wake_up_interruptible(&pupd_waitq);
+}
+
+static int pupd_active = -1;
 
 static int pupdate(void *unused) 
 {
+	struct task_struct *pupdated;
+	u_long flags;
         int interval = pupd_prm.interval;
         long age = pupd_prm.age_buffer;
         int wrote = 0;
+	struct timer_list pupd_timer;
+
+	init_timer(&pupd_timer);
+	pupd_timer.function = pupd_wakeup;
         
         exit_files(current);
         exit_mm(current);
+	daemonize();
 
         pupdated = current;
         pupdated->session = 1;
@@ -348,39 +363,27 @@ static int pupdate(void *unused)
         strcpy(pupdated->comm, "pupdated");
 
         printk("pupdated activated...\n");
+	pupd_active = 1;
 
-        spin_lock_irq(&pupdated->sigmask_lock);
+        spin_lock_irqsave(&pupdated->sigmask_lock, flags);
+	flush_signals(pupdated);
         sigfillset(&pupdated->blocked);
-        siginitsetinv(&pupdated->blocked, sigmask(SIGTERM));
         recalc_sigpending(pupdated);
-        spin_unlock_irq(&pupdated->sigmask_lock);
+        spin_unlock_irqrestore(&pupdated->sigmask_lock, flags);
 
-        for (;;) {
+        do {
                 long dirty_limit;
 
                 /* update interval */
-                if (interval) {
-                        set_task_state(pupdated, TASK_INTERRUPTIBLE);
-                        schedule_timeout(interval);
+                if (pupd_active == 1 && interval) {
+			mod_timer(&pupd_timer, jiffies + interval);
+			interruptible_sleep_on(&pupd_waitq);
                 }
-                if (signal_pending(pupdated))
-                {
-                        int stopped = 0;
-                        spin_lock_irq(&pupdated->sigmask_lock);
-                        if (sigismember(&pupdated->pending.signal, SIGTERM))
-                        {
-                                sigdelset(&pupdated->pending.signal, SIGTERM);
-                                stopped = 1;
-                        }
-                        recalc_sigpending(pupdated);
-                        spin_unlock_irq(&pupdated->sigmask_lock);
-                        if (stopped) {
-                                printk("pupdated stopped...\n");
-                                set_task_state(pupdated, TASK_STOPPED);
-                                pupdated = NULL;
-                                return 0;
-                        }
-                }
+                if (pupd_active == 0) {
+			del_timer(&pupd_timer);
+			/* If stopped, we flush one last time... */
+		}
+
                 /* asynchronous setattr etc for the future ...
                 obdfs_flush_dirty_inodes(jiffies - pupd_prm.age_super);
                  */
@@ -388,14 +391,14 @@ static int pupdate(void *unused)
 
                 if (obdfs_cache_count > dirty_limit) {
                         interval = 0;
-                        if ( wrote < pupd_prm.ndirty )
+                        if (wrote < pupd_prm.ndirty)
                                 age >>= 1;
                         if (wrote) 
 			  CDEBUG(D_CACHE, "wrote %d, age %ld, interval %d\n",
                                 wrote, age, interval);
                 } else {
-                        if ( wrote < pupd_prm.ndirty >> 1 &&
-                             obdfs_cache_count < dirty_limit / 2) {
+                        if (wrote < pupd_prm.ndirty >> 1 &&
+			    obdfs_cache_count < dirty_limit / 2) {
                                 interval = pupd_prm.interval;
                                 age = pupd_prm.age_buffer;
                                 if (wrote) 
@@ -404,7 +407,7 @@ static int pupdate(void *unused)
                                        wrote, age, interval);
                         } else if (obdfs_cache_count > dirty_limit / 2) {
                                 interval >>= 1;
-                                if ( wrote < pupd_prm.ndirty )
+                                if (wrote < pupd_prm.ndirty)
                                         age >>= 1;
                                 if (wrote) 
 				  CDEBUG(D_CACHE,
@@ -414,11 +417,18 @@ static int pupdate(void *unused)
                 }
 
                 wrote = obdfs_flush_dirty_pages(jiffies - age);
-                if (wrote)
+                if (wrote) {
                         CDEBUG(D_CACHE,
                                "dirty_limit %ld, cache_count %ld, wrote %d\n",
                                dirty_limit, obdfs_cache_count, wrote);
-        }
+			run_task_queue(&tq_disk);
+		}
+        } while (pupd_active == 1);
+
+	CDEBUG(D_CACHE, "pupdated stopped...\n");
+	pupd_active = -1;
+	wake_up_interruptible (&pupd_waitq);
+	return 0;
 }
 
 
@@ -428,7 +438,7 @@ int obdfs_flushd_init(void)
         kernel_thread(bdflush, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND);
          */
         kernel_thread(pupdate, NULL, 0);
-        CDEBUG(D_PSDEV, __FUNCTION__ ": flushd inited\n");
+        CDEBUG(D_PSDEV, "flushd inited\n");
         return 0;
 }
 
@@ -436,30 +446,18 @@ int obdfs_flushd_cleanup(void)
 {
         ENTRY;
 
-        if (pupdated) /* for debugging purposes only */
-                CDEBUG(D_CACHE, "pupdated->state = %lx\n", pupdated->state);
+	/* Shut down pupdated. */
+        if (pupd_active > 0) {
+                CDEBUG(D_CACHE, "inform pupdated\n");
+		pupd_active = 0;
+		wake_up_interruptible(&pupd_waitq);
 
-        /* deliver a signal to pupdated to shut it down */
-        if (pupdated && (pupdated->state == TASK_RUNNING ||
-                         pupdated->state == TASK_INTERRUPTIBLE )) {
-                unsigned long timeout = HZ/20;
-                unsigned long count = 0;
-                CDEBUG(D_CACHE, "\n");
-                send_sig_info(SIGTERM, (struct siginfo *)1, pupdated);
-                CDEBUG(D_CACHE, "\n");
-                while (pupdated) {
-			CDEBUG(D_CACHE, "\n");
-                        if ((count % 2*HZ) == timeout)
-                                printk(KERN_INFO "wait for pupdated to stop\n");
-			CDEBUG(D_CACHE, "\n");
-			count += timeout;
-                        set_current_state(TASK_INTERRUPTIBLE);
-			CDEBUG(D_CACHE, "\n");
-                        schedule_timeout(timeout);
-			CDEBUG(D_CACHE, "\n");
-                }
-                CDEBUG(D_CACHE, "\n");
-        }
+                CDEBUG(D_CACHE, "wait for pupdated\n");
+		while (pupd_active == 0) {
+			interruptible_sleep_on(&pupd_waitq);
+		}
+                CDEBUG(D_CACHE, "done waiting for pupdated\n");
+	}		
 
         EXIT;
         return 0;
