@@ -356,26 +356,26 @@ static struct inode *filter_inode_from_obj(struct obd_device *obddev,
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         int rc;
-
+        ENTRY;
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd);
 
         if (rc)
                 MOD_DEC_USE_COUNT;
-
-        return rc;
+        RETURN(rc);
 }
 
 static int filter_disconnect(struct lustre_handle *conn)
 {
         int rc;
+        ENTRY;
 
         rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
 
         /* XXX cleanup preallocated inodes */
-        return rc;
+        RETURN(rc);
 }
 
 /* mount the file system (secretly) */

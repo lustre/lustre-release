@@ -374,7 +374,8 @@ setup_ost() {
 }
 
 setup_server() {
-	setup_mds $1 && setup_mds_lov $1 && setup_ost $1
+	#setup_mds $1 && setup_mds_lov $1 && setup_ost $1
+	setup_mds $1 && setup_ost $1
 }
 
 setup_osc() {
@@ -460,7 +461,8 @@ setup_mount() {
 }
 
 setup_client() {
-	setup_osc && setup_mdc && setup_lov  && setup_mount
+	# setup_osc && setup_mdc && setup_lov  && setup_mount
+	setup_osc && setup_mdc && setup_mount
 }
 
 DEBUG_ON="echo 0xffffffff > /proc/sys/portals/debug"

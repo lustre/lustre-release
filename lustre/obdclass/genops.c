@@ -11,6 +11,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
+#include <linux/kmod.h>   /* for request_module() */
 #include <linux/module.h>
 #include <linux/obd_class.h>
 #include <linux/random.h>
@@ -111,6 +112,9 @@ int class_name2dev(char *name)
 {
         int res = -1;
         int i;
+
+	if (!name)
+	    return -1;
 
         for (i=0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];

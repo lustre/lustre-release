@@ -19,7 +19,6 @@
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/major.h>
-#include <linux/kmod.h>   /* for request_module() */
 #include <linux/sched.h>
 #include <linux/lp.h>
 #include <linux/slab.h>
@@ -144,11 +143,16 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 for (i = 0 ; i < MAX_OBD_DEVICES ; i++) {
                         int l;
+                        char *status;
                         struct obd_device *obd = &obd_dev[i];
                         if (!obd->obd_type) 
                                 continue;
-                        l = snprintf(buf2, remains, "%2d %s %s %s\n",
-                                     i, obd->obd_type->typ_name, 
+                        if (obd->obd_flags & OBD_SET_UP)
+                                status = "*";
+                        else 
+                                status = " ";
+                        l = snprintf(buf2, remains, "%2d %s %s %s %s\n",
+                                     i, status, obd->obd_type->typ_name, 
                                      obd->obd_name, obd->obd_uuid);
                         buf2 +=l;
                         remains -=l;
@@ -292,14 +296,14 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                obd->obd_minor, data->ioc_inlbuf1);
                         if (data->ioc_inlbuf2) {
                                 int len = strlen(data->ioc_inlbuf2) + 1;
-                                OBD_ALLOC(obd->obd_name, len + 1);
+                                OBD_ALLOC(obd->obd_name, len);
                                 if (!obd->obd_name) {
                                         CERROR("no memory\n");
                                         LBUG();
                                 }
-                                memcpy(obd->obd_name, data->ioc_inlbuf2, len + 1);
-                                obd->obd_proc_entry =
-                                        proc_lustre_register_obd_device(obd);
+                                memcpy(obd->obd_name, data->ioc_inlbuf2, len);
+                                //obd->obd_proc_entry =
+                                //        proc_lustre_register_obd_device(obd);
                         } else { 
                                 CERROR("WARNING: unnamed obd device\n");
                                 obd->obd_proc_entry = NULL;
@@ -341,12 +345,12 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 if (obd->obd_name) {
-                        OBD_FREE(obd->obd_name, strlen(obd->obd_name)+ 1);
+                        OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                         obd->obd_name = NULL;
                 }
 
-                if (obd->obd_proc_entry)
-                        proc_lustre_release_obd_device(obd);
+                //if (obd->obd_proc_entry)
+                  //      proc_lustre_release_obd_device(obd);
 
                 obd->obd_flags &= ~OBD_ATTACHED;
                 obd->obd_type->typ_refcnt--;
