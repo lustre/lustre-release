@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.21 2002/08/12 21:57:42 pschwan Exp $";
-#define OBDECHO_VERSION "$Revision: 1.21 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.22 2002/08/12 22:25:53 pschwan Exp $";
+#define OBDECHO_VERSION "$Revision: 1.22 $"
 
 #define EXPORT_SYMTAB
 
@@ -249,12 +249,22 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         obddev->obd_namespace =
                 ldlm_namespace_new("echo-tgt", LDLM_NAMESPACE_SERVER);
-        if (obddev->obd_namespace == NULL)
+        if (obddev->obd_namespace == NULL) {
                 LBUG();
+                RETURN(-ENOMEM);
+        }
 
         RETURN(0);
 }
 
+static int echo_cleanup(struct obd_device *obddev)
+{
+        ENTRY;
+
+        ldlm_namespace_free(obddev->obd_namespace);
+
+        RETURN(0);
+}
 
 struct obd_ops echo_obd_ops = {
         o_connect:     echo_connect,
@@ -262,7 +272,8 @@ struct obd_ops echo_obd_ops = {
         o_getattr:     echo_getattr,
         o_preprw:      echo_preprw,
         o_commitrw:    echo_commitrw,
-        o_setup:       echo_setup
+        o_setup:       echo_setup,
+        o_cleanup:     echo_cleanup
 };
 
 static int __init obdecho_init(void)
