@@ -164,3 +164,7 @@ fi
 if [ "$REPLAY_OST_SINGLE" != "no" ]; then
         sh replay-ost-single.sh
 fi
+
+if [ "$INSANITY" != "no" ]; then
+        sh insanity.sh -r
+fi
