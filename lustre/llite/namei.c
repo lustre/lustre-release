@@ -645,7 +645,6 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
 		if (new_inode) {
 			new_inode->i_ctime = CURRENT_TIME;
 			new_inode->i_nlink--;
-			dput(new_dentry);
 		}
                 GOTO(out, err = new_dentry->d_it->it_status);
         }
