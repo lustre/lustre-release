@@ -608,6 +608,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
 
         uc.ouc_fsuid = body->fsuid;
         uc.ouc_fsgid = body->fsgid;
+        uc.ouc_cap = body->capability;
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
@@ -675,6 +676,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         body = lustre_msg_buf(req->rq_reqmsg, offset);
         uc.ouc_fsuid = body->fsuid;
         uc.ouc_fsgid = body->fsgid;
+        uc.ouc_cap = body->capability;
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
@@ -774,7 +776,8 @@ static int mds_store_ea(struct mds_obd *mds, struct ptlrpc_request *req,
 
         uc.ouc_fsuid = body->fsuid;
         uc.ouc_fsgid = body->fsgid;
-        push_ctxt(&saved, &mds->mds_ctxt, &uc);
+        uc.ouc_cap = body->capability;
+       push_ctxt(&saved, &mds->mds_ctxt, &uc);
         handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
         if (!handle)
                 GOTO(out_ea, rc = -ENOMEM);
@@ -952,6 +955,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         uc.ouc_fsuid = body->fsuid;
         uc.ouc_fsgid = body->fsgid;
+        uc.ouc_cap = body->capability;
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, &mnt);
         if (IS_ERR(de))

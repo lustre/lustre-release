@@ -375,6 +375,7 @@ struct mds_body {
         __u32          valid;
         __u32          fsuid;
         __u32          fsgid;
+        __u32          capability;
         __u32          mode;
         __u32          uid;
         __u32          gid;
@@ -400,6 +401,8 @@ struct mds_rec_setattr {
         __u32           sa_opcode;
         __u32           sa_fsuid;
         __u32           sa_fsgid;
+        __u32           sa_cap;
+        __u32           sa_reserved;
         __u32           sa_valid;
         struct ll_fid   sa_fid;
         __u32           sa_mode;
@@ -416,6 +419,8 @@ struct mds_rec_create {
         __u32           cr_opcode;
         __u32           cr_fsuid;
         __u32           cr_fsgid;
+        __u32           cr_cap;
+        __u32           cr_reserved;
         __u32           cr_mode;
         struct ll_fid   cr_fid;
         struct ll_fid   cr_replayfid;
@@ -429,7 +434,7 @@ struct mds_rec_link {
         __u32           lk_opcode;
         __u32           lk_fsuid;
         __u32           lk_fsgid;
-        __u32           lk_reserved;
+        __u32           lk_cap;
         struct ll_fid   lk_fid1;
         struct ll_fid   lk_fid2;
 };
@@ -438,6 +443,8 @@ struct mds_rec_unlink {
         __u32           ul_opcode;
         __u32           ul_fsuid;
         __u32           ul_fsgid;
+        __u32           ul_cap;
+        __u32           ul_reserved;
         __u32           ul_mode;
         struct ll_fid   ul_fid1;
         struct ll_fid   ul_fid2;
@@ -447,7 +454,7 @@ struct mds_rec_rename {
         __u32           rn_opcode;
         __u32           rn_fsuid;
         __u32           rn_fsgid;
-        __u32           rn_reserved;
+        __u32           rn_cap;
         struct ll_fid   rn_fid1;
         struct ll_fid   rn_fid2;
 };

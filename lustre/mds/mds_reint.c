@@ -856,6 +856,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
 
         uc.ouc_fsuid = rec->ur_fsuid;
         uc.ouc_fsgid = rec->ur_fsgid;
+        uc.ouc_cap = rec->ur_cap;
 
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
         rc = reinters[realop] (rec, offset, req);

@@ -345,7 +345,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
          *  operation can lay its hands on it; but that is not 
          *  always needed...
          */
-        if (it->it_status == 0 && 
+        if ( // it->it_status == 0 && 
             it->it_op != IT_RENAME2 && 
             it->it_op != IT_SETATTR &&
             it->it_op != IT_GETATTR &&

@@ -553,7 +553,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
-        DEBUG_REQ(D_HA, req, "subsys: %s:", cli->cli_name);
+        //        DEBUG_REQ(D_HA, req, "subsys: %s:", cli->cli_name);
 
         /* XXX probably both an import and connection level are needed */
         if (req->rq_level > conn->c_level) { 

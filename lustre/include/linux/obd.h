@@ -63,6 +63,7 @@ struct ext2_obd {
 struct obd_ucred {
         __u32 ouc_fsuid;
         __u32 ouc_fsgid;
+        __u32 ouc_cap;
 };
 
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
@@ -73,7 +74,7 @@ struct obd_run_ctxt {
         mm_segment_t     fs;
         __u32            fsuid;
         __u32            fsgid;
-        __u32            override;
+        __u32            cap;
 #ifdef OBD_CTXT_DEBUG
         __u32            magic;
 #endif
