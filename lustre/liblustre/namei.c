@@ -38,6 +38,8 @@
 #include <inode.h>
 #include <file.h>
 
+#undef LIST_HEAD
+
 #include "llite_lib.h"
 
 static void ll_intent_release(struct lookup_intent *it)
