@@ -159,8 +159,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sbi->ll_rootino = rootfid.id;
 
         sb->s_maxbytes = 1ULL << 36;
-        sb->s_blocksize = PAGE_SIZE;
-        sb->s_blocksize_bits = (unsigned char)PAGE_SHIFT;
+        /* XXX get this with a get_info call (like we have in OBDFS),
+           this info call should return the blocksize of the MDS */
+        sb->s_blocksize = 4096;
+        sb->s_blocksize_bits = 12;
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_op = &ll_super_operations;
 
