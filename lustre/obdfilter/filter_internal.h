@@ -39,7 +39,7 @@
 #define FILTER_LR_MAX_CLIENT_WORDS (FILTER_LR_MAX_CLIENTS/sizeof(unsigned long))
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
-#define FILTER_GROUPS 2 /* must be at least 2; not dynamic yet */
+#define FILTER_GROUPS 2 /* must be at least 3; not dynamic yet */
 
 #define FILTER_MOUNT_RECOV 2
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
