@@ -540,6 +540,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 CERROR("unpack_rep failed: %d\n", rc);
                 GOTO(out, rc);
         }
+#if 0
+        /* FIXME: Enable when BlueArc makes new release */
         if (req->rq_repmsg->type != PTL_RPC_MSG_REPLY &&
             req->rq_repmsg->type != PTL_RPC_MSG_ERR) {
                 CERROR("invalid packet type received (type=%u)\n",
@@ -547,7 +549,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 LBUG();
                 GOTO(out, rc = -EINVAL);
         }
-
+#endif
         CDEBUG(D_NET, "got rep %Ld\n", req->rq_xid);
         if (req->rq_repmsg->status == 0)
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
