@@ -237,6 +237,7 @@ static int llu_iop_lookup(struct pnode *pnode,
         struct qstr *name = &pnode->p_base->pb_name;
         struct mds_body *body;
         unsigned long valid;
+        char *pname;
         int rc;
         struct ll_read_inode2_cookie lic = {.lic_body = NULL, .lic_lsm = NULL};
 
@@ -253,9 +254,16 @@ static int llu_iop_lookup(struct pnode *pnode,
         if (!name->len)
                 return -EINVAL;
 
+        /* mdc_getattr_name require NULL-terminated name */
+        pname = malloc(name->len + 1);
+        if (!pname)
+                return -ENOMEM;
+        memcpy(pname, name->name, name->len);
+        pname[name->len] = 0;
+
         valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
         rc = mdc_getattr_name(&sbi->ll_mdc_conn, fid,
-                              (char*)name->name, name->len + 1,
+                              pname, name->len + 1,
                               valid, 0, &request);
         if (rc < 0) {
                 CERROR("mdc_getattr_name: %d\n", rc);
