@@ -1021,10 +1021,18 @@ struct page *filter_get_page_write(struct inode *inode, unsigned long index,
         //ASSERT_PAGE_INDEX(index, GOTO(err, rc = -EINVAL));
         page = grab_cache_page_nowait(mapping, index); /* locked page */
 
-        /* This page is currently locked, so get a temporary page instead */
+        /* This page is currently locked, so get a temporary page instead. */
+        /* XXX I believe this is a very dangerous thing to do - consider if
+         *     we had multiple writers for the same file (definitely the case
+         *     if we are using this codepath).  If writer A locks the page,
+         *     writer B writes to a copy (as here), writer A drops the page
+         *     lock, and writer C grabs the lock before B does, then B will
+         *     later overwrite the data from C, even if C had LDLM locked
+         *     and initiated the write after B did.
+         */
         if (!page) {
                 unsigned long addr;
-                /* not a real error, just seeing if/when this really happens
+                /* debugging: just seeing if this ever happens
                 CDEBUG(D_PAGE, "ino %ld page %ld locked\n", inode->i_ino,index);
                 */
                 CERROR("writing ino %ld page %ld locked\n", inode->i_ino,index);
@@ -1087,7 +1095,7 @@ static int filter_commit_write(struct page *page, unsigned from, unsigned to,
                 unsigned blocksize = head->b_size;
                 void *addr = page_address(page);
 
-                /* not really an error, just seeing if this ever happens */
+                /* debugging: just seeing if this ever happens */
                 CERROR("called filter_commit_write for obj %ld:%ld on err %d\n",
                        page->index, page->mapping->host->i_ino, err);
 
@@ -1220,15 +1228,22 @@ static int filter_write_locked_page(struct niobuf_local *lnb)
                 GOTO(out, rc);
         }
 
-        memcpy(page_address(lpage), kmap(lnb->page), PAGE_SIZE);
+        /* debugging: just seeing that this works correctly */
+        CERROR("copying data from %p (%ld) to %p (ino %ld:%ld)\n", lnb->addr,
+               lnb->page->index, page_address(lpage),
+               lnb->dentry->d_inode->i_ino, lpage->index);
+        /* lpage is kmapped in lustre_get_page_write() above and kunmapped in
+         * lustre_commit_write() below, lnb->page was kmapped previously in
+         * filter_get_page_write() and kunmapped in lustre_put_page() below.
+         */
+        memcpy(page_address(lpage), page_address(lnb->page), PAGE_SIZE);
         rc = lustre_commit_write(lpage, 0, PAGE_SIZE);
         if (rc)
                 CERROR("error committing locked page %ld: rc = %d\n",
                        lnb->page->index, rc);
 out:
-        kunmap(lnb->page);
-        __free_pages(lnb->page, 0);
-        dput(lnb->dentry);
+        unlock_page(lnb->page);
+        lustre_put_page(lnb->page);
 
         return rc;
 }
@@ -1239,8 +1254,8 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                            void *private)
 {
         struct obd_run_ctxt saved;
-        struct obd_ioobj *o = obj;
-        struct niobuf_local *r = res;
+        struct obd_ioobj *o;
+        struct niobuf_local *r;
         struct obd_device *obd = class_conn2obd(conn); 
         void *journal_save;
         int found_locked = 0;
@@ -1253,7 +1268,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
         if (journal_save)
                 CERROR("Existing handle %p???\n", journal_save);
         current->journal_info = private;
-        for (i = 0; i < objcount; i++, obj++) {
+        for (i = 0, o = obj, r = res; i < objcount; i++, o++) {
                 int j;
                 for (j = 0 ; j < o->ioo_bufcnt ; j++, r++) {
                         struct page *page = r->page;
@@ -1262,7 +1277,10 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                                 LBUG();
 
                         if (r->flags & N_LOCAL_TEMP_PAGE) {
-                                found_locked = 1;
+                                /* debugging: just seeing if this happens */
+                                CERROR("found a locked page (index %ld)\n",
+                                       page->index);
+                                found_locked++;
                                 continue;
                         }
 
@@ -1287,7 +1305,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
         if (!found_locked)
                 goto out_ctxt;
 
-        for (i = 0; i < objcount; i++, obj++) {
+        for (i = 0, o = obj, r = res; i < objcount; i++, o++) {
                 int j;
                 for (j = 0 ; j < o->ioo_bufcnt ; j++, r++) {
                         int err;
@@ -1297,6 +1315,13 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
                         err = filter_write_locked_page(r);
                         if (!rc)
                                 rc = err;
+                        CDEBUG(D_INODE,
+                               "put inode %p (%ld), count = %d, nlink = %d\n",
+                               r->page->mapping->host,
+                               r->page->mapping->host->i_ino,
+                               atomic_read(&r->page->mapping->host->i_count)-1,
+                               r->page->mapping->host->i_nlink);
+                        dput(r->dentry);
                 }
         }
 
