@@ -85,7 +85,8 @@ extern unsigned int portal_printk;
 #endif
 #ifdef  __ia64__
 #define CDEBUG_STACK() (THREAD_SIZE -                                      \
-                        (unsigned long)__builtin_dwarf_cfa()&(THREAD_SIZE - 1))
+                        ((unsigned long)__builtin_dwarf_cfa() &            \
+                         (THREAD_SIZE - 1)))
 #else
 #define CDEBUG_STACK() (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_frame_address(0) &       \
