@@ -27,7 +27,7 @@ EXTRA_DIST = $(bin_SCRIPTS) $(sbin_SCRIPTS)
 
 include $(top_srcdir)/Rules
 
+# NOTE: this should only be run on i386.
 wiretest.c: wirehdr.c wirecheck
-	cp wirehdr.c wiretest.c
+	cp wirehdr.c $@
 	./wirecheck >> $@
-
