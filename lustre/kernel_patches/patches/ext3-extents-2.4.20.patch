@@ -1,8 +1,8 @@
 Index: linux-2.4.24/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/fs/ext3/extents.c	2004-01-26 20:52:25.000000000 +0300
-@@ -0,0 +1,2260 @@
++++ linux-2.4.24/fs/ext3/extents.c	2004-01-28 20:01:16.000000000 +0300
+@@ -0,0 +1,2254 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -1842,7 +1842,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		/* try to find previous block */
 +		if (path[depth].p_ext)
 +			return path[depth].p_ext->e_start +
-+				path[depth].p_ext->e_num - 1;
++				path[depth].p_ext->e_num;
 +		
 +		/* it looks index is empty
 +		 * try to find starting from index itself */
@@ -1903,7 +1903,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	tree->cex = (struct ext3_extent *) &EXT3_I(inode)->i_cached_extent;
 +}
 +
-+#if 0
++#if EXT3_MULTIBLOCK_ALLOCATOR
 +static int
 +ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
 +			struct ext3_ext_path *path,
@@ -1925,14 +1925,10 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	goal = ext3_ext_find_goal(inode, path);
 +	count = newex->e_num;
-+#ifdef EXT3_MULTIBLOCK_ALLOCATOR
-+	pblock = ext3_new_block(handle, inode, goal, &count, NULL, &err);
-+	EXT_ASSERT(count <= num);
++	pblock = ext3_new_blocks(handle, inode, &count, goal, &err);
++	EXT_ASSERT(count <= newex->e_num);
 +	/* FIXME: error handling here */
 +	EXT_ASSERT(err == 0);
-+#else
-+	pblock = 0;
-+#endif
 +
 +	/* insert new extent */
 +	newex->e_start = pblock;
@@ -1941,12 +1937,11 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	if (err)
 +		goto out;
 +
++
 +	/* correct on-disk inode size */
 +	if (newex->e_num > 0) {
 +		new_i_size = (loff_t) newex->e_block + newex->e_num;
 +		new_i_size = new_i_size << inode->i_blkbits;
-+		if (new_i_size > i_size_read(inode))
-+			new_i_size = i_size_read(inode);
 +		if (new_i_size > EXT3_I(inode)->i_disksize) {
 +			EXT3_I(inode)->i_disksize = new_i_size;
 +			err = ext3_mark_inode_dirty(handle, inode);
@@ -1965,14 +1960,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	struct ext3_extents_tree tree;
 +	int err;
 +
++	ext3_init_tree_desc(&tree, inode);
 +	ext_debug(&tree, "blocks %lu-%lu requested for inode %u\n",
 +			block, block + num,(unsigned) inode->i_ino);
-+
-+	ext3_init_tree_desc(&tree, inode);
-+	down(&EXT3_I(inode)->truncate_sem);
++	down_write(&EXT3_I(inode)->truncate_sem);
 +	err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
 +	ext3_ext_invalidate_cache(&tree);
-+	up(&EXT3_I(inode)->truncate_sem);
++	up_write(&EXT3_I(inode)->truncate_sem);
 +
 +	return err;
 +}
@@ -2266,7 +2260,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 Index: linux-2.4.24/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-01-14 02:58:45.000000000 +0300
-+++ linux-2.4.24/fs/ext3/ialloc.c	2004-01-24 16:58:08.000000000 +0300
++++ linux-2.4.24/fs/ext3/ialloc.c	2004-01-26 23:17:19.000000000 +0300
 @@ -592,11 +592,13 @@
   		iloc.bh = NULL;
   		goto fail;
@@ -2286,7 +2280,7 @@ Index: linux-2.4.24/fs/ext3/ialloc.c
 Index: linux-2.4.24/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/inode.c	2004-01-14 02:58:45.000000000 +0300
-+++ linux-2.4.24/fs/ext3/inode.c	2004-01-24 16:58:08.000000000 +0300
++++ linux-2.4.24/fs/ext3/inode.c	2004-01-26 23:17:19.000000000 +0300
 @@ -848,6 +848,15 @@
  	goto reread;
  }
@@ -2371,7 +2365,7 @@ Index: linux-2.4.24/fs/ext3/inode.c
 Index: linux-2.4.24/fs/ext3/Makefile
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/Makefile	2004-01-14 02:58:45.000000000 +0300
-+++ linux-2.4.24/fs/ext3/Makefile	2004-01-24 16:58:08.000000000 +0300
++++ linux-2.4.24/fs/ext3/Makefile	2004-01-26 23:17:19.000000000 +0300
 @@ -13,7 +13,7 @@
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -2384,7 +2378,7 @@ Index: linux-2.4.24/fs/ext3/Makefile
 Index: linux-2.4.24/fs/ext3/super.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/super.c	2004-01-14 02:58:45.000000000 +0300
-+++ linux-2.4.24/fs/ext3/super.c	2004-01-24 16:58:08.000000000 +0300
++++ linux-2.4.24/fs/ext3/super.c	2004-01-26 23:17:19.000000000 +0300
 @@ -530,6 +530,7 @@
  	int i;
  
@@ -2416,7 +2410,7 @@ Index: linux-2.4.24/fs/ext3/super.c
 Index: linux-2.4.24/fs/ext3/ioctl.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/ioctl.c	2004-01-14 02:58:42.000000000 +0300
-+++ linux-2.4.24/fs/ext3/ioctl.c	2004-01-24 16:58:08.000000000 +0300
++++ linux-2.4.24/fs/ext3/ioctl.c	2004-01-26 23:17:19.000000000 +0300
 @@ -174,6 +174,10 @@
  			return ret;
  		}
@@ -2431,7 +2425,7 @@ Index: linux-2.4.24/fs/ext3/ioctl.c
 Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-01-14 02:58:45.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_fs.h	2004-01-24 16:58:08.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-01-26 23:17:19.000000000 +0300
 @@ -184,6 +184,7 @@
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
@@ -2485,7 +2479,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
 Index: linux-2.4.24/include/linux/ext3_extents.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_extents.h	2004-01-24 19:28:54.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_extents.h	2004-01-26 23:17:19.000000000 +0300
 @@ -0,0 +1,212 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
@@ -2513,13 +2507,13 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 + * other hard changes happens much more often
 + * this is for debug purposes only
 + */
-+#define AGRESSIVE_TEST_
++#define AGRESSIVE_TEST
 +
 +/*
 + * if CHECK_BINSEARCH defined, then results of binary search
 + * will be checked by linear search
 + */
-+#define CHECK_BINSEARCH_
++#define CHECK_BINSEARCH
 +
 +/*
 + * if EXT_DEBUG is defined you can use 'extdebug' mount option
@@ -2702,7 +2696,7 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 Index: linux-2.4.24/include/linux/ext3_fs_i.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_fs_i.h	2004-01-24 19:30:22.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-01-24 19:54:39.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-01-26 23:17:19.000000000 +0300
 @@ -76,6 +76,8 @@
  	 * by other means, so we have truncate_sem.
  	 */
