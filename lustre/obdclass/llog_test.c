@@ -105,15 +105,18 @@ static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
 /* Test record writing, single and in bulk */
 static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 {
-        struct llog_rec_hdr rec;
+        struct {
+                struct llog_rec_hdr hdr;
+                struct llog_rec_tail tail;
+        } rec;
         int rc, i;
         ENTRY;
 
-        rec.lrh_len = LLOG_MIN_REC_SIZE;
-        rec.lrh_type = 0xf00f00;
+        rec.hdr.lrh_len = LLOG_MIN_REC_SIZE;
+        rec.hdr.lrh_type = 0xf00f00;
 
         CERROR("3a: write one log record\n");
-        rc = llog_write_rec(llh, &rec, NULL, 0, NULL, -1);
+        rc = llog_write_rec(llh, &rec.hdr, NULL, 0, NULL, -1);
         if (rc) {
                 CERROR("3a: write one log record failed: %d\n", rc);
                 RETURN(rc);
@@ -136,7 +139,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 
         CERROR("3b: write 1000 more log records\n");
         for (i = 0; i < 1000; i++) {
-                rc = llog_write_rec(llh, &rec, NULL, 0, NULL, -1);
+                rc = llog_write_rec(llh, &rec.hdr, NULL, 0, NULL, -1);
                 if (rc) {
                         CERROR("3b: write 1000 records failed at #%d: %d\n",
                                i + 1, rc);
