@@ -150,10 +150,10 @@ check_options()
 #    [ -r "$TARGET_FILE" ] || \
 #	usage 1 "Target '$TARGET' was not found."
 
-    RPMBUILD=`which rpmbuild`
-    if [ $? -ne 0 -o ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
-	RPMBUILD=`which rpm`
-	if [ $? -ne 0 -o ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
+    RPMBUILD=$(which rpmbuild 2>/dev/null | head -1)
+    if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
+	RPMBUILD=$(which rpm 2>/dev/null | head -1)
+	if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
 	    usage 1 "Could not find binary for making rpms (tried rpmbuild and rpm)."
 	fi
     fi
