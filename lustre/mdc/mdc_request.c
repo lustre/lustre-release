@@ -173,8 +173,6 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         struct ldlm_intent *lit;
         ENTRY;
 
-#warning FIXME: Andreas, the sgid directory stuff also goes here, but check again on mds
-
         LDLM_DEBUG_NOLOCK("mdsintent %d dir %ld", it->it_op, dir->i_ino);
 
         switch (it->it_op) { 
