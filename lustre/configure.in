@@ -73,7 +73,7 @@ changequote([, ])
 moduledir='$(libdir)/modules/'$RELEASE/kernel
 AC_SUBST(moduledir)
 
-modulefsdir='$(moduledir)/fs'
+modulefsdir='$(moduledir)/fs/$(PACKAGE)'
 AC_SUBST(modulefsdir)
 
 AC_MSG_RESULT($RELEASE)

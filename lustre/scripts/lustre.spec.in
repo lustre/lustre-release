@@ -84,19 +84,20 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/extN.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/ldlm.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/llite.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/mdc.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/mds.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/mds_extN.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdclass.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdecho.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdfilter.o
-#%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/obdfs.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/osc.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/ost.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/ptlrpc.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/extN.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ldlm.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/llite.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mdc.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mds.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mds_extN.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdclass.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdecho.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdfilter.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/lov.o
+#%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdfs.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/osc.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ost.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ptlrpc.o
 
 %files -n lustre-source
 %attr(-, root, root) /usr/src/lustre-%{version}
