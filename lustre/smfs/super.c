@@ -46,7 +46,8 @@
 #include "smfs_internal.h"
 
 static char *smfs_options(char *data, char **devstr, char **namestr,
-                          int *kml, int *cache, char **opts, int *iopen_nopriv)
+                          int *kml, int *cache, char **opts, int *iopen_nopriv,
+                          int *cow)
 {
         char *pos;
         struct option *opt_value = NULL;
@@ -70,6 +71,8 @@ static char *smfs_options(char *data, char **devstr, char **namestr,
                 } else if (!strcmp(opt_value->opt, "iopen_nopriv")) {
                         if (iopen_nopriv != NULL)
                                 *iopen_nopriv = 1;
+                } else if (!strcmp(opt_value->opt, "snap")) {
+                                *cow = 1;
                 } else {
                         break;
                 }
@@ -249,7 +252,7 @@ static int smfs_fill_super(struct super_block *sb,
 
         int iopen_nopriv = 0;
         struct inode *root_inode = NULL;
-        int err = 0, do_rec = 0, cache_hook = 0;
+        int err = 0, do_rec = 0, cache_hook = 0, do_cow = 0;
         char *devstr = NULL, *typestr = NULL, *opts = NULL;
 
         ENTRY;
@@ -262,7 +265,7 @@ static int smfs_fill_super(struct super_block *sb,
         /* read and validate passed options. */
         cache_data = smfs_options(data, &devstr, &typestr,
                                   &do_rec, &cache_hook, &opts,
-                                  &iopen_nopriv);
+                                  &iopen_nopriv, &do_cow);
 
         if (*cache_data)
                 CWARN("smfs_fill_super(): options parsing stoped at "
@@ -280,7 +283,7 @@ static int smfs_fill_super(struct super_block *sb,
 
         if (do_rec) smfs_rec_init(sb);
         if (cache_hook) cache_space_hook_init(sb);
-
+        
         dget(S2CSB(sb)->s_root);
         root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
         root_inode = iget(sb, root_ino);
@@ -294,13 +297,9 @@ static int smfs_fill_super(struct super_block *sb,
                 sm_umount_cache(sb);
                 GOTO(out_err, err=-EINVAL);
         }
-
-        sb->s_root = d_alloc_root(root_inode);
-
-        if (!sb->s_root) {
-                sm_umount_cache(sb);
-                GOTO(out_err, err = -EINVAL);
-        }
+#if CONFIG_SNAP
+        if (do_cow) smfs_cow_init(sb);
+#endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",

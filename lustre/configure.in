@@ -143,8 +143,12 @@ AC_ARG_ENABLE([snapfs],
 	AC_HELP_STRING([--enable-snapfs],
 			[build snapfs]),
 	[],[enable_snapfs='no'])
+
 AC_MSG_RESULT([$enable_snapfs])
 AM_CONDITIONAL(SNAPFS, test x$enable_snapfs = xyes)
+if test x$enable_snapfs = xyes ; then
+	AC_DEFINE(CONFIG_SNAPFS, 1, [enable snap support])
+fi
 
 sinclude(portals/build.m4)
 sinclude(portals/archdep.m4)
@@ -239,9 +243,6 @@ scripts/lustre.spec
 scripts/version_tag.pl
 smfs/Makefile
 smfs/autoMakefile
-snapfs/Makefile
-snapfs/autoMakefile
-snapfs/utils/Makefile
 cmobd/Makefile
 cmobd/autoMakefile
 tests/Makefile

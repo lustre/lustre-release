@@ -23,6 +23,5 @@ ifeq ($(PATCHLEVEL),4)
 subdir-m += ptlbd
 endif # PATCHLEVEL = 4
 
-@SNAPFS_TRUE@subdir-m += snapfs
 
 @INCLUDE_RULES@

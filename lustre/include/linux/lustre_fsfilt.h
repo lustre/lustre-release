@@ -58,8 +58,8 @@ struct fsfilt_operations {
         int     (* fs_iocontrol)(struct inode *inode, struct file *file,
                                  unsigned int cmd, unsigned long arg);
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
-                              int size);
-        int     (* fs_get_md)(struct inode *inode, void *md, int size);
+                              int size, int flags);
+        int     (* fs_get_md)(struct inode *inode, void *md, int size, int flags);
 
         /* this method is needed to make IO operation fsfilt nature depend. */
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
@@ -126,6 +126,32 @@ struct fsfilt_operations {
                                      char *, int, unsigned long, unsigned long,
                                      unsigned);
         int     (* fs_del_dir_entry)(struct obd_device *, struct dentry *);
+        /*snap operations*/
+        int     (* fs_is_redirector)(struct inode *inode);
+        int     (* fs_is_indirect)(struct inode *inode);
+        
+        struct inode * (* fs_create_indirect)(struct inode *pri, int index,
+                                              unsigned int gen, struct inode *parent,
+                                              int del);
+        struct inode * (* fs_get_indirect)(struct inode *pri, int *table,
+                                          int slot);
+        ino_t   (* fs_get_indirect_ino)(struct inode *pri, int index);
+        int     (* fs_destroy_indirect)(struct inode *pri, int index,
+                                        struct inode *next_ind);
+        int     (* fs_restore_indirect)(struct inode *pri, int index);
+        int     (* fs_iterate)(struct super_block *sb,
+                              int (*repeat)(struct inode *inode, void *priv),
+                              struct inode **start, void *priv, int flag);
+        int     (* fs_copy_block)(struct inode *dst, struct inode *src, int blk);
+        int     (* fs_set_indirect)(struct inode *pri, int index,
+                                    ino_t ind_ino, ino_t parent_ino);
+        int     (* fs_snap_feature)(struct super_block *sb, int feature, int op);
+        int     (* fs_set_snap_info)(struct super_block *sb, struct inode *inode, 
+                                     void* key, __u32 keylen, void *val, 
+                                     __u32 *vallen); 
+        int     (* fs_get_snap_info)(struct super_block *sb, struct inode *inode,
+                                     void* key, __u32 keylen, void *val, 
+                                     __u32 *vallen); 
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -174,6 +200,10 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 #define KML_CACHE_MKNOD         0x37
 #define KML_CACHE_LINK          0x39
 #define KML_CACHE_NOOP          0x3f
+
+/*for fsfilt set md ea*/
+#define LMV_EA  1
+#define LOV_EA  0
 
 static inline void *
 fsfilt_start_ops(struct fsfilt_operations *ops, struct inode *inode,
@@ -335,19 +365,18 @@ static inline int fsfilt_setup(struct obd_device *obd,
                 return obd->obd_fsops->fs_setup(obd, fs);
         return 0;
 }
-
 static inline int
 fsfilt_set_md(struct obd_device *obd, struct inode *inode,
-              void *handle, void *md, int size)
+              void *handle, void *md, int size, int flags)
 {
-        return obd->obd_fsops->fs_set_md(inode, handle, md, size);
+        return obd->obd_fsops->fs_set_md(inode, handle, md, size, flags);
 }
 
 static inline int
 fsfilt_get_md(struct obd_device *obd, struct inode *inode,
-              void *md, int size)
+              void *md, int size, int flags)
 {
-        return obd->obd_fsops->fs_get_md(inode, md, size);
+        return obd->obd_fsops->fs_get_md(inode, md, size, flags);
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))

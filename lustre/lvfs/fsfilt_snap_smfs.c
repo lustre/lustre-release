@@ -137,7 +137,7 @@ static int fsfilt_smfs_set_indirect(struct inode *inode, int index,
 static int fsfilt_smfs_snap_feature(struct super_block *sb, int feature, 
                                     int op)
 {
-        struct fsfilt_operations *snap_fsfilt = S2SMI(sb)->sm_snap_fsfilt;
+        struct fsfilt_operations *snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
         struct super_block       *csb = S2CSB(sb);
         int                      rc = -EIO;
         
@@ -215,50 +215,6 @@ static ino_t fsfilt_smfs_get_indirect_ino(struct inode *inode, int index)
         
         RETURN(rc);
 }
-static int fsfilt_smfs_set_generation(struct inode *inode, 
-                                      unsigned long new_gen)
-{
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
-        struct inode *cache_inode = NULL;
-        int    rc = -EIO;
-        ENTRY;
-
-        if (snap_fsfilt == NULL)
-                RETURN(rc);
-
-        cache_inode = I2CI(inode);
-        if (!cache_inode)
-                RETURN(rc);
-
-        pre_smfs_inode(inode, cache_inode);
-        if (snap_fsfilt->fs_set_generation)
-                rc = snap_fsfilt->fs_set_generation(cache_inode, new_gen);
-        post_smfs_inode(inode, cache_inode);
-        
-        RETURN(rc);
-}
-
-static int fsfilt_smfs_get_generation(struct inode *inode)
-{
-        struct fsfilt_operations *snap_fsfilt = I2SNAPOPS(inode);
-        struct inode *cache_inode = NULL;
-        int    rc = -EIO;
-        ENTRY;
-
-        if (snap_fsfilt == NULL)
-                RETURN(rc);
-
-        cache_inode = I2CI(inode);
-        if (!cache_inode)
-                RETURN(rc);
-
-        pre_smfs_inode(inode, cache_inode);
-        if (snap_fsfilt->fs_get_generation)
-                rc = snap_fsfilt->fs_get_generation(cache_inode);
-        post_smfs_inode(inode, cache_inode);
-        
-        RETURN(rc);
-}
 
 static int fsfilt_smfs_destroy_indirect(struct inode *inode, int index,
                                         struct inode *next_ind)
@@ -318,7 +274,7 @@ static int fsfilt_smfs_iterate(struct super_block *sb,
                                int (*repeat)(struct inode *inode, void *priv),
                                struct inode **start, void *priv, int flag)
 {
-        struct fsfilt_operations *snap_fsfilt = S2SMI(sb)->sm_snap_fsfilt;
+        struct fsfilt_operations *snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
         struct super_block       *csb = S2CSB(sb);
         int                      rc = -EIO;
         ENTRY;
@@ -366,38 +322,56 @@ static int fsfilt_smfs_copy_block(struct inode *dst, struct inode *src, int blk)
         RETURN(rc); 
 }
 
-static int fsfilt_smfs_set_meta_attr(struct super_block *sb, char *name,
-                                     char *buf, int size)
+static int fsfilt_smfs_set_snap_info(struct super_block *sb,struct inode *inode, 
+                                     void* key, __u32 keylen, void *val, 
+                                     __u32 *vallen)
 {
-        struct fsfilt_operations *snap_fsfilt = S2SMI(sb)->sm_snap_fsfilt;
-        struct super_block       *csb = S2CSB(sb);
+        struct super_block     *csb = NULL;
+        struct inode           *cache_inode = NULL;  
+        struct fsfilt_operations *snap_fsfilt = NULL; 
         int                      rc = -EIO;
         
+        if (sb) {
+                csb = S2CSB(sb);
+                snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
+        } else if (inode) {
+                cache_inode = I2CI(inode);
+                snap_fsfilt = I2SNAPOPS(inode);
+        }
+
         if (snap_fsfilt == NULL)
                 RETURN(rc);
-        if (!csb)
-                RETURN(rc);
         
-        if (snap_fsfilt->fs_set_meta_attr)
-                rc = snap_fsfilt->fs_set_meta_attr(csb, name, buf, size);
+        if (snap_fsfilt->fs_set_snap_info)
+                rc = snap_fsfilt->fs_set_snap_info(csb, cache_inode, key, 
+                                                   keylen, val, vallen);
 
         RETURN(rc);
 }
 
-static int fsfilt_smfs_get_meta_attr(struct super_block *sb, char *name,
-                                     char *buf, int *size)
+static int fsfilt_smfs_get_snap_info(struct super_block *sb, struct inode *inode,
+                                     void *key, __u32 keylen, void *val,
+                                     __u32 *vallen)
 {
-        struct fsfilt_operations *snap_fsfilt = S2SMI(sb)->sm_snap_fsfilt;
-        struct super_block       *csb = S2CSB(sb);
+        struct super_block     *csb = NULL;
+        struct inode           *cache_inode = NULL;  
+        struct fsfilt_operations *snap_fsfilt = NULL; 
         int                      rc = -EIO;
         
+        if (sb) {
+                csb = S2CSB(sb);
+                snap_fsfilt = S2SNAPI(sb)->snap_cache_fsfilt;
+        } else if (inode) {
+                cache_inode = I2CI(inode);
+                snap_fsfilt = I2SNAPOPS(inode);
+        }
+      
         if (snap_fsfilt == NULL)
                 RETURN(rc);
-        if (!csb)
-                RETURN(rc);
-        
-        if (snap_fsfilt->fs_get_meta_attr)
-                rc = snap_fsfilt->fs_get_meta_attr(csb, name, buf, size);
+       
+        if (snap_fsfilt->fs_get_snap_info)
+                rc = snap_fsfilt->fs_get_snap_info(csb, cache_inode, key, 
+                                                   keylen, val, vallen);
 
         RETURN(rc);
 }
@@ -412,14 +386,12 @@ struct fsfilt_operations fsfilt_smfs_snap_ops = {
 	.fs_is_redirector	= fsfilt_smfs_is_redirector,
 	.fs_is_indirect		= fsfilt_smfs_is_indirect,
         .fs_get_indirect_ino    = fsfilt_smfs_get_indirect_ino,
-        .fs_set_generation      = fsfilt_smfs_set_generation,
-        .fs_get_generation      = fsfilt_smfs_get_generation,
         .fs_destroy_indirect    = fsfilt_smfs_destroy_indirect,
         .fs_restore_indirect    = fsfilt_smfs_restore_indirect,
         .fs_iterate             = fsfilt_smfs_iterate,
         .fs_copy_block          = fsfilt_smfs_copy_block,
-        .fs_set_meta_attr       = fsfilt_smfs_set_meta_attr,
-        .fs_get_meta_attr       = fsfilt_smfs_get_meta_attr,
+        .fs_set_snap_info       = fsfilt_smfs_set_snap_info,
+        .fs_get_snap_info       = fsfilt_smfs_get_snap_info,
 };
 
 

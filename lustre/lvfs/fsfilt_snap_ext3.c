@@ -56,7 +56,7 @@
 #define EXT3_DEL_FL                     0x00200000 /* inode is deleting in snapshot */
 
 #define EXT3_SNAP_ATTR "@snap"
-#define EXT3_SNAP_GENERATION_ATTR "@snap_generation"
+#define EXT3_SNAP_GENERATION "@snap_generation"
 #define EXT3_MAX_SNAPS 20
 #define EXT3_MAX_SNAP_DATA (sizeof(struct snap_ea))
 #define EXT3_SNAP_INDEX EXT3_XATTR_INDEX_LUSTRE
@@ -69,6 +69,8 @@
 
 #define EXT3_FEATURE_COMPAT_SNAPFS             0x0010
 #define EXT3_FEATURE_COMPAT_BLOCKCOW           0x0020
+/*snaptable info for EXT3*/
+#define EXT3_SNAPTABLE_EA       "@snaptable"
                                                                                                                                                                                                      
 /* NOTE: these macros are close dependant on the structure of snap ea */
 #define SNAP_CNT_FROM_SIZE(size)       ((((size)-sizeof(ino_t)*2)/2)/sizeof(ino_t))
@@ -232,7 +234,7 @@ out_unlock:
 	return err;
 }
 
-static int fsfilt_ext3_set_generation(struct inode *inode, unsigned long gen)
+static int ext3_set_generation(struct inode *inode, unsigned long gen)
 {
         handle_t *handle;
         int err = 0;
@@ -243,7 +245,7 @@ static int fsfilt_ext3_set_generation(struct inode *inode, unsigned long gen)
                 RETURN(-EINVAL);
 
         err = ext3_xattr_set(handle, inode, EXT3_SNAP_INDEX, 
-                             EXT3_SNAP_GENERATION_ATTR,
+                             EXT3_SNAP_GENERATION,
                              (char*)&gen, sizeof(int), 0);
         if (err < 0) {
                 CERROR("ino %lu, set_ext_attr err %d\n", inode->i_ino, err);
@@ -252,26 +254,6 @@ static int fsfilt_ext3_set_generation(struct inode *inode, unsigned long gen)
         
         ext3_journal_stop(handle, inode);
         RETURN(0);
-}
-                                                                                                                                                                                                     
-static int fsfilt_ext3_get_generation(struct inode *inode)
-{
-        int err, gen;
-        ENTRY;
-
-        err = ext3_xattr_get(inode, EXT3_SNAP_INDEX, EXT3_SNAP_GENERATION_ATTR,
-                             (char*)&gen, sizeof(gen));
-        if (err < 0) {
-                if (err == -ENODATA) {
-                        RETURN(0);
-                } else {
-                        CERROR("can not get generation from %lu \n", 
-                               inode->i_ino);
-                        RETURN(err);
-                }
-        }
-
-        RETURN(gen);
 }
 
 /*
@@ -624,7 +606,7 @@ static struct inode* fsfilt_ext3_create_indirect(struct inode *pri, int index,
 	CDEBUG(D_INODE, "got new inode %lu\n", ind->i_ino);
 	ind->i_rdev = pri->i_rdev;
 	ind->i_op = pri->i_op;
-	fsfilt_ext3_set_generation(ind, (unsigned long)gen);
+	ext3_set_generation(ind, (unsigned long)gen);
 	/* If we are deleting the primary inode, we want to ensure that it is
 	 * written to disk with a non-zero link count, otherwise the next iget
 	 * and iput will mark the inode as free (which we don't want, we want
@@ -1455,230 +1437,71 @@ static int fsfilt_ext3_iterate(struct super_block *sb,
 	}
 }
 
-static int find_snap_meta_index(
-	struct table_snap_meta_data *snap_meta,
-	char			    *name)
+static int fsfilt_ext3_get_snap_info(struct super_block *sb,struct inode *inode,
+                                     void *key, __u32 keylen, void *val, 
+                                     __u32 *vallen) 
 {
-	int i;
+        int rc = 0;
+        ENTRY;
 
-	/* table max length is null*/
-	for( i = 0; i < TABLE_ITEM_COUNT; i++){
-		/*compare name Max name Length 15*/
-		if (snap_meta->array[i].name[0]){
-			if(!strncmp(snap_meta->array[i].name, name, strlen(name)))
-				return i;
-		}
-	}
-	return -1; /* can not find */
-}
-
-int set_snap_meta_index(
-	struct table_snap_meta_data *snap_meta,
-	char			    *name,
-	int			     size)
-{
-	int i;
-
-	for( i = 0; i < TABLE_ITEM_COUNT; i++){
-		/*compare name Max name Length 15*/
-		if (! snap_meta->array[i].name[0]){
-			strcpy(snap_meta->array[i].name, name);
-			snap_meta->count ++;
-			snap_meta->array[i].start = i * TABLE_ITEM_SIZE + 1;
-			snap_meta->array[i].len	  = size;
-			return i;
-		}
-	}
-	return -1; /* can not find */
-}
-
-static int fsfilt_ext3_get_meta_attr(struct super_block *sb, char* name, 
-                                     char* buf, int *size)
-{
-        struct inode  			*inode;
-	struct buffer_head 		*bh = NULL;
-	struct table_snap_meta_data     *s_attr;
-	unsigned long			map_len = 0,  left_size;
-        int 				i, error = 0, index = 0;
-        ino_t           		ino;
-        ENTRY;        
-	
-	ino = SB_SNAPTABLE_INO(sb);	
-	if (ino == 0){
-		CERROR("No table file \n");
-		RETURN(-ENODATA);
-	} 
-
-	inode = iget(sb, ino);
-        if(!inode || is_bad_inode(inode)){
-                CERROR("unable to get table ino %lu\n", ino);
-                GOTO(out_iput, error = -ENOENT);
-	}
-	/*read the table from the table inode*/
-	bh = ext3_bread(NULL, inode, 0, 0, &error);
-	if (!bh) {
-		CERROR("read table ino %lu, error %d\n", ino, error);
-                GOTO(out_iput, error = -ENODATA);
-	}
-	s_attr = (struct table_snap_meta_data *)(bh->b_data);
-	index = find_snap_meta_index(s_attr, name);
-	if (index < 0) {
-		CDEBUG(D_INFO, "not exit %s meta attr of table ino %lu \n", 
-		       name, inode->i_ino);
-	        GOTO(out_iput, error = 0);
-	}
-	if (!buf || *size < s_attr->array[index].len) {
-		/*return the size of this meta attr */
-		error = s_attr->array[index].len;		
-		GOTO(out_iput, error);
-	}
-	map_len = (s_attr->array[index].len + sb->s_blocksize - 1) 
-                  >> sb->s_blocksize_bits;	
-	left_size = *size;
-	for(i = 0; i < map_len; i++) {
-		struct buffer_head *array_bh = NULL;
-
-		array_bh = ext3_bread(NULL, inode, 
-				      s_attr->array[index].start + i,
-				      0, &error);
-		if (!array_bh) {
-			CERROR("ino %lu read snap attr offset %d error %d \n",
-			       inode->i_ino, (s_attr->array[index].start + i), 
-                               error);
-			GOTO(out_iput, error);
-		}
-		if (left_size >= sb->s_blocksize) 
-			memcpy(buf, array_bh->b_data, sb->s_blocksize);
-		else
-			memcpy(buf, array_bh->b_data, left_size);
-		left_size -= sb->s_blocksize;
-		brelse(array_bh);
-	}
-	*size = s_attr->array[index].len;
-out_iput:
-	brelse(bh);
-	iput(inode);
-
-	RETURN(error);
+        if (!vallen || !val) {
+                CERROR("val and val_size is 0!\n");
+                RETURN(-EFAULT);
+        }
+        if (keylen >= strlen(MAX_SNAPTABLE_COUNT) 
+            && strcmp(key, MAX_SNAPTABLE_COUNT) == 0) {
+                /*FIXME should get it from the EA_size*/
+               *((__u32 *)val) = EXT3_MAX_SNAPS; 
+               *vallen = sizeof(int);
+               RETURN(rc);
+        } else if (keylen >= strlen(SNAPTABLE_INFO) 
+                   && strcmp(key, SNAPTABLE_INFO) == 0) {
+                rc = ext3_xattr_get(sb->s_root->d_inode, EXT3_SNAP_INDEX, 
+                                    EXT3_SNAPTABLE_EA, val, *vallen); 
+                RETURN(rc);
+        } else if (keylen >= strlen(SNAP_GENERATION) 
+                   && strcmp(key, SNAP_GENERATION) == 0) {
+                
+                rc = ext3_xattr_get(inode, EXT3_SNAP_INDEX,EXT3_SNAP_GENERATION,
+                                    (char *)val, *vallen);
+                RETURN(rc);
+        } 
+        RETURN(-EINVAL);
 } 
 
-static int fsfilt_ext3_set_meta_attr(struct super_block *sb, char* name, 
-			             char* buf, int size)
+static int fsfilt_ext3_set_snap_info(struct super_block *sb,struct inode *inode, 
+                                     void *key, __u32 keylen, void *val, 
+                                     __u32 *vallen)
 {
-        struct inode  			*inode = NULL;
-        handle_t			*handle = NULL;
-	struct	buffer_head 		*bh = NULL;
-	struct table_snap_meta_data     *s_attr = NULL;
-	unsigned long   		ino;
-        int 				i, index = 0, error = 0;
-	unsigned long   		new_len = 0, left_size; 
-        
+        int rc = 0;
         ENTRY;
-		
-	ino = SB_SNAPTABLE_INO(sb);
-      
-	if (ino == 0 && !buf) {
-		CDEBUG(D_INODE, "no table ino \n");
-		RETURN(0);
-	}
-	
-	handle = ext3_journal_start(sb->s_root->d_inode, 
-                                    2 * EXT3_SETMETA_TRANS_BLOCKS);
-	if(!handle)
-		RETURN(-EINVAL);
+        
+        if (!vallen || !val) {
+                CERROR("val and val_size is 0!\n");
+                RETURN(-EFAULT);
+        }
 
-	if (ino == 0) {
-		/*create table inode update table ino*/
-		inode = ext3_new_inode(handle, sb->s_root->d_inode, (int)S_IFREG, 0);
-		if (!inode)
-			RETURN(-EINVAL);
-		lock_super(sb);
-		ext3_journal_get_write_access(handle, sb->u.ext3_sb.s_sbh);
-		SB_SNAPTABLE_INO(sb) = inode->i_ino;
-		ext3_journal_dirty_metadata(handle, sb->u.ext3_sb.s_sbh);
-		sb->s_dirt = 1;
-		unlock_super(sb);
-
-	} else {
-		inode = iget(sb, ino);
-		if (!inode || !inode->i_nlink || is_bad_inode(inode)) {
-			CERROR("unable to get table ino %lu\n", ino);
-			GOTO(exit, error = -ENOENT);
-		}
-	}
-	/*read the table from the table inode,
-	 * If can not find the block just create it*/
-	bh = ext3_bread(handle, inode, 0, 1, &error);
-	if (!bh) {
-		CERROR("read table ino %lu, error %d\n", ino, error);
-		GOTO(exit, error = -ENODATA);
-	}
-	s_attr = (struct table_snap_meta_data *)(bh->b_data);
-	index = find_snap_meta_index(s_attr, name);
-	if (index < 0 && !buf) { 	
-		CDEBUG(D_INODE, "%s meta attr of table ino %lu do not exist\n", 
-		       name, inode->i_ino);
-		brelse(bh);
-	        GOTO(exit, error = 0);
-	}
-	if (!buf) {
-		CDEBUG(D_INODE, "delete the meta attr %s in the table ino %lu",
-		       name, inode->i_ino);
-		/*Here we only delete the entry of the attr
-		 *FIXME, should we also delete the block of 
-		 * this attr
-		 */
-		ext3_journal_get_write_access(handle, bh);
-		memset(s_attr->array[index].name, 0, TABLE_ITEM_NAME_SIZE);
-	        s_attr->array[index].len = 0;
-	        s_attr->count --;
-		ext3_journal_dirty_metadata(handle, bh);
-		brelse(bh);
-		GOTO(exit, error);
-	}
-	new_len = (size + sb->s_blocksize - 1) >> sb->s_blocksize_bits;
-	/*find the place to put this attr in that index*/
-	ext3_journal_get_write_access(handle, bh);
-	if (index < 0){
-		index = set_snap_meta_index(s_attr, name, size);
-		if (index < 0){
-			CERROR("table full of ino %lu \n", inode->i_ino);
-		        brelse(bh);
-		        GOTO(exit, error = index);
-		}
-	}
-	s_attr->array[index].len = size;
-	journal_dirty_metadata(handle, bh);
-	brelse(bh);
-	/*put this attr to the snap table*/
-	left_size = size;
-	for(i = 0; i < new_len; i++) {
-		struct buffer_head *array_bh = NULL;
-		
-		array_bh = ext3_bread(handle, inode, 
-				      s_attr->array[index].start + i, 1, &error);
-		if (!array_bh) {
-			CERROR("inode %lu Can not get the block of attr %s\n",  
-				inode->i_ino, name);
-			brelse(array_bh);
-			GOTO(exit, error = -ENOSPC);
-		}
-		ext3_journal_get_write_access(handle, array_bh);
-		if (left_size > inode->i_sb->s_blocksize) 	
-			memcpy(array_bh->b_data, buf, inode->i_sb->s_blocksize);
-		else
-			memcpy(array_bh->b_data, buf, left_size);
-		ext3_journal_dirty_metadata(handle, array_bh);
-		left_size -= inode->i_sb->s_blocksize;
-		brelse(array_bh);
-	}
-exit:
-        if (handle)
-		ext3_journal_stop(handle, sb->s_root->d_inode); 
-	iput(inode);
-	RETURN(error);
+        if (keylen >= strlen(SNAPTABLE_INFO) 
+            && strcmp(key, SNAPTABLE_INFO) == 0) {
+                struct inode *inode = sb->s_root->d_inode;
+                handle_t *handle;
+ 
+                handle = ext3_journal_start(inode, EXT3_XATTR_TRANS_BLOCKS);
+                if( !handle )
+                        RETURN(-EINVAL);
+                rc = ext3_xattr_set(handle, inode, EXT3_SNAP_INDEX, 
+                                    EXT3_SNAPTABLE_EA, val, *vallen, 0); 
+	        ext3_journal_stop(handle,inode);
+                
+                RETURN(rc);
+        } else if (keylen >= strlen(SNAP_GENERATION) 
+                   && strcmp(key, SNAP_GENERATION) == 0) {
+                rc = ext3_set_generation(inode, *(int*)val);
+                
+                RETURN(rc); 
+        }
+        RETURN(-EINVAL);
 }
-
 
 struct fsfilt_operations fsfilt_ext3_snap_ops = {
         .fs_type                = "ext3_snap",
@@ -1690,14 +1513,12 @@ struct fsfilt_operations fsfilt_ext3_snap_ops = {
 	.fs_is_redirector	= fsfilt_ext3_is_redirector,
 	.fs_is_indirect		= fsfilt_ext3_is_indirect,
         .fs_get_indirect_ino    = fsfilt_ext3_get_indirect_ino,
-        .fs_set_generation      = fsfilt_ext3_set_generation,
-        .fs_get_generation      = fsfilt_ext3_get_generation,
         .fs_destroy_indirect    = fsfilt_ext3_destroy_indirect,
         .fs_restore_indirect    = fsfilt_ext3_restore_indirect,
         .fs_iterate             = fsfilt_ext3_iterate,
         .fs_copy_block          = fsfilt_ext3_copy_block,
-        .fs_set_meta_attr       = fsfilt_ext3_set_meta_attr,
-        .fs_get_meta_attr       = fsfilt_ext3_get_meta_attr,
+        .fs_set_snap_info       = fsfilt_ext3_set_snap_info,
+        .fs_get_snap_info       = fsfilt_ext3_get_snap_info,
 };
 
 static int __init fsfilt_ext3_snap_init(void)

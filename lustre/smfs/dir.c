@@ -67,7 +67,7 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
 
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_CREATE, handle, dir);
 
-         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
+        cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
 
         lock_kernel();
@@ -75,6 +75,8 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
                 GOTO(exit, rc = -ENOMEM);
 
         pre_smfs_inode(dir, cache_dir);
+
+        SMFS_PRE_COW(dir, dentry, REINT_CREATE, "create", rc, exit);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (cache_dir && cache_dir->i_op->create)
@@ -98,6 +100,7 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
         post_smfs_inode(dir, cache_dir);
 
         /*Do KML post hook*/
+
         SMFS_KML_POST(dir, dentry, NULL, NULL, REINT_CREATE,
                       "create", rc, exit);
         SMFS_CACHE_HOOK_POST(CACHE_HOOK_CREATE, handle, dir, dentry,
@@ -133,7 +136,7 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
 
         handle = smfs_trans_start(dir, KML_CACHE_NOOP, NULL);
         if (IS_ERR(handle))
-                       RETURN(ERR_PTR(-ENOSPC));
+                RETURN(ERR_PTR(-ENOSPC));
 
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_LOOKUP, handle, dir);
 

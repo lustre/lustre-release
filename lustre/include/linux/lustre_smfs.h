@@ -1,9 +1,40 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2001-2003 Cluster File Systems, Inc. <info@clusterfs.com>
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *   smfs data structures.
+ *   See also lustre_idl.h for wire formats of requests.
+ *
+ */
+
 #ifndef __LUSTRE_SMFS_H
 #define __LUSTRE_SMFS_H
+
+struct snap_inode_info {
+	int sn_flags;		/* the flags indicated inode type */
+	int sn_gen; 	        /*the inode generation*/
+};
 
 struct smfs_inode_info {
         struct inode *smi_inode;
         __u32  smi_flags;
+	struct snap_inode_info sm_sninfo;
 };
 
 struct journal_operations {
@@ -40,6 +71,7 @@ struct mds_kml_pack_info {
         int mpi_size[4];
         int mpi_total_size;
 };
+
 struct smfs_super_info {
         struct super_block       *smsi_sb;
         struct vfsmount          *smsi_mnt;         /* mount the cache kern */
@@ -54,9 +86,10 @@ struct smfs_super_info {
         char                     *smsi_cache_ftype; /* cache file system type */
         char                     *smsi_ftype;       /* file system type */
 	struct obd_export	 *smsi_exp;	    /* file system obd exp */
-        smfs_pack_rec_func   smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
-        __u32                     smsi_flags;       /* flags */
-        __u32                     smsi_ops_check;
+	struct snap_info	 *smsi_snap_info;    /* snap table cow */
+        smfs_pack_rec_func   	 smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
+        __u32                    smsi_flags;       /* flags */
+        __u32                    smsi_ops_check;
 };
 
 #define SMFS_FILE_TYPE "smfs"
@@ -104,6 +137,9 @@ struct fs_extent{
                         (inode->i_sb->s_fs_info))->sm_cache_fsfilt)
 #endif
 
+#define I2SNAPOPS(inode) ((S2SMI(inode->i_sb))->smsi_snap_info->snap_cache_fsfilt) 
+
+#define S2SNAPI(sb) (S2SMI(sb)->smsi_snap_info)
 #define F2SMFI(file) ((struct smfs_file_info *)((file->private_data)))
 #define F2CF(file) (((struct smfs_file_info *) ((file->private_data)))->c_file)
 #define SIZE2BLKS(size, inode) ((size + (I2CI(inode)->i_blksize)) >> (I2CI(inode)->i_blkbits))
@@ -113,7 +149,8 @@ struct fs_extent{
 #define SM_INIT_REC             0x2
 #define SM_CACHE_HOOK           0x4
 #define SM_OVER_WRITE           0x8
-#define SM_DIRTY_WRITE         0x10
+#define SM_DIRTY_WRITE          0x10
+#define SM_DO_COW         	0x20
 
 #define SMFS_DO_REC(smfs_info) (smfs_info->smsi_flags & SM_DO_REC)
 #define SMFS_SET_REC(smfs_info) (smfs_info->smsi_flags |= SM_DO_REC)
@@ -143,6 +180,13 @@ struct fs_extent{
 #define SMFS_SET_INODE_DIRTY_WRITE(inode) (I2SMI(inode)->smi_flags |= SM_DIRTY_WRITE)
 #define SMFS_CLEAN_INODE_DIRTY_WRITE(inode) (I2SMI(inode)->smi_flags &= ~SM_DIRTY_WRITE)
 
+#define SMFS_DO_COW(smfs_info) (smfs_info->smsi_flags & SM_DO_COW)
+#define SMFS_SET_COW(smfs_info) (smfs_info->smsi_flags |= SM_DO_COW)
+#define SMFS_CLEAN_COW(smfs_info) (smfs_info->smsi_flags &= ~SM_DO_COW)
+
+#define SMFS_SET_INODE_COW(inode) (I2SMI(inode)->smi_flags |= SM_DO_COW)
+#define SMFS_DO_INODE_COW(inode) (I2SMI(inode)->smi_flags & SM_DO_COW)
+#define SMFS_CLEAN_INODE_COW(inode) (I2SMI(inode)->smi_flags &= ~SM_DO_COW)
 
 #define LVFS_SMFS_BACK_ATTR "lvfs_back_attr"
 
@@ -358,7 +402,6 @@ static inline int lookup_by_path(char *path, int flags, struct nameidata *nd)
 }
 
 /*FIXME there should be more conditions in this check*/
-
 static inline int smfs_do_rec(struct inode *inode)
 {
         struct super_block *sb = inode->i_sb;
@@ -369,6 +412,7 @@ static inline int smfs_do_rec(struct inode *inode)
                 return 1;
         return 0;
 }
+
 static inline int smfs_cache_hook(struct inode *inode)
 {
         struct smfs_super_info  *smfs_info = I2CSB(inode);
@@ -379,6 +423,17 @@ static inline int smfs_cache_hook(struct inode *inode)
         else
                 return 0;
 }
+
+static inline int smfs_do_cow(struct inode *inode)
+{
+        struct super_block *sb = inode->i_sb;
+        struct smfs_super_info *smfs_info = S2SMI(sb);
+
+        if (SMFS_DO_COW(smfs_info) && SMFS_DO_INODE_COW(inode))
+                return 1;
+        return 0;
+}
+
 /* XXX BUG 3188 -- must return to one set of opcodes */
 #define SMFS_TRANS_OP(inode, op)                \
 {                                               \
@@ -398,5 +453,7 @@ extern int smfs_rec_precreate(struct dentry *dentry, int *num, struct obdo *oa);
 extern int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size);
 extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
                            char **pbuf, int *opcode);
+	
+int smfs_cow(struct inode *dir, struct dentry *dentry, int op);
 
 #endif /* _LUSTRE_SMFS_H */

@@ -196,7 +196,9 @@ extern int smfs_llog_add_rec(struct smfs_super_info * sinfo, void *data,
 /*ioctl.c*/
 extern int init_smfs_psdev(void);
 extern void smfs_cleanup_psdev(void);
+/*smfs_cow.c */
 
+extern int smfs_cow_init(struct super_block *sb);
 /* cache_space.c */
 extern int do_cache_manage;
 struct cache_purge_queue {
@@ -306,6 +308,21 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
                         GOTO(label, rc);                                \
         }                                                               \
 }
+#if CONFIG_SNAP
+/*snap macros*/
+#define SMFS_PRE_COW(dir, dentry, op, name, rc, label)                  \
+do {                                                                    \
+        if (smfs_do_cow(dir) && !rc) {                                  \
+                CDEBUG(D_INODE, "Do %s snap post for dir %lu \n",       \
+                              name, dir->i_ino);                        \
+                rc = smfs_cow(dir, dentry, op);                         \
+                if (rc)                                                 \
+                        GOTO(label, rc);                                \
+        }                                                               \
+} while(0)
+#else
+#define SMFS_PRE_COW(dir, dentry, op, name, rc, label)                 
+#endif 
 
 #endif /*__KERNEL*/
 #endif /* __LINUX_SMFS_H */
