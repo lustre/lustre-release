@@ -73,6 +73,11 @@ static inline void lustre_daemonize_helper(void)
         current->signal->tty = NULL;
 }
 
+#define  rb_node_s rb_node
+#define  rb_root_s rb_root
+typedef struct rb_root_s rb_root_t;
+typedef struct rb_node_s rb_node_t;
+
 #else /* 2.4.. */
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
@@ -136,14 +141,11 @@ static inline void lustre_daemonize_helper(void)
         current->tty = NULL;
 }
 
-#endif /* end of 2.4 compat macros */
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#define  rb_node_s rb_node
-#define  rb_root_s rb_root
-typedef struct rb_root_s rb_root_t;
-typedef struct rb_node_s rb_node_t;
+#ifndef conditional_schedule
+#define conditional_schedule() if (unlikely(need_resched())) schedule()
 #endif
+
+#endif /* end of 2.4 compat macros */
 
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
