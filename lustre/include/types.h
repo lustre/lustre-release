@@ -4,7 +4,8 @@
 typedef unsigned short umode_t;
 
 #if (!defined(_LINUX_TYPES_H) && !defined(_BLKID_TYPES_H) && \
-	!defined(_EXT2_TYPES_H))
+	!defined(_EXT2_TYPES_H) && !defined(_I386_TYPES_H))
+
 /*
  * __xx is ok: it doesn't pollute the POSIX namespace. Use these in the
  * header files exported to user space
