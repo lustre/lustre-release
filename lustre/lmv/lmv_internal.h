@@ -14,10 +14,12 @@ struct lmv_inode {
         int                flags;
 };
 
+#define O_FREEING          (1 << 0)
+
 struct lmv_obj {
         struct list_head   list;
 	struct semaphore   guard;
-	int                freeing;        /* object is freeing. */
+	int                state;          /* object state. */
         atomic_t           count;
         struct ll_fid      fid;            /* master fid of dir */
         void               *update;        /* bitmap of status (uptodate) */

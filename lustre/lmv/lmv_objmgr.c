@@ -66,8 +66,8 @@ lmv_alloc_obj(struct obd_device *obd, struct ll_fid *fid,
                 return NULL;
 
         obj->obd = obd;
+        obj->state = 0;
         obj->fid = *fid;
-        obj->freeing = 0;
           
         init_MUTEX(&obj->guard);
         atomic_set(&obj->count, 0);
@@ -130,6 +130,9 @@ lmv_add_obj(struct lmv_obj *obj)
 static void
 __del_obj(struct lmv_obj *obj)
 {
+        if (!(obj->state & O_FREEING))
+                LBUG();
+        
         list_del(&obj->list);
         lmv_free_obj(obj);
 }
@@ -193,7 +196,7 @@ __grab_obj(struct obd_device *obd, struct ll_fid *fid)
 
                 /* check if object is in progress of destroying. If so - skip
                  * it. */
-                if (obj->freeing)
+                if (obj->state & O_FREEING)
                         continue;
 
                 /* check if this is waht we're looking for. */
@@ -337,7 +340,8 @@ lmv_delete_obj(struct obd_export *exp, struct ll_fid *fid)
         
         obj = __grab_obj(obd, fid);
         if (obj) {
-                obj->freeing = 1;
+                obj->state |= O_FREEING;
+                
                 __put_obj(obj);
                 __put_obj(obj);
                 rc = 1;
@@ -371,6 +375,7 @@ lmv_cleanup_mgr(struct obd_device *obd)
                 if (obj->obd != obd)
                         continue;
 
+                obj->state |= O_FREEING;
                 __put_obj(obj);
         }
         spin_unlock(&lmv_obj_list_lock);
