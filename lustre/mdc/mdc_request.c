@@ -194,12 +194,9 @@ int mdc_readpage(struct ptlrpc_client *cl, ino_t ino, int type, __u64 offset,
         bulk->b_buflen = PAGE_SIZE;
         bulk->b_buf = (void *)(long)niobuf.addr;
 	bulk->b_portal = MDS_BULK_PORTAL;
+        bulk->b_xid = request->rq_xid;
 
-        spin_lock(&cl->cli_lock);
-        bulk->b_xid = cl->cli_xid++;
-        spin_unlock(&cl->cli_lock);
-
-        rc = ptlrpc_wait_bulk(bulk);
+        rc = ptlrpc_register_bulk(bulk);
         if (rc) {
                 CERROR("%s: couldn't setup bulk sink: error %d.\n",
                        __FUNCTION__, rc);

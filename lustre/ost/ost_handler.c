@@ -357,7 +357,7 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
                         bulk_vec[i]->b_buf = (void *)(unsigned long)dst->addr;
                         bulk_vec[i]->b_buflen = PAGE_SIZE;
                         bulk_vec[i]->b_portal = OSC_BULK_PORTAL;
-                        rc = ptlrpc_wait_bulk(bulk_vec[i]);
+                        rc = ptlrpc_register_bulk(bulk_vec[i]);
                         if (rc)
                                 goto out;
 

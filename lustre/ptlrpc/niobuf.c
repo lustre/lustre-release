@@ -154,7 +154,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
         return rc;
 }
 
-int ptlrpc_wait_bulk(struct ptlrpc_bulk_desc *bulk)
+int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
 {
         int rc;
 
@@ -186,12 +186,15 @@ int ptlrpc_wait_bulk(struct ptlrpc_bulk_desc *bulk)
 
         CDEBUG(D_NET, "Setup bulk sink buffer: %u bytes, xid %u, portal %u\n",
                bulk->b_buflen, bulk->b_xid, bulk->b_portal);
+        EXIT;
+        return 0;
 
  cleanup2:
+        EXIT;
         PtlMEUnlink(bulk->b_me_h);
  cleanup1:
         PtlMDUnlink(bulk->b_md_h);
-
+        EXIT;
         return rc;
 }
 

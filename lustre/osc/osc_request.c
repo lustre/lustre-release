@@ -393,7 +393,7 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                 *(__u32 *)ptr2 = bulk[n]->b_xid;
                 ptr2 = (char *)ptr2 + sizeof(__u32);
 
-                rc = ptlrpc_wait_bulk(bulk[n]);
+                rc = ptlrpc_register_bulk(bulk[n]);
                 if (rc)
                         goto out;
         }

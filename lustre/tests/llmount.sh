@@ -62,4 +62,4 @@ quit
 EOF
 
 mkdir /mnt/obd
-# mount -t lustre_light -o device=3 none /mnt/obd
+mount -t lustre_light -o device=3 none /mnt/obd
