@@ -906,8 +906,9 @@ int mds_open(struct mds_update_record *rec, int offset,
                 int i;
                 i = mea_name2idx(mea, rec->ur_name, rec->ur_namelen - 1);
                 if (mea->mea_master != i) {
-                        CERROR("inapropriate MDS(%d) for %s. should be %d\n",
-                                mea->mea_master, rec->ur_name, i);
+                        CERROR("inapropriate MDS(%d) for %lu/%u:%s. should be %d\n",
+                                mea->mea_master, dparent->d_inode->i_ino,
+                                dparent->d_inode->i_generation, rec->ur_name, i);
                         GOTO(cleanup, rc = -ERESTART);
                 }
         }

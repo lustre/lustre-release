@@ -170,6 +170,15 @@ repeat:
                                      flags, reqp, cb_blocking);
         if (rc != 0) {
                 LASSERT(rc < 0);
+                CERROR("can't handle remote %s: dir %lu/%lu/%lu(%lu/%lu/%lu):"
+                       "%*s: %d\n", LL_IT2STR(it),
+                       (unsigned long) pfid->mds,
+                       (unsigned long) pfid->id,
+                       (unsigned long) pfid->generation,
+                       (unsigned long) rpfid.mds,
+                       (unsigned long) rpfid.id,
+                       (unsigned long) rpfid.generation,
+                       len, name, rc);
                 RETURN(rc);
         }
 
