@@ -445,6 +445,10 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                 data->ioc_count = ncpu;
                 data->ioc_misc = total_size;
 
+                /* Hedge against broken user/kernel typedefs (e.g. cycles_t) */
+                data->ioc_nid = sizeof(lwt_event_t);
+                data->ioc_nid2 = offsetof(lwt_event_t, lwte_where);
+
                 if (err == 0 &&
                     copy_to_user((char *)arg, data, sizeof (*data)))
                         err = -EFAULT;
