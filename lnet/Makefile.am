@@ -5,4 +5,8 @@
 
 EXTRA_DIST = Rules.linux archdep.m4 MCP
 DIST_SUBDIRS = libcfs portals knals unals utils tests doc router
+if LIBLUSTRE
+SUBDIRS = portals unals utils
+else
 SUBDIRS = libcfs portals knals unals utils tests doc router
+endif
