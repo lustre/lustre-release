@@ -1,4 +1,3 @@
-linux-2.4.18-14-kgdb-1.6.patch
 dev_read_only.patch
 exports.patch
 kmem_cache_validate.patch
@@ -16,7 +15,7 @@ ext3-delete_thread-2.4.18.patch
 extN-misc-fixup.patch
 extN-noread.patch
 extN-wantedi.patch
-extN-san.patch
+ext3-san-2.4.20.patch
 extN-2.4.18-ino_sb_fixup.patch
-ext3_map_inode_page_chaos.patch
+ext3-map_inode_page_2.4.18.patch
 iopen-2.4.18.patch
