@@ -2555,13 +2555,13 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 + * other hard changes happens much more often
 + * this is for debug purposes only
 + */
-+#define AGRESSIVE_TEST
++#define AGRESSIVE_TEST_
 +
 +/*
 + * if CHECK_BINSEARCH defined, then results of binary search
 + * will be checked by linear search
 + */
-+#define CHECK_BINSEARCH
++#define CHECK_BINSEARCH_
 +
 +/*
 + * if EXT_DEBUG is defined you can use 'extdebug' mount option
