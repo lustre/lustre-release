@@ -28,7 +28,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_import.h>
 
-void ptlrpc_init_client(int req_portal, int rep_portal, char *name, 
+void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
                         struct ptlrpc_client *cl)
 {
         cl->cli_request_portal = req_portal;
@@ -54,7 +54,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(obd_uuid_t uuid)
         }
 
         c = ptlrpc_get_connection(&peer, uuid);
-        if (c) { 
+        if (c) {
                 memcpy(c->c_remote_uuid, uuid, sizeof(c->c_remote_uuid));
                 c->c_epoch++;
         }
@@ -74,8 +74,8 @@ void ptlrpc_readdress_connection(struct ptlrpc_connection *conn,obd_uuid_t uuid)
                 CERROR("cannot find peer %s!\n", uuid);
                 return;
         }
-        
-        memcpy(&conn->c_peer, &peer, sizeof(peer)); 
+
+        memcpy(&conn->c_peer, &peer, sizeof(peer));
         return;
 }
 
@@ -196,7 +196,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         request->rq_xid = HTON__u32(++conn->c_xid_out);
         spin_unlock(&conn->c_lock);
 
-        request->rq_reqmsg->magic = PTLRPC_MSG_MAGIC; 
+        request->rq_reqmsg->magic = PTLRPC_MSG_MAGIC;
         request->rq_reqmsg->version = PTLRPC_MSG_VERSION;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->flags = 0;
@@ -234,10 +234,10 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
                 /* LBUG(); */
         }
 
-        if (request->rq_repmsg != NULL) { 
+        if (request->rq_repmsg != NULL) {
                 OBD_FREE(request->rq_repmsg, request->rq_replen);
                 request->rq_repmsg = NULL;
-                request->rq_reply_md.start = NULL; 
+                request->rq_reply_md.start = NULL;
         }
         if (request->rq_reqmsg != NULL) {
                 OBD_FREE(request->rq_reqmsg, request->rq_reqlen);
@@ -277,7 +277,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 GOTO(out, rc = 1);
         }
 
-        if (req->rq_flags & PTL_RPC_FL_RESEND) { 
+        if (req->rq_flags & PTL_RPC_FL_RESEND) {
                 CERROR("-- RESTART --\n");
                 GOTO(out, rc = 1);
         }
@@ -371,13 +371,13 @@ restart:
                 /* not yet committed */
                 if (req->rq_transno > conn->c_last_committed)
                         break;
-                
+
                 DEBUG_REQ(D_HA, req, "committing (last_committed %Lu)",
                           (long long)conn->c_last_committed);
                 if (atomic_dec_and_test(&req->rq_refcount)) {
-                        /* We do this to prevent free_req deadlock.
-                         * Restarting after each removal is not so bad, as we are
-                         * almost always deleting the first item in the list.
+                        /* We do this to prevent free_req deadlock.  Restarting
+                         * after each removal is not so bad, as we are almost
+                         * always deleting the first item in the list.
                          *
                          * If we use a recursive lock here, we can skip the
                          * unlock/lock/restart sequence.
@@ -428,7 +428,7 @@ restart2:
                 list_del_init(&req->rq_list);
                 req->rq_import = NULL;
                 spin_unlock(&conn->c_lock);
-                ptlrpc_req_finished(req); 
+                ptlrpc_req_finished(req);
                 spin_lock(&conn->c_lock);
                 goto restart2;
         }
@@ -441,18 +441,18 @@ restart2:
 void ptlrpc_continue_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_HA, "continue delayed request "LPD64" opc %d\n", 
-               req->rq_xid, req->rq_reqmsg->opc); 
+        CDEBUG(D_HA, "continue delayed request "LPD64" opc %d\n",
+               req->rq_xid, req->rq_reqmsg->opc);
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
-        wake_up(&req->rq_wait_for_rep); 
+        wake_up(&req->rq_wait_for_rep);
         EXIT;
 }
 
 void ptlrpc_resend_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_HA, "resend request "LPD64", opc %d\n", 
+        CDEBUG(D_HA, "resend request "LPD64", opc %d\n",
                req->rq_xid, req->rq_reqmsg->opc);
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
@@ -467,7 +467,7 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
 void ptlrpc_restart_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_HA, "restart completed request "LPD64", opc %d\n", 
+        CDEBUG(D_HA, "restart completed request "LPD64", opc %d\n",
                req->rq_xid, req->rq_reqmsg->opc);
         req->rq_status = -ERESTARTSYS;
         req->rq_flags |= PTL_RPC_FL_RECOVERY;
@@ -541,21 +541,21 @@ if ((conn->c_flags & CONN_INVALID) ||                                         \
                   (conn->c_flags & CONN_INVALID) ? "CONN" : "IMP");           \
         spin_unlock(&conn->c_lock);                                           \
         RETURN(-EIO);                                                         \
-}        
+}
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
         int rc = 0;
         struct l_wait_info lwi;
-        struct ptlrpc_client *cli = req->rq_import->imp_client;
+        //struct ptlrpc_client *cli = req->rq_import->imp_client;
         struct ptlrpc_connection *conn = req->rq_import->imp_connection;
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
-        //        DEBUG_REQ(D_HA, req, "subsys: %s:", cli->cli_name);
+        //DEBUG_REQ(D_HA, req, "subsys: %s:", cli->cli_name);
 
         /* XXX probably both an import and connection level are needed */
-        if (req->rq_level > conn->c_level) { 
+        if (req->rq_level > conn->c_level) {
                 spin_lock(&conn->c_lock);
                 EIO_IF_INVALID(conn, req);
                 list_del(&req->rq_list);
@@ -578,14 +578,14 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
                 if (rc)
                         RETURN(rc);
-                
+
                 CERROR("process %d resumed\n", current->pid);
         }
  resend:
         req->rq_timeout = obd_timeout;
         spin_lock(&conn->c_lock);
         EIO_IF_INVALID(conn, req);
-        
+
         list_del(&req->rq_list);
         list_add_tail(&req->rq_list, &conn->c_sending_head);
         spin_unlock(&conn->c_lock);
