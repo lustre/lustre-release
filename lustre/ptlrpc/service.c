@@ -61,11 +61,11 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
                         return 1;
                 }
 
-                if (rc == PTL_EQ_DROPPED) { 
-                        CERROR("dropped event!\n");
+                if (rc != PTL_EQ_EMPTY) {
+                        CDEBUG(D_NET, "BUG: PtlEQGet returned %d\n", rc);
                         BUG();
                 }
-                CDEBUG(D_NET, "PtlEQGet returns %d\n", rc); 
+
                 EXIT;
                 return 0;
         }
