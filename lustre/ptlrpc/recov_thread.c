@@ -41,13 +41,13 @@ static struct llog_commit_master lustre_lcm;
 static struct llog_commit_master *lcm = &lustre_lcm;
 
 /* Allocate new commit structs in case we do not have enough */
-static int llcd_alloc(void)
+static struct llog_commit_data *llcd_alloc(void)
 {
         struct llog_commit_data *llcd;
 
         OBD_ALLOC(llcd, PAGE_SIZE);
         if (llcd == NULL)
-                return -ENOMEM;
+                return NULL;
 
         llcd->llcd_lcm = lcm;
 
@@ -56,7 +56,7 @@ static int llcd_alloc(void)
         atomic_inc(&lcm->lcm_llcd_numfree);
         spin_unlock(&lcm->lcm_llcd_lock);
 
-        return 0;
+        return llcd;
 }
 
 /* Get a free cookie struct from the list */
@@ -68,7 +68,7 @@ struct llog_commit_data *llcd_grab(void)
         if (list_empty(&lcm->lcm_llcd_free)) {
                 spin_unlock(&lcm->lcm_llcd_lock);
                 CERROR("no free log commit data structs!\n");
-                llcd = llcd_alloc(lcm);
+                llcd = llcd_alloc();
                 return llcd;
         }
 
@@ -145,7 +145,7 @@ static int log_commit_thread(void *arg)
                 /* If we do not have enough pages available, allocate some */
                 while (atomic_read(&lcm->lcm_llcd_numfree) <
                        lcm->lcm_llcd_minfree) {
-                        if (llcd_alloc(lcm) < 0)
+                        if (llcd_alloc() < 0)
                                 break;
                 }
 
@@ -181,7 +181,7 @@ static int log_commit_thread(void *arg)
                 if (atomic_read(&lcm->lcm_thread_numidle) <= 1 &&
                     atomic_read(&lcm->lcm_thread_numidle) <
                     lcm->lcm_thread_max) {
-                        rc = llog_start_commit_thread(lcm);
+                        rc = llog_start_commit_thread();
                         if (rc < 0)
                                 CERROR("error starting thread: rc %d\n", rc);
                 }
@@ -253,11 +253,11 @@ static int log_commit_thread(void *arg)
                                                "rc %d\n", llcd,
                                                llcd->llcd_cookiebytes /
                                                sizeof(*llcd->llcd_cookies), rc);
-                                       llcd_put(lcm, llcd);
+                                       llcd_put(llcd);
                                 }
                                 break;
                         } else
-                                llcd_put(lcm, llcd);
+                                llcd_put(llcd);
                         ptlrpc_req_finished(request);
                 }
 
@@ -277,7 +277,7 @@ static int log_commit_thread(void *arg)
                 spin_unlock(&lcm->lcm_llcd_lock);
 
                 list_for_each_entry_safe(llcd, n, &lcd->lcd_llcd_list,llcd_list)
-                        llcd_put(lcm, llcd);
+                        llcd_put(llcd);
         }
 
         CDEBUG(D_HA, "%s exiting\n", current->comm);
@@ -313,6 +313,7 @@ int llog_init_commit_master(void)
         INIT_LIST_HEAD(&lcm->lcm_llcd_free);
         spin_lock_init(&lcm->lcm_llcd_lock);
         atomic_set(&lcm->lcm_llcd_numfree, 0);
+        return 0;
 }
 
 int llog_cleanup_commit_master(void)
