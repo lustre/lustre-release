@@ -98,6 +98,7 @@ extern unsigned int portal_printk;
 #define D_MMAP        0x00800000
 #define D_CONFIG      0x01000000
 #define D_CONSOLE     0x02000000
+#define D_QUOTA       0x04000000
 /* If you change these values, please keep these files up to date...
  *    portals/utils/debug.c
  *    utils/lconf
