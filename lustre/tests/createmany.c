@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
@@ -33,6 +34,8 @@ int main(int argc, char ** argv)
                                filename, strerror(errno));
                         break;
                 }
+		if ( (i%10000) == 0 )
+		    printf(" - created %d (time %d)\n", i, time(0));
         }
         return rc;
 } 
