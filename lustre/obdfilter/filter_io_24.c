@@ -172,7 +172,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
                         iattr.ia_size = this_size;
         }
 
-        push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_ctxt, NULL);
         cleanup_phase = 2; 
 
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, oti);
@@ -215,7 +215,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
 cleanup:
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
                 free_kiovec(1, &iobuf);
