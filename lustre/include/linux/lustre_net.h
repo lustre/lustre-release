@@ -149,7 +149,6 @@ struct ptlrpc_request {
 
         /* incoming reply */
         ptl_md_t rq_reply_md;
-        ptl_handle_md_t rq_reply_md_h; /* we can lose this: set, never read */
         ptl_handle_me_t rq_reply_me_h;
 
         /* outgoing req/rep */
@@ -161,9 +160,18 @@ struct ptlrpc_request {
         struct obd_import *rq_import;
         struct ptlrpc_service *rq_svc;
 
-        void (*rq_replay_cb)(struct ptlrpc_request *, void *);
-        void *rq_replay_cb_data;
+        void (*rq_replay_cb)(struct ptlrpc_request *);
 };
+
+#define DEBUG_REQ(level, req, fmt, args...)                                    \
+do {                                                                           \
+CDEBUG(level,                                                                  \
+       "@@@ " fmt " req x"LPD64"/t"LPD64" o%d->%s:%d lens %d/%d fl %x\n",      \
+       ## args, req->rq_xid, req->rq_transno,                                  \
+       req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
+       req->rq_connection->c_remote_uuid,                                      \
+       req->rq_import->imp_client->cli_request_portal);                        \
+} while (0)
 
 struct ptlrpc_bulk_page {
         struct ptlrpc_bulk_desc *bp_desc;

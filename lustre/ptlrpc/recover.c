@@ -108,6 +108,51 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
         RETURN(0);
 }
 
+#define REPLAY_COMMITTED     0 /* Fully processed (commit + reply) */
+#define REPLAY_REPLAY        1 /* Forced-replay (e.g. open) */
+#define REPLAY_RESEND        2 /* Resend required. */
+#define REPLAY_RESEND_IGNORE 3 /* Resend, ignore the reply (already saw it) */
+#define REPLAY_RESTART       4 /* Have to restart the call, sorry! */
+
+static int replay_state(struct ptlrpc_request *req, __u64 last_xid)
+{
+        /* This request must always be replayed. */
+        if (req->rq_flags & PTL_RPC_FL_REPLAY)
+                return REPLAY_REPLAY;
+
+        /* Uncommitted request */
+        if (req->rq_xid > last_xid) {
+                if (req->rq_flags & PTL_RPC_FL_REPLIED) {
+                        /* Saw reply, so resend and ignore new reply. */
+                        return REPLAY_RESEND_IGNORE;
+                }
+
+                /* Didn't see reply either, so resend. */
+                return REPLAY_RESEND;
+        }
+
+        /* This request has been committed and we saw the reply.  Goodbye! */
+        if (req->rq_flags & PTL_RPC_FL_REPLIED)
+                return REPLAY_COMMITTED;
+
+        /* Request committed, but we didn't see the reply: have to restart. */
+        return REPLAY_RESTART;
+}
+
+static char *replay_state2str(int state) {
+        static char *state_strings[] = {
+                "COMMITTED", "REPLAY", "RESEND", "RESEND_IGNORE", "RESTART"
+        };
+        static char *unknown_state = "UNKNOWN";
+
+        if (state < 0 || 
+            state > (sizeof(state_strings) / sizeof(state_strings[0]))) {
+                return unknown_state;
+        }
+
+        return state_strings[state];
+}
+
 int ptlrpc_replay(struct ptlrpc_connection *conn)
 {
         int rc = 0;
@@ -120,14 +165,26 @@ int ptlrpc_replay(struct ptlrpc_connection *conn)
         CDEBUG(D_HA, "connection %p to %s has last_xid "LPD64"\n",
                conn, conn->c_remote_uuid, conn->c_last_xid);
 
+        list_for_each(tmp, &conn->c_sending_head) {
+                int state;
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                state = replay_state(req, conn->c_last_xid);
+                DEBUG_REQ(D_HA, req, "SENDING: %s: ", replay_state2str(state));
+        }
+
+        list_for_each(tmp, &conn->c_delayed_head) {
+                int state;
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                state = replay_state(req, conn->c_last_xid);
+                DEBUG_REQ(D_HA, req, "DELAYED: ");
+        }
+
         list_for_each_safe(tmp, pos, &conn->c_sending_head) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 
-                /* replay what needs to be replayed */
-                if (req->rq_flags & PTL_RPC_FL_REPLAY) {
-                        CDEBUG(D_HA, "FL_REPLAY: xid "LPD64" transno "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_repmsg->transno, req->rq_reqmsg->opc,
-                               req->rq_import->imp_client->cli_request_portal);
+                switch (replay_state(req, conn->c_last_xid)) {
+                    case REPLAY_REPLAY:
+                        DEBUG_REQ(D_HA, req, "REPLAY:");
                         rc = ptlrpc_replay_req(req);
 #if 0
 #error We should not hold a spinlock over such a lengthy operation.
@@ -141,53 +198,36 @@ int ptlrpc_replay(struct ptlrpc_connection *conn)
                                        rc, req->rq_xid);
                                 GOTO(out, rc);
                         }
-                }
+                        break;
 
-                /* server has seen req, we have reply: skip */
-                if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                    req->rq_xid <= conn->c_last_xid) { 
-                        CDEBUG(D_HA, "REPLIED SKIP: xid "LPD64" transno "
-                               LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_repmsg->transno, 
-                               req->rq_reqmsg->opc,
-                               req->rq_import->imp_client->cli_request_portal);
-                        continue;
-                }
 
-                /* server has lost req, we have reply: resend, ign reply */
-                if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                    req->rq_xid > conn->c_last_xid) { 
-                        CDEBUG(D_HA, "REPLIED RESEND: xid "LPD64" transno "
-                               LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_repmsg->transno,
-                               req->rq_reqmsg->opc,
-                               req->rq_import->imp_client->cli_request_portal);
+                    case REPLAY_COMMITTED:
+                        DEBUG_REQ(D_HA, req, "COMMITTED:");
+                        /* XXX commit now? */
+                        break;
+
+                    case REPLAY_RESEND_IGNORE:
+                        DEBUG_REQ(D_HA, req, "RESEND_IGNORE:");
                         rc = ptlrpc_replay_req(req); 
                         if (rc) {
                                 CERROR("request resend error %d for req %Ld\n",
                                        rc, req->rq_xid); 
                                 GOTO(out, rc);
                         }
-                }
+                        break;
 
-                /* server has seen req, we have lost reply: -ERESTARTSYS */
-                if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                     req->rq_xid <= conn->c_last_xid) { 
-                        CDEBUG(D_HA, "RESTARTSYS: xid "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_reqmsg->opc,
-                               req->rq_import->imp_client->cli_request_portal);
+                    case REPLAY_RESTART:
+                        DEBUG_REQ(D_HA, req, "RESTART:");
                         ptlrpc_restart_req(req);
-                }
+                        break;
 
-                /* service has not seen req, no reply: resend */
-                if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                     req->rq_xid > conn->c_last_xid) {
-                        CDEBUG(D_HA, "RESEND: xid "LPD64" transno "LPD64
-                               " op %d @ %d\n", req->rq_xid,
-                               req->rq_repmsg ? req->rq_repmsg->transno : 0,
-                               req->rq_reqmsg->opc,
-                               req->rq_import->imp_client->cli_request_portal);
+                    case REPLAY_RESEND:
+                        DEBUG_REQ(D_HA, req, "RESEND:");
                         ptlrpc_resend_req(req);
+                        break;
+
+                    default:
+                        LBUG();
                 }
 
         }
@@ -197,9 +237,10 @@ int ptlrpc_replay(struct ptlrpc_connection *conn)
 
         CERROR("recovery complete on conn %p(%s), waking delayed reqs\n",
                conn, conn->c_remote_uuid);
-        /* Finally, continue what we delayed since recovery started */
+        /* Finally, continue processing requests that blocked for recovery. */
         list_for_each_safe(tmp, pos, &conn->c_delayed_head) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                DEBUG_REQ(D_HA, req, "WAKING: ");
                 ptlrpc_continue_req(req);
         }
 

@@ -110,7 +110,7 @@ struct lustre_msg {
         __u64 cookie; /* security token */
         __u32 magic;
         __u32 type;
-        __u32 version;
+        __u32 flags;
         __u32 opc;
         __u64 last_xid;
         __u64 last_committed;
@@ -119,6 +119,35 @@ struct lustre_msg {
         __u32 bufcount;
         __u32 buflens[0];
 };
+
+/* Flags that are operation-specific go in the top 16 bits. */
+#define MSG_OP_FLAG_MASK   0xffff0000
+#define MSG_OP_FLAG_SHIFT  16
+
+/* Flags that apply to all requests are in the bottom 16 bits */
+#define MSG_GEN_FLAG_MASK  0x0000ffff
+
+static inline u16 lustre_msg_get_flags(struct lustre_msg *msg)
+{
+        return (u16)(msg->flags & MSG_GEN_FLAG_MASK);
+}
+
+static inline void lustre_msg_set_flags(struct lustre_msg *msg, u16 flags)
+{
+        msg->flags &= ~MSG_GEN_FLAG_MASK;
+        msg->flags |= flags;
+}
+
+static inline u16 lustre_msg_get_op_flags(struct lustre_msg *msg)
+{
+        return (u16)(msg->flags >> MSG_OP_FLAG_SHIFT);
+}
+
+static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, u16 flags)
+{
+        msg->flags &= ~MSG_OP_FLAG_MASK;
+        msg->flags |= (flags << MSG_OP_FLAG_SHIFT);
+}
 
 #define CONNMGR_REPLY	0
 #define CONNMGR_CONNECT	1
@@ -356,6 +385,8 @@ struct mds_body {
         __u32          nlink;
         __u32          generation;
 };
+
+#define MDS_OPEN_HAS_EA 1 /* this open has an EA, for a delayed create*/
 
 /* MDS update records */
 

@@ -197,8 +197,8 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         spin_unlock(&conn->c_lock);
 
         request->rq_reqmsg->magic = PTLRPC_MSG_MAGIC; 
-        request->rq_reqmsg->version = PTLRPC_MSG_VERSION;
         request->rq_reqmsg->opc = HTON__u32(opcode);
+        request->rq_reqmsg->flags = 0;
 
         ptlrpc_hdl2req(request, &imp->imp_handle);
         RETURN(request);
@@ -257,7 +257,6 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
 
         if (req->rq_repmsg != NULL) {
                 struct ptlrpc_connection *conn = req->rq_import->imp_connection;
-                spin_lock(&conn->c_lock);
                 if (req->rq_level > conn->c_level) {
                         CDEBUG(D_HA,
                                "rep to xid "LPD64" op %d to %s:%d: "
@@ -267,10 +266,8 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                                req->rq_import->imp_client->cli_request_portal,
                                req->rq_level, conn->c_level);
                         req->rq_repmsg = NULL;
-                        spin_unlock(&conn->c_lock);
                         GOTO(out, rc = 0);
                 }
-                spin_unlock(&conn->c_lock);
                 req->rq_transno = NTOH__u64(req->rq_repmsg->transno);
                 req->rq_flags |= PTL_RPC_FL_REPLIED;
                 GOTO(out, rc = 1);
@@ -524,11 +521,8 @@ static int interrupted_request(void *data)
 #define EIO_IF_INVALID(conn, req)                                             \
 if ((conn->c_flags & CONN_INVALID) ||                                         \
     (req->rq_import->imp_flags & IMP_INVALID)) {                              \
-        CERROR("req xid "LPD64" op %d to %s:%d: %s_INVALID\n",                \
-               (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,          \
-               req->rq_connection->c_remote_uuid,                             \
-               req->rq_import->imp_client->cli_request_portal,                \
-               (conn->c_flags & CONN_INVALID) ? "CONN_" : "IMP_");            \
+        DEBUG_REQ(D_ERROR, req, "%s_INVALID:",                                \
+                  (conn->c_flags & CONN_INVALID) ? "CONN" : "IMP");           \
         spin_unlock(&conn->c_lock);                                           \
         RETURN(-EIO);                                                         \
 }        
@@ -542,9 +536,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
-        CDEBUG(D_NET, "subsys: %s req "LPD64" opc %d level %d, conn level %d\n",
-               cli->cli_name, req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
-               req->rq_connection->c_level);
+        DEBUG_REQ(D_HA, req, "subsys: %s:", cli->cli_name);
 
         /* XXX probably both an import and connection level are needed */
         if (req->rq_level > conn->c_level) { 
@@ -554,13 +546,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 list_add_tail(&req->rq_list, &conn->c_delayed_head);
                 spin_unlock(&conn->c_lock);
 
-                CDEBUG(D_HA, "req xid "LPD64" op %d to %s:%d: waiting for "
-                       "recovery (%d < %d)\n",
-                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
-                       req->rq_connection->c_remote_uuid,
-                       req->rq_import->imp_client->cli_request_portal,
-                       req->rq_level, conn->c_level);
-
+                DEBUG_REQ(D_HA, req, "waiting for recovery: (%d < %d)",
+                          req->rq_level, conn->c_level);
                 lwi = LWI_INTR(NULL, NULL);
                 rc = l_wait_event(req->rq_wait_for_rep,
                                   (req->rq_level <= conn->c_level) ||
@@ -593,17 +580,11 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 /* the sleep below will time out, triggering recovery */
         }
 
-        CDEBUG(D_NET, "-- sleeping on req xid "LPD64" op %d to %s:%d\n",
-                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
-                       req->rq_connection->c_remote_uuid,
-                       req->rq_import->imp_client->cli_request_portal);
+        DEBUG_REQ(D_NET, req, "-- sleeping");
         lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
                                interrupted_request,req);
         l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
-        CDEBUG(D_NET, "-- done sleeping on req xid "LPD64" op %d to %s:%d\n",
-                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
-                       req->rq_connection->c_remote_uuid,
-                       req->rq_import->imp_client->cli_request_portal);
+        DEBUG_REQ(D_NET, req, "-- done sleeping");
 
         if (req->rq_flags & PTL_RPC_FL_ERR) {
                 ptlrpc_abort(req);
@@ -614,10 +595,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         if ((req->rq_flags & (PTL_RPC_FL_RESEND | PTL_RPC_FL_INTR)) ==
             PTL_RPC_FL_RESEND) {
                 req->rq_flags &= ~PTL_RPC_FL_RESEND;
-                CDEBUG(D_HA, "resending req xid "LPD64" op %d to %s:%d\n",
-                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
-                       req->rq_connection->c_remote_uuid,
-                       req->rq_import->imp_client->cli_request_portal);
+                DEBUG_REQ(D_HA, req, "resending: ");
                 goto resend;
         }
 
@@ -720,7 +698,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 
         /* let the callback do fixups, possibly including in the request */
         if (req->rq_replay_cb)
-                req->rq_replay_cb(req, req->rq_replay_cb_data);
+                req->rq_replay_cb(req);
 
         if (req->rq_repmsg->status == 0) {
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,

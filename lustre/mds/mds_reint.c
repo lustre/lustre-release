@@ -408,10 +408,19 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
 
         if (!inode) {
-                CDEBUG(D_INODE, "child doesn't exist (dir %ld, name %s\n",
-                       dir->i_ino, rec->ur_name);
+                if (rec->ur_opcode & REINT_REPLAYING) {
+                        CDEBUG(D_INODE,
+                               "child missing (%ld/%s); OK for REPLAYING\n",
+                               dir->i_ino, rec->ur_name);
+                        rc = 0;
+                } else { 
+                        CDEBUG(D_INODE,
+                               "child doesn't exist (dir %ld, name %s)\n",
+                               dir->i_ino, rec->ur_name);
+                        rc = -ENOENT;
+                }
                 /* going to out_unlink_cancel causes an LBUG, don't know why */
-                GOTO(out_unlink_dchild, rc = -ENOENT);
+                GOTO(out_unlink_dchild, rc);
         }
 
         if (offset) {
@@ -586,6 +595,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                         }
                 }
                 if (rec->ur_opcode & REINT_REPLAYING) {
+                        /* XXX verify that the link is to the the right file? */
                         rc = 0;
                         CDEBUG(D_INODE,
                                "child exists (dir %ld, name %s) (REPLAYING)\n",
@@ -618,8 +628,6 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                         rc = err;
         }
         EXIT;
-
-
 
 out_link_dchild:
         l_dput(dchild);

@@ -366,15 +366,27 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         RETURN(0);
 }
 
-static void mdc_replay_open(struct ptlrpc_request *req, void *data)
+struct replay_open_data {
+        struct lustre_handle *fh;
+};
+
+static void mdc_replay_open(struct ptlrpc_request *req)
 {
-        struct lustre_handle *fh = data;
+        int offset;
+        struct replay_open_data *saved;
         struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 0);
 
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MDS_OPEN_HAS_EA)
+                offset = 2;
+        else
+                offset = 1;
+
+        saved = lustre_msg_buf(req->rq_reqmsg, offset);
         mds_unpack_body(body);
         CDEBUG(D_HA, "updating from "LPD64"/"LPD64" to "LPD64"/"LPD64"\n",
-               fh->addr, fh->cookie, body->handle.addr, body->handle.cookie);
-        memcpy(fh, &body->handle, sizeof(*fh));
+               saved->fh->addr, saved->fh->cookie,
+               body->handle.addr, body->handle.cookie);
+        memcpy(saved->fh, &body->handle, sizeof(body->handle));
 }
 
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
@@ -382,13 +394,15 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
              struct ptlrpc_request **request)
 {
         struct mds_body *body;
-        int rc, size[2] = {sizeof(*body)}, bufcount = 1;
+        struct replay_open_data *replay_data;
+        int rc, size[3] = {sizeof(*body), sizeof(*replay_data)}, bufcount = 2;
         struct ptlrpc_request *req;
         ENTRY;
 
         if (lsm) {
-                bufcount = 2;
-                // size[1] = mdc->cl_max_mds_easize; soon...
+                bufcount = 3;
+                size[2] = size[1]; /* shuffle the spare data along */
+
                 size[1] = lsm->lsm_mds_easize;
         }
 
@@ -396,6 +410,10 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
                               NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
+
+        if (lsm)
+                lustre_msg_set_op_flags(req->rq_reqmsg, MDS_OPEN_HAS_EA);
+
 
         req->rq_flags |= PTL_RPC_FL_REPLAY;
         body = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -419,8 +437,9 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
 
         /* If open is replayed, we need to fix up the fh. */
         req->rq_replay_cb = mdc_replay_open;
-        req->rq_replay_cb_data = fh;
-
+        replay_data = lustre_msg_buf(req->rq_reqmsg, lsm ? 2 : 1);
+        replay_data->fh = fh;
+        
         EXIT;
  out:
         *request = req;

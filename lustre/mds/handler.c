@@ -819,7 +819,7 @@ static int mds_open(struct ptlrpc_request *req)
                 GOTO(out_free, rc = PTR_ERR(de));
 
         /* check if this inode has seen a delayed object creation */
-        if (req->rq_reqmsg->bufcount > 1) {
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MDS_OPEN_HAS_EA) {
                 struct lov_mds_md *lmm = lustre_msg_buf(req->rq_reqmsg, 1);
 
                 rc = mds_store_ea(mds, req, body, de, lmm);

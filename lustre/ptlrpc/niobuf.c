@@ -336,7 +336,6 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         /* add a ref, which will be balanced in request_out_callback */
         atomic_inc(&request->rq_refcount);
         if (request->rq_replen != 0) {
-
                 /* request->rq_repmsg is set only when the reply comes in, in
                  * client_packet_callback() */
                 if (request->rq_reply_md.start) {
@@ -372,7 +371,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 request->rq_reply_md.eventq = reply_in_eq;
 
                 rc = PtlMDAttach(request->rq_reply_me_h, request->rq_reply_md,
-                                 PTL_UNLINK, &request->rq_reply_md_h);
+                                 PTL_UNLINK, NULL);
                 if (rc != PTL_OK) {
                         CERROR("PtlMDAttach failed: %d\n", rc);
                         LBUG();
