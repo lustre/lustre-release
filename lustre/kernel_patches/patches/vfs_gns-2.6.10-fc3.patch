@@ -1,0 +1,22 @@
+Index: linux-2.6.10/fs/namespace.c
+===================================================================
+--- linux-2.6.10.orig/fs/namespace.c	2005-03-31 17:58:42.827926064 +0800
++++ linux-2.6.10/fs/namespace.c	2005-03-31 18:19:21.976546840 +0800
+@@ -62,6 +62,7 @@
+ 		INIT_LIST_HEAD(&mnt->mnt_mounts);
+ 		INIT_LIST_HEAD(&mnt->mnt_list);
+ 		INIT_LIST_HEAD(&mnt->mnt_fslink);
++ 		INIT_LIST_HEAD(&mnt->mnt_lustre_list);
+ 		if (name) {
+ 			int size = strlen(name)+1;
+ 			char *newname = kmalloc(size, GFP_KERNEL);
+@@ -177,6 +178,9 @@
+ {
+ 	struct super_block *sb = mnt->mnt_sb;
+ 	dput(mnt->mnt_root);
++        spin_lock(&dcache_lock);
++        list_del(&mnt->mnt_lustre_list);
++        spin_unlock(&dcache_lock);
+ 	free_vfsmnt(mnt);
+ 	deactivate_super(sb);
+ }
