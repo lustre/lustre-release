@@ -246,6 +246,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	       sb->s_dev, root->i_ino, device, MINOR(devno), 
 	       blocksize, blocksize_bits);
 	sb->s_root = d_alloc_root(root);
+	list_add(&sbi->osi_list, &obdfs_super_list);
 	unlock_super(sb);
 	EXIT;  
         return sb;
@@ -277,7 +278,7 @@ static void obdfs_put_super(struct super_block *sb)
 	sbi = (struct obdfs_sb_info *) &sb->u.generic_sbp;
 
 	OPS(sb,disconnect)(ID(sb));
-
+	list_del(&sbi->osi_list);
 	memset(sbi, 0, sizeof(* sbi));
 	
 	printk("OBDFS: Bye bye.\n");

@@ -223,7 +223,9 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 	 *     In the future, a flush daemon will write out the page.
 	return 0;
 	 */
+	/*
 	rc = obdfs_flush_reqs(obdfs_slist(inode), 0, 0);
+	*/
 	EXIT;
 	return rc;
 } /* obdfs_add_page_to_cache */

@@ -72,6 +72,7 @@ int obdfs_do_vec_wr(struct super_block *sb, obd_count *num_io,
 
 
 struct obdfs_sb_info {
+	struct list_head         osi_list; /* list of supers */
 	struct obd_conn		 osi_conn;
 	struct super_block	*osi_super;
 	struct obd_device	*osi_obd;

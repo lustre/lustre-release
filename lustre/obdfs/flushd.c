@@ -235,9 +235,7 @@ static int pupdate(void *unused)
 		/* asynchronous setattr etc for the future ... */
 		/* flush_inodes(); */
 		CDEBUG(D_INODE, "about to flush pages...\n");
-		/*
 		obdfs_flush_dirty_pages(1);
-		*/
 		CDEBUG(D_INODE, "done flushing pages...\n");
 	}
 }
