@@ -187,6 +187,7 @@ EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 
 /* pack_generic.c */
+EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_pack_msg);
 EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
