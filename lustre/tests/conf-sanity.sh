@@ -435,4 +435,36 @@ test_13() {
 }
 run_test 13 "check new_uuid of lmc operating correctly"
 
+test_14() {
+        rm -f $XMLCONFIG
+
+        # create xml file with --mkfsoptions for ost
+        echo "create xml file with --mkfsoptions for ost"
+        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+            --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+        add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE \
+            --mkfsoptions -V
+        add_client client mds --lov lov1 --path $MOUNT
+
+        FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
+        EXPECTEDSTRING="mkfsoptions>-V"
+        if [ $EXPECTEDSTRING != $FOUNDSTRING ]; then
+                echo "Error:expected string: $EXPECTEDSTRING; found: $FOUNDSTRING"
+                return 1
+        fi
+        echo "Success:mkfsoptions for ost written to xml file correctly."
+
+        # mount lustre to test lconf mkfsoptions-parsing
+        echo "mount lustre"
+        start_ost
+        start_mds
+        mount_client $MOUNT || return $?
+        cleanup
+        echo "lconf mkfsoptions-parsing for ost success"
+
+        gen_config
+}
+run_test 14 "test mkfsoptions of ost for lmc and lconf"
+
 equals_msg "Done"
