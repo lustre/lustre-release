@@ -114,11 +114,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         if (!ns)
                 RETURN(NULL);
 
-        ns->ns_hash = vmalloc(sizeof(*ns->ns_hash) * RES_HASH_SIZE);
+        OBD_VMALLOC(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         if (!ns->ns_hash)
                 GOTO(out_ns, NULL);
-
-        atomic_add(sizeof(*ns->ns_hash) * RES_HASH_SIZE, &obd_memory);
 
         OBD_ALLOC(ns->ns_name, strlen(name) + 1);
         if (!ns->ns_name)
@@ -152,8 +150,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
 out_hash:
         POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
-        vfree(ns->ns_hash);
-        atomic_sub(sizeof(*ns->ns_hash) * RES_HASH_SIZE, &obd_memory);
+        OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
 out_ns:
         OBD_FREE(ns, sizeof(*ns));
         return NULL;
@@ -272,8 +269,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
         ldlm_namespace_cleanup(ns, 0);
 
         POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
-        vfree(ns->ns_hash /* , sizeof(*ns->ns_hash) * RES_HASH_SIZE */);
-        atomic_sub(sizeof(*ns->ns_hash) * RES_HASH_SIZE, &obd_memory);
+        OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE(ns, sizeof(*ns));
 
