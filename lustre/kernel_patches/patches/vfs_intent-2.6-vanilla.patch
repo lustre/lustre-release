@@ -1,21 +1,21 @@
 Index: linux-2.6.6-vanilla/fs/exec.c
 ===================================================================
 --- linux-2.6.6-vanilla.orig/fs/exec.c	2004-05-26 20:25:42.000000000 +0300
-+++ linux-2.6.6-vanilla/fs/exec.c	2004-06-29 12:23:41.797427168 +0300
-@@ -121,8 +121,11 @@
++++ linux-2.6.6-vanilla/fs/exec.c	2004-06-29 13:56:19.131583960 +0300
+@@ -121,9 +121,10 @@
  	struct file * file;
  	struct nameidata nd;
  	int error;
 +	intent_init(&nd.intent, IT_OPEN);
  
 -	nd.intent.open.flags = FMODE_READ;
-+	error = user_path_walk_it(library, &nd);
-+
-+	nd.intent.it_flags = O_RDONLY;
- 	error = __user_walk(library, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
+-	error = __user_walk(library, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
++	nd.intent.it_flags = FMODE_READ;
++	error = __user_walk_it(library, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
  	if (error)
  		goto out;
-@@ -135,7 +138,7 @@
+ 
+@@ -135,7 +136,7 @@
  	if (error)
  		goto exit;
  
@@ -24,19 +24,19 @@ Index: linux-2.6.6-vanilla/fs/exec.c
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -483,8 +486,9 @@
+@@ -483,8 +484,9 @@
  	int err;
  	struct file *file;
  
 -	nd.intent.open.flags = FMODE_READ;
 -	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
 +	intent_init(&nd.intent, IT_OPEN);
-+	nd.intent.it_flags = O_RDONLY;
++	nd.intent.it_flags = FMODE_READ;
 +	err = path_lookup(name, LOOKUP_FOLLOW, &nd);
  	file = ERR_PTR(err);
  
  	if (!err) {
-@@ -497,7 +501,7 @@
+@@ -497,7 +499,7 @@
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -275,7 +275,7 @@ Index: linux-2.6.6-vanilla/fs/namei.c
 Index: linux-2.6.6-vanilla/fs/namespace.c
 ===================================================================
 --- linux-2.6.6-vanilla.orig/fs/namespace.c	2004-05-26 20:25:43.000000000 +0300
-+++ linux-2.6.6-vanilla/fs/namespace.c	2004-06-29 12:23:41.817424128 +0300
++++ linux-2.6.6-vanilla/fs/namespace.c	2004-06-29 13:50:23.793603544 +0300
 @@ -115,6 +115,7 @@
  
  static void detach_mnt(struct vfsmount *mnt, struct nameidata *old_nd)
@@ -284,7 +284,23 @@ Index: linux-2.6.6-vanilla/fs/namespace.c
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
  	mnt->mnt_parent = mnt;
-@@ -756,6 +757,7 @@
+@@ -539,6 +540,7 @@
+ 		return err;
+ 	if (!old_name || !*old_name)
+ 		return -EINVAL;
++	intent_init(&old_nd.intent, IT_LOOKUP);
+ 	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
+ 	if (err)
+ 		return err;
+@@ -607,6 +609,7 @@
+ 		return -EPERM;
+ 	if (!old_name || !*old_name)
+ 		return -EINVAL;
++	intent_init(&old_nd.intent, IT_LOOKUP);
+ 	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
+ 	if (err)
+ 		return err;
+@@ -756,6 +759,7 @@
  	int retval = 0;
  	int mnt_flags = 0;
  
@@ -295,8 +311,8 @@ Index: linux-2.6.6-vanilla/fs/namespace.c
 Index: linux-2.6.6-vanilla/fs/open.c
 ===================================================================
 --- linux-2.6.6-vanilla.orig/fs/open.c	2004-05-26 20:25:43.000000000 +0300
-+++ linux-2.6.6-vanilla/fs/open.c	2004-06-29 12:23:41.820423672 +0300
-@@ -213,7 +213,7 @@
++++ linux-2.6.6-vanilla/fs/open.c	2004-06-29 13:52:28.003720736 +0300
+@@ -213,12 +213,12 @@
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
@@ -305,6 +321,12 @@ Index: linux-2.6.6-vanilla/fs/open.c
  	error = -EINVAL;
  	if (length < 0)	/* sorry, but loff_t says... */
  		goto out;
+ 
+-	error = user_path_walk(path, &nd);
++	error = user_path_walk_it(path, &nd);
+ 	if (error)
+ 		goto out;
+ 	inode = nd.dentry->d_inode;
 @@ -472,6 +472,7 @@
  	int old_fsuid, old_fsgid;
  	kernel_cap_t old_cap;
@@ -313,7 +335,15 @@ Index: linux-2.6.6-vanilla/fs/open.c
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -503,6 +504,7 @@
+@@ -496,13 +497,14 @@
+ 	else
+ 		current->cap_effective = current->cap_permitted;
+ 
+-	res = __user_walk(filename, LOOKUP_FOLLOW|LOOKUP_ACCESS, &nd);
++	res = __user_walk_it(filename, LOOKUP_FOLLOW|LOOKUP_ACCESS, &nd);
+ 	if (!res) {
+ 		res = permission(nd.dentry->d_inode, mode, &nd);
+ 		/* SuS v2 requires we report a read only fs too */
  		if(!res && (mode & S_IWOTH) && IS_RDONLY(nd.dentry->d_inode)
  		   && !special_file(nd.dentry->d_inode->i_mode))
  			res = -EROFS;
@@ -321,31 +351,28 @@ Index: linux-2.6.6-vanilla/fs/open.c
  		path_release(&nd);
  	}
  
-@@ -517,6 +519,7 @@
+@@ -517,8 +519,9 @@
  {
  	struct nameidata nd;
  	int error;
 +	intent_init(&nd.intent, IT_GETATTR);
  
- 	error = __user_walk(filename, LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &nd);
+-	error = __user_walk(filename, LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &nd);
++	error = __user_walk_it(filename, LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &nd);
  	if (error)
-@@ -568,6 +571,7 @@
+ 		goto out;
+ 
+@@ -568,8 +571,9 @@
  {
  	struct nameidata nd;
  	int error;
 +	intent_init(&nd.intent, IT_GETATTR);
  
- 	error = __user_walk(filename, LOOKUP_FOLLOW | LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
+-	error = __user_walk(filename, LOOKUP_FOLLOW | LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
++	error = __user_walk_it(filename, LOOKUP_FOLLOW | LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
  	if (error)
-@@ -640,7 +644,7 @@
- 	error = -EROFS;
- 	if (IS_RDONLY(inode))
- 		goto dput_and_out;
--
-+	
- 	error = -EPERM;
- 	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
- 		goto dput_and_out;
+ 		goto out;
+ 
 @@ -748,27 +752,8 @@
   * for the internal routines (ie open_namei()/follow_link() etc). 00 is
   * used by symlinks.
@@ -513,7 +540,7 @@ Index: linux-2.6.6-vanilla/fs/stat.c
 Index: linux-2.6.6-vanilla/fs/nfs/dir.c
 ===================================================================
 --- linux-2.6.6-vanilla.orig/fs/nfs/dir.c	2004-05-26 20:25:50.000000000 +0300
-+++ linux-2.6.6-vanilla/fs/nfs/dir.c	2004-06-29 12:23:41.841420480 +0300
++++ linux-2.6.6-vanilla/fs/nfs/dir.c	2004-06-29 13:14:46.887462656 +0300
 @@ -705,7 +705,7 @@
  		return 0;
  	if (!nd || (nd->flags & LOOKUP_CONTINUE) || !(nd->flags & LOOKUP_CREATE))

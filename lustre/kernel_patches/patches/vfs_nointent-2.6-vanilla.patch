@@ -403,7 +403,7 @@ Index: linux-2.6.4-51.0/fs/open.c
 -	error = -EROFS;
 -	if (IS_RDONLY(inode))
 -		goto dput_and_out;
--	
+-
 -	error = -EPERM;
 -	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
 -		goto dput_and_out;
