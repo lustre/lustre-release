@@ -281,7 +281,7 @@ static void ll_clear_inode(struct inode *inode)
                 char *symlink_name = lli->lli_symlink_name;
 
                 if (lli->lli_smd)
-                        obd_free_mem_md(&sbi->ll_osc_conn, lli->lli_smd);
+                        obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
                 if (symlink_name) {
                         OBD_FREE(symlink_name, strlen(symlink_name) + 1);
                         lli->lli_symlink_name = NULL;
