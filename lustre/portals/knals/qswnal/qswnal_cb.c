@@ -1582,11 +1582,12 @@ kqswnal_rxhandler(EP_RXD *rxd)
         krx->krx_state = KRX_PARSE;
         krx->krx_rxd = rxd;
         krx->krx_nob = nob;
-#if MULTIRAIL_EKC
-        krx->krx_rpc_reply_needed = (status != EP_SHUTDOWN) && ep_rxd_isrpc(rxd);
-#else
-        krx->krx_rpc_reply_needed = ep_rxd_isrpc(rxd);
-#endif
+
+        /* RPC reply iff rpc request received without error */
+        krx->krx_rpc_reply_needed = ep_rxd_isrpc(rxd) &&
+                                    (status == EP_SUCCESS ||
+                                     status == EP_MSG_TOO_BIG);
+
         /* Default to failure if an RPC reply is requested but not handled */
         krx->krx_rpc_reply_status = -EPROTO;
         atomic_set (&krx->krx_refcount, 1);
