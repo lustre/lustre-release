@@ -331,7 +331,7 @@ Index: linux-2.4.21-chaos/fs/ext3/xattr.c
  /*
   * If the EXT3_FEATURE_COMPAT_EXT_ATTR feature of this file system is
   * not set, set it.
-@@ -480,6 +691,101 @@
+@@ -480,6 +691,102 @@
   */
  int
  ext3_xattr_set_handle(handle_t *handle, struct inode *inode, int name_index,
@@ -372,10 +372,11 @@ Index: linux-2.4.21-chaos/fs/ext3/xattr.c
 +		if (err != 0 && err != -ENOENT) {
 +			/* not found EA in block */
 +			goto finish;	
++		} else if (err == 0) {
++			/* found EA in block */
++			where = 1;
++			found = 1;
 +		}
-+		/* found EA in block */
-+		where = 1;
-+		found = 1;
 +	} else
 +		goto finish;
 +
