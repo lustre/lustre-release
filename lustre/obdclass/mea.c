@@ -48,6 +48,8 @@ int mea_name2idx(struct mea *mea, char *name, int namelen)
 
         /* FIXME: real hash calculation here */
         c = name[namelen - 1];
+        if (c == 0)
+                CWARN("looks like wrong len is passed\n");
         c = c % mea->mea_count;
 	
 	LASSERT(c < mea->mea_count);
@@ -65,6 +67,8 @@ int raw_name2idx(int count, const char *name, int namelen)
 
         /* FIXME: real hash calculation here */
         c = name[namelen - 1];
+        if (c == 0)
+                CWARN("looks like wrong len is passed\n");
         c = c % count;
 	
         return c;

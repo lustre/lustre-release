@@ -196,8 +196,13 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         body->eadatasize = ea_size;
         mdc_pack_req_body(req);
 
-        LASSERT (strnlen (filename, namelen) == namelen - 1);
-        memcpy(lustre_msg_buf(req->rq_reqmsg, 1, namelen), filename, namelen);
+        if (filename != NULL) {
+                LASSERT (strnlen (filename, namelen) == namelen - 1);
+                memcpy(lustre_msg_buf(req->rq_reqmsg, 1, namelen),
+                       filename, namelen);
+        } else {
+                LASSERT(namelen == 1);
+        }
 
         rc = mdc_getattr_common(exp, ea_size, req);
         if (rc != 0) {

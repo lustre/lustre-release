@@ -1222,6 +1222,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                 /* inode lives on another MDS: return * mds/ino/gen
                  * and LOOKUP lock. drop possible UPDATE lock! */
                 child_policy.l_inodebits.bits &= ~MDS_INODELOCK_UPDATE;
+                child_policy.l_inodebits.bits |= MDS_INODELOCK_LOOKUP;
                 child_res_id.name[0] = (*dchildp)->d_inum;
                 child_res_id.name[1] = (*dchildp)->d_generation;
                 goto retry_locks;
@@ -1452,7 +1453,7 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec, int offset,
 
         LASSERT(offset == 0 || offset == 2);
 
-        DEBUG_REQ(D_INODE, req, "unlink %*s (remote inode %u/%u/%u)\n",
+        DEBUG_REQ(D_INODE, req, "unlink %*s (remote inode %u/%u/%u)",
                   rec->ur_namelen - 1, rec->ur_name, (unsigned)dchild->d_mdsnum,
                   (unsigned) dchild->d_inum, (unsigned) dchild->d_generation);
 

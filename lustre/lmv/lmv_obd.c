@@ -586,21 +586,43 @@ int lmv_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         struct lmv_obd *lmv = &obd->u.lmv;
         struct ll_fid rfid = *fid;
         int rc, mds = fid->mds;
+        struct mds_body *body;
         struct lmv_obj *obj;
         ENTRY;
         lmv_connect(obd);
-        CDEBUG(D_OTHER, "getattr_name for %*s on %lu/%lu/%lu\n",
-               namelen, filename, (unsigned long) fid->mds,
-               (unsigned long) fid->id, (unsigned long) fid->generation);
         obj = lmv_grab_obj(obd, fid, 0);
         if (obj) {
                 /* directory is splitted. look for right mds for this name */
-                mds = raw_name2idx(obj->objcount, filename, namelen);
+                mds = raw_name2idx(obj->objcount, filename, namelen - 1);
                 rfid = obj->objs[mds].fid;
                 lmv_put_obj(obj);
         }
+        CDEBUG(D_OTHER, "getattr_name for %*s on %lu/%lu/%lu -> %lu/%lu/%lu\n",
+               namelen, filename, (unsigned long) fid->mds,
+               (unsigned long) fid->id, (unsigned long) fid->generation,
+               (unsigned long) rfid.mds, (unsigned long) rfid.id,
+               (unsigned long) rfid.generation);
         rc = md_getattr_name(lmv->tgts[mds].exp, &rfid, filename, namelen,
                                   valid, ea_size, request);
+        if (rc == 0) {
+                /* this could be cross-node reference. in this case all
+                 * we have right now is mds/ino/generation triple. we'd
+                 * like to find other attributes */
+                body = lustre_msg_buf((*request)->rq_repmsg, 0, sizeof(*body));
+                LASSERT(body != NULL);
+                if (body->valid & OBD_MD_MDS) {
+                        struct ptlrpc_request *req = NULL;
+                        rfid = body->fid1;
+                        CDEBUG(D_OTHER, "request attrs for %lu/%lu/%lu\n",
+                               (unsigned long) rfid.mds,
+                               (unsigned long) rfid.id,
+                               (unsigned long) rfid.generation);
+                        rc = md_getattr_name(lmv->tgts[rfid.mds].exp, &rfid,
+                                             NULL, 1, valid, ea_size, &req);
+                        ptlrpc_req_finished(*request);
+                        *request = req;
+                }
+        }
         RETURN(rc);
 }
 
@@ -661,6 +683,14 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
                newlen, new, (unsigned long) data->fid2.mds,
                (unsigned long) data->fid2.id,
                (unsigned long) data->fid2.generation);
+        if (!fid_equal(&data->fid1, &data->fid2))
+                CWARN("cross-node rename %lu/%lu/%lu:%*s to %lu/%lu/%lu:%*s\n",
+                      (unsigned long) data->fid1.mds,
+                      (unsigned long) data->fid1.id,
+                      (unsigned long) data->fid1.generation, oldlen, old,
+                      (unsigned long) data->fid2.mds,
+                      (unsigned long) data->fid2.id,
+                      (unsigned long) data->fid2.generation, newlen, new);
 
         lmv_connect(obd);
 
