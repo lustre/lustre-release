@@ -214,7 +214,7 @@ static void mds_extN_delete_inode(struct inode *inode)
                 mds_extN_fs_ops.cl_delete_inode(inode);
 }
 
-static void mds_extN_callback_status(struct journal_callback *jcb, int error)
+static void mds_extN_callback_status(void *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
 
@@ -250,7 +250,7 @@ static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
         CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
                (unsigned long long)mcb->cb_last_rcvd);
         journal_callback_set(handle, mds_extN_callback_status,
-                             (struct journal_callback *)mcb);
+                             (void *)mcb);
 #elif defined(HAVE_JOURNAL_CALLBACK)
         /* XXX original patch version - remove soon */
 #warning "using old journal callback kernel patch, please update"
@@ -302,7 +302,7 @@ static int __init mds_extN_init(void)
         //rc = extN_xattr_register();
         jcb_cache = kmem_cache_create("mds_extN_jcb",
                                       sizeof(struct mds_cb_data), 0,
-                                      SLAB_POISON, NULL, NULL);
+                                      0, NULL, NULL);
         if (!jcb_cache) {
                 CERROR("error allocating MDS journal callback cache\n");
                 GOTO(out, rc = -ENOMEM);

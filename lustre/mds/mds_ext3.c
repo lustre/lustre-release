@@ -183,7 +183,7 @@ static void mds_ext3_delete_inode(struct inode *inode)
                 mds_ext3_fs_ops.cl_delete_inode(inode);
 }
 
-static void mds_ext3_callback_status(struct journal_callback *jcb, int error)
+static void mds_ext3_callback_status(void *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
 
@@ -193,6 +193,7 @@ static void mds_ext3_callback_status(struct journal_callback *jcb, int error)
                 mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;
 
         kmem_cache_free(jcb_cache, mcb);
+        //OBD_FREE(mcb, sizeof(*mcb));
         --jcb_cache_count;
 }
 
@@ -207,6 +208,7 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
 {
         struct mds_cb_data *mcb;
 
+        //OBD_ALLOC(mcb, sizeof(*mcb));
         mcb = kmem_cache_alloc(jcb_cache, GFP_NOFS);
         if (!mcb)
                 RETURN(-ENOMEM);
@@ -219,7 +221,7 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
         CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
                (unsigned long long)mcb->cb_last_rcvd);
         journal_callback_set(handle, mds_ext3_callback_status,
-                             (struct journal_callback *)mcb);
+                             (void *)mcb);
 #elif defined(HAVE_JOURNAL_CALLBACK)
         /* XXX original patch version - remove soon */
 #warning "using old journal callback kernel patch, please update"
@@ -270,7 +272,7 @@ static int __init mds_ext3_init(void)
 
         jcb_cache = kmem_cache_create("mds_ext3_jcb",
                                       sizeof(struct mds_cb_data), 0,
-                                      SLAB_POISON, NULL, NULL);
+                                      0, NULL, NULL);
         if (!jcb_cache) {
                 CERROR("error allocating MDS journal callback cache\n");
                 GOTO(out, rc = -ENOMEM);
@@ -286,7 +288,7 @@ out:
 
 static void __exit mds_ext3_exit(void)
 {
-        int rc;
+        int rc = 0;
 
         mds_unregister_fs_type("ext3");
         rc = kmem_cache_destroy(jcb_cache);
