@@ -3,6 +3,8 @@
 
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
+#include <linux/malloc.h>
+#include <linux/vmalloc.h>
 
 #define SYM_OBD_DEBUG
 
@@ -85,24 +87,73 @@ do {							\
 } while (0)
 
 
+#define MAX_DEVICES 128
+struct obd_conn_info {
+	unsigned int conn_id;
+	unsigned long conn_ino;
+	unsigned long conn_blocksize;
+	unsigned char conn_blocksize_bits;
+};
+
+struct obd_device {
+	int refcnt;
+	struct super_block * sb;
+	unsigned int last_id;
+	unsigned long prealloc_quota;
+	struct list_head clients;
+};
+
+struct obd_client {
+	struct list_head cli_chain;
+	kdev_t minor;
+	unsigned int cli_id;
+	unsigned long cli_prealloc_quota;
+	struct list_head cli_prealloc_inodes;
+};
+
+struct obd_prealloc_inode {
+	struct list_head obd_prealloc_chain;
+	unsigned long inode;
+};
+
 /*
  * ioctl commands
  */
-struct ioc_prealloc {
-	long alloc; /* user sets it to the number of inodes requesting to be
-		     * preallocated.  kernel sets it to the actual number of
-		     * succesfully preallocate inodes */
+struct oic_prealloc_s {
+	unsigned long cli_id;
+	unsigned long alloc; /* user sets it to the number of inodes requesting
+		     * to be preallocated.  kernel sets it to the actual number
+		     * of succesfully preallocated inodes */
 	long inodes[32]; /* actual inode numbers */
 };
+struct oic_attr_s {
+	unsigned int conn_id;
+	unsigned long inode;
 
-#define OBD_IOC_CREATE                 _IOR('f', 3, long)
-#define OBD_IOC_SETUP                  _IOW('f', 4, long)
-#define OBD_IOC_SYNC                   _IOR('f', 5, long)
-#define OBD_IOC_DESTROY                _IOW('f', 6, long)
+	struct iattr iattr;
+};
+struct oic_rw_s {
+	unsigned int conn_id;
+	unsigned long inode;
+	char * buf;
+	unsigned long count;
+	loff_t offset;
+};
 
-#define OBD_IOC_DEC_USE_COUNT          _IO('f', 8)
-#define OBD_IOC_SETATTR                _IOR('f', 9, long)
-#define OBD_IOC_READ                   _IOWR('f', 10, long)
+#define OBD_IOC_CREATE                 _IOR ('f',  3, long)
+#define OBD_IOC_SETUP                  _IOW ('f',  4, long)
+#define OBD_IOC_SYNC                   _IOR ('f',  5, long)
+#define OBD_IOC_DESTROY                _IOW ('f',  6, long)
+#define OBD_IOC_PREALLOCATE            _IOWR('f',  7, long)
+#define OBD_IOC_DEC_USE_COUNT          _IO  ('f',  8      )
+#define OBD_IOC_SETATTR                _IOW ('f',  9, long)
+#define OBD_IOC_GETATTR                _IOR ('f', 10, long)
+#define OBD_IOC_READ                   _IOWR('f', 11, long)
+#define OBD_IOC_WRITE                  _IOWR('f', 12, long)
+#define OBD_IOC_CONNECT                _IOR ('f', 13, long)
+#define OBD_IOC_DISCONNECT             _IOW ('f', 14, long)
+#define OBD_IOC_STATFS                 _IOWR('f', 15, long)
+#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 16      )
 
 /* balloc.c */
 int ext2_new_block (const struct inode * inode, unsigned long goal,
@@ -128,6 +179,8 @@ extern struct inode * ext2_new_inode (const struct inode * dir, int mode,
 				     int * err);
 extern unsigned long ext2_count_free_inodes (struct super_block * sb);
 extern void ext2_check_inodes_bitmap (struct super_block * sb);
+extern int load_inode_bitmap (struct super_block * sb,
+			      unsigned int block_group);
 
 /* inode.c */
 void obd_read_inode (struct inode * inode);
@@ -144,18 +197,26 @@ struct buffer_head * obd_getblk (struct inode * inode, long block,
 /* interface.c */
 extern int obd_create (struct super_block * sb, int inode_hint, int * err);
 extern void obd_unlink (struct inode * inode);
+extern struct obd_client * obd_client(int cli_id);
+extern void obd_cleanup_client (struct obd_device * obddev,
+				struct obd_client * cli);
+void obd_cleanup_device(int dev);
+long obd_preallocate_inodes(unsigned int conn_id,
+			    int req, long inodes[32], int * err);
+long obd_preallocate_quota(struct super_block * sb, struct obd_client * cli,
+			   unsigned long req, int * err);
+int obd_connect (int minor, struct obd_conn_info * conninfo);
+int obd_disconnect (unsigned int conn_id);
+int obd_setattr(unsigned int conn_id, unsigned long ino, struct iattr * iattr);
+int obd_getattr(unsigned int conn_id, unsigned long ino, struct iattr * iattr);
+int obd_destroy(unsigned int conn_id, unsigned long ino);
+int obd_statfs(unsigned int conn_id, struct statfs * statfs);
+unsigned long obd_read(unsigned int conn_id, unsigned long ino, char * buf,
+		       unsigned long count, loff_t offset, int * err);
+unsigned long obd_write (unsigned int conn_id, unsigned long ino, char * buf,
+			 unsigned long count, loff_t offset, int * err);
 
 /* ioctl.c */
-struct oic_setattr_s {
-	unsigned long inode;
-	struct iattr iattr;
-};
-struct oic_read_s {
-	unsigned long inode;
-	char * buf;
-	unsigned long count;
-	loff_t offset;
-};
 int obd_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
 	       unsigned long arg);
 
@@ -191,5 +252,8 @@ extern struct inode_operations ext2_dir_inode_operations;
 /* file.c */
 extern struct file_operations ext2_file_operations;
 extern struct inode_operations ext2_file_inode_operations;
+
+/* super.c */
+extern struct super_operations ext2_sops;
 
 #endif /* __LINUX_SYM_OBD_H */

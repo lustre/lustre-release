@@ -13,10 +13,32 @@ eval 'sub OBD_IOC_SYNC () { &_IOC(2, ord(\'f\'), 5, 4);}' unless
   defined(&OBD_IOC_SYNC);
 eval 'sub OBD_IOC_DESTROY () { &_IOC(1, ord(\'f\'), 6, 4);}' unless
   defined(&OBD_IOC_DESTROY);
+eval 'sub OBD_IOC_PREALLOCATE () { &_IOC(3, ord(\'f\'), 7, 4);}' unless
+  defined(&OBD_IOC_PREALLOCATE);
 eval 'sub OBD_IOC_DEC_USE_COUNT () { &_IOC(0, ord(\'f\'), 8, 0);}' unless
   defined(&OBD_IOC_DEC_USE_COUNT);
-eval 'sub OBD_IOC_READ () { &_IOC(3, ord(\'f\'), 10, 4);}' unless
+eval 'sub OBD_IOC_SETATTR () { &_IOC(1, ord(\'f\'), 9, 4);}' unless
+  defined(&OBD_IOC_SETATTR);
+eval 'sub OBD_IOC_GETATTR () { &_IOC(2, ord(\'f\'), 10, 4);}' unless
+  defined(&OBD_IOC_GETATTR);
+eval 'sub OBD_IOC_READ () { &_IOC(3, ord(\'f\'), 11, 4);}' unless
   defined(&OBD_IOC_READ);
+eval 'sub OBD_IOC_WRITE () { &_IOC(3, ord(\'f\'), 12, 4);}' unless
+  defined(&OBD_IOC_WRITE);
+eval 'sub OBD_IOC_CONNECT () { &_IOC(2, ord(\'f\'), 13, 4);}' unless
+  defined(&OBD_IOC_CONNECT);
+eval 'sub OBD_IOC_DISCONNECT () { &_IOC(1, ord(\'f\'), 14, 4);}' unless
+  defined(&OBD_IOC_DISCONNECT);
+eval 'sub OBD_IOC_STATFS () { &_IOC(3, ord(\'f\'), 15, 4);}' unless
+  defined(&OBD_IOC_STATFS);
+
+eval 'sub ATTR_MODE () {1;}' unless defined(&ATTR_MODE);
+eval 'sub ATTR_UID () {2;}' unless defined(&ATTR_UID);
+eval 'sub ATTR_GID () {4;}' unless defined(&ATTR_GID);
+eval 'sub ATTR_SIZE () {8;}' unless defined(&ATTR_SIZE);
+eval 'sub ATTR_ATIME () {16;}' unless defined(&ATTR_ATIME);
+eval 'sub ATTR_MTIME () {32;}' unless defined(&ATTR_MTIME);
+eval 'sub ATTR_CTIME () {64;}' unless defined(&ATTR_CTIME);
 
 use Getopt::Long;
 use File::stat;
@@ -47,10 +69,17 @@ my $arg;
 my %commands =
     ('create' => {func => "Create", doc => "create: creates a new inode"},
      'setup' => {func => "Setup", doc => "setup: initializes the environment"},
+     'connect' => {func => "Connect", doc => "connect: allocates client ID for this session"},
+     'disconnect' => {func => "Disconnect", doc => "disconnect [id]: frees client resources"},
      'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
      'destroy' => {func => "Destroy", doc => "setup: destroys an inode"},
      'dec_use_count' => {func => "Decusecount", doc => "decreases the module use count so that the module can be removed following an oops"},
      'read' => {func => "Read", doc => "read <inode> <count> [offset]"},
+     'write' => {func => "Write", doc => "write <inode> <offset> <text>"},
+     'setattr' => {func => "Setattr", doc => "setattr [mode [uid [gid [size [atime [mtime [ctime]]]]]]]"},
+     'getattr' => {func => "Getattr", doc => "getattr [inode]: displays inode object attributes"},
+     'preallocate' => {func => "Preallocate", doc => "preallocate [num]: requests preallocation of num inodes."},
+     'statfs' => {func => "Statfs", doc => "statfs: filesystem status information"},
      'help' => {func => \&Help,  doc => "help: this message"},
      'quit' => {func => \&Quit,  doc => "see \"exit\""},
      'exit' => {func => \&Quit,  doc => "see \"quit\""}
@@ -136,10 +165,66 @@ sub Setup {
     }
 }
 
+sub Connect {
+    my $id = 0;
+    my $ino = 0;
+    my $bs = 0;
+    my $bs_b = 0;
+    my $rc;
+
+    # unsigned int conn_id;
+    # unsigned long conn_ino;
+    # unsigned long conn_blocksize;
+    # unsigned char conn_blocksize_bits;
+
+    my $packed = pack("ILLC", $id, $ino, $bs, $bs_b);
+    $rc = ioctl(DEV_OBD, &OBD_IOC_CONNECT, $packed);
+    ($id, $ino, $bs, $bs_b) = unpack("ILLC", $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	$::client_id = $id;
+	print "Client ID     : $id\n";
+	print "Root inode    : $ino\n";
+	print "Blocksize     : $bs\n";
+	print "Blocksize bits: $bs_b\n";
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Disconnect {
+    my $id = shift;
+
+    if (!defined($id)) {
+	$id = $::client_id;
+    }
+
+    if (!defined($id)) {
+	print "syntax: disconnect [client ID]\n";
+	print "When client ID is not given, the last valid client ID to be returned by a\n";
+	print "connect command this session is used; there is no such ID.\n";
+	return;
+    }
+
+    my $packed = pack("L", $id);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_DISCONNECT, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	$::client_id = undef;
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
 sub Create {
     my $arg = shift;
     my $quiet = shift;
-    my $err = "0";
     my $rc;
 
     if (defined($quiet) && !($quiet eq "quiet")) {
@@ -147,11 +232,13 @@ sub Create {
 	return;
     }
 
+    my $packed = pack("I", $::client_id);
     if (!defined($arg) || scalar($arg) < 2) {
 	print "Creating 1 object...\n";
-	$rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $err);
+	my $packed = pack("I", 0);
+	$rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
 	if (!defined($quiet)) {
-	    my $ino = unpack("L", $err);
+	    my $ino = unpack("L", $packed);
 	    print "Created object #$ino.\n";
 	}
     } else {
@@ -159,11 +246,11 @@ sub Create {
 
 	print "Creating " . scalar($arg) . " objects...\n";
 	for ($i = 0; $i < scalar($arg); $i++) {
-	    $rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $err);
-	    if (!($rc eq "0 but true") || $err < 0) {
+	    $rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
+	    my $ino = unpack("L", $packed);
+	    if (!($rc eq "0 but true") || $packed == 0) {
 		last;
 	    } elsif (!defined($quiet)) {
-		my $ino = unpack("L", $err);
 		print "Created object #$ino.\n";
 	    }
 	}
@@ -192,6 +279,10 @@ sub Sync {
 }
 
 sub Destroy {
+    if (!defined($id)) {
+	$id = $::client_id;
+    }
+
     my $arg = shift;
 
     if (!defined($arg) || scalar($arg) < 1) {
@@ -200,7 +291,7 @@ sub Destroy {
     }
 
     print "Destroying object $arg...\n";
-    my $packed = pack("L", $arg);
+    my $packed = pack("IL", $::client_id, $arg);
     my $rc = ioctl(DEV_OBD, &OBD_IOC_DESTROY, $packed);
 
     if (!defined $rc) {
@@ -212,11 +303,121 @@ sub Destroy {
     }
 }
 
+sub Getattr {
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
+
+    my $inode = shift;
+
+    if (!defined($inode) || scalar($inode) < 1) {
+	print "invalid arguments; type \"help getattr\" for a synopsis\n";
+	return;
+    }
+
+    # see Setattr
+    my $packed = pack("ILsx2lLLLI", $::client_id, $inode, 0, 0, 0, 0, 0, 0, 0,
+		      0);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_GETATTR, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	my ($valid, $mode, $uid, $gid, $size, $atime, $mtime, $ctime, $flags);
+	($valid, $mode, $uid, $gid, $size, $atime, $mtime, $ctime, $flags) =
+	  unpack("ISssx2lLLLI", $packed);
+
+	printf("Inode: %d  Mode:  %04d\n", $inode, $mode);
+	printf("User: %6d   Group: %6d   Size: %d\n", $uid, $gid, $size);
+	printf("ctime: %08lx -- %s\n", $ctime, scalar(gmtime($ctime)));
+	printf("atime: %08lx -- %s\n", $atime, scalar(gmtime($atime)));
+	printf("mtime: %08lx -- %s\n", $mtime, scalar(gmtime($mtime)));
+	printf("flags: %08x\n", $flags);
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Setattr {
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
+
+    my $inode = shift;
+    my $valid = 0;
+    my $mode = shift;
+    my $uid = shift;
+    my $gid = shift;
+    my $size = shift;
+    my $atime = shift;
+    my $mtime = shift;
+    my $ctime = shift;
+
+    if (defined($uid)) {
+	$valid |= &ATTR_UID;
+    }
+    if (defined($gid)) {
+	$valid |= &ATTR_GID;
+    }
+    if (defined($size)) {
+	$valid |= &ATTR_SIZE;
+    }
+    if (defined($atime)) {
+	$valid |= &ATTR_ATIME;
+    }
+    if (defined($mtime)) {
+	$valid |= &ATTR_MTIME;
+    }
+    if (defined($ctime)) {
+	$valid |= &ATTR_CTIME;
+    }
+    if (defined($mode)) {
+	$valid |= &ATTR_MODE;
+    }
+
+    if (!defined($inode) || scalar($inode) < 1) {
+	print "invalid arguments; type \"help setattr\" for a synopsis\n";
+	return;
+    }
+
+    #struct iattr {
+    #        unsigned int    ia_valid; (32)
+    #        umode_t         ia_mode; (16)
+    #        uid_t           ia_uid; (16)
+    #        gid_t           ia_gid; (16)
+    # -- 16 bit alignment here! --
+    #        off_t           ia_size; (32)
+    #        time_t          ia_atime; (32)
+    #        time_t          ia_mtime; (32)
+    #        time_t          ia_ctime; (32)
+    #        unsigned int    ia_attr_flags; (32)
+    #};
+    my $packed = pack("ILLSssx2ILLLL", $::client_id, $inode, $valid, $mode,
+		      $uid, $gid, $size, $atime, $mtime, $ctime, 0);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETATTR, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
 sub Read {
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
+
     my $inode = shift;
     my $count = shift;
     my $offset = shift;
-
+  
     if (!defined($inode) || scalar($inode) < 1 || !defined($count) ||
 	$count < 1 || (defined($offset) && $offset < 0)) {
 	print "invalid arguments; type \"help read\" for a synopsis\n";
@@ -234,10 +435,12 @@ sub Read {
     my $buf = sprintf("%${count}s", " ");
     die "suck" if (length($buf) != $count);
 
-    my $packed = pack("LpLLL", $inode, $buf, $count, 0, $offset);
+    # the perl we're using doesn't support pack type Q, and offset is 64 bits
+    my $packed = pack("ILpLLL", $::client_id, $inode, $buf, $count, 0, $offset);
+
     my $rc = ioctl(DEV_OBD, &OBD_IOC_READ, $packed);
 
-    $retval = unpack("x4x4L", $packed);
+    $retval = unpack("L", $packed);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
@@ -254,28 +457,79 @@ sub Read {
     }
 }
 
-# Unused for now
+sub Write {
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
+
+    my $inode = shift;
+    my $offset = shift;
+    my $text = join(' ', @_);
+    my $count = length($text);
+
+    if (!defined($inode) || scalar($inode) < 1 || !defined($offset) ||
+	scalar($offset) < 0) {
+	print "invalid arguments; type \"help write\" for a synopsis\n";
+	return;
+    }
+
+    if (!defined($text)) {
+	$text = "";
+	$count = 0;
+    }
+
+    print("Writing $count bytes starting at byte $offset to object " .
+	  "$inode...\n");
+
+    # the perl we're using doesn't support pack type Q
+    my $packed = pack("ILpLLL", $::client_id, $inode, $text, $count, 0, $offset);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_WRITE, $packed);
+
+    $retval = unpack("L", $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	if ($retval >= 0) {
+		print "\nWrote $retval of an attempted $count bytes.\n";
+		print "Finished (success)\n";
+	} else {
+		print "Finished (error $retval)\n";
+	}
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
 sub Preallocate {
     my $arg = shift;
+
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
 
     if (!defined($arg) || scalar($arg) < 1 || scalar($arg) > 32) {
 	$arg = 32;
     }
 
     print "Preallocating $arg inodes...\n";
-    my $packed = pack("Lx128", $arg); # alloc, inodes[32]
+    my $packed = pack("LLx128", $::client_id, $arg);
+    # client id, alloc, inodes[32]
+
     my $rc = ioctl(DEV_OBD, &OBD_IOC_PREALLOCATE, $packed);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
     } elsif ($rc eq "0 but true") {
-	my $alloc = unpack("L", $packed);
-	my @inodes = unpack("L32", $packed);
+	my $alloc = unpack("x4L", $packed);
+	my @inodes = unpack("x8L32", $packed);
 	my $i;
 
 	print "Got $alloc inodes: ";
-	for ($i = 1; $i <= $alloc; ++$i) {
-	    print $inodes[$i] . " ";
+	foreach $i (@inodes) {
+	    print $i . " ";
 	}
 	print "\nFinished (success)\n";
     } else {
@@ -295,6 +549,44 @@ sub Decusecount {
     }
 }
 
+sub Statfs {
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
+
+    # struct statfs {
+    #         long f_type;
+    #         long f_bsize;
+    #         long f_blocks;
+    #         long f_bfree;
+    #         long f_bavail;
+    #         long f_files;
+    #         long f_ffree;
+    #         __kernel_fsid_t f_fsid; (64 bits)
+    #         long f_namelen;
+    #         long f_spare[6];
+    # };
+
+    my $packed = pack("LLLLLLLIILL6", $::client_id, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		      0, 0, 0, 0, 0, 0);
+
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_STATFS, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	my ($bsize, $blocks, $bfree, $bavail, $files, $ffree) =
+	    unpack("x4LLLLLL", $packed);
+	print("$bsize byte blocks: $blocks, " . ($blocks - $bfree) . " used, " .
+	      "$bfree free ($bavail available).\n");
+	print "$files files, " . ($files - $ffree) . " used, $ffree free.\n";
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
 sub Help {
     my $arg = shift;
 
@@ -306,5 +598,9 @@ sub Help {
 }
 
 sub Quit {
+    if ($::client_id) {
+	print "Disconnecting active session ($::client_id)...";
+	Disconnect($::client_id);
+    }
     exit;
 }
