@@ -107,7 +107,6 @@ int mdc_getattr(struct lustre_handle *conn,
                 size[1] = ea_size;
         }
         req->rq_replen = lustre_msg_size(bufcount, size);
-        req->rq_level = LUSTRE_CONN_FULL;
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
@@ -376,7 +375,6 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
                 GOTO(out, rc = -ENOMEM);
 
         req->rq_flags |= PTL_RPC_FL_REPLAY;
-        req->rq_level = LUSTRE_CONN_FULL;
         body = lustre_msg_buf(req->rq_reqmsg, 0);
 
         ll_ino2fid(&body->fid1, ino, 0, type);
@@ -420,7 +418,6 @@ int mdc_close(struct lustre_handle *conn,
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->extra = fh;
 
-        req->rq_level = LUSTRE_CONN_FULL;
         req->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(req);
@@ -472,7 +469,6 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
         body->size = offset;
 
         req->rq_replen = lustre_msg_size(1, &size);
-        req->rq_level = LUSTRE_CONN_FULL;
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
         if (rc) {
@@ -505,7 +501,6 @@ int mdc_statfs(struct lustre_handle *conn, struct statfs *sfs,
         if (!req)
                 GOTO(out, rc = -ENOMEM);
         req->rq_replen = lustre_msg_size(1, &size);
-        req->rq_level = LUSTRE_CONN_FULL;
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);

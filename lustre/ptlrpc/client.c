@@ -176,6 +176,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                 RETURN(NULL);
         }
 
+        request->rq_level = LUSTRE_CONN_FULL;
         request->rq_type = PTL_RPC_TYPE_REQUEST;
         request->rq_client = cl;
         request->rq_connection = ptlrpc_connection_addref(conn);
@@ -289,9 +290,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 schedule_timeout(req->rq_timeout * HZ);
         }
 
-        if (sigismember(&(current->pending.signal), SIGKILL) ||
-            sigismember(&(current->pending.signal), SIGTERM) ||
-            sigismember(&(current->pending.signal), SIGINT)) {
+        if (l_killable_pending(current)) {
                 req->rq_flags |= PTL_RPC_FL_INTR;
                 GOTO(out, rc = 1);
         }
