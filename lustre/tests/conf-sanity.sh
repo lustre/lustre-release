@@ -652,9 +652,9 @@ test_16() {
         EXPECTEDPENDINGMODE=`debugfs -R "stat PENDING" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
 
 	# check if values are empty
-	test "$EXPECTEDOBJECTSMODE" = "x" && EXPECTEDOBJECTSMODE="<empty>"
-	test "$EXPECTEDLOGSMODE" = "x" && EXPECTEDLOGSMODE="<empty>"
-	test "$EXPECTEDPENDINGMODE" = "x" && EXPECTEDPENDINGMODE="<empty>"
+	test "x$EXPECTEDOBJECTSMODE" = "x" && EXPECTEDOBJECTSMODE="<empty>"
+	test "x$EXPECTEDLOGSMODE" = "x" && EXPECTEDLOGSMODE="<empty>"
+	test "x$EXPECTEDPENDINGMODE" = "x" && EXPECTEDPENDINGMODE="<empty>"
 
 	# check if values are valid digits
 	is_digit $EXPECTEDOBJECTSMODE || {
