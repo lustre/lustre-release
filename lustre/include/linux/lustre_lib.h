@@ -305,7 +305,7 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
         data->ioc_len = obd_ioctl_packlen(data);
         data->ioc_version = OBD_IOCTL_VERSION;
 
-        if (*pbuf && obd_ioctl_packlen(data) > max)
+        if (*pbuf && data->ioc_len > max)
                 return 1;
         if (*pbuf == NULL) {
                 *pbuf = malloc(data->ioc_len);
@@ -328,6 +328,27 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
         return 0;
 }
 
+static inline int obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf,
+                                   int max)
+{
+        char *ptr;
+        struct obd_ioctl_data *overlay;
+
+        if (!*pbuf)
+                return 1;
+        overlay = (struct obd_ioctl_data *)*pbuf;
+        memcpy(data, *pbuf, sizeof(*data));
+
+        ptr = overlay->ioc_bulk;
+        if (data->ioc_inlbuf1)
+                LOGU(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
+        if (data->ioc_inlbuf2)
+                LOGU(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
+        if (data->ioc_inlbuf3)
+                LOGU(data->ioc_inlbuf3, data->ioc_inllen3, ptr);
+
+        return 0;
+}
 #else
 
 #include <linux/obd_support.h>
@@ -339,7 +360,6 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         struct obd_ioctl_data *data;
         int err;
         ENTRY;
-
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
         if ( err ) {
@@ -432,14 +452,16 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
 
 #define OBD_IOC_RECOVD_NEWCONN         _IOWR('f', 131, long)
-#define OBD_IOC_LOV_CONFIG             _IOWR('f', 132, long)
-
-#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 133      )
+#define OBD_IOC_LOV_SET_CONFIG         _IOWR('f', 132, long)
+#define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 133, long)
+#define OBD_IOC_LOV_CONFIG             OBD_IOC_LOV_SET_CONFIG
 
 #define OBD_IOC_OPEN                   _IOWR('f', 134, long)
 #define OBD_IOC_CLOSE                  _IOWR('f', 135, long)
 
 #define OBD_IOC_RECOVD_FAILCONN        _IOWR('f', 136, long)
+
+#define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
 
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller

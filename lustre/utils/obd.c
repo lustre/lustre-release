@@ -75,7 +75,7 @@ uint64_t conn_addr = -1;
 uint64_t conn_cookie;
 char rawbuf[8192];
 char *buf = rawbuf;
-int max = 8192;
+int max = sizeof(rawbuf);
 
 static int thread;
 
@@ -1143,12 +1143,12 @@ int jt_obd_test_brw(int argc, char **argv)
         return rc;
 }
 
-int jt_obd_lov_config(int argc, char **argv)
+int jt_obd_lov_setconfig(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct lov_desc desc;
-        obd_uuid_t *uuidarray;
-        int rc, size, i;
+        obd_uuid_t *uuidarray, *ptr;
+        int rc, i;
         char *end;
 
         IOCINIT(data);
@@ -1156,14 +1156,15 @@ int jt_obd_lov_config(int argc, char **argv)
         if (argc <= 6)
                 return CMD_HELP;
 
-        if (strlen(argv[1]) > sizeof(*uuidarray) - 1) {
-                fprintf(stderr, "error: %s: no %dB memory for uuid's\n",
-                        cmdname(argv[0]), strlen(argv[1]));
-                return -ENOMEM;
+        if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
+                fprintf(stderr,
+                        "error: %s: LOV uuid '%s' longer than %d characters\n",
+                        cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
+                return -EINVAL;
         }
 
         memset(&desc, 0, sizeof(desc));
-        strncpy(desc.ld_uuid, argv[1], sizeof(*uuidarray) - 1);
+        strncpy(desc.ld_uuid, argv[1], sizeof(desc.ld_uuid) - 1);
         desc.ld_tgt_count = argc - 6;
         desc.ld_default_stripe_count = strtoul(argv[2], &end, 0);
         if (*end) {
@@ -1173,26 +1174,31 @@ int jt_obd_lov_config(int argc, char **argv)
         }
         if (desc.ld_default_stripe_count > desc.ld_tgt_count) {
                 fprintf(stderr,
-                        "error: %s: stripe count %d more than OST count %d\n",
+                        "error: %s: default stripe count %u > OST count %u\n",
                         cmdname(argv[0]), desc.ld_default_stripe_count,
                         desc.ld_tgt_count);
                 return -EINVAL;
         }
-        if (desc.ld_default_stripe_count == 0)
-                desc.ld_default_stripe_count = desc.ld_tgt_count;
 
-        desc.ld_default_stripe_size = strtoul(argv[3], &end, 0);
+        desc.ld_default_stripe_size = strtoull(argv[3], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad default stripe size '%s'\n",
                         cmdname(argv[0]), argv[3]);
                 return CMD_HELP;
         }
         if (desc.ld_default_stripe_size < 4096) {
-                fprintf(stderr, "error: %s: stripe size %ld too small\n",
-                        cmdname(argv[0]), (long)desc.ld_default_stripe_size);
+                fprintf(stderr,
+                        "error: %s: default stripe size "LPU64" too small\n",
+                        cmdname(argv[0]), desc.ld_default_stripe_size);
+                return -EINVAL;
+        } else if ((long)desc.ld_default_stripe_size <
+                   desc.ld_default_stripe_size) {
+                fprintf(stderr,
+                        "error: %s: default stripe size "LPU64" too large\n",
+                        cmdname(argv[0]), desc.ld_default_stripe_size);
                 return -EINVAL;
         }
-        desc.ld_default_stripe_offset = (__u64) strtoul(argv[4], &end, 0);
+        desc.ld_default_stripe_offset = strtoull(argv[4], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad default stripe offset '%s'\n",
                         cmdname(argv[0]), argv[4]);
@@ -1205,39 +1211,121 @@ int jt_obd_lov_config(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        size = desc.ld_tgt_count * sizeof(*uuidarray);
-        uuidarray = malloc(size);
+        /* NOTE: it is possible to overwrite the default striping parameters,
+         *       but EXTREME care must be taken when saving the OST UUID list.
+         *       It must be EXACTLY the same, or have only additions at the
+         *       end of the list, or only overwrite individual OST entries
+         *       that are restored from backups of the previous OST.
+         */
+        uuidarray = calloc(desc.ld_tgt_count, sizeof(*uuidarray));
         if (!uuidarray) {
-                fprintf(stderr, "error: %s: no %dB memory for uuid's\n",
-                        cmdname(argv[0]), size);
-                return -ENOMEM;
+                fprintf(stderr, "error: %s: no memory for %d UUIDs\n",
+                        cmdname(argv[0]), desc.ld_tgt_count);
+                rc = -ENOMEM;
+                goto out;
         }
-        memset(uuidarray, 0, size);
-        for (i = 6; i < argc; i++) {
-                char *buf = (char *)(uuidarray + i - 6);
-                if (strlen(argv[i]) >= sizeof(*uuidarray)) {
+        for (i = 6, ptr = uuidarray; i < argc; i++, ptr++) {
+                if (strlen(argv[i]) >= sizeof(*ptr)) {
                         fprintf(stderr, "error: %s: arg %d (%s) too long\n",
                                 cmdname(argv[0]), i, argv[i]);
-                        free(uuidarray);
-                        return -EINVAL;
+                        rc = -EINVAL;
+                        goto out;
                 }
-                strcpy(buf, argv[i]);
+                strcpy((char *)ptr, argv[i]);
         }
 
         data.ioc_inllen1 = sizeof(desc);
         data.ioc_inlbuf1 = (char *)&desc;
-        data.ioc_inllen2 = size;
+        data.ioc_inllen2 = desc.ld_tgt_count * sizeof(*uuidarray);
         data.ioc_inlbuf2 = (char *)uuidarray;
 
         if (obd_ioctl_pack(&data, &buf, max)) {
                 fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
+                rc = -EINVAL;
+                goto out;
+        }
+
+        rc = ioctl(fd, OBD_IOC_LOV_SET_CONFIG, buf);
+        if (rc)
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        cmdname(argv[0]), strerror(rc = errno));
+out:
+        free(uuidarray);
+        return rc;
+}
+
+#define DEF_UUID_ARRAY_LEN (8192 / 40)
+
+int jt_obd_lov_getconfig(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        struct lov_desc desc;
+        obd_uuid_t *uuidarray;
+        int rc;
+
+        IOCINIT(data);
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
+                fprintf(stderr,
+                        "error: %s: LOV uuid '%s' longer than %d characters\n",
+                        cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
                 return -EINVAL;
         }
 
-        rc = ioctl(fd, OBD_IOC_LOV_CONFIG, buf);
-        if (rc)
-                fprintf(stderr, "lov_config: error: %s: %s\n",
+        memset(&desc, 0, sizeof(desc));
+        strncpy(desc.ld_uuid, argv[1], sizeof(desc.ld_uuid) - 1);
+        desc.ld_tgt_count = DEF_UUID_ARRAY_LEN;
+repeat:
+        uuidarray = calloc(desc.ld_tgt_count, sizeof(*uuidarray));
+        if (!uuidarray) {
+                fprintf(stderr, "error: %s: no memory for %d uuid's\n",
+                        cmdname(argv[0]), desc.ld_tgt_count);
+                return -ENOMEM;
+        }
+
+        data.ioc_inllen1 = sizeof(desc);
+        data.ioc_inlbuf1 = (char *)&desc;
+        data.ioc_inllen2 = desc.ld_tgt_count * sizeof(*uuidarray);
+        data.ioc_inlbuf2 = (char *)uuidarray;
+
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
+                rc = -EINVAL;
+                goto out;
+        }
+
+        rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
+        if (rc == -ENOSPC) {
+                free(uuidarray);
+                goto repeat;
+        } else if (rc) {
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
                         cmdname(argv[0]), strerror(rc = errno));
+        } else {
+                obd_uuid_t *ptr;
+                int i;
+
+                if (obd_ioctl_unpack(&data, buf, max)) {
+                        fprintf(stderr, "error: %s: invalid reply\n",
+                                cmdname(argv[0]));
+                        rc = -EINVAL;
+                        goto out;
+                }
+                printf("default_stripe_count: %u\n",
+                       desc.ld_default_stripe_count);
+                printf("default_stripe_size: "LPU64"\n",
+                       desc.ld_default_stripe_size);
+                printf("default_stripe_offset: "LPU64"\n",
+                       desc.ld_default_stripe_offset);
+                printf("default_stripe_pattern: %u\n", desc.ld_pattern);
+                printf("obd_count: %u\n", desc.ld_tgt_count);
+                for (i = 0, ptr = uuidarray; i < desc.ld_tgt_count; i++, ptr++)
+                        printf("%u: %s\n", i, (char *)ptr);
+        }
+out:
         free(uuidarray);
         return rc;
 }

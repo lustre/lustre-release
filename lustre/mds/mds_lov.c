@@ -24,8 +24,8 @@
 #include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
 
-int mds_configure_lov(struct obd_device *obd, struct lov_desc *desc,
-                      obd_uuid_t *uuidarray)
+int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
+                    obd_uuid_t *uuidarray)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
@@ -155,7 +155,7 @@ int mds_iocontrol(long cmd, struct lustre_handle *conn,
 
 
         switch (cmd) {
-        case OBD_IOC_LOV_CONFIG:
+        case OBD_IOC_LOV_SET_CONFIG:
                 desc = (struct lov_desc *)data->ioc_inlbuf1;
                 if (sizeof(*desc) > data->ioc_inllen1) {
                         CERROR("descriptor size wrong\n");
@@ -168,7 +168,28 @@ int mds_iocontrol(long cmd, struct lustre_handle *conn,
                         CERROR("UUID array size wrong\n");
                         RETURN(-EINVAL);
                 }
-                rc = mds_configure_lov(obd, desc, uuidarray);
+                rc = mds_set_lovdesc(obd, desc, uuidarray);
+
+                RETURN(rc);
+        case OBD_IOC_LOV_GET_CONFIG:
+                desc = (struct lov_desc *)data->ioc_inlbuf1;
+                if (sizeof(*desc) > data->ioc_inllen1) {
+                        CERROR("descriptor size wrong\n");
+                        RETURN(-EINVAL);
+                }
+
+                count = desc->ld_tgt_count;
+                uuidarray = (obd_uuid_t *)data->ioc_inlbuf2;
+                if (sizeof(*uuidarray) * count != data->ioc_inllen2) {
+                        CERROR("UUID array size wrong\n");
+                        RETURN(-EINVAL);
+                }
+                rc = mds_get_lovdesc(obd, desc);
+                if (desc->ld_tgt_count > count) {
+                        CERROR("UUID array size too small\n");
+                        RETURN(-ENOSPC);
+                }
+                rc = mds_get_lovtgts(obd, desc->ld_tgt_count, uuidarray);
 
                 RETURN(rc);
         default:

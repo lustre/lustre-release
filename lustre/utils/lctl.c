@@ -125,9 +125,12 @@ command_t cmdlist[] = {
         {"detach", jt_obd_detach, 0,
          "remove driver (and name and uuid) from current device\n"
          "usage: detach"},
-        {"lovconfig", jt_obd_lov_config, 0,
+        {"lov_setconfig", jt_obd_lov_setconfig, 0,
          "write lov configuration to an mds device\n"
-         "usage: lovconfig lov-uuid stripe-count stripe-size offset pattern UUID1 [UUID2 ...]"},
+         "usage: lov_setconfig lov-uuid stripe-count stripe-size offset pattern UUID1 [UUID2 ...]"},
+        {"lov_getconfig", jt_obd_lov_getconfig, 0,
+         "read lov configuration from an mds device\n"
+         "usage: lov_getconfig lov-uuid"},
 
         /* Device operations */
         {"=== device operations ==", jt_noop, 0, "device operations"},

@@ -46,7 +46,7 @@ command_t cmdlist[] = {
          "--threads <threads> <devno> <command [args ...]>"},
 
         /* Device configuration commands */
-        {"lovconfig", jt_obd_lov_config, 0, "configure lov data on MDS "
+        {"lov_setconfig", jt_obd_lov_setconfig, 0, "configure lov data on MDS "
          "[usage: lovconfig lov-uuid stripecount, stripesize, pattern, UUID1, [UUID2, ...]"},
         {"list", jt_obd_list, 0, "list the devices (no args)"},
         {"newdev", jt_obd_newdev, 0, "set device to a new unused obd (no args)"},

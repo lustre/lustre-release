@@ -364,7 +364,7 @@ setup_mds_lov() {
 	$OBDCTL <<- EOF || return $?
 	name2dev MDSDEV
 	connect 
-	lovconfig ${LOVUUID} 1 4096 0 OSCDEV-`hostname`
+	lov_setconfig ${LOVUUID} 1 65536 0 OSCDEV-`hostname`
 	disconnect
 	quit
 	EOF
