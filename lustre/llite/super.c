@@ -385,10 +385,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
 
         /* temporary until mds_statfs returns statfs info for all OSTs */
         if (!rc) {
-                struct statfs obd_sfs;
-
                 rc = obd_statfs(&sbi->ll_osc_conn, &osfs);
-                statfs_unpack(&obd_sfs, &osfs);
                 if (rc) {
                         CERROR("obd_statfs fails: rc = %d\n", rc);
                         GOTO(out, rc);
@@ -398,11 +395,18 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
                        osfs.os_bavail, osfs.os_blocks,
                        osfs.os_ffree, osfs.os_files);
 
-                sfs->f_bfree = obd_sfs.f_bfree;
-                sfs->f_bavail = obd_sfs.f_bavail;
-                sfs->f_blocks = obd_sfs.f_blocks;
-                if (obd_sfs.f_ffree < sfs->f_ffree)
-                        sfs->f_ffree = obd_sfs.f_ffree;
+                while (osfs.os_blocks > ~0UL) {
+                        sfs->f_bsize <<= 1;
+
+                        osfs.os_blocks >>= 1;
+                        osfs.os_bfree >>= 1;
+                        osfs.os_bavail >>= 1;
+                }
+                sfs->f_blocks = osfs.os_blocks;
+                sfs->f_bfree = osfs.os_bfree;
+                sfs->f_bavail = osfs.os_bavail;
+                if (osfs.os_ffree < (__u64)sfs->f_ffree)
+                        sfs->f_ffree = osfs.os_ffree;
         }
 
 out:
