@@ -443,7 +443,7 @@ mds_process_log_rec(struct llog_handle * loghandle,
 {
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
-        int rc;
+        int rc = 0;
 
         if (rec->lrh_type == OBD_CFG_REC) {
                 char *buf;
@@ -516,16 +516,15 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 if (data->ioc_type == LUSTRE_CFG_TYPE) {
                         rec.lrh_type = OBD_CFG_REC;
-                }
-                else if (data->ioc_type == PORTALS_CFG_TYPE) {
+                } else if (data->ioc_type == PORTALS_CFG_TYPE) {
                         rec.lrh_type = PTL_CFG_REC;
                 } else {
                         CERROR("unknown cfg record type:%d \n", data->ioc_type);
                         RETURN(-EINVAL);
                 }
-                        
+
                 OBD_ALLOC(cfg_buf, data->ioc_plen1);
-                if (cfg_buf == NULL) 
+                if (cfg_buf == NULL)
                         RETURN(-EINVAL);
                 rc = copy_from_user(cfg_buf, data->ioc_pbuf1, data->ioc_plen1);
                 if (rc) {
@@ -534,7 +533,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 }
 
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0, 
+                rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0,
                                     cfg_buf, -1);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
