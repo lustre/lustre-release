@@ -9,13 +9,27 @@ use Time::Local;
 my $pristine = 1;
 my $kernver;
 
+# Use the CVS tag first otherwise use the portals version
 sub get_tag()
 {
     my $tag;
+    my $line;
 
     my $tagfile = new IO::File;
     if (!$tagfile->open("CVS/Tag")) {
-        return "HEAD";
+        my $verfile = new IO::File;
+        if (!$verfile->open("portals/include/config.h")) {
+          return "UNKNOWN";
+        }
+        while(defined($line = <$verfile>)) {
+            $line =~ /\#define VERSION "(.*)"/;
+            if ($1) {
+                $tag = $1;
+                last;
+            }
+        }
+        $verfile->close();
+        return $tag
     } else {
         my $tmp = <$tagfile>;
         $tagfile->close();
