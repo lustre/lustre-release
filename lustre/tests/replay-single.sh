@@ -11,21 +11,19 @@ init_test_env
 # 3 - bug 1852
 ALWAYS_EXCEPT="3"
 
-
 # XXX I wish all this stuff was in some default-config.sh somewhere
 MOUNT=${MOUNT:-/mnt/lustre}
 DIR=${DIR:-$MOUNT}
 MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
-MDSSIZE=${MDSSIZE:-100000}
+MDSSIZE=${MDSSIZE:-10000}
 OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
-OSTSIZE=${OSTSIZE:-100000}
+OSTSIZE=${OSTSIZE:-10000}
 UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-5}
 
 STRIPE_BYTES=65536
 STRIPES_PER_OBJ=1
-
 
 gen_config() {
     rm -f replay-single.xml
@@ -39,13 +37,28 @@ gen_config() {
     do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost lov1
 }
 
-
 build_test_filter
 
+cleanup() {
+    [ "$DAEMONFILE" ] && lctl debug_daemon stop
+    stop client ${FORCE:=--force} $CLIENTLCONFARGS
+    stop mds ${FORCE} $MDSLCONFARGS --dump cleanup.log
+    stop ost ${FORCE}
+}
+
+if [ "$ONLY" == "cleanup" ]; then
+    sysctl -w portals.debug=0
+    cleanup
+    exit
+fi
+
 gen_config
-start mds --reformat $MDSLCONFARGS
+
 start ost --reformat $OSTLCONFARGS
+start mds --reformat $MDSLCONFARGS
 start client --gdb $CLIENTLCONFARGS
+
+[ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 mkdir -p $DIR
 
@@ -213,7 +226,7 @@ test_12() {
     multiop $DIR/$tfile o_tSc &
     pid=$!
     # give multiop a chance to open
-    sleep 1 
+    sleep 1
     rm -f $DIR/$tfile
     replay_barrier mds
     kill -USR1 $pid
@@ -284,12 +297,12 @@ run_test 15 "open(O_CREAT), unlink |X|  touch new, close"
 test_16() {
     replay_barrier mds
     mcreate $DIR/$tfile
-    unlink $DIR/$tfile
+    munlink $DIR/$tfile
     mcreate $DIR/$tfile-2
     fail mds
     [ -e $DIR/$tfile ] && return 1
     [ -e $DIR/$tfile-2 ] || return 2
-    unlink $DIR/$tfile-2 || return 3
+    munlink $DIR/$tfile-2 || return 3
 }
 run_test 16 "|X| open(O_CREAT), unlink, touch new,  unlink new"
 
@@ -323,8 +336,8 @@ test_18() {
     [ -e $DIR/$tfile-2 ] || return 4
     # this touch frequently fails
     touch $DIR/$tfile-3 || return 5
-    unlink $DIR/$tfile-2 || return 6
-    unlink $DIR/$tfile-3 || return 7
+    munlink $DIR/$tfile-2 || return 6
+    munlink $DIR/$tfile-3 || return 7
     return 0
 }
 run_test 18 "|X| open(O_CREAT), unlink, touch new, close, touch, unlink"
@@ -342,7 +355,4 @@ test_19() {
 run_test 19 "|X| mcreate, open, write, rename "
 
 equals_msg test complete, cleaning up
-stop client ${FORCE:=--force} $CLIENTLCONFARGS
-stop ost ${FORCE}
-stop mds ${FORCE} $MDSLCONFARGS --dump cleanup.log
-
+cleanup
