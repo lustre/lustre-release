@@ -518,13 +518,19 @@ kibnal_del_peer_locked (kib_peer_t *peer, int single_share)
         if (peer->ibp_persistence != 0)
                 return;
 
-        list_for_each_safe (ctmp, cnxt, &peer->ibp_conns) {
-                conn = list_entry(ctmp, kib_conn_t, ibc_list);
+        if (list_empty(&peer->ibp_conns)) {
+                kibnal_unlink_peer_locked(peer);
+        } else {
+                list_for_each_safe (ctmp, cnxt, &peer->ibp_conns) {
+                        conn = list_entry(ctmp, kib_conn_t, ibc_list);
 
-                kibnal_close_conn_locked (conn, 0);
+                        kibnal_close_conn_locked (conn, 0);
+                }
+                /* NB peer is no longer persistent; closing its last conn
+                 * unlinked it. */
         }
-
-        /* NB peer unlinks itself when last conn is closed */
+        /* NB peer now unlinked; might even be freed if the peer table had the
+         * last ref on it. */
 }
 
 int
