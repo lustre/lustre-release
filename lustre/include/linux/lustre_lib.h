@@ -25,8 +25,6 @@
 #ifndef _LUSTRE_LIB_H
 #define _LUSTRE_LIB_H
 
-#include <config.h>
-
 #ifndef __KERNEL__
 # include <string.h>
 # include <sys/types.h>
@@ -41,6 +39,18 @@
 #include <linux/kp30.h> /* XXX just for LASSERT! */
 #include <linux/lustre_idl.h>
 #include <linux/lustre_cfg.h>
+
+#ifndef LP_POISON
+#if BITS_PER_LONG > 32
+# define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
+# define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
+# define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
+#else
+# define LI_POISON ((int)0x5a5a5a5a)
+# define LL_POISON ((long)0x5a5a5a5a)
+# define LP_POISON ((void *)(long)0x5a5a5a5a)
+#endif
+#endif
 
 #ifndef LPU64
 /* x86_64 has 64bit longs and defines u64 as long long */
@@ -456,6 +466,11 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_ENQUEUE               _IOWR('f', 202, long)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
 
+#define OBD_IOC_CMOBD_SYNC             _IOWR('f', 210, long)
+
+#define OBD_IOC_COBD_CON               _IOWR('f', 220, long)
+#define OBD_IOC_COBD_COFF              _IOWR('f', 221, long)
+#define OBD_IOC_COBD_CFLUSH            _IOWR('f', 222, long)
 /* XXX _IOWR('f', 250, long) has been defined in
  * portals/include/linux/kp30.h for debug, don't use it
  */

@@ -169,7 +169,7 @@ struct lib_eq_t {
         ptl_size_t        size;
         ptl_event_t      *base;
         int               eq_refcount;
-        int (*event_callback) (ptl_event_t * event);
+        ptl_eq_handler_t  event_callback;
         void             *eq_addrkey;
 };
 
@@ -245,15 +245,11 @@ typedef struct {
  * extracted by masking with (PTL_COOKIE_TYPES - 1) */
 
 typedef struct {
-        int up;
-        int refcnt;
         ptl_nid_t nid;
         ptl_pid_t pid;
-        int num_nodes;
-        unsigned int debug;
         lib_ptl_t tbl;
-        lib_ac_t ac;
         lib_counters_t counters;
+        ptl_ni_limits_t actual_limits;
 
         int               ni_lh_hash_size;      /* size of lib handle hash table */
         struct list_head *ni_lh_hash_table;     /* all extant lib handles, this interface */

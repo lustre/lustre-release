@@ -1,4 +1,4 @@
-dev_read_only_hp_2.4.20.patch
+dev_read_only-suse-2.4.19.patch
 exports_2.4.19-suse.patch 
 lustre_version.patch
 vfs_intent-2.4.19-suse.patch 
@@ -6,11 +6,10 @@ invalidate_show.patch
 export-truncate.patch
 iod-stock-24-exports-2.4.19-suse.patch 
 jbd-2.4.18-jcberr.patch
-ext-2.4-patch-1-chaos.patch 
+ext-2.4-patch-1-suse-2.4.19.patch 
 ext-2.4-patch-2.patch
 ext-2.4-patch-3.patch
 ext-2.4-patch-4.patch
-linux-2.4.20-xattr-0.8.54-hp.patch 
 linux-2.4.19-xattr-0.8.54-suse.patch 
 ext3-2.4-ino_t.patch
 ext3-largefile.patch
@@ -32,5 +31,5 @@ jbd-flushtime-2.4.19-suse.patch
 jbd-get_write_access.patch
 ext3-ea-in-inode-2.4.20.patch 
 listman-2.4.20.patch
-ext3-trusted_ea-2.4.20.patch 
+ext3-trusted_ea-suse-2.4.19.patch
 ext3-truncate-buffer-head.patch

@@ -366,8 +366,6 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         RETURN(0);
 }
 
-
-
 /* Test log and catalogue processing */
 static int llog_test_5(struct obd_device *obd)
 {
@@ -423,6 +421,14 @@ static int llog_test_5(struct obd_device *obd)
         rc = llog_cat_process(llh, plain_print_cb, "foobar");
         if (rc) {
                 CERROR("5e: process with plain_print_cb failed: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        CWARN("5f: print plain log entries reversely.. expect 6\n");
+        rc = llog_cat_reverse_process(llh, plain_print_cb, "foobar");
+        if (rc) {
+                CERROR("5f: reversely process with plain_print_cb failed: %d\n",
+                       rc);
                 GOTO(out, rc);
         }
 
@@ -483,6 +489,10 @@ static int llog_test_6(struct obd_device *obd, char *name)
         if (rc)
                 CERROR("6: llog_process failed %d\n", rc);
 
+        rc = llog_reverse_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
+        if (rc)
+                CERROR("6: llog_reverse_process failed %d\n", rc);
+
 parse_out:
         rc = llog_close(llh);
         if (rc) {
@@ -536,16 +546,16 @@ static int llog_test_7(struct obd_device *obd)
  * ------------------------------------------------------------------------- */
 static int llog_run_tests(struct obd_device *obd)
 {
-        struct llog_handle *llh;
-        struct obd_run_ctxt saved;
         struct llog_ctxt *ctxt;
+        struct llog_handle *llh;
+        struct lvfs_run_ctxt saved;
         int rc, err, cleanup_phase = 0;
         char name[10];
         ENTRY;
 
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         sprintf(name, "%x", llog_test_rand);
-        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 
         rc = llog_test_1(obd, name);
         if (rc)
@@ -585,7 +595,7 @@ static int llog_run_tests(struct obd_device *obd)
                 if (!rc)
                         rc = err;
         case 0:
-                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
         }
 
         return rc;
@@ -599,8 +609,8 @@ static int llog_test_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, llogs, LLOG_TEST_ORIG_CTXT, tgt, 0,
-                        NULL, &llog_lvfs_ops);
+        rc = obd_llog_setup(obd, llogs, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL,
+                            &llog_lvfs_ops);
         RETURN(rc);
 }
 
@@ -610,7 +620,7 @@ static int llog_test_llog_finish(struct obd_device *obd,
         int rc;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(llogs, LLOG_TEST_ORIG_CTXT));
         RETURN(rc);
 }
 
@@ -651,12 +661,9 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = llog_run_tests(obd);
         if (rc)
                 llog_test_cleanup(obd, 0);
+
         RETURN(rc);
 }
-
-static struct lprocfs_vars lprocfs_ost_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_ost_module_vars[] = { {0} };
-LPROCFS_INIT_VARS(ost, lprocfs_ost_module_vars, lprocfs_ost_obd_vars)
 
 static int llog_test_attach(struct obd_device *dev, obd_count len, void *data)
 {
@@ -672,14 +679,13 @@ static int llog_test_detach(struct obd_device *dev)
 }
 
 static struct obd_ops llog_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_attach:      llog_test_attach,
-        o_detach:      llog_test_detach,
-        o_setup:       llog_test_setup,
-        o_cleanup:     llog_test_cleanup,
-        o_llog_init:   llog_test_llog_init,
-        o_llog_finish: llog_test_llog_finish,
-
+        .o_owner       = THIS_MODULE,
+        .o_attach      = llog_test_attach,
+        .o_detach      = llog_test_detach,
+        .o_setup       = llog_test_setup,
+        .o_cleanup      = llog_test_cleanup,
+        .o_llog_init   = llog_test_llog_init,
+        .o_llog_finish = llog_test_llog_finish,
 };
 
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };

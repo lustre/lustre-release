@@ -14,6 +14,7 @@ obj-y += obdecho/
 obj-y += osc/
 obj-y += ost/
 obj-y += lov/
+obj-y += lmv/
 obj-y += llite/
 obj-y += lvfs/
 

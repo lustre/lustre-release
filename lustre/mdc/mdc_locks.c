@@ -120,7 +120,7 @@ int it_open_error(int phase, struct lookup_intent *it)
 EXPORT_SYMBOL(it_open_error);
 
 /* this must be called on a lockh that is known to have a referenced lock */
-void mdc_set_lock_data(__u64 *l, void *data)
+int mdc_set_lock_data(struct obd_export *exp, __u64 *l, void *data)
 {
         struct ldlm_lock *lock;
         struct lustre_handle *lockh = (struct lustre_handle *)l;
@@ -128,7 +128,7 @@ void mdc_set_lock_data(__u64 *l, void *data)
 
         if (!*l) {
                 EXIT;
-                return;
+                return 0;
         }
 
         lock = ldlm_handle2lock(lockh);
@@ -139,12 +139,12 @@ void mdc_set_lock_data(__u64 *l, void *data)
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
-                unsigned long state = old_inode->i_state & I_FREEING;
-                CERROR("Found existing inode %p/%lu/%u state %lu in lock: "
-                       "setting data to %p/%lu/%u\n", old_inode,
-                       old_inode->i_ino, old_inode->i_generation, state,
-                       new_inode, new_inode->i_ino, new_inode->i_generation);
-                LASSERT(state);
+                LASSERTF(old_inode->i_state & I_FREEING,
+                         "Found existing inode %p/%lu/%u state %lu in lock: "
+                         "setting data to %p/%lu/%u\n", old_inode,
+                         old_inode->i_ino, old_inode->i_generation,
+                         old_inode->i_state,
+                         new_inode, new_inode->i_ino, new_inode->i_generation);
         }
 #endif
         lock->l_ast_data = data;
@@ -152,6 +152,7 @@ void mdc_set_lock_data(__u64 *l, void *data)
         LDLM_LOCK_PUT(lock);
 
         EXIT;
+        return 0;
 }
 EXPORT_SYMBOL(mdc_set_lock_data);
 
@@ -230,7 +231,7 @@ int mdc_enqueue(struct obd_export *exp,
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mdc_open_pack(req, 2, data, it->it_create_mode, 0,
+                mdc_open_pack(req->rq_reqmsg, 2, data, it->it_create_mode, 0,
                               it->it_flags, lmm, lmmsize);
                 /* get ready for the reply */
                 reply_buffers = 3;
@@ -248,7 +249,7 @@ int mdc_enqueue(struct obd_export *exp,
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mdc_unlink_pack(req, 2, data);
+                mdc_unlink_pack(req->rq_reqmsg, 2, data);
                 /* get ready for the reply */
                 reply_buffers = 4;
                 req->rq_replen = lustre_msg_size(4, repsize);
@@ -270,7 +271,7 @@ int mdc_enqueue(struct obd_export *exp,
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mdc_getattr_pack(req, valid, 2, it->it_flags, data);
+                mdc_getattr_pack(req->rq_reqmsg, valid, 2, it->it_flags, data);
                 /* get ready for the reply */
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
@@ -345,6 +346,9 @@ int mdc_enqueue(struct obd_export *exp,
                 req->rq_replay = 0;
                 spin_unlock(&req->rq_lock);
         }
+
+        DEBUG_REQ(D_RPCTRACE, req, "disposition: %x, status: %d",
+                  it->d.lustre.it_disposition, it->d.lustre.it_status);
 
         /* We know what to expect, so we do any byte flipping required here */
         LASSERT(reply_buffers == 4 || reply_buffers == 3 || reply_buffers == 1);

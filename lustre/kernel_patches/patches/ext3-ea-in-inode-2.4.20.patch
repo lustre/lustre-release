@@ -41,7 +41,7 @@
  			goto out_brelse;
  	}
 +	if (EXT3_I(inode)->i_state & EXT3_STATE_NEW)
-+		memset(raw_inode, 0, EXT3_INODE_SIZE(inode->i_sb)); 
++		memset(raw_inode, 0, EXT3_INODE_SIZE(inode->i_sb));
  	raw_inode->i_mode = cpu_to_le16(inode->i_mode);
  	if(!(test_opt(inode->i_sb, NO_UID32))) {
  		raw_inode->i_uid_low = cpu_to_le16(low_16_bits(inode->i_uid));
@@ -173,7 +173,7 @@
 +	/* try to find attribute in inode body */
 +	err = ext3_xattr_ibody_get(inode, name_index, name,
 +					buffer, buffer_size);
-+	if (err < 0) 
++	if (err < 0)
 +		/* search was unsuccessful, try to find EA in dedicated block */
 +		err = ext3_xattr_block_get(inode, name_index, name,
 +				buffer, buffer_size);
@@ -216,7 +216,7 @@
 +		return 0;
 +
 +	ret = ext3_get_inode_loc(inode, &iloc);
-+	if (ret) 
++	if (ret)
 +		return ret;
 +	raw_inode = iloc.raw_inode;
 +
@@ -296,7 +296,7 @@
 +	/* get list of attributes stored in inode body */
 +	error = ext3_xattr_ibody_list(inode, buffer, buffer_size);
 +	if (error < 0) {
-+		/* some error occured while collecting 
++		/* some error occured while collecting
 +		 * attributes in inode body */
 +		size = 0;
 +		goto cleanup;
@@ -309,12 +309,12 @@
 +		if (buffer_size <= 0) {
 +			buffer = NULL;
 +			buffer_size = 0;
-+		} else 
++		} else
 +			buffer += error;
 +	}
 +
 +	error = ext3_xattr_block_list(inode, buffer, buffer_size);
-+	if (error < 0) 
++	if (error < 0)
 +		/* listing was successful, so we return len */
 +		size = 0;
 +
@@ -335,7 +335,7 @@
 + * NOTE: free space includes space our attribute hold
 + */
 +int
-+ext3_xattr_ibody_find(struct inode *inode, int name_index, 
++ext3_xattr_ibody_find(struct inode *inode, int name_index,
 +		const char *name, struct ext3_xattr_entry *rentry, int *free)
 +{
 +	struct ext3_xattr_entry *last;
@@ -350,7 +350,7 @@
 +		return ret;
 +
 +	err = ext3_get_inode_loc(inode, &iloc);
-+	if (err) 
++	if (err)
 +		return -EIO;
 +	raw_inode = iloc.raw_inode;
 +
@@ -459,7 +459,7 @@
 +
 +/*
 + * ext3_xattr_inode_set()
-+ * 
++ *
 + * this routine add/remove/replace attribute in inode body
 + */
 +int
@@ -519,7 +519,7 @@
 +		}
 +		if (name_index == last->e_name_index &&
 +			name_len == last->e_name_len &&
-+			!memcmp(name, last->e_name, name_len)) 
++			!memcmp(name, last->e_name, name_len))
 +			here = last;
 +		else {
 +			/* we calculate all but our attribute
@@ -556,9 +556,9 @@
 +		e = (struct ext3_xattr_entry *) start;
 +		while (!IS_LAST_ENTRY(e)) {
 +			struct ext3_xattr_entry *next = EXT3_XATTR_NEXT(e);
-+			int offs = le16_to_cpu(e->e_value_offs); 
-+			if (offs < border) 
-+				e->e_value_offs = 
++			int offs = le16_to_cpu(e->e_value_offs);
++			if (offs < border)
++				e->e_value_offs =
 +					cpu_to_le16(offs + size);
 +			e = next;
 +		}
@@ -699,7 +699,7 @@
 +
 +/*
 + * ext3_xattr_block_set()
-+ * 
++ *
 + * this routine add/remove/replace attribute in EA block
 + */
 +int
@@ -724,7 +724,7 @@
  	 */
  	loff_t	i_disksize;
  
-+	/* on-disk additional lenght */
++	/* on-disk additional length */
 +	__u16 i_extra_isize;
 +
  	/*

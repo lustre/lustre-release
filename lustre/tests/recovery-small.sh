@@ -2,8 +2,8 @@
 
 set -e
 
-# 17 = bug 2732
-ALWAYS_EXCEPT="17"
+#         bug  2986
+ALWAYS_EXCEPT="20b"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -51,14 +51,8 @@ setup() {
     start ost --reformat $OSTLCONFARGS 
     start ost2 --reformat $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-    if [ "$MDSCOUNT" -gt 1 ]; then
-        for num in `seq $MDSCOUNT`; do
-            start mds$num $MDSLCONFARGS --reformat
-        done
-    else
-        start mds $MDSLCONFARGS --reformat
-    fi
-    zconf_mount `hostname`  $MOUNT
+    start mds $MDSLCONFARGS --reformat
+    grep " $MOUNT " /proc/mounts || zconf_mount `hostname`  $MOUNT
 }
 
 cleanup() {
@@ -137,13 +131,11 @@ test_7() {
 }
 run_test 7 "unlink: drop req, drop rep"
 
-
 #bug 1423
 test_8() {
     drop_reint_reply "touch $MOUNT/renamed"    || return 1
 }
 run_test 8 "touch: drop rep (bug 1423)"
-
 
 #bug 1420
 test_9() {
@@ -230,47 +222,69 @@ test_15() {
 run_test 15 "failed open (-ENOMEM)"
 
 test_16() {
-# OBD_FAIL_PTLRPC_BULK_PUT_NET | OBD_FAIL_ONCE
     do_facet client cp /etc/termcap $MOUNT
     sync
 
+#define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
     sysctl -w lustre.fail_loc=0x80000504
     cancel_lru_locks OSC
-    # wil get evicted here
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 1
+    # will get evicted here
+    do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
     sysctl -w lustre.fail_loc=0
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
-
+    # give recovery a chance to finish (shouldn't take long)
+    sleep $TIMEOUT
+    do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
 }
 run_test 16 "timeout bulk put, evict client (2732)"
 
 test_17() {
-# OBD_FAIL_PTLRPC_BULK_GET_NET | OBD_FAIL_ONCE
-    # wil get evicted here
+    # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
+    # client will get evicted here
     sysctl -w lustre.fail_loc=0x80000503
-    do_facet client cp /etc/termcap $MOUNT && return 1
-
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 1
+    do_facet client cp /etc/termcap $DIR/$tfile
     sysctl -w lustre.fail_loc=0
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
 
+    sleep $TIMEOUT
+    # expect cmp to fail
+    do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 1
+    do_facet client "rm $DIR/$tfile" || return 2
+    return 0
 }
 run_test 17 "timeout bulk get, evict client (2732)"
 
-test_18() {
+test_18a() {
+    do_facet client mkdir -p $MOUNT/$tdir
+    f=$MOUNT/$tdir/$tfile
+
+    cancel_lru_locks OSC
+    pgcache_empty || return 1
+
+    # 1 stripe on ost2
+    lfs setstripe $f $((128 * 1024)) 1 1
+
+    do_facet client cp /etc/termcap $f
+    sync
+    local osc2_dev=`$LCTL device_list | \
+	awk '(/ost2.*client_facet/){print $4}' `
+    $LCTL --device %$osc2_dev deactivate
+    # my understanding is that there should be nothing in the page
+    # cache after the client reconnects?     
+    rc=0
+    pgcache_empty || rc=2
+    $LCTL --device %$osc2_dev activate
+    rm -f $f
+    return $rc
+}
+run_test 18a "manual ost invalidate clears page cache immediately"
+
+test_18b() {
 # OBD_FAIL_PTLRPC_BULK_PUT_NET|OBD_FAIL_ONCE
     do_facet client mkdir -p $MOUNT/$tdir
     f=$MOUNT/$tdir/$tfile
     f2=$MOUNT/$tdir/${tfile}-2
 
     cancel_lru_locks OSC
-    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
-        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
-                echo there is still data in page cache $a ?
-                cat $a;
-                return 1;
-        fi
-    done
+    pgcache_empty || return 1
 
     # shouldn't have to set stripe size of count==1
     lfs setstripe $f $((128 * 1024)) 0 1
@@ -284,17 +298,64 @@ test_18() {
     sync
     sysctl -w lustre.fail_loc=0
     # allow recovery to complete
-    sleep 10
+    sleep $((TIMEOUT + 2))
     # my understanding is that there should be nothing in the page
     # cache after the client reconnects?     
-    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
-        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
-                echo there is still data in page cache $a ?
-                cat $a;
-                return 1;
-        fi
-    done
+    rc=0
+    pgcache_empty || rc=2
+    rm -f $f $f2
+    return $rc
 }
-run_test 18 "eviction and reconnect clears page cache (2766)"
+run_test 18b "eviction and reconnect clears page cache (2766)"
+
+test_19a() {
+    f=$MOUNT/$tfile
+    do_facet client mcreate $f        || return 1
+    drop_ldlm_cancel "chmod 0777 $f"  || echo evicted
+
+    do_facet client checkstat -v -p 0777 $f  || echo evicted
+    do_facet client "munlink $f"
+}
+run_test 19a "test expired_lock_main on mds (2867)"
+
+test_19b() {
+    f=$MOUNT/$tfile
+    do_facet client multiop $f Ow  || return 1
+    do_facet client multiop $f or  || return 2
+
+    cancel_lru_locks OSC
+
+    do_facet client multiop $f or  || return 3
+    drop_ldlm_cancel multiop $f Ow  || echo "client evicted, as expected"
+
+    do_facet client munlink $f  || return 4
+}
+run_test 19b "test expired_lock_main on ost (2867)"
+
+test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
+	mkdir -p $DIR/$tdir
+	multiop $DIR/$tdir/${tfile} O_wc &
+	MULTI_PID=$!
+	usleep 500
+	cancel_lru_locks OSC
+#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
+	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	kill -USR1 $MULTI_PID
+	wait $MULTI_PID
+	rc=$?
+	[ $rc -eq 0 ] && error "multiop didn't fail enqueue: rc $rc" || true
+}
+run_test 20a "ldlm_handle_enqueue error (should return error)" 
+
+test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
+	mkdir -p $DIR/$tdir
+	touch $DIR/$tdir/${tfile}
+	cancel_lru_locks OSC
+#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
+	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	dd if=/etc/hosts of=$DIR/$tdir/$tfile && \
+		error "didn't fail open enqueue" || true
+}
+run_test 20b "ldlm_handle_enqueue error (should return error)"
 
 $CLEANUP

@@ -58,9 +58,13 @@ struct lustre_cfg {
         char    *lcfg_inlbuf3;
         uint32_t lcfg_inllen4;
         char    *lcfg_inlbuf4;
+        uint32_t lcfg_inllen5;
+        char    *lcfg_inlbuf5;
+        uint32_t lcfg_inllen6;
+        char    *lcfg_inlbuf6;
+
 
         char    lcfg_bulk[0];
-
 };
 
 #define LCFG_INIT(l, cmd, name)                                 \
@@ -84,6 +88,8 @@ static inline int lustre_cfg_packlen(struct lustre_cfg *lcfg)
         len += size_round(lcfg->lcfg_inllen2);
         len += size_round(lcfg->lcfg_inllen3);
         len += size_round(lcfg->lcfg_inllen4);
+        len += size_round(lcfg->lcfg_inllen5);
+        len += size_round(lcfg->lcfg_inllen6);
         return size_round(len);
 }
 
@@ -119,6 +125,10 @@ static inline int lustre_cfg_pack(struct lustre_cfg *data, char **pbuf,
                 LOGL(data->lcfg_inlbuf3, data->lcfg_inllen3, ptr);
         if (data->lcfg_inlbuf4)
                 LOGL(data->lcfg_inlbuf4, data->lcfg_inllen4, ptr);
+        if (data->lcfg_inlbuf5)
+                LOGL(data->lcfg_inlbuf5, data->lcfg_inllen5, ptr);
+        if (data->lcfg_inlbuf6)
+                LOGL(data->lcfg_inlbuf6, data->lcfg_inllen6, ptr);
 
 	*plen = len;
 
@@ -141,6 +151,8 @@ static inline int lustre_cfg_unpack(struct lustre_cfg *data, char *pbuf,
         overlay->lcfg_inlbuf2 = data->lcfg_inlbuf2;
         overlay->lcfg_inlbuf3 = data->lcfg_inlbuf3;
         overlay->lcfg_inlbuf4 = data->lcfg_inlbuf4;
+        overlay->lcfg_inlbuf5 = data->lcfg_inlbuf5;
+        overlay->lcfg_inlbuf6 = data->lcfg_inlbuf6;
 
         memcpy(data, pbuf, sizeof(*data));
 
@@ -155,6 +167,10 @@ static inline int lustre_cfg_unpack(struct lustre_cfg *data, char *pbuf,
                 LOGU(data->lcfg_inlbuf3, data->lcfg_inllen3, ptr);
         if (data->lcfg_inlbuf4)
                 LOGU(data->lcfg_inlbuf4, data->lcfg_inllen4, ptr);
+        if (data->lcfg_inlbuf5)
+                LOGU(data->lcfg_inlbuf5, data->lcfg_inllen5, ptr);
+        if (data->lcfg_inlbuf6)
+                LOGU(data->lcfg_inlbuf6, data->lcfg_inllen6, ptr);
 
         return 0;
 }
@@ -226,8 +242,17 @@ static inline int lustre_cfg_getdata(char **buf, int len, void *arg, int kernel)
 
         if (lcfg->lcfg_inllen4) {
                 lcfg->lcfg_inlbuf4 = &lcfg->lcfg_bulk[0] + offset;
+		offset += size_round(lcfg->lcfg_inllen4);
         }
 
+        if (lcfg->lcfg_inllen5) {
+                lcfg->lcfg_inlbuf5 = &lcfg->lcfg_bulk[0] + offset;
+		offset += size_round(lcfg->lcfg_inllen5);
+        }
+        
+        if (lcfg->lcfg_inllen6)
+                lcfg->lcfg_inlbuf6 = &lcfg->lcfg_bulk[0] + offset;
+       
         EXIT;
         return 0;
 }

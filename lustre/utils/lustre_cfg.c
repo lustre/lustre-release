@@ -155,7 +155,7 @@ int jt_lcfg_setup(int argc, char **argv)
 
         LCFG_INIT(lcfg, LCFG_SETUP, lcfg_devname);
 
-        if (argc > 5)
+        if (argc > 7)
                 return CMD_HELP;
 
         if (argc > 1) {
@@ -174,7 +174,14 @@ int jt_lcfg_setup(int argc, char **argv)
                 lcfg.lcfg_inllen4 = strlen(argv[4]) + 1;
                 lcfg.lcfg_inlbuf4 = argv[4];
         }
-
+        if (argc > 5) {
+                lcfg.lcfg_inllen5 = strlen(argv[5]) + 1;
+                lcfg.lcfg_inlbuf5 = argv[5];
+        }
+        if (argc > 6) {
+                lcfg.lcfg_inllen6 = strlen(argv[6]) + 1;
+                lcfg.lcfg_inlbuf6 = argv[6];
+        }
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),

@@ -51,29 +51,6 @@ struct ll_file_data;
 #define LUSTRE_MDT_NAME "mdt"
 #define LUSTRE_MDC_NAME "mdc"
 
-struct lustre_md {
-        struct mds_body *body;
-        struct lov_stripe_md *lsm;
-        struct mea *mea;
-};
-
-struct ll_uctxt {
-        __u32 gid1;
-        __u32 gid2;
-};
-
-struct mdc_op_data {
-        struct ll_fid fid1;
-        struct ll_fid fid2;
-        struct ll_uctxt ctxt;
-        __u64 mod_time;
-        const char *name;
-        int namelen;
-        __u32 create_mode;
-        struct mea *mea1;       /* mea of inode1 */
-        struct mea *mea2;       /* mea of inode2 */
-};
-
 struct mds_update_record {
         __u32 ur_opcode;
         struct ll_fid *ur_fid1;
@@ -87,18 +64,18 @@ struct mds_update_record {
         int ur_cookielen;
         struct llog_cookie *ur_logcookies;
         struct iattr ur_iattr;
-        struct obd_ucred ur_uc;
+        struct lvfs_ucred ur_uc;
         __u64 ur_rdev;
         __u32 ur_mode;
         __u64 ur_time;
         __u32 ur_flags;
 };
 
-#define ur_fsuid    ur_uc.ouc_fsuid
-#define ur_fsgid    ur_uc.ouc_fsgid
-#define ur_cap      ur_uc.ouc_cap
-#define ur_suppgid1 ur_uc.ouc_suppgid1
-#define ur_suppgid2 ur_uc.ouc_suppgid2
+#define _ur_fsuid    ur_uc.luc_fsuid
+#define _ur_fsgid    ur_uc.luc_fsgid
+#define _ur_cap      ur_uc.luc_cap
+#define _ur_suppgid1 ur_uc.luc_suppgid1
+#define _ur_suppgid2 ur_uc.luc_suppgid2
 
 /* i_attr_flags holds the open count in the inode in 2.4 */
 //XXX Alex implement on 2.4 with i_attr_flags and find soln for 2.5 please
@@ -132,6 +109,13 @@ struct mds_update_record {
 #define MDS_ROCOMPAT_SUPP       (MDS_ROCOMPAT_LOVOBJID)
 
 #define MDS_INCOMPAT_SUPP       (0)
+
+#define REAL_MDS_NUMBER       1 
+#define CACHE_MDS_NUMBER      0 
+
+/*flags for indicate the record are come from cmobd reint or 
+  mdc create */
+#define REC_REINT_CREATE      0x0001
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as fsd_server_data so we might one day merge. */
@@ -198,7 +182,7 @@ int mds_fs_cleanup(struct obd_device *obddev, int failover);
 int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
-void mdc_set_lock_data(__u64 *lockh, void *data);
+int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data);
 int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
                       ldlm_iterator_t it, void *data);
 int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *, 
@@ -221,9 +205,8 @@ int mdc_enqueue(struct obd_export *exp,
                 void *cb_data);
 
 /* mdc/mdc_request.c */
-int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
-                      struct obd_export *exp_osc,
-                      struct obd_export *exp_mdc,
+int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req, 
+                      unsigned int offset, struct obd_export *exp_osc, 
                       struct lustre_md *md);
 int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
 int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
@@ -239,9 +222,11 @@ int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
              struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **);
 struct obd_client_handle;
-void mdc_set_open_replay_data(struct obd_client_handle *och,
-                              struct ptlrpc_request *open_req);
-void mdc_clear_open_replay_data(struct obd_client_handle *och);
+int mdc_set_open_replay_data(struct obd_export *exp, 
+                             struct obd_client_handle *och,
+                             struct ptlrpc_request *open_req);
+int mdc_clear_open_replay_data(struct obd_export *exp, 
+                               struct obd_client_handle *och);
 int mdc_close(struct obd_export *, struct obdo *, struct obd_client_handle *,
               struct ptlrpc_request **);
 int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
@@ -261,11 +246,12 @@ int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
 int mdc_create_client(struct obd_uuid uuid, struct ptlrpc_client *cl);
 
 /* Store the generation of a newly-created inode in |req| for replay. */
-void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
-                                int repoff);
+int mdc_store_inode_generation(struct obd_export *exp, struct ptlrpc_request *req, 
+                               int reqoff, int repoff);
 int mdc_llog_process(struct obd_export *, char *logname, llog_cb_t, void *data);
 int mdc_done_writing(struct obd_export *exp, struct obdo *);
-
+int mdc_reint(struct ptlrpc_request *request, struct mdc_rpc_lock *rpc_lock, 
+              int level);
 static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
                                 int type)
 {

@@ -146,13 +146,6 @@ int do_PtlMEUnlink(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 /* call with state_lock please */
 void lib_me_unlink(nal_cb_t *nal, lib_me_t *me)
 {
-        lib_ni_t *ni = &nal->ni;
-
-        if (ni->debug & PTL_DEBUG_UNLINK) {
-                ptl_handle_any_t handle;
-                ptl_me2handle(&handle, me);
-        }
-
         list_del (&me->me_list);
 
         if (me->md) {

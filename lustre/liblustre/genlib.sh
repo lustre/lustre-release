@@ -83,6 +83,6 @@ $RANLIB $CWD/liblustre.a
 # create shared lib lustre
 rm -f $CWD/liblustre.so
 $LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_cleanup_ \
-	$ALL_OBJS -lpthread
+	$ALL_OBJS -lcap -lpthread
 
 #rm -rf $sysio_tmp

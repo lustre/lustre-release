@@ -1,0 +1,15 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+if MODULES
+if BUILD_GMNAL
+if !CRAY_PORTALS
+modulenet_DATA = kgmnal$(KMODEXT)
+endif
+endif
+endif
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c
+DIST_SOURCES = $(kgmnal-objs:%.o=%.c) gmnal.h

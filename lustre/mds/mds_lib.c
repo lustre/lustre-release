@@ -108,11 +108,11 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fsuid = rec->sa_fsuid;
-        r->ur_fsgid = rec->sa_fsgid;
-        r->ur_cap = rec->sa_cap;
-        r->ur_suppgid1 = rec->sa_suppgid;
-        r->ur_suppgid2 = -1;
+        r->_ur_fsuid = rec->sa_fsuid;
+        r->_ur_fsgid = rec->sa_fsgid;
+        r->_ur_cap = rec->sa_cap;
+        r->_ur_suppgid1 = rec->sa_suppgid;
+        r->_ur_suppgid2 = -1;
         r->ur_fid1 = &rec->sa_fid;
         attr->ia_valid = rec->sa_valid;
         attr->ia_mode = rec->sa_mode;
@@ -155,17 +155,17 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fsuid = rec->cr_fsuid;
-        r->ur_fsgid = rec->cr_fsgid;
-        r->ur_cap = rec->cr_cap;
+        r->_ur_fsuid = rec->cr_fsuid;
+        r->_ur_fsgid = rec->cr_fsgid;
+        r->_ur_cap = rec->cr_cap;
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
-        r->ur_suppgid1 = rec->cr_suppgid;
-        r->ur_suppgid2 = -1;
+        r->_ur_suppgid1 = rec->cr_suppgid;
+        r->_ur_suppgid2 = -1;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
@@ -211,11 +211,11 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fsuid = rec->lk_fsuid;
-        r->ur_fsgid = rec->lk_fsgid;
-        r->ur_cap = rec->lk_cap;
-        r->ur_suppgid1 = rec->lk_suppgid1;
-        r->ur_suppgid2 = rec->lk_suppgid2;
+        r->_ur_fsuid = rec->lk_fsuid;
+        r->_ur_fsgid = rec->lk_fsgid;
+        r->_ur_cap = rec->lk_cap;
+        r->_ur_suppgid1 = rec->lk_suppgid1;
+        r->_ur_suppgid2 = rec->lk_suppgid2;
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
         r->ur_time = rec->lk_time;
@@ -239,12 +239,12 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->ur_fsuid = rec->ul_fsuid;
-        r->ur_fsgid = rec->ul_fsgid;
-        r->ur_cap = rec->ul_cap;
+        r->_ur_fsuid = rec->ul_fsuid;
+        r->_ur_fsgid = rec->ul_fsgid;
+        r->_ur_cap = rec->ul_cap;
         r->ur_mode = rec->ul_mode;
-        r->ur_suppgid1 = rec->ul_suppgid;
-        r->ur_suppgid2 = -1;
+        r->_ur_suppgid1 = rec->ul_suppgid;
+        r->_ur_suppgid2 = -1;
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
         r->ur_time = rec->ul_time;
@@ -268,11 +268,11 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->ur_fsuid = rec->rn_fsuid;
-        r->ur_fsgid = rec->rn_fsgid;
-        r->ur_cap = rec->rn_cap;
-        r->ur_suppgid1 = rec->rn_suppgid1;
-        r->ur_suppgid2 = rec->rn_suppgid2;
+        r->_ur_fsuid = rec->rn_fsuid;
+        r->_ur_fsgid = rec->rn_fsgid;
+        r->_ur_cap = rec->rn_cap;
+        r->_ur_suppgid1 = rec->rn_suppgid1;
+        r->_ur_suppgid2 = rec->rn_suppgid2;
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
         r->ur_time = rec->rn_time;
@@ -302,17 +302,17 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fsuid = rec->cr_fsuid;
-        r->ur_fsgid = rec->cr_fsgid;
-        r->ur_cap = rec->cr_cap;
+        r->_ur_fsuid = rec->cr_fsuid;
+        r->_ur_fsgid = rec->cr_fsgid;
+        r->_ur_cap = rec->cr_cap;
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
-        r->ur_suppgid1 = rec->cr_suppgid;
-        r->ur_suppgid2 = -1;
+        r->_ur_suppgid1 = rec->cr_suppgid;
+        r->_ur_suppgid2 = -1;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);

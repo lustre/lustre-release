@@ -95,23 +95,26 @@ static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
         return 1;
 }
 
-int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
-                          struct obd_ioobj *obj, int niocount,
+int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
+                          int objcount, struct obd_ioobj *obj, int niocount,
                           struct niobuf_local *res, struct obd_trans_info *oti,
                           int rc)
 {
-        struct obd_device *obd = exp->exp_obd;
-        struct obd_run_ctxt saved;
-        struct niobuf_local *lnb;
-        struct fsfilt_objinfo fso;
-        struct iattr iattr = { .ia_valid = ATTR_SIZE, .ia_size = 0, };
-        struct inode *inode = NULL;
-        int i, k, cleanup_phase = 0, err;
-        unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
-        int blocks_per_page;
-        struct dio_request *dreq;
         struct bio *bio = NULL;
+        int blocks_per_page, err;
+        struct niobuf_local *lnb;
+        struct lvfs_run_ctxt saved;
+        struct fsfilt_objinfo fso;
+        struct iattr iattr = { 0 };
+        struct inode *inode = NULL;
+        unsigned long now = jiffies;
+        int i, k, cleanup_phase = 0;
+
+        struct dio_request *dreq = NULL;
+        struct obd_device *obd = exp->exp_obd;
+
         ENTRY;
+
         LASSERT(oti != NULL);
         LASSERT(objcount == 1);
         LASSERT(current->journal_info == NULL);
@@ -124,8 +127,10 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         LASSERT(blocks_per_page <= MAX_BLOCKS_PER_PAGE);
 
         OBD_ALLOC(dreq, sizeof(*dreq));
+
         if (dreq == NULL)
                 RETURN(-ENOMEM);
+
         dreq->bio_list = NULL;
         init_waitqueue_head(&dreq->wait);
         atomic_set(&dreq->numreqs, 0);
@@ -135,10 +140,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         fso.fso_dentry = res->dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
-        oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res, oti);
+        oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso,
+                                           niocount, res, oti);
+        
         if (IS_ERR(oti->oti_handle)) {
                 rc = PTR_ERR(oti->oti_handle);
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
@@ -154,6 +161,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
                 loff_t this_size;
                 sector_t sector;
+                struct page *pages[1];
                 int offs;
 
                 /* If overwriting an existing block, we don't need a grant */
@@ -161,13 +169,15 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                     filter_range_is_mapped(inode, lnb->offset, lnb->len))
                         lnb->rc = 0;
 
-                if (lnb->rc) /* ENOSPC, network RPC error */
+                if (lnb->rc) /* ENOSPC, network RPC error, etc. */ 
                         continue;
 
                 /* get block number for next page */
-                rc = fsfilt_map_inode_page(obd, inode, lnb->page, dreq->blocks,
-                                           dreq->created, 1);
-                if (rc)
+                pages[0] = lnb->page;
+                rc = fsfilt_map_inode_pages(obd, inode, pages, 1, 
+                                            dreq->blocks, dreq->created, 1,
+                                            NULL);
+                if (rc != 0)
                         GOTO(cleanup, rc);
 
                 for (k = 0; k < blocks_per_page; k++) {
@@ -193,7 +203,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                         }
                 }
 
-                /* We expect these pages to be in offset order, but we'll
+                /* we expect these pages to be in offset order, but we'll
                  * be forgiving */
                 this_size = lnb->offset + lnb->len;
                 if (this_size > iattr.ia_size)
@@ -203,7 +213,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
 #warning This probably needs filemap_fdatasync() like filter_io_24 (bug 2366)
         if (bio) {
                 atomic_inc(&dreq->numreqs);
-                submit_bio(WRITE, bio);
+                fsfilt_send_bio(obd, inode, bio);
         }
 
         /* time to wait for I/O completion */
@@ -216,26 +226,30 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 bio_put(bio);
         }
 
-        if (rc == 0) {
-                down(&inode->i_sem);
-                if (iattr.ia_size > inode->i_size) {
-                        CDEBUG(D_INFO, "setting i_size to "LPU64"\n",
-                               iattr.ia_size);
-                        fsfilt_setattr(obd, res->dentry, oti->oti_handle,
-                                       &iattr, 0);
-                }
-                up(&inode->i_sem);
+        down(&inode->i_sem);
+        if (iattr.ia_size > inode->i_size) {
+                CDEBUG(D_INFO, "setting i_size to "LPU64"\n",
+                       iattr.ia_size);
+            		
+                iattr.ia_valid |= ATTR_SIZE;
+			
+                fsfilt_setattr(obd, res->dentry, oti->oti_handle,
+                               &iattr, 0);
         }
+        up(&inode->i_sem);
 
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
 
         rc = filter_finish_transno(exp, oti, rc);
+
         err = fsfilt_commit(obd, inode, oti->oti_handle, obd_sync_filter);
         if (err)
                 rc = err;
+
         if (obd_sync_filter)
                 LASSERT(oti->oti_transno <= obd->obd_last_committed);
+
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow commitrw commit %lus\n", (jiffies - now) / HZ);
 
@@ -244,18 +258,17 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
                 OBD_FREE(dreq, sizeof(*dreq));
         case 0:
                 for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
-                        /* flip_.. gets a ref, while free_page only frees
-                         * when it decrefs to 0 */
-                        if (rc == 0)
-                                flip_into_page_cache(inode, lnb->page);
-                        __free_page(lnb->page);
+                        filter_release_write_page(&obd->u.filter,
+                                                  res->dentry->d_inode, lnb,
+                                                  rc);
                 }
+
                 f_dput(res->dentry);
         }
 

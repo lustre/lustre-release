@@ -30,6 +30,7 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <asm/div64.h>
+#include <linux/seq_file.h>
 #else
 #include <liblustre.h>
 #endif
@@ -42,7 +43,6 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 #include <linux/obd_ost.h>
-#include <linux/seq_file.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd_lmv.h>
@@ -137,7 +137,7 @@ repeat:
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
-                mds = raw_name2idx(obj->objcount, name, len);
+                mds = raw_name2idx(obj->objcount, (char *)name, len);
                 rpfid = obj->objs[mds].fid;
                 CDEBUG(D_OTHER, "forward to MDS #%u\n", mds);
         }

@@ -141,6 +141,7 @@ EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
 EXPORT_SYMBOL(lustre_free_reply_state);
 EXPORT_SYMBOL(lustre_msg_size);
+EXPORT_SYMBOL(lustre_init_msg);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
 EXPORT_SYMBOL(lustre_msg_string);
@@ -173,6 +174,11 @@ EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
+EXPORT_SYMBOL(mdc_create_pack);
+EXPORT_SYMBOL(mdc_setattr_pack);
+EXPORT_SYMBOL(mdc_unlink_pack);
+EXPORT_SYMBOL(mdc_link_pack);
+EXPORT_SYMBOL(mdc_rename_pack);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);
@@ -204,6 +210,7 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 
 /* llogd.c */
 EXPORT_SYMBOL(llog_origin_handle_create);
+EXPORT_SYMBOL(llog_origin_handle_prev_block);
 EXPORT_SYMBOL(llog_origin_handle_next_block);
 EXPORT_SYMBOL(llog_origin_handle_read_header);
 EXPORT_SYMBOL(llog_origin_handle_close);

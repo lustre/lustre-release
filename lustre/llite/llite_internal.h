@@ -10,27 +10,24 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+/* default to about 40meg of readahead on a given system.  That much tied
+ * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
+#define SBI_DEFAULT_RA_MAX ((40 << 20) >> PAGE_CACHE_SHIFT)
+
 struct ll_sb_info {
+        /* this protects pglist and max_r_a_pages.  It isn't safe to
+         * grab from interrupt contexts */
+        spinlock_t                ll_lock;
         struct obd_uuid           ll_sb_uuid;
-//        struct lustre_handle      ll_mdc_conn;
         struct obd_export        *ll_mdc_exp;
         struct obd_export        *ll_osc_exp;
         struct proc_dir_entry*    ll_proc_root;
         obd_id                    ll_rootino; /* number of root inode */
 
-        struct obd_uuid           ll_mds_uuid;
-        struct obd_uuid           ll_mds_peer_uuid;
         struct lustre_mount_data *ll_lmd;
         char                     *ll_instance;
 
         int                       ll_flags;
-        wait_queue_head_t         ll_commitcbd_waitq;
-        wait_queue_head_t         ll_commitcbd_ctl_waitq;
-        int                       ll_commitcbd_flags;
-        struct task_struct       *ll_commitcbd_thread;
-        time_t                    ll_commitcbd_waketime;
-        time_t                    ll_commitcbd_timeout;
-        spinlock_t                ll_commitcbd_lock;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
 
         struct hlist_head         ll_orphan_dentry_list; /*please don't ask -p*/
@@ -38,14 +35,20 @@ struct ll_sb_info {
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
-        spinlock_t                ll_pglist_lock;
         unsigned long             ll_pglist_gen;
         struct list_head          ll_pglist;
+
+        unsigned long             ll_read_ahead_pages;
+        unsigned long             ll_max_read_ahead_pages;
+
 };
 
 struct ll_readahead_state {
         spinlock_t      ras_lock;
-        unsigned long   ras_last, ras_window, ras_next_index;
+        unsigned long   ras_last_readpage, ras_consecutive;
+        unsigned long   ras_window_start, ras_window_len;
+        unsigned long   ras_next_readahead;
+
 };
 
 extern kmem_cache_t *ll_file_data_slab;
@@ -78,25 +81,6 @@ static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 #endif
 }
 
-static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
-                              struct inode *i2)
-{
-        LASSERT(i1);
-        LASSERT(ctxt);
-
-        if (in_group_p(i1->i_gid))
-                ctxt->gid1 = i1->i_gid;
-        else
-                ctxt->gid1 = -1;
-
-        if (i2) {
-                if (in_group_p(i2->i_gid))
-                        ctxt->gid2 = i2->i_gid;
-                else
-                        ctxt->gid2 = -1;
-        } else
-                ctxt->gid2 = 0;
-}
 
 struct it_cb_data {
         struct inode *icbd_parent;
@@ -139,26 +123,16 @@ int ll_mdc_cancel_unused(struct lustre_handle *, struct inode *, int flags,
                          void *opaque);
 int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                         void *data, int flag);
-void ll_prepare_mdc_op_data(struct mdc_op_data *,
-                            struct inode *i1, struct inode *i2,
-                            const char *name, int namelen, int mode);
-
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define ll_ap_completion ll_ap_completion_24
-void ll_ap_completion_24(void *data, int cmd, int rc);
-#else
-#define ll_ap_completion ll_ap_completion_26
-void ll_ap_completion_26(void *data, int cmd, int rc);
-#endif
+void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 void ll_removepage(struct page *page);
-int ll_sync_page(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
 struct ll_async_page *llap_from_page(struct page *page);
+struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 
 void ll_truncate(struct inode *inode);
@@ -166,7 +140,6 @@ void ll_truncate(struct inode *inode);
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
-extern struct inode_operations ll_special_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
@@ -177,6 +150,9 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb);
+int ll_local_open(struct file *file, struct lookup_intent *it);
+int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
+                 struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
@@ -192,7 +168,6 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 
 /* llite/llite_lib.c */
 
-extern struct super_operations ll_super_operations;
 extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
@@ -202,7 +177,6 @@ void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
 int lustre_fill_super(struct super_block *sb, void *data, int silent);
 void lustre_put_super(struct super_block *sb);
-void ll_put_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc);
@@ -226,6 +200,15 @@ struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
 int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 int null_if_equal(struct ldlm_lock *lock, void *data);
 
+/* llite/special.c */
+extern struct inode_operations ll_special_inode_operations;
+extern struct file_operations ll_special_chr_inode_fops;
+extern struct file_operations ll_special_chr_file_fops;
+extern struct file_operations ll_special_blk_inode_fops;
+extern struct file_operations ll_special_fifo_inode_fops;
+extern struct file_operations ll_special_fifo_file_fops;
+extern struct file_operations ll_special_sock_inode_fops;
+
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
 
@@ -247,15 +230,14 @@ void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
 /* generic */
-#define LL_SUPER_MAGIC 0x0BD00BD0
-
-#define LL_SBI_NOLCK            0x1
-#define LL_SBI_READAHEAD        0x2
-
-#define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
+#define LL_SBI_NOLCK           0x1
+#define LL_SBI_READAHEAD       0x2
+#define LL_SUPER_MAGIC         0x0BD00BD0
+#define LL_MAX_BLKSIZE         (4UL * 1024 * 1024)
 
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->s_fs_info))
+#define    ll_s2sbi(sb)        ((struct ll_sb_info *)((sb)->s_fs_info))
+#define    ll_set_sbi(sb, sbi) ((sb)->s_fs_info = sbi)
 void __d_rehash(struct dentry * entry, int lock);
 static inline __u64 ll_ts2u64(struct timespec *time)
 {
@@ -263,7 +245,8 @@ static inline __u64 ll_ts2u64(struct timespec *time)
         return t;
 }
 #else  /* 2.4 here */
-#define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->u.generic_sbp))
+#define    ll_s2sbi(sb)        ((struct ll_sb_info *)((sb)->u.generic_sbp))
+#define    ll_set_sbi(sb, sbi) ((sb)->u.generic_sbp = sbi)
 static inline __u64 ll_ts2u64(time_t *time)
 {
         return *time;
@@ -304,14 +287,6 @@ static inline struct obd_export *ll_i2obdexp(struct inode *inode)
 static inline struct obd_export *ll_i2mdcexp(struct inode *inode)
 {
         return ll_s2mdcexp(inode->i_sb);
-}
-
-static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
-{
-        mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
-                     inode->i_mode & S_IFMT);
-        LASSERT(ll_i2info(inode));
-        fid->mds = ll_i2info(inode)->lli_mds;
 }
 
 static inline int ll_mds_max_easize(struct super_block *sb)

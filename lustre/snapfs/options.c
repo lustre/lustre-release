@@ -17,8 +17,8 @@
 
 
 static struct list_head option_list;
-char  *options = NULL;
-char  *opt_left = NULL;
+static char *options = NULL;
+static char *opt_left = NULL;
 
 int init_option(char *data)
 {
@@ -32,6 +32,7 @@ int init_option(char *data)
 	opt_left = options;
 	return 0;
 }
+
 /*cleanup options*/
 void cleanup_option()
 {
@@ -45,6 +46,7 @@ void cleanup_option()
 	}
 	SNAP_FREE(options, strlen(options) + 1);
 }
+
 int get_opt(struct option **option, char **pos)
 {
 	char  *name, *value, *left;

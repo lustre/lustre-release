@@ -27,7 +27,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <portals/api-support.h>
 #include <portals/ptlctl.h>
 #include "obdctl.h"
 #include "parser.h"
@@ -65,17 +64,17 @@ command_t cmdlist[] = {
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
         {"--net", jt_opt_net, 0, "run <command> after setting network to <net>\n"
-         "usage: --net <tcp/elan/myrinet/scimac> <command>"},
+         "usage: --net <tcp/elan/myrinet> <command>"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
-         "usage: network <tcp/elan/myrinet/scimac>"},
+         "usage: network <tcp/elan/myrinet>"},
         {"autoconn_list", jt_ptl_print_autoconnects, 0, "print autoconnect entries\n"
          "usage: print_autoconns"},
         {"add_autoconn", jt_ptl_add_autoconnect, 0, "add an autoconnect entry\n"
          "usage: add_autoconn <nid> <host> <port> [ise]"},
         {"del_autoconn", jt_ptl_del_autoconnect, 0, "remove an autoconnect entry\n"
          "usage: del_autoconn [<nid>] [<host>] [ks]"},
-        {"conn_list", jt_ptl_print_connections, 0, "connect to a remote nid\n"
-         "usage: print_conns"},
+        {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
+         "usage: conn_list"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
          "usage: connect <host> <port> [iIOC]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
@@ -84,14 +83,14 @@ command_t cmdlist[] = {
          "usage: active_tx"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
-         "setup for elan/myrinet/scimac networks.\n"
+         "setup for elan/myrinet networks.\n"
          "usage: mynid [<nid>]"},
         {"shownid", jt_ptl_shownid, 0, "print the local NID\n"
          "usage: shownid"},
         {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid> <net_type>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
-         "usage: close_uuid <uuid> <net-type>)"},
+         "usage: close_uuid <uuid> <net_type>"},
         {"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_ptl_add_route, 0,
@@ -128,7 +127,7 @@ command_t cmdlist[] = {
          "usage: device <%name|$name|devno>"},
         {"cfg_device", jt_lcfg_device, 0,
          "set current device being configured to <$name>\n"
-         "usage: device <name>"},
+         "usage: cfg_device <name>"},
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
         {"dl", jt_obd_list, 0, "show all devices\n"
@@ -236,7 +235,12 @@ command_t cmdlist[] = {
          "usage: set_timeout <secs>\n"},
         {"set_lustre_upcall", jt_lcfg_set_lustre_upcall, 0,
          "usage: set_lustre_upcall </full/path/to/upcall> \n"},
-       
+        {"lsync", jt_obd_reint_sync, 0,
+         "usage: lsync\n"},  
+        {"cache_on", jt_obd_cache_on, 0,
+         "usage: lsync\n"},  
+        {"cache_off", jt_obd_cache_off, 0,
+         "usage: lsync\n"},  
         /* Llog operations */ 
         {"llog_catlist", jt_llog_catlist, 0, 
          "list all catalog logs on current device.\n"
@@ -257,24 +261,24 @@ command_t cmdlist[] = {
          "       check all records from index 1 by default."},
          {"llog_cancel", jt_llog_cancel, 0,
          "cancel one record in log.\n"
-         "usage: llog_cancel <catlog id|catlog name> <log id> <index>"},
+         "usage: llog_cancel <catalog id|catalog name> <log id> <index>"},
         {"llog_remove", jt_llog_remove, 0,
-         "remove one log from catlog, erase it from disk.\n"
-         "usage: llog_remove <catlog id|catlog name> <log id>"},
+         "remove one log from catalog, erase it from disk.\n"
+         "usage: llog_remove <catalog id|catalog name> <log id>"},
 
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
-         "debug daemon control and dump to a file"
+         "debug daemon control and dump to a file\n"
          "usage: debug_daemon [start file <#MB>|stop|pause|continue]"},
         {"debug_kernel", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file"
+         "get debug buffer and dump to a file\n"
          "usage: debug_kernel [file] [raw]"},
         {"dk", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file"
+         "get debug buffer and dump to a file\n"
          "usage: dk [file] [raw]"},
         {"debug_file", jt_dbg_debug_file, 0,
-         "read debug buffer from input and dump to output"
+         "read debug buffer from input and dump to output\n"
          "usage: debug_file <input> [output] [raw]"},
         {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
          "usage: clear"},
@@ -282,7 +286,7 @@ command_t cmdlist[] = {
          "usage: mark <text>"},
         {"filter", jt_dbg_filter, 0, "filter message type\n"
          "usage: filter <subsystem id/debug mask>"},
-        {"show", jt_dbg_show, 0, "show message type\n"
+        {"show", jt_dbg_show, 0, "Show specific type of messages\n"
          "usage: show <subsystem id/debug mask>"},
         {"debug_list", jt_dbg_list, 0, "list subsystem and debug types\n"
          "usage: debug_list <subs/types>"},

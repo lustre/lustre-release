@@ -53,7 +53,11 @@
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/errno.h>
-#include <linux/locks.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/locks.h>        /* wait_on_buffer */
+#else
+#include <linux/buffer_head.h>  /* wait_on_buffer */
+#endif
 #include <linux/unistd.h>
 #include <net/sock.h>
 #include <linux/uio.h>
@@ -74,6 +78,7 @@
 #include <linux/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
+#include <portals/nal.h>
 
 #define KQSW_CHECKSUM   0
 #if KQSW_CHECKSUM
@@ -194,17 +199,19 @@ typedef struct
 
 typedef struct
 {
+        /* dynamic tunables... */
+        int                      kqn_optimized_gets;  /* optimized GETs? */
+#if CONFIG_SYSCTL
+        struct ctl_table_header *kqn_sysctl;          /* sysctl interface */
+#endif        
+} kqswnal_tunables_t;
+
+typedef struct
+{
         char               kqn_init;            /* what's been initialised */
         char               kqn_shuttingdown;    /* I'm trying to shut down */
-        atomic_t           kqn_nthreads;        /* # threads not terminated */
-        atomic_t           kqn_nthreads_running;/* # threads still running */
+        atomic_t           kqn_nthreads;        /* # threads running */
 
-        int                kqn_optimized_gets;  /* optimized GETs? */
-        int                kqn_copy_small_fwd;  /* fwd small msgs from pre-allocated buffer? */
-
-#if CONFIG_SYSCTL
-        struct ctl_table_header *kqn_sysctl;    /* sysctl interface */
-#endif        
         kqswnal_rx_t      *kqn_rxds;            /* all the receive descriptors */
         kqswnal_tx_t      *kqn_txds;            /* all the transmit descriptors */
 
@@ -214,6 +221,7 @@ typedef struct
         spinlock_t         kqn_idletxd_lock;    /* serialise idle txd access */
         wait_queue_head_t  kqn_idletxd_waitq;   /* sender blocks here waiting for idle txd */
         struct list_head   kqn_idletxd_fwdq;    /* forwarded packets block here waiting for idle txd */
+        atomic_t           kqn_pending_txs;     /* # transmits being prepped */
         
         spinlock_t         kqn_sched_lock;      /* serialise packet schedulers */
         wait_queue_head_t  kqn_sched_waitq;     /* scheduler blocks here */
@@ -247,12 +255,13 @@ typedef struct
 /* kqn_init state */
 #define KQN_INIT_NOTHING        0               /* MUST BE ZERO so zeroed state is initialised OK */
 #define KQN_INIT_DATA           1
-#define KQN_INIT_PTL            2
+#define KQN_INIT_LIB            2
 #define KQN_INIT_ALL            3
 
-extern nal_cb_t        kqswnal_lib;
-extern nal_t           kqswnal_api;
-extern kqswnal_data_t  kqswnal_data;
+extern nal_cb_t            kqswnal_lib;
+extern nal_t               kqswnal_api;
+extern kqswnal_tunables_t  kqswnal_tunables;
+extern kqswnal_data_t      kqswnal_data;
 
 /* global pre-prepared replies to keep off the stack */
 extern EP_STATUSBLK    kqswnal_rpc_success;

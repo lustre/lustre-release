@@ -482,8 +482,10 @@ test_13() {
         fi
         EXPECTEDMDS1UUID="e_longer_than_31characters_UUID"
         EXPECTEDMDS2UUID="longer_than_31characters_UUID_2"
-        FOUNDMDS1UUID=`awk -F"'" '/<mds uuid=/{print $2}' $XMLCONFIG | sed -n '1p'`
-        FOUNDMDS2UUID=`awk -F"'" '/<mds uuid=/{print $2}' $XMLCONFIG | sed -n '2p'`
+        FOUNDMDS1UUID=`awk -F"'" '/<mds .*uuid=/' $XMLCONFIG | sed -n '1p' \
+                       | sed "s/ /\n\r/g" | awk -F"'" '/uuid=/{print $2}'`
+        FOUNDMDS2UUID=`awk -F"'" '/<mds .*uuid=/' $XMLCONFIG | sed -n '2p' \
+                       | sed "s/ /\n\r/g" | awk -F"'" '/uuid=/{print $2}'`
         if [ $EXPECTEDMDS1UUID != $FOUNDMDS1UUID ]; then
                 echo "Error:expected uuid for mds1: $EXPECTEDMDS1UUID; found: $FOUNDMDS1UUID"
                 return 1
@@ -670,5 +672,34 @@ test_17() {
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
 
+test_18() {
+        [ -f $MDSDEV ] && echo "remove $MDSDEV" && rm -f $MDSDEV
+        echo "mount mds with large journal..."
+        OLDMDSSIZE=$MDSSIZE
+        MDSSIZE=2000000
+        gen_config
+                                                                                                                             
+        echo "mount lustre system..."
+        start_ost
+        start_mds
+        mount_client $MOUNT
+        check_mount || return 41
+                                                                                                                             
+        echo "check journal size..."
+        FOUNDJOURNALSIZE=`debugfs -R "stat <8>" $MDSDEV | awk '/Size: / { print $6; exit;}'`
+        if [ $FOUNDJOURNALSIZE = "79691776" ]; then
+                echo "Success:lconf creates large journals"
+        else
+                echo "Error:lconf not create large journals correctly"
+                echo "expected journal size: 79691776(76M), found journal size: $FOUNDJOURNALSIZE"
+                return 1
+        fi
+                                                                                                                             
+        cleanup || return $?
+                                                                                                                             
+        MDSSIZE=$OLDMDSSIZE
+        gen_config
+}
+run_test 18 "check lconf creates large journals"
 
 equals_msg "Done"

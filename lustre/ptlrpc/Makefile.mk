@@ -13,5 +13,6 @@ ptlrpc-objs := recover.o connection.o ptlrpc_module.o events.o service.o \
 		llog_server.o ptlrpcd.o ../ldlm/l_lock.o ../ldlm/ldlm_lock.o \
 		../ldlm/ldlm_resource.o ../ldlm/ldlm_extent.o \
 		../ldlm/ldlm_request.o ../ldlm/ldlm_lockd.o \
-		../ldlm/ldlm_lib.o ../ldlm/ldlm_flock.o ../ldlm/ldlm_plain.o
+		../ldlm/ldlm_lib.o ../ldlm/ldlm_flock.o ../ldlm/ldlm_plain.o \
+		../ldlm/ldlm_inodebits.o
 

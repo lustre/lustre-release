@@ -517,23 +517,17 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
-                               "evicting %s@%s nid "LPX64" (%s)\n",
+                               "evicting %s@%s nid %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               ptlrpc_peernid2str(&req->rq_peer, str));
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s nid "LPX64" (%s)\n",  
+                               "client reconnected %s@%s nid %s\n",  
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               ptlrpc_peernid2str(&req->rq_peer, str));
                 }
         }
 
@@ -666,8 +660,7 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 obd_count client_cksum = body->oa.o_cksum;
                 obd_count cksum = ost_checksum_bulk(desc);
 
-                portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                req->rq_connection->c_peer.peer_nid, str);
+                ptlrpc_peernid2str(&req->rq_connection->c_peer, str);
                 if (client_cksum != cksum) {
                         CERROR("Bad checksum: client %x, server %x, client NID "
                                LPX64" (%s)\n", client_cksum, cksum,
@@ -686,9 +679,16 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 #endif
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_WRITE, req->rq_export, &repbody->oa,
-                           objcount, ioo, npages, local_nb, oti, rc);
+                          objcount, ioo, npages, local_nb, oti, rc);
 
         if (rc == 0) {
+                repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
+                memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
+
+#if CHECKSUM_BULK
+                repbody->oa.o_cksum = ost_checksum_bulk(desc);
+                repbody->oa.o_valid |= OBD_MD_FLCKSUM;
+#endif
                 /* set per-requested niobuf return codes */
                 for (i = j = 0; i < niocount; i++) {
                         int nob = remote_nb[i].len;
@@ -705,7 +705,11 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
                 LASSERT(j == npages);
         }
-
+        rc = obd_write_extents(req->rq_export, ioo, npages, local_nb, rc);
+        if (rc) {
+                CERROR("write extents error of id "LPU64" rc=%d\n", 
+                        ioo->ioo_id, rc);  
+        } 
  out_bulk:
         ptlrpc_free_bulk(desc);
  out_local:
@@ -727,23 +731,17 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
-                               "evicting %s@%s nid "LPX64" (%s)\n",
+                               "evicting %s@%s nid %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               ptlrpc_peernid2str(&req->rq_peer, str));
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s nid "LPX64" (%s)\n",
+                               "client reconnected %s@%s nid %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               ptlrpc_peernid2str(&req->rq_peer, str));
                 }        
         }
         RETURN(rc);
@@ -1132,81 +1130,6 @@ out:
         return 0;
 }
 
-static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
-{
-        struct ost_obd *ost = &obddev->u.ost;
-        int rc;
-        ENTRY;
-
-        rc = cleanup_group_info();
-        if (rc)
-                RETURN(rc);
-
-        rc = llog_start_commit_thread();
-        if (rc < 0)
-                RETURN(rc);
-
-        ost->ost_service = 
-                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
-                                ost_handle, "ost",
-                                obddev->obd_proc_entry);
-        if (ost->ost_service == NULL) {
-                CERROR("failed to start service\n");
-                RETURN(-ENOMEM);
-        }
-        
-        rc = ptlrpc_start_n_threads(obddev, ost->ost_service, OST_NUM_THREADS, 
-                                 "ll_ost");
-        if (rc)
-                GOTO(out, rc = -EINVAL);
-
-        ost->ost_create_service =
-                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL,
-                                ost_handle, "ost_create",
-                                obddev->obd_proc_entry);
-        if (ost->ost_create_service == NULL) {
-                CERROR("failed to start OST create service\n");
-                GOTO(out, rc = -ENOMEM);
-        }
-
-        rc = ptlrpc_start_n_threads(obddev, ost->ost_create_service, 1,
-                                    "ll_ost_create");
-        if (rc) 
-                GOTO(out_create, rc = -EINVAL);
-
-        RETURN(0);
-
-out_create:
-        ptlrpc_unregister_service(ost->ost_create_service);
-out:
-        ptlrpc_unregister_service(ost->ost_service);
-        RETURN(rc);
-}
-
-static int ost_cleanup(struct obd_device *obddev, int flags)
-{
-        struct ost_obd *ost = &obddev->u.ost;
-        int err = 0;
-        ENTRY;
-
-        spin_lock_bh(&obddev->obd_processing_task_lock);
-        if (obddev->obd_recovering) {
-                target_cancel_recovery_timer(obddev);
-                obddev->obd_recovering = 0;
-        }
-        spin_unlock_bh(&obddev->obd_processing_task_lock);
-
-        ptlrpc_stop_all_threads(ost->ost_service);
-        ptlrpc_unregister_service(ost->ost_service);
-
-        ptlrpc_stop_all_threads(ost->ost_create_service);
-        ptlrpc_unregister_service(ost->ost_create_service);
-
-        RETURN(err);
-}
-
 int ost_attach(struct obd_device *dev, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
@@ -1220,13 +1143,88 @@ int ost_detach(struct obd_device *dev)
         return lprocfs_obd_detach(dev);
 }
 
+static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
+{
+        struct ost_obd *ost = &obd->u.ost;
+        int rc;
+        ENTRY;
+
+        rc = cleanup_group_info();
+        if (rc)
+                RETURN(rc);
+
+        rc = llog_start_commit_thread();
+        if (rc < 0)
+                RETURN(rc);
+
+        ost->ost_service =
+                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
+                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                                ost_handle, "ost",
+                                obd->obd_proc_entry);
+        if (ost->ost_service == NULL) {
+                CERROR("failed to start service\n");
+                RETURN(-ENOMEM);
+        }
+
+        rc = ptlrpc_start_n_threads(obd, ost->ost_service, OST_NUM_THREADS,
+                                    "ll_ost");
+        if (rc)
+                GOTO(out_service, rc = -EINVAL);
+
+        ost->ost_create_service =
+                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
+                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL,
+                                ost_handle, "ost_create",
+                                obd->obd_proc_entry);
+        if (ost->ost_create_service == NULL) {
+                CERROR("failed to start OST create service\n");
+                GOTO(out_service, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_n_threads(obd, ost->ost_create_service, 1,
+                                    "ll_ost_creat");
+        if (rc)
+                GOTO(out_create, rc = -EINVAL);
+
+        RETURN(0);
+
+out_create:
+        ptlrpc_unregister_service(ost->ost_create_service);
+out_service:
+        ptlrpc_unregister_service(ost->ost_service);
+        RETURN(rc);
+}
+
+static int ost_cleanup(struct obd_device *obd, int flags)
+{
+        struct ost_obd *ost = &obd->u.ost;
+        int err = 0;
+        ENTRY;
+
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        if (obd->obd_recovering) {
+                target_cancel_recovery_timer(obd);
+                obd->obd_recovering = 0;
+        }
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+
+        ptlrpc_stop_all_threads(ost->ost_service);
+        ptlrpc_unregister_service(ost->ost_service);
+
+        ptlrpc_stop_all_threads(ost->ost_create_service);
+        ptlrpc_unregister_service(ost->ost_create_service);
+
+        RETURN(err);
+}
+
 /* use obd ops to offer management infrastructure */
 static struct obd_ops ost_obd_ops = {
-        o_owner:        THIS_MODULE,
-        o_attach:       ost_attach,
-        o_detach:       ost_detach,
-        o_setup:        ost_setup,
-        o_cleanup:      ost_cleanup,
+        .o_owner        = THIS_MODULE,
+        .o_attach       = ost_attach,
+        .o_detach       = ost_detach,
+        .o_setup        = ost_setup,
+        .o_cleanup      = ost_cleanup,
 };
 
 static int __init ost_init(void)

@@ -251,7 +251,8 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
 
 /* Search for a client OBD connected to tgt_uuid.  If grp_uuid is
    specified, then only the client with that uuid is returned,
-   otherwise any client connected to the tgt is returned. */
+   otherwise any client connected to the tgt is returned.
+   If tgt_uuid is NULL, the lov with grp_uuid is returned. */
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           char * typ_name,
                                           struct obd_uuid *grp_uuid)
@@ -266,6 +267,12 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                              strlen(typ_name)) == 0)) {
                         struct client_obd *cli = &obd->u.cli;
                         struct obd_import *imp = cli->cl_import;
+                        if (tgt_uuid == NULL) {
+                                LASSERT(grp_uuid);
+                                if (obd_uuid_equals(grp_uuid, &obd->obd_uuid))
+                                        return obd;
+                                continue;
+                        }
                         if (obd_uuid_equals(tgt_uuid, &imp->imp_target_uuid) &&
                             ((grp_uuid)? obd_uuid_equals(grp_uuid,
                                                          &obd->obd_uuid) : 1)) {
@@ -548,7 +555,7 @@ struct obd_import *class_new_import(void)
 void class_destroy_import(struct obd_import *import)
 {
         LASSERT(import != NULL);
-        LASSERT((unsigned long)import != 0x5a5a5a5a);
+        LASSERT(import != LP_POISON);
 
         class_handle_unhash(&import->imp_handle);
 

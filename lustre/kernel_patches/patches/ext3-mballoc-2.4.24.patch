@@ -67,7 +67,7 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 +		return 1;
 +	}
 +
-+	/* if found extent has lenght we need, return it right now */
++	/* if found extent has length we need, return it right now */
 +	if (as->target_len == len)
 +		goto nice;
 +
@@ -85,7 +85,7 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 +
 +	/* 1) closeness to goal */
 +	
-+	/* 2) extent lenght */
++	/* 2) extent length */
 +	/* 3) number of tested extent (we check all found extents) */
 +	/* */
 +	return 0;
@@ -93,7 +93,7 @@ Index: linux-2.4.24/fs/ext3/balloc.c
 +
 +/*
 + * this routine tries to find upto *len free contig. blocks
-+ * return number of found block (+ lenght of extent in *len)
++ * return number of found block (+ length of extent in *len)
 + * or -1 if no free blocks at all
 + */
 +int ext3_find_free_extent(struct buffer_head *bh, int goal, int *len, int max)

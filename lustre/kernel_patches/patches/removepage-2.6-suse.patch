@@ -1,0 +1,30 @@
+ include/linux/fs.h |    1 +
+ mm/filemap.c       |    3 +++
+ 2 files changed, 4 insertions(+)
+
+Index: linux-2.6.4-30.1/include/linux/fs.h
+===================================================================
+--- linux-2.6.4-30.1.orig/include/linux/fs.h	2004-04-02 03:20:19.000000000 -0500
++++ linux-2.6.4-30.1/include/linux/fs.h	2004-04-02 03:20:19.000000000 -0500
+@@ -320,6 +320,7 @@
+ 	int (*releasepage) (struct page *, int);
+ 	int (*direct_IO)(int, struct kiocb *, const struct iovec *iov,
+ 			loff_t offset, unsigned long nr_segs);
++	void (*removepage)(struct page *); /* called when page gets removed from the inode */
+ };
+ 
+ struct backing_dev_info;
+Index: linux-2.6.4-30.1/mm/filemap.c
+===================================================================
+--- linux-2.6.4-30.1.orig/mm/filemap.c	2004-04-02 03:19:42.000000000 -0500
++++ linux-2.6.4-30.1/mm/filemap.c	2004-04-02 03:23:10.000000000 -0500
+@@ -102,6 +102,9 @@
+ {
+ 	struct address_space *mapping = page_mapping(page);
+ 
++	if (mapping->a_ops->removepage)
++		mapping->a_ops->removepage(page);
++
+ 	if (likely(!PageSwapCache(page))) {
+ 		BUG_ON(PageAnon(page));
+ 		radix_tree_delete(&mapping->page_tree, page->index);

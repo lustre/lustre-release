@@ -28,12 +28,16 @@
 #include <sys/param.h>
 #include <assert.h>
 
-#include <config.h>
 #ifdef HAVE_LIBREADLINE
 #define	READLINE_LIBRARY
 #include <readline/readline.h>
+
+/* completion_matches() is #if 0-ed out in modern glibc */
+#ifndef completion_matches
+#  define completion_matches rl_completion_matches
 #endif
-//extern char **completion_matches __P((char *, rl_compentry_func_t *));
+#endif
+
 extern void using_history(void);
 extern void stifle_history(int);
 extern void add_history(char *);
@@ -221,14 +225,15 @@ static char **command_completion(char * text, int start, int end)
     char	* pos;
 
     match_tbl = top_level;
+    
     for (table = find_cmd(rl_line_buffer, match_tbl, &pos);
-	 table;
-	 table = find_cmd(pos, match_tbl, &pos)) {
+	 table; table = find_cmd(pos, match_tbl, &pos)) 
+    {
 
 	if (*(pos - 1) == ' ') match_tbl = table->pc_sub_cmd;
     }
 
-    return(completion_matches(text, command_generator));
+    return completion_matches(text, command_generator);
 }
 #endif
 
@@ -635,68 +640,6 @@ int Parser_arg2int(const char *inp, long *result, int base)
                 return 0;
         else 
                 return 1;
-}
-
-/* Convert human readable size string to and int; "1k" -> 1000 */
-int Parser_size (int *sizep, char *str) {
-        int size;
-        char mod[32];
-
-        switch (sscanf (str, "%d%1[gGmMkK]", &size, mod)) {
-        default:
-                return (-1);
-
-        case 1:
-                *sizep = size;
-                return (0);
-
-        case 2:
-                switch (*mod) {
-                case 'g':
-                case 'G':
-                        *sizep = size << 30;
-                        return (0);
-
-                case 'm':
-                case 'M':
-                        *sizep = size << 20;
-                        return (0);
-
-                case 'k':
-                case 'K':
-                        *sizep = size << 10;
-                        return (0);
-
-                default:
-                        *sizep = size;
-                        return (0);
-                }
-        }
-}
-
-/* Convert a string boolean to an int; "enable" -> 1 */
-int Parser_bool (int *b, char *str) {
-        if (!strcasecmp (str, "no") ||
-            !strcasecmp (str, "n") ||
-            !strcasecmp (str, "off") ||
-            !strcasecmp (str, "down") ||
-            !strcasecmp (str, "disable"))
-        {
-                *b = 0;
-                return (0);
-        }
-        
-        if (!strcasecmp (str, "yes") ||
-            !strcasecmp (str, "y") ||
-            !strcasecmp (str, "on") ||
-            !strcasecmp (str, "up") ||
-            !strcasecmp (str, "enable"))
-        {
-                *b = 1;
-                return (0);
-        }
-        
-        return (-1);
 }
 
 int Parser_quit(int argc, char **argv)

@@ -194,11 +194,11 @@ lib_md_alloc (nal_cb_t *nal, ptl_md_t *umd)
         int       niov;
 
         if ((umd->options & PTL_MD_KIOV) != 0) {
-                niov = umd->niov;
+                niov = umd->length;
                 size = offsetof(lib_md_t, md_iov.kiov[niov]);
         } else {
                 niov = ((umd->options & PTL_MD_IOVEC) != 0) ?
-                       umd->niov : 1;
+                       umd->length : 1;
                 size = offsetof(lib_md_t, md_iov.iov[niov]);
         }
 
@@ -346,8 +346,9 @@ ptl_handle2me (ptl_handle_me_t *handle, nal_cb_t *nal)
         return (lh_entry (lh, lib_me_t, me_lh));
 }
 
-extern int lib_init(nal_cb_t * cb, ptl_nid_t nid, ptl_pid_t pid, int gsize,
-                    ptl_pt_index_t tbl_size, ptl_ac_index_t ac_size);
+extern int lib_init(nal_cb_t *cb, ptl_process_id_t pid,
+                    ptl_ni_limits_t *desired_limits, 
+                    ptl_ni_limits_t *actual_limits);
 extern int lib_fini(nal_cb_t * cb);
 extern void lib_dispatch(nal_cb_t * cb, void *private, int index,
                          void *arg_block, void *ret_block);

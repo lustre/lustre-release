@@ -45,15 +45,10 @@
  */
 int class_attach(struct lustre_cfg *lcfg)
 {
-        int minor;
         struct obd_type *type;
-        int err = 0;
-        int len;
-        char *typename;
-        char *name;
-        char *uuid;
         struct obd_device *obd;
-        int dev;
+        char *typename, *name, *uuid;
+        int minor, rc, len, dev, stage = 0;
 
         if (!lcfg->lcfg_inllen1 || !lcfg->lcfg_inlbuf1) {
                 CERROR("No type passed!\n");
@@ -95,22 +90,23 @@ int class_attach(struct lustre_cfg *lcfg)
                 CERROR("OBD: unknown type: %s\n", typename);
                 RETURN(-EINVAL);
         }
+        stage = 1;
 
         obd = class_name2obd(name);
         if (obd != NULL) {
                 CERROR("obd %s already attached\n", name);
-                RETURN(-EEXIST);
+                GOTO(out, rc = -EEXIST);
         }
 
         obd = class_newdev(&dev);
         if (obd == NULL)
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
 
         /* have we attached a type to this device */
         if (obd->obd_attached || obd->obd_type) {
                 CERROR("OBD: Device %d already typed as %s.\n",
                        obd->obd_minor, MKSTR(obd->obd_type->typ_name));
-                RETURN(-EBUSY);
+                GOTO(out, rc = -EBUSY);
         }
 
         LASSERT(obd == (obd_dev + obd->obd_minor));
@@ -128,49 +124,51 @@ int class_attach(struct lustre_cfg *lcfg)
 
         /* XXX belongs in setup not attach  */
         /* recovery data */
+        init_timer(&obd->obd_recovery_timer);
         spin_lock_init(&obd->obd_processing_task_lock);
         init_waitqueue_head(&obd->obd_next_transno_waitq);
         INIT_LIST_HEAD(&obd->obd_recovery_queue);
         INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
 
-        spin_lock_init (&obd->obd_uncommitted_replies_lock);
-        INIT_LIST_HEAD (&obd->obd_uncommitted_replies);
+        spin_lock_init(&obd->obd_uncommitted_replies_lock);
+        INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
 
         len = strlen(name) + 1;
         OBD_ALLOC(obd->obd_name, len);
-        if (!obd->obd_name) {
-                class_put_type(obd->obd_type);
-                obd->obd_type = NULL;
-                RETURN(-ENOMEM);
-        }
+        if (!obd->obd_name)
+                GOTO(out, rc = -ENOMEM);
         memcpy(obd->obd_name, name, len);
+        stage = 2;
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
                 CERROR("uuid must be < "LPSZ" bytes long\n",
                        sizeof(obd->obd_uuid));
-                OBD_FREE(obd->obd_name, strlen(obd->obd_name) + 1);
-                class_put_type(obd->obd_type);
-                obd->obd_type = NULL;
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
         memcpy(obd->obd_uuid.uuid, uuid, len);
 
         /* do the attach */
-        if (OBP(obd, attach))
-                err = OBP(obd,attach)(obd, sizeof *lcfg, lcfg);
+        if (OBP(obd, attach)) {
+                rc = OBP(obd,attach)(obd, sizeof *lcfg, lcfg);
+                if (rc)
+                        GOTO(out, rc = -EINVAL);
+        }
 
-        if (err) {
+        obd->obd_attached = 1;
+        type->typ_refcnt++;
+        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
+               obd->obd_minor, typename);
+        RETURN(0);
+ out:
+        switch (stage) {
+        case 2:
                 OBD_FREE(obd->obd_name, strlen(obd->obd_name) + 1);
+        case 1:
                 class_put_type(obd->obd_type);
                 obd->obd_type = NULL;
-        } else {
-                obd->obd_attached = 1;
-                type->typ_refcnt++;
-                CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
-                       obd->obd_minor, typename);
         }
-        RETURN(err);
+        return rc;
 }
 
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
@@ -604,7 +602,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         pcfg->pcfg_nid = cfg->cfg_local_nid;
                 }
 
-                rc = kportal_nal_cmd(pcfg);
+                rc = libcfs_nal_cmd(pcfg);
         }
 out:
         RETURN(rc);
@@ -667,11 +665,15 @@ static int class_config_dump_handler(struct llog_handle * handle,
                 if (lcfg->lcfg_inlbuf1)
                         CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf1);
                 if (lcfg->lcfg_inlbuf2)
-                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf2);
+                        CDEBUG(D_INFO, "     inlbuf3: %s\n",lcfg->lcfg_inlbuf2);
                 if (lcfg->lcfg_inlbuf3)
-                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf3);
+                        CDEBUG(D_INFO, "     inlbuf3: %s\n",lcfg->lcfg_inlbuf3);
                 if (lcfg->lcfg_inlbuf4)
-                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf4);
+                        CDEBUG(D_INFO, "     inlbuf4: %s\n",lcfg->lcfg_inlbuf4);
+                if (lcfg->lcfg_inlbuf5)
+                        CDEBUG(D_INFO, "     inlbuf5: %s\n",lcfg->lcfg_inlbuf5);
+                if (lcfg->lcfg_inlbuf6)
+                        CDEBUG(D_INFO, "     inlbuf6: %s\n",lcfg->lcfg_inlbuf6);
 
                 lustre_cfg_freedata(buf, cfg_len);
         } else if (rec->lrh_type == PTL_CFG_REC) {

@@ -22,8 +22,8 @@ sleep 1	# to ensure we get up-to-date statfs info
 #lctl clear
 #lctl debug_daemon start /r/tmp/debug 1024
 
-STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -1`
-ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
+STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -n 1`
+ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -n 1`
 MAXFREE=${MAXFREE:-$((200000 * $STRIPECOUNT))}
 if [ $ORIGFREE -gt $MAXFREE ]; then
 	echo "skipping out-of-space test on $OSC"
@@ -33,6 +33,9 @@ if [ $ORIGFREE -gt $MAXFREE ]; then
 fi
 
 export LANG=C LC_LANG=C # for "No space left on device" message
+
+rm -f $LOG >/dev/null 2>&1
+[ -f $LOG ] && echo "ERROR: log file wasn't removed?" && exit 1
 
 # make sure we stripe over all OSTs to avoid OOS on only a subset of OSTs
 $LFS setstripe $OOS 65536 0 $STRIPECOUNT
@@ -49,12 +52,15 @@ fi
 # flush cache to OST(s) so avail numbers are correct
 sync; sleep 1 ; sync
 
-for AVAIL in /proc/fs/lustre/osc/OSC*MNT*/kbytesavail; do
-	[ `cat $AVAIL` -lt 400 ] && OSCFULL=full
+for OSC in /proc/fs/lustre/osc/OSC*MNT*; do
+	AVAIL=`cat $OSC/kbytesavail`
+	GRANT=`cat $OSC/cur_grant_bytes`
+	[ $(($AVAIL - $GRANT / 1024)) -lt 400 ] && OSCFULL=full
 done
+
 if [ -z "$OSCFULL" ]; then
 	echo "no OSTs are close to full"
-	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*}
+	grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*}
 	SUCCESS=0
 fi
 

@@ -56,14 +56,15 @@
  * we need to keep cookies in stripe order, even if some are NULL, so that
  * the right cookies are passed back to the right OSTs at the client side.
  * Unset cookies should be all-zero (which will never occur naturally). */
-static int lov_llog_origin_add(struct llog_ctxt *ctxt,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
+static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                               void *buf, struct llog_cookie *logcookies, 
+                               int numcookies, void *data)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
         struct lov_oinfo *loi;
         struct llog_unlink_rec *lur;
+        struct lov_stripe_md *lsm = (struct lov_stripe_md *)buf;
         int i, rc = 0;
         ENTRY;
 
@@ -83,7 +84,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                 lur->lur_ogen = loi->loi_gr;
                 LASSERT(lsm->lsm_object_gr == loi->loi_gr);
                 rc += llog_add(cctxt, &lur->lur_hdr, NULL, logcookies + rc,
-                                numcookies - rc);
+                                numcookies - rc, NULL);
 
         }
         OBD_FREE(lur, sizeof(*lur));
@@ -121,9 +122,11 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 }
 
 /* the replicators commit callback */
-static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
-                          int count, struct llog_cookie *cookies, int flags)
+static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, int count, 
+                                struct llog_cookie *cookies, int flags,
+                                void *data)
 {
+        struct lov_stripe_md *lsm = (struct lov_stripe_md *)data;
         struct lov_obd *lov;
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_oinfo *loi;
@@ -141,7 +144,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
                 int err;
 
                 cctxt = llog_get_context(&child->obd_llogs, ctxt->loc_idx);
-                err = llog_cancel(cctxt, NULL, 1, cookies, flags);
+                err = llog_cancel(cctxt, 1, cookies, flags, NULL);
                 if (err && lov->tgts[loi->loi_ost_idx].active) {
                         CERROR("error: objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
@@ -162,21 +165,20 @@ static struct llog_operations lov_size_repl_logops = {
         lop_cancel: lov_llog_repl_cancel
 };
 
-
 int lov_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
                   struct obd_device *tgt, int count, struct llog_catid *logid)
 {
         struct lov_obd *lov = &obd->u.lov;
         int i, rc = 0;
         ENTRY;
-
-        rc = llog_setup(obd, llogs, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
-                        &lov_unlink_orig_logops);
+        
+        rc = obd_llog_setup(obd, llogs, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
+                            &lov_unlink_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, llogs, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
-                        &lov_size_repl_logops);
+        rc = obd_llog_setup(obd, llogs, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL, 
+                            &lov_size_repl_logops);
         if (rc)
                 RETURN(rc);
 
@@ -198,11 +200,11 @@ int lov_llog_finish(struct obd_device *obd, struct obd_llogs *llogs, int count)
         int i, rc = 0;
         ENTRY;
         
-        rc = llog_cleanup(llog_get_context(llogs, LLOG_UNLINK_ORIG_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(llogs, LLOG_UNLINK_ORIG_CTXT));
         if (rc)
                 RETURN(rc);
 
-        rc = llog_cleanup(llog_get_context(llogs, LLOG_SIZE_REPL_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(llogs, LLOG_SIZE_REPL_CTXT));
         if (rc)
                 RETURN(rc);
 

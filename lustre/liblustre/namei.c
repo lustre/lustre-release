@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * Lustre Light name resolution
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
@@ -105,7 +105,7 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%lu)\n",
                        inode, llu_i2info(inode)->lli_st_ino,
                        llu_i2info(inode)->lli_st_generation);
-                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+                mdc_set_lock_data(NULL, &it->d.lustre.it_lock_handle, inode);
         }
 
         /* drop lookup/getattr locks */
@@ -140,6 +140,7 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
         case LDLM_CB_CANCELING: {
                 struct inode *inode = llu_inode_from_lock(lock);
                 struct llu_inode_info *lli;
+                __u64 bits = lock->l_policy_data.l_inodebits.bits;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
@@ -147,14 +148,16 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
 
                 lli =  llu_i2info(inode);
 
-                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+                if (bits & MDS_INODELOCK_UPDATE)
+                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
                 if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
                     lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
                                    lli->lli_st_ino, lli->lli_st_generation);
                 }
-                if (S_ISDIR(lli->lli_st_mode)) {
+                if (S_ISDIR(lli->lli_st_mode) &&
+                    (bits & MDS_INODELOCK_UPDATE)) {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                lli->lli_st_ino);
 
@@ -194,7 +197,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
         if (it_disposition(it, DISP_LOOKUP_NEG))
                 RETURN(-ENOENT);
 
-        rc = mdc_req2lustre_md(req, offset, llu_i2sbi(inode)->ll_osc_exp, &md);
+        rc = mdc_req2lustre_md(llu_i2sbi(inode)->ll_mdc_exp, req, offset, 
+                               llu_i2sbi(inode)->ll_osc_exp, &md);
         if (rc)
                 RETURN(rc);
 
@@ -316,23 +320,28 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return
-         * Note: libsysio require the inode must be generated here
+         */
+        /* FIXME: for CREAT, libsysio require the inode must be generated here
+         * currently here we don't know the whether the create is successful
+         * or failed on mds. thus blinded return -EPERM in llu_iget(). need
+         * a fix later.
          */
         if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
                 struct lustre_md md;
                 struct llu_inode_info *lli;
                 ENTRY;
 
-                rc = mdc_req2lustre_md(request, offset, sbi->ll_osc_exp, &md);
+                rc = mdc_req2lustre_md(sbi->ll_mdc_exp, request, offset, 
+                                       sbi->ll_osc_exp, &md);
                 if (rc)
                         RETURN(rc);
 
                 inode = llu_iget(parent->i_fs, &md);
-                if (!inode) {
+                if (!inode || IS_ERR(inode)) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
                                 obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
-                        RETURN(-ENOMEM);
+                        RETURN(inode ? PTR_ERR(inode) : -ENOMEM);
                 } else if (md.lsm != NULL &&
                            llu_i2info(inode)->lli_smd != md.lsm) {
                         obd_free_memmd(sbi->ll_osc_exp, &md.lsm);

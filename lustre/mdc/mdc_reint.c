@@ -37,17 +37,20 @@
 #include "mdc_internal.h"
 
 /* mdc_setattr does its own semaphore handling */
-static int mdc_reint(struct ptlrpc_request *request,
-                     struct mdc_rpc_lock *rpc_lock, int level)
+int mdc_reint(struct ptlrpc_request *request,
+              struct mdc_rpc_lock *rpc_lock, int level)
 {
         int rc;
-        
 
         request->rq_send_state = level;
-
-        mdc_get_rpc_lock(rpc_lock, NULL);
+       
+        if (rpc_lock)
+                mdc_get_rpc_lock(rpc_lock, NULL);
+       
         rc = ptlrpc_queue_wait(request);
-        mdc_put_rpc_lock(rpc_lock, NULL);
+        
+        if (rpc_lock)
+                mdc_put_rpc_lock(rpc_lock, NULL);
         if (rc)
                 CDEBUG(D_INFO, "error in handling %d\n", rc);
         else if (!lustre_swab_repbuf(request, 0, sizeof(struct mds_body),
@@ -57,7 +60,7 @@ static int mdc_reint(struct ptlrpc_request *request,
         }
         return rc;
 }
-
+EXPORT_SYMBOL(mdc_reint);
 /* If mdc_setattr is called with an 'iattr', then it is a normal RPC that
  * should take the normal semaphore and go to the normal portal.
  *
@@ -98,7 +101,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
         if (iattr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu\n",
                        LTIME_S(iattr->ia_mtime), LTIME_S(iattr->ia_ctime));
-        mdc_setattr_pack(req, data, iattr, ea, ealen, ea2, ea2len);
+        mdc_setattr_pack(req->rq_reqmsg, data, iattr, ea, ealen, ea2, ea2len);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
@@ -133,7 +136,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
 
         /* mdc_create_pack fills msg->bufs[1] with name
          * and msg->bufs[2] with tgt, for symlinks or lov MD data */
-        mdc_create_pack(req, 0, op_data, mode, rdev, data, datalen);
+        mdc_create_pack(req->rq_reqmsg, 0, op_data, mode, rdev, data, datalen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
@@ -148,7 +151,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         }
 
         if (!rc)
-                mdc_store_inode_generation(req, 0, 0);
+                mdc_store_inode_generation(exp, req, 0, 0);
 
         *request = req;
         RETURN(rc);
@@ -174,7 +177,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
         size[2] = obddev->u.cli.cl_max_mds_cookiesize;
         req->rq_replen = lustre_msg_size(3, size);
 
-        mdc_unlink_pack(req, 0, data);
+        mdc_unlink_pack(req->rq_reqmsg, 0, data);
 
         rc = mdc_reint(req, obddev->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
         if (rc == -ERESTARTSYS)
@@ -195,7 +198,7 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_link_pack(req, 0, data);
+        mdc_link_pack(req->rq_reqmsg, 0, data);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
@@ -223,7 +226,7 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_rename_pack(req, 0, data, old, oldlen, new, newlen);
+        mdc_rename_pack(req->rq_reqmsg, 0, data, old, oldlen, new, newlen);
 
         size[0] = sizeof(struct mds_body);
         size[1] = obd->u.cli.cl_max_mds_easize;

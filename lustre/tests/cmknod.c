@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+
 #define TEST_MINOR 120
 #define TEST_MAJOR 25
 
@@ -16,18 +17,48 @@ void usage(char *prog)
 	exit(1);
 }
 
+/* UMKA: This stuff inlined here instead of using appropriate header 
+   to avoid linking to symbols which is not present in newer libc.
+   
+   Currently this is the case, as UML image contains RedHat 9 and 
+   developers use something newer (Fedora, etc.). */
+inline unsigned int
+__gnu_dev_major (unsigned long long int __dev)
+{
+	return ((__dev >> 8) & 0xfff) | ((unsigned int) (__dev >> 32) & ~0xfff);
+}
+
+inline unsigned int
+__gnu_dev_minor (unsigned long long int __dev)
+{
+	return (__dev & 0xff) | ((unsigned int) (__dev >> 12) & ~0xff);
+}
+
+inline unsigned long long int
+__gnu_dev_makedev (unsigned int __major, unsigned int __minor)
+{
+	return ((__minor & 0xff) | ((__major & 0xfff) << 8)
+		| (((unsigned long long int) (__minor & ~0xff)) << 12)
+		| (((unsigned long long int) (__major & ~0xfff)) << 32));
+}
+
+#define __minor(dev) __gnu_dev_minor(dev)
+#define __major(dev) __gnu_dev_major(dev)
+#define __makedev(maj, min) __gnu_dev_makedev(maj, min)
+
 int main( int argc, char **argv)
 {
 	char *prog = argv[0];
 	char *filename = argv[1];
 	int rc;
 	struct stat st;
-	dev_t device = makedev(TEST_MAJOR, TEST_MINOR);
+	dev_t device = __makedev(TEST_MAJOR, TEST_MINOR);
 
 	if (argc != 2) 
 		usage(prog);
 
 	unlink(filename);
+	
 	/* First try block devices */
 	rc = mknod(filename, 0700 | S_IFBLK, device);
 	if ( rc < 0 ) {
@@ -42,11 +73,13 @@ int main( int argc, char **argv)
 			prog, filename, errno, strerror(errno));
 		return 3;
 	}
+	
 	if ( st.st_rdev != device) {
-		fprintf(stderr, "%s: created device other than requested: (%d,%d) instead of (%d,%d)\n", prog, major(st.st_rdev),minor(st.st_rdev),major(device),minor(device));
+		fprintf(stderr, "%s: created device other than requested: (%u,%u) instead of (%u,%u)\n", 
+			prog, __major(st.st_rdev),__minor(st.st_rdev),__major(device),__minor(device));
 		return 4;
 	}
-	if ( ! (st.st_mode | S_IFBLK) ) {
+	if (!S_ISBLK(st.st_mode)) {
 		fprintf(stderr, "%s: created device of different type. Requested block device, got mode %o\n", prog, st.st_mode);
 		return 5;
 	}
@@ -73,10 +106,11 @@ int main( int argc, char **argv)
 		return 8;
 	}
 	if ( st.st_rdev != device) {
-		fprintf(stderr, "%s: created device other than requested: (%d,%d) instead of (%d,%d)\n", prog, major(st.st_rdev),minor(st.st_rdev),major(device),minor(device));
+		fprintf(stderr, "%s: created device other than requested: (%u,%u) instead of (%u,%u)\n", 
+			prog, __major(st.st_rdev),__minor(st.st_rdev),__major(device),__minor(device));
 		return 9;
 	}
-	if ( ! (st.st_mode | S_IFCHR) ) {
+	if (!S_ISCHR(st.st_mode)) {
 		fprintf(stderr, "%s: created device of different type. Requested char device, got mode %o\n", prog, st.st_mode);
 		return 10;
 	}

@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001-2003 Cluster File Systems, Inc.
+ * Copyright (C) 2001-2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.sf.net/projects/lustre/
  *
@@ -95,7 +95,7 @@ int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid)
                               0);
 }
 
-int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size, 
+int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                        struct ptlrpc_request *req)
 {
         struct mds_body *body;
@@ -215,7 +215,8 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
 }
 
 /* This should be called with both the request and the reply still packed. */
-void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
+int mdc_store_inode_generation(struct obd_export *exp,
+                                struct ptlrpc_request *req, int reqoff,
                                 int repoff)
 {
         struct mds_rec_create *rec =
@@ -229,11 +230,11 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
         memcpy(&rec->cr_replayfid, &body->fid1, sizeof rec->cr_replayfid);
         DEBUG_REQ(D_HA, req, "storing generation %u for ino "LPU64,
                   rec->cr_replayfid.generation, rec->cr_replayfid.id);
+        return 0;
 }
 
-int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
-                      struct obd_export *exp_osc,
-                      struct obd_export *exp_mdc,
+int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req, 
+                      unsigned int offset, struct obd_export *exp_osc, 
                       struct lustre_md *md)
 {
         int rc = 0;
@@ -246,7 +247,8 @@ int mdc_req2lustre_md(struct ptlrpc_request *req, int offset,
         LASSERT (md->body != NULL);
         LASSERT_REPSWABBED (req, offset);
 
-        if (!(md->body->valid & OBD_MD_FLEASIZE))
+        if (!(md->body->valid & OBD_MD_FLEASIZE) && 
+            !(md->body->valid & OBD_MD_FLDIREA))
                 RETURN(0);
 
         /* ea is presented in reply, parse it */
@@ -313,7 +315,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
         struct mdc_open_data *mod = req->rq_cb_data;
         struct obd_client_handle *och;
         struct ptlrpc_request *close_req;
-        struct lustre_handle old; 
+        struct lustre_handle old;
         struct mds_body *body;
         ENTRY;
 
@@ -329,14 +331,14 @@ static void mdc_replay_open(struct ptlrpc_request *req)
 
         och = mod->mod_och;
         if (och != NULL) {
-                struct lustre_handle *file_fh; 
+                struct lustre_handle *file_fh;
                 LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
                 file_fh = &och->och_fh;
                 CDEBUG(D_HA, "updating handle from "LPX64" to "LPX64"\n",
                        file_fh->cookie, body->handle.cookie);
                 memcpy(&old, file_fh, sizeof(old));
                 memcpy(file_fh, &body->handle, sizeof(*file_fh));
-        } 
+        }
 
         close_req = mod->mod_close_req;
         if (close_req != NULL) {
@@ -354,7 +356,8 @@ static void mdc_replay_open(struct ptlrpc_request *req)
         EXIT;
 }
 
-void mdc_set_open_replay_data(struct obd_client_handle *och,
+int  mdc_set_open_replay_data(struct obd_export *exp,
+                              struct obd_client_handle *och,
                               struct ptlrpc_request *open_req)
 {
         struct mdc_open_data *mod;
@@ -372,7 +375,7 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
         OBD_ALLOC(mod, sizeof(*mod));
         if (mod == NULL) {
                 DEBUG_REQ(D_ERROR, open_req, "can't allocate mdc_open_data");
-                return;
+                return 0;
         }
 
         och->och_mod = mod;
@@ -384,9 +387,11 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
         open_req->rq_commit_cb = mdc_commit_open;
         open_req->rq_cb_data = mod;
         DEBUG_REQ(D_HA, open_req, "set up replay data");
+        return 0;
 }
 
-void mdc_clear_open_replay_data(struct obd_client_handle *och)
+int mdc_clear_open_replay_data(struct obd_export *exp,
+                               struct obd_client_handle *och)
 {
         struct mdc_open_data *mod = och->och_mod;
 
@@ -394,10 +399,11 @@ void mdc_clear_open_replay_data(struct obd_client_handle *och)
          * we're sure we won't need to fix up the close request in the future),
          * but make sure that replay doesn't poke at the och, which is about to
          * be freed. */
-        LASSERT(mod != (void *)0x5a5a5a5a);
+        LASSERT(mod != LP_POISON);
         if (mod != NULL)
                 mod->mod_och = NULL;
         och->och_mod = NULL;
+        return 0;
 }
 
 static void mdc_commit_close(struct ptlrpc_request *req)
@@ -416,7 +422,8 @@ static void mdc_commit_close(struct ptlrpc_request *req)
 
         open_req = mod->mod_open_req;
         LASSERT(open_req != NULL);
-        LASSERT(open_req != (void *)0x5a5a5a5a);
+        LASSERT(open_req != LP_POISON);
+        LASSERT(open_req->rq_type != LI_POISON);
 
         DEBUG_REQ(D_HA, open_req, "open req balanced");
         LASSERT(open_req->rq_transno != 0);
@@ -432,18 +439,21 @@ static void mdc_commit_close(struct ptlrpc_request *req)
 static int mdc_close_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
         union ptlrpc_async_args *aa = data;
-        struct mdc_rpc_lock *rpc_lock = aa->pointer_arg[0];
+        struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = aa->pointer_arg[1];
+        unsigned long flags;
+
+        spin_lock_irqsave(&req->rq_lock, flags);
+        rpc_lock = aa->pointer_arg[0];
+        aa->pointer_arg[0] = NULL;
+        spin_unlock_irqrestore (&req->rq_lock, flags);
 
         if (rpc_lock == NULL) {
                 CERROR("called with NULL rpc_lock\n");
         } else {
                 mdc_put_rpc_lock(rpc_lock, NULL);
-                LASSERTF(req->rq_async_args.pointer_arg[0] ==
-                         obd->u.cli.cl_rpc_lock, "%p != %p\n",
-                         req->rq_async_args.pointer_arg[0],
-                         obd->u.cli.cl_rpc_lock);
-                aa->pointer_arg[0] = NULL;
+                LASSERTF(rpc_lock == obd->u.cli.cl_rpc_lock, "%p != %p\n",
+                         rpc_lock, obd->u.cli.cl_rpc_lock);
         }
         wake_up(&req->rq_reply_waitq);
         RETURN(rc);
@@ -457,9 +467,8 @@ static int mdc_close_check_reply(struct ptlrpc_request *req)
         unsigned long flags;
 
         spin_lock_irqsave(&req->rq_lock, flags);
-        if (PTLRPC_REQUEST_COMPLETE(req)) {
+        if (req->rq_async_args.pointer_arg[0] == NULL)
                 rc = 1;
-        }
         spin_unlock_irqrestore (&req->rq_lock, flags);
         return rc;
 }
@@ -469,13 +478,12 @@ static int go_back_to_sleep(void *unused)
         return 0;
 }
 
-int mdc_close(struct obd_export *exp, struct obdo *obdo,
+int mdc_close(struct obd_export *exp, struct obdo *oa,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
-        struct mds_body *body;
         struct obd_device *obd = class_exp2obd(exp);
-        int reqsize = sizeof(*body);
-        int rc, repsize[3] = {sizeof(*body),
+        int reqsize = sizeof(struct mds_body);
+        int rc, repsize[3] = {sizeof(struct mds_body),
                               obd->u.cli.cl_max_mds_easize,
                               obd->u.cli.cl_max_mds_cookiesize};
         struct ptlrpc_request *req;
@@ -493,19 +501,14 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         mod = och->och_mod;
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
+                LASSERT(mod->mod_open_req->rq_type != LI_POISON);
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open req %p",
                           mod->mod_open_req);
         } else {
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
         }
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
-        mdc_pack_fid(&body->fid1, obdo->o_id, 0, obdo->o_mode);
-        memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
-        body->size = obdo->o_size;
-        body->blocks = obdo->o_blocks;
-        body->flags = obdo->o_flags;
-        body->valid = obdo->o_valid;
+        mdc_close_pack(req, 0, oa, oa->o_valid, och);
 
         req->rq_replen = lustre_msg_size(3, repsize);
         req->rq_commit_cb = mdc_commit_close;
@@ -524,7 +527,12 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
                                NULL, NULL);
         rc = l_wait_event(req->rq_reply_waitq, mdc_close_check_reply(req),
                           &lwi);
-        if (rc == 0) {
+        if (req->rq_repmsg == NULL) {
+                CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
+                       req->rq_status);
+                if (rc == 0)
+                        rc = req->rq_status ? req->rq_status : -EIO;
+        } else if (rc == 0) {
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {
                         DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err "
@@ -643,9 +651,15 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
-        
-        MOD_INC_USE_COUNT;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        MOD_INC_USE_COUNT;
+#else
+        if (!try_module_get(THIS_MODULE)) {
+                CERROR("Can't get module. Is it alive?");
+                return -EINVAL;
+        }
+#endif
         switch (cmd) {
         case OBD_IOC_CLIENT_RECOVER:
                 rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1);
@@ -666,16 +680,21 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_LLOG_PRINT: {
                 ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_REPL_CTXT);
                 rc = llog_ioctl(ctxt, cmd, data);
-                
+
                 GOTO(out, rc);
         }
 #endif
         default:
-                CERROR("osc_ioctl(): unrecognised ioctl %#x\n", cmd);
+                CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, rc = -ENOTTY);
         }
 out:
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_DEC_USE_COUNT;
+#else
+        module_put(THIS_MODULE);
+#endif
+
         return rc;
 }
 
@@ -707,13 +726,26 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 rc = ptlrpc_queue_wait(req);
                 ptlrpc_req_finished(req);
                 RETURN(rc);
+        } else if (keylen >= strlen("mds_num") && strcmp(key, "mds_num") == 0) {
+                struct ptlrpc_request *req;
+                int rc, size[2] = {keylen, vallen};
+                char *bufs[2] = {key, val};
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SET_INFO, 2,
+                                      size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, NULL);
+                rc = ptlrpc_queue_wait(req);
+                ptlrpc_req_finished(req);
+                RETURN(rc);
         } else if (keylen >= strlen("inter_mds") && strcmp(key, "inter_mds") == 0) {
                 struct obd_import *imp = class_exp2cliimp(exp);
                 imp->imp_server_timeout = 1;
                 CDEBUG(D_OTHER, "%s: timeout / 2\n", exp->exp_obd->obd_name);
                 RETURN(0);
         }
-        
         RETURN(rc);
 }
 
@@ -867,21 +899,7 @@ int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
         RETURN(rc);
 }
 
-static int mdc_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-
-        lprocfs_init_vars(mdc, &lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
-}
-
-static int mdc_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
-}
-
-static int mdc_import_event(struct obd_device *obd,
-                            struct obd_import *imp, 
+static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                             enum obd_import_event event)
 {
         int rc = 0;
@@ -899,7 +917,7 @@ static int mdc_import_event(struct obd_device *obd,
         }
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
-                
+
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
                 break;
@@ -914,6 +932,19 @@ static int mdc_import_event(struct obd_device *obd,
                 LBUG();
         }
         RETURN(rc);
+}
+
+static int mdc_attach(struct obd_device *dev, obd_count len, void *data)
+{
+        struct lprocfs_static_vars lvars;
+
+        lprocfs_init_vars(mdc, &lvars);
+        return lprocfs_obd_attach(dev, lvars.obd_vars);
+}
+
+static int mdc_detach(struct obd_device *dev)
+{
+        return lprocfs_obd_detach(dev);
 }
 
 static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -931,15 +962,12 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 
         OBD_ALLOC(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
         if (!cli->cl_setattr_lock)
-                GOTO(out_free_rpc, rc = -ENOMEM);
+                GOTO(err_rpc_lock, rc = -ENOMEM);
         mdc_init_rpc_lock(cli->cl_setattr_lock);
 
         rc = client_obd_setup(obd, len, buf);
-        if (rc) {
-                OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
- out_free_rpc:
-                OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
-        }
+        if (rc)
+                GOTO(err_setattr_lock, rc);
 
         rc = obd_llog_init(obd, &obd->obd_llogs, obd, 0, NULL);
         if (rc) {
@@ -947,6 +975,13 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
                 CERROR("failed to setup llogging subsystems\n");
         }
 
+        RETURN(rc);
+
+err_setattr_lock:
+        OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
+err_rpc_lock:
+        OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
+        ptlrpcd_decref();
         RETURN(rc);
 }
 
@@ -977,7 +1012,7 @@ static int mdc_precleanup(struct obd_device *obd, int flags)
 static int mdc_cleanup(struct obd_device *obd, int flags)
 {
         struct client_obd *cli = &obd->u.cli;
- 
+
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
 
@@ -995,8 +1030,8 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, llogs, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
-                        &llog_client_ops);
+        rc = obd_llog_setup(obd, llogs, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
+                            &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(llogs, LLOG_CONFIG_REPL_CTXT);
                 ctxt->loc_imp = obd->u.cli.cl_import;
@@ -1011,8 +1046,50 @@ static int mdc_llog_finish(struct obd_device *obd,
         int rc;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(llogs, LLOG_CONFIG_REPL_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(llogs, LLOG_CONFIG_REPL_CTXT));
         RETURN(rc);
+}
+static struct obd_device *mdc_get_real_obd(struct obd_export *exp,
+                                           char *name, int len)
+{
+       ENTRY;
+       RETURN(exp->exp_obd);
+}
+
+static int mdc_get_info(struct obd_export *exp, obd_count keylen,
+                        void *key, __u32 *vallen, void *val)
+{
+        ENTRY;
+        if (!vallen || !val)
+                RETURN(-EFAULT);
+
+        if (keylen >= strlen("mdsize") && strcmp(key, "mdsize") == 0) {
+                struct ptlrpc_request *req;
+                __u32 *reply;
+                char *bufs[1] = {key};
+                int rc;
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), OST_GET_INFO, 1,
+                                      &keylen, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(1, vallen);
+                rc = ptlrpc_queue_wait(req);
+                if (rc)
+                        GOTO(out, rc);
+
+                /* FIXME: right swap routine here! */
+                reply = lustre_swab_repbuf(req, 0, sizeof(*reply), NULL);
+                if (reply == NULL) {
+                        CERROR("Can't unpack mdsize\n");
+                        GOTO(out, rc = -EPROTO);
+                }
+                *((__u32 *)val) = *reply;
+        out:
+                ptlrpc_req_finished(req);
+                RETURN(rc);
+        }
+        RETURN(-EINVAL);
 }
 
 int mdc_obj_create(struct obd_export *exp, struct obdo *oa,
@@ -1057,42 +1134,6 @@ int mdc_obj_create(struct obd_export *exp, struct obdo *oa,
 out_req:
         ptlrpc_req_finished(request);
         return rc;
-}
-
-static int mdc_get_info(struct obd_export *exp, obd_count keylen,
-                        void *key, __u32 *vallen, void *val)
-{
-        ENTRY;
-        if (!vallen || !val)
-                RETURN(-EFAULT);
-
-        if (keylen >= strlen("mdsize") && strcmp(key, "mdsize") == 0) {
-                struct ptlrpc_request *req;
-                __u32 *reply;
-                char *bufs[1] = {key};
-                int rc;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), OST_GET_INFO, 1,
-                                      &keylen, bufs);
-                if (req == NULL)
-                        RETURN(-ENOMEM);
-
-                req->rq_replen = lustre_msg_size(1, vallen);
-                rc = ptlrpc_queue_wait(req);
-                if (rc)
-                        GOTO(out, rc);
-
-                /* FIXME: right swap routine here! */
-                reply = lustre_swab_repbuf(req, 0, sizeof(*reply), NULL);
-                if (reply == NULL) {
-                        CERROR("Can't unpack mdsize\n");
-                        GOTO(out, rc = -EPROTO);
-                }
-                *((__u32 *)val) = *reply;
-        out:
-                ptlrpc_req_finished(req);
-                RETURN(rc);
-        }
-        RETURN(-EINVAL);
 }
 
 int mdc_brw(int rw, struct obd_export *exp, struct obdo *oa,
@@ -1192,46 +1233,64 @@ static int mdc_valid_attrs(struct obd_export *exp, struct ll_fid *fid)
         }
         RETURN(0);
 }
+static int mdc_change_cbdata_name(struct obd_export *exp, struct ll_fid *pfid,
+                                  char *name, int len, struct ll_fid *cfid,
+                                  ldlm_iterator_t it, void *data)
+{
+        int rc;
+        rc = mdc_change_cbdata(exp, cfid, it, data);
+        RETURN(rc);
+}
 
 struct obd_ops mdc_obd_ops = {
-        o_owner:        THIS_MODULE,
-        o_attach:       mdc_attach,
-        o_detach:       mdc_detach,
-        o_setup:        mdc_setup,
-        o_precleanup:   mdc_precleanup,
-        o_cleanup:      mdc_cleanup,
-        o_connect:      client_connect_import,
-        o_disconnect:   client_disconnect_export,
-        o_iocontrol:    mdc_iocontrol,
-        o_set_info:     mdc_set_info,
-        o_statfs:       mdc_statfs,
-        o_pin:          mdc_pin,
-        o_unpin:        mdc_unpin,
-        o_llog_init:    mdc_llog_init,
-        o_llog_finish:  mdc_llog_finish,
-        o_create:       mdc_obj_create,
-        o_get_info:     mdc_get_info,
-        o_brw:          mdc_brw,
-        o_init_ea_size: mdc_init_ea_size,
+        .o_owner         = THIS_MODULE,
+        .o_attach        = mdc_attach,
+        .o_detach        = mdc_detach,
+        .o_setup         = mdc_setup,
+        .o_precleanup    = mdc_precleanup,
+        .o_cleanup       = mdc_cleanup,
+        .o_connect       = client_connect_import,
+        .o_disconnect    = client_disconnect_export,
+        .o_iocontrol     = mdc_iocontrol,
+        .o_set_info      = mdc_set_info,
+        .o_statfs        = mdc_statfs,
+        .o_pin           = mdc_pin,
+        .o_unpin         = mdc_unpin,
+        .o_import_event  = mdc_import_event,
+        .o_llog_init     = mdc_llog_init,
+        .o_llog_finish   = mdc_llog_finish,
+        .o_create        = mdc_obj_create,
+        .o_set_info      = mdc_set_info,
+        .o_get_info      = mdc_get_info,
+        .o_brw           = mdc_brw,
+        .o_init_ea_size  = mdc_init_ea_size,
 };
 
 struct md_ops mdc_md_ops = {
-        m_getstatus:     mdc_getstatus,
-        m_getattr:       mdc_getattr,
-        m_change_cbdata: mdc_change_cbdata,
-        m_close:         mdc_close,
-        m_create:        mdc_create,
-        m_done_writing:  mdc_done_writing,
-        m_enqueue:       mdc_enqueue,
-        m_getattr_name:  mdc_getattr_name,
-        m_intent_lock:   mdc_intent_lock,
-        m_link:          mdc_link,
-        m_rename:        mdc_rename,
-        m_setattr:       mdc_setattr,
-        m_sync:          mdc_sync,
-        m_readpage:      mdc_readpage,
-        m_unlink:        mdc_unlink,
-        m_valid_attrs:   mdc_valid_attrs,
+        .m_getstatus     = mdc_getstatus,
+        .m_getattr       = mdc_getattr,
+        .m_change_cbdata = mdc_change_cbdata,
+        .m_close         = mdc_close,
+        .m_create        = mdc_create,
+        .m_done_writing  = mdc_done_writing,
+        .m_enqueue       = mdc_enqueue,
+        .m_getattr_name  = mdc_getattr_name,
+        .m_intent_lock   = mdc_intent_lock,
+        .m_link          = mdc_link,
+        .m_rename        = mdc_rename,
+        .m_setattr       = mdc_setattr,
+        .m_sync          = mdc_sync,
+        .m_readpage      = mdc_readpage,
+        .m_unlink        = mdc_unlink,
+        .m_valid_attrs   = mdc_valid_attrs,
+        .m_req2lustre_md = mdc_req2lustre_md,
+        .m_set_open_replay_data   = mdc_set_open_replay_data,
+        .m_clear_open_replay_data = mdc_clear_open_replay_data,
+        .m_store_inode_generation = mdc_store_inode_generation,
+        .m_set_lock_data = mdc_set_lock_data,
+        .m_get_real_obd  = mdc_get_real_obd,
+        .m_change_cbdata_name = mdc_change_cbdata_name,
+        .m_change_cbdata = mdc_change_cbdata,
 };
 
 int __init mdc_init(void)
@@ -1242,12 +1301,12 @@ int __init mdc_init(void)
                                    LUSTRE_MDC_NAME);
 }
 
+#ifdef __KERNEL__
 static void /*__exit*/ mdc_exit(void)
 {
         class_unregister_type(LUSTRE_MDC_NAME);
 }
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Metadata Client");
 MODULE_LICENSE("GPL");

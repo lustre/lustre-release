@@ -255,10 +255,10 @@ static void ptlbd_request(request_queue_t *q)
 }
 
 static struct block_device_operations ptlbd_ops = {
-        .owner = THIS_MODULE,
-        .open = ptlbd_open,
+        .owner   = THIS_MODULE,
+        .open    = ptlbd_open,
+        .ioctl   = ptlbd_ioctl,
         .release = ptlbd_release,
-        .ioctl = ptlbd_ioctl,
 };
 
 int ptlbd_blk_init(void)

@@ -95,7 +95,7 @@ struct obd_llogs * filter_grab_llog_for_group(struct obd_device *, int);
 
 /* When this (destroy) operation is committed, return the cancel cookie */
 void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
-                                     void *cb_data, int error)
+                              void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
         struct obd_llogs *llogs = NULL;
@@ -107,7 +107,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         if (llogs) {
                 ctxt = llog_get_context(llogs, cookie->lgc_subsys + 1);
                 if (ctxt) {
-                        llog_cancel(ctxt, NULL, 1, cookie, 0);
+                        llog_cancel(ctxt, 1, cookie, 0, NULL);
                 } else
                         CERROR("no valid context for group "LPU64"\n",
                                cookie->lgc_lgl.lgl_ogr);
@@ -155,7 +155,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
                 else
                         rc = LLOG_PROC_BREAK;
                 CWARN("fetch generation log, send cookie\n");
-                llog_cancel(ctxt, NULL, 1, &cookie, 0);
+                llog_cancel(ctxt, 1, &cookie, 0, NULL);
                 RETURN(rc);
         }
 
@@ -174,7 +174,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         obdo_free(oa);
         if (rc == -ENOENT) {
                 CDEBUG(D_HA, "object already removed, send cookie\n");
-                llog_cancel(ctxt, NULL, 1, &cookie, 0);
+                llog_cancel(ctxt, 1, &cookie, 0, NULL);
                 RETURN(0);
         }
 

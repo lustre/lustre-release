@@ -309,17 +309,17 @@ Index: linux-ia64/fs/namei.c
 +			if (!dentry->d_op->d_revalidate_it(dentry, 0, it)) {
 +				struct dentry *new;
 +				err = permission(dentry->d_parent->d_inode,
-+						MAY_EXEC);
++						 MAY_EXEC);
 +				if (err)
 +					break;
 +				new = real_lookup(dentry->d_parent,
-+						&dentry->d_name, 0, NULL);
-+				d_invalidate(dentry);
-+				dput(dentry);
++						  &dentry->d_name, 0, it);
 +				if (IS_ERR(new)) {
 +					err = PTR_ERR(new);
 +					break;
 +				}
++				d_invalidate(dentry);
++				dput(dentry);
 +				nd->dentry = new;
 +			}
 +			if (!nd->dentry->d_inode)
@@ -554,7 +554,7 @@ Index: linux-ia64/fs/namei.c
  		if (!IS_POSIXACL(dir->d_inode))
  			mode &= ~current->fs->umask;
 -		error = vfs_create(dir->d_inode, dentry, mode);
-+ 		error = vfs_create_it(dir->d_inode, dentry, mode, it);
++		error = vfs_create_it(dir->d_inode, dentry, mode, it);
  		up(&dir->d_inode->i_sem);
  		dput(nd->dentry);
  		nd->dentry = dentry;
@@ -930,7 +930,7 @@ Index: linux-ia64/fs/namespace.c
  	int retval = 0;
  	int mnt_flags = 0;
  
-@@ -725,10 +732,11 @@ long do_mount(char * dev_name, char * di
+@@ -725,9 +732,11 @@ long do_mount(char * dev_name, char * di
  	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
  
  	/* ... and get the mountpoint */
@@ -940,11 +940,10 @@ Index: linux-ia64/fs/namespace.c
 +	if (retval) {
 +		intent_release(&it);
  		return retval;
--
 +	}
+ 
  	if (flags & MS_REMOUNT)
  		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
- 				    data_page);
 @@ -739,6 +747,8 @@ long do_mount(char * dev_name, char * di
  	else
  		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
@@ -1202,7 +1201,7 @@ Index: linux-ia64/fs/open.c
 -	error = __user_walk(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
 -		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
 +	error = __user_walk_it(filename, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
-+		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
++			       LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd, &it);
  	if (error)
  		goto out;
  
@@ -1661,7 +1660,7 @@ Index: linux-ia64/include/linux/fs.h
  #define ATTR_ATTR_FLAG	1024
 +#define ATTR_RAW	0x0800	/* file system, not vfs will massage attrs */
 +#define ATTR_FROM_OPEN	0x1000	/* called from open path, ie O_TRUNC */
-+#define ATTR_CTIME_SET 0x2000
++#define ATTR_CTIME_SET	0x2000
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It

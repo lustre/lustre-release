@@ -37,15 +37,17 @@ static struct list_head conn_unused_list;
 
 void ptlrpc_dump_connections(void)
 {
+        char str[PTL_NALFMT_SIZE];
         struct list_head *tmp;
         struct ptlrpc_connection *c;
         ENTRY;
 
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid="LPX64" on %s)\n",
+                CERROR("Connection %p/%s has refcount %d (nid=%s on %s)\n",
                        c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       c->c_peer.peer_nid, c->c_peer.peer_ni->pni_name);
+                       ptlrpc_peernid2str(&c->c_peer, str),
+                       c->c_peer.peer_ni->pni_name);
         }
         EXIT;
 }
@@ -53,13 +55,14 @@ void ptlrpc_dump_connections(void)
 struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
                                                 struct obd_uuid *uuid)
 {
+        char str[PTL_NALFMT_SIZE];
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
         ENTRY;
 
 
-        CDEBUG(D_INFO, "peer is "LPX64" on %s\n",
-               peer->peer_nid, peer->peer_ni->pni_name);
+        CDEBUG(D_INFO, "peer is %s on %s\n",
+               ptlrpc_peernid2str(peer, str), peer->peer_ni->pni_name);
 
         spin_lock(&conn_lock);
         list_for_each(tmp, &conn_list) {
@@ -84,7 +87,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
 
         /* FIXME: this should be a slab once we can validate slab addresses
          * without OOPSing */
-        OBD_ALLOC(c, sizeof(*c));
+        OBD_ALLOC_GFP(c, sizeof(*c), GFP_ATOMIC);
+	
         if (c == NULL)
                 GOTO(out, c);
 
@@ -105,6 +109,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
 
 int ptlrpc_put_connection(struct ptlrpc_connection *c)
 {
+        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         ENTRY;
 
@@ -113,8 +118,9 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 RETURN(0);
         }
 
-        CDEBUG (D_INFO, "connection=%p refcount %d to "LPX64" on %s\n",
-                c, atomic_read(&c->c_refcount) - 1, c->c_peer.peer_nid,
+        CDEBUG (D_INFO, "connection=%p refcount %d to %s on %s\n",
+                c, atomic_read(&c->c_refcount) - 1, 
+                ptlrpc_peernid2str(&c->c_peer, str),
                 c->c_peer.peer_ni->pni_name);
 
         if (atomic_dec_and_test(&c->c_refcount)) {
@@ -133,10 +139,12 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
 
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
 {
+        char str[PTL_NALFMT_SIZE];
         ENTRY;
         atomic_inc(&c->c_refcount);
-        CDEBUG (D_INFO, "connection=%p refcount %d to "LPX64" on %s\n",
-                c, atomic_read(&c->c_refcount), c->c_peer.peer_nid,
+        CDEBUG (D_INFO, "connection=%p refcount %d to %s on %s\n",
+                c, atomic_read(&c->c_refcount),
+                ptlrpc_peernid2str(&c->c_peer, str),
                 c->c_peer.peer_ni->pni_name);
         RETURN(c);
 }
@@ -150,6 +158,7 @@ void ptlrpc_init_connection(void)
 
 void ptlrpc_cleanup_connection(void)
 {
+        char str[PTL_NALFMT_SIZE];
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
 
@@ -161,9 +170,10 @@ void ptlrpc_cleanup_connection(void)
         }
         list_for_each_safe(tmp, pos, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid="LPX64" on %s)\n",
+                CERROR("Connection %p/%s has refcount %d (nid=%s on %s)\n",
                        c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       c->c_peer.peer_nid, c->c_peer.peer_ni->pni_name);
+                       ptlrpc_peernid2str(&c->c_peer, str),
+                       c->c_peer.peer_ni->pni_name);
                 list_del(&c->c_link);
                 OBD_FREE(c, sizeof(*c));
         }

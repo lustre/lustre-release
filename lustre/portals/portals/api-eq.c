@@ -23,29 +23,8 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/api-support.h>
-
-int ptl_eq_init(void)
-{
-        /* Nothing to do anymore... */
-        return PTL_OK;
-}
-
-void ptl_eq_fini(void)
-{
-        /* Nothing to do anymore... */
-}
-
-int ptl_eq_ni_init(nal_t * nal)
-{
-        /* Nothing to do anymore... */
-        return PTL_OK;
-}
-
-void ptl_eq_ni_fini(nal_t * nal)
-{
-        /* Nothing to do anymore... */
-}
 
 int ptl_get_event (ptl_eq_t *eq, ptl_event_t *ev)
 {

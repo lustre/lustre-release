@@ -90,6 +90,11 @@ struct ll_inode_info {
         struct list_head        lli_pending_write_llaps;
 
         struct list_head        lli_close_item;
+
+        struct file_operations *ll_save_ifop;
+        struct file_operations *ll_save_ffop;
+        struct file_operations *ll_save_wfop;
+        struct file_operations *ll_save_wrfop;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
@@ -140,10 +145,62 @@ enum {
          LPROC_LL_FILE_OPCODES
 };
 
+static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+{
+        mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
+                     inode->i_mode & S_IFMT);
+        LASSERT(ll_i2info(inode));
+        fid->mds = ll_i2info(inode)->lli_mds;
+}
+
+static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
+                              struct inode *i2)
+{
+        LASSERT(i1);
+        LASSERT(ctxt);
+
+        if (in_group_p(i1->i_gid))
+                ctxt->gid1 = i1->i_gid;
+        else
+                ctxt->gid1 = -1;
+
+        if (i2) {
+                if (in_group_p(i2->i_gid))
+                        ctxt->gid2 = i2->i_gid;
+                else
+                        ctxt->gid2 = -1;
+        } else
+                ctxt->gid2 = 0;
+}
+
+static inline void 
+ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
+                       struct inode *i2, const char *name, int namelen,
+                       int mode)
+{
+        LASSERT(i1);
+
+        ll_i2uctxt(&data->ctxt, i1, i2);
+        ll_inode2fid(&data->fid1, i1);
+
+        /* it could be directory with mea */
+        data->mea1 = ll_i2info(i1)->lli_mea;
+
+        if (i2) {
+                ll_inode2fid(&data->fid2, i2);
+                data->mea2 = ll_i2info(i2)->lli_mea;
+        }
+
+        data->name = name;
+        data->namelen = namelen;
+        data->create_mode = mode;
+        data->mod_time = LTIME_S(CURRENT_TIME);
+}
+
 #else
 #include <linux/lustre_idl.h>
 #endif /* __KERNEL__ */
 
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 
 #endif

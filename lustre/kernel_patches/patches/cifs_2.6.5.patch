@@ -1,0 +1,65 @@
+#EJF i took out part of this change set
+
+
+# This is a BitKeeper generated diff -Nru style patch.
+#
+# ChangeSet
+#   2004/01/30 17:20:19-06:00 stevef@stevef95.austin.ibm.com 
+#   Relax requested CIFS permissions on open to simply request GENERIC_READ and GENERIC_WRITE (instead of GENERIC_ALL which
+#   can unnecessarily conflict with share permissions by asking implicitly for take ownership and other unneeded flags)
+# 
+# fs/cifs/dir.c
+#   2004/01/30 17:20:13-06:00 stevef@stevef95.austin.ibm.com +7 -3
+#   Relax requested CIFS permissions on open to simply request GENERIC_READ and GENERIC_WRITE (instead of GENERIC_ALL which
+#   can unnecessarily conflict with share permissions by asking implicitly for take ownership and other unneeded flags)
+# 
+# fs/cifs/file.c
+#   2004/01/30 17:20:13-06:00 stevef@stevef95.austin.ibm.com +12 -4
+#   Relax requested CIFS permissions on open to simply request GENERIC_READ and GENERIC_WRITE (instead of GENERIC_ALL which
+#   can unnecessarily conflict with share permissions by asking implicitly for take ownership and other unneeded flags)
+# 
+diff -Nru a/fs/cifs/dir.c b/fs/cifs/dir.c
+--- a/fs/cifs/dir.c	Mon May  3 16:32:08 2004
++++ b/fs/cifs/dir.c	Mon May  3 16:32:08 2004
+@@ -125,7 +125,7 @@
+ 	int rc = -ENOENT;
+ 	int xid;
+ 	int oplock = 0;
+-	int desiredAccess = GENERIC_ALL;
++	int desiredAccess = GENERIC_READ | GENERIC_WRITE;
+ 	__u16 fileHandle;
+ 	struct cifs_sb_info *cifs_sb;
+ 	struct cifsTconInfo *pTcon;
+@@ -150,8 +150,12 @@
+ 			desiredAccess = GENERIC_READ;
+ 		else if ((nd->intent.open.flags & O_ACCMODE) == O_WRONLY)
+ 			desiredAccess = GENERIC_WRITE;
+-		else if ((nd->intent.open.flags & O_ACCMODE) == O_RDWR)
+-			desiredAccess = GENERIC_ALL;
++		else if ((nd->intent.open.flags & O_ACCMODE) == O_RDWR) {
++			/* GENERIC_ALL is too much permission to request */
++			/* can cause unnecessary access denied on create */
++			/* desiredAccess = GENERIC_ALL; */
++			desiredAccess = GENERIC_READ | GENERIC_WRITE;
++		}
+ 
+ 		if((nd->intent.open.flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))
+ 			disposition = FILE_CREATE;
+diff -Nru a/fs/cifs/file.c b/fs/cifs/file.c
+--- a/fs/cifs/file.c	Mon May  3 16:32:08 2004
++++ b/fs/cifs/file.c	Mon May  3 16:32:08 2004
+@@ -87,8 +87,12 @@
+ 		desiredAccess = GENERIC_READ;
+ 	else if ((file->f_flags & O_ACCMODE) == O_WRONLY)
+ 		desiredAccess = GENERIC_WRITE;
+-	else if ((file->f_flags & O_ACCMODE) == O_RDWR)
+-		desiredAccess = GENERIC_ALL;
++	else if ((file->f_flags & O_ACCMODE) == O_RDWR) {
++		/* GENERIC_ALL is too much permission to request */
++		/* can cause unnecessary access denied on create */
++		/* desiredAccess = GENERIC_ALL; */
++		desiredAccess = GENERIC_READ | GENERIC_WRITE;
++	}
+ 
+ /*********************************************************************
+  *  open flag mapping table:

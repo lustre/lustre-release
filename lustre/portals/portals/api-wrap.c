@@ -124,25 +124,6 @@ int PtlNIDist(ptl_handle_ni_t interface_in, ptl_process_id_t process_in,
         return ret.rc;
 }
 
-
-
-unsigned int PtlNIDebug(ptl_handle_ni_t ni, unsigned int mask_in)
-{
-        PtlNIDebug_in args;
-        PtlNIDebug_out ret;
-        int rc;
-
-        args.mask_in = mask_in;
-
-        rc = do_forward(ni, PTL_NIDEBUG, &args, sizeof(args), &ret,
-                        sizeof(ret));
-
-        if (rc != PTL_OK)
-                return rc;
-
-        return ret.rc;
-}
-
 int PtlMEAttach(ptl_handle_ni_t interface_in, ptl_pt_index_t index_in,
                 ptl_process_id_t match_id_in, ptl_match_bits_t match_bits_in,
                 ptl_match_bits_t ignore_bits_in, ptl_unlink_t unlink_in,
@@ -255,45 +236,6 @@ int PtlMEDump(ptl_handle_me_t current_in)
         return ret.rc;
 }
 
-static int validate_md(ptl_handle_any_t current_in, ptl_md_t md_in)
-{
-        nal_t *nal;
-        int rc;
-        int i;
-
-        if (!ptl_init) {
-                CERROR("PtlMDAttach/Bind/Update: Not initialized\n");
-                return PTL_NO_INIT;
-        }
-
-        nal = ptl_hndl2nal(&current_in);
-        if (!nal)
-                return PTL_HANDLE_INVALID;
-
-        if (nal->validate != NULL)                /* nal->validate not a NOOP */
-        {
-                if ((md_in.options & PTL_MD_IOVEC) == 0) /* contiguous */
-                {
-                        rc = nal->validate (nal, md_in.start, md_in.length);
-                        if (rc)
-                                return (PTL_SEGV);
-                }
-                else
-                {
-                        struct iovec *iov = (struct iovec *)md_in.start;
-
-                        for (i = 0; i < md_in.niov; i++, iov++)
-                        {
-                                rc = nal->validate (nal, iov->iov_base, iov->iov_len);
-                                if (rc)
-                                        return (PTL_SEGV);
-                        }
-                }
-        }
-
-        return 0;
-}
-
 static ptl_handle_eq_t md2eq (ptl_md_t *md)
 {
         if (PtlHandleIsEqual (md->eventq, PTL_EQ_NONE))
@@ -310,16 +252,13 @@ int PtlMDAttach(ptl_handle_me_t me_in, ptl_md_t md_in,
         PtlMDAttach_out ret;
         int rc;
 
-        rc = validate_md(me_in, md_in);
-        if (rc == PTL_OK) {
-                args.eq_in = md2eq(&md_in);
-                args.me_in = me_in;
-                args.md_in = md_in;
-                args.unlink_in = unlink_in;
+        args.eq_in = md2eq(&md_in);
+        args.me_in = me_in;
+        args.md_in = md_in;
+        args.unlink_in = unlink_in;
                 
-                rc = do_forward(me_in, PTL_MDATTACH, 
-                                &args, sizeof(args), &ret, sizeof(ret));
-        }
+        rc = do_forward(me_in, PTL_MDATTACH, 
+                        &args, sizeof(args), &ret, sizeof(ret));
 
         if (rc != PTL_OK)
                 return (rc == PTL_HANDLE_INVALID) ? PTL_ME_INVALID : rc;
@@ -339,10 +278,6 @@ int PtlMDBind(ptl_handle_ni_t ni_in, ptl_md_t md_in,
         PtlMDBind_in args;
         PtlMDBind_out ret;
         int rc;
-
-        rc = validate_md(ni_in, md_in);
-        if (rc != PTL_OK)
-                return rc;
 
         args.eq_in = md2eq(&md_in);
         args.ni_in = ni_in;
@@ -378,9 +313,6 @@ int PtlMDUpdate(ptl_handle_md_t md_in, ptl_md_t *old_inout,
                 args.old_inout_valid = 0;
 
         if (new_inout) {
-                rc = validate_md (md_in, *new_inout);
-                if (rc != PTL_OK)
-                        return (rc == PTL_HANDLE_INVALID) ? PTL_MD_INVALID : rc;
                 args.new_inout = *new_inout;
                 args.new_inout_valid = 1;
         } else
@@ -423,7 +355,7 @@ int PtlMDUnlink(ptl_handle_md_t md_in)
 }
 
 int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
-               int (*callback) (ptl_event_t * event),
+               ptl_eq_handler_t callback,
                ptl_handle_eq_t * handle_out)
 {
         ptl_eq_t *eq = NULL;
@@ -457,12 +389,6 @@ int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
 
         for (i = 0; i < count; i++)
                 ev[i].sequence = 0;
-
-        if (nal->validate != NULL) {
-                rc = nal->validate(nal, ev, count * sizeof(ptl_event_t));
-                if (rc != PTL_OK)
-                        goto fail;
-        }
 
         args.ni_in = interface;
         args.count_in = count;

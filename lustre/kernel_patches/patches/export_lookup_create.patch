@@ -1,0 +1,34 @@
+diff -rupN linux-2.4.24/fs/namei.c linux-2.4.24.new/fs/namei.c
+--- linux-2.4.24/fs/namei.c	2004-05-19 10:58:50.000000000 +0300
++++ linux-2.4.24.new/fs/namei.c	2004-05-19 11:04:05.725450928 +0300
+@@ -1391,8 +1391,8 @@ int open_namei(const char *pathname, int
+ 
+ 
+ /* SMP-safe */
+-static struct dentry *lookup_create(struct nameidata *nd, int is_dir,
+-				    struct lookup_intent *it)
++struct dentry *lookup_create(struct nameidata *nd, int is_dir,
++                             struct lookup_intent *it)
+ {
+ 	struct dentry *dentry;
+ 
+@@ -1412,6 +1412,7 @@ enoent:
+ fail:
+ 	return dentry;
+ }
++EXPORT_SYMBOL(lookup_create);
+ 
+ int vfs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t dev)
+ {
+diff -rupN linux-2.4.24/include/linux/fs.h linux-2.4.24.new/include/linux/fs.h
+--- linux-2.4.24/include/linux/fs.h	2004-05-19 10:58:50.178421368 +0300
++++ linux-2.4.24.new/include/linux/fs.h	2004-05-19 11:04:35.373943672 +0300
+@@ -1129,6 +1129,8 @@ extern struct file *filp_open(const char
+ extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
+ extern int open_namei_it(const char *filename, int namei_flags, int mode,
+ 			 struct nameidata *nd, struct lookup_intent *it);
++extern struct dentry *lookup_create(struct nameidata *nd, int is_dir,
++                                    struct lookup_intent *it);
+ extern struct file *dentry_open_it(struct dentry *dentry, struct vfsmount *mnt,
+ 			    int flags, struct lookup_intent *it);
+ extern int revalidate_it(struct dentry *dentry, struct lookup_intent *it);

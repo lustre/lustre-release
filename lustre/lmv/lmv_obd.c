@@ -30,6 +30,7 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <asm/div64.h>
+#include <linux/seq_file.h>
 #else
 #include <liblustre.h>
 #endif
@@ -43,7 +44,6 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 #include <linux/obd_ost.h>
-#include <linux/seq_file.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd_lmv.h>
@@ -52,21 +52,22 @@
 int lmv_attach(struct obd_device *dev, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
-        struct proc_dir_entry *entry;
         int rc;
         ENTRY;
 
         lprocfs_init_vars(lmv, &lvars);
         rc = lprocfs_obd_attach(dev, lvars.obd_vars);
-        if (rc)
-        	RETURN (rc);
-
-        entry = create_proc_entry("target_obd", 0444, dev->obd_proc_entry);
-        if (entry == NULL)
-                RETURN(-ENOMEM);
-        /* entry->proc_fops = &lmv_proc_target_fops; */
-        entry->data = dev;
-
+        if (rc == 0) {
+#ifdef __KERNEL__
+                struct proc_dir_entry *entry;
+                
+                entry = create_proc_entry("target_obd", 0444, dev->obd_proc_entry);
+                if (entry == NULL)
+                        RETURN(-ENOMEM);
+                /* entry->proc_fops = &lmv_proc_target_fops; */
+                entry->data = dev;
+#endif
+       }
         RETURN (rc);
 }
 
@@ -479,21 +480,31 @@ int lmv_get_mea_and_update_object(struct obd_export *exp, struct ll_fid *fid)
         struct lmv_obd *lmv = &obd->u.lmv;
         struct ptlrpc_request *req = NULL;
         struct lustre_md md;
+        unsigned long valid;
         int mealen, rc;
 
         md.mea = NULL;
         mealen = MEA_SIZE_LMV(lmv);
+        
+        valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
 
         /* time to update mea of parent fid */
         rc = md_getattr(lmv->tgts[fid->mds].exp, fid,
-                        OBD_MD_FLEASIZE, mealen, &req);
-        if (rc)
+                        valid, mealen, &req);
+        if (rc) {
+                CERROR("md_getattr() failed, rc = %d\n", rc);
                 GOTO(cleanup, rc);
-        rc = mdc_req2lustre_md(req, 0, NULL, exp, &md);
-        if (rc)
+        }
+
+        rc = mdc_req2lustre_md(exp, req, 0, NULL, &md);
+        if (rc) {
+                CERROR("mdc_req2lustre_md() failed, rc = %d\n", rc);
                 GOTO(cleanup, rc);
+        }
+
         if (md.mea == NULL)
                 GOTO(cleanup, rc = -ENODATA);
+
         rc = lmv_create_obj_from_attrs(exp, fid, md.mea);
         obd_free_memmd(exp, (struct lov_stripe_md **) &md.mea);
 
@@ -504,8 +515,8 @@ cleanup:
 }
 
 int lmv_create(struct obd_export *exp, struct mdc_op_data *op_data,
-                   const void *data, int datalen, int mode, __u32 uid,
-                   __u32 gid, __u64 rdev, struct ptlrpc_request **request)
+               const void *data, int datalen, int mode, __u32 uid,
+               __u32 gid, __u64 rdev, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -568,11 +579,11 @@ int lmv_done_writing(struct obd_export *exp, struct obdo *obdo)
 }
 
 int lmv_enqueue(struct obd_export *exp, int lock_type,
-                    struct lookup_intent *it, int lock_mode,
-                    struct mdc_op_data *data, struct lustre_handle *lockh,
-                    void *lmm, int lmmsize,
-                    ldlm_completion_callback cb_completion,
-                    ldlm_blocking_callback cb_blocking, void *cb_data)
+                struct lookup_intent *it, int lock_mode,
+                struct mdc_op_data *data, struct lustre_handle *lockh,
+                void *lmm, int lmmsize,
+                ldlm_completion_callback cb_completion,
+                ldlm_blocking_callback cb_blocking, void *cb_data)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -585,8 +596,8 @@ int lmv_enqueue(struct obd_export *exp, int lock_type,
                 if (obj) {
                         /* directory is splitted. look for
                          * right mds for this name */
-                        mds = raw_name2idx(obj->objcount, data->name,
-                                                data->namelen);
+                        mds = raw_name2idx(obj->objcount, (char *)data->name,
+                                           data->namelen);
                         data->fid1 = obj->objs[mds].fid;
                         lmv_put_obj(obj);
                 }
@@ -737,7 +748,7 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
-                mds = raw_name2idx(obj->objcount, old, oldlen);
+                mds = raw_name2idx(obj->objcount, (char *)old, oldlen);
                 data->fid1 = obj->objs[mds].fid;
                 CDEBUG(D_OTHER, "forward to MDS #%u (%lu/%lu/%lu)\n", mds,
                        (unsigned long) obj->objs[mds].fid.mds,
@@ -750,7 +761,7 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
-                mds = raw_name2idx(obj->objcount, new, newlen);
+                mds = raw_name2idx(obj->objcount, (char *)new, newlen);
                 data->fid2 = obj->objs[mds].fid;
                 CDEBUG(D_OTHER, "forward to MDS #%u (%lu/%lu/%lu)\n", mds,
                        (unsigned long) obj->objs[mds].fid.mds,
@@ -961,7 +972,7 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
 }
 
 struct obd_device *lmv_get_real_obd(struct obd_export *exp,
-                                        char *name, int len)
+                                    char *name, int len)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1041,11 +1052,11 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
         }
 
         if (*ea == NULL) {
-                rc = obd_alloc_diskmd(exp, (struct lov_mds_md **) ea);
+                rc = obd_alloc_diskmd(exp, (struct lov_mds_md **)ea);
                 LASSERT(*ea != NULL);
         }
 
-        mea = (struct mea *) *ea;
+        mea = (struct mea *)*ea;
         mfid.id = oa->o_id;
         mfid.generation = oa->o_generation;
         rc = 0;
@@ -1296,12 +1307,6 @@ struct md_ops lmv_md_ops = {
         m_valid_attrs:          lmv_valid_attrs,
 };
 
-//#ifndef LPROCFS
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-//#else
-LPROCFS_INIT_VARS(lmv, lprocfs_module_vars, lprocfs_obd_vars)
-
 int __init lmv_init(void)
 {
         struct lprocfs_static_vars lvars;
@@ -1313,12 +1318,12 @@ int __init lmv_init(void)
         RETURN(rc);
 }
 
+#ifdef __KERNEL__
 static void lmv_exit(void)
 {
         class_unregister_type(OBD_LMV_DEVICENAME);
 }
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Logical Metadata Volume OBD driver");
 MODULE_LICENSE("GPL");
@@ -1326,4 +1331,3 @@ MODULE_LICENSE("GPL");
 module_init(lmv_init);
 module_exit(lmv_exit);
 #endif
-

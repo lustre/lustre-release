@@ -1,0 +1,13 @@
+Index: linux-2.4.20-8/kernel/ksyms.c
+===================================================================
+--- linux-2.4.20-8.orig/kernel/ksyms.c	2004-04-06 20:50:10.000000000 +0800
++++ linux-2.4.20-8/kernel/ksyms.c	2004-04-06 22:50:31.000000000 +0800
+@@ -336,7 +336,7 @@
+ EXPORT_SYMBOL(refile_buffer);
+ EXPORT_SYMBOL(max_sectors);
+ EXPORT_SYMBOL(max_readahead);
+-
++EXPORT_SYMBOL(get_blkfops);
+ /* tty routines */
+ EXPORT_SYMBOL(tty_hangup);
+ EXPORT_SYMBOL(tty_wait_until_sent);

@@ -9,7 +9,7 @@ COUNT_100=`expr $COUNT / 100`
 
 ENDRUN=endrun-`hostname`
 
-ECHONAME="`lctl device_list 2> /dev/null | awk '/ echo_client / { print $4 }' | tail -1`"
+ECHONAME="`lctl device_list 2> /dev/null | awk '/ echo_client / { print $4 }' | tail -n 1`"
 
 if [ -z "$ECHONAME" ]; then
 	echo "$0: needs an ECHO_CLIENT set up first" 1>&2

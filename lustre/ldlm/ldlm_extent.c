@@ -45,6 +45,7 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
         ldlm_mode_t req_mode = req->l_req_mode;
         __u64 req_start = req->l_req_extent.start;
         __u64 req_end = req->l_req_extent.end;
+        int conflicting = 0;
         ENTRY;
 
         lockmode_verify(req_mode);
@@ -65,13 +66,22 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
                 if (req == lock)
                         continue;
 
+                /* Locks are compatible, overlap doesn't matter */
+                /* Until bug 20 is fixed, try to avoid granting overlapping
+                 * locks on one client (they take a long time to cancel) */
+                if (lockmode_compat(lock->l_req_mode, req_mode) &&
+                    lock->l_export != req->l_export)
+                        continue;
+
+                /* If this is a high-traffic lock, don't grow downwards at all
+                 * or grow upwards too much */
+                ++conflicting;
+                if (conflicting > 4)
+                        new_ex->start = req_start;
+
                 /* If lock doesn't overlap new_ex, skip it. */
                 if (l_extent->end < new_ex->start ||
                     l_extent->start > new_ex->end)
-                        continue;
-
-                /* Locks are compatible, overlap doesn't matter */
-                if (lockmode_compat(lock->l_req_mode, req_mode))
                         continue;
 
                 /* Locks conflicting in requested extents and we can't satisfy
@@ -85,10 +95,10 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
                 /* We grow extents downwards only as far as they don't overlap
                  * with already-granted locks, on the assumtion that clients
                  * will be writing beyond the initial requested end and would
-                 * then need to enqueue a new lock beyond the previous request.
-                 * We don't grow downwards if there are lots of lockers. */
-                if (l_extent->start < req_start) {
-                        if (atomic_read(&req->l_resource->lr_refcount) > 20)
+                 * then need to enqueue a new lock beyond previous request.
+                 * l_req_extent->end strictly < req_start, checked above. */
+                if (l_extent->start < req_start && new_ex->start != req_start) {
+                        if (l_extent->end >= req_start)
                                 new_ex->start = req_start;
                         else
                                 new_ex->start = min(l_extent->end+1, req_start);
@@ -106,6 +116,13 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
                         else
                                 new_ex->end = max(l_extent->start - 1, req_end);
                 }
+        }
+
+#define LDLM_MAX_GROWN_EXTENT (32 * 1024 * 1024 - 1)
+        if (conflicting > 32 && (req_mode == LCK_PW || req_mode == LCK_CW)) {
+                if (req_end < req_start + LDLM_MAX_GROWN_EXTENT)
+                        new_ex->end = min(req_start + LDLM_MAX_GROWN_EXTENT,
+                                          new_ex->end);
         }
         EXIT;
 }
@@ -147,6 +164,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
         __u64 req_start = req->l_req_extent.start;
         __u64 req_end = req->l_req_extent.end;
         int compat = 1;
+        int scan = 0;
         ENTRY;
 
         lockmode_verify(req_mode);
@@ -157,16 +175,43 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 if (req == lock)
                         RETURN(compat);
 
-                /* locks are compatible, overlap doesn't matter */
-                if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                        /* nonCW locks are compatible, overlap doesn't matter */
-                        if (req_mode != LCK_CW)
-                                continue;
-                                
-                        /* If we are trying to get a CW lock and there is
-                           another one of this kind, we need to compare gid */
+                if (scan) {
+                        /* We only get here if we are queuing GROUP lock
+                           and met some incompatible one. The main idea of this
+                           code is to insert GROUP lock past compatible GROUP
+                           lock in the waiting queue or if there is not any,
+                           then in front of first non-GROUP lock */
+                        if (lock->l_req_mode != LCK_GROUP) {
+                        /* Ok, we hit non-GROUP lock, there should be no
+                           more GROUP locks later on, queue in front of
+                           first non-GROUP lock */
+
+                                ldlm_resource_insert_lock_after(lock, req);
+                                list_del_init(&lock->l_res_link);
+                                ldlm_resource_insert_lock_after(req, lock);
+                                RETURN(0);
+                        }
                         if (req->l_policy_data.l_extent.gid ==
                              lock->l_policy_data.l_extent.gid) {
+                                /* found it */
+                                ldlm_resource_insert_lock_after(lock,
+                                                                req);
+                                RETURN(0);
+                        }
+                        continue;
+                }
+
+                /* locks are compatible, overlap doesn't matter */
+                if (lockmode_compat(lock->l_req_mode, req_mode)) {
+                        /* non-group locks are compatible, overlap doesn't
+                           matter */
+                        if (req_mode != LCK_GROUP)
+                                continue;
+                                
+                        /* If we are trying to get a GROUP lock and there is
+                           another one of this kind, we need to compare gid */
+                        if (req->l_policy_data.l_extent.gid ==
+                            lock->l_policy_data.l_extent.gid) {
                                 if (lock->l_req_mode == lock->l_granted_mode)
                                         RETURN(2);
 
@@ -191,8 +236,31 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         }
                 }
 
-                if (lock->l_req_mode == LCK_CW) {
-                        /* If compared lock is CW, then requested is PR/PW/ =>
+                if (req_mode == LCK_GROUP &&
+                    (lock->l_req_mode != lock->l_granted_mode)) {
+                        scan = 1;
+                        compat = 0;
+                        if (lock->l_req_mode != LCK_GROUP) {
+                        /* Ok, we hit non-GROUP lock, there should be no
+                           more GROUP locks later on, queue in front of
+                           first non-GROUP lock */
+
+                                ldlm_resource_insert_lock_after(lock, req);
+                                list_del_init(&lock->l_res_link);
+                                ldlm_resource_insert_lock_after(req, lock);
+                                RETURN(0);
+                        }
+                        if (req->l_policy_data.l_extent.gid ==
+                             lock->l_policy_data.l_extent.gid) {
+                                /* found it */
+                                ldlm_resource_insert_lock_after(lock, req);
+                                RETURN(0);
+                        }
+                        continue;
+                }
+
+                if (lock->l_req_mode == LCK_GROUP) {
+                        /* If compared lock is GROUP, then requested is PR/PW/=>
                          * this is not compatible; extent range does not
                          * matter */
                         if (*flags & LDLM_FL_BLOCK_NOWAIT) {
@@ -203,7 +271,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         }
                 } else if (lock->l_policy_data.l_extent.end < req_start ||
                            lock->l_policy_data.l_extent.start > req_end) {
-                        /* if a non-CW lock doesn't overlap skip it */
+                        /* if a non grouplock doesn't overlap skip it */
                         continue;
                 }
 
@@ -272,13 +340,15 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         res->lr_tmp = &rpc_list;
         rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 1, flags, err);
         if (rc < 0)
-                RETURN(rc); /* lock was destroyed */
-        if (rc == 2)
+                GOTO(out, rc); /* lock was destroyed */
+        if (rc == 2) {
+                res->lr_tmp = NULL;
                 goto grant;
+        }
 
         rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, 1, flags, err);
         if (rc2 < 0)
-                RETURN(rc2); /* lock was destroyed */
+                GOTO(out, rc = rc2); /* lock was destroyed */
         res->lr_tmp = NULL;
 
         if (rc + rc2 == 2) {
@@ -302,7 +372,10 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                         GOTO(restart, -ERESTART);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
         }
-        RETURN(0);
+        rc = 0;
+out:
+        res->lr_tmp = NULL;
+        RETURN(rc);
 }
 
 /* When a lock is cancelled by a client, the KMS may undergo change if this
@@ -318,15 +391,27 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
         ENTRY;
 
         l_lock(&res->lr_namespace->ns_lock);
+
+        /* don't let another thread in ldlm_extent_shift_kms race in just after
+         * we finish and take our lock into account in its calculation of the
+         * kms */
+        lock->l_flags |= LDLM_FL_KMS_IGNORE;
+
         list_for_each(tmp, &res->lr_granted) {
                 lck = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (lock == lck)
+                if (lck->l_flags & LDLM_FL_KMS_IGNORE)
                         continue;
+
                 if (lck->l_policy_data.l_extent.end >= old_kms)
                         GOTO(out, kms = old_kms);
-                kms = lck->l_policy_data.l_extent.end + 1;
+
+                /* This extent _has_ to be smaller than old_kms (checked above)
+                 * so kms can only ever be smaller or the same as old_kms. */
+                if (lck->l_policy_data.l_extent.end + 1 > kms)
+                        kms = lck->l_policy_data.l_extent.end + 1;
         }
+        LASSERTF(kms <= old_kms, "kms "LPU64" old_kms "LPU64"\n", kms, old_kms);
 
         GOTO(out, kms);
  out:

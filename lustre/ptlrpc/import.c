@@ -78,7 +78,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 int ptlrpc_init_import(struct obd_import *imp)
 {
         unsigned long flags;
-        
+
         spin_lock_irqsave(&imp->imp_lock, flags);
 
         imp->imp_generation++;
@@ -96,18 +96,18 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
 {
         unsigned long flags;
         int rc = 0;
-        
+
         spin_lock_irqsave(&imp->imp_lock, flags);
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
-                spin_unlock_irqrestore(&imp->imp_lock, flags); 
+                spin_unlock_irqrestore(&imp->imp_lock, flags);
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
                 rc = 1;
         } else {
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
                 CDEBUG(D_HA, "%p %s: import already not connected: %s\n",
-                       imp,imp->imp_client->cli_name, 
+                       imp,imp->imp_client->cli_name,
                        ptlrpc_import_state_name(imp->imp_state));
         }
 
@@ -154,11 +154,12 @@ void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
 
         if (!imp->imp_invalid)
                 ptlrpc_deactivate_import(imp);
-        
+
         LASSERT(imp->imp_invalid);
 
         if (in_rpc)
                 inflight = 1;
+
         /* wait for all requests to error out and call completion 
            callbacks */
         if (imp->imp_server_timeout)
@@ -170,12 +171,12 @@ void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
         rc = l_wait_event(imp->imp_recovery_waitq, 
                           (atomic_read(&imp->imp_inflight) == inflight), 
                           &lwi);
-        
+
         if (rc)
                 CERROR("%s: rc = %d waiting for callback (%d != %d)\n",
                        imp->imp_target_uuid.uuid, rc,
                        atomic_read(&imp->imp_inflight), inflight);
-        
+
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 }
 
@@ -208,16 +209,15 @@ void ptlrpc_fail_import(struct obd_import *imp, int generation)
                                imp->imp_obd->obd_name);
                         ptlrpc_deactivate_import(imp);
                 }
-                
-                CDEBUG(D_HA, "%s: waking up pinger\n", 
+
+                CDEBUG(D_HA, "%s: waking up pinger\n",
                        imp->imp_target_uuid.uuid);
-                
+
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 imp->imp_force_verify = 1;
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
-                
+
                 ptlrpc_pinger_wake_up();
-                
         }
         EXIT;
 }
@@ -255,7 +255,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CONNECTING);
 
-        imp->imp_conn_cnt++; 
+        imp->imp_conn_cnt++;
         imp->imp_last_replay_transno = 0;
 
         if (imp->imp_remote_handle.cookie == 0) {
@@ -293,7 +293,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                 imp->imp_connection = conn;
 
                 dlmexp = class_conn2export(&imp->imp_dlm_handle);
-                
+
                 LASSERT(dlmexp != NULL);
 
                 if (dlmexp->exp_connection)
@@ -344,7 +344,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
         unsigned long flags;
         int msg_flags;
         ENTRY;
-        
+
         spin_lock_irqsave(&imp->imp_lock, flags);
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
@@ -393,7 +393,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         imp->imp_remote_handle = request->rq_repmsg->handle;
                 } else {
                         CERROR("reconnected to %s@%s after partition\n",
-                               imp->imp_target_uuid.uuid, 
+                               imp->imp_target_uuid.uuid,
                                imp->imp_connection->c_remote_uuid.uuid);
                 }
 
@@ -401,20 +401,17 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
                 else
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
-        } 
-        else if ((MSG_CONNECT_RECOVERING & msg_flags) && !imp->imp_invalid) {
+        } else if ((MSG_CONNECT_RECOVERING & msg_flags) && !imp->imp_invalid) {
                 LASSERT(imp->imp_replayable);
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
-        } 
-        else {
+        } else {
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
         }
-        
+
         /* Sanity checks for a reconnected import. */
-        if (!(imp->imp_replayable) != 
-             !(msg_flags & MSG_CONNECT_REPLAYABLE)) {
+        if (!(imp->imp_replayable) != !(msg_flags & MSG_CONNECT_REPLAYABLE)) {
                 CERROR("imp_replayable flag does not match server "
                        "after reconnect. We should LBUG right here.\n");
         }
@@ -438,7 +435,7 @@ finish:
                                imp->imp_connection->c_remote_uuid.uuid);
                         ptlrpc_connect_import(imp, NULL);
                         RETURN(0);
-                } 
+                }
         }
  out:
         if (rc != 0) {
@@ -485,7 +482,7 @@ static int signal_completed_replay(struct obd_import *imp)
         req->rq_replen = lustre_msg_size(0, NULL);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
         req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
-        req->rq_timeout *= 3; 
+        req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
 
         ptlrpcd_add_req(req);
@@ -505,13 +502,13 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                 ptlrpc_invalidate_import(imp, 1);
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
-        } 
-        
+        }
+
         if (imp->imp_state == LUSTRE_IMP_REPLAY) {
                 CDEBUG(D_HA, "replay requested by %s\n",
                        imp->imp_target_uuid.uuid);
                 rc = ptlrpc_replay_next(imp, &inflight);
-                if (inflight == 0 && 
+                if (inflight == 0 &&
                     atomic_read(&imp->imp_replay_inflight) == 0) {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
                         rc = ldlm_replay_locks(imp);
@@ -547,7 +544,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                         GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 ptlrpc_activate_import(imp);
-        } 
+        }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
                 wake_up(&imp->imp_recovery_waitq);
@@ -558,7 +555,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         RETURN(rc);
 }
 
-static int back_to_sleep(void *unused) 
+static int back_to_sleep(void *unused)
 {
 	return 0;
 }

@@ -205,6 +205,7 @@ do {      \
         extern void lprocfs_##NAME##_init_vars(struct lprocfs_static_vars *);  \
         lprocfs_##NAME##_init_vars(VAR);                                       \
 } while (0)
+
 extern void lprocfs_init_multi_vars(unsigned int idx,
                                     struct lprocfs_static_vars *var);
 /* lprocfs_status.c */
@@ -222,8 +223,8 @@ extern void lprocfs_remove(struct proc_dir_entry *root);
 extern struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *root,
                                            const char *name);
 
-extern int lprocfs_obd_attach(struct obd_device *dev, struct lprocfs_vars *list);
-extern int lprocfs_obd_detach(struct obd_device *dev);
+extern int lprocfs_obd_attach(struct obd_device *obd, struct lprocfs_vars *list);
+extern int lprocfs_obd_detach(struct obd_device *obd);
 
 /* Generic callbacks */
 
@@ -239,6 +240,8 @@ extern int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
+extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data);
 extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                               int count, int *eof, void *data);
 
@@ -325,9 +328,14 @@ static inline int lprocfs_rd_uuid(char *page, char **start, off_t off,
 static inline int lprocfs_rd_name(char *page, char **start, off_t off,
                                   int count, int *eof, void *data) { return 0; }
 static inline int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data) { return 0; }
+                                         int count, int *eof, void *data)
+{ return 0; }
 static inline int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
-                                       int count, int *eof, void *data) { return 0; }
+                                       int count, int *eof, void *data)
+{ return 0; }
+static inline int lprocfs_rd_num_exports(char *page, char **start, off_t off,
+                                         int count, int *eof, void *data)
+{ return 0; }
 static inline int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                                      int count, int *eof, void *data) { return 0; }
 

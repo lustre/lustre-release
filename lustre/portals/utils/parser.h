@@ -64,10 +64,4 @@ char *Parser_strarg(char *inp, const char *prompt, const char *deft,
 /* Extracts an integer from a string  with a base */
 int Parser_arg2int(const char *inp, long *result, int base);
 
-/* Convert human readable size string to and int; "1k" -> 1000 */
-int Parser_size(int *sizep, char *str);
-
-/* Convert a string boolean to an int; "enable" -> 1 */
-int Parser_bool(int *b, char *str);
-
 #endif

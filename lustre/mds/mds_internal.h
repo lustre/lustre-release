@@ -7,6 +7,8 @@
 
 #include <linux/lustre_mds.h>
 
+#define MAX_ATIME_DIFF 60
+
 struct mds_filter_data {
         __u64 io_epoch;
 };
@@ -106,6 +108,8 @@ int mds_lov_clean(struct obd_device *obd);
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 #ifdef __KERNEL__
+int mds_get_md(struct obd_device *, struct inode *, void *md, int *size, 
+               int lock);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);
 void mds_pack_inode2fid(struct obd_device *, struct ll_fid *, struct inode *);
@@ -113,12 +117,13 @@ void mds_pack_inode2body(struct obd_device *, struct mds_body *, struct inode *)
 #endif
 
 /* mds/mds_lmv.c */
+int mds_lmv_postsetup(struct obd_device *obd);
 int mds_lmv_connect(struct obd_device *obd, char * lov_name);
 int mds_lmv_disconnect(struct obd_device *obd, int flags);
 int mds_try_to_split_dir(struct obd_device *, struct dentry *, struct mea **,
                          int);
 int mds_get_lmv_attr(struct obd_device *, struct inode *, struct mea **, int *);
-int mds_choose_mdsnum(struct obd_device *, const char *, int);
+int mds_choose_mdsnum(struct obd_device *, const char *, int, int);
 int mds_lmv_postsetup(struct obd_device *);
 
 #endif /* _MDS_INTERNAL_H */

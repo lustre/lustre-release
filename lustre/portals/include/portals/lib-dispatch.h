@@ -18,7 +18,6 @@
 extern int do_PtlGetId(nal_cb_t * nal, void *private, void *args, void *ret);
 extern int do_PtlNIStatus(nal_cb_t * nal, void *private, void *args, void *ret);
 extern int do_PtlNIDist(nal_cb_t * nal, void *private, void *args, void *ret);
-extern int do_PtlNIDebug(nal_cb_t * nal, void *private, void *args, void *ret);
 extern int do_PtlMEAttach(nal_cb_t * nal, void *private, void *args, void *ret);
 extern int do_PtlMEInsert(nal_cb_t * nal, void *private, void *args, void *ret);
 extern int do_PtlMEPrepend(nal_cb_t * nal, void *private, void *args,

@@ -1,0 +1,4 @@
+MODULES := cmobd 
+cmobd-objs := cache_manager_obd.o cmobd_reint.o cmobd_write.o 
+cmobd-objs += cmobd_oss_reint.o cmobd_mds_reint.o lproc_cm.o
+@INCLUDE_RULES@

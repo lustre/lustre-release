@@ -27,12 +27,13 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 #ifndef __KERNEL__
-#include <liblustre.h>
+# include <liblustre.h>
 #endif
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+#include <linux/fcntl.h>
 
 
 #define HDR_SIZE(count) \
@@ -43,8 +44,7 @@ int lustre_msg_swabbed(struct lustre_msg *msg)
         return (msg->magic == __swab32(PTLRPC_MSG_MAGIC));
 }
 
-static void
-lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
+void lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
 {
         char *ptr;
         int   i;
@@ -373,6 +373,186 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab32s (&o->o_misc);
         __swab32s (&o->o_easize);
         /* o_inline is opaque */
+}
+
+/* mdc pack methods used by mdc and smfs*/
+void *mdc_create_pack(struct lustre_msg *msg, int offset,
+                      struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
+                      const void *data, int datalen)
+{
+        struct mds_rec_create *rec;
+        char *tmp;
+        rec = lustre_msg_buf(msg, offset, sizeof (*rec));
+
+        rec->cr_opcode = REINT_CREATE;
+        rec->cr_fsuid = current->fsuid;
+        rec->cr_fsgid = current->fsgid;
+        rec->cr_cap = current->cap_effective;
+        rec->cr_fid = op_data->fid1;
+        memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
+        rec->cr_mode = mode;
+        rec->cr_rdev = rdev;
+        rec->cr_time = op_data->mod_time;
+        rec->cr_suppgid = op_data->ctxt.gid1;
+
+        tmp = lustre_msg_buf(msg, offset + 1, op_data->namelen + 1);
+        LOGL0(op_data->name, op_data->namelen, tmp);
+
+        if (data) {
+                tmp = lustre_msg_buf(msg, offset + 2, datalen);
+                memcpy (tmp, data, datalen);
+        }
+        return ((void*)tmp + size_round(datalen));
+}
+
+static __u32 mds_pack_open_flags(__u32 flags)
+{
+        return
+                (flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC |
+                          MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
+                          MDS_OPEN_HAS_OBJS)) |
+                ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
+                ((flags & O_EXCL) ? MDS_OPEN_EXCL : 0) |
+                ((flags & O_TRUNC) ? MDS_OPEN_TRUNC : 0) |
+                ((flags & O_APPEND) ? MDS_OPEN_APPEND : 0) |
+                ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
+                ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
+                0;
+}
+
+void *mdc_setattr_pack(struct lustre_msg *msg, struct mdc_op_data *data,
+                       struct iattr *iattr, void *ea, int ealen,
+                       void *ea2, int ea2len)
+{
+        struct mds_rec_setattr *rec = lustre_msg_buf(msg, 0, sizeof (*rec));
+        char *tmp = NULL;
+
+        rec->sa_opcode = REINT_SETATTR;
+        rec->sa_fsuid = current->fsuid;
+        rec->sa_fsgid = current->fsgid;
+        rec->sa_cap = current->cap_effective;
+        rec->sa_fid = data->fid1;
+
+        if (iattr) {
+                rec->sa_valid = iattr->ia_valid;
+                rec->sa_mode = iattr->ia_mode;
+                rec->sa_uid = iattr->ia_uid;
+                rec->sa_gid = iattr->ia_gid;
+                rec->sa_size = iattr->ia_size;
+                rec->sa_atime = LTIME_S(iattr->ia_atime);
+                rec->sa_mtime = LTIME_S(iattr->ia_mtime);
+                rec->sa_ctime = LTIME_S(iattr->ia_ctime);
+                rec->sa_attr_flags = iattr->ia_attr_flags;
+                if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
+                        rec->sa_suppgid = iattr->ia_gid;
+                else if ((iattr->ia_valid & ATTR_MODE) &&
+                         in_group_p(iattr->ia_gid))
+                        rec->sa_suppgid = data->ctxt.gid1;
+                else if ((iattr->ia_valid & (ATTR_MTIME|ATTR_CTIME)) &&
+                         data->ctxt.gid1 != -1)
+                        rec->sa_suppgid = data->ctxt.gid1;
+        }
+        tmp = (char*)rec + size_round(sizeof(*rec));
+                
+        if (ealen == 0)
+                return (void*)tmp;
+
+        memcpy(lustre_msg_buf(msg, 1, ealen), ea, ealen);
+        
+        tmp += size_round(ealen);
+
+        if (ea2len == 0)
+                return (void*)tmp;
+
+        tmp += size_round(ea2len);
+        memcpy(lustre_msg_buf(msg, 2, ea2len), ea2, ea2len);
+        
+        return (void*)tmp;
+}
+
+void *mdc_unlink_pack(struct lustre_msg *msg, int offset,
+                     struct mdc_op_data *data)
+{
+        struct mds_rec_unlink *rec;
+        char *tmp;
+
+        rec = lustre_msg_buf(msg, offset, sizeof (*rec));
+        LASSERT (rec != NULL);
+
+        rec->ul_opcode = REINT_UNLINK;
+        rec->ul_fsuid = current->fsuid;
+        rec->ul_fsgid = current->fsgid;
+        rec->ul_cap = current->cap_effective;
+        rec->ul_mode = data->create_mode;
+        rec->ul_suppgid = data->ctxt.gid1;
+        rec->ul_fid1 = data->fid1;
+        rec->ul_fid2 = data->fid2;
+        rec->ul_time = data->mod_time;
+
+        tmp = lustre_msg_buf(msg, offset + 1, data->namelen + 1);
+        LASSERT (tmp != NULL);
+        LOGL0(data->name, data->namelen, tmp);
+        return (void*)tmp;        
+}
+
+void *mdc_link_pack(struct lustre_msg *msg, int offset,
+                  struct mdc_op_data *data)
+{
+        struct mds_rec_link *rec;
+        char *tmp;
+
+        rec = lustre_msg_buf(msg, offset, sizeof (*rec));
+
+        rec->lk_opcode = REINT_LINK;
+        rec->lk_fsuid = current->fsuid;
+        rec->lk_fsgid = current->fsgid;
+        rec->lk_cap = current->cap_effective;
+        rec->lk_suppgid1 = data->ctxt.gid1;
+        rec->lk_suppgid2 = data->ctxt.gid2;
+        rec->lk_fid1 = data->fid1;
+        rec->lk_fid2 = data->fid2;
+        rec->lk_time = data->mod_time;
+
+        tmp = lustre_msg_buf(msg, offset + 1, data->namelen + 1);
+        LOGL0(data->name, data->namelen, tmp);
+        
+        return (void*)tmp; 
+}
+
+void *mdc_rename_pack(struct lustre_msg *msg, int offset,
+                      struct mdc_op_data *data,
+                      const char *old, int oldlen, const char *new, int newlen)
+{
+        struct mds_rec_rename *rec;
+        char *tmp;
+
+        rec = lustre_msg_buf(msg, offset, sizeof (*rec));
+
+        /* XXX do something about time, uid, gid */
+        rec->rn_opcode = REINT_RENAME;
+        rec->rn_fsuid = current->fsuid;
+        rec->rn_fsgid = current->fsgid;
+        rec->rn_cap = current->cap_effective;
+        if (in_group_p(data->ctxt.gid1))
+                rec->rn_suppgid1 = data->ctxt.gid1;
+        else
+                rec->rn_suppgid1 = -1;
+        if (in_group_p(data->ctxt.gid2))
+                rec->rn_suppgid2 = data->ctxt.gid2;
+        else
+                rec->rn_suppgid2 = -1;
+        rec->rn_fid1 = data->fid1;
+        rec->rn_fid2 = data->fid2;
+        rec->rn_time = data->mod_time;
+
+        tmp = lustre_msg_buf(msg, offset + 1, oldlen + 1);
+        LOGL0(old, oldlen, tmp);
+
+        if (new) {
+                tmp = lustre_msg_buf(msg, offset + 2, newlen + 1);
+                LOGL0(new, newlen, tmp);
+        }
+        return (void*)tmp;
 }
 
 void lustre_swab_obd_statfs (struct obd_statfs *os)
@@ -775,7 +955,7 @@ void lustre_assert_wire_constants(void)
                  (long long)REINT_RENAME);
         LASSERTF(REINT_OPEN == 6, " found %lld\n",
                  (long long)REINT_OPEN);
-        LASSERTF(REINT_MAX == 6, " found %lld\n",
+        LASSERTF(REINT_MAX == 8, " found %lld\n",
                  (long long)REINT_MAX);
         LASSERTF(DISP_IT_EXECD == 1, " found %lld\n",
                  (long long)DISP_IT_EXECD);

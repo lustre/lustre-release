@@ -29,20 +29,15 @@
 #include <getopt.h>
 #include <string.h>
 #include <mntent.h>
-#include <portals/api-support.h>
 #include <portals/ptlctl.h>
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
-#include <linux/lustre_user.h>
+#include <lustre/liblustreapi.h>
+#include <lustre/lustre_user.h>
 
 #include "parser.h"
 #include "obdctl.h"
-
-extern int op_find(char *path, struct obd_uuid *obduuid, int recursive,
-                int verbose, int quiet);
-extern int op_check(int type_num, char **obd_type_p, char *dir);
-extern int op_catinfo(char *dir, char *keyword, char *node_name);
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
@@ -56,8 +51,9 @@ static int lfs_catinfo(int argc, char **argv);
 /* all avaialable commands */
 command_t cmdlist[] = {
         {"setstripe", lfs_setstripe, 0,
-         "To create a new file with a specific striping pattern.\n"
-         "usage: setstripe <filename> <stripe size> <stripe start> <stripe count>\n"
+         "Create a new file with a specific striping pattern or\n"
+         "Set the default striping pattern on an existing directory\n"
+         "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default)"},
@@ -66,23 +62,22 @@ command_t cmdlist[] = {
          "usage: dirstripe <dirname> <stripe count> [<mds idx list>]\n"
          "\tstripe count: Number of MDSes to stripe over (0 default)\n"
          "\tmds idx list: List of MDS servers to contain the dir (not implemented)"},
-
         {"find", lfs_find, 0,
-         "To list the extended attributes for a given filename or files in a directory "
-         "or recursively for all files in a directory tree.\n"
+         "To list the extended attributes for a given filename or files in a\n"
+         "directory or recursively for all files in a directory tree.\n"
          "usage: find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file> ..."},
         {"getstripe", lfs_getstripe, 0,
          "To list the striping pattern for given filename.\n"
          "usage:getstripe <filename>"},
         {"check", lfs_check, 0,
-         "Display the status of MDS or OSTs (as specified in the command) "
+         "Display the status of MDS or OSTs (as specified in the command)\n"
          "or all the servers (MDS and OSTs).\n"
          "usage: check <osts|mds|servers>"},
         {"catinfo", lfs_catinfo, 0,
          "Show information of specified type logs.\n"
-         "usage: catinfo <keyword> [node name]"
-         "keywords are one of followings: config, deletions.\n"
-         "client node name must be provided when use keyword config."},
+         "usage: catinfo {keyword} [node name]\n"
+         "\tkeywords are one of followings: config, deletions.\n"
+         "\tnode name must be provided when use keyword config."},
         {"osts", lfs_osts, 0, "osts"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
@@ -123,7 +118,7 @@ static int lfs_setstripe(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        result = op_create_file(argv[1], st_size, st_offset, st_count);
+        result = llapi_file_create(argv[1], st_size, st_offset, st_count, 0);
         if (result)
                 fprintf(stderr, "error: %s: create stripe file failed\n",
                                 argv[0]);
@@ -209,7 +204,7 @@ static int lfs_find(int argc, char **argv)
                 return CMD_HELP;
 
         do {
-                rc = op_find(argv[optind], obduuid, recursive, verbose, quiet);
+                rc = llapi_find(argv[optind], obduuid, recursive,verbose,quiet);
         } while (++optind < argc && !rc);
 
         if (rc)
@@ -228,7 +223,7 @@ static int lfs_getstripe(int argc, char **argv)
         optind = 1;
 
         do {
-                rc = op_find(argv[optind], obduuid, 0, 0, 0);
+                rc = llapi_find(argv[optind], obduuid, 0, 0, 0);
         } while (++optind < argc && !rc);
 
         if (rc)
@@ -256,11 +251,12 @@ static int lfs_osts(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) ==0) {
-                        if (strcmp(mnt->mnt_type, "lustre_lite") == 0) {
-                                rc = op_find(mnt->mnt_dir, obduuid, 0, 0, 0);
+                        if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
+                                rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0);
                                 if (rc)
-                                        fprintf(stderr, "error: lfs osts failed for %s\n",
-                                                mnt->mnt_dir);
+                                        fprintf(stderr,
+                                               "error: lfs osts failed on %s\n",
+                                               mnt->mnt_dir);
                         }
                         mnt = getmntent(fp);
                 }
@@ -275,25 +271,25 @@ static int lfs_check(int argc, char **argv)
         int rc;
         FILE *fp;
         struct mntent *mnt = NULL;
-        int type_num = 1;
-        char *obd_type_p[2];
+        int num_types = 1;
+        char *obd_types[2];
         char obd_type1[4];
         char obd_type2[4];
 
         if (argc != 2)
                 return CMD_HELP;
 
-        obd_type_p[1]=obd_type1;
-        obd_type_p[2]=obd_type2;
+        obd_types[1] = obd_type1;
+        obd_types[2] = obd_type2;
 
-        if (strcmp(argv[1],"osts")==0) {
-                strcpy(obd_type_p[0],"osc");
-        } else if (strcmp(argv[1],"mds")==0) {
-                strcpy(obd_type_p[0],"mdc");
-        } else if (strcmp(argv[1],"servers")==0) {
-                type_num=2;
-                strcpy(obd_type_p[0],"osc");
-                strcpy(obd_type_p[1],"mdc");
+        if (strcmp(argv[1], "osts") == 0) {
+                strcpy(obd_types[0], "osc");
+        } else if (strcmp(argv[1], "mds") == 0) {
+                strcpy(obd_types[0], "mdc");
+        } else if (strcmp(argv[1], "servers") == 0) {
+                num_types = 2;
+                strcpy(obd_types[0], "osc");
+                strcpy(obd_types[1], "mdc");
         } else {
                 fprintf(stderr, "error: %s: option '%s' unrecognized\n",
                                 argv[0], argv[1]);
@@ -307,19 +303,19 @@ static int lfs_check(int argc, char **argv)
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) ==0) {
-                        if (strcmp(mnt->mnt_type, "lustre_lite") == 0) 
+                        if (llapi_is_lustre_mnttype(mnt->mnt_type))
                                 break;
                         mnt = getmntent(fp);
                 }
                 endmntent(fp);
         }
-           
-        rc = op_check(type_num,obd_type_p,mnt->mnt_dir);
+
+        rc = llapi_target_check(num_types, obd_types, mnt->mnt_dir);
 
         if (rc)
                 fprintf(stderr, "error: %s: %s status failed\n",
                                 argv[0],argv[1]);
-                                                                                                                             
+
         return rc;
 
 }
@@ -329,7 +325,7 @@ static int lfs_catinfo(int argc, char **argv)
         FILE *fp;
         struct mntent *mnt = NULL;
         int rc;
-        
+
         if (argc < 2 || (!strcmp(argv[1],"config") && argc < 3))
                 return CMD_HELP;
 
@@ -338,12 +334,12 @@ static int lfs_catinfo(int argc, char **argv)
 
         fp = setmntent(MOUNTED, "r");
         if (fp == NULL) {
-                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED, 
+                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
                          strerror(errno));
         } else {
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) == 0) {
-                        if (strcmp(mnt->mnt_type, "lustre_lite") == 0) 
+                        if (llapi_is_lustre_mnttype(mnt->mnt_type))
                                 break;
                         mnt = getmntent(fp);
                 }
@@ -352,9 +348,9 @@ static int lfs_catinfo(int argc, char **argv)
 
         if (mnt) {
                 if (argc == 3)
-                        rc = op_catinfo(mnt->mnt_dir, argv[1], argv[2]);
+                        rc = llapi_catinfo(mnt->mnt_dir, argv[1], argv[2]);
                 else
-                        rc = op_catinfo(mnt->mnt_dir, argv[1], NULL);
+                        rc = llapi_catinfo(mnt->mnt_dir, argv[1], NULL);
         } else {
                 fprintf(stderr, "no lustre_lite mounted.\n");
                 rc = -1;
@@ -368,13 +364,13 @@ int main(int argc, char **argv)
         int rc;
 
         setlinebuf(stdout);
-                                                                                                                             
+
         ptl_initialize(argc, argv);
         if (obd_initialize(argc, argv) < 0)
                 exit(2);
         if (dbg_initialize(argc, argv) < 0)
                 exit(3);
-                                                                                                                             
+
         Parser_init("lfs > ", cmdlist);
 
         if (argc > 1) {

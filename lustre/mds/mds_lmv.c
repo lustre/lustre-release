@@ -162,7 +162,7 @@ int mds_get_lmv_attr(struct obd_device *obd, struct inode *inode,
 
 	/* first calculate mea size */
         *mea_size = obd_alloc_diskmd(mds->mds_lmv_exp,
-                                     (struct lov_mds_md **) mea);
+                                     (struct lov_mds_md **)mea);
 	/* FIXME: error handling here */
 	LASSERT(*mea != NULL);
 
@@ -637,13 +637,18 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len)
+int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int flags)
 {
+        struct lmv_obd *lmv;
         struct mds_obd *mds = &obd->u.mds;
-        struct lmv_obd *lmv = &mds->mds_lmv_exp->exp_obd->u.lmv;
-        int i;
+        int i = mds->mds_num;
 
-        i = raw_name2idx(lmv->count, name, len);
+        if (flags & REC_REINT_CREATE) { 
+                i = mds->mds_num;
+        } else if (mds->mds_lmv_exp) {
+                lmv = &mds->mds_lmv_exp->exp_obd->u.lmv;
+                i = raw_name2idx(lmv->count, name, len);
+        }
         RETURN(i);
 }
 

@@ -8,7 +8,7 @@
 #define PORTAL_DEBUG
 
 #ifndef offsetof
-# define offsetof(typ,memb)     ((int)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
@@ -301,6 +301,7 @@ extern void kportal_blockallsigs (void);
 #endif
 # include <unistd.h>
 # include <time.h>
+# include <limits.h>
 # include <asm/types.h>
 # ifndef DEBUG_SUBSYSTEM
 #  define DEBUG_SUBSYSTEM S_UNDEFINED
@@ -309,7 +310,12 @@ extern void kportal_blockallsigs (void);
 #  undef NDEBUG
 #  include <assert.h>
 #  define LASSERT(e)     assert(e)
-#  define LASSERTF(cond, args...)     assert(cond)
+#  define LASSERTF(cond, args...)                                              \
+do {                                                                           \
+          if (!(cond))                                                         \
+                CERROR(args);                                                  \
+          assert(cond);                                                        \
+} while (0)
 # else
 #  define LASSERT(e)
 #  define LASSERTF(cond, args...) do { } while (0)
@@ -317,6 +323,7 @@ extern void kportal_blockallsigs (void);
 # define printk(format, args...) printf (format, ## args)
 # define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
 # define PORTAL_FREE(a, b) do { free(a); } while (0);
+void portals_debug_dumplog(void);
 # define portals_debug_msg(subsys, mask, file, fn, line, stack, format, a...) \
     printf("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
            (subsys), (mask), (long)time(0), file, fn, line,                   \
@@ -432,40 +439,6 @@ struct portals_device_userstate
 /*
  * USER LEVEL STUFF BELOW
  */
-
-#define PORTALS_CFG_VERSION 0x00010001;
-
-struct portals_cfg {
-        __u32 pcfg_version;
-        __u32 pcfg_command;
-
-        __u32 pcfg_nal;
-        __u32 pcfg_flags;
-
-        __u32 pcfg_gw_nal;
-        __u64 pcfg_nid;
-        __u64 pcfg_nid2;
-        __u64 pcfg_nid3;
-        __u32 pcfg_id;
-        __u32 pcfg_misc;
-        __u32 pcfg_fd;
-        __u32 pcfg_count;
-        __u32 pcfg_size;
-        __u32 pcfg_wait;
-
-        __u32 pcfg_plen1; /* buffers in userspace */
-        char *pcfg_pbuf1;
-        __u32 pcfg_plen2; /* buffers in userspace */
-        char *pcfg_pbuf2;
-};
-
-#define PCFG_INIT(pcfg, cmd)                            \
-do {                                                    \
-        memset(&pcfg, 0, sizeof(pcfg));                 \
-        pcfg.pcfg_version = PORTALS_CFG_VERSION;        \
-        pcfg.pcfg_command = (cmd);                      \
-                                                        \
-} while (0)
 
 #define PORTAL_IOCTL_VERSION 0x00010007
 #define PING_SYNC       0
@@ -672,21 +645,13 @@ enum {
         GMNAL     = 3,
         /*          4 unused */
         TCPNAL    = 5,
-        SCIMACNAL = 6,
-        ROUTER    = 7,
-        IBNAL     = 8,
+        ROUTER    = 6,
+        IBNAL     = 7,
+        CRAY_KB_ERNAL = 8,
         NAL_ENUM_END_MARKER
 };
 
-#ifdef __KERNEL__
-extern ptl_handle_ni_t  kqswnal_ni;
-extern ptl_handle_ni_t  ksocknal_ni;
-extern ptl_handle_ni_t  kgmnal_ni;
-extern ptl_handle_ni_t  kibnal_ni;
-extern ptl_handle_ni_t  kscimacnal_ni;
-#endif
-
-#define PTL_NALFMT_SIZE         16
+#define PTL_NALFMT_SIZE               26 /* %u:%u.%u.%u.%u (10+4+4+4+3+1) */
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 
@@ -711,10 +676,6 @@ enum {
         DEBUG_DAEMON_CONTINUE    =  4,
 };
 
-/* module.c */
-typedef int (*nal_cmd_handler_t)(struct portals_cfg *, void * private);
-int kportal_nal_register(int nal, nal_cmd_handler_t handler, void * private);
-int kportal_nal_unregister(int nal);
 
 enum cfg_record_type {
         PORTALS_CFG_TYPE = 1,
@@ -722,10 +683,6 @@ enum cfg_record_type {
 };
 
 typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
-int kportal_nal_cmd(struct portals_cfg *);
-
-ptl_handle_ni_t *kportal_get_ni (int nal);
-void kportal_put_ni (int nal);
 
 #ifdef __CYGWIN__
 # ifndef BITS_PER_LONG
@@ -735,6 +692,16 @@ void kportal_put_ni (int nal);
 #   define BITS_PER_LONG 64
 #  endif
 # endif
+#endif
+
+#if BITS_PER_LONG > 32
+# define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
+# define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
+# define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
+#else
+# define LI_POISON ((int)0x5a5a5a5a)
+# define LL_POISON ((long)0x5a5a5a5a)
+# define LP_POISON ((void *)(long)0x5a5a5a5a)
 #endif
 
 #if defined(__x86_64__)

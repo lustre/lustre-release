@@ -23,7 +23,7 @@ OSTSIZE=${OSTSIZE:-150000}
 # 1 to config an echo client instead of llite
 ECHO_CLIENT=${ECHO_CLIENT:-}
 
-STRIPE_BYTES=65536
+STRIPE_BYTES=524288
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-$((OSTCOUNT -1))}
 
 # specific journal size for the ost, in MB

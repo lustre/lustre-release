@@ -18,32 +18,29 @@
 typedef struct nal_t nal_t;
 
 struct nal_t {
-	ptl_ni_t ni;
-	int refct;
-	void *nal_data;
-	int *timeout;		/* for libp30api users */
-	int (*forward) (nal_t * nal, int index,	/* Function ID */
+	int              nal_refct;
+	void            *nal_data;
+
+	int (*startup) (nal_t *nal, ptl_pid_t requested_pid,
+			ptl_ni_limits_t *req, ptl_ni_limits_t *actual);
+	
+	void (*shutdown) (nal_t *nal);
+
+	int (*forward) (nal_t *nal, int index,	/* Function ID */
 			void *args, size_t arg_len, void *ret, size_t ret_len);
 
-	int (*shutdown) (nal_t * nal, int interface);
+	int (*yield) (nal_t *nal, unsigned long *flags, int milliseconds);
 
-	int (*validate) (nal_t * nal, void *base, size_t extent);
+	void (*lock) (nal_t *nal, unsigned long *flags);
 
-	int (*yield) (nal_t * nal, unsigned long *flags, int milliseconds);
-
-	void (*lock) (nal_t * nal, unsigned long *flags);
-
-	void (*unlock) (nal_t * nal, unsigned long *flags);
+	void (*unlock) (nal_t *nal, unsigned long *flags);
 };
-
-typedef nal_t *(ptl_interface_t) (int, ptl_pt_index_t, ptl_ac_index_t, ptl_pid_t requested_pid);
-extern nal_t *PTL_IFACE_IP(int, ptl_pt_index_t, ptl_ac_index_t, ptl_pid_t requested_pid);
-extern nal_t *PTL_IFACE_MYR(int, ptl_pt_index_t, ptl_ac_index_t, ptl_pid_t requested_pid);
 
 extern nal_t *ptl_hndl2nal(ptl_handle_any_t * any);
 
-#ifndef PTL_IFACE_DEFAULT
-#define PTL_IFACE_DEFAULT (PTL_IFACE_IP)
+#ifdef __KERNEL__
+extern int ptl_register_nal(ptl_interface_t interface, nal_t *nal);
+extern void ptl_unregister_nal(ptl_interface_t interface);
 #endif
 
 #endif

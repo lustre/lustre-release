@@ -43,7 +43,6 @@
 #include <linux/lustre_net.h>
 
 #ifndef  __CYGWIN__
-# include <linux/ctype.h>
 # include <linux/init.h>
 #else
 # include <ctype.h>

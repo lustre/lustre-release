@@ -47,10 +47,9 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
-        struct obd_device *disk_obd;
         struct llog_handle  *loghandle;
         struct llogd_body *body;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct llog_logid *logid = NULL;
         struct llog_ctxt *ctxt;
         char * name = NULL;
@@ -78,8 +77,7 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
 
         ctxt = llog_get_context(&obd->obd_llogs, body->lgd_ctxt_idx);
         LASSERT(ctxt != NULL);
-        disk_obd = ctxt->loc_exp->exp_obd;
-        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         rc = llog_create(ctxt, &loghandle, logid, name);
         if (rc)
@@ -97,7 +95,73 @@ out_close:
         if (!rc)
                 rc = rc2;
 out_pop:
-        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
+out:
+        RETURN(rc);
+}
+
+int llog_origin_handle_prev_block(struct ptlrpc_request *req)
+{
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        struct llog_handle  *loghandle;
+        struct llogd_body *body;
+        struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
+        __u32 flags;
+        __u8 *buf;
+        void * ptr;
+        int rc, rc2, size[] = {sizeof (*body), LLOG_CHUNK_SIZE};
+        ENTRY;
+
+        body = lustre_swab_reqbuf(req, 0, sizeof(*body),
+                                  lustre_swab_llogd_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack llogd_body\n");
+                GOTO(out, rc =-EFAULT);
+        }
+
+        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
+        if (!buf)
+                GOTO(out, rc = -ENOMEM);
+
+        ctxt = llog_get_context(&obd->obd_llogs, body->lgd_ctxt_idx);
+        LASSERT(ctxt != NULL);
+        push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
+
+        rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+        if (rc)
+                GOTO(out_pop, rc);
+
+        flags = body->lgd_llh_flags;
+        rc = llog_init_handle(loghandle, flags, NULL);
+        if (rc)
+                GOTO(out_close, rc);
+
+        memset(buf, 0, LLOG_CHUNK_SIZE);
+        rc = llog_prev_block(loghandle, body->lgd_index, buf, LLOG_CHUNK_SIZE);
+        if (rc)
+                GOTO(out_close, rc);
+
+
+        rc = lustre_pack_reply(req, 2, size, NULL);
+        if (rc)
+                GOTO(out_close, rc = -ENOMEM);
+
+        ptr = lustre_msg_buf(req->rq_repmsg, 0, sizeof (body));
+        memcpy(ptr, body, sizeof(*body));
+
+        ptr = lustre_msg_buf(req->rq_repmsg, 1, LLOG_CHUNK_SIZE);
+        memcpy(ptr, buf, LLOG_CHUNK_SIZE);
+
+out_close:
+        rc2 = llog_close(loghandle);
+        if (!rc)
+                rc = rc2;
+
+out_pop:
+        pop_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
+        OBD_FREE(buf, LLOG_CHUNK_SIZE);
 out:
         RETURN(rc);
 }
@@ -106,10 +170,9 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
-        struct obd_device *disk_obd;
         struct llog_handle  *loghandle;
         struct llogd_body *body;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct llog_ctxt *ctxt;
         __u32 flags;
         __u8 *buf;
@@ -132,8 +195,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 
         ctxt = llog_get_context(&obd->obd_llogs, body->lgd_ctxt_idx);
         LASSERT(ctxt != NULL);
-        disk_obd = ctxt->loc_exp->exp_obd;
-        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
         if (rc)
@@ -168,7 +230,7 @@ out_close:
                 rc = rc2;
 
 out_pop:
-        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
         OBD_FREE(buf, LLOG_CHUNK_SIZE);
 out:
         RETURN(rc);
@@ -178,11 +240,10 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
-        struct obd_device *disk_obd;
         struct llog_handle  *loghandle;
         struct llogd_body *body;
         struct llog_log_hdr *hdr;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct llog_ctxt *ctxt;
         __u32 flags;
         int size[] = {sizeof (*hdr)};
@@ -198,8 +259,7 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
 
         ctxt = llog_get_context(&obd->obd_llogs, body->lgd_ctxt_idx);
         LASSERT(ctxt != NULL);
-        disk_obd = ctxt->loc_exp->exp_obd;
-        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
         if (rc)
@@ -224,7 +284,7 @@ out_close:
                 rc = rc2;
 
 out_pop:
-        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
 out:
         RETURN(rc);
@@ -242,11 +302,10 @@ int llog_origin_handle_close(struct ptlrpc_request *req)
 int llog_origin_handle_cancel(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_device *disk_obd;
         struct llog_cookie *logcookies;
         struct llog_ctxt *ctxt;
         int num_cookies, rc = 0, err, i;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct llog_handle *cathandle;
         struct inode *inode;
         void *handle;
@@ -265,15 +324,14 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                 RETURN(-ENOENT);
         }
 
-        disk_obd = ctxt->loc_exp->exp_obd;
-        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
         for (i = 0; i < num_cookies; i++, logcookies++) {
                 cathandle = ctxt->loc_handle;
                 LASSERT(cathandle != NULL);
                 inode = cathandle->lgh_file->f_dentry->d_inode;
 
-                handle = fsfilt_start_log(disk_obd, inode,
-                                          FSFILT_OP_CANCEL_UNLINK, NULL, 1);
+                handle = llog_fsfilt_start(ctxt, inode,
+                                           FSFILT_OP_CANCEL_UNLINK, NULL);
                 if (IS_ERR(handle)) {
                         CERROR("fsfilt_start failed: %ld\n", PTR_ERR(handle));
                         GOTO(pop_ctxt, rc = PTR_ERR(handle));
@@ -281,7 +339,7 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
 
                 rc = llog_cat_cancel_records(cathandle, 1, logcookies);
 
-                err = fsfilt_commit(disk_obd, inode, handle, 0);
+                err = llog_fsfilt_commit(ctxt, inode, handle, 0);
                 if (err) {
                         CERROR("error committing transaction: %d\n", err);
                         if (!rc)
@@ -290,7 +348,7 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                 }
         }
 pop_ctxt:
-        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
         if (rc)
                 CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
         else
@@ -304,17 +362,18 @@ static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
                                char *client)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct llog_ctxt *ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
-        struct obd_run_ctxt saved;
+        struct llog_ctxt *ctxt;
+        struct lvfs_run_ctxt saved;
         struct llog_handle *handle = NULL;
         char name[4][64];
         int rc, i, l, remains = buf_len;
         char *out = buf;
 
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
         if (ctxt == NULL || mds == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         sprintf(name[0], "%s", mds->mds_profile);
         sprintf(name[1], "%s-clean", mds->mds_profile);
@@ -350,7 +409,7 @@ static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
                         break;
         }
 out_pop:
-        pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
         RETURN(rc);
 }
 
@@ -422,14 +481,15 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct llog_handle *handle;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int size, i, count;
         struct llog_catid *idarray;
         struct llog_logid *id;
         char name[32] = CATLIST;
         int rc;
         struct cb_data data;
-        struct llog_ctxt *ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
+        struct llog_ctxt *ctxt = llog_get_context(&obd->obd_llogs, 
+                                                  LLOG_CONFIG_ORIG_CTXT);
 
         if (ctxt == NULL || mds == NULL)
                 RETURN(-EOPNOTSUPP);
@@ -441,11 +501,12 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         if (!idarray)
                 RETURN(-ENOMEM);
 
-        rc = llog_get_cat_list(obd, obd, name, count, idarray);
+        rc = llog_get_cat_list(&obd->obd_lvfs_ctxt, obd->obd_fsops, 
+                               name, count, idarray);
         if (rc)
                 GOTO(out_free, rc);
 
-        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         data.ctxt = ctxt;
         data.out = buf;
@@ -483,7 +544,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
                         break;
         }
 out_pop:
-        pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 out_free:
         OBD_FREE(idarray, size);
         RETURN(rc);
@@ -529,6 +590,11 @@ out_free:
 
 #else /* !__KERNEL__ */
 int llog_origin_handle_create(struct ptlrpc_request *req)
+{
+        LBUG();
+        return 0;
+}
+int llog_origin_handle_prev_block(struct ptlrpc_request *req)
 {
         LBUG();
         return 0;

@@ -229,7 +229,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
  #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
  #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
-+#define EXT3_FEATURE_INCOMPAT_MDSNUM		0x0010 /* direntry has mdsnum */
++#define EXT3_FEATURE_INCOMPAT_MDSNUM		0x0020 /* direntry has mdsnum */
  
  #define EXT3_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
  #define EXT3_FEATURE_INCOMPAT_SUPP	(EXT3_FEATURE_INCOMPAT_FILETYPE| \

@@ -129,6 +129,10 @@ class LustreDB_XML(LustreDB):
         self.dom_node = dom
         self.root_node = root_node
 
+    def close(self):
+        # do nothing
+        return None
+
     def xmltext(self, dom_node, tag):
         list = dom_node.getElementsByTagName(tag)
         if len(list) > 0:

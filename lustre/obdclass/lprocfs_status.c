@@ -315,20 +315,13 @@ int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int lprocfs_rd_filegroups(char *page, char **start, off_t off, int count,
-                          int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "unimplemented\n");
-}
-
 int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         struct obd_import *imp;
         char *imp_state_name = NULL;
-        
+
         LASSERT(obd != NULL);
         imp = obd->u.cli.cl_import;
         imp_state_name = ptlrpc_import_state_name(imp->imp_state);
@@ -348,6 +341,16 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
         LASSERT(conn != NULL);
         *eof = 1;
         return snprintf(page, count, "%s\n", conn->c_remote_uuid.uuid);
+}
+
+int lprocfs_rd_num_exports(char *page, char **start, off_t off, int count,
+                           int *eof,  void *data)
+{
+        struct obd_device *obd = (struct obd_device*)data;
+
+        LASSERT(obd != NULL);
+        *eof = 1;
+        return snprintf(page, count, "%u\n", obd->obd_num_exports);
 }
 
 int lprocfs_rd_numrefs(char *page, char **start, off_t off, int count,
@@ -538,10 +541,11 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 }
 
 struct file_operations lprocfs_stats_seq_fops = {
-        open:    lprocfs_stats_seq_open,
-        read:    seq_read,
-        llseek:  seq_lseek,
-        release: seq_release,
+        .owner   = THIS_MODULE,
+        .open    = lprocfs_stats_seq_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
+        .release = seq_release,
 };
 
 int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
@@ -593,7 +597,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LASSERT(obd->obd_proc_entry != NULL);
         LASSERT(obd->obd_cntr_base == 0);
 
-        num_stats = 1 + OBD_COUNTER_OFFSET(notify) +
+        num_stats = 1 + OBD_COUNTER_OFFSET(init_ea_size) +
                 num_private_stats;
         stats = lprocfs_alloc_stats(num_stats);
         if (stats == NULL)
@@ -634,6 +638,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, iterate);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, preprw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, commitrw);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, write_extents);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, enqueue);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, match);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, change_cbdata);
@@ -649,7 +654,8 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, import_event);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, notify);
-        
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, init_ea_size);
+
         for (i = num_private_stats; i < num_stats; i++) {
                 /* If this LBUGs, it is likely that an obd
                  * operation was added to struct obd_ops in
@@ -803,6 +809,7 @@ EXPORT_SYMBOL(lprocfs_rd_name);
 EXPORT_SYMBOL(lprocfs_rd_fstype);
 EXPORT_SYMBOL(lprocfs_rd_server_uuid);
 EXPORT_SYMBOL(lprocfs_rd_conn_uuid);
+EXPORT_SYMBOL(lprocfs_rd_num_exports);
 EXPORT_SYMBOL(lprocfs_rd_numrefs);
 
 EXPORT_SYMBOL(lprocfs_rd_blksize);
@@ -811,7 +818,6 @@ EXPORT_SYMBOL(lprocfs_rd_kbytesfree);
 EXPORT_SYMBOL(lprocfs_rd_kbytesavail);
 EXPORT_SYMBOL(lprocfs_rd_filestotal);
 EXPORT_SYMBOL(lprocfs_rd_filesfree);
-EXPORT_SYMBOL(lprocfs_rd_filegroups);
 
 EXPORT_SYMBOL(lprocfs_write_helper);
 EXPORT_SYMBOL(lprocfs_write_u64_helper);

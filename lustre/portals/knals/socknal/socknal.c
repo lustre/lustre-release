@@ -25,13 +25,10 @@
 
 #include "socknal.h"
 
+nal_t                   ksocknal_api;
+ksock_nal_data_t        ksocknal_data;
 ptl_handle_ni_t         ksocknal_ni;
-static nal_t            ksocknal_api;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-ksock_nal_data_t ksocknal_data;
-#else
-static ksock_nal_data_t ksocknal_data;
-#endif
+ksock_tunables_t        ksocknal_tunables;
 
 kpr_nal_interface_t ksocknal_router_interface = {
         kprni_nalid:      SOCKNAL,
@@ -40,6 +37,7 @@ kpr_nal_interface_t ksocknal_router_interface = {
         kprni_notify:     ksocknal_notify,
 };
 
+#ifdef CONFIG_SYSCTL
 #define SOCKNAL_SYSCTL	200
 
 #define SOCKNAL_SYSCTL_TIMEOUT     1
@@ -50,21 +48,21 @@ kpr_nal_interface_t ksocknal_router_interface = {
 
 static ctl_table ksocknal_ctl_table[] = {
         {SOCKNAL_SYSCTL_TIMEOUT, "timeout", 
-         &ksocknal_data.ksnd_io_timeout, sizeof (int),
+         &ksocknal_tunables.ksnd_io_timeout, sizeof (int),
          0644, NULL, &proc_dointvec},
         {SOCKNAL_SYSCTL_EAGER_ACK, "eager_ack", 
-         &ksocknal_data.ksnd_eager_ack, sizeof (int),
+         &ksocknal_tunables.ksnd_eager_ack, sizeof (int),
          0644, NULL, &proc_dointvec},
 #if SOCKNAL_ZC
         {SOCKNAL_SYSCTL_ZERO_COPY, "zero_copy", 
-         &ksocknal_data.ksnd_zc_min_frag, sizeof (int),
+         &ksocknal_tunables.ksnd_zc_min_frag, sizeof (int),
          0644, NULL, &proc_dointvec},
 #endif
         {SOCKNAL_SYSCTL_TYPED, "typed", 
-         &ksocknal_data.ksnd_typed_conns, sizeof (int),
+         &ksocknal_tunables.ksnd_typed_conns, sizeof (int),
          0644, NULL, &proc_dointvec},
         {SOCKNAL_SYSCTL_MIN_BULK, "min_bulk", 
-         &ksocknal_data.ksnd_min_bulk, sizeof (int),
+         &ksocknal_tunables.ksnd_min_bulk, sizeof (int),
          0644, NULL, &proc_dointvec},
         { 0 }
 };
@@ -73,6 +71,7 @@ static ctl_table ksocknal_top_ctl_table[] = {
         {SOCKNAL_SYSCTL, "socknal", NULL, 0, 0555, ksocknal_ctl_table},
         { 0 }
 };
+#endif
 
 int
 ksocknal_api_forward(nal_t *nal, int id, void *args, size_t args_len,
@@ -85,12 +84,6 @@ ksocknal_api_forward(nal_t *nal, int id, void *args, size_t args_len,
         nal_cb = k->ksnd_nal_cb;
 
         lib_dispatch(nal_cb, k, id, args, ret); /* ksocknal_send needs k */
-        return PTL_OK;
-}
-
-int
-ksocknal_api_shutdown(nal_t *nal, int ni)
-{
         return PTL_OK;
 }
 
@@ -153,19 +146,6 @@ ksocknal_api_yield(nal_t *nal, unsigned long *flags, int milliseconds)
 	
 	return (milliseconds);
 }
-
-nal_t *
-ksocknal_init(int interface, ptl_pt_index_t ptl_size,
-              ptl_ac_index_t ac_size, ptl_pid_t requested_pid)
-{
-        CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n", (ptl_nid_t)0);
-        lib_init(&ksocknal_lib, (ptl_nid_t)0, 0, 10, ptl_size, ac_size);
-        return (&ksocknal_api);
-}
-
-/*
- *  EXTRA functions follow
- */
 
 int
 ksocknal_set_mynid(ptl_nid_t nid)
@@ -832,7 +812,7 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
 
         /* Set the deadline for the outgoing HELLO to drain */
         conn->ksnc_tx_deadline = jiffies +
-                                 ksocknal_data.ksnd_io_timeout * HZ;
+                                 ksocknal_tunables.ksnd_io_timeout * HZ;
 
         list_add (&conn->ksnc_list, &peer->ksnp_conns);
         atomic_inc (&conn->ksnc_refcount);
@@ -1466,30 +1446,34 @@ ksocknal_free_buffers (void)
 }
 
 void
-ksocknal_module_fini (void)
+ksocknal_api_shutdown (nal_t *nal)
 {
         int   i;
 
+        if (nal->nal_refct != 0) {
+                /* This module got the first ref */
+                PORTAL_MODULE_UNUSE;
+                return;
+        }
+
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
+
+        LASSERT(nal == &ksocknal_api);
 
         switch (ksocknal_data.ksnd_init) {
         default:
                 LASSERT (0);
 
         case SOCKNAL_INIT_ALL:
-#if CONFIG_SYSCTL
-                if (ksocknal_data.ksnd_sysctl != NULL)
-                        unregister_sysctl_table (ksocknal_data.ksnd_sysctl);
-#endif
-                kportal_nal_unregister(SOCKNAL);
-                PORTAL_SYMBOL_UNREGISTER (ksocknal_ni);
+                libcfs_nal_cmd_unregister(SOCKNAL);
+
+                ksocknal_data.ksnd_init = SOCKNAL_INIT_LIB;
                 /* fall through */
 
-        case SOCKNAL_INIT_PTL:
+        case SOCKNAL_INIT_LIB:
                 /* No more calls to ksocknal_cmd() to create new
                  * autoroutes/connections since we're being unloaded. */
-                PtlNIFini(ksocknal_ni);
 
                 /* Delete all autoroute entries */
                 ksocknal_del_route(PTL_NID_ANY, 0, 0, 0);
@@ -1510,6 +1494,8 @@ ksocknal_module_fini (void)
 
                 /* Tell lib we've stopped calling into her. */
                 lib_fini(&ksocknal_lib);
+
+                ksocknal_data.ksnd_init = SOCKNAL_INIT_DATA;
                 /* fall through */
 
         case SOCKNAL_INIT_DATA:
@@ -1557,6 +1543,8 @@ ksocknal_module_fini (void)
                 kpr_deregister (&ksocknal_data.ksnd_router);
 
                 ksocknal_free_buffers();
+
+                ksocknal_data.ksnd_init = SOCKNAL_INIT_NOTHING;
                 /* fall through */
 
         case SOCKNAL_INIT_NOTHING:
@@ -1571,7 +1559,7 @@ ksocknal_module_fini (void)
 }
 
 
-void __init
+void
 ksocknal_init_incarnation (void)
 {
         struct timeval tv;
@@ -1587,42 +1575,31 @@ ksocknal_init_incarnation (void)
                 (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 }
 
-int __init
-ksocknal_module_init (void)
+int
+ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
+                      ptl_ni_limits_t *requested_limits,
+                      ptl_ni_limits_t *actual_limits)
 {
-        int   pkmem = atomic_read(&portal_kmemory);
-        int   rc;
-        int   i;
-        int   j;
+        ptl_process_id_t  process_id;
+        int               pkmem = atomic_read(&portal_kmemory);
+        int               rc;
+        int               i;
+        int               j;
 
-        /* packet descriptor must fit in a router descriptor's scratchpad */
-        LASSERT(sizeof (ksock_tx_t) <= sizeof (kprfd_scratch_t));
-        /* the following must be sizeof(int) for proc_dointvec() */
-        LASSERT(sizeof (ksocknal_data.ksnd_io_timeout) == sizeof (int));
-        LASSERT(sizeof (ksocknal_data.ksnd_eager_ack) == sizeof (int));
-        /* check ksnr_connected/connecting field large enough */
-        LASSERT(SOCKNAL_CONN_NTYPES <= 4);
-        
+        LASSERT (nal == &ksocknal_api);
+
+        if (nal->nal_refct != 0) {
+                if (actual_limits != NULL)
+                        *actual_limits = ksocknal_lib.ni.actual_limits;
+                /* This module got the first ref */
+                PORTAL_MODULE_USE;
+                return (PTL_OK);
+        }
+
         LASSERT (ksocknal_data.ksnd_init == SOCKNAL_INIT_NOTHING);
-
-        ksocknal_api.forward  = ksocknal_api_forward;
-        ksocknal_api.shutdown = ksocknal_api_shutdown;
-        ksocknal_api.validate = NULL;           /* our api validate is a NOOP */
-        ksocknal_api.lock     = ksocknal_api_lock;
-        ksocknal_api.unlock   = ksocknal_api_unlock;
-        ksocknal_api.nal_data = &ksocknal_data;
-
-        ksocknal_lib.nal_data = &ksocknal_data;
 
         memset (&ksocknal_data, 0, sizeof (ksocknal_data)); /* zero pointers */
 
-        ksocknal_data.ksnd_io_timeout = SOCKNAL_IO_TIMEOUT;
-        ksocknal_data.ksnd_eager_ack  = SOCKNAL_EAGER_ACK;
-        ksocknal_data.ksnd_typed_conns = SOCKNAL_TYPED_CONNS;
-        ksocknal_data.ksnd_min_bulk   = SOCKNAL_MIN_BULK;
-#if SOCKNAL_ZC
-        ksocknal_data.ksnd_zc_min_frag = SOCKNAL_ZC_MIN_FRAG;
-#endif
         ksocknal_init_incarnation();
         
         ksocknal_data.ksnd_peer_hash_size = SOCKNAL_PEER_HASH_SIZE;
@@ -1669,7 +1646,7 @@ ksocknal_module_init (void)
         PORTAL_ALLOC(ksocknal_data.ksnd_schedulers,
                      sizeof(ksock_sched_t) * SOCKNAL_N_SCHED);
         if (ksocknal_data.ksnd_schedulers == NULL) {
-                ksocknal_module_fini ();
+                ksocknal_api_shutdown (&ksocknal_api);
                 return (-ENOMEM);
         }
 
@@ -1685,15 +1662,19 @@ ksocknal_module_init (void)
                 init_waitqueue_head (&kss->kss_waitq);
         }
 
-        rc = PtlNIInit(ksocknal_init, 32, 4, 0, &ksocknal_ni);
-        if (rc != 0) {
-                CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
-                ksocknal_module_fini ();
+        /* NB we have to wait to be told our true NID... */
+        process_id.pid = 0;
+        process_id.nid = 0;
+        
+        rc = lib_init(&ksocknal_lib, process_id,
+                      requested_limits, actual_limits);
+        if (rc != PTL_OK) {
+                CERROR("lib_init failed: error %d\n", rc);
+                ksocknal_api_shutdown (&ksocknal_api);
                 return (rc);
         }
-        PtlNIDebug(ksocknal_ni, ~0);
 
-        ksocknal_data.ksnd_init = SOCKNAL_INIT_PTL; // flag PtlNIInit() called
+        ksocknal_data.ksnd_init = SOCKNAL_INIT_LIB; // flag lib_init() called
 
         for (i = 0; i < SOCKNAL_N_SCHED; i++) {
                 rc = ksocknal_thread_start (ksocknal_scheduler,
@@ -1701,7 +1682,7 @@ ksocknal_module_init (void)
                 if (rc != 0) {
                         CERROR("Can't spawn socknal scheduler[%d]: %d\n",
                                i, rc);
-                        ksocknal_module_fini ();
+                        ksocknal_api_shutdown (&ksocknal_api);
                         return (rc);
                 }
         }
@@ -1710,7 +1691,7 @@ ksocknal_module_init (void)
                 rc = ksocknal_thread_start (ksocknal_autoconnectd, (void *)((long)i));
                 if (rc != 0) {
                         CERROR("Can't spawn socknal autoconnectd: %d\n", rc);
-                        ksocknal_module_fini ();
+                        ksocknal_api_shutdown (&ksocknal_api);
                         return (rc);
                 }
         }
@@ -1718,7 +1699,7 @@ ksocknal_module_init (void)
         rc = ksocknal_thread_start (ksocknal_reaper, NULL);
         if (rc != 0) {
                 CERROR ("Can't spawn socknal reaper: %d\n", rc);
-                ksocknal_module_fini ();
+                ksocknal_api_shutdown (&ksocknal_api);
                 return (rc);
         }
 
@@ -1728,7 +1709,7 @@ ksocknal_module_init (void)
                 CDEBUG(D_NET, "Can't initialise routing interface "
                        "(rc = %d): not routing\n", rc);
         } else {
-                /* Only allocate forwarding buffers if I'm on a gateway */
+                /* Only allocate forwarding buffers if there's a router */
 
                 for (i = 0; i < (SOCKNAL_SMALL_FWD_NMSGS +
                                  SOCKNAL_LARGE_FWD_NMSGS); i++) {
@@ -1744,7 +1725,7 @@ ksocknal_module_init (void)
                         PORTAL_ALLOC(fmb, offsetof(ksock_fmb_t, 
                                                    fmb_kiov[pool->fmp_buff_pages]));
                         if (fmb == NULL) {
-                                ksocknal_module_fini();
+                                ksocknal_api_shutdown(&ksocknal_api);
                                 return (-ENOMEM);
                         }
 
@@ -1754,7 +1735,7 @@ ksocknal_module_init (void)
                                 fmb->fmb_kiov[j].kiov_page = alloc_page(GFP_KERNEL);
 
                                 if (fmb->fmb_kiov[j].kiov_page == NULL) {
-                                        ksocknal_module_fini ();
+                                        ksocknal_api_shutdown (&ksocknal_api);
                                         return (-ENOMEM);
                                 }
 
@@ -1765,19 +1746,13 @@ ksocknal_module_init (void)
                 }
         }
 
-        rc = kportal_nal_register(SOCKNAL, &ksocknal_cmd, NULL);
+        rc = libcfs_nal_cmd_register(SOCKNAL, &ksocknal_cmd, NULL);
         if (rc != 0) {
                 CERROR ("Can't initialise command interface (rc = %d)\n", rc);
-                ksocknal_module_fini ();
+                ksocknal_api_shutdown (&ksocknal_api);
                 return (rc);
         }
 
-        PORTAL_SYMBOL_REGISTER(ksocknal_ni);
-
-#ifdef CONFIG_SYSCTL
-        /* Press on regardless even if registering sysctl doesn't work */
-        ksocknal_data.ksnd_sysctl = register_sysctl_table (ksocknal_top_ctl_table, 0);
-#endif
         /* flag everything initialised */
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
 
@@ -1789,6 +1764,75 @@ ksocknal_module_init (void)
         return (0);
 }
 
+void __exit
+ksocknal_module_fini (void)
+{
+#ifdef CONFIG_SYSCTL
+        if (ksocknal_tunables.ksnd_sysctl != NULL)
+                unregister_sysctl_table (ksocknal_tunables.ksnd_sysctl);
+#endif
+        PtlNIFini(ksocknal_ni);
+
+        ptl_unregister_nal(SOCKNAL);
+}
+
+int __init
+ksocknal_module_init (void)
+{
+        int    rc;
+
+        /* packet descriptor must fit in a router descriptor's scratchpad */
+        LASSERT(sizeof (ksock_tx_t) <= sizeof (kprfd_scratch_t));
+        /* the following must be sizeof(int) for proc_dointvec() */
+        LASSERT(sizeof (ksocknal_tunables.ksnd_io_timeout) == sizeof (int));
+        LASSERT(sizeof (ksocknal_tunables.ksnd_eager_ack) == sizeof (int));
+        LASSERT(sizeof (ksocknal_tunables.ksnd_typed_conns) == sizeof (int));
+        LASSERT(sizeof (ksocknal_tunables.ksnd_min_bulk) == sizeof (int));
+#if SOCKNAL_ZC
+        LASSERT(sizeof (ksocknal_tunables.ksnd_zc_min_frag) == sizeof (int));
+#endif
+        /* check ksnr_connected/connecting field large enough */
+        LASSERT(SOCKNAL_CONN_NTYPES <= 4);
+        
+        ksocknal_api.startup  = ksocknal_api_startup;
+        ksocknal_api.forward  = ksocknal_api_forward;
+        ksocknal_api.shutdown = ksocknal_api_shutdown;
+        ksocknal_api.lock     = ksocknal_api_lock;
+        ksocknal_api.unlock   = ksocknal_api_unlock;
+        ksocknal_api.nal_data = &ksocknal_data;
+
+        ksocknal_lib.nal_data = &ksocknal_data;
+
+        /* Initialise dynamic tunables to defaults once only */
+        ksocknal_tunables.ksnd_io_timeout = SOCKNAL_IO_TIMEOUT;
+        ksocknal_tunables.ksnd_eager_ack  = SOCKNAL_EAGER_ACK;
+        ksocknal_tunables.ksnd_typed_conns = SOCKNAL_TYPED_CONNS;
+        ksocknal_tunables.ksnd_min_bulk   = SOCKNAL_MIN_BULK;
+#if SOCKNAL_ZC
+        ksocknal_tunables.ksnd_zc_min_frag = SOCKNAL_ZC_MIN_FRAG;
+#endif
+
+        rc = ptl_register_nal(SOCKNAL, &ksocknal_api);
+        if (rc != PTL_OK) {
+                CERROR("Can't register SOCKNAL: %d\n", rc);
+                return (-ENOMEM);               /* or something... */
+        }
+
+        /* Pure gateways want the NAL started up at module load time... */
+        rc = PtlNIInit(SOCKNAL, 0, NULL, NULL, &ksocknal_ni);
+        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
+                ptl_unregister_nal(SOCKNAL);
+                return (-ENODEV);
+        }
+        
+#ifdef CONFIG_SYSCTL
+        /* Press on regardless even if registering sysctl doesn't work */
+        ksocknal_tunables.ksnd_sysctl = 
+                register_sysctl_table (ksocknal_top_ctl_table, 0);
+#endif
+        return (0);
+}
+
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Kernel TCP Socket NAL v0.01");
 MODULE_LICENSE("GPL");
@@ -1796,4 +1840,3 @@ MODULE_LICENSE("GPL");
 module_init(ksocknal_module_init);
 module_exit(ksocknal_module_fini);
 
-EXPORT_SYMBOL (ksocknal_ni);

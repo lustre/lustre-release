@@ -27,10 +27,11 @@ usage() {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
-    export XMLCONFIG="${TESTSUITE}.xml"
+    export XMLCONFIG=${XMLCONFIG:-${TESTSUITE}.xml}
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=/r
+    export TMP=${TMP:-$ROOT/tmp}
 
     export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
     export LLMOUNT=${LLMOUNT:-"llmount"}
@@ -38,6 +39,7 @@ init_test_env() {
     export LMC=${LMC:-"lmc"}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
+    export FSYTPE=${FSTYPE:-"ext3"}
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
@@ -306,14 +308,14 @@ add_mds() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
+    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc --fstype $FSTYPE $*
 }
 
 add_mdsfailover() {
     facet=$1
     shift
     add_facet ${facet}failover  --lustre_upcall $UPCALL
-    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc $*
+    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc --fstype $FSTYPE $*
 }
 
 add_ost() {
@@ -321,14 +323,14 @@ add_ost() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc $*
+    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc --fstype $FSTYPE $*
 }
 
 add_ostfailover() {
     facet=$1
     shift
     add_facet ${facet}failover
-    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc $*
+    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc --fstype $FSTYPE $*
 }
 
 add_lov() {
@@ -476,6 +478,18 @@ cancel_lru_locks() {
 	    grep [0-9] $d/lock_unused_count
 	fi
     done
+}
+
+
+pgcache_empty() {
+    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
+        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
+                echo there is still data in page cache $a ?
+                cat $a;
+                return 1;
+        fi
+    done
+    return 0
 }
 
 ##################################

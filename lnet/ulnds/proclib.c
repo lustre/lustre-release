@@ -157,9 +157,6 @@ static void check_stopping(void *z)
  *  We define a limit macro to place a ceiling on limits
  *   for syntactic convenience
  */
-#define LIMIT(x,y,max)\
-     if ((unsigned int)x > max) y = max;
-
 extern int tcpnal_init(bridge);
 
 nal_initialize nal_table[PTL_IFACE_MAX]={0,tcpnal_init,0};
@@ -170,10 +167,8 @@ void *nal_thread(void *z)
     bridge b = args->nia_bridge;
     procbridge p=b->local;
     int rc;
-    ptl_pid_t pid_request;
+    ptl_process_id_t process_id;
     int nal_type;
-    ptl_ni_limits_t desired;
-    ptl_ni_limits_t actual;
     
     b->nal_cb=(nal_cb_t *)malloc(sizeof(nal_cb_t));
     b->nal_cb->nal_data=b;
@@ -189,28 +184,21 @@ void *nal_thread(void *z)
     b->nal_cb->cb_callback=nal_callback;
     b->nal_cb->cb_dist=nal_dist;
 
-    pid_request = args->nia_requested_pid;
-    desired = *args->nia_limits;
     nal_type = args->nia_nal_type;
 
-    actual = desired;
-    LIMIT(desired.max_match_entries,actual.max_match_entries,MAX_MES);
-    LIMIT(desired.max_mem_descriptors,actual.max_mem_descriptors,MAX_MDS);
-    LIMIT(desired.max_event_queues,actual.max_event_queues,MAX_EQS);
-    LIMIT(desired.max_atable_index,actual.max_atable_index,MAX_ACLS);
-    LIMIT(desired.max_ptable_index,actual.max_ptable_index,MAX_PTLS);
+    /* Wierd, but this sets b->nal_cb->ni.{nid,pid}, which lib_init() is
+     * about to do from the process_id passed to it...*/
+    set_address(b,args->nia_requested_pid);
 
-    set_address(b,pid_request);
-
+    process_id.pid = b->nal_cb->ni.pid;
+    process_id.nid = b->nal_cb->ni.nid;
+    
     if (nal_table[nal_type]) rc=(*nal_table[nal_type])(b);
     /* initialize the generic 'library' level code */
 
-    rc = lib_init(b->nal_cb, 
-                  b->nal_cb->ni.nid,
-                  b->nal_cb->ni.pid,
-		  10,
-		  actual.max_ptable_index,
-		  actual.max_atable_index);
+    rc = lib_init(b->nal_cb, process_id, 
+                  args->nia_requested_limits, 
+                  args->nia_actual_limits);
 
     /*
      * Whatever the initialization returned is passed back to the
@@ -219,11 +207,11 @@ void *nal_thread(void *z)
      */
     /* this should perform error checking */
     pthread_mutex_lock(&p->mutex);
-    p->nal_flags |= rc ? NAL_FLAG_STOPPED : NAL_FLAG_RUNNING;
+    p->nal_flags |= (rc != PTL_OK) ? NAL_FLAG_STOPPED : NAL_FLAG_RUNNING;
     pthread_cond_broadcast(&p->cond);
     pthread_mutex_unlock(&p->mutex);
 
-    if (!rc) {
+    if (rc == PTL_OK) {
         /* the thunk function is called each time the timer loop
            performs an operation and returns to blocking mode. we
            overload this function to inform the api side that
@@ -233,4 +221,3 @@ void *nal_thread(void *z)
     }
     return(0);
 }
-#undef LIMIT

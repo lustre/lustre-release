@@ -49,7 +49,7 @@ void usage(char *prog)
 }
 
 /* Print process rank, loop count, message, and exit (i.e. a fatal error) */
-int rprintf(int rank, int loop, const char *fmt, ...)
+void rprintf(int rank, int loop, const char *fmt, ...)
 {
         va_list       ap;
 
@@ -59,8 +59,7 @@ int rprintf(int rank, int loop, const char *fmt, ...)
 
         vprintf(fmt, ap);
 
-        MPI_Finalize();
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
 }
 
 int main(int argc, char *argv[])

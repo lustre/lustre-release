@@ -33,8 +33,6 @@
 #include <linux/stat.h>
 #include <linux/sched.h>
 #include <linux/smp_lock.h>
-#include <linux/ext2_fs.h>
-#include <linux/quotaops.h>
 #include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <asm/unistd.h>
@@ -442,33 +440,33 @@ commitrw_cleanup:
         return rc;
 }
 
-static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
+static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         ENTRY;
 
-        spin_lock_init(&obddev->u.echo.eo_lock);
-        obddev->u.echo.eo_lastino = ECHO_INIT_OBJID;
+        spin_lock_init(&obd->u.echo.eo_lock);
+        obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
-        obddev->obd_namespace =
-                ldlm_namespace_new("echo-tgt", LDLM_NAMESPACE_SERVER);
-        if (obddev->obd_namespace == NULL) {
+        obd->obd_namespace = ldlm_namespace_new("echo-tgt",
+                                                LDLM_NAMESPACE_SERVER);
+        if (obd->obd_namespace == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);
         }
 
         ptlrpc_init_client (LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                            "echo_ldlm_cb_client", &obddev->obd_ldlm_client);
+                            "echo_ldlm_cb_client", &obd->obd_ldlm_client);
         RETURN(0);
 }
 
-static int echo_cleanup(struct obd_device *obddev, int flags)
+static int echo_cleanup(struct obd_device *obd, int flags)
 {
-        int     leaked;
+        int leaked;
         ENTRY;
 
-        ldlm_namespace_free(obddev->obd_namespace, flags & OBD_OPT_FORCE);
+        ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
 
-        leaked = atomic_read(&obddev->u.echo.eo_prep);
+        leaked = atomic_read(&obd->u.echo.eo_prep);
         if (leaked != 0)
                 CERROR("%d prep/commitrw pages leaked\n", leaked);
 
@@ -502,20 +500,20 @@ int echo_detach(struct obd_device *dev)
 }
 
 static struct obd_ops echo_obd_ops = {
-        o_owner:           THIS_MODULE,
-        o_attach:          echo_attach,
-        o_detach:          echo_detach,
-        o_connect:         echo_connect,
-        o_disconnect:      echo_disconnect,
-        o_destroy_export:  echo_destroy_export,
-        o_create:          echo_create,
-        o_destroy:         echo_destroy,
-        o_getattr:         echo_getattr,
-        o_setattr:         echo_setattr,
-        o_preprw:          echo_preprw,
-        o_commitrw:        echo_commitrw,
-        o_setup:           echo_setup,
-        o_cleanup:         echo_cleanup
+        .o_owner           = THIS_MODULE,
+        .o_attach          = echo_attach,
+        .o_detach          = echo_detach,
+        .o_connect         = echo_connect,
+        .o_disconnect      = echo_disconnect,
+        .o_destroy_export  = echo_destroy_export,
+        .o_create          = echo_create,
+        .o_destroy         = echo_destroy,
+        .o_getattr         = echo_getattr,
+        .o_setattr         = echo_setattr,
+        .o_preprw          = echo_preprw,
+        .o_commitrw        = echo_commitrw,
+        .o_setup           = echo_setup,
+        .o_cleanup         = echo_cleanup
 };
 
 extern int echo_client_init(void);

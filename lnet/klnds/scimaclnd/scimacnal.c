@@ -26,7 +26,6 @@
 
 #include "scimacnal.h"
 
-ptl_handle_ni_t kscimacnal_ni;
 nal_t  kscimacnal_api;
 
 kscimacnal_data_t kscimacnal_data;
@@ -101,10 +100,34 @@ static void kscimacnal_unlock(nal_t *nal, unsigned long *flags)
 }
 
 
-static int kscimacnal_shutdown(nal_t *nal, int ni)
+static void kscimacnal_shutdown(nal_t *nal, int ni)
 {
         LASSERT (nal == &kscimacnal_api);
-        return 0;
+        LASSERT (kscimacnal_data.ksci_init);
+
+        if (nal->nal_refct != 0)
+                return;
+
+        /* Called on last matching PtlNIFini() */
+
+        /* FIXME: How should the shutdown procedure really look? 
+         */
+        kscimacnal_data.ksci_shuttingdown=1;
+
+        /* Stop handling ioctls */
+        libcfs_nal_cmd_unregister(SCIMACNAL);
+
+        mac_finish(kscimacnal_data.ksci_machandle);
+
+        /* finalise lib after net shuts up */
+        lib_fini(&kscimacnal_lib);
+
+        kscimacnal_data.ksci_init = 0;
+
+        /* Allow unload */
+        PORTAL_MODULE_UNUSE;
+
+        return;
 }
 
 
@@ -123,56 +146,26 @@ static void kscimacnal_yield( nal_t *nal, unsigned long *flags, int milliseconds
 }
 
 
-static nal_t *kscimacnal_init(int interface, ptl_pt_index_t  ptl_size,
-                ptl_ac_index_t  ac_size, ptl_pid_t requested_pid)
-{
-        int     nnids = 512; /* FIXME: Need ScaMac funktion to get #nodes */
-
-        CDEBUG(D_NET, "calling lib_init with nid "LPX64" nnids %d\n", kscimacnal_data.ksci_nid, nnids);
-        lib_init(&kscimacnal_lib, kscimacnal_data.ksci_nid, 0, nnids,ptl_size, ac_size); 
-        return &kscimacnal_api;
-}
-
-
-/* Called by kernel at module unload time */
-static void /*__exit*/ 
-kscimacnal_finalize(void)
-{
-        /* FIXME: How should the shutdown procedure really look? */
-        kscimacnal_data.ksci_shuttingdown=1;
-
-        PORTAL_SYMBOL_UNREGISTER(kscimacnal_ni);
-
-        PtlNIFini(kscimacnal_ni);
-        lib_fini(&kscimacnal_lib);
-
-        mac_finish(kscimacnal_data.ksci_machandle);
-
-        CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read (&portal_kmemory));
-
-        return;
-}
-
-
-/* Called by kernel at module insertion time */
-static int __init
-kscimacnal_initialize(void)
+static int kscimacnal_startup(nal_t *nal, ptl_pid_t requested_pid,
+                              ptl_ni_limits_t *requested_limits,
+                              ptl_ni_limits_t *actual_limits)
 {
         int rc;
-        unsigned long     nid=0;
+        mac_physaddr_t   mac_physaddr;
+        ptl_process_id_t process_id;
         mac_handle_t    *machandle = NULL;
 
+        if (nal->nal_refct != 0) {
+                if (actual_limits != NULL)
+                        *actual_limits = kscimacnal_lib.ni.actual_limits;
+                return (PTL_OK);
+        }
 
-        CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read (&portal_kmemory));
+        /* Called on first PtlNIInit(SCIMACNAL) */
 
-        kscimacnal_api.forward = kscimacnal_forward;
-        kscimacnal_api.shutdown = kscimacnal_shutdown;
-        kscimacnal_api.yield = kscimacnal_yield;
-        kscimacnal_api.validate = NULL;         /* our api validate is a NOOP */
-        kscimacnal_api.lock= kscimacnal_lock;
-        kscimacnal_api.unlock= kscimacnal_unlock;
-        kscimacnal_api.nal_data = &kscimacnal_data;
-
+        LASSERT (nal == kscimacnal_api);
+        LASSERT (!kscimacnal_data.ksci_init);
+        
         kscimacnal_lib.nal_data = &kscimacnal_data;
 
         memset(&kscimacnal_data, 0, sizeof(kscimacnal_data));
@@ -188,7 +181,7 @@ kscimacnal_initialize(void)
 
         if(!machandle) {
                 CERROR("mac_init() failed\n");
-                return -1;
+                return PTL_FAIL;
         }
 
         kscimacnal_data.ksci_machandle = machandle;
@@ -199,45 +192,88 @@ kscimacnal_initialize(void)
                                 mac_get_mtusize(machandle), SCIMACNAL_MTU);
                 CERROR("Consult README.scimacnal for more information\n");
                 mac_finish(machandle);
-                return -1;
+                return PTL_FAIL;
         }
 
         /* Get the node ID */
         /* mac_get_physaddrlen() is a function instead of define, sigh */
-        LASSERT(mac_get_physaddrlen(machandle) <= sizeof(nid));
-        if(mac_get_physaddr(machandle, (mac_physaddr_t *) &nid)) {
+        LASSERT(mac_get_physaddrlen(machandle) <= sizeof(mac_physaddr));
+        if(mac_get_physaddr(machandle, &mac_physaddr)) {
                 CERROR("mac_get_physaddr() failed\n");
                 mac_finish(machandle);
-                return -1;
+                return PTL_FAIL;
         }
-        nid = ntohl(nid);
-        kscimacnal_data.ksci_nid = nid;
+        kscimacnal_data.ksci_nid = (ptl_nid_t)(ntohl(mac_physaddr));
 
+        process_id.pid = 0;
+        process_id.nid = kscimacnal_data.ksci_nid;
 
-        /* Initialize Network Interface */
-        /* FIXME: What do the magic numbers mean? Documentation anyone? */
-        rc = PtlNIInit(kscimacnal_init, 32, 4, 0, &kscimacnal_ni);
-        if (rc) {
+        CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n",
+               kscimacnal_data.ksci_nid);
+
+        rc = lib_init(&kscimacnal_lib, process_id,
+                      requested_limits, actual_limits);
+        if (rc != PTL_OK) {
                 CERROR("PtlNIInit failed %d\n", rc);
-                mac_finish(machandle);
-                return (-ENOMEM);
-        }
-
-        /* Init command interface */
-        rc = kportal_nal_register (SCIMACNAL, &kscimacnal_cmd, NULL);
-        if (rc != 0) {
-                CERROR ("Can't initialise command interface (rc = %d)\n", rc);
-                PtlNIFini(kscimacnal_ni);
                 mac_finish(machandle);
                 return (rc);
         }
 
-
-        PORTAL_SYMBOL_REGISTER(kscimacnal_ni);
+        /* Init command interface */
+        rc = libcfs_nal_cmd_register (SCIMACNAL, &kscimacnal_cmd, NULL);
+        if (rc != 0) {
+                CERROR ("Can't initialise command interface (rc = %d)\n", rc);
+                lib_fini(&kscimacnal_lib);
+                mac_finish(machandle);
+                return (PTL_FAIL);
+        }
 
         /* We're done now, it's OK for the RX callback to do stuff */
         kscimacnal_data.ksci_init = 1;
 
+        /* Prevent unload before matching PtlNIFini() */
+        PORTAL_MODULE_USE;
+        
+        return (PTL_OK);
+}
+
+
+/* Called by kernel at module unload time */
+static void /*__exit*/ 
+kscimacnal_finalize(void)
+{
+        LASSERT (!kscimacnal_data.ksci_init);
+        
+        ptl_unregister_nal(SCIMACNAL);
+
+        CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read (&portal_kmemory));
+
+        return;
+}
+
+
+/* Called by kernel at module insertion time */
+static int __init
+kscimacnal_initialize(void)
+{
+        int rc;
+
+        CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read (&portal_kmemory));
+
+        kscimacnal_api.startup = kscimacnal_startup;
+        kscimacnal_api.forward = kscimacnal_forward;
+        kscimacnal_api.shutdown = kscimacnal_shutdown;
+        kscimacnal_api.yield = kscimacnal_yield;
+        kscimacnal_api.lock= kscimacnal_lock;
+        kscimacnal_api.unlock= kscimacnal_unlock;
+        kscimacnal_api.nal_data = &kscimacnal_data;
+
+        rc = ptl_register_nal(SCIMACNAL, &kscimacnal_api);
+        if (rc != PTL_OK) {
+                CERROR("Can't register SCIMACNAL: %d\n", rc);
+                return (-ENODEV);
+        }
+        
         return 0;
 }
 

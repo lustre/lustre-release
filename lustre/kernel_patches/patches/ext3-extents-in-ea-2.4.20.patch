@@ -1,7 +1,7 @@
 Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 ===================================================================
---- linux-2.4.20.orig/fs/ext3/extents-in-ea.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.20/fs/ext3/extents-in-ea.c	2004-01-24 14:54:04.000000000 +0300
+--- linux-2.4.20.orig/fs/ext3/extents-in-ea.c	2004-05-06 23:03:39.000000000 -0700
++++ linux-2.4.20/fs/ext3/extents-in-ea.c	2004-05-06 23:03:39.000000000 -0700
 @@ -0,0 +1,202 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
@@ -100,7 +100,7 @@ Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 +	memset(root, 0, size);
 +
 +	/* first, create ea to store root of the tree */
-+	handle = ext3_journal_start(inode, EXT3_ALLOC_NEEDED + 1);
++	handle = ext3_journal_start(inode, EXT3_ALLOC_NEEDED + 2);
 +	if (IS_ERR(handle))
 +		return PTR_ERR(handle);
 +	if ((err = ext3_xattr_set(handle, inode, name_index,
@@ -207,9 +207,9 @@ Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 +
 Index: linux-2.4.20/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.20.orig/fs/ext3/Makefile	2004-01-24 00:45:20.000000000 +0300
-+++ linux-2.4.20/fs/ext3/Makefile	2004-01-24 14:34:27.000000000 +0300
-@@ -17,7 +17,7 @@
+--- linux-2.4.20.orig/fs/ext3/Makefile	2004-05-06 23:02:11.000000000 -0700
++++ linux-2.4.20/fs/ext3/Makefile	2004-05-06 23:03:39.000000000 -0700
+@@ -19,7 +19,7 @@
  obj-m    := $(O_TARGET)
  
  export-objs += xattr.o
@@ -220,15 +220,15 @@ Index: linux-2.4.20/fs/ext3/Makefile
  include $(TOPDIR)/Rules.make
 Index: linux-2.4.20/fs/ext3/xattr.c
 ===================================================================
---- linux-2.4.20.orig/fs/ext3/xattr.c	2004-01-23 19:00:43.000000000 +0300
-+++ linux-2.4.20/fs/ext3/xattr.c	2004-01-24 14:34:27.000000000 +0300
+--- linux-2.4.20.orig/fs/ext3/xattr.c	2004-05-06 23:02:11.000000000 -0700
++++ linux-2.4.20/fs/ext3/xattr.c	2004-05-06 23:05:20.000000000 -0700
 @@ -771,7 +771,8 @@
   */
  int
- ext3_xattr_ibody_find(struct inode *inode, int name_index, 
+ ext3_xattr_ibody_find(struct inode *inode, int name_index,
 -		const char *name, struct ext3_xattr_entry *rentry, int *free)
-+		const char *name, struct ext3_xattr_entry *rentry, int *free,
-+		struct buffer_head **bh, int *offset)
++ 		const char *name, struct ext3_xattr_entry *rentry, int *free,
++ 		struct buffer_head **bh, int *offset)
  {
  	struct ext3_xattr_entry *last;
  	struct ext3_inode *raw_inode;
@@ -328,11 +328,11 @@ Index: linux-2.4.20/fs/ext3/xattr.c
 +
  /*
   * ext3_xattr_block_set()
-  * 
+  *
 Index: linux-2.4.20/include/linux/ext3_xattr.h
 ===================================================================
---- linux-2.4.20.orig/include/linux/ext3_xattr.h	2004-01-24 14:22:28.000000000 +0300
-+++ linux-2.4.20/include/linux/ext3_xattr.h	2004-01-24 14:34:27.000000000 +0300
+--- linux-2.4.20.orig/include/linux/ext3_xattr.h	2004-05-06 23:02:11.000000000 -0700
++++ linux-2.4.20/include/linux/ext3_xattr.h	2004-05-06 23:03:39.000000000 -0700
 @@ -80,6 +80,7 @@
  extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
  extern int ext3_xattr_list(struct inode *, char *, size_t);

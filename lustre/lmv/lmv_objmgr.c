@@ -30,6 +30,7 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <asm/div64.h>
+#include <linux/seq_file.h>
 #else
 #include <liblustre.h>
 #endif
@@ -42,7 +43,6 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 #include <linux/obd_ost.h>
-#include <linux/seq_file.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd_lmv.h>
@@ -162,17 +162,32 @@ int lmv_create_obj_from_attrs(struct obd_export *exp,
                (unsigned long) fid->generation);
 
         if (!mea) {
+                unsigned long valid;
+                
                 CDEBUG(D_OTHER, "mea isn't passed in, get it now\n");
                 mealen = MEA_SIZE_LMV(lmv);
+                
                 /* time to update mea of parent fid */
                 i = fid->mds;
-                rc = md_getattr(lmv->tgts[fid->mds].exp, fid,
-                                OBD_MD_FLEASIZE, mealen, &req);
-                LASSERT(rc == 0);
                 md.mea = NULL;
-                rc = mdc_req2lustre_md(req, 0, NULL, exp, &md);
-                LASSERT(rc == 0);
-                LASSERT(md.mea != NULL);
+                
+                valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
+                rc = md_getattr(lmv->tgts[fid->mds].exp, fid,
+                                valid, mealen, &req);
+                if (rc) {
+                        CERROR("md_getattr() failed, rc = %d\n", rc);
+                        GOTO(cleanup, rc);
+                }
+
+                rc = mdc_req2lustre_md(exp, req, 0, NULL, &md);
+                if (rc) {
+                        CERROR("mdc_req2lustre_md() failed, rc = %d\n", rc);
+                        GOTO(cleanup, rc);
+                }
+
+                if (md.mea == NULL)
+                        GOTO(cleanup, rc = -ENODATA);
+                        
                 mea = md.mea;
         }
 

@@ -35,7 +35,6 @@
 #include <linux/kp30.h>
 // #include <linux/obd.h>
 #include <portals/p30.h>
-#include <portals/lib-types.h>                  /* FIXME (for PTL_MD_MAX_IOV) */
 #include <linux/lustre_idl.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_import.h>
@@ -45,26 +44,43 @@
 #define PTLRPC_MD_OPTIONS  (PTL_MD_EVENT_START_DISABLE | \
                             PTL_MD_LUSTRE_COMPLETION_SEMANTICS)
 
-/* Define some large-ish defaults for MTU and MAX_IOV if portals ones
- * aren't defined (i.e. no limits) or too large */
-#if (defined(PTL_MTU) && (PTL_MTU <= (1 << 20)))
-# define PTLRPC_MTU  PTL_MTU
+/* Define some large-ish maxima for bulk I/O 
+ * CAVEAT EMPTOR, with multinet (i.e. gateways forwarding between networks)
+ * these limits are system wide and not interface-local. */
+#define PTLRPC_MAX_BRW_SIZE     (1 << 20)
+#define PTLRPC_MAX_BRW_PAGES    512
+
+/* ...reduce to fit... */
+
+#if CRAY_PORTALS
+/* include a cray header here if relevant
+ * NB liblustre SIZE/PAGES is affected too, but it merges contiguous
+ * chunks, so FTTB, it always used contiguous MDs */
 #else
-# define PTLRPC_MTU  (1 << 20)
-#endif
-#if (defined(PTL_MAX_IOV) && (PTL_MAX_IOV <= 512))
-# define PTLRPC_MAX_IOV PTL_MAX_IOV
-#else
-# define PTLRPC_MAX_IOV 512
+# include <portals/lib-types.h>
 #endif
 
-/* Define consistent max bulk size/pages */
-#if (PTLRPC_MTU > PTLRPC_MAX_IOV * PAGE_SIZE)
-# define PTLRPC_MAX_BRW_PAGES   PTLRPC_MAX_IOV
-# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_IOV * PAGE_SIZE)
+#if (defined(PTL_MTU) && (PTL_MTU < PTLRPC_MAX_BRW_SIZE))
+# undef  PTLRPC_MAX_BRW_SIZE
+# define PTLRPC_MAX_BRW_SIZE  PTL_MTU
+#endif
+#if (defined(PTL_MD_MAX_IOV) && (PTL_MD_MAX_IOV < PTLRPC_MAX_BRW_PAGES ))
+# undef  PTLRPC_MAX_BRW_PAGES
+# define PTLRPC_MAX_BRW_PAGES PTL_MD_MAX_IOV
+#endif
+
+/* ...and make consistent... */
+
+#if (PTLRPC_MAX_BRW_SIZE > PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
+# undef  PTLRPC_MAX_BRW_SIZE
+# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
 #else
-# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MTU / PAGE_SIZE)
-# define PTLRPC_MAX_BRW_SIZE    PTLRPC_MTU
+# undef  PTLRPC_MAX_BRW_PAGES
+# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MAX_BRW_SIZE / PAGE_SIZE)
+#endif
+
+#if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
+#error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
 #endif
 
 /* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
@@ -87,7 +103,7 @@
  */
 
 #define LDLM_NUM_THREADS        min(smp_num_cpus * smp_num_cpus * 8, 64)
-#define LDLM_NBUF_MAX   256UL
+#define LDLM_NBUF_MAX   512UL
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
 #define LDLM_MAXMEM      (num_physpages*(PAGE_SIZE/1024))
@@ -96,7 +112,7 @@
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   MDT_MAX_THREADS), 2UL)
-#define MDS_NBUF_MAX    512UL
+#define MDS_NBUF_MAX    4096UL
 #define MDS_BUFSIZE     (8 * 1024)
 /* Assume file name length = FNAME_MAX = 256 (true for extN).
  *        path name length = PATH_MAX = 4096
@@ -343,8 +359,6 @@ struct ptlrpc_request {
 /* Spare the preprocessor, spoil the bugs. */
 #define FLAG(field, str) (field ? str : "")
 
-#define PTLRPC_REQUEST_COMPLETE(req) ((req)->rq_phase > RQ_PHASE_RPC)
-
 #define DEBUG_REQ_FLAGS(req)                                                    \
         ((req->rq_phase == RQ_PHASE_NEW) ? "New" :                              \
          (req->rq_phase == RQ_PHASE_RPC) ? "Rpc" :                              \
@@ -416,7 +430,7 @@ struct ptlrpc_bulk_desc {
 #if (!CRAY_PORTALS && defined(__KERNEL__))
         ptl_kiov_t             bd_iov[0];
 #else
-        struct iovec           bd_iov[0];
+        ptl_md_iovec_t         bd_iov[0];
 #endif
 };
 
@@ -496,6 +510,12 @@ struct ptlrpc_service {
         struct ptlrpc_srv_ni srv_interfaces[0];
 };
 
+static inline char *ptlrpc_peernid2str(struct ptlrpc_peer *p, char *str)
+{
+        LASSERT(p->peer_ni != NULL);
+        return (portals_nid2str(p->peer_ni->pni_number, p->peer_nid, str));
+}
+
 /* ptlrpc/events.c */
 extern struct ptlrpc_ni ptlrpc_interfaces[];
 extern int              ptlrpc_ninterfaces;
@@ -506,6 +526,7 @@ extern void client_bulk_callback (ptl_event_t *ev);
 extern void request_in_callback(ptl_event_t *ev);
 extern void reply_out_callback(ptl_event_t *ev);
 extern void server_bulk_callback (ptl_event_t *ev);
+extern int ptlrpc_default_nal(void);
 
 /* ptlrpc/connection.c */
 void ptlrpc_dump_connections(void);
@@ -662,6 +683,23 @@ void *lustre_swab_reqbuf (struct ptlrpc_request *req, int n, int minlen,
 void *lustre_swab_repbuf (struct ptlrpc_request *req, int n, int minlen,
                           void *swabber);
 
+void lustre_init_msg (struct lustre_msg *msg, int count, 
+                      int *lens, char **bufs);
+void *mdc_setattr_pack(struct lustre_msg *msg,
+                       struct mdc_op_data *data,
+                       struct iattr *iattr, void *ea, int ealen,
+		       void *ea2, int ea2len);
+void *mdc_create_pack(struct lustre_msg *msg, int offset,
+                      struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
+                      const void *data, int datalen);
+void *mdc_unlink_pack(struct lustre_msg *msg, int offset,
+                      struct mdc_op_data *data);
+void *mdc_link_pack(struct lustre_msg *msg, int offset,
+                    struct mdc_op_data *data);
+void *mdc_rename_pack(struct lustre_msg *msg, int offset,
+                      struct mdc_op_data *data,
+                      const char *old, int oldlen, const char *new, int newlen);
+
 /* ldlm/ldlm_lib.c */
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev, int flags);
@@ -690,6 +728,7 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obddev);
 
 /* ptlrpc/llog_server.c */
 int llog_origin_handle_create(struct ptlrpc_request *req);
+int llog_origin_handle_prev_block(struct ptlrpc_request *req);
 int llog_origin_handle_next_block(struct ptlrpc_request *req);
 int llog_origin_handle_read_header(struct ptlrpc_request *req);
 int llog_origin_handle_close(struct ptlrpc_request *req);

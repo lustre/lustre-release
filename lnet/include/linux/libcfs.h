@@ -6,8 +6,43 @@
 
 #define PORTAL_DEBUG
 
+/* I think this beast is just trying to get cycles_t and get_cycles().
+ * this should be in its own header. */
+#ifdef __linux__
+# include <asm/types.h>
+# if defined(__powerpc__) && !defined(__KERNEL__)
+#  define __KERNEL__
+#  include <asm/timex.h>
+#  undef __KERNEL__
+# else
+#  if defined(__KERNEL__)
+#   include <asm/timex.h>
+#  else
+#   include <sys/time.h>
+#   define cycles_t unsigned long
+static inline cycles_t get_cycles(void) 
+{
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return (tv.tv_sec * 100000) + tv.tv_usec;
+}
+#  endif
+# endif
+#else
+# include <sys/types.h>
+typedef u_int32_t __u32;
+typedef u_int64_t __u64;
+#endif
+
+#ifdef __KERNEL__
+# include <linux/time.h>
+#else
+# include <sys/time.h>
+# define do_gettimeofday(tv) gettimeofday(tv, NULL);
+#endif
+
 #ifndef offsetof
-# define offsetof(typ,memb)     ((int)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
@@ -45,7 +80,8 @@ extern unsigned int portal_cerror;
 #define S_COBD        0x00200000
 #define S_IBNAL       0x00400000
 #define S_LMV         0x00800000
-
+#define S_SM          0x01000000
+#define S_CMOBD       0x02000000
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */
 
@@ -165,6 +201,45 @@ do {                                                                    \
 #define EXIT                            do { } while (0)
 #endif
 
+#define PORTALS_CFG_VERSION 0x00010001;
+
+struct portals_cfg {
+        __u32 pcfg_version;
+        __u32 pcfg_command;
+
+        __u32 pcfg_nal;
+        __u32 pcfg_flags;
+
+        __u32 pcfg_gw_nal;
+        __u64 pcfg_nid;
+        __u64 pcfg_nid2;
+        __u64 pcfg_nid3;
+        __u32 pcfg_id;
+        __u32 pcfg_misc;
+        __u32 pcfg_fd;
+        __u32 pcfg_count;
+        __u32 pcfg_size;
+        __u32 pcfg_wait;
+
+        __u32 pcfg_plen1; /* buffers in userspace */
+        char *pcfg_pbuf1;
+        __u32 pcfg_plen2; /* buffers in userspace */
+        char *pcfg_pbuf2;
+};
+
+#define PCFG_INIT(pcfg, cmd)                            \
+do {                                                    \
+        memset(&pcfg, 0, sizeof(pcfg));                 \
+        pcfg.pcfg_version = PORTALS_CFG_VERSION;        \
+        pcfg.pcfg_command = (cmd);                      \
+                                                        \
+} while (0)
+
+typedef int (nal_cmd_handler_fn)(struct portals_cfg *, void *);
+int libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *arg);
+int libcfs_nal_cmd(struct portals_cfg *pcfg);
+void libcfs_nal_cmd_unregister(int nal);
+
 struct portal_ioctl_data {
         __u32 ioc_len;
         __u32 ioc_version;
@@ -196,6 +271,7 @@ struct portal_ioctl_data {
 
         char ioc_bulk[0];
 };
+
 
 #ifdef __KERNEL__
 

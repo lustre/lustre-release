@@ -1,8 +1,26 @@
-/*
- *  smfs/inode.c
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ *  lustre/smfs/journal.c
+ *  Lustre filesystem abstraction routines
+ *
+ *  Copyright (C) 2004 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
 #define DEBUG_SUBSYSTEM S_SM
 
 #include <linux/kmod.h>
@@ -12,60 +30,73 @@
 #include <linux/string.h>
 #include <asm/segment.h>
 #include <asm/uaccess.h>
+#include <linux/obd_class.h>
+#include <linux/obd_support.h>
+#include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
-#include "kml_idl.h" 
-#include "smfs_internal.h" 
-extern struct sm_ops smfs_operations;
+#include <linux/lustre_fsfilt.h>
+#include <linux/lustre_smfs.h>
+#include <linux/lvfs.h>
+#include "smfs_internal.h"
 
-#define size_round(x)  (((x)+3) & ~0x3)
+#define KML_BUF_REC_INIT(buffer, pbuf, len)     \
+do {                                            \
+        pbuf = buffer + sizeof(int);            \
+        len -= sizeof(int);                     \
+} while (0)
+        
+#define KML_BUF_REC_END(buffer, length, pbuf)   \
+do {                                            \
+        int len = length;                       \
+        memcpy(buffer, &len, sizeof(len));      \
+        length += sizeof(int);                  \
+        pbuf = buffer + length;                 \
+} while (0)
 
-void *smfs_trans_start(struct inode *inode, int op)
+void *smfs_trans_start(struct inode *inode, int op, void *desc_private)
 {
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
 
-	CDEBUG(D_INODE, "trans start %p\n", 
-	       smfs_operations.sm_journal_ops.tr_start);
-	if (smfs_operations.sm_journal_ops.tr_start) {
-		return smfs_operations.sm_journal_ops.tr_start(inode, op);	
-	}
-	return NULL;
+        CDEBUG(D_INFO, "trans start %p\n", fsfilt->fs_start);
+
+        SMFS_TRANS_OP(inode, op);
+
+        /* There are some problem here. fs_start in fsfilt is used by lustre
+         * the journal blocks of write rec are not counted in FIXME later */
+        if (fsfilt->fs_start)
+                return fsfilt->fs_start(inode, op, desc_private, 0);
+        return NULL;
 }
 
-void smfs_trans_commit(void *handle)
+void smfs_trans_commit(struct inode *inode, void *handle, int force_sync)
 {
-	if (smfs_operations.sm_journal_ops.tr_commit) {
-		smfs_operations.sm_journal_ops.tr_commit(handle);	
-	}
-	CDEBUG(D_SM, "trans commit %p\n", 
-	       smfs_operations.sm_journal_ops.tr_commit);
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+
+        CDEBUG(D_INFO, "trans commit %p\n", fsfilt->fs_commit);
+
+        if (fsfilt->fs_commit)
+                fsfilt->fs_commit(inode, handle, force_sync);
 }
-/*The following function are gotten from intermezzo
- * smfs_path
- * logit
- * journal_log_prefix_with_groups_and_ids 
- * journal_log_prefix 
-*/
-static char* smfs_path(struct dentry *dentry, struct dentry *root,
-                        char *buffer, int buflen)
+
+/*smfs_path is gotten from intermezzo*/
+static char* smfs_path(struct dentry *dentry, struct dentry *root, char *buffer,
+                       int buflen)
 {
-        char * end = buffer+buflen;
+        char * end = buffer + buflen;
+        char * name = buffer;
+        char * buf_end = buffer + buflen;
         char * retval;
-                                                                                                                                                                                                     
+
         *--end = '\0';
         buflen--;
-        if (dentry->d_parent != dentry && list_empty(&dentry->d_hash)) {
-                buflen -= 10;
-                end -= 10;
-                memcpy(end, " (deleted)", 10);
-        }
-                                                                                                                                                                                                     
         /* Get '/' right */
         retval = end-1;
         *retval = '/';
-                                                                                                                                                                                                     
+
         for (;;) {
                 struct dentry * parent;
                 int namelen;
-                                                                                                                                                                                                     
+
                 if (dentry == root)
                         break;
                 parent = dentry->d_parent;
@@ -81,169 +112,424 @@ static char* smfs_path(struct dentry *dentry, struct dentry *root,
                 retval = end;
                 dentry = parent;
         }
+        
+        while (end != buf_end) 
+                *name++ = *end++;
+        *name = '\0'; 
         return retval;
 }
-                                                                                                                                                                                                     
-static inline char *logit(char *buf, const void *value, int size)
+
+static int smfs_log_path(struct super_block *sb, 
+                         struct dentry *dentry, 
+                         char   *buffer,
+                         int    buffer_len)
 {
-        char *ptr = (char *)value;
-                                                                                                                                                                                                     
-        memcpy(buf, ptr, size);
-        buf += size;
-        return buf;
-}
-static inline char *
-journal_log_prefix_with_groups_and_ids(char *buf, int opcode,
-                                       __u32 ngroups, gid_t *groups,
-                                       __u32 fsuid, __u32 fsgid)
-{
-        struct kml_prefix_hdr p;
-        u32 loggroups[NGROUPS_MAX];
-                                                                                                                                                                                                     
-        int i;
-                                                                                                                                                                                                     
-        p.version = KML_MAJOR_VERSION | KML_MINOR_VERSION;
-        p.pid = cpu_to_le32(current->pid);
-        p.auid = cpu_to_le32(current->uid);
-        p.fsuid = cpu_to_le32(fsuid);
-        p.fsgid = cpu_to_le32(fsgid);
-        p.ngroups = cpu_to_le32(ngroups);
-        p.opcode = cpu_to_le32(opcode);
-        for (i=0 ; i < ngroups ; i++)
-                loggroups[i] = cpu_to_le32((__u32) groups[i]);
-                                                                                                                                                                                                     
-        buf = logit(buf, &p, sizeof(struct kml_prefix_hdr));
-        buf = logit(buf, &loggroups, sizeof(__u32) * ngroups);
-        return buf;
-}
-                                                                                                                                                                                                     
-static inline char *
-journal_log_prefix(char *buf, int opcode)
-{
-        __u32 groups[NGROUPS_MAX];
-        int i;
-                                                                                                                                                                                                     
-        /* convert 16 bit gid's to 32 bit gid's */
-        for (i=0; i<current->ngroups; i++)
-                groups[i] = (__u32) current->groups[i];
-                                                                                                                                                                                                     
-        return journal_log_prefix_with_groups_and_ids(buf, opcode, 
-                                                      (__u32)current->ngroups,
-                                                      groups,
-                                                      (__u32)current->fsuid,
-                                                      (__u32)current->fsgid);
-}
-                                                                                                                                                                                                     
-static inline char *
-journal_log_prefix_with_groups(char *buf, int opcode, 
-                               __u32 ngroups, gid_t *groups)
-{
-        return journal_log_prefix_with_groups_and_ids(buf, opcode,
-                                                      ngroups, groups,
-                                                      (__u32)current->fsuid,
-                                                      (__u32)current->fsgid);
+        struct dentry *root=sb->s_root;
+        char *p_name = buffer + sizeof(int);
+        char *name = NULL;
+        int namelen = 0;
+        if (dentry) {
+                name = smfs_path(dentry, root, p_name, buffer_len - sizeof(int));
+                namelen = cpu_to_le32(strlen(p_name));
+                memcpy(buffer, &namelen, sizeof(int));        
+        }
+        namelen += sizeof(int);
+        RETURN(namelen);
 }
 
-static inline char *log_dentry_version(char *buf, struct dentry *dentry)
+static inline int log_it(char *buffer, void *data, int length)
 {
-        struct smfs_version version;
-                                                                                                                                                                                                     
-        smfs_getversion(&version, dentry->d_inode);
-                                                                                                                                                                                                     
-        version.sm_mtime = HTON__u64(version.sm_mtime);
-        version.sm_ctime = HTON__u64(version.sm_ctime);
-        version.sm_size = HTON__u64(version.sm_size);
-                                                                                                                                                                                                     
-        return logit(buf, &version, sizeof(version));
-}
-                                                                                                                                                                                                     
-static inline char *log_version(char *buf, struct smfs_version *pv)
-{
-        struct smfs_version version;
-                                                                                                                                                                                                     
-        memcpy(&version, pv, sizeof(version));
-                                                                                                                                                                                                     
-        version.sm_mtime = HTON__u64(version.sm_mtime);
-        version.sm_ctime = HTON__u64(version.sm_ctime);
-        version.sm_size = HTON__u64(version.sm_size);
-                                                                                                                                                                                                     
-        return logit(buf, &version, sizeof(version));
-}
-static inline char *journal_log_suffix(char *buf, char *log,
-                                       struct dentry *dentry)
-{
-        struct kml_suffix s;
-        struct kml_prefix_hdr *p = (struct kml_prefix_hdr *)log;
-                                                                                                                                                                                                     
-        s.prevrec = 0;
-                                                                                                                                                                                                     
-        /* record number needs to be filled in after reservation
-           s.recno = cpu_to_le32(rec->recno); */
-        s.time = cpu_to_le32(CURRENT_TIME);
-        s.len = p->len;
-        return logit(buf, &s, sizeof(s));
+        memcpy(buffer, &length, sizeof(int));
+        memcpy(buffer + sizeof(int), data, length);
+        return (sizeof(int) + length);                 
 }
 
-int smfs_kml_log(struct smfs_super_info *smfs_info,
-                 const char *buf, size_t size,
-                 const char *string1, int len1,
-                 const char *string2, int len2,
-                 const char *string3, int len3)
-{
-	int rc = 0;	
-	/*should pack the record and dispatch it
-	 *create llog handle write to the log*/
-	return rc;
+static int smfs_pack_rec (char *buffer, struct dentry *dentry, 
+                          struct inode *dir, void *data1, 
+                          void *data2, int op)
+{ 
+        smfs_pack_rec_func pack_func;        
+        int rc;
+
+        pack_func = smfs_get_rec_pack_type(dir->i_sb);
+        if (!pack_func) {
+                return (0);
+        }
+        rc = pack_func(buffer, dentry, dir, data1, data2, op);
+        return rc;
 }
 
-int smfs_journal_mkdir(struct dentry *dentry,
-                       struct smfs_version *tgt_dir_ver,
-                       struct smfs_version *new_dir_ver, 
-		       int mode)
+static int smfs_post_rec_create(struct inode *dir, 
+                                struct dentry *dentry,
+                                 void   *data1,
+                                void   *data2)
 {
-  	int opcode = KML_OPCODE_MKDIR;
-        char *buffer, *path, *logrecord, record[292];
-        struct dentry *root;
-        __u32 uid, gid, lmode, pathlen;
-	struct smfs_super_info *smfs_info; 	       
-        struct super_block* sb;
-        int error, size;
- 
-	ENTRY;
+        struct smfs_super_info *sinfo;
+        char   *buffer = NULL, *pbuf;
+        int rc = 0, length = 0, buf_len = 0;
+        
+        sinfo = S2SMI(dentry->d_inode->i_sb);
+        if (!sinfo)
+                RETURN(-EINVAL);
+        
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);        
+
+        buf_len = PAGE_SIZE;
+        KML_BUF_REC_INIT(buffer, pbuf, buf_len);
+        rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
+        if (rc < 0)
+                GOTO(exit, rc);
+        length = rc;
+        KML_BUF_REC_END(buffer, length, pbuf);   
        
-	sb = dentry->d_inode->i_sb;
-	root = sb->s_root;
-	smfs_info = S2SMI(sb);
-	
-        uid = cpu_to_le32(dentry->d_inode->i_uid);
-        gid = cpu_to_le32(dentry->d_inode->i_gid);
-        lmode = cpu_to_le32(mode);
-                                                                                                                                                                                                     
-        SM_ALLOC(buffer, PAGE_SIZE);
-        path = smfs_path(dentry, root, buffer, PAGE_SIZE);
-        pathlen = cpu_to_le32(MYPATHLEN(buffer, path));
-        size = sizeof(__u32) * current->ngroups +
-               sizeof(struct kml_prefix_hdr) + 3 * sizeof(*tgt_dir_ver) +
-               sizeof(lmode) + sizeof(uid) + sizeof(gid) + sizeof(pathlen) +
-               sizeof(struct kml_suffix);
-                                                                                                                                                                                                     
-        if ( size > sizeof(record) )
-                CERROR("InterMezzo: BUFFER OVERFLOW in %s!\n", __FUNCTION__);
-                                                                                                                                                                                                     
-        logrecord = journal_log_prefix(record, opcode);
-                                                                                                                                                                                                     
-        logrecord = log_version(logrecord, tgt_dir_ver);
-        logrecord = log_dentry_version(logrecord, dentry->d_parent);
-        logrecord = log_version(logrecord, new_dir_ver);
-        logrecord = logit(logrecord, &lmode, sizeof(lmode));
-        logrecord = logit(logrecord, &uid, sizeof(uid));
-        logrecord = logit(logrecord, &gid, sizeof(gid));
-        logrecord = logit(logrecord, &pathlen, sizeof(pathlen));
-        logrecord = journal_log_suffix(logrecord, record, dentry);
-                                                                                                                                                                                                     
-        error = smfs_kml_log(smfs_info, record, size,
-                         path, size_round(le32_to_cpu(pathlen)),
-                         NULL, 0, NULL, 0);
-	SM_FREE(buffer, PAGE_SIZE);
-	RETURN(error);
+        rc = smfs_pack_rec(pbuf, dentry, dir, 
+                           data1, data2, REINT_CREATE);
+        if (rc <= 0)
+                GOTO(exit, rc);
+        else
+                length += rc;
+        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
+        
+        RETURN(rc);
+}
+
+static int smfs_post_rec_link(struct inode *dir, 
+                              struct dentry *dentry,
+                               void   *data1,
+                              void   *data2)
+{
+        struct smfs_super_info *sinfo;
+        struct dentry *old_dentry = (struct dentry *)data1;
+        char *buffer = NULL, *pbuf = NULL;
+        int rc = 0, length = 0, buf_len = 0;
+        
+        sinfo = S2SMI(dir->i_sb);
+        if (!sinfo)
+                RETURN(-EINVAL);
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);
+        
+        buf_len = PAGE_SIZE;
+        KML_BUF_REC_INIT(buffer, pbuf, buf_len);
+        rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
+        if (rc < 0)
+                GOTO(exit, rc);
+        
+        length = rc;
+        KML_BUF_REC_END(buffer, length, pbuf);  
+        
+        rc = smfs_pack_rec(pbuf, dentry, dir, dentry->d_parent, 
+                           old_dentry->d_parent, REINT_LINK);
+        if (rc <= 0)
+                GOTO(exit, rc);
+        else
+                length += rc;
+        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
+        
+        RETURN(rc);
+}
+
+static int smfs_post_rec_unlink(struct inode *dir, struct dentry *dentry,
+                                void *data1, void *data2)
+{
+        struct smfs_super_info *sinfo;
+        int mode = *((int*)data1);
+        char   *buffer = NULL, *pbuf = NULL;
+        int  length = 0, rc = 0, buf_len = 0;
+         
+        sinfo = S2SMI(dentry->d_inode->i_sb);
+        if (!sinfo)
+                RETURN(-EINVAL);
+        
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);        
+      
+        buf_len = PAGE_SIZE;
+        KML_BUF_REC_INIT(buffer, pbuf, buf_len);        
+        rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
+        if (rc < 0)
+                GOTO(exit, rc);
+
+        length = rc;
+        KML_BUF_REC_END(buffer, length, pbuf);
+        rc = smfs_pack_rec(pbuf, dentry, dir, 
+                           &mode, NULL, REINT_UNLINK);
+        if (rc <= 0)
+                GOTO(exit, rc);
+        else
+                length += rc;         
+        
+        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
+        
+        RETURN(rc);
+}
+
+static int smfs_post_rec_rename(struct inode *dir, 
+                                 struct dentry *dentry,
+                                 void   *data1,
+                                void   *data2)
+{
+        struct smfs_super_info *sinfo;
+        struct inode *new_dir = (struct inode *)data1;
+        struct dentry *new_dentry = (struct dentry *)data2;
+        char *buffer = NULL, *pbuf = NULL;
+        int rc = 0, length = 0, buf_len = 0;
+        
+        sinfo = S2SMI(dir->i_sb);
+        if (!sinfo)
+                RETURN(-EINVAL);
+
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);
+        
+        buf_len = PAGE_SIZE;
+        KML_BUF_REC_INIT(buffer, pbuf, buf_len);        
+        rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
+        if (rc < 0)
+                GOTO(exit, rc);
+
+        pbuf += rc; 
+        length += rc;
+        buf_len -= rc;         
+        /*record new_dentry path*/        
+        rc = smfs_log_path(dir->i_sb, new_dentry, pbuf, buf_len);
+        if (rc < 0)
+                GOTO(exit, rc);
+
+        length += rc;
+        KML_BUF_REC_END(buffer, length, pbuf);
+               
+        rc = smfs_pack_rec(pbuf, dentry, dir, 
+                           new_dir, new_dentry, REINT_RENAME);
+        if (rc <= 0) 
+                GOTO(exit, rc);
+        length += rc;
+        
+        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);
+        RETURN(rc);
+}
+
+static int smfs_insert_extents_ea(struct inode *inode, size_t from, loff_t num)
+{
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+        int rc = 0;
+        
+        if (SMFS_INODE_OVER_WRITE(inode))
+                RETURN(rc);
+        
+        rc = fsfilt->fs_insert_extents_ea(inode, OFF2BLKS(from, inode), 
+                                          SIZE2BLKS(num, inode));        
+        RETURN(rc);
+}
+
+static int smfs_remove_extents_ea(struct inode *inode, size_t from, loff_t num)
+{
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+        int rc = 0;
+        
+        rc = fsfilt->fs_remove_extents_ea(inode, OFF2BLKS(from, inode), 
+                                          SIZE2BLKS(num, inode));        
+        
+        RETURN(rc);
+}
+
+static int smfs_remove_all_extents_ea(struct inode *inode)
+{
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+        int rc = 0;
+        
+        rc = fsfilt->fs_remove_extents_ea(inode, 0, 0xffffffff);        
+        RETURN(rc);
+}
+static int  smfs_init_extents_ea(struct inode *inode)
+{
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+        int rc = 0;
+        
+        rc = fsfilt->fs_init_extents_ea(inode);        
+        
+        RETURN(rc);
+}
+static int smfs_set_dirty_flags(struct inode *inode, int flags)
+{
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+        void   *handle;
+        int    rc = 0;
+
+        if (SMFS_INODE_OVER_WRITE(inode))
+                RETURN(rc);
+        /*FIXME later, the blocks needed in journal here will be recalculated*/
+         handle = smfs_trans_start(inode, FSFILT_OP_SETATTR, NULL);
+        if (IS_ERR(handle)) {
+                CERROR("smfs_set_dirty_flag:no space for transaction\n");
+                RETURN(-ENOSPC);
+        }
+        if ((!SMFS_INODE_DIRTY_WRITE(inode) && (!SMFS_INODE_OVER_WRITE(inode))) || 
+             ((flags == SMFS_OVER_WRITE) && (SMFS_INODE_DIRTY_WRITE(inode)))) {        
+                rc = fsfilt->fs_set_xattr(inode, handle, REINT_EXTENTS_FLAGS,
+                                            &flags, sizeof(int));
+                if (rc)
+                        GOTO(out, rc);
+        }
+        if (flags == SMFS_OVER_WRITE)
+                SMFS_SET_INODE_OVER_WRITE(inode);
+        else
+                SMFS_SET_INODE_DIRTY_WRITE(inode);
+out:
+        smfs_trans_commit(inode, handle, 0);
+        RETURN(rc);
+}
+
+int smfs_post_rec_setattr(struct inode *inode, struct dentry *dentry,
+                          void  *data1, void  *data2)
+{        
+        struct smfs_super_info *sinfo;
+        struct iattr *attr = (struct iattr *)data1;
+        char   *buffer = NULL, *pbuf;
+        int rc = 0, length = 0, buf_len = 0;
+
+        sinfo = S2SMI(inode->i_sb);
+        if (!sinfo)
+                RETURN(-EINVAL);
+        
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);        
+
+        buf_len = PAGE_SIZE;
+        KML_BUF_REC_INIT(buffer, pbuf, buf_len);        
+        rc = smfs_log_path(inode->i_sb, dentry, pbuf, buf_len);
+        if (rc < 0)
+                GOTO(exit, rc);
+        
+        length = rc;
+        KML_BUF_REC_END(buffer, length, pbuf);
+        
+        rc = smfs_pack_rec(pbuf, dentry, inode, 
+                           data1, data2, REINT_SETATTR);
+        if (rc <= 0) 
+                GOTO(exit, rc);
+        else
+                length += rc;
+
+        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
+        if (!rc) {
+                if (attr && attr->ia_valid & ATTR_SIZE) {
+                        smfs_remove_extents_ea(inode, attr->ia_size,
+                                               0xffffffff);                                
+                        if (attr->ia_size == 0)
+                                smfs_set_dirty_flags(inode, SMFS_OVER_WRITE);
+                        else
+                                smfs_set_dirty_flags(inode, SMFS_DIRTY_WRITE);
+                }
+        }
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
+        RETURN(rc);
+}
+ 
+static int all_blocks_present_ea(struct inode *inode)
+{
+        int rc = 0;
+        
+        RETURN(rc);        
+}
+int smfs_post_rec_write(struct inode *dir, struct dentry *dentry,
+                        void   *data1, void *data2)
+{
+        struct smfs_super_info *sinfo;
+        char   *buffer = NULL, *pbuf;
+        int rc = 0, length = 0, buf_len = 0;
+        
+        if (!SMFS_INODE_OVER_WRITE(dentry->d_inode) && 
+            !SMFS_INODE_DIRTY_WRITE(dentry->d_inode)) {
+                sinfo = S2SMI(dentry->d_inode->i_sb);
+                if (!sinfo)
+                        RETURN(-EINVAL);
+                
+                OBD_ALLOC(buffer, PAGE_SIZE);
+                if (!buffer)
+                        GOTO(exit, rc = -ENOMEM);        
+                
+                buf_len = PAGE_SIZE;
+                KML_BUF_REC_INIT(buffer, pbuf, buf_len);        
+                rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
+                
+                if (rc < 0)
+                        GOTO(exit, rc);
+                pbuf += rc;
+                memcpy(buffer, &rc, sizeof(int));        
+                length = rc + sizeof(int);
+                        
+                rc = smfs_pack_rec(pbuf, dentry, dir, 
+                                   data1, data2, REINT_WRITE);
+                if (rc <= 0) 
+                        GOTO(exit, rc);
+                else
+                        length += rc;
+ 
+                rc = smfs_llog_add_rec(sinfo, (void*)buffer, length);
+                if (rc)
+                        GOTO(exit, rc);
+                rc = smfs_init_extents_ea(dentry->d_inode);
+                if (rc)
+                        GOTO(exit, rc);
+        } 
+        if (dentry->d_inode->i_size == 0) {
+                smfs_set_dirty_flags(dentry->d_inode, SMFS_OVER_WRITE);        
+        } else {
+                /*insert extent EA*/
+                loff_t off = *((loff_t*)data1);        
+                size_t count = *((size_t*)data2);
+                
+                rc = smfs_insert_extents_ea(dentry->d_inode, off, count);        
+                if (rc < 0)  
+                        GOTO(exit, rc);        
+                if (all_blocks_present_ea(dentry->d_inode)){
+                        smfs_set_dirty_flags(dentry->d_inode, SMFS_OVER_WRITE);        
+                        smfs_remove_all_extents_ea(dentry->d_inode);
+                } else {
+                        smfs_set_dirty_flags(dentry->d_inode, SMFS_DIRTY_WRITE);        
+                }
+        }
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);
+        RETURN(rc);
+}
+
+typedef int (*post_kml_rec)(struct inode *dir, struct dentry *dentry,
+                            void *data1, void *data2);
+
+static post_kml_rec smfs_kml_post[REINT_MAX + 1] = {
+        [REINT_SETATTR] smfs_post_rec_setattr,
+        [REINT_CREATE]  smfs_post_rec_create,
+        [REINT_LINK]    smfs_post_rec_link,
+        [REINT_UNLINK]  smfs_post_rec_unlink,
+        [REINT_RENAME]  smfs_post_rec_rename,
+        [REINT_WRITE]   smfs_post_rec_write,
+};
+
+int smfs_post_kml_rec(struct inode *dir, struct dentry *dst_dentry,
+                      void *data1, void *data2, int op)
+{
+        return smfs_kml_post[op](dir, dst_dentry, data1, data2);
 }

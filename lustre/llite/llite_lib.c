@@ -38,7 +38,6 @@ kmem_cache_t *ll_file_data_slab;
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
-extern struct super_operations ll_super_operations;
 
 #ifndef log2
 #define log2(n) ffz(~(n))
@@ -54,12 +53,13 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         if (!sbi)
                 RETURN(NULL);
 
-        spin_lock_init(&sbi->ll_pglist_lock);
+        spin_lock_init(&sbi->ll_lock);
         INIT_LIST_HEAD(&sbi->ll_pglist);
         sbi->ll_pglist_gen = 0;
+        sbi->ll_max_read_ahead_pages = SBI_DEFAULT_RA_MAX;
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
-        ll_s2sbi(sb) = sbi;
+        ll_set_sbi(sb, sbi);
 
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
@@ -73,7 +73,7 @@ void lustre_free_sbi(struct super_block *sb)
 
         if (sbi != NULL)
                 OBD_FREE(sbi, sizeof(*sbi));
-        ll_s2sbi(sb) = NULL;
+        ll_set_sbi(sb, NULL);
         EXIT;
 }
 
@@ -187,14 +187,14 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         /* make root inode
          * XXX: move this to after cbd setup? */
         err = md_getattr(sbi->ll_mdc_exp, &rootfid,
-                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
+                         OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out_osc, err);
         }
 
-        err = mdc_req2lustre_md(request, 0, sbi->ll_osc_exp,
-                                sbi->ll_mdc_exp, &md);
+        err = mdc_req2lustre_md(sbi->ll_mdc_exp, request, 0, 
+                                sbi->ll_osc_exp, &md);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n",err);
                 ptlrpc_req_finished (request);
@@ -218,12 +218,14 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err);
         }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
-#warning "Please fix this"
-#else
+        /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
+           backing dev info assigned to inode mapping is used for
+           determining maximal readahead. */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* bug 2805 - set VM readahead to zero */
         vm_max_readahead = vm_min_readahead = 0;
 #endif
+
         sb->s_root = d_alloc_root(root);
         RETURN(err);
 
@@ -262,6 +264,8 @@ void lustre_common_put_super(struct super_block *sb)
         spin_lock(&dcache_lock);
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
+                CWARN("orphan dentry %*s (%p) at unmount\n",
+                      dentry->d_name.len, dentry->d_name.name, dentry);
                 shrink_dcache_parent(dentry);
         }
         spin_unlock(&dcache_lock);
@@ -387,19 +391,6 @@ out:
         RETURN(err);
 } /* ll_read_super */
 
-void ll_put_super(struct super_block *sb)
-{
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-
-        lustre_common_put_super(sb);
-
-        lustre_free_sbi(sb);
-
-        EXIT;
-} /* ll_put_super */
-
 int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                        struct config_llog_instance *cfg, int allow_recov)
 {
@@ -427,7 +418,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
                 pcfg.pcfg_nal = lmd->lmd_nal;
                 pcfg.pcfg_nid = lmd->lmd_local_nid;
-                err = kportal_nal_cmd(&pcfg);
+                err = libcfs_nal_cmd(&pcfg);
                 if (err <0)
                         GOTO(out, err);
         }
@@ -440,7 +431,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 pcfg.pcfg_misc    = lmd->lmd_port;
                 pcfg.pcfg_size    = 8388608;
                 pcfg.pcfg_flags   = 0x4; /*share*/
-                err = kportal_nal_cmd(&pcfg);
+                err = libcfs_nal_cmd(&pcfg);
                 if (err <0)
                         GOTO(out, err);
         }
@@ -531,7 +522,7 @@ out_del_conn:
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
                 pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
                 pcfg.pcfg_flags   = 1; /*share*/
-                err = kportal_nal_cmd(&pcfg);
+                err = libcfs_nal_cmd(&pcfg);
                 if (err <0)
                         GOTO(out, err);
         }
@@ -566,7 +557,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 struct config_llog_instance cfg;
                 int len;
 
-                if (!lmd->lmd_mds) {
+                if (lmd->lmd_mds[0] == '\0') {
                         CERROR("no mds name\n");
                         GOTO(out_free, err = -EINVAL);
                 }
@@ -878,8 +869,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = md_setattr(sbi->ll_mdc_exp, &op_data,
-                                     attr, NULL, 0, NULL, 0, &request);
-
+                                attr, NULL, 0, NULL, 0, &request);
                 if (rc) {
                         ptlrpc_req_finished(request);
                         if (rc != -EPERM && rc != -EACCES)
@@ -887,8 +877,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
                 }
 
-                rc = mdc_req2lustre_md(request, 0, sbi->ll_osc_exp,
-                                       sbi->ll_mdc_exp, &md);
+                rc = mdc_req2lustre_md(sbi->ll_mdc_exp, request, 0, 
+                                       sbi->ll_osc_exp, &md);
                 if (rc) {
                         ptlrpc_req_finished(request);
                         RETURN(rc);
@@ -916,10 +906,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                     (rc=ll_permission(inode,MAY_WRITE,NULL))!=0)
                                         RETURN(rc);
                         } else {
-				/* from inode_change_ok() */
-				if (current->fsuid != inode->i_uid &&
-				    !capable(CAP_FOWNER))
-					RETURN(-EPERM);
+                                /* from inode_change_ok() */
+                                if (current->fsuid != inode->i_uid &&
+                                    !capable(CAP_FOWNER))
+                                        RETURN(-EPERM);
                         }
                 }
 
@@ -950,7 +940,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
                 down(&inode->i_sem);
-                if (rc != ELDLM_OK)
+                if (rc != 0)
                         RETURN(rc);
 
                 rc = vmtruncate(inode, attr->ia_size);
@@ -1086,8 +1076,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         struct mea *mea = md->mea;
         ENTRY;
 
-        LASSERT((((__u32) lsm | (__u32) mea) != 0) ==
-                        ((body->valid & OBD_MD_FLEASIZE) != 0));
+        LASSERT((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
+        LASSERT((mea != NULL) == ((body->valid & OBD_MD_FLDIREA) != 0));
         if (lsm != NULL) {
                 LASSERT(lsm->lsm_object_gr > 0);
                 if (lli->lli_smd == NULL) {
@@ -1175,6 +1165,13 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT(body->mds < 1000);
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+static struct backing_dev_info ll_backing_dev_info = {
+        .ra_pages       = 0,    /* No readahead */
+        .memory_backed  = 0,    /* Does contribute to dirty memory */
+};
+#endif
+
 void ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct lustre_md *md = opaque;
@@ -1195,6 +1192,8 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         LTIME_S(inode->i_mtime) = 0;
         LTIME_S(inode->i_atime) = 0;
         LTIME_S(inode->i_ctime) = 0;
+
+        inode->i_rdev = 0;
         ll_update_inode(inode, md);
 
         /* OIDEBUG(inode); */
@@ -1214,12 +1213,34 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 EXIT;
         } else {
                 inode->i_op = &ll_special_inode_operations;
+
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
+
+                /* initializing backing dev info. */
+                inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
 #endif
+                lli->ll_save_ifop = inode->i_fop;
+
+                if (S_ISCHR(inode->i_mode))
+                        inode->i_fop = &ll_special_chr_inode_fops;
+                else if (S_ISBLK(inode->i_mode))
+                        inode->i_fop = &ll_special_blk_inode_fops;
+                else if (S_ISFIFO(inode->i_mode))
+                        inode->i_fop = &ll_special_fifo_inode_fops;
+                else if (S_ISSOCK(inode->i_mode))
+                        inode->i_fop = &ll_special_sock_inode_fops;
+
+                CWARN("saved %p, replaced with %p\n", lli->ll_save_ifop,
+                      inode->i_fop);
+
+                if (lli->ll_save_ifop->owner) {
+                        CWARN("%p has owner %p\n", lli->ll_save_ifop,
+                              lli->ll_save_ifop->owner);
+                }
                 EXIT;
         }
 }
@@ -1278,7 +1299,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 attr.ia_valid |= ATTR_ATTR_FLAG;
 
                 rc = md_setattr(sbi->ll_mdc_exp, &op_data,
-                                     &attr, NULL, 0, NULL, 0, &req);
+                                &attr, NULL, 0, NULL, 0, &req);
                 if (rc) {
                         ptlrpc_req_finished(req);
                         if (rc != -EPERM && rc != -EACCES)
@@ -1297,7 +1318,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 obdo_free(oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
-                                CERROR("obd_setattr fails: rc = %d\n", rc);
+                                CERROR("md_setattr fails: rc = %d\n", rc);
                         RETURN(rc);
                 }
 
@@ -1365,12 +1386,12 @@ void ll_umount_begin(struct super_block *sb)
 
 int ll_prep_inode(struct obd_export *osc_exp, struct obd_export *mdc_exp,
                   struct inode **inode, struct ptlrpc_request *req,
-                  int offset,struct super_block *sb)
+                  int offset, struct super_block *sb)
 {
         struct lustre_md md;
         int rc = 0;
 
-        rc = mdc_req2lustre_md(req, offset, osc_exp, mdc_exp, &md);
+        rc = mdc_req2lustre_md(mdc_exp, req, offset, osc_exp, &md);
         if (rc)
                 RETURN(rc);
 

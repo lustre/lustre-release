@@ -779,22 +779,21 @@ int jt_obd_list(int argc, char **argv)
         int rc;
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
-                                                                                                                                               
+
         if (fp == NULL) {
-                fprintf(stderr, "error: %s: %s could not open file " 
-                        DEVICES_LIST " .\n",
+                fprintf(stderr, "error: %s: %s opening "DEVICES_LIST"\n",
                         jt_cmdname(argv[0]), strerror(rc =  errno));
                 return rc;
         }
-                                                                                                                                               
+
         if (argc != 1)
                 return CMD_HELP;
-                                                                                                                                               
+
         while (fgets(buf, sizeof(buf), fp) != NULL)
                 printf("%s", buf);
-                                                                                                                                               
+
         fclose(fp);
-                                                                                                                                               
+
         return 0;
 }
 
@@ -1989,12 +1988,62 @@ int jt_llog_remove(int argc, char **argv)
                 if (argc == 3)
                         fprintf(stdout, "log %s are removed.\n", argv[2]);
                 else
-                        fprintf(stdout, "the log in catlog %s are removed. \n", argv[1]);
+                        fprintf(stdout, "the log in catalog %s are removed. \n", argv[1]);
         } else
                 fprintf(stderr, "OBD_IOC_LLOG_REMOVE failed: %s\n",
                         strerror(errno));
 
         return rc;
+}
+int jt_obd_reint_sync(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc = 0;
+      
+        IOC_INIT(data);
+        if (argc != 1)
+               return CMD_HELP; 
+        IOC_PACK(argv[0], data);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CMOBD_SYNC, buf);
+       
+        if (rc)
+                fprintf(stderr, "OBD_IOC_CMOBD_SYNC failed: rc=%d\n",
+                        rc);
+        return rc;  
+               
+}
+
+int jt_obd_cache_on(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc = 0;
+      
+        IOC_INIT(data);
+        if (argc != 1)
+               return CMD_HELP; 
+        IOC_PACK(argv[0], data);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_COBD_CON, buf);
+       
+        if (rc)
+                fprintf(stderr, "OBD_IOC_CMOBD_SYNC failed: rc=%d\n",
+                        rc);
+        return rc;  
+               
+}
+int jt_obd_cache_off(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc = 0;
+      
+        IOC_INIT(data);
+        if (argc != 1)
+               return CMD_HELP; 
+        IOC_PACK(argv[0], data);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_COBD_COFF, buf);
+        if (rc)
+                fprintf(stderr, "OBD_IOC_CMOBD_SYNC failed: rc=%d\n",
+                        rc);
+        return rc;  
 }
 
 static void signal_server(int sig)

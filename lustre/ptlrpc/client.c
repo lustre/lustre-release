@@ -160,7 +160,7 @@ void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 
         desc->bd_nob += len;
 
-        pers_bulk_add_page(desc, page, pageoffset, len);
+        ptlrpc_add_bulk_page(desc, page, pageoffset, len);
 }
 
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
@@ -168,7 +168,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         ENTRY;
 
         LASSERT(desc != NULL);
-        LASSERT(desc->bd_iov_count != 0x5a5a5a5a); /* not freed already */
+        LASSERT(desc->bd_iov_count != LI_POISON); /* not freed already */
         LASSERT(!desc->bd_network_rw);         /* network hands off or */
         LASSERT((desc->bd_export != NULL) ^ (desc->bd_import != NULL));
         if (desc->bd_export)
@@ -504,8 +504,11 @@ static int after_reply(struct ptlrpc_request *req)
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 if (req->rq_replay || req->rq_transno != 0)
                         ptlrpc_retain_replayable_request(req, imp);
-                else if (req->rq_commit_cb != NULL)
+                else if (req->rq_commit_cb != NULL) {
+            		spin_unlock_irqrestore(&imp->imp_lock, flags);
                         req->rq_commit_cb(req);
+            		spin_lock_irqsave(&imp->imp_lock, flags);
+		}
 
                 if (req->rq_transno > imp->imp_max_transno)
                         imp->imp_max_transno = req->rq_transno;
@@ -523,6 +526,7 @@ static int after_reply(struct ptlrpc_request *req)
 
 static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 {
+        char                   str[PTL_NALFMT_SIZE];
         struct obd_import     *imp;
         unsigned long          flags;
         int rc;
@@ -567,11 +571,11 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
         req->rq_reqmsg->status = current->pid;
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:ni:nid:opc"
-               " %s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               " %s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid, req->rq_reqmsg->status,
                req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         rc = ptl_send_rpc(req);
@@ -585,6 +589,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
 int ptlrpc_check_set(struct ptlrpc_request_set *set)
 {
+        char str[PTL_NALFMT_SIZE];
         unsigned long flags;
         struct list_head *tmp;
         int force_timer_recalc = 0;
@@ -784,11 +789,11 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:"
-                       "opc %s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+                       "opc %s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                        imp->imp_obd->obd_uuid.uuid, req->rq_reqmsg->status,
                        req->rq_xid,
                        imp->imp_connection->c_peer.peer_ni->pni_name,
-                       imp->imp_connection->c_peer.peer_nid,
+                       ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                        req->rq_reqmsg->opc);
 
                 set->set_remaining--;
@@ -1068,8 +1073,8 @@ static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked)
         if (request == NULL)
                 RETURN(1);
 
-        if (request == (void *)(unsigned long)(0x5a5a5a5a5a5a5a5a) ||
-            request->rq_reqmsg == (void *)(unsigned long)(0x5a5a5a5a5a5a5a5a)) {
+        if (request == LP_POISON ||
+            request->rq_reqmsg == LP_POISON) {
                 CERROR("dereferencing freed request (bug 575)\n");
                 LBUG();
                 RETURN(1);
@@ -1107,13 +1112,10 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         if (!ptlrpc_client_receiving_reply(request))
                 return;
 
-        rc = PtlMDUnlink (request->rq_reply_md_h);
-        if (rc == PTL_MD_INVALID) {
-                LASSERT (!ptlrpc_client_receiving_reply(request));
-                return;
-        }
-        
-        LASSERT (rc == PTL_OK);
+        PtlMDUnlink (request->rq_reply_md_h);
+
+        /* We have to l_wait_event() whatever the result, to give liblustre
+         * a chance to run reply_in_callback() */
 
         if (request->rq_set == NULL)
                 wq = &request->rq_set->set_waitq;
@@ -1301,6 +1303,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
+        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         int brc;
         struct l_wait_info lwi;
@@ -1317,11 +1320,11 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         req->rq_reqmsg->status = current->pid;
         LASSERT(imp->imp_obd != NULL);
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:ni:nid:opc "
-               "%s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               "%s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid,
                req->rq_reqmsg->status, req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         /* Mark phase here for a little debug help */
@@ -1404,11 +1407,11 @@ restart:
         DEBUG_REQ(D_NET, req, "-- done sleeping");
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:opc "
-               "%s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               "%s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid,
                req->rq_reqmsg->status, req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         spin_lock_irqsave(&imp->imp_lock, flags);

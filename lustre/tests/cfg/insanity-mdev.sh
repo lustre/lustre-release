@@ -20,7 +20,7 @@ UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
 MDSDEV=${MDSDEV:-/dev/sda1}
 MDSSIZE=${MDSSIZE:-50000}
 
-OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
+OSTDEV=${OSTDEV:-$TMP/ost%d-`hostname`}
 OSTSIZE=${OSTSIZE:=50000}
 FSTYPE=${FSTYPE:-ext3}
 STRIPE_BYTES=${STRIPE_BYTES:-1048576} 

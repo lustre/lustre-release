@@ -35,7 +35,8 @@ typedef struct procbridge {
 
 typedef struct nal_init_args {
     ptl_pid_t        nia_requested_pid;
-    ptl_ni_limits_t *nia_limits;
+    ptl_ni_limits_t *nia_requested_limits;
+    ptl_ni_limits_t *nia_actual_limits;
     int              nia_nal_type;
     bridge           nia_bridge;
 } nal_init_args_t;
@@ -50,10 +51,6 @@ extern void *nal_thread(void *);
 #define MAX_PTLS        128
 
 extern void set_address(bridge t,ptl_pid_t pidrequest);
-extern nal_t *procbridge_interface(int num_interface,
-                                   ptl_pt_index_t ptl_size,
-                                   ptl_ac_index_t acl_size,
-                                   ptl_pid_t requested_pid);
 extern void procbridge_wakeup_nal(procbridge p);
 
 #endif

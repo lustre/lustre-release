@@ -1,0 +1,16 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+if MODULES
+if !CRAY_PORTALS
+if TESTS
+noinst_DATA := pingsrv$(KMODEXT) pingcli$(KMODEXT)
+noinst_DATA += spingsrv$(KMODEXT) spingcli$(KMODEXT)
+endif
+endif
+endif
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c pingsrv.c pingcli.c spingsrv.c spingcli.c
+DIST_SOURCES = ping_srv.c ping_cli.c sping_srv.c sping_cli.c ping.h

@@ -34,7 +34,7 @@ do {                                                    \
 
 #define CHECK_MEMBER_OFFSET(s,m)                \
 do {                                            \
-        CHECK_VALUE(offsetof(s, m));            \
+        CHECK_VALUE((int)offsetof(s, m));       \
 } while (0)
 
 #define CHECK_MEMBER_SIZEOF(s,m)                \

@@ -64,6 +64,7 @@
 #include <linux/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
+#include <portals/nal.h>
 #include <portals/socknal.h>
 
 #if CONFIG_SMP
@@ -141,7 +142,6 @@ typedef struct {
 } ksock_irqinfo_t;
 
 typedef struct {
-        int               ksnd_init;            /* initialisation state */
         int               ksnd_io_timeout;      /* "stuck" socket timeout (seconds) */
         int               ksnd_eager_ack;       /* make TCP ack eagerly? */
         int               ksnd_typed_conns;     /* drive sockets by type? */
@@ -150,6 +150,10 @@ typedef struct {
         unsigned int      ksnd_zc_min_frag;     /* minimum zero copy frag size */
 #endif
         struct ctl_table_header *ksnd_sysctl;   /* sysctl interface */
+} ksock_tunables_t;
+
+typedef struct {
+        int               ksnd_init;            /* initialisation state */
         __u64             ksnd_incarnation;     /* my epoch */
         
         rwlock_t          ksnd_global_lock;     /* stabilize peer/conn ops */
@@ -194,7 +198,7 @@ typedef struct {
 
 #define SOCKNAL_INIT_NOTHING    0
 #define SOCKNAL_INIT_DATA       1
-#define SOCKNAL_INIT_PTL        2
+#define SOCKNAL_INIT_LIB        2
 #define SOCKNAL_INIT_ALL        3
 
 /* A packet just assembled for transmission is represented by 1 or more
@@ -362,6 +366,7 @@ typedef struct ksock_peer
 
 extern nal_cb_t         ksocknal_lib;
 extern ksock_nal_data_t ksocknal_data;
+extern ksock_tunables_t ksocknal_tunables;
 
 static inline struct list_head *
 ksocknal_nid2peerlist (ptl_nid_t nid) 
