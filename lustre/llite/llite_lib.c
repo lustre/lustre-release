@@ -477,7 +477,9 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
 
         if (lmd->lmd_nal == SOCKNAL ||
             lmd->lmd_nal == OPENIBNAL ||
-            lmd->lmd_nal == IIBNAL) {
+            lmd->lmd_nal == IIBNAL ||
+            lmd->lmd_nal == VIBNAL ||
+            lmd->lmd_nal == RANAL) {
                 PCFG_INIT(pcfg, NAL_CMD_ADD_PEER);
                 pcfg.pcfg_nal     = lmd->lmd_nal;
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
