@@ -40,30 +40,34 @@ static struct llog_logid cat_logid;
 static int verify_handle(char * test, struct llog_handle *llh, int num_recs)
 {
         int i;
-        if (llh->lgh_last_idx != num_recs - 1) {
-                CERROR("%s: handle->last_idx is %d, expected %d after write\n",
-                       test, llh->lgh_last_idx, num_recs - 1);
+        int last_idx = 0;
+        int active_recs = 0;
+
+        for (i = 0; i < LLOG_BITMAP_BYTES * 8; i++) {
+                if (ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
+                        last_idx = i;
+                        active_recs++;
+                }
+        }
+
+        if (active_recs != num_recs) {
+                CERROR("%s: expected %d active recs after write, found %d\n",
+                       test, num_recs, active_recs);
                 RETURN(-ERANGE);
         }
+
         if (llh->lgh_hdr->llh_count != num_recs) {
-                CERROR("%s: header->count is %d, expected %d after write\n",
+                CERROR("%s: handle->count is %d, expected %d after write\n",
                        test, llh->lgh_hdr->llh_count, num_recs);
                 RETURN(-ERANGE);
         }
-        for (i = 0; i < num_recs; i++) {
-                if (!ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
-                        CERROR("%s: bit %d not set after %d writes\n", 
-                               test, i, num_recs);
-                        RETURN(-ERANGE);
-                }
+
+        if (llh->lgh_last_idx != last_idx) {
+                CERROR("%s: handle->last_idx is %d, expected %d after write\n",
+                       test, llh->lgh_last_idx, last_idx);
+                RETURN(-ERANGE);
         }
-        for (i = num_recs; i < LLOG_BITMAP_BYTES * 8; i++) {
-                if (ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
-                        CERROR("%s: bit %d is set, but should not be\n", 
-                               test, i);
-                        RETURN(-ERANGE);
-                }
-        }
+
         RETURN(0);
 }
 
@@ -125,16 +129,16 @@ static int llog_test_2(struct obd_device *obd, struct llog_handle **llh)
 /* Test record writing, single and in bulk */
 static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 {
-        struct llog_rec_hdr rec;
+        struct llog_create_rec lcr;
         int rc, i;
         int num_recs = 1;       /* 1 for the header */
         ENTRY;
 
-        rec.lrh_len = LLOG_MIN_REC_SIZE;
-        rec.lrh_type = 0xf00f00;
+        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
+        lcr.lcr_hdr.lrh_type = OST_CREATE_REC;
 
-        CERROR("3a: write one log record\n");
-        rc = llog_write_rec(llh, &rec, NULL, 0, NULL, -1);
+        CERROR("3a: write one create_rec\n");
+        rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
         num_recs++;
         if (rc) {
                 CERROR("3a: write one log record failed: %d\n", rc);
@@ -144,33 +148,39 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         if ((rc = verify_handle("3a", llh, num_recs)))
                 RETURN(rc);
 
-        CERROR("3b: write 10 log records with 16 byte bufs\n");
+        CERROR("3b: write 10 cfg log records with 16 byte bufs\n");
         for (i = 0; i < 10; i++) {
+                struct llog_rec_hdr hdr;
                 char buf[16];
-                rec.lrh_len = 16;
+                hdr.lrh_len = 16;
+                hdr.lrh_type = OBD_CFG_REC;
                 memset(buf, 0, sizeof buf);
-                rc = llog_write_rec(llh, &rec, NULL, 0, buf, -1);
+                rc = llog_write_rec(llh, &hdr, NULL, 0, buf, -1);
                 if (rc) {
                         CERROR("3b: write 10 records failed at #%d: %d\n",
                                i + 1, rc);
                         RETURN(rc);
                 }
+                num_recs++;
+                if ((rc = verify_handle("3c", llh, num_recs)))
+                        RETURN(rc);
         }
-        num_recs += i;
         
         if ((rc = verify_handle("3b", llh, num_recs)))
                 RETURN(rc);
         
         CERROR("3c: write 1000 more log records\n");
         for (i = 0; i < 1000; i++) {
-                rc = llog_write_rec(llh, &rec, NULL, 0, NULL, -1);
+                rc = llog_write_rec(llh, &lcr.lcr_hdr, NULL, 0, NULL, -1);
                 if (rc) {
                         CERROR("3c: write 1000 records failed at #%d: %d\n",
                                i + 1, rc);
                         RETURN(rc);
                 }
+                num_recs++;
+                if ((rc = verify_handle("3c", llh, num_recs)))
+                        RETURN(rc);
         }
-        num_recs += i;
 
         if ((rc = verify_handle("3c", llh, num_recs)))
                 RETURN(rc);
@@ -184,13 +194,14 @@ static int llog_test_4(struct obd_device *obd)
         struct llog_handle *llh;
         char name[10];
         int rc, i;
-        struct llog_rec_hdr rec;
+        struct llog_orphan_rec lor;
         struct llog_cookie cookie;
+        int num_recs = 0;
 
         ENTRY;
 
-        rec.lrh_len = LLOG_MIN_REC_SIZE;
-        rec.lrh_type = 0xf00f00;
+        lor.lor_hdr.lrh_len = lor.lor_tail.lrt_len = LLOG_MIN_REC_SIZE;
+        lor.lor_hdr.lrh_type = OST_ORPHAN_REC;
 
         sprintf(name, "%x", llog_test_rand+1);
         CERROR("4a: create a catalog log with name: %s\n", name);
@@ -200,14 +211,18 @@ static int llog_test_4(struct obd_device *obd)
                 GOTO(out, rc);
         }
         llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
+        num_recs++;
         cat_logid = llh->lgh_id;
 
         CERROR("4b: write 1 log records\n");
-        rc = llog_cat_add_rec(llh, &rec, &cookie, NULL);
+        rc = llog_cat_add_rec(llh, &lor.lor_hdr, &cookie, NULL);
         if (rc != 1) {
                 CERROR("4b: write 1 catalog record failed at: %d\n", rc);
                 GOTO(out, rc);
         }
+        num_recs++; 
+        if ((rc = verify_handle("4b", llh, num_recs)))
+                RETURN(rc);
 
         if (llh->u.chd.chd_current_log->lgh_hdr->llh_count != 2) {
                 CERROR("llh->u.chd.chd_current_log->lgh_hdr->llh_count != 2\n");
@@ -220,6 +235,10 @@ static int llog_test_4(struct obd_device *obd)
                 CERROR("4c: cancel 1 catalog based record failed: %d\n", rc);
                 GOTO(out, rc);
         }
+        num_recs--;
+
+        if ((rc = verify_handle("4c", llh, num_recs)))
+                RETURN(rc);
 
         if (llh->u.chd.chd_current_log && 
             llh->u.chd.chd_current_log->lgh_hdr->llh_count != 1) {
@@ -229,13 +248,17 @@ static int llog_test_4(struct obd_device *obd)
 
         CERROR("4d: write 40,000 more log records\n");
         for (i = 0; i < 40000; i++) {
-                rc = llog_cat_add_rec(llh, &rec, NULL, NULL);
+                rc = llog_cat_add_rec(llh, &lor.lor_hdr, NULL, NULL);
                 if (rc) {
                         CERROR("4d: write 1000 records failed at #%d: %d\n",
                                i + 1, rc);
                         GOTO(out, rc);
                 }
-        }
+                num_recs++;
+                if ((rc = verify_handle("4c", llh, num_recs)))
+                        RETURN(rc);
+
+         }
 
  out:
         CERROR("4e: put newly-created catalog\n");
