@@ -1490,6 +1490,8 @@ class Mountpoint(Module):
         if not mdc_uuid:
             panic("Unable to determine MDC UUID. Probably need to cleanup before re-mounting.")
         self.info(self.path, self.mds_uuid, self.obd_uuid)
+        if config.lctl_dump:
+            return
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
               (self.vosc.get_uuid(), mdc_uuid, self.path)
         run("mkdir", self.path)
