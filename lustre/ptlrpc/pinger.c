@@ -160,8 +160,10 @@ static int ptlrpc_pinger_main(void *arg)
                         req->rq_phase = RQ_PHASE_COMPLETE;
                         set->set_remaining--;
                         /* If it was disconnected, don't sweat it. */
-                        if (list_empty(&req->rq_import->imp_pinger_chain))
+                        if (list_empty(&req->rq_import->imp_pinger_chain)) {
+                                ptlrpc_unregister_reply(req);
                                 continue;
+                        }
 
                         ptlrpc_expire_one_request(req);
                 }
