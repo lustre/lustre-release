@@ -30,27 +30,6 @@
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
 
-/* from namei.c*/
-struct dentry *lookup_create(struct nameidata *nd, int is_dir)
-{
-        struct dentry *dentry;
-                                                                                                                                                                                                     
-        dentry = ERR_PTR(-EEXIST);
-        if (nd->last_type != LAST_NORM)
-                goto fail;
-        dentry = lookup_hash(&nd->last, nd->dentry);
-        if (IS_ERR(dentry))
-                goto fail;
-        if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-                goto enoent;
-        return dentry;
-enoent:
-        dput(dentry);
-        dentry = ERR_PTR(-ENOENT);
-fail:
-        return dentry;
-}
-
 int lookup_by_path(char *path, int flags, struct nameidata *nd)
 {
 	struct dentry *dentry = NULL;
@@ -98,7 +77,7 @@ static int lvfs_reint_create(struct super_block *sb,
         
         down(&dparent->d_inode->i_sem);
         /*create a new dentry*/
-        dentry = lookup_create(&nd, 0);
+        dentry = lookup_create(&nd, 0, NULL);
         dir = dparent->d_inode;
  
         if (!SMFS_DO_WRITE_KML(r_rec->u_rec.ur_flags))
@@ -237,7 +216,7 @@ static int lvfs_reint_link(struct super_block *sb,
         
         dir = new_dparent->d_inode;
 
-        new_dentry = lookup_create(&new_nd, 0);
+        new_dentry = lookup_create(&new_nd, 0, NULL);
         
         rc = lookup_by_path(old_path, LOOKUP_PARENT, &old_nd);
         if (rc) {
@@ -390,7 +369,7 @@ static int lvfs_reint_rename(struct super_block *sb,
         }
         new_dparent = new_nd.dentry;
         new_dir = new_dparent->d_inode;
-        new_dentry = lookup_create(&new_nd, 0);
+        new_dentry = lookup_create(&new_nd, 0, NULL);
  
         if (!SMFS_DO_WRITE_KML(r_rec->u_rec.ur_flags)) 
                 SMFS_CLEAN_INODE_REC(dir);

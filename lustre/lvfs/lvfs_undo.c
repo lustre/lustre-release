@@ -204,7 +204,7 @@ static int lvfs_undo_unlink(struct super_block *sb,
         dparent = nd.dentry;
         dir = dparent->d_inode;
         
-        dentry = lookup_create(&nd, 0);
+        dentry = lookup_create(&nd, 0, NULL);
         
         if (!SMFS_DO_WRITE_KML(r_rec->u_rec.ur_flags))
                 SMFS_CLEAN_INODE_REC(dir);
@@ -297,7 +297,7 @@ static int lvfs_undo_rename(struct super_block *sb,
        
         dparent = nd.dentry;
         dir = dparent->d_inode;
-        dentry = lookup_create(&nd, 0);
+        dentry = lookup_create(&nd, 0, NULL);
         
         rc = lookup_by_path(new_path, LOOKUP_PARENT, &new_nd);
         if (rc) {
