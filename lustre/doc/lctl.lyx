@@ -132,7 +132,7 @@ help
 \family default 
 \size default 
  at the lctl prompt.
-  To get basic help on the meaning and syntax of a command, type 
+ To get basic help on the meaning and syntax of a command, type 
 \family typewriter 
 \size small 
 help command
@@ -212,6 +212,59 @@ Indicate the network type to be used for the operation.
 network\SpecialChar ~
 <tcp/elans/myrinet> Indicate what kind of network applies for the
  configuration commands that follow.
+\layout Description
+
+interface_list Print the interface entries.
+\layout Description
+
+add_interface\SpecialChar ~
+
+\series bold 
+<
+\series default 
+ip>\SpecialChar ~
+[netmask] Add an interface entry.
+\layout Description
+
+del_interface\SpecialChar ~
+[ip] Delete an interface entry.
+\layout Description
+
+peer_list Print the peer entries.
+\layout Description
+
+add_peer\SpecialChar ~
+
+\series bold 
+<
+\series default 
+nid>\SpecialChar ~
+
+\series bold 
+<
+\series default 
+host>\SpecialChar ~
+
+\series bold 
+<
+\series default 
+port> 
+\series bold 
+Add a peer entry.
+\layout Description
+
+del_peer\SpecialChar ~
+[
+\series bold 
+<
+\series default 
+nid>]\SpecialChar ~
+[
+\series bold 
+<
+\series default 
+host>]\SpecialChar ~
+[ks] Remove a peer entry.
 \layout Description
 
 autoconn_list Print autoconnect entries.
@@ -345,61 +398,6 @@ set_route\SpecialChar ~
 \layout Description
 
 route_list Print the complete portals routing table.
-\layout Description
-
-recv_mem\SpecialChar ~
-[size] Set the buffer size for socket 
-\emph on 
-receive
-\emph default 
- buffer(that is, assign 
-\begin_inset Quotes eld
-\end_inset 
-
-size
-\begin_inset Quotes erd
-\end_inset 
-
- to g_socket_rxmem).
- If the argument of 
-\begin_inset Quotes eld
-\end_inset 
-
-size
-\begin_inset Quotes erd
-\end_inset 
-
- is omitted, this command should print the default size for the buffer.
-\layout Description
-
-send_mem\SpecialChar ~
-[size] Set the buffer size for socket 
-\emph on 
-send
-\emph default 
- buffer(that is, assign 
-\begin_inset Quotes eld
-\end_inset 
-
-size
-\begin_inset Quotes erd
-\end_inset 
-
- to g_socket_txmem).
- If the argument of 
-\begin_inset Quotes eld
-\end_inset 
-
-size
-\begin_inset Quotes erd
-\end_inset 
-
- is omitted, this command should print the default size for the buffer.
-\layout Description
-
-nagle\SpecialChar ~
-[on/off] Enable/disable nagle; omitting the argument will cause the
- current nagle setting to be reported.
 \layout Description
 
 fail\SpecialChar ~
@@ -701,6 +699,10 @@ readonly Disable writes to the underlying device.
 \layout Description
 
 abort_recovery Abort recovery on MDS device.
+\layout Description
+
+start\SpecialChar ~
+<profilename> Setup mds/ost from the llog file.
 \layout Description
 
 mount_option\SpecialChar ~

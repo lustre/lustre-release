@@ -286,6 +286,10 @@ name> Name of the node on which the MDS resides
 <mds_name> Specify MDS name.
 \layout Description
 
+--mdsuuid\SpecialChar ~
+<uuid> Specify MDS uuid.
+\layout Description
+
 --failover Enable failover support on MDS.
 \layout Description
 
@@ -538,6 +542,9 @@ ost_name\SpecialChar ~
 --lov\SpecialChar ~
 lov_name Specify the ost or lov, which will provide service
  for this client.
+\layout Description
+
+--clientoptions Specify the options for Lustre, such as async.
 \end_deeper 
 \layout Description
 
@@ -604,6 +611,24 @@ nodename
  
 \emph default 
 Node on which the echo-client resides.
+\end_deeper 
+\layout Description
+
+--add\SpecialChar ~
+mgmt Management/monitoring service.
+\begin_deeper 
+\layout Description
+
+--node\SpecialChar ~
+nodename
+\emph on 
+ 
+\emph default 
+Node on which the mgmt service resides.
+\layout Description
+
+--mgmt\SpecialChar ~
+<mgmt_service_name> Specify management/monitoring service name.
 \end_deeper 
 \layout List
 \labelwidthstring 00.00.0000
