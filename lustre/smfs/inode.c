@@ -1,0 +1,72 @@
+/*
+ *  fs/snap/snap.c
+ *
+ *  A snap shot file system.
+ *
+ */
+
+#define DEBUG_SUBSYSTEM S_SM
+
+#include <linux/kmod.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include "smfs_internal.h" 
+
+
+static void smfs_read_inode(struct inode *inode)
+{
+	struct super_block *cache_sb;
+	struct inode *cache_inode;	
+	ENTRY;
+
+	if (!inode) 
+		return;
+	
+	CDEBUG(D_INODE, "read_inode ino %lu\n", inode->i_ino);
+	cache_sb = S2CSB(inode->i_sb);
+
+	cache_inode = new_inode(cache_sb);
+	I2CI(inode) = cache_inode;
+	
+	if(cache_sb && cache_sb->s_op->read_inode)
+		cache_sb->s_op->read_inode(cache_inode);
+
+	CDEBUG(D_INODE, "read_inode ino %lu icount %d \n", 
+	       inode->i_ino, atomic_read(&inode->i_count));
+
+	sm_setup_inode_ops(cache_inode, inode);
+	
+	CDEBUG(D_INODE, "read_inode ino %lu icount %d \n", 
+	       inode->i_ino, atomic_read(&inode->i_count));
+	
+	return; 
+}
+/* Although some filesystem(such as ext3) do not have
+ * clear_inode method, but we need it to free the 
+ * cache inode 
+ */
+static void smfs_clear_inode(struct inode *inode)
+{
+	struct super_block *cache_sb;
+	struct inode *cache_inode;	
+
+	ENTRY;
+	
+	if (!inode) return;
+	
+	cache_sb = S2CSB(inode->i_sb);
+	cache_inode = I2CI(inode);
+	clear_inode(cache_inode);
+	return;	
+}
+struct super_operations currentfs_super_ops = {
+	read_inode:	smfs_read_inode,
+	clear_inode:	smfs_clear_inode,
+};
+
+
+
+
+
