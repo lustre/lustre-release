@@ -43,6 +43,10 @@ echo -n "test 4: symlink on one mtpt, readlink on another..."
 [ "Xthis/is/good" = X`perl -e 'print readlink("/mnt/lustre2/lnk");'` ] || error  "test 4 fails"
 echo "pass"
 
+echo -n "test 5: fstat validation on multiple mount points..."
+./multifstat /mnt/lustre1/fstatfile /mnt/lustre2/fstatfile || error "test 5 fails"
+echo "pass"
+
 $CLEAN
 $START
 
