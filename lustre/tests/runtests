@@ -24,7 +24,7 @@ diff -u /etc/hosts /mnt/lustre/hosts || fail "/etc/hosts copy different" 4
 # ok, that hopefully worked, so let's do a little more
 FILES=`find /etc -type f`
 echo "copying files from /etc to /mnt/lustre"
-tar cf - $FILES | tar xf - -C /mnt/lustre || fail "copying /etc" 10
+tar cf - $FILES | tar xvf - -C /mnt/lustre || fail "copying /etc" 10
 
 echo "comparing newly copied files"
 for f in $FILES; do
