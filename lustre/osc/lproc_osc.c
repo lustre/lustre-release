@@ -35,7 +35,6 @@ static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 
-#define OSC_MAX_PPR_MAX PTL_MD_MAX_IOV
 #define OSC_MAX_RIF_MAX 32
 #define OSC_MAX_DIRTY_MB_MAX 4096 /* totally arbitrary */
 
@@ -63,7 +62,7 @@ int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val < 1 || val > OSC_MAX_PPR_MAX)
+        if (val < 1 || val > PTL_MD_MAX_PAGES)
                 return -ERANGE;
 
         spin_lock(&cli->cl_loi_list_lock);
@@ -244,6 +243,42 @@ int osc_wr_create_count(struct file *file, const char *buffer,
         return count;
 }
 
+int osc_rd_prealloc_next_id(char *page, char **start, off_t off, int count,
+                            int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *exp;
+
+        if (obd == NULL || list_empty(&obd->obd_exports))
+                return 0;
+
+        spin_lock(&obd->obd_dev_lock);
+        exp = list_entry(obd->obd_exports.next, struct obd_export,
+                         exp_obd_chain);
+        spin_unlock(&obd->obd_dev_lock);
+
+        return snprintf(page, count, LPU64"\n",
+                        exp->exp_osc_data.oed_oscc.oscc_next_id);
+}
+
+int osc_rd_prealloc_last_id(char *page, char **start, off_t off, int count,
+                            int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *exp;
+
+        if (obd == NULL || list_empty(&obd->obd_exports))
+                return 0;
+
+        spin_lock(&obd->obd_dev_lock);
+        exp = list_entry(obd->obd_exports.next, struct obd_export,
+                         exp_obd_chain);
+        spin_unlock(&obd->obd_dev_lock);
+
+        return snprintf(page, count, LPU64"\n",
+                        exp->exp_osc_data.oed_oscc.oscc_last_id);
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
@@ -262,6 +297,8 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         {"create_low_watermark", osc_rd_create_low_wm, osc_wr_create_low_wm, 0},
         { "create_count", osc_rd_create_count, osc_wr_create_count, 0 },
+        { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
+        { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },
         { 0 }
 };
 

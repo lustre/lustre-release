@@ -9,8 +9,6 @@ tags
 TAGS
 obdctl
 lctl
-lfind
-lstripe
 obdstat
 obdio
 obdbarrier
