@@ -353,7 +353,10 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        inode = igrab(lock->l_data);
+        if (lock->l_data)
+                inode = igrab(lock->l_data);
+        else
+                inode = NULL;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return inode;
 }
