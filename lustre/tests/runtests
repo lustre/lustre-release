@@ -14,8 +14,10 @@ fail() {
 export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
 cleanup() {
-        $LCONF --cleanup --dump /tmp/debug $OPTS
-	trap 0
+	sync
+	$LCONF --cleanup --dump /tmp/debug $OPTS
+	sync
+	#trap 0
 }
 
 ERROR=
@@ -29,10 +31,11 @@ SRC=/etc
 OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 if [ -z "$OSCMT" ]; then
 	[ -z "$*" ] && fail "usage: $0 [--reformat] <conf>.xml" 1
-	$LCONF $@ || exit 1
-        trap cleanup 0
+	$LCONF --gdb $@ || exit 1
+	#trap cleanup 0
 	OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 	[ -z "$OSCMT" ] && fail "no lustre filesystem mounted" 1
+	I_MOUNTED="yes"
 fi
 
 while [ "$1" ]; do
@@ -89,8 +92,6 @@ done
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
 
 cleanup || exit 19
-sync
-
 $LCONF $OPTS || exit 20
 
 echo "comparing previously copied files"
@@ -102,7 +103,6 @@ done
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
 cleanup || exit 29
-sync
 $LCONF $OPTS || exit 30
 
 echo "renaming $HOSTS.ren to $HOSTS"
@@ -120,5 +120,4 @@ if [ $NOWUSED -gt $USED ]; then
 	echo "This is normal on BA OSTs, because of subdirectories." 1>&2
 fi
 
-cleanup $OPTS || exit 29
-sync
+[ "$I_MOUNTED" = "yes" ] && cleanup $OPTS || exit 29
