@@ -200,14 +200,17 @@ static inline int lustre_cfg_getdata(char **buf, int len, void *arg, int kernel)
         lcfg = (struct lustre_cfg *)*buf;
 
         if (lcfg->lcfg_version != LUSTRE_CFG_VERSION) {
-                CERROR("Version mismatch kernel vs application\n");
+                CERROR("Version mismatch kernel: %#x application: %#x\n",
+                       LUSTRE_CFG_VERSION, lcfg->lcfg_version);
                 return -EINVAL;
         }
 
-//        if (lustre_cfg_is_invalid(data)) {
-//                CERROR("ioctl not correctly formatted\n");
-//                return -EINVAL;
-//        }
+#if 0
+        if (lustre_cfg_is_invalid(data)) {
+                CERROR("ioctl not correctly formatted\n");
+                return -EINVAL;
+        }
+#endif
 
         if (lcfg->lcfg_dev_name) {
                 lcfg->lcfg_dev_name = &lcfg->lcfg_bulk[0];
