@@ -41,12 +41,6 @@ Options:
 	size (in KB) of each stripe on an OST (default: 64)
     --stripe_count=COUNT
 	the number of OSTs files are striped to (default: 1)
-    --lustre_upcall=LUSTRE_UPCALL
-	Set location of lustre upcall script	
-    --portals_upcall=PORTALS_UPCALL
-	Set location of portals upcall script	
-    --upcall=UPCALL
-	Set both lustre and portals upcall script	
 EOF
 
     exit 0     
@@ -69,7 +63,7 @@ RM_BATCH_FILE=1
 FORCE=0
 get_option()
 {
-    local long_options="batch:,file:,force:,help,stripe_size:,stripe_count:,lustre_upcall:,portals_upcall:,upcall:"
+    local long_options="batch:,file:,force:,help,stripe_size:,stripe_count:"
     local options
 
     options=$(getopt -o o:hf --long "$long_options" -- "$@")
@@ -106,18 +100,6 @@ get_option()
 		    fatal 1 "Stripe size should be a number."
 		shift 2
 		;;
-            --lustre_upcall)
-		LUSTRE_UPCALL=$2
-		shift 2
-		;;	
-            --portals_upcall)
-		PORTALS_UPCALL=$2
-		shift 2
-		;;	
-            --upcall)
-		UPCALL=$2
-		shift 2
-		;;	
 	    -h | --help)
 		usage
 		;;
@@ -198,14 +180,14 @@ add_device()
 	while [ -z "$device" ] ; do
 	    echo -n "Please enter the device or loop file name for $1$2 on ${hostname}: "
 	    read device
-	    echo -n "Please enter the device size or 0 to use entire device: "
+	    echo -n "Please enter the device SIZE or 0 to use entire device (in KB): "
 	    while ! get_device_size ; do
-	       echo -n "Please enter the device size or 0 to use entire device: "
+	       echo -n "Please enter the device SIZE or 0 to use entire device (in KB): "
 	    done
-	    echo -n "Do you want to configure failover $1$2?"
+	    echo -n "Do you want to configure FAILOVER $1$2? "
 	    read answer
 	    if [ "${answer:0:1}" = "y" -o "${answer:0:1}" = "Y" ] ; then
-		echo -n "Please enter the hostname(s) for failover $1$2 : "
+		echo -n "Please enter the HOSTNAME(s) for failover $1$2: "
 		read failoverhostname
 		echo -n "Please enter the device for failover $1$2 on ${failoverhostname}: "
 		read failoverdevice
@@ -275,24 +257,12 @@ add_client()
 add_node()
 {
     local node=$1
-    local lustre_upcall=$LUSTRE_UPCALL
-    local portals_upcall=$PORTALS_UPCALL
-    local upcall=$UPCALL
     local nettype=$DEFAULT_NETTYPE
-    local extraopt=""
 
     in_list "$node" "$NODE_LIST" && return 0 
     NODE_LIST="$NODE_LIST $node" 
-    if [ $lustre_upcall != "0" ] ; then
-	extraopt="--lustre_upcall $lustre_upcall "
-    fi
-    if [ $portals_upcall != "0" ] ; then
-	extraopt="$extraopt --portals_upcall $portals_upcall"
-    fi
-    if [ $upcall != "0" ] ; then
-	extraopt="$extraopt --upcall $upcall"
-    fi
-    run_lmc --add node --node "$node" "$extraopt"
+
+    run_lmc --add node --node "$node"
     run_lmc --add net --node "$node" --nid "$node"  \
 	--nettype "$nettype"
 
@@ -458,9 +428,6 @@ DEFAULT_MNTPT=${DEFAULT_MNTPT:-"/mnt/lustre"}
 STRIPE_SIZE=${STRIPE_SIZE:-$((1 * 1024 * 1024))}
 STRIPE_CNT=${STRIPE_CNT:-1}
 STRIPE_PATTERN=${STRIPE_PATTERN:-0}
-LUSTRE_UPCALL=${LUSTRE_UPCALL:-"0"}
-PORTALS_UPCALL=${PORTALS_UPCALL:-"0"}
-UPCALL=${UPCALL:-"0"}
 
 ANSWER="yes no"
 
@@ -474,10 +441,10 @@ cat <<EOF
 ${0##*/} will help you create a Lustre configuration file.
 
 EOF
-while add_mds ; do
+if add_mds ; then
     add_ost
     add_client
-done
+fi
 
 create_config
 $LMC --batch "$LMC_BATCH_FILE" -o "$CONFIG_FILE"
