@@ -139,7 +139,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
         struct obd_export *export = class_conn2export(exph);
         struct osc_creator *oscc = &export->u.eu_osc_data.oed_oscc;
         struct osc_created *osccd = oscc->oscc_osccd;
-        int try_again = 1, rc;
+        int try_again = 1, rc = 0;
         ENTRY;
 
         class_export_put(export);
@@ -256,7 +256,7 @@ static int osccd_main(void *arg)
                         spin_unlock(&osccd->osccd_lock);
                         osccd_do_create(osccd);
                 }
-                spin_unlock(&osccd->osccd_created_lock);
+                spin_unlock(&osccd->osccd_lock);
         }
 
         osccd->osccd_thread = NULL;
@@ -274,6 +274,7 @@ void oscc_init(struct lustre_handle *exph)
         memset(oed, 0, sizeof(*oed));
         INIT_LIST_HEAD(&oed->oed_oscc.oscc_list);
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
+        spin_lock_init(&oscc->oscc_lock);
         oed->oed_oscc.oscc_exph = exph;
         oed->oed_oscc.oscc_osccd = &osc_created;
         oed->oed_oscc.oscc_kick_barrier = 50;
@@ -299,6 +300,7 @@ int osccd_setup(void)
         INIT_LIST_HEAD(&osccd->osccd_work_list_head);
         init_waitqueue_head(&osccd->osccd_ctl_waitq);
         init_waitqueue_head(&osccd->osccd_waitq);
+        spin_lock_init(&osccd->osccd_lock);
         rc = kernel_thread(osccd_main, osccd,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
