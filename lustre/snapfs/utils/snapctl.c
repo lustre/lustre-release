@@ -17,16 +17,21 @@
 #define IOC_BUF_MAX_LEN 8192 
 static char rawbuf[IOC_BUF_MAX_LEN];
 static char *buf = rawbuf;
-
 /*FIXME add this temporary, will use obd_ioc_data later*/
-#define IOC_PACK(buffer, length)  	\
+#define IOC_INIT(ptr)					\
+do{							\
+	struct ioc_data* pbuf;				\
+	memset(buf, 0, sizeof(rawbuf));	 		\
+	pbuf = (struct ioc_data*)buf;			\
+	pbuf->ioc_inbuf = pbuf->ioc_bulk;		\
+	ptr = (struct ioc_snap_tbl_data *)pbuf->ioc_bulk; \
+} while(0)
+
+#define IOC_PACK(length)  		\
 do{                             	 	\
 	struct ioc_data* pbuf;			\
-	memset(buf, 0, sizeof(rawbuf));	 	\
 	pbuf = (struct ioc_data*)buf;		\
-	pbuf->ioc_inbuf = pbuf->ioc_bulk;	\
 	pbuf->ioc_inlen = length;		\
-	memcpy(pbuf->ioc_inbuf, buffer, length);\
 } while (0)
 
 static struct list_head snap_list;
@@ -217,6 +222,26 @@ int snap_dev_list(int argc, char **argv)
 	release_snap_list();
 	return 0;
 }
+static inline void print_snap_table(void * buf)
+{
+	struct ioc_snap_tbl_data *ptable;
+	int    i;
+
+	ptable = (struct ioc_snap_tbl_data*)buf;
+	
+	printf("There are %d snapshot in the system\n", ptable->count);
+	printf("index\t\tname\t\t\ttime\t\t\n"); 
+	for (i = 0; i < ptable->count; i++) {
+		struct	tm* local_time; 	
+		char	time[128];
+		
+		memset (time, 0, sizeof(time));
+		local_time = localtime(&ptable->snaps[i].time);
+		if (local_time) 
+			strftime(time, sizeof(time), "%a %b %d %Y %H:%M:%S", local_time);			
+		printf("%-10d\t%-20s\t%s\n", ptable->snaps[i].index, ptable->snaps[i].name, time); 
+	}
+}
 int snap_snap_list(int argc, char **argv)
 {
 	int i, rc = 0;
@@ -231,15 +256,17 @@ int snap_snap_list(int argc, char **argv)
 	}
 	
 	for (i = 0; i < open_device_table.count; i++) {
-		struct snap_table_data	snap_ioc_data;
-	
+		struct ioc_snap_tbl_data *snap_ioc_data;
+
+		IOC_INIT(snap_ioc_data);
+
 		if (argc == 2) { 
-			snap_ioc_data.tblcmd_no = atoi(argv[1]);
+			snap_ioc_data->no = atoi(argv[1]);
 		} else { 
-			snap_ioc_data.tblcmd_no = 0;
+			snap_ioc_data->no = 0;
 		}
 		
-		IOC_PACK((char*)&snap_ioc_data, sizeof(struct snap_table_data));
+		IOC_PACK(sizeof(struct ioc_snap_tbl_data));
 		
 		if ((rc = ioctl(open_device_table.device[i].fd, 
 				IOC_SNAP_PRINTTABLE, buf))) {
@@ -247,7 +274,8 @@ int snap_snap_list(int argc, char **argv)
 				&open_device_table.device[i].name[0], rc);
 			return (rc);
 		}
-		printf("%s", ((struct ioc_data*)buf)->ioc_bulk);
+		if(((struct ioc_data*)buf)->ioc_bulk)
+			print_snap_table(((struct ioc_data*)buf)->ioc_bulk);	
 	}
 	return rc;
 }
@@ -265,31 +293,31 @@ int snap_snap_add(int argc, char **argv)
 		return (-EINVAL);
 	}
 	for (i = 0; i < open_device_table.count; i++) {
-		struct snap_table_data	snap_ioc_data;
+		struct ioc_snap_tbl_data *snap_ioc_data;
 
-		snap_ioc_data.tblcmd_count = 1;
-		snap_ioc_data.dev = open_device_table.device[i].dev;
+		IOC_INIT(snap_ioc_data);
+
+		snap_ioc_data->count = 1;
+		snap_ioc_data->dev = open_device_table.device[i].dev;
 
 		if (argc == 3) { 
-			snap_ioc_data.tblcmd_no = atoi(argv[1]);
-			memcpy(&snap_ioc_data.tblcmd_snaps[0].name[0], 
+			snap_ioc_data->no = atoi(argv[1]);
+			memcpy(snap_ioc_data->snaps[0].name, 
 			       argv[2], strlen(argv[2]));
 		} else { 
-			snap_ioc_data.tblcmd_no = 0;
-			memcpy(&snap_ioc_data.tblcmd_snaps[0].name[0], 
+			snap_ioc_data->no = 0;
+			memcpy(snap_ioc_data->snaps[0].name, 
 			       argv[1], strlen(argv[1]));
 		}
-		snap_ioc_data.tblcmd_snaps[0].time = time(NULL);
+		snap_ioc_data->snaps[0].time = time(NULL);
 		
-		IOC_PACK(&snap_ioc_data, sizeof(struct snap_table_data));
+		IOC_PACK(sizeof(struct ioc_snap_tbl_data) + sizeof(struct snap));
 
 		if ((rc = ioctl(open_device_table.device[i].fd, 
-				IOC_SNAP_ADD, buf))) {
-			fprintf(stderr, "add snapshot %s failed %d \n", 
-				&open_device_table.device[i].name[0], rc);
+					IOC_SNAP_ADD, buf))) {
+			fprintf(stderr, "add %s failed \n", argv[1]);
 		} else {
-			fprintf(stderr, "add snapshot %s success\n", 
-				&open_device_table.device[i].name[0]); 
+			fprintf(stderr, "add %s success\n", argv[1]);
 		}
 	}
 	return rc;

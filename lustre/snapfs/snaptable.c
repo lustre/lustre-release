@@ -117,65 +117,61 @@ int snap_needs_cow(struct inode *inode)
 	RETURN(index);
 } /* snap_needs_cow */
 
-int snap_print_table(struct snap_table_data *data, char *buf, int *buflen)
+int snap_print_table(struct ioc_snap_tbl_data *data, char *buf, int *buflen)
 {
 	struct snap_table *table;
-	int tableno = data->tblcmd_no;
-	int i, l, rc = 0, nleft = (*buflen);
+	struct ioc_snap_tbl_data *stbl_out;
+	int tableno = data->no;
+	int i, rc = 0, nleft = (*buflen);
+
 	char *buf_ptr;
 
-	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
+	if (tableno < 0 || tableno > SNAP_MAX_TABLES) {
 		CERROR("invalid table number %d\n", tableno);
 		RETURN(-EINVAL);
 	}
-
+	
 	table = &snap_tables[tableno];
-
-	buf_ptr = buf;
-	l = snprintf(buf_ptr, nleft, "snap table %d snap count %d \n", 
-		     tableno, table->tbl_count);
-	nleft -= l;
-	if(nleft < 0) { 
-		CERROR("can not get enough space to print snaptable\n");
-		rc = -ERANGE;
-		goto exit; 
-	} else {
-		buf_ptr += l;
-	}	
-
+	stbl_out = (struct ioc_snap_tbl_data *)buf;
+	stbl_out->count = table->tbl_count;
+	stbl_out->no = tableno;	
+	buf_ptr = (char*)stbl_out->snaps; 
+	nleft -= buf_ptr - buf; 
 	for (i = 0; i < table->tbl_count; i++) {
-		/*FIXME later, will convert time to time string later */
-		l = snprintf(buf_ptr, nleft,
-			"-- slot %d, idx %d, time %lu, name %s\n", i, 
-			table->snap_items[i+1].index, table->snap_items[i+1].time, 
-			&table->snap_items[i+1].name[0]);
+		memcpy(buf_ptr, &table->snap_items[i+1], sizeof(struct snap));
 		
-		nleft -= l;
+		nleft -= sizeof(struct snap);
 		if(nleft < 0) { 
 			CERROR("can not get enough space to print snaptable\n");
 			rc = -ERANGE;
 			goto exit; 
 		} else {
-			buf_ptr += l;
+			buf_ptr += sizeof(struct snap);
 		}	
 	}
 exit:
 	if(nleft > 0) 
 		(*buflen) = (*buflen) - nleft;
-
 	return 0;
 }
-static int inline get_index_of_item(struct snap_table *table)
+static int inline get_index_of_item(struct snap_table *table, char *name)
 {
 	int count = table->tbl_count;
 	int i, j;
-
-	for (i = 0; i < SNAP_MAX; i ++) {
-		for (j = 1; j < count; j++) {
-			if (table->snap_items[j].index == i)
-				break;
+	
+	for (i = 0; i < SNAP_MAX; i++) { 
+		if (!strcmp(name, table->snap_items[i].name)) 
+			return -EINVAL;	
+	}
+	for (i = 0; i < SNAP_MAX; i++) {
+		int found = 0;
+		for (j = 0; j < (count + 1); j++) {
+			if (table->snap_items[j].index == i) {
+				found = 1;
+				break;	
+			}
                 }
-		if (j >= count) 
+		if (!found)
 			return i;
 	}
 	return -EINVAL;
@@ -183,7 +179,7 @@ static int inline get_index_of_item(struct snap_table *table)
 /* This function will write one item(a snapshot) to snaptable  
  * and will also write to disk.
  */
-int snaptable_add_item(struct snap_table_data *data)
+static int snaptable_add_item(struct ioc_snap_tbl_data *data)
 {
 	struct snap_table 		*table;
 	struct snap_disk_table 		*disk_snap_table;
@@ -198,7 +194,7 @@ int snaptable_add_item(struct snap_table_data *data)
 	if (!snapops || !snapops->set_meta_attr)
 		RETURN(-EINVAL);
 
-	tableno = data->tblcmd_no;
+	tableno = data->no;
 	if (tableno < 0 || tableno > SNAP_MAX_TABLES) {
 		CERROR("invalid table number %d\n", tableno);
 		RETURN(-EINVAL);
@@ -207,20 +203,20 @@ int snaptable_add_item(struct snap_table_data *data)
 	count = table->tbl_count;
 
 	/* XXX Is down this sema necessary*/
-	//down_interruptible(&table->tbl_sema);
+	down_interruptible(&table->tbl_sema);
 
 	/*add item in snap_table*/
 	table->snap_items[count+1].gen = table->generation;
 	table->snap_items[count+1].time = CURRENT_TIME;
 	/* find table index */
-	index = get_index_of_item(table);
+	index = get_index_of_item(table, data->snaps[0].name);
 	if (index < 0)
 		RETURN(-EINVAL);
-
+	
 	table->snap_items[count+1].index = index;
 	table->snap_items[count+1].flags = 0;
 	memcpy(&table->snap_items[count + 1].name[0], 
-	       &data->tblcmd_snaps[0].name[0], SNAP_MAX_NAMELEN);
+	       data->snaps[0].name, SNAP_MAX_NAMELEN);
 	/* we will write the whole snap_table to disk */
 	SNAP_ALLOC(disk_snap_table, sizeof(struct snap_disk_table));
 	if (!disk_snap_table)
@@ -246,7 +242,7 @@ int snaptable_add_item(struct snap_table_data *data)
 	table->tbl_count++;
 	table->generation++;
 	
-	//up(&table->tbl_sema);
+	up(&table->tbl_sema);
 	
 	return 0;
 }

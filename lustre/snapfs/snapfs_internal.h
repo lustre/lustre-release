@@ -1,7 +1,8 @@
 #ifndef __LINUX_SNAPFS_H
 #define __LINUX_SNAPFS_H
 /* maximum number of snapshot tables we maintain in the kernel */
-#define SNAP_MAX_TABLES 	32
+#define SNAP_MAX		32	
+#define SNAP_MAX_TABLES 	32	
 #define SNAP_MAX_NAMELEN	64
 
 /* ioctls for manipulating snapshots 40 - 60 */
@@ -23,7 +24,6 @@
 
 #define IOC_SNAP_MAX_NR                 51 
 
-
 struct snap {
 	time_t 		time;
 	unsigned int 	index;
@@ -32,19 +32,22 @@ struct snap {
 	char 	name[SNAP_MAX_NAMELEN];
 };
 
-/* snap ioctl data for table fiddling */
-struct snap_table_data {
-	int 		tblcmd_no;		/* which table */
-	unsigned long	dev;
-	unsigned int 	tblcmd_count;		/* how many snaps */
-	struct snap 	tblcmd_snaps[0];	/* sorted times! */
-};
+
 /*FIXME, use ioc_data temporary, will use obd_ioc_data later*/
 struct ioc_data {
 	unsigned int ioc_inlen;
 	char 	     *ioc_inbuf;
 	char	     ioc_bulk[0];
 };
+
+/* snap ioctl data for table fiddling */
+struct ioc_snap_tbl_data {
+	int 		no;		/* which table */
+	unsigned long	dev;
+	unsigned int 	count;		/* how many snaps */
+	struct snap 	snaps[0];	/* sorted times! */
+};
+
 /* we have just a single snapshot control device
    it contains a list of all the snap_current info's
 */
@@ -74,7 +77,6 @@ typedef ino_t	snap_id;
 //#define OBD_OBDMDSZ  54
 //#define SNAP_MAX ((OBD_OBDMDSZ - sizeof(uint32_t))/sizeof(snap_id))
 
-#define SNAP_MAX	50
 
 
 /* if time is 0 this designates the "current" snapshot, i.e.
@@ -203,14 +205,6 @@ struct snap_obd_data {
 	unsigned int snap_index;/* which snapshot is ours */
 	unsigned int snap_table;/* which table do we use */
 };
-
-struct snap_table {
-	struct semaphore    tbl_sema;
-	spinlock_t          tbl_lock;
-	unsigned int 	    tbl_count; /* how many snapshots exist in this table*/
-	unsigned int	    generation;
-	struct snap    	    snap_items[SNAP_MAX]; 
-};
 #define DISK_SNAPTABLE_ATTR     "Snaptable"
 #define DISK_SNAP_TABLE_MAGIC	0x1976
 struct snap_disk_table {
@@ -218,6 +212,15 @@ struct snap_disk_table {
 	unsigned int    	count;
 	unsigned int		generation;
 	struct  snap_disk  	snap_items[SNAP_MAX];
+};
+
+/*Snap Table*/
+struct snap_table {
+	struct semaphore    tbl_sema;
+	spinlock_t          tbl_lock;
+	unsigned int 	    tbl_count; /* how many snapshots exist in this table*/
+	unsigned int	    generation;
+	struct snap    	    snap_items[SNAP_MAX]; 
 };
 
 struct snap_iterdata {
