@@ -275,11 +275,11 @@ getobdindex(const char *path)
 		exit(1);
 	}
 
+	memset(&data, 0, sizeof data);
         data.ioc_inllen1 = sizeof(desc);
         data.ioc_inlbuf1 = (char *)&desc;
         data.ioc_inllen2 = uuidslen;
         data.ioc_inlbuf2 = (char *)uuids;
-        data.ioc_inllen3 = 0;
 
         memset(&desc, 0, sizeof(desc));
         desc.ld_tgt_count = max_ost_count;
