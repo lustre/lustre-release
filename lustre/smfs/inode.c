@@ -42,10 +42,12 @@ static void smfs_init_inode_info (struct inode *inode, void *opaque)
         struct smfs_iget_args *sargs = (struct smfs_iget_args*)opaque;
         struct inode *cache_inode = NULL;
         
+#if 0
         if (sargs)
                 cache_inode = iget(S2CSB(inode->i_sb), sargs->s_ino);
         else 
-                cache_inode = iget(S2CSB(inode->i_sb), inode->i_ino); 
+#endif
+        cache_inode = iget(S2CSB(inode->i_sb), inode->i_ino); 
                  
         OBD_ALLOC(I2SMI(inode), sizeof(struct smfs_inode_info));
         LASSERT(I2SMI(inode));
@@ -180,25 +182,6 @@ static void smfs_delete_inode(struct inode *inode)
         if (!cache_inode || !S2CSB(inode->i_sb))
                 return;
 
-        /* FIXME-WANGDI: because i_count of cache_inode may not be 0 or 1 in
-         * before smfs_delete inode, So we need to dec it to 1 before we call
-         * delete_inode of the bellow cache filesystem Check again latter. */
-
-        if (atomic_read(&cache_inode->i_count) < 1)
-                BUG();
-
-        while (atomic_read(&cache_inode->i_count) != 1)
-                atomic_dec(&cache_inode->i_count);
-
-        pre_smfs_inode(inode, cache_inode);
-
-        if (atomic_read(&cache_inode->i_count) < 1)
-                LBUG();
-
-        while (atomic_read(&cache_inode->i_count) != 1) {
-                atomic_dec(&cache_inode->i_count);
-        }
-
         pre_smfs_inode(inode, cache_inode);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -217,8 +200,8 @@ static void smfs_delete_inode(struct inode *inode)
                 S2CSB(inode->i_sb)->s_op->delete_inode(cache_inode);
 
         post_smfs_inode(inode, cache_inode);
-
-        I2CI(inode) = NULL;
+        smfs_clear_inode_info(inode);
+        
         return;
 }
 
