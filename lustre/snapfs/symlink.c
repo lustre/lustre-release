@@ -4,26 +4,19 @@
  *  A snap shot file system.
  *
  */
+#define DEBUG_SUBSYSTEM S_SNAP
 
-#define EXPORT_SYMTAB
-
-
-#define __NO_VERSION__
-#include <linux/module.h>
-#include <asm/uaccess.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
+#include <linux/kmod.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
 #include <linux/string.h>
-#include <linux/locks.h>
-#include <linux/quotaops.h>
-#include <linux/list.h>
-#include <linux/file.h>
-#include <asm/bitops.h>
-#include <asm/byteorder.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
 
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
+#include "snapfs_internal.h" 
+
 
 static inline int inode_has_ea(struct inode *inode)
 {               
@@ -92,19 +85,17 @@ static int cat_str_ahead(char *buf, int pos, const char* str)
  * (1) we are not lies in .snap
  * (2) we are already in the root's .snap
  */
-static struct dentry * dotsnap_follow_link(struct dentry *base,
-					   struct dentry *dentry,
-					   int follow)
+static int dotsnap_follow_link(struct dentry *dentry,
+					   struct nameidata *nd)
 {
 	struct super_block *sb = dentry->d_inode->i_sb;
-	struct dentry *rc = NULL;
 	struct dentry *de = dentry, *de_save1=NULL, *de_save2=NULL;
 	char *buf = NULL;
-	int pos = D_MAXLEN;
+	int pos = D_MAXLEN, rc;
 
-	SNAP_ALLOC(buf, char*, D_MAXLEN);
+	SNAP_ALLOC(buf, D_MAXLEN);
 	if( !buf )
-		return ERR_PTR(-ENOMEM);
+		RETURN(-ENOMEM);
 
 	/*
 	 * iterate upward to construct the path
@@ -139,49 +130,50 @@ lookup:
 
 	pos = cat_str_ahead(buf, pos, ".snap");
 	buf[D_MAXLEN-1] = 0;
-	CDEBUG(D_FILE, "constructed path: %s\n", &buf[pos]);
+	CDEBUG(D_SNAP, "constructed path: %s\n", &buf[pos]);
 
 	/* FIXME lookup_dentry will never return NULL ?? */
+#if 0
 	rc = lookup_dentry(&buf[pos], dget(sb->s_root), follow);
 	if( !rc ){
 		rc = ERR_PTR(-ENOENT);
-		CDEBUG(D_FILE, "lookup_dentry return NULL~!@#$^&*\n");
+		CDEBUG(D_SNAP, "lookup_dentry return NULL~!@#$^&*\n");
 	}
-	dput(base);
-
+#else
+	if (path_init(&buf[pos], LOOKUP_FOLLOW, nd)) {
+		rc = path_walk(&buf[pos], nd);
+		if (rc)
+			GOTO(exit, rc);
+	} 
+#endif
 exit:
 	SNAP_FREE(buf, D_MAXLEN);
 	return rc;
 }
 
-static struct dentry * currentfs_follow_link (	struct dentry *dentry, 
-						struct dentry *base,
-						unsigned int follow)
+static int currentfs_follow_link (struct dentry *dentry, struct nameidata *nd)
 {
 	struct snap_cache *cache;
-	struct dentry * rc;
 	struct inode_operations *iops;
 	struct inode * inode = dentry->d_inode;
 	int bpib = inode->i_sb->s_blocksize >> 9;
 	__u32 save_i_blocks;
-
+	int	rc;
 	ENTRY;
 
 	cache = snap_find_cache(inode->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return ERR_PTR(-EINVAL);
+		RETURN(-EINVAL);
 	}
 
 	iops = filter_c2csiops(cache->cache_filter); 
 	if (!iops ||
 	    !iops->follow_link) {
-		rc = ERR_PTR(-EINVAL);
-		goto exit;
+		GOTO(exit, rc = -EINVAL);
 	}
 
 	if( currentfs_is_under_dotsnap(dentry) ){
-		rc = dotsnap_follow_link( base, dentry, follow );
+		rc = dotsnap_follow_link(dentry, nd);
 		if( rc )
 			goto exit;
 	}
@@ -193,7 +185,7 @@ static struct dentry * currentfs_follow_link (	struct dentry *dentry,
 	if( inode_has_ea(inode) && inode->i_blocks == bpib ) {
 		inode->i_blocks = 0; 
 	}
-	rc = iops->follow_link(dentry, base, follow);
+	rc = iops->follow_link(dentry, nd);
 	
 	if( inode->i_blocks != save_i_blocks ){
 		inode->i_blocks = save_i_blocks;
@@ -201,13 +193,14 @@ static struct dentry * currentfs_follow_link (	struct dentry *dentry,
 	}
 	
 exit:
-	EXIT;
-	return rc;
+	RETURN(rc);
 }
 
 struct inode_operations currentfs_sym_iops = {
 	readlink:	currentfs_readlink,
-	follow_link:	currentfs_follow_link
+	follow_link:	currentfs_follow_link,
 };
 
-struct file_operations currentfs_sym_fops;
+struct file_operations currentfs_sym_fops = {
+	ioctl:		NULL,
+};

@@ -8,43 +8,22 @@
  *
  *  Author: Peter J. Braam <braam@mountainviewdata.com>
  */
+#define DEBUG_SUBSYSTEM S_SNAP
 
-
-#include <stdarg.h>
-
-#include <asm/bitops.h>
-#include <asm/uaccess.h>
-#include <asm/system.h>
-
-#include <linux/errno.h>
-#include <linux/fs.h>
-#include <linux/dcache.h>
-
-#ifdef CONFIG_SNAPFS_EXT2
-#include <linux/ext2_fs.h>
-#endif
-#ifdef CONFIG_SNAPFS_EXT3
-#include <linux/ext3_fs.h>
-#endif
-
-#include <linux/malloc.h>
-#include <linux/vmalloc.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
-#include <linux/string.h>
-#include <linux/locks.h>
-#include <linux/blkdev.h>
-#include <linux/init.h>
-#define __NO_VERSION__
 #include <linux/module.h>
+#include <linux/kmod.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
+#include <linux/errno.h>
+#include "snapfs_internal.h" 
 
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
 
 #ifdef SNAP_DEBUG
-long snap_vmemory = 0;
-long snap_kmemory = 0;
 unsigned int snap_debug_failcode = 0;
 #endif
 
@@ -54,15 +33,16 @@ extern inline void snap_init_cache_hash(void);
 
 extern int snap_get_index_from_name (int tableno, char *name);
 
-#ifdef CONFIG_SNAPFS_EXT2
-extern struct snapshot_operations ext2_snap_operations;
-extern struct journal_ops snap_ext2_journal_ops;
-#endif
 
-#ifdef CONFIG_SNAPFS_EXT3
 extern struct snapshot_operations ext3_snap_operations;
 extern struct journal_ops snap_ext3_journal_ops;
-#endif
+                                                                                                                                                                                                     
+static void put_filesystem(struct file_system_type *fs)
+{
+	if (fs->owner)
+		__MOD_DEC_USE_COUNT(fs->owner);
+}
+
 
 /* returns an allocated string, copied out from data if opt is found */
 static char *read_opt(const char *opt, char *data)
@@ -78,9 +58,9 @@ static char *read_opt(const char *opt, char *data)
 		return NULL;
 
 	value++;
-	SNAP_ALLOC(retval, char *, strlen(value) + 1);
+	SNAP_ALLOC(retval, strlen(value) + 1);
 	if ( !retval ) {
-		printk("snapfs: Out of memory!\n");
+		CERROR("snapfs: Out of memory!\n");
 		return NULL;
 	}
 
@@ -114,15 +94,15 @@ static char *snapfs_options(char *options, char *cache_data,
 
 	/* set the defaults here */
 	if (cache_type && !*cache_type) {
-		SNAP_ALLOC(*cache_type, char *, strlen("ext2") + 1);
-		strcpy(*cache_type, "ext2");
+		SNAP_ALLOC(*cache_type, strlen("ext3") + 1);
+		strcpy(*cache_type, "ext3");
 	}
 	if (cow_type && !*cow_type) {
-		SNAP_ALLOC(*cow_type, char *, strlen("block") + 1);
+		SNAP_ALLOC(*cow_type, strlen("block") + 1);
 		strcpy(*cow_type, "block");
 	}
 	if (snaptable && !*snaptable) {
-		SNAP_ALLOC(*snaptable, char *, strlen("-1")+1);
+		SNAP_ALLOC(*snaptable, strlen("-1")+1);
 		strcpy(*snaptable, "-1");
 	}
 
@@ -167,25 +147,18 @@ int snapfs_remount(struct super_block * sb, int *flags, char *data)
 	int err = 0;
 
 	ENTRY;
-	CDEBUG(D_MALLOC, "before remount: kmem %ld, vmem %ld\n",
-	       snap_kmemory, snap_vmemory);
 	CDEBUG(D_SUPER, "remount opts: %s\n", data ? (char *)data : "(none)");
 	if (data) {
 		/* reserve space for the cache's data */
-		SNAP_ALLOC(cache_data, void *, PAGE_SIZE);
-		if ( !cache_data ) {
-			err = -ENOMEM;
-			EXIT;
-			goto out_err;
-		}
+		SNAP_ALLOC(cache_data, PAGE_SIZE);
+		if ( !cache_data ) 
+			GOTO(out_err, err = -ENOMEM);
 	}
 
 	cache = snap_find_cache(sb->s_dev);
 	if (!cache) {
-		printk(__FUNCTION__ ": cannot find cache on remount\n");
-		err = -ENODEV;
-		EXIT;
-		goto out_err;
+		CERROR("cannot find cache on remount\n");
+		GOTO(out_err, err = -ENODEV);
 	}
 
 	/* If an option has not yet been set, we allow it to be set on
@@ -211,8 +184,6 @@ int snapfs_remount(struct super_block * sb, int *flags, char *data)
 		err = sops->remount_fs(sb, flags, cache_data);
 	}
 
-	CDEBUG(D_MALLOC, "after remount: kmem %ld, vmem %ld\n",
-	       snap_kmemory, snap_vmemory);
 	EXIT;
 out_err:
 	if (cache_data)
@@ -251,15 +222,12 @@ snapfs_read_super (
 	int tableno;
 
 	ENTRY;
-	CDEBUG(D_MALLOC, "before parsing: kmem %ld, vmem %ld\n",
-	       snap_kmemory, snap_vmemory);
 
 	/* reserve space for the cache's data */
-	SNAP_ALLOC(cache_data, void *, PAGE_SIZE);
+	SNAP_ALLOC(cache_data, PAGE_SIZE);
 	if ( !cache_data ) {
-		printk("snapfs_read_super: Cannot allocate data page.\n");
-		EXIT;
-		goto out_err;
+		CERROR("snapfs_read_super: Cannot allocate data page.\n");
+		GOTO(out_err, 0);
 	}
 
 	CDEBUG(D_SUPER, "mount opts: %s\n", data ? (char *)data : "(none)");
@@ -281,20 +249,21 @@ snapfs_read_super (
 	/* set up the cache */
 	cache = snap_init_cache();
 	if ( !cache ) {
-		printk("snapfs_read_super: failure allocating cache.\n");
-		EXIT;
-		goto out_err;
+		CERROR("snapfs_read_super: failure allocating cache.\n");
+		GOTO(out_err, 0);
 	}
 
 	fstype = get_fs_type(cache_type);
 	if ( !fstype || !fstype->read_super) {
-		EXIT;
-		goto out_err;
+		GOTO(out_err, 0);
 	}
 	
 	cache->cache_filter = filter_get_filter_fs((const char *)cache_type); 
-	/* XXX if cache->cache_filter==NULL?although it's rare ***/
-
+	
+	if (!cache->cache_filter) {
+		CERROR("Unrecognized cache type %s \n", cache_type);
+		GOTO(out_err, 0);
+	}
 
 	/*
          * Read the underlying file system superblock - ext2, ext3, reiser.
@@ -303,20 +272,12 @@ snapfs_read_super (
          *
          * Note: It's assumed that sb is always returned.
          */
-	CDEBUG(D_SUPER, "\n");
 	if (fstype->read_super(sb, cache_data, silent) != sb) {
-		printk("snapfs: cache mount failure.\n");
-		EXIT;
-		goto out_err;
+		CERROR("snapfs: cache mount failure.\n");
+		GOTO(out_err, 0);
         }
 
-	/* XXX now look at the flags in the superblock and determine if this 
-	       is a block cow file system or a file cow fs.  Then assign the 
-	       snap operations accordingly.  This goes in the sections for ext2/ext3/xfs etc
-        */ 
-
 	/* this might have been freed above */
-	CDEBUG(D_SUPER, "\n");
 	if (cache_data) {
 		SNAP_FREE(cache_data, PAGE_SIZE);
 		cache_data = NULL;
@@ -329,14 +290,13 @@ snapfs_read_super (
          * 'cache' is the struct snap_cache allocated for this
          * snapfs mount.
          */
-	CDEBUG(D_SUPER, "\n");
 	snap_cache_add(cache, sb->s_dev);
 
 	tableno  =  simple_strtoul(snapno, &endptr, 0);
 	cache->cache_snap_tableno = tableno;
 
-	CDEBUG(D_SUPER, "get tableno %d\n", cache->cache_snap_tableno);
 
+	CDEBUG(D_SUPER, "get tableno %d\n", cache->cache_snap_tableno);
 	/*
          * make sure we have our own super operations
          *
@@ -344,10 +304,8 @@ snapfs_read_super (
          * struct snap_ops structure set based on the underlying
          * file system type.
          */
-	CDEBUG(D_SUPER, "\n");
 	filter_setup_super_ops(cache->cache_filter, sb->s_op,
 			       &currentfs_super_ops);
-	CDEBUG(D_SUPER, "\n");
 	sb->s_op = filter_c2usops(cache->cache_filter); 
         /*
          * Save pointers in the snap_cache structure to the
@@ -358,25 +316,6 @@ snapfs_read_super (
 	/* set up snapshot ops, handle COMPAT_FEATUREs */
 	if( 0 ){
 	}
-#ifdef CONFIG_SNAPFS_EXT2
-	else if ( strcmp (cache_type,"ext2") == 0 ){
-		cache->cache_type = FILTER_FS_EXT2;
-		filter_setup_snapshot_ops(cache->cache_filter, 
-					&ext2_snap_operations);
-		filter_setup_journal_ops(cache->cache_filter,
-					&snap_ext2_journal_ops);
-		if( !EXT2_HAS_COMPAT_FEATURE(sb, EXT2_FEATURE_COMPAT_SNAPFS) ){
-			if( strcmp(cow_type, "block")==0 ){
-				sb->u.ext2_sb.s_feature_compat |=
-					EXT2_FEATURE_COMPAT_BLOCKCOW;
-				sb->u.ext2_sb.s_es->s_feature_compat |=
-					cpu_to_le32(EXT2_FEATURE_COMPAT_BLOCKCOW);
-			}
-		}
-                sb->u.ext2_sb.s_last_cowed_ino = 0;
-	}
-#endif
-#ifdef CONFIG_SNAPFS_EXT3
 	else if ( strcmp (cache_type,"ext3") == 0 ){
 		cache->cache_type = FILTER_FS_EXT3;
 		filter_setup_snapshot_ops(cache->cache_filter,
@@ -389,37 +328,32 @@ snapfs_read_super (
 					cpu_to_le32(EXT3_FEATURE_COMPAT_BLOCKCOW);
 			}
 		}
-		sb->u.ext3_sb.s_last_cowed_ino = 0;
+		sb->u.ext3_sb.s_last_cowed_pri_ino = 0;
+		sb->u.ext3_sb.s_first_cowed_pri_ino = 0;
 	}
-#endif
-
-	CDEBUG(D_SUPER, "\n");
 	/* now get our own directory operations */
 	if ( sb->s_root && sb->s_root->d_inode ) {
-		CDEBUG(D_SUPER, "\n");
 		filter_setup_dir_ops(cache->cache_filter, 
-				     sb->s_root->d_inode->i_op,
-				     &currentfs_dir_iops);
-		CDEBUG(D_SUPER, "\n");
+				     sb->s_root->d_inode,
+				     &currentfs_dir_iops, &currentfs_dir_fops);
 		sb->s_root->d_inode->i_op =filter_c2udiops(cache->cache_filter);
-//	CDEBUG(D_SUPER, "\n");
-//		sb->s_root->d_inode->i_snapop = ext2_snapops();
 
 		CDEBUG(D_SUPER, "lookup at %p\n", 
 		       sb->s_root->d_inode->i_op->lookup);
-#if 0
-		/* XXX is this needed ?? */
+		/* XXX is this needed ?? ext3 do not have dentry operations*/
 		filter_setup_dentry_ops(cache->cache_filter, 
 					sb->s_root->d_op, 
 					&currentfs_dentry_ops);
 		sb->s_root->d_op = filter_c2udops(cache->cache_filter);
-#endif
 	}
         /*
          * Save a pointer to the snap_cache structure in the
          * "snap_current" superblock.
          */
         (struct snap_cache *) sb->u.generic_sbp = cache;
+
+	snapfs_read_snaptable(cache, tableno);
+	
 	CDEBUG(D_SUPER, "sb %lx, sb->u.generic_sbp: %lx\n",
                 (ulong) sb, (ulong) sb->u.generic_sbp);
 
@@ -436,12 +370,10 @@ snapfs_read_super (
 		SNAP_FREE(cow_type, strlen(cow_type) + 1);
 		cow_type = NULL;
 	}
+	/* Inc in get_fs_type, Dec in put_fs_type*/
 
-	CDEBUG(D_MALLOC, "after mounting: kmem %ld, vmem %ld\n",
-	       snap_kmemory, snap_vmemory);
-
-	MOD_INC_USE_COUNT;
-	EXIT;
+	put_filesystem(fstype);
+	
 	return sb;
 
  out_err:
@@ -456,19 +388,13 @@ snapfs_read_super (
 		SNAP_FREE(cache_type, strlen(cache_type) + 1);
 	if (cow_type)
 		SNAP_FREE(cow_type, strlen(cow_type) + 1);
+	if (fstype)
+		put_filesystem(fstype);
 
-	CDEBUG(D_MALLOC, "mount error exit: kmem %ld, vmem %ld\n",
-	       snap_kmemory, snap_vmemory);
 	return NULL;
 }
 
-
-struct file_system_type snapfs_current_type = {
-	"snap_current",
-	FS_REQUIRES_DEV, /* can use Ibaskets when ext2 does */
-	snapfs_read_super,
-	NULL
-};
+static DECLARE_FSTYPE_DEV(snapfs_current_type, "snap_current", snapfs_read_super);
 
 
 /* Find the options for the clone. These consist of a cache device
@@ -510,19 +436,26 @@ static char *clonefs_options(char *options, char *cache_data,
 static int snapfs_path2dev(char *dev_path, kdev_t *dev)
 {
 	struct dentry *dentry;
+	struct nameidata nd;
+	int error = 0;
+	
+	if (path_init(dev_path, LOOKUP_FOLLOW, &nd)) {
+		error = path_walk(dev_path, &nd);
+		if (error)
+			return error;
+	} else
+		return -EINVAL;
 
-	dentry = lookup_dentry(dev_path, NULL, 0);
-	if (IS_ERR(dentry))
-		return PTR_ERR(dentry);
+	dentry = nd.dentry;
 
-	if (!dentry->d_inode)
+	if (!dentry->d_inode || !S_ISBLK(dentry->d_inode->i_mode) || 
+	    is_bad_inode(dentry->d_inode) ) {
+		path_release(&nd);
 		return -ENODEV;
-
-	if (!S_ISBLK(dentry->d_inode->i_mode))
-		return -ENODEV;
+	}
 
 	*dev = dentry->d_inode->i_rdev;
-
+	path_release(&nd);
 	return 0;
 }
 
@@ -554,15 +487,12 @@ clone_read_super(
 
 	ENTRY;
 
-	CDEBUG(D_MALLOC, "before parsing: kmem %ld, vmem %ld\n",
-	       snap_kmemory, snap_vmemory);
 
 	/* reserve space for the cache's data */
-	SNAP_ALLOC(cache_data, void *, PAGE_SIZE);
+	SNAP_ALLOC(cache_data, PAGE_SIZE);
 	if ( !cache_data ) {
-		printk("clone_read_super: Cannot allocate data page.\n");
-		EXIT;
-		goto out_err;
+		CERROR("clone_read_super: Cannot allocate data page.\n");
+		GOTO(out_err, 0);
 	}
 
 	CDEBUG(D_SUPER, "mount opts: %s\n", data ? (char *)data : "(none)");
@@ -575,29 +505,25 @@ clone_read_super(
 		SNAP_FREE(cache_data, PAGE_SIZE);
 		cache_data = NULL;
 	} else {
-		printk("clonefs: invalid mount option %s\n", cache_data);
-		EXIT;
-		goto out_err;
+		CERROR("clonefs: invalid mount option %s\n", cache_data);
+		GOTO(out_err, 0);
 	}
 
 	if (!namestr || !devstr) {
-		printk("snapfs: mount options name and dev mandatory\n");
-		EXIT;
-		goto out_err;
+		CERROR("snapfs: mount options name and dev mandatory\n");
+		GOTO(out_err, 0);
 	}
 
 	err = snapfs_path2dev(devstr, &dev);
 	if ( err ) {
-		printk("snap: incorrect device option %s\n", devstr);
-		EXIT;
-		goto out_err;
+		CERROR("snap: incorrect device option %s\n", devstr);
+		GOTO(out_err, 0);
 	}
 	
 	snap_cache = snap_find_cache(dev);
 	if ( !snap_cache ) {
-		printk("snap: incorrect device option %s\n", devstr);
-		EXIT;
-		goto out_err;
+		CERROR("snap: incorrect device option %s\n", devstr);
+		GOTO(out_err, 0);
 	}
 
 	/*index =  simple_strtoul(indexstr, &endptr, 0);
@@ -614,9 +540,8 @@ clone_read_super(
 			snap_cache->cache_snap_tableno, namestr, index);
 
 	if(index < 0 ) {
-		printk("No valid index for name %s passed to mount\n",namestr); 
-		EXIT;
-		goto out_err;
+		CERROR("No valid index for name %s passed to mount\n",namestr); 
+		GOTO(out_err, 0);
 	}
 
         /*
@@ -640,13 +565,13 @@ clone_read_super(
 	CDEBUG(D_SUPER, "readinode %p, root ino %ld, root inode at %p\n",
 	       sb->s_op->read_inode, root_ino, root_inode);
 
-	sb->s_root = d_alloc_root(root_inode, NULL);
+	sb->s_root = d_alloc_root(root_inode);
 	if (!sb->s_root) {
 		list_del(&clone_sb->clone_list_entry);
 		sb = NULL;
 	}
 
-	dget( snap_cache->cache_sb->s_root );
+	dget(snap_cache->cache_sb->s_root);
 
 	if (cache_data)
 		SNAP_FREE(cache_data, PAGE_SIZE);
@@ -656,39 +581,29 @@ clone_read_super(
 		SNAP_FREE(namestr, strlen(namestr) + 1);
 	CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
                 (ulong) sb, (ulong) &sb->u.generic_sbp);
-
-	MOD_INC_USE_COUNT;
-	EXIT;
 	return sb;
  out_err:
-	CDEBUG(D_MALLOC, "mount error exit: kmem %ld, vmem %ld\n",
-	       snap_kmemory, snap_vmemory);
 	return NULL;
 }
 
-
-struct file_system_type snapfs_clone_type = {
-	"snap_clone",
-	0,
-	clone_read_super,
-	NULL
-};
-
+static DECLARE_FSTYPE(snapfs_clone_type, "snap_clone", clone_read_super, 0);
 
 int init_snapfs(void)
 {
 	int status;
 
 	snap_init_cache_hash();
+	init_filter_info_cache();
 
-	status = register_filesystem(&snapfs_current_type);
-	if (status) {
-		printk("snapfs: failed in register current filesystem!\n");
-	}
 	status = register_filesystem(&snapfs_clone_type);
 	if (status) {
 		unregister_filesystem(&snapfs_current_type);
-		printk("snapfs: failed in register clone filesystem!\n");
+		CERROR("snapfs: failed in register clone filesystem!\n");
+	}
+
+	status = register_filesystem(&snapfs_current_type);
+	if (status) {
+		CERROR("snapfs: failed in register current filesystem!\n");
 	}
 	return status;
 }
@@ -701,14 +616,14 @@ int cleanup_snapfs(void)
 
 	ENTRY;
 
+	cleanup_filter_info_cache();
 	err = unregister_filesystem(&snapfs_clone_type);
 	if ( err ) {
-		printk("snapfs: failed to unregister clone filesystem\n");
+		CERROR("snapfs: failed to unregister clone filesystem\n");
 	}
 	err = unregister_filesystem(&snapfs_current_type);
 	if ( err ) {
-		printk("snapfs: failed to unregister filesystem\n");
+		CERROR("snapfs: failed to unregister filesystem\n");
 	}
-
 	return 0;
 }

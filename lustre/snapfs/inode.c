@@ -5,32 +5,17 @@
  *
  */
 
-#define EXPORT_SYMTAB
+#define DEBUG_SUBSYSTEM S_SNAP
 
-
-#define __NO_VERSION__
-#include <linux/module.h>
-#include <asm/uaccess.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
-#include <linux/string.h>
-#include <linux/locks.h>
-#include <linux/quotaops.h>
-#include <linux/list.h>
-#include <linux/file.h>
-#include <asm/bitops.h>
-#include <asm/byteorder.h>
-
-#ifdef CONFIG_SNAPFS_EXT2
-#include <linux/ext2_fs.h>
-#endif
-#ifdef CONFIG_SNAPFS_EXT3
+#include <linux/kmod.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/jbd.h>
 #include <linux/ext3_fs.h>
-#endif
-
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
+#include <linux/string.h>
+#include <linux/snap.h>
+#include "snapfs_internal.h" 
 
 
 extern int currentfs_remount(struct super_block * sb, int *flags, char *data);
@@ -43,103 +28,99 @@ extern int currentfs_remount(struct super_block * sb, int *flags, char *data);
  
 extern void currentfs_dotsnap_read_inode(struct snap_cache *, struct inode *);
 
+static kmem_cache_t *filter_info_cache = NULL;
+
+void cleanup_filter_info_cache()
+{
+	kmem_cache_destroy(filter_info_cache);
+}
+
+int init_filter_info_cache()
+{
+	filter_info_cache = kmem_cache_create("snapfs_filter_info",
+					       sizeof(struct filter_inode_info), 
+					    0, 0, NULL, NULL);
+        if (!filter_info_cache) {
+                CERROR("unable to create snap_inode info cache\n");
+		return -ENOMEM;
+        }
+        return 0;
+}
+
+
+void init_filter_data(struct inode *inode, 
+			     struct snapshot_operations *snapops, 
+			     int flag)
+{
+	struct filter_inode_info *i;
+
+	if (inode->i_filterdata){
+                return;
+        }
+	inode->i_filterdata = (struct filter_inode_info *) \
+			      kmem_cache_alloc(filter_info_cache, SLAB_KERNEL);
+	i = inode->i_filterdata;
+	i -> generation = snapops->get_generation(inode);
+	i -> flags      = flag;
+}
 /* Superblock operations. */
 static void currentfs_read_inode(struct inode *inode)
 {
         struct snap_cache *cache;
+	struct snapshot_operations *snapops;	
 	ENTRY;
 
 	if( !inode ) 
-	{
-		EXIT;
 		return;
-	}
 
 	CDEBUG(D_INODE, "read_inode ino %lu\n", inode->i_ino);
 
 	cache = snap_find_cache(inode->i_dev);
-	if ( !cache ) {
-		printk("currentfs_read_inode: cannot find cache\n");
+	if (!cache) {
+		CERROR("currentfs_read_inode: cannot find cache\n");
 		make_bad_inode(inode);
-		EXIT;
-		return ;
+		return;
 	}
 
-	if ( inode->i_ino & 0xF0000000 ) { 
-		CDEBUG(D_INODE, "\n");
+	if (inode->i_ino & 0xF0000000) { 
 		currentfs_dotsnap_read_inode(cache, inode);
-		EXIT;
-		return ;
+		return;
 	}
+	snapops = filter_c2csnapops(cache->cache_filter);
+	
+	if (!snapops || !snapops->get_indirect) 
+		return;
 
-	if( filter_c2csops(cache->cache_filter) )
+	if(filter_c2csops(cache->cache_filter))
 		filter_c2csops(cache->cache_filter)->read_inode(inode);
 
 	/* XXX now set the correct snap_{file,dir,sym}_iops */
-	if ( S_ISDIR(inode->i_mode) ) 
+	if (S_ISDIR(inode->i_mode)) 
 		inode->i_op = filter_c2udiops(cache->cache_filter);
-	else if ( S_ISREG(inode->i_mode) ) {
+	else if (S_ISREG(inode->i_mode)) {
 		if ( !filter_c2cfiops(cache->cache_filter) ) {
-			filter_setup_file_ops(cache->cache_filter,
-				inode->i_op, &currentfs_file_iops);
+			filter_setup_file_ops(cache->cache_filter, inode, 
+					      &currentfs_file_iops, 
+					      &currentfs_file_fops, 
+					      &currentfs_file_aops);
 		}
-		inode->i_op = filter_c2ufiops(cache->cache_filter);
-		printk("inode %lu, i_op at %p\n", inode->i_ino, inode->i_op);
+		CDEBUG(D_INODE, "inode %lu, i_op at %p\n", 
+		       inode->i_ino, inode->i_op);
 	}
-	else if ( S_ISLNK(inode->i_mode) ) {
+	else if (S_ISLNK(inode->i_mode)) {
 		if ( !filter_c2csiops(cache->cache_filter) ) {
-			filter_setup_symlink_ops(cache->cache_filter,
-				inode->i_op, &currentfs_sym_iops);
+			filter_setup_symlink_ops(cache->cache_filter, inode,
+				&currentfs_sym_iops, &currentfs_sym_fops);
 		}
 		inode->i_op = filter_c2usiops(cache->cache_filter);
-		printk("inode %lu, i_op at %p\n", inode->i_ino, inode->i_op);
+		CDEBUG(D_INODE, "inode %lu, i_op at %p\n", 
+		       inode->i_ino, inode->i_op);
 	}
-
-	EXIT;
+	/*init filter_data struct 
+	 * FIXME flag should be set future*/
+	init_filter_data(inode, snapops, 0); 
 	return; 
 }
-
-
-static int currentfs_notify_change(struct dentry *dentry, struct iattr *iattr)
-{
-	struct snap_cache *cache;
-	int rc;
-	struct super_operations *sops;
-
-	ENTRY;
-
-	if (currentfs_is_under_dotsnap(dentry)) {
-		EXIT;
-		return -EPERM;
-	}
-
-	cache = snap_find_cache(dentry->d_inode->i_dev);
-	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
-	}
-
-	/* XXX better alloc a new dentry */
-
-	if ( snap_needs_cow(dentry->d_inode) != -1 ) {
-		printk("notify_change:snap_needs_cow for ino %lu \n",
-			dentry->d_inode->i_ino);
-		snap_do_cow(dentry->d_inode, 
-			dentry->d_parent->d_inode->i_ino, 0);
-	}
-
-	sops = filter_c2csops(cache->cache_filter); 
-	if (!sops ||
-	    !sops->notify_change) {
-		EXIT;
-		return -EINVAL;
-	}
-	rc = sops->notify_change(dentry, iattr);
-	
-	EXIT;
-	return rc;
-}
-
 
 static void currentfs_put_super(struct super_block *sb)
 {
@@ -150,10 +131,10 @@ static void currentfs_put_super(struct super_block *sb)
 	CDEBUG(D_SUPER, "sb %lx, sb->u.generic_sbp: %lx\n",
                 (ulong) sb, (ulong) sb->u.generic_sbp);
 	cache = snap_find_cache(sb->s_dev);
-	if (!cache) {
-		EXIT;
-		goto exit;
-	}
+
+	if (!cache) 
+		GOTO(exit, 0);	
+	
 	/* handle COMPAT_FEATUREs */
 #ifdef CONFIG_SNAPFS_EXT2
 	else if( cache->cache_type == FILTER_FS_EXT2 ){
@@ -182,7 +163,7 @@ static void currentfs_put_super(struct super_block *sb)
 	}
 	
 	if (!list_empty(&cache->cache_clone_list)) {
-		printk("Warning: snap_put_super: clones exist!\n");
+		CWARN("snap_put_super: clones exist!\n");
 	}
 
 	list_del(&cache->cache_chain);
@@ -191,21 +172,32 @@ static void currentfs_put_super(struct super_block *sb)
 	CDEBUG(D_SUPER, "sb %lx, sb->u.generic_sbp: %lx\n",
                 (ulong) sb, (ulong) sb->u.generic_sbp);
 exit:
-	CDEBUG(D_MALLOC, "after umount: kmem %ld, vmem %ld\n",
-	       snap_kmemory, snap_vmemory);
-	MOD_DEC_USE_COUNT;
 	EXIT;
-	return ;
+	return;
+}
+static void currentfs_clear_inode(struct inode *inode)
+{
+	struct snap_cache *cache;
+        struct super_operations *sops;
+	ENTRY;			                                                                                                                                                                                                     
+        cache = snap_find_cache(inode->i_dev);
+        if (!cache) {
+                CDEBUG(D_INODE, "inode has invalid dev\n");
+                return;
+        }
+	
+	if (inode->i_filterdata) {
+		kmem_cache_free(filter_info_cache, inode->i_filterdata);
+		inode->i_filterdata = NULL;
+	}
+
+	sops = filter_c2csops(cache->cache_filter);
+        if (sops && sops->clear_inode)
+                sops->clear_inode(inode);
 }
 
 struct super_operations currentfs_super_ops = {
-	currentfs_read_inode,
-	NULL, /* write inode */
-	NULL, /* put inode */
-	NULL, /* delete inode */
-	currentfs_notify_change,
-	currentfs_put_super,
-	NULL, /* write super */
-	NULL,
-	NULL, /* remount */
+	read_inode:	currentfs_read_inode,
+	put_super:	currentfs_put_super,
+	clear_inode:	currentfs_clear_inode,
 };

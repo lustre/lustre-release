@@ -6,28 +6,18 @@
  *
  */
 
-#include <linux/sched.h>
-#include <linux/fs.h>
-#include <linux/malloc.h>
-#include <linux/locks.h>
-#include <linux/errno.h>
-#include <linux/swap.h>
-#include <linux/smp_lock.h>
-#include <linux/vmalloc.h>
-#include <linux/blkdev.h>
-#include <linux/sysrq.h>
-#include <linux/file.h>
+#define DEBUG_SUBSYSTEM S_SNAP
+
+#include <linux/module.h>
+#include <linux/kmod.h>
 #include <linux/init.h>
-#include <linux/quotaops.h>
-
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <linux/snap.h>
 #include <asm/uaccess.h>
-#include <asm/io.h>
-#include <asm/bitops.h>
-#include <asm/mmu_context.h>
+#include "snapfs_internal.h" 
 
-#include <linux/filter.h>
-#include <linux/snapsupport.h>
-#include <linux/snapfs.h>
 
 struct snap_table snap_tables[SNAP_MAX_TABLES];
 
@@ -52,7 +42,7 @@ int snap_index2slot(struct snap_table *snap_table, int snap_index)
 	int slot;
 
 	for ( slot=0 ; slot<snap_table->tbl_count ; slot++ )
-		if ( snap_table->tbl_index[slot] == snap_index )
+		if ( snap_table->snap_items[slot].index == snap_index )
 			return slot;
 	return -1;
 }
@@ -63,7 +53,8 @@ int snap_index2slot(struct snap_table *snap_table, int snap_index)
    -  the index of the latest snapshot before NOW
    -  hence it returns 0 in case all the volume snapshots lie in the future
    -  this is the index where a COW will land (will be created) 
- */
+*/
+
 void snap_last(struct snap_cache *info, struct snap *snap)
 {
 	int i ;
@@ -73,9 +64,10 @@ void snap_last(struct snap_cache *info, struct snap *snap)
 
 	ENTRY;
 	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid table no %d\n", tableno);
+		CERROR("invalid table no %d\n", tableno);
 		snap->index = -1;
 	}
+	
 	table = &snap_tables[tableno];
 
 	/* start at the highest index in the superblock 
@@ -83,16 +75,11 @@ void snap_last(struct snap_cache *info, struct snap *snap)
 	i = table->tbl_count - 1;
 
 	/* NOTE: i>0 is an unnecessary check */
-	while ( table->tbl_times[i] > now && i > 0) {
-		CDEBUG(D_SNAP, "time: %ld, i: %d\n", table->tbl_times[i], i);
-		i--;
-	}
-
-	snap->index = table->tbl_index[i];
-	snap->time = table->tbl_times[i];
+	snap->index = table->snap_items[i].index;
+	snap->time = table->snap_items[i].time;
+	snap->gen = table->snap_items[i].gen;
 	CDEBUG(D_SNAP, "index: %d, time[i]: %ld, now: %ld\n",
 	       snap->index, snap->time, now);
-	EXIT;
 	return;
 }
 
@@ -104,117 +91,30 @@ int snap_needs_cow(struct inode *inode)
 {
 	struct snap snap;
 	struct snap_cache *cache;
+	struct filter_inode_info   *filter_info; 
 	int index = -1;
 	ENTRY;
 
 	cache = snap_find_cache(inode->i_dev);
 	if ( !cache ) {
-		EXIT;
-		return -1;
+		RETURN(index);
 	}
-
+	filter_info = (struct filter_inode_info *) inode->i_filterdata;
 	/* here we find the time of the last snap to compare with */
-	snap_last(cache, &snap);
 
+	snap_last(cache, &snap);
 	/* decision .... if the snapshot is more recent than the object,
 	 * then any change to the object should cause a COW.
 	 */
-	if (inode->i_mtime <= snap.time && inode->i_ctime <= snap.time) {
+	if (filter_info && filter_info->generation < snap.gen ) {
 		index = snap.index;
 	}
-	printk("snap_needs_cow, ino %lu , get index %d\n",inode->i_ino, index);
 
-	EXIT;
-	return index;
+	CDEBUG(D_SNAP, "snap_needs_cow, ino %lu , get index %d\n",
+	       inode->i_ino, index);
+
+	RETURN(index);
 } /* snap_needs_cow */
-
-#if 0
-int  snap_obd2snap(struct snap_clone_info *info, struct snap *snap)
-{
-	struct snap_table *table;
-	int tableno = info->clone_cache->cache_snap_tableno;
-	int index =  info->clone_index;
-	int slot;
-
-	ENTRY;
-	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid table no %d\n", tableno);
-		snap->index = -1;
-	}
-	table = &snap_tables[tableno];
-	slot = snap_index2slot(table, index);
-
-	snap->index = index;
-	snap->time = table->tbl_times[slot];
-	EXIT;
-	return slot;
-}
-#endif
-
-/* at what index is the current snapshot located */
-int snap_current(struct snap_cache *cache)
-{
-	int tableno = cache->cache_snap_tableno;
-
-	return snap_tables[tableno].tbl_index[0];
-}
-
-int snap_is_used(int table_no, int snap_index) 
-
-{
-	/* ENTRY; */
-	if ( snap_index < 0 || snap_index >= SNAP_MAX ) {
-		printk(__FUNCTION__ ": invalid snapno %d,table %d\n",
-		       snap_index, table_no);
-		EXIT;
-		return -1;
-	}
-	if ( table_no < 0 || table_no > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid snapno %d,table %d\n",
-		       snap_index, table_no);
-		EXIT;
-		return -1;
-	}
-
-	/* EXIT; */
-	return snap_tables[table_no].tbl_used & (1<<snap_index);
-}
-
-void snap_use(int table_no, int snap_index) 
-{
-	if ( snap_index < 0 || snap_index >= SNAP_MAX ) {
-		printk(__FUNCTION__ ": invalid snapno %d,table %d\n",
-		       snap_index, table_no);
-		return;
-	}
-	if ( table_no < 0 || table_no > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid snapno %d,table %d\n",
-		       snap_index, table_no);
-		return;
-	}
-	if ( snap_index2slot(&snap_tables[table_no], snap_index) < 0 ) 
-		return;
-
-	snap_tables[table_no].tbl_used |=  (1<<snap_index);
-}
-
-void snap_unuse(int table_no, int snap_index) 
-{
-	if ( snap_index < 0 || snap_index >= SNAP_MAX ) {
-		printk(__FUNCTION__ ": invalid snapno %d,table %d\n",
-		       snap_index, table_no);
-		return;
-	}
-	if ( table_no < 0 || table_no > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid snapno %d,table %d\n",
-		       snap_index, table_no);
-		return;
-	}
-	if ( snap_index2slot(&snap_tables[table_no], snap_index) < 0 ) 
-		return;
-
-	snap_tables[table_no].tbl_used &=  ~(1<<snap_index);
-}
 
 static int nprint_buf(char *buf, int buflen, char *fmt, ...)
 {
@@ -247,20 +147,18 @@ int snap_print_table(struct snap_table_data *data, char *buf, int *buflen)
 	int nprint = 0;
 
 	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid table number %d\n", tableno);
-		EXIT;
-		return -EINVAL;
+		CERROR("invalid table number %d\n", tableno);
+		RETURN(-EINVAL);
 	}
 
 	table = &snap_tables[tableno];
 
 	printk("------- snap table %d\n", tableno);
 	printk("     -- snap count %d\n", table->tbl_count);
-	printk("     -- snap used  0x%x\n", table->tbl_used);
 	for ( i = 0 ; i < SNAP_MAX ; i++ ) {
 		printk("     -- slot %d, idx %d, time %ld, name %s\n",
-		       i, table->tbl_index[i], table->tbl_times[i], 
-			table->tbl_name[i]);
+		       i, table->snap_items[i].index, table->snap_items[i].time, 
+			&table->snap_items[i].name[0]);
 	}
 
 	buf_ptr = buf;
@@ -272,15 +170,14 @@ int snap_print_table(struct snap_table_data *data, char *buf, int *buflen)
 	nleft -= nprint;
 	if( nleft > 0 )  buf_ptr += nprint;
 	else goto exit;
-	nprint = nprint_buf(buf_ptr, nleft, "     -- snap used  0x%x\n", table->tbl_used);
-	nleft -= nprint;
+
 	if( nleft > 0 )  buf_ptr += nprint;
 	else goto exit;
 	for ( i = 0 ; i < SNAP_MAX ; i++ ) {
 		nprint = nprint_buf( buf_ptr, nleft,
 			"     -- slot %d, idx %d, time %ld, name %s\n",
-		       i, table->tbl_index[i], table->tbl_times[i], 
-			table->tbl_name[i]);
+		       i, table->snap_items[i].index, table->snap_items[i].time, 
+			&table->snap_items[i].name[0]);
 		nleft -= nprint;
 		if( nleft > 0 )  buf_ptr += nprint;
 		else goto exit;
@@ -291,153 +188,301 @@ exit:
 
 	return 0;
 }
-
-int snap_install_table(int len, struct snap_table_data *data)
+static int inline get_index_of_item(struct snap_table *table)
 {
+	int count = table->tbl_count;
 	int i, j;
-	int tableno = data->tblcmd_no;
-//	int found_current;
-	struct snap_table *table;
 
+	for (i = 0; i < SNAP_MAX; i ++) {
+		for (j = 1; j < count; j++) {
+			if (table->snap_items[j].index == i)
+				break;
+                }
+		if (j >= count) 
+			return i;
+	}
+	return -EINVAL;
+}
+/* This function will write one item(a snapshot) to snaptable  
+ * and will also write to disk.
+ */
+int snaptable_add_item(struct snap_table_data *data)
+{
+	struct snap_table 		*table;
+	struct snap_disk_table 		*disk_snap_table;
+	struct snapshot_operations 	*snapops;
+	struct snap_cache 		*cache;
+	int 				tableno , index, i, count, rc;
+	
+	if (!(cache = snap_find_cache((kdev_t)data->dev)))
+		RETURN(-ENODEV);
+
+	snapops = filter_c2csnapops(cache->cache_filter);
+	if (!snapops || !snapops->set_meta_attr)
+		RETURN(-EINVAL);
+
+	tableno = data->tblcmd_no;
 	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid table number %d\n", tableno);
-		EXIT;
-		return -EINVAL;
+		CERROR("invalid table number %d\n", tableno);
+		RETURN(-EINVAL);
 	}
 	table = &snap_tables[tableno];	
+	count = table->tbl_count;
 
-	/* for each index that is used by the current table
-	   we need to make sure that the new table we are about
-	   to put in contains that index too 
-	*/
-	for ( i = 0; i < SNAP_MAX ; i++ ) {
-		int foundit;
-		int err;
+	/* XXX Is down this sema necessary*/
+	down_interruptible(&table->tbl_sema);
 
-		if ((err = snap_is_used(tableno, i)) < 0 ) {
-			printk(__FUNCTION__  ": table %d not used\n", tableno);
-			EXIT;
-			return -EINVAL;
-		} else if (err == 0) {
-			continue;
-		}
+	/*add item in snap_table*/
+	table->snap_items[count+1].gen = table->generation;
+	table->snap_items[count+1].time = CURRENT_TIME;
+	/* find table index */
+	index = get_index_of_item(table);
+	if (index < 0)
+		RETURN(-EINVAL);
 
-		foundit = 0;
-		for (j = 0 ; j<= data->tblcmd_count ; j++) {
-			if ( i == data->tblcmd_snaps[j].index ) {
-				foundit = 1;
-				break;
-			}
-		}
-		if ( !foundit ) {
-			printk(__FUNCTION__ ": index %d not in table %d\n", 
-			       i, tableno);
-			return -EINVAL;
-		}
+	table->snap_items[count+1].index = index;
+	table->snap_items[count+1].flags = 0;
+	memcpy(&table->snap_items[count + 1].name[0], 
+	       &data->tblcmd_snaps[0].name[0], SNAP_MAX_NAMELEN);
+	/* we will write the whole snap_table to disk */
+	SNAP_ALLOC(disk_snap_table, sizeof(struct snap_disk_table));
+	if (!disk_snap_table)
+		RETURN(-ENOMEM);
+	disk_snap_table->magic = cpu_to_le32((__u32)DISK_SNAP_TABLE_MAGIC);
+	disk_snap_table->count = cpu_to_le32((__u32)table->tbl_count);
+	disk_snap_table->generation = cpu_to_le32((__u32)table->generation);
+	memset(&disk_snap_table->snap_items[0], 0, 
+	       SNAP_MAX * sizeof(struct snap_disk));
+	for (i = 1; i <= count; i++) {
+		struct snap *item = &table->snap_items[i];
+		disk_snap_table->snap_items[i].time = cpu_to_le64((__u64)item->time);
+		disk_snap_table->snap_items[i].gen = cpu_to_le32((__u32)item->gen);
+		disk_snap_table->snap_items[i].flags = cpu_to_le32((__u32)item->flags);
+		disk_snap_table->snap_items[i].index = cpu_to_le32((__u32)item->index);
+		memcpy(&disk_snap_table->snap_items[i].name , item->name, SNAP_MAX_NAMELEN);
 	}
+	rc = snapops->set_meta_attr(cache->cache_sb, DISK_SNAPTABLE_ATTR,
+				    (char*)disk_snap_table, sizeof(struct snap_disk_table));
 
-	/* we must have:
-           - valid indices 
-	   - a current snapshot in the table 
-	   - increasing snapshot times 
-	*/
-//	found_current = 0;
-	CDEBUG(D_SNAP, "snaplist: tblcmd_count %d\n", data->tblcmd_count);
-	for (i = 0 ; i < data->tblcmd_count ; i++) {
-
-		if ( (data->tblcmd_snaps[i].index < 0) ||
-		     (data->tblcmd_snaps[i].index >= SNAP_MAX) ) {
-			printk(__FUNCTION__ ": snap_index out of range!\n");
-			return -EINVAL;
-		}
-
-		if (i>0 && data->tblcmd_snaps[i].time <= 
-		    data->tblcmd_snaps[i-1].time) {
-			printk(__FUNCTION__ ": times not increasing\n");
-			return -EINVAL;
-		}
-
-//		if ( 0 == data->tblcmd_snaps[i].time ) {
-//			found_current = 1;
-//			break;
-//		}
-	}
-//	if ( !found_current ) {
-//		printk(__FUNCTION__ "no current snapshot in table\n");
-//		return -EINVAL;
-//	}
-
-	/* ready to go: over write the table */
-/*	
-	for (i = 0 ; i < data->tblcmd_count ; i++) {
-
-		table->tbl_times[i] = data->tblcmd_snaps[i].time;
-		table->tbl_index[i] = data->tblcmd_snaps[i].index;
-		memcpy(table->tbl_name[i], data->tblcmd_snaps[i].name, 
-			SNAP_MAX_NAMELEN);
-		table->tbl_name[i][SNAP_MAX_NAMELEN - 1] = '\0';
-
-		CDEBUG(D_SNAP, "snaplist: i %d, time %ld, idx %d, name %s\n",
-		       i, table->tbl_times[i], table->tbl_index[i], 
-			table->tbl_name[i]);
-	}
-*/
-	/* below : new, we don't need current snapshot for data
-	 * current snapshot always has slot 0, index 0, name "current" 
-	 */
-	table->tbl_times[0] = 0;
-	table->tbl_index[0] = 0;
-	strcpy(table->tbl_name[0], "current");
-
-	i=0;	
-	CDEBUG(D_SNAP, "snaplist: i %d, time %ld, idx %d, name %s\n",
-	       i, table->tbl_times[i], table->tbl_index[i], 
-		table->tbl_name[i]);
-
-	for (i = 0 ; i < data->tblcmd_count ; i++) {
-
-		table->tbl_times[i+1] = data->tblcmd_snaps[i].time;
-		table->tbl_index[i+1] = data->tblcmd_snaps[i].index;
-		memcpy(table->tbl_name[i+1], data->tblcmd_snaps[i].name, 
-			SNAP_MAX_NAMELEN);
-		table->tbl_name[i+1][SNAP_MAX_NAMELEN - 1] = '\0';
-
-		CDEBUG(D_SNAP, "snaplist: i %d, time %ld, idx %d, name %s\n",
-		       i+1, table->tbl_times[i+1], table->tbl_index[i+1], 
-			table->tbl_name[i+1]);
-	}
-
-	for ( i = data->tblcmd_count + 1 ; i < SNAP_MAX ; i++ ) {
-		table->tbl_times[i] = 0;
-		table->tbl_index[i] = 0;
-		memset(table->tbl_name[i], 0, SNAP_MAX_NAMELEN);
-	}
-
-	/* set the table count */
-//	table->tbl_count = data->tblcmd_count;
-	table->tbl_count = data->tblcmd_count + 1;
+	SNAP_FREE(disk_snap_table, sizeof(struct snap_disk_table));
+	table->tbl_count++;
+	table->generation++;
+	
+	up(&table->tbl_sema);
+	
 	return 0;
 }
 
-
-int snap_table_attach(int tableno, int snap_index) 
+static int delete_inode(struct inode *primary, void *param)
 {
+	struct snap_iterdata * data;
+	int tableno = 0;
+	int index = 0;
+	int rc = 0;
+
+	struct inode *redirect;
+	ino_t old_ind = 0;
 	struct snap_table *table;
+	int slot;
+	int delete_slot;
+	int this_index;
+	struct inode *next_ind = NULL;
+	int my_table[SNAP_MAX];
 
-	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid table number %d\n", tableno);
-		EXIT;
-		return -EINVAL;
+	if(!primary) return 0;
+
+	data = (struct snap_iterdata*) param;
+
+	if(data) {
+		index = data->index;
+		tableno = data->tableno;
 	}
-	table = &snap_tables[tableno];	
+
+	CDEBUG(D_INODE, "delete_inode ino %lu, index %d\n", primary->i_ino, index);
+
+	table = &snap_tables[tableno];
+
+	redirect = snap_get_indirect(primary, NULL, index);
+
+	if(!redirect)	
+		return 0;
+
+	old_ind = redirect->i_ino;
+	iput(redirect);
+	slot = snap_index2slot(table, index) - 1;
+	if( slot > 0 ) {
+		this_index = table->snap_items[slot].index;
+		redirect = snap_get_indirect(primary, NULL, this_index);
+		if(redirect)	
+			iput(redirect);
+		else  {
+			snap_set_indirect(primary, old_ind, this_index, 0);
+			snap_set_indirect(primary, 0, index, 0);
+			return 0;
+		}
+	}
+
+	/* get the FIRST index after this and before NOW */
+	/* used for destroy_indirect and block level cow */
+ 	/* XXX fix this later, now use tbl_count, not NOW */
+	delete_slot = snap_index2slot(table, index);
+	for(slot = table->tbl_count; slot > delete_slot; slot --)
+	{
+		my_table[slot - delete_slot] = table->snap_items[slot].index;
+	}
+	next_ind = snap_get_indirect 
+		(primary, my_table, table->tbl_count - delete_slot );
+	if( next_ind && (next_ind->i_ino == primary->i_ino) ) {
+		iput(next_ind);
+		next_ind = NULL;
+	}
+
+	if( next_ind && (next_ind->i_ino == old_ind) ) {
+		iput(next_ind);
+		next_ind = NULL;
+	}
+
+	rc = snap_destroy_indirect(primary, index, next_ind);
+
+	if(next_ind)	iput(next_ind);
+
+	if(rc != 0)	
+		CERROR("snap_destroy_indirect(ino %lu,index %d),ret %d\n",
+			primary->i_ino, index, rc);
+	return 0;
+}
+
+static int snap_delete(struct super_block *sb, struct snap_iterdata *data)
+{
+	CDEBUG(D_SNAP, "dev %d, tableno %d, index %d, time %lu\n",
+		data->dev, data->tableno, data->index, data->time );
+
+	snap_iterate(sb, &delete_inode, NULL, data, SNAP_ITERATE_COWED_INODE);
 	
-	if ( snap_index2slot(table, snap_index) < 0 ) {
-		printk(__FUNCTION__ ": snap index %d not present in table %d\n",
-		       snap_index, tableno);
-		return -EINVAL;
+	return 0;
+}
+
+/* This function will delete one item(a snapshot) in the snaptable  
+ * and will also delete the item in the disk.
+ */
+int snaptable_delete_item(struct super_block *sb, struct snap_iterdata *data)
+{
+	struct snap_table 		*table;
+	struct snap_disk_table 		*disk_snap_table;
+	struct snapshot_operations 	*snapops;
+	struct snap_cache 		*cache;
+	int 				tableno = data->tableno, index, i, slot, rc, count;
+	
+	if (!(cache = snap_find_cache((kdev_t)data->dev)))
+		RETURN(-ENODEV);
+
+	snapops = filter_c2csnapops(cache->cache_filter);
+	if (!snapops || !snapops->set_meta_attr)
+		RETURN(-EINVAL);
+
+	if (tableno < 0 || tableno > SNAP_MAX_TABLES) {
+		CERROR("invalid table number %d\n", tableno);
+		RETURN(-EINVAL);
+	}
+	/*first delete the snapshot
+	 * FIXME if snap delete error, how to handle this error*/
+	rc = snap_delete(sb, data);
+	if (rc) 
+		RETURN(-EINVAL);
+	/*delete item in snaptable */
+	table = &snap_tables[tableno];
+	index = data->index;
+
+	slot = snap_index2slot(table, index);
+	if (slot < 0)
+		RETURN(-EINVAL);
+
+	down_interruptible(&table->tbl_sema);
+	while(slot < table->tbl_count) {
+		struct snap *item = &table->snap_items[slot];
+		item->time = table->snap_items[slot + 1].time;
+		item->flags = table->snap_items[slot + 1].flags;
+		item->gen = table->snap_items[slot + 1].gen;
+		item->index = table->snap_items[slot + 1].index;
+		memcpy(&item->name[0], &table->snap_items[slot + 1].name[0],
+			SNAP_MAX_NAMELEN);
 	}
 
-	snap_use(tableno, snap_index);
+	table->tbl_count --;
+	
+	SNAP_ALLOC(disk_snap_table, sizeof(struct snap_disk_table));
+
+	if (!disk_snap_table)
+		RETURN(-ENOMEM);
+	/* we will delete the item  snap_table to disk */
+	
+	disk_snap_table->magic = cpu_to_le32((__u32)DISK_SNAP_TABLE_MAGIC);
+	disk_snap_table->count = cpu_to_le32((__u32)table->tbl_count);
+	disk_snap_table->generation = cpu_to_le32((__u32)table->generation);
+	memset(&disk_snap_table->snap_items[0], 0, 
+	       SNAP_MAX * sizeof(struct snap_disk));
+
+	count = table->tbl_count;
+
+	for (i = 1; i <= count; i++) {
+		struct snap *item = &table->snap_items[i];
+		disk_snap_table->snap_items[i].time = cpu_to_le64((__u64)item->time);
+		disk_snap_table->snap_items[i].gen = cpu_to_le32((__u32)item->gen);
+		disk_snap_table->snap_items[i].flags = cpu_to_le32((__u32)item->flags);
+		disk_snap_table->snap_items[i].index = cpu_to_le32((__u32)item->index);
+		memcpy(&disk_snap_table->snap_items[i].name , item->name, SNAP_MAX_NAMELEN);
+	}
+	rc = snapops->set_meta_attr(cache->cache_sb, DISK_SNAPTABLE_ATTR,
+				    (char*)disk_snap_table, sizeof(struct snap_disk_table));
+
+	SNAP_FREE(disk_snap_table, sizeof(struct snap_disk_table));
+	
+	up(&table->tbl_sema);
+	
+	RETURN(0);
+}
+
+int snapfs_read_snaptable(struct snap_cache *cache, int tableno)
+{
+	struct snap_table 		*table;
+	struct snap_disk_table 		*disk_snap_table;
+	struct snapshot_operations 	*snapops;
+	int 				i, rc;
+	int				size = 0;
+
+	
+	snapops = filter_c2csnapops(cache->cache_filter);
+	if (!snapops || !snapops->get_meta_attr)
+		RETURN(-EINVAL);
+	
+	SNAP_ALLOC(disk_snap_table, sizeof(struct snap_disk_table));
+
+	size = sizeof(struct snap_disk_table);
+
+	rc = snapops->get_meta_attr(cache->cache_sb, DISK_SNAPTABLE_ATTR,
+			       (char*)disk_snap_table, &size);
+	if (rc < 0) {
+		SNAP_FREE(disk_snap_table, sizeof(struct snap_disk_table));
+		RETURN(rc);
+	}
+	table = &snap_tables[tableno];
+
+	if (le32_to_cpu(disk_snap_table->magic) != DISK_SNAP_TABLE_MAGIC) {
+		CERROR("On disk snaptable is not right \n");
+		RETURN(rc);
+	}
+	table->generation = le32_to_cpu(disk_snap_table->generation);
+	table->tbl_count = le32_to_cpu(disk_snap_table->count);
+	for ( i = 0; i < disk_snap_table->count; i++) {
+		struct snap *item = &table->snap_items[i + 1];
+		item->time = le64_to_cpu(disk_snap_table->snap_items[i].time);
+		item->gen = le32_to_cpu(disk_snap_table->snap_items[i].gen);
+		item->flags = le32_to_cpu(disk_snap_table->snap_items[i].flags);
+		item->index = le32_to_cpu(disk_snap_table->snap_items[i].index);
+		memcpy(&item->name[0], &disk_snap_table->snap_items[i].name[0],
+		       SNAP_MAX_NAMELEN);
+	}
+	SNAP_FREE(disk_snap_table, sizeof(struct snap_disk_table));
 	return 0;
 }
 
@@ -450,16 +495,16 @@ static int getdata(int len, void **data)
 		return 0;
 	}
 
-	SNAP_ALLOC(tmp, void *, len);
+	SNAP_ALLOC(tmp, len);
 	if ( !tmp )
 		return -ENOMEM;
 
-	CDEBUG(D_MALLOC, "snap_alloc:len %d, add %p\n", len, tmp);
+	CDEBUG(D_SNAP, "snap_alloc:len %d, add %p\n", len, tmp);
 
 	memset(tmp, 0, len);
 	if ( copy_from_user(tmp, *data, len)) {
 		SNAP_FREE(tmp, len);
-		CDEBUG(D_MALLOC, "snap_free:len %d, add %p\n", len, tmp);
+		CDEBUG(D_SNAP, "snap_free:len %d, add %p\n", len, tmp);
 		return -EFAULT;
 	}
 	*data = tmp;
@@ -469,7 +514,7 @@ static int getdata(int len, void **data)
 
 static void freedata(void *data, int len) {
 	SNAP_FREE(data, len);
-	CDEBUG(D_MALLOC, "snap_free:len %d, add %p\n", len, data);
+	CDEBUG(D_SNAP, "snap_free:len %d, add %p\n", len, data);
 }
 
 static int get_next_inode(struct inode *pri, void *ino)
@@ -527,7 +572,7 @@ static int snap_get_next_inode(struct snap_ino_list_data *data, ino_t *found_ino
 	*parent_ino = 0;
 	inode = iget (cache->cache_sb, *found_ino);
 	if (list_empty(&inode->i_dentry)) {
-		printk("No dentry for ino %lu, Error(XXX)! \n", inode->i_ino);
+		CERROR("No dentry for ino %lu, Error(XXX)! \n", inode->i_ino);
 		iput(inode);	
        		return 0;
 	}
@@ -544,35 +589,6 @@ static int snap_get_next_inode(struct snap_ino_list_data *data, ino_t *found_ino
 
 	return 0;
 }
-/*
-static int snap_get_inode_info(struct snap_ino_list_data *data,  int index)
-{
-	kdev_t dev = data->dev;
-	ino_t pri = data->ino; 
-	int index = data->index;
-
-	struct snap_cache *cache;
-
-	struct inode *pri;
-	struct inode *ind;
-	ino_t ind_ino = 0;
-
-	ENTRY;
-
-	cache = snap_find_cache(dev); 
-	if ( !cache ) {
-                EXIT;
-                return -EINVAL;
-        }
-	pri = iget(cache->cache->sb, pri_ino);
-	ind = snap_get_indirect(pri, NULL, index);
-	if(ind)	{
-		ind_ino = ind->i_ino;	
-		iput(ind);
-	}
-	return ind_ino;
-}
-*/
 
 static int print_inode(struct inode *pri,void *param)
 {
@@ -583,94 +599,6 @@ static int print_inode(struct inode *pri,void *param)
 static int snap_print(struct super_block *sb, void *data)
 {
 	snap_iterate(sb, &print_inode, NULL, data, SNAP_ITERATE_COWED_INODE);
-	return 0;
-}
-
-static int delete_inode(struct inode *primary, void *param)
-{
-	struct snap_iterdata * data;
-	int tableno = 0;
-	int index = 0;
-	int rc = 0;
-
-	struct inode *redirect;
-	ino_t old_ind = 0;
-	struct snap_table *table;
-	int slot;
-	int delete_slot;
-	int this_index;
-	struct inode *next_ind = NULL;
-	int my_table[SNAP_MAX];
-
-	if(!primary) return 0;
-
-	data = (struct snap_iterdata*) param;
-
-	if(data) {
-		index = data->index;
-		tableno = data->tableno;
-	}
-
-	printk("delete_inode ino %lu, index %d\n", primary->i_ino, index);
-
-	table = &snap_tables[tableno];
-
-	redirect = snap_get_indirect(primary, NULL, index);
-
-	if(!redirect)	
-		return 0;
-
-	old_ind = redirect->i_ino;
-	iput(redirect);
-	slot = snap_index2slot(table, index) - 1;
-	if( slot > 0 ) {
-		this_index = table->tbl_index[slot];
-		redirect = snap_get_indirect(primary, NULL, this_index);
-		if(redirect)	
-			iput(redirect);
-		else  {
-			snap_set_indirect(primary, old_ind, this_index, 0);
-			snap_set_indirect(primary, 0, index, 0);
-			return 0;
-		}
-	}
-
-	/* get the FIRST index after this and before NOW */
-	/* used for destroy_indirect and block level cow */
- 	/* XXX fix this later, now use tbl_count, not NOW */
-	delete_slot = snap_index2slot(table, index);
-	for(slot = table->tbl_count; slot > delete_slot; slot --)
-	{
-		my_table[slot - delete_slot] = table->tbl_index[slot];
-	}
-	next_ind = snap_get_indirect 
-		(primary, my_table, table->tbl_count - delete_slot );
-	if( next_ind && (next_ind->i_ino == primary->i_ino) ) {
-		iput(next_ind);
-		next_ind = NULL;
-	}
-
-	if( next_ind && (next_ind->i_ino == old_ind) ) {
-		iput(next_ind);
-		next_ind = NULL;
-	}
-
-	rc = snap_destroy_indirect(primary, index, next_ind);
-
-	if(next_ind)	iput(next_ind);
-
-	if(rc != 0)	
-		printk("ERROR:snap_destroy_indirect(ino %lu,index %d),ret %d\n", 			primary->i_ino, index, rc);
-	return 0;
-}
-
-static int snap_delete(struct super_block *sb, struct snap_iterdata *data)
-//static int snap_delete(struct super_block *sb, void *data)
-{
-	CDEBUG(D_SNAP, "dev %d, tableno %d, index %d, time %lu\n",
-		data->dev, data->tableno, data->index, data->time );
-
-	snap_iterate(sb,&delete_inode,NULL, data, SNAP_ITERATE_COWED_INODE);
 	return 0;
 }
 
@@ -706,7 +634,6 @@ static int delete_new_inode(struct inode *pri, void *param)
 
 		CDEBUG(D_SNAP, "snap_restore ino %lu is newer, delete \n",pri->i_ino);
 		for( pos = head->next; pos != head; pos = pos->next ){
-//			d_invalidate( list_entry(pos, struct dentry, d_alias) );
 			d_drop( list_entry(pos, struct dentry, d_alias) );
 		}
 		pri->i_nlink = 0;
@@ -728,7 +655,6 @@ static int restore_inode(struct inode *pri, void *param)
 	int slot;
 	int restore_slot;
 	struct snap_table *table;
-//	int my_table[SNAP_MAX];
 	int restore_index;
 	
 	ENTRY; 
@@ -760,33 +686,18 @@ static int restore_inode(struct inode *pri, void *param)
 			for(slot = restore_slot; slot <= table->tbl_count; 
 			    slot++) {
 				ind = snap_get_indirect (pri, NULL, 
-					table->tbl_index[slot]);
+					table->snap_items[slot].index);
 				if(ind)	{
-					restore_index = table->tbl_index[slot];
+					restore_index = table->snap_items[slot].index;
 					break;
 				}
 			}
-/*			for(slot = table->tbl_count; slot >= restore_slot; 
-				slot --)
-			{
-				my_table[slot - restore_slot + 1] = 
-					table->tbl_index[slot];
-			}
-			ind = snap_get_indirect (pri, my_table, 
-					table->tbl_count - restore_slot + 1);
-
-			if( ind && (ind->i_ino == pri->i_ino) )	{
-				iput(ind);
-				ind =  NULL;
-			}
-*/
 		}
 
 		if(ind) {
 			CDEBUG(D_SNAP, "restore ino %lu with index %d\n",
 					pri->i_ino, restore_index);
 			iput(ind);
-//			snap_restore_indirect(pri, index);
 			snap_restore_indirect(pri, restore_index);
 			/* XXX */
 			//delete_inode(pri, param);
@@ -797,7 +708,7 @@ static int restore_inode(struct inode *pri, void *param)
 		}
 	}
 	else {
-		printk("ino %lu is older, don't restore\n",pri->i_ino);
+		CDEBUG(D_SNAP, "ino %lu is older, don't restore\n", pri->i_ino);
 	}
 	EXIT;
 	return 0;
@@ -821,21 +732,16 @@ int snap_get_index_from_name(int tableno, char *name)
 	int slot;
 
 	if ( tableno < 0 || tableno > SNAP_MAX_TABLES ) {
-		printk(__FUNCTION__ ": invalid table number %d\n", tableno);
+		CDEBUG(D_SNAP, ": invalid table number %d\n", tableno);
 		return -EINVAL;
 	}
 
 	table = &snap_tables[tableno];
 
 	for ( slot = 0 ; slot < SNAP_MAX ; slot++ ) {
-/*		if(memcmp (table->tbl_name[slot], name, 
-			strlen(table->tbl_name[slot]) ) == 0 ) {
-			return table->tbl_index[slot];
-		}
-*/
-		if(strncmp (table->tbl_name[slot], name, 
+		if(strncmp (&table->snap_items[slot].name[0], name, 
 			SNAP_MAX_NAMELEN) == 0 ) {
-			return table->tbl_index[slot];
+			return table->snap_items[slot].index;
 		}
 	}
 	return -EINVAL;
@@ -844,27 +750,20 @@ int snap_get_index_from_name(int tableno, char *name)
 int snap_iterate_func(int len, struct snap_ioc_data *ioc_data, unsigned int cmd)
 {
 	struct snap_iterdata data;
-
-	kdev_t dev ;
-	char name[SNAP_MAX_NAMELEN];
-
-	int index ;
-	int tableno; 
-	int name_len;
-	int slot;
-
 	struct super_block *sb;
 	struct snap_cache *cache;
 	struct snap_table *table;
+	char name[SNAP_MAX_NAMELEN];
+	int index, tableno, name_len, slot, rc;
+	
+	kdev_t dev ;
 
 	ENTRY;
 
 	dev = ioc_data->dev;
 	cache = snap_find_cache(dev); 
-	if ( !cache ) {
-                EXIT;
-                return -EINVAL;
-        }
+	if ( !cache ) 
+                RETURN(-EINVAL);
 
 	sb = cache->cache_sb;
 	tableno = cache->cache_snap_tableno;
@@ -877,41 +776,37 @@ int snap_iterate_func(int len, struct snap_ioc_data *ioc_data, unsigned int cmd)
 	if(name_len < 0 ) 
 		name_len = 0;
 	memcpy(name, ioc_data->name, name_len);
-	if ( (index = snap_get_index_from_name (tableno, name)) < 0 ) {
-		EXIT;
-		return -EINVAL;
-	}
+	
+	if ((index = snap_get_index_from_name (tableno, name)) < 0) 
+		RETURN(-EINVAL);
 	
 	data.dev = dev;
 	data.index = index;
 	data.tableno = tableno;
 	slot = snap_index2slot (table, index);
-	if( slot < 0 ) {
-		EXIT;
-		return -EINVAL;
-	}
-	data.time = table->tbl_times[slot];
-
+	if( slot < 0 ) 
+		RETURN(-EINVAL);
+	
+	data.time = table->snap_items[slot].time;
 	CDEBUG(D_SNAP, "dev %d, tableno %d, index %d, time %lu\n",
 		data.dev, data.tableno, data.index, data.time );
 
 	switch (cmd) {
 		case IOC_SNAP_DEBUG:
-			snap_print(sb, &data);	
+			rc = snap_print(sb, &data);	
 			break;
 		case IOC_SNAP_DELETE:
-			snap_delete(sb, &data);	
+			rc = snaptable_delete_item(sb, &data);	
 			break;
 		case IOC_SNAP_RESTORE:
-			snap_restore(sb, &data);	
+			rc = snap_restore(sb, &data);	
 			break;
 		default:
-			return -EINVAL;
+			CERROR("unrecognized cmd %d \n", cmd);
+			rc = -EINVAL;
+			break;
 	}
-	
-	EXIT;
-
-	return 0;
+	RETURN(0);
 }
 
 int snap_ioctl (struct inode * inode, struct file * filp, 
@@ -941,10 +836,12 @@ int snap_ioctl (struct inode * inode, struct file * filp,
         if ( _IOC_TYPE(cmd) != IOC_SNAP_TYPE || 
              _IOC_NR(cmd) < IOC_SNAP_MIN_NR  || 
              _IOC_NR(cmd) > IOC_SNAP_MAX_NR ) {
-                CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
+                /*FIXME: Sometimes Gettimeof the day will come here
+		 * Do not know the reason*/
+		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
                                 _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
                 EXIT;
-                return -EINVAL;
+                return 0;
         }
 
 	/* get data structures */
@@ -964,8 +861,8 @@ int snap_ioctl (struct inode * inode, struct file * filp,
 	}
 	
 	switch (cmd) {
-	case IOC_SNAP_SETTABLE:
-		rc = snap_install_table(len, karg);
+	case IOC_SNAP_ADD:
+		rc = snaptable_add_item(karg);
 		break;
 	case IOC_SNAP_PRINTTABLE: {
 		struct output_data{
@@ -1064,9 +961,11 @@ int snap_ioctl (struct inode * inode, struct file * filp,
 	case IOC_SNAP_DEBUG:
 		rc = snap_iterate_func(len, karg, cmd);
 		break;
+#ifdef SNAP_DEBUG
 	case IOC_SNAP_DEVFAIL:
 		snap_debug_failcode = (unsigned int)arg;
 		break;
+#endif
 	case IOC_SNAP_SHOW_DOTSNAP: {
 		struct ioc_show_info{
 			kdev_t dev;

@@ -13,45 +13,33 @@
  * 
  */
 
-#define __NO_VERSION__
+#define DEBUG_SUBSYSTEM S_SNAP
+
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/mm.h>
 #include <linux/string.h>
+#include <linux/slab.h>
 #include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/locks.h>
 #include <linux/unistd.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
+#include "snapfs_internal.h" 
 
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/locks.h>
-#include <linux/string.h>
-#include <asm/uaccess.h>
-#include <linux/malloc.h>
-#include <linux/vmalloc.h>
-#include <asm/segment.h>
-
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
 
 /* Clone is a simple file system, read only that just follows redirectors
    we have placed the entire implementation except clone_read_super in
    this file 
  */
 
-struct inode_operations clonefs_dir_inode_operations;
-struct inode_operations clonefs_file_inode_operations;
-struct inode_operations clonefs_symlink_inode_operations;
-struct inode_operations clonefs_special_inode_operations;
-struct file_operations clonefs_dir_file_operations;
-struct file_operations clonefs_file_file_operations;
-struct file_operations clonefs_special_file_operations;
+struct inode_operations clonefs_dir_inode_ops;
+struct inode_operations clonefs_file_inode_ops;
+struct inode_operations clonefs_symlink_inode_ops;
+//struct inode_operations clonefs_special_inode_operations;
+struct file_operations clonefs_dir_file_ops;
+struct file_operations clonefs_file_file_ops;
+//struct file_operations clonefs_special_file_operations;
+struct address_space_operations clonefs_file_address_ops;
 
 /* support routines for following redirectors */
 
@@ -82,14 +70,14 @@ struct inode *clonefs_get_inode(struct inode *inode)
 	redirected_inode = snap_redirect(cache_inode, inode->i_sb);
 
 	CDEBUG(D_SNAP, "redirected_inode: %lx, cache_inode %lx\n",
-	       (ulong) redirected_inode, (ulong) cache_inode);
+	       (unsigned long) redirected_inode, (unsigned long) cache_inode);
 
 	CDEBUG(D_SNAP, "cache_inode: %lx, ino %ld, sb %lx, count %d\n",
-	       (ulong) cache_inode, cache_inode->i_ino, 
-	       (ulong) cache_inode->i_sb, cache_inode->i_count);
-
+	       (unsigned long) cache_inode, cache_inode->i_ino, 
+	       (unsigned long) cache_inode->i_sb, atomic_read(&cache_inode->i_count));
+	
 	iput(cache_inode); 
-	EXIT;
+	
 	return redirected_inode;
 }
 
@@ -102,39 +90,43 @@ static void clonefs_read_inode(struct inode *inode)
 	ENTRY;
 
 	CDEBUG(D_SNAP, "inode: %lx, ino %ld, sb %lx, count %d\n",
-	       (ulong) inode , inode->i_ino, (long) inode->i_sb, 
-	       inode->i_count);
+	       (unsigned long)inode, inode->i_ino, (long) inode->i_sb, 
+	       atomic_read(&inode->i_count));
 
 	/* redirecting inode in the cache */
         cache_inode = clonefs_get_inode(inode);
 	if (!cache_inode) {
 		make_bad_inode(inode);
-		EXIT;
 		return;
 	}
 	/* copy attrs of that inode to our clone inode */
 	snapfs_cpy_attrs(inode, cache_inode);
 
-	if (S_ISREG(inode->i_mode))
-		inode->i_op = &clonefs_file_inode_operations;
-	else if (S_ISDIR(inode->i_mode))
-		inode->i_op = &clonefs_dir_inode_operations;
-	else if (S_ISLNK(inode->i_mode))
-		inode->i_op = &clonefs_symlink_inode_operations;
-	else if (S_ISCHR(inode->i_mode))
-		inode->i_op = &chrdev_inode_operations;
-	else if (S_ISBLK(inode->i_mode))
-		inode->i_op = &blkdev_inode_operations;
-	else if (S_ISFIFO(inode->i_mode))
-		init_fifo(inode);
-
+	if (S_ISREG(inode->i_mode)) {
+		inode->i_op = &clonefs_file_inode_ops;
+		if (inode->i_mapping)
+			inode->i_mapping->a_ops = &clonefs_file_address_ops;
+	} else if (S_ISDIR(inode->i_mode)) {
+		inode->i_op = &clonefs_dir_inode_ops;
+	} else if (S_ISLNK(inode->i_mode)) {
+		inode->i_op = &clonefs_symlink_inode_ops;
+	} else {
+	/* init special inode 
+	 * FIXME whether we should replace special inode ops*/
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+                init_special_inode(inode, inode->i_mode,
+                                   kdev_t_to_nr(inode->i_rdev));
+#else
+                init_special_inode(inode, inode->i_mode, inode->i_rdev);
+#endif
+	}
 	iput(cache_inode);
 
 	CDEBUG(D_SNAP, "cache_inode: %lx ino %ld, sb %lx, count %d\n",
-                (ulong) cache_inode, cache_inode->i_ino, 
-	       (ulong) cache_inode->i_sb, cache_inode->i_count);
-	EXIT;
-	return; 
+               (unsigned long) cache_inode, cache_inode->i_ino, 
+	       (unsigned long) cache_inode->i_sb, 
+	       atomic_read(&cache_inode->i_count));
+	EXIT; 
 }
 
 
@@ -144,18 +136,15 @@ static void clonefs_put_super(struct super_block *sb)
 
 	ENTRY;
 	CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
-                (ulong) sb, (ulong) &sb->u.generic_sbp);
+                (unsigned long) sb, (unsigned long) &sb->u.generic_sbp);
 	clone_sb = (struct snap_clone_info *)&sb->u.generic_sbp;
-	dput( clone_sb->clone_cache->cache_sb->s_root );
+	dput(clone_sb->clone_cache->cache_sb->s_root);
 	list_del(&clone_sb->clone_list_entry);
-
-	MOD_DEC_USE_COUNT;
 
 	EXIT;
 }
 
-static int clonefs_statfs(struct super_block *sb, struct statfs *buf, 
-			int bufsiz)
+static int clonefs_statfs(struct super_block *sb, struct statfs *buf) 
 {
 	struct snap_clone_info *clone_sb;
 	struct snap_cache *cache; 
@@ -165,26 +154,19 @@ static int clonefs_statfs(struct super_block *sb, struct statfs *buf,
 
 	cache = clone_sb->clone_cache;
 	if (!cache) {
-		printk("clone_statfs: no cache\n");
-		return -EINVAL;
+		CERROR("clone_statfs: no cache\n");
+		RETURN(-EINVAL);
 	}
 
-	EXIT;
 	return cache->cache_filter->o_caops.cache_sops->statfs
-		(cache->cache_sb, buf, bufsiz);
+		(cache->cache_sb, buf);
 }
 
 struct super_operations clone_super_ops =
 {
-	clonefs_read_inode,       /* read_inode */
-	NULL,                   /* write_inode */
-	NULL,	                /* put_inode */
-	NULL,                   /* delete_inode */
-	NULL,	                /* notify_change */
-	clonefs_put_super,	/* put_super */
-	NULL,			/* write_super */
-	clonefs_statfs,   	/* statfs */
-	NULL			/* remount_fs */
+	read_inode:	clonefs_read_inode,     /* read_inode */
+	put_super:	clonefs_put_super,	/* put_super */
+	statfs:		clonefs_statfs,   	/* statfs */
 };
 
 
@@ -220,8 +202,7 @@ struct dentry *clonefs_lookup(struct inode *dir,  struct dentry *dentry)
 	cache_dentry = d_alloc(dentry->d_parent, &dentry->d_name);
 	if (!cache_dentry) {
                 iput(cache_dir);
-		EXIT;
-		return ERR_PTR(-ENOENT);
+		RETURN(ERR_PTR(-ENOENT));
 	}
 
         /* Lock cache directory inode. */
@@ -239,8 +220,7 @@ struct dentry *clonefs_lookup(struct inode *dir,  struct dentry *dentry)
 	        up(&cache_dir->i_sem);
                 iput(cache_dir);
 		dentry->d_inode = NULL;
-		EXIT;
-		return ERR_PTR(-ENOENT);
+		RETURN(ERR_PTR(-ENOENT));
 	}
         /* Unlock cache directory inode. */
 	up(&cache_dir->i_sem);
@@ -268,8 +248,8 @@ struct dentry *clonefs_lookup(struct inode *dir,  struct dentry *dentry)
 
 	if ( cache_inode != NULL ) {
 		CDEBUG(D_INODE, "cache ino %ld, count %d, dir %ld, count %d\n", 
-				cache_inode->i_ino, cache_inode->i_count, cache_dir->i_ino, 
-				cache_dir->i_count);
+		       cache_inode->i_ino, atomic_read(&cache_inode->i_count), 
+		       cache_dir->i_ino, atomic_read(&cache_dir->i_count));
 	}
 
 	d_unalloc(cache_dentry);
@@ -280,8 +260,7 @@ struct dentry *clonefs_lookup(struct inode *dir,  struct dentry *dentry)
          */
 	d_add(dentry, inode);
 
-	EXIT;
-        return NULL;
+        RETURN(NULL);
 }
 
 
@@ -293,16 +272,17 @@ static void clonefs_prepare_snapfile(struct inode *i,
 				     struct dentry *cache_dentry)
 {
 	ENTRY;
-        cache_file->f_pos = clone_file->f_pos;
+        
+	cache_file->f_pos = clone_file->f_pos;
         cache_file->f_mode = clone_file->f_mode;
         cache_file->f_flags = clone_file->f_flags;
         cache_file->f_count  = clone_file->f_count;
         cache_file->f_owner  = clone_file->f_owner;
-	cache_file->f_op = cache_inode->i_op->default_file_ops;
+	cache_file->f_op = cache_inode->i_fop;
 	cache_file->f_dentry = cache_dentry;
         cache_file->f_dentry->d_inode = cache_inode;
+	
 	EXIT;
-        return ;
 }
 
 /* update the clonefs file struct after IO in cache file */
@@ -312,10 +292,11 @@ static void clonefs_restore_snapfile(struct inode *cache_inode,
 				   struct file *clone_file)
 {
 	ENTRY;
-        cache_file->f_pos = clone_file->f_pos;
+ 
+	cache_file->f_pos = clone_file->f_pos;
 	cache_inode->i_size = clone_inode->i_size;
+	
 	EXIT;
-        return;
 }
 
 static int clonefs_readdir(struct file *file, void *dirent, 
@@ -330,15 +311,13 @@ static int clonefs_readdir(struct file *file, void *dirent,
 	ENTRY;
 
 	if(!inode) {
- 		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
         cache_inode = clonefs_get_inode(inode);
 
 	if (!cache_inode) {
 		make_bad_inode(inode);
-		EXIT;
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 	}
 
 	CDEBUG(D_INODE,"clone ino %ld\n",cache_inode->i_ino);
@@ -354,56 +333,22 @@ static int clonefs_readdir(struct file *file, void *dirent,
 	}
 	clonefs_restore_snapfile(inode, file, cache_inode, &open_file);
 	iput(cache_inode);
-        EXIT;
-	return result;
+	RETURN(result);
 }
 
-struct file_operations clonefs_dir_file_operations = {
-        NULL,                   /* lseek */
-        NULL,                   /* read -- bad */
-        NULL,                   /* write */
-        clonefs_readdir,        /* readdir */
-        NULL,                   /* select */
-        NULL,                   /* ioctl */
-        NULL,                   /* mmap */
-        NULL,                   /* open */
-	NULL,
-        NULL,                   /* release */
-	NULL,                   /* fsync */
-        NULL,                   
-	NULL,
-	NULL
+struct file_operations clonefs_dir_file_ops = {
+	readdir:	clonefs_readdir,        /* readdir */
 };
 
-struct inode_operations clonefs_dir_inode_operations =
-{
-	&clonefs_dir_file_operations,
-	NULL,	        /* create */
-	clonefs_lookup,   /* lookup */
-	NULL,	        /* link */
-	NULL,           /* unlink */
-	NULL,	        /* symlink */
-	NULL,	        /* mkdir */
-	NULL,           /* rmdir */
-	NULL,	        /* mknod */
-	NULL,	        /* rename */
-	NULL,           /* readlink */
-	NULL,           /* follow_link */
-	NULL,           /* readpage */
-	NULL,           /* writepage */
-	NULL,	        /* bmap */
-	NULL,	        /* truncate */
-	NULL,	        /* permission */
-	NULL,           /* smap */
-	NULL,           /* update page */
-        NULL,           /* revalidate */
+struct inode_operations clonefs_dir_inode_ops = {
+	lookup:		clonefs_lookup,   /* lookup */
 };
 
 
 /* ***************** end of clonefs dir ops *******************  */ 
 /* ***************** begin clonefs file ops *******************  */ 
 
-int clonefs_readpage(struct file *file, struct page *page)
+static int clonefs_readpage(struct file *file, struct page *page)
 {
 	int result = 0;
 	struct inode *cache_inode;
@@ -417,8 +362,7 @@ int clonefs_readpage(struct file *file, struct page *page)
         cache_inode = clonefs_get_inode(file->f_dentry->d_inode); 
 	if (!cache_inode) {
 		make_bad_inode(file->f_dentry->d_inode);
-		EXIT;
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 	}
 
 	clonefs_prepare_snapfile(inode, file, cache_inode, &open_file,
@@ -429,65 +373,28 @@ int clonefs_readpage(struct file *file, struct page *page)
 	/* potemkin case: we are handed a directory inode */
 	down(&cache_inode->i_sem);
         /* XXX - readpage NULL on directories... */
-        if (cache_inode->i_op->readpage == NULL)
-                printk("Yes, Grigori, directories are a problem.\n");
-        else
-	        cache_inode->i_op->readpage(&open_file, page);
+        result = cache_inode->i_mapping->a_ops->readpage(&open_file, page);
+
 	up(&cache_inode->i_sem);
 	clonefs_restore_snapfile(inode, file, cache_inode, &open_file);
 	iput(cache_inode);
-        EXIT;
-	return result;
+	RETURN(result);
 }
 
-
-struct file_operations clonefs_file_file_operations = {
-        NULL,                   /* lseek */
-        generic_file_read,      /* read -- bad */
-        NULL,                   /* write */
-        NULL,                   /* readdir */
-        NULL,                   /* select */
-        NULL,                   /* ioctl */
-        generic_file_mmap,      /* mmap */
-        NULL,                   /* open */
-	NULL,
-        NULL,                   /* release */
-	NULL,                   /* fsync */
-        NULL,                   
-	NULL,
-	NULL
+struct file_operations clonefs_file_file_ops = {
+	read:	generic_file_read,      /* read -- bad */
+	mmap:	generic_file_mmap,      /* mmap */
 };
 
-struct inode_operations clonefs_file_inode_operations =
-{
-	&clonefs_file_file_operations,
-	NULL,	        /* create */
-	NULL,           /* lookup */
-	NULL,	        /* link */
-	NULL,           /* unlink */
-	NULL,	        /* symlink */
-	NULL,	        /* mkdir */
-	NULL,           /* rmdir */
-	NULL,	        /* mknod */
-	NULL,	        /* rename */
-	NULL,           /* readlink */
-	NULL,           /* follow_link */
-	clonefs_readpage, /* readpage */
-	NULL,           /* writepage */
-	NULL,	        /* bmap */
-	NULL,	        /* truncate */
-	NULL,	        /* permission */
-	NULL,           /* smap */
-	NULL,           /* update page */
-        NULL,           /* revalidate */
+struct address_space_operations clonefs_file_address_ops = {
+        readpage:       clonefs_readpage
 };
-
 
 
 /* ***************** end of clonefs file ops *******************  */ 
 /* ***************** begin clonefs symlink ops *******************  */ 
 
-int clonefs_readlink(struct dentry *dentry, char *buf, int len)
+static int clonefs_readlink(struct dentry *dentry, char *buf, int len)
 {
 	int res;
 	struct inode * cache_inode;
@@ -501,12 +408,11 @@ int clonefs_readlink(struct dentry *dentry, char *buf, int len)
 
 	if ( ! cache_inode ) {
 		CDEBUG(D_INODE, "clonefs_get_inode failed, NULL\n");
-		EXIT;
-		return res;	
+		RETURN(res);	
 	}
 	
 	/* XXX: shall we allocate a new dentry ? 
-		The following is safe for ext2, etc. because ext2_readlink only
+		The following is safe for ext3, etc. because ext2_readlink only
 		use the inode info */
 
 	/* save the old dentry inode */	
@@ -525,26 +431,21 @@ int clonefs_readlink(struct dentry *dentry, char *buf, int len)
 
 	iput(cache_inode);
 
-	EXIT;
-	return res;
+	RETURN(res);
 }
 
-struct dentry * clonefs_follow_link(struct dentry * dentry,
-                                        struct dentry *base,
-                                        unsigned int follow)
+static int clonefs_follow_link(struct dentry * dentry, struct nameidata *nd)
 {
-	struct dentry * res;
 	struct inode * cache_inode;
 	struct inode * old_inode;
+	int    res;
 
 	ENTRY;
-	res = ERR_PTR(-ENOENT);
 
 	cache_inode = clonefs_get_inode(dentry->d_inode); 
 	if ( ! cache_inode ) {
 		CDEBUG(D_INODE, "clonefs_get_inode failed, NULL\n");
-		EXIT;
-		return res;	
+		RETURN(-ENOENT);	
 	}
 
 	/* XXX: shall we allocate a new dentry ? 
@@ -557,7 +458,7 @@ struct dentry * clonefs_follow_link(struct dentry * dentry,
 	dentry->d_inode = cache_inode;
 
 	if ( cache_inode->i_op->follow_link ) {
-		res = cache_inode->i_op->follow_link(dentry, base, follow); 
+		res = cache_inode->i_op->follow_link(dentry, nd); 
 	}
 
 	/* restore the old inode */
@@ -565,32 +466,16 @@ struct dentry * clonefs_follow_link(struct dentry * dentry,
 
 	iput(cache_inode);
 
-	EXIT;
-	return res;
+	RETURN(res);
 }
 
-struct inode_operations clonefs_symlink_inode_operations =
+struct inode_operations clonefs_symlink_inode_ops =
 {
-	NULL,               /* no file operations */      
-	NULL,	            /* create */                  
-	NULL,               /* lookup */                  
-	NULL,	            /* link */                    
-	NULL,               /* unlink */                  
-	NULL,	            /* symlink */                 
-	NULL,	            /* mkdir */                   
-	NULL,               /* rmdir */                   
-	NULL,	            /* mknod */                   
-	NULL,	            /* rename */                  
-	clonefs_readlink,   /* readlink */              
-	clonefs_follow_link,/* follow_link */             
-	NULL,               /* readpage */                
-	NULL,               /* writepage */               
-	NULL,	            /* bmap */                    
-	NULL,	            /* truncate */                
-	NULL,	            /* permission */              
-	NULL,               /* smap */                    
-	NULL,               /* update page */             
-        NULL,               /* revalidate */          
+	/*FIXME later getxattr, listxattr, 
+	 * other method need to be replaced too 
+	 * */  
+	readlink:	clonefs_readlink,   /* readlink */              
+	follow_link:	clonefs_follow_link,/* follow_link */             
 };
 
 

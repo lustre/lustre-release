@@ -3,26 +3,21 @@
  * Snapfs. (C) 2000 Peter J. Braam
  */
 
-#include <linux/types.h>
-#include <linux/kernel.h>
-#include <linux/sched.h>
-#include <linux/fs.h>
-#include <linux/malloc.h>
-#include <linux/vmalloc.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/locks.h>
-#include <asm/segment.h>
-#include <asm/uaccess.h>
-#include <linux/string.h>
-#ifdef CONFIG_SNAPFS_EXT3
-#include <linux/ext3_jfs.h>
-#endif
-#include "linux/filter.h"
-#include "linux/snapfs.h"
-#include "linux/snapsupport.h"
+#define DEBUG_SUBSYSTEM S_SNAP
 
-#ifdef CONFIG_SNAPFS_EXT3
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/string.h>
+#include <linux/slab.h>
+#include <linux/stat.h>
+#include <linux/unistd.h>
+#include <linux/jbd.h>
+#include <linux/ext3_jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
+
+#include "snapfs_internal.h" 
+
 
 #define EXT3_EA_TRANS_BLOCKS EXT3_DATA_TRANS_BLOCKS
 
@@ -63,17 +58,17 @@ static void *snap_e3_trans_start(struct inode *inode, int op)
 		jblocks = 4 * COW_CREDITS + 2 * EXT3_DATA_TRANS_BLOCKS + 2;
 		break;
 	default:
-		CDEBUG(D_JOURNAL, "invalid operation %d for journal\n", op);
+		CDEBUG(D_INODE, "invalid operation %d for journal\n", op);
 		return NULL;
 	}
 
-	CDEBUG(D_JOURNAL, "creating journal handle (%d blocks)\n", jblocks);
-	return journal_start(EXT3_JOURNAL(inode), jblocks);
+	CDEBUG(D_INODE, "creating journal handle (%d blocks)\n", jblocks);
+	return ext3_journal_start(inode, jblocks);
 }
 
 static void snap_e3_trans_commit(void *handle)
 {
-	journal_stop(current->j_handle);
+	journal_stop(handle);
 }
 
 struct journal_ops snap_ext3_journal_ops = {
@@ -81,4 +76,3 @@ struct journal_ops snap_ext3_journal_ops = {
 	snap_e3_trans_commit
 };
 
-#endif /* CONFIG_EXT3_FS */

@@ -2,25 +2,19 @@
  * file.c
  */
 
-#define EXPORT_SYMTAB
+#define DEBUG_SUBSYSTEM S_SNAP
 
-
-#define __NO_VERSION__
 #include <linux/module.h>
-#include <asm/uaccess.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
+#include <linux/kernel.h>
 #include <linux/string.h>
-#include <linux/locks.h>
-#include <linux/quotaops.h>
-#include <linux/list.h>
-#include <linux/file.h>
-#include <asm/bitops.h>
-#include <asm/byteorder.h>
+#include <linux/slab.h>
+#include <linux/stat.h>
+#include <linux/unistd.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
 
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
+#include "snapfs_internal.h" 
 
 /* instantiate a file handle to the cache file */
 static void currentfs_prepare_snapfile(struct inode *inode,
@@ -29,17 +23,13 @@ static void currentfs_prepare_snapfile(struct inode *inode,
 				     struct file *cache_file,
 				     struct dentry *cache_dentry)
 {
-	ENTRY;
         cache_file->f_pos = clone_file->f_pos;
         cache_file->f_mode = clone_file->f_mode;
         cache_file->f_flags = clone_file->f_flags;
         cache_file->f_count  = clone_file->f_count;
         cache_file->f_owner  = clone_file->f_owner;
-	cache_file->f_op = cache_inode->i_op->default_file_ops;
 	cache_file->f_dentry = cache_dentry;
         cache_file->f_dentry->d_inode = cache_inode;
-	EXIT;
-        return ;
 }
 
 /* update the currentfs file struct after IO in cache file */
@@ -48,10 +38,7 @@ static void currentfs_restore_snapfile(struct inode *cache_inode,
 				   struct inode *clone_inode,
 				   struct file *clone_file)
 {
-	ENTRY;
         cache_file->f_pos = clone_file->f_pos;
-	EXIT;
-        return;
 }
 
 
@@ -67,41 +54,34 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
 	struct snap_table *table;
 	int slot = 0;
 	int index = 0;
-	struct inode_operations *ciops;
+	struct address_space_operations *aops;
 	struct inode *cache_inode = NULL;
 	struct snapshot_operations *snapops;
   
 	ENTRY;
 
-	if (currentfs_is_under_dotsnap(filp->f_dentry)) {
-		EXIT;
-		return -ENOSPC;
-	}
+	if (currentfs_is_under_dotsnap(filp->f_dentry)) 
+		RETURN(-ENOSPC);
 
         cache = snap_find_cache(inode->i_dev);
-        if ( !cache ) { 
-                EXIT;
-                return -EINVAL;
-        }
+        if ( !cache ) 
+                RETURN(-EINVAL);
 
         if ( snap_needs_cow(inode) != -1 ) {
-                CDEBUG(D_FILE, "snap_needs_cow for ino %lu \n",inode->i_ino);
+                CDEBUG(D_SNAP, "snap_needs_cow for ino %lu \n",inode->i_ino);
                 snap_do_cow(inode, filp->f_dentry->d_parent->d_inode->i_ino, 0);
 	}
 
         fops = filter_c2cffops(cache->cache_filter); 
-        if (!fops ||
-            !fops->write) {
-                EXIT;
-                return -EINVAL;
-        }
+        if (!fops || !fops->write) 
+                RETURN(-EINVAL);
 
         if (filp->f_flags & O_APPEND)
                 pos = inode->i_size;
         else {
                 pos = *ppos;
                 if (pos != *ppos)
-                        return -EINVAL;
+                        RETURN(-EINVAL);
         }
 
 	/*
@@ -115,41 +95,38 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
 		block[1] = pos >> inode->i_sb->s_blocksize_bits;
 	if( block[0] == block[1] )
 		block[1] = -1;
-
-	ciops = filter_c2cfiops(cache->cache_filter);
+	
+	aops = filter_c2cfaops(cache->cache_filter);
 	snapops = filter_c2csnapops(cache->cache_filter);
 
 	for( i=0; i<2; i++ ){
-		if( block[i]!=-1 && !ciops->bmap(inode, block[i]) ) {
+		if(block[i]!=-1 && aops->bmap(inode->i_mapping, block[i])) {
 			table = &snap_tables[cache->cache_snap_tableno];
-        		for (slot = table->tbl_count ; slot >= 1; slot--)
-        		{
+        		for (slot = table->tbl_count ; slot >= 1; slot--) {
+				struct address_space_operations *c_aops = 
+					cache_inode->i_mapping->a_ops;
 				cache_inode = NULL;
-                		index = table->tbl_index[slot];
+                		index = table->snap_items[slot].index;
 				cache_inode = snap_get_indirect(inode, NULL, index);
 
 				if ( !cache_inode )  continue;
 
-	                	if (cache_inode->i_op->bmap(cache_inode, block[i])) {
-					CDEBUG(D_FILE, "find cache_ino %lu\n",
+	                	if (c_aops->bmap(cache_inode->i_mapping, block[i])) {
+					CDEBUG(D_SNAP, "find cache_ino %lu\n",
 						cache_inode->i_ino);
 					if( snapops && snapops->copy_block) {
-						snapops->copy_block( inode, 
+						snapops->copy_block(inode, 
 								cache_inode, block[i]);
 					}
-
 					iput(cache_inode);
                         		break;
                 		}
-                       		 iput(cache_inode);
+                       		iput(cache_inode);
         		}
 		}
 	}
-
         rc = fops->write(filp, buf, count, ppos);
-        
-        EXIT;
-        return rc;
+        RETURN(rc);
 }
 
 static int currentfs_readpage(struct file *file, struct page *page)
@@ -161,7 +138,7 @@ static int currentfs_readpage(struct file *file, struct page *page)
 	struct inode *cache_inode = NULL;
 	struct file open_file;
 	struct dentry open_dentry ;
-	struct inode_operations *ciops;
+	struct address_space_operations *c_aops;
 	struct snap_cache *cache;
  	long block;
 	struct snap_table *table;
@@ -173,21 +150,19 @@ static int currentfs_readpage(struct file *file, struct page *page)
 
 	cache = snap_find_cache(inode->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
+	
+	c_aops = filter_c2cfaops(cache->cache_filter);
 
-	ciops = filter_c2cfiops(cache->cache_filter);
-
-	block = page->offset >> inode->i_sb->s_blocksize_bits;
+	block = page->index >> inode->i_sb->s_blocksize_bits;
 
 	/* if there is a block in the cache, return the cache readpage */
-	if( inode->i_blocks && ciops->bmap(inode, block) ) {
-		CDEBUG(D_FILE, "block %lu in cache, ino %lu\n", 
+	if( inode->i_blocks && c_aops->bmap(inode->i_mapping, block) ) {
+		CDEBUG(D_SNAP, "block %lu in cache, ino %lu\n", 
 				block, inode->i_ino);
-		result = ciops->readpage(file, page);
-        	EXIT;
-		return result;
+		result = c_aops->readpage(file, page);
+		RETURN(result);
 	}
 
 	/*
@@ -197,7 +172,7 @@ static int currentfs_readpage(struct file *file, struct page *page)
 	if( file->f_dentry->d_fsdata ){
 		pri_inode = iget(inode->i_sb, (unsigned long)file->f_dentry->d_fsdata);
 		if( !pri_inode )
-			return -EINVAL;
+			RETURN(-EINVAL);
 		inode = pri_inode;
 		search_older = 1;
 	}
@@ -206,54 +181,55 @@ static int currentfs_readpage(struct file *file, struct page *page)
 
         for (slot = table->tbl_count ; slot >= 1; slot--)
         {
+		struct address_space_operations *c_aops = 
+					cache_inode->i_mapping->a_ops;
 		cache_inode = NULL;
-                index = table->tbl_index[slot];
+                index = table->snap_items[slot].index;
 		cache_inode = snap_get_indirect(inode, NULL, index);
 
-		if ( !cache_inode )  continue;
+		if (!cache_inode )  continue;
 
 		/* we only want slots between cache_inode to the oldest one */
-		if( search_older && cache_inode->i_ino == ind_ino )
+		if(search_older && cache_inode->i_ino == ind_ino )
 			search_older = 0;
 
-                if ( !search_older && cache_inode->i_op->bmap(cache_inode, block)) {
+                if (!search_older && c_aops->bmap(cache_inode->i_mapping, block)) 
                         break;
-                }
                 iput(cache_inode);
         }
 	if( pri_inode )
 		iput(pri_inode);
 
-	if ( !cache_inode ) { 
-		EXIT;
-		return -EINVAL;
-	}
+	if ( !cache_inode )  
+		RETURN(-EINVAL);
 
 	currentfs_prepare_snapfile(inode, file, cache_inode, &open_file,
 			      &open_dentry);
 
 	down(&cache_inode->i_sem);
 
-	if( ciops->readpage ) {
-		CDEBUG(D_FILE, "block %lu NOT in cache, use redirected ino %lu\n", block, cache_inode->i_ino );
-		result = ciops->readpage(&open_file, page);
+	if( c_aops->readpage ) {
+		CDEBUG(D_SNAP, "block %lu NOT in cache, use redirected ino %lu\n", 
+		       block, cache_inode->i_ino );
+		result = c_aops->readpage(&open_file, page);
 	}else {
-		CDEBUG(D_FILE, "cache ino %lu, readpage is NULL\n", 
-				cache_inode->i_ino);
+		CDEBUG(D_SNAP, "cache ino %lu, readpage is NULL\n", 
+		       cache_inode->i_ino);
 	}
-
 	up(&cache_inode->i_sem);
 	currentfs_restore_snapfile(inode, file, cache_inode, &open_file);
 	iput(cache_inode);
-        EXIT;
-	return result;
+	RETURN(result);
 }
-
+struct address_space_operations currentfs_file_aops = {
+	readpage:       currentfs_readpage,
+};
+                                                                                                                                                                                                     
 struct file_operations currentfs_file_fops = {
-	write:currentfs_write,
+	write:          currentfs_write,
+};
+                                                                                                                                                                                                     
+struct inode_operations currentfs_file_iops = {
+	revalidate:     NULL,
 };
 
-struct inode_operations currentfs_file_iops = {
-	default_file_ops: &currentfs_file_fops,
-	readpage: currentfs_readpage,
-};

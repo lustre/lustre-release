@@ -2,25 +2,19 @@
  * dotsnap.c - support for .snap directories
  */
 
-#define EXPORT_SYMTAB
+#define DEBUG_SUBSYSTEM S_SNAP
 
-
-#define __NO_VERSION__
 #include <linux/module.h>
-#include <asm/uaccess.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
+#include <linux/kernel.h>
 #include <linux/string.h>
-#include <linux/locks.h>
-#include <linux/quotaops.h>
-#include <linux/list.h>
-#include <linux/file.h>
-#include <asm/bitops.h>
-#include <asm/byteorder.h>
+#include <linux/slab.h>
+#include <linux/stat.h>
+#include <linux/unistd.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
 
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
+#include "snapfs_internal.h" 
 
 struct inode_operations dotsnap_inode_operations;
 struct file_operations dotsnap_file_operations;
@@ -38,8 +32,7 @@ int currentfs_is_under_dotsnap(struct dentry *de)
 		de = de->d_parent;
 	}
 
-	EXIT;
-	return 0;
+	RETURN(0);
 }
 
 void currentfs_dotsnap_read_inode(struct snap_cache *cache, 
@@ -76,41 +69,39 @@ struct dentry *dotsnap_lookup(struct inode *dir,  struct dentry *dentry)
 
 	cache = snap_find_cache(dir->i_dev);
 	if ( !cache ) {
-		printk("dotsnap_readdir: cannot find cache\n");
+		CERROR("dotsnap_readdir: cannot find cache\n");
 		make_bad_inode(dir);
-		EXIT;
-		return ERR_PTR(-EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
 	}
 
 	snapops = filter_c2csnapops(cache->cache_filter);
 	if (!snapops || !snapops->get_indirect_ino) {
-                EXIT;
-                return ERR_PTR(-EINVAL);
+                RETURN(ERR_PTR(-EINVAL));
         }
 
 	tableno = cache->cache_snap_tableno; 
 	table = &snap_tables[tableno];
 
 	if( table->tbl_count <= 1 )
-		return NULL;
+		RETURN(NULL);
 	
-	index = table->tbl_index[0]; 
+	index = table->snap_items[0].index;; 
 	for ( i = 1 ; i < table->tbl_count ; i++ ) {
-		if ( (dentry->d_name.len == strlen(table->tbl_name[i])) &&
-		     (memcmp(dentry->d_name.name, table->tbl_name[i], 
+		if ( (dentry->d_name.len == strlen(table->snap_items[i].name)) &&
+		     (memcmp(&dentry->d_name.name[0], &table->snap_items[i].name[0], 
 			     dentry->d_name.len) == 0) ) {
-			index = table->tbl_index[i]; 
+			index = table->snap_items[i].index; 
 			break;
 		}
 	}
 	
 	if( i >= table->tbl_count )
-		return ERR_PTR(-ENOENT);
+		RETURN(ERR_PTR(-ENOENT));
 
 	inode = iget(dir->i_sb, dir->i_ino & (~0xF0000000));
 
         if ( !inode ) 
-                return ERR_PTR(-EINVAL);
+                RETURN(ERR_PTR(-EINVAL));
 
 	ino =  snapops->get_indirect_ino(inode, index);
 	iput(inode); 
@@ -120,15 +111,15 @@ struct dentry *dotsnap_lookup(struct inode *dir,  struct dentry *dentry)
 	}
 
 	if ( ino == -EINVAL ) {
-		return ERR_PTR(-EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
 	}
-CDEBUG(D_INODE, "index %d, ino is %lu\n",index, ino);
+	CDEBUG(D_INODE, "index %d, ino is %lu\n",index, ino);
 
 	inode = iget(dir->i_sb, ino);
 	d_add(dentry, inode); 
 	dentry->d_fsdata = (void*)index;
 	inode->i_op = dentry->d_parent->d_parent->d_inode->i_op;
-	return NULL;
+	RETURN(NULL);
 }
 
 
@@ -145,55 +136,47 @@ static int dotsnap_readdir(struct file * filp,
 
 	cache = snap_find_cache(filp->f_dentry->d_inode->i_dev);
 	if ( !cache ) {
-		printk("dotsnap_readdir: cannot find cache\n");
+		CDEBUG(D_INODE, "dotsnap_readdir: cannot find cache\n");
 		make_bad_inode(filp->f_dentry->d_inode);
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	snapops = filter_c2csnapops(cache->cache_filter);
 	if (!snapops || !snapops->get_indirect_ino) {
-                EXIT;
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
 	tableno = cache->cache_snap_tableno; 
 	table = &snap_tables[tableno];
-	CDEBUG(D_INODE, "\n");	
 	for (i = filp->f_pos ; i < table->tbl_count -1 ; i++) {
 		int index;
 		struct inode *inode;
 		ino_t ino;
 
-		CDEBUG(D_INODE, "%d\n",i);	
 
 		inode = filp->f_dentry->d_inode;
-		index = table->tbl_index[i+1];
+		index = table->snap_items[i+1].index;
 		ino =  snapops->get_indirect_ino 
 			(filp->f_dentry->d_inode, index);
-
-		CDEBUG(D_INODE, "\n");	
 
 		if ( ino == -ENOATTR || ino == 0 ) {
 			ino = filp->f_dentry->d_parent->d_inode->i_ino;
 		}
-
-		CDEBUG(D_INODE, "\n");	
+		
 		if ( ino == -EINVAL ) {
 			return -EINVAL;
 		}
 
-		CDEBUG(D_INODE, "Listing %s\n", table->tbl_name[i+1]);	
-		if (filldir(dirent, table->tbl_name[i+1],
-			    strlen(table->tbl_name[i+1]),
-			    filp->f_pos, ino) < 0){
+		CDEBUG(D_INODE, "Listing %s\n", &table->snap_items[i+1].name[0]);	
+		if (filldir(dirent, &table->snap_items[i+1].name[0],
+			    strlen(&table->snap_items[i+1].name[0]),
+			    filp->f_pos, ino, 0) < 0){
 			CDEBUG(D_INODE, "\n");
 			break;
 		}
 		filp->f_pos++;
 	}
-	EXIT;
-	return 0;
+	RETURN(0);
 }
 
 
@@ -203,6 +186,5 @@ struct file_operations dotsnap_file_operations = {
 
 struct inode_operations dotsnap_inode_operations =
 {
-	default_file_ops: &dotsnap_file_operations,
 	lookup: dotsnap_lookup
 };

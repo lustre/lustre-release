@@ -2,20 +2,20 @@
  * Directory operations for SnapFS filesystem
  */
 
-#include <linux/types.h>
-#include <linux/kernel.h>
-#include <linux/sched.h>
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/locks.h>
-#include <asm/segment.h>
-#include <asm/uaccess.h>
-#include <linux/string.h>
+#define DEBUG_SUBSYSTEM S_SNAP
 
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/string.h>
+#include <linux/slab.h>
+#include <linux/stat.h>
+#include <linux/unistd.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
+
+#include "snapfs_internal.h" 
+
 
 /* called when a cache lookup succeeds */
 
@@ -45,7 +45,7 @@ static int currentfs_dentry_revalidate(struct dentry *de, int flag)
 		return 0;
 	}
 #else 
-	return 1;
+	RETURN(1);
 #endif
 }
 

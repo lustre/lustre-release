@@ -1,37 +1,21 @@
 /*
- *
- *
- *  Copyright (C) 2000 Stelias Computing, Inc.
- *  Copyright (C) 2000 Red Hat, Inc.
- *  Copyright (C) 2000 Mountain View Data, Inc.
- *
- *
+ * filter.c
  */
+#define DEBUG_SUBSYSTEM S_SNAP
 
-#include <stdarg.h>
-
-#include <asm/bitops.h>
-#include <asm/uaccess.h>
-#include <asm/system.h>
-
-#include <linux/errno.h>
-#include <linux/fs.h>
-#include <linux/ext2_fs.h>
-#include <linux/malloc.h>
-#include <linux/vmalloc.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
-#include <linux/string.h>
-#include <linux/locks.h>
-#include <linux/blkdev.h>
-#include <linux/init.h>
-#define __NO_VERSION__
 #include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/string.h>
+#include <linux/slab.h>
+#include <linux/stat.h>
+#include <linux/unistd.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
 
-#include <linux/filter.h>
+#include "snapfs_internal.h" 
 
-int filter_print_entry = 1;
-int filter_debug = 0xfffffff;
+
 /*
  * The function in this file are responsible for setting up the 
  * correct methods layered file systems like InterMezzo and SnapFS
@@ -71,6 +55,11 @@ inline struct file_operations *filter_c2uffops(struct filter_fs *cache)
 	return &cache->o_fops.filter_file_fops;
 }
 
+inline struct address_space_operations *filter_c2ufaops(struct filter_fs *cache)
+{
+	return &cache->o_fops.filter_file_aops;
+}
+
 inline struct file_operations *filter_c2usfops(struct filter_fs *cache)
 {
 	return &cache->o_fops.filter_sym_fops;
@@ -95,6 +84,11 @@ inline struct inode_operations *filter_c2cdiops(struct filter_fs *cache)
 inline struct inode_operations *filter_c2cfiops(struct filter_fs *cache)
 {
 	return cache->o_caops.cache_file_iops;
+}
+
+inline struct address_space_operations *filter_c2cfaops(struct filter_fs *cache)
+{
+	return cache->o_caops.cache_file_aops;
 }
 
 inline struct inode_operations *filter_c2csiops(struct filter_fs *cache)
@@ -131,32 +125,31 @@ inline struct snapshot_operations *filter_c2csnapops(struct filter_fs *cache)
 struct filter_fs *filter_get_filter_fs(const char *cache_type)
 {
 	struct filter_fs *ops = NULL;
-	FENTRY;
+	ENTRY;
 
 	if ( strlen(cache_type) == strlen("ext2") &&
 	     memcmp(cache_type, "ext2", strlen("ext2")) == 0 ) {
 		ops = &filter_oppar[FILTER_FS_EXT2];
-		FDEBUG(D_SUPER, "ops at %p\n", ops);
+		CDEBUG(D_SUPER, "ops at %p\n", ops);
 	}
 
 	if ( strlen(cache_type) == strlen("ext3") &&
 	     memcmp(cache_type, "ext3", strlen("ext3")) == 0 ) {
 		ops = &filter_oppar[FILTER_FS_EXT3];
-		FDEBUG(D_SUPER, "ops at %p\n", ops);
+		CDEBUG(D_SUPER, "ops at %p\n", ops);
 	}
 	if ( strlen(cache_type) == strlen("reiser") &&
 	     memcmp(cache_type, "reiser", strlen("reiser")) == 0 ) {
 		ops = &filter_oppar[FILTER_FS_REISER];
-		FDEBUG(D_SUPER, "ops at %p\n", ops);
+		CDEBUG(D_SUPER, "ops at %p\n", ops);
 	}
 
 	if (ops == NULL) {
-		printk("prepare to die: unrecognized cache type for Filter\n");
+		CERROR("prepare to die: unrecognized cache type for Filter\n");
 	}
-	FEXIT;
+	EXIT;
 	return ops;
 }
-
 
 /*
  *  Frobnicate the InterMezzo/SnapFS operations
@@ -164,17 +157,19 @@ struct filter_fs *filter_get_filter_fs(const char *cache_type)
  *    and the underlying file system used for the cache.
  */
 
-void filter_setup_super_ops(struct filter_fs *cache, struct super_operations *cache_sops, struct super_operations *filter_sops)
+void filter_setup_super_ops(struct filter_fs *cache, 
+		            struct super_operations *cache_sops, 
+			    struct super_operations *filter_sops)
 {
         /* Get ptr to the shared struct snapfs_ops structure. */
 	struct filter_ops *uops = &cache->o_fops;
         /* Get ptr to the shared struct cache_ops structure. */
 	struct cache_ops *caops = &cache->o_caops;
 
-	FENTRY;
+	ENTRY;
 
 	if ( cache->o_flags & FILTER_DID_SUPER_OPS ) {
-		FEXIT;
+		EXIT;
 		return;
 	}
 	cache->o_flags |= FILTER_DID_SUPER_OPS;
@@ -182,7 +177,6 @@ void filter_setup_super_ops(struct filter_fs *cache, struct super_operations *ca
         /* Set the cache superblock operations to point to the
 	   superblock operations of the underlying file system.  */
 	caops->cache_sops = cache_sops;
-
         /*
          * Copy the cache (real fs) superblock ops to the "filter"
          * superblock ops as defaults. Some will be changed below
@@ -195,189 +189,163 @@ void filter_setup_super_ops(struct filter_fs *cache, struct super_operations *ca
 	}
 	if (cache_sops->read_inode && uops->filter_sops.read_inode) {
 		uops->filter_sops.read_inode = filter_sops->read_inode;
-		FDEBUG(D_INODE, "setting filter_read_inode, cache_ops %p, cache %p, ri at %p\n",
+		CDEBUG(D_INODE, "setting filter_read_inode, cache_ops %p, cache %p, ri at %p\n",
 		      cache, cache, uops->filter_sops.read_inode);
 	}
-	if (cache_sops->notify_change && uops->filter_sops.notify_change) 
-		uops->filter_sops.notify_change = filter_sops->notify_change;
-	if (cache_sops->remount_fs && uops->filter_sops.remount_fs)
-		uops->filter_sops.remount_fs = filter_sops->remount_fs;
-	FEXIT;
+	uops->filter_sops.clear_inode = filter_sops->clear_inode;
+	
+	EXIT;
 }
 
-
-void filter_setup_dir_ops(struct filter_fs *cache, struct inode_operations *cache_iops, struct inode_operations *filter_iops)
+void filter_setup_dir_ops(struct filter_fs *cache, 
+			  struct inode	   *inode,
+			  struct inode_operations *filter_iops, 
+			  struct file_operations *filter_fops)
 {
 	struct inode_operations *u_iops;
-	struct file_operations *u_fops, *c_fops, *f_fops;
-	FENTRY;
+	struct file_operations *u_fops;
+	
+	ENTRY;
 
-	if ( cache->o_flags & FILTER_DID_DIR_OPS ) {
-		FEXIT;
+	if (cache->o_flags & FILTER_DID_DIR_OPS) {
+		EXIT;
 		return;
 	}
-	FDEBUG(D_SUPER, "\n");
 	cache->o_flags |= FILTER_DID_DIR_OPS;
 
 	/* steal the old ops */
-	cache->o_caops.cache_dir_iops = cache_iops;
-	cache->o_caops.cache_dir_fops = 
-		cache_iops->default_file_ops;
-
-	FDEBUG(D_SUPER, "\n");
-	/* abbreviate */
-	u_iops = &cache->o_fops.filter_dir_iops;
-
-	/* setup our dir iops: copy and modify */
-	memcpy(u_iops, cache_iops, sizeof(*cache_iops));
-	FDEBUG(D_SUPER, "\n");
+	cache->o_caops.cache_dir_iops = inode->i_op;
+	cache->o_caops.cache_dir_fops = inode->i_fop;
+	
+	u_iops = filter_c2udiops(cache);
+	u_fops = filter_c2udfops(cache); 
+	
+	/* setup our dir iops and fops: copy and modify */
+	memcpy(u_iops, inode->i_op, sizeof(struct inode_operations));
+	memcpy(u_fops, inode->i_fop, sizeof(struct file_operations));
 
 	/* methods that filter if cache filesystem has these ops */
-	if ( cache_iops->lookup && filter_iops->lookup ) {
-	FDEBUG(D_SUPER, "\n");
-		u_iops->lookup = filter_iops->lookup;
-		FDEBUG(D_SUPER, "lookup at %p\n", &filter_iops->lookup);
+	if (filter_iops) {
+		struct inode_operations *cache_iops = inode->i_op;
+		
+		if (cache_iops->lookup && filter_iops->lookup) 
+			u_iops->lookup = filter_iops->lookup;
+		if (cache_iops->create && filter_iops->create)
+			u_iops->create = filter_iops->create;
+		if (cache_iops->link && filter_iops->link)
+			u_iops->link = filter_iops->link;
+		if (cache_iops->unlink && filter_iops->unlink)
+			u_iops->unlink = filter_iops->unlink;
+		if (cache_iops->mkdir && filter_iops->mkdir)
+			u_iops->mkdir = filter_iops->mkdir;
+		if (cache_iops->rmdir && filter_iops->rmdir)
+			u_iops->rmdir = filter_iops->rmdir;
+		if (cache_iops->symlink && filter_iops->symlink)
+			u_iops->symlink = filter_iops->symlink;
+		if (cache_iops->rename && filter_iops->rename)
+			u_iops->rename = filter_iops->rename;
+		if (cache_iops->mknod && filter_iops->mknod)
+			u_iops->mknod = filter_iops->mknod;
+		if (cache_iops->permission && filter_iops->permission)
+			u_iops->permission = filter_iops->permission;
 	}
-	if (cache_iops->create && filter_iops->create)
-		u_iops->create = filter_iops->create;
-	FDEBUG(D_SUPER, "\n");
-	if (cache_iops->link && filter_iops->link)
-		u_iops->link = filter_iops->link;
-	FDEBUG(D_SUPER, "\n");
-	if (cache_iops->unlink && filter_iops->unlink)
-		u_iops->unlink = filter_iops->unlink;
-	FDEBUG(D_SUPER, "\n");
-	if (cache_iops->mkdir && filter_iops->mkdir)
-		u_iops->mkdir = filter_iops->mkdir;
-	FDEBUG(D_SUPER, "\n");
-	if (cache_iops->rmdir && filter_iops->rmdir)
-		u_iops->rmdir = filter_iops->rmdir;
-	FDEBUG(D_SUPER, "\n");
-	if (cache_iops->symlink && filter_iops->symlink)
-		u_iops->symlink = filter_iops->symlink;
-	FDEBUG(D_SUPER, "\n");
-	if (cache_iops->rename && filter_iops->rename)
-		u_iops->rename = filter_iops->rename;
-	FDEBUG(D_SUPER, "\n");
-	if (cache_iops->mknod && filter_iops->mknod)
-		u_iops->mknod = filter_iops->mknod;
-	FDEBUG(D_SUPER, "\n");
-	if (cache_iops->permission && filter_iops->permission)
-		u_iops->permission = filter_iops->permission;
-
 	/* copy dir fops */
-	FDEBUG(D_SUPER, "\n");
-	u_fops = &cache->o_fops.filter_dir_fops;
-	c_fops = cache_iops->default_file_ops;
-	f_fops = filter_iops->default_file_ops;
-
-        memcpy(u_fops, c_fops, sizeof(*c_fops));
-
-	if( c_fops->readdir && f_fops->readdir )
-		u_fops->readdir = f_fops->readdir;
-
-	/* assign */
-	FDEBUG(D_SUPER, "\n");
-	filter_c2udiops(cache)->default_file_ops = filter_c2udfops(cache);
-	FDEBUG(D_SUPER, "\n");
-
-	/* unconditional filtering operations */
-	if ( filter_iops->default_file_ops && 
-	     filter_iops->default_file_ops->open ) 
-		filter_c2udfops(cache)->open = 
-			filter_iops->default_file_ops->open;
-
-	FEXIT;
+	
+	if (filter_fops) {
+		struct file_operations *cache_fops = inode->i_fop;
+		
+		if(cache_fops->readdir && filter_fops->readdir)
+			u_fops->readdir = filter_fops->readdir;
+	}
+	EXIT;
 }
 
-
-void filter_setup_file_ops(struct filter_fs *cache, struct inode_operations *cache_iops, struct inode_operations *filter_iops)
+void filter_setup_file_ops(struct filter_fs 	   *cache, 
+			   struct inode		   *inode,
+			   struct inode_operations *filter_iops,
+			   struct file_operations  *filter_fops,
+			   struct address_space_operations *filter_aops)
 {
 	struct inode_operations *u_iops;
-	FENTRY;
+	struct file_operations *u_fops;
+	struct address_space_operations *u_aops;
+	ENTRY;
 
-	if ( cache->o_flags & FILTER_DID_FILE_OPS ) {
-		FEXIT;
+	if (cache->o_flags & FILTER_DID_FILE_OPS || !inode ) { 
+		EXIT;
 		return;
 	}
+
 	cache->o_flags |= FILTER_DID_FILE_OPS;
 
 	/* steal the old ops */
-	cache->o_caops.cache_file_iops = cache_iops;
-	cache->o_caops.cache_file_fops = 
-		cache_iops->default_file_ops;
+	cache->o_caops.cache_file_iops = inode->i_op; 
+	cache->o_caops.cache_file_fops = inode->i_fop;
 
 	/* abbreviate */
 	u_iops = filter_c2ufiops(cache); 
-
+	u_fops = filter_c2uffops(cache); 
+	u_aops = filter_c2ufaops(cache); 
+		
 	/* setup our dir iops: copy and modify */
-	memcpy(u_iops, cache_iops, sizeof(*cache_iops));
+	memcpy(u_iops, inode->i_op, sizeof(struct inode_operations));
+	memcpy(u_fops, inode->i_fop, sizeof(struct file_operations));
 
-	/* copy dir fops */
-        memcpy(filter_c2uffops(cache), cache_iops->default_file_ops, 
-	       sizeof(*cache_iops->default_file_ops));
-	/* assign */
-	filter_c2ufiops(cache)->default_file_ops = filter_c2uffops(cache);
-
-	/* unconditional filtering operations */
-	if (filter_iops->default_file_ops &&
-	    filter_iops->default_file_ops->open ) 
-		filter_c2uffops(cache)->open = 
-			filter_iops->default_file_ops->open;
-	if (filter_iops->default_file_ops &&
-	    filter_iops->default_file_ops->release ) 
-		filter_c2uffops(cache)->release = 
-			filter_iops->default_file_ops->release;
-	if (filter_iops->default_file_ops &&
-	    filter_iops->default_file_ops->write ) 
-		filter_c2uffops(cache)->write = 
-			filter_iops->default_file_ops->write;
-
-	/* set up readpage */
-	if (filter_iops->readpage) 
-		filter_c2ufiops(cache)->readpage = filter_iops->readpage;
-
-	FEXIT;
+	if (inode->i_mapping && inode->i_mapping->a_ops) {
+		cache->o_caops.cache_file_aops = inode->i_mapping->a_ops; 
+		memcpy(u_aops, inode->i_mapping->a_ops, 
+		       sizeof(struct address_space_operations));
+	}
+	if (filter_iops) {
+		if (filter_iops->revalidate)
+			u_iops->revalidate = filter_iops->revalidate;
+	}
+	if (filter_fops) {
+		if (filter_fops->read)
+			u_fops->read = filter_fops->read;
+	}
+	if (filter_aops) {
+		if (filter_aops->readpage)
+			u_aops->readpage = filter_aops->readpage;
+	}
+	EXIT;
 }
 
-/* XXX in 2.3 there are "fast" and "slow" symlink ops for ext2 XXX */
-void filter_setup_symlink_ops(struct filter_fs *cache, struct inode_operations *cache_iops, struct inode_operations *filter_iops)
+void filter_setup_symlink_ops(struct filter_fs *cache, 
+			      struct inode *inode,
+		              struct inode_operations *filter_iops, 
+			      struct file_operations *filter_fops)
 {
 	struct inode_operations *u_iops;
-	FENTRY;
+	struct file_operations *u_fops;
+	
+	ENTRY;
 
-	if ( cache->o_flags & FILTER_DID_SYMLINK_OPS ) {
-		FEXIT;
+	if (cache->o_flags & FILTER_DID_SYMLINK_OPS || !inode ) {
+		EXIT;
 		return;
 	}
 	cache->o_flags |= FILTER_DID_SYMLINK_OPS;
 
 	/* steal the old ops */
-	cache->o_caops.cache_sym_iops = cache_iops;
-	cache->o_caops.cache_sym_fops = 
-		cache_iops->default_file_ops;
+	cache->o_caops.cache_sym_iops = inode->i_op;
+	cache->o_caops.cache_sym_fops = inode->i_fop; 
 
 	/* abbreviate */
 	u_iops = filter_c2usiops(cache); 
+	u_fops = filter_c2usfops(cache); 
 
 	/* setup our dir iops: copy and modify */
-	memcpy(u_iops, cache_iops, sizeof(*cache_iops));
-
-	/* copy fops - careful for symlinks they might be NULL */
-	if ( cache_iops->default_file_ops ) { 
-		memcpy(filter_c2usfops(cache), cache_iops->default_file_ops, 
-		       sizeof(*cache_iops->default_file_ops));
+	memcpy(u_iops, inode->i_op, sizeof(struct inode_operations));
+	memcpy(u_fops, inode->i_fop, sizeof(struct file_operations));
+	if (filter_iops) {
+		struct inode_operations *cache_iops = inode->i_op; 
+		if (cache_iops->readlink && filter_iops->readlink) 
+			u_iops->readlink = filter_iops->readlink;
+		if (cache_iops->follow_link && filter_iops->follow_link)
+			u_iops->follow_link = filter_iops->follow_link;
 	}
-
-	/* assign */
-	filter_c2usiops(cache)->default_file_ops = filter_c2usfops(cache);
-
-	if (cache_iops->readlink && filter_iops->readlink) 
-		u_iops->readlink = filter_iops->readlink;
-	if (cache_iops->follow_link && filter_iops->follow_link)
-		u_iops->follow_link = filter_iops->follow_link;
-
-	FEXIT;
+	EXIT;
 }
 
 void filter_setup_dentry_ops(struct filter_fs *cache,
@@ -385,7 +353,7 @@ void filter_setup_dentry_ops(struct filter_fs *cache,
 			     struct dentry_operations *filter_dop)
 {
 	if ( cache->o_flags & FILTER_DID_DENTRY_OPS ) {
-		FEXIT;
+		EXIT;
 		return;
 	}
 	cache->o_flags |= FILTER_DID_DENTRY_OPS;
@@ -395,39 +363,40 @@ void filter_setup_dentry_ops(struct filter_fs *cache,
 	       filter_dop, sizeof(*filter_dop));
 	
 	if (cache_dop &&  cache_dop != filter_dop && cache_dop->d_revalidate){
-		printk("WARNING: filter overriding revalidation!\n");
+		CWARN("filter overriding revalidation!\n");
 	}
+	EXIT;
 	return;
 }
 /* snapfs : for snapshot operations */
 void filter_setup_snapshot_ops (struct filter_fs *cache, 
 				struct snapshot_operations *cache_snapops)
 {
-	FENTRY;
+	ENTRY;
 
 	if ( cache->o_flags & FILTER_DID_SNAPSHOT_OPS ) {
-		FEXIT;
+		EXIT;
 		return;
 	}
 	cache->o_flags |= FILTER_DID_SNAPSHOT_OPS;
 
 	cache->o_snapops = cache_snapops;
 
-	FEXIT;
+	EXIT;
 }
 
 void filter_setup_journal_ops (struct filter_fs *cache,
 			       struct journal_ops *cache_journal_ops)
 {
-	FENTRY;
+	ENTRY;
 
 	if( cache->o_flags & FILTER_DID_JOURNAL_OPS ){
-		FEXIT;
+		EXIT;
 		return;
 	}
 	cache->o_flags |= FILTER_DID_JOURNAL_OPS;
 
 	cache->o_trops = cache_journal_ops;
 
-	FEXIT;
+	EXIT;
 }

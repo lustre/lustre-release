@@ -2,53 +2,27 @@
  *  Sysctrl entries for Snapfs
  */
 
-#define __NO_VERSION__
-#include <linux/config.h> /* for CONFIG_PROC_FS */
-#include <linux/module.h>
-#include <linux/sched.h>
-#include <linux/mm.h>
-#include <linux/sysctl.h>
-#include <linux/swapctl.h>
-#include <linux/proc_fs.h>
-#include <linux/malloc.h>
-#include <linux/vmalloc.h>
-#include <linux/stat.h>
-#include <linux/ctype.h>
-#include <linux/init.h>
-#include <asm/bitops.h>
-#include <asm/segment.h>
-#include <asm/uaccess.h>
-#include <linux/utsname.h>
-#include <linux/blk.h>
- 
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
-
-
 /* /proc entries */
 
+#define DEBUG_SUBSYSTEM S_SNAP
+
+#include <linux/module.h>
+#include <linux/kmod.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <linux/sysctl.h>
+#include <linux/proc_fs.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
+
+#include "snapfs_internal.h" 
+
+
 #ifdef CONFIG_PROC_FS
-
-
-static void snapfs_proc_modcount(struct inode *inode, int fill)
-{
-	if (fill)
-		MOD_INC_USE_COUNT;
-	else
-		MOD_DEC_USE_COUNT;
-}
-
-struct proc_dir_entry proc_fs_snapfs = {
-	0, 10, "snapfs",
-	S_IFDIR | S_IRUGO | S_IXUGO, 2, 0, 0,
-	0, &proc_dir_inode_operations,
-	NULL, NULL,
-	NULL,
-	NULL, NULL
-};
-
-
+static struct proc_dir_entry *proc_snapfs_root;
 #endif
 
 
@@ -67,9 +41,11 @@ static struct ctl_table_header *snapfs_table_header = NULL;
 #define ENTRY_CNT 3
 
 /* XXX - doesn't seem to be working in 2.2.15 */
-static struct ctl_table snapfs_ctltable[ENTRY_CNT] =
+static struct ctl_table snapfs_ctltable[] =
 {
+#ifdef SNAP_DEBUG
 	{PSDEV_DEBUG, "debug", &snap_debug_level, sizeof(int), 0644, NULL, &proc_dointvec},
+#endif
 	{PSDEV_TRACE, "trace", &snap_print_entry, sizeof(int), 0644, NULL, &proc_dointvec},
 	{0}
 };
@@ -80,31 +56,35 @@ static ctl_table snapfs_table[2] = {
 };
 
 
-int /* __init */ init_snapfs_proc_sys(void)
+int  __init  init_snapfs_proc_sys(void)
 {
+#ifdef CONFIG_PROC_FS
+	proc_snapfs_root = proc_mkdir("snapfs", proc_root_fs);
+	if (!proc_snapfs_root) {
+		printk(KERN_ERR "SNAPFS: error registering /proc/fs/snapfs\n");
+		RETURN(-ENOMEM);
+	}
+	proc_snapfs_root->owner = THIS_MODULE;
+#endif
 
 #ifdef CONFIG_SYSCTL
 	if ( !snapfs_table_header )
 		snapfs_table_header =
 			register_sysctl_table(snapfs_table, 0);
 #endif
-#ifdef CONFIG_PROC_FS
-	proc_register(&proc_root_fs, &proc_fs_snapfs);
-	proc_fs_snapfs.fill_inode = &snapfs_proc_modcount;
-#endif
 	return 0;
 }
 
-void cleanup_snapfs_proc_sys(void) {
-
+void cleanup_snapfs_proc_sys(void) 
+{
 #ifdef CONFIG_SYSCTL
 	if ( snapfs_table_header )
 		unregister_sysctl_table(snapfs_table_header);
 	snapfs_table_header = NULL;
 #endif
-
 #if CONFIG_PROC_FS
-	proc_unregister(&proc_root_fs, proc_fs_snapfs.low_ino);
+	remove_proc_entry("snapfs", proc_root_fs);
 #endif
+
 }
 

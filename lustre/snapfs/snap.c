@@ -6,25 +6,15 @@
  *
  */
 
-#define EXPORT_SYMTAB
+#define DEBUG_SUBSYSTEM S_SNAP
 
-
-#define __NO_VERSION__
-#include <linux/module.h>
-#include <asm/uaccess.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
+#include <linux/kmod.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
 #include <linux/string.h>
-#include <linux/locks.h>
-#include <linux/quotaops.h>
-#include <linux/list.h>
-#include <linux/file.h>
-#include <asm/bitops.h>
-#include <asm/byteorder.h>
-
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
+#include <linux/snap.h>
+#include "snapfs_internal.h" 
 
 /*
  * Return true if the inode is a redirector inode.
@@ -36,12 +26,10 @@ int snap_is_redirector(struct inode *cache_inode)
 
 	cache = snap_find_cache(cache_inode->i_dev);
 	if (!cache) {
-		EXIT;
 		return 0;
 	}
         snapops = filter_c2csnapops(cache->cache_filter);
         if (!snapops || !snapops->is_redirector) {
-                EXIT;
                 return 0;
         }
 
@@ -68,13 +56,11 @@ struct inode *snap_redirect(struct inode *cache_inode,
 
         cache = snap_find_cache(cache_inode->i_dev);
         if (!cache) {
-                EXIT;
-                return NULL;
+                RETURN(NULL);
         }
         snapops = filter_c2csnapops(cache->cache_filter);
         if (!snapops || !snapops->get_indirect) {
-                EXIT;
-                return NULL;
+                RETURN(NULL);
         }
 
 	CDEBUG(D_SNAP, "cache ino %ld\n", cache_inode->i_ino);
@@ -87,22 +73,19 @@ struct inode *snap_redirect(struct inode *cache_inode,
 					clone_info->clone_index);
 	/* if not found, get the FIRST index after this and before NOW */
  	/* XXX fix this later, now use tbl_count, not NOW */
-	if(!redirected) {
+	if (!redirected) {
+		int index;
 		clone_slot = snap_index2slot(table, clone_info->clone_index);
-		for(slot = table->tbl_count; slot >= clone_slot; slot --)
-		{
-			my_table[slot-clone_slot+1] = table->tbl_index[slot];
+		for (slot = table->tbl_count; slot >= clone_slot; slot --) {
+			my_table[slot-clone_slot+1] = table->snap_items[slot].index;
 		}
-		redirected = snapops->get_indirect 
-		(cache_inode, my_table, table->tbl_count - clone_slot + 1);
+		index = table->tbl_count - clone_slot + 1;
+		redirected = snapops->get_indirect(cache_inode, my_table, index);
 	}
-        /* old version
-	redirected = snapops->get_indirect 
-			(cache_inode, table->tbl_index,
-		 	snap_index2slot(table, clone_info->clone_index));
-	*/
-	if(redirected) CDEBUG(D_SNAP,"redirected ino %ld\n",redirected->i_ino);
-	EXIT;
+
+	if (redirected) 
+		CDEBUG(D_SNAP,"redirected ino %ld\n",redirected->i_ino);
+
 	return redirected;
 }
 
@@ -122,23 +105,19 @@ int snap_do_cow(struct inode *inode, ino_t parent_ino, int del)
 
 	cache = snap_find_cache(inode->i_dev);
 	if (!cache) {
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 	snapops = filter_c2csnapops(cache->cache_filter);
 	if (!snapops || !snapops->create_indirect) {
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
+
 	snap_last(cache, &snap);
-	ind = snapops->create_indirect(inode, parent_ino, snap.index, del);
-	EXIT;
-	if(ind)	{
-		iput(ind);
-		return	0;
-	}
-	else
-		return -EINVAL;
+	ind = snapops->create_indirect(inode, snap.index, 0, parent_ino, del);
+	if(!ind)
+		RETURN(-EINVAL);		
+	iput(ind);
+	RETURN(0);
 }
 
 int snap_iterate(struct super_block *sb,
@@ -153,16 +132,13 @@ int snap_iterate(struct super_block *sb,
 
         cache = snap_find_cache(inode->i_dev);
         if (!cache) {
-                EXIT;
-                return 0;
+                RETURN(0);
         }
         snapops = filter_c2csnapops(cache->cache_filter);
         if (!snapops || !snapops->iterate) {
-                EXIT;
-                return 0;
+                RETURN(0);
         }
 
-	EXIT;
 	return snapops->iterate(sb, repeat, start, priv, flag);
 }
 
@@ -173,17 +149,12 @@ int snap_destroy_indirect(struct inode *pri, int index, struct inode *next_ind )
 
 	ENTRY;
         cache = snap_find_cache(pri->i_dev);
-        if (!cache) {
-                EXIT;
-                return 0;
-        }
+        if (!cache) 
+        	RETURN(0);
         snapops = filter_c2csnapops(cache->cache_filter);
-        if (!snapops || !snapops->destroy_indirect) {
-                EXIT;
-                return 0;
-        }
+        if (!snapops || !snapops->destroy_indirect) 
+                RETURN(0);
 
-	EXIT;
 	return snapops->destroy_indirect(pri, index, next_ind);
 }
 
@@ -195,17 +166,13 @@ int snap_restore_indirect(struct inode *pri, int index )
 	ENTRY;
 
         cache = snap_find_cache(pri->i_dev);
-        if (!cache) {
-                EXIT;
-                return 0;
-        }
-        snapops = filter_c2csnapops(cache->cache_filter);
-        if (!snapops || !snapops->restore_indirect) {
-                EXIT;
-                return 0;
-        }
+        if (!cache) 
+                RETURN(0);
 
-	EXIT;
+        snapops = filter_c2csnapops(cache->cache_filter);
+        if (!snapops || !snapops->restore_indirect) 
+                RETURN(0);
+
 	return snapops->restore_indirect(pri, index);
 }
 
@@ -217,40 +184,14 @@ struct inode *snap_get_indirect(struct inode *pri, int *table, int slot)
 	ENTRY;
 
         cache = snap_find_cache(pri->i_dev);
-        if (!cache) {
-                EXIT;
-                return NULL;
-        }
+        if (!cache) 
+                RETURN(NULL);
+        
         snapops = filter_c2csnapops(cache->cache_filter);
-        if (!snapops || !snapops->get_indirect) {
-                EXIT;
-                return NULL;
-        }
+        if (!snapops || !snapops->get_indirect) 
+                RETURN(NULL);
 
-	EXIT;
 	return snapops->get_indirect(pri, table, slot);
-}
-
-int snap_migrate_data(struct inode *dst, struct inode *src)
-{
-	struct snap_cache *cache;
-        struct snapshot_operations *snapops;
-
-	ENTRY;
-
-        cache = snap_find_cache(src->i_dev);
-        if (!cache) {
-                EXIT;
-                return 0;
-        }
-        snapops = filter_c2csnapops(cache->cache_filter);
-        if (!snapops || !snapops->migrate_data) {
-                EXIT;
-                return 0;
-        }
-
-	EXIT;
-	return snapops->migrate_data(dst, src);
 }
 
 int snap_set_indirect(struct inode *pri, ino_t ind_ino, int index, ino_t parent_ino)
@@ -261,15 +202,12 @@ int snap_set_indirect(struct inode *pri, ino_t ind_ino, int index, ino_t parent_
 	ENTRY;
 
         cache = snap_find_cache(pri->i_dev);
-        if (!cache) {
-                EXIT;
-                return -EINVAL;
-        }
-        snapops = filter_c2csnapops(cache->cache_filter);
-        if (!snapops || !snapops->set_indirect) {
-                EXIT;
-                return -EINVAL;
-        }
+        if (!cache) 
+                RETURN(-EINVAL);
+        
+	snapops = filter_c2csnapops(cache->cache_filter);
+        if (!snapops || !snapops->set_indirect) 
+                RETURN(-EINVAL);
 
 	EXIT;
 	return snapops->set_indirect(pri, ind_ino, index, parent_ino);

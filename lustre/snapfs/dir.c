@@ -1,30 +1,19 @@
 /*
  * dir.c
  */
+#define DEBUG_SUBSYSTEM S_SNAP
 
-#define EXPORT_SYMTAB
-
-
-#define __NO_VERSION__
 #include <linux/module.h>
-#include <asm/uaccess.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
+#include <linux/kernel.h>
 #include <linux/string.h>
-#include <linux/locks.h>
-#include <linux/quotaops.h>
-#include <linux/list.h>
-#include <linux/file.h>
-#include <asm/bitops.h>
-#include <asm/byteorder.h>
+#include <linux/slab.h>
+#include <linux/stat.h>
+#include <linux/unistd.h>
+#include <linux/jbd.h>
+#include <linux/ext3_fs.h>
+#include <linux/snap.h>
 
-#include <linux/filter.h>
-#include <linux/snapfs.h>
-#include <linux/snapsupport.h>
-
-#ifdef CONFIG_SNAPFS_EXT3
-void ext3_orphan_del(handle_t *handle, struct inode *inode);
-#endif
+#include "snapfs_internal.h" 
 
 static ino_t get_parent_ino(struct inode * inode)
 {
@@ -32,7 +21,7 @@ static ino_t get_parent_ino(struct inode * inode)
 	struct dentry * dentry;
 
 	if (list_empty(&inode->i_dentry)) {
-       		printk("snapfs ERROR: no dentry for ino %lu\n", inode->i_ino);
+       		CERROR("No dentry for ino %lu\n", inode->i_ino);
                 return 0;
         }
 
@@ -69,8 +58,7 @@ static struct dentry *currentfs_lookup(struct inode * dir,struct dentry *dentry)
 
 	cache = snap_find_cache(dir->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return ERR_PTR(-EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
 	}
 
 	if ( dentry->d_name.len == strlen(".snap") &&
@@ -80,30 +68,27 @@ static struct dentry *currentfs_lookup(struct inode * dir,struct dentry *dentry)
 
 		/* Don't permit .snap in clonefs */
 		if( dentry->d_sb != cache->cache_sb )
-			return ERR_PTR(-ENOENT);
+			RETURN(ERR_PTR(-ENOENT));
 
 		/* Don't permit .snap under .snap */
 		if( currentfs_is_under_dotsnap(dentry) )
-			return ERR_PTR(-ENOENT);
+			RETURN(ERR_PTR(-ENOENT));
 
 		ino = 0xF0000000 | dir->i_ino;
 		snap = iget(dir->i_sb, ino);
 		CDEBUG(D_INODE, ".snap inode ino %ld, mode %o\n", snap->i_ino, snap->i_mode);
 		d_add(dentry, snap);
-		EXIT;
-		return NULL;
+		RETURN(NULL);
 	}
 
 	iops = filter_c2cdiops(cache->cache_filter); 
 	if (!iops || !iops->lookup) {
-		EXIT;
-		return ERR_PTR(-EINVAL);
+		RETURN(ERR_PTR(-EINVAL));
 	}
 
 	rc = iops->lookup(dir, dentry);
 	if ( rc || !dentry->d_inode) {
-		EXIT;
-		return NULL;
+		RETURN(NULL);
 	}
 	
 	/*
@@ -144,8 +129,7 @@ static struct dentry *currentfs_lookup(struct inode * dir,struct dentry *dentry)
 			dentry->d_fsdata = (void*)pri_ino;
 	}
 
-	EXIT;
-	return NULL;
+	RETURN(NULL);
 
 #if 0
 	/* XXX: PJB these need to be set up again. See dcache.c */
@@ -159,70 +143,71 @@ static struct dentry *currentfs_lookup(struct inode * dir,struct dentry *dentry)
 
 err_out:
 	d_unadd_iput(dentry);
-	EXIT;
-	return ERR_PTR(-EINVAL);
+	RETURN(ERR_PTR(-EINVAL));
 }
 
 static int currentfs_create(struct inode *dir, struct dentry *dentry, int mode)
 {
-	struct snap_cache *cache;
-	int rc;
+	struct snap_cache 	*cache;
 	struct inode_operations *iops;
-	void *handle = NULL;
+	struct snapshot_operations *snapops;	
+	void 			*handle = NULL;
+	int 			rc;
 
 	ENTRY;
 
 	if (currentfs_is_under_dotsnap(dentry)) {
-		EXIT;
-		return -EPERM;
+		RETURN(-EPERM);
 	}
 
 	cache = snap_find_cache(dir->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
+
+	snapops = filter_c2csnapops(cache->cache_filter);
+	if (!snapops || !snapops->get_generation) 
+		RETURN(-EINVAL);
 
 	handle = snap_trans_start(cache, dir, SNAP_OP_CREATE);
 
 	if ( snap_needs_cow(dir) != -1 ) {
-		printk("snap_needs_cow for ino %lu \n",dir->i_ino);
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_CREATE, 1);
-		snap_do_cow(dir, get_parent_ino(dir), 0);
+		if (!(snap_do_cow(dir, get_parent_ino(dir), 0))) {
+			CERROR("Do cow error\n");
+			RETURN(-EINVAL);
+		}
 	}
 
 	iops = filter_c2cdiops(cache->cache_filter); 
-	if (!iops ||
-	    !iops->create) {
-		rc = -EINVAL;
-		goto exit;
+	if (!iops || !iops->create) {
+		RETURN(-EINVAL);
 	}
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_CREATE, 2);
 	rc = iops->create(dir, dentry, mode);
 
 	/* XXX now set the correct snap_{file,dir,sym}_iops */
-        if ( ! dentry->d_inode) {
-                printk("Error in currentfs_create, dentry->d_inode is NULL\n");
-                goto exit;
+        if (!dentry->d_inode) {
+                CERROR("Error in currentfs_create, dentry->d_inode is NULL\n");
+                GOTO(exit, 0);
         }
 
-	if ( S_ISDIR(dentry->d_inode->i_mode) )
+	if (S_ISDIR(dentry->d_inode->i_mode))
                 dentry->d_inode->i_op = filter_c2udiops(cache->cache_filter);
-        else if ( S_ISREG(dentry->d_inode->i_mode) ) {
-                if ( !filter_c2cfiops(cache->cache_filter) ) {
-                        filter_setup_file_ops(cache->cache_filter,
-                                dentry->d_inode->i_op, &currentfs_file_iops);
+        else if (S_ISREG(dentry->d_inode->i_mode)) {
+                if (!filter_c2cfiops(cache->cache_filter)) {
+                        filter_setup_file_ops(cache->cache_filter, dentry->d_inode,
+                                	      &currentfs_file_iops, &currentfs_file_fops,
+					      &currentfs_file_aops);
                 }
                 dentry->d_inode->i_op = filter_c2ufiops(cache->cache_filter);
         }
-	printk("inode %lu, i_op %p\n", dentry->d_inode->i_ino, dentry->d_inode->i_op);
-
+	CDEBUG(D_INODE, "inode %lu, i_op %p\n", dentry->d_inode->i_ino, dentry->d_inode->i_op);
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_CREATE, 3);
-	
-exit:
+	init_filter_data(dentry->d_inode, snapops, 0); exit:
 	snap_trans_commit(cache, handle);
-	EXIT;
-	return rc;
+	RETURN(rc);
 }
 
 static int currentfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
@@ -235,27 +220,24 @@ static int currentfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	ENTRY;
 
 	if (currentfs_is_under_dotsnap(dentry)) {
-		EXIT;
-		return -EPERM;
+		RETURN(-EPERM);
 	}
 
 	cache = snap_find_cache(dir->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	handle = snap_trans_start(cache, dir, SNAP_OP_MKDIR);
 
 	if ( snap_needs_cow(dir) != -1 ) {
-		CDEBUG(D_FILE, "snap_needs_cow for ino %lu \n",dir->i_ino);
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_MKDIR, 1);
 		snap_do_cow(dir, get_parent_ino(dir), 0);
 	}
 
 	iops = filter_c2cdiops(cache->cache_filter); 
-	if (!iops ||
-	    !iops->mkdir) {
+	if (!iops || !iops->mkdir) {
 		rc = -EINVAL;
 		goto exit;
 	}
@@ -269,17 +251,16 @@ static int currentfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	/* XXX now set the correct snap_{file,dir,sym}_iops */
         if ( dentry->d_inode) {
                 dentry->d_inode->i_op = filter_c2udiops(cache->cache_filter);
-	        printk("inode %lu, i_op %p\n", dentry->d_inode->i_ino, dentry->d_inode->i_op);
+	        CDEBUG(D_INODE, "inode %lu, i_op %p\n", dentry->d_inode->i_ino, dentry->d_inode->i_op);
         } else {
-                printk("Error in currentfs_mkdir, dentry->d_inode is NULL\n");
+                CERROR("Error in currentfs_mkdir, dentry->d_inode is NULL\n");
         }
 
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_MKDIR, 3);
 	
 exit:
 	snap_trans_commit(cache, handle);
-	EXIT;
-	return rc;
+	RETURN(rc);
 }
 
 static int currentfs_link (struct dentry * old_dentry, struct inode * dir, 
@@ -292,44 +273,37 @@ static int currentfs_link (struct dentry * old_dentry, struct inode * dir,
 
 	ENTRY;
 
-	if (currentfs_is_under_dotsnap(dentry)) {
-		EXIT;
-		return -EPERM;
-	}
+	if (currentfs_is_under_dotsnap(dentry)) 
+		RETURN(-EPERM);
 
 	cache = snap_find_cache(dir->i_dev);
-	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
-	}
+	if ( !cache )  
+		RETURN(-EINVAL);
 
 	handle = snap_trans_start(cache, dir, SNAP_OP_LINK);
 
 	if ( snap_needs_cow(dir) != -1 ) {
-		printk("snap_needs_cow for ino %lu \n",dir->i_ino);
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_LINK, 1);
 		snap_do_cow(dir, get_parent_ino(dir), 0);
 	}
         if ( snap_needs_cow(old_dentry->d_inode) != -1 ) {
-		printk("snap_needs_cow for ino %lu \n",old_dentry->d_inode->i_ino);
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",old_dentry->d_inode->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_LINK, 2);
 		snap_do_cow(old_dentry->d_inode, dir->i_ino, 0);
 	}
 
 	iops = filter_c2cdiops(cache->cache_filter); 
-	if (!iops ||
-	    !iops->link) {
-		rc = -EINVAL;
-		goto exit;
-	}
+
+	if (!iops || !iops->link) 
+		GOTO(exit, rc = -EINVAL);
+	
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_LINK, 2);
 	rc = iops->link(old_dentry,dir, dentry);
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_LINK, 3);
-	
 exit:
 	snap_trans_commit(cache, handle);
-	EXIT;
-	return rc;
+	RETURN(rc);
 }
 
 static int currentfs_symlink(struct inode *dir, struct dentry *dentry, 
@@ -343,33 +317,28 @@ static int currentfs_symlink(struct inode *dir, struct dentry *dentry,
 	ENTRY;
 
 	cache = snap_find_cache(dir->i_dev);
-	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
-	}
+	if (!cache)  
+		RETURN(-EINVAL);
 
 	handle = snap_trans_start(cache, dir, SNAP_OP_SYMLINK);
 
 	if ( snap_needs_cow(dir) != -1 ) {
-		printk("snap_needs_cow for ino %lu \n",dir->i_ino);
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_SYMLINK, 1);
 		snap_do_cow(dir, get_parent_ino(dir), 0);
 	}
 
 	iops = filter_c2cdiops(cache->cache_filter); 
-	if (!iops ||
-	    !iops->symlink) {
-		rc = -EINVAL;
-		goto exit;
-	}
+	if (!iops || !iops->symlink) 
+		GOTO(exit, rc = -EINVAL);
+
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_SYMLINK, 2);
 	rc = iops->symlink(dir, dentry, symname);
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_SYMLINK, 3);
 	
 exit:
 	snap_trans_commit(cache, handle);
-	EXIT;
-	return rc;
+	RETURN(rc);
 }
 
 static int currentfs_mknod(struct inode *dir, struct dentry *dentry, int mode, 
@@ -383,30 +352,26 @@ static int currentfs_mknod(struct inode *dir, struct dentry *dentry, int mode,
 	ENTRY;
 
 	if (currentfs_is_under_dotsnap(dentry)) {
-		EXIT;
-		return -EPERM;
+		RETURN(-EPERM);
 	}
 
 	cache = snap_find_cache(dir->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	handle = snap_trans_start(cache, dir, SNAP_OP_MKNOD);
 
 	if ( snap_needs_cow(dir) != -1 ) {
-		printk("snap_needs_cow for ino %lu \n",dir->i_ino);
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_MKNOD, 1);
 		snap_do_cow(dir, get_parent_ino(dir), 0);
 	}
 
 	iops = filter_c2cdiops(cache->cache_filter); 
-	if (!iops ||
-	    !iops->mknod) {
-		rc = -EINVAL;
-		goto exit;
-	}
+	if (!iops || !iops->mknod) 
+		GOTO(exit, rc = -EINVAL);
+
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_MKNOD, 2);
 	rc = iops->mknod(dir, dentry, mode, rdev);
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_MKNOD, 3);
@@ -415,8 +380,7 @@ static int currentfs_mknod(struct inode *dir, struct dentry *dentry, int mode,
 
 exit:
 	snap_trans_commit(cache, handle);
-	EXIT;
-	return rc;
+	RETURN(rc);
 }
 
 static int currentfs_rmdir(struct inode *dir, struct dentry *dentry)
@@ -436,30 +400,25 @@ static int currentfs_rmdir(struct inode *dir, struct dentry *dentry)
 	ENTRY;
 
 	if (currentfs_is_under_dotsnap(dentry)) {
-		EXIT;
-		return -EPERM;
+		RETURN(-EPERM);
 	}
 
 	cache = snap_find_cache(dir->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	handle = snap_trans_start(cache, dir, SNAP_OP_RMDIR);
 
 	if ( snap_needs_cow(dir) != -1 ) {
-		printk("snap_needs_cow for ino %lu \n",dir->i_ino);
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_RMDIR, 1);
 		snap_do_cow(dir, get_parent_ino(dir), 0);
 	}
 
 	iops = filter_c2cdiops(cache->cache_filter); 
-	if (!iops ||
-	    !iops->rmdir) {
-		rc = -EINVAL;
-		goto exit;
-	}
+	if (!iops || !iops->rmdir) 
+		GOTO(exit, rc = -EINVAL);
 
 	/* XXX : there are two cases that we can't remove this inode from disk. 
 		1. the inode needs to be cowed. 
@@ -468,17 +427,12 @@ static int currentfs_rmdir(struct inode *dir, struct dentry *dentry)
 		will not be deleted after rmdir, will only remove dentry 
 	*/
 
-	if( snap_needs_cow(dentry->d_inode) != -1) {
+	if (snap_needs_cow(dentry->d_inode) != -1 || 
+	    snap_is_redirector(dentry->d_inode)) {
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_RMDIR, 2);
-		snap_do_cow (dentry->d_inode, dir->i_ino, 
-				SNAP_DEL_PRI_WITHOUT_IND);
+		snap_do_cow (dir, get_parent_ino(dir), SNAP_CREATE_IND_DEL_PRI);
 		keep_inode = 1;
 	}
-	else if( snap_is_redirector(dentry->d_inode) ) {
-		snap_debug_device_fail(dir->i_dev, SNAP_OP_RMDIR, 3);
-		snap_do_cow(dentry->d_inode, dir->i_ino, SNAP_DEL_PRI_WITH_IND);
-		keep_inode = 1;
-	}	
 #if 0
 	if ( keep_inode ) {	
        		printk("set up dentry ops, before %p\n",dentry->d_op);
@@ -499,8 +453,7 @@ static int currentfs_rmdir(struct inode *dir, struct dentry *dentry)
 	//	i_ctime = dentry->d_inode->i_ctime;
 		i_nlink = dentry->d_inode->i_nlink;
 		i_size = dentry->d_inode->i_size;
-	
-}
+	}
 
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_RMDIR, 4);
 	rc = iops->rmdir(dir, dentry);
@@ -534,7 +487,6 @@ static int currentfs_rmdir(struct inode *dir, struct dentry *dentry)
 			snap_debug_device_fail(dir->i_dev, SNAP_OP_RMDIR, 6);
 		}
 	}
-
 exit:
 	snap_trans_commit(cache, handle);
 	EXIT;
@@ -552,27 +504,24 @@ static int currentfs_unlink(struct inode *dir, struct dentry *dentry)
 	ENTRY;
 
 	if (currentfs_is_under_dotsnap(dentry)) {
-		EXIT;
-		return -EPERM;
+		RETURN(-EPERM);
 	}
 
 	cache = snap_find_cache(dir->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	handle = snap_trans_start(cache, dir, SNAP_OP_UNLINK);
 
 	if ( snap_needs_cow(dir) != -1 ) {
-		printk("snap_needs_cow for ino %lu \n",dir->i_ino);
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n",dir->i_ino);
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_UNLINK, 1);
 		snap_do_cow(dir, get_parent_ino(dir), 0);
 	}
 
 	iops = filter_c2cdiops(cache->cache_filter); 
-	if (!iops ||
-	    !iops->unlink) {
+	if (!iops || !iops->unlink) {
 		rc = -EINVAL;
 		goto exit;
 	}
@@ -588,18 +537,17 @@ static int currentfs_unlink(struct inode *dir, struct dentry *dentry)
 	if( snap_needs_cow (inode) != -1) {
 		/* call snap_do_cow with DEL_WITHOUT_IND option */
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_UNLINK, 2);
-		snap_do_cow(inode, dir->i_ino,SNAP_DEL_PRI_WITHOUT_IND);
+		snap_do_cow(inode, dir->i_ino, SNAP_CREATE_IND_DEL_PRI);
 		if( inode->i_nlink == 1 )
 			inode->i_nlink++;
-	}
-	else if( snap_is_redirector (inode) && inode->i_nlink == 1 ) {
+	} else if (snap_is_redirector (inode) && inode->i_nlink == 1) {
 		/* call snap_do_cow with DEL_WITH_IND option 
 		 * just free the blocks of inode, not really delete it
 		 */
 		snap_debug_device_fail(dir->i_dev, SNAP_OP_UNLINK, 3);
-		snap_do_cow (inode, dir->i_ino, SNAP_DEL_PRI_WITH_IND);
+		snap_do_cow (inode, dir->i_ino, SNAP_CREATE_IND_DEL_PRI);
 		inode->i_nlink++;
-	}	
+	}
 
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_UNLINK, 4);
 	rc = iops->unlink(dir, dentry);
@@ -607,8 +555,7 @@ static int currentfs_unlink(struct inode *dir, struct dentry *dentry)
 
 exit:
 	snap_trans_commit(cache, handle);
-	EXIT;
-	return rc;
+	RETURN(rc);
 }
 
 static int currentfs_rename (struct inode * old_dir, struct dentry *old_dentry,
@@ -623,26 +570,24 @@ static int currentfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 
 	if (currentfs_is_under_dotsnap(old_dentry) ||
 	    currentfs_is_under_dotsnap(new_dentry)) {
-		EXIT;
-		return -EPERM;
+		RETURN(-EPERM);
 	}
 
 	cache = snap_find_cache(old_dir->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	handle = snap_trans_start(cache, old_dir, SNAP_OP_RENAME);
        
         /* Always cow the old dir and old dentry->d_inode */ 
 	if ( snap_needs_cow(old_dir) != -1 ) {
-		printk("rename: needs_cow for old_dir %lu\n",old_dir->i_ino);
+		CDEBUG(D_INODE, "rename: needs_cow for old_dir %lu\n",old_dir->i_ino);
 		snap_debug_device_fail(old_dir->i_dev, SNAP_OP_RENAME, 1);
 		snap_do_cow(old_dir, get_parent_ino(old_dir), 0);
 	}
 	if( snap_needs_cow (old_dentry->d_inode) != -1) {
-		printk("rename: needs_cow for old_dentry, ino %lu\n",
+		CDEBUG(D_INODE, "rename: needs_cow for old_dentry, ino %lu\n",
                        old_dentry->d_inode->i_ino);
 		snap_debug_device_fail(old_dir->i_dev, SNAP_OP_RENAME, 2);
 		snap_do_cow(old_dentry->d_inode, old_dir->i_ino,0);
@@ -654,10 +599,10 @@ static int currentfs_rename (struct inode * old_dir, struct dentry *old_dentry,
          */
 	if(( old_dir != new_dir) ) {
 		if( snap_needs_cow(new_dir) !=-1 ){
-			printk("rename:snap_needs_cow for new_dir %lu\n",
+			CDEBUG(D_INODE, "rename:snap_needs_cow for new_dir %lu\n",
 				new_dir->i_ino);
 			snap_debug_device_fail(old_dir->i_dev,SNAP_OP_RENAME,3);
-			snap_do_cow(new_dir, get_parent_ino(new_dir),0);	
+			snap_do_cow(new_dir, get_parent_ino(new_dir), 0);	
 		}
 	}
 
@@ -681,7 +626,7 @@ static int currentfs_rename (struct inode * old_dir, struct dentry *old_dentry,
         		/* call snap_do_cow with DEL_WITHOUT_IND option */
 	        	snap_debug_device_fail(old_dir->i_dev,SNAP_OP_RENAME,4);
 	                snap_do_cow(new_dentry->d_inode, new_dir->i_ino,
-                                    SNAP_DEL_PRI_WITHOUT_IND);
+                                    SNAP_CREATE_IND_DEL_PRI);
 	                new_dentry->d_inode->i_nlink++;
 	        }
 	        else if( snap_is_redirector (new_dentry->d_inode) ) {
@@ -690,14 +635,13 @@ static int currentfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 	        	 */
 		        snap_debug_device_fail(old_dir->i_dev,SNAP_OP_RENAME,4);
 	        	snap_do_cow (new_dentry->d_inode, new_dir->i_ino, 
-                                     SNAP_DEL_PRI_WITH_IND);
+                                     SNAP_CREATE_IND_DEL_PRI);
 	        	new_dentry->d_inode->i_nlink++;
 	       	}	
         }
 
 	iops = filter_c2cdiops(cache->cache_filter); 
-	if (!iops ||
-	    !iops->rename) {
+	if (!iops || !iops->rename) {
 		rc = -EINVAL;
 		goto exit;
 	}
@@ -708,8 +652,7 @@ static int currentfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 
 exit:
 	snap_trans_commit(cache, handle);
-	EXIT;
-	return rc;
+	RETURN(rc);
 }
 
 static int currentfs_readdir(struct file *filp, void *dirent,
@@ -721,19 +664,16 @@ static int currentfs_readdir(struct file *filp, void *dirent,
 	
 	ENTRY;
 	if( !filp || !filp->f_dentry || !filp->f_dentry->d_inode ) {
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	cache = snap_find_cache(filp->f_dentry->d_inode->i_dev);
 	if ( !cache ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 	fops = filter_c2cdfops( cache->cache_filter );
 	if( !fops ) {
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	/*
@@ -745,7 +685,7 @@ static int currentfs_readdir(struct file *filp, void *dirent,
 		if( filp->f_pos == 0 ){
 			if( filldir(dirent, ".snap",
 				    strlen(".snap")+1, filp->f_pos,
-				    0xF0000000|filp->f_dentry->d_inode->i_ino) ){
+				    -1, 0) ){
 				return -EINVAL;
 			}
 			filp->f_pos += strlen(".snap")+1;
@@ -756,7 +696,7 @@ static int currentfs_readdir(struct file *filp, void *dirent,
 	}else
 		rc = fops->readdir(filp, dirent, filldir);
 
-	return rc;
+	RETURN(rc);
 }
 
 struct file_operations currentfs_dir_fops = {
@@ -764,14 +704,13 @@ struct file_operations currentfs_dir_fops = {
 };
 
 struct inode_operations currentfs_dir_iops = { 
-	default_file_ops: &currentfs_dir_fops,
-	create: currentfs_create,
-	mkdir: currentfs_mkdir,
-	link: currentfs_link,
-	symlink: currentfs_symlink,
-	mknod: currentfs_mknod,
-	rmdir: currentfs_rmdir,
-	unlink: currentfs_unlink,
-	rename: currentfs_rename,
-	lookup:	currentfs_lookup
+	create: 	currentfs_create,
+	mkdir: 		currentfs_mkdir,
+	link: 		currentfs_link,
+	symlink: 	currentfs_symlink,
+	mknod: 		currentfs_mknod,
+	rmdir: 		currentfs_rmdir,
+	unlink: 	currentfs_unlink,
+	rename: 	currentfs_rename,
+	lookup:		currentfs_lookup
 };
