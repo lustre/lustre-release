@@ -42,3 +42,4 @@ openfile
 unlinkmany
 fchdir_test
 getdents
+o_directory
