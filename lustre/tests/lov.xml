@@ -11,6 +11,7 @@
   </node>
 
   <profile name="local-profile" uuid="local-profile-UUID">
+    <service_ref uuidref="ldlm-srv-UUID"></service_ref>
     <service_ref uuidref="lov1-UUID"></service_ref>
     <service_ref uuidref="mtpt1-UUID"></service_ref>
     <service_ref uuidref="mdc1-UUID"></service_ref>
@@ -23,6 +24,8 @@
     <service_ref uuidref="osc1-UUID"></service_ref>
     <service_ref uuidref="osc2-UUID"></service_ref>
   </profile>
+
+  <ldlm name="ldlm-srv" uuid="ldlm-srv-UUID"/>
 
   <lov name="lov1" uuid="lov1-UUID">
     <mdc_ref uuidref="mdc1-UUID"/>
