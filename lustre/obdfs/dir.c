@@ -47,14 +47,20 @@ static ssize_t obdfs_dir_read (struct file * filp, char * buf,
 {
 	return -EISDIR;
 }
+#endif
 
-
-int ext2_check_dir_entry (const char * function, struct inode * dir,
+int obdfs_check_dir_entry (const char * function, struct inode * dir,
 			  struct ext2_dir_entry_2 * de,
-			  struct buffer_head * bh,
+			  struct page * page,
 			  unsigned long offset)
 {
 	const char * error_msg = NULL;
+
+	ENTRY;
+	if ( !de ) {
+		error_msg = "null de passed";
+		return 1;
+	}
 
 	if (le16_to_cpu(de->rec_len) < EXT2_DIR_REC_LEN(1))
 		error_msg = "rec_len is smaller than minimal";
@@ -62,22 +68,25 @@ int ext2_check_dir_entry (const char * function, struct inode * dir,
 		error_msg = "rec_len % 4 != 0";
 	else if (le16_to_cpu(de->rec_len) < EXT2_DIR_REC_LEN(de->name_len))
 		error_msg = "rec_len is too small for name_len";
-	else if (dir && ((char *) de - bh->b_data) + le16_to_cpu(de->rec_len) >
+	else if (dir && ((char *) de - (char *)page_address(page)) + le16_to_cpu(de->rec_len) >
 		 dir->i_sb->s_blocksize)
 		error_msg = "directory entry across blocks";
-	else if (dir && le32_to_cpu(de->inode) > le32_to_cpu(dir->i_sb->u.ext2_sb.s_es->s_inodes_count))
-		error_msg = "inode out of bounds";
+#if 0 /* this one doesn't yet work for OBDFS */
+	else 
 
+if (dir && le32_to_cpu(de->inode) > le32_to_cpu(dir->i_sb->u.ext2_sb.s_es->s_inodes_count))
+		error_msg = "inode out of bounds";
+#endif
 	if (error_msg != NULL)
 		ext2_error (dir->i_sb, function, "bad entry in directory #%lu: %s - "
 			    "offset=%lu, inode=%lu, rec_len=%d, name_len=%d",
 			    dir->i_ino, error_msg, offset,
 			    (unsigned long) le32_to_cpu(de->inode),
 			    le16_to_cpu(de->rec_len), de->name_len);
+	EXIT;
 	return error_msg == NULL ? 1 : 0;
 }
 
-#endif
 
 int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 {
@@ -98,6 +107,7 @@ int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 
 	while (!error && !stored && filp->f_pos < inode->i_size) {
 		page = obdfs_getpage(inode, offset, 0, NOLOCK);
+		PDEBUG(page, "readdir");
 		if (!page) {
 			ext2_error (sb, "ext2_readdir",
 				    "directory #%lu contains a hole at offset %lu",

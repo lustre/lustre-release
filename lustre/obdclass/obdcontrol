@@ -23,8 +23,8 @@ eval 'sub OBD_IOC_CREATE () { &_IOC(2, ord(\'f\'), 3, 4);}' unless
   defined(&OBD_IOC_CREATE);
 eval 'sub OBD_IOC_SETUP_OBDDEV () { &_IOC(1, ord(\'f\'), 4, 4);}' unless
   defined(&OBD_IOC_SETUP_OBDDEV);
-eval 'sub OBD_IOC_CLEANUP_OBDDEV () { &_IOC(0, ord(\'f\'), 5, 0);}' unless
-  defined(&OBD_IOC_CLEANUP_OBDDEV);
+eval 'sub OBD_IOC_CLEANUP () { &_IOC(0, ord(\'f\'), 5, 0);}' unless
+  defined(&OBD_IOC_CLEANUP);
 eval 'sub OBD_IOC_DESTROY () { &_IOC(1, ord(\'f\'), 6, 4);}' unless
   defined(&OBD_IOC_DESTROY);
 eval 'sub OBD_IOC_PREALLOCATE () { &_IOC(3, ord(\'f\'), 7, 4);}' unless
@@ -71,22 +71,19 @@ use Carp;
 use Term::ReadLine;
 use IO::Handle;
 
-my ($device, $filesystem);
+
+my ($device, $filesystem, $file);
 # startup options (I'll replace these when I have some to replace with)
-GetOptions("device=s" => \$device, "fs=s" => $filesystem) || die "Getoptions";
+GetOptions("f!" => \$file, "device=s" => \$device, "fs=s" => $filesystem) || die "Getoptions";
 
 # genuine new simulated OBD device
-$device = "/dev/obd" unless $device;
+$device = "/dev/obd0" unless $device;
 # object store in the ext2 formatted block device
 $filesystem = "/dev/loop0" unless $filesystem;
 
-# get a console for the app
-my $term = new Term::ReadLine 'obdcontrol ';
-my $attribs = $term->Attribs;
-$term->ornaments('md,me,,');	# bold face prompt
 
-# make sure stdout is not buffered
-STDOUT->autoflush(1);
+
+# get a console for the app
 
 my $line;
 my $command;
@@ -121,7 +118,6 @@ my %commands =
 #
 my @jcm_cmd_list = keys %commands;
 
-$attribs->{attempted_completion_function} = \&completeme;
 #------------------------------------------------------------------------------
 # Open the device, as we need an FD for the ioctl
 sysopen(DEV_OBD, $device, 0) || die "Cannot open $device";
@@ -130,8 +126,26 @@ if (!defined($::st = stat($filesystem))) {
     die "Unable to stat $filesystem.\n";
 }
 
-# Get on with the show
-process_line();
+my $term, $attribs;
+
+if ( $file ) {
+	while ( <STDIN> ) {
+	    print $_;
+	    execute_line($_);
+	}
+	exit 0;
+} else {
+    $term = new Term::ReadLine 'obdcontrol ';
+    $attribs = $term->Attribs;
+    $attribs->{attempted_completion_function} = \&completeme;
+    $term->ornaments('md,me,,');	# bold face prompt
+    
+    # make sure stdout is not buffered
+    STDOUT->autoflush(1);
+
+    # Get on with the show
+    process_line();
+}
 
 #------------------------------------------------------------------------------
 sub completeme {
@@ -168,7 +182,12 @@ sub execute_line {
     my @arg = split(' ', $line);
     my $word = shift @arg;
 
-    my $cmd = find_command($word);
+    my $cmd;
+    if ( $file ) {
+	$cmd = $word;
+    } else {
+	$cmd = find_command($word);
+    }
     unless ($cmd) {
 	printf STDERR "$word: No such command, or not unique.\n";
 	return (-1);
@@ -283,6 +302,7 @@ sub Cleanup {
 	print STDERR "ioctl failed: $!\n";
     } elsif ($rc eq "0 but true") {
 	print "Finished (success)\n";
+	$::client_id = 0;
     } else {
 	print "ioctl returned error code $rc.\n";
     }
@@ -338,16 +358,16 @@ sub Create {
     my $arg = shift;
     my $quiet = shift;
     my $rc;
+    my $prealloc = 0;
 
     if (defined($quiet) && !($quiet eq "quiet")) {
 	print "syntax: create [number of objects [quiet]]\n";
 	return;
     }
 
-    my $packed = pack("I", $::client_id);
+    my $packed = pack("IL", $::client_id, $prealloc);
     if (!defined($arg) || scalar($arg) < 2) {
 	print "Creating 1 object...\n";
-	my $packed = pack("I", 0);
 	$rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
 	if (!defined($quiet)) {
 	    my $ino = unpack("L", $packed);

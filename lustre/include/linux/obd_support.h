@@ -5,6 +5,10 @@
 
 #define SIM_OBD_DEBUG
 
+
+#define MIN(a,b) (((a)<(b)) ? (a): (b))
+#define MAX(a,b) (((a)>(b)) ? (a): (b))
+
 /*
  * Debug code
  */
@@ -53,7 +57,7 @@ extern int obd_print_entry;
 
 #define CMD(cmd) (( cmd == READ ) ? "read" : "write")
 
-#define PDEBUG(page,cmd)	{\
+#define PDEBUG(page,cmd)	{if (page){\
 		char *uptodate = (Page_Uptodate(page)) ? "yes" : "no";\
 		char *locked = (PageLocked(page)) ? "yes" : "no";\
 		int count = page->count.counter;\
@@ -61,9 +65,9 @@ extern int obd_print_entry;
                 long offset = page->offset / PAGE_SIZE;\
 		\
 		CDEBUG(D_IOCTL, " ** %s, cmd: %s, ino: %ld, off %ld, uptodate: %s, "\
-		       "locked: %s, cnt %d ** \n", __FUNCTION__,\
-		       cmd, ino, offset, uptodate, locked, count);\
-	}
+		       "locked: %s, cnt %d page %p ** \n", __FUNCTION__,\
+		       cmd, ino, offset, uptodate, locked, count, page);\
+	} else { CDEBUG(D_IOCTL, "** %s, no page\n", __FUNCTION__); }}
 
 
 #define OBD_ALLOC(ptr, cast, size)					\
@@ -126,7 +130,8 @@ static inline void inode_cpy(struct inode *dest, struct inode *src)
 	/* allocation of space */
 	dest->i_blocks = src->i_blocks;
 
-	memcpy(&dest->u, &src->u, sizeof(src->u));
+	if ( !dest->i_blocks) 
+		memcpy(&dest->u, &src->u, sizeof(src->u));
 }
 
 

@@ -56,7 +56,7 @@ static inline void remove_suid(struct inode *inode)
 ssize_t obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
 	ssize_t retval;
-	CDEBUG(D_INODE, "Writing %d bytes, offset %ld\n", count, (long)*ppos);
+	CDEBUG(D_INODE, "Writing inode %ld, %d bytes, offset %ld\n", file->f_dentry->d_inode->i_ino, count, (long)*ppos);
 
 	retval = generic_file_write(file, buf, count,
 				    ppos, obdfs_write_one_page);
@@ -66,5 +66,6 @@ ssize_t obdfs_file_write(struct file *file, const char *buf, size_t count, loff_
 		inode->i_ctime = inode->i_mtime = CURRENT_TIME;
 		mark_inode_dirty(inode);
 	}
+	EXIT;
 	return retval;
 }

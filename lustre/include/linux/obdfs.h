@@ -34,6 +34,10 @@ int obdfs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dent
 int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry);
 /* dir.c */
 int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir);
+int obdfs_check_dir_entry (const char * function, struct inode * dir,
+			  struct ext2_dir_entry_2 * de,
+			  struct page * page,
+			   unsigned long offset);
 
 struct obdfs_sb_info {
 	struct obd_conn_info osi_conn_info;

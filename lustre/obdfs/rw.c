@@ -73,6 +73,7 @@ int obdfs_write_one_page(struct file *file, struct page *page, unsigned long off
 	long status;
         struct obdfs_sb_info *sbi = file->f_dentry->d_inode->i_sb->u.generic_sbp;
 
+	ENTRY;
 	if ( !Page_Uptodate(page) ) {
 		status =  sbi->osi_ops->o_brw(READ, 
 					      sbi->osi_conn_info.conn_id, 
@@ -92,6 +93,7 @@ int obdfs_write_one_page(struct file *file, struct page *page, unsigned long off
 		status = obdfs_writepage(file, page);
 		unlock_kernel();
 	}
+	EXIT;
 	if ( status != PAGE_SIZE ) 
 		return status;
 	else
@@ -140,6 +142,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 		PDEBUG(page,"GETPAGE");
 		if (!locked)
 			UnlockPage(page);
+		EXIT;
 		return page;
 	} 
 		
@@ -147,7 +150,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 		CDEBUG(D_INODE, "Page found but not up to date\n");
 	}
 
-	/* page_cache_alloc returns address of page */
+	/* page_cache_alloc returns the VM address of page */
 	new_page = page_cache_alloc();
 	if (!new_page)
 		return NULL;
@@ -155,16 +158,16 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	/* corresponding struct page in the mmap */
 	hash = page_hash(inode, offset);
 	page = page_cache_entry(new_page);
-	PDEBUG(page, "GETPAGE");
 	if (!add_to_page_cache_unique(page, inode, offset, hash)) {
 		CDEBUG(D_INODE, "Page not found. Reading it.\n");
-		PDEBUG(page,"GETPAGE");
+		PDEBUG(page,"GETPAGE - before reading");
 		sbi->osi_ops->o_brw(READ, sbi->osi_conn_info.conn_id, 
 				    inode->i_ino, page, create);
 		if ( !locked )
 			UnlockPage(page);
 		SetPageUptodate(page);
-		PDEBUG(page,"GETPAGE");
+		PDEBUG(page,"GETPAGE - after reading");
+		EXIT;
 		return page;
 	}
 	/*
@@ -173,6 +176,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	 */
 	CDEBUG(D_INODE, "Page not found. Someone raced us.\n");
 	PDEBUG(page,"GETPAGE");
+	EXIT;
 	return page;
 }
 

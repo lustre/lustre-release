@@ -66,6 +66,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 {
         struct inode *root = 0; 
 	struct obdfs_sb_info *sbi = NULL;
+	struct obd_device *obddev;
         int error = 0;
 	unsigned long blocksize;
 	unsigned long blocksize_bits;
@@ -83,8 +84,14 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 		MOD_DEC_USE_COUNT;
 		return NULL;
 	}
+	
+	obddev = &obd_dev[obd_minor];
 
-	sbi->osi_obd = &obd_dev[obd_minor];
+	if ( ! (obddev->obd_flags & OBD_ATTACHED) || 
+	     ! (obddev->obd_flags & OBD_SET_UP) )
+		return NULL;
+
+	sbi->osi_obd = obddev;
 	sbi->osi_ops = sbi->osi_obd->obd_type->typ_ops;
 	
         error  = sbi->osi_ops->o_connect(sbi->osi_obd, &sbi->osi_conn_info);

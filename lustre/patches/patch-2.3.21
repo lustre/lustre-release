@@ -1,0 +1,60 @@
+--- linux/kernel/ksyms.c.or	Tue Oct 12 10:40:21 1999
++++ linux/kernel/ksyms.c	Tue Oct 12 11:22:45 1999
+@@ -36,6 +36,7 @@
+ #include <linux/swap.h>
+ #include <linux/ctype.h>
+ #include <linux/file.h>
++#include <linux/iobuf.h>
+ #include <linux/console.h>
+ #include <linux/poll.h>
+ #include <linux/mm.h>
+@@ -118,6 +119,8 @@
+ EXPORT_SYMBOL(update_atime);
+ EXPORT_SYMBOL(get_super);
+ EXPORT_SYMBOL(get_fs_type);
++EXPORT_SYMBOL(get_empty_super);
++EXPORT_SYMBOL(remove_vfsmnt);
+ EXPORT_SYMBOL(getname);
+ EXPORT_SYMBOL(_fput);
+ EXPORT_SYMBOL(igrab);
+@@ -140,6 +143,9 @@
+ EXPORT_SYMBOL(d_path);
+ EXPORT_SYMBOL(__mark_buffer_dirty);
+ EXPORT_SYMBOL(__mark_inode_dirty);
++EXPORT_SYMBOL(free_kiovec);
++EXPORT_SYMBOL(brw_kiovec);
++EXPORT_SYMBOL(alloc_kiovec);
+ EXPORT_SYMBOL(get_empty_filp);
+ EXPORT_SYMBOL(init_private_file);
+ EXPORT_SYMBOL(filp_open);
+--- linux/fs/super.c.or	Tue Oct 12 10:39:05 1999
++++ linux/fs/super.c	Tue Oct 12 11:18:14 1999
+@@ -135,7 +135,7 @@
+ 	return lptr;
+ }
+ 
+-static void remove_vfsmnt(kdev_t dev)
++void remove_vfsmnt(kdev_t dev)
+ {
+ 	struct vfsmount *lptr, *tofree;
+ 
+@@ -508,7 +508,7 @@
+ /*
+  * Find a super_block with no device assigned.
+  */
+-static struct super_block *get_empty_super(void)
++struct super_block *get_empty_super(void)
+ {
+ 	struct super_block *s;
+ 
+--- linux/include/linux/fs.h.or	Tue Oct 12 10:39:59 1999
++++ linux/include/linux/fs.h	Tue Oct 12 11:32:46 1999
+@@ -934,6 +934,8 @@
+ 
+ 
+ extern struct super_block *get_super(kdev_t);
++struct super_block *get_empty_super(void);
++void remove_vfsmnt(kdev_t dev);
+ extern void put_super(kdev_t);
+ unsigned long generate_cluster(kdev_t, int b[], int);
+ unsigned long generate_cluster_swab32(kdev_t, int b[], int);

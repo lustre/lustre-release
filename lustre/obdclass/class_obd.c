@@ -199,8 +199,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		CDEBUG(D_IOCTL, "Attach %d, type %s\n", 
 		       dev, obddev->obd_type->typ_name);
-		if (!obddev->obd_type->typ_ops || 
-		    !obddev->obd_type->typ_ops->o_attach ) {
+		if (!obddev->obd_type->typ_ops || !OBP(obddev,attach)) {
 			obddev->obd_flags |=  OBD_ATTACHED;
 			type->typ_refcnt++;
 			MOD_INC_USE_COUNT;
@@ -208,8 +207,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
 		/* do the attach */
-		err = obddev->obd_type->typ_ops->o_attach
-			(obddev,  input.att_datalen, &input.att_data);
+		err = OBP(obddev,attach)(obddev,  
+					 input.att_datalen, &input.att_data);
 		OBD_FREE(input.att_data, input.att_datalen);
 
 		if ( err ) {
@@ -322,8 +321,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		CDEBUG(D_IOCTL, "Setup %d, type %s\n", dev, 
 		       obddev->obd_type->typ_name);
 		if ( !obddev->obd_type->typ_ops || 
-		     !obddev->obd_type->typ_ops->o_setup )
-			return -EOPNOTSUPP;
+		     !obddev->obd_type->typ_ops->o_setup ) {
+			obddev->obd_flags |= OBD_SET_UP;
+			return 0;
+		}
 
 		err = obddev->obd_type->typ_ops->o_setup
 			(obddev, input.setup_datalen, input.setup_data);
@@ -334,7 +335,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			obddev->obd_flags |= OBD_SET_UP;
 		return err;
 	}
-	case OBD_IOC_CLEANUP_OBDDEV: {
+	case OBD_IOC_CLEANUP: {
 		int rc;
 
 		/* has this minor been registered? */
@@ -348,7 +349,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			goto cleanup_out;
 
 		/* cleanup has no argument */
-		rc = obddev->obd_type->typ_ops->o_cleanup(obddev);
+		rc = OBP(obddev, cleanup)(obddev);
 		if ( rc )
 			return rc;
 
@@ -383,10 +384,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		get_user(cli_id, (int *) arg);
 
-		obddev->obd_type->typ_ops->o_disconnect(cli_id);
+		OBP(obddev, disconnect)(cli_id);
 		return 0;
 
-	case OBD_IOC_SYNC:
+	case OBD_IOC_SYNC: {
 		/* sync doesn't need a connection ID, because it knows
 		 * what device it was called on, and can thus get the
 		 * superblock that it needs. */
@@ -405,12 +406,17 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
 		return put_user(err, (int *) arg);
-	case OBD_IOC_CREATE:
-		/* similarly, create doesn't need a connection ID for
-		 * the same reasons. */
+	}
+	case OBD_IOC_CREATE: {
+		int err;
+		struct oic_create_s foo;
+
+		if ( copy_from_user(&foo, (const void *)arg, sizeof(foo)) )
+			return -EFAULT;
 
 		/* has this minor been registered? */
-		if (!obddev->obd_type)
+		if ( !(obddev->obd_flags & OBD_ATTACHED) ||
+		     !(obddev->obd_flags & OBD_SET_UP))
 			return -ENODEV;
 
 
@@ -419,7 +425,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return put_user(-EINVAL, (int *) arg);
 		}
 
-		i_ino = obddev->obd_type->typ_ops->o_create(obddev, 0, &err);
+		i_ino = OBP(obddev, create)(foo.conn_id, foo.prealloc, &err);
 		if (err) {
 			CDEBUG(D_IOCTL, "create: obd_inode_new failure\n");
 			/* 0 is the only error value */
@@ -427,6 +433,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
 		return put_user(i_ino, (int *) arg);
+	}
 	case OBD_IOC_DESTROY:
 	{
 		struct destroy_s {
@@ -449,18 +456,15 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	case OBD_IOC_SETATTR:
 	{
 		int err;
-		struct tmp {
-			unsigned int conn_id;
-			unsigned long ino;
-			struct iattr iattr;
-		} foo;
+		struct oic_attr_s foo;
 		struct inode holder;
+
 		/* has this minor been registered? */
 		if (!obddev->obd_type)
 			return -ENODEV;
 
 
-		err= copy_from_user(&foo, (int *)arg, sizeof(struct tmp));
+		err= copy_from_user(&foo, (int *)arg, sizeof(foo));
 		if (err)
 			return err;
 
@@ -715,7 +719,7 @@ int init_obd(void)
 
 	for (i = 0; i < MAX_OBD_DEVICES; i++) {
 		memset(&(obd_dev[i]), 0, sizeof(obd_dev[i]));
-		INIT_LIST_HEAD(&obd_dev[i].u.sim.sim_clients);
+		INIT_LIST_HEAD(&obd_dev[i].obd_gen_clients);
 	}
 
 	obd_sysctl_init();
@@ -729,6 +733,16 @@ EXPORT_SYMBOL(obd_unregister_type);
 EXPORT_SYMBOL(obd_print_entry);
 EXPORT_SYMBOL(obd_debug_level);
 EXPORT_SYMBOL(obd_dev);
+
+EXPORT_SYMBOL(gen_connect);
+EXPORT_SYMBOL(gen_client);
+EXPORT_SYMBOL(gen_cleanup);
+EXPORT_SYMBOL(gen_disconnect);
+
+EXPORT_SYMBOL(gen_multi_attach);
+EXPORT_SYMBOL(gen_multi_setup);
+EXPORT_SYMBOL(gen_multi_cleanup);
+
 
 #ifdef MODULE
 int init_module(void)
@@ -746,7 +760,7 @@ void cleanup_module(void)
 		struct obd_device *obddev = &obd_dev[i];
 		if ( obddev->obd_type && 
 		     obddev->obd_type->typ_ops->o_cleanup_device )
-			return obddev->obd_type->typ_ops->o_cleanup_device(i);
+			OBP(obddev, cleanup_device)(obddev);
 	}
 
 	obd_sysctl_clean();
