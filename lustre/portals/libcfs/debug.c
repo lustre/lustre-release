@@ -686,9 +686,9 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
         copied = 0;
         list_for_each(pos, &my_pages) {
                 unsigned long to_copy;
-                page = list_entry(pos, struct page, list);
                 void *addr;
 
+                page = list_entry(pos, struct page, list);
                 to_copy = min(total - off, PAGE_SIZE);
                 if (to_copy == 0) {
                         off = 0;
