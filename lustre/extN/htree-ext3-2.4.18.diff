@@ -57,7 +57,7 @@
   */
  
  #include <linux/fs.h>
-@@ -38,6 +42,440 @@
+@@ -38,6 +42,439 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -260,7 +260,6 @@
 +		hash1 = hash0;
 +		hash0 = hash;
 +	}
-+	return 80; /* FIXME: for test only */
 +	return hash0;
 +}
 +
