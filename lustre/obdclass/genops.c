@@ -207,8 +207,8 @@ int gen_copy_data(struct obd_conn *conn, obdattr *tgt, obdattr *src)
 	int rc;
 	ENTRY;
 
-	CDEBUG(D_INODE, "src: blocks %ld, size %Ld\n", 
-	       src->i_blocks, src->i_size);
+	CDEBUG(D_INODE, "src: ino %ld blocks %ld, size %Ld, dst: ino %ld\n", 
+	       src->i_ino, src->i_blocks, src->i_size, dst->i_ino);
 	page = alloc_page(GFP_USER);
 	if ( !page ) {
 		EXIT;
@@ -229,7 +229,7 @@ int gen_copy_data(struct obd_conn *conn, obdattr *tgt, obdattr *src)
 		if ( rc != PAGE_SIZE)
 			break;
 
-		CDEBUG(D_INODE, "Copied 1 page ...\n");
+		CDEBUG(D_INODE, "Copied page %d ...\n", index);
 		
 		index ++;
 	}
