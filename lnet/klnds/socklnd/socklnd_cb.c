@@ -479,12 +479,26 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
         /* Actual error */
         LASSERT (rc < 0);
 
-        if (!conn->ksnc_closing)
+        if (!conn->ksnc_closing) {
+                switch (rc) {
+                case -ECONNRESET:
+                        LCONSOLE_WARN("Host %u.%u.%u.%u reset our connection "
+                                      "while we were sending data; it may have "
+                                      "rebooted.\n",
+                                      HIPQUAD(conn->ksnc_ipaddr));
+                        break;
+                default:
+                        LCONSOLE_WARN("There was an unexpected network error "
+                                      "while writing to %u.%u.%u.%u: %d.\n",
+                                      HIPQUAD(conn->ksnc_ipaddr), rc);
+                        break;
+                }
                 CERROR("[%p] Error %d on write to "LPX64
                        " ip %d.%d.%d.%d:%d\n", conn, rc,
                        conn->ksnc_peer->ksnp_nid,
                        HIPQUAD(conn->ksnc_ipaddr),
                        conn->ksnc_port);
+        }
 
         ksocknal_close_conn_and_siblings (conn, rc);
         ksocknal_tx_launched (tx);
@@ -1798,6 +1812,7 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
         int                 type;
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv;
+        char                ipbuf[PTL_NALFMT_SIZE];
 
         hmv = (ptl_magicversion_t *)&hdr.dest_nid;
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
@@ -1860,6 +1875,16 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
         if (*nid == PTL_NID_ANY) {              /* don't know peer's nid yet */
                 *nid = le64_to_cpu(hdr.src_nid);
         } else if (*nid != le64_to_cpu (hdr.src_nid)) {
+                LCONSOLE_ERROR("Connected successfully to nid "LPX64" on host "
+                               "%u.%u.%u.%u, but they claimed they were nid "
+                               LPX64" (%s); please check your Lustre "
+                               "configuration.\n",
+                               *nid, HIPQUAD(conn->ksnc_ipaddr),
+                               le64_to_cpu(hdr.src_nid),
+                               portals_nid2str(SOCKNAL,
+                                               le64_to_cpu(hdr.src_nid),
+                                               ipbuf));
+                               
                 CERROR ("Connected to nid "LPX64"@%u.%u.%u.%u "
                         "but expecting "LPX64"\n",
                         le64_to_cpu (hdr.src_nid),
@@ -1964,6 +1989,7 @@ ksocknal_autoconnect (ksock_route_t *route)
         unsigned long     flags;
         int               rc;
         int               type;
+        char *err_msg = NULL;
         
         for (;;) {
                 for (type = 0; type < SOCKNAL_CONN_NTYPES; type++)
@@ -1982,6 +2008,52 @@ ksocknal_autoconnect (ksock_route_t *route)
                         /* No more connections required */
                         return;
                 }
+        }
+
+        switch (rc) {
+        /* "normal" errors */
+        case -ECONNREFUSED:
+                LCONSOLE_ERROR("Connection was refused by host %u.%u.%u.%u on "
+                               "port %d; check that Lustre is running on that "
+                               "node.\n",
+                               HIPQUAD(route->ksnr_ipaddr),
+                               route->ksnr_port);
+                break;
+        case -EHOSTUNREACH:
+        case -ENETUNREACH:
+                LCONSOLE_ERROR("Host %u.%u.%u.%u was unreachable; the network "
+                               "or that node may be down, or Lustre may be "
+                               "misconfigured.\n",
+                               HIPQUAD(route->ksnr_ipaddr));
+                break;
+        case -ETIMEDOUT:
+                LCONSOLE_ERROR("Connecting to host %u.%u.%u.%u on port %d took "
+                               "too long; that node may be hung or "
+                               "experiencing high load.\n",
+                               HIPQUAD(route->ksnr_ipaddr),
+                               route->ksnr_port);
+                break;
+        /* errors that should be rare */
+        case -EPROTO:
+                err_msg = "Portals could not negotiate a connection";
+                break;
+        case -EAGAIN:
+        case -EADDRINUSE:
+                /* -EAGAIN is out of ports, but we specify the ports
+                 * manually.  we really should never get this */
+                err_msg = "no privileged ports were available";
+                break;
+        default:
+                err_msg = "unknown error";
+                break;
+        }
+
+        if (err_msg) {
+                LCONSOLE_ERROR("There was an unexpected error connecting to host "
+                               "%u.%u.%u.%u on port %d: %s (error code %d).\n",
+                               HIPQUAD(route->ksnr_ipaddr),
+                               route->ksnr_port,
+                               err_msg, -rc);
         }
 
         /* Connection attempt failed */
@@ -2106,11 +2178,34 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                 LASSERT (!conn->ksnc_closing);
 
                 if (SOCK_ERROR(conn->ksnc_sock) != 0) {
-                        /* Something (e.g. failed keepalive) set the socket error */
                         atomic_inc (&conn->ksnc_refcount);
+
+                        switch (SOCK_ERROR(conn->ksnc_sock)) {
+                        case ECONNRESET:
+                                LCONSOLE_WARN("A connection with %u.%u.%u.%u "
+                                              "was reset; they may have "
+                                              "rebooted.\n",
+                                              HIPQUAD(conn->ksnc_ipaddr));
+                                break;
+                        case ETIMEDOUT:
+                                LCONSOLE_WARN("A connection with %u.%u.%u.%u "
+                                              "timed out; the network or that "
+                                              "node may be down.\n",
+                                              HIPQUAD(conn->ksnc_ipaddr));
+                                break;
+                        default:
+                                LCONSOLE_WARN("An unexpected network error "
+                                              "occurred with %u.%u.%u.%u: %d.\n",
+                                              HIPQUAD(conn->ksnc_ipaddr),
+                                              SOCK_ERROR(conn->ksnc_sock));
+                                break;
+                        }
+
+                        /* Something (e.g. failed keepalive) set the socket error */
                         CERROR ("Socket error %d: "LPX64" %p %d.%d.%d.%d\n",
                                 SOCK_ERROR(conn->ksnc_sock), peer->ksnp_nid,
                                 conn, HIPQUAD(conn->ksnc_ipaddr));
+
                         return (conn);
                 }
 
@@ -2119,6 +2214,10 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                                       conn->ksnc_rx_deadline)) {
                         /* Timed out incomplete incoming message */
                         atomic_inc (&conn->ksnc_refcount);
+                        LCONSOLE_ERROR("A timeout occurred receiving data from "
+                                       "%u.%u.%u.%u; the network or that node "
+                                       "may be down.\n",
+                                       HIPQUAD(conn->ksnc_ipaddr));
                         CERROR ("Timed out RX from "LPX64" %p %d.%d.%d.%d\n",
                                 peer->ksnp_nid,conn,HIPQUAD(conn->ksnc_ipaddr));
                         return (conn);
@@ -2131,6 +2230,10 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                         /* Timed out messages queued for sending or
                          * buffered in the socket's send buffer */
                         atomic_inc (&conn->ksnc_refcount);
+                        LCONSOLE_ERROR("A timeout occurred sending data to "
+                                       "%u.%u.%u.%u; the network or that node "
+                                       "may be down.\n",
+                                       HIPQUAD(conn->ksnc_ipaddr));
                         CERROR ("Timed out TX to "LPX64" %s%d %p %d.%d.%d.%d\n",
                                 peer->ksnp_nid,
                                 list_empty (&conn->ksnc_tx_queue) ? "" : "Q ",

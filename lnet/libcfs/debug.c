@@ -209,8 +209,13 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case OPENIBNAL:
         case RANAL:
         case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
-                         (__u32)(nid >> 32), HIPQUAD(nid));
+                if ((__u32)(nid >> 32)) {
+                        snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
+                                 (__u32)(nid >> 32), HIPQUAD(nid));
+                } else {
+                        snprintf(str, PTL_NALFMT_SIZE, "%u.%u.%u.%u",
+                                 HIPQUAD(nid));
+                }
                 break;
         case QSWNAL:
         case GMNAL:

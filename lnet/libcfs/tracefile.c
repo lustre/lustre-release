@@ -226,7 +226,7 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                        "tage->used == %u in portals_debug_msg\n", tage->used);
 
  out:
-        if ((mask & (D_EMERG | D_ERROR | D_WARNING)) || portal_printk)
+        if ((mask & (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE)) || portal_printk)
                 print_to_console(&header, mask, debug_buf, needed, file, fn);
 
         trace_put_tcd(tcd, flags);

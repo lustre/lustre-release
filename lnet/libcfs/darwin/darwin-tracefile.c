@@ -65,12 +65,17 @@ void print_to_console(struct ptldebug_header *hdr, int mask, char *buf,
 	} else if ((mask & D_WARNING) != 0) { 
 		prefix = "Lustre"; 
 		ptype = KERN_WARNING; 
-	} else if (portal_printk != 0) { 
+	} else if (portal_printk != 0 || (mask & D_CONSOLE)) {
 		prefix = "Lustre"; 
 		ptype = KERN_INFO; 
 	} 
-	printk("%s%s: %d:%d:(%s:%d:%s()) %*s", ptype, prefix, hdr->ph_pid, 
-	       hdr->ph_extern_pid, file, hdr->ph_line_num, fn, len, buf);
+
+	if ((mask & D_CONSOLE) != 0) {
+		printk("%s%s: %.*s", ptype, prefix, len, buf);
+	} else {
+		printk("%s%s: %d:%d:(%s:%d:%s()) %*s", ptype, prefix, hdr->ph_pid, 
+		       hdr->ph_extern_pid, file, hdr->ph_line_num, fn, len, buf);
+	}
 }
 
 /*

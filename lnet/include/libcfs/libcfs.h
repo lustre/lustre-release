@@ -97,6 +97,7 @@ extern unsigned int portal_printk;
 #define D_READA       0x00400000 /* read-ahead */
 #define D_MMAP        0x00800000
 #define D_CONFIG      0x01000000
+#define D_CONSOLE     0x02000000
 /* If you change these values, please keep these files up to date...
  *    portals/utils/debug.c
  *    utils/lconf
@@ -110,7 +111,7 @@ extern unsigned int portal_printk;
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
         CHECK_STACK(CDEBUG_STACK);                                            \
-        if (((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||                     \
+        if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||         \
             (portal_debug & (mask) &&                                         \
              portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
@@ -159,6 +160,12 @@ do {                                                                          \
 #define CWARN(format, a...) CDEBUG_LIMIT(D_WARNING, format, ## a)
 #define CERROR(format, a...) CDEBUG_LIMIT(D_ERROR, format, ## a)
 #define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
+
+#define LCONSOLE(mask, format, a...) CDEBUG(D_CONSOLE | (mask), format, ## a)
+#define LCONSOLE_INFO(format, a...)  CDEBUG_LIMIT(D_CONSOLE, format, ## a)
+#define LCONSOLE_WARN(format, a...)  CDEBUG_LIMIT(D_CONSOLE | D_WARNING, format, ## a)
+#define LCONSOLE_ERROR(format, a...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, format, ## a)
+#define LCONSOLE_EMERG(format, a...) CDEBUG(D_CONSOLE | D_EMERG, format, ## a)
 
 #define GOTO(label, rc)                                                 \
 do {                                                                    \
@@ -412,7 +419,6 @@ extern void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                               const int line, unsigned long stack,
                               char *format, ...)
             __attribute__ ((format (printf, 7, 8)));
-
 
 static inline void cfs_slow_warning(cfs_time_t now, int seconds, char *msg)
 {
