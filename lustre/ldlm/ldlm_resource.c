@@ -116,8 +116,10 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
                                 rc = cleanup_resource(res, &res->lr_waiting);
 
                         if (rc == 0) {
-                                CERROR("Resource refcount nonzero after lock "
-                                       "cleanup; forcing cleanup.\n");
+                                CERROR("Resource refcount nonzero (%d) after "
+                                       "lock cleanup; forcing cleanup.\n",
+                                       res->lr_refcount);
+                                ldlm_resource_dump(res);
                                 res->lr_refcount = 1;
                                 rc = ldlm_resource_put(res);
                         }
@@ -352,7 +354,8 @@ void ldlm_resource_dump(struct ldlm_resource *res)
                  (unsigned long long)res->lr_name[1],
                  (unsigned long long)res->lr_name[2]);
 
-        CDEBUG(D_OTHER, "--- Resource: %p (%s)\n", res, name);
+        CDEBUG(D_OTHER, "--- Resource: %p (%s) (rc: %d)\n", res, name,
+               res->lr_refcount);
         CDEBUG(D_OTHER, "Namespace: %p (%s)\n", res->lr_namespace,
                res->lr_namespace->ns_name);
         CDEBUG(D_OTHER, "Parent: %p, root: %p\n", res->lr_parent, res->lr_root);

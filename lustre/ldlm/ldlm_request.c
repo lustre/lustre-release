@@ -74,8 +74,13 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 req->rq_replen = lustre_msg_size(1, &size);
         }
 
+        lock->l_connection = conn;
+        lock->l_client = cl;
+
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
+
+        spin_lock(&lock->l_lock);
         if (rc != ELDLM_OK) {
                 spin_lock(&lock->l_resource->lr_lock);
                 ldlm_resource_put(lock->l_resource);
@@ -86,8 +91,6 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 GOTO(out, rc);
         }
 
-        lock->l_connection = conn;
-        lock->l_client = cl;
         reply = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&lock->l_remote_handle, &reply->lock_handle,
                sizeof(lock->l_remote_handle));
@@ -101,11 +104,17 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                (unsigned long long)reply->lock_extent.start,
                (unsigned long long)reply->lock_extent.end);
 
-        if (*flags & LDLM_FL_LOCK_CHANGED) {
+        /* If enqueue returned a blocked lock but the completion handler has
+         * already run, then it fixed up the resource and we don't need to do it
+         * again. */
+        if (*flags & LDLM_FL_LOCK_CHANGED &&
+            lock->l_req_mode != lock->l_granted_mode) {
                 CDEBUG(D_INFO, "remote intent success, locking %ld instead of"
                        "%ld\n", (long)reply->lock_resource_name[0],
                        (long)lock->l_resource->lr_name[0]);
-                ldlm_resource_put(lock->l_resource);
+                spin_lock(&lock->l_resource->lr_lock);
+                if (!ldlm_resource_put(lock->l_resource))
+                        spin_unlock(&lock->l_resource->lr_lock);
 
                 lock->l_resource =
                         ldlm_resource_get(ns, NULL, reply->lock_resource_name,
@@ -120,6 +129,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         if (!req_passed_in)
                 ptlrpc_free_req(req);
 
+        spin_unlock(&lock->l_lock);
         rc = ldlm_local_lock_enqueue(lockh, cookie, cookielen, flags, callback,
                                      callback);
 

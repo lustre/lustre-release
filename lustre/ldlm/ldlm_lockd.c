@@ -21,60 +21,6 @@ extern kmem_cache_t *ldlm_lock_slab;
 extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
 extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
-/* _ldlm_callback and local_callback setup the variables then call this common
- * code */
-static int common_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                           ldlm_mode_t mode, void *data, __u32 data_len,
-                           struct ptlrpc_request **reqp)
-{
-        ENTRY;
-
-        if (!lock)
-                LBUG();
-        if (!lock->l_resource)
-                LBUG();
-
-        ldlm_lock_dump(lock);
-
-        spin_lock(&lock->l_resource->lr_lock);
-        spin_lock(&lock->l_lock);
-        if (!new) {
-                CDEBUG(D_INFO, "Got local completion AST for lock %p.\n", lock);
-                lock->l_req_mode = mode;
-
-                /* FIXME: the API is flawed if I have to do these refcount
-                 * acrobatics (along with the _put() below). */
-                lock->l_resource->lr_refcount++;
-
-                /* _del_lock is safe for half-created locks that are not yet on
-                 * a list. */
-                ldlm_resource_del_lock(lock);
-                ldlm_grant_lock(lock->l_resource, lock);
-
-                ldlm_resource_put(lock->l_resource);
-
-                wake_up(&lock->l_waitq);
-                spin_unlock(&lock->l_lock);
-                spin_unlock(&lock->l_resource->lr_lock);
-        } else {
-                CDEBUG(D_INFO, "Got local blocking AST for lock %p.\n", lock);
-                lock->l_flags |= LDLM_FL_DYING;
-                spin_unlock(&lock->l_lock);
-                spin_unlock(&lock->l_resource->lr_lock);
-                if (!lock->l_readers && !lock->l_writers) {
-                        CDEBUG(D_INFO, "Lock already unused, calling "
-                               "callback (%p).\n", lock->l_blocking_ast);
-                        if (lock->l_blocking_ast != NULL)
-                                lock->l_blocking_ast(lock, new, lock->l_data,
-                                                     lock->l_data_len, reqp);
-                } else {
-                        CDEBUG(D_INFO, "Lock still has references; lock will be"
-                               " cancelled later.\n");
-                }
-        }
-        RETURN(0);
-}
-
 static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
                          struct ptlrpc_request *req)
 {
@@ -227,7 +173,7 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
                           struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
-        struct ldlm_lock *lock1, *lock2;
+        struct ldlm_lock *lock, *new;
         int rc;
         ENTRY;
 
@@ -244,17 +190,72 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
         if (rc != 0)
                 RETURN(rc);
 
-        lock1 = lustre_handle2object(&dlm_req->lock_handle1);
-        lock2 = lustre_handle2object(&dlm_req->lock_handle2);
+        lock = lustre_handle2object(&dlm_req->lock_handle1);
+        new = lustre_handle2object(&dlm_req->lock_handle2);
 
-        LDLM_DEBUG(lock1, "client %s callback handler START",
-                   lock2 == NULL ? "completion" : "blocked");
+        LDLM_DEBUG(lock, "client %s callback handler START",
+                   new == NULL ? "completion" : "blocked");
 
-        common_callback(lock1, lock2, dlm_req->lock_desc.l_granted_mode, NULL,
-                        0, NULL);
+        spin_lock(&lock->l_resource->lr_lock);
+        spin_lock(&lock->l_lock);
+        if (!new) {
+                CDEBUG(D_INFO, "Got local completion AST for lock %p.\n", lock);
+                lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
+
+                /* If we receive the completion AST before the actual enqueue
+                 * returned, then we might need to switch resources. */
+                if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
+                           lock->l_resource->lr_name,
+                           sizeof(__u64) * RES_NAME_SIZE) != 0) {
+                        struct ldlm_namespace *ns =
+                                lock->l_resource->lr_namespace;
+                        int type = lock->l_resource->lr_type;
+
+                        if (!ldlm_resource_put(lock->l_resource))
+                                spin_unlock(&lock->l_resource->lr_lock);
+
+                        lock->l_resource = ldlm_resource_get(ns, NULL, dlm_req->lock_desc.l_resource.lr_name, type, 1);
+                        if (lock->l_resource == NULL) {
+                                LBUG();
+                                RETURN(-ENOMEM);
+                        }
+                        spin_lock(&lock->l_resource->lr_lock);
+                        LDLM_DEBUG(lock, "completion AST, new resource");
+                }
+
+                /* FIXME: the API is flawed if I have to do these refcount
+                 * acrobatics (along with the _put() below). */
+                lock->l_resource->lr_refcount++;
+
+                /* _del_lock is safe for half-created locks that are not yet on
+                 * a list. */
+                ldlm_resource_del_lock(lock);
+                ldlm_grant_lock(lock->l_resource, lock);
+
+                ldlm_resource_put(lock->l_resource);
+
+                wake_up(&lock->l_waitq);
+                spin_unlock(&lock->l_lock);
+                spin_unlock(&lock->l_resource->lr_lock);
+        } else {
+                CDEBUG(D_INFO, "Got local blocking AST for lock %p.\n", lock);
+                lock->l_flags |= LDLM_FL_DYING;
+                spin_unlock(&lock->l_lock);
+                spin_unlock(&lock->l_resource->lr_lock);
+                if (!lock->l_readers && !lock->l_writers) {
+                        CDEBUG(D_INFO, "Lock already unused, calling "
+                               "callback (%p).\n", lock->l_blocking_ast);
+                        if (lock->l_blocking_ast != NULL)
+                                lock->l_blocking_ast(lock, new, lock->l_data,
+                                                     lock->l_data_len, NULL);
+                } else {
+                        CDEBUG(D_INFO, "Lock still has references; lock will be"
+                               " cancelled later.\n");
+                }
+        }
 
         LDLM_DEBUG_NOLOCK("client %s callback handler END (lock: %p)",
-                   lock2 == NULL ? "completion" : "blocked", lock1);
+                   new == NULL ? "completion" : "blocked", lock);
 
         RETURN(0);
 }
