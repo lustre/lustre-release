@@ -41,9 +41,7 @@
 /*
  * TODO:
  *   - magic in mea struct
- *   - error handling is totally missed
  */
-
 int mds_lmv_connect(struct obd_device *obd, char *lmv_name)
 {
         struct mds_obd *mds = &obd->u.mds;

@@ -1194,8 +1194,8 @@ static int fsfilt_ext3_setup(struct obd_device *obd, struct super_block *sb)
                 int err;
                 
                 if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_MDSNUM)) {
-                        CWARN("%s: set mdsnum %d in ext3fs\n",
-                                        obd->obd_name, mds->mds_num);
+                        CWARN("%s: set mdsnum %d in ext3\n",
+                              obd->obd_name, mds->mds_num);
                         lock_kernel();
                         handle = journal_start(sbi->s_journal, 1);
                         unlock_kernel();

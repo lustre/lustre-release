@@ -279,12 +279,12 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
 void mds_steal_ack_locks(struct ptlrpc_request *req)
 {
         struct obd_export         *exp = req->rq_export;
+        char                       str[PTL_NALFMT_SIZE];
         struct list_head          *tmp;
         struct ptlrpc_reply_state *oldrep;
         struct ptlrpc_service     *svc;
         struct llog_create_locks  *lcl;
         unsigned long              flags;
-        char                       str[PTL_NALFMT_SIZE];
         int                        i;
 
         /* CAVEAT EMPTOR: spinlock order */
@@ -306,8 +306,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                 list_del_init (&oldrep->rs_exp_list);
 
                 CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
-                      " o%d NID %s\n",
-                      oldrep->rs_nlocks, oldrep,
+                      " o%d NID %s\n", oldrep->rs_nlocks, oldrep,
                       oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_msg.opc,
                       ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
 
@@ -687,7 +686,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         }
         case S_IFDIR:{
                 int i, nstripes = 0;
-                struct lustre_id sid;
                 
                 /*
                  * as Peter asked, mkdir() should distribute new directories
@@ -725,7 +723,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 mds_set_last_fid(obd, id_fid(rec->ur_id2));
                         } else {
                                 rc = mds_alloc_inode_sid(obd, dchild->d_inode,
-                                                         handle, &sid);
+                                                         handle, NULL);
                                 if (rc) {
                                         CERROR("mds_alloc_inode_sid() failed, inode %lu, "
                                                "rc %d\n", dchild->d_inode->i_ino, rc);
@@ -948,15 +946,13 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                inode->i_ino, inode->i_generation);
 
                         if (type != S_IFDIR) {
-                                struct lustre_id sid;
-                                
                                 /* 
                                  * allocate new id for @inode if it is not dir,
                                  * because for dir it was already done.
                                  */
                                 down(&inode->i_sem);
                                 rc = mds_alloc_inode_sid(obd, inode,
-                                                         handle, &sid);
+                                                         handle, NULL);
                                 up(&inode->i_sem);
                                 if (rc) {
                                         CERROR("mds_alloc_inode_sid() failed, "
@@ -2119,8 +2115,8 @@ cleanup:
                 if (err)
                         CERROR("error on parent setattr: rc = %d\n", err);
         }
-        rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
-                                handle, req, rc, 0);
+//        rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
+//                                handle, req, rc, 0);
         if (!rc)
                 (void)obd_set_info(mds->mds_lov_exp, strlen("unlinked"),
                                    "unlinked", 0, NULL);
@@ -2160,6 +2156,9 @@ cleanup:
                         ptlrpc_save_lock(req, parent_lockh, LCK_PW);
                 l_dput(dchild);
                 l_dput(dchild);
+
+                rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
+                                        handle, req, rc, 0);
                 l_dput(dparent);
         case 0:
                 break;
@@ -2876,13 +2875,9 @@ static int mds_add_local_dentry(struct mds_update_record *rec, int offset,
                 if (rc)
                         GOTO(cleanup, rc);
         } else if (de->d_flags & DCACHE_CROSS_REF) {
-                struct lustre_id de_id;
-
-                /* name exists and points to remote inode */
-                mds_pack_dentry2id(obd, &de_id, de, 1);
-                
-                CDEBUG(D_OTHER, "%s: %s points to remote inode "DLID4"\n",
-                       obd->obd_name, rec->ur_tgt, OLID4(&de_id));
+                CDEBUG(D_OTHER, "%s: %s points to remote inode %lu/%lu\n",
+                       obd->obd_name, rec->ur_tgt, (unsigned long)de->d_mdsnum,
+                        (unsigned long)de->d_fid);
 
                 /* checking if we can remove local dentry. */
                 rc = mds_check_for_rename(obd, de);

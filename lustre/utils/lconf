@@ -776,7 +776,7 @@ def do_find_file(base, mod):
 def is_block(path):
     s = ()
     try:
-        s =  os.lstat(path)
+        s =  os.stat(path)
     except OSError:
         return 0
     return stat.S_ISBLK(s[stat.ST_MODE])
@@ -1647,6 +1647,8 @@ class LMV(Module):
     def prepare(self):
         if is_prepared(self.name):
             return
+	    
+	self.info();
         for mdc in self.mdclist:
             try:
                 # Only ignore connect failures with --force, which
@@ -1655,6 +1657,7 @@ class LMV(Module):
             except CommandError, e:
                 print "Error preparing LMV %s\n" % mdc.uuid
                 raise e
+	
         lctl.lmv_setup(self.name, self.uuid, self.desc_uuid,
                        string.join(self.devlist))
 
@@ -1694,21 +1697,14 @@ class MDSDEV(Module):
         self.name = self.mds.getName()
         self.client_uuids = self.mds.get_refs('client')
         
-        # LMV instance
-	self.lmv_uuid = ""
-	self.lmv = ''
-        
-        self.master_uuid = ""
-        self.master = ''
-        
-        # it is possible to have MDS with no clients. It is master MDS
-        # in configuration with CMOBD.
-        self.lmv_uuid = self.db.get_first_ref('lmv')
-	if self.lmv_uuid:
-	    self.lmv = self.db.lookup(self.lmv_uuid)
-	    if self.lmv:
+	self.lmv = None
+        self.master = None
+	
+        lmv_uuid = self.db.get_first_ref('lmv')
+	if lmv_uuid != None:
+	    self.lmv = self.db.lookup(lmv_uuid)
+	    if self.lmv != None:
                 self.client_uuids = self.lmv.get_refs('client')
-                self.master_uuid = self.lmv_uuid
 
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = self.db.get_val('autoformat', "no")
@@ -1736,27 +1732,27 @@ class MDSDEV(Module):
         else:
             # find the LOV for this MDS
             lovconfig_uuid = self.mds.get_first_ref('lovconfig')
-            if lovconfig_uuid or self.lmv:
-                if self.lmv:
+            if lovconfig_uuid or self.lmv != None:
+                if self.lmv != None:
                     lovconfig_uuid = self.lmv.get_first_ref('lovconfig')
                     lovconfig = self.lmv.lookup(lovconfig_uuid)
                     lov_uuid = lovconfig.get_first_ref('lov')
-                    if not lov_uuid:
+                    if lov_uuid == None:
                         panic(self.mds.getName() + ": No LOV found for lovconfig ", 
                               lovconfig.name)
 	        else:
                     lovconfig = self.mds.lookup(lovconfig_uuid)
                     lov_uuid = lovconfig.get_first_ref('lov')
-                    if not lov_uuid:
+                    if lov_uuid == None:
                        panic(self.mds.getName() + ": No LOV found for lovconfig ", 
                              lovconfig.name)
 
-		    if self.lmv:
+		    if self.lmv != None:
 		        lovconfig_uuid = self.lmv.get_first_ref('lovconfig')
 		        lovconfig = self.lmv.lookup(lovconfig_uuid)
 		        lov_uuid = lovconfig.get_first_ref('lov')
 
-                lov = LOV(self.db.lookup(lov_uuid), lov_uuid, 'FS_name', 
+                lov = LOV(self.db.lookup(lov_uuid), lov_uuid, self.name, 
                           config_only = 1)
 
                 # default stripe count controls default inode_size
@@ -1776,11 +1772,10 @@ class MDSDEV(Module):
         self.uuid = target_uuid
 
  	# setup LMV
- 	if self.master_uuid:
-	    client_uuid = self.name + "_lmv_" + "UUID"
- 	    self.master = LMV(self.db.lookup(self.lmv_uuid), client_uuid, 
-                              self.name, self.name)
- 	    self.master_uuid = self.master.name
+ 	if self.lmv != None:
+	    client_uuid = self.name + "_lmv_UUID"
+ 	    self.master = LMV(self.lmv, client_uuid, 
+			      self.name, self.name)
 
     def add_module(self, manager):
         if self.active:
@@ -1812,9 +1807,34 @@ class MDSDEV(Module):
 		    manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.backfstype))
 
  	# add LMV modules
- 	if self.master_uuid:
+ 	if self.master != None:
             self.master.add_module(manager)
-
+	    
+    def get_mount_options(self, blkdev):
+        options = def_mount_options(self.fstype, 'mds')
+            
+        if config.mountfsoptions != None:
+            if options != None:
+                options = "%s,%s" %(options, config.mountfsoptions)
+            else:
+                options = config.mountfsoptions
+            if self.mountfsoptions != None:
+                options = "%s,%s" %(options, self.mountfsoptions)
+        else:
+            if self.mountfsoptions != None:
+                if options != None:
+                    options = "%s,%s" %(options, self.mountfsoptions)
+                else:
+                    options = self.mountfsoptions
+            
+        if self.fstype == 'smfs':
+            if options != None:
+                options = "%s,type=%s,dev=%s" %(options, 
+			   self.backfstype, blkdev)
+            else:
+                options = "type=%s,dev=%s" %(self.backfstype, blkdev)
+	return options
+	
     def prepare(self):
         if not config.record and is_prepared(self.name):
             return
@@ -1824,11 +1844,10 @@ class MDSDEV(Module):
         if config.reformat:
             # run write_conf automatically, if --reformat used
             self.write_conf()
-        self.info(self.devpath, self.fstype, self.size, self.format)
         run_acceptors()
         
  	# prepare LMV
- 	if self.master_uuid:
+ 	if self.master != None:
              self.master.prepare()
 	     
         # never reformat here
@@ -1839,53 +1858,33 @@ class MDSDEV(Module):
         if not is_prepared('MDT'):
             lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
         try: 
-            mountfsoptions = def_mount_options(self.fstype, 'mds')
-            
-            if config.mountfsoptions:
-                if mountfsoptions:
-                    mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
-                else:
-                    mountfsoptions = config.mountfsoptions
-                if self.mountfsoptions:
-                    mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
-            else:
-                if self.mountfsoptions:
-                    if mountfsoptions:
-                        mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
-                    else:
-                        mountfsoptions = self.mountfsoptions
-            
             if self.fstype == 'smfs':
                 realdev = self.fstype
-                
-                if mountfsoptions:
-                    mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                            self.backfstype, 
-                                                            blkdev)
-                else:
-                    mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
-                                                         blkdev)
             else:
                 realdev = blkdev
-                
-            print 'MDS mount options: ' + mountfsoptions
-            
-	    if not self.master_uuid:
-                self.master_uuid = 'dumb'
-                
-            if not self.obdtype:
+		
+            if self.obdtype == None:
                 self.obdtype = 'dumb'
+		
+	    if self.master == None:
+		master_name = 'dumb'
+	    else:
+		master_name = self.master.name
+                
+            if self.client_uuids == None:
+		profile_name = 'dumb'
+	    else:
+		profile_name = self.name
             
-            if not self.client_uuids:
-	        lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s %s %s %s" %(realdev, self.fstype, 
-                                               'dumb', mountfsoptions,
-                                               self.master_uuid, self.obdtype))
-            else:
-	        lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s %s %s %s" %(realdev, self.fstype, 
-                                               self.name, mountfsoptions,
-                                               self.master_uuid, self.obdtype))
+	    mountfsoptions = self.get_mount_options(blkdev)
+
+    	    self.info("mds", realdev, mountfsoptions, self.fstype, self.size, 
+		      self.format, master_name, profile_name, self.obdtype)
+	    
+	    lctl.newdev("mds", self.name, self.uuid,
+            		setup = "%s %s %s %s %s %s" %(realdev, 
+			    self.fstype, profile_name, mountfsoptions,
+                            master_name, self.obdtype))
 
             if development_mode():
                 procentry = "/proc/fs/lustre/mds/grp_hash_upcall"
@@ -1919,57 +1918,26 @@ class MDSDEV(Module):
             
         do_cleanup = 0
         if not is_prepared(self.name):
-            self.info(self.devpath, self.fstype, self.format)
-
             blkdev = block_dev(self.devpath, self.size, self.fstype,
                                config.reformat, self.format, self.journal_size,
                                self.inode_size, self.mkfsoptions,
                                self.backfstype, self.backdevpath)
 
-            # Even for writing logs we mount mds with supplied mount options
-            # because it will not mount smfs (if used) otherwise.
-
-            mountfsoptions = def_mount_options(self.fstype, 'mds')
-
-            if config.mountfsoptions:
-                if mountfsoptions:
-                    mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
-                else:
-                    mountfsoptions = config.mountfsoptions
-                if self.mountfsoptions:
-                    mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
-            else:
-                if self.mountfsoptions:
-                    if mountfsoptions:
-                        mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
-                    else:
-                        mountfsoptions = self.mountfsoptions
-
             if self.fstype == 'smfs':
                 realdev = self.fstype
-                
-                if mountfsoptions:
-                    mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                            self.backfstype, 
-                                                            blkdev)
-                else:
-                    mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
-                                                         blkdev)
             else:
                 realdev = blkdev
             
-            print 'MDS mount options: ' + mountfsoptions
+            # Even for writing logs we mount mds with supplied mount options
+            # because it will not mount smfs (if used) otherwise.
+	    mountfsoptions = self.get_mount_options(blkdev)
 
-            if not self.obdtype:
+            if self.obdtype == None:
                 self.obdtype = 'dumb'
                 
-            # As mount options are passed by 4th param to config tool, we need 
-            # to pass something in 3rd param. But we do not want this 3rd param
-            # be counted as a profile name for reading log on MDS setup, thus,
-            # we pass there some predefined sign like 'dumb', which will be 
-            # checked in MDS code and skipped. Probably there is more nice way
-            # like pass empty string and check it in config tool and pass null
-            # as 4th param.
+    	    self.info("mds", realdev, mountfsoptions, self.fstype, self.size, 
+		      self.format, "dumb", "dumb", self.obdtype)
+	    
             lctl.newdev("mds", self.name, self.uuid,
                         setup ="%s %s %s %s %s %s" %(realdev, self.fstype, 
                                                      'dumb', mountfsoptions,
@@ -2078,7 +2046,7 @@ class MDSDEV(Module):
                 cleanup_error(e.rc)
                 Module.cleanup(self)
 	    # cleanup LMV
-	    if self.master_uuid:
+	    if self.master != None:
                 self.master.cleanup()
         if not self.msd_remaining() and is_prepared('MDT'):
             try:
@@ -2093,7 +2061,7 @@ class MDSDEV(Module):
 	          self.backdevpath)
 
     def correct_level(self, level, op=None):
-	#if self.master_uuid:
+	#if self.master != None:
 	#   level = level + 2
         return level
 
@@ -2156,6 +2124,32 @@ class OSD(Module):
 
             manager.add_lustre_module(self.osdtype, self.osdtype)
 
+    def get_mount_options(self, blkdev):
+        options = def_mount_options(self.fstype, 'ost')
+            
+        if config.mountfsoptions != None:
+            if options != None:
+                options = "%s,%s" %(options, config.mountfsoptions)
+            else:
+                options = config.mountfsoptions
+            if self.mountfsoptions != None:
+                options = "%s,%s" %(options, self.mountfsoptions)
+        else:
+            if self.mountfsoptions != None:
+                if options != None:
+                    options = "%s,%s" %(options, self.mountfsoptions)
+                else:
+                    options = self.mountfsoptions
+            
+        if self.fstype == 'smfs':
+            if options != None:
+                options = "%s,type=%s,dev=%s" %(options, 
+		    self.backfstype, blkdev)
+            else:
+                options = "type=%s,dev=%s" %(self.backfstype, 
+		    blkdev)
+	return options
+	
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
     # FIXME: check if device is already formatted.
@@ -2165,8 +2159,6 @@ class OSD(Module):
         if not self.active:
             debug(self.uuid, "not active")
             return
-        self.info(self.osdtype, self.devpath, self.size, self.fstype,
-                  self.format, self.journal_size, self.inode_size)
         run_acceptors()
         if self.osdtype == 'obdecho':
             blkdev = ''
@@ -2176,37 +2168,16 @@ class OSD(Module):
                                self.inode_size, self.mkfsoptions, self.backfstype,
                                self.backdevpath)
 
-        mountfsoptions = def_mount_options(self.fstype, 'ost')
-            
-        if config.mountfsoptions:
-            if mountfsoptions:
-                mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
-            else:
-                mountfsoptions = config.mountfsoptions
-            if self.mountfsoptions:
-                mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
-        else:
-            if self.mountfsoptions:
-                if mountfsoptions:
-                    mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
-                else:
-                    mountfsoptions = self.mountfsoptions
-            
         if self.fstype == 'smfs':
             realdev = self.fstype
-                
-            if mountfsoptions:
-                mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                        self.backfstype, 
-                                                        blkdev)
-            else:
-                mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
-                                                     blkdev)
         else:
             realdev = blkdev
-                
-        print 'OSD mount options: ' + mountfsoptions
-        
+
+	mountfsoptions = self.get_mount_options(blkdev)
+	
+        self.info(self.osdtype, realdev, mountfsoptions, self.fstype, 
+		  self.size, self.format, self.journal_size, self.inode_size)
+		  
         lctl.newdev(self.osdtype, self.name, self.uuid,
                     setup ="%s %s %s %s" %(realdev, self.fstype,
                                            self.failover_ost, 
@@ -2412,9 +2383,11 @@ class CMOBD(Module):
         cache_class = cache_obd.get_class()
 
 	if master_class == 'ost' or master_class == 'lov':
-            self.master = LOV(master_obd, self.master_uuid, self.name, 
+	    client_uuid = "%s_lov_master_UUID" % (self.name)
+            self.master = LOV(master_obd, client_uuid, self.name, 
                               "%s_master" % (self.name));
-            self.cache = LOV(cache_obd, self.cache_uuid, self.name, 
+	    client_uuid = "%s_lov_cache_UUID" % (self.name)
+            self.cache = LOV(cache_obd, client_uuid, self.name, 
                              "%s_cache" % (self.name));
         if master_class == 'mds':
 	    self.master = get_mdc(db, self.name, self.master_uuid) 
@@ -2422,11 +2395,13 @@ class CMOBD(Module):
 	    self.cache = get_mdc(db, self.name, self.cache_uuid)
             
         if master_class == 'lmv':
-            self.master = LMV(master_obd, self.master_uuid, self.name, 
-                              "%s_master" % (self.name));
+	    client_uuid = "%s_lmv_master_UUID" % (self.name)
+            self.master = LMV(master_obd, client_uuid, self.name,
+			      "%s_master" % (self.name));
         if cache_class == 'lmv':
-            self.cache = LMV(cache_obd, self.cache_uuid, self.name, 
-                             "%s_cache" % (self.name));
+	    client_uuid = "%s_lmv_cache_UUID" % (self.name)
+            self.cache = LMV(cache_obd, client_uuid, self.name,
+			     "%s_cache" % (self.name));
 
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
@@ -2442,17 +2417,21 @@ class CMOBD(Module):
 
     def get_uuid(self):
         return self.uuid
+	
     def get_name(self):
         return self.name
+	
     def get_master_name(self):
-        return self.master.name
+    	return self.master.name
+	    
     def get_cache_name(self):
         return self.cache.name
 
     def cleanup(self):
         if is_prepared(self.name):
             Module.cleanup(self)
-        self.master.cleanup()
+	if self.master:
+    	    self.master.cleanup()
 
     def add_module(self, manager):
 	manager.add_lustre_module('cmobd', 'cmobd')
@@ -2481,9 +2460,11 @@ class COBD(Module):
         cache_class = cache_obd.get_class()
 
 	if master_class == 'ost' or master_class == 'lov':
-            self.master = LOV(master_obd, self.master_uuid, name, 
+	    client_uuid = "%s_lov_master_UUID" % (self.name)
+            self.master = LOV(master_obd, client_uuid, name, 
                               "%s_master" % (self.name));
-            self.cache = LOV(cache_obd, self.cache_uuid, name, 
+	    client_uuid = "%s_lov_cache_UUID" % (self.name)
+            self.cache = LOV(cache_obd, client_uuid, name, 
                              "%s_cache" % (self.name));
         if master_class == 'mds':
             self.master = get_mdc(db, name, self.master_uuid) 
@@ -2491,11 +2472,13 @@ class COBD(Module):
             self.cache = get_mdc(db, name, self.cache_uuid)
             
         if master_class == 'lmv':
-            self.master = LMV(master_obd, self.master_uuid, self.name, 
-                              "%s_master" % (self.name));
+	    client_uuid = "%s_lmv_master_UUID" % (self.name)
+            self.master = LMV(master_obd, client_uuid, self.name,
+			      "%s_master" % (self.name));
         if cache_class == 'lmv':
-            self.cache = LMV(cache_obd, self.cache_uuid, self.name, 
-                             "%s_cache" % (self.name));
+	    client_uuid = "%s_lmv_cache_UUID" % (self.name)
+            self.cache = LMV(cache_obd, client_uuid, self.name,
+			     "%s_cache" % (self.name));
 	    
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
@@ -2569,7 +2552,7 @@ class VMDC(Module):
     def __init__(self, db, client_uuid, name, name_override = None):
         Module.__init__(self, 'VMDC', db)
         if db.get_class() == 'lmv':
-            self.mdc = LMV(db, client_uuid, name)
+            self.mdc = LMV(db, client_uuid, name, name_override)
         elif db.get_class() == 'cobd':
             self.mdc = COBD(db, client_uuid, name)
         else:
@@ -2652,8 +2635,8 @@ class Mountpoint(Module):
 	if not mds:
 	    panic("no mds: ", self.mds_uuid)
        
-        self.vosc = VOSC(ost, client_uuid, self.name)
-	self.vmdc = VMDC(mds, client_uuid, self.name)
+        self.vosc = VOSC(ost, client_uuid, self.name, self.name)
+	self.vmdc = VMDC(mds, client_uuid, self.name, self.name)
         
         if self.mgmt_uuid:
             self.mgmtcli = ManagementClient(db.lookup(self.mgmt_uuid),

@@ -375,7 +375,7 @@ int mdc_enqueue(struct obd_export *exp,
                 struct mds_body *body;
 
                 body = lustre_swab_repbuf(req, 1, sizeof (*body),
-                                           lustre_swab_mds_body);
+                                          lustre_swab_mds_body);
                 if (body == NULL) {
                         CERROR ("Can't swab mds_body\n");
                         RETURN (-EPROTO);

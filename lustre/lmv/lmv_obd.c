@@ -547,7 +547,7 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         if (lcfg->lcfg_inllen2 < 1) {
-                CERROR("LMV setup requires an OST UUID list\n");
+                CERROR("LMV setup requires an MDT UUID list\n");
                 RETURN(-EINVAL);
         }
 
@@ -590,7 +590,7 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
                 OBD_FREE(lmv->tgts, lmv->tgts_size);
         }
 
-        tgt_obd = class_find_client_obd(&lmv->tgts->uuid, LUSTRE_MDC_NAME, 
+        tgt_obd = class_find_client_obd(&lmv->tgts->uuid, LUSTRE_MDC_NAME,
                                         &obd->obd_uuid);
         if (!tgt_obd) {
                 CERROR("Target %s not attached\n", lmv->tgts->uuid.uuid);
@@ -631,8 +631,9 @@ static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 
                 rc = obd_statfs(lmv->tgts[i].ltd_exp->exp_obd, &temp, max_age);
                 if (rc) {
-                        CERROR("can't stat MDS #%d (%s)\n", i,
-                               lmv->tgts[i].ltd_exp->exp_obd->obd_name);
+                        CERROR("can't stat MDS #%d (%s), error %d\n", i,
+                               lmv->tgts[i].ltd_exp->exp_obd->obd_name,
+                               rc);
                         RETURN(rc);
                 }
                 if (i == 0) {

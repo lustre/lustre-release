@@ -164,7 +164,7 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
                 if (inode->i_state & I_NEW)
                         unlock_new_inode(inode);
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p) index %d "
-                       "ino %lu \n", inode->i_ino, inode->i_generation,
+                       "ino %d\n", inode->i_ino, inode->i_generation,
                        inode, sargs->s_index, sargs->s_ino);
                 inode->i_ino = hash;
         }

@@ -18,7 +18,7 @@ gen_config() {
         add_lmv lmv1_svc
         for mds in `mds_list`; do
             MDSDEV=$TMP/${mds}-`hostname`
-            add_mds $mds --dev $MDSDEV --size $MDSSIZE  --lmv lmv1_svc
+            add_mds $mds --dev $MDSDEV --size $MDSSIZE --lmv lmv1_svc
         done
         add_lov_to_lmv lov1 lmv1_svc --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
@@ -28,15 +28,12 @@ gen_config() {
         add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 	MDS=mds1_svc
-
     fi
 
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE  --failover
     add_client client  ${MDS} --lov lov1 --path $MOUNT
 }
-
-
 
 build_test_filter
 

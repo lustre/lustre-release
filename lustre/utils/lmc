@@ -1368,11 +1368,10 @@ def add_lmv(gen, lustre, options):
 def new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid):
     fs_name = new_name("FS_fsname")
     fs_uuid = new_uuid(fs_name)
-
-    obd = lookup(lustre, mds_uuid)
-    obd.appendChild(gen.ref("client", obd_uuid))
-
-    fs = gen.filesystem(fs_name, fs_uuid, mds_uuid, obd_uuid, mgmt_uuid)
+    
+    fs = gen.filesystem(fs_name, fs_uuid, mds_uuid, 
+			obd_uuid, mgmt_uuid)
+			
     lustre.appendChild(fs)
     return fs_uuid
 

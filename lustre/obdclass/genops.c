@@ -182,7 +182,7 @@ int class_unregister_type(char *name)
         if (type->typ_ops != NULL)
                 OBD_FREE(type->typ_ops, sizeof(*type->typ_ops));
         if (type->typ_md_ops != NULL)
-                OBD_FREE (type->typ_md_ops, sizeof (*type->typ_md_ops));
+                OBD_FREE (type->typ_md_ops, sizeof(*type->typ_md_ops));
         OBD_FREE(type, sizeof(*type));
         RETURN(0);
 } /* class_unregister_type */
@@ -334,7 +334,6 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
         spin_unlock(&obd_dev_lock);
         return NULL;
 }
-
 
 void obd_cleanup_caches(void)
 {

@@ -2502,11 +2502,18 @@ int mds_alloc_inode_sid(struct obd_device *obd, struct inode *inode,
                         void *handle, struct lustre_id *id)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int rc = 0;
+        int alloc = 0, rc = 0;
         ENTRY;
 
-        LASSERT(id != NULL);
         LASSERT(obd != NULL);
+        LASSERT(inode != NULL);
+
+        if (id == NULL) {
+                OBD_ALLOC(id, sizeof(*id));
+                if (id == NULL)
+                        RETURN(-ENOMEM);
+                alloc = 1;
+        }
 
         id_group(id) = mds->mds_num;
         
@@ -2525,6 +2532,8 @@ int mds_alloc_inode_sid(struct obd_device *obd, struct inode *inode,
                        "rc = %d\n", rc);
         }
 
+        if (alloc)
+                OBD_FREE(id, sizeof(*id));
         RETURN(rc);
 }
 
@@ -2677,8 +2686,10 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         /* we have to know mdsnum before touching underlying fs -bzzz */
         sema_init(&mds->mds_lmv_sem, 1);
         mds->mds_lmv_connected = 0;
+        mds->mds_lmv_name = NULL;
+        
         if (lcfg->lcfg_inllen5 > 0 && lcfg->lcfg_inlbuf5 && 
-            strcmp(lcfg->lcfg_inlbuf5, "dumb")) {
+            strncmp(lcfg->lcfg_inlbuf5, "dumb", lcfg->lcfg_inllen5)) {
                 class_uuid_t uuid;
 
                 CDEBUG(D_OTHER, "MDS: %s is master for %s\n",
@@ -2704,7 +2715,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_obd_type = MDS_MASTER_OBD;
 
         if (lcfg->lcfg_inllen6 > 0 && lcfg->lcfg_inlbuf6 &&
-            strcmp(lcfg->lcfg_inlbuf6, "dumb")) {
+            strncmp(lcfg->lcfg_inlbuf6, "dumb", lcfg->lcfg_inllen6)) {
                 if (!memcmp(lcfg->lcfg_inlbuf6, "master", strlen("master"))) {
                         mds->mds_obd_type = MDS_MASTER_OBD;
                 } else if (!memcmp(lcfg->lcfg_inlbuf6, "cache", strlen("cache"))) {
@@ -2751,12 +2762,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc < 0)
                 GOTO(err_fs, rc);
 
-        /*
-         * this check for @dumb string is needed to handle mounting MDS with
-         * smfs. Read lconf:MDSDEV.write_conf() for more details.
-         */
         if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3 &&
-            strcmp(lcfg->lcfg_inlbuf3, "dumb")) {
+            strncmp(lcfg->lcfg_inlbuf3, "dumb", lcfg->lcfg_inllen3)) {
                 class_uuid_t uuid;
 
                 generate_random_uuid(uuid);
@@ -2768,17 +2775,19 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
                 memcpy(mds->mds_profile, lcfg->lcfg_inlbuf3,
                        lcfg->lcfg_inllen3);
+        }
 
-                /*
-                 * setup root id in the case this is not clients write
-                 * setup. This is important, as in the case of LMV we need
-                 * mds->mds_num to be already assigned to form correct root fid.
-                 */
+        /* 
+         * setup root dir and files ID dir if lmv already connected, or there is
+         * not lmv at all.
+         */
+        if (mds->mds_lmv_exp || (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3 &&
+                                 strncmp(lcfg->lcfg_inlbuf3, "dumb", lcfg->lcfg_inllen3)))
+        {
                 rc = mds_fs_setup_rootid(obd);
                 if (rc)
                         GOTO(err_fs, rc);
 
-                /* setup lustre id for ID directory. */
                 rc = mds_fs_setup_virtid(obd);
                 if (rc)
                         GOTO(err_fs, rc);

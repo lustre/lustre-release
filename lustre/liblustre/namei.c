@@ -374,7 +374,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 LL_SAVE_INTENT(inode, it);
 
         child->p_base->pb_ino = inode;
-
         RETURN(0);
 }
 

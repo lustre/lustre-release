@@ -532,7 +532,6 @@ int mds_fs_setup_virtid(struct obd_device *obd)
 {
         int rc = 0;
         void *handle;
-        struct lustre_id id;
         struct mds_obd *mds = &obd->u.mds;
         struct inode *inode = mds->mds_id_dir->d_inode;
         ENTRY;
@@ -547,7 +546,7 @@ int mds_fs_setup_virtid(struct obd_device *obd)
         }
         
         down(&inode->i_sem);
-        rc = mds_alloc_inode_sid(obd, inode, handle, &id);
+        rc = mds_alloc_inode_sid(obd, inode, handle, NULL);
         up(&inode->i_sem);
         
         if (rc) {
