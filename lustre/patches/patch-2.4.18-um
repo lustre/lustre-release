@@ -1,5 +1,5 @@
---- lum-pristine/arch/um/kernel/mem.c.orig	Sat Jul 20 19:05:51 2002
-+++ lum/arch/um/kernel/mem.c	Sat Jul 20 19:07:18 2002
+--- lum-pristine/arch/um/kernel/mem.c	Mon Aug 12 11:05:20 2002
++++ lum/arch/um/kernel/mem.c	Thu Aug  1 18:07:35 2002
 @@ -527,6 +527,22 @@
  	return(phys_mem_map(pte_val(pte)));
  }
