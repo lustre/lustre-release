@@ -98,6 +98,9 @@ int ll_sync_page(struct page *page);
 int ll_ocp_update_obdo(struct obd_client_page *ocp, int cmd, struct obdo *oa);
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
+void ll_check_inode_clean(struct inode *inode, int force);
+void ll_ocp_dirty(struct ll_inode_info *lli, struct obd_client_page *ocp);
+void ll_ocp_clean(struct ll_inode_info *lli, struct obd_client_page *ocp);
 
 void ll_truncate(struct inode *inode);
 
@@ -117,6 +120,8 @@ int ll_extent_lock_no_validate(struct ll_file_data *, struct inode *,
                                struct lov_stripe_md *, int mode,
                                struct ldlm_extent *, struct lustre_handle *,
                                int ast_flags);
+int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
+                 struct ll_file_data *fd);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
