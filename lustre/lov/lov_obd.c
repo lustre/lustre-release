@@ -236,6 +236,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
 
         lsm = *ea;
         LASSERT(oa->o_valid & OBD_MD_FLID);
+        lsm->lsm_magic = LOV_MAGIC;
         lsm->lsm_mds_easize = lov_mds_md_size(ost_count);
         lsm->lsm_object_id = oa->o_id;
         if (!lsm->lsm_stripe_count)
@@ -245,10 +246,10 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;
 
         lsm->lsm_ost_count = ost_count;
-        sub_offset = ((int)lsm->lsm_object_id / lsm->lsm_stripe_count) %
-                lsm->lsm_stripe_count;
         stripe_offset = (((int)lsm->lsm_object_id * lsm->lsm_stripe_count) %
                          ost_count);
+        sub_offset = ((int)lsm->lsm_object_id*lsm->lsm_stripe_count/ost_count)%
+                        lsm->lsm_stripe_count;
         lsm->lsm_stripe_offset = stripe_offset + sub_offset;
 
         CDEBUG(D_INODE, "allocating %d subobjs for objid "LPX64" at idx %d\n",
