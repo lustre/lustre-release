@@ -286,9 +286,11 @@ void class_destroy_export(struct obd_export *exp)
         int rc;
         ENTRY;
 
-        spin_lock(&exp->exp_connection->c_lock);
-        list_del(&exp->exp_chain);
-        spin_unlock(&exp->exp_connection->c_lock);
+        if (exp->exp_connection) {
+                spin_lock(&exp->exp_connection->c_lock);
+                list_del(&exp->exp_chain);
+                spin_unlock(&exp->exp_connection->c_lock);
+        }
 
         /* XXXshaver these bits want to be hung off the export, instead of
          * XXXshaver hard-coded here.
