@@ -48,7 +48,6 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_mds.h>
-#include <linux/lustre_lite.h>
 
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
