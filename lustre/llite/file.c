@@ -54,7 +54,7 @@ int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid, gid_t gid,
         obdo_free(oa);
 
         if (!rc)
-                LASSERT((*lsmp)->lsm_object_id);
+                LASSERT(*lsmp && (*lsmp)->lsm_object_id);
         RETURN(rc);
 }
 
