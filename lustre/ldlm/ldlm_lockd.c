@@ -1147,7 +1147,8 @@ static int ldlm_setup(void)
                         .bltd_blp = blp,
                 };
                 init_completion(&blp->blp_comp);
-                if (kernel_thread(ldlm_bl_thread_main, &bltd, 0) < 0) {
+                rc = kernel_thread(ldlm_bl_thread_main, &bltd, 0);
+                if (rc < 0) {
                         CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);
                         LBUG();
                         GOTO(out_thread, rc);
