@@ -1,0 +1,116 @@
+%define kversion @RELEASE@
+%define linuxdir @LINUX@
+%define version HEAD
+
+Summary: Sandia Portals Message Passing - utilities 
+Name: portals
+Version: %{version}
+Release: 0210101748uml
+Copyright: LGPL
+Group: Utilities/System
+BuildRoot: /var/tmp/portals-%{version}-root
+Source: http://sandiaportals.org/portals-%{version}.tar.gz
+
+%description
+Sandia Portals message passing package.  Contains kernel modules, libraries and utilities. 
+
+%package -n portals-modules
+Summary: Kernel modules and NAL's for portals
+Group: Development/Kernel
+
+%description -n portals-modules
+Object-Based Disk storage drivers for Linux %{kversion}.
+
+%package -n portals-source
+Summary: Portals kernel source for rebuilding with other kernels
+Group: Development/Kernel
+
+%description -n portals-source
+Portals kernel source for rebuilding with other kernels
+
+%prep
+%setup -n portals-%{version}
+
+%build
+rm -rf $RPM_BUILD_ROOT
+
+# Create the pristine source directory.
+srcdir=$RPM_BUILD_ROOT/usr/src/portals-%{version}
+mkdir -p $srcdir
+find . -name CVS -prune -o -print | cpio -ap $srcdir
+
+# Set an explicit path to our Linux tree, if we can.
+conf_flag=
+linuxdir=%{linuxdir}
+test -d $linuxdir && conf_flag=--with-linux=$linuxdir
+./configure $conf_flag
+make 
+
+%install
+make install prefix=$RPM_BUILD_ROOT
+
+%ifarch alpha
+# this hurts me
+  conf_flag=
+  linuxdir=%{linuxdir}
+  test -d $linuxdir && conf_flag=--with-linux=$linuxdir
+  make clean
+  ./configure --enable-rtscts-myrinet $conf_flag
+  make
+  cp linux/rtscts/rtscts.o $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/net/portals/rtscts_myrinet.o
+  cp user/myrinet_utils/mcpload $RPM_BUILD_ROOT/usr/sbin/mcpload
+%endif
+
+
+%files
+%attr(-, root, root) %doc COPYING
+%attr(-, root, root) /usr/sbin/acceptor
+%attr(-, root, root) /usr/sbin/ptlctl
+%attr(-, root, root) /usr/sbin/debugctl
+%ifarch alpha
+%attr(-, root, root) /usr/sbin/mcpload
+%endif
+%attr(-, root, root) /lib/libmyrnal.a
+%attr(-, root, root) /lib/libptlapi.a
+%attr(-, root, root) /lib/libptlctl.a
+%attr(-, root, root) /lib/libprocbridge.a
+%attr(-, root, root) /lib/libptllib.a
+%attr(-, root, root) /lib/libtcpnal.a 
+%attr(-, root, root) /lib/libtcpnalutil.a
+%attr(-, root, root) /usr/include/portals/*.h
+%attr(-, root, root) /usr/include/portals/base/*.h
+%attr(-, root, root) /usr/include/linux/*.h
+
+%files -n portals-modules
+%attr(-, root, root) %doc COPYING
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/portals/portals.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/portals/kptlrouter.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/portals/kptrxtx.o
+%ifarch alpha
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/portals/p3mod.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/portals/rtscts.o
+%endif
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/portals/*nal.o
+
+%files -n portals-source
+%attr(-, root, root) /usr/src/portals-%{version}
+
+%post
+if [ ! -e /dev/portals ]; then
+   mknod /dev/portals c 10 240
+fi
+depmod -ae || exit 0
+
+grep -q portals /etc/modules.conf || \
+	echo 'alias char-major-10-240 portals' >> /etc/modules.conf
+
+grep -q '/dev/portals' /etc/modules.conf || \
+	echo 'alias /dev/portals portals' >> /etc/modules.conf
+
+%postun
+depmod -ae || exit 0
+
+%clean
+#rm -rf $RPM_BUILD_ROOT
+
+# end of file
