@@ -2914,7 +2914,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 if (rc == 0)
                         rc = llog_initiator_connect(ctxt);
                 else
-                        CERROR("cannot establish the connect for ctxt %p: %d\n",
+                        CERROR("cannot establish connection for ctxt %p: %d\n",
                                ctxt, rc);
         }
 
