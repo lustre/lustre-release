@@ -63,7 +63,7 @@ struct lmv_obj *lmv_create_obj(struct obd_export *exp,
 			       struct ll_fid *fid,
 			       struct mea *mea);
 
-int lmv_destroy_obj(struct obd_export *exp, struct ll_fid *fid);
+int lmv_delete_obj(struct obd_export *exp, struct ll_fid *fid);
 
 int lmv_intent_lock(struct obd_export *, struct ll_uctxt *,
                     struct ll_fid *, const char *, int, void *, int,

@@ -1283,6 +1283,19 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
         RETURN(rc);
 }
 
+int lmv_delete_object(struct obd_export *exp, struct ll_fid *fid)
+{
+        ENTRY;
+
+        if (!lmv_delete_obj(exp, fid)) {
+                CWARN("Object %lu/%lu/%lu is not found.\n",
+                      (unsigned long)fid->mds, (unsigned long)fid->id,
+                      (unsigned long)fid->generation);
+        }
+        
+        RETURN(0);
+}
+
 int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request)
 {
@@ -1691,6 +1704,7 @@ struct md_ops lmv_md_ops = {
         .m_unlink               = lmv_unlink,
         .m_get_real_obd         = lmv_get_real_obd,
         .m_valid_attrs          = lmv_valid_attrs,
+        .m_delete_object        = lmv_delete_object,
 };
 
 int __init lmv_init(void)

@@ -1122,11 +1122,31 @@ static inline int md_getstatus(struct obd_export *exp, struct ll_fid *fid)
         RETURN(rc);
 }
 
+/* this function notifies MDC, that inode described by @fid gets removed from
+ * memory.*/
+static inline int md_delete_object(struct obd_export *exp,
+                                   struct ll_fid *fid)
+{
+        int rc;
+        ENTRY;
+
+        /* as this method only notifies MDC that inode gets deleted, we can
+         * return zero if method is not implemented, this means, that OBD does
+         * not need such a notification. */
+        if (MDP(exp->exp_obd, delete_object) == NULL)
+                RETURN(0);
+        
+        MD_COUNTER_INCREMENT(exp->exp_obd, delete_object);
+        rc = MDP(exp->exp_obd, delete_object)(exp, fid);
+        RETURN(rc);
+}
+
 static inline int md_getattr(struct obd_export *exp, struct ll_fid *fid,
                              unsigned long valid, unsigned int ea_size,
                              struct ptlrpc_request **request)
 {
         int rc;
+        ENTRY;
         EXP_CHECK_MD_OP(exp, getattr);
         MD_COUNTER_INCREMENT(exp->exp_obd, getattr);
         rc = MDP(exp->exp_obd, getattr)(exp, fid, valid, ea_size, request);
@@ -1323,8 +1343,8 @@ static inline int md_unlink(struct obd_export *exp, struct mdc_op_data *data,
         RETURN(rc);
 }
 
-static inline struct obd_device * md_get_real_obd(struct obd_export *exp,
-                                                  char *name, int len)
+static inline struct obd_device *md_get_real_obd(struct obd_export *exp,
+                                                 char *name, int len)
 {
         ENTRY;
         if (MDP(exp->exp_obd, get_real_obd) == NULL)

@@ -336,7 +336,7 @@ cleanup:
  * this case it will be marked as "freeing" and will not be accessible anymore
  * for subsequent callers of lmv_grab_obj(). */
 int
-lmv_destroy_obj(struct obd_export *exp, struct ll_fid *fid)
+lmv_delete_obj(struct obd_export *exp, struct ll_fid *fid)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obj *obj;

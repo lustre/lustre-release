@@ -1334,6 +1334,24 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         }
 }
 
+void ll_delete_inode(struct inode *inode)
+{
+        int rc;
+        struct ll_fid fid;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        ENTRY;
+        
+        ll_inode2fid(&fid, inode);
+
+        rc = md_delete_object(sbi->ll_mdc_exp, &fid);
+        if (rc) {
+                CERROR("md_delete_object() failed, error %d.\n",
+                       rc);
+        }
+        
+        EXIT;
+}
+
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg)
 {
