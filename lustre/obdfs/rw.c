@@ -185,9 +185,11 @@ int obdfs_do_vec_wr(struct super_block *sb, obd_count num_io,
 	err = OPS(sb, brw)(WRITE, &sbi->osi_conn, num_obdos, obdos, oa_bufs,
 				bufs, counts, offsets, flags);
 
-	do {
-		put_page(pages[--num_io]);
-	} while ( num_io > 0 );
+	/* release the pages from the page cache */
+	while ( num_io >= 0 ) {
+		num_io--;
+		put_page(pages[num_io]);
+	} 
 
 	EXIT;
 	return err;

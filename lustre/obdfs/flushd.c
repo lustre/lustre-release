@@ -61,8 +61,11 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 	int i = 0;
 
 	ENTRY;
+	/* if there are no pages, remove from super block list */
 	if (list_empty(obdfs_iplist(inode))) {
 		list_del(obdfs_islist(inode));
+		/* we check for "empty" on this animal: must init it! */
+		INIT_LIST_HEAD(obdfs_islist(inode));
 		CDEBUG(D_INODE, "empty list\n");
 		EXIT;
 		return 0;
@@ -114,7 +117,7 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 }
 
 
-/* Remove writeback requests from an inode */
+/* Remove writeback requests for the superblock */
 int obdfs_flush_reqs(struct list_head *inode_list, int flush_inode,
 		     int check_time)
 {
