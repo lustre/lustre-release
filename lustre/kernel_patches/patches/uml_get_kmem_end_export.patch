@@ -1,0 +1,10 @@
+--- uml-2.4/arch/um/kernel/ksyms.c.orig	2003-12-12 18:16:28.000000000 +0200
++++ uml-2.4/arch/um/kernel/ksyms.c	2003-12-12 18:16:39.000000000 +0200
+@@ -33,6 +33,7 @@
+ EXPORT_SYMBOL(flush_tlb_range);
+ EXPORT_SYMBOL(host_task_size);
+ EXPORT_SYMBOL(arch_validate);
++EXPORT_SYMBOL(get_kmem_end);
+ 
+ EXPORT_SYMBOL(region_pa);
+ EXPORT_SYMBOL(region_va);
