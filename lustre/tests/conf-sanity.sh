@@ -613,6 +613,12 @@ test_15() {
 }
 run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 
+is_digit() {
+    local value=$1
+    echo $value | grep -q "^[[:digit:]]*$"
+    return $?
+}
+
 test_16() {
         TMPMTPT="/mnt/conf16"
                                                                                                                              
@@ -645,24 +651,49 @@ test_16() {
         EXPECTEDLOGSMODE=`debugfs -R "stat LOGS" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
         EXPECTEDPENDINGMODE=`debugfs -R "stat PENDING" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
 
-        if [ $EXPECTEDOBJECTSMODE = "0777" ]; then
-                echo "Success:Lustre change the mode of OBJECTS correctly"
+	# check if values are empty
+	test "$EXPECTEDOBJECTSMODE" = "x" && EXPECTEDOBJECTSMODE="<empty>"
+	test "$EXPECTEDLOGSMODE" = "x" && EXPECTEDLOGSMODE="<empty>"
+	test "$EXPECTEDPENDINGMODE" = "x" && EXPECTEDPENDINGMODE="<empty>"
+
+	# check if values are valid digits
+	is_digit $EXPECTEDOBJECTSMODE || {
+	    echo "Invalid OBJECTS mode obtained from debugfs: $EXPECTEDOBJECTSMODE"
+	    return 42
+	}
+
+	is_digit $EXPECTEDLOGSMODE || {
+	    echo "Invalid LOGS mode obtained from debugfs: $EXPECTEDLOGSMODE"
+	    return 42
+	}
+
+	is_digit $EXPECTEDPENDINGMODE || {
+	    echo "Invalid PINDING mode obtained from debugfs: $EXPECTEDPENDINGMODE"
+	    return 42
+	}
+
+	# check if values are those we expected
+        if [ "x$EXPECTEDOBJECTSMODE" = "x0777" ]; then
+                echo "Success: Lustre change the mode of OBJECTS correctly"
         else
                 echo "Error: Lustre does not change the mode of OBJECTS properly"
+		echo "Expected value: 0777, actual one: $EXPECTEDOBJECTSMODE"
                 return 1
         fi
                                                                                                                              
-        if [ $EXPECTEDLOGSMODE = "0777" ]; then
-                echo "Success:Lustre change the mode of LOGS correctly"
+        if [ "x$EXPECTEDLOGSMODE" = "x0777" ]; then
+                echo "Success: Lustre change the mode of LOGS correctly"
         else
                 echo "Error: Lustre does not change the mode of LOGS properly"
+		echo "Expected value: 0777, actual one: $EXPECTEDLOGSMODE"
                 return 1
         fi
                                                                                                                              
-        if [ $EXPECTEDPENDINGMODE = "0777" ]; then
-                echo "Success:Lustre change the mode of PENDING correctly"
+        if [ "x$EXPECTEDPENDINGMODE" = "x0777" ]; then
+                echo "Success: Lustre change the mode of PENDING correctly"
         else
                 echo "Error: Lustre does not change the mode of PENDING properly"
+		echo "Expected value: 0777, actual one: $EXPECTEDPENDINGMODE"
                 return 1
         fi
 }
