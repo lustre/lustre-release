@@ -1,7 +1,7 @@
 Index: linux-2.6.7/fs/exec.c
 ===================================================================
---- linux-2.6.7.orig/fs/exec.c	2004-06-16 13:19:13.000000000 +0800
-+++ linux-2.6.7/fs/exec.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/fs/exec.c	2004-08-26 17:12:39.000000000 +0400
++++ linux-2.6.7/fs/exec.c	2005-01-18 11:27:18.069500328 +0300
 @@ -121,9 +121,10 @@
  	struct file * file;
  	struct nameidata nd;
@@ -47,8 +47,8 @@ Index: linux-2.6.7/fs/exec.c
  					if (err) {
 Index: linux-2.6.7/fs/namei.c
 ===================================================================
---- linux-2.6.7.orig/fs/namei.c	2004-06-16 13:19:12.000000000 +0800
-+++ linux-2.6.7/fs/namei.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/fs/namei.c	2004-08-26 17:12:40.000000000 +0400
++++ linux-2.6.7/fs/namei.c	2005-01-18 11:27:30.762570688 +0300
 @@ -272,8 +272,19 @@
  	return 0;
  }
@@ -203,7 +203,7 @@ Index: linux-2.6.7/fs/namei.c
  	return err;
  }
  
-+int __user_walk(const char __user *name, unsigned flags, struct nameidata *nd)
++int fastcall __user_walk(const char __user *name, unsigned flags, struct nameidata *nd)
 +{
 +	intent_init(&nd->intent, IT_LOOKUP);
 +	return __user_walk_it(name, flags, nd);
@@ -274,8 +274,8 @@ Index: linux-2.6.7/fs/namei.c
  	if (current->link_count || res || nd->last_type!=LAST_NORM)
 Index: linux-2.6.7/fs/namespace.c
 ===================================================================
---- linux-2.6.7.orig/fs/namespace.c	2004-06-16 13:19:37.000000000 +0800
-+++ linux-2.6.7/fs/namespace.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/fs/namespace.c	2004-08-26 17:12:40.000000000 +0400
++++ linux-2.6.7/fs/namespace.c	2005-01-18 11:27:18.077499112 +0300
 @@ -60,6 +60,7 @@
  		INIT_LIST_HEAD(&mnt->mnt_child);
  		INIT_LIST_HEAD(&mnt->mnt_mounts);
@@ -337,8 +337,8 @@ Index: linux-2.6.7/fs/namespace.c
  		flags &= ~MS_MGC_MSK;
 Index: linux-2.6.7/fs/open.c
 ===================================================================
---- linux-2.6.7.orig/fs/open.c	2004-06-16 13:18:56.000000000 +0800
-+++ linux-2.6.7/fs/open.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/fs/open.c	2004-08-26 17:12:40.000000000 +0400
++++ linux-2.6.7/fs/open.c	2005-01-18 11:27:18.080498656 +0300
 @@ -215,12 +215,12 @@
  	struct nameidata nd;
  	struct inode * inode;
@@ -493,8 +493,8 @@ Index: linux-2.6.7/fs/open.c
   */
 Index: linux-2.6.7/fs/stat.c
 ===================================================================
---- linux-2.6.7.orig/fs/stat.c	2004-06-16 13:19:01.000000000 +0800
-+++ linux-2.6.7/fs/stat.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/fs/stat.c	2004-08-26 17:12:40.000000000 +0400
++++ linux-2.6.7/fs/stat.c	2005-01-18 11:27:18.082498352 +0300
 @@ -37,7 +37,7 @@
  
  EXPORT_SYMBOL(generic_fillattr);
@@ -566,8 +566,8 @@ Index: linux-2.6.7/fs/stat.c
  	return error;
 Index: linux-2.6.7/fs/nfs/dir.c
 ===================================================================
---- linux-2.6.7.orig/fs/nfs/dir.c	2004-06-16 13:19:23.000000000 +0800
-+++ linux-2.6.7/fs/nfs/dir.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/fs/nfs/dir.c	2004-08-26 17:11:31.000000000 +0400
++++ linux-2.6.7/fs/nfs/dir.c	2005-01-18 11:27:18.084498048 +0300
 @@ -705,7 +705,7 @@
  		return 0;
  	if (!nd || (nd->flags & LOOKUP_CONTINUE) || !(nd->flags & LOOKUP_CREATE))
@@ -588,8 +588,8 @@ Index: linux-2.6.7/fs/nfs/dir.c
  	 * The 0 argument passed into the create function should one day
 Index: linux-2.6.7/fs/inode.c
 ===================================================================
---- linux-2.6.7.orig/fs/inode.c	2004-06-16 13:20:26.000000000 +0800
-+++ linux-2.6.7/fs/inode.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/fs/inode.c	2004-08-26 17:12:40.000000000 +0400
++++ linux-2.6.7/fs/inode.c	2005-01-18 11:27:18.086497744 +0300
 @@ -232,6 +232,7 @@
  	inodes_stat.nr_unused--;
  }
@@ -600,8 +600,8 @@ Index: linux-2.6.7/fs/inode.c
   * @inode: inode to clear
 Index: linux-2.6.7/fs/super.c
 ===================================================================
---- linux-2.6.7.orig/fs/super.c	2004-06-16 13:19:22.000000000 +0800
-+++ linux-2.6.7/fs/super.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/fs/super.c	2004-08-26 17:12:40.000000000 +0400
++++ linux-2.6.7/fs/super.c	2005-01-18 11:27:18.088497440 +0300
 @@ -804,6 +804,8 @@
  	return (struct vfsmount *)sb;
  }
@@ -613,8 +613,8 @@ Index: linux-2.6.7/fs/super.c
  	return do_kern_mount(type->name, 0, type->name, NULL);
 Index: linux-2.6.7/include/linux/dcache.h
 ===================================================================
---- linux-2.6.7.orig/include/linux/dcache.h	2004-06-16 13:20:26.000000000 +0800
-+++ linux-2.6.7/include/linux/dcache.h	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/include/linux/dcache.h	2004-08-26 17:12:41.000000000 +0400
++++ linux-2.6.7/include/linux/dcache.h	2005-01-18 11:27:18.089497288 +0300
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -634,8 +634,8 @@ Index: linux-2.6.7/include/linux/dcache.h
  	int nr_unused;
 Index: linux-2.6.7/include/linux/fs.h
 ===================================================================
---- linux-2.6.7.orig/include/linux/fs.h	2004-06-16 13:19:02.000000000 +0800
-+++ linux-2.6.7/include/linux/fs.h	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/include/linux/fs.h	2004-08-26 17:12:41.000000000 +0400
++++ linux-2.6.7/include/linux/fs.h	2005-01-18 11:27:18.092496832 +0300
 @@ -74,6 +74,7 @@
  
  #define FMODE_READ 1
@@ -705,8 +705,8 @@ Index: linux-2.6.7/include/linux/fs.h
  
 Index: linux-2.6.7/include/linux/namei.h
 ===================================================================
---- linux-2.6.7.orig/include/linux/namei.h	2004-06-16 13:19:10.000000000 +0800
-+++ linux-2.6.7/include/linux/namei.h	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/include/linux/namei.h	2003-07-24 15:52:31.000000000 +0400
++++ linux-2.6.7/include/linux/namei.h	2005-01-18 11:27:18.094496528 +0300
 @@ -2,25 +2,56 @@
  #define _LINUX_NAMEI_H
  
@@ -805,8 +805,8 @@ Index: linux-2.6.7/include/linux/namei.h
  
 Index: linux-2.6.7/include/linux/mount.h
 ===================================================================
---- linux-2.6.7.orig/include/linux/mount.h	2004-06-16 13:18:57.000000000 +0800
-+++ linux-2.6.7/include/linux/mount.h	2004-09-06 21:05:29.000000000 +0800
+--- linux-2.6.7.orig/include/linux/mount.h	2003-07-24 15:52:47.000000000 +0400
++++ linux-2.6.7/include/linux/mount.h	2005-01-18 11:27:18.094496528 +0300
 @@ -31,6 +31,8 @@
  	int mnt_flags;
  	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
@@ -818,8 +818,8 @@ Index: linux-2.6.7/include/linux/mount.h
  static inline struct vfsmount *mntget(struct vfsmount *mnt)
 Index: linux-2.6.7/kernel/exit.c
 ===================================================================
---- linux-2.6.7.orig/kernel/exit.c	2004-06-16 13:19:52.000000000 +0800
-+++ linux-2.6.7/kernel/exit.c	2004-09-06 21:03:22.000000000 +0800
+--- linux-2.6.7.orig/kernel/exit.c	2004-08-26 17:12:42.000000000 +0400
++++ linux-2.6.7/kernel/exit.c	2005-01-18 11:27:18.096496224 +0300
 @@ -256,6 +256,8 @@
  	write_unlock_irq(&tasklist_lock);
  }
