@@ -9,7 +9,7 @@ LMC_REAL="../../lustre/utils/lmc -m $config"
 SERVER_START=0
 SERVER_CNT=62
 
-PORT=2432
+PORT=988
 TCPBUF=1048576
  
 h2ip () {
