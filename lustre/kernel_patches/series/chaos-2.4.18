@@ -30,4 +30,5 @@ nfs_export_kernel-2.4.18.patch
 ext3-ea-in-inode-2.4.18-chaos.patch
 listman-2.4.18.patch
 ext3-trusted_ea-2.4.18.patch
-gfp_memalloc-2.4.18-chaos.patch 
+gfp_memalloc-2.4.18-chaos.patch
+ext3-xattr-ptr-arith-fix.patch
