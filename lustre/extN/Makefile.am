@@ -58,7 +58,7 @@ patch-stamp: $(EXTNP)
 	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then                       \
 		patch -p0 < $(srcdir)/extN.patch-$(RELEASE);                  \
 	else                                                                  \
-		echo "If first patch fails, read NOTE in extN/Makefile.am"    \
+		echo "If first patch fails, read NOTE in extN/Makefile.am";   \
 		list='$(EXTNP)'; for p in $$list; do                          \
 		sed $(SUB) $(srcdir)/$$p|(cd $(top_srcdir);patch -p1)||exit -1;\
 		done;                                                         \
