@@ -12,6 +12,7 @@ TAG=
 TARGET=
 TARGET_ARCHS=
 CONFIGURE_FLAGS=
+EXTERNAL_PATCHES=
 EXTRA_VERSION=
 
 # from target file
@@ -41,11 +42,15 @@ cleanup()
     true
 }
 
+error()
+{
+    [ "$1" ] && echo -e "\n${0##*/}: $1"
+}
+
 fatal()
 {
     cleanup
-    [ "$2" ] && echo
-    [ "$2" ] && echo "${0##*/}: $2"
+    error "$2"
     exit $1
 }
 
@@ -78,6 +83,11 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Specifies the CVS Root to use when pulling files from CVS.  The
     environment variable \$CVSROOT is used if this option is not
     present.
+
+  --external-patches=EXTERNAL_PATCHES
+    Directory similar to lustre/kernel_patches/ that lbuild should
+    look for seres and config files in before looking in the lustre
+    tree.
 
   --extraversion=EXTRAVERSION
     Text to use for the rpm release and kernel extraversion.
@@ -177,7 +187,10 @@ uniqify()
 load_target()
 {
     EXTRA_VERSION_save="$EXTRA_VERSION"
-    TARGET_FILE="$TOPDIR/lustre/kernel_patches/targets/$TARGET.target"
+    for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/kernel_patches" ; do
+	TARGET_FILE="$patchesdir/targets/$TARGET.target"
+	[ -r "$TARGET_FILE" ] && break
+    done
     [ -r "$TARGET_FILE" ] || \
 	fatal 1 "Target $TARGET was not found."
 
@@ -196,9 +209,12 @@ load_target()
 	    fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
     fi
 
-    SERIES_FILE="$TOPDIR/lustre/kernel_patches/series/$SERIES"
-    [ -r "$SERIES_FILE" ] || \
-	fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/lustre/kernel_patches/series."
+    for series in $SERIES ; do
+	for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/kernel_patches" ; do
+	    [ -r "$patchesdir/series/$series" ] && continue 2
+	done
+	fatal 1 "Target $TARGET's series $SERIES could not be found.\nSearched:\n\t$EXTERNAL_PATCHES/series\n\t$TOPDIR/lustre/kernel_patches/series."
+    done
 
     CONFIG_FILE="$TOPDIR/lustre/kernel_patches/kernel_configs/$CONFIG"
     [ -r "$CONFIG_FILE" ] || \
@@ -282,24 +298,35 @@ patch_linux()
     FULL_PATCH="$PWD/lustre-kernel-${TARGET}-${EXTRA_VERSION}.patch"
     [ -f "$FULL_PATCH" ] && rm -f "$FULL_PATCH"
     pushd linux >/dev/null
-    echo -n "Applying patches:"
-    for patch in $(<"$SERIES_FILE") ; do
-	echo -n " $patch"
-	PATCH_FILE="$TOPDIR/lustre/kernel_patches/patches/$patch"
-	[ -r "$PATCH_FILE" ] || \
-	    fatal 1 "Patch $patch does not exist in Lustre tree."
-	cat "$PATCH_FILE" >> "$FULL_PATCH" || \
-	    fatal 1 "Error adding patch $patch to full patch."
-	patch -s -p1 < "$PATCH_FILE" || fatal 1 "Error applying patch $patch."
+    for series in $SERIES ; do
+	echo -n "Applying series $series:"
+	for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/kernel_patches" ; do
+	    [ -r "$patchesdir/series/$series" ] || continue
+	    SERIES_FILE="$patchesdir/series/$series"
+	    for patch in $(<"$SERIES_FILE") ; do
+		echo -n " $patch"
+		PATCH_FILE="$patchesdir/patches/$patch"
+		[ -r "$PATCH_FILE" ] || \
+		    fatal 1 "Patch $patch does not exist in Lustre tree."
+		cat "$PATCH_FILE" >> "$FULL_PATCH" || \
+		    fatal 1 "Error adding patch $patch to full patch."
+		patch -s -p1 < "$PATCH_FILE" || fatal 1 "Error applying patch $patch."
+	    done
+	    break
+	done
+	echo
     done
-    echo
     popd >/dev/null
     echo "Full patch has been saved in ${FULL_PATCH##*/}."
     echo "Replacing .config files..."
     [ -d linux/configs ] || mkdir linux/configs || \
         fatal 1 "Error creating configs directory."
     rm -f linux/configs/*
-    cp -v lustre/kernel_patches/kernel_configs/kernel-${VERSION}-${TARGET}*.config linux/configs/ || \
+    copysuccess=0
+    for patchesdir in "$EXTERNAL_PATCHES" "lustre/kernel_patches" ; do
+	cp -v $patchesdir/kernel_configs/kernel-${VERSION}-${TARGET}*.config linux/configs/ >/dev/null && copysuccess=1
+    done
+    [ "$copysuccess" = "1" ] || \
 	fatal 1 "Error copying in kernel configs."
 }
 
@@ -324,22 +351,23 @@ clean_linux()
 prep_build()
 {
     # make .spec file
-    sed -e "s/@KERNEL_VERSION@/$VERSION/g" \
-	-e "s/@KERNEL_EXTRA_VERSION@/$EXTRA_VERSION/g" \
+    sed \
+	-e "s^@BASE_ARCHS@^$BASE_ARCHS^g" \
+	-e "s^@BIGMEM_ARCHS@^$BIGMEM_ARCHS^g" \
+	-e "s^@BOOT_ARCHS@^$BOOT_ARCHS^g" \
+	-e "s^@CONFIGURE_FLAGS@^$CONFIGURE_FLAGS^g" \
+	-e "s^@JENSEN_ARCHS@^$BOOT_ARCHS^g" \
+	-e "s^@KERNEL_EXTRA_VERSION@^$EXTRA_VERSION^g" \
 	-e "s^@KERNEL_RELEASE@^${EXTRA_VERSION//-/_}^g" \
-	-e "s/@KERNEL_SOURCE@/$KERNEL/g" \
-	-e "s/@LUSTRE_SOURCE@/${LUSTRE##*/}/g" \
-	-e "s/@LUSTRE_TARGET@/$TARGET/g" \
-	-e "s#@CONFIGURE_FLAGS@#$CONFIGURE_FLAGS#g" \
-	-e "s/@BASE_ARCHS@/$BASE_ARCHS/g" \
-	-e "s/@BIGMEM_ARCHS@/$BIGMEM_ARCHS/g" \
-	-e "s/@BOOT_ARCHS@/$BOOT_ARCHS/g" \
-	-e "s/@JENSEN_ARCHS@/$BOOT_ARCHS/g" \
-	-e "s/@SMP_ARCHS@/$SMP_ARCHS/g" \
-	-e "s/@UP_ARCHS@/$UP_ARCHS/g" \
-	-e "s/@RHBUILD@/$RHBUILD/g" \
-	-e "s/@LINUX26@/$LINUX26/g" \
-	-e "s/@SUSEBUILD@/$SUSEBUILD/g" \
+	-e "s^@KERNEL_SOURCE@^$KERNEL^g" \
+	-e "s^@KERNEL_VERSION@^$VERSION^g" \
+	-e "s^@LINUX26@^$LINUX26^g" \
+	-e "s^@LUSTRE_SOURCE@^${LUSTRE##*/}^g" \
+	-e "s^@LUSTRE_TARGET@^$TARGET^g" \
+	-e "s^@RHBUILD@^$RHBUILD^g" \
+	-e "s^@SMP_ARCHS@^$SMP_ARCHS^g" \
+	-e "s^@SUSEBUILD@^$SUSEBUILD^g" \
+	-e "s^@UP_ARCHS@^$UP_ARCHS^g" \
 	< $TOPDIR/lustre/scripts/lustre-kernel-2.4.spec.in \
 	> lustre-kernel-2.4.spec
     [ -d SRPMS ] || mkdir SRPMS
@@ -350,6 +378,11 @@ prep_build()
     cp $TOPDIR/lustre/scripts/linux-merge-config.awk SOURCES
     cp $TOPDIR/lustre/scripts/linux-merge-modules.awk SOURCES
     cp "$LUSTRE" "$KERNEL_FILE" SOURCES
+    if [ "$EXTERNAL_PATCHES" -a -d "$EXTERNAL_PATCHES" ] ; then
+	tar zcf SOURCES/external-patches.tar.gz -C "$EXTERNAL_PATCHES" series targets patches kernel_configs
+    else
+	touch SOURCES/external-patches.tar.gz
+    fi
 }
 
 clean_lustre()
@@ -372,9 +405,11 @@ build()
 	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building rpms for $arch."
 
-    (( $DO_SRC )) && $RPMBUILD -bs lustre-kernel-2.4.spec \
-	--define "_topdir $TOPDIR" || \
-	fatal 1 "Error building .src.rpm."
+    if (( $DO_SRC )) ; then
+	$RPMBUILD -bs lustre-kernel-2.4.spec \
+	    --define "_topdir $TOPDIR" || \
+	    fatal 1 "Error building .src.rpm."
+    fi
 }
 
 publish()
@@ -384,7 +419,7 @@ publish()
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l extraversion:,kerneldir:,lustre:,nosrc,publish,release,tag:,target:,target-archs:,disable-datestamp -- "$@")
+options=$(getopt -o d:D:h -l external-patches:,extraversion:,kerneldir:,lustre:,nosrc,publish,release,tag:,target:,target-archs:,disable-datestamp -- "$@")
 
 eval set -- "$options"
     
@@ -399,6 +434,10 @@ while [ "$1" ] ; do
 	    ;;
 	-D)
 	    DATE=$2
+	    shift 2
+	    ;;
+	--external-patches)
+	    EXTERNAL_PATCHES=$2
 	    shift 2
 	    ;;
 	--extraversion)
