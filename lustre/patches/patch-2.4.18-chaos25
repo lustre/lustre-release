@@ -750,6 +750,20 @@
  		if (error)
  			goto exit;
  		error = path_lookup(to, LOOKUP_PARENT, &nd);
+@@ -1670,10 +1778,12 @@
+ 		error = -EXDEV;
+ 		if (old_nd.mnt != nd.mnt)
+ 			goto out_release;
+-		new_dentry = lookup_create(&nd, 0);
++		it.it_op = IT_LINK2;
++		new_dentry = lookup_create(&nd, 0, &it);
+ 		error = PTR_ERR(new_dentry);
+ 		if (!IS_ERR(new_dentry)) {
+ 			error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
++			intent_release(new_dentry, &it);
+ 			dput(new_dentry);
+ 		}
+ 		up(&nd.dentry->d_inode->i_sem);
 @@ -1715,7 +1822,8 @@
   *	   locking].
   */
@@ -1058,15 +1072,15 @@
 -
 -	return ERR_PTR(error);
 +	error = open_namei_it(filename, namei_flags, mode, &nd, &it);
-+ 	if (error)
-+ 		return ERR_PTR(error);
-+ 
-+ 	return dentry_open_it(nd.dentry, nd.mnt, flags, &it);
++	if (error)
++		return ERR_PTR(error);
++
++	return dentry_open_it(nd.dentry, nd.mnt, flags, &it);
  }
  
 -struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags)
 +struct file *dentry_open_it(struct dentry *dentry, struct vfsmount *mnt,
-+ 			    int flags, struct lookup_intent *it)
++			    int flags, struct lookup_intent *it)
  {
  	struct file * f;
  	struct inode *inode;
