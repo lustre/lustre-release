@@ -355,7 +355,7 @@
  EXPORT_SYMBOL(dentry_open);
 --- linux-2.4.18-chaos5-pristine/include/linux/dcache.h	Sat Jun 29 23:07:57 2002
 +++ linux-2.4.18-chaos5/include/linux/dcache.h	Mon Jul  1 08:51:12 2002
-@@ -6,6 +6,32 @@
+@@ -6,6 +6,33 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
  
@@ -373,6 +373,7 @@
 +#define IT_SETATTR  (1<<11)
 +#define IT_READLINK  (1<<12)
 +#define IT_MKNOD  (1<<13)
++#define IT_LOOKUP  (1<<14)
 +
 +struct lookup_intent { 
 +	int it_op;
@@ -388,7 +389,7 @@
  /*
   * linux/include/linux/dcache.h
   *
-@@ -78,6 +104,7 @@
+@@ -78,6 +105,7 @@
  	unsigned long d_time;		/* used by d_revalidate */
  	struct dentry_operations  *d_op;
  	struct super_block * d_sb;	/* The root of the dentry tree */
@@ -396,7 +397,7 @@
  	unsigned long d_vfs_flags;
  	void * d_fsdata;		/* fs-specific data */
  	void * d_extra_attributes;	/* TUX-specific data */
-@@ -91,6 +118,8 @@
+@@ -91,6 +119,8 @@
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
