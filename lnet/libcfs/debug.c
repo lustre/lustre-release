@@ -633,9 +633,9 @@ int portals_debug_mark_buffer(char *text)
         if (debug_buf == NULL)
                 return -EINVAL;
 
-        CDEBUG(0, "********************************************************\n");
+        CDEBUG(D_TRACE,"***************************************************\n");
         CWARN("DEBUG MARKER: %s\n", text);
-        CDEBUG(0, "********************************************************\n");
+        CDEBUG(D_TRACE,"***************************************************\n");
 
         return 0;
 }
@@ -805,8 +805,10 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                               subsys, mask, smp_processor_id(),
                               tv.tv_sec, tv.tv_usec, stack, current->pid);
         max_nob -= prefix_nob;
+
         if(*(format + strlen(format) - 1) != '\n')
-                *(format + strlen(format)) = '\n';
+                printk(KERN_INFO "format at %s:%d:%s doesn't end in newline\n",
+                       file, line, fn);
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
         msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
@@ -943,9 +945,6 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 }
 
 #ifdef __KERNEL__
-#include <linux/lustre_version.h>
-#if (LUSTRE_KERNEL_VERSION >= 30)
-#warning "FIXME: remove workaround when l30 is widely used"
 char stack_backtrace[LUSTRE_TRACE_SIZE];
 spinlock_t stack_backtrace_lock = SPIN_LOCK_UNLOCKED;
 
@@ -956,7 +955,7 @@ extern int is_kernel_text_address(unsigned long addr);
 char *portals_debug_dumpstack(void)
 {
         asm("int $3");
-        return "dump stack";
+        return "dump stack\n";
 }
 
 #elif defined(__i386__)
@@ -1018,7 +1017,6 @@ char *portals_debug_dumpstack(void)
 #endif /* __arch_um__ */
 EXPORT_SYMBOL(stack_backtrace_lock);
 EXPORT_SYMBOL(portals_debug_dumpstack);
-#endif /* LUSTRE_KERNEL_VERSION < 30 */
 #endif /* __KERNEL__ */
 
 EXPORT_SYMBOL(portals_debug_dumplog);
