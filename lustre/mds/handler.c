@@ -23,7 +23,6 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <linux/locks.h>
-#include <linux/ext2_fs.h>
 #include <linux/quotaops.h>
 #include <asm/unistd.h>
 #include <asm/uaccess.h>
@@ -34,9 +33,6 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
 
-struct buffer_head *ext3_bread(void *handle, struct inode *inode,
-                               int block, int create, int *err);
-
 int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                  __u64 offset, struct niobuf *dst)
 {
@@ -46,34 +42,12 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         OBD_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, -EIO);
 
         if (req->rq_peer.peer_nid == 0) {
-                struct inode *inode = file->f_dentry->d_inode;
+                /* dst->addr is a user address, but in a different task! */
                 char *buf = (char *)(long)dst->addr;
 
-                /* dst->addr is a user address, but in a different task! */
                 set_fs(KERNEL_DS);
-                /* FIXME: we need to use ext3_bread because ext3 does not
-                 *        have the directories in page cache yet.  If we
-                 *        just use generic_file_read() then the pages we
-                 *        get are in a different address space than those
-                 *        used by the filesystem == cache incoherency.
-                 */
-                if (S_ISREG(inode->i_mode))
-                        rc = file->f_op->read(file, buf, PAGE_SIZE, &offset);
-                else if (!strcmp(inode->i_sb->s_type->name, "ext3")) {
-                        struct buffer_head *bh;
-
-                        bh = ext3_bread(NULL, inode,
-                                        offset >> inode->i_sb->s_blocksize_bits,
-                                        0, &rc);
-
-                        if (bh) {
-                                memcpy(buf, bh->b_data, inode->i_blksize);
-                                brelse(bh);
-                                rc = inode->i_blksize;
-                        }
-                } else
-                        rc = generic_file_read(file, buf, PAGE_SIZE, &offset);
-
+                rc = mds_fs_readpage(&req->rq_obd->u.mds, file, buf, PAGE_SIZE,
+                                     &offset);
                 set_fs(oldfs);
 
                 if (rc != PAGE_SIZE) {
@@ -82,7 +56,6 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 }
                 EXIT;
         } else {
-                struct inode *inode = file->f_dentry->d_inode;
                 struct ptlrpc_bulk_desc *bulk;
                 char *buf;
 
@@ -101,23 +74,8 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 }
 
                 set_fs(KERNEL_DS);
-                /* FIXME: see comments above */
-                if (S_ISREG(inode->i_mode))
-                        rc = file->f_op->read(file, buf, PAGE_SIZE, &offset);
-                else if (!strcmp(inode->i_sb->s_type->name, "ext3")) {
-                        struct buffer_head *bh;
-
-                        bh = ext3_bread(NULL, inode, offset >> inode->i_blkbits,
-                                        0, &rc);
-
-                        if (bh) {
-                                memcpy(buf, bh->b_data, inode->i_blksize);
-                                brelse(bh);
-                                rc = inode->i_blksize;
-                        }
-                } else
-                        rc = generic_file_read(file, buf, PAGE_SIZE, &offset);
-
+                rc = mds_fs_readpage(&req->rq_obd->u.mds, file, buf, PAGE_SIZE,
+                                     &offset);
                 set_fs(oldfs);
 
                 if (rc != PAGE_SIZE) {
@@ -210,17 +168,12 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         return result;
 }
 
-static inline void mds_get_objid(struct inode *inode, __u64 *id)
-{
-        /* FIXME: it is only by luck that this works on ext3 */
-        memcpy(id, &inode->u.ext2_i.i_data, sizeof(*id));
-}
-
 int mds_getattr(struct ptlrpc_request *req)
 {
         struct dentry *de;
         struct inode *inode;
         struct mds_rep *rep;
+        struct mds_obd *mds = &req->rq_obd->u.mds;
         int rc;
 
         rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
@@ -234,7 +187,7 @@ int mds_getattr(struct ptlrpc_request *req)
         req->rq_rephdr->xid = req->rq_reqhdr->xid;
         rep = req->rq_rep.mds;
 
-        de = mds_fid2dentry(&req->rq_obd->u.mds, &req->rq_req.mds->fid1, NULL);
+        de = mds_fid2dentry(mds, &req->rq_req.mds->fid1, NULL);
         if (IS_ERR(de)) {
                 req->rq_rephdr->status = -ENOENT;
                 RETURN(0);
@@ -252,7 +205,7 @@ int mds_getattr(struct ptlrpc_request *req)
         rep->mode = inode->i_mode;
         rep->nlink = inode->i_nlink;
         rep->valid = ~0;
-        mds_get_objid(inode, &rep->objid);
+        mds_fs_get_objid(mds, inode, &rep->objid);
         dput(de);
         return 0;
 }
@@ -485,19 +438,42 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         int err;
         ENTRY;
 
+        MOD_INC_USE_COUNT;
         mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL);
         err = PTR_ERR(mnt);
         if (IS_ERR(mnt)) {
                 CERROR("do_kern_mount failed: %d\n", err);
+                MOD_DEC_USE_COUNT;
                 RETURN(err);
         }
 
         mds->mds_sb = mnt->mnt_root->d_inode->i_sb;
-        if (!mds->mds_sb)
+        if (!mds->mds_sb) {
+                MOD_DEC_USE_COUNT;
                 RETURN(-ENODEV);
+        }
 
         mds->mds_vfsmnt = mnt;
         mds->mds_fstype = strdup(data->ioc_inlbuf2);
+
+        if (!strcmp(mds->mds_fstype, "ext3"))
+                mds->mds_fsops = &mds_ext3_fs_ops;
+        else if (!strcmp(mds->mds_fstype, "ext2"))
+                mds->mds_fsops = &mds_ext2_fs_ops;
+        else {
+                CERROR("unsupported MDS filesystem type %s\n", mds->mds_fstype);
+                kfree(mds->mds_fstype);
+                MOD_DEC_USE_COUNT;
+                RETURN(-EPERM);
+        }
+
+        /*
+         * Replace the client filesystem delete_inode method with our own,
+         * so that we can clear the object ID before the inode is deleted.
+         * The fs_delete_inode method will call cl_delete_inode for us.
+         */
+        mds->mds_fsops->cl_delete_inode = mds->mds_sb->s_op->delete_inode;
+        mds->mds_sb->s_op->delete_inode = mds->mds_fsops->fs_delete_inode;
 
         mds->mds_ctxt.pwdmnt = mnt;
         mds->mds_ctxt.pwd = mnt->mnt_root;
@@ -514,8 +490,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         err = ptlrpc_start_thread(obddev, mds->mds_service, "lustre_mds");
         if (err)
                 CERROR("cannot start thread\n");
+                /* FIXME: do we need to MOD_DEC_USE_COUNT here? */
 
-        MOD_INC_USE_COUNT;
         RETURN(0);
 }
 

@@ -22,7 +22,6 @@
 #include <linux/fs.h>
 #include <linux/stat.h>
 #include <linux/locks.h>
-#include <linux/ext2_fs.h>
 #include <linux/quotaops.h>
 #include <asm/unistd.h>
 #include <asm/uaccess.h>
@@ -43,8 +42,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
 {
         struct dentry *de;
         struct inode *inode;
+        struct mds_obd *mds = &req->rq_obd->u.mds;
 
-        de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
+        de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_SETATTR)) {
                 req->rq_rephdr->status = -ESTALE;
                 RETURN(0);
@@ -53,53 +53,18 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
         inode = de->d_inode;
         CDEBUG(D_INODE, "ino %ld\n", inode->i_ino);
 
-        /* a _really_ horrible hack to avoid removing the data stored
-           in the block pointers; this data is the object id
-           this will go into an extended attribute at some point.
-        */
-        if ( rec->ur_iattr.ia_valid & ATTR_SIZE ) {
-                /* ATTR_SIZE would invoke truncate: clear it */
-                rec->ur_iattr.ia_valid &= ~ATTR_SIZE;
-                inode->i_size = rec->ur_iattr.ia_size;
+        mds_fs_setattr(mds, inode, NULL, &rec->ur_iattr);
 
-                /* an _even_more_ horrible hack to make this hack work with
-                 * ext3.  This is because ext3 keeps a separate inode size
-                 * until the inode is committed to ensure consistency.  This
-                 * will also go away with the move to EAs.
-                 */
-                if (!strcmp(inode->i_sb->s_type->name, "ext3"))
-                        inode->u.ext3_i.i_disksize = inode->i_size;
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb->s_dev);
 
-                /* make sure _something_ gets set - so new inode
-                   goes to disk (probably won't work over XFS */
-                if (!rec->ur_iattr.ia_valid & ATTR_MODE) {
-                        rec->ur_iattr.ia_valid |= ATTR_MODE;
-                        rec->ur_iattr.ia_mode = inode->i_mode;
-                }
-        }
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE);
-        if ( inode->i_op->setattr ) {
-                req->rq_rephdr->status =
-                        inode->i_op->setattr(de, &rec->ur_iattr);
-        } else {
-                req->rq_rephdr->status =
-                        inode_setattr(inode, &rec->ur_iattr);
-        }
+        if (inode->i_op->setattr)
+                req->rq_rephdr->status = inode->i_op->setattr(de, &rec->ur_iattr);
+        else
+                req->rq_rephdr->status = inode_setattr(inode, &rec->ur_iattr);
 
         l_dput(de);
         RETURN(0);
 }
-
-/*
-   XXX nasty hack: store the object id in the first two
-   direct block spots
-*/
-static inline void mds_store_objid(struct inode *inode, __u64 *id)
-{
-        /* FIXME: it is only by luck that this works on ext3 */
-        memcpy(&inode->u.ext2_i.i_data, id, sizeof(*id));
-}
-
 
 static int mds_reint_create(struct mds_update_record *rec,
                             struct ptlrpc_request *req)
@@ -107,16 +72,19 @@ static int mds_reint_create(struct mds_update_record *rec,
         int type = rec->ur_mode & S_IFMT;
         struct dentry *de = NULL;
         struct mds_rep *rep = req->rq_rep.mds;
+        struct mds_obd *mds = &req->rq_obd->u.mds;
         struct dentry *dchild = NULL;
+        struct inode *dir;
         int rc = 0;
         ENTRY;
 
-        de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
+        de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE)) {
                 LBUG();
                 GOTO(out_reint_create, (rc = -ESTALE));
         }
-        CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
+        dir = de->d_inode;
+        CDEBUG(D_INODE, "ino %ld\n", dir->i_ino);
 
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
@@ -127,26 +95,26 @@ static int mds_reint_create(struct mds_update_record *rec,
 
         if (dchild->d_inode) {
                 CERROR("child exists (dir %ld, name %s)\n",
-                       de->d_inode->i_ino, rec->ur_name);
+                       dir->i_ino, rec->ur_name);
                 LBUG();
                 GOTO(out_reint_create, (rc = -EEXIST));
         }
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb->s_dev);
 
         switch (type) {
         case S_IFREG: {
-                rc = vfs_create(de->d_inode, dchild, rec->ur_mode);
+                rc = vfs_create(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
         }
         case S_IFDIR: {
-                rc = vfs_mkdir(de->d_inode, dchild, rec->ur_mode);
+                rc = vfs_mkdir(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
         }
         case S_IFLNK: {
-                rc = vfs_symlink(de->d_inode, dchild, rec->ur_tgt);
+                rc = vfs_symlink(dir, dchild, rec->ur_tgt);
                 EXIT;
                 break;
         }
@@ -155,7 +123,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFIFO:
         case S_IFSOCK: {
                 int rdev = rec->ur_id;
-                rc = vfs_mknod(de->d_inode, dchild, rec->ur_mode, rdev);
+                rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
                 EXIT;
                 break;
         }
@@ -163,7 +131,8 @@ static int mds_reint_create(struct mds_update_record *rec,
 
         if (!rc) {
                 if (type == S_IFREG)
-                        mds_store_objid(dchild->d_inode, &rec->ur_id);
+                        rc = mds_fs_set_objid(mds, dchild->d_inode,
+                                              NULL, rec->ur_id);
                 dchild->d_inode->i_atime = rec->ur_time;
                 dchild->d_inode->i_ctime = rec->ur_time;
                 dchild->d_inode->i_mtime = rec->ur_time;
@@ -188,15 +157,18 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 {
         struct dentry *de = NULL;
         struct dentry *dchild = NULL;
+        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct inode *dir;
         int rc = 0;
         ENTRY;
 
-        de = mds_fid2dentry(&req->rq_obd->u.mds, rec->ur_fid1, NULL);
+        de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
                 LBUG();
                 GOTO(out_unlink, (rc = -ESTALE));
         }
-        CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
+        dir = de->d_inode;
+        CDEBUG(D_INODE, "ino %ld\n", dir->i_ino);
 
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
@@ -207,7 +179,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 
         if (!dchild->d_inode) {
                 CERROR("child doesn't exist (dir %ld, name %s\n",
-                       de->d_inode->i_ino, rec->ur_name);
+                       dir->i_ino, rec->ur_name);
                 LBUG();
                 GOTO(out_unlink, (rc = -ESTALE));
         }
@@ -217,15 +189,15 @@ static int mds_reint_unlink(struct mds_update_record *rec,
         if (dchild->d_inode->i_generation != rec->ur_fid2->generation)
                 LBUG();
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
 
         switch (dchild->d_inode->i_mode & S_IFMT) {
         case S_IFDIR:
-                rc = vfs_rmdir(de->d_inode, dchild);
+                rc = vfs_rmdir(dir, dchild);
                 EXIT;
                 break;
         default:
-                rc = vfs_unlink(de->d_inode, dchild);
+                rc = vfs_unlink(dir, dchild);
                 EXIT;
                 break;
         }
@@ -268,7 +240,8 @@ static int mds_reint_link(struct mds_update_record *rec,
                 GOTO(out_link, (rc = -EEXIST));
         }
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE,
+                       dchild->d_inode->i_sb->s_dev);
 
         rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
         EXIT;
@@ -314,7 +287,8 @@ static int mds_reint_rename(struct mds_update_record *rec,
                 GOTO(out_rename, (rc = -ESTALE));
         }
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
+                       de_srcdir->d_inode->i_sb->s_dev);
 
         rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
         EXIT;
@@ -335,7 +309,7 @@ static mds_reinter  reinters[REINT_MAX+1] = {
         [REINT_CREATE]    mds_reint_create,
         [REINT_UNLINK]    mds_reint_unlink,
         [REINT_LINK]      mds_reint_link,
-        [REINT_RENAME]    mds_reint_rename
+        [REINT_RENAME]    mds_reint_rename,
 };
 
 int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)

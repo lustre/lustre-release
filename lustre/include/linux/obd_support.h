@@ -86,23 +86,36 @@ enum {
 #define OBD_FAIL_MDS_ALL_NET 0x01000000
 #define OBD_FAIL_OST_ALL_NET 0x02000000
 
-#define OBD_FAIL_CHECK(id)      ((obd_fail_loc & OBD_FAIL_MASK_LOC) == (id))
+#define OBD_FAIL_CHECK(id)   ((obd_fail_loc & OBD_FAIL_MASK_LOC) == (id) &&  \
+                              ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE))!=\
+                                (OBD_FAILED | OBD_FAIL_ONCE)))
 
 #define OBD_FAIL_RETURN(id, ret)                                             \
 do {                                                                         \
         if (OBD_FAIL_CHECK(id)) {                                            \
-                CERROR("obd_fail_loc=%d, fail operation rc=%d\n", id, ret);  \
+                CERROR("obd_fail_loc=%x, fail operation rc=%d\n", id, ret);  \
+                obd_fail_loc |= OBD_FAILED;                                  \
                 RETURN(ret);                                                 \
         }                                                                    \
 } while(0)
 
-#define OBD_FAIL_WRITE(id)                                                   \
-do {                                                                         \
-        if (OBD_FAIL_CHECK(id)) {                                            \
-                CERROR("obd_fail_loc=%d, fail write operation\n", id);       \
-                /* FIXME: do something bad here */                           \
-        }                                                                    \
-} while (0)
+#include <linux/blkdev.h>
+
+static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
+{
+        if (OBD_FAIL_CHECK(id)) {
+#ifdef CONFIG_DEV_RDONLY
+                CERROR("obd_fail_loc=%x, fail write operation on %s\n",
+                       id, bdevname(dev));
+                dev_set_rdonly(dev, 2);
+#else
+                CERROR("obd_fail_loc=%x, can't fail write operation on %s\n",
+                       id, bdevname(dev));
+#endif
+                /* We set FAIL_ONCE because we never "un-fail" a device */
+                obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
+        }
+}
 
 #define OBD_ALLOC(ptr, size)                                    \
 do {                                                            \
