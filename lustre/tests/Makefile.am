@@ -72,6 +72,8 @@ sleeptest_SOURCES = sleeptest.c
 #write_append_truncate_CC=mpicc
 #createmany_mpi_SOURCES=createmany_mpi.c
 #createmany_mpi_CC=mpicc
+#parallel_grouplock_SOURCES=parallel_grouplock.c lp_utils.c
+#parallel_grouplock_CC=mpicc
 copy_attr_SOURCES= copy_attr.c
 copy_attr_LDADD= -lattr
 
