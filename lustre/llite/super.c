@@ -6,12 +6,7 @@
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  *
- * Copryright (C) 1996 Peter J. Braam <braam@stelias.com>
- * Copryright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
- * Copryright (C) 1999 Seagate Technology Inc.
- * Copryright (C) 2001 Mountain View Data, Inc.
  * Copryright (C) 2002 Cluster File Systems, Inc.
- *
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -36,7 +31,7 @@ static char *ll_read_opt(const char *opt, char *data)
         char *retval;
         ENTRY;
 
-        CDEBUG(D_INFO, "option: %s, data %s\n", opt, data);
+        CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
         if ( strncmp(opt, data, strlen(opt)) )
                 RETURN(NULL);
         if ( (value = strchr(data, '=')) == NULL )
@@ -67,7 +62,7 @@ static void ll_options(char *options, char **ost, char **mds)
         for (this_char = strtok (options, ",");
              this_char != NULL;
              this_char = strtok (NULL, ",")) {
-                CDEBUG(D_INFO, "this_char %s\n", this_char);
+                CDEBUG(D_SUPER, "this_char %s\n", this_char);
                 if ( (!*ost && (*ost = ll_read_opt("ost", this_char)))||
                      (!*mds && (*mds = ll_read_opt("mds", this_char))) )
                         continue;
@@ -83,10 +78,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
                                           void *data, int silent)
 {
         struct inode *root = 0;
+        struct obd_device *obd;
         struct ll_sb_info *sbi;
         char *ost = NULL;
         char *mds = NULL;
-        int devno;
         int err;
         struct ll_fid rootfid;
         struct statfs sfs;
@@ -118,9 +113,10 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        devno = simple_strtoul(mds, NULL, 0);
-        if (devno >= MAX_OBD_DEVICES) {
-                CERROR("devno of %s too high\n", mds);
+        obd = class_uuid2obd(mds); 
+        obd->u.mdc.mdc_max_mdsize = sizeof(struct lov_stripe_md); 
+        if (!obd) {
+                CERROR("MDS %s: not setup or attached\n", mds);
                 GOTO(out_free, sb = NULL);
         }
 
@@ -134,7 +130,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 #endif 
 
-        err = obd_connect(&sbi->ll_mdc_conn, &obd_dev[devno]);
+        err = obd_connect(&sbi->ll_mdc_conn, obd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mds, err);
                 GOTO(out_free, sb = NULL);
@@ -142,12 +138,13 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sbi2mdc(sbi)->mdc_conn->c_level = LUSTRE_CONN_FULL;
 
         /* now the OST, which could be an LOV */ 
-        devno = simple_strtoul(ost, NULL, 0);
-        if (devno >= MAX_OBD_DEVICES) {
-                CERROR("devno of %s too high\n", ost);
+
+        obd = class_uuid2obd(ost);
+        if (!obd) {
+                CERROR("OST %s: not setup or attached\n", ost);
                 GOTO(out_free, sb = NULL);
         }
-        err = obd_connect(&sbi->ll_osc_conn, &obd_dev[devno]);
+        err = obd_connect(&sbi->ll_osc_conn, obd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", ost, err);
                 GOTO(out_free, sb = NULL);
@@ -176,8 +173,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         /* make root inode */
         err = mdc_getattr(&sbi->ll_mdc_conn,
-                          sbi->ll_rootino, S_IFDIR,
-                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
+                          sbi->ll_rootino, S_IFDIR, OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_mdc, sb = NULL);
