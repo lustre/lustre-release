@@ -1,3 +1,4 @@
+if MODULES
 if LINUX
 if !CRAY_PORTALS
 
@@ -5,6 +6,7 @@ if !CRAY_PORTALS
 
 endif # !CRAY_PORTALS
 endif # LINUX
+endif # MODULES
 
 DIST_SOURCES := $(ksocknal-objs:%.o=%.c) socknal_lib-linux.h socknal.h
 
