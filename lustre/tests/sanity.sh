@@ -26,6 +26,8 @@ pass() {
     echo PASS
 }
 
+mount | grep $MOUNT || $START
+
 echo '== touch .../f ; rm .../f ======================== test 0'
 touch $MOUNT/f
 $CHECKSTAT -t file $MOUNT/f || error 
