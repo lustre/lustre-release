@@ -210,7 +210,7 @@
  }
  
 +/* Allocate a new handle.  This should probably be in a slab... */
-+static handle_t *get_handle(int nblocks)
++static handle_t *new_handle(int nblocks)
 +{
 +	handle_t *handle = jbd_kmalloc(sizeof (handle_t), GFP_NOFS);
 +	if (!handle)
@@ -233,7 +233,7 @@
 -	
 -	handle = jbd_kmalloc(sizeof (handle_t), GFP_NOFS);
 +
-+	handle = get_handle(nblocks);
++	handle = new_handle(nblocks);
  	if (!handle)
  		return ERR_PTR(-ENOMEM);
 -	memset (handle, 0, sizeof (handle_t));
@@ -250,7 +250,7 @@
 -	
 -	handle = jbd_kmalloc(sizeof (handle_t), GFP_NOFS);
 +
-+	handle = get_handle(nblocks);
++	handle = new_handle(nblocks);
  	if (!handle)
  		return ERR_PTR(-ENOMEM);
 -	memset (handle, 0, sizeof (handle_t));
@@ -437,7 +437,7 @@
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
 +	int (*d_revalidate2)(struct dentry *, int, struct lookup_intent *);
-+	void (*d_intent_release)(struct dentry *);
++	void (*d_intent_release)(struct dentry *, struct lookup_intent *);
  };
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
@@ -523,10 +523,10 @@
   * XEmacs seems to be relying on it...
   */
  
-+void intent_release(struct dentry *de)
++void intent_release(struct dentry *de, struct lookup_intent *it)
 +{
 +	if (de->d_op && de->d_op->d_intent_release)
-+		de->d_op->d_intent_release(de);
++		de->d_op->d_intent_release(de, it);
 +	de->d_it = NULL;
 +}
 +
@@ -641,20 +641,7 @@
  				break;
  		}
  		goto return_base;
-@@ -626,6 +655,7 @@
- 		else if (this.len == 2 && this.name[1] == '.')
- 			nd->last_type = LAST_DOTDOT;
- return_base:
-+		nd->dentry->d_it = it;
- 		return 0;
- out_dput:
- 		dput(dentry);
-@@ -633,15 +663,29 @@
- 	}
- 	path_release(nd);
- return_err:
-+	if (!err)
-+		nd->dentry->d_it = it;
+@@ -630,12 +660,23 @@
  	return err;
  }
  
@@ -676,7 +663,6 @@
 +	return link_path_walk_it(name, nd, NULL);
  }
  
-+
  /* SMP-safe */
  /* returns 1 if everything is done */
  static int __emul_lookup_dentry(const char *name, struct nameidata *nd)
@@ -764,8 +750,7 @@
  {
  	int acc_mode, error = 0;
  	struct inode *inode;
-@@ -984,17 +1056,22 @@
- 	 * The simplest case - just a plain lookup.
+@@ -985,7 +1057,7 @@
  	 */
  	if (!(flag & O_CREAT)) {
  		if (path_init(pathname, lookup_flags(flag), nd))
@@ -774,10 +759,7 @@
  		if (error)
  			return error;
  		dentry = nd->dentry;
-+		dentry->d_it = it;
- 		goto ok;
- 	}
- 
+@@ -994,6 +1067,10 @@
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -797,12 +779,11 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1020,6 +1098,8 @@
+@@ -1020,6 +1098,7 @@
  		goto exit;
  	}
  
-+	dentry->d_it = it;
-+	dentry->d_it->it_mode = mode;
++	it->it_mode = mode;
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
  		error = vfs_create(dir->d_inode, dentry,
@@ -810,10 +791,10 @@
  	return 0;
  
  exit_dput:
-+	intent_release(dentry);
++	intent_release(dentry, it);
  	dput(dentry);
  exit:
-+	intent_release(nd->dentry);
++	intent_release(nd->dentry, it);
  	path_release(nd);
  	return error;
  
@@ -822,7 +803,7 @@
  	UPDATE_ATIME(dentry->d_inode);
  	error = dentry->d_inode->i_op->follow_link(dentry, nd);
 +	if (error)
-+		intent_release(dentry);
++		intent_release(dentry, it);
  	dput(dentry);
  	if (error)
  		return error;
@@ -866,7 +847,7 @@
  
  	if (S_ISDIR(mode))
  		return -EPERM;
-@@ -1252,11 +1344,12 @@
+@@ -1252,7 +1344,7 @@
  		error = path_walk(tmp, &nd);
  	if (error)
  		goto out;
@@ -875,16 +856,11 @@
  	error = PTR_ERR(dentry);
  
  	mode &= ~current->fs->umask;
- 	if (!IS_ERR(dentry)) {
-+		dentry->d_it = &it;
- 		switch (mode & S_IFMT) {
- 		case 0: case S_IFREG:
- 			error = vfs_create(nd.dentry->d_inode,dentry,mode);
 @@ -1270,6 +1363,7 @@
  		default:
  			error = -EINVAL;
  		}
-+		intent_release(dentry);
++		intent_release(dentry, &it);
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
@@ -896,7 +872,7 @@
  
  	tmp = getname(pathname);
  	error = PTR_ERR(tmp);
-@@ -1321,11 +1416,13 @@
+@@ -1321,11 +1416,12 @@
  			error = path_walk(tmp, &nd);
  		if (error)
  			goto out;
@@ -904,10 +880,9 @@
 +		dentry = lookup_create(&nd, 1, &it);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
-+			dentry->d_it = &it;
  			error = vfs_mkdir(nd.dentry->d_inode, dentry,
  					  mode & ~current->fs->umask);
-+			intent_release(dentry);
++			intent_release(dentry, &it);
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -919,7 +894,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1429,10 +1527,12 @@
+@@ -1429,10 +1527,11 @@
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -927,9 +902,8 @@
 +	dentry = lookup_hash_it(&nd.last, nd.dentry, &it);
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
-+		dentry->d_it = &it;
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-+		intent_release(dentry);
++		intent_release(dentry, &it);
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
@@ -941,7 +915,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1489,14 +1590,16 @@
+@@ -1489,14 +1590,15 @@
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
  	down(&nd.dentry->d_inode->i_sem);
@@ -949,13 +923,12 @@
 +	dentry = lookup_hash_it(&nd.last, nd.dentry, &it);
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
-+		dentry->d_it = &it;
  		/* Why not before? Because we want correct error value */
  		if (nd.last.name[nd.last.len])
  			goto slashes;
  		error = vfs_unlink(nd.dentry->d_inode, dentry);
  	exit2:
-+		intent_release(dentry);
++		intent_release(dentry, &it);
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
@@ -967,7 +940,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1557,10 +1661,13 @@
+@@ -1557,10 +1661,12 @@
  			error = path_walk(to, &nd);
  		if (error)
  			goto out;
@@ -976,9 +949,8 @@
 +		dentry = lookup_create(&nd, 0, &it);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
-+			dentry->d_it = &it;
  			error = vfs_symlink(nd.dentry->d_inode, dentry, from);
-+			intent_release(dentry);
++			intent_release(dentry, &it);
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -999,7 +971,7 @@
  		if (error)
  			goto exit;
  		if (path_init(to, LOOKUP_PARENT, &nd))
-@@ -1648,10 +1755,13 @@
+@@ -1648,10 +1755,12 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -1008,9 +980,8 @@
 +		new_dentry = lookup_create(&nd, 0, &it);
  		error = PTR_ERR(new_dentry);
  		if (!IS_ERR(new_dentry)) {
-+			new_dentry->d_it = &it;
  			error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
-+			intent_release(new_dentry);
++			intent_release(new_dentry, &it);
  			dput(new_dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -1024,18 +995,11 @@
  {
  	int error;
  	struct inode *target;
-@@ -1748,12 +1858,14 @@
- 	} else
- 		double_down(&old_dir->i_zombie,
- 			    &new_dir->i_zombie);
-+	new_dentry->d_it = it;
- 	if (IS_DEADDIR(old_dir)||IS_DEADDIR(new_dir))
- 		error = -ENOENT;
- 	else if (d_mountpoint(old_dentry)||d_mountpoint(new_dentry))
+@@ -1754,6 +1864,7 @@
  		error = -EBUSY;
  	else 
  		error = old_dir->i_op->rename(old_dir, old_dentry, new_dir, new_dentry);
-+	intent_release(new_dentry);
++	intent_release(new_dentry, it);
  	if (target) {
  		if (!error)
  			target->i_flags |= S_DEAD;
@@ -1049,16 +1013,11 @@
  {
  	int error;
  
-@@ -1802,10 +1915,12 @@
- 	DQUOT_INIT(old_dir);
- 	DQUOT_INIT(new_dir);
- 	double_down(&old_dir->i_zombie, &new_dir->i_zombie);
-+	new_dentry->d_it = it;
- 	if (d_mountpoint(old_dentry)||d_mountpoint(new_dentry))
+@@ -1806,6 +1919,7 @@
  		error = -EBUSY;
  	else
  		error = old_dir->i_op->rename(old_dir, old_dentry, new_dir, new_dentry);
-+	intent_release(new_dentry);
++	intent_release(new_dentry, it);
  	double_up(&old_dir->i_zombie, &new_dir->i_zombie);
  	if (error)
  		return error;
@@ -1114,10 +1073,10 @@
 +				   new_dir->d_inode, new_dentry, &it);
  	unlock_kernel();
  
-+	intent_release(new_dentry);
++	intent_release(new_dentry, &it);
  	dput(new_dentry);
  exit4:
-+	intent_release(old_dentry);
++	intent_release(old_dentry, &it); // FIXME: release same intent twice!!!
  	dput(old_dentry);
  exit3:
  	double_up(&new_dir->d_inode->i_sem, &old_dir->d_inode->i_sem);
@@ -1129,11 +1088,11 @@
  #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
 +extern int path_walk_it(const char *name, struct nameidata *nd,
 +			struct lookup_intent *it);
-+extern void intent_release(struct dentry *de);
++extern void intent_release(struct dentry *de, struct lookup_intent *it);
  
  int vfs_statfs(struct super_block *sb, struct statfs *buf)
  {
-@@ -94,14 +97,16 @@
+@@ -94,12 +97,13 @@
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
@@ -1147,19 +1106,16 @@
 +	error = user_path_walk_it(path, &nd, &it);
  	if (error)
  		goto out;
-+	nd.dentry->d_it = &it;
  	inode = nd.dentry->d_inode;
- 
- 	/* For directories it's -EISDIR, for other non-regulars - -EINVAL */
 @@ -144,6 +149,7 @@
  	put_write_access(inode);
  
  dput_and_out:
-+	intent_release(nd.dentry);
++	intent_release(nd.dentry, &it);
  	path_release(&nd);
  out:
  	return error;
-@@ -235,10 +241,12 @@
+@@ -235,8 +241,9 @@
  	struct nameidata nd;
  	struct inode * inode;
  	struct iattr newattrs;
@@ -1169,19 +1125,16 @@
 +	error = user_path_walk_it(filename, &nd, &it);
  	if (error)
  		goto out;
-+	nd.dentry->d_it = &it;
  	inode = nd.dentry->d_inode;
- 
- 	error = -EROFS;
 @@ -262,6 +270,7 @@
  	}
  	error = notify_change(nd.dentry, &newattrs);
  dput_and_out:
-+	intent_release(nd.dentry);
++	intent_release(nd.dentry, &it);
  	path_release(&nd);
  out:
  	return error;
-@@ -279,11 +288,13 @@
+@@ -279,8 +288,9 @@
  	struct nameidata nd;
  	struct inode * inode;
  	struct iattr newattrs;
@@ -1192,15 +1145,11 @@
  
  	if (error)
  		goto out;
-+	nd.dentry->d_it = &it;
- 	inode = nd.dentry->d_inode;
- 
- 	error = -EROFS;
 @@ -306,6 +317,7 @@
  	}
  	error = notify_change(nd.dentry, &newattrs);
  dput_and_out:
-+	intent_release(nd.dentry);
++	intent_release(nd.dentry, &it);
  	path_release(&nd);
  out:
  	return error;
@@ -1224,7 +1173,7 @@
  		if(!res && (mode & S_IWOTH) && IS_RDONLY(nd.dentry->d_inode)
  		   && !special_file(nd.dentry->d_inode->i_mode))
  			res = -EROFS;
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  
@@ -1236,7 +1185,7 @@
  
  	name = getname(filename);
  	error = PTR_ERR(name);
-@@ -369,11 +384,12 @@
+@@ -369,7 +384,7 @@
  
  	error = 0;
  	if (path_init(name,LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY,&nd))
@@ -1245,16 +1194,11 @@
  	putname(name);
  	if (error)
  		goto out;
- 
-+	nd.dentry->d_it = &it;
- 	error = permission(nd.dentry->d_inode,MAY_EXEC);
- 	if (error)
- 		goto dput_and_out;
 @@ -381,6 +397,7 @@
  	set_fs_pwd(current->fs, nd.mnt, nd.dentry);
  
  dput_and_out:
-+	intent_release(nd.dentry);
++	intent_release(nd.dentry, &it);
  	path_release(&nd);
  out:
  	return error;
@@ -1266,7 +1210,7 @@
  
  	name = getname(filename);
  	error = PTR_ERR(name);
-@@ -429,11 +447,12 @@
+@@ -429,7 +447,7 @@
  
  	path_init(name, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
  		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
@@ -1275,20 +1219,15 @@
  	putname(name);
  	if (error)
  		goto out;
- 
-+	nd.dentry->d_it = &it;
- 	error = permission(nd.dentry->d_inode,MAY_EXEC);
- 	if (error)
- 		goto dput_and_out;
 @@ -446,6 +465,7 @@
  	set_fs_altroot();
  	error = 0;
  dput_and_out:
-+	intent_release(nd.dentry);
++	intent_release(nd.dentry, &it);
  	path_release(&nd);
  out:
  	return error;
-@@ -490,12 +510,14 @@
+@@ -490,8 +510,9 @@
  	struct inode * inode;
  	int error;
  	struct iattr newattrs;
@@ -1299,20 +1238,15 @@
  	if (error)
  		goto out;
  	inode = nd.dentry->d_inode;
- 
-+	nd.dentry->d_it = &it;
- 	error = -EROFS;
- 	if (IS_RDONLY(inode))
- 		goto dput_and_out;
 @@ -511,6 +532,7 @@
  	error = notify_change(nd.dentry, &newattrs);
  
  dput_and_out:
-+	intent_release(nd.dentry);
++	intent_release(nd.dentry, &it);
  	path_release(&nd);
  out:
  	return error;
-@@ -580,10 +602,13 @@
+@@ -580,10 +602,12 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1321,13 +1255,12 @@
 -	error = user_path_walk(filename, &nd);
 +	error = user_path_walk_it(filename, &nd, &it);
  	if (!error) {
-+		nd.dentry->d_it = &it;
  		error = chown_common(nd.dentry, user, group);
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
-@@ -593,10 +618,13 @@
+@@ -593,10 +618,12 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1336,9 +1269,8 @@
 -	error = user_path_walk_link(filename, &nd);
 +	error = user_path_walk_link_it(filename, &nd, &it);
  	if (!error) {
-+		nd.dentry->d_it = &it;
  		error = chown_common(nd.dentry, user, group);
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
@@ -1384,7 +1316,7 @@
  	}
  	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
  
-+	intent_release(dentry);
++	intent_release(dentry, it);
  	return f;
  
  cleanup_all:
@@ -1392,7 +1324,7 @@
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
-+	intent_release(dentry);
++	intent_release(dentry, it);
  	dput(dentry);
  	mntput(mnt);
  	return ERR_PTR(error);
@@ -1412,7 +1344,7 @@
  
  #include <asm/uaccess.h>
  
-+extern void intent_release(struct dentry *de);
++extern void intent_release(struct dentry *de, struct lookup_intent *it);
  /*
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1429,7 +1361,7 @@
  		error = do_revalidate(nd.dentry);
  		if (!error)
  			error = cp_old_stat(nd.dentry->d_inode, statbuf);
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
@@ -1446,7 +1378,7 @@
  		error = do_revalidate(nd.dentry);
  		if (!error)
  			error = cp_new_stat(nd.dentry->d_inode, statbuf);
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
@@ -1463,7 +1395,7 @@
  		error = do_revalidate(nd.dentry);
  		if (!error)
  			error = cp_old_stat(nd.dentry->d_inode, statbuf);
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
@@ -1480,7 +1412,7 @@
  		error = do_revalidate(nd.dentry);
  		if (!error)
  			error = cp_new_stat(nd.dentry->d_inode, statbuf);
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
@@ -1504,7 +1436,7 @@
  			UPDATE_ATIME(inode);
  			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
  		}
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
@@ -1520,7 +1452,7 @@
  		error = do_revalidate(nd.dentry);
  		if (!error)
  			error = cp_new_stat64(nd.dentry->d_inode, statbuf);
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
@@ -1536,18 +1468,10 @@
  		error = do_revalidate(nd.dentry);
  		if (!error)
  			error = cp_new_stat64(nd.dentry->d_inode, statbuf);
-+		intent_release(nd.dentry);
++		intent_release(nd.dentry, &it);
  		path_release(&nd);
  	}
  	return error;
-@@ -363,6 +376,7 @@
- {
- 	struct file * f;
- 	int err = -EBADF;
-+	struct lookup_intent it = { .it_op = IT_GETATTR };
- 
- 	f = fget(fd);
- 	if (f) {
 --- lum-pristine/mm/slab.c	Fri Dec 21 12:42:05 2001
 +++ lum/mm/slab.c	Thu Aug  1 18:07:35 2002
 @@ -1187,6 +1187,59 @@
