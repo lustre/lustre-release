@@ -57,7 +57,8 @@ int ext3_map_inode_page(struct inode *inode, struct page *page,
                         unsigned long *blocks, int *created, int create);
 /* Must be called with i_sem taken; this will drop it */
 static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf,
-                            struct obd_device *obd, struct obd_trans_info *oti)
+                            struct obd_device *obd, struct obd_trans_info *oti,
+                            void **wait_handle)
 {
         struct page *page;
         unsigned long *b = iobuf->blocks;
@@ -92,7 +93,7 @@ static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf,
         up(&inode->i_sem);
         cleanup_phase = 3;
 
-        rc = fsfilt_commit_async(obd, inode, &oti->oti_handle);
+        rc = fsfilt_commit_async(obd, inode, oti->oti_handle, wait_handle);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -143,6 +144,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         struct inode *inode = NULL;
         int rc = 0, i, cleanup_phase = 0, err;
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
+        void *wait_handle;
         ENTRY;
         LASSERT(oti != NULL);
         LASSERT(objcount == 1);
@@ -195,7 +197,8 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow brw_start %lus\n", (jiffies - now) / HZ);
 
-        rc = filter_direct_io(OBD_BRW_WRITE, inode, iobuf, obd, oti);
+        rc = filter_direct_io(OBD_BRW_WRITE, inode, iobuf, obd,
+                                oti, &wait_handle);
         if (rc == 0) {
                 lock_kernel();
                 inode_update_time(inode, 1);
@@ -212,7 +215,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
                 CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
 
         rc = filter_finish_transno(exp, oti, rc);
-        err = fsfilt_commit_wait(obd, inode, oti->oti_handle);
+        err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err)
                 rc = err;
         if (obd_sync_filter)
