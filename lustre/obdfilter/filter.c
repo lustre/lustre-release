@@ -263,6 +263,10 @@ static int filter_client_free(struct obd_export *exp, int flags)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_fcd,
                                  sizeof(zero_fcd), &off, 1);
+        if (rc == 0)
+                /* update server's transno */
+                filter_update_server_data(obd, filter->fo_rcvd_filp,
+                                          filter->fo_fsd, 1);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         CDEBUG(rc == 0 ? D_INFO : D_ERROR,

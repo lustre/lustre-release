@@ -956,6 +956,27 @@ test_47() {
 }
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
+
+test_48() {
+    createmany -o $DIR/${tfile}- 100
+    $CHECKSTAT $DIR/${tfile}-99 || return 1
+    mds_evict_client
+    df $MOUNT || df $MOUNT || return 2
+    sleep 1
+    $CHECKSTAT $DIR/${tfile}-99 || return 3
+
+    dmesg -c >/dev/null
+    replay_barrier mds1
+    fail mds1
+    unlinkmany $DIR/${tfile}- 100 || return 4
+    if dmesg | grep "back in time"; then 
+	echo "server went back in time!"
+	return 5
+    fi
+    return 0
+}
+run_test 48 "Don't lose transno when client is evicted (2525)"
+
 equals_msg test complete, cleaning up
 $CLEANUP
 

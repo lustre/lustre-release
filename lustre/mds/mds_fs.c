@@ -167,6 +167,12 @@ int mds_client_free(struct obd_export *exp, int clear_client)
                 LBUG();
         }
 
+
+        /* Make sure the server's last_transno is up to date. Do this
+         * after the client is freed so we know all the client's
+         * transactions have been committed. */
+        mds_update_server_data(exp->exp_obd, 1);
+
  free_and_out:
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
 
