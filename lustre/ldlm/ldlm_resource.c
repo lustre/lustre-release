@@ -37,11 +37,10 @@ void ldlm_proc_cleanup(struct obd_device *obd)
 void ldlm_proc_namespace(struct ldlm_namespace *ns)
 {
         struct lprocfs_vars lock_vars[2];
-        char lock_names[MAX_STRING_SIZE];
+        char lock_names[MAX_STRING_SIZE+1];
 
         memset(lock_vars, 0, sizeof(lock_vars));
-        snprintf(lock_names, MAX_STRING_SIZE, "%s/resource_count", 
-                 ns->ns_name);
+        snprintf(lock_names, MAX_STRING_SIZE, "%s/resource_count", ns->ns_name);
         lock_names[MAX_STRING_SIZE] = '\0';
         lock_vars[0].name = lock_names;
         lock_vars[0].read_fptr = lprocfs_ll_rd;

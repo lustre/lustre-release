@@ -101,11 +101,11 @@ struct proc_dir_entry* lprocfs_new_dir(struct proc_dir_entry* root,
 {
         struct proc_dir_entry* new_root;
         struct proc_dir_entry* temp_entry;
-        char temp_string[MAX_STRING_SIZE];
+        char temp_string[MAX_STRING_SIZE+1];
         char* my_str;
         char* mover_str;
 
-        strncpy(temp_string, string, MAX_STRING_SIZE-1);
+        strncpy(temp_string, string, MAX_STRING_SIZE);
         temp_string[MAX_STRING_SIZE] = '\0';
 
         new_root = root;
@@ -138,7 +138,7 @@ int lprocfs_new_vars(struct proc_dir_entry* root,
         struct proc_dir_entry *temp_root;
         struct proc_dir_entry *new_leaf;
         struct proc_dir_entry *new_parent;
-        char temp_string[MAX_STRING_SIZE];
+        char temp_string[MAX_STRING_SIZE+1];
 
         if (list == NULL)
                 return 0;
@@ -147,16 +147,21 @@ int lprocfs_new_vars(struct proc_dir_entry* root,
                 temp_root = lprocfs_new_dir(root, list->name, tok);
                 if (temp_root == NULL) {
                         CDEBUG(D_OTHER, "!LProcFS: Mods: No root!");
-                        return -EINVAL;
+                        return -ENOMEM;
                 }
 
                 /* Convert the last element into a leaf-node */
-                strncpy(temp_string, temp_root->name, MAX_STRING_SIZE-1);
+                strncpy(temp_string, temp_root->name, MAX_STRING_SIZE);
                 temp_string[MAX_STRING_SIZE] = '\0';
                 new_parent = temp_root->parent;
                 remove_proc_entry(temp_root->name, new_parent);
                 new_leaf = create_proc_entry(temp_string, DEFAULT_MODE,
                                              new_parent);
+                if (new_leaf == NULL) {
+                        CERROR("LprocFS: No memory to create /proc entry %s",
+                                temp_string);
+                        return -ENOMEM;
+                }
                 new_leaf->read_proc = list->read_fptr;
                 new_leaf->write_proc = list->write_fptr;
                 if (data)

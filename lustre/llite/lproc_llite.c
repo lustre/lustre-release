@@ -181,8 +181,8 @@ struct lprocfs_vars status_var_nm_1[] = {
 #define MAX_STRING_SIZE 100
 void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
 {
-        char mnt_name[MAX_STRING_SIZE];
-        char uuid_name[MAX_STRING_SIZE];
+        char mnt_name[MAX_STRING_SIZE+1];
+        char uuid_name[MAX_STRING_SIZE+1];
         struct lprocfs_vars d_vars[3];
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device* obd;
@@ -190,44 +190,47 @@ void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
 
         
         /* Register this mount instance with LProcFS */
-        snprintf(mnt_name, 100, "mount_%s", sbi->ll_sb_uuid);
+        snprintf(mnt_name, MAX_STRING_SIZE, "mount_%s", sbi->ll_sb_uuid);
+        mnt_name[MAX_STRING_SIZE] = '\0';
         sbi->ll_proc_root = lprocfs_reg_mnt(mnt_name);
-        if (!sbi->ll_proc_root)
+        if (sbi->ll_proc_root == NULL) {
                 CDEBUG(D_OTHER, "Could not register FS");
+                return;
+        }
         /* Add the static configuration info */
         err = lprocfs_add_vars(sbi->ll_proc_root,status_var_nm_1, sb);
-        if (err)
+        if (err) {
                 CDEBUG(D_OTHER, "Unable to add procfs variables\n");
-
+                return;
+        }
         /* MDC */
         obd = class_uuid2obd(mdc);
-
-        
         snprintf(mnt_name, MAX_STRING_SIZE, "status/%s/common_name", 
                  obd->obd_type->typ_name);
-
+        mnt_name[MAX_STRING_SIZE] = '\0';
         memset(d_vars, 0, sizeof(d_vars));
         d_vars[0].read_fptr = rd_dev_name;
         d_vars[0].write_fptr = NULL;
         d_vars[0].name = mnt_name;
-
         snprintf(uuid_name, MAX_STRING_SIZE, "status/%s/uuid",
                  obd->obd_type->typ_name);
+        uuid_name[MAX_STRING_SIZE] = '\0';
         d_vars[1].read_fptr = rd_dev_uuid;
         d_vars[1].write_fptr = NULL;
         d_vars[1].name = uuid_name;
 
         err = lprocfs_add_vars(sbi->ll_proc_root, d_vars, obd);
-        if (err)
+        if (err) {
                 CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables\n");
-
+                return;
+        }
         /* OSC or LOV*/
         obd = class_uuid2obd(osc);
 
         /* Reuse mnt_name */
-        snprintf(mnt_name, MAX_STRING_SIZE, "status/%s/common_name",
-                 obd->obd_type->typ_name);
-
+        snprintf(mnt_name, MAX_STRING_SIZE, 
+                 "status/%s/common_name", obd->obd_type->typ_name);
+        mnt_name[MAX_STRING_SIZE] = '\0';
         memset(d_vars, 0, sizeof(d_vars));
         d_vars[0].read_fptr = rd_dev_name;
         d_vars[0].write_fptr = NULL;
@@ -235,13 +238,15 @@ void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
 
         snprintf(uuid_name, MAX_STRING_SIZE, "status/%s/uuid",
                  obd->obd_type->typ_name);
+        uuid_name[MAX_STRING_SIZE] = '\0';
         d_vars[1].read_fptr = rd_dev_uuid;
         d_vars[1].write_fptr = NULL;
         d_vars[1].name = uuid_name;
 
         err = lprocfs_add_vars(sbi->ll_proc_root, d_vars, obd);
-        if (err)
+        if (err) {
                 CDEBUG(D_OTHER, "Unable to add fs proc dynamic variables\n");
-
+                return;
+        }
 }
 #undef MAX_STRING_SIZE
