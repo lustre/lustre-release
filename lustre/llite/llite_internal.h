@@ -119,6 +119,7 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
 /* llite/dcache.c */
 void ll_intent_release(struct lookup_intent *);
 extern void ll_set_dd(struct dentry *de);
+void ll_unhash_aliases(struct inode *);
 
 /* llite/rw.c */
 void ll_truncate(struct inode *inode);
