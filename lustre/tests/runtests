@@ -48,7 +48,9 @@ done
 sh llcleanup.sh $@
 echo | sh llrsetup.sh $@ || exit 24
 
-echo "removing files from /mnt/lustre/etc"
+echo "truncating /etc/hosts"
+> /etc/hosts || fail "can't cp /etc/hosts" 4
+echo "removing /mnt/lustre/hosts"
 rm /mnt/lustre/hosts || fail "can't remove /mnt/lustre/hosts" 25
 
 rm -r /mnt/lustre/etc || fail "can't remove /mnt/lustre/etc" 26
