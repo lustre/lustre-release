@@ -406,6 +406,24 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 		printk("OBD ioctl: pbuf2 pointer but 0 length\n");
 		return 1;
 	}
+        /*
+        if (data->ioc_inllen1 && !data->ioc_inlbuf1) {
+                printk("OBD ioctl: inllen1 set but NULL pointer\n");
+                return 1;
+        }
+        if (data->ioc_inllen2 && !data->ioc_inlbuf2) {
+                printk("OBD ioctl: inllen2 set but NULL pointer\n");
+                return 1;
+        }
+        if (data->ioc_plen1 && !data->ioc_pbuf1) {
+                printk("OBD ioctl: plen1 set but NULL pointer\n");
+                return 1;
+        }
+        if (data->ioc_plen2 && !data->ioc_pbuf2) {
+                printk("OBD ioctl: plen2 set but NULL pointer\n");
+                return 1;
+        }
+        */
 	if (obd_ioctl_packlen(data) != data->ioc_len ) {
 		printk("OBD ioctl: packlen exceeds ioc_len\n");
 		return 1;
@@ -536,6 +554,8 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 #define OBD_IOC_PUNCH                  _IOWR('f', 24, long)
 #define OBD_IOC_DEVICE                 _IOWR('f', 25, long)
 #define OBD_IOC_MODULE_DEBUG           _IOWR('f', 26, long)
+#define OBD_IOC_BRW_READ               _IOWR('f', 27, long)
+#define OBD_IOC_BRW_WRITE              _IOWR('f', 28, long)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 32      )
 
