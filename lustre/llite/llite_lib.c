@@ -838,9 +838,13 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                 inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)
                 LTIME_S(inode->i_atime) = body->atime;
-        if (body->valid & OBD_MD_FLMTIME)
+        if (body->valid & OBD_MD_FLMTIME) {
+                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to %u\n",
+                       inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
                 LTIME_S(inode->i_mtime) = body->mtime;
-        if (body->valid & OBD_MD_FLCTIME)
+        }
+        if (body->valid & OBD_MD_FLCTIME &&
+            body->ctime > LTIME_S(inode->i_ctime))
                 LTIME_S(inode->i_ctime) = body->ctime;
         if (body->valid & OBD_MD_FLMODE)
                 inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);
@@ -881,7 +885,13 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 
         LASSERT(!lli->lli_smd);
 
-        /* core attributes from the MDS first */
+        /* Core attributes from the MDS first.  This is a new inode, and
+         * the VFS doesn't zero times in the core inode so we have to do
+         * it ourselves.  They will be overwritten by either MDS or OST
+         * attributes - we just need to make sure they aren't newer. */
+        LTIME_S(inode->i_mtime) = 0;
+        LTIME_S(inode->i_atime) = 0;
+        LTIME_S(inode->i_ctime) = 0;
         ll_update_inode(inode, md->body, md->lsm);
 
         /* OIDEBUG(inode); */
