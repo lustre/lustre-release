@@ -1,9 +1,0 @@
-config.h
-config.out
-config.mk
-.depfiles
-.prereq.ok
-.ready
-*~
-TAGS
-Xrefs
