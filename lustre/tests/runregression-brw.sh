@@ -45,7 +45,7 @@ if [  -z "`$OBDCTL device_list 2> /dev/null | grep osc`" ]; then
 	setup_client || exit -1
 fi
 
-OID=`$OBDCTL --device '$OSCDEV' create 1 | awk '/is object id/ { print $6 }'`
+[ -z "$OID" ] && OID=`$OBDCTL --device '$OSCDEV' create 1 | awk '/is object id/ { print $6 }'`
 [ -z "$OID" ] && echo "error creating object" 1>&2 && exit 1
 
 # TODO: obdctl needs to check on the progress of each forked thread
