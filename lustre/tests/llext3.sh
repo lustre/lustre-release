@@ -1,46 +1,9 @@
 #!/bin/sh
 
-SRCDIR="`dirname $0`"
+SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-NETWORK=tcp
-LOCALHOST=localhost
-SERVER=localhost
-PORT=1234
+export DEBUG_WAIT=yes
+. $SRCDIR/llsetup.sh $SRCDIR/net-local.cfg $SRCDIR/client-mount.cfg $SRCDIR/mds.cfg $SRCDIR/obdext2.cfg
 
-setup_portals
-setup_lustre
-echo -n "Hit return to continue..."
-read
-
-new_fs ext2 /tmp/ost 10000
-OST=$LOOPDEV
-MDSFS=ext3
-new_fs ${MDSFS} /tmp/mds 10000
-MDS=$LOOPDEV
-
-echo 0xffffffff > /proc/sys/portals/debug
-
-$OBDCTL <<EOF
-device 0
-attach mds MDSDEV
-setup ${MDS} ${MDSFS}
-device 1
-attach obdext2 OBDDEV
-setup ${OST}
-device 2
-attach ost OSTDEV
-setup \$OBDDEV
-device 3
-attach ptlrpc RPCDEV
-setup
-device 4
-attach ldlm LDLMDEV
-setup
-device 5
-attach osc OSCDEV
-setup -1
-quit
-EOF
-
-mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre
+debug_client_on

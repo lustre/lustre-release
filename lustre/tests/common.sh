@@ -93,6 +93,7 @@ old_fs () {
 list_mods() {
 	$DBGCTL modules > $R/tmp/ogdb
 	echo "The GDB module script is in /tmp/ogdb"
+	[ "$DEBUG_WAIT" = "yes" ] && echo -n "Press ENTER to continue" && read
 }
 
 # We need at least one setup file to be given.  It can be passed on
@@ -105,6 +106,7 @@ setup_opts() {
 	for CFG in "$@" ; do
 		case $CFG  in
 		*.cfg) [ -r "$CFG" ] && . $CFG && SETUP=y ;;
+		*) echo "unknown option '$CFG'" 1>&2
 		esac
 	done
 
@@ -116,6 +118,15 @@ setup_opts() {
 	[ -z "$MDS_RSH" ] && MDS_RSH="eval"
 	[ -z "$OST_RSH" ] && OST_RSH="eval"
 	[ -z "$OSC_RSH" ] && OSC_RSH="eval"
+}
+
+do_insmod() {
+	MODULE=$LUSTRE/$1
+
+	[ "$MODULE" ] || fail "usage: $0 <module>"
+	[ -f $MODULE ] || fail "$0: module '$MODULE' not found"
+
+	lsmod | grep -q `basename $MODULE` || insmod $MODULE || exit -1
 }
 
 setup_portals() {
@@ -135,22 +146,14 @@ setup_portals() {
 	insmod $PORTALS/linux/oslib/portals.o || exit -1
 
 	case $NETWORK in
-	elan)	if [ "$PORT" ]; then
-			echo "$0: NETWORK is elan but PORT is set" 1>&2
-			exit -1
-		fi
+	elan)	[ "$PORT" ] && fail "$0: NETWORK is elan but PORT is set"
 		insmod $PORTALS/linux/qswnal/kqswnal.o
 		;;
-	tcp)	if [ -z "$PORT" ]; then
-			echo "$0: NETWORK is tcp but PORT is not set" 1>&2
-			exit -1
-		fi
+	tcp)	[ "$PORT" ] || fail "$0: NETWORK is tcp but PORT is not set"
 		insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
 		$ACCEPTOR $PORT
 		;;
-	*) 	echo "$0: unknown NETWORK '$NETWORK'" 1>&2
-		exit -1
-		;;
+	*) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
 	esac
 
 	$PTLCTL <<- EOF
@@ -169,19 +172,26 @@ setup_portals() {
 setup_lustre() {
 	[ -c /dev/obd ] || mknod /dev/obd c 10 241
 
-	insmod $LUSTRE/class/obdclass.o || exit -1
-	insmod $LUSTRE/rpc/ptlrpc.o || exit -1
-	insmod $LUSTRE/ldlm/ldlm.o || exit -1
-	insmod $LUSTRE/ext2obd/obdext2.o || exit -1
-	insmod $LUSTRE/filterobd/obdfilter.o || exit -1
-	insmod $LUSTRE/ost/ost.o || exit -1
-	insmod $LUSTRE/osc/osc.o || exit -1
-	insmod $LUSTRE/obdecho/obdecho.o || exit -1
-	insmod $LUSTRE/mds/mds.o || exit -1
-	insmod $LUSTRE/mdc/mdc.o || exit -1
-	insmod $LUSTRE/llight/llite.o || exit -1
+	do_insmod class/obdclass.o
+	do_insmod rpc/ptlrpc.o
+	do_insmod ldlm/ldlm.o
+	do_insmod mds/mds.o
+	do_insmod obdecho/obdecho.o
+	do_insmod ext2obd/obdext2.o
+	do_insmod filterobd/obdfilter.o
+	do_insmod ost/ost.o
+	do_insmod osc/osc.o
+	do_insmod mdc/mdc.o
+	do_insmod llight/llite.o
 
 	list_mods
+
+	$OBDCTL <<- EOF || return $rc
+	newdev
+	attach ptlrpc RPCDEV
+	setup
+	quit
+	EOF
 
 	[ -d /mnt/lustre ] || mkdir /mnt/lustre
 }
@@ -191,12 +201,12 @@ setup_ldlm() {
 
 	insmod $PORTALS/linux/oslib/portals.o || exit -1
 
-	insmod $LUSTRE/class/obdclass.o || exit -1
-	insmod $LUSTRE/ldlm/ldlm.o || exit -1
+	do_insmod class/obdclass.o
+	do_insmod rpc/ptlrpc.o
+	do_insmod ldlm/ldlm.o
 
+	DEBUG_WAIT=yes
 	list_mods
-        echo "Press Enter to continue"
-        read
 }
 
 find_devno() {
@@ -288,15 +298,6 @@ setup_server() {
 	setup_mds $1 && setup_ost $1
 }
 
-setup_rpc() {
-	$OBDCTL <<- EOF || return $rc
-	newdev
-	attach ptlrpc RPCDEV
-	setup
-	quit
-	EOF
-}
-
 setup_osc() {
 	[ "$SETUP_OSC" != "y" ] && return 0
 
@@ -311,17 +312,14 @@ setup_osc() {
 setup_mount() {
 	[ "$SETUP_MOUNT" != "y" ] && return 0
 
-	if [ -z "$OSCMT" ]; then
-		echo "error: setup_mount: OSCMT unset" 1>&2
-		return -1
-	fi
+	[ "$OSCMT" ] || fail "error: $0: OSCMT unset"
 
 	[ ! -d $OSCMT ] && mkdir $OSCMT
 	mount -t lustre_lite -o device=`find_devno OSCDEV` none $OSCMT
 }
 
 setup_client() {
-	setup_rpc && setup_osc && setup_mount
+	setup_osc && setup_mount
 }
 
 DEBUG_ON="echo 0xffffffff > /proc/sys/portals/debug"
@@ -338,11 +336,11 @@ debug_server_on() {
 }
 
 debug_client_off() {
-	echo "Tuning OFF debug on client" && $OSC_RSH "$DEBUG_OFF"
+	echo "Turning OFF debug on client" && $OSC_RSH "$DEBUG_OFF"
 }
 
 debug_client_on() {
-	echo "Tuning ON debug on client" && $OSC_RSH "$DEBUG_ON"
+	echo "Turning ON debug on client" && $OSC_RSH "$DEBUG_ON"
 }
 
 cleanup_portals() {
