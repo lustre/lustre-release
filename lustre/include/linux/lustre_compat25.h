@@ -37,8 +37,6 @@
 
 #define KDEVT_INIT(val)                 { .value = val }
 #define LTIME_S(time)                   (time.tv_sec)
-#define USERMODEHELPER(path, argv, envp) \
-                                        call_usermodehelper(path, argv, envp, 1)
 #define ll_path_lookup                  path_lookup
 
 
@@ -68,8 +66,7 @@
 #ifndef CONFIG_RH_2_4_20
 #define cpu_online(cpu)                 (cpu_online_map & (1<<cpu))
 #endif
-#define USERMODEHELPER(path, argv, envp) \
-                                        call_usermodehelper(path, argv, envp)
+
 static inline int ll_path_lookup(const char *path, unsigned flags, 
                               struct nameidata *nd)
 {
