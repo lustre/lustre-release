@@ -26,13 +26,13 @@
 
 \layout Section
 
-LCTL
+lctl
 \layout Subsection
 
 NAME 
-\layout Standard
+\layout Description
 
-lctl - low level Lustre file system configuration utility
+lctl Low level Lustre filesystem configuration utility.
 \layout Subsection
 
 SYNOPSIS
@@ -69,70 +69,94 @@ The program can be invoked in interactive mode by issuing
 lctl.
 
 \series default 
- After that commands are issued as below.
+ After that, commands are issued as below.
  The most common commands in lctl are (in matching pairs) 
 \family typewriter 
+\size small 
 device
 \family default 
-, 
+\size default 
+ and 
 \family typewriter 
+\size small 
 attach
 \family default 
- and 
+\size default 
+, 
 \family typewriter 
+\size small 
 detach
 \family default 
-, 
+\size default 
+ and 
 \family typewriter 
+\size small 
 setup
 \family default 
- and 
+\size default 
+, 
 \family typewriter 
+\size small 
 cleanup
 \family default 
-, 
-\family typewriter 
-connect
-\family default 
+\size default 
  and 
 \family typewriter 
-disconnect
+\size small 
+connect
 \family default 
+\size default 
 , 
 \family typewriter 
+\size small 
+disconnect
+\family default 
+\size default 
+ and 
+\family typewriter 
+\size small 
 help
 \family default 
+\size default 
 , and 
 \family typewriter 
+\size small 
 quit
 \family default 
+\size default 
 .
-  To get a complete listing of available commands, type 
+ To get a complete listing of available commands, type 
 \family typewriter 
+\size small 
 help
 \family default 
+\size default 
  at the lctl prompt.
   To get basic help on the meaning and syntax of a command, type 
 \family typewriter 
+\size small 
 help command
 \family default 
+\size default 
 .
   Command completion is activated with the 
 \family typewriter 
+\size small 
 TAB
 \family default 
+\size default 
  key, and command history is available via the up- and down-arrow keys.
  
 \layout Standard
 
-For non-interactive single threaded use, one uses the second invocation
+For non-interactive single threaded use, one uses the second invocation,
  which runs 
 \emph on 
 command
 \emph default 
- after connecting to the 
+ after connecting to the device
 \emph on 
-device.
+.
 
 \emph default 
  
@@ -148,27 +172,27 @@ on a device name.
 \layout Description
 
 --threads How many threads should be forked doing the command specified.
- The numthreads variable is a strictly positivie integer indicating how
- many threads should be started.
- Verbose can take values <XXXX>, 
+ The numthreads variable is a strictly positive integer indicating how many
+ threads should be started.
+ The 
 \emph on 
 devno 
 \emph default 
-is used as above.
+option is used as above.
 \layout LyX-Code
 
 \layout LyX-Code
 
 \layout Description
 
-network\SpecialChar ~
-config
+Network\SpecialChar ~
+Configuration
 \begin_deeper 
 \layout Description
 
 network\SpecialChar ~
 <tcp/elans/myrinet> Indicate what kind of network applies for the
- configuration commands that follow
+ configuration commands that follow.
 \layout Description
 
 connect\SpecialChar ~
@@ -177,73 +201,90 @@ connect\SpecialChar ~
 |\SpecialChar ~
 <elan\SpecialChar ~
 id>] This will establish a connection to
- a remote network network id given by the hostname/port combination or the
- elan id 
+ a remote network network 
+\emph on 
+id
+\emph default 
+ given by the hostname/port combination, or the elan 
+\emph on 
+id
+\emph default 
+.
 \layout Description
 
 disconnect\SpecialChar ~
-<nid> Disconnect from a remote nid
+<nid> Disconnect from a remote 
+\emph on 
+nid
+\emph default 
+.
 \layout Description
 
 mynid\SpecialChar ~
-[nid] Informs the socknal of the local nid.
+[nid] Informs the socknal of the local 
+\emph on 
+nid
+\emph default 
+.
  It defaults to hostname for tcp networks and is automatically setup for
- elan/myrinet networks 
+ elan/myrinet networks.
 \layout Description
 
 add_uuid\SpecialChar ~
 <uuid>\SpecialChar ~
 <nid> Associate a given UUID with an 
 \emph on 
-nid
-\emph default 
- 
+nid.
 \layout Description
 
 close_uuid\SpecialChar ~
-<uuid> Disconnect a UUID 
+<uuid> Disconnect a UUID.
 \layout Description
 
 del_uuid\SpecialChar ~
-<uuid> Delete a UUID association
+<uuid> Delete a UUID association.
 \layout Description
 
 add_route\SpecialChar ~
 <gateway>\SpecialChar ~
 <target>\SpecialChar ~
 [target] Add an entry to the routing table for
- the given target 
+ the given target.
 \layout Description
 
 del_route\SpecialChar ~
-<target> Delete an entry for the target from the routing table
+<target> Delete an entry for the target from the routing table.
 \layout Description
 
-route_list Print the complete routing table 
+route_list Print the complete routing table.
 \layout Description
 
 recv_mem\SpecialChar ~
-[size] Set the socket receive buffer size, if the size is omited
- the default size for the buffer is printed
+[size] Set the socket 
+\emph on 
+receive
+\emph default 
+ buffer size; if the size is omitted, the default size for the buffer is
+ printed.
 \layout Description
 
 send_mem\SpecialChar ~
-[size] Set send buffer size for the socket, if size is omited the
- default size for the buffer is printed
+[size] Set send buffer size for the socket; if size is omitted,
+ the default size for the buffer is printed.
 \layout Description
 
 nagle\SpecialChar ~
-[on/off] Enable/disable nagle, omiting the arguement will cause the
- default value to be printed
+[on/off] Enable/disable nagle; omitting the argument will cause the
+ default value to be printed.
 \end_deeper 
 \layout Description
 
-device\SpecialChar ~
-selection
+Device\SpecialChar ~
+Selection
 \begin_deeper 
 \layout Description
 
-newdev Create a new device
+newdev Create a new device.
 \layout Description
 
 name2dev This command can be used to determine a device number for the given
@@ -255,12 +296,12 @@ device This will select the specified OBD device.
  
 \layout Description
 
-device_list Show all the devices
+device_list Show all the devices.
 \end_deeper 
 \layout Description
 
-device\SpecialChar ~
-config
+Device\SpecialChar ~
+Configuration
 \begin_deeper 
 \layout Description
 
@@ -269,12 +310,16 @@ type\SpecialChar ~
 [name\SpecialChar ~
 [uuid]] 
 \shape italic 
+\emph on 
 Attach
 \shape default 
+\emph default 
  a type to the current device (which you need to set using the 
 \family typewriter 
+\size small 
 device
 \family default 
+\size default 
  command) and give that device a name and UUID.
   This allows us to identify the device for use later, and also tells us
  what type of device we will have.
@@ -282,15 +327,15 @@ device
 
 setup\SpecialChar ~
 <args...> Type specific device setup commands.
- For obdfilter a setup command tells the driver which block device it should
+ For obdfilter, a setup command tells the driver which block device it should
  use for storage and what type of filesystem is on that device.
  
 \layout Description
 
-cleanup Cleanup a previously setup device
+cleanup Cleanup a previously setup device.
 \layout Description
 
-detach Remove driver (and name and uuid) from the current device
+detach Remove driver (and name and UUID) from the current device.
 \layout Description
 
 lov_setconfig\SpecialChar ~
@@ -301,56 +346,88 @@ offset\SpecialChar ~
 pattern\SpecialChar ~
 UUID1\SpecialChar ~
 [U
-UID2...] Write LOV configuration to an MDS device
+UID2...] Write LOV configuration to an MDS device.
 \layout Description
 
 lov_getconfig\SpecialChar ~
 lov-uuid Read LOV configuration from an MDS device.
  Returns default-stripe-count, default-stripe-size, offset, pattern, and
- a list of OST UUIDs.
+ a list of OST UUID's.
 \end_deeper 
 \layout Description
 
-device\SpecialChar ~
-operations
+Device\SpecialChar ~
+Operations
 \begin_deeper 
 \layout Description
 
 probe\SpecialChar ~
 [timeout] Build a connection handle to a device.
- This command is used to suspend configuration till the lctl command has
- ensured that the mds and osc services are available.
- This is to avoid mount failures in a reebooting cluster
+ This command is used to suspend configuration until the lctl command has
+ ensured that the MDS and OSC services are available.
+ This is to avoid mount failures in a rebooting cluster.
 \layout Description
 
-close 
+close
+\emph on 
+ 
 \layout Description
 
 getattr\SpecialChar ~
-<objid> Get attributes for an OST object <objid> 
+<objid> Get attributes for an OST object 
+\emph on 
+<objid>
+\emph default 
+ .
 \layout Description
 
 setattr\SpecialChar ~
 <objid>\SpecialChar ~
-<mode> Set mode attribute for OST object <objid>
+<mode> Set mode attribute for OST object 
+\emph on 
+<objid>
+\emph default 
+.
 \layout Description
 
 create\SpecialChar ~
 [num\SpecialChar ~
 [mode\SpecialChar ~
-[verbose]]] Create the specified number <num> of OST objects
- with the given <mode>
+[verbose]]] Create the specified number 
+\emph on 
+<num>
+\emph default 
+ of OST objects with the given 
+\emph on 
+<mode>
+\emph default 
+.
 \layout Description
 
 destroy\SpecialChar ~
-<objid> Destroy an OST object
+<objid> Destroy an OST object.
 \layout Description
 
 test_getattr\SpecialChar ~
 <num>\SpecialChar ~
 [verbose\SpecialChar ~
-[[t]objid]] Do <num> getattrs on OST object <objid>
- (objectid+1 on each thread)
+[[t]objid]] Do 
+\emph on 
+<num>
+\emph default 
+ 
+\emph on 
+getattrs
+\emph default 
+ on OST object 
+\emph on 
+<objid>
+\emph default 
+ (
+\emph on 
+objectid
+\emph default 
++1 on each thread).
 \layout Description
 
 test_brw\SpecialChar ~
@@ -358,11 +435,30 @@ test_brw\SpecialChar ~
 [write\SpecialChar ~
 [verbose\SpecialChar ~
 [npages\SpecialChar ~
-[[t]objid]]]] Do <num> bulk read/writes
- on OST object <objid> (<npages> per I/O)
+[[t]objid]]]] Do 
+\emph on 
+<num>
+\emph default 
+ bulk 
+\emph on 
+read
+\emph default 
+/
+\emph on 
+writes
+\emph default 
+ on OST object 
+\emph on 
+<objid>
+\emph default 
+ (
+\emph on 
+<npages>
+\emph default 
+ per I/O).
 \layout Description
 
-test_ldlm Perform lock manager test
+test_ldlm Perform lock manager test.
 \layout Description
 
 ldlm_regress_start\SpecialChar ~
@@ -371,10 +467,10 @@ ldlm_regress_start\SpecialChar ~
 [refheld\SpecialChar ~
 [numres\SpecialChar ~
 [numext]]]] Start lock manager
- stress test
+ stress test.
 \layout Description
 
-ldlm_regress_stop Stop lock manager stress test
+ldlm_regress_stop Stop lock manager stress test.
 \layout Description
 
 dump_ldlm Dump all lock manager state, this is very useful for debugging
@@ -386,62 +482,73 @@ newconn\SpecialChar ~
 \end_deeper 
 \layout Description
 
-debug
+Debug
 \begin_deeper 
 \layout Description
 
 debug_kernel\SpecialChar ~
 [file]\SpecialChar ~
-[raw] Get debug buffer and dump to a fileusage
+[raw] Get debug buffer and dump to a 
+\emph on 
+fileusage
+\emph default 
+.
 \layout Description
 
 debug_file\SpecialChar ~
 <input>\SpecialChar ~
 [output]\SpecialChar ~
 [raw] Read debug buffer from input and dump to
- outputusage
+ 
+\emph on 
+outputusage
+\emph default 
+.
 \layout Description
 
-clear Clear kernel debug buffer 
+clear Clear kernel debug buffer.
 \layout Description
 
 mark\SpecialChar ~
-<text> Insert marker text in kernel debug buffer 
+<text> Insert marker text in kernel debug buffer.
 \layout Description
 
 filter\SpecialChar ~
 <subsystem\SpecialChar ~
 id/debug\SpecialChar ~
 mask> Filter message type from the kernel debug
- buffer
+ buffer.
 \layout Description
 
 show\SpecialChar ~
 <subsystem\SpecialChar ~
 id/debug\SpecialChar ~
-mask> Show specific type of messages 
+mask> Show specific type of messages.
 \layout Description
 
 debug_list\SpecialChar ~
-<subs/types> List all the subsystem and debug types
+<subs/types> List all the subsystem and debug types.
 \layout Description
 
-panic Force the kernel to panic
+panic Force the kernel to panic.
 \end_deeper 
 \layout Description
 
-control
+Control
 \begin_deeper 
 \layout Description
 
-help Show a complete list of commands, help <command name> can be used to
- get help on specific command
+help Show a complete list of commands; 
+\emph on 
+help <command name>
+\emph default 
+ can be used to get help on specific command.
 \layout Description
 
-exit Close the lctl session
+exit Close the lctl session.
 \layout Description
 
-quit Close the lctl session
+quit Close the lctl session.
 \end_deeper 
 \layout Subsection
 
@@ -451,16 +558,24 @@ EXAMPLES
 attach
 \layout LyX-Code
 
+
+\size small 
 # lctl
 \newline 
 lctl > newdev
 \newline 
-lctl > attach obdfilter OBDDEV OBDUUID 
+lctl > attach obdfilter OBDDEV OBDUUID
+\size default 
+
+\newline 
+
 \layout Description
 
 connect
 \layout LyX-Code
 
+
+\size small 
 lctl > name2dev OSCDEV
 \newline 
 2 
@@ -468,6 +583,8 @@ lctl > name2dev OSCDEV
 lctl > device 2
 \newline 
 lctl > connect
+\size default 
+
 \newline 
 
 \layout Description
@@ -475,6 +592,8 @@ lctl > connect
 getattr
 \layout LyX-Code
 
+
+\size small 
 lctl > getattr 12
 \newline 
 id: 12
@@ -514,14 +633,24 @@ obdmd:
 lctl > disconnect 
 \newline 
 Finished (success)
+\newline 
+
 \layout Description
 
-setup 
+setup
+\emph on 
+ 
 \layout LyX-Code
 
+
+\size small 
 lctl > setup /dev/loop0 extN
 \newline 
-lctl > quit 
+lctl > quit
+\size default 
+
+\newline 
+
 \layout LyX-Code
 
 \layout Subsection
@@ -530,11 +659,4 @@ BUGS
 \layout Standard
 
 None are known.
-\layout Subsection
-
-AUTHOR
-\layout Standard
-
-Cluster File Systems, Inc.
- 2002 - created
 \the_end
