@@ -77,10 +77,10 @@ sub get_latest_mtime
 
 sub get_linuxdir
 {
-	open(CONFIG,"config.status") or die "Run ./configure first \n";
+	open(CONFIG,"Makefile") or die "Run ./configure first \n";
 	while($line=<CONFIG>){
-		$line =~ /(.*)\%\@LINUX\@\%(.*)\%g/;
-		if($2){$linuxdir=$2;last;}
+		$line =~ /LINUX = (.*)/;
+		if($1){$linuxdir=$1;last;}
 	}
 	close(CONFIG);
 	open(VER,"$linuxdir/include/linux/version.h") 
