@@ -155,9 +155,9 @@ static int ll_commit_write(struct file *file, struct page *page,
         struct inode *inode = page->mapping->host;
         struct ll_inode_info *lii = ll_i2info(inode);
         struct lov_stripe_md *md = lii->lli_smd;
-        struct brw_page pg; 
-        int              err;
-        struct iattr     iattr;
+        struct brw_page pg;
+        int err;
+        struct iattr iattr;
         struct io_cb_data *cbd = ll_init_cb();
 
         pg.pg = page;
@@ -166,8 +166,8 @@ static int ll_commit_write(struct file *file, struct page *page,
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
         ENTRY;
-        if (!cbd) 
-                RETURN(-ENOMEM); 
+        if (!cbd)
+                RETURN(-ENOMEM);
 
         SetPageUptodate(page);
 
@@ -180,6 +180,9 @@ static int ll_commit_write(struct file *file, struct page *page,
         err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md,
                       1, &pg, ll_sync_io_cb, cbd);
         kunmap(page);
+
+        if (err)
+                GOTO(out, err);
 
         iattr.ia_size = pg.off + pg.count;
         if (iattr.ia_size > inode->i_size) {
@@ -194,7 +197,7 @@ static int ll_commit_write(struct file *file, struct page *page,
                 }
 #endif
         }
-
+out:
         RETURN(err);
 } /* ll_commit_write */
 
