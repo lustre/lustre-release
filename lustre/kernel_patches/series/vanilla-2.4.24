@@ -44,3 +44,4 @@ export-show_task-2.4-vanilla.patch
 export-zap-page-range.patch
 uml-sigusr1-2.4-vanilla.patch 
 remove-suid-2.4-rhel.patch
+uml_malloc_fix.patch
