@@ -125,7 +125,6 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         body->lgd_cur_offset = *cur_offset;
         body->lgd_index = next_idx;
         body->lgd_saved_index = *cur_idx;
-        body->lgd_len = len;
         repsize[1] = len;
 
         req->rq_replen = lustre_msg_size(2, repsize);
