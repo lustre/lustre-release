@@ -345,6 +345,10 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                         --index;
                         if (index < first_index)
                                 GOTO(out, rc = 0);
+
+                        if ((void *)rec == buf)
+                                break;
+
                         tail = (void *)rec - sizeof(struct llog_rec_tail);
                         rec = ((void *)rec - le32_to_cpu(tail->lrt_len));
                 }
