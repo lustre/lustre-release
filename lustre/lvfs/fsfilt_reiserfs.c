@@ -157,15 +157,10 @@ static int fsfilt_reiserfs_add_journal_cb(struct obd_device *obd,
         return 0;
 }
 
-static int fsfilt_reiserfs_statfs(struct super_block *sb,
-                                  struct obd_statfs *osfs)
+static int fsfilt_reiserfs_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
-        struct kstatfs sfs;
-        int rc;
-
-        memset(&sfs, 0, sizeof(sfs));
-
-        rc = sb->s_op->statfs(sb, &sfs);
+        struct statfs sfs;
+        int rc = vfs_statfs(sb, &sfs);
 
         statfs_pack(osfs, &sfs);
         return rc;

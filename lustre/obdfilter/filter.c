@@ -1342,35 +1342,19 @@ static int filter_destroy_export(struct obd_export *exp)
 /* also incredibly similar to mds_disconnect */
 static int filter_disconnect(struct obd_export *exp, int flags)
 {
-        struct filter_obd *filter = &exp->exp_obd->u.filter;
-        struct filter_export_data *fed = &exp->exp_filter_data;
         unsigned long irqflags;
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
         LASSERT(exp);
-
-        /* XXX should this go into filter_destroy_export() instead? */
-        /* forget what this client had cached, I bet this needs to be
-         * matched with appropriate client behaviour in the face of
-         * disconnects */
-        spin_lock(&exp->exp_obd->obd_osfs_lock);
-        filter->fo_tot_cached -= fed->fed_cached;
-        filter->fo_tot_granted -= fed->fed_grant;
-        fed->fed_cached = 0;
-        fed->fed_grant = 0;
-        fed->fed_grant_sent = 0;
-        fed->fed_grant_waiting = 0;
-        spin_unlock(&exp->exp_obd->obd_osfs_lock);
-
         ldlm_cancel_locks_for_export(exp);
 
         spin_lock_irqsave(&exp->exp_lock, irqflags);
         exp->exp_flags = flags;
         spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
-        fsfilt_sync(exp->exp_obd, filter->fo_sb);
+        fsfilt_sync(exp->exp_obd, exp->exp_obd->u.filter.fo_sb);
         /* XXX cleanup preallocated inodes */
 
         /* flush any remaining cancel messages out to the target */
@@ -1922,56 +1906,11 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-/* debugging to make sure that nothing bad happens, can be turned off soon */
-static void filter_grant_sanity_check(struct obd_device *obd,
-                                      struct filter_obd *filter, __u64 maxsize)
-{
-        struct filter_export_data *fed;
-        struct obd_export *exp_pos;
-        obd_size tot_cached = 0, tot_granted = 0;
-
-        list_for_each_entry(exp_pos, &obd->obd_exports, exp_obd_chain) {
-                fed = &exp_pos->exp_filter_data;
-                LASSERT(fed->fed_cached <= maxsize);
-                LASSERT(fed->fed_grant <= maxsize);
-                tot_cached += fed->fed_cached;
-                tot_granted += fed->fed_grant;
-        }
-        LASSERT(tot_cached == filter->fo_tot_cached);
-        LASSERT(tot_granted == filter->fo_tot_granted);
-        LASSERT(tot_cached <= maxsize);
-        LASSERT(tot_granted <= maxsize);
-}
-
 static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                          unsigned long max_age)
 {
-        struct filter_obd *filter = &obd->u.filter;
-        __u64 cached;
-        int blockbits = filter->fo_sb->s_blocksize_bits;
-        int rc;
         ENTRY;
-
-        /* at least try to account for cached pages.  its still racey and
-         * might be under-reporting if clients haven't announced their
-         * caches with brw recently */
-        spin_lock(&obd->obd_osfs_lock);
-        rc = fsfilt_statfs(obd, filter->fo_sb, max_age);
-        memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
-        filter_grant_sanity_check(obd, filter, osfs->os_blocks << blockbits);
-        cached = filter->fo_tot_cached + osfs->os_bsize - 1;
-        spin_unlock(&obd->obd_osfs_lock);
-
-        cached >>= blockbits;
-        if (cached > osfs->os_bavail) {
-                CERROR("cached "LPU64" > bavail "LPU64", clamping\n", cached,
-                       osfs->os_bavail);
-                cached = osfs->os_bavail;
-        }
-        osfs->os_bavail -= cached;
-        osfs->os_bfree -= cached;
-
-        RETURN(rc);
+        RETURN(fsfilt_statfs(obd, obd->u.filter.fo_sb, osfs));
 }
 
 static int filter_get_info(struct obd_export *exp, __u32 keylen,

@@ -49,8 +49,6 @@
 #define FILTER_INCOMPAT_GROUPS 0x00000001
 #define FILTER_INCOMPAT_SUPP   (FILTER_INCOMPAT_GROUPS)
 
-#define FILTER_GRANT_CHUNK (2ULL*1024*1024)
-
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as mds_server_data so we might one day merge. */
 struct filter_server_data {

@@ -1351,7 +1351,7 @@ int jt_obd_test_brw(int argc, char **argv)
 
         cmd = write ? OBD_IOC_BRW_WRITE : OBD_IOC_BRW_READ;
         for (i = 1, next_count = verbose; i <= count; i++) {
-                data.ioc_obdo1.o_valid &= ~(OBD_MD_FLBLOCKS|OBD_MD_FLGRANT);
+                data.ioc_obdo1.o_valid &= ~(OBD_MD_FLBLOCKS|OBD_MD_FLRDEV);
                 IOC_PACK(argv[0], data);
                 rc = l2_ioctl(OBD_DEV_ID, cmd, buf);
                 SHMEM_BUMP();

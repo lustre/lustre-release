@@ -221,7 +221,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 RETURN(-EINVAL);
 
         /* Temp fix to stop falling foul of osc_announce_cached() */
-        oa->o_valid &= ~(OBD_MD_FLBLOCKS | OBD_MD_FLGRANT);
+        oa->o_valid &= ~(OBD_MD_FLBLOCKS | OBD_MD_FLRDEV);
 
         memset(res, 0, sizeof(*res) * niocount);
 

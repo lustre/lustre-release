@@ -96,6 +96,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         memcpy(server_uuid.uuid, lcfg->lcfg_inlbuf2, MIN(lcfg->lcfg_inllen2,
                                                         sizeof(server_uuid)));
 
+        init_MUTEX(&cli->cl_dirty_sem);
         cli->cl_dirty = 0;
         cli->cl_dirty_granted = 0;
         cli->cl_dirty_max = 64*1024*1024; /* some default */

@@ -99,7 +99,7 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_ctime);
         CHECK_MEMBER(obdo, o_size);
         CHECK_MEMBER(obdo, o_blocks);
-        CHECK_MEMBER(obdo, o_grant);
+        CHECK_MEMBER(obdo, o_rdev);
         CHECK_MEMBER(obdo, o_blksize);
         CHECK_MEMBER(obdo, o_mode);
         CHECK_MEMBER(obdo, o_uid);

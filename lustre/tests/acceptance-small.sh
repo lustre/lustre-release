@@ -124,6 +124,3 @@ if [ "$SANITYN" != "no" ]; then
 	sh sanityN.sh
 	mount | grep $MOUNT && sh llmountcleanup.sh
 fi
-if [ "$OOSTEST" != "no" ]; then
-	sh oos.sh
-fi

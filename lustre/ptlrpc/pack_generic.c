@@ -306,7 +306,7 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab64s (&o->o_ctime);
         __swab64s (&o->o_size);
         __swab64s (&o->o_blocks);
-        __swab64s (&o->o_grant);
+        __swab64s (&o->o_rdev);
         __swab32s (&o->o_blksize);
         __swab32s (&o->o_mode);
         __swab32s (&o->o_uid);
@@ -774,8 +774,8 @@ void lustre_assert_wire_constants (void)
         LASSERT (sizeof (((struct obdo *)0)->o_size) == 8);
         LASSERT (offsetof (struct obdo, o_blocks) == 48);
         LASSERT (sizeof (((struct obdo *)0)->o_blocks) == 8);
-        LASSERT (offsetof (struct obdo, o_grant) == 56);
-        LASSERT (sizeof (((struct obdo *)0)->o_grant) == 8);
+        LASSERT (offsetof (struct obdo, o_rdev) == 56);
+        LASSERT (sizeof (((struct obdo *)0)->o_rdev) == 8);
         LASSERT (offsetof (struct obdo, o_blksize) == 64);
         LASSERT (sizeof (((struct obdo *)0)->o_blksize) == 4);
         LASSERT (offsetof (struct obdo, o_mode) == 68);

@@ -629,17 +629,17 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         OBD_COUNTER_INCREMENT(obd, statfs);
 
         CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
-        if (time_before(obd->obd_osfs_age, max_age)) {
+        if (obd->obd_osfs_age == 0 || time_before(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs)(obd, osfs, max_age);
-                spin_lock(&obd->obd_osfs_lock);
+                spin_lock(&obd->obd_dev_lock);
                 memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
                 obd->obd_osfs_age = jiffies;
-                spin_unlock(&obd->obd_osfs_lock);
+                spin_unlock(&obd->obd_dev_lock);
         } else {
                 CDEBUG(D_SUPER, "using cached obd_statfs data\n");
-                spin_lock(&obd->obd_osfs_lock);
+                spin_lock(&obd->obd_dev_lock);
                 memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
-                spin_unlock(&obd->obd_osfs_lock);
+                spin_unlock(&obd->obd_dev_lock);
         }
         RETURN(rc);
 }
