@@ -535,9 +535,6 @@ static int ll_page_matches(struct page *page)
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                             &page_extent, LCK_PR | LCK_PW, &flags, inode,
                             &match_lockh);
-        if (matches < 0)
-                LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n",
-                               matches);
         RETURN(matches);
 }
 
@@ -612,8 +609,14 @@ static void ll_readahead(struct ll_readahead_state *ras,
                 /* the book-keeping above promises that we've tried
                  * all the indices from start to end, so we don't
                  * stop if anyone returns an error. This may not be good. */
-                if (Page_Uptodate(page) || ll_page_matches(page) <= 0)
+                if (Page_Uptodate(page))
                         goto next_page;
+
+                if ((rc = ll_page_matches(page)) <= 0) {
+                        LL_CDEBUG_PAGE(D_READA | D_PAGE, page,
+                                       "lock match failed: rc %d\n", rc);
+                        goto next_page;
+                }
 
                 llap = llap_from_page(page);
                 if (IS_ERR(llap) || llap->llap_defer_uptodate)
@@ -773,8 +776,10 @@ int ll_readpage(struct file *filp, struct page *page)
         ll_readahead_update(inode, &fd->fd_ras, page->index, 0);
 
         rc = ll_page_matches(page);
-        if (rc < 0)
+        if (rc < 0) {
+                LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n", rc);
                 GOTO(out, rc);
+        }
 
         if (rc == 0) {
                 static unsigned long next_print;
