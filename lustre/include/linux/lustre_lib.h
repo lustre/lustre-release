@@ -334,9 +334,15 @@ static inline int obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf,
         char *ptr;
         struct obd_ioctl_data *overlay;
 
-        if (!*pbuf)
+        if (!pbuf)
                 return 1;
         overlay = (struct obd_ioctl_data *)pbuf;
+
+        /* Preserve the caller's buffer pointers */
+        overlay->ioc_inlbuf1 = data->ioc_inlbuf1;
+        overlay->ioc_inlbuf2 = data->ioc_inlbuf2;
+        overlay->ioc_inlbuf3 = data->ioc_inlbuf3;
+
         memcpy(data, pbuf, sizeof(*data));
 
         ptr = overlay->ioc_bulk;
