@@ -33,11 +33,11 @@ add_uuid ost
 quit
 EOF
 
-dd if=/dev/zero of=/tmp/ost bs=1024 count=30000
+dd if=/dev/zero of=/tmp/ost bs=1024 count=10000
 mke2fs -b 4096 -F /tmp/ost
 losetup ${LOOP}0 /tmp/ost || exit -1
 
-dd if=/dev/zero of=/tmp/mds bs=1024 count=100000
+dd if=/dev/zero of=/tmp/mds bs=1024 count=10000
 mke2fs -b 4096 -F /tmp/mds
 losetup ${LOOP}1 /tmp/mds || exit -1
 
