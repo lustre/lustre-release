@@ -65,7 +65,7 @@ static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
 
         EXIT;
  out:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         return rc;
 }
 
@@ -100,7 +100,7 @@ static int osc_open(struct lustre_handle *conn, struct obdo *oa,
 
         EXIT;
  out:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         return rc;
 }
 
@@ -135,7 +135,7 @@ static int osc_close(struct lustre_handle *conn, struct obdo *oa,
 
         EXIT;
  out:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         return rc;
 }
 
@@ -160,7 +160,7 @@ static int osc_setattr(struct lustre_handle *conn, struct obdo *oa,
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
 
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         return rc;
 }
 
@@ -208,7 +208,7 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
         *ea = lsm;
         EXIT;
 out_req:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
 out:
         if (rc && !*ea)
                 OBD_FREE(lsm, oa->o_easize);
@@ -256,7 +256,7 @@ static int osc_punch(struct lustre_handle *conn, struct obdo *oa,
 
         EXIT;
  out:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         return rc;
 }
 
@@ -293,7 +293,7 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
 
         EXIT;
  out:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         return rc;
 }
 
@@ -713,7 +713,7 @@ static int osc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
 
         EXIT;
  out:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         return rc;
 }
 

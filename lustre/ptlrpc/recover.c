@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * Portal-RPC reconnection and replay operations, for use in recovery.
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
@@ -18,12 +18,13 @@
 #include <linux/module.h>
 #include <linux/kmod.h>
 
-#define DEBUG_SUBSYSTEM S_LLITE
+#define DEBUG_SUBSYSTEM S_RPC
 
-#include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
+#include <linux/lustre_net.h>
+#include <linux/obd.h>
 
-int ll_reconnect(struct ptlrpc_connection *conn) 
+static int ptlrpc_reconnect(struct ptlrpc_connection *conn) 
 {
         struct list_head *tmp;
         int rc = -EINVAL;
@@ -85,7 +86,7 @@ int ll_reconnect(struct ptlrpc_connection *conn)
         return rc;
 }
 
-static int ll_recover_upcall(struct ptlrpc_connection *conn)
+int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
 {
         char *argv[3];
         char *envp[3];
@@ -104,21 +105,23 @@ static int ll_recover_upcall(struct ptlrpc_connection *conn)
 
         rc = call_usermodehelper(argv[0], argv, envp);
         if (rc < 0) {
-                /*
-                 * Tragically, this will never be run, because call_umh doesn't
-                 * report errors like -ENOENT to its caller.
-                 */
-                CERROR("Error invoking recovery upcall (%s): %d\n",
-                       obd_recovery_upcall, rc);
+                CERROR("Error invoking recovery upcall %s for %s: %d\n",
+                       argv[0], argv[1], rc);
                 CERROR("Check /proc/sys/lustre/recovery_upcall?\n");
         } else {
                 CERROR("Invoked upcall %s for connection %s\n",
                        argv[0], argv[1]);
         }
-        RETURN(rc);
+
+        /*
+         * We don't want to make this a "failed" recovery, because the system
+         * administrator -- or, perhaps, tester -- may well be able to rescue
+         * things by running the correct upcall.
+         */
+        RETURN(0);
 }
 
-static int ll_recover_reconnect(struct ptlrpc_connection *conn)
+int ptlrpc_reconnect_and_replay(struct ptlrpc_connection *conn)
 {
         int rc = 0;
         struct list_head *tmp, *pos;
@@ -126,7 +129,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
         ENTRY;
 
         /* 1. reconnect */
-        rc = ll_reconnect(conn);
+        rc = ptlrpc_reconnect(conn);
         if (rc)
                 RETURN(rc);
         
@@ -141,8 +144,8 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 
                 /* replay what needs to be replayed */
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
-                        CDEBUG(D_HA, "FL_REPLAY: xid "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_reqmsg->opc,
+                        CDEBUG(D_HA, "FL_REPLAY: xid "LPD64" transno "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_repmsg->transno, req->rq_reqmsg->opc,
                                req->rq_import->imp_client->cli_request_portal);
                         rc = ptlrpc_replay_req(req);
 #if 0
@@ -162,8 +165,8 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* server has seen req, we have reply: skip */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                     req->rq_xid <= conn->c_last_xid) { 
-                        CDEBUG(D_HA, "REPLIED SKIP: xid "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_reqmsg->opc,
+                        CDEBUG(D_HA, "REPLIED SKIP: xid "LPD64" transno "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_repmsg->transno, req->rq_reqmsg->opc,
                                req->rq_import->imp_client->cli_request_portal);
                         continue;
                 }
@@ -171,8 +174,8 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* server has lost req, we have reply: resend, ign reply */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                     req->rq_xid > conn->c_last_xid) { 
-                        CDEBUG(D_HA, "REPLIED RESEND: xid "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_reqmsg->opc,
+                        CDEBUG(D_HA, "REPLIED RESEND: xid "LPD64" transno "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_repmsg->transno, req->rq_reqmsg->opc,
                                req->rq_import->imp_client->cli_request_portal);
                         rc = ptlrpc_replay_req(req); 
                         if (rc) {
@@ -194,8 +197,8 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* service has not seen req, no reply: resend */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                      req->rq_xid > conn->c_last_xid) {
-                        CDEBUG(D_HA, "RESEND: xid "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_reqmsg->opc,
+                        CDEBUG(D_HA, "RESEND: xid "LPD64" transno "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_repmsg->transno, req->rq_reqmsg->opc,
                                req->rq_import->imp_client->cli_request_portal);
                         ptlrpc_resend_req(req);
                 }
@@ -217,37 +220,4 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
  out:
         spin_unlock(&conn->c_lock);
         return rc;
-}
-
-static int ll_retry_recovery(struct ptlrpc_connection *conn)
-{
-        CERROR("Recovery has failed on conn %p\n", conn);
-#if 0
-        /* XXX use a timer, sideshow bob */
-        recovd_conn_fail(conn);
-        /* XXX this is disabled until I fix it so that we don't just keep
-         * XXX retrying in the case of a missing upcall.
-         */
-#endif
-        return 0;
-}
-
-int ll_recover(struct recovd_data *rd, int phase)
-{
-        struct ptlrpc_connection *conn = class_rd2conn(rd);
-
-        LASSERT(conn);
-        ENTRY;
-
-        switch (phase) {
-            case PTLRPC_RECOVD_PHASE_PREPARE:
-                RETURN(ll_recover_upcall(conn));
-            case PTLRPC_RECOVD_PHASE_RECOVER:
-                RETURN(ll_recover_reconnect(conn));
-            case PTLRPC_RECOVD_PHASE_FAILURE:
-                RETURN(ll_retry_recovery(conn));
-        }
-
-        LBUG();
-        RETURN(-ENOSYS);
 }

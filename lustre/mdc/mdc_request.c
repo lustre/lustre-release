@@ -72,7 +72,7 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
 
         EXIT;
  out:
-        ptlrpc_free_req(req);
+        ptlrpc_req_finished(req);
         return rc;
 }
 

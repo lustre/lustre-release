@@ -138,7 +138,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         }
 
  out:
-        ptlrpc_free_req(req);
+        ptlrpc_req_finished(req);
         return rc;
 
  out_disc:

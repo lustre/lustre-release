@@ -46,6 +46,7 @@ static int request_out_callback(ptl_event_t *ev)
                 LBUG();
         }
 
+        /* this balances the atomic_inc in ptl_send_rpc */
         ptlrpc_req_finished(req);
         RETURN(1);
 }

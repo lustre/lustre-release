@@ -174,14 +174,18 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         INIT_LIST_HEAD(&request->rq_list);
         /*
          * This will be reduced once when the sender is finished (waiting for
-         * reply, f.e.), once when the request has been committed and is
-         * removed from the to-be-committed list, and once when portals is
-         * finished with it and has called request_out_callback.
+         * reply, f.e.), and once when the request has been committed and is
+         * removed from the to-be-committed list.
+         *
+         * Also, the refcount will be increased in ptl_send_rpc immediately
+         * before we hand it off to portals, and there will be a corresponding
+         * decrease in request_out_cb (which is called to indicate that portals
+         * is finished with the request, and it can be safely freed).
          *
          * (Except in the DLM server case, where it will be dropped twice
          * by the sender, and then the last time by request_out_callback.)
          */
-        atomic_set(&request->rq_refcount, 3);
+        atomic_set(&request->rq_refcount, 2);
 
         spin_lock(&conn->c_lock);
         request->rq_xid = HTON__u32(++conn->c_xid_out);
@@ -200,12 +204,6 @@ void ptlrpc_req_finished(struct ptlrpc_request *request)
         if (request == NULL)
                 return;
 
-        if (request->rq_repmsg != NULL) { 
-                OBD_FREE(request->rq_repmsg, request->rq_replen);
-                request->rq_repmsg = NULL;
-                request->rq_reply_md.start = NULL; 
-        }
-
         if (atomic_dec_and_test(&request->rq_refcount))
                 ptlrpc_free_req(request);
 }
@@ -218,10 +216,24 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
                 return;
         }
 
-        if (request->rq_repmsg != NULL)
+        if (atomic_read(&request->rq_refcount) != 0) {
+                CERROR("freeing request %p (%d->%s:%d) with refcount %d\n",
+                       request, request->rq_reqmsg->opc,
+                       request->rq_connection->c_remote_uuid,
+                       request->rq_import->imp_client->cli_request_portal,
+                       request->rq_refcount);
+                /* LBUG(); */
+        }
+
+        if (request->rq_repmsg != NULL) { 
                 OBD_FREE(request->rq_repmsg, request->rq_replen);
-        if (request->rq_reqmsg != NULL)
+                request->rq_repmsg = NULL;
+                request->rq_reply_md.start = NULL; 
+        }
+        if (request->rq_reqmsg != NULL) {
                 OBD_FREE(request->rq_reqmsg, request->rq_reqlen);
+                request->rq_reqmsg = NULL;
+        }
 
         if (request->rq_connection) {
                 spin_lock(&request->rq_connection->c_lock);
@@ -341,11 +353,12 @@ restart:
                        (long long)req->rq_xid, (long long)req->rq_transno,
                        (long long)conn->c_last_committed);
                 if (atomic_dec_and_test(&req->rq_refcount)) {
-                        req->rq_import = NULL;
-
-                        /* We do this to prevent free_req deadlock.  Restarting
-                         * after each removal is not so bad, as we are almost
-                         * always deleting the first item in the list.
+                        /* We do this to prevent free_req deadlock.
+                         * Restarting after each removal is not so bad, as we are
+                         * almost always deleting the first item in the list.
+                         *
+                         * If we use a recursive lock here, we can skip the
+                         * unlock/lock/restart sequence.
                          */
                         spin_unlock(&conn->c_lock);
                         ptlrpc_free_req(req);
@@ -381,7 +394,7 @@ restart1:
                 list_del_init(&req->rq_list);
                 req->rq_import = NULL;
                 spin_unlock(&conn->c_lock);
-                ptlrpc_free_req(req);
+                ptlrpc_req_finished(req);
                 goto restart1;
         }
 restart2:
@@ -393,7 +406,7 @@ restart2:
                 list_del_init(&req->rq_list);
                 req->rq_import = NULL;
                 spin_unlock(&conn->c_lock);
-                ptlrpc_free_req(req); 
+                ptlrpc_req_finished(req); 
                 spin_lock(&conn->c_lock);
                 goto restart2;
         }
@@ -571,7 +584,6 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                        req->rq_connection->c_remote_uuid,
                        req->rq_import->imp_client->cli_request_portal);
                 /* we'll get sent again, so balance 2nd request_out_callback */
-                atomic_inc(&req->rq_refcount);
                 goto resend;
         }
 
@@ -637,8 +649,6 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
 
-        /* add a ref, which will again be balanced in request_out_callback */
-        atomic_inc(&req->rq_refcount);
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);

@@ -230,7 +230,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                         valid |= OBD_MD_LINKNAME;
                         symlen = lic.lic_body->size;
                 }
-                ptlrpc_free_req(request);
+                ptlrpc_req_finished(request);
                 request = NULL;
                 err = mdc_getattr(&sbi->ll_mdc_conn, ino, mode,
                                   valid, symlen, &request);
@@ -385,7 +385,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
  out:
         if (lmm)
                 OBD_FREE(lmm, mds_md_size);
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         return inode;
 }
 
@@ -400,7 +400,7 @@ static int ll_mdc_unlink(struct inode *dir, struct inode *child, __u32 mode,
 
         err = mdc_unlink(&sbi->ll_mdc_conn, dir, child, mode, name, len,
                          &request);
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
 
         RETURN(err);
 }
@@ -416,7 +416,7 @@ int ll_mdc_link(struct dentry *src, struct inode *dir,
 
         err = mdc_link(&sbi->ll_mdc_conn, src, dir, name,
                        len, &request);
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
 
         RETURN(err);
 }
@@ -433,7 +433,7 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
         err = mdc_rename(&sbi->ll_mdc_conn, src, tgt,
                          old->d_name.name, old->d_name.len,
                          new->d_name.name, new->d_name.len, &request);
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
 
         RETURN(err);
 }

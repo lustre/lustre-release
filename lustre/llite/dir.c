@@ -77,7 +77,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         rc = ll_lock(inode, NULL, &it, &lockh);
         request = (struct ptlrpc_request *)it.it_data;
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         if (rc != ELDLM_OK) {
                 CERROR("lock enqueue: err: %d\n", rc);
                 UnlockPage(page);
@@ -102,7 +102,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 else
                         inode->i_size = body->size;
         }
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         EXIT;
 
  readpage_out:

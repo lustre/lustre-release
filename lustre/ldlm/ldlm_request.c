@@ -290,7 +290,7 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         }
 
         if (!req_passed_in)
-                ptlrpc_free_req(req);
+                ptlrpc_req_finished(req);
 
         rc = ldlm_lock_enqueue(lock, cookie, cookielen, flags, completion,
                                blocking);
@@ -410,7 +410,7 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
         EXIT;
  out:
         LDLM_LOCK_PUT(lock);
-        ptlrpc_free_req(req);
+        ptlrpc_req_finished(req);
         return rc;
 }
 
@@ -454,7 +454,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
                 rc = ptlrpc_queue_wait(req);
                 rc = ptlrpc_check_status(req, rc);
-                ptlrpc_free_req(req);
+                ptlrpc_req_finished(req);
                 if (rc != ELDLM_OK)
                         GOTO(out, rc);
 

@@ -20,11 +20,53 @@
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h>
 
+/* dump_connection_list, but shorter for nicer debugging logs */
+static void d_c_l(struct list_head *head)
+{
+        int sanity = 0;
+        struct list_head *tmp;
+
+        list_for_each(tmp, head) {
+                struct ptlrpc_connection *conn =
+                        list_entry(tmp, struct ptlrpc_connection,
+                                   c_recovd_data.rd_managed_chain);
+                CDEBUG(D_HA, "   %p = %s (%d/%d)\n", conn, conn->c_remote_uuid,
+                       conn->c_recovd_data.rd_phase,
+                       conn->c_recovd_data.rd_next_phase);
+                if (sanity++ > 50)
+                        LBUG();
+        }
+}
+
+static void dump_lists(struct recovd_obd *recovd)
+{
+        CDEBUG(D_HA, "managed: \n");
+        d_c_l(&recovd->recovd_managed_items);
+        CDEBUG(D_HA, "troubled: \n");
+        d_c_l(&recovd->recovd_troubled_items);
+}
+
 void recovd_conn_manage(struct ptlrpc_connection *conn,
                         struct recovd_obd *recovd, ptlrpc_recovery_cb_t recover)
 {
         struct recovd_data *rd = &conn->c_recovd_data;
         ENTRY;
+
+        if (!list_empty(&rd->rd_managed_chain)) {
+                if (rd->rd_recovd == recovd && rd->rd_recover == recover) {
+                        CDEBUG(D_HA, "conn %p/%s already setup for recovery\n",
+                               conn, conn->c_remote_uuid);
+                        EXIT;
+                        return;
+                }
+                CDEBUG(D_HA,
+                       "conn %p/%s has recovery items %p/%p, making %p/%p\n",
+                       conn, conn->c_remote_uuid, rd->rd_recovd, rd->rd_recover,
+                       recovd, recover);
+                spin_lock(&rd->rd_recovd->recovd_lock);
+                list_del(&rd->rd_managed_chain);
+                spin_unlock(&rd->rd_recovd->recovd_lock);
+        }
 
         rd->rd_recovd = recovd;
         rd->rd_recover = recover;
@@ -32,8 +74,8 @@ void recovd_conn_manage(struct ptlrpc_connection *conn,
         rd->rd_next_phase = RD_TROUBLED;
 
         spin_lock(&recovd->recovd_lock);
-        INIT_LIST_HEAD(&rd->rd_managed_chain);
-        list_add(&recovd->recovd_managed_items, &rd->rd_managed_chain);
+        list_add(&rd->rd_managed_chain, &recovd->recovd_managed_items);
+        dump_lists(recovd);
         spin_unlock(&recovd->recovd_lock);
 
         EXIT;
@@ -51,7 +93,6 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
                 return;
         }
 
-
         spin_lock(&recovd->recovd_lock);
         if (rd->rd_phase != RD_IDLE) {
                 CERROR("connection %p to %s already in recovery\n",
@@ -66,6 +107,7 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
         rd->rd_phase = RD_TROUBLED;
+        dump_lists(recovd);
         spin_unlock(&recovd->recovd_lock);
 
         wake_up(&recovd->recovd_waitq);
@@ -85,6 +127,7 @@ void recovd_conn_fixed(struct ptlrpc_connection *conn)
         rd->rd_phase = RD_IDLE;
         rd->rd_next_phase = RD_TROUBLED;
         list_add(&rd->rd_managed_chain, &rd->rd_recovd->recovd_managed_items);
+        dump_lists(rd->rd_recovd);
         spin_unlock(&rd->rd_recovd->recovd_lock);
 
         EXIT;
@@ -118,20 +161,6 @@ static int recovd_check_event(struct recovd_obd *recovd)
         RETURN(rc);
 }
 
-static void dump_connection_list(struct list_head *head)
-{
-        struct list_head *tmp;
-
-        list_for_each(tmp, head) {
-                struct ptlrpc_connection *conn =
-                        list_entry(tmp, struct ptlrpc_connection,
-                                   c_recovd_data.rd_managed_chain);
-                CDEBUG(D_HA, "   %p = %s (%d/%d)\n", conn, conn->c_remote_uuid,
-                       conn->c_recovd_data.rd_phase,
-                       conn->c_recovd_data.rd_next_phase);
-        }
-}
-
 static int recovd_handle_event(struct recovd_obd *recovd)
 {
         struct list_head *tmp, *n;
@@ -140,10 +169,7 @@ static int recovd_handle_event(struct recovd_obd *recovd)
 
         spin_lock(&recovd->recovd_lock);
 
-        CERROR("managed: \n");
-        dump_connection_list(&recovd->recovd_managed_items);
-        CERROR("troubled: \n");
-        dump_connection_list(&recovd->recovd_troubled_items);
+        dump_lists(recovd);
 
         /*
          * We use _safe here because one of the callbacks, expecially
@@ -178,6 +204,7 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                         CERROR("starting recovery for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));
                         rd->rd_phase = RD_PREPARING;
+                        rd->rd_next_phase = RD_PREPARED;
                         
                         spin_unlock(&recovd->recovd_lock);
                         rc = rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_PREPARE);
@@ -185,14 +212,14 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                         if (rc)
                                 goto cb_failed;
                         
-                        rd->rd_next_phase = RD_PREPARED;
                         break;
                         
                     case RD_PREPARED:
-                        rd->rd_phase = RD_RECOVERING;
                         
                         CERROR("recovery prepared for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));
+                        rd->rd_phase = RD_RECOVERING;
+                        rd->rd_next_phase = RD_RECOVERED;
                         
                         spin_unlock(&recovd->recovd_lock);
                         rc = rd->rd_recover(rd, PTLRPC_RECOVD_PHASE_RECOVER);
@@ -200,7 +227,6 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                         if (rc)
                                 goto cb_failed;
                         
-                        rd->rd_next_phase = RD_RECOVERED;
                         break;
                         
                     case RD_RECOVERED:

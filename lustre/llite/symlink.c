@@ -78,7 +78,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         rc = vfs_readlink(dentry, buffer, buflen, symname);
  out:
         up(&lli->lli_open_sem);
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
 
         RETURN(rc);
 }
@@ -102,7 +102,7 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 	rc = vfs_follow_link(nd, symname);
  out:
         up(&lli->lli_open_sem);
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
 
         RETURN(rc);
 }

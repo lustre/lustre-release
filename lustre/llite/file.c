@@ -102,7 +102,11 @@ static int ll_file_open(struct inode *inode, struct file *file)
         rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG | inode->i_mode,
                       file->f_flags, lsm, &fd->fd_mdshandle, &req);
         fd->fd_req = req;
-        ptlrpc_req_finished(req);
+
+        /* We don't call ptlrpc_req_finished here, because the request is
+         * preserved until we see a matching close, at which point it is
+         * released (and likely freed).  (See ll_file_release.)
+         */
         if (rc)
                 GOTO(out_req, -abs(rc));
         if (!fd->fd_mdshandle.addr ||

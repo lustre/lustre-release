@@ -160,11 +160,9 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         cli->cl_import.imp_handle.addr = request->rq_repmsg->addr;
         cli->cl_import.imp_handle.cookie = request->rq_repmsg->cookie;
 
-        recovd_conn_manage(c, ptlrpc_recovd, ll_recover);
-
         EXIT;
 out_req:
-        ptlrpc_free_req(request);
+        ptlrpc_req_finished(request);
         if (rc) {
 out_ldlm:
                 ldlm_namespace_free(obd->obd_namespace);
@@ -221,7 +219,7 @@ int client_obd_disconnect(struct lustre_handle *conn)
         EXIT;
  out_req:
         if (request)
-                ptlrpc_free_req(request);
+                ptlrpc_req_finished(request);
  out_disco:
         err = class_disconnect(conn);
         if (!rc && err)

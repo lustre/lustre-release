@@ -49,6 +49,7 @@ int recovd_cleanup(struct recovd_obd *mgr);
 
 extern struct recovd_obd *ptlrpc_recovd;
 
-int ll_recover(struct recovd_data *rd, int phase);
+int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn);
+int ptlrpc_reconnect_and_replay(struct ptlrpc_connection *conn);
 
 #endif

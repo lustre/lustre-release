@@ -333,6 +333,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         source_id.nid = request->rq_connection->c_peer.peer_nid;
         source_id.pid = PTL_PID_ANY;
 
+        /* add a ref, which will be balanced in request_out_callback */
+        atomic_inc(&request->rq_refcount);
         if (request->rq_replen != 0) {
 
                 /* request->rq_repmsg is set only when the reply comes in, in
