@@ -208,53 +208,47 @@ cobd_close(struct lustre_handle *conn, struct obdo *oa,
         return (obd_close (&cobd->cobd_target, oa, lsm, oti));
 }
 
-static int
-cobd_preprw(int cmd, struct lustre_handle *conn,
-            int objcount, struct obd_ioobj *obj,
-            int niocount, struct niobuf_remote *nb,
-            struct niobuf_local *res, void **desc_private, 
-            struct obd_trans_info *oti)
+static int cobd_preprw(int cmd, struct obd_export *exp,
+                       int objcount, struct obd_ioobj *obj,
+                       int niocount, struct niobuf_remote *nb,
+                       struct niobuf_local *res, void **desc_private,
+                       struct obd_trans_info *oti)
 {
-        struct obd_device *obd = class_conn2obd(conn);
-        struct cache_obd  *cobd;
+        struct obd_export *cobd_exp;
+        int rc;
 
-        if (obd == NULL) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
+        if (exp->exp_obd == NULL)
                 return -EINVAL;
-        }
 
         if ((cmd & OBD_BRW_WRITE) != 0)
                 return -EOPNOTSUPP;
 
-        cobd = &obd->u.cobd;
-        return (obd_preprw (cmd, &cobd->cobd_target,
-                            objcount, obj,
-                            niocount, nb,
-                            res, desc_private, oti));
+        cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
+        rc = obd_preprw(cmd, cobd_exp, objcount, obj, niocount, nb, res,
+                        desc_private, oti);
+        class_export_put(cobd_exp);
+        return rc;
 }
 
-static int
-cobd_commitrw(int cmd, struct lustre_handle *conn,
-              int objcount, struct obd_ioobj *obj,
-              int niocount, struct niobuf_local *local,
-              void *desc_private, struct obd_trans_info *oti)
+static int cobd_commitrw(int cmd, struct obd_export *exp,
+                         int objcount, struct obd_ioobj *obj,
+                         int niocount, struct niobuf_local *local,
+                         void *desc_private, struct obd_trans_info *oti)
 {
-        struct obd_device *obd = class_conn2obd(conn);
-        struct cache_obd  *cobd;
+        struct obd_export *cobd_exp;
+        int rc;
 
-        if (obd == NULL) {
-                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
+        if (exp->exp_obd == NULL)
                 return -EINVAL;
-        }
 
         if ((cmd & OBD_BRW_WRITE) != 0)
                 return -EOPNOTSUPP;
 
-        cobd = &obd->u.cobd;
-        return (obd_commitrw (cmd, &cobd->cobd_target,
-                              objcount, obj,
-                              niocount, local,
-                              desc_private, oti));
+        cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
+        rc = obd_commitrw(cmd, cobd_exp, objcount, obj, niocount, local,
+                          desc_private, oti);
+        class_export_put(cobd_exp);
+        return rc;
 }
 
 static inline int
