@@ -32,7 +32,8 @@ struct mds_fs_type {
         char                            *mft_name;
 };
 
-#define MDS_MAX_CLIENTS 1024
+/* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
+#define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
 #define MDS_MAX_CLIENT_WORDS (MDS_MAX_CLIENTS / sizeof(unsigned long))
 
 static unsigned long last_rcvd_slots[MDS_MAX_CLIENT_WORDS];

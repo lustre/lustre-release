@@ -774,7 +774,7 @@ static int osc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         return rc;
 }
 
-static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
+static int osc_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
                          void *karg, void *uarg)
 {
         struct obd_device *obddev = class_conn2obd(conn);
@@ -877,6 +877,7 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 GOTO(out, err);
         }
         default:
+                CERROR ("osc_ioctl(): unrecognised ioctl %#lx\n", cmd);
                 GOTO(out, err = -ENOTTY);
         }
 out:

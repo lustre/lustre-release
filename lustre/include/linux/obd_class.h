@@ -469,7 +469,7 @@ static inline int obd_commitrw(int cmd, struct lustre_handle *conn,
         RETURN(rc);
 }
 
-static inline int obd_iocontrol(int cmd, struct lustre_handle *conn,
+static inline int obd_iocontrol(unsigned int cmd, struct lustre_handle *conn,
                                 int len, void *karg, void *uarg)
 {
         struct obd_export *exp;

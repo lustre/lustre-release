@@ -78,9 +78,9 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
         /* Go to sleep until the lock is granted or cancelled. */
         rc = l_wait_event(lock->l_waitq,
                           ((lock->l_req_mode == lock->l_granted_mode) ||
-                           (lock->l_flags & LDLM_FL_DESTROYED)), &lwi);
+                           lock->l_destroyed), &lwi);
 
-        if (lock->l_flags & LDLM_FL_DESTROYED) {
+        if (lock->l_destroyed) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
                 RETURN(-EIO);
         }
@@ -518,7 +518,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns)
 
                 w->w_lock = LDLM_LOCK_GET(lock);
                 list_add(&w->w_list, &list);
-                list_del_init(&lock->l_lru);
+                ldlm_lock_remove_from_lru(lock);
 
                 if (--count == 0)
                         break;
@@ -600,7 +600,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 OBD_FREE(w, sizeof(*w));
         }
 
-        ldlm_resource_put(res);
+        ldlm_resource_putref(res);
 
         RETURN(0);
 }
@@ -614,6 +614,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
                            int flags)
 {
         int i;
+        ENTRY;
 
         if (res_id)
                 RETURN(ldlm_cli_cancel_unused_resource(ns, res_id, flags));
@@ -633,12 +634,12 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
                         if (rc)
                                 CERROR("cancel_unused_res ("LPU64"): %d\n",
                                        res->lr_name[0], rc);
-                        ldlm_resource_put(res);
+                        ldlm_resource_putref(res);
                 }
         }
         l_unlock(&ns->ns_lock);
 
-        return ELDLM_OK;
+        RETURN(ELDLM_OK);
 }
 
 /* Lock iterators. */
@@ -709,7 +710,7 @@ int ldlm_namespace_foreach(struct ldlm_namespace *ns, ldlm_iterator_t iter,
                         ldlm_resource_getref(res);
                         rc = ldlm_resource_foreach(res, ldlm_iter_helper,
                                                    &helper);
-                        ldlm_resource_put(res);
+                        ldlm_resource_putref(res);
                         if (rc == LDLM_ITER_STOP)
                                 GOTO(out, rc);
                 }

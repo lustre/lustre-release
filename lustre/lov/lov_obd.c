@@ -1378,7 +1378,7 @@ static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         RETURN(rc);
 }
 
-static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
+static int lov_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
                          void *karg, void *uarg)
 {
         struct obd_device *obddev = class_conn2obd(conn);

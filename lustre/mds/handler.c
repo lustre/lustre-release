@@ -1783,7 +1783,7 @@ static int mdt_cleanup(struct obd_device *obddev)
         RETURN(0);
 }
 
-extern int mds_iocontrol(long cmd, struct lustre_handle *conn,
+extern int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
                          int len, void *karg, void *uarg);
 
 /* use obd ops to offer management infrastructure */

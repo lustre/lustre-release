@@ -182,13 +182,13 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
                          * local_only (which is only used by recovery).  In that
                          * case, we probably still have outstanding lock refs
                          * which reference these resources. -phil */
-                        if (!ldlm_resource_put(res) && !local_only) {
+                        if (!ldlm_resource_putref(res) && !local_only) {
                                 CERROR("Resource refcount nonzero (%d) after "
                                        "lock cleanup; forcing cleanup.\n",
                                        atomic_read(&res->lr_refcount));
                                 ldlm_resource_dump(res);
                                 atomic_set(&res->lr_refcount, 1);
-                                ldlm_resource_put(res);
+                                ldlm_resource_putref(res);
                         }
                 }
         }
@@ -286,6 +286,7 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         ns->ns_resources++;
         spin_unlock(&ns->ns_counter_lock);
 
+        l_lock(&ns->ns_lock);
         memcpy(res->lr_name, name, sizeof(res->lr_name));
         res->lr_namespace = ns;
         ns->ns_refcount++;
@@ -296,12 +297,13 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
         list_add(&res->lr_hash, bucket);
 
-        if (parent == NULL)
+        if (parent == NULL) {
                 list_add(&res->lr_childof, &ns->ns_root_list);
-        else {
+        } else {
                 res->lr_parent = parent;
                 list_add(&res->lr_childof, &parent->lr_children);
         }
+        l_unlock(&ns->ns_lock);
 
         RETURN(res);
 }
@@ -348,37 +350,49 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 {
         atomic_inc(&res->lr_refcount);
+        CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
+               atomic_read(&res->lr_refcount));
         return res;
 }
 
 /* Returns 1 if the resource was freed, 0 if it remains. */
-int ldlm_resource_put(struct ldlm_resource *res)
+int ldlm_resource_putref(struct ldlm_resource *res)
 {
         int rc = 0;
 
         if (atomic_dec_and_test(&res->lr_refcount)) {
                 struct ldlm_namespace *ns = res->lr_namespace;
                 ENTRY;
+                CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
+                       atomic_read(&res->lr_refcount));
 
                 l_lock(&ns->ns_lock);
 
                 if (atomic_read(&res->lr_refcount) != 0) {
                         /* We lost the race. */
                         l_unlock(&ns->ns_lock);
-                        goto out;
+                        RETURN(rc);
                 }
 
-                if (!list_empty(&res->lr_granted))
+                if (!list_empty(&res->lr_granted)) {
+                        ldlm_resource_dump(res);
                         LBUG();
+                }
 
-                if (!list_empty(&res->lr_converting))
+                if (!list_empty(&res->lr_converting)) {
+                        ldlm_resource_dump(res);
                         LBUG();
+                }
 
-                if (!list_empty(&res->lr_waiting))
+                if (!list_empty(&res->lr_waiting)) {
+                        ldlm_resource_dump(res);
                         LBUG();
+                }
 
-                if (!list_empty(&res->lr_children))
+                if (!list_empty(&res->lr_children)) {
+                        ldlm_resource_dump(res);
                         LBUG();
+                }
 
                 ns->ns_refcount--;
                 list_del(&res->lr_hash);
@@ -395,9 +409,10 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 rc = 1;
         } else {
                 ENTRY;
+                CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
+                       atomic_read(&res->lr_refcount));
         out:
-                if (atomic_read(&res->lr_refcount) < 0)
-                        LBUG();
+                LASSERT(atomic_read(&res->lr_refcount) >= 0);
         }
 
         RETURN(rc);
@@ -411,8 +426,7 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
         ldlm_resource_dump(res);
         ldlm_lock_dump(lock);
 
-        if (!list_empty(&lock->l_res_link))
-                LBUG();
+        LASSERT(list_empty(&lock->l_res_link));
 
         list_add(&lock->l_res_link, head);
         l_unlock(&res->lr_namespace->ns_lock);

@@ -91,6 +91,7 @@ char *ldlm_it2str(int it)
 }
 
 extern kmem_cache_t *ldlm_lock_slab;
+struct lustre_lock ldlm_handle_lock;
 
 static int ldlm_plain_compat(struct ldlm_lock *a, struct ldlm_lock *b);
 
@@ -141,7 +142,7 @@ void ldlm_unregister_intent(void)
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
 {
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        lock->l_refc++;
+        atomic_inc(&lock->l_refc);
         ldlm_resource_getref(lock->l_resource);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return lock;
@@ -153,23 +154,21 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         ENTRY;
 
         l_lock(&ns->ns_lock);
-        lock->l_refc--;
-        //LDLM_DEBUG(lock, "after refc--");
-        if (lock->l_refc < 0)
-                LBUG();
+        atomic_dec(&lock->l_refc);
+        LASSERT(atomic_read(&lock->l_refc) >= 0);
 
-        if (ldlm_resource_put(lock->l_resource)) {
-                LASSERT(lock->l_refc == 0);
+        if (ldlm_resource_putref(lock->l_resource)) {
+                LASSERT(atomic_read(&lock->l_refc) == 0);
                 lock->l_resource = NULL;
         }
         if (lock->l_parent)
                 LDLM_LOCK_PUT(lock->l_parent);
 
-        if (lock->l_refc == 0 && (lock->l_flags & LDLM_FL_DESTROYED)) {
+        if (atomic_read(&lock->l_refc) == 0) {
+                LASSERT(lock->l_destroyed);
                 l_unlock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
 
-                //spin_lock(&ldlm_handle_lock);
                 spin_lock(&ns->ns_counter_lock);
                 ns->ns_locks--;
                 spin_unlock(&ns->ns_counter_lock);
@@ -180,12 +179,24 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                         ptlrpc_put_connection(lock->l_export->exp_connection);
                 memset(lock, 0x5a, sizeof(*lock));
                 kmem_cache_free(ldlm_lock_slab, lock);
-                //spin_unlock(&ldlm_handle_lock);
                 CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 0).\n",
                        sizeof(*lock), lock);
         } else
                 l_unlock(&ns->ns_lock);
 
+        EXIT;
+}
+
+void ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
+{
+        ENTRY;
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        if (!list_empty(&lock->l_lru)) {
+                list_del_init(&lock->l_lru);
+                lock->l_resource->lr_namespace->ns_nr_unused--;
+                LASSERT(lock->l_resource->lr_namespace->ns_nr_unused >= 0);
+        }
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         EXIT;
 }
 
@@ -210,17 +221,17 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
                 LBUG();
         }
 
-        if (lock->l_flags & LDLM_FL_DESTROYED) {
+        if (lock->l_destroyed) {
                 LASSERT(list_empty(&lock->l_lru));
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 EXIT;
                 return;
         }
+        lock->l_destroyed = 1;
 
-        list_del_init(&lock->l_lru);
         list_del(&lock->l_export_chain);
         lock->l_export = NULL;
-        lock->l_flags |= LDLM_FL_DESTROYED;
+        ldlm_lock_remove_from_lru(lock);
 
         /* Wake anyone waiting for this lock */
         /* FIXME: I should probably add yet another flag, instead of using
@@ -258,7 +269,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         lock->l_resource = resource;
         /* this refcount matches the one of the resource passed
            in which is not being put away */
-        lock->l_refc = 1;
+        atomic_set(&lock->l_refc, 1);
         INIT_LIST_HEAD(&lock->l_children);
         INIT_LIST_HEAD(&lock->l_res_link);
         INIT_LIST_HEAD(&lock->l_lru);
@@ -288,7 +299,7 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
 {
         struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         struct ldlm_resource *oldres = lock->l_resource;
-        int i;
+        int i, refc;
         ENTRY;
 
         l_lock(&ns->ns_lock);
@@ -312,15 +323,16 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
         }
 
         /* move references over */
-        for (i = 0; i < lock->l_refc; i++) {
+        refc = atomic_read(&lock->l_refc);
+        for (i = 0; i < refc; i++) {
                 int rc;
                 ldlm_resource_getref(lock->l_resource);
-                rc = ldlm_resource_put(oldres);
-                if (rc == 1 && i != lock->l_refc - 1)
+                rc = ldlm_resource_putref(oldres);
+                if (rc == 1 && i != refc - 1)
                         LBUG();
         }
         /* compensate for the initial get above.. */
-        ldlm_resource_put(lock->l_resource);
+        ldlm_resource_putref(lock->l_resource);
 
         l_unlock(&ns->ns_lock);
         RETURN(0);
@@ -341,8 +353,8 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
  * Return NULL if flag already set
  */
 
-struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
-                                     int strict, int flags)
+struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle, int strict,
+                                     int flags)
 {
         struct ldlm_lock *lock = NULL, *retval = NULL;
         ENTRY;
@@ -352,7 +364,6 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
         if (!handle->addr)
                 RETURN(NULL);
 
-        //spin_lock(&ldlm_handle_lock);
         lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
         if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock)) {
                 //CERROR("bogus lock %p\n", lock);
@@ -360,8 +371,8 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
         }
 
         if (lock->l_random != handle->cookie) {
-                //CERROR("bogus cookie: lock %p has "LPX64" vs. handle "LPX64"\n",
-                //       lock, lock->l_random, handle->cookie);
+                //CERROR("bogus cookie: lock %p has "LPX64" vs. handle "LPX64
+                //       "\n", lock, lock->l_random, handle->cookie);
                 GOTO(out2, NULL);
         }
         if (!lock->l_resource) {
@@ -376,7 +387,7 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
         }
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (strict && lock->l_flags & LDLM_FL_DESTROYED) {
+        if (strict && lock->l_destroyed) {
                 CERROR("lock already destroyed: lock %p\n", lock);
                 //LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
                 GOTO(out, NULL);
@@ -395,7 +406,6 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
  out2:
-        //spin_unlock(&ldlm_handle_lock);
         return retval;
 }
 
@@ -455,13 +465,7 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode)
 void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
 {
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-
-        if (!list_empty(&lock->l_lru)) { 
-                list_del_init(&lock->l_lru);
-                lock->l_resource->lr_namespace->ns_nr_unused--;
-                LASSERT(lock->l_resource->lr_namespace->ns_nr_unused >= 0);
-        }
-
+        ldlm_lock_remove_from_lru(lock);
         if (mode == LCK_NL || mode == LCK_CR || mode == LCK_PR)
                 lock->l_readers++;
         else
@@ -612,7 +616,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                 if (lock == old_lock)
                         continue;
 
-                if (lock->l_flags & (LDLM_FL_CBPENDING | LDLM_FL_DESTROYED))
+                if (lock->l_flags & LDLM_FL_CBPENDING)
                         continue;
 
                 if (lock->l_req_mode != mode)
@@ -621,6 +625,9 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                 if (lock->l_resource->lr_type == LDLM_EXTENT &&
                     (lock->l_extent.start > extent->start ||
                      lock->l_extent.end < extent->end))
+                        continue;
+
+                if (lock->l_destroyed)
                         continue;
 
                 ldlm_lock_addref_internal(lock, mode);
@@ -676,7 +683,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
 
         EXIT;
        out:
-        ldlm_resource_put(res);
+        ldlm_resource_putref(res);
         l_unlock(&ns->ns_lock);
 
         if (lock) {
@@ -716,7 +723,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 
         lock = ldlm_lock_new(parent_lock, res);
         if (lock == NULL) {
-                ldlm_resource_put(res);
+                ldlm_resource_putref(res);
                 RETURN(NULL);
         }
 
@@ -961,7 +968,7 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
                 LDLM_DEBUG(lock, "export %p", exp);
                 ldlm_lock_cancel(lock);
                 ldlm_reprocess_all(res);
-                ldlm_resource_put(res);
+                ldlm_resource_putref(res);
         }
 }
 

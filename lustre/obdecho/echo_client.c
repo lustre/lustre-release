@@ -31,7 +31,7 @@
 #include <linux/lustre_debug.h>
 #include <linux/lprocfs_status.h>
 
-static int echo_iocontrol(long cmd, struct lustre_handle *obdconn, int len,
+static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn, int len,
                           void *karg, void *uarg)
 {
         struct obd_device *obd = class_conn2obd(obdconn);
@@ -182,7 +182,8 @@ static int echo_iocontrol(long cmd, struct lustre_handle *obdconn, int len,
                 GOTO(out, rc);
         }
         default:
-                return -ENOTTY;
+                CERROR ("echo_ioctl(): unrecognised ioctl %#lx\n", cmd);
+                GOTO (out, rc = -ENOTTY);
         }
 
  out:

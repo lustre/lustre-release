@@ -391,6 +391,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 DEBUG_REQ(D_ERROR, req, "RESTART:");
                 GOTO(out, rc = 1);
         }
+        EXIT;
  out:
         DEBUG_REQ(D_NET, req, "rc = %d for", rc);
         return rc;
@@ -443,6 +444,10 @@ void ptlrpc_free_committed(struct obd_import *imp)
         struct ptlrpc_request *req;
         ENTRY;
 
+#ifndef __arch_um__
+        LASSERT(spin_is_locked(&imp->imp_lock));
+#endif
+
         CDEBUG(D_HA, "committing for xid "LPU64", last_committed "LPU64"\n",
                imp->imp_peer_last_xid, imp->imp_peer_committed_transno);
 
@@ -455,10 +460,12 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 }
 
                 /* not yet committed */
-                if (req->rq_transno > imp->imp_peer_committed_transno)
+                if (req->rq_transno > imp->imp_peer_committed_transno) {
+                        DEBUG_REQ(D_HA, req, "stopping search");
                         break;
+                }
 
-                DEBUG_REQ(D_HA, req, "committing (last_committed %Lu)",
+                DEBUG_REQ(D_HA, req, "committing (last_committed "LPU64")",
                           imp->imp_peer_committed_transno);
                 __ptlrpc_req_finished(req, 1);
         }

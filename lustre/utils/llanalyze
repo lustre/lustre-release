@@ -61,10 +61,14 @@ $masks->{RPCTRACE} = 1 << 19; # /* recovery and failover */
 
 sub extractpid
 {
-    $_ = shift;
+    $line = shift;
 #    print "$_\n";
-    /\(\) ([0-9]*)\+[0-9]*\):/;
-    return $1;
+    if ($line =~ m/\(\) ([0-9]*)\+[0-9]*\):/) {
+	return $1;
+    }
+    if ($line =~ m/\(\) ([0-9]*) | [0-9]*\+[0-9]*\):/) {
+	return $1;
+    }
 }
 
 sub entering

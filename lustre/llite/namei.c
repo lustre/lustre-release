@@ -306,7 +306,6 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 }
                 offset = 0;
         } else {
-                struct ll_inode_info *lli = ll_i2info(parent);
                 obd_flag valid;
                 int mode;
 
@@ -653,7 +652,6 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
                 RETURN(PTR_ERR(inode));
 
         if (it && it->it_disposition) {
-                struct ll_inode_info *lli = ll_i2info(inode);
                 d_instantiate(dentry, inode);
         } else {
                 /* no directory data updates when intents rule */

@@ -42,19 +42,18 @@ typedef enum {
 
 #define LDLM_FL_CBPENDING      (1 << 4) // this lock is being destroyed
 #define LDLM_FL_AST_SENT       (1 << 5) // blocking or cancel packet was sent
-#define LDLM_FL_DESTROYED      (1 << 6) // this lock is destroyed
-#define LDLM_FL_WAIT_NOREPROC  (1 << 7)// not a real lock flag,not saved in lock
-#define LDLM_FL_CANCEL         (1 << 8) // cancellation callback already run
+#define LDLM_FL_WAIT_NOREPROC  (1 << 6)// not a real lock flag,not saved in lock
+#define LDLM_FL_CANCEL         (1 << 7) // cancellation callback already run
 
 /* Lock is being replayed.  This could probably be implied by the fact that one
  * of BLOCK_{GRANTED,CONV,WAIT} is set, but that is pretty dangerous. */
-#define LDLM_FL_REPLAY         (1 << 9)
+#define LDLM_FL_REPLAY         (1 << 8)
 
-#define LDLM_FL_INTENT_ONLY    (1 << 10) /* don't grant lock, just do intent */
-#define LDLM_FL_LOCAL_ONLY     (1 << 11) /* see ldlm_cli_cancel_unused */
-#define LDLM_FL_NO_CALLBACK    (1 << 12) /* see ldlm_cli_cancel_unused */
-#define LDLM_FL_HAS_INTENT     (1 << 13) /* lock request has intent */
-#define LDLM_FL_CANCELING      (1 << 14) /* lock cancel has already been sent */
+#define LDLM_FL_INTENT_ONLY    (1 << 9) /* don't grant lock, just do intent */
+#define LDLM_FL_LOCAL_ONLY     (1 << 10) /* see ldlm_cli_cancel_unused */
+#define LDLM_FL_NO_CALLBACK    (1 << 11) /* see ldlm_cli_cancel_unused */
+#define LDLM_FL_HAS_INTENT     (1 << 12) /* lock request has intent */
+#define LDLM_FL_CANCELING      (1 << 13) /* lock cancel has already been sent */
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -146,7 +145,7 @@ typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags);
 
 struct ldlm_lock {
         __u64                 l_random;
-        int                   l_refc;
+        atomic_t              l_refc;
         struct ldlm_resource *l_resource;
         struct ldlm_lock     *l_parent;
         struct list_head      l_children;
@@ -174,6 +173,7 @@ struct ldlm_lock {
 
         __u32                 l_readers;
         __u32                 l_writers;
+        __u8                  l_destroyed;
 
         /* If the lock is granted, a process sleeps on this waitq to learn when
          * it's no longer in use.  If the lock is not granted, a process sleeps
@@ -326,6 +326,7 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict,
                                      int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_set_data(struct lustre_handle *, void *data, int datalen);
+void ldlm_lock_remove_from_lru(struct ldlm_lock *);
 
 static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 {
@@ -395,7 +396,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u64 *name, __u32 type, int create);
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res);
-int ldlm_resource_put(struct ldlm_resource *res);
+int ldlm_resource_putref(struct ldlm_resource *res);
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock);

@@ -1,4 +1,11 @@
-2002-01-02  Andreas Dilger  <adilger@clusterfs.com>
+TBA
+	* bug fixes
+	 - LRU counters were broken, causing constant lock purge (433, 432)
+	 - garbage on read from stripes with failed OSTs (441)
+	 - mark OSCs as active before reconnecting during recovery (438)
+	 - lov_enqueue and lov_cancel need to handle inactive OSTs (403)
+
+2002-12-02  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_18
 	* bug fixes
 	  - fix many simultaneous client startup (392)
@@ -12,10 +19,10 @@
 	  - fix echo client over LOV (409)
 	  - fix dbench 2, extN refcount problem (170, 258, 356, 418)
 	  - fix double-O_EXCL intent crash (424)
-	  - fix LOV-with-dead-OST bugs (307, 325, 326, 400, 403, 410)
-	* Features
+	  - avoid sending multiple lock CANCELs (352)
+	* Features 
 	  - MDS can do multi-client recovery (modulo bugs in new code)
-	* Documentation
+	* Documentation 
 	  - many updates, edits, cleanups
 
 2002-11-18  Phil Schwan  <phil@clusterfs.com>

@@ -132,10 +132,19 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         struct obd_ioctl_data *data;
         struct obd_device *obd = filp->private_data;
         struct lustre_handle conn;
-        int err = 0, len = 0;
+        int err = 0, len = 0, serialised = 0;
         ENTRY;
 
-        down(&obd_conf_sem);
+        switch (cmd) {
+        case OBD_IOC_BRW_WRITE:
+        case OBD_IOC_BRW_READ:
+        case OBD_IOC_GETATTR:
+                break;
+        default:
+                down(&obd_conf_sem);
+                serialised = 1;
+                break;
+        }
 
         if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS &&
             cmd != OBD_IOC_LIST && cmd != OBD_GET_VERSION &&
@@ -519,7 +528,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
  out:
         if (buf)
                 OBD_FREE(buf, len);
-        up(&obd_conf_sem);
+        if (serialised)
+                up(&obd_conf_sem);
         RETURN(err);
 } /* obd_class_ioctl */
 

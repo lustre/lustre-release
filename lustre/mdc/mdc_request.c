@@ -521,6 +521,7 @@ int mdc_close(struct lustre_handle *conn, obd_id ino, int type,
         struct mds_body *body;
         int rc, size = sizeof(*body);
         struct ptlrpc_request *req;
+        ENTRY;
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_CLOSE, 1, &size,
                               NULL);

@@ -73,7 +73,7 @@ inline struct lustre_handle *child_conn(struct lustre_handle *conn);
 int snap_deleteobj(obd_id id, obd_gr group, void *data);
 int snap_restoreobj(obd_id id, obd_gr group, void *data);
 int snap_printobj(obd_id id, obd_gr group, void *data);
-int snap_iocontrol(int cmd, struct lustre_handle *conn, int len, void *karg, void *uarg);
+int snap_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len, void *karg, void *uarg);
 
 /* In the future, this function may have to deal with offsets into the obdmd.
  * Currently, we assume we have the whole obdmd struct.

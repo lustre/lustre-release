@@ -71,7 +71,7 @@ int connmgr_cleanup(struct obd_device *dev)
         RETURN(0);
 }
 
-int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
+int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len, void *karg,
                       void *uarg)
 {
         struct ptlrpc_connection *conn = NULL;

@@ -29,20 +29,10 @@
 # include <string.h>
 #else
 # include <asm/semaphore.h>
-#include <linux/kp30.h> /* XXX just for LASSERT! */
 #endif
+#include <linux/kp30.h> /* XXX just for LASSERT! */
 #include <linux/portals_lib.h>
 #include <linux/lustre_idl.h>
-
-#if BITS_PER_LONG > 32
-#define LPU64 "%lu"
-#define LPD64 "%ld"
-#define LPX64 "%#lx"
-#else
-#define LPU64 "%Lu"
-#define LPD64 "%Ld"
-#define LPX64 "%#Lx"
-#endif
 
 #ifdef __KERNEL__
 /* l_net.c */

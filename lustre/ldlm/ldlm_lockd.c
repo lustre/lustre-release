@@ -32,6 +32,7 @@
 
 extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
+extern struct lustre_lock ldlm_handle_lock;
 extern struct list_head ldlm_namespace_list;
 extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
 extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
@@ -733,6 +734,8 @@ static int __init ldlm_init(void)
                 kmem_cache_destroy(ldlm_resource_slab);
                 return -ENOMEM;
         }
+
+        l_lock_init(&ldlm_handle_lock);
 
         return 0;
 }

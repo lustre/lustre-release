@@ -273,7 +273,7 @@ struct obd_device {
 };
 
 struct obd_ops {
-        int (*o_iocontrol)(long cmd, struct lustre_handle *, int len,
+        int (*o_iocontrol)(unsigned int cmd, struct lustre_handle *, int len,
                            void *karg, void *uarg);
         int (*o_get_info)(struct lustre_handle *, obd_count keylen, void *key,
                           obd_count *vallen, void **val);

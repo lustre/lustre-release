@@ -52,7 +52,10 @@ static void usage(char *argv0, int status)
 
 int main(int argc, char **argv)
 {
-        int fd, rc, c, cmd = 0;
+        int fd = 0;
+        int rc = 0;
+        int c  = 0;
+        long cmd = 0;
         unsigned long arg;
         char *short_opts = "h", *name = argv[0];
         static struct option long_opts[] = {
