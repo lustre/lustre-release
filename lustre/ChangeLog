@@ -16,6 +16,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- x86-64 compile warning fixes
 	- fix gateway LMC keyword conflict (2318)
 	- fix MDS lock inversions in getattr/reint paths (1844)
+	- fix a rare lock re-ordering bug, which caused deadlock (2322)
        * miscellania
 	- allow configurable automake binary, for testing new versions
 	- small update to the lfs documentation

@@ -190,9 +190,13 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 
         if (rc != 2) {
                 /* If either of the compat_queue()s returned 0, then we
-                 * have ASTs to send and must go onto the waiting list. */
-                ldlm_resource_unlink_lock(lock);
-                ldlm_resource_add_lock(res, &res->lr_waiting, lock);
+                 * have ASTs to send and must go onto the waiting list.
+                 *
+                 * bug 2322: we used to unlink and re-add here, which was a
+                 * terrible folly -- if we goto restart, we could get
+                 * re-ordered!  Causes deadlock, because ASTs aren't sent! */
+                if (list_empty(&lock->l_res_link))
+                        ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 l_unlock(&res->lr_namespace->ns_lock);
                 rc = ldlm_run_ast_work(res->lr_namespace, &rpc_list);
                 l_lock(&res->lr_namespace->ns_lock);
