@@ -1,4 +1,4 @@
-diff -rup linux-2.4.20-uml linux-2.4.21-rc2
+diff -rup linux-2.4.20-uml/fs/jbd/transaction.c linux-2.4.21-rc2/fs/jbd/transaction.c
 --- linux-2.4.20-uml/fs/jbd/transaction.c	Thu Nov 28 16:53:15 2002
 +++ linux-2.4.21-rc2/fs/jbd/transaction.c	Fri May 16 11:00:40 2003
 @@ -666,7 +673,8 @@ repeat:

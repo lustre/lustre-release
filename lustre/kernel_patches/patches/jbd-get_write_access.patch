@@ -1,4 +1,4 @@
-diff -rup linux-2.4.20-uml linux-2.4.21-rc2
+diff -rup linux-2.4.20-uml/fs/jbd/transaction.c linux-2.4.21-rc2/fs/jbd/transaction.c
 --- linux-2.4.20-uml/fs/jbd/transaction.c	Thu Nov 28 16:53:15 2002
 +++ linux-2.4.21-rc2/fs/jbd/transaction.c	Fri May 16 11:00:40 2003
 @@ -735,7 +743,8 @@ done_locked:
@@ -11,7 +11,7 @@ diff -rup linux-2.4.20-uml linux-2.4.21-rc2
  		page = jh2bh(jh)->b_page;
  		offset = ((unsigned long) jh2bh(jh)->b_data) & ~PAGE_MASK;
  		source = kmap(page);
-diff -rup linux-2.4.20-uml linux-2.4.21-rc2
+diff -rup linux-2.4.20-uml/include/linux/jbd.h linux-2.4.21-rc2/include/linux/jbd.h
 --- linux-2.4.20-uml/include/linux/jbd.h	Mon Aug 25 16:16:57 2003
 +++ linux-2.4.21-rc2/include/linux/jbd.h	Tue May 13 13:28:29 2003
 @@ -40,6 +40,15 @@
