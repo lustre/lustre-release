@@ -11,7 +11,7 @@ save_cmd() {
 }
 
 LMC="save_cmd"
-LMC_REAL="../../lustre/utils/lmc -m $config"
+LMC_REAL="../utils/lmc -m $config"
 
 # TCP/IP servers
 SERVER_START=0
