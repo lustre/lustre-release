@@ -56,51 +56,38 @@ lgmnal_api_forward(nal_t *nal, int index, void *args, size_t arg_len,
 
 
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_api_forward: nal [%p], index [%d], args [%p], arglen [%d], ret [%p], retlen [%d]\n", nal, index, args, arg_len, ret, ret_len));
+	CDEBUG(D_INFO, "lgmnal_api_forward: nal [%p], index [%d], args [%p], arglen [%u], ret [%p], retlen [%u]\n", nal, index, args, arg_len, ret, ret_len);
 
 	if (!nal || !args || (index < 0) || (arg_len < 0)) {
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Bad args to lgmnal_api_forward\n"));
-#ifdef LGMNAL_DEBUG
-		if (!nal)
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("No nal specified\n"));
-		if (!args)
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("No args specified\n"));
-		if (index < 0)
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Index is negative[%d]\n", index));
-		if (arg_len < 0)
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("arg_len is negative [%d]\n", arg_len));
-#endif
+			CDEBUG(D_ERROR, "Bad args to lgmnal_api_forward\n");
 		return (PTL_FAIL);
 	}
 
 	if (ret && (ret_len <= 0)) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Bad args to lgmnal_api_forward\n"));
-#ifdef LGMNAL_DEBUG
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("ret_len is [%d]\n", ret_len));
-#endif
+		CDEBUG(D_ERROR, "Bad args to lgmnal_api_forward\n");
 		return (PTL_FAIL);
 	}
 
 
 	if (!nal->nal_data) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("bad nal, no nal data\n"));	
+		CDEBUG(D_ERROR, "bad nal, no nal data\n");	
 		return (PTL_FAIL);
 	}
 	
 	nal_data = nal->nal_data;
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("nal_data is [%p]\n", nal_data));	
+	CDEBUG(D_INFO, "nal_data is [%p]\n", nal_data);	
 
 	if (!nal_data->nal_cb) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("bad nal_data, no nal_cb\n"));	
+		CDEBUG(D_ERROR, "bad nal_data, no nal_cb\n");	
 		return (PTL_FAIL);
 	}
 	
 	nal_cb = nal_data->nal_cb;
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("nal_cb is [%p]\n", nal_cb));	
+	CDEBUG(D_INFO, "nal_cb is [%p]\n", nal_cb);	
 	
-	LGMNAL_PRINT(LGMNAL_DEBUG_V, ("lgmnal_api_forward calling lib_dispatch\n"));
+	CDEBUG(D_PORTALS, "lgmnal_api_forward calling lib_dispatch\n");
 	lib_dispatch(nal_cb, NULL, index, args, ret);
-	LGMNAL_PRINT(LGMNAL_DEBUG_V, ("lgmnal_api_forward returns from lib_dispatch\n"));
+	CDEBUG(D_PORTALS, "lgmnal_api_forward returns from lib_dispatch\n");
 
 	return(PTL_OK);
 }
@@ -117,7 +104,7 @@ lgmnal_api_shutdown(nal_t *nal, int interface)
 
 	lgmnal_data_t	*nal_data = nal->nal_data;
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_api_shutdown: nal_data [%p]\n", nal_data));
+	CDEBUG(D_TRACE, "lgmnal_api_shutdown: nal_data [%p]\n", nal_data);
 
 	return(PTL_OK);
 }
@@ -132,7 +119,7 @@ int
 lgmnal_api_validate(nal_t *nal, void *base, size_t extent)
 {
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_api_validate : nal [%p], base [%p], extent [%d]\n", nal, base, extent));
+	CDEBUG(D_TRACE, "lgmnal_api_validate : nal [%p], base [%p], extent [%d]\n", nal, base, (int)extent);
 
 	return(PTL_OK);
 }
@@ -146,7 +133,7 @@ lgmnal_api_validate(nal_t *nal, void *base, size_t extent)
 void
 lgmnal_api_yield(nal_t *nal)
 {
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_api_yield : nal [%p]\n", nal));
+	CDEBUG(D_TRACE, "lgmnal_api_yield : nal [%p]\n", nal);
 
 	set_current_state(TASK_INTERRUPTIBLE);
 	schedule();
@@ -166,7 +153,7 @@ lgmnal_api_lock(nal_t *nal, unsigned long *flags)
 
 	lgmnal_data_t	*nal_data;
 	nal_cb_t	*nal_cb;
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_api_lock : nal [%p], flagsa [%p] flags[%ul]\n", nal, flags, *flags));
+	CDEBUG(D_TRACE, "lgmnal_api_lock : nal [%p], flagsa [%p] flags[%lu]\n", nal, flags, *flags);
 
 	nal_data = nal->nal_data;
 	nal_cb = nal_data->nal_cb;
@@ -185,7 +172,7 @@ lgmnal_api_unlock(nal_t *nal, unsigned long *flags)
 {
 	lgmnal_data_t	*nal_data;
 	nal_cb_t	*nal_cb;
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_api_lock : nal [%p], flags [%p]\n", nal, flags));
+	CDEBUG(D_TRACE, "lgmnal_api_lock : nal [%p], flags [%p]\n", nal, flags);
 
 	nal_data = nal->nal_data;
 	nal_cb = nal_data->nal_cb;
@@ -210,22 +197,22 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	ptl_pid_t	portals_pid = 0;
 
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_init : interface [%d], ptl_size [%d], ac_size[%d]\n",
-			interface, ptl_size, ac_size));
+	CDEBUG(D_TRACE, "lgmnal_init : interface [%d], ptl_size [%d], ac_size[%d]\n",
+			interface, ptl_size, ac_size);
 
 	if ((interface < 0) || (interface > LGMNAL_NUM_IF) || (ptl_size <= 0) || (ac_size <= 0) ) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("bad args\n"));
+		CDEBUG(D_ERROR, "bad args\n");
 		return(NULL);
 	} else {
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("parameters check out ok\n"));
+		CDEBUG(D_INFO, "parameters check out ok\n");
 	}
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Acquired global lock\n"));
+	CDEBUG(D_INFO, "Acquired global lock\n");
 
 
 	PORTAL_ALLOC(nal_data, sizeof(lgmnal_data_t));
 	if (!nal_data) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("can't get memory\n"));
+		CDEBUG(D_ERROR, "can't get memory\n");
 		return(NULL);
 	}	
 	memset(nal_data, 0, sizeof(lgmnal_data_t));
@@ -234,8 +221,8 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	 */
 	nal_data->refcnt = 1;
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Allocd and reset nal_data[%p]\n", nal_data));
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("small_msg_size is [%d]\n", nal_data->small_msg_size));
+	CDEBUG(D_INFO, "Allocd and reset nal_data[%p]\n", nal_data);
+	CDEBUG(D_INFO, "small_msg_size is [%d]\n", nal_data->small_msg_size);
 
 	PORTAL_ALLOC(nal, sizeof(nal_t));
 	if (!nal) {
@@ -243,7 +230,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 		return(NULL);
 	}
 	memset(nal, 0, sizeof(nal_t));
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Allocd and reset nal[%p]\n", nal));
+	CDEBUG(D_INFO, "Allocd and reset nal[%p]\n", nal);
 
 	PORTAL_ALLOC(nal_cb, sizeof(nal_cb_t));
 	if (!nal_cb) {
@@ -252,7 +239,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 		return(NULL);
 	}
 	memset(nal_cb, 0, sizeof(nal_cb_t));
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Allocd and reset nal_cb[%p]\n", nal_cb));
+	CDEBUG(D_INFO, "Allocd and reset nal_cb[%p]\n", nal_cb);
 
 	LGMNAL_INIT_NAL(nal);
 	LGMNAL_INIT_NAL_CB(nal_cb);
@@ -271,9 +258,9 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	/*
  	 *	initialise the interface, 
 	 */
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Calling gm_init\n"));
+	CDEBUG(D_INFO, "Calling gm_init\n");
 	if (gm_init() != GM_SUCCESS) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("call to gm_init failed\n"));
+		CDEBUG(D_ERROR, "call to gm_init failed\n");
 		PORTAL_FREE(nal, sizeof(nal_t));	
 		PORTAL_FREE(nal_data, sizeof(lgmnal_data_t));	
 		PORTAL_FREE(nal_cb, sizeof(nal_cb_t));
@@ -281,34 +268,34 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	}
 
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_V, ("Calling gm_open with interface [%d], port [%d], name [%s], version [%d]\n", interface, LGMNAL_GM_PORT, "lgmnal", GM_API_VERSION));
+	CDEBUG(D_NET, "Calling gm_open with interface [%d], port [%d], name [%s], version [%d]\n", interface, LGMNAL_GM_PORT, "lgmnal", GM_API_VERSION);
 
 	LGMNAL_GM_LOCK(nal_data);
 	gm_status = gm_open(&nal_data->gm_port, 0, LGMNAL_GM_PORT, "lgmnal", GM_API_VERSION);
 	LGMNAL_GM_UNLOCK(nal_data);
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("gm_open returned [%d]\n", gm_status));
+	CDEBUG(D_INFO, "gm_open returned [%d]\n", gm_status);
 	if (gm_status == GM_SUCCESS) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("gm_open succeeded port[%p]\n", nal_data->gm_port));
+		CDEBUG(D_INFO, "gm_open succeeded port[%p]\n", nal_data->gm_port);
 	} else {
 		switch(gm_status) {
 		case(GM_INVALID_PARAMETER):
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("gm_open Failure. Invalid Parameter\n"));
+			CDEBUG(D_ERROR, "gm_open Failure. Invalid Parameter\n");
 			break;
 		case(GM_BUSY):
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("gm_open Failure. GM Busy\n"));
+			CDEBUG(D_ERROR, "gm_open Failure. GM Busy\n");
 			break;
 		case(GM_NO_SUCH_DEVICE):
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("gm_open Failure. No such device\n"));
+			CDEBUG(D_ERROR, "gm_open Failure. No such device\n");
 			break;
 		case(GM_INCOMPATIBLE_LIB_AND_DRIVER):
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("gm_open Failure. Incompatile lib and driver\n"));
+			CDEBUG(D_ERROR, "gm_open Failure. Incompatile lib and driver\n");
 			break;
 		case(GM_OUT_OF_MEMORY):
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("gm_open Failure. Out of Memory\n"));
+			CDEBUG(D_ERROR, "gm_open Failure. Out of Memory\n");
 			break;
 		default:
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("gm_open Failure. Unknow error code [%d]\n", gm_status));
+			CDEBUG(D_ERROR, "gm_open Failure. Unknow error code [%d]\n", gm_status);
 			break;
 		}	
 		LGMNAL_GM_LOCK(nal_data);
@@ -325,7 +312,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	nal_data->small_msg_gmsize = gm_min_size_for_length(lgmnal_small_msg_size);
 
 	if (lgmnal_alloc_srxd(nal_data) != LGMNAL_STATUS_OK) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Failed to allocate small rx descriptors\n"));
+		CDEBUG(D_ERROR, "Failed to allocate small rx descriptors\n");
 		lgmnal_free_stxd(nal_data);
 		LGMNAL_GM_LOCK(nal_data);
 		gm_close(nal_data->gm_port);
@@ -343,7 +330,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	 *	In fact hang them all out
 	 */
 	while((srxd = lgmnal_get_srxd(nal_data, 0))) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_V, ("giving [%p] to gm_provide_recvive_buffer\n", srxd->buffer));
+		CDEBUG(D_NET, "giving [%p] to gm_provide_recvive_buffer\n", srxd->buffer);
 		LGMNAL_GM_LOCK(nal_data);
 		gm_provide_receive_buffer_with_tag(nal_data->gm_port, srxd->buffer, 
 									srxd->gmsize, GM_LOW_PRIORITY, 0);
@@ -354,7 +341,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	 *	Allocate pools of small tx buffers and descriptors
 	 */
 	if (lgmnal_alloc_stxd(nal_data) != LGMNAL_STATUS_OK) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Failed to allocate small tx descriptors\n"));
+		CDEBUG(D_ERROR, "Failed to allocate small tx descriptors\n");
 		LGMNAL_GM_LOCK(nal_data);
 		gm_close(nal_data->gm_port);
 		gm_finalize();
@@ -370,15 +357,15 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	 *	Initialise the gm_alarm we will use to wake the thread is 
 	 *	it needs to be stopped
 	 */
-	LGMNAL_PRINT(LGMNAL_DEBUG_V, ("Initializing receive thread alarm and flag\n"));
+	CDEBUG(D_NET, "Initializing receive thread alarm and flag\n");
 	gm_initialize_alarm(&nal_data->rxthread_alarm);
 	nal_data->rxthread_flag = LGMNAL_THREAD_START;
 
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Starting receive thread\n"));
+	CDEBUG(D_INFO, "Starting receive thread\n");
 	nal_data->rxthread_pid = kernel_thread(lgmnal_rx_thread, (void*)nal_data, 0);
 	if (nal_data->rxthread_pid <= 0) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Receive thread failed to start\n"));
+		CDEBUG(D_ERROR, "Receive thread failed to start\n");
 		lgmnal_free_stxd(nal_data);
 		lgmnal_free_srxd(nal_data);
 		LGMNAL_GM_LOCK(nal_data);
@@ -393,9 +380,9 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	while (nal_data->rxthread_flag != LGMNAL_THREAD_STARTED) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(128);
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Waiting for receive thread signs of life\n"));
+		CDEBUG(D_INFO, "Waiting for receive thread signs of life\n");
 	}
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("receive thread seems to have started\n"));
+	CDEBUG(D_INFO, "receive thread seems to have started\n");
 	nal_data->rxthread_flag = LGMNAL_THREAD_CONTINUE;
 
 
@@ -403,13 +390,13 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	/*
 	 *	Initialise the portals library
 	 */
-	LGMNAL_PRINT(LGMNAL_DEBUG_V, ("Getting node id\n"));
+	CDEBUG(D_NET, "Getting node id\n");
 	LGMNAL_GM_LOCK(nal_data);
 	gm_status = gm_get_node_id(nal_data->gm_port, &local_nid);
 	LGMNAL_GM_UNLOCK(nal_data);
 	if (gm_status != GM_SUCCESS) {
 		lgmnal_stop_rxthread(nal_data);
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("can't determine node id\n"));
+		CDEBUG(D_ERROR, "can't determine node id\n");
 		lgmnal_free_stxd(nal_data);
 		lgmnal_free_srxd(nal_data);
 		LGMNAL_GM_LOCK(nal_data);
@@ -422,12 +409,12 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 		return(NULL);
 	}
 	nal_data->gm_local_nid = local_nid;
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Local node id is [%u]\n", local_nid));
+	CDEBUG(D_INFO, "Local node id is [%u]\n", local_nid);
 	LGMNAL_GM_LOCK(nal_data);
 	gm_status = gm_node_id_to_global_id(nal_data->gm_port, local_nid, &global_nid);
 	LGMNAL_GM_UNLOCK(nal_data);
 	if (gm_status != GM_SUCCESS) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("failed to obtain global id\n"));
+		CDEBUG(D_ERROR, "failed to obtain global id\n");
 		lgmnal_stop_rxthread(nal_data);
 		lgmnal_free_stxd(nal_data);
 		lgmnal_free_srxd(nal_data);
@@ -440,19 +427,19 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 		PORTAL_FREE(nal_cb, sizeof(nal_cb_t));
 		return(NULL);
 	}
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Global node id is [%u][%x]\n", global_nid));
+	CDEBUG(D_INFO, "Global node id is [%u]\n", global_nid);
 	nal_data->gm_global_nid = global_nid;
 
 /*
 	pid = gm_getpid();
 */
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("portals_pid is [%u]\n", portals_pid));
+	CDEBUG(D_INFO, "portals_pid is [%u]\n", portals_pid);
 	portals_nid = (unsigned long)global_nid;
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("portals_nid is [%lu]\n", portals_nid));
+	CDEBUG(D_INFO, "portals_nid is ["LPU64"]\n", portals_nid);
 	
-	LGMNAL_PRINT(LGMNAL_DEBUG_V, ("calling lib_init\n"));
+	CDEBUG(D_PORTALS, "calling lib_init\n");
 	if (lib_init(nal_cb, portals_nid, portals_pid, 1024, ptl_size, ac_size) != PTL_OK) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("lib_init failed\n"));
+		CDEBUG(D_ERROR, "lib_init failed\n");
 		lgmnal_stop_rxthread(nal_data);
 		lgmnal_free_stxd(nal_data);
 		lgmnal_free_srxd(nal_data);
@@ -467,7 +454,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 		
 	}
 	
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_init finished\n"));
+	CDEBUG(D_INFO, "lgmnal_init finished\n");
 	global_nal_data = nal->nal_data;
 	return(nal);
 }
@@ -483,7 +470,7 @@ void lgmnal_fini()
 	nal_t		*nal = nal_data->nal;
 	nal_cb_t	*nal_cb = nal_data->nal_cb;
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_fini\n"));
+	CDEBUG(D_TRACE, "lgmnal_fini\n");
 
 	PtlNIFini(lgmnal_ni);
 	lib_fini(nal_cb);

@@ -185,8 +185,6 @@ typedef struct _lgmnal_data_t {
 #define LGMNAL_NUM_IF 	1
 
 extern lgmnal_data_t	*global_nal_data;
-extern int	lgmnal_debug_level;
-#define LGMNAL_DEBUG_LEVEL	lgmnal_debug_level
 
 /*
  *	The gm_port to use for lgmnal
@@ -197,23 +195,6 @@ extern int	lgmnal_debug_level;
  * for ioctl get pid
  */
 #define LGMNAL_IOC_GET_GNID 1	
-
-/*
- *	LGMNAL_DEBUG_LEVEL set by module load 0<debug_level<4
- *	Increase it to get more debug info
- */	
-
-#define LGMNAL_DEBUG 1
-#ifdef LGMNAL_DEBUG
-#define LGMNAL_PRINT(level, args)	if (LGMNAL_DEBUG_LEVEL >= level) lgmnal_print args
-#else
-#define LGMNAL_PRINT(level, args)
-#endif
-
-#define LGMNAL_DEBUG_ERR 	1	/* only report errors */
-#define LGMNAL_DEBUG_TRACE 	2	/* on entering function */
-#define LGMNAL_DEBUG_V 		3	/* debug */
-#define LGMNAL_DEBUG_VV 	4	/* more debug */
 
 /*
  *	Return codes
@@ -254,10 +235,10 @@ extern int	lgmnal_debug_level;
 #define LGMNAL_GM_LOCK_INIT(a)			spin_lock_init(&a->gm_lock);
 #define LGMNAL_GM_LOCK(a)			do { \
 							while (!spin_trylock(&a->gm_lock)) { \
-								LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("waiting %s:%s:%d holder %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__, nal_data->_function, nal_data->_file, nal_data->_line)); \
+								CDEBUG(D_INFO, "waiting %s:%s:%d holder %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__, nal_data->_function, nal_data->_file, nal_data->_line); \
 								lgmnal_yield(128); \
 							} \
-								LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("GM Locked %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__)); \
+								CDEBUG(D_INFO, "GM Locked %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
 								sprintf(nal_data->_function, "%s", __FUNCTION__); \
 								sprintf(nal_data->_file, "%s", __FILE__); \
 								nal_data->_line = __LINE__; \
@@ -267,7 +248,7 @@ extern int	lgmnal_debug_level;
 							memset(nal_data->_function, 0, 128); \
 							memset(nal_data->_file, 0, 128); \
 							nal_data->_line = 0; \
-							LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("GM Unlocked %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__)); \
+							CDEBUG(D_INFO, "GM Unlocked %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
 						} while(0);
 
 #define LGMNAL_CB_LOCK_INIT(a)			spin_lock_init(&a->cb_lock);
