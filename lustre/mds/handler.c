@@ -1345,6 +1345,10 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         if (body == NULL)
                 RETURN(-EFAULT);
 
+        rc = lustre_pack_reply(req, 1, &size, NULL);
+        if (rc)
+                RETURN(rc);
+
         MDS_CHECK_RESENT(req, reconstruct_create(req));
 
         uc.luc_fsuid = body->oa.o_uid;
@@ -1352,10 +1356,6 @@ static int mdt_obj_create(struct ptlrpc_request *req)
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         
-        rc = lustre_pack_reply(req, 1, &size, NULL);
-        if (rc)
-                RETURN(rc);
-
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
 
         if (body->oa.o_flags & OBD_FL_RECREATE_OBJS) {
