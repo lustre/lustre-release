@@ -1213,22 +1213,17 @@ static inline int md_getstatus(struct obd_export *exp, struct lustre_id *id)
         RETURN(rc);
 }
 
-/* this function notifies MDC, that inode described by @id gets removed from
- * memory.*/
-static inline int md_delete_object(struct obd_export *exp,
-                                   struct lustre_id *id)
+static inline int md_put_inode(struct obd_export *exp,
+                               struct lustre_id *id)
 {
         int rc;
         ENTRY;
 
-        /* as this method only notifies MDC that inode gets deleted, we can
-         * return zero if method is not implemented, this means, that OBD does
-         * not need such a notification. */
-        if (MDP(exp->exp_obd, delete_object) == NULL)
+        if (MDP(exp->exp_obd, put_inode) == NULL)
                 RETURN(0);
         
-        MD_COUNTER_INCREMENT(exp->exp_obd, delete_object);
-        rc = MDP(exp->exp_obd, delete_object)(exp, id);
+        MD_COUNTER_INCREMENT(exp->exp_obd, put_inode);
+        rc = MDP(exp->exp_obd, put_inode)(exp, id);
         RETURN(rc);
 }
 

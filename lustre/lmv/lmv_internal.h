@@ -43,15 +43,11 @@ struct lmv_obj {
 	int                state;          /* object state. */
         atomic_t           count;          /* ref counter. */
         struct lustre_id   id;             /* master id of dir */
-        void               *update;        /* bitmap of status (uptodate) */
+        void               *update;        /* bitmap of status (up-to-date) */
 	__u32		   hashtype;
         int                objcount;       /* number of slaves */
         struct lmv_inode   *objs;          /* array of dirobjs */
         struct obd_device  *obd;           /* pointer to LMV itself */
-	unsigned long      mtime;
-	unsigned long      ctime;
-	unsigned long      atime;
-	unsigned long      nlink;
 };
 
 static inline void

@@ -48,8 +48,13 @@
 #include <linux/obd_lmv.h>
 #include "lmv_internal.h"
 
-static LIST_HEAD(lmv_obj_list);
-static spinlock_t lmv_obj_list_lock = SPIN_LOCK_UNLOCKED;
+/* objects cache. */
+extern kmem_cache_t *obj_cache;
+extern atomic_t obj_cache_count;
+
+/* object list and its guard. */
+static LIST_HEAD(obj_list);
+static spinlock_t obj_list_lock = SPIN_LOCK_UNLOCKED;
 
 /* creates new obj on passed @id and @mea. */
 struct lmv_obj *
@@ -65,10 +70,12 @@ lmv_alloc_obj(struct obd_device *obd,
         LASSERT(mea->mea_magic == MEA_MAGIC_LAST_CHAR
                 || mea->mea_magic == MEA_MAGIC_ALL_CHARS);
 
-        OBD_ALLOC(obj, sizeof(*obj));
+        OBD_SLAB_ALLOC(obj, obj_cache, GFP_NOFS, sizeof(*obj));
         if (!obj)
                 return NULL;
 
+        atomic_inc(&obj_cache_count);
+        
         obj->id = *id;
         obj->obd = obd;
         obj->state = 0;
@@ -92,6 +99,7 @@ lmv_alloc_obj(struct obd_device *obd,
                 CDEBUG(D_OTHER, "subobj "DLID4"\n",
                        OLID4(&mea->mea_ids[i]));
                 obj->objs[i].id = mea->mea_ids[i];
+                LASSERT(id_ino(&obj->objs[i].id));
                 LASSERT(id_fid(&obj->objs[i].id));
         }
 
@@ -109,34 +117,34 @@ lmv_free_obj(struct lmv_obj *obj)
         unsigned int obj_size;
         struct lmv_obd *lmv = &obj->obd->u.lmv;
         
+        LASSERT(!atomic_read(&obj->count));
+        
         obj_size = sizeof(struct lmv_inode) *
                 lmv->desc.ld_tgt_count;
         
         OBD_FREE(obj->objs, obj_size);
-        OBD_FREE(obj, sizeof(*obj));
+        OBD_SLAB_FREE(obj, obj_cache, sizeof(*obj));
+        atomic_dec(&obj_cache_count);
 }
 
 static void
 __add_obj(struct lmv_obj *obj)
 {
         atomic_inc(&obj->count);
-        list_add(&obj->list, &lmv_obj_list);
+        list_add(&obj->list, &obj_list);
 }
 
 void
 lmv_add_obj(struct lmv_obj *obj)
 {
-        spin_lock(&lmv_obj_list_lock);
+        spin_lock(&obj_list_lock);
         __add_obj(obj);
-        spin_unlock(&lmv_obj_list_lock);
+        spin_unlock(&obj_list_lock);
 }
 
 static void
 __del_obj(struct lmv_obj *obj)
 {
-        if (!(obj->state & O_FREEING))
-                LBUG();
-        
         list_del(&obj->list);
         lmv_free_obj(obj);
 }
@@ -144,15 +152,15 @@ __del_obj(struct lmv_obj *obj)
 void
 lmv_del_obj(struct lmv_obj *obj)
 {
-        spin_lock(&lmv_obj_list_lock);
+        spin_lock(&obj_list_lock);
         __del_obj(obj);
-        spin_unlock(&lmv_obj_list_lock);
+        spin_unlock(&obj_list_lock);
 }
 
 static struct lmv_obj *
 __get_obj(struct lmv_obj *obj)
 {
-        LASSERT(obj);
+        LASSERT(obj != NULL);
         atomic_inc(&obj->count);
         return obj;
 }
@@ -160,10 +168,9 @@ __get_obj(struct lmv_obj *obj)
 struct lmv_obj *
 lmv_get_obj(struct lmv_obj *obj)
 {
-        spin_lock(&lmv_obj_list_lock);
+        spin_lock(&obj_list_lock);
         __get_obj(obj);
-        spin_unlock(&lmv_obj_list_lock);
-
+        spin_unlock(&obj_list_lock);
         return obj;
 }
 
@@ -183,9 +190,9 @@ __put_obj(struct lmv_obj *obj)
 void
 lmv_put_obj(struct lmv_obj *obj)
 {
-        spin_lock(&lmv_obj_list_lock);
+        spin_lock(&obj_list_lock);
         __put_obj(obj);
-        spin_unlock(&lmv_obj_list_lock);
+        spin_unlock(&obj_list_lock);
 }
 
 static struct lmv_obj *
@@ -194,7 +201,7 @@ __grab_obj(struct obd_device *obd, struct lustre_id *id)
         struct lmv_obj *obj;
         struct list_head *cur;
 
-        list_for_each(cur, &lmv_obj_list) {
+        list_for_each(cur, &obj_list) {
                 obj = list_entry(cur, struct lmv_obj, list);
 
                 /* check if object is in progress of destroying. If so - skip
@@ -216,9 +223,9 @@ lmv_grab_obj(struct obd_device *obd, struct lustre_id *id)
         struct lmv_obj *obj;
         ENTRY;
         
-        spin_lock(&lmv_obj_list_lock);
+        spin_lock(&obj_list_lock);
         obj = __grab_obj(obd, id);
-        spin_unlock(&lmv_obj_list_lock);
+        spin_unlock(&obj_list_lock);
         
         RETURN(obj);
 }
@@ -242,19 +249,19 @@ __create_obj(struct obd_device *obd, struct lustre_id *id, struct mea *mea)
 
         /* check if someone create it already while we were dealing with
          * allocating @obj. */
-        spin_lock(&lmv_obj_list_lock);
+        spin_lock(&obj_list_lock);
         obj = __grab_obj(obd, id);
         if (obj) {
                 /* someone created it already - put @obj and getting out. */
                 lmv_free_obj(new);
-                spin_unlock(&lmv_obj_list_lock);
+                spin_unlock(&obj_list_lock);
                 RETURN(obj);
         }
 
         __add_obj(new);
         __get_obj(new);
         
-        spin_unlock(&lmv_obj_list_lock);
+        spin_unlock(&obj_list_lock);
 
         CDEBUG(D_OTHER, "new obj in lmv cache: "DLID4"\n",
                OLID4(id));
@@ -273,7 +280,7 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
         struct ptlrpc_request *req = NULL;
         struct lmv_obj *obj;
         struct lustre_md md;
-        int mealen, i, rc;
+        int mealen, rc;
         ENTRY;
 
         CDEBUG(D_OTHER, "get mea for "DLID4" and create lmv obj\n",
@@ -286,11 +293,10 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
                 mealen = MEA_SIZE_LMV(lmv);
                 
                 /* time to update mea of parent id */
-                i = id->li_fid.lf_group;
                 md.mea = NULL;
-                
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
-                rc = md_getattr(lmv->tgts[id->li_fid.lf_group].ltd_exp,
+
+                rc = md_getattr(lmv->tgts[id_group(id)].ltd_exp,
                                 id, valid, mealen, &req);
                 if (rc) {
                         CERROR("md_getattr() failed, error %d\n", rc);
@@ -316,10 +322,11 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
                        OLID4(id));
                 GOTO(cleanup, obj = ERR_PTR(-ENOMEM));
         }
+        EXIT;
 cleanup:
-        if (req)       
+        if (req)
                 ptlrpc_req_finished(req);
-        RETURN(obj);
+        return obj;
 }
 
 /* looks for object with @id and orders to destroy it. It is possible the
@@ -334,29 +341,27 @@ lmv_delete_obj(struct obd_export *exp, struct lustre_id *id)
         int rc = 0;
         ENTRY;
 
-        spin_lock(&lmv_obj_list_lock);
-        
+        spin_lock(&obj_list_lock);
         obj = __grab_obj(obd, id);
         if (obj) {
                 obj->state |= O_FREEING;
-                
-                if (atomic_read(&obj->count) > 1)
-                        CERROR("obj "DLID4" has count > 2 (%d)\n",
-                               OLID4(&obj->id), atomic_read(&obj->count));
                 __put_obj(obj);
                 __put_obj(obj);
                 rc = 1;
         }
 
-        spin_unlock(&lmv_obj_list_lock);
+        spin_unlock(&obj_list_lock);
         RETURN(rc);
 }
 
 int
 lmv_setup_mgr(struct obd_device *obd)
 {
+        LASSERT(obd != NULL);
+        
         CDEBUG(D_INFO, "LMV object manager setup (%s)\n",
                obd->obd_uuid.uuid);
+
         return 0;
 }
 
@@ -369,18 +374,19 @@ lmv_cleanup_mgr(struct obd_device *obd)
         CDEBUG(D_INFO, "LMV object manager cleanup (%s)\n",
                obd->obd_uuid.uuid);
         
-        spin_lock(&lmv_obj_list_lock);
-        list_for_each_safe(cur, tmp, &lmv_obj_list) {
+        spin_lock(&obj_list_lock);
+        list_for_each_safe(cur, tmp, &obj_list) {
                 obj = list_entry(cur, struct lmv_obj, list);
                 
                 if (obj->obd != obd)
                         continue;
 
                 obj->state |= O_FREEING;
-                if (atomic_read(&obj->count) > 1)
+                if (atomic_read(&obj->count) > 1) {
                         CERROR("obj "DLID4" has count > 1 (%d)\n",
                                OLID4(&obj->id), atomic_read(&obj->count));
+                }
                 __put_obj(obj);
         }
-        spin_unlock(&lmv_obj_list_lock);
+        spin_unlock(&obj_list_lock);
 }

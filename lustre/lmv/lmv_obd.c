@@ -49,6 +49,10 @@
 #include <linux/obd_lmv.h>
 #include "lmv_internal.h"
 
+/* object cache. */
+kmem_cache_t *obj_cache;
+atomic_t obj_cache_count = ATOMIC_INIT(0);
+
 static void lmv_activate_target(struct lmv_obd *lmv,
                                 struct lmv_tgt_desc *tgt,
                                 int activate)
@@ -158,8 +162,8 @@ int lmv_attach(struct obd_device *dev, obd_count len, void *data)
 
         lprocfs_init_vars(lmv, &lvars);
         rc = lprocfs_obd_attach(dev, lvars.obd_vars);
-        if (rc == 0) {
 #ifdef __KERNEL__
+        if (rc == 0) {
                 struct proc_dir_entry *entry;
                 
                 entry = create_proc_entry("target_obd_status", 0444, 
@@ -168,8 +172,8 @@ int lmv_attach(struct obd_device *dev, obd_count len, void *data)
                         RETURN(-ENOMEM);
                 entry->proc_fops = &lmv_proc_target_fops; 
                 entry->data = dev;
-#endif
        }
+#endif
         RETURN (rc);
 }
 
@@ -233,8 +237,10 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
                 rc = lmv_check_connect(obd);
 
 #ifdef __KERNEL__
-        if (lmv_proc_dir)
-                lprocfs_remove(lmv_proc_dir);
+        if (rc) {
+                if (lmv_proc_dir)
+                        lprocfs_remove(lmv_proc_dir);
+        }
 #endif
 
         RETURN(rc);
@@ -495,7 +501,6 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
         struct obd_device *obddev = class_exp2obd(exp);
         struct lmv_obd *lmv = &obddev->u.lmv;
         int i, rc = 0, set = 0;
-
         ENTRY;
 
         if (lmv->desc.ld_tgt_count == 0)
@@ -1459,7 +1464,7 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
         RETURN(rc);
 }
 
-int lmv_delete_object(struct obd_export *exp, struct lustre_id *id)
+int lmv_put_inode(struct obd_export *exp, struct lustre_id *id)
 {
         ENTRY;
 
@@ -1921,25 +1926,25 @@ struct obd_ops lmv_obd_ops = {
 };
 
 struct md_ops lmv_md_ops = {
-        .m_getstatus            = lmv_getstatus,
-        .m_getattr              = lmv_getattr,
-        .m_change_cbdata        = lmv_change_cbdata,
-        .m_change_cbdata_name   = lmv_change_cbdata_name,
-        .m_close                = lmv_close,
-        .m_create               = lmv_create,
-        .m_done_writing         = lmv_done_writing,
-        .m_enqueue              = lmv_enqueue,
-        .m_getattr_lock         = lmv_getattr_lock,
-        .m_intent_lock          = lmv_intent_lock,
-        .m_link                 = lmv_link,
-        .m_rename               = lmv_rename,
-        .m_setattr              = lmv_setattr,
-        .m_sync                 = lmv_sync,
-        .m_readpage             = lmv_readpage,
-        .m_unlink               = lmv_unlink,
-        .m_get_real_obd         = lmv_get_real_obd,
-        .m_valid_attrs          = lmv_valid_attrs,
-        .m_delete_object        = lmv_delete_object,
+        .m_getstatus           = lmv_getstatus,
+        .m_getattr             = lmv_getattr,
+        .m_change_cbdata       = lmv_change_cbdata,
+        .m_change_cbdata_name  = lmv_change_cbdata_name,
+        .m_close               = lmv_close,
+        .m_create              = lmv_create,
+        .m_done_writing        = lmv_done_writing,
+        .m_enqueue             = lmv_enqueue,
+        .m_getattr_lock        = lmv_getattr_lock,
+        .m_intent_lock         = lmv_intent_lock,
+        .m_link                = lmv_link,
+        .m_rename              = lmv_rename,
+        .m_setattr             = lmv_setattr,
+        .m_sync                = lmv_sync,
+        .m_readpage            = lmv_readpage,
+        .m_unlink              = lmv_unlink,
+        .m_get_real_obd        = lmv_get_real_obd,
+        .m_valid_attrs         = lmv_valid_attrs,
+        .m_put_inode           = lmv_put_inode,
 };
 
 int __init lmv_init(void)
@@ -1947,16 +1952,29 @@ int __init lmv_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
+        obj_cache = kmem_cache_create("lmv_objects",
+                                      sizeof(struct lmv_obj),
+                                      0, 0, NULL, NULL);
+        if (!obj_cache) {
+                CERROR("error allocating lmv objects cache\n");
+                return -ENOMEM;
+        }
+
         lprocfs_init_vars(lmv, &lvars);
         rc = class_register_type(&lmv_obd_ops, &lmv_md_ops,
-                                 lvars.module_vars, OBD_LMV_DEVICENAME);
-        RETURN(rc);
+                                 lvars.module_vars,
+                                 OBD_LMV_DEVICENAME);
+        return rc;
 }
 
 #ifdef __KERNEL__
 static void lmv_exit(void)
 {
         class_unregister_type(OBD_LMV_DEVICENAME);
+
+        LASSERTF(kmem_cache_destroy(obj_cache) == 0,
+                 "can't free lmv objects cache, %d object(s)"
+                 "still in use\n", atomic_read(&obj_cache_count));
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

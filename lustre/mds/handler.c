@@ -415,14 +415,14 @@ out:
         return rc;
 }
 
-static int mds_connect_post(struct obd_export *exp, unsigned long connect_flags)
+static int mds_connect_post(struct obd_export *exp, unsigned long flags)
 {
         struct obd_device *obd = exp->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
         int rc = 0;
         ENTRY;
 
-        if (!(connect_flags & OBD_OPT_MDS_CONNECTION)) {
+        if (!(flags & OBD_OPT_MDS_CONNECTION)) {
                 if (!(exp->exp_flags & OBD_OPT_REAL_CLIENT)) {
                         atomic_inc(&mds->mds_real_clients);
                         CDEBUG(D_OTHER,"%s: peer from %s is real client (%d)\n",
