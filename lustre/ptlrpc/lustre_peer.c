@@ -1,5 +1,41 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ */
 
+#define DEBUG_SUBSYSTEM S_RPC
 
+#ifdef __KERNEL__
+# include <linux/module.h>
+# include <linux/init.h>
+# include <linux/list.h>
+#else
+# include <liblustre.h>
+#endif
+#include <linux/obd.h>
+#include <linux/obd_support.h>
+#include <linux/obd_class.h>
+#include <linux/lustre_lib.h>
+#include <linux/lustre_ha.h>
+#include <linux/lustre_net.h>
+#include <linux/lprocfs_status.h>
 
 struct uuid_nid_data {
         struct list_head head;
@@ -9,11 +45,29 @@ struct uuid_nid_data {
         ptl_handle_ni_t ni;
 };
 
-
 /* FIXME: This should probably become more elegant than a global linked list */
 static struct list_head g_uuid_list;
 static spinlock_t       g_uuid_lock;
 
+void ptlrpc_init_uuidlist(void)
+{
+        INIT_LIST_HEAD(&g_uuid_list);
+        spin_lock_init(&g_uuid_lock);
+}
+
+void ptlrpc_exit_uuidlist(void)
+{
+        struct list_head *tmp, *n;
+
+        /* Module going => sole user => don't need to lock g_uuid_list */
+        list_for_each_safe(tmp, n, &g_uuid_list) {
+                struct uuid_nid_data *data =
+                        list_entry(tmp, struct uuid_nid_data, head);
+
+                PORTAL_FREE(data->uuid, strlen(data->uuid) + 1);
+                PORTAL_FREE(data, sizeof(*data));
+        }
+}
 
 int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
 {
@@ -49,7 +103,7 @@ static int lustre_add_uuid(char *uuid, __u64 nid, __u32 nal)
         if (nob > PAGE_SIZE)
                 return -EINVAL;
         
-        nip = lustre_get_ni (nal);
+        nip = kportal_get_ni (nal);
         if (nip == NULL) {
                 CERROR("get_ni failed: is the NAL module loaded?\n");
                 return -EIO;
@@ -80,7 +134,7 @@ static int lustre_add_uuid(char *uuid, __u64 nid, __u32 nal)
  fail_1:
         PORTAL_FREE (data, sizeof (*data));
  fail_0:
-        lustre_put_ni (nal);
+        kportal_put_ni (nal);
         return (rc);
 }
 
@@ -116,7 +170,7 @@ static int lustre_del_uuid (char *uuid)
 
                 list_del (&data->head);
 
-                lustre_put_ni (data->nal);
+                kportal_put_ni (data->nal);
                 PORTAL_FREE(data->uuid, strlen(data->uuid) + 1);
                 PORTAL_FREE(data, sizeof(*data));
         } while (!list_empty (&deathrow));
