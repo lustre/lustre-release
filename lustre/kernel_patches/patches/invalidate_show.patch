@@ -91,3 +91,14 @@
  extern int invalidate_device(kdev_t, int);
  extern void invalidate_inode_pages(struct inode *);
  extern void invalidate_inode_pages2(struct address_space *);
+--- lum/fs/smbfs/inode.c.orig	Mon Feb 25 12:38:09 2002
++++ lum/fs/smbfs/inode.c	Thu Feb  6 21:34:26 2003
+@@ -166,7 +166,7 @@
+ {
+ 	VERBOSE("\n");
+ 	shrink_dcache_sb(SB_of(server));
+-	invalidate_inodes(SB_of(server));
++	invalidate_inodes(SB_of(server), 0);
+ }
+ 
+ /*
