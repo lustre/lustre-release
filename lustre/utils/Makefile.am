@@ -6,10 +6,13 @@ CFLAGS:=-g -O2 -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include  -I$(srcdir
 KFLAGS:=
 CPPFLAGS = $(HAVE_LIBREADLINE)
 lctl_LDADD := $(LIBREADLINE) -lptlctl
+lfs_LDADD := $(LIBREADLINE) parser.o liblustreapi.a
 lload_LDADD := -lptlctl
-sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck
+sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck lfs
 sbin_SCRIPTS = lconf lmc llanalyze llstat.pl llobdstat.pl lactive load_ldap.sh
 bin_PROGRAMS = lfind lstripe
+lib_LIBRARIES = liblustreapi.a
+liblustreapi_a_SOURCES = liblustreapi.c
 wirecheck_SOURCES = wirecheck.c
 lctl_SOURCES = parser.c obd.c lctl.c parser.h obdctl.h
 lload_SOURCES = lload.c 
@@ -17,6 +20,7 @@ obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfind_SOURCES = lfind.c
 lstripe_SOURCES = lstripe.c
+lfs_SOURCES = lfs.c 
 lfind_CPPFLAGS = -D_XOPEN_SOURCE=500
 EXTRA_DIST = $(sbin_SCRIPTS)
 
