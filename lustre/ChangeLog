@@ -17,6 +17,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * kernel patches
 	- fix truncated write corruption (2366)
 	- fix for failed assertion in iopen_connect_dentry (1792,2517)
+       * bug fixes
+	- don't flag the ptlrpcd thread with PF_MEMALLOC (2636)
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3
