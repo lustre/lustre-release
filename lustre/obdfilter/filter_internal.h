@@ -1,6 +1,14 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Copyright (C) 2003 Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ */
+
 #ifndef _FILTER_INTERNAL_H
 #define _FILTER_INTERNAL_H
-
 
 #ifdef __KERNEL__
 # include <linux/spinlock.h>
@@ -98,7 +106,7 @@ void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
                                  obd_mode mode, obd_id id);
 struct dentry *__filter_oa2dentry(struct lustre_handle *conn,
-				  struct obdo *oa, char *what);
+                                  struct obdo *oa, char *what);
 #define filter_oa2dentry(conn, oa) __filter_oa2dentry(conn, oa, __FUNCTION__)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
