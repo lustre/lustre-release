@@ -24,8 +24,6 @@
 #include <portals/list.h>
 #include "llog_internal.h"
 
-#ifdef __KERNEL__
-
 /* helper functions for calling the llog obd methods */
 
 int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd, 
@@ -216,7 +214,7 @@ int llog_cat_initialize(struct obd_device *obd, int count)
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);
- 
+
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
                   int count, struct llog_logid *logid)
 {
@@ -241,25 +239,3 @@ int obd_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 EXPORT_SYMBOL(obd_llog_finish);
-
-#else /* !__KERNEL__ */
-
-int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd, 
-               int count, struct llog_logid *logid, struct llog_operations *op)
-{
-        return 0;
-}
-int llog_cleanup(struct llog_obd_ctxt *ctxt)
-{
-        return 0;
-}
-int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                  int count, struct llog_logid *logid)
-{
-        return 0;
-}
-int obd_llog_finish(struct obd_device *obd, int count)
-{
-        return 0;
-}
-#endif

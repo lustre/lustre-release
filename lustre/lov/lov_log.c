@@ -52,8 +52,6 @@
 
 #include "lov_internal.h"
 
-#ifdef __KERNEL__
-
 #if 0
 static int lov_logop_cleanup(struct llog_obd_ctxt *ctxt)
 {
@@ -199,16 +197,3 @@ int lov_llog_finish(struct obd_device *obd, int count)
         }
         RETURN(rc);
 }
-
-#else /* !__KERNEL__ */
-
-int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_logid *logid)
-{
-        return 0;
-}
-int lov_llog_finish(struct obd_device *obd, int count)
-{
-        return 0;
-}
-#endif
