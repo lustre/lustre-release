@@ -175,11 +175,11 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 
 
 	CDEBUG(D_NET, "Calling gm_open with port [%d], "
-       	       "name [%s], version [%d]\n", GMNAL_GM_PORT, 
+       	       "name [%s], version [%d]\n", GMNAL_GM_PORT_ID, 
 	       "gmnal", GM_API_VERSION);
 
 	GMNAL_GM_LOCK(nal_data);
-	gm_status = gm_open(&nal_data->gm_port, 0, GMNAL_GM_PORT, "gmnal", 
+	gm_status = gm_open(&nal_data->gm_port, 0, GMNAL_GM_PORT_ID, "gmnal", 
 			    GM_API_VERSION);
 	GMNAL_GM_UNLOCK(nal_data);
 

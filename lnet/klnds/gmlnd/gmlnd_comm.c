@@ -48,6 +48,8 @@ gmnal_ct_thread(void *arg)
 	nal_data = (gmnal_data_t*)arg;
 	CDEBUG(D_TRACE, "nal_data is [%p]\n", arg);
 
+	sprintf(current->comm, "gmnal_ct");
+
 	daemonize();
 
 	nal_data->ctthread_flag = GMNAL_CTTHREAD_STARTED;
@@ -113,6 +115,7 @@ int gmnal_rx_thread(void *arg)
 	gmnal_data_t		*nal_data;
 	void			*buffer;
 	gmnal_rxtwe_t		*we = NULL;
+	int 			rank;
 
 	if (!arg) {
 		CDEBUG(D_TRACE, "NO nal_data. Exiting\n");
@@ -121,6 +124,12 @@ int gmnal_rx_thread(void *arg)
 
 	nal_data = (gmnal_data_t*)arg;
 	CDEBUG(D_TRACE, "nal_data is [%p]\n", arg);
+
+	for (rank=0; rank<num_rx_threads; rank++) 
+		if (nal_data->rxthread_pid[rank] == current->pid)
+			break;
+
+	sprintf(current->comm, "gmnal_rx_%d", rank);
 
 	daemonize();
 	/*
@@ -317,16 +326,12 @@ gmnal_rx_bad(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, gmnal_srxd_t *srxd)
  *	Hang out the receive buffer again for another receive
  *	Call lib_finalize
  */
-int
-gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
-		unsigned int niov, struct iovec *iov, size_t offset, size_t mlen, size_t rlen)
+ptl_err_t
+gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie)
 {
 	gmnal_srxd_t	*srxd = NULL;
-	void	*buffer = NULL;
 	gmnal_data_t	*nal_data = (gmnal_data_t*)libnal->libnal_data;
 
-
-	CDEBUG(D_TRACE, "niov [%d] mlen["LPSZ"]\n", niov, mlen);
 
 	if (!private) {
 		CDEBUG(D_ERROR, "gmnal_small_rx no context\n");
@@ -335,31 +340,6 @@ gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	}
 
 	srxd = (gmnal_srxd_t*)private;
-	buffer = srxd->buffer;
-	buffer += sizeof(gmnal_msghdr_t);
-	buffer += sizeof(ptl_hdr_t);
-
-	while(niov--) {
-                if (offset >= iov->iov_len) {
-                        offset -= iov->iov_len;
-                } else if (offset > 0) {
-		        CDEBUG(D_INFO, "processing [%p] base [%p] len %d, "
-                               "offset %d, len ["LPSZ"]\n", iov,
-		               iov->iov_base + offset, iov->iov_len, offset,
-                               iov->iov_len - offset);
-		        gm_bcopy(buffer, iov->iov_base + offset,
-                                 iov->iov_len - offset);
-                        offset = 0;
-                        buffer += iov->iov_len - offset;
-                } else {
-		        CDEBUG(D_INFO, "processing [%p] len ["LPSZ"]\n", iov,
-		               iov->iov_len);
-		        gm_bcopy(buffer, iov->iov_base, iov->iov_len);
-		        buffer += iov->iov_len;
-                }
-                iov++;
-	}
-
 
 	/*
  	 *	let portals library know receive is complete
@@ -381,18 +361,16 @@ gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 
 /*
  *	Start a small transmit. 
- *	Get a send token (and wired transmit buffer).
- *	Copy data from senders buffer to wired buffer and
- *	initiate gm_send from the wired buffer.
+ *	Use the given send token (and wired transmit buffer).
+ *	Copy headers to wired buffer and initiate gm_send from the wired buffer.
  *	The callback function informs when the send is complete.
  */
-int
+ptl_err_t
 gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
 		ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid, 
-		unsigned int niov, struct iovec *iov, size_t offset, int size)
+		gmnal_stxd_t *stxd, int size)
 {
 	gmnal_data_t	*nal_data = (gmnal_data_t*)libnal->libnal_data;
-	gmnal_stxd_t	*stxd = NULL;
 	void		*buffer = NULL;
 	gmnal_msghdr_t	*msghdr = NULL;
 	int		tot_size = 0;
@@ -400,16 +378,16 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	gm_status_t	gm_status = GM_SUCCESS;
 
 	CDEBUG(D_TRACE, "gmnal_small_tx libnal [%p] private [%p] cookie [%p] "
-	       "hdr [%p] type [%d] global_nid ["LPU64"] pid [%d] niov [%d] "
-	       "iov [%p] size [%d]\n", libnal, private, cookie, hdr, type, 
-	       global_nid, pid, niov, iov, size);
+	       "hdr [%p] type [%d] global_nid ["LPU64"] pid [%d] stxd [%p] "
+	       "size [%d]\n", libnal, private, cookie, hdr, type, 
+	       global_nid, pid, stxd, size);
 
 	CDEBUG(D_INFO, "portals_hdr:: dest_nid ["LPU64"], src_nid ["LPU64"]\n",
 	       hdr->dest_nid, hdr->src_nid);
 
 	if (!nal_data) {
 		CDEBUG(D_ERROR, "no nal_data\n");
-		return(GMNAL_STATUS_FAIL);
+		return(PTL_FAIL);
 	} else {
 		CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
 	}
@@ -420,19 +398,17 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	GMNAL_GM_UNLOCK(nal_data);
 	if (gm_status != GM_SUCCESS) {
 		CDEBUG(D_ERROR, "Failed to obtain local id\n");
-		return(GMNAL_STATUS_FAIL);
+		return(PTL_FAIL);
 	}
 	CDEBUG(D_INFO, "Local Node_id is [%u][%x]\n", local_nid, local_nid);
-
-	stxd = gmnal_get_stxd(nal_data, 1);
-	CDEBUG(D_INFO, "stxd [%p]\n", stxd);
 
 	stxd->type = GMNAL_SMALL_MESSAGE;
 	stxd->cookie = cookie;
 
 	/*
 	 *	Copy gmnal_msg_hdr and portals header to the transmit buffer
-	 *	Then copy the data in
+	 *	Then send the message, as the data has previously been copied in
+	 *      (HP SFS 1380).
 	 */
 	buffer = stxd->buffer;
 	msghdr = (gmnal_msghdr_t*)buffer;
@@ -448,24 +424,6 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	gm_bcopy(hdr, buffer, sizeof(ptl_hdr_t));
 
 	buffer += sizeof(ptl_hdr_t);
-
-	while(niov--) {
-                if (offset >= iov->iov_len) {
-                        offset -= iov->iov_len;
-                } else if (offset > 0) {
-		        CDEBUG(D_INFO, "processing iov [%p] base [%p] len ["LPSZ"] to [%p]\n", 
-		                iov, iov->iov_base + offset, iov->iov_len - offset, buffer);
-		        gm_bcopy(iov->iov_base + offset, buffer, iov->iov_len - offset);
-		        buffer+= iov->iov_len - offset;
-                        offset = 0;
-                } else {
-		        CDEBUG(D_INFO, "processing iov [%p] len ["LPSZ"] to [%p]\n", 
-		                iov, iov->iov_len, buffer);
-		        gm_bcopy(iov->iov_base, buffer, iov->iov_len);
-		        buffer+= iov->iov_len;
-                } 
-                iov++;
-	}
 
 	CDEBUG(D_INFO, "sending\n");
 	tot_size = size+sizeof(ptl_hdr_t)+sizeof(gmnal_msghdr_t);
@@ -505,14 +463,25 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 	lib_msg_t	*cookie = stxd->cookie;
 	gmnal_data_t	*nal_data = (gmnal_data_t*)stxd->nal_data;
 	lib_nal_t	*libnal = nal_data->libnal;
+	unsigned	 gnid = 0;
+	gm_status_t	 gm_status = 0;
 
 	if (!stxd) {
 		CDEBUG(D_TRACE, "send completion event for unknown stxd\n");
 		return;
 	}
 	if (status != GM_SUCCESS) {
-		CDEBUG(D_ERROR, "Result of send stxd [%p] is [%s]\n", 
-		       stxd, gmnal_gm_error(status));
+		GMNAL_GM_LOCK(nal_data);
+		gm_status = gm_node_id_to_global_id(nal_data->gm_port,
+						    stxd->gm_target_node, &gnid);
+		GMNAL_GM_UNLOCK(nal_data);
+		if (gm_status != GM_SUCCESS) {
+			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n",
+			       gm_status);
+			gnid = 0;
+		}
+		CDEBUG(D_ERROR, "Result of send stxd [%p] is [%s] to [%u]\n", 
+		       stxd, gmnal_gm_error(status), gnid);
 	}
 
 	switch(status) {
@@ -547,7 +516,7 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 			CDEBUG(D_INFO, "calling gm_drop_sends\n");
 			GMNAL_GM_LOCK(nal_data);
 			gm_drop_sends(nal_data->gm_port, stxd->gm_priority, 
-				      stxd->gm_target_node, GMNAL_GM_PORT, 
+				      stxd->gm_target_node, GMNAL_GM_PORT_ID, 
 				      gmnal_drop_sends_callback, context);
 			GMNAL_GM_UNLOCK(nal_data);
 
@@ -600,9 +569,8 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
   		case(GM_FIRMWARE_NOT_RUNNING):
   		case(GM_YP_NO_MATCH):
 		default:
-			CDEBUG(D_ERROR, "Unknown send error\n");
                 gm_resume_sending(nal_data->gm_port, stxd->gm_priority,
-                                      stxd->gm_target_node, GMNAL_GM_PORT,
+                                      stxd->gm_target_node, GMNAL_GM_PORT_ID,
                                       gmnal_resume_sending_callback, context);
                 return;
 
@@ -658,7 +626,7 @@ void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
 					      stxd->gm_target_node, 
 					      gmnal_small_tx_callback, 
 					      context);
-		GMNAL_GM_LOCK(nal_data);
+		GMNAL_GM_UNLOCK(nal_data);
 	} else {
 		CDEBUG(D_ERROR, "send_to_peer status for stxd [%p] is "
 		       "[%d][%s]\n", stxd, status, gmnal_gm_error(status));
@@ -730,7 +698,7 @@ gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	msghdr->magic = GMNAL_MAGIC;
 	msghdr->type = GMNAL_LARGE_MESSAGE_INIT;
 	msghdr->sender_node_id = nal_data->gm_global_nid;
-	msghdr->stxd = stxd;
+	msghdr->stxd_remote_ptr = (gm_remote_ptr_t)stxd;
 	msghdr->niov = niov ;
 	buffer += sizeof(gmnal_msghdr_t);
 	mlen = sizeof(gmnal_msghdr_t);
@@ -884,7 +852,7 @@ gmnal_large_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	 *	The gmnal_large_message_ack needs it to notify the sender
 	 *	the pull of data is complete
 	 */
-	srxd->source_stxd = msghdr->stxd;
+	srxd->source_stxd = (gmnal_stxd_t*)msghdr->stxd_remote_ptr;
 
 	/*
 	 *	Register the receivers memory
@@ -1003,7 +971,7 @@ gmnal_remote_get(gmnal_srxd_t *srxd, int nsiov, struct iovec *siov,
 /*
  *	pull data from source node (source iovec) to a local iovec.
  *	The iovecs may not match which adds the complications below.
- *	Count the number of gm_gets that will be required to the callbacks
+ *	Count the number of gm_gets that will be required so the callbacks
  *	can determine who is the last one.
  */	
 int
@@ -1067,7 +1035,7 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
 				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
 				       rlen, GM_LOW_PRIORITY, source_node, 
-				       GMNAL_GM_PORT, 
+				       GMNAL_GM_PORT_ID, 
 				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}
@@ -1091,7 +1059,7 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
 				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
 				       slen, GM_LOW_PRIORITY, source_node, 
-				       GMNAL_GM_PORT, 
+				       GMNAL_GM_PORT_ID, 
 				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}
@@ -1114,7 +1082,7 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 				remote_ptr = (gm_remote_ptr_t)sbuf_long;
 				gm_get(nal_data->gm_port, remote_ptr, rbuf, 
 				       rlen, GM_LOW_PRIORITY, source_node, 
-				       GMNAL_GM_PORT, 
+				       GMNAL_GM_PORT_ID, 
 				       gmnal_remote_get_callback, ltxd);
 				GMNAL_GM_UNLOCK(nal_data);
 			}
@@ -1267,7 +1235,7 @@ gmnal_large_tx_ack(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 	msghdr->magic = GMNAL_MAGIC;
 	msghdr->type = GMNAL_LARGE_MESSAGE_ACK;
 	msghdr->sender_node_id = nal_data->gm_global_nid;
-	msghdr->stxd = srxd->source_stxd;
+	msghdr->stxd_remote_ptr = (gm_remote_ptr_t)srxd->source_stxd;
 	CDEBUG(D_INFO, "processing msghdr at [%p]\n", buffer);
 
 	CDEBUG(D_INFO, "sending\n");
@@ -1342,7 +1310,7 @@ gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 
 	buffer = srxd->buffer;
 	msghdr = (gmnal_msghdr_t*)buffer;
-	stxd = msghdr->stxd;
+	stxd = (gmnal_stxd_t*)msghdr->stxd_remote_ptr;
 
 	CDEBUG(D_INFO, "gmnal_large_tx_ack_received stxd [%p]\n", stxd);
 

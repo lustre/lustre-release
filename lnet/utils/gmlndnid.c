@@ -35,76 +35,144 @@
 #include <portals/api-support.h>
 #include <portals/lib-types.h>
 
+#include <gm.h>
+
 #define GMNAL_IOC_GET_GNID 1
+/*
+ *      portals always uses unit 0
+ *      Can this be configurable?
+ */
+#define GM_UNIT 0
+
+/*
+ * prototypes
+ */
+unsigned u_getgmnid(char *name, int get_local_id);
+void usage(char *prg, int h);
 
 int main(int argc, char **argv)
 {
-        int rc, pfd;
-        struct portal_ioctl_data data;
-        struct portals_cfg pcfg;
-	unsigned int	nid = 0, len;
-	char	*name = NULL;
-	int	c;
+    unsigned int        nid = 0;
+    char	        *name = NULL;
+    int	                c;
+    int	                get_local_id = 0;
 
 
 
-	while ((c = getopt(argc, argv, "n:l")) != -1) {
-		switch(c) {
-		case('n'):
-			name = optarg;	
-		break;
-		case('l'):
-			printf("Get local id not implemented yet!\n");
-			exit(-1);
-		default:
-			printf("usage %s -n nodename [-p]\n", argv[0]);
-		}
-	}
-
-	if (!name) {
-		printf("usage %s -n nodename [-p]\n", argv[0]);
-		exit(-1);
-	}
-
-
-
-
-        PCFG_INIT(pcfg, GMNAL_IOC_GET_GNID);
-        pcfg.pcfg_nal = GMNAL;
-
-	/*
-	 *	set up the inputs
-	 */
-	len = strlen(name) + 1;
-	pcfg.pcfg_pbuf1 = malloc(len);
-	strcpy(pcfg.pcfg_pbuf1, name);
-	pcfg.pcfg_plen1 = len;
-
-	/*
-	 *	set up the outputs
-	 */
-	pcfg.pcfg_pbuf2 = (void*)&nid;
-	pcfg.pcfg_plen2 = sizeof(unsigned int*);
-
-        pfd = open("/dev/portals", O_RDWR);
-        if ( pfd < 0 ) {
-                perror("opening portals device");
-		free(pcfg.pcfg_pbuf1);
+    while ((c = getopt(argc, argv, "n:lh")) != -1) {
+        switch(c) {
+            case('n'):
+                if (get_local_id) {
+                    usage(argv[0], 0);
+                    exit(-1);
+                }
+            name = optarg;	
+            break;
+            case('h'):
+                usage(argv[0], 1);
                 exit(-1);
-        }
+            break;
+            case('l'):
+                if (name) {
+                    usage(argv[0], 0);
+                    exit(-1);
+                }
+                get_local_id = 1;
+            break;
+            default:
+                usage(argv[0], 0);
+                exit(-1);
+            }
+    }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_pbuf1 = (char*)&pcfg;
-        data.ioc_plen1 = sizeof(pcfg);
-                
-        rc = ioctl (pfd, IOC_PORTAL_NAL_CMD, &data);
-        if (rc < 0)
-        {
-        	perror ("Can't get my NID");
+    if (!name && !get_local_id) {
+        usage(argv[0], 0);
+        exit(-1);
+    }
+
+    nid = u_getgmnid(name, get_local_id);
+    printf("%u\n", nid);
+    exit(0);
+}
+
+unsigned
+u_getgmnid(char *name, int get_local_id)
+{
+    struct gm_port	*gm_port;
+    int		gm_port_id = 2;
+    gm_status_t     gm_status = GM_SUCCESS;
+
+    /*
+     *	gm global or local ids are never 0
+     */
+    unsigned	global_nid = 0, local_nid = 0;
+
+    gm_status = gm_init();
+    if (gm_status != GM_SUCCESS) {
+        fprintf(stderr, "gm_init :: %s\n", gm_strerror(gm_status));
+        return(0);
+    }
+	
+    gm_status = gm_open(&gm_port, GM_UNIT, gm_port_id,  
+		            "gmnalnid", GM_API_VERSION);
+
+    if (gm_status != GM_SUCCESS) {
+        /*
+         *	Couldn't open port 2 
+         *	try 4 5 6 7 
+         */
+	
+        for (gm_port_id=4; gm_port_id<8; gm_port_id++) {
+            gm_status = gm_open(&gm_port, 
+                                GM_UNIT, 
+                                gm_port_id,  
+                                "gmnalnid", 
+                                GM_API_VERSION);
+            if (gm_status == GM_SUCCESS) {
+                break;
+            }
+        fprintf(stderr, "gm_open :: %s\n", 
+        gm_strerror(gm_status));
+        gm_finalize();
+        return(0);
         }
-                        
-	free(pcfg.pcfg_pbuf1);
-	close(pfd);
-	printf("%u\n", nid);
-        exit(0);
+    }
+
+    if (get_local_id) {
+        local_nid = 1;
+    } else {
+        gm_status = gm_host_name_to_node_id_ex(gm_port, 1000000, name, 
+                                               &local_nid);
+        if (gm_status != GM_SUCCESS) {
+            fprintf(stderr, "gm_host_name_to_node_id_ex :: %s\n", 
+            gm_strerror(gm_status));
+            gm_close(gm_port);
+            gm_finalize();
+            return(0);
+        }
+    }
+
+    gm_status = gm_node_id_to_global_id(gm_port, local_nid, &global_nid) ;
+    if (gm_status != GM_SUCCESS) {
+        fprintf(stderr, "gm_node_id_to_global_id :: %s\n", 
+        gm_strerror(gm_status));
+        gm_close(gm_port);
+        gm_finalize();
+        return(0);
+    }
+    gm_close(gm_port);
+    gm_finalize();
+    return(global_nid);
+}
+
+void 
+usage(char *prg, int h)
+{
+
+    fprintf(stderr, "usage %s -n hostname | -l | -h\n", prg);
+    if (h) {
+        printf("\nGet Myrinet Global network ids for specified host\n");
+        printf("-l gets network id for local host\n");
+    }
+    return;
 }

@@ -30,7 +30,7 @@ int gmnal_small_msg_size = 525312;
  */
 int num_rx_threads = -1;
 int num_stxds = 5;
-int gm_port = 4;
+int gm_port_id = 4;
 
 int 
 gmnal_cmd(struct portals_cfg *pcfg, void *private)
@@ -125,7 +125,7 @@ module_exit(gmnal_unload);
 MODULE_PARM(gmnal_small_msg_size, "i");
 MODULE_PARM(num_rx_threads, "i");
 MODULE_PARM(num_stxds, "i");
-MODULE_PARM(gm_port, "i");
+MODULE_PARM(gm_port_id, "i");
 
 MODULE_AUTHOR("Morgan Doyle");
 

@@ -84,14 +84,14 @@
 extern  int gmnal_small_msg_size;
 extern  int num_rx_threads;
 extern  int num_stxds;
-extern  int gm_port;
+extern  int gm_port_id;
 #define GMNAL_SMALL_MSG_SIZE(a)		a->small_msg_size
 #define GMNAL_IS_SMALL_MESSAGE(n,a,b,c)	gmnal_is_small_msg(n, a, b, c)
 #define GMNAL_MAGIC				0x1234abcd
 /*
  *	The gm_port to use for gmnal
  */
-#define GMNAL_GM_PORT	gm_port
+#define GMNAL_GM_PORT_ID	gm_port_id
 
 
 /*
@@ -156,13 +156,14 @@ typedef struct _gmnal_srxd_t {
 
 /*
  *	Header which lmgnal puts at the start of each message
+ *	watch alignment for ia32/64 interaction
  */
 typedef struct	_gmnal_msghdr {
 	int		magic;
 	int 		type;
 	unsigned int	sender_node_id;
-	gmnal_stxd_t	*stxd;
 	int		niov;
+	gm_remote_ptr_t	stxd_remote_ptr; /* 64 bits */
 	} gmnal_msghdr_t;
 #define GMNAL_MSGHDR_SIZE	sizeof(gmnal_msghdr_t)
 
@@ -193,6 +194,8 @@ typedef struct _gmnal_rxtwe {
 #define NRXTHREADS 10 /* max number of receiver threads */
 
 typedef struct _gmnal_data_t {
+	int		refcnt;
+	spinlock_t	cb_lock;
 	spinlock_t 	stxd_lock;
 	struct semaphore stxd_token;
 	gmnal_stxd_t	*stxd;
@@ -300,6 +303,7 @@ extern gmnal_data_t	*global_nal_data;
 #define GMNAL_GM_LOCK_INIT(a)		spin_lock_init(&a->gm_lock);
 #define GMNAL_GM_LOCK(a)		spin_lock(&a->gm_lock);
 #define GMNAL_GM_UNLOCK(a)		spin_unlock(&a->gm_lock);
+#define GMNAL_CB_LOCK_INIT(a)		spin_lock_init(&a->cb_lock);
 
 
 /*
@@ -389,7 +393,6 @@ void 		gmnal_return_srxd(gmnal_data_t *, gmnal_srxd_t *);
 gmnal_srxd_t	*gmnal_rxbuffer_to_srxd(gmnal_data_t *, void*);
 void		gmnal_stop_rxthread(gmnal_data_t *);
 void		gmnal_stop_ctthread(gmnal_data_t *);
-void		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 void		gmnal_drop_sends_callback(gm_port_t *, void *, gm_status_t);
 void		gmnal_resume_sending_callback(gm_port_t *, void *, gm_status_t);
 char		*gmnal_gm_error(gm_status_t);
@@ -419,11 +422,10 @@ void		gmnal_remove_rxtwe(gmnal_data_t *);
 /*
  *	Small messages
  */
-int 		gmnal_small_rx(lib_nal_t *, void *, lib_msg_t *, unsigned int, 
-			        struct iovec *, size_t, size_t, size_t);
-int 		gmnal_small_tx(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *, 
+ptl_err_t 	gmnal_small_rx(lib_nal_t *, void *, lib_msg_t *);
+ptl_err_t 	gmnal_small_tx(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *, 
 				int, ptl_nid_t, ptl_pid_t, 
-				unsigned int, struct iovec*, size_t, int);
+				gmnal_stxd_t*, int);
 void 		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 
 
