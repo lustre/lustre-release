@@ -151,8 +151,6 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
-        r->ur_uid = rec->cr_uid;
-        r->ur_gid = rec->cr_gid;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
         r->ur_suppgid1 = rec->cr_suppgid;

@@ -27,9 +27,10 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
+#include "mdc_internal.h"
 
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
-                      obd_id ino, int type, __u64 xid)
+                      obd_id ino, int type)
 {
         struct mds_body *b;
 
@@ -41,7 +42,6 @@ void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
         b->fid1.f_type = type;
         b->size = offset;                       /* !! */
         b->suppgid = -1;
-        b->blocks = xid;                        /* !! */
         b->nlink = size;                        /* !! */
 }
 
@@ -63,7 +63,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req)
 /* packing of MDS records */
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *op_data,
-                     __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
+                     __u32 mode, __u64 rdev, __u64 time,
                      const void *data, int datalen)
 {
         struct mds_rec_create *rec;
@@ -78,8 +78,6 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
-        rec->cr_uid = uid;
-        rec->cr_gid = gid;
         rec->cr_time = time;
         rec->cr_suppgid = op_data->ctxt.gid1;
 
@@ -95,7 +93,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
 /* packing of MDS records */
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data,
-                   __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
+                   __u32 mode, __u64 rdev, __u64 time,
                    __u32 flags, const void *data, int datalen)
 {
         struct mds_rec_create *rec;
@@ -113,8 +111,6 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_mode = mode;
         rec->cr_flags = flags;
         rec->cr_rdev = rdev;
-        rec->cr_uid = uid;
-        rec->cr_gid = gid;
         rec->cr_time = time;
         rec->cr_suppgid = op_data->ctxt.gid1;
 
