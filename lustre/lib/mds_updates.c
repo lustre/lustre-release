@@ -65,6 +65,9 @@ static void mds_pack_body(struct mds_body *b)
         b->ino = HTON__u32(b->ino);
         b->nlink = HTON__u32(b->nlink);
         b->generation = HTON__u32(b->generation);
+        b->last_xid = HTON__u32(b->last_xid);
+        b->last_committed = HTON__u64(b->last_committed);
+        b->last_rcvd = HTON__u64(b->last_rcvd);
 }
 
 void mds_pack_req_body(struct ptlrpc_request *req) 
@@ -165,6 +168,9 @@ static void mds_unpack_body(struct mds_body *b)
         b->ino = NTOH__u32(b->ino);
         b->nlink = NTOH__u32(b->nlink);
         b->generation = NTOH__u32(b->generation);
+        b->last_xid = NTOH__u32(b->last_xid);
+        b->last_rcvd = NTOH__u64(b->last_rcvd);
+        b->last_committed = NTOH__u64(b->last_committed);
 }
 
 

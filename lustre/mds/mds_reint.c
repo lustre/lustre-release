@@ -36,29 +36,55 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
+struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid)
+{
+        struct list_head *p;
+
+        if (!uuid)
+                return NULL;
+
+        list_for_each(p, &mds->mds_client_info) {
+                struct mds_client_info *mci;
+
+                mci = list_entry(p, struct mds_client_info, mci_list);
+                CDEBUG(D_INFO, "checking client UUID '%s'\n",
+                       mci->mci_mcd->mcd_uuid);
+                if (!strncmp(mci->mci_mcd->mcd_uuid, uuid,
+                             sizeof(mci->mci_mcd->mcd_uuid)))
+                        return mci;
+        }
+        CDEBUG(D_INFO, "no client UUID found for '%s'\n", uuid);
+        return NULL;
+}
+
 int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                          struct ptlrpc_request *req)
 {
         /* get from req->rq_connection-> or req->rq_client */
-        struct mds_client_info mci_data, *mci = &mci_data;
-        struct mds_client_data mcd_data, *mcd = &mcd_data;
+        struct mds_client_info *mci;
         loff_t off;
         int rc;
 
-        /* Just a placeholder until more gets committed */
-        memset(mcd, 0, sizeof(*mcd));
-        mci->mci_mcd = mcd;
-        mci->mci_off = off = MDS_LR_CLIENT;
+        mci = mds_uuid_to_mci(mds, req->rq_connection->c_remote_uuid);
+        if (!mci) {
+                CERROR("unable to locate MDS client data for UUID '%s'\n",
+                       ptlrpc_req_to_uuid(req));
+                /* This will be a real error once everything is working */
+                //LBUG();
+                RETURN(0);
+        }
+
+        off = MDS_LR_CLIENT + mci->mci_off * MDS_LR_SIZE;
 
         ++mds->mds_last_rcvd;   /* lock this, or make it an LDLM function? */
         mci->mci_mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
         mci->mci_mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
-        mci->mci_mcd->mcd_xid = cpu_to_le32(req->rq_connection->c_xid_in);
+        mci->mci_mcd->mcd_last_xid = cpu_to_le32(req->rq_reqmsg->xid);
 
         mds_fs_set_last_rcvd(mds, handle);
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mci->mci_mcd,
                            sizeof(*mci->mci_mcd), &off);
-        CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at %Ld: rc = %d\n",
+        CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at #%d: rc = %d\n",
                mds->mds_last_rcvd, mci->mci_mcd->mcd_uuid, mci->mci_off, rc);
         // store new value and last committed value in req struct
 
@@ -95,6 +121,7 @@ static int mds_reint_setattr(struct mds_update_record *rec,
 
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
+        /* FIXME: need to return last_rcvd, last_committed */
 
         EXIT;
 
@@ -124,7 +151,7 @@ static int mds_reint_create(struct mds_update_record *rec,
                 GOTO(out_create_de, rc = -ESTALE);
         }
         dir = de->d_inode;
-        CDEBUG(D_INODE, "ino %ld\n", dir->i_ino);
+        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
@@ -136,8 +163,8 @@ static int mds_reint_create(struct mds_update_record *rec,
         }
 
         if (dchild->d_inode) {
-                CERROR("child exists (dir %ld, name %s)\n",
-                       dir->i_ino, rec->ur_name);
+                CERROR("child exists (dir %ld, name %s, ino %ld)\n",
+                       dir->i_ino, rec->ur_name, dchild->d_inode->i_ino);
                 LBUG();
                 GOTO(out_create_dchild, rc = -EEXIST);
         }
@@ -195,6 +222,7 @@ static int mds_reint_create(struct mds_update_record *rec,
                 struct inode *inode = dchild->d_inode;
                 struct mds_body *body;
 
+                CDEBUG(D_INODE, "created ino %ld\n", dchild->d_inode->i_ino);
                 if (type == S_IFREG) {
                         rc = mds_fs_set_objid(mds, inode, handle, rec->ur_id);
                         if (rc)
@@ -213,13 +241,15 @@ static int mds_reint_create(struct mds_update_record *rec,
                 rc = mds_fs_setattr(mds, dchild, handle, &iattr);
                 /* XXX should we abort here in case of error? */
 
+                //if (!rc)
+                rc = mds_update_last_rcvd(mds, handle, req);
+
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 body->ino = inode->i_ino;
                 body->generation = inode->i_generation;
+                body->last_rcvd = mds->mds_last_rcvd;
+                body->last_committed = mds->mds_last_committed;
         }
-
-        if (!rc)
-                rc = mds_update_last_rcvd(mds, handle, req);
 
 out_create_commit:
         /* FIXME: keep rc intact */
@@ -250,7 +280,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
                 GOTO(out_unlink, rc = -ESTALE);
         }
         dir = de->d_inode;
-        CDEBUG(D_INODE, "ino %ld\n", dir->i_ino);
+        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
@@ -300,6 +330,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
+        /* FIXME: need to return last_rcvd, last_committed */
         /* FIXME: keep rc intact */
         rc = mds_fs_commit(mds, dir, handle);
 
@@ -360,6 +391,7 @@ static int mds_reint_link(struct mds_update_record *rec,
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
 
+        /* FIXME: need to return last_rcvd, last_committed */
         /* FIXME: keep rc intact */
         rc = mds_fs_commit(mds, de_tgt_dir->d_inode, handle);
         EXIT;
@@ -421,6 +453,7 @@ static int mds_reint_rename(struct mds_update_record *rec,
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
 
+        /* FIXME: need to return last_rcvd, last_committed */
         /* FIXME: keep rc intact */
         rc = mds_fs_commit(mds, de_tgtdir->d_inode, handle);
         EXIT;

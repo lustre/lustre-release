@@ -35,7 +35,8 @@
 extern int mds_queue_req(struct ptlrpc_request *);
 
 int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
-                struct ll_fid *rootfid, struct ptlrpc_request **request)
+                struct ll_fid *rootfid, __u64 *last_committed, __u64 *last_rcvd,
+                __u32 *last_xid, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
@@ -49,17 +50,24 @@ int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         req->rq_replen = lustre_msg_size(1, &size);
 
-        mds_pack_req_body(req); 
+        mds_pack_req_body(req);
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
                 mds_unpack_rep_body(req);
                 body = lustre_msg_buf(req->rq_repmsg, 0);
-                memcpy(rootfid, &body->fid1, sizeof(*rootfid)); 
+                memcpy(rootfid, &body->fid1, sizeof(*rootfid));
+                *last_committed = body->last_committed;
+                *last_rcvd = body->last_rcvd;
+                *last_xid = body->last_xid;
 
-                CDEBUG(D_NET, "root ino: %Ld\n", rootfid->id);
-                
+                CDEBUG(D_NET, "root ino=%ld, last_committed=%ld, last_rcvd=%ld,"
+                       " last_xid=%d\n",
+                       (unsigned long)rootfid->id,
+                       (unsigned long)body->last_committed,
+                       (unsigned long)body->last_rcvd,
+                       body->last_xid);
         }
 
         EXIT;

@@ -97,7 +97,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
 
         err = kportal_uuid_to_peer(uuid, &service->srv_self);
         if (err) {
-                CERROR("cannot get peer for uuid %s", uuid);
+                CERROR("cannot get peer for uuid '%s'", uuid);
                 GOTO(err_free, NULL);
         }
 

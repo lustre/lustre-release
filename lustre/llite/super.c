@@ -84,6 +84,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
         int devno;
         int err;
         struct ll_fid rootfid;
+        __u64 last_committed, last_rcvd;
+        __u32 last_xid;
         struct ptlrpc_request *request = NULL;
 
         ENTRY;
@@ -135,13 +137,15 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         sbi->ll_mds_conn->c_level = LUSTRE_CONN_FULL;
 
+        /* XXX: need to store the last_* values somewhere */
         err = mdc_connect(&sbi->ll_mds_client, sbi->ll_mds_conn,
-                          &rootfid, &request);
+                          &rootfid, &last_committed, &last_rcvd, &last_xid,
+                          &request);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_disc, sb = NULL);
         }
-        CERROR("rootfid %Ld\n", rootfid.id);
+        CERROR("rootfid %ld\n", (unsigned long)rootfid.id);
         sbi->ll_rootino = rootfid.id;
 
         sb->s_maxbytes = 1ULL << 36;

@@ -96,6 +96,7 @@ int connmgr_connect(struct recovd_obd *recovd, struct ptlrpc_connection *conn)
         body->generation = HTON__u32(conn->c_generation);
         body->conn = (__u64)(unsigned long)conn;
         body->conn_token = conn->c_token;
+        strncpy(body->conn_uuid, conn->c_local_uuid, sizeof(body->conn_uuid));
 
         req->rq_replen = lustre_msg_size(1, &size);
 
@@ -110,6 +111,8 @@ int connmgr_connect(struct recovd_obd *recovd, struct ptlrpc_connection *conn)
                 conn->c_level = LUSTRE_CONN_CON;
                 conn->c_remote_conn = body->conn;
                 conn->c_remote_token = body->conn_token;
+                strncpy(conn->c_remote_uuid, body->conn_uuid,
+                        sizeof(conn->c_remote_uuid));
         }
 
 out_free:
@@ -140,12 +143,16 @@ static int connmgr_handle_connect(struct ptlrpc_request *req)
 
         req->rq_connection->c_remote_conn = body->conn;
         req->rq_connection->c_remote_token = body->conn_token;
+        strncpy(req->rq_connection->c_remote_uuid, body->conn_uuid,
+                sizeof(req->rq_connection->c_remote_uuid));
 
         CERROR("incoming generation %d\n", body->generation);
         body = lustre_msg_buf(req->rq_repmsg, 0);
         body->generation = 4711;
         body->conn = (__u64)(unsigned long)req->rq_connection;
         body->conn_token = req->rq_connection->c_token;
+        strncpy(body->conn_uuid, req->rq_connection->c_local_uuid,
+                sizeof(body->conn_uuid));
 
         req->rq_connection->c_level = LUSTRE_CONN_CON;
         RETURN(0);

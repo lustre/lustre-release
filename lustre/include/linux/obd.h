@@ -84,7 +84,7 @@ struct mds_obd {
         __u64 mds_mount_count;
         struct ll_fid mds_rootfid;
         int mds_client_count;
-        struct mds_client_info *mds_client_info;
+        struct list_head mds_client_info;
         struct mds_server_data *mds_server_data;
 };
 

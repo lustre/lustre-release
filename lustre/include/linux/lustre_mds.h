@@ -80,7 +80,7 @@ struct mds_client_data {
         __u8 uuid_padding[3];   /* unused */
         __u64 mcd_last_rcvd;    /* last completed transaction ID */
         __u64 mcd_mount_count;  /* MDS incarnation number */
-        __u32 mcd_xid;          /* client RPC xid for the last transaction */
+        __u32 mcd_last_xid;     /* client RPC xid for the last transaction */
         __u8 padding[MDS_LR_SIZE - 60];
 };
 
@@ -88,11 +88,12 @@ struct mds_client_data {
 struct mds_client_info {
         struct list_head mci_list;
         struct mds_client_data *mci_mcd;
-        loff_t mci_off;
+        int mci_off;
 };
 
 /* mds/mds_reint.c  */
-int mds_reint_rec(struct mds_update_record *r, struct ptlrpc_request *req); 
+int mds_reint_rec(struct mds_update_record *r, struct ptlrpc_request *req);
+struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid);
 
 /* lib/mds_updates.c */
 void mds_pack_req_body(struct ptlrpc_request *);
@@ -115,7 +116,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vf
 
 /* mdc/mdc_request.c */
 int mdc_connect(struct ptlrpc_client *, struct ptlrpc_connection *,
-                struct ll_fid *rootfid, struct ptlrpc_request **);
+                struct ll_fid *rootfid, __u64 *last_committed, __u64 *last_rcvd,
+                __u32 *last_xid, struct ptlrpc_request **);
 int mdc_getattr(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
                 int type, unsigned long valid, struct ptlrpc_request **);
 int mdc_setattr(struct ptlrpc_client *, struct ptlrpc_connection *,
