@@ -126,6 +126,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         } else if (rc != LLOG_EEMPTY) {
                 GOTO(out, rc);
         }
+        rc = 0;
 
         llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
         llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;

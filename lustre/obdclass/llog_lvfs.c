@@ -216,7 +216,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 reclen = sizeof(*rec) + size_round(rec->lrh_len) + 
                         sizeof(struct llog_rec_tail);
 
-        if (left != 0 && left <= reclen) {
+        if (left != 0 && left < reclen) {
                 loghandle->lgh_last_idx++;
                 rc = llog_lvfs_pad(file, left, loghandle->lgh_last_idx);
                 if (rc)
