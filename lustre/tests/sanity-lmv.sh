@@ -320,6 +320,22 @@ test_3c() {
 
 run_test 3c " dir splitting via lfs stripe ============================="
 
+test_4a() {
+	let rr=0
+	while let "rr < 33000"; do
+		if let "rr % 2000 == 0"; then
+			echo "$rr"
+		fi
+		mkdir $DIR/4a1 || error
+		rm -rf $DIR/4a1
+		let "rr = rr + 1"
+	done
+}
+
+## this test is very time-consuming, don't run it by default
+#run_test 4a " FIDS/ nlink overflow test  ============================="
+
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

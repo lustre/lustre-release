@@ -1,8 +1,8 @@
 Index: linux-2.4.24/fs/ext3/namei.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/namei.c	2004-03-01 19:42:04.000000000 +0300
-+++ linux-2.4.24/fs/ext3/namei.c	2004-03-29 19:27:13.000000000 +0400
-@@ -1100,6 +1100,23 @@
+--- linux-2.4.24.orig/fs/ext3/namei.c	2004-06-23 08:31:23.000000000 +0400
++++ linux-2.4.24/fs/ext3/namei.c	2004-06-23 08:32:59.000000000 +0400
+@@ -1099,6 +1099,23 @@
  	inode = NULL;
  	if (bh) {
  		unsigned long ino = le32_to_cpu(de->inode);
@@ -26,16 +26,16 @@ Index: linux-2.4.24/fs/ext3/namei.c
  		ext3_unlock_htree(dir, lock);
  		brelse (bh);
  		inode = iget(dir->i_sb, ino);
-@@ -1160,7 +1177,7 @@
+@@ -1138,7 +1155,7 @@
  	while (count--) {
  		struct ext3_dir_entry_2 *de =
  			(struct ext3_dir_entry_2 *) (from + map->offs);
 -		rec_len = EXT3_DIR_REC_LEN(de->name_len);
 +		rec_len = EXT3_DIR_REC_LEN_DE(de);
  		memcpy (to, de, rec_len);
- 		((struct ext3_dir_entry_2 *) to)->rec_len = rec_len;
+ 		((struct ext3_dir_entry_2 *)to)->rec_len = cpu_to_le16(rec_len);
  		de->inode = 0;
-@@ -1181,7 +1198,7 @@
+@@ -1159,7 +1176,7 @@
  		next = (struct ext3_dir_entry_2 *) ((char *) de +
  						    le16_to_cpu(de->rec_len));
  		if (de->inode && de->name_len) {
@@ -43,8 +43,8 @@ Index: linux-2.4.24/fs/ext3/namei.c
 +			rec_len = EXT3_DIR_REC_LEN_DE(de);
  			if (de > to)
  				memmove(to, de, rec_len);
- 			to->rec_len = rec_len;
-@@ -1297,6 +1314,7 @@
+ 			to->rec_len = cpu_to_le16(rec_len);
+@@ -1275,6 +1292,7 @@
  			     struct buffer_head * bh)
  {
  	struct inode	*dir = dentry->d_parent->d_inode;
@@ -52,7 +52,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
  	const char	*name = dentry->d_name.name;
  	int		namelen = dentry->d_name.len;
  	unsigned long	offset = 0;
-@@ -1305,6 +1323,10 @@
+@@ -1283,6 +1301,10 @@
  	char		*top;
  	
  	reclen = EXT3_DIR_REC_LEN(namelen);
@@ -63,7 +63,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
  	if (!de) {
  		de = (struct ext3_dir_entry_2 *)bh->b_data;
  		top = bh->b_data + dir->i_sb->s_blocksize - reclen;
-@@ -1318,7 +1340,7 @@
+@@ -1296,7 +1318,7 @@
  				brelse (bh);
  				return -EEXIST;
  			}
@@ -72,7 +72,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
  			rlen = le16_to_cpu(de->rec_len);
  			if ((de->inode? rlen - nlen: rlen) >= reclen)
  				break;
-@@ -1337,7 +1359,7 @@
+@@ -1315,7 +1337,7 @@
  	}
  	
  	/* By now the buffer is marked for journaling */
@@ -81,7 +81,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
  	rlen = le16_to_cpu(de->rec_len);
  	if (de->inode) {
  		struct ext3_dir_entry_2 *de1 =
-@@ -1349,8 +1371,20 @@
+@@ -1327,8 +1349,20 @@
  	de->file_type = EXT3_FT_UNKNOWN;
  	if (inode) {
  		de->inode = cpu_to_le32(inode->i_ino);
@@ -104,7 +104,7 @@ Index: linux-2.4.24/fs/ext3/namei.c
  		de->inode = 0;
  	de->name_len = namelen;
  	memcpy (de->name, name, namelen);
-@@ -2662,6 +2696,77 @@
+@@ -2662,6 +2696,79 @@
  }
  
  /*
@@ -166,11 +166,13 @@ Index: linux-2.4.24/fs/ext3/namei.c
 +		goto end_unlink;
 +	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
 +	ext3_update_dx_flag(dir);
-+	ext3_mark_inode_dirty(handle, dir);
 +	if (inode) {
 +		inode->i_ctime = dir->i_ctime;
 +		ext3_mark_inode_dirty(handle, inode);
++		if (S_ISDIR(inode->i_mode))
++			dir->i_nlink--;
 +	}
++	ext3_mark_inode_dirty(handle, dir);
 +	retval = 0;
 +
 +end_unlink:
@@ -184,8 +186,8 @@ Index: linux-2.4.24/fs/ext3/namei.c
  struct inode_operations ext3_dir_inode_operations = {
 Index: linux-2.4.24/fs/ext3/dir.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/dir.c	2004-03-01 19:20:49.000000000 +0300
-+++ linux-2.4.24/fs/ext3/dir.c	2004-03-01 19:42:15.000000000 +0300
+--- linux-2.4.24.orig/fs/ext3/dir.c	2004-06-23 08:31:21.000000000 +0400
++++ linux-2.4.24/fs/ext3/dir.c	2004-06-23 08:31:23.000000000 +0400
 @@ -42,6 +42,9 @@
  
  static unsigned char get_dtype(struct super_block *sb, int filetype)
@@ -198,8 +200,8 @@ Index: linux-2.4.24/fs/ext3/dir.c
  		return DT_UNKNOWN;
 Index: linux-2.4.24/fs/ext3/ext3-exports.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/ext3-exports.c	2004-03-01 19:20:50.000000000 +0300
-+++ linux-2.4.24/fs/ext3/ext3-exports.c	2004-03-11 23:40:49.000000000 +0300
+--- linux-2.4.24.orig/fs/ext3/ext3-exports.c	2004-06-23 08:31:22.000000000 +0400
++++ linux-2.4.24/fs/ext3/ext3-exports.c	2004-06-23 08:31:23.000000000 +0400
 @@ -26,3 +26,10 @@
  EXPORT_SYMBOL(ext3_decode_error);
  EXPORT_SYMBOL(__ext3_std_error);
@@ -213,9 +215,9 @@ Index: linux-2.4.24/fs/ext3/ext3-exports.c
 +
 Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-03-01 19:42:04.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_fs.h	2004-03-01 19:42:15.000000000 +0300
-@@ -431,7 +431,8 @@
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-06-23 08:31:23.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-06-23 08:31:23.000000000 +0400
+@@ -445,7 +445,8 @@
  	__u8	s_def_hash_version;	/* Default hash version to use */
  	__u8	s_reserved_char_pad;
  	__u16	s_reserved_word_pad;
@@ -225,7 +227,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  };
  
  #ifdef __KERNEL__
-@@ -504,10 +505,12 @@
+@@ -518,10 +519,12 @@
  #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
  #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
  #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
@@ -239,7 +241,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
-@@ -568,6 +571,9 @@
+@@ -582,6 +585,9 @@
  #define EXT3_DIR_ROUND			(EXT3_DIR_PAD - 1)
  #define EXT3_DIR_REC_LEN(name_len)	(((name_len) + 8 + EXT3_DIR_ROUND) & \
  					 ~EXT3_DIR_ROUND)
@@ -251,8 +253,8 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
   * (c) Daniel Phillips, 2001
 Index: linux-2.4.24/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs_sb.h	2004-03-01 19:20:49.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_fs_sb.h	2004-03-01 19:42:21.000000000 +0300
+--- linux-2.4.24.orig/include/linux/ext3_fs_sb.h	2004-06-23 08:31:21.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs_sb.h	2004-06-23 08:31:23.000000000 +0400
 @@ -86,6 +86,7 @@
  	wait_queue_head_t s_delete_thread_queue;
  	wait_queue_head_t s_delete_waiter_queue;
@@ -263,9 +265,9 @@ Index: linux-2.4.24/include/linux/ext3_fs_sb.h
  #endif	/* _LINUX_EXT3_FS_SB */
 Index: linux-2.4.24/include/linux/dcache.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/dcache.h	2004-03-01 19:20:49.000000000 +0300
-+++ linux-2.4.24/include/linux/dcache.h	2004-03-01 19:42:15.000000000 +0300
-@@ -118,6 +118,9 @@
+--- linux-2.4.24.orig/include/linux/dcache.h	2004-06-23 08:31:22.000000000 +0400
++++ linux-2.4.24/include/linux/dcache.h	2004-06-23 08:31:23.000000000 +0400
+@@ -120,6 +120,9 @@
  	atomic_t d_count;
  	unsigned int d_flags;
  	struct inode  * d_inode;	/* Where the name belongs to - NULL is negative */
@@ -275,7 +277,7 @@ Index: linux-2.4.24/include/linux/dcache.h
  	struct dentry * d_parent;	/* parent directory */
  	struct list_head d_hash;	/* lookup hash list */
  	struct list_head d_lru;		/* d_count = 0 LRU list */
-@@ -189,6 +192,7 @@
+@@ -193,6 +196,7 @@
  					 */
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
  #define DCACHE_LUSTRE_INVALID	0x0010  /* Lustre invalidated */
