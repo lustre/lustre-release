@@ -66,8 +66,8 @@
 
 Index: linux-2.4.19-pre1/Documentation/Configure.help
 ===================================================================
---- linux-2.4.19-pre1.orig/Documentation/Configure.help	2003-11-20 19:01:44.000000000 +0300
-+++ linux-2.4.19-pre1/Documentation/Configure.help	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/Documentation/Configure.help	2004-01-14 01:11:29.000000000 +0300
++++ linux-2.4.19-pre1/Documentation/Configure.help	2004-01-14 01:11:49.000000000 +0300
 @@ -14035,6 +14035,39 @@
    be compiled as a module, and so this could be dangerous.  Most
    everyone wants to say Y here.
@@ -151,7 +151,7 @@ Index: linux-2.4.19-pre1/Documentation/Configure.help
 Index: linux-2.4.19-pre1/arch/alpha/defconfig
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/alpha/defconfig	2001-11-20 02:19:42.000000000 +0300
-+++ linux-2.4.19-pre1/arch/alpha/defconfig	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/alpha/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -169,7 +169,7 @@ Index: linux-2.4.19-pre1/arch/alpha/defconfig
 Index: linux-2.4.19-pre1/arch/alpha/kernel/entry.S
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/alpha/kernel/entry.S	2001-11-10 00:45:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/alpha/kernel/entry.S	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/alpha/kernel/entry.S	2004-01-14 01:11:49.000000000 +0300
 @@ -1148,3 +1148,16 @@
  	.quad sys_gettid
  	.quad sys_readahead
@@ -190,7 +190,7 @@ Index: linux-2.4.19-pre1/arch/alpha/kernel/entry.S
 Index: linux-2.4.19-pre1/arch/arm/defconfig
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/arm/defconfig	2001-05-20 04:43:05.000000000 +0400
-+++ linux-2.4.19-pre1/arch/arm/defconfig	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/arm/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -208,7 +208,7 @@ Index: linux-2.4.19-pre1/arch/arm/defconfig
 Index: linux-2.4.19-pre1/arch/arm/kernel/calls.S
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/arm/kernel/calls.S	2001-10-08 21:39:18.000000000 +0400
-+++ linux-2.4.19-pre1/arch/arm/kernel/calls.S	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/arm/kernel/calls.S	2004-01-14 01:11:49.000000000 +0300
 @@ -236,6 +236,22 @@
  		.long	SYMBOL_NAME(sys_mincore)
  /* 220 */	.long	SYMBOL_NAME(sys_madvise)
@@ -234,8 +234,8 @@ Index: linux-2.4.19-pre1/arch/arm/kernel/calls.S
  		.rept	NR_syscalls - (__syscall_end - __syscall_start) / 4
 Index: linux-2.4.19-pre1/arch/i386/defconfig
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/i386/defconfig	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/i386/defconfig	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/i386/defconfig	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/i386/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -250,10 +250,45 @@ Index: linux-2.4.19-pre1/arch/i386/defconfig
  CONFIG_X86=y
  CONFIG_ISA=y
  # CONFIG_SBUS is not set
+Index: linux-2.4.19-pre1/arch/i386/kernel/entry.S
+===================================================================
+--- linux-2.4.19-pre1.orig/arch/i386/kernel/entry.S	2004-01-14 01:11:46.000000000 +0300
++++ linux-2.4.19-pre1/arch/i386/kernel/entry.S	2004-01-14 01:11:49.000000000 +0300
+@@ -619,18 +619,18 @@
+ 	.long SYMBOL_NAME(sys_ni_syscall)	/* Reserved for Security */
+ 	.long SYMBOL_NAME(sys_gettid)
+ 	.long SYMBOL_NAME(sys_readahead)	/* 225 */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for setxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for lsetxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for fsetxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for getxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* 230 reserved for lgetxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for fgetxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for listxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for llistxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for flistxattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* 235 reserved for removexattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for lremovexattr */
+-	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for fremovexattr */
++	.long SYMBOL_NAME(sys_setxattr)
++	.long SYMBOL_NAME(sys_lsetxattr)
++	.long SYMBOL_NAME(sys_fsetxattr)
++	.long SYMBOL_NAME(sys_getxattr)
++	.long SYMBOL_NAME(sys_lgetxattr)	/* 230 */
++	.long SYMBOL_NAME(sys_fgetxattr)
++	.long SYMBOL_NAME(sys_listxattr)
++	.long SYMBOL_NAME(sys_llistxattr)
++	.long SYMBOL_NAME(sys_flistxattr)
++	.long SYMBOL_NAME(sys_removexattr)	/* 235 */
++	.long SYMBOL_NAME(sys_lremovexattr)
++	.long SYMBOL_NAME(sys_fremovexattr)
+ 
+ 	.rept NR_syscalls-(.-sys_call_table)/4
+ 		.long SYMBOL_NAME(sys_ni_syscall)
 Index: linux-2.4.19-pre1/arch/ia64/defconfig
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/ia64/defconfig	2001-11-10 01:26:17.000000000 +0300
-+++ linux-2.4.19-pre1/arch/ia64/defconfig	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/ia64/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -271,7 +306,7 @@ Index: linux-2.4.19-pre1/arch/ia64/defconfig
 Index: linux-2.4.19-pre1/arch/ia64/kernel/entry.S
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/ia64/kernel/entry.S	2001-11-10 01:26:17.000000000 +0300
-+++ linux-2.4.19-pre1/arch/ia64/kernel/entry.S	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/ia64/kernel/entry.S	2004-01-14 01:11:49.000000000 +0300
 @@ -1130,18 +1130,18 @@
  	data8 sys_getdents64
  	data8 sys_getunwind			// 1215
@@ -306,7 +341,7 @@ Index: linux-2.4.19-pre1/arch/ia64/kernel/entry.S
 Index: linux-2.4.19-pre1/arch/m68k/defconfig
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/m68k/defconfig	2000-06-19 23:56:08.000000000 +0400
-+++ linux-2.4.19-pre1/arch/m68k/defconfig	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/m68k/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -324,7 +359,7 @@ Index: linux-2.4.19-pre1/arch/m68k/defconfig
 Index: linux-2.4.19-pre1/arch/mips/defconfig
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/mips/defconfig	2001-09-09 21:43:02.000000000 +0400
-+++ linux-2.4.19-pre1/arch/mips/defconfig	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/mips/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -342,7 +377,7 @@ Index: linux-2.4.19-pre1/arch/mips/defconfig
 Index: linux-2.4.19-pre1/arch/mips64/defconfig
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/mips64/defconfig	2001-09-09 21:43:02.000000000 +0400
-+++ linux-2.4.19-pre1/arch/mips64/defconfig	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/mips64/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -359,8 +394,8 @@ Index: linux-2.4.19-pre1/arch/mips64/defconfig
  # Code maturity level options
 Index: linux-2.4.19-pre1/arch/ppc/defconfig
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/ppc/defconfig	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/ppc/defconfig	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/ppc/defconfig	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/ppc/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,20 @@
  #
  # Automatically generated make config: don't edit
@@ -384,8 +419,8 @@ Index: linux-2.4.19-pre1/arch/ppc/defconfig
  CONFIG_RWSEM_XCHGADD_ALGORITHM=y
 Index: linux-2.4.19-pre1/arch/s390/defconfig
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/s390/defconfig	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/s390/defconfig	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/s390/defconfig	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/s390/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -402,8 +437,8 @@ Index: linux-2.4.19-pre1/arch/s390/defconfig
  # CONFIG_MCA is not set
 Index: linux-2.4.19-pre1/arch/s390/kernel/entry.S
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/s390/kernel/entry.S	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/s390/kernel/entry.S	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/s390/kernel/entry.S	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/s390/kernel/entry.S	2004-01-14 01:11:49.000000000 +0300
 @@ -599,8 +599,19 @@
          .long  sys_fcntl64 
  	.long  sys_ni_syscall		 /* 222 - reserved for posix_acl */
@@ -428,8 +463,8 @@ Index: linux-2.4.19-pre1/arch/s390/kernel/entry.S
  
 Index: linux-2.4.19-pre1/arch/s390x/defconfig
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/s390x/defconfig	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/s390x/defconfig	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/s390x/defconfig	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/s390x/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -446,8 +481,8 @@ Index: linux-2.4.19-pre1/arch/s390x/defconfig
  # CONFIG_MCA is not set
 Index: linux-2.4.19-pre1/arch/s390x/kernel/entry.S
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/s390x/kernel/entry.S	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/s390x/kernel/entry.S	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/s390x/kernel/entry.S	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/s390x/kernel/entry.S	2004-01-14 01:11:49.000000000 +0300
 @@ -632,8 +632,19 @@
  	.long  SYSCALL(sys_ni_syscall,sys32_fcntl64_wrapper)
  	.long  SYSCALL(sys_ni_syscall,sys_ni_syscall) /* 222 - reserved for posix_acl */
@@ -472,8 +507,8 @@ Index: linux-2.4.19-pre1/arch/s390x/kernel/entry.S
  
 Index: linux-2.4.19-pre1/arch/s390x/kernel/wrapper32.S
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/s390x/kernel/wrapper32.S	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/s390x/kernel/wrapper32.S	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/s390x/kernel/wrapper32.S	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/s390x/kernel/wrapper32.S	2004-01-14 01:11:49.000000000 +0300
 @@ -1091,3 +1091,95 @@
  	llgtr	%r3,%r3			# struct stat64 *
  	llgfr	%r4,%r4			# long
@@ -572,8 +607,8 @@ Index: linux-2.4.19-pre1/arch/s390x/kernel/wrapper32.S
 +
 Index: linux-2.4.19-pre1/arch/sparc/defconfig
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/sparc/defconfig	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/sparc/defconfig	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/sparc/defconfig	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/sparc/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -591,7 +626,7 @@ Index: linux-2.4.19-pre1/arch/sparc/defconfig
 Index: linux-2.4.19-pre1/arch/sparc/kernel/systbls.S
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/sparc/kernel/systbls.S	2001-10-21 21:36:54.000000000 +0400
-+++ linux-2.4.19-pre1/arch/sparc/kernel/systbls.S	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/sparc/kernel/systbls.S	2004-01-14 01:11:49.000000000 +0300
 @@ -51,11 +51,11 @@
  /*150*/	.long sys_nis_syscall, sys_nis_syscall, sys_nis_syscall, sys_poll, sys_getdents64
  /*155*/	.long sys_fcntl64, sys_nis_syscall, sys_statfs, sys_fstatfs, sys_oldumount
@@ -611,8 +646,8 @@ Index: linux-2.4.19-pre1/arch/sparc/kernel/systbls.S
  /*200*/	.long sys_ssetmask, sys_sigsuspend, sys_newlstat, sys_uselib, old_readdir
 Index: linux-2.4.19-pre1/arch/sparc64/defconfig
 ===================================================================
---- linux-2.4.19-pre1.orig/arch/sparc64/defconfig	2003-11-20 19:01:35.000000000 +0300
-+++ linux-2.4.19-pre1/arch/sparc64/defconfig	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/arch/sparc64/defconfig	2004-01-14 01:10:36.000000000 +0300
++++ linux-2.4.19-pre1/arch/sparc64/defconfig	2004-01-14 01:11:49.000000000 +0300
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -630,7 +665,7 @@ Index: linux-2.4.19-pre1/arch/sparc64/defconfig
 Index: linux-2.4.19-pre1/arch/sparc64/kernel/systbls.S
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/sparc64/kernel/systbls.S	2001-10-21 21:36:54.000000000 +0400
-+++ linux-2.4.19-pre1/arch/sparc64/kernel/systbls.S	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/arch/sparc64/kernel/systbls.S	2004-01-14 01:11:49.000000000 +0300
 @@ -52,11 +52,11 @@
  /*150*/	.word sys_nis_syscall, sys_nis_syscall, sys_nis_syscall, sys_poll, sys_getdents64
  	.word sys32_fcntl64, sys_nis_syscall, sys32_statfs, sys32_fstatfs, sys_oldumount
@@ -667,8 +702,8 @@ Index: linux-2.4.19-pre1/arch/sparc64/kernel/systbls.S
  /*200*/	.word sys_ssetmask, sys_nis_syscall, sys_newlstat, sys_uselib, sys_nis_syscall
 Index: linux-2.4.19-pre1/fs/Config.in
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/Config.in	2003-11-20 19:01:36.000000000 +0300
-+++ linux-2.4.19-pre1/fs/Config.in	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/Config.in	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/Config.in	2004-01-14 01:11:49.000000000 +0300
 @@ -22,6 +22,11 @@
  dep_tristate 'BFS file system support (EXPERIMENTAL)' CONFIG_BFS_FS $CONFIG_EXPERIMENTAL
  
@@ -706,8 +741,8 @@ Index: linux-2.4.19-pre1/fs/Config.in
  source fs/partitions/Config.in
 Index: linux-2.4.19-pre1/fs/Makefile
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/Makefile	2003-11-21 03:51:01.000000000 +0300
-+++ linux-2.4.19-pre1/fs/Makefile	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/Makefile	2004-01-14 01:11:49.000000000 +0300
++++ linux-2.4.19-pre1/fs/Makefile	2004-01-14 01:11:49.000000000 +0300
 @@ -14,7 +14,7 @@
  		super.o block_dev.o char_dev.o stat.o exec.o pipe.o namei.o \
  		fcntl.o ioctl.o readdir.o select.o fifo.o locks.o \
@@ -730,7 +765,7 @@ Index: linux-2.4.19-pre1/fs/Makefile
 Index: linux-2.4.19-pre1/fs/ext2/Makefile
 ===================================================================
 --- linux-2.4.19-pre1.orig/fs/ext2/Makefile	2001-10-11 19:05:18.000000000 +0400
-+++ linux-2.4.19-pre1/fs/ext2/Makefile	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/Makefile	2004-01-14 01:11:49.000000000 +0300
 @@ -13,4 +13,8 @@
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
@@ -743,7 +778,7 @@ Index: linux-2.4.19-pre1/fs/ext2/Makefile
 Index: linux-2.4.19-pre1/fs/ext2/file.c
 ===================================================================
 --- linux-2.4.19-pre1.orig/fs/ext2/file.c	2001-10-11 19:05:18.000000000 +0400
-+++ linux-2.4.19-pre1/fs/ext2/file.c	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/file.c	2004-01-14 01:11:49.000000000 +0300
 @@ -20,6 +20,7 @@
  
  #include <linux/fs.h>
@@ -763,8 +798,8 @@ Index: linux-2.4.19-pre1/fs/ext2/file.c
  };
 Index: linux-2.4.19-pre1/fs/ext2/ialloc.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext2/ialloc.c	2003-11-20 19:01:36.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext2/ialloc.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext2/ialloc.c	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/ialloc.c	2004-01-14 01:11:49.000000000 +0300
 @@ -15,6 +15,7 @@
  #include <linux/config.h>
  #include <linux/fs.h>
@@ -783,8 +818,8 @@ Index: linux-2.4.19-pre1/fs/ext2/ialloc.c
  	}
 Index: linux-2.4.19-pre1/fs/ext2/inode.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext2/inode.c	2003-11-20 19:01:36.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext2/inode.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext2/inode.c	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/inode.c	2004-01-14 01:11:49.000000000 +0300
 @@ -39,6 +39,18 @@
  static int ext2_update_inode(struct inode * inode, int do_sync);
  
@@ -870,7 +905,7 @@ Index: linux-2.4.19-pre1/fs/ext2/inode.c
 Index: linux-2.4.19-pre1/fs/ext2/namei.c
 ===================================================================
 --- linux-2.4.19-pre1.orig/fs/ext2/namei.c	2001-10-04 09:57:36.000000000 +0400
-+++ linux-2.4.19-pre1/fs/ext2/namei.c	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/namei.c	2004-01-14 01:11:49.000000000 +0300
 @@ -31,6 +31,7 @@
  
  #include <linux/fs.h>
@@ -906,8 +941,8 @@ Index: linux-2.4.19-pre1/fs/ext2/namei.c
  };
 Index: linux-2.4.19-pre1/fs/ext2/super.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext2/super.c	2003-11-20 19:01:36.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext2/super.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext2/super.c	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/super.c	2004-01-14 01:11:49.000000000 +0300
 @@ -21,6 +21,7 @@
  #include <linux/string.h>
  #include <linux/fs.h>
@@ -980,7 +1015,7 @@ Index: linux-2.4.19-pre1/fs/ext2/super.c
 Index: linux-2.4.19-pre1/fs/ext2/symlink.c
 ===================================================================
 --- linux-2.4.19-pre1.orig/fs/ext2/symlink.c	2000-09-28 00:41:33.000000000 +0400
-+++ linux-2.4.19-pre1/fs/ext2/symlink.c	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/symlink.c	2004-01-14 01:11:49.000000000 +0300
 @@ -19,6 +19,7 @@
  
  #include <linux/fs.h>
@@ -1012,8 +1047,8 @@ Index: linux-2.4.19-pre1/fs/ext2/symlink.c
  };
 Index: linux-2.4.19-pre1/fs/ext2/xattr.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext2/xattr.c	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext2/xattr.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext2/xattr.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/xattr.c	2004-01-14 01:11:49.000000000 +0300
 @@ -0,0 +1,1212 @@
 +/*
 + * linux/fs/ext2/xattr.c
@@ -2229,8 +2264,8 @@ Index: linux-2.4.19-pre1/fs/ext2/xattr.c
 +#endif  /* CONFIG_EXT2_FS_XATTR_SHARING */
 Index: linux-2.4.19-pre1/fs/ext2/xattr_user.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext2/xattr_user.c	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext2/xattr_user.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext2/xattr_user.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext2/xattr_user.c	2004-01-14 01:11:49.000000000 +0300
 @@ -0,0 +1,103 @@
 +/*
 + * linux/fs/ext2/xattr_user.c
@@ -2337,8 +2372,8 @@ Index: linux-2.4.19-pre1/fs/ext2/xattr_user.c
 +}
 Index: linux-2.4.19-pre1/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/Makefile	2003-11-21 03:51:02.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/Makefile	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext3/Makefile	2004-01-14 01:11:49.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/Makefile	2004-01-14 01:11:49.000000000 +0300
 @@ -1,5 +1,5 @@
  #
 -# Makefile for the linux ext2-filesystem routines.
@@ -2365,8 +2400,8 @@ Index: linux-2.4.19-pre1/fs/ext3/Makefile
  include $(TOPDIR)/Rules.make
 Index: linux-2.4.19-pre1/fs/ext3/file.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/file.c	2003-11-21 03:51:02.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/file.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext3/file.c	2004-01-14 01:11:49.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/file.c	2004-01-14 01:11:49.000000000 +0300
 @@ -23,6 +23,7 @@
  #include <linux/locks.h>
  #include <linux/jbd.h>
@@ -2387,8 +2422,8 @@ Index: linux-2.4.19-pre1/fs/ext3/file.c
  
 Index: linux-2.4.19-pre1/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/ialloc.c	2003-11-20 19:01:36.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/ialloc.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext3/ialloc.c	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/ialloc.c	2004-01-14 01:11:49.000000000 +0300
 @@ -17,6 +17,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -2407,8 +2442,8 @@ Index: linux-2.4.19-pre1/fs/ext3/ialloc.c
  
 Index: linux-2.4.19-pre1/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/inode.c	2003-11-20 19:01:36.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/inode.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext3/inode.c	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/inode.c	2004-01-14 01:11:49.000000000 +0300
 @@ -39,6 +39,18 @@
   */
  #undef SEARCH_FROM_ZERO
@@ -2501,8 +2536,8 @@ Index: linux-2.4.19-pre1/fs/ext3/inode.c
  		/* inode->i_attr_flags |= ATTR_FLAG_SYNCRONOUS; unused */
 Index: linux-2.4.19-pre1/fs/ext3/namei.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/namei.c	2003-11-21 03:51:02.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/namei.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext3/namei.c	2004-01-14 01:11:49.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/namei.c	2004-01-14 01:11:49.000000000 +0300
 @@ -29,6 +29,7 @@
  #include <linux/sched.h>
  #include <linux/ext3_fs.h>
@@ -2566,8 +2601,8 @@ Index: linux-2.4.19-pre1/fs/ext3/namei.c
 +
 Index: linux-2.4.19-pre1/fs/ext3/super.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/super.c	2003-11-21 03:51:02.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/super.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext3/super.c	2004-01-14 01:11:49.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/super.c	2004-01-14 01:11:49.000000000 +0300
 @@ -24,6 +24,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -2656,7 +2691,7 @@ Index: linux-2.4.19-pre1/fs/ext3/super.c
 Index: linux-2.4.19-pre1/fs/ext3/symlink.c
 ===================================================================
 --- linux-2.4.19-pre1.orig/fs/ext3/symlink.c	2001-11-10 01:25:04.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/symlink.c	2003-11-21 03:51:05.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/symlink.c	2004-01-14 01:11:49.000000000 +0300
 @@ -20,6 +20,7 @@
  #include <linux/fs.h>
  #include <linux/jbd.h>
@@ -2688,8 +2723,8 @@ Index: linux-2.4.19-pre1/fs/ext3/symlink.c
  };
 Index: linux-2.4.19-pre1/fs/ext3/xattr.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/xattr.c	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/xattr.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext3/xattr.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/xattr.c	2004-01-14 01:11:49.000000000 +0300
 @@ -0,0 +1,1225 @@
 +/*
 + * linux/fs/ext3/xattr.c
@@ -3918,8 +3953,8 @@ Index: linux-2.4.19-pre1/fs/ext3/xattr.c
 +#endif  /* CONFIG_EXT3_FS_XATTR_SHARING */
 Index: linux-2.4.19-pre1/fs/ext3/xattr_user.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/xattr_user.c	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/xattr_user.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/ext3/xattr_user.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/xattr_user.c	2004-01-14 01:11:49.000000000 +0300
 @@ -0,0 +1,111 @@
 +/*
 + * linux/fs/ext3/xattr_user.c
@@ -4032,10 +4067,28 @@ Index: linux-2.4.19-pre1/fs/ext3/xattr_user.c
 +	ext3_xattr_unregister(EXT3_XATTR_INDEX_USER,
 +			      &ext3_xattr_user_handler);
 +}
+Index: linux-2.4.19-pre1/fs/ext3/ext3-exports.c
+===================================================================
+--- linux-2.4.19-pre1.orig/fs/ext3/ext3-exports.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/ext3/ext3-exports.c	2004-01-14 01:11:49.000000000 +0300
+@@ -0,0 +1,13 @@
++#include <linux/config.h>
++#include <linux/module.h>
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++#include <linux/ext3_xattr.h>
++
++EXPORT_SYMBOL(ext3_force_commit);
++EXPORT_SYMBOL(ext3_bread);
++EXPORT_SYMBOL(ext3_xattr_register);
++EXPORT_SYMBOL(ext3_xattr_unregister);
++EXPORT_SYMBOL(ext3_xattr_get);
++EXPORT_SYMBOL(ext3_xattr_list);
++EXPORT_SYMBOL(ext3_xattr_set);
 Index: linux-2.4.19-pre1/fs/mbcache.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/mbcache.c	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/fs/mbcache.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/mbcache.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/mbcache.c	2004-01-14 01:11:49.000000000 +0300
 @@ -0,0 +1,648 @@
 +/*
 + * linux/fs/mbcache.c
@@ -4685,989 +4738,10 @@ Index: linux-2.4.19-pre1/fs/mbcache.c
 +module_init(init_mbcache)
 +module_exit(exit_mbcache)
 +
-Index: linux-2.4.19-pre1/include/asm-arm/unistd.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/asm-arm/unistd.h	2001-08-12 22:14:00.000000000 +0400
-+++ linux-2.4.19-pre1/include/asm-arm/unistd.h	2003-11-21 03:51:05.000000000 +0300
-@@ -240,6 +240,18 @@
- #define __NR_mincore			(__NR_SYSCALL_BASE+219)
- #define __NR_madvise			(__NR_SYSCALL_BASE+220)
- #define __NR_fcntl64			(__NR_SYSCALL_BASE+221)
-+#define __NR_setxattr			(__NR_SYSCALL_BASE+226)
-+#define __NR_lsetxattr			(__NR_SYSCALL_BASE+227)
-+#define __NR_fsetxattr			(__NR_SYSCALL_BASE+228)
-+#define __NR_getxattr			(__NR_SYSCALL_BASE+229)
-+#define __NR_lgetxattr			(__NR_SYSCALL_BASE+230)
-+#define __NR_fgetxattr			(__NR_SYSCALL_BASE+231)
-+#define __NR_listxattr			(__NR_SYSCALL_BASE+232)
-+#define __NR_llistxattr			(__NR_SYSCALL_BASE+233)
-+#define __NR_flistxattr			(__NR_SYSCALL_BASE+234)
-+#define __NR_removexattr		(__NR_SYSCALL_BASE+235)
-+#define __NR_lremovexattr		(__NR_SYSCALL_BASE+236)
-+#define __NR_fremovexattr		(__NR_SYSCALL_BASE+237)
- 
- /*
-  * The following SWIs are ARM private.
-Index: linux-2.4.19-pre1/include/asm-ia64/unistd.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/asm-ia64/unistd.h	2001-11-10 01:26:17.000000000 +0300
-+++ linux-2.4.19-pre1/include/asm-ia64/unistd.h	2003-11-21 03:51:05.000000000 +0300
-@@ -206,6 +206,18 @@
- #define __NR_getdents64			1214
- #define __NR_getunwind			1215
- #define __NR_readahead			1216
-+#define __NR_setxattr			1217
-+#define __NR_lsetxattr			1218
-+#define __NR_fsetxattr			1219
-+#define __NR_getxattr			1220
-+#define __NR_lgetxattr			1221
-+#define __NR_fgetxattr			1222
-+#define __NR_listxattr			1223
-+#define __NR_llistxattr			1224
-+#define __NR_flistxattr			1225
-+#define __NR_removexattr		1226
-+#define __NR_lremovexattr		1227
-+#define __NR_fremovexattr		1228
- 
- #if !defined(__ASSEMBLY__) && !defined(ASSEMBLER)
- 
-Index: linux-2.4.19-pre1/include/asm-s390/unistd.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/asm-s390/unistd.h	2001-10-11 20:43:38.000000000 +0400
-+++ linux-2.4.19-pre1/include/asm-s390/unistd.h	2003-11-21 03:51:05.000000000 +0300
-@@ -211,6 +211,18 @@
- #define __NR_mincore            218
- #define __NR_madvise            219
- #define __NR_getdents64		220
-+#define __NR_setxattr		224
-+#define __NR_lsetxattr		225
-+#define __NR_fsetxattr		226
-+#define __NR_getxattr		227
-+#define __NR_lgetxattr		228
-+#define __NR_fgetxattr		229
-+#define __NR_listxattr		230
-+#define __NR_llistxattr		231
-+#define __NR_flistxattr		232
-+#define __NR_removexattr	233
-+#define __NR_lremovexattr	234
-+#define __NR_fremovexattr	235
- 
- 
- /* user-visible error numbers are in the range -1 - -122: see <asm-s390/errno.h> */
-Index: linux-2.4.19-pre1/include/asm-s390x/unistd.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/asm-s390x/unistd.h	2001-10-11 20:43:38.000000000 +0400
-+++ linux-2.4.19-pre1/include/asm-s390x/unistd.h	2003-11-21 03:51:05.000000000 +0300
-@@ -181,6 +181,18 @@
- #define __NR_mincore            218
- #define __NR_madvise            219
- #define __NR_getdents64         220
-+#define __NR_setxattr		224
-+#define __NR_lsetxattr		225
-+#define __NR_fsetxattr		226
-+#define __NR_getxattr		227
-+#define __NR_lgetxattr		228
-+#define __NR_fgetxattr		229
-+#define __NR_listxattr		230
-+#define __NR_llistxattr		231
-+#define __NR_flistxattr		232
-+#define __NR_removexattr	233
-+#define __NR_lremovexattr	234
-+#define __NR_fremovexattr	235
- 
- 
- /* user-visible error numbers are in the range -1 - -122: see <asm-s390/errno.h> */
-Index: linux-2.4.19-pre1/include/asm-sparc/unistd.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/asm-sparc/unistd.h	2001-10-21 21:36:54.000000000 +0400
-+++ linux-2.4.19-pre1/include/asm-sparc/unistd.h	2003-11-21 03:51:05.000000000 +0300
-@@ -184,24 +184,24 @@
- /* #define __NR_exportfs        166    SunOS Specific                              */
- #define __NR_mount              167 /* Common                                      */
- #define __NR_ustat              168 /* Common                                      */
--/* #define __NR_semsys          169    SunOS Specific                              */
--/* #define __NR_msgsys          170    SunOS Specific                              */
--/* #define __NR_shmsys          171    SunOS Specific                              */
--/* #define __NR_auditsys        172    SunOS Specific                              */
--/* #define __NR_rfssys          173    SunOS Specific                              */
-+#define __NR_setxattr           169 /* SunOS: semsys                               */
-+#define __NR_lsetxattr          170 /* SunOS: msgsys                               */
-+#define __NR_fsetxattr          171 /* SunOS: shmsys                               */
-+#define __NR_getxattr           172 /* SunOS: auditsys                             */
-+#define __NR_lgetxattr          173 /* SunOS: rfssys                               */
- #define __NR_getdents           174 /* Common                                      */
- #define __NR_setsid             175 /* Common                                      */
- #define __NR_fchdir             176 /* Common                                      */
--/* #define __NR_fchroot         177    SunOS Specific                              */
--/* #define __NR_vpixsys         178    SunOS Specific                              */
--/* #define __NR_aioread         179    SunOS Specific                              */
--/* #define __NR_aiowrite        180    SunOS Specific                              */
--/* #define __NR_aiowait         181    SunOS Specific                              */
--/* #define __NR_aiocancel       182    SunOS Specific                              */
-+#define __NR_fgetxattr          177 /* SunOS: fchroot                              */
-+#define __NR_listxattr          178 /* SunOS: vpixsys                              */
-+#define __NR_llistxattr         179 /* SunOS: aioread                              */
-+#define __NR_flistxattr         180 /* SunOS: aiowrite                             */
-+#define __NR_removexattr        181 /* SunOS: aiowait                              */
-+#define __NR_lremovexattr       182 /* SunOS: aiocancel                            */
- #define __NR_sigpending         183 /* Common                                      */
- #define __NR_query_module	184 /* Linux Specific				   */
- #define __NR_setpgid            185 /* Common                                      */
--/* #define __NR_pathconf        186    SunOS Specific                              */
-+#define __NR_fremovexattr       186 /* SunOS: pathconf                             */
- /* #define __NR_fpathconf       187    SunOS Specific                              */
- /* #define __NR_sysconf         188    SunOS Specific                              */
- #define __NR_uname              189 /* Linux Specific                              */
-Index: linux-2.4.19-pre1/include/asm-sparc64/unistd.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/asm-sparc64/unistd.h	2001-10-21 21:36:54.000000000 +0400
-+++ linux-2.4.19-pre1/include/asm-sparc64/unistd.h	2003-11-21 03:51:05.000000000 +0300
-@@ -184,24 +184,24 @@
- /* #define __NR_exportfs        166    SunOS Specific                              */
- #define __NR_mount              167 /* Common                                      */
- #define __NR_ustat              168 /* Common                                      */
--/* #define __NR_semsys          169    SunOS Specific                              */
--/* #define __NR_msgsys          170    SunOS Specific                              */
--/* #define __NR_shmsys          171    SunOS Specific                              */
--/* #define __NR_auditsys        172    SunOS Specific                              */
--/* #define __NR_rfssys          173    SunOS Specific                              */
-+#define __NR_setxattr           169 /* SunOS: semsys                               */
-+#define __NR_lsetxattr          170 /* SunOS: msgsys                               */
-+#define __NR_fsetxattr          171 /* SunOS: shmsys                               */
-+#define __NR_getxattr           172 /* SunOS: auditsys                             */
-+#define __NR_lgetxattr          173 /* SunOS: rfssys                               */
- #define __NR_getdents           174 /* Common                                      */
- #define __NR_setsid             175 /* Common                                      */
- #define __NR_fchdir             176 /* Common                                      */
--/* #define __NR_fchroot         177    SunOS Specific                              */
--/* #define __NR_vpixsys         178    SunOS Specific                              */
--/* #define __NR_aioread         179    SunOS Specific                              */
--/* #define __NR_aiowrite        180    SunOS Specific                              */
--/* #define __NR_aiowait         181    SunOS Specific                              */
--/* #define __NR_aiocancel       182    SunOS Specific                              */
-+#define __NR_fgetxattr          177 /* SunOS: fchroot                              */
-+#define __NR_listxattr          178 /* SunOS: vpixsys                              */
-+#define __NR_llistxattr         179 /* SunOS: aioread                              */
-+#define __NR_flistxattr         180 /* SunOS: aiowrite                             */
-+#define __NR_removexattr        181 /* SunOS: aiowait                              */
-+#define __NR_lremovexattr       182 /* SunOS: aiocancel                            */
- #define __NR_sigpending         183 /* Common                                      */
- #define __NR_query_module	184 /* Linux Specific				   */
- #define __NR_setpgid            185 /* Common                                      */
--/* #define __NR_pathconf        186    SunOS Specific                              */
-+#define __NR_fremovexattr       186 /* SunOS: pathconf                             */
- /* #define __NR_fpathconf       187    SunOS Specific                              */
- /* #define __NR_sysconf         188    SunOS Specific                              */
- #define __NR_uname              189 /* Linux Specific                              */
-Index: linux-2.4.19-pre1/include/linux/cache_def.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/cache_def.h	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/cache_def.h	2003-11-21 03:51:05.000000000 +0300
-@@ -0,0 +1,15 @@
-+/*
-+ * linux/cache_def.h
-+ * Handling of caches defined in drivers, filesystems, ...
-+ *
-+ * Copyright (C) 2002 by Andreas Gruenbacher, <a.gruenbacher@computer.org>
-+ */
-+
-+struct cache_definition {
-+	const char *name;
-+	void (*shrink)(int, unsigned int);
-+	struct list_head link;
-+};
-+
-+extern void register_cache(struct cache_definition *);
-+extern void unregister_cache(struct cache_definition *);
-Index: linux-2.4.19-pre1/include/linux/errno.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/errno.h	2001-02-10 01:46:13.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/errno.h	2003-11-21 03:51:05.000000000 +0300
-@@ -23,4 +23,8 @@
- 
- #endif
- 
-+/* Defined for extended attributes */
-+#define ENOATTR ENODATA		/* No such attribute */
-+#define ENOTSUP EOPNOTSUPP	/* Operation not supported */
-+
- #endif
-Index: linux-2.4.19-pre1/include/linux/ext2_fs.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/ext2_fs.h	2001-11-22 22:46:52.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/ext2_fs.h	2003-11-21 03:51:05.000000000 +0300
-@@ -57,8 +57,6 @@
-  */
- #define	EXT2_BAD_INO		 1	/* Bad blocks inode */
- #define EXT2_ROOT_INO		 2	/* Root inode */
--#define EXT2_ACL_IDX_INO	 3	/* ACL inode */
--#define EXT2_ACL_DATA_INO	 4	/* ACL inode */
- #define EXT2_BOOT_LOADER_INO	 5	/* Boot loader inode */
- #define EXT2_UNDEL_DIR_INO	 6	/* Undelete directory inode */
- 
-@@ -86,7 +84,6 @@
- #else
- # define EXT2_BLOCK_SIZE(s)		(EXT2_MIN_BLOCK_SIZE << (s)->s_log_block_size)
- #endif
--#define EXT2_ACLE_PER_BLOCK(s)		(EXT2_BLOCK_SIZE(s) / sizeof (struct ext2_acl_entry))
- #define	EXT2_ADDR_PER_BLOCK(s)		(EXT2_BLOCK_SIZE(s) / sizeof (__u32))
- #ifdef __KERNEL__
- # define EXT2_BLOCK_SIZE_BITS(s)	((s)->s_blocksize_bits)
-@@ -121,28 +118,6 @@
- #endif
- 
- /*
-- * ACL structures
-- */
--struct ext2_acl_header	/* Header of Access Control Lists */
--{
--	__u32	aclh_size;
--	__u32	aclh_file_count;
--	__u32	aclh_acle_count;
--	__u32	aclh_first_acle;
--};
--
--struct ext2_acl_entry	/* Access Control List Entry */
--{
--	__u32	acle_size;
--	__u16	acle_perms;	/* Access permissions */
--	__u16	acle_type;	/* Type of entry */
--	__u16	acle_tag;	/* User or group identity */
--	__u16	acle_pad1;
--	__u32	acle_next;	/* Pointer on next entry for the */
--					/* same inode or on next free entry */
--};
--
--/*
-  * Structure of a blocks group descriptor
-  */
- struct ext2_group_desc
-@@ -314,6 +289,7 @@
- #define EXT2_MOUNT_ERRORS_PANIC		0x0040	/* Panic on errors */
- #define EXT2_MOUNT_MINIX_DF		0x0080	/* Mimics the Minix statfs */
- #define EXT2_MOUNT_NO_UID32		0x0200  /* Disable 32-bit UIDs */
-+#define EXT2_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
- 
- #define clear_opt(o, opt)		o &= ~EXT2_MOUNT_##opt
- #define set_opt(o, opt)			o |= EXT2_MOUNT_##opt
-@@ -397,6 +373,7 @@
- 
- #ifdef __KERNEL__
- #define EXT2_SB(sb)	(&((sb)->u.ext2_sb))
-+#define EXT2_I(inode)	(&((inode)->u.ext2_i))
- #else
- /* Assume that user mode programs are passing in an ext2fs superblock, not
-  * a kernel struct super_block.  This will allow us to call the feature-test
-@@ -466,7 +443,7 @@
- #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008
- #define EXT2_FEATURE_INCOMPAT_ANY		0xffffffff
- 
--#define EXT2_FEATURE_COMPAT_SUPP	0
-+#define EXT2_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
- #define EXT2_FEATURE_INCOMPAT_SUPP	EXT2_FEATURE_INCOMPAT_FILETYPE
- #define EXT2_FEATURE_RO_COMPAT_SUPP	(EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER| \
- 					 EXT2_FEATURE_RO_COMPAT_LARGE_FILE| \
-@@ -623,8 +600,10 @@
- 
- /* namei.c */
- extern struct inode_operations ext2_dir_inode_operations;
-+extern struct inode_operations ext2_special_inode_operations;
- 
- /* symlink.c */
-+extern struct inode_operations ext2_symlink_inode_operations;
- extern struct inode_operations ext2_fast_symlink_inode_operations;
- 
- #endif	/* __KERNEL__ */
-Index: linux-2.4.19-pre1/include/linux/ext2_xattr.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/ext2_xattr.h	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/ext2_xattr.h	2003-11-21 03:51:05.000000000 +0300
-@@ -0,0 +1,157 @@
-+/*
-+  File: linux/ext2_xattr.h
-+
-+  On-disk format of extended attributes for the ext2 filesystem.
-+
-+  (C) 2001 Andreas Gruenbacher, <a.gruenbacher@computer.org>
-+*/
-+
-+#include <linux/config.h>
-+#include <linux/init.h>
-+#include <linux/xattr.h>
-+
-+/* Magic value in attribute blocks */
-+#define EXT2_XATTR_MAGIC		0xEA020000
-+
-+/* Maximum number of references to one attribute block */
-+#define EXT2_XATTR_REFCOUNT_MAX		1024
-+
-+/* Name indexes */
-+#define EXT2_XATTR_INDEX_MAX			10
-+#define EXT2_XATTR_INDEX_USER			1
-+#define EXT2_XATTR_INDEX_POSIX_ACL_ACCESS	2
-+#define EXT2_XATTR_INDEX_POSIX_ACL_DEFAULT	3
-+
-+struct ext2_xattr_header {
-+	__u32	h_magic;	/* magic number for identification */
-+	__u32	h_refcount;	/* reference count */
-+	__u32	h_blocks;	/* number of disk blocks used */
-+	__u32	h_hash;		/* hash value of all attributes */
-+	__u32	h_reserved[4];	/* zero right now */
-+};
-+
-+struct ext2_xattr_entry {
-+	__u8	e_name_len;	/* length of name */
-+	__u8	e_name_index;	/* attribute name index */
-+	__u16	e_value_offs;	/* offset in disk block of value */
-+	__u32	e_value_block;	/* disk block attribute is stored on (n/i) */
-+	__u32	e_value_size;	/* size of attribute value */
-+	__u32	e_hash;		/* hash value of name and value */
-+	char	e_name[0];	/* attribute name */
-+};
-+
-+#define EXT2_XATTR_PAD_BITS		2
-+#define EXT2_XATTR_PAD		(1<<EXT2_XATTR_PAD_BITS)
-+#define EXT2_XATTR_ROUND		(EXT2_XATTR_PAD-1)
-+#define EXT2_XATTR_LEN(name_len) \
-+	(((name_len) + EXT2_XATTR_ROUND + \
-+	sizeof(struct ext2_xattr_entry)) & ~EXT2_XATTR_ROUND)
-+#define EXT2_XATTR_NEXT(entry) \
-+	( (struct ext2_xattr_entry *)( \
-+	  (char *)(entry) + EXT2_XATTR_LEN((entry)->e_name_len)) )
-+#define EXT2_XATTR_SIZE(size) \
-+	(((size) + EXT2_XATTR_ROUND) & ~EXT2_XATTR_ROUND)
-+
-+#ifdef __KERNEL__
-+
-+# ifdef CONFIG_EXT2_FS_XATTR
-+
-+struct ext2_xattr_handler {
-+	char *prefix;
-+	size_t (*list)(char *list, struct inode *inode, const char *name,
-+		       int name_len);
-+	int (*get)(struct inode *inode, const char *name, void *buffer,
-+		   size_t size);
-+	int (*set)(struct inode *inode, const char *name, const void *buffer,
-+		   size_t size, int flags);
-+};
-+
-+extern int ext2_xattr_register(int, struct ext2_xattr_handler *);
-+extern void ext2_xattr_unregister(int, struct ext2_xattr_handler *);
-+
-+extern int ext2_setxattr(struct dentry *, const char *, const void *, size_t, int);
-+extern ssize_t ext2_getxattr(struct dentry *, const char *, void *, size_t);
-+extern ssize_t ext2_listxattr(struct dentry *, char *, size_t);
-+extern int ext2_removexattr(struct dentry *, const char *);
-+
-+extern int ext2_xattr_get(struct inode *, int, const char *, void *, size_t);
-+extern int ext2_xattr_list(struct inode *, char *, size_t);
-+extern int ext2_xattr_set(struct inode *, int, const char *, const void *, size_t, int);
-+
-+extern void ext2_xattr_delete_inode(struct inode *);
-+extern void ext2_xattr_put_super(struct super_block *);
-+
-+extern int init_ext2_xattr(void) __init;
-+extern void exit_ext2_xattr(void);
-+
-+# else  /* CONFIG_EXT2_FS_XATTR */
-+#  define ext2_setxattr		NULL
-+#  define ext2_getxattr		NULL
-+#  define ext2_listxattr	NULL
-+#  define ext2_removexattr	NULL
-+
-+static inline int
-+ext2_xattr_get(struct inode *inode, int name_index,
-+	       const char *name, void *buffer, size_t size)
-+{
-+	return -ENOTSUP;
-+}
-+
-+static inline int
-+ext2_xattr_list(struct inode *inode, char *buffer, size_t size)
-+{
-+	return -ENOTSUP;
-+}
-+
-+static inline int
-+ext2_xattr_set(struct inode *inode, int name_index, const char *name,
-+	       const void *value, size_t size, int flags)
-+{
-+	return -ENOTSUP;
-+}
-+
-+static inline void
-+ext2_xattr_delete_inode(struct inode *inode)
-+{
-+}
-+
-+static inline void
-+ext2_xattr_put_super(struct super_block *sb)
-+{
-+}
-+
-+static inline int
-+init_ext2_xattr(void)
-+{
-+	return 0;
-+}
-+
-+static inline void
-+exit_ext2_xattr(void)
-+{
-+}
-+
-+# endif  /* CONFIG_EXT2_FS_XATTR */
-+
-+# ifdef CONFIG_EXT2_FS_XATTR_USER
-+
-+extern int init_ext2_xattr_user(void) __init;
-+extern void exit_ext2_xattr_user(void);
-+
-+# else  /* CONFIG_EXT2_FS_XATTR_USER */
-+
-+static inline int
-+init_ext2_xattr_user(void)
-+{
-+	return 0;
-+}
-+
-+static inline void
-+exit_ext2_xattr_user(void)
-+{
-+}
-+
-+# endif  /* CONFIG_EXT2_FS_XATTR_USER */
-+
-+#endif  /* __KERNEL__ */
-+
-Index: linux-2.4.19-pre1/include/linux/ext3_fs.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/ext3_fs.h	2003-11-21 03:51:02.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/ext3_fs.h	2003-11-21 03:51:05.000000000 +0300
-@@ -63,8 +63,6 @@
-  */
- #define	EXT3_BAD_INO		 1	/* Bad blocks inode */
- #define EXT3_ROOT_INO		 2	/* Root inode */
--#define EXT3_ACL_IDX_INO	 3	/* ACL inode */
--#define EXT3_ACL_DATA_INO	 4	/* ACL inode */
- #define EXT3_BOOT_LOADER_INO	 5	/* Boot loader inode */
- #define EXT3_UNDEL_DIR_INO	 6	/* Undelete directory inode */
- #define EXT3_RESIZE_INO		 7	/* Reserved group descriptors inode */
-@@ -94,7 +92,6 @@
- #else
- # define EXT3_BLOCK_SIZE(s)		(EXT3_MIN_BLOCK_SIZE << (s)->s_log_block_size)
- #endif
--#define EXT3_ACLE_PER_BLOCK(s)		(EXT3_BLOCK_SIZE(s) / sizeof (struct ext3_acl_entry))
- #define	EXT3_ADDR_PER_BLOCK(s)		(EXT3_BLOCK_SIZE(s) / sizeof (__u32))
- #ifdef __KERNEL__
- # define EXT3_BLOCK_SIZE_BITS(s)	((s)->s_blocksize_bits)
-@@ -129,28 +126,6 @@
- #endif
- 
- /*
-- * ACL structures
-- */
--struct ext3_acl_header	/* Header of Access Control Lists */
--{
--	__u32	aclh_size;
--	__u32	aclh_file_count;
--	__u32	aclh_acle_count;
--	__u32	aclh_first_acle;
--};
--
--struct ext3_acl_entry	/* Access Control List Entry */
--{
--	__u32	acle_size;
--	__u16	acle_perms;	/* Access permissions */
--	__u16	acle_type;	/* Type of entry */
--	__u16	acle_tag;	/* User or group identity */
--	__u16	acle_pad1;
--	__u32	acle_next;	/* Pointer on next entry for the */
--					/* same inode or on next free entry */
--};
--
--/*
-  * Structure of a blocks group descriptor
-  */
- struct ext3_group_desc
-@@ -344,6 +319,7 @@
-   #define EXT3_MOUNT_WRITEBACK_DATA	0x0C00	/* No data ordering */
- #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
- #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
-+#define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
- 
- /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
- #ifndef _LINUX_EXT2_FS_H
-@@ -520,7 +496,7 @@
- #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
- #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
- 
--#define EXT3_FEATURE_COMPAT_SUPP	0
-+#define EXT3_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
- #define EXT3_FEATURE_INCOMPAT_SUPP	(EXT3_FEATURE_INCOMPAT_FILETYPE| \
- 					 EXT3_FEATURE_INCOMPAT_RECOVER)
- #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
-@@ -703,6 +679,7 @@
- extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
- 
- /* inode.c */
-+extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
- extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
- extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
- 
-@@ -771,8 +748,10 @@
- 
- /* namei.c */
- extern struct inode_operations ext3_dir_inode_operations;
-+extern struct inode_operations ext3_special_inode_operations;
- 
- /* symlink.c */
-+extern struct inode_operations ext3_symlink_inode_operations;
- extern struct inode_operations ext3_fast_symlink_inode_operations;
- 
- 
-Index: linux-2.4.19-pre1/include/linux/ext3_jbd.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/ext3_jbd.h	2003-11-21 03:51:02.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/ext3_jbd.h	2003-11-21 03:51:05.000000000 +0300
-@@ -30,13 +30,19 @@
- 
- #define EXT3_SINGLEDATA_TRANS_BLOCKS	8
- 
-+/* Extended attributes may touch two data buffers, two bitmap buffers,
-+ * and two group and summaries. */
-+
-+#define EXT3_XATTR_TRANS_BLOCKS		8
-+
- /* Define the minimum size for a transaction which modifies data.  This
-  * needs to take into account the fact that we may end up modifying two
-  * quota files too (one for the group, one for the user quota).  The
-  * superblock only gets updated once, of course, so don't bother
-  * counting that again for the quota updates. */
- 
--#define EXT3_DATA_TRANS_BLOCKS		(3 * EXT3_SINGLEDATA_TRANS_BLOCKS - 2)
-+#define EXT3_DATA_TRANS_BLOCKS		(3 * EXT3_SINGLEDATA_TRANS_BLOCKS + \
-+					 EXT3_XATTR_TRANS_BLOCKS - 2)
- 
- extern int ext3_writepage_trans_blocks(struct inode *inode);
- 
-Index: linux-2.4.19-pre1/include/linux/ext3_xattr.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/ext3_xattr.h	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/ext3_xattr.h	2003-11-21 03:51:05.000000000 +0300
-@@ -0,0 +1,157 @@
-+/*
-+  File: linux/ext3_xattr.h
-+
-+  On-disk format of extended attributes for the ext3 filesystem.
-+
-+  (C) 2001 Andreas Gruenbacher, <a.gruenbacher@computer.org>
-+*/
-+
-+#include <linux/config.h>
-+#include <linux/init.h>
-+#include <linux/xattr.h>
-+
-+/* Magic value in attribute blocks */
-+#define EXT3_XATTR_MAGIC		0xEA020000
-+
-+/* Maximum number of references to one attribute block */
-+#define EXT3_XATTR_REFCOUNT_MAX		1024
-+
-+/* Name indexes */
-+#define EXT3_XATTR_INDEX_MAX			10
-+#define EXT3_XATTR_INDEX_USER			1
-+#define EXT3_XATTR_INDEX_POSIX_ACL_ACCESS	2
-+#define EXT3_XATTR_INDEX_POSIX_ACL_DEFAULT	3
-+
-+struct ext3_xattr_header {
-+	__u32	h_magic;	/* magic number for identification */
-+	__u32	h_refcount;	/* reference count */
-+	__u32	h_blocks;	/* number of disk blocks used */
-+	__u32	h_hash;		/* hash value of all attributes */
-+	__u32	h_reserved[4];	/* zero right now */
-+};
-+
-+struct ext3_xattr_entry {
-+	__u8	e_name_len;	/* length of name */
-+	__u8	e_name_index;	/* attribute name index */
-+	__u16	e_value_offs;	/* offset in disk block of value */
-+	__u32	e_value_block;	/* disk block attribute is stored on (n/i) */
-+	__u32	e_value_size;	/* size of attribute value */
-+	__u32	e_hash;		/* hash value of name and value */
-+	char	e_name[0];	/* attribute name */
-+};
-+
-+#define EXT3_XATTR_PAD_BITS		2
-+#define EXT3_XATTR_PAD		(1<<EXT3_XATTR_PAD_BITS)
-+#define EXT3_XATTR_ROUND		(EXT3_XATTR_PAD-1)
-+#define EXT3_XATTR_LEN(name_len) \
-+	(((name_len) + EXT3_XATTR_ROUND + \
-+	sizeof(struct ext3_xattr_entry)) & ~EXT3_XATTR_ROUND)
-+#define EXT3_XATTR_NEXT(entry) \
-+	( (struct ext3_xattr_entry *)( \
-+	  (char *)(entry) + EXT3_XATTR_LEN((entry)->e_name_len)) )
-+#define EXT3_XATTR_SIZE(size) \
-+	(((size) + EXT3_XATTR_ROUND) & ~EXT3_XATTR_ROUND)
-+
-+#ifdef __KERNEL__
-+
-+# ifdef CONFIG_EXT3_FS_XATTR
-+
-+struct ext3_xattr_handler {
-+	char *prefix;
-+	size_t (*list)(char *list, struct inode *inode, const char *name,
-+		       int name_len);
-+	int (*get)(struct inode *inode, const char *name, void *buffer,
-+		   size_t size);
-+	int (*set)(struct inode *inode, const char *name, const void *buffer,
-+		   size_t size, int flags);
-+};
-+
-+extern int ext3_xattr_register(int, struct ext3_xattr_handler *);
-+extern void ext3_xattr_unregister(int, struct ext3_xattr_handler *);
-+
-+extern int ext3_setxattr(struct dentry *, const char *, const void *, size_t, int);
-+extern ssize_t ext3_getxattr(struct dentry *, const char *, void *, size_t);
-+extern ssize_t ext3_listxattr(struct dentry *, char *, size_t);
-+extern int ext3_removexattr(struct dentry *, const char *);
-+
-+extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
-+extern int ext3_xattr_list(struct inode *, char *, size_t);
-+extern int ext3_xattr_set(handle_t *handle, struct inode *, int, const char *, const void *, size_t, int);
-+
-+extern void ext3_xattr_delete_inode(handle_t *, struct inode *);
-+extern void ext3_xattr_put_super(struct super_block *);
-+
-+extern int init_ext3_xattr(void) __init;
-+extern void exit_ext3_xattr(void);
-+
-+# else  /* CONFIG_EXT3_FS_XATTR */
-+#  define ext3_setxattr		NULL
-+#  define ext3_getxattr		NULL
-+#  define ext3_listxattr	NULL
-+#  define ext3_removexattr	NULL
-+
-+static inline int
-+ext3_xattr_get(struct inode *inode, int name_index, const char *name,
-+	       void *buffer, size_t size)
-+{
-+	return -ENOTSUP;
-+}
-+
-+static inline int
-+ext3_xattr_list(struct inode *inode, void *buffer, size_t size)
-+{
-+	return -ENOTSUP;
-+}
-+
-+static inline int
-+ext3_xattr_set(handle_t *handle, struct inode *inode, int name_index,
-+	       const char *name, const void *value, size_t size, int flags)
-+{
-+	return -ENOTSUP;
-+}
-+
-+static inline void
-+ext3_xattr_delete_inode(handle_t *handle, struct inode *inode)
-+{
-+}
-+
-+static inline void
-+ext3_xattr_put_super(struct super_block *sb)
-+{
-+}
-+
-+static inline int
-+init_ext3_xattr(void)
-+{
-+	return 0;
-+}
-+
-+static inline void
-+exit_ext3_xattr(void)
-+{
-+}
-+
-+# endif  /* CONFIG_EXT3_FS_XATTR */
-+
-+# ifdef CONFIG_EXT3_FS_XATTR_USER
-+
-+extern int init_ext3_xattr_user(void) __init;
-+extern void exit_ext3_xattr_user(void);
-+
-+# else  /* CONFIG_EXT3_FS_XATTR_USER */
-+
-+static inline int
-+init_ext3_xattr_user(void)
-+{
-+	return 0;
-+}
-+
-+static inline void
-+exit_ext3_xattr_user(void)
-+{
-+}
-+
-+#endif  /* CONFIG_EXT3_FS_XATTR_USER */
-+
-+#endif  /* __KERNEL__ */
-+
-Index: linux-2.4.19-pre1/include/linux/fs.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/fs.h	2003-11-21 03:51:00.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/fs.h	2003-11-21 03:51:05.000000000 +0300
-@@ -872,6 +872,10 @@
- 	int (*setattr) (struct dentry *, struct iattr *);
- 	int (*setattr_raw) (struct inode *, struct iattr *);
- 	int (*getattr) (struct dentry *, struct iattr *);
-+	int (*setxattr) (struct dentry *, const char *, const void *, size_t, int);
-+	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-+	ssize_t (*listxattr) (struct dentry *, char *, size_t);
-+	int (*removexattr) (struct dentry *, const char *);
- };
- 
- struct seq_file;
-Index: linux-2.4.19-pre1/include/linux/mbcache.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/mbcache.h	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/mbcache.h	2003-11-21 03:51:05.000000000 +0300
-@@ -0,0 +1,69 @@
-+/*
-+  File: linux/mbcache.h
-+
-+  (C) 2001 by Andreas Gruenbacher, <a.gruenbacher@computer.org>
-+*/
-+
-+/* Hardwire the number of additional indexes */
-+#define MB_CACHE_INDEXES_COUNT 1
-+
-+struct mb_cache_entry;
-+
-+struct mb_cache_op {
-+	int (*free)(struct mb_cache_entry *, int);
-+};
-+
-+struct mb_cache {
-+	struct list_head		c_cache_list;
-+	const char			*c_name;
-+	struct mb_cache_op		c_op;
-+	atomic_t			c_entry_count;
-+	int				c_bucket_count;
-+#ifndef MB_CACHE_INDEXES_COUNT
-+	int				c_indexes_count;
-+#endif
-+	kmem_cache_t			*c_entry_cache;
-+	struct list_head		*c_block_hash;
-+	struct list_head		*c_indexes_hash[0];
-+};
-+
-+struct mb_cache_entry_index {
-+	struct list_head		o_list;
-+	unsigned int			o_key;
-+};
-+
-+struct mb_cache_entry {
-+	struct list_head		e_lru_list;
-+	struct mb_cache			*e_cache;
-+	atomic_t			e_used;
-+	kdev_t				e_dev;
-+	unsigned long			e_block;
-+	struct list_head		e_block_list;
-+	struct mb_cache_entry_index	e_indexes[0];
-+};
-+
-+/* Functions on caches */
-+
-+struct mb_cache * mb_cache_create(const char *, struct mb_cache_op *, size_t,
-+				  int, int);
-+void mb_cache_shrink(struct mb_cache *, kdev_t);
-+void mb_cache_destroy(struct mb_cache *);
-+
-+/* Functions on cache entries */
-+
-+struct mb_cache_entry *mb_cache_entry_alloc(struct mb_cache *);
-+int mb_cache_entry_insert(struct mb_cache_entry *, kdev_t, unsigned long,
-+			  unsigned int[]);
-+void mb_cache_entry_rehash(struct mb_cache_entry *, unsigned int[]);
-+void mb_cache_entry_release(struct mb_cache_entry *);
-+void mb_cache_entry_takeout(struct mb_cache_entry *);
-+void mb_cache_entry_free(struct mb_cache_entry *);
-+struct mb_cache_entry *mb_cache_entry_dup(struct mb_cache_entry *);
-+struct mb_cache_entry *mb_cache_entry_get(struct mb_cache *, kdev_t,
-+					  unsigned long);
-+#if !defined(MB_CACHE_INDEXES_COUNT) || (MB_CACHE_INDEXES_COUNT > 0)
-+struct mb_cache_entry *mb_cache_entry_find_first(struct mb_cache *cache, int,
-+						 kdev_t, unsigned int);
-+struct mb_cache_entry *mb_cache_entry_find_next(struct mb_cache_entry *, int,
-+						kdev_t, unsigned int);
-+#endif
-Index: linux-2.4.19-pre1/kernel/ksyms.c
-===================================================================
---- linux-2.4.19-pre1.orig/kernel/ksyms.c	2003-11-21 03:50:59.000000000 +0300
-+++ linux-2.4.19-pre1/kernel/ksyms.c	2003-11-21 03:51:05.000000000 +0300
-@@ -11,6 +11,7 @@
- 
- #include <linux/config.h>
- #include <linux/slab.h>
-+#include <linux/cache_def.h>
- #include <linux/module.h>
- #include <linux/blkdev.h>
- #include <linux/cdrom.h>
-@@ -88,6 +89,7 @@
- EXPORT_SYMBOL(exit_files);
- EXPORT_SYMBOL(exit_fs);
- EXPORT_SYMBOL(exit_sighand);
-+EXPORT_SYMBOL(copy_fs_struct);
- 
- /* internal kernel memory management */
- EXPORT_SYMBOL(_alloc_pages);
-@@ -104,6 +106,8 @@
- EXPORT_SYMBOL(kmem_cache_shrink);
- EXPORT_SYMBOL(kmem_cache_alloc);
- EXPORT_SYMBOL(kmem_cache_free);
-+EXPORT_SYMBOL(register_cache);
-+EXPORT_SYMBOL(unregister_cache);
- EXPORT_SYMBOL(kmalloc);
- EXPORT_SYMBOL(kfree);
- EXPORT_SYMBOL(vfree);
-Index: linux-2.4.19-pre1/mm/vmscan.c
-===================================================================
---- linux-2.4.19-pre1.orig/mm/vmscan.c	2003-11-20 19:01:38.000000000 +0300
-+++ linux-2.4.19-pre1/mm/vmscan.c	2003-11-21 03:51:05.000000000 +0300
-@@ -15,6 +15,7 @@
- #include <linux/kernel_stat.h>
- #include <linux/swap.h>
- #include <linux/swapctl.h>
-+#include <linux/cache_def.h>
- #include <linux/smp_lock.h>
- #include <linux/pagemap.h>
- #include <linux/init.h>
-@@ -32,6 +33,39 @@
-  */
- #define DEF_PRIORITY (6)
- 
-+static DECLARE_MUTEX(other_caches_sem);
-+static LIST_HEAD(cache_definitions);
-+
-+void register_cache(struct cache_definition *cache)
-+{
-+	down(&other_caches_sem);
-+	list_add(&cache->link, &cache_definitions);
-+	up(&other_caches_sem);
-+}
-+
-+void unregister_cache(struct cache_definition *cache)
-+{
-+	down(&other_caches_sem);
-+	list_del(&cache->link);
-+	up(&other_caches_sem);
-+}
-+
-+static void shrink_other_caches(unsigned int priority, int gfp_mask)
-+{
-+	struct list_head *p;
-+
-+	if (down_trylock(&other_caches_sem))
-+		return;
-+
-+	list_for_each_prev(p, &cache_definitions) {
-+		struct cache_definition *cache =
-+			list_entry(p, struct cache_definition, link);
-+
-+		cache->shrink(priority, gfp_mask);
-+	}
-+	up(&other_caches_sem);
-+}
-+
- /*
-  * The swap-out function returns 1 if it successfully
-  * scanned all the pages it was asked to (`count').
-@@ -578,6 +612,7 @@
- 
- 	shrink_dcache_memory(priority, gfp_mask);
- 	shrink_icache_memory(priority, gfp_mask);
-+	shrink_other_caches(priority, gfp_mask);
- #ifdef CONFIG_QUOTA
- 	shrink_dqcache_memory(DEF_PRIORITY, gfp_mask);
- #endif
-Index: linux-2.4.19-pre1/fs/ext3/ext3-exports.c
-===================================================================
---- linux-2.4.19-pre1.orig/fs/ext3/ext3-exports.c	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/fs/ext3/ext3-exports.c	2003-11-21 03:51:05.000000000 +0300
-@@ -0,0 +1,13 @@
-+#include <linux/config.h>
-+#include <linux/module.h>
-+#include <linux/ext3_fs.h>
-+#include <linux/ext3_jbd.h>
-+#include <linux/ext3_xattr.h>
-+
-+EXPORT_SYMBOL(ext3_force_commit);
-+EXPORT_SYMBOL(ext3_bread);
-+EXPORT_SYMBOL(ext3_xattr_register);
-+EXPORT_SYMBOL(ext3_xattr_unregister);
-+EXPORT_SYMBOL(ext3_xattr_get);
-+EXPORT_SYMBOL(ext3_xattr_list);
-+EXPORT_SYMBOL(ext3_xattr_set);
-Index: linux-2.4.19-pre1/include/linux/xattr.h
-===================================================================
---- linux-2.4.19-pre1.orig/include/linux/xattr.h	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/xattr.h	2003-11-21 03:51:05.000000000 +0300
-@@ -0,0 +1,15 @@
-+/*
-+  File: linux/xattr.h
-+
-+  Extended attributes handling.
-+
-+  Copyright (C) 2001 by Andreas Gruenbacher <a.gruenbacher@computer.org>
-+  Copyright (c) 2001-2002 Silicon Graphics, Inc.  All Rights Reserved.
-+*/
-+#ifndef _LINUX_XATTR_H
-+#define _LINUX_XATTR_H
-+
-+#define XATTR_CREATE	0x1	/* set the value, fail if attr already exists */
-+#define XATTR_REPLACE	0x2	/* set the value, fail if attr does not exist */
-+
-+#endif	/* _LINUX_XATTR_H */
-Index: linux-2.4.19-pre1/arch/i386/kernel/entry.S
-===================================================================
---- linux-2.4.19-pre1.orig/arch/i386/kernel/entry.S	2003-11-21 03:38:55.000000000 +0300
-+++ linux-2.4.19-pre1/arch/i386/kernel/entry.S	2003-11-21 03:51:05.000000000 +0300
-@@ -622,18 +622,18 @@
- 	.long SYMBOL_NAME(sys_ni_syscall)	/* Reserved for Security */
- 	.long SYMBOL_NAME(sys_gettid)
- 	.long SYMBOL_NAME(sys_readahead)	/* 225 */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for setxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for lsetxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for fsetxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for getxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* 230 reserved for lgetxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for fgetxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for listxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for llistxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for flistxattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* 235 reserved for removexattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for lremovexattr */
--	.long SYMBOL_NAME(sys_ni_syscall)	/* reserved for fremovexattr */
-+	.long SYMBOL_NAME(sys_setxattr)
-+	.long SYMBOL_NAME(sys_lsetxattr)
-+	.long SYMBOL_NAME(sys_fsetxattr)
-+	.long SYMBOL_NAME(sys_getxattr)
-+	.long SYMBOL_NAME(sys_lgetxattr)	/* 230 */
-+	.long SYMBOL_NAME(sys_fgetxattr)
-+	.long SYMBOL_NAME(sys_listxattr)
-+	.long SYMBOL_NAME(sys_llistxattr)
-+	.long SYMBOL_NAME(sys_flistxattr)
-+	.long SYMBOL_NAME(sys_removexattr)	/* 235 */
-+	.long SYMBOL_NAME(sys_lremovexattr)
-+	.long SYMBOL_NAME(sys_fremovexattr)
- 
- 	.rept NR_syscalls-(.-sys_call_table)/4
- 		.long SYMBOL_NAME(sys_ni_syscall)
 Index: linux-2.4.19-pre1/fs/xattr.c
 ===================================================================
---- linux-2.4.19-pre1.orig/fs/xattr.c	2003-11-21 03:51:05.000000000 +0300
-+++ linux-2.4.19-pre1/fs/xattr.c	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/fs/xattr.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/fs/xattr.c	2004-01-14 01:11:49.000000000 +0300
 @@ -0,0 +1,355 @@
 +/*
 +  File: fs/xattr.c
@@ -6024,10 +5098,847 @@ Index: linux-2.4.19-pre1/fs/xattr.c
 +	fput(f);
 +	return error;
 +}
+Index: linux-2.4.19-pre1/include/asm-arm/unistd.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/asm-arm/unistd.h	2001-08-12 22:14:00.000000000 +0400
++++ linux-2.4.19-pre1/include/asm-arm/unistd.h	2004-01-14 01:11:49.000000000 +0300
+@@ -240,6 +240,18 @@
+ #define __NR_mincore			(__NR_SYSCALL_BASE+219)
+ #define __NR_madvise			(__NR_SYSCALL_BASE+220)
+ #define __NR_fcntl64			(__NR_SYSCALL_BASE+221)
++#define __NR_setxattr			(__NR_SYSCALL_BASE+226)
++#define __NR_lsetxattr			(__NR_SYSCALL_BASE+227)
++#define __NR_fsetxattr			(__NR_SYSCALL_BASE+228)
++#define __NR_getxattr			(__NR_SYSCALL_BASE+229)
++#define __NR_lgetxattr			(__NR_SYSCALL_BASE+230)
++#define __NR_fgetxattr			(__NR_SYSCALL_BASE+231)
++#define __NR_listxattr			(__NR_SYSCALL_BASE+232)
++#define __NR_llistxattr			(__NR_SYSCALL_BASE+233)
++#define __NR_flistxattr			(__NR_SYSCALL_BASE+234)
++#define __NR_removexattr		(__NR_SYSCALL_BASE+235)
++#define __NR_lremovexattr		(__NR_SYSCALL_BASE+236)
++#define __NR_fremovexattr		(__NR_SYSCALL_BASE+237)
+ 
+ /*
+  * The following SWIs are ARM private.
+Index: linux-2.4.19-pre1/include/asm-ia64/unistd.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/asm-ia64/unistd.h	2001-11-10 01:26:17.000000000 +0300
++++ linux-2.4.19-pre1/include/asm-ia64/unistd.h	2004-01-14 01:11:49.000000000 +0300
+@@ -206,6 +206,18 @@
+ #define __NR_getdents64			1214
+ #define __NR_getunwind			1215
+ #define __NR_readahead			1216
++#define __NR_setxattr			1217
++#define __NR_lsetxattr			1218
++#define __NR_fsetxattr			1219
++#define __NR_getxattr			1220
++#define __NR_lgetxattr			1221
++#define __NR_fgetxattr			1222
++#define __NR_listxattr			1223
++#define __NR_llistxattr			1224
++#define __NR_flistxattr			1225
++#define __NR_removexattr		1226
++#define __NR_lremovexattr		1227
++#define __NR_fremovexattr		1228
+ 
+ #if !defined(__ASSEMBLY__) && !defined(ASSEMBLER)
+ 
+Index: linux-2.4.19-pre1/include/asm-s390/unistd.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/asm-s390/unistd.h	2001-10-11 20:43:38.000000000 +0400
++++ linux-2.4.19-pre1/include/asm-s390/unistd.h	2004-01-14 01:11:49.000000000 +0300
+@@ -211,6 +211,18 @@
+ #define __NR_mincore            218
+ #define __NR_madvise            219
+ #define __NR_getdents64		220
++#define __NR_setxattr		224
++#define __NR_lsetxattr		225
++#define __NR_fsetxattr		226
++#define __NR_getxattr		227
++#define __NR_lgetxattr		228
++#define __NR_fgetxattr		229
++#define __NR_listxattr		230
++#define __NR_llistxattr		231
++#define __NR_flistxattr		232
++#define __NR_removexattr	233
++#define __NR_lremovexattr	234
++#define __NR_fremovexattr	235
+ 
+ 
+ /* user-visible error numbers are in the range -1 - -122: see <asm-s390/errno.h> */
+Index: linux-2.4.19-pre1/include/asm-s390x/unistd.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/asm-s390x/unistd.h	2001-10-11 20:43:38.000000000 +0400
++++ linux-2.4.19-pre1/include/asm-s390x/unistd.h	2004-01-14 01:11:49.000000000 +0300
+@@ -181,6 +181,18 @@
+ #define __NR_mincore            218
+ #define __NR_madvise            219
+ #define __NR_getdents64         220
++#define __NR_setxattr		224
++#define __NR_lsetxattr		225
++#define __NR_fsetxattr		226
++#define __NR_getxattr		227
++#define __NR_lgetxattr		228
++#define __NR_fgetxattr		229
++#define __NR_listxattr		230
++#define __NR_llistxattr		231
++#define __NR_flistxattr		232
++#define __NR_removexattr	233
++#define __NR_lremovexattr	234
++#define __NR_fremovexattr	235
+ 
+ 
+ /* user-visible error numbers are in the range -1 - -122: see <asm-s390/errno.h> */
+Index: linux-2.4.19-pre1/include/asm-sparc/unistd.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/asm-sparc/unistd.h	2001-10-21 21:36:54.000000000 +0400
++++ linux-2.4.19-pre1/include/asm-sparc/unistd.h	2004-01-14 01:11:49.000000000 +0300
+@@ -184,24 +184,24 @@
+ /* #define __NR_exportfs        166    SunOS Specific                              */
+ #define __NR_mount              167 /* Common                                      */
+ #define __NR_ustat              168 /* Common                                      */
+-/* #define __NR_semsys          169    SunOS Specific                              */
+-/* #define __NR_msgsys          170    SunOS Specific                              */
+-/* #define __NR_shmsys          171    SunOS Specific                              */
+-/* #define __NR_auditsys        172    SunOS Specific                              */
+-/* #define __NR_rfssys          173    SunOS Specific                              */
++#define __NR_setxattr           169 /* SunOS: semsys                               */
++#define __NR_lsetxattr          170 /* SunOS: msgsys                               */
++#define __NR_fsetxattr          171 /* SunOS: shmsys                               */
++#define __NR_getxattr           172 /* SunOS: auditsys                             */
++#define __NR_lgetxattr          173 /* SunOS: rfssys                               */
+ #define __NR_getdents           174 /* Common                                      */
+ #define __NR_setsid             175 /* Common                                      */
+ #define __NR_fchdir             176 /* Common                                      */
+-/* #define __NR_fchroot         177    SunOS Specific                              */
+-/* #define __NR_vpixsys         178    SunOS Specific                              */
+-/* #define __NR_aioread         179    SunOS Specific                              */
+-/* #define __NR_aiowrite        180    SunOS Specific                              */
+-/* #define __NR_aiowait         181    SunOS Specific                              */
+-/* #define __NR_aiocancel       182    SunOS Specific                              */
++#define __NR_fgetxattr          177 /* SunOS: fchroot                              */
++#define __NR_listxattr          178 /* SunOS: vpixsys                              */
++#define __NR_llistxattr         179 /* SunOS: aioread                              */
++#define __NR_flistxattr         180 /* SunOS: aiowrite                             */
++#define __NR_removexattr        181 /* SunOS: aiowait                              */
++#define __NR_lremovexattr       182 /* SunOS: aiocancel                            */
+ #define __NR_sigpending         183 /* Common                                      */
+ #define __NR_query_module	184 /* Linux Specific				   */
+ #define __NR_setpgid            185 /* Common                                      */
+-/* #define __NR_pathconf        186    SunOS Specific                              */
++#define __NR_fremovexattr       186 /* SunOS: pathconf                             */
+ /* #define __NR_fpathconf       187    SunOS Specific                              */
+ /* #define __NR_sysconf         188    SunOS Specific                              */
+ #define __NR_uname              189 /* Linux Specific                              */
+Index: linux-2.4.19-pre1/include/asm-sparc64/unistd.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/asm-sparc64/unistd.h	2001-10-21 21:36:54.000000000 +0400
++++ linux-2.4.19-pre1/include/asm-sparc64/unistd.h	2004-01-14 01:11:49.000000000 +0300
+@@ -184,24 +184,24 @@
+ /* #define __NR_exportfs        166    SunOS Specific                              */
+ #define __NR_mount              167 /* Common                                      */
+ #define __NR_ustat              168 /* Common                                      */
+-/* #define __NR_semsys          169    SunOS Specific                              */
+-/* #define __NR_msgsys          170    SunOS Specific                              */
+-/* #define __NR_shmsys          171    SunOS Specific                              */
+-/* #define __NR_auditsys        172    SunOS Specific                              */
+-/* #define __NR_rfssys          173    SunOS Specific                              */
++#define __NR_setxattr           169 /* SunOS: semsys                               */
++#define __NR_lsetxattr          170 /* SunOS: msgsys                               */
++#define __NR_fsetxattr          171 /* SunOS: shmsys                               */
++#define __NR_getxattr           172 /* SunOS: auditsys                             */
++#define __NR_lgetxattr          173 /* SunOS: rfssys                               */
+ #define __NR_getdents           174 /* Common                                      */
+ #define __NR_setsid             175 /* Common                                      */
+ #define __NR_fchdir             176 /* Common                                      */
+-/* #define __NR_fchroot         177    SunOS Specific                              */
+-/* #define __NR_vpixsys         178    SunOS Specific                              */
+-/* #define __NR_aioread         179    SunOS Specific                              */
+-/* #define __NR_aiowrite        180    SunOS Specific                              */
+-/* #define __NR_aiowait         181    SunOS Specific                              */
+-/* #define __NR_aiocancel       182    SunOS Specific                              */
++#define __NR_fgetxattr          177 /* SunOS: fchroot                              */
++#define __NR_listxattr          178 /* SunOS: vpixsys                              */
++#define __NR_llistxattr         179 /* SunOS: aioread                              */
++#define __NR_flistxattr         180 /* SunOS: aiowrite                             */
++#define __NR_removexattr        181 /* SunOS: aiowait                              */
++#define __NR_lremovexattr       182 /* SunOS: aiocancel                            */
+ #define __NR_sigpending         183 /* Common                                      */
+ #define __NR_query_module	184 /* Linux Specific				   */
+ #define __NR_setpgid            185 /* Common                                      */
+-/* #define __NR_pathconf        186    SunOS Specific                              */
++#define __NR_fremovexattr       186 /* SunOS: pathconf                             */
+ /* #define __NR_fpathconf       187    SunOS Specific                              */
+ /* #define __NR_sysconf         188    SunOS Specific                              */
+ #define __NR_uname              189 /* Linux Specific                              */
+Index: linux-2.4.19-pre1/include/linux/cache_def.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/cache_def.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/cache_def.h	2004-01-14 01:11:49.000000000 +0300
+@@ -0,0 +1,15 @@
++/*
++ * linux/cache_def.h
++ * Handling of caches defined in drivers, filesystems, ...
++ *
++ * Copyright (C) 2002 by Andreas Gruenbacher, <a.gruenbacher@computer.org>
++ */
++
++struct cache_definition {
++	const char *name;
++	void (*shrink)(int, unsigned int);
++	struct list_head link;
++};
++
++extern void register_cache(struct cache_definition *);
++extern void unregister_cache(struct cache_definition *);
+Index: linux-2.4.19-pre1/include/linux/errno.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/errno.h	2001-02-10 01:46:13.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/errno.h	2004-01-14 01:11:49.000000000 +0300
+@@ -23,4 +23,8 @@
+ 
+ #endif
+ 
++/* Defined for extended attributes */
++#define ENOATTR ENODATA		/* No such attribute */
++#define ENOTSUP EOPNOTSUPP	/* Operation not supported */
++
+ #endif
+Index: linux-2.4.19-pre1/include/linux/ext2_fs.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/ext2_fs.h	2001-11-22 22:46:52.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/ext2_fs.h	2004-01-14 01:18:00.000000000 +0300
+@@ -57,8 +57,6 @@
+  */
+ #define	EXT2_BAD_INO		 1	/* Bad blocks inode */
+ #define EXT2_ROOT_INO		 2	/* Root inode */
+-#define EXT2_ACL_IDX_INO	 3	/* ACL inode */
+-#define EXT2_ACL_DATA_INO	 4	/* ACL inode */
+ #define EXT2_BOOT_LOADER_INO	 5	/* Boot loader inode */
+ #define EXT2_UNDEL_DIR_INO	 6	/* Undelete directory inode */
+ 
+@@ -86,7 +84,6 @@
+ #else
+ # define EXT2_BLOCK_SIZE(s)		(EXT2_MIN_BLOCK_SIZE << (s)->s_log_block_size)
+ #endif
+-#define EXT2_ACLE_PER_BLOCK(s)		(EXT2_BLOCK_SIZE(s) / sizeof (struct ext2_acl_entry))
+ #define	EXT2_ADDR_PER_BLOCK(s)		(EXT2_BLOCK_SIZE(s) / sizeof (__u32))
+ #ifdef __KERNEL__
+ # define EXT2_BLOCK_SIZE_BITS(s)	((s)->s_blocksize_bits)
+@@ -121,28 +118,6 @@
+ #endif
+ 
+ /*
+- * ACL structures
+- */
+-struct ext2_acl_header	/* Header of Access Control Lists */
+-{
+-	__u32	aclh_size;
+-	__u32	aclh_file_count;
+-	__u32	aclh_acle_count;
+-	__u32	aclh_first_acle;
+-};
+-
+-struct ext2_acl_entry	/* Access Control List Entry */
+-{
+-	__u32	acle_size;
+-	__u16	acle_perms;	/* Access permissions */
+-	__u16	acle_type;	/* Type of entry */
+-	__u16	acle_tag;	/* User or group identity */
+-	__u16	acle_pad1;
+-	__u32	acle_next;	/* Pointer on next entry for the */
+-					/* same inode or on next free entry */
+-};
+-
+-/*
+  * Structure of a blocks group descriptor
+  */
+ struct ext2_group_desc
+@@ -314,6 +289,7 @@
+ #define EXT2_MOUNT_ERRORS_PANIC		0x0040	/* Panic on errors */
+ #define EXT2_MOUNT_MINIX_DF		0x0080	/* Mimics the Minix statfs */
+ #define EXT2_MOUNT_NO_UID32		0x0200  /* Disable 32-bit UIDs */
++#define EXT2_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
+ 
+ #define clear_opt(o, opt)		o &= ~EXT2_MOUNT_##opt
+ #define set_opt(o, opt)			o |= EXT2_MOUNT_##opt
+@@ -397,6 +373,7 @@
+ 
+ #ifdef __KERNEL__
+ #define EXT2_SB(sb)	(&((sb)->u.ext2_sb))
++#define EXT2_I(inode)	(&((inode)->u.ext2_i))
+ #else
+ /* Assume that user mode programs are passing in an ext2fs superblock, not
+  * a kernel struct super_block.  This will allow us to call the feature-test
+@@ -466,7 +443,7 @@
+ #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008
+ #define EXT2_FEATURE_INCOMPAT_ANY		0xffffffff
+ 
+-#define EXT2_FEATURE_COMPAT_SUPP	0
++#define EXT2_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
+ #define EXT2_FEATURE_INCOMPAT_SUPP	EXT2_FEATURE_INCOMPAT_FILETYPE
+ #define EXT2_FEATURE_RO_COMPAT_SUPP	(EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER| \
+ 					 EXT2_FEATURE_RO_COMPAT_LARGE_FILE| \
+@@ -623,8 +600,10 @@
+ 
+ /* namei.c */
+ extern struct inode_operations ext2_dir_inode_operations;
++extern struct inode_operations ext2_special_inode_operations;
+ 
+ /* symlink.c */
++extern struct inode_operations ext2_symlink_inode_operations;
+ extern struct inode_operations ext2_fast_symlink_inode_operations;
+ 
+ #endif	/* __KERNEL__ */
+Index: linux-2.4.19-pre1/include/linux/ext2_xattr.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/ext2_xattr.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/ext2_xattr.h	2004-01-14 01:18:01.000000000 +0300
+@@ -0,0 +1,157 @@
++/*
++  File: linux/ext2_xattr.h
++
++  On-disk format of extended attributes for the ext2 filesystem.
++
++  (C) 2001 Andreas Gruenbacher, <a.gruenbacher@computer.org>
++*/
++
++#include <linux/config.h>
++#include <linux/init.h>
++#include <linux/xattr.h>
++
++/* Magic value in attribute blocks */
++#define EXT2_XATTR_MAGIC		0xEA020000
++
++/* Maximum number of references to one attribute block */
++#define EXT2_XATTR_REFCOUNT_MAX		1024
++
++/* Name indexes */
++#define EXT2_XATTR_INDEX_MAX			10
++#define EXT2_XATTR_INDEX_USER			1
++#define EXT2_XATTR_INDEX_POSIX_ACL_ACCESS	2
++#define EXT2_XATTR_INDEX_POSIX_ACL_DEFAULT	3
++
++struct ext2_xattr_header {
++	__u32	h_magic;	/* magic number for identification */
++	__u32	h_refcount;	/* reference count */
++	__u32	h_blocks;	/* number of disk blocks used */
++	__u32	h_hash;		/* hash value of all attributes */
++	__u32	h_reserved[4];	/* zero right now */
++};
++
++struct ext2_xattr_entry {
++	__u8	e_name_len;	/* length of name */
++	__u8	e_name_index;	/* attribute name index */
++	__u16	e_value_offs;	/* offset in disk block of value */
++	__u32	e_value_block;	/* disk block attribute is stored on (n/i) */
++	__u32	e_value_size;	/* size of attribute value */
++	__u32	e_hash;		/* hash value of name and value */
++	char	e_name[0];	/* attribute name */
++};
++
++#define EXT2_XATTR_PAD_BITS		2
++#define EXT2_XATTR_PAD		(1<<EXT2_XATTR_PAD_BITS)
++#define EXT2_XATTR_ROUND		(EXT2_XATTR_PAD-1)
++#define EXT2_XATTR_LEN(name_len) \
++	(((name_len) + EXT2_XATTR_ROUND + \
++	sizeof(struct ext2_xattr_entry)) & ~EXT2_XATTR_ROUND)
++#define EXT2_XATTR_NEXT(entry) \
++	( (struct ext2_xattr_entry *)( \
++	  (char *)(entry) + EXT2_XATTR_LEN((entry)->e_name_len)) )
++#define EXT2_XATTR_SIZE(size) \
++	(((size) + EXT2_XATTR_ROUND) & ~EXT2_XATTR_ROUND)
++
++#ifdef __KERNEL__
++
++# ifdef CONFIG_EXT2_FS_XATTR
++
++struct ext2_xattr_handler {
++	char *prefix;
++	size_t (*list)(char *list, struct inode *inode, const char *name,
++		       int name_len);
++	int (*get)(struct inode *inode, const char *name, void *buffer,
++		   size_t size);
++	int (*set)(struct inode *inode, const char *name, const void *buffer,
++		   size_t size, int flags);
++};
++
++extern int ext2_xattr_register(int, struct ext2_xattr_handler *);
++extern void ext2_xattr_unregister(int, struct ext2_xattr_handler *);
++
++extern int ext2_setxattr(struct dentry *, const char *, const void *, size_t, int);
++extern ssize_t ext2_getxattr(struct dentry *, const char *, void *, size_t);
++extern ssize_t ext2_listxattr(struct dentry *, char *, size_t);
++extern int ext2_removexattr(struct dentry *, const char *);
++
++extern int ext2_xattr_get(struct inode *, int, const char *, void *, size_t);
++extern int ext2_xattr_list(struct inode *, char *, size_t);
++extern int ext2_xattr_set(struct inode *, int, const char *, const void *, size_t, int);
++
++extern void ext2_xattr_delete_inode(struct inode *);
++extern void ext2_xattr_put_super(struct super_block *);
++
++extern int init_ext2_xattr(void) __init;
++extern void exit_ext2_xattr(void);
++
++# else  /* CONFIG_EXT2_FS_XATTR */
++#  define ext2_setxattr		NULL
++#  define ext2_getxattr		NULL
++#  define ext2_listxattr	NULL
++#  define ext2_removexattr	NULL
++
++static inline int
++ext2_xattr_get(struct inode *inode, int name_index,
++	       const char *name, void *buffer, size_t size)
++{
++	return -ENOTSUP;
++}
++
++static inline int
++ext2_xattr_list(struct inode *inode, char *buffer, size_t size)
++{
++	return -ENOTSUP;
++}
++
++static inline int
++ext2_xattr_set(struct inode *inode, int name_index, const char *name,
++	       const void *value, size_t size, int flags)
++{
++	return -ENOTSUP;
++}
++
++static inline void
++ext2_xattr_delete_inode(struct inode *inode)
++{
++}
++
++static inline void
++ext2_xattr_put_super(struct super_block *sb)
++{
++}
++
++static inline int
++init_ext2_xattr(void)
++{
++	return 0;
++}
++
++static inline void
++exit_ext2_xattr(void)
++{
++}
++
++# endif  /* CONFIG_EXT2_FS_XATTR */
++
++# ifdef CONFIG_EXT2_FS_XATTR_USER
++
++extern int init_ext2_xattr_user(void) __init;
++extern void exit_ext2_xattr_user(void);
++
++# else  /* CONFIG_EXT2_FS_XATTR_USER */
++
++static inline int
++init_ext2_xattr_user(void)
++{
++	return 0;
++}
++
++static inline void
++exit_ext2_xattr_user(void)
++{
++}
++
++# endif  /* CONFIG_EXT2_FS_XATTR_USER */
++
++#endif  /* __KERNEL__ */
++
+Index: linux-2.4.19-pre1/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/ext3_fs.h	2004-01-14 01:11:49.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/ext3_fs.h	2004-01-14 01:11:49.000000000 +0300
+@@ -63,8 +63,6 @@
+  */
+ #define	EXT3_BAD_INO		 1	/* Bad blocks inode */
+ #define EXT3_ROOT_INO		 2	/* Root inode */
+-#define EXT3_ACL_IDX_INO	 3	/* ACL inode */
+-#define EXT3_ACL_DATA_INO	 4	/* ACL inode */
+ #define EXT3_BOOT_LOADER_INO	 5	/* Boot loader inode */
+ #define EXT3_UNDEL_DIR_INO	 6	/* Undelete directory inode */
+ #define EXT3_RESIZE_INO		 7	/* Reserved group descriptors inode */
+@@ -94,7 +92,6 @@
+ #else
+ # define EXT3_BLOCK_SIZE(s)		(EXT3_MIN_BLOCK_SIZE << (s)->s_log_block_size)
+ #endif
+-#define EXT3_ACLE_PER_BLOCK(s)		(EXT3_BLOCK_SIZE(s) / sizeof (struct ext3_acl_entry))
+ #define	EXT3_ADDR_PER_BLOCK(s)		(EXT3_BLOCK_SIZE(s) / sizeof (__u32))
+ #ifdef __KERNEL__
+ # define EXT3_BLOCK_SIZE_BITS(s)	((s)->s_blocksize_bits)
+@@ -129,28 +126,6 @@
+ #endif
+ 
+ /*
+- * ACL structures
+- */
+-struct ext3_acl_header	/* Header of Access Control Lists */
+-{
+-	__u32	aclh_size;
+-	__u32	aclh_file_count;
+-	__u32	aclh_acle_count;
+-	__u32	aclh_first_acle;
+-};
+-
+-struct ext3_acl_entry	/* Access Control List Entry */
+-{
+-	__u32	acle_size;
+-	__u16	acle_perms;	/* Access permissions */
+-	__u16	acle_type;	/* Type of entry */
+-	__u16	acle_tag;	/* User or group identity */
+-	__u16	acle_pad1;
+-	__u32	acle_next;	/* Pointer on next entry for the */
+-					/* same inode or on next free entry */
+-};
+-
+-/*
+  * Structure of a blocks group descriptor
+  */
+ struct ext3_group_desc
+@@ -344,6 +319,7 @@
+   #define EXT3_MOUNT_WRITEBACK_DATA	0x0C00	/* No data ordering */
+ #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
+ #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
++#define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
+ 
+ /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
+ #ifndef _LINUX_EXT2_FS_H
+@@ -520,7 +496,7 @@
+ #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
+ #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
+ 
+-#define EXT3_FEATURE_COMPAT_SUPP	0
++#define EXT3_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
+ #define EXT3_FEATURE_INCOMPAT_SUPP	(EXT3_FEATURE_INCOMPAT_FILETYPE| \
+ 					 EXT3_FEATURE_INCOMPAT_RECOVER)
+ #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
+@@ -703,6 +679,7 @@
+ extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
+ 
+ /* inode.c */
++extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
+ extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
+ extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
+ 
+@@ -771,8 +748,10 @@
+ 
+ /* namei.c */
+ extern struct inode_operations ext3_dir_inode_operations;
++extern struct inode_operations ext3_special_inode_operations;
+ 
+ /* symlink.c */
++extern struct inode_operations ext3_symlink_inode_operations;
+ extern struct inode_operations ext3_fast_symlink_inode_operations;
+ 
+ 
+Index: linux-2.4.19-pre1/include/linux/ext3_jbd.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/ext3_jbd.h	2004-01-14 01:11:49.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/ext3_jbd.h	2004-01-14 01:18:04.000000000 +0300
+@@ -30,13 +30,19 @@
+ 
+ #define EXT3_SINGLEDATA_TRANS_BLOCKS	8
+ 
++/* Extended attributes may touch two data buffers, two bitmap buffers,
++ * and two group and summaries. */
++
++#define EXT3_XATTR_TRANS_BLOCKS		8
++
+ /* Define the minimum size for a transaction which modifies data.  This
+  * needs to take into account the fact that we may end up modifying two
+  * quota files too (one for the group, one for the user quota).  The
+  * superblock only gets updated once, of course, so don't bother
+  * counting that again for the quota updates. */
+ 
+-#define EXT3_DATA_TRANS_BLOCKS		(3 * EXT3_SINGLEDATA_TRANS_BLOCKS - 2)
++#define EXT3_DATA_TRANS_BLOCKS		(3 * EXT3_SINGLEDATA_TRANS_BLOCKS + \
++					 EXT3_XATTR_TRANS_BLOCKS - 2)
+ 
+ extern int ext3_writepage_trans_blocks(struct inode *inode);
+ 
+Index: linux-2.4.19-pre1/include/linux/ext3_xattr.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/ext3_xattr.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/ext3_xattr.h	2004-01-14 01:11:49.000000000 +0300
+@@ -0,0 +1,157 @@
++/*
++  File: linux/ext3_xattr.h
++
++  On-disk format of extended attributes for the ext3 filesystem.
++
++  (C) 2001 Andreas Gruenbacher, <a.gruenbacher@computer.org>
++*/
++
++#include <linux/config.h>
++#include <linux/init.h>
++#include <linux/xattr.h>
++
++/* Magic value in attribute blocks */
++#define EXT3_XATTR_MAGIC		0xEA020000
++
++/* Maximum number of references to one attribute block */
++#define EXT3_XATTR_REFCOUNT_MAX		1024
++
++/* Name indexes */
++#define EXT3_XATTR_INDEX_MAX			10
++#define EXT3_XATTR_INDEX_USER			1
++#define EXT3_XATTR_INDEX_POSIX_ACL_ACCESS	2
++#define EXT3_XATTR_INDEX_POSIX_ACL_DEFAULT	3
++
++struct ext3_xattr_header {
++	__u32	h_magic;	/* magic number for identification */
++	__u32	h_refcount;	/* reference count */
++	__u32	h_blocks;	/* number of disk blocks used */
++	__u32	h_hash;		/* hash value of all attributes */
++	__u32	h_reserved[4];	/* zero right now */
++};
++
++struct ext3_xattr_entry {
++	__u8	e_name_len;	/* length of name */
++	__u8	e_name_index;	/* attribute name index */
++	__u16	e_value_offs;	/* offset in disk block of value */
++	__u32	e_value_block;	/* disk block attribute is stored on (n/i) */
++	__u32	e_value_size;	/* size of attribute value */
++	__u32	e_hash;		/* hash value of name and value */
++	char	e_name[0];	/* attribute name */
++};
++
++#define EXT3_XATTR_PAD_BITS		2
++#define EXT3_XATTR_PAD		(1<<EXT3_XATTR_PAD_BITS)
++#define EXT3_XATTR_ROUND		(EXT3_XATTR_PAD-1)
++#define EXT3_XATTR_LEN(name_len) \
++	(((name_len) + EXT3_XATTR_ROUND + \
++	sizeof(struct ext3_xattr_entry)) & ~EXT3_XATTR_ROUND)
++#define EXT3_XATTR_NEXT(entry) \
++	( (struct ext3_xattr_entry *)( \
++	  (char *)(entry) + EXT3_XATTR_LEN((entry)->e_name_len)) )
++#define EXT3_XATTR_SIZE(size) \
++	(((size) + EXT3_XATTR_ROUND) & ~EXT3_XATTR_ROUND)
++
++#ifdef __KERNEL__
++
++# ifdef CONFIG_EXT3_FS_XATTR
++
++struct ext3_xattr_handler {
++	char *prefix;
++	size_t (*list)(char *list, struct inode *inode, const char *name,
++		       int name_len);
++	int (*get)(struct inode *inode, const char *name, void *buffer,
++		   size_t size);
++	int (*set)(struct inode *inode, const char *name, const void *buffer,
++		   size_t size, int flags);
++};
++
++extern int ext3_xattr_register(int, struct ext3_xattr_handler *);
++extern void ext3_xattr_unregister(int, struct ext3_xattr_handler *);
++
++extern int ext3_setxattr(struct dentry *, const char *, const void *, size_t, int);
++extern ssize_t ext3_getxattr(struct dentry *, const char *, void *, size_t);
++extern ssize_t ext3_listxattr(struct dentry *, char *, size_t);
++extern int ext3_removexattr(struct dentry *, const char *);
++
++extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
++extern int ext3_xattr_list(struct inode *, char *, size_t);
++extern int ext3_xattr_set(handle_t *handle, struct inode *, int, const char *, const void *, size_t, int);
++
++extern void ext3_xattr_delete_inode(handle_t *, struct inode *);
++extern void ext3_xattr_put_super(struct super_block *);
++
++extern int init_ext3_xattr(void) __init;
++extern void exit_ext3_xattr(void);
++
++# else  /* CONFIG_EXT3_FS_XATTR */
++#  define ext3_setxattr		NULL
++#  define ext3_getxattr		NULL
++#  define ext3_listxattr	NULL
++#  define ext3_removexattr	NULL
++
++static inline int
++ext3_xattr_get(struct inode *inode, int name_index, const char *name,
++	       void *buffer, size_t size)
++{
++	return -ENOTSUP;
++}
++
++static inline int
++ext3_xattr_list(struct inode *inode, void *buffer, size_t size)
++{
++	return -ENOTSUP;
++}
++
++static inline int
++ext3_xattr_set(handle_t *handle, struct inode *inode, int name_index,
++	       const char *name, const void *value, size_t size, int flags)
++{
++	return -ENOTSUP;
++}
++
++static inline void
++ext3_xattr_delete_inode(handle_t *handle, struct inode *inode)
++{
++}
++
++static inline void
++ext3_xattr_put_super(struct super_block *sb)
++{
++}
++
++static inline int
++init_ext3_xattr(void)
++{
++	return 0;
++}
++
++static inline void
++exit_ext3_xattr(void)
++{
++}
++
++# endif  /* CONFIG_EXT3_FS_XATTR */
++
++# ifdef CONFIG_EXT3_FS_XATTR_USER
++
++extern int init_ext3_xattr_user(void) __init;
++extern void exit_ext3_xattr_user(void);
++
++# else  /* CONFIG_EXT3_FS_XATTR_USER */
++
++static inline int
++init_ext3_xattr_user(void)
++{
++	return 0;
++}
++
++static inline void
++exit_ext3_xattr_user(void)
++{
++}
++
++#endif  /* CONFIG_EXT3_FS_XATTR_USER */
++
++#endif  /* __KERNEL__ */
++
+Index: linux-2.4.19-pre1/include/linux/fs.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/fs.h	2004-01-14 01:11:48.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/fs.h	2004-01-14 01:11:49.000000000 +0300
+@@ -872,6 +872,10 @@
+ 	int (*setattr) (struct dentry *, struct iattr *);
+ 	int (*setattr_raw) (struct inode *, struct iattr *);
+ 	int (*getattr) (struct dentry *, struct iattr *);
++	int (*setxattr) (struct dentry *, const char *, const void *, size_t, int);
++	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
++	ssize_t (*listxattr) (struct dentry *, char *, size_t);
++	int (*removexattr) (struct dentry *, const char *);
+ };
+ 
+ struct seq_file;
+Index: linux-2.4.19-pre1/include/linux/mbcache.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/mbcache.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/mbcache.h	2004-01-14 01:11:49.000000000 +0300
+@@ -0,0 +1,69 @@
++/*
++  File: linux/mbcache.h
++
++  (C) 2001 by Andreas Gruenbacher, <a.gruenbacher@computer.org>
++*/
++
++/* Hardwire the number of additional indexes */
++#define MB_CACHE_INDEXES_COUNT 1
++
++struct mb_cache_entry;
++
++struct mb_cache_op {
++	int (*free)(struct mb_cache_entry *, int);
++};
++
++struct mb_cache {
++	struct list_head		c_cache_list;
++	const char			*c_name;
++	struct mb_cache_op		c_op;
++	atomic_t			c_entry_count;
++	int				c_bucket_count;
++#ifndef MB_CACHE_INDEXES_COUNT
++	int				c_indexes_count;
++#endif
++	kmem_cache_t			*c_entry_cache;
++	struct list_head		*c_block_hash;
++	struct list_head		*c_indexes_hash[0];
++};
++
++struct mb_cache_entry_index {
++	struct list_head		o_list;
++	unsigned int			o_key;
++};
++
++struct mb_cache_entry {
++	struct list_head		e_lru_list;
++	struct mb_cache			*e_cache;
++	atomic_t			e_used;
++	kdev_t				e_dev;
++	unsigned long			e_block;
++	struct list_head		e_block_list;
++	struct mb_cache_entry_index	e_indexes[0];
++};
++
++/* Functions on caches */
++
++struct mb_cache * mb_cache_create(const char *, struct mb_cache_op *, size_t,
++				  int, int);
++void mb_cache_shrink(struct mb_cache *, kdev_t);
++void mb_cache_destroy(struct mb_cache *);
++
++/* Functions on cache entries */
++
++struct mb_cache_entry *mb_cache_entry_alloc(struct mb_cache *);
++int mb_cache_entry_insert(struct mb_cache_entry *, kdev_t, unsigned long,
++			  unsigned int[]);
++void mb_cache_entry_rehash(struct mb_cache_entry *, unsigned int[]);
++void mb_cache_entry_release(struct mb_cache_entry *);
++void mb_cache_entry_takeout(struct mb_cache_entry *);
++void mb_cache_entry_free(struct mb_cache_entry *);
++struct mb_cache_entry *mb_cache_entry_dup(struct mb_cache_entry *);
++struct mb_cache_entry *mb_cache_entry_get(struct mb_cache *, kdev_t,
++					  unsigned long);
++#if !defined(MB_CACHE_INDEXES_COUNT) || (MB_CACHE_INDEXES_COUNT > 0)
++struct mb_cache_entry *mb_cache_entry_find_first(struct mb_cache *cache, int,
++						 kdev_t, unsigned int);
++struct mb_cache_entry *mb_cache_entry_find_next(struct mb_cache_entry *, int,
++						kdev_t, unsigned int);
++#endif
+Index: linux-2.4.19-pre1/include/linux/xattr.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/xattr.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/xattr.h	2004-01-14 01:11:49.000000000 +0300
+@@ -0,0 +1,15 @@
++/*
++  File: linux/xattr.h
++
++  Extended attributes handling.
++
++  Copyright (C) 2001 by Andreas Gruenbacher <a.gruenbacher@computer.org>
++  Copyright (c) 2001-2002 Silicon Graphics, Inc.  All Rights Reserved.
++*/
++#ifndef _LINUX_XATTR_H
++#define _LINUX_XATTR_H
++
++#define XATTR_CREATE	0x1	/* set the value, fail if attr already exists */
++#define XATTR_REPLACE	0x2	/* set the value, fail if attr does not exist */
++
++#endif	/* _LINUX_XATTR_H */
 Index: linux-2.4.19-pre1/include/linux/kernel.h
 ===================================================================
---- linux-2.4.19-pre1.orig/include/linux/kernel.h	2003-11-21 02:25:34.000000000 +0300
-+++ linux-2.4.19-pre1/include/linux/kernel.h	2003-11-21 03:51:05.000000000 +0300
+--- linux-2.4.19-pre1.orig/include/linux/kernel.h	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/kernel.h	2004-01-14 01:16:51.000000000 +0300
 @@ -11,6 +11,7 @@
  #include <linux/linkage.h>
  #include <linux/stddef.h>
@@ -6036,3 +5947,106 @@ Index: linux-2.4.19-pre1/include/linux/kernel.h
  
  /* Optimization barrier */
  /* The "volatile" is due to gcc bugs */
+Index: linux-2.4.19-pre1/include/linux/limits.h
+===================================================================
+--- linux-2.4.19-pre1.orig/include/linux/limits.h	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/include/linux/limits.h	2004-01-14 01:22:08.000000000 +0300
+@@ -13,6 +13,9 @@
+ #define NAME_MAX         255	/* # chars in a file name */
+ #define PATH_MAX        4096	/* # chars in a path name including nul */
+ #define PIPE_BUF        4096	/* # bytes in atomic write to a pipe */
++#define XATTR_NAME_MAX   255	/* # chars in an extended attribute name */
++#define XATTR_SIZE_MAX 65536	/* size of an extended attribute value (64k) */
++#define XATTR_LIST_MAX 65536	/* size of extended attribute namelist (64k) */
+ 
+ #define RTSIG_MAX	  32
+ 
+Index: linux-2.4.19-pre1/kernel/ksyms.c
+===================================================================
+--- linux-2.4.19-pre1.orig/kernel/ksyms.c	2004-01-14 01:11:48.000000000 +0300
++++ linux-2.4.19-pre1/kernel/ksyms.c	2004-01-14 01:11:49.000000000 +0300
+@@ -11,6 +11,7 @@
+ 
+ #include <linux/config.h>
+ #include <linux/slab.h>
++#include <linux/cache_def.h>
+ #include <linux/module.h>
+ #include <linux/blkdev.h>
+ #include <linux/cdrom.h>
+@@ -88,6 +89,7 @@
+ EXPORT_SYMBOL(exit_files);
+ EXPORT_SYMBOL(exit_fs);
+ EXPORT_SYMBOL(exit_sighand);
++EXPORT_SYMBOL(copy_fs_struct);
+ 
+ /* internal kernel memory management */
+ EXPORT_SYMBOL(_alloc_pages);
+@@ -104,6 +106,8 @@
+ EXPORT_SYMBOL(kmem_cache_shrink);
+ EXPORT_SYMBOL(kmem_cache_alloc);
+ EXPORT_SYMBOL(kmem_cache_free);
++EXPORT_SYMBOL(register_cache);
++EXPORT_SYMBOL(unregister_cache);
+ EXPORT_SYMBOL(kmalloc);
+ EXPORT_SYMBOL(kfree);
+ EXPORT_SYMBOL(vfree);
+Index: linux-2.4.19-pre1/mm/vmscan.c
+===================================================================
+--- linux-2.4.19-pre1.orig/mm/vmscan.c	2004-01-14 01:10:37.000000000 +0300
++++ linux-2.4.19-pre1/mm/vmscan.c	2004-01-14 01:11:49.000000000 +0300
+@@ -15,6 +15,7 @@
+ #include <linux/kernel_stat.h>
+ #include <linux/swap.h>
+ #include <linux/swapctl.h>
++#include <linux/cache_def.h>
+ #include <linux/smp_lock.h>
+ #include <linux/pagemap.h>
+ #include <linux/init.h>
+@@ -32,6 +33,39 @@
+  */
+ #define DEF_PRIORITY (6)
+ 
++static DECLARE_MUTEX(other_caches_sem);
++static LIST_HEAD(cache_definitions);
++
++void register_cache(struct cache_definition *cache)
++{
++	down(&other_caches_sem);
++	list_add(&cache->link, &cache_definitions);
++	up(&other_caches_sem);
++}
++
++void unregister_cache(struct cache_definition *cache)
++{
++	down(&other_caches_sem);
++	list_del(&cache->link);
++	up(&other_caches_sem);
++}
++
++static void shrink_other_caches(unsigned int priority, int gfp_mask)
++{
++	struct list_head *p;
++
++	if (down_trylock(&other_caches_sem))
++		return;
++
++	list_for_each_prev(p, &cache_definitions) {
++		struct cache_definition *cache =
++			list_entry(p, struct cache_definition, link);
++
++		cache->shrink(priority, gfp_mask);
++	}
++	up(&other_caches_sem);
++}
++
+ /*
+  * The swap-out function returns 1 if it successfully
+  * scanned all the pages it was asked to (`count').
+@@ -578,6 +612,7 @@
+ 
+ 	shrink_dcache_memory(priority, gfp_mask);
+ 	shrink_icache_memory(priority, gfp_mask);
++	shrink_other_caches(priority, gfp_mask);
+ #ifdef CONFIG_QUOTA
+ 	shrink_dqcache_memory(DEF_PRIORITY, gfp_mask);
+ #endif
