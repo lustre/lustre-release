@@ -271,7 +271,7 @@ command_t cmdlist[] = {
          "get debug buffer and dump to a file, same as debug_kernel\n"
          "usage: dk [file] [raw]"},
         {"debug_file", jt_dbg_debug_file, 0,
-         "read debug buffer from input and dump to output, same as dk\n"
+         "convert a binary debug file dumped by the kernel to ASCII text\n"
          "usage: debug_file <input> [output] [raw]"},
         {"df", jt_dbg_debug_file, 0,
          "read debug buffer from input and dump to output, same as debug_file\n"
