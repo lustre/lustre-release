@@ -162,6 +162,15 @@ test_1() {
 }
 run_test 1 "simple create"
 
+test_1a() {
+    replay_barrier mds
+    touch $DIR/f1
+    fail mds
+    $CHECKSTAT -t file $DIR/f1 || error 
+    rm $DIR/f1
+}
+run_test 1 "touch"
+
 test_2() {
     replay_barrier mds
     mkdir $DIR/d2
