@@ -291,7 +291,8 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 	}
 
 	mode = mode | S_IFREG;
-        CDEBUG(D_DENTRY, "name %s mode %o\n", dentry->d_name.name, mode);
+        CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n", 
+	       dentry->d_name.name, mode, oa.o_id);
 	inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len, 
 			       NULL, 0,
 			       mode, oa.o_id);

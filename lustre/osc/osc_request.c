@@ -186,6 +186,7 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
 	}
 	
 	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+        request->rq_req.ost->connid = conn->oc_id;
 	request->rq_req.ost->oa.o_valid = ~0;
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
