@@ -50,8 +50,10 @@ struct fsfilt_cb_data {
         void *cb_data;                  /* MDS/OST completion function data */
 };
 
-#define EXTN_XATTR_INDEX_LUSTRE         5
-#define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
+#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
+
+#define EXTN_XATTR_INDEX_LUSTRE         5                         /* old */
+#define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid" /* old */
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -306,10 +308,11 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
 }
 
 #undef INLINE_EA
+#undef OLD_EA
 static int fsfilt_extN_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size)
 {
-        int rc;
+        int rc, old_ea = 0;
 
 #ifdef INLINE_EA
         /* Nasty hack city - store stripe MD data in the block pointers if
@@ -331,16 +334,43 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
                 return 0;
         }
 #endif
-        if (EXTN_I(inode)->i_file_acl /* || large inode EA flag */)
-                CERROR("setting EA on %lu/%u again... interesting\n",
+#ifdef OLD_EA
+        /* keep this when we get rid of OLD_EA (too noisy during conversion) */
+        if (EXTN_I(inode)->i_file_acl /* || large inode EA flag */) {
+                CWARN("setting EA on %lu/%u again... interesting\n",
                        inode->i_ino, inode->i_generation);
+                old_ea = 1;
+        }
+
         lock_kernel();
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
-#else
+        /* this can go away before 1.0.  For bug 2097 testing only. */
         rc = extN_xattr_set_handle(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                    XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
+#else
+        lock_kernel();
+        rc = extN_xattr_set_handle(handle, inode, EXTN_XATTR_INDEX_TRUSTED,
+                                   XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size, 0);
+
+        /* This tries to delete the old-format LOV EA, but only as long as we
+         * have successfully saved the new-format LOV EA (we can always try
+         * the conversion again the next time the file is accessed).  It is
+         * possible (although unlikely) that the new-format LOV EA couldn't be
+         * saved because it ran out of space but we would need a file striped
+         * over least 123 OSTs before the two EAs filled a 4kB block.
+         *
+         * This can be removed when all filesystems have converted to the
+         * new EA format, but otherwise adds little if any overhead.  If we
+         * wanted backward compatibility for existing files, we could keep
+         * the old EA around for a while but we'd have to clean it up later. */
+        if (rc >= 0 && old_ea) {
+                int err = extN_xattr_set_handle(handle, inode,
+                                                EXTN_XATTR_INDEX_LUSTRE,
+                                                XATTR_LUSTRE_MDS_OBJID,
+                                                NULL, 0, 0);
+                if (err)
+                        CERROR("error deleting old LOV EA on %lu/%u: rc %d\n",
+                               inode->i_ino, inode->i_generation, err);
+        }
 #endif
         unlock_kernel();
 
@@ -400,8 +430,17 @@ static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int lmm_size)
                 return size;
         }
 
-        rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size);
+        rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_TRUSTED,
+                            XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size);
+        /* try old EA type if new one failed - MDS will convert it for us */
+        if (rc == -ENODATA) {
+                CDEBUG(D_INFO,"failed new LOV EA %d/%s from inode %lu: rc %d\n",
+                       EXTN_XATTR_INDEX_TRUSTED, XATTR_LUSTRE_MDS_LOV_EA,
+                       inode->i_ino, rc);
+
+                rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
+                                    XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size);
+        }
         unlock_kernel();
 
         /* This gives us the MD size */
@@ -409,8 +448,9 @@ static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int lmm_size)
                 return (rc == -ENODATA) ? 0 : rc;
 
         if (rc < 0) {
-                CDEBUG(D_INFO, "error getting EA %s from inode %lu: "
-                       "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
+                CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
+                       EXTN_XATTR_INDEX_LUSTRE, XATTR_LUSTRE_MDS_OBJID,
+                       inode->i_ino, rc);
                 memset(lmm, 0, lmm_size);
                 return (rc == -ENODATA) ? 0 : rc;
         }
