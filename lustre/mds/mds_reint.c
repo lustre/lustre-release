@@ -1271,13 +1271,11 @@ static int mds_verify_child(struct obd_device *obd,
                             struct dentry **dchildp, int child_mode,
                             ldlm_policy_data_t *child_policy,
                             const char *name, int namelen,
-                            struct ldlm_res_id *maxres,
-                            unsigned long child_ino,
-                            __u32 child_gen)
+                            struct ldlm_res_id *maxres)
 {
-        struct lustre_id sid;
         struct dentry *vchild, *dchild = *dchildp;
         int rc = 0, cleanup_phase = 2; /* parent, child locks */
+        struct lustre_id sid;
         ENTRY;
 
         vchild = ll_lookup_one_len(name, dparent, namelen - 1);
@@ -1285,27 +1283,48 @@ static int mds_verify_child(struct obd_device *obd,
                 GOTO(cleanup, rc = PTR_ERR(vchild));
 
         if ((vchild->d_flags & DCACHE_CROSS_REF)) {
-                if (child_gen == vchild->d_generation &&
-                    child_ino == vchild->d_inum) {
-                        if (dchild)
-                                l_dput(dchild);
-                        *dchildp = vchild;
-                        RETURN(0);
+                /* 
+                 * cross-ref case, comparing child res_id with values stored in
+                 * dentry.
+                 */
+                id_fid(&sid) = vchild->d_fid;
+                id_group(&sid) = vchild->d_mdsnum;
+
+                if (child_res_id->name[0] != id_fid(&sid) ||
+                    child_res_id->name[1] != id_group(&sid))
+                {
+                        goto changed;
                 }
-                goto changed;
+        } else {
+                if (vchild->d_inode != NULL) {
+                        /* 
+                         * name found and child res_id is not zero, getting
+                         * inode fid and compare it with child res_id.
+                         */
+                        down(&vchild->d_inode->i_sem);
+                        rc = mds_read_inode_sid(obd, vchild->d_inode, &sid);
+                        up(&vchild->d_inode->i_sem);
+                        if (rc) {
+                                CERROR("Can't read inode self id, inode %lu,"
+                                       " rc %d\n",  vchild->d_inode->i_ino, rc);
+                                GOTO(cleanup, rc);
+                        }
+
+                        if (child_res_id->name[0] != id_fid(&sid) ||
+                            child_res_id->name[1] != id_group(&sid))
+                        {
+                                goto changed;
+                        }
+                }
         }
 
-        if (likely((vchild->d_inode == NULL && child_res_id->name[0] == 0) ||
-                   (vchild->d_inode != NULL &&
-                    child_gen == vchild->d_inode->i_generation &&
-                    child_ino == vchild->d_inode->i_ino))) {
-                if (dchild)
-                        l_dput(dchild);
-                *dchildp = vchild;
-                RETURN(0);
-        }
+        if (dchild)
+                l_dput(dchild);
+        *dchildp = vchild;
+        RETURN(0);
 
 changed:
+        /* child inode is chnaged, analizing it. */
         CDEBUG(D_DLMTRACE, "child inode changed: %p != %p (%lu != "LPU64")\n",
                vchild->d_inode, dchild ? dchild->d_inode : 0,
                vchild->d_inode ? vchild->d_inode->i_ino : 0,
@@ -1321,22 +1340,9 @@ changed:
 
         if (dchild->d_inode || (dchild->d_flags & DCACHE_CROSS_REF)) {
                 int flags = 0;
-                
-                if (dchild->d_inode) {
-                        down(&dchild->d_inode->i_sem);
-                        rc = mds_read_inode_sid(obd, dchild->d_inode, &sid);
-                        up(&dchild->d_inode->i_sem);
-                        if (rc) {
-                                CERROR("Can't read inode self id, inode %lu,"
-                                       " rc %d\n",  dchild->d_inode->i_ino, rc);
-                                GOTO(cleanup, rc);
-                        }
-                        child_res_id->name[0] = id_fid(&sid);
-                        child_res_id->name[1] = id_group(&sid);
-                } else {
-                        child_res_id->name[0] = dchild->d_fid;
-                        child_res_id->name[1] = dchild->d_mdsnum;
-                }
+
+                child_res_id->name[0] = id_fid(&sid);
+                child_res_id->name[1] = id_group(&sid);
 
                 if (res_gt(parent_res_id, child_res_id, NULL, NULL) ||
                     res_gt(maxres, child_res_id, NULL, NULL)) {
@@ -1387,9 +1393,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         struct ldlm_res_id parent_res_id = { .name = {0} };
         struct ldlm_res_id child_res_id = { .name = {0} };
         int rc = 0, cleanup_phase = 0;
-        unsigned long child_ino;
         struct lustre_id sid;
-        __u32 child_gen = 0;
         struct inode *inode;
         ENTRY;
 
@@ -1459,8 +1463,6 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
 
                 child_res_id.name[0] = (*dchildp)->d_fid;
                 child_res_id.name[1] = (*dchildp)->d_mdsnum;
-                child_gen = (*dchildp)->d_generation;
-                child_ino = (*dchildp)->d_inum;
                 goto retry_locks;
         }
 
@@ -1482,8 +1484,6 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         
         child_res_id.name[0] = id_fid(&sid);
         child_res_id.name[1] = id_group(&sid);
-        child_gen = inode->i_generation;
-        child_ino = inode->i_ino;
         iput(inode);
 
 retry_locks:
@@ -1506,8 +1506,7 @@ retry_locks:
         rc = mds_verify_child(obd, &parent_res_id, parent_lockh, *dparentp,
                               parent_mode, &child_res_id, child_lockh, 
                               dchildp, child_mode, &child_policy,
-                              name, namelen, &parent_res_id,
-                              child_ino, child_gen);
+                              name, namelen, &parent_res_id);
         if (rc > 0)
                 goto retry_locks;
         if (rc < 0) {
@@ -2572,10 +2571,6 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                                                         MDS_INODELOCK_UPDATE}};
         struct ldlm_res_id *maxres_src, *maxres_tgt;
         struct inode *inode;
-        __u32 child1_gen = 0;
-        __u32 child2_gen = 0;
-        unsigned long child1_ino;
-        unsigned long child2_ino;
         int rc = 0, cleanup_phase = 0;
         ENTRY;
 
@@ -2664,14 +2659,10 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
 
                 c1_res_id.name[0] = id_fid(&sid);
                 c1_res_id.name[1] = id_group(&sid);
-                child1_gen = inode->i_generation;
-                child1_ino = inode->i_ino;
                 iput(inode);
         } else if ((*de_oldp)->d_flags & DCACHE_CROSS_REF) {
                 c1_res_id.name[0] = (*de_oldp)->d_fid;
                 c1_res_id.name[1] = (*de_oldp)->d_mdsnum;
-                child1_gen = (*de_oldp)->d_generation;
-                child1_ino = (*de_oldp)->d_inum;
         } else {
                 GOTO(cleanup, rc = -ENOENT);
         }
@@ -2707,14 +2698,10 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
 
                 c2_res_id.name[0] = id_fid(&sid);
                 c2_res_id.name[1] = id_group(&sid);
-                child2_gen = inode->i_generation;
-                child2_ino = inode->i_ino;
                 iput(inode);
         } else if ((*de_newp)->d_flags & DCACHE_CROSS_REF) {
                 c2_res_id.name[0] = (*de_newp)->d_fid;
                 c2_res_id.name[1] = (*de_newp)->d_mdsnum;
-                child2_gen = (*de_newp)->d_generation;
-                child2_ino = (*de_newp)->d_inum;
         }
 
 retry_locks:
@@ -2745,7 +2732,7 @@ retry_locks:
         rc = mds_verify_child(obd, &p1_res_id, &dlm_handles[0], *de_srcdirp,
                               parent_mode, &c1_res_id, &dlm_handles[2],
                               de_oldp, child_mode, &c1_policy, old_name,old_len,
-                              maxres_tgt, child1_ino, child1_gen);
+                              maxres_tgt);
         if (rc) {
                 if (c2_res_id.name[0] != 0)
                         ldlm_lock_decref(&dlm_handles[3], child_mode);
@@ -2763,7 +2750,7 @@ retry_locks:
         rc = mds_verify_child(obd, &p2_res_id, &dlm_handles[1], *de_tgtdirp,
                               parent_mode, &c2_res_id, &dlm_handles[3],
                               de_newp, child_mode, &c2_policy, new_name,
-                              new_len, maxres_src, child2_ino, child2_gen);
+                              new_len, maxres_src);
         if (rc) {
                 ldlm_lock_decref(&dlm_handles[2], child_mode);
                 ldlm_lock_decref(&dlm_handles[0], parent_mode);
