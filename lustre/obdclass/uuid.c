@@ -23,7 +23,8 @@
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
-#include <linux/obd_ost.h>
+#include <linux/obd_ost.h> /* for LUSTRE_OST_NAME */
+#include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
 
 struct uuid {
 	__u32	time_low;
