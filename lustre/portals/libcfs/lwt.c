@@ -45,9 +45,12 @@
 
 #if LWT_SUPPORT
 
+#if !KLWT_SUPPORT
 int         lwt_enabled;
+lwt_cpu_t   lwt_cpus[NR_CPUS];
+#endif
+
 int         lwt_pages_per_cpu;
-lwt_cpu_t   lwt_cpus[LWT_MAX_CPUS];
 
 /* NB only root is allowed to retrieve LWT info; it's an open door into the
  * kernel... */
@@ -97,23 +100,35 @@ lwt_control (int enable, int clear)
         if (!capable(CAP_SYS_ADMIN))
                 return (-EPERM);
 
-        if (clear)
-                for (i = 0; i < num_online_cpus(); i++) {
-                        p = lwt_cpus[i].lwtc_current_page;
-
-                        for (j = 0; j < lwt_pages_per_cpu; j++) {
-                                memset (p->lwtp_events, 0, PAGE_SIZE);
-
-                                p = list_entry (p->lwtp_list.next,
-                                                lwt_page_t, lwtp_list);
-                        }
-        }
-
-        lwt_enabled = enable;
-        mb();
         if (!enable) {
+                LWT_EVENT(0,0,0,0);
+                lwt_enabled = 0;
+                mb();
                 /* give people some time to stop adding traces */
                 schedule_timeout(10);
+        }
+
+        for (i = 0; i < num_online_cpus(); i++) {
+                p = lwt_cpus[i].lwtc_current_page;
+
+                if (p == NULL)
+                        return (-ENODATA);
+
+                if (!clear)
+                        continue;
+
+                for (j = 0; j < lwt_pages_per_cpu; j++) {
+                        memset (p->lwtp_events, 0, PAGE_SIZE);
+
+                        p = list_entry (p->lwtp_list.next,
+                                        lwt_page_t, lwtp_list);
+                }
+        }
+
+        if (enable) {
+                lwt_enabled = 1;
+                mb();
+                LWT_EVENT(0,0,0,0);
         }
 
         return (0);
@@ -141,6 +156,9 @@ lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 
         for (i = 0; i < num_online_cpus(); i++) {
                 p = lwt_cpus[i].lwtc_current_page;
+
+                if (p == NULL)
+                        return (-ENODATA);
                 
                 for (j = 0; j < lwt_pages_per_cpu; j++) {
                         if (copy_to_user(user_ptr, p->lwtp_events,
@@ -162,11 +180,12 @@ lwt_init ()
 {
 	int     i;
         int     j;
+
+        for (i = 0; i < num_online_cpus(); i++)
+                if (lwt_cpus[i].lwtc_current_page != NULL)
+                        return (-EALREADY);
         
-        if (num_online_cpus() > LWT_MAX_CPUS) {
-                CERROR ("Too many CPUs\n");
-                return (-EINVAL);
-        }
+        LASSERT (!lwt_enabled);
 
 	/* NULL pointers, zero scalars */
 	memset (lwt_cpus, 0, sizeof (lwt_cpus));
@@ -207,6 +226,8 @@ lwt_init ()
         lwt_enabled = 1;
         mb();
 
+        LWT_EVENT(0,0,0,0);
+
         return (0);
 }
 
@@ -214,10 +235,9 @@ void
 lwt_fini () 
 {
         int    i;
-        
-        if (num_online_cpus() > LWT_MAX_CPUS)
-                return;
 
+        lwt_control(0, 0);
+        
         for (i = 0; i < num_online_cpus(); i++)
                 while (lwt_cpus[i].lwtc_current_page != NULL) {
                         lwt_page_t *lwtp = lwt_cpus[i].lwtc_current_page;
