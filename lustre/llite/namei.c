@@ -124,15 +124,13 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
         struct inode *inode;
 
         LASSERT(hash != 0);
-	inode = iget5_locked(sb, hash, ll_test_inode, ll_read_inode2, lic);
+        inode = iget5_locked(sb, hash, ll_test_inode, ll_read_inode2, lic);
 
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
+        if (!inode)
+                return ERR_PTR(-ENOMEM);
 
-	if (inode->i_state & I_NEW) {
-
-		unlock_new_inode(inode);
-	}
+        if (inode->i_state & I_NEW)
+                unlock_new_inode(inode);
 
         // XXX Coda always fills inodes, should Lustre?
         return inode;
@@ -388,11 +386,11 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
  * de.  If found, return it.  If not found, return de. */
 struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 {
-	struct list_head *tmp;
+        struct list_head *tmp;
 
-	spin_lock(&dcache_lock);
+        spin_lock(&dcache_lock);
         list_for_each(tmp, &inode->i_dentry) {
-		struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
+                struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
 
                 /* We are called here with 'de' already on the aliases list. */
                 if (dentry == de) { 
@@ -416,12 +414,12 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 list_del_init(&dentry->d_hash);
                 spin_unlock(&dcache_lock);
                 d_rehash(dentry);
-		atomic_inc(&dentry->d_count);
+                atomic_inc(&dentry->d_count);
                 iput(inode);
                 return dentry;
-	}
+        }
 
-	spin_unlock(&dcache_lock);
+        spin_unlock(&dcache_lock);
 
         return de;
 }

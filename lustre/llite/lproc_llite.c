@@ -25,21 +25,23 @@
 #include <linux/lprocfs_status.h>
 
 
-int rd_path(char* page, char **start, off_t off, int count, int *eof, 
+int rd_path(char* page, char **start, off_t off, int count, int *eof,
             void *data)
 {
         return 0;
 }
-int rd_fstype(char* page, char **start, off_t off, int count, int *eof, 
+
+int rd_fstype(char* page, char **start, off_t off, int count, int *eof,
               void *data)
 {
         int len = 0;
         struct super_block *sb = (struct super_block*)data;
-        
-        len += snprintf(page, count, "%s\n", sb->s_type->name); 
+
+        len += snprintf(page, count, "%s\n", sb->s_type->name);
         return len;
 }
-int rd_blksize(char* page, char **start, off_t off, int count, int *eof, 
+
+int rd_blksize(char* page, char **start, off_t off, int count, int *eof,
                void *data)
 {
         int len = 0;
@@ -47,11 +49,12 @@ int rd_blksize(char* page, char **start, off_t off, int count, int *eof,
         struct statfs mystats;
 
         (sb->s_op->statfs)(sb, &mystats);
-        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_bsize)); 
+        len += snprintf(page, count, "%lu\n", mystats.f_bsize);
         return len;
 
 }
-int rd_kbytestotal(char* page, char **start, off_t off, int count, int *eof, 
+
+int rd_kbytestotal(char* page, char **start, off_t off, int count, int *eof,
                    void *data)
 {
         int len = 0;
@@ -64,23 +67,21 @@ int rd_kbytestotal(char* page, char **start, off_t off, int count, int *eof,
         blk_size = mystats.f_bsize;
         blk_size >>= 10;
         result = mystats.f_blocks;
-        
-        while(blk_size >>= 1){
+
+        while(blk_size >>= 1)
                 result <<= 1;
-        }
-       
-        len += snprintf(page, count, LPU64"\n", result); 
+
+        len += snprintf(page, count, LPU64"\n", result);
         return len;
-        
 }
 
 
-int rd_kbytesfree(char* page, char **start, off_t off, int count, int *eof, 
+int rd_kbytesfree(char* page, char **start, off_t off, int count, int *eof,
                   void *data)
 {
         int len = 0;
         struct super_block *sb = (struct super_block*)data;
-        struct statfs mystats; 
+        struct statfs mystats;
         __u32 blk_size;
         __u64 result;
 
@@ -88,59 +89,56 @@ int rd_kbytesfree(char* page, char **start, off_t off, int count, int *eof,
         blk_size = mystats.f_bsize;
         blk_size >>= 10;
         result = mystats.f_bfree;
-        
-        while(blk_size >>= 1){
-                result <<= 1;
-        }
-       
-        len += snprintf(page, count, LPU64"\n", result); 
-        return len;
 
-        
+        while(blk_size >>= 1)
+                result <<= 1;
+
+        len += snprintf(page, count, LPU64"\n", result);
+        return len;
 }
 
-int rd_filestotal(char* page, char **start, off_t off, int count, int *eof, 
+int rd_filestotal(char* page, char **start, off_t off, int count, int *eof,
                   void *data)
 {
-        
         int len = 0;
         struct super_block *sb = (struct super_block*)data;
-        struct statfs mystats; 
-        
+        struct statfs mystats;
+
         (sb->s_op->statfs)(sb, &mystats);
-        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_files)); 
+        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_files));
         return len;
 }
 
-int rd_filesfree(char* page, char **start, off_t off, int count, int *eof, 
+int rd_filesfree(char* page, char **start, off_t off, int count, int *eof,
                  void *data)
 {
-        
         int len = 0;
         struct super_block *sb = (struct super_block*)data;
-        struct statfs mystats; 
-        
+        struct statfs mystats;
+
         (sb->s_op->statfs)(sb, &mystats);
-        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_ffree)); 
+        len += snprintf(page, count, LPU64"\n", (__u64)(mystats.f_ffree));
         return len;
 }
 
-int rd_filegroups(char* page, char **start, off_t off, int count, int *eof, 
+int rd_filegroups(char* page, char **start, off_t off, int count, int *eof,
                   void *data)
 {
         return 0;
 }
-int rd_uuid(char* page, char **start, off_t off, int count, int *eof, 
+int rd_uuid(char* page, char **start, off_t off, int count, int *eof,
             void *data)
 {
         int len = 0;
         struct super_block *sb = (struct super_block*)data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        len += snprintf(page, count, "%s\n", sbi->ll_sb_uuid); 
-        return len;    
+
+        len += snprintf(page, count, "%s\n", sbi->ll_sb_uuid);
+
+        return len;
 
 }
-int rd_dev_name(char* page, char **start, off_t off, int count, int *eof, 
+int rd_dev_name(char* page, char **start, off_t off, int count, int *eof,
                 void *data)
 {
         int len = 0;
@@ -149,7 +147,7 @@ int rd_dev_name(char* page, char **start, off_t off, int count, int *eof,
         return len;
 }
 
-int rd_dev_uuid(char* page, char **start, off_t off, int count, int *eof, 
+int rd_dev_uuid(char* page, char **start, off_t off, int count, int *eof,
                 void *data)
 {
         int len = 0;
@@ -172,7 +170,7 @@ struct lprocfs_vars status_var_nm_1[] = {
         {0}
 };
 
-/* 
+/*
  * Proc registration function for Lustre
  * file system
  */
@@ -188,7 +186,6 @@ void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
         struct obd_device* obd;
         int err;
 
-        
         /* Register this mount instance with LProcFS */
         snprintf(mnt_name, MAX_STRING_SIZE, "mount_%s", sbi->ll_sb_uuid);
         mnt_name[MAX_STRING_SIZE] = '\0';
@@ -205,7 +202,7 @@ void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
         }
         /* MDC */
         obd = class_uuid2obd(mdc);
-        snprintf(mnt_name, MAX_STRING_SIZE, "status/%s/common_name", 
+        snprintf(mnt_name, MAX_STRING_SIZE, "status/%s/common_name",
                  obd->obd_type->typ_name);
         mnt_name[MAX_STRING_SIZE] = '\0';
         memset(d_vars, 0, sizeof(d_vars));
@@ -228,7 +225,7 @@ void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
         obd = class_uuid2obd(osc);
 
         /* Reuse mnt_name */
-        snprintf(mnt_name, MAX_STRING_SIZE, 
+        snprintf(mnt_name, MAX_STRING_SIZE,
                  "status/%s/common_name", obd->obd_type->typ_name);
         mnt_name[MAX_STRING_SIZE] = '\0';
         memset(d_vars, 0, sizeof(d_vars));
