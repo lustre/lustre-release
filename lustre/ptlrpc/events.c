@@ -28,7 +28,8 @@
 
 ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq, bulk_source_eq,
         bulk_sink_eq;
-static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL, *gmnal_nip = NULL;
+static const ptl_handle_ni_t *socknal_nip = NULL, *toenal_nip = NULL, 
+        *qswnal_nip = NULL, *gmnal_nip = NULL;
 
 /*
  *  Free the packet when it has gone out
@@ -227,17 +228,15 @@ int ptlrpc_init_portals(void)
         int rc;
         ptl_handle_ni_t ni;
 
-        socknal_nip = inter_module_get_request("ksocknal_ni", "ksocknal");
-        qswnal_nip = inter_module_get_request("kqswnal_ni", "kqswnal");
-        gmnal_nip = inter_module_get_request("kgmnal_ni", "kgmnal");
-
         /* Use the qswnal if it's there */
-        if (qswnal_nip != NULL)
+        if ((qswnal_nip = inter_module_get("kqswnal_ni")) != NULL)
                 ni = *qswnal_nip;
-        else if (gmnal_nip != NULL)
+        else if ((gmnal_nip = inter_module_get("kgmnal_ni")) != NULL)
                 ni = *gmnal_nip;
-        else if (socknal_nip != NULL)
+        else if ((socknal_nip = inter_module_get("ksocknal_ni")) != NULL)
                 ni = *socknal_nip;
+        else if ((toenal_nip = inter_module_get("ktoenal_ni")) != NULL)
+                ni = *toenal_nip;
         else {
                 CERROR("get_ni failed: is a NAL module loaded?\n");
                 return -EIO;
