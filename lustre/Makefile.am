@@ -4,9 +4,8 @@
 # See the file COPYING in this distribution
 
 AUTOMAKE_OPTIONS = foreign
-SUBDIRS = rpc llight lib ldlm obdecho mdc osc mds ost utils tests filterobd
-SUBDIRS+= class ext2obd obdfs obdtrace demos doc scripts extN
-#SUBDIRS+= oraid1 rpctarget inofs rpcclient tests snap
+SUBDIRS = ptlrpc llite lib ldlm obdecho mdc osc mds ost utils tests obdfilter
+SUBDIRS+= obdclass obdext2 obdfs demos doc scripts extN
 EXTRA_DIST = BUGS FDL Rules include patches
 
 # We get the version from the spec file.

@@ -76,9 +76,9 @@ AC_SUBST(docdir)
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
 
-AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile obdecho/Makefile rpc/Makefile \
+AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile obdecho/Makefile ptlrpc/Makefile \
 	osc/Makefile mdc/Makefile mds/Makefile ost/Makefile utils/Makefile \
-	tests/Makefile filterobd/Makefile class/Makefile ext2obd/Makefile \
-	llight/Makefile obdfs/Makefile obdtrace/Makefile demos/Makefile \
-	snap/Makefile doc/Makefile scripts/Makefile scripts/lustre.spec \
+	tests/Makefile obdfilter/Makefile obdclass/Makefile obdext2/Makefile \
+	llite/Makefile obdfs/Makefile demos/Makefile \
+	doc/Makefile scripts/Makefile scripts/lustre.spec \
 	extN/Makefile)
