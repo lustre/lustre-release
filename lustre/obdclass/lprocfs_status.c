@@ -377,6 +377,7 @@ static int lprocfs_counters_seq_show(struct seq_file *p, void *v)
        }
        tp = cntr;
        memset(&c, 0, sizeof (struct lprocfs_counter));
+       c.min = (~(__u64)0);
        for (i = 0; i < smp_num_cpus; i++) {
                int centry;
                do {
@@ -390,8 +391,8 @@ static int lprocfs_counters_seq_show(struct seq_file *p, void *v)
                         centry != atomic_read(&tp->cntl.exit));
                c.count += t.count;
                c.sum += t.sum;
-               c.min += t.min;
-               c.max += t.max;
+               if (t.min < c.min) c.min = t.min;             
+               if (t.max > c.max) c.max = t.max; 
                c.sumsquare += t.sumsquare;
                tp = (struct lprocfs_counter *)((void *)tp + cntrs->cntr_size);
        }
