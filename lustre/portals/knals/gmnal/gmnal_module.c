@@ -73,7 +73,7 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 		copy_to_user(pcfg->pcfg_pbuf2, &gnid, pcfg->pcfg_plen2);
 	break;
 	default:
-		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_nal_cmd);
+		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);
 		pcfg->pcfg_nid2 = -1;
 	}
 
