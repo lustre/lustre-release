@@ -1,0 +1,279 @@
+diff -rupN linux-2.6.6.old/arch/arm/kernel/sys_arm.c linux-2.6.6.new/arch/arm/kernel/sys_arm.c
+--- linux-2.6.6.old/arch/arm/kernel/sys_arm.c	Mon May 10 05:32:02 2004
++++ linux-2.6.6.new/arch/arm/kernel/sys_arm.c	Tue Jun 29 17:54:28 2004
+@@ -76,7 +76,7 @@ inline long do_mmap2(
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/arm26/kernel/sys_arm.c linux-2.6.6.new/arch/arm26/kernel/sys_arm.c
+--- linux-2.6.6.old/arch/arm26/kernel/sys_arm.c	Mon May 10 05:32:39 2004
++++ linux-2.6.6.new/arch/arm26/kernel/sys_arm.c	Tue Jun 29 17:55:58 2004
+@@ -77,7 +77,7 @@ inline long do_mmap2(
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/cris/kernel/sys_cris.c linux-2.6.6.new/arch/cris/kernel/sys_cris.c
+--- linux-2.6.6.old/arch/cris/kernel/sys_cris.c	Mon May 10 05:31:58 2004
++++ linux-2.6.6.new/arch/cris/kernel/sys_cris.c	Tue Jun 29 17:54:45 2004
+@@ -61,7 +61,7 @@ do_mmap2(unsigned long addr, unsigned lo
+         }
+ 
+         down_write(&current->mm->mmap_sem);
+-        error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++        error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+         up_write(&current->mm->mmap_sem);
+ 
+         if (file)
+diff -rupN linux-2.6.6.old/arch/h8300/kernel/sys_h8300.c linux-2.6.6.new/arch/h8300/kernel/sys_h8300.c
+--- linux-2.6.6.old/arch/h8300/kernel/sys_h8300.c	Mon May 10 05:33:13 2004
++++ linux-2.6.6.new/arch/h8300/kernel/sys_h8300.c	Tue Jun 29 17:57:05 2004
+@@ -60,7 +60,7 @@ static inline long do_mmap2(
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+@@ -147,7 +147,7 @@ asmlinkage long sys_mmap64(struct mmap_a
+ 	a.flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, a.addr, a.len, a.prot, a.flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, a.addr, a.len, a.prot, a.flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 	if (file)
+ 		fput(file);
+diff -rupN linux-2.6.6.old/arch/i386/kernel/sys_i386.c linux-2.6.6.new/arch/i386/kernel/sys_i386.c
+--- linux-2.6.6.old/arch/i386/kernel/sys_i386.c	Mon May 10 05:33:20 2004
++++ linux-2.6.6.new/arch/i386/kernel/sys_i386.c	Tue Jun 29 17:54:02 2004
+@@ -57,7 +57,7 @@ static inline long do_mmap2(
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/ia64/ia32/sys_ia32.c linux-2.6.6.new/arch/ia64/ia32/sys_ia32.c
+--- linux-2.6.6.old/arch/ia64/ia32/sys_ia32.c	Mon May 10 05:32:39 2004
++++ linux-2.6.6.new/arch/ia64/ia32/sys_ia32.c	Tue Jun 29 17:54:54 2004
+@@ -1601,7 +1601,7 @@ sys32_iopl (int level)
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	addr = do_mmap_pgoff(file, IA32_IOBASE,
++	addr = do_mmap_pgoff(current->mm, file, IA32_IOBASE,
+ 			     IOLEN, PROT_READ|PROT_WRITE, MAP_SHARED,
+ 			     (ia64_iobase & ~PAGE_OFFSET) >> PAGE_SHIFT);
+ 	up_write(&current->mm->mmap_sem);
+diff -rupN linux-2.6.6.old/arch/ia64/kernel/sys_ia64.c linux-2.6.6.new/arch/ia64/kernel/sys_ia64.c
+--- linux-2.6.6.old/arch/ia64/kernel/sys_ia64.c	Mon May 10 05:32:38 2004
++++ linux-2.6.6.new/arch/ia64/kernel/sys_ia64.c	Tue Jun 29 17:55:01 2004
+@@ -223,7 +223,7 @@ do_mmap2 (unsigned long addr, unsigned l
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	addr = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	addr = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ out:	if (file)
+diff -rupN linux-2.6.6.old/arch/m68k/kernel/sys_m68k.c linux-2.6.6.new/arch/m68k/kernel/sys_m68k.c
+--- linux-2.6.6.old/arch/m68k/kernel/sys_m68k.c	Mon May 10 05:32:01 2004
++++ linux-2.6.6.new/arch/m68k/kernel/sys_m68k.c	Tue Jun 29 17:55:13 2004
+@@ -61,7 +61,7 @@ static inline long do_mmap2(
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+@@ -148,7 +148,7 @@ asmlinkage long sys_mmap64(struct mmap_a
+ 	a.flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, a.addr, a.len, a.prot, a.flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, a.addr, a.len, a.prot, a.flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 	if (file)
+ 		fput(file);
+diff -rupN linux-2.6.6.old/arch/m68knommu/kernel/sys_m68k.c linux-2.6.6.new/arch/m68knommu/kernel/sys_m68k.c
+--- linux-2.6.6.old/arch/m68knommu/kernel/sys_m68k.c	Mon May 10 05:33:19 2004
++++ linux-2.6.6.new/arch/m68knommu/kernel/sys_m68k.c	Tue Jun 29 17:56:26 2004
+@@ -61,7 +61,7 @@ static inline long do_mmap2(
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/mips/kernel/linux32.c linux-2.6.6.new/arch/mips/kernel/linux32.c
+--- linux-2.6.6.old/arch/mips/kernel/linux32.c	Mon May 10 05:32:52 2004
++++ linux-2.6.6.new/arch/mips/kernel/linux32.c	Tue Jun 29 17:55:21 2004
+@@ -115,7 +115,7 @@ sys32_mmap2(unsigned long addr, size_t l
+ 	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 	if (file)
+ 		fput(file);
+diff -rupN linux-2.6.6.old/arch/mips/kernel/syscall.c linux-2.6.6.new/arch/mips/kernel/syscall.c
+--- linux-2.6.6.old/arch/mips/kernel/syscall.c	Mon May 10 05:33:12 2004
++++ linux-2.6.6.new/arch/mips/kernel/syscall.c	Tue Jun 29 17:55:34 2004
+@@ -130,7 +130,7 @@ do_mmap2(unsigned long addr, unsigned lo
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/mips/kernel/sysirix.c linux-2.6.6.new/arch/mips/kernel/sysirix.c
+--- linux-2.6.6.old/arch/mips/kernel/sysirix.c	Mon May 10 05:33:19 2004
++++ linux-2.6.6.new/arch/mips/kernel/sysirix.c	Tue Jun 29 17:55:28 2004
+@@ -1572,7 +1572,7 @@ asmlinkage int irix_mmap64(struct pt_reg
+ 	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/parisc/kernel/sys_parisc.c linux-2.6.6.new/arch/parisc/kernel/sys_parisc.c
+--- linux-2.6.6.old/arch/parisc/kernel/sys_parisc.c	Mon May 10 05:33:13 2004
++++ linux-2.6.6.new/arch/parisc/kernel/sys_parisc.c	Tue Jun 29 17:56:53 2004
+@@ -140,7 +140,7 @@ static unsigned long do_mmap2(unsigned l
+ 	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file != NULL)
+diff -rupN linux-2.6.6.old/arch/ppc/kernel/syscalls.c linux-2.6.6.new/arch/ppc/kernel/syscalls.c
+--- linux-2.6.6.old/arch/ppc/kernel/syscalls.c	Mon May 10 05:33:20 2004
++++ linux-2.6.6.new/arch/ppc/kernel/syscalls.c	Tue Jun 29 17:54:35 2004
+@@ -172,7 +172,7 @@ do_mmap2(unsigned long addr, size_t len,
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	ret = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	ret = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 	if (file)
+ 		fput(file);
+diff -rupN linux-2.6.6.old/arch/s390/kernel/compat_linux.c linux-2.6.6.new/arch/s390/kernel/compat_linux.c
+--- linux-2.6.6.old/arch/s390/kernel/compat_linux.c	Mon May 10 05:33:13 2004
++++ linux-2.6.6.new/arch/s390/kernel/compat_linux.c	Tue Jun 29 17:55:41 2004
+@@ -1838,7 +1838,7 @@ static inline long do_mmap2(
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	if (!IS_ERR((void *) error) && error + len >= 0x80000000ULL) {
+ 		/* Result is out of bounds.  */
+ 		do_munmap(current->mm, addr, len);
+diff -rupN linux-2.6.6.old/arch/s390/kernel/sys_s390.c linux-2.6.6.new/arch/s390/kernel/sys_s390.c
+--- linux-2.6.6.old/arch/s390/kernel/sys_s390.c	Mon May 10 05:32:28 2004
++++ linux-2.6.6.new/arch/s390/kernel/sys_s390.c	Tue Jun 29 17:55:46 2004
+@@ -67,7 +67,7 @@ static inline long do_mmap2(
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/sh/kernel/sys_sh.c linux-2.6.6.new/arch/sh/kernel/sys_sh.c
+--- linux-2.6.6.old/arch/sh/kernel/sys_sh.c	Mon May 10 05:33:22 2004
++++ linux-2.6.6.new/arch/sh/kernel/sys_sh.c	Tue Jun 29 17:54:19 2004
+@@ -128,7 +128,7 @@ do_mmap2(unsigned long addr, unsigned lo
+ 	}
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/sparc/kernel/sys_sparc.c linux-2.6.6.new/arch/sparc/kernel/sys_sparc.c
+--- linux-2.6.6.old/arch/sparc/kernel/sys_sparc.c	Mon May 10 05:32:28 2004
++++ linux-2.6.6.new/arch/sparc/kernel/sys_sparc.c	Tue Jun 29 17:56:59 2004
+@@ -245,7 +245,7 @@ static unsigned long do_mmap2(unsigned l
+ 	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
+ 
+ 	down_write(&current->mm->mmap_sem);
+-	retval = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	retval = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ out_putf:
+diff -rupN linux-2.6.6.old/arch/v850/kernel/syscalls.c linux-2.6.6.new/arch/v850/kernel/syscalls.c
+--- linux-2.6.6.old/arch/v850/kernel/syscalls.c	Mon May 10 05:32:52 2004
++++ linux-2.6.6.new/arch/v850/kernel/syscalls.c	Tue Jun 29 17:55:53 2004
+@@ -167,7 +167,7 @@ do_mmap2 (unsigned long addr, size_t len
+ 	}
+ 	
+ 	down_write (&current->mm->mmap_sem);
+-	ret = do_mmap_pgoff (file, addr, len, prot, flags, pgoff);
++	ret = do_mmap_pgoff (current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write (&current->mm->mmap_sem);
+ 	if (file)
+ 		fput (file);
+diff -rupN linux-2.6.6.old/arch/x86_64/ia32/sys_ia32.c linux-2.6.6.new/arch/x86_64/ia32/sys_ia32.c
+--- linux-2.6.6.old/arch/x86_64/ia32/sys_ia32.c	Mon May 10 05:32:29 2004
++++ linux-2.6.6.new/arch/x86_64/ia32/sys_ia32.c	Tue Jun 29 17:56:48 2004
+@@ -223,7 +223,7 @@ sys32_mmap(struct mmap_arg_struct *arg)
+ 
+ 	mm = current->mm; 
+ 	down_write(&mm->mmap_sem); 
+-	retval = do_mmap_pgoff(file, a.addr, a.len, a.prot, a.flags, a.offset>>PAGE_SHIFT);
++	retval = do_mmap_pgoff(current->mm, file, a.addr, a.len, a.prot, a.flags, a.offset>>PAGE_SHIFT);
+ 	if (file)
+ 		fput(file);
+ 
+@@ -1247,7 +1247,7 @@ asmlinkage long sys32_mmap2(unsigned lon
+ 		prot |= vm_force_exec32;
+ 
+ 	down_write(&mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
+ 	up_write(&mm->mmap_sem);
+ 
+ 	if (file)
+diff -rupN linux-2.6.6.old/arch/x86_64/kernel/sys_x86_64.c linux-2.6.6.new/arch/x86_64/kernel/sys_x86_64.c
+--- linux-2.6.6.old/arch/x86_64/kernel/sys_x86_64.c	Mon May 10 05:32:52 2004
++++ linux-2.6.6.new/arch/x86_64/kernel/sys_x86_64.c	Tue Jun 29 17:56:32 2004
+@@ -57,7 +57,7 @@ long sys_mmap(unsigned long addr, unsign
+ 			goto out;
+ 	}
+ 	down_write(&current->mm->mmap_sem);
+-	error = do_mmap_pgoff(file, addr, len, prot, flags, off >> PAGE_SHIFT);
++	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, off >> PAGE_SHIFT);
+ 	up_write(&current->mm->mmap_sem);
+ 
+ 	if (file)

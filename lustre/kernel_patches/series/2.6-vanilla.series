@@ -1,5 +1,6 @@
 uml-vanilla-2.6.6-p1.patch
 uml-vanilla-2.6.6-p2.patch
+uml-vanilla-2.6.6-p3.patch
 lustre_version.patch
 vfs_intent-2.6-vanilla.patch
 vfs_nointent-2.6-vanilla.patch
