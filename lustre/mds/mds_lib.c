@@ -57,6 +57,7 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
         fid->f_type = (S_IFMT & inode->i_mode);
 }
 
+/* Note that we can copy all of the fields, just some will not be "valid" */
 void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
 {
         b->valid = OBD_MD_FLID | OBD_MD_FLATIME | OBD_MD_FLMTIME |
