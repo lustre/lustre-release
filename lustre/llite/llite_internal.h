@@ -41,6 +41,9 @@ struct ll_sb_info {
         spinlock_t                ll_pglist_lock;
         unsigned long             ll_pglist_gen;
         struct list_head          ll_pglist;
+
+        /* list of GNS mounts; protected by the dcache_lock */
+        struct list_head          ll_mnt_list;
 };
 
 struct ll_readahead_state {
@@ -127,6 +130,7 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 /* llite/dir.c */
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
+int fill_page_with_path(struct dentry *, struct vfsmount *, char **pagep);
 
 /* llite/namei.c */
 int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
