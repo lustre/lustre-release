@@ -47,7 +47,8 @@
 /*
  *  GENERAL STUFF
  */
-typedef __u8 uuid_t[37];
+typedef __u8 uuid_t[37]; /* deprecated */
+typedef __u8 obd_uuid_t[37];
 
 /* FOO_REQUEST_PORTAL is for incoming requests on the FOO
  * FOO_REPLY_PORTAL   is for incoming replies on the FOO
@@ -265,7 +266,7 @@ struct connmgr_body {
         __u64 conn;
         __u64 conn_token;
         __u32 generation;
-        __u8  conn_uuid[37];
+        obd_uuid_t conn_uuid;
 };
 
 /* request structure for OST's */
@@ -415,7 +416,7 @@ struct lov_desc {
         __u64 ld_default_stripe_size;      /* in bytes */
         __u64 ld_default_stripe_offset;    /* in bytes */
         __u32 ld_pattern;                  /* RAID 0,1 etc */
-         uuid_t ld_uuid;
+        uuid_t ld_uuid;
 }; 
 
 /*
