@@ -335,7 +335,8 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
         if (cb_data->callback)
                 cb_data->callback(cb_data->cb_data, err, CB_PHASE_FINISH);
 
-        OBD_FREE(cb_data->obd_data, cb_data->obd_size);
+        if (cb_data->obd_data)
+                OBD_FREE(cb_data->obd_data, cb_data->obd_size);
         OBD_FREE(cb_data, sizeof(*cb_data));
 
         /* We can't kunmap the desc from interrupt context, so we do it from
