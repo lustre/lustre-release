@@ -402,6 +402,9 @@ static struct inode_ops llu_inode_ops = {
         inop_lookup:    llu_iop_lookup,
         inop_getattr:   llu_iop_getattr,
         inop_open:      llu_iop_open,
+        inop_ipreadv:   llu_iop_ipreadv,
+        inop_ipwritev:  llu_iop_ipwritev,
+        inop_iodone:    llu_iop_iodone,
 };
 
 

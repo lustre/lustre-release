@@ -75,7 +75,8 @@ int
 main(int argc, char * const argv[])
 {
 	struct stat statbuf;
-	int	err, i, fd;
+	int	err, i, fd, written, read;
+	char pgbuf[4096], readbuf[4096];
 
 	if (_sysio_init() != 0) {
 		perror("init sysio");
@@ -104,8 +105,18 @@ main(int argc, char * const argv[])
 	}
 #endif
 #if 1
-	fd = fixme_open("/newfile", O_CREAT, 00666);
+	fd = fixme_open("/newfile5", O_RDWR|O_CREAT|O_TRUNC, 00664);
 	printf("***************** open return %d ****************\n", fd);
+
+	memset(pgbuf, 'A', 4096);
+	written = fixme_write(fd, pgbuf, 4096);
+	printf("+++++++++++++++++ %d bytes written ++++++++++++++\n", written);
+
+	fixme_lseek(fd, 0, SEEK_SET);
+
+	memset(readbuf, 'a', 4096);
+	read = fixme_read(fd, readbuf, 4096);
+	printf("----------------- %d bytes read --------------\n", read);
 #endif
 	printf("sysio is about shutdown\n");
 	/*

@@ -137,9 +137,9 @@ static struct inode *llu_create_node(struct inode *dir, const char *name,
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode)
 {
         struct inode *inode;
+#if 0
         int rc = 0;
 
-#if 0
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu,intent=%s\n",
                dentry->d_name.name, dir->i_ino, LL_IT2STR(dentry->d_it));
 
@@ -305,7 +305,9 @@ out:
 
 static int llu_file_open(struct inode *inode)
 {
+#if 0
         struct llu_sb_info *sbi = llu_i2sbi(inode);
+#endif
         struct llu_inode_info *lli = llu_i2info(inode);
         struct lustre_handle *conn = llu_i2obdconn(inode);
         struct lookup_intent *it;
@@ -375,3 +377,56 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         LASSERT(pnode->p_base->pb_ino);
         return llu_file_open(pnode->p_base->pb_ino);
 }
+
+int llu_iop_ipreadv(struct inode *ino,
+                    struct io_arguments *ioargs,
+                    struct ioctx **ioctxp)
+{
+        struct ioctx *ioctx;
+
+        if (!ioargs->ioarg_iovlen)
+                return 0;
+        if (ioargs->ioarg_iovlen < 0)
+                return -EINVAL;
+
+        ioctx = _sysio_ioctx_new(ino, ioargs);
+        if (!ioctx)
+                return -ENOMEM;
+
+        ioctx->ioctx_cc = llu_file_read(ino,
+                                        ioctx->ioctx_iovec,
+                                        ioctx->ioctx_iovlen,
+                                        ioctx->ioctx_offset);
+        if (ioctx->ioctx_cc < 0)
+                ioctx->ioctx_errno = ioctx->ioctx_cc;
+
+        *ioctxp = ioctx;
+        return 0;
+}
+
+int llu_iop_ipwritev(struct inode *ino,
+                     struct io_arguments *ioargs,
+                     struct ioctx **ioctxp)
+{
+        struct ioctx *ioctx;
+
+        if (!ioargs->ioarg_iovlen)
+                return 0;
+        if (ioargs->ioarg_iovlen < 0)
+                return -EINVAL;
+
+        ioctx = _sysio_ioctx_new(ino, ioargs);
+        if (!ioctx)
+                return -ENOMEM;
+
+        ioctx->ioctx_cc = llu_file_write(ino,
+                                         ioctx->ioctx_iovec,
+                                         ioctx->ioctx_iovlen,
+                                         ioctx->ioctx_offset);
+        if (ioctx->ioctx_cc < 0)
+                ioctx->ioctx_errno = ioctx->ioctx_cc;
+
+        *ioctxp = ioctx;
+        return 0;
+}
+
