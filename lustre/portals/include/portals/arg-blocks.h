@@ -18,7 +18,7 @@
 #define PTL_GETID     1
 #define PTL_NISTATUS  2
 #define PTL_NIDIST    3
-#define PTL_NIDEBUG   4
+// #define PTL_NIDEBUG   4
 #define PTL_MEATTACH  5
 #define PTL_MEINSERT  6
 // #define PTL_MEPREPEND 7
@@ -205,7 +205,7 @@ typedef struct PtlEQAlloc_in {
         ptl_size_t count_in;
         void *base_in;
         int len_in;
-        int (*callback_in) (ptl_event_t * event);
+        ptl_eq_handler_t callback_in;
 } PtlEQAlloc_in;
 
 typedef struct PtlEQAlloc_out {

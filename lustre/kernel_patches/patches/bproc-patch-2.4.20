@@ -1,4 +1,4 @@
-$Id: bproc-patch-2.4.20,v 1.8 2004/04/12 21:44:45 nic Exp $
+$Id: bproc-patch-2.4.20,v 1.9 2004/04/13 01:57:22 eeb Exp $
 
 Index: linux/fs/exec.c
 ===================================================================
@@ -764,7 +764,7 @@ Index: linux/kernel/bproc_hook.c
 + *  along with this program; if not, write to the Free Software
 + *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 + *
-+ * $Id: bproc-patch-2.4.20,v 1.8 2004/04/12 21:44:45 nic Exp $
++ * $Id: bproc-patch-2.4.20,v 1.9 2004/04/13 01:57:22 eeb Exp $
 + *-----------------------------------------------------------------------*/
 +#include <linux/kernel.h>
 +#include <linux/sched.h>
@@ -832,7 +832,7 @@ Index: linux/include/linux/bproc.h
 + *  along with this program; if not, write to the Free Software
 + *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 + *
-+ * $Id: bproc-patch-2.4.20,v 1.8 2004/04/12 21:44:45 nic Exp $
++ * $Id: bproc-patch-2.4.20,v 1.9 2004/04/13 01:57:22 eeb Exp $
 + *-----------------------------------------------------------------------*/
 +#ifndef _LINUX_BPROC_H
 +#define _LINUX_BPROC_H

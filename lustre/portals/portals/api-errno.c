@@ -36,8 +36,7 @@ const char *ptl_err_str[] = {
         "PTL_MD_NO_UPDATE",
         "PTL_FAIL",
 
-        "PTL_IOV_TOO_MANY",
-        "PTL_IOV_TOO_SMALL",
+        "PTL_IOV_INVALID",
 
         "PTL_EQ_IN_USE",
 

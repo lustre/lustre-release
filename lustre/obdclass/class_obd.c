@@ -297,10 +297,10 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
         case OBD_IOC_CLOSE_UUID: {
                 ptl_nid_t       peer_nid;
-                ptl_handle_ni_t peer_ni;
+                __u32           peer_nal;
                 CDEBUG(D_IOCTL, "closing all connections to uuid %s\n",
                        data->ioc_inlbuf1);
-                lustre_uuid_to_peer(data->ioc_inlbuf1, &peer_ni, &peer_nid);
+                lustre_uuid_to_peer(data->ioc_inlbuf1, &peer_nal, &peer_nid);
                 GOTO(out, err = 0);
         }
 

@@ -11,25 +11,10 @@
 
 #include <portals/p30.h>
 
-extern int ptl_init;		/* Has the library be initialized */
+extern int ptl_init;		/* Has the library been initialized */
 
 extern int ptl_ni_init(void);
-extern int ptl_me_init(void);
-extern int ptl_md_init(void);
-extern int ptl_eq_init(void);
-
-extern int ptl_me_ni_init(nal_t * nal);
-extern int ptl_md_ni_init(nal_t * nal);
-extern int ptl_eq_ni_init(nal_t * nal);
-
 extern void ptl_ni_fini(void);
-extern void ptl_me_fini(void);
-extern void ptl_md_fini(void);
-extern void ptl_eq_fini(void);
-
-extern void ptl_me_ni_fini(nal_t * nal);
-extern void ptl_md_ni_fini(nal_t * nal);
-extern void ptl_eq_ni_fini(nal_t * nal);
 
 static inline ptl_eq_t *
 ptl_handle2usereq (ptl_handle_eq_t *handle)

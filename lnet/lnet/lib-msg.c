@@ -89,10 +89,6 @@ lib_finalize(nal_cb_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
         int           rc;
         ptl_hdr_t     ack;
 
-        /* ni went down while processing this message */
-        if (nal->ni.up == 0)
-                return;
-
         if (msg == NULL)
                 return;
 

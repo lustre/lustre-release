@@ -402,7 +402,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
                 pcfg.pcfg_nal = lmd->lmd_nal;
                 pcfg.pcfg_nid = lmd->lmd_local_nid;
-                err = kportal_nal_cmd(&pcfg);
+                err = libcfs_nal_cmd(&pcfg);
                 if (err <0)
                         GOTO(out, err);
         }
@@ -415,7 +415,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 pcfg.pcfg_misc    = lmd->lmd_port;
                 pcfg.pcfg_size    = 8388608;
                 pcfg.pcfg_flags   = 0x4; /*share*/
-                err = kportal_nal_cmd(&pcfg);
+                err = libcfs_nal_cmd(&pcfg);
                 if (err <0)
                         GOTO(out, err);
         }
@@ -506,7 +506,7 @@ out_del_conn:
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
                 pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
                 pcfg.pcfg_flags   = 1; /*share*/
-                err = kportal_nal_cmd(&pcfg);
+                err = libcfs_nal_cmd(&pcfg);
                 if (err <0)
                         GOTO(out, err);
         }

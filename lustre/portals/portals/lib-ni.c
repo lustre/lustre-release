@@ -29,18 +29,6 @@
 
 #define MAX_DIST 18446744073709551615ULL
 
-int do_PtlNIDebug(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
-{
-        PtlNIDebug_in *args = v_args;
-        PtlNIDebug_out *ret = v_ret;
-        lib_ni_t *ni = &nal->ni;
-
-        ret->rc = ni->debug;
-        ni->debug = args->mask_in;
-
-        return 0;
-}
-
 int do_PtlNIStatus(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 {
         /*

@@ -36,8 +36,18 @@
 
 #ifdef __KERNEL__
 #ifndef CRAY_PORTALS
-void pers_bulk_add_page(struct ptlrpc_bulk_desc *desc, struct page *page,
-                        int pageoffset, int len)
+void ptlrpc_fill_bulk_md (ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
+{
+        LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
+        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_KIOV | PTL_MD_PHYS)));
+
+        md->options |= PTL_MD_KIOV;
+        md->start = &desc->bd_iov[0];
+        md->length = desc->bd_iov_count;
+}
+
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
+                          int pageoffset, int len)
 {
         ptl_kiov_t *kiov = &desc->bd_iov[desc->bd_iov_count];
 
@@ -48,10 +58,20 @@ void pers_bulk_add_page(struct ptlrpc_bulk_desc *desc, struct page *page,
         desc->bd_iov_count++;
 }
 #else
-void pers_bulk_add_page(struct ptlrpc_bulk_desc *desc, struct page *page,
-                        int pageoffset, int len)
+void ptlrpc_fill_bulk_md (ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
 {
-        struct iovec *iov = &desc->bd_iov[desc->bd_iov_count];
+        LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
+        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_KIOV | PTL_MD_PHYS)));
+        
+        md->options |= (PTL_MD_IOVEC | PTL_MD_PHYS);
+        md->start = &desc->bd_iov[0];
+        md->length = desc->bd_iov_count;
+}
+
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
+                          int pageoffset, int len)
+{
+        ptl_md_iovec_t *iov = &desc->bd_iov[desc->bd_iov_count];
 
         /* Should get a compiler warning if sizeof(physaddr) > sizeof(void *) */
         iov->iov_base = (void *)(page_to_phys(page) + pageoffset);
@@ -62,17 +82,39 @@ void pers_bulk_add_page(struct ptlrpc_bulk_desc *desc, struct page *page,
 #endif
 
 #else /* !__KERNEL__ */
-
-int can_merge_iovs(struct iovec *existing, struct iovec *candidate)
+void ptlrpc_fill_bulk_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
 {
-        if (existing->iov_base + existing->iov_len == candidate->iov_base)
+        LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_KIOV | PTL_MD_PHYS)));
+
+        if (desc->bd_iov_count == 1) {
+                md->start = desc->bd_iov[0].iov_base;
+                md->length = desc->bd_iov[0].iov_len;
+                return;
+        }
+        
+#if CRAY_PORTALS
+        LBUG();
+#endif
+        md->options |= PTL_MD_IOVEC;
+        md->start = &desc->bd_iov[0];
+        md->length = desc->bd_iov_count;
+}
+
+static int can_merge_iovs(ptl_md_iovec_t *existing, ptl_md_iovec_t *candidate)
+{
+        if (existing->iov_base + existing->iov_len == candidate->iov_base) 
                 return 1;
+
+        CERROR("Can't merge iovs %p for %x, %p for %x\n",
+               existing->iov_base, existing->iov_len,
+               candidate->iov_base, candidate->iov_len);
         return 0;
 }
-void pers_bulk_add_page(struct ptlrpc_bulk_desc *desc, struct page *page, 
-                        int pageoffset, int len)
+
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page, 
+                          int pageoffset, int len)
 {
-        struct iovec *iov = &desc->bd_iov[desc->bd_iov_count];
+        ptl_md_iovec_t *iov = &desc->bd_iov[desc->bd_iov_count];
 
         iov->iov_base = page->addr + pageoffset;
         iov->iov_len = len;

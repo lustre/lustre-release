@@ -48,13 +48,6 @@ kpr_router_interface_t kpr_router_interface = {
 	kprri_deregister:	kpr_deregister_nal,
 };
 
-kpr_control_interface_t kpr_control_interface = {
-	kprci_add_route:	kpr_add_route,
-	kprci_del_route:        kpr_del_route,
-	kprci_get_route:        kpr_get_route,
-	kprci_notify:           kpr_sys_notify,
-};
-
 int
 kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 {
@@ -637,7 +630,7 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
 
 int
 kpr_sys_notify (int gateway_nalid, ptl_nid_t gateway_nid,
-            int alive, time_t when)
+                int alive, time_t when)
 {
         return (kpr_do_notify (0, gateway_nalid, gateway_nid, alive, when));
 }
@@ -696,8 +689,8 @@ kpr_del_route (int gw_nalid, ptl_nid_t gw_nid,
 }
 
 int
-kpr_get_route (int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
-               ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive)
+kpr_get_route (int idx, __u32 *gateway_nalid, ptl_nid_t *gateway_nid,
+               ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, __u32 *alive)
 {
 	struct list_head  *e;
 
@@ -725,10 +718,66 @@ kpr_get_route (int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
         return (-ENOENT);
 }
 
+static int 
+kpr_nal_cmd(struct portals_cfg *pcfg, void * private)
+{
+        int err = -EINVAL;
+        ENTRY;
+
+        switch(pcfg->pcfg_command) {
+        default:
+                CDEBUG(D_IOCTL, "Inappropriate cmd: %d\n", pcfg->pcfg_command);
+                break;
+                
+        case NAL_CMD_ADD_ROUTE:
+                CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
+                       pcfg->pcfg_nal, pcfg->pcfg_nid, 
+                       pcfg->pcfg_nid2, pcfg->pcfg_nid3);
+                err = kpr_add_route(pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
+                                    pcfg->pcfg_nid2, pcfg->pcfg_nid3);
+                break;
+
+        case NAL_CMD_DEL_ROUTE:
+                CDEBUG (D_IOCTL, "Removing routes via [%d] "LPU64" : "LPU64" - "LPU64"\n",
+                        pcfg->pcfg_gw_nal, pcfg->pcfg_nid, 
+                        pcfg->pcfg_nid2, pcfg->pcfg_nid3);
+                err = kpr_del_route (pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
+                                     pcfg->pcfg_nid2, pcfg->pcfg_nid3);
+                break;
+
+        case NAL_CMD_NOTIFY_ROUTER: {
+                CDEBUG (D_IOCTL, "Notifying peer [%d] "LPU64" %s @ %ld\n",
+                        pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
+                        pcfg->pcfg_flags ? "Enabling" : "Disabling",
+                        (time_t)pcfg->pcfg_nid3);
+                
+                err = kpr_sys_notify (pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
+                                      pcfg->pcfg_flags, (time_t)pcfg->pcfg_nid3);
+                break;
+        }
+                
+        case NAL_CMD_GET_ROUTE:
+                CDEBUG (D_IOCTL, "Getting route [%d]\n", pcfg->pcfg_count);
+                err = kpr_get_route(pcfg->pcfg_count, &pcfg->pcfg_gw_nal,
+                                    &pcfg->pcfg_nid, 
+                                    &pcfg->pcfg_nid2, &pcfg->pcfg_nid3,
+                                    &pcfg->pcfg_flags);
+                break;
+        }
+        RETURN(err);
+}
+
+
 static void /*__exit*/
 kpr_finalise (void)
 {
         LASSERT (list_empty (&kpr_nals));
+
+        libcfs_nal_cmd_unregister(ROUTER);
+
+        PORTAL_SYMBOL_UNREGISTER(kpr_router_interface);
+
+        kpr_proc_fini();
 
         while (!list_empty (&kpr_routes)) {
                 kpr_route_entry_t *re = list_entry(kpr_routes.next,
@@ -739,11 +788,6 @@ kpr_finalise (void)
                 PORTAL_FREE(re, sizeof (*re));
         }
 
-        kpr_proc_fini();
-
-        PORTAL_SYMBOL_UNREGISTER(kpr_router_interface);
-        PORTAL_SYMBOL_UNREGISTER(kpr_control_interface);
-
         CDEBUG(D_MALLOC, "kpr_finalise: kmem back to %d\n",
                atomic_read(&portal_kmemory));
 }
@@ -751,13 +795,20 @@ kpr_finalise (void)
 static int __init
 kpr_initialise (void)
 {
+        int     rc;
+        
         CDEBUG(D_MALLOC, "kpr_initialise: kmem %d\n",
                atomic_read(&portal_kmemory));
 
         kpr_proc_init();
 
+        rc = libcfs_nal_cmd_register(ROUTER, kpr_nal_cmd, NULL);
+        if (rc != 0) {
+                CERROR("Can't register nal cmd handler\n");
+                return (rc);
+        }
+        
         PORTAL_SYMBOL_REGISTER(kpr_router_interface);
-        PORTAL_SYMBOL_REGISTER(kpr_control_interface);
         return (0);
 }
 
@@ -768,5 +819,4 @@ MODULE_LICENSE("GPL");
 module_init (kpr_initialise);
 module_exit (kpr_finalise);
 
-EXPORT_SYMBOL (kpr_control_interface);
 EXPORT_SYMBOL (kpr_router_interface);

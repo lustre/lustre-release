@@ -95,7 +95,7 @@ static int procbridge_forward(nal_t *n, int id, void *args, size_t args_len,
  * cleanup nal state, reclaim the lower side thread and
  *   its state using PTL_FINI codepoint
  */
-static int procbridge_shutdown(nal_t *n, int ni)
+static void procbridge_shutdown(nal_t *n)
 {
     bridge b=(bridge)n->nal_data;
     procbridge p=(procbridge)b->local;
@@ -114,16 +114,6 @@ static int procbridge_shutdown(nal_t *n, int ni)
     } while (1);
 
     free(p);
-    return(0);
-}
-
-
-/* Function: validate
- *    useless stub
- */
-static int procbridge_validate(nal_t *nal, void *base, size_t extent)
-{
-    return(0);
 }
 
 
@@ -187,18 +177,20 @@ static int procbridge_yield(nal_t *n, unsigned long *flags, int milliseconds)
     return (milliseconds);
 }
 
+/* forward decl */
+extern int procbridge_startup (nal_t *, ptl_pid_t,
+                               ptl_ni_limits_t *, ptl_ni_limits_t *);
 
 /* api_nal
  *  the interface vector to allow the generic code to access
  *  this nal. this is seperate from the library side nal_cb.
  *  TODO: should be dyanmically allocated
  */
-static nal_t api_nal = {
-    ni:       {0},
+nal_t procapi_nal = {
     nal_data: NULL,
-    forward:  procbridge_forward,
+    startup:  procbridge_startup,
     shutdown: procbridge_shutdown,
-    validate: procbridge_validate,
+    forward:  procbridge_forward,
     yield:    procbridge_yield,
     lock:     procbridge_lock,
     unlock:   procbridge_unlock
@@ -206,7 +198,7 @@ static nal_t api_nal = {
 
 ptl_nid_t tcpnal_mynid;
 
-/* Function: procbridge_interface
+/* Function: procbridge_startup
  *
  * Arguments:  pid: requested process id (port offset)
  *                  PTL_ID_ANY not supported.
@@ -214,40 +206,34 @@ ptl_nid_t tcpnal_mynid;
  *                      and effectively ignored
  *             actual:  limits actually allocated and returned
  *
- * Returns: a pointer to my statically allocated top side NAL
- *          structure
+ * Returns: portals rc
  *
  * initializes the tcp nal. we define unix_failure as an
  * error wrapper to cut down clutter.
  */
-nal_t *procbridge_interface(int num_interface,
-                            ptl_pt_index_t ptl_size,
-                            ptl_ac_index_t acl_size,
-                            ptl_pid_t requested_pid)
+int procbridge_startup (nal_t *nal, ptl_pid_t requested_pid,
+                        ptl_ni_limits_t *requested_limits,
+                        ptl_ni_limits_t *actual_limits)
 {
     nal_init_args_t args;
+
     procbridge p;
     bridge b;
-    static int initialized=0;
-    ptl_ni_limits_t limits = {-1,-1,-1,-1,-1};
+    /* XXX nal_type is purely private to tcpnal here */
     int nal_type = PTL_IFACE_TCP;/* PTL_IFACE_DEFAULT FIXME hack */
 
-    if(initialized) return (&api_nal);
+    LASSERT(nal == &procapi_nal);
 
     init_unix_timer();
 
     b=(bridge)malloc(sizeof(struct bridge));
     p=(procbridge)malloc(sizeof(struct procbridge));
-    api_nal.nal_data=b;
+    nal->nal_data=b;
     b->local=p;
 
-    if (ptl_size)
-	    limits.max_ptable_index = ptl_size;
-    if (acl_size)
-	    limits.max_atable_index = acl_size;
-
     args.nia_requested_pid = requested_pid;
-    args.nia_limits = &limits;
+    args.nia_requested_limits = requested_limits;
+    args.nia_actual_limits = actual_limits;
     args.nia_nal_type = nal_type;
     args.nia_bridge = b;
 
@@ -259,19 +245,19 @@ nal_t *procbridge_interface(int num_interface,
     /* initialize notifier */
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, p->notifier)) {
         perror("socketpair failed");
-        return NULL;
+        return PTL_FAIL;
     }
 
     if (!register_io_handler(p->notifier[1], READ_HANDLER,
                 procbridge_notifier_handler, p)) {
         perror("fail to register notifier handler");
-        return NULL;
+        return PTL_FAIL;
     }
 
     /* create nal thread */
     if (pthread_create(&p->t, NULL, nal_thread, &args)) {
         perror("nal_init: pthread_create");
-        return(NULL);
+        return PTL_FAIL;
     }
 
     do {
@@ -285,10 +271,9 @@ nal_t *procbridge_interface(int num_interface,
     } while (1);
 
     if (p->nal_flags & NAL_FLAG_STOPPED)
-        return (NULL);
+        return PTL_FAIL;
 
     b->nal_cb->ni.nid = tcpnal_mynid;
-    initialized = 1;
 
-    return (&api_nal);
+    return PTL_OK;
 }

@@ -32,9 +32,6 @@ int num_rx_threads = -1;
 int num_stxds = 5;
 int gm_port = 4;
 
-ptl_handle_ni_t	kgmnal_ni;
-
-
 int 
 gmnal_cmd(struct portals_cfg *pcfg, void *private)
 {
@@ -92,26 +89,15 @@ gmnal_load(void)
 
 
 	CDEBUG(D_INFO, "Calling gmnal_init\n");
-	status = PtlNIInit(gmnal_init, 32, 4, 0, &kgmnal_ni);
+        statud = gmnal_init();
 	if (status == PTL_OK) {
-		CDEBUG(D_INFO, "Portals GMNAL initialised ok kgmnal_ni\n");
+		CDEBUG(D_INFO, "Portals GMNAL initialised ok\n");
 	} else {
 		CDEBUG(D_INFO, "Portals GMNAL Failed to initialise\n");
-		return(1);
+		return(-ENODEV);
 		
 	}
 
-	CDEBUG(D_INFO, "Calling kportal_nal_register\n");
-	/*
- 	 *	global_nal_data is set by gmnal_init
-	 */
-	if (kportal_nal_register(GMNAL, &gmnal_cmd, global_nal_data) != 0) {
-		CDEBUG(D_INFO, "kportal_nal_register failed\n");
-		return(1);
-	}
-
-	CDEBUG(D_INFO, "Calling PORTAL_SYMBOL_REGISTER\n");
-	PORTAL_SYMBOL_REGISTER(kgmnal_ni);
 	CDEBUG(D_INFO, "This is the end of the gmnal init routine");
 
 
@@ -122,11 +108,7 @@ gmnal_load(void)
 static void __exit
 gmnal_unload(void)
 {
-
-	kportal_nal_unregister(GMNAL);
-	PORTAL_SYMBOL_UNREGISTER(kgmnal_ni);
 	gmnal_fini();
-	global_nal_data = NULL;
 	return;
 }
 
@@ -134,8 +116,6 @@ gmnal_unload(void)
 module_init(gmnal_load);
 
 module_exit(gmnal_unload);
-
-EXPORT_SYMBOL(kgmnal_ni);
 
 MODULE_PARM(gmnal_small_msg_size, "i");
 MODULE_PARM(num_rx_threads, "i");

@@ -70,46 +70,11 @@ struct pingcli_args {
 
 struct task_struct *current;
 
-/* portals interfaces */
-ptl_handle_ni_t *
-kportal_get_ni (int nal)
-{
-        switch (nal)
-        {
-        case SOCKNAL:
-                return &tcpnal_ni;
-        default:
-                return NULL;
-        }
-}
-
-inline void
-kportal_put_ni (int nal)
-{
-        return;
-}
-
 int
-kportal_nal_cmd(struct portals_cfg *pcfg)
+libcfs_nal_cmd(struct portals_cfg *pcfg)
 {
-#if 0
-        __u32 nal = pcfg->pcfg_nal;
-        int rc = -EINVAL;
-
-        ENTRY;
-
-        down(&nal_cmd_sem);
-        if (nal > 0 && nal <= NAL_MAX_NR && nal_cmd[nal].nch_handler) {
-                CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, 
-                       pcfg->pcfg_command);
-                rc = nal_cmd[nal].nch_handler(pcfg, nal_cmd[nal].nch_private);
-        }
-        up(&nal_cmd_sem);
-        RETURN(rc);
-#else
         CERROR("empty function!!!\n");
         return 0;
-#endif
 }
 
 int init_current(int argc, char **argv)
@@ -127,14 +92,11 @@ int init_lib_portals()
 	int max_interfaces;
         int rc;
 
-        PtlInit(&max_interfaces);
-        rc = PtlNIInit(procbridge_interface, 0, 0, 0, &tcpnal_ni);
+        rc = PtlInit(&max_interfaces);
         if (rc != 0) {
                 CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
-                PtlFini();
                 RETURN (rc);
         }
-        PtlNIDebug(tcpnal_ni, ~0);
         return rc;
 }
 
@@ -349,7 +311,6 @@ int main(int argc, char **argv)
         if (init_current(argc, argv) ||
 	    init_obdclass() || init_lib_portals() ||
 	    ptlrpc_init() ||
-	    ldlm_init() ||
 	    mdc_init() ||
 	    lov_init() ||
 	    osc_init() ||

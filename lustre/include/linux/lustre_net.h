@@ -35,7 +35,6 @@
 #include <linux/kp30.h>
 // #include <linux/obd.h>
 #include <portals/p30.h>
-#include <portals/lib-types.h>                  /* FIXME (for PTL_MD_MAX_IOV) */
 #include <linux/lustre_idl.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_import.h>
@@ -45,27 +44,41 @@
 #define PTLRPC_MD_OPTIONS  (PTL_MD_EVENT_START_DISABLE | \
                             PTL_MD_LUSTRE_COMPLETION_SEMANTICS)
 
-/* Define some large-ish defaults for MTU and MAX_IOV if portals ones
- * aren't defined (i.e. no limits) or too large */
-#if (defined(PTL_MTU) && (PTL_MTU <= (1 << 20)))
-# define PTLRPC_MTU  PTL_MTU
+/* Define some large-ish maxima for bulk I/O 
+ * CAVEAT EMPTOR, with multinet (i.e. gateways forwarding between networks)
+ * these limits are system wide and not interface-local. */
+#define PTLRPC_MAX_BRW_SIZE     (1 << 20)
+#define PTLRPC_MAX_BRW_PAGES    512
+
+/* ...reduce to fit... */
+
+#if CRAY_PORTALS
+/* include a cray header here if relevant
+ * NB liblustre SIZE/PAGES is affected too, but it merges contiguous
+ * chunks, so FTTB, it always used contiguous MDs */
 #else
-# define PTLRPC_MTU  (1 << 20)
-#endif
-#if (defined(PTL_MAX_IOV) && (PTL_MAX_IOV <= 512))
-# define PTLRPC_MAX_IOV PTL_MAX_IOV
-#else
-# define PTLRPC_MAX_IOV 512
+# include <portals/lib-types.h>
 #endif
 
-/* Define consistent max bulk size/pages */
-#if (PTLRPC_MTU > PTLRPC_MAX_IOV * PAGE_SIZE)
-# define PTLRPC_MAX_BRW_PAGES   PTLRPC_MAX_IOV
-# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_IOV * PAGE_SIZE)
-#else
-# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MTU / PAGE_SIZE)
-# define PTLRPC_MAX_BRW_SIZE    PTLRPC_MTU
+#if (defined(PTL_MTU) && (PTL_MTU < PTLRPC_MAX_BRW_SIZE))
+# undef  PTLRPC_MAX_BRW_SIZE
+# define PTLRPC_MAX_BRW_SIZE  PTL_MTU
 #endif
+#if (defined(PTL_MD_MAX_IOV) && (PTL_MD_MAX_IOV < PTLRPC_MAX_BRW_PAGES ))
+# undef  PTLRPC_MAX_BRW_PAGES
+# define PTLRPC_MAX_BRW_PAGES PTL_MD_MAX_IOV
+#endif
+
+/* ...and make consistent... */
+
+#if (PTLRPC_MAX_BRW_SIZE > PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
+# undef  PTLRPC_MAX_BRW_SIZE
+# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
+#else
+# undef  PTLRPC_MAX_BRW_PAGES
+# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MAX_BRW_SIZE / PAGE_SIZE)
+#endif
+
 
 /* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
  * buffers */
@@ -416,7 +429,7 @@ struct ptlrpc_bulk_desc {
 #if (!CRAY_PORTALS && defined(__KERNEL__))
         ptl_kiov_t             bd_iov[0];
 #else
-        struct iovec           bd_iov[0];
+        ptl_md_iovec_t         bd_iov[0];
 #endif
 };
 
@@ -506,6 +519,7 @@ extern void client_bulk_callback (ptl_event_t *ev);
 extern void request_in_callback(ptl_event_t *ev);
 extern void reply_out_callback(ptl_event_t *ev);
 extern void server_bulk_callback (ptl_event_t *ev);
+extern int ptlrpc_default_nal(void);
 
 /* ptlrpc/connection.c */
 void ptlrpc_dump_connections(void);

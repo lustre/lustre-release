@@ -81,7 +81,7 @@ static void *pingsrv_shutdown(int err)
                                         PDEBUG ("PtlMEUnlink", rc);
 
                 case 3:
-                        kportal_put_ni (nal);
+                        PtlNIFini (server->ni);
 
                 case 4:
                         
@@ -167,19 +167,18 @@ int pingsrv_thread(void *arg)
         return 0;    
 }
 
-static int pingsrv_packet(ptl_event_t *ev)
+static void pingsrv_packet(ptl_event_t *ev)
 {
         atomic_inc (&pkt);
         wake_up_process (server->tsk);
-        return 1;
 } /* pingsrv_head() */
 
-static int pingsrv_callback(ptl_event_t *ev)
+static void pingsrv_callback(ptl_event_t *ev)
 {
         
         if (ev == NULL) {
                 CERROR ("null in callback, ev=%p\n", ev);
-                return 0;
+                return;
         }
         server->evnt = *ev;
         
@@ -193,23 +192,24 @@ static int pingsrv_callback(ptl_event_t *ev)
         
         packets_valid++;
 
-        return pingsrv_packet(ev);
+        pingsrv_packet(ev);
         
 } /* pingsrv_callback() */
 
 
 static struct pingsrv_data *pingsrv_setup(void)
 {
-        ptl_handle_ni_t *nip;
         int rc;
 
+        server->ni = PTL_INVALID_HANDLE;
+
        /* Aquire and initialize the proper nal for portals. */
-        if ((nip = kportal_get_ni (nal)) == NULL) {
+        rc = PtlNIInit(nal, 0, NULL, NULL, &server->ni);
+        if (!(rc == PTL_OK || rc == PTL_IFACE_DUP)) {
                 CDEBUG (D_OTHER, "NAL %d not loaded\n", nal);
                 return pingsrv_shutdown (4);
         }
 
-        server->ni= *nip;
 
         /* Based on the initialization aquire our unique portal ID. */
         if ((rc = PtlGetId (server->ni, &server->my_id))) {
@@ -229,7 +229,7 @@ static struct pingsrv_data *pingsrv_setup(void)
         }
 
 
-        if ((rc = PtlEQAlloc (server->ni, 1024, pingsrv_callback,
+        if ((rc = PtlEQAlloc (server->ni, 1024, &pingsrv_callback,
                                         &server->eq))) {
                 PDEBUG ("PtlEQAlloc (callback)", rc);
                 return pingsrv_shutdown (2);

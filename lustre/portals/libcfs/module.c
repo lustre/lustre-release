@@ -51,7 +51,13 @@
 
 #define PORTAL_MINOR 240
 
-extern void (kping_client)(struct portal_ioctl_data *);
+struct nal_cmd_handler {
+        nal_cmd_handler_fn  *nch_handler;
+        void                *nch_private;
+};
+
+static struct nal_cmd_handler nal_cmd[NAL_MAX_NR + 1];
+static DECLARE_MUTEX(nal_cmd_sem);
 
 #ifdef PORTAL_DEBUG
 void kportal_assertion_failed(char *expr, char *file, const char *func,
@@ -239,6 +245,62 @@ static inline void freedata(void *data, int len)
         PORTAL_FREE(data, len);
 }
 
+int
+libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *private)
+{
+        int rc = 0;
+
+        CDEBUG(D_IOCTL, "Register NAL %d, handler: %p\n", nal, handler);
+
+        if (nal > 0  && nal <= NAL_MAX_NR) {
+                down(&nal_cmd_sem);
+                if (nal_cmd[nal].nch_handler != NULL)
+                        rc = -EBUSY;
+                else {
+                        nal_cmd[nal].nch_handler = handler;
+                        nal_cmd[nal].nch_private = private;
+                }
+                up(&nal_cmd_sem);
+        }
+        return rc;
+}
+EXPORT_SYMBOL(libcfs_nal_cmd_register);
+
+void
+libcfs_nal_cmd_unregister(int nal)
+{
+        CDEBUG(D_IOCTL, "Unregister NAL %d\n", nal);
+
+        LASSERT(nal > 0 && nal <= NAL_MAX_NR);
+        LASSERT(nal_cmd[nal].nch_handler != NULL);
+
+        down(&nal_cmd_sem);
+        nal_cmd[nal].nch_handler = NULL;
+        nal_cmd[nal].nch_private = NULL;
+        up(&nal_cmd_sem);
+}
+EXPORT_SYMBOL(libcfs_nal_cmd_unregister);
+
+int
+libcfs_nal_cmd(struct portals_cfg *pcfg)
+{
+        __u32 nal = pcfg->pcfg_nal;
+        int   rc = -EINVAL;
+        ENTRY;
+
+        down(&nal_cmd_sem);
+        if (nal > 0 && nal <= NAL_MAX_NR && 
+            nal_cmd[nal].nch_handler != NULL) {
+                CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, 
+                       pcfg->pcfg_command);
+                rc = nal_cmd[nal].nch_handler(pcfg, nal_cmd[nal].nch_private);
+        }
+        up(&nal_cmd_sem);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(libcfs_nal_cmd);
+
 static DECLARE_RWSEM(ioctl_list_sem);
 static LIST_HEAD(ioctl_list);
 
@@ -356,6 +418,27 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                         err = -EFAULT;
                 break;
 #endif
+        case IOC_PORTAL_NAL_CMD: {
+                struct portals_cfg pcfg;
+
+                LASSERT (data->ioc_plen1 == sizeof(pcfg));
+                if (copy_from_user(&pcfg, (void *)data->ioc_pbuf1, 
+                                   sizeof(pcfg))) {
+                        err = -EFAULT;
+                        break;
+                }
+
+                CDEBUG (D_IOCTL, "nal command nal %d cmd %d\n", pcfg.pcfg_nal,
+                        pcfg.pcfg_command);
+                err = libcfs_nal_cmd(&pcfg);
+
+                if (err == 0 &&
+                    copy_to_user((char *)data->ioc_pbuf1, &pcfg, 
+                                 sizeof (pcfg)))
+                        err = -EFAULT;
+                break;
+        }
+
         case IOC_PORTAL_MEMHOG:
                 if (!capable (CAP_SYS_ADMIN))
                         err = -EPERM;

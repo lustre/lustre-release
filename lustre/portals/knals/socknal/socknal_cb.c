@@ -262,7 +262,7 @@ ksocknal_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         LASSERT (tx->tx_nkiov > 0);
 
 #if SOCKNAL_ZC
-        if (fragsize >= ksocknal_data.ksnd_zc_min_frag &&
+        if (fragsize >= ksocknal_tunables.ksnd_zc_min_frag &&
             (sock->sk->route_caps & NETIF_F_SG) &&
             (sock->sk->route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM))) {
 
@@ -381,7 +381,7 @@ ksocknal_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                  * is set.  Instead, we presume peer death has occurred if
                  * the socket doesn't drain within a timout */
                 conn->ksnc_tx_deadline = jiffies + 
-                                         ksocknal_data.ksnd_io_timeout * HZ;
+                                         ksocknal_tunables.ksnd_io_timeout * HZ;
                 conn->ksnc_peer->ksnp_last_alive = jiffies;
 
         } while (tx->tx_resid != 0);
@@ -444,7 +444,7 @@ ksocknal_recv_iov (ksock_conn_t *conn)
         /* received something... */
         conn->ksnc_peer->ksnp_last_alive = jiffies;
         conn->ksnc_rx_deadline = jiffies + 
-                                 ksocknal_data.ksnd_io_timeout * HZ;
+                                 ksocknal_tunables.ksnd_io_timeout * HZ;
         mb();                           /* order with setting rx_started */
         conn->ksnc_rx_started = 1;
 
@@ -503,7 +503,7 @@ ksocknal_recv_kiov (ksock_conn_t *conn)
         /* received something... */
         conn->ksnc_peer->ksnp_last_alive = jiffies;
         conn->ksnc_rx_deadline = jiffies + 
-                                 ksocknal_data.ksnd_io_timeout * HZ;
+                                 ksocknal_tunables.ksnd_io_timeout * HZ;
         mb();                           /* order with setting rx_started */
         conn->ksnc_rx_started = 1;
 
@@ -562,7 +562,7 @@ ksocknal_receive (ksock_conn_t *conn)
 
                 if (conn->ksnc_rx_nob_wanted == 0) {
                         /* Completed a message segment (header or payload) */
-                        if ((ksocknal_data.ksnd_eager_ack & conn->ksnc_type) != 0 &&
+                        if ((ksocknal_tunables.ksnd_eager_ack & conn->ksnc_type) != 0 &&
                             (conn->ksnc_rx_state ==  SOCKNAL_RX_BODY ||
                              conn->ksnc_rx_state == SOCKNAL_RX_BODY_FWD)) {
                                 /* Remind the socket to ack eagerly... */
@@ -723,7 +723,7 @@ ksocknal_launch_autoconnect_locked (ksock_route_t *route)
         LASSERT ((route->ksnr_connected & KSNR_TYPED_ROUTES) != KSNR_TYPED_ROUTES);
         LASSERT (!route->ksnr_connecting);
         
-        if (ksocknal_data.ksnd_typed_conns)
+        if (ksocknal_tunables.ksnd_typed_conns)
                 route->ksnr_connecting = 
                         KSNR_TYPED_ROUTES & ~route->ksnr_connected;
         else
@@ -797,7 +797,7 @@ ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
                         fnob     = nob;
                 }
 
-                if (!ksocknal_data.ksnd_typed_conns)
+                if (!ksocknal_tunables.ksnd_typed_conns)
                         continue;
 
                 switch (c->ksnc_type) {
@@ -808,11 +808,11 @@ ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
                 case SOCKNAL_CONN_BULK_IN:
                         continue;
                 case SOCKNAL_CONN_BULK_OUT:
-                        if (tx->tx_nob < ksocknal_data.ksnd_min_bulk)
+                        if (tx->tx_nob < ksocknal_tunables.ksnd_min_bulk)
                                 continue;
                         break;
                 case SOCKNAL_CONN_CONTROL:
-                        if (tx->tx_nob >= ksocknal_data.ksnd_min_bulk)
+                        if (tx->tx_nob >= ksocknal_tunables.ksnd_min_bulk)
                                 continue;
                         break;
                 }
@@ -856,7 +856,7 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         spin_lock_irqsave (&sched->kss_lock, flags);
 
         conn->ksnc_tx_deadline = jiffies + 
-                                 ksocknal_data.ksnd_io_timeout * HZ;
+                                 ksocknal_tunables.ksnd_io_timeout * HZ;
         mb();                                   /* order with list_add_tail */
 
         list_add_tail (&tx->tx_list, &conn->ksnc_tx_queue);
@@ -2182,7 +2182,7 @@ ksocknal_setup_sock (struct socket *sock)
         /* Keepalives: If 3/4 of the timeout elapses, start probing every
          * second until the timeout elapses. */
 
-        option = (ksocknal_data.ksnd_io_timeout * 3) / 4;
+        option = (ksocknal_tunables.ksnd_io_timeout * 3) / 4;
         set_fs (KERNEL_DS);
         rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_KEEPIDLE,
                                     (char *)&option, sizeof (option));
@@ -2202,7 +2202,7 @@ ksocknal_setup_sock (struct socket *sock)
                 return (rc);
         }
         
-        option = ksocknal_data.ksnd_io_timeout / 4;
+        option = ksocknal_tunables.ksnd_io_timeout / 4;
         set_fs (KERNEL_DS);
         rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_KEEPCNT,
                                     (char *)&option, sizeof (option));
@@ -2259,7 +2259,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
 
         /* Set the socket timeouts, so our connection attempt completes in
          * finite time */
-        tv.tv_sec = ksocknal_data.ksnd_io_timeout;
+        tv.tv_sec = ksocknal_tunables.ksnd_io_timeout;
         tv.tv_usec = 0;
 
         set_fs (KERNEL_DS);
@@ -2268,7 +2268,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set send timeout %d: %d\n", 
-                        ksocknal_data.ksnd_io_timeout, rc);
+                        ksocknal_tunables.ksnd_io_timeout, rc);
                 goto out;
         }
         
@@ -2278,7 +2278,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set receive timeout %d: %d\n",
-                        ksocknal_data.ksnd_io_timeout, rc);
+                        ksocknal_tunables.ksnd_io_timeout, rc);
                 goto out;
         }
 
@@ -2652,9 +2652,9 @@ ksocknal_reaper (void *arg)
                          * timeout on any connection within (n+1)/n times the
                          * timeout interval. */
 
-                        if (ksocknal_data.ksnd_io_timeout > n * p)
+                        if (ksocknal_tunables.ksnd_io_timeout > n * p)
                                 chunk = (chunk * n * p) / 
-                                        ksocknal_data.ksnd_io_timeout;
+                                        ksocknal_tunables.ksnd_io_timeout;
                         if (chunk == 0)
                                 chunk = 1;
 

@@ -37,12 +37,11 @@ typedef enum {
         PTL_MD_NO_UPDATE	= 18,
         PTL_FAIL		= 19,
 
-        PTL_IOV_TOO_MANY	= 20,
-        PTL_IOV_TOO_SMALL	= 21,
+        PTL_IOV_INVALID 	= 20,
 
-	PTL_EQ_IN_USE		= 22,
+	PTL_EQ_IN_USE		= 21,
 
-        PTL_MAX_ERRNO		= 23
+        PTL_MAX_ERRNO		= 22
 } ptl_err_t;
 /* If you change these, you must update the string table in api-errno.c */
 

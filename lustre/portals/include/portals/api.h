@@ -9,9 +9,9 @@
 int PtlInit(int *);
 void PtlFini(void);
 
-int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size_in,
-              ptl_ac_index_t acl_size_in, ptl_pid_t requested_pid,
-              ptl_handle_ni_t * interface_out);
+int PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
+	      ptl_ni_limits_t *desired_limits, ptl_ni_limits_t *actual_limits,
+              ptl_handle_ni_t *interface_out);
 
 int PtlNIInitialized(ptl_interface_t);
 
@@ -36,17 +36,6 @@ int PtlNIDist(ptl_handle_ni_t interface_in, ptl_process_id_t process_in,
 int PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t * interface_out);
 #endif
 
-
-/*
- * PtlNIDebug: 
- *
- * This is not an official Portals 3 API call.  It is provided
- * by the reference implementation to allow the maintainers an
- * easy way to turn on and off debugging information in the
- * library.  Do not use it in code that is not intended for use
- * with any version other than the portable reference library.
- */
-unsigned int PtlNIDebug(ptl_handle_ni_t ni, unsigned int mask_in);
 
 /* 
  * PtlNIFailNid
@@ -123,8 +112,8 @@ int PtlMDUpdate_internal(ptl_handle_md_t md_in, ptl_md_t * old_inout,
 
 /* These should be called by users */
 int PtlEQAlloc(ptl_handle_ni_t ni_in, ptl_size_t count_in,
-               int (*callback) (ptl_event_t * event),
-               ptl_handle_eq_t * handle_out);
+               ptl_eq_handler_t handler,
+               ptl_handle_eq_t *handle_out);
 int PtlEQFree(ptl_handle_eq_t eventq_in);
 
 int PtlEQCount(ptl_handle_eq_t eventq_in, ptl_size_t * count_out);

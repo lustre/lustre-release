@@ -949,19 +949,20 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
         switch(nal){
-/* XXX this should be a nal method of some sort */
+/* XXX this could be a nal method of some sort, 'cept it's config
+ * dependent whether (say) socknal NIDs are actually IP addresses... */
 #ifndef CRAY_PORTALS 
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
-                sprintf(str, "%u:%d.%d.%d.%d", (__u32)(nid >> 32),
-                        HIPQUAD(nid));
+                snprintf(str, PTL_NALFMT_SIZE-1,
+                         "%u:%d.%d.%d.%d", (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
         case IBNAL:
         case SCIMACNAL:
-                sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
+                snprintf(str, PTL_NALFMT_SIZE-1, LPD64, nid);
                 break;
 #endif
         default:

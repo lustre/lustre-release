@@ -35,7 +35,6 @@ static dispatch_table_t dispatch_table[] = {
         [PTL_GETID] {do_PtlGetId, "PtlGetId"},
         [PTL_NISTATUS] {do_PtlNIStatus, "PtlNIStatus"},
         [PTL_NIDIST] {do_PtlNIDist, "PtlNIDist"},
-        [PTL_NIDEBUG] {do_PtlNIDebug, "PtlNIDebug"},
         [PTL_MEATTACH] {do_PtlMEAttach, "PtlMEAttach"},
         [PTL_MEINSERT] {do_PtlMEInsert, "PtlMEInsert"},
         [PTL_MEUNLINK] {do_PtlMEUnlink, "PtlMEUnlink"},

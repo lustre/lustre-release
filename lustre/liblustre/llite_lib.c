@@ -55,23 +55,6 @@ ptl_handle_ni_t         tcpnal_ni;
 struct task_struct     *current;
 
 /* portals interfaces */
-ptl_handle_ni_t *
-kportal_get_ni (int nal)
-{
-        switch (nal)
-        {
-        case SOCKNAL:
-                return &tcpnal_ni;
-        default:
-                return NULL;
-        }
-}
-
-inline void
-kportal_put_ni (int nal)
-{
-        return;
-}
 
 struct ldlm_namespace;
 struct ldlm_res_id;
@@ -145,19 +128,16 @@ int init_lib_portals()
         int rc;
         ENTRY;
 
-        PtlInit(&max_interfaces);
-        rc = PtlNIInit(procbridge_interface, 0, 0, 0, &tcpnal_ni);
-        if (rc != 0) {
-                CERROR("TCPNAL: PtlNIInit failed: error %d\n", rc);
-                PtlFini();
-                RETURN (rc);
+        rc = PtlInit(&max_interfaces);
+        if (rc != PTL_OK) {
+                CERROR("PtlInit failed: %d\n", rc);
+                RETURN (-ENXIO);
         }
-        PtlNIDebug(tcpnal_ni, ~0);
-        RETURN(rc);
+        RETURN(0);
 }
 
 int
-kportal_nal_cmd(struct portals_cfg *pcfg)
+libcfs_nal_cmd(struct portals_cfg *pcfg)
 {
         /* handle portals command if we want */
         return 0;
@@ -225,7 +205,6 @@ int lllib_init(char *dumpfile)
         if (init_obdclass() ||
             init_lib_portals() ||
             ptlrpc_init() ||
-            ldlm_init() ||
             mdc_init() ||
             lov_init() ||
             osc_init())
@@ -266,6 +245,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                 CERROR("Can't parse NID %s\n", g_zconf_mdsnid);
                 RETURN(-EINVAL);
         }
+
         nal = ptl_name2nal("tcp");
         if (nal <= 0) {
                 CERROR("Can't parse NAL tcp\n");

@@ -1058,7 +1058,7 @@ typedef __u8 class_uuid_t[16];
 void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
 
 /* lustre_peer.c    */
-int lustre_uuid_to_peer(char *uuid, ptl_handle_ni_t *peer_ni, ptl_nid_t *peer_nid);
+int lustre_uuid_to_peer(char *uuid, __u32 *peer_nal, ptl_nid_t *peer_nid);
 int class_add_uuid(char *uuid, __u64 nid, __u32 nal);
 int class_del_uuid (char *uuid);
 void class_init_uuidlist(void);

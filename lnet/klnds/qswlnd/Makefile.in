@@ -1,6 +1,6 @@
 MODULES := kqswnal
 kqswnal-objs := qswnal.o qswnal_cb.o
 
-EXTRA_CFLAGS := @QSWCPPFLAGS@
+EXTRA_CFLAGS := @QSWCPPFLAGS@ -I /usr/include
 
 @INCLUDE_RULES@

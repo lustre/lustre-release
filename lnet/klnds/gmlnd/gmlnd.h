@@ -190,7 +190,6 @@ typedef struct _gmnal_rxtwe {
 #define NRXTHREADS 10 /* max number of receiver threads */
 
 typedef struct _gmnal_data_t {
-	int		refcnt;
 	spinlock_t	cb_lock;
 	spinlock_t 	stxd_lock;
 	struct semaphore stxd_token;
@@ -309,9 +308,12 @@ extern gmnal_data_t	*global_nal_data;
 /*
  *	API NAL
  */
+int gmnal_api_startup(nal_t *, ptl_pid_t, 
+                      ptl_ni_limits_t *, ptl_ni_limits_t *);
+
 int gmnal_api_forward(nal_t *, int, void *, size_t, void *, size_t);
 
-int gmnal_api_shutdown(nal_t *, int);
+void gmnal_api_shutdown(nal_t *);
 
 int gmnal_api_validate(nal_t *, void *, size_t);
 
@@ -323,14 +325,13 @@ void gmnal_api_unlock(nal_t *, unsigned long *);
 
 
 #define GMNAL_INIT_NAL(a)	do { 	\
+                                a->startup = gmnal_api_startup; \
 				a->forward = gmnal_api_forward; \
 				a->shutdown = gmnal_api_shutdown; \
-				a->validate = NULL; \
 				a->yield = gmnal_api_yield; \
 				a->lock = gmnal_api_lock; \
 				a->unlock = gmnal_api_unlock; \
 				a->timeout = NULL; \
-				a->refct = 1; \
 				a->nal_data = NULL; \
 				} while (0)
 
@@ -373,7 +374,7 @@ void gmnal_cb_sti(nal_cb_t *, unsigned long *);
 
 int gmnal_cb_dist(nal_cb_t *, ptl_nid_t, unsigned long *);
 
-nal_t *gmnal_init(int, ptl_pt_index_t, ptl_ac_index_t, ptl_pid_t rpid);
+int gmnal_init(void);
 
 void  gmnal_fini(void);
 

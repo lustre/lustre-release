@@ -108,57 +108,15 @@ enum {
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
-/* XXX these should be run-time checks so we can have one build run against
- * many nals */
-#if defined(__KERNEL__)
-#define ptl_requires_iov() 1
-#else
-#define ptl_requires_iov() 0
-#endif
-
-#if defined(__KERNEL__)
-# if defined(CRAY_PORTALS)
-#  define PTLRPC_PTL_MD_IOV (PTL_MD_IOVEC | PTL_MD_PHYS)
-# else
-#  define PTLRPC_PTL_MD_IOV PTL_MD_KIOV
-# endif
-#else
-# define PTLRPC_PTL_MD_IOV PTL_MD_IOVEC
-#endif
-
 #if !defined(__KERNEL__) && defined(CRAY_PORTALS)
-#define ptl_md_max_iovs() 1
-#else
-#define ptl_md_max_iovs() 0 /* unlimited */
-#endif
-
-/* XXX hopefully we can make the iov a consistent type across portals imps */
-#if defined(__KERNEL__)
-#define ptl_iov_base(kiov) (NULL) /* this is meaningless */
-#else
-#define ptl_iov_base(iov) ((iov)->iov_base)
-#endif
-
-#ifdef __KERNEL__
-/* portals calls the callback when the event is added to the queue, so we don't
- * care if we lose events */
-# define PTLRPC_NUM_EQ 1024
-# define PTLRPC_EQ_CALLBACK ptlrpc_master_callback
-#else 
-/* liblustre: no callback, or only when app polls event queues, so allocate a
- * nice big event queue to ensure we don't drop any */
-# define PTLRPC_NUM_EQ 10240
-# if CRAY_PORTALS
-int cray_portals_callback(ptl_event_t *ev);
-#  define PTLRPC_EQ_CALLBACK cray_portals_callback
-# else 
-#  define PTLRPC_EQ_CALLBACK PTL_EQ_HANDLER_NONE
-# endif
+/* forward ref in events.c */
+static void cray_portals_callback(ptl_event_t *ev);
 #endif
 
 /* pers.c */
-void pers_bulk_add_page(struct ptlrpc_bulk_desc *desc, struct page *page, 
-                        int pageoffset, int len);
+void ptlrpc_fill_bulk_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc);
+void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page, 
+                          int pageoffset, int len);
 
 /* pinger.c */
 int ptlrpc_start_pinger(void);

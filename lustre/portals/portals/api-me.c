@@ -25,18 +25,3 @@
 
 #include <portals/api-support.h>
 
-int ptl_me_init(void)
-{
-        return PTL_OK;
-}
-void ptl_me_fini(void)
-{                                /* Nothing to do */
-}
-int ptl_me_ni_init(nal_t * nal)
-{
-        return PTL_OK;
-}
-
-void ptl_me_ni_fini(nal_t * nal)
-{                                /* Nothing to do... */
-}

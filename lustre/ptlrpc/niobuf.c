@@ -23,7 +23,6 @@
 #define DEBUG_SUBSYSTEM S_RPC
 #ifndef __KERNEL__
 #include <liblustre.h>
-#include <portals/lib-types.h>
 #endif
 #include <linux/obd_support.h>
 #include <linux/lustre_net.h>
@@ -93,20 +92,6 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
         RETURN (0);
 }
 
-static void ptlrpc_fill_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
-{
-        LASSERT(ptl_md_max_iovs() == 0  || 
-                (desc->bd_iov_count <= ptl_md_max_iovs()));
-
-        if (ptl_requires_iov() || desc->bd_iov_count > 0) {
-                md->options |= PTLRPC_PTL_MD_IOV;
-                md->start = &desc->bd_iov[0];
-                md->niov = desc->bd_iov_count;
-        } else {
-                md->start = ptl_iov_base(&desc->bd_iov[0]);
-        }
-}
-
 int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
 {
         int                 rc;
@@ -127,13 +112,12 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         desc->bd_success = 0;
         peer = &desc->bd_export->exp_connection->c_peer;
 
-        md.length = desc->bd_nob;
+        md.user_ptr = &desc->bd_cbid;
         md.eventq = peer->peer_ni->pni_eq_h;
         md.threshold = 2; /* SENT and ACK/REPLY */
         md.options = PTLRPC_MD_OPTIONS;
+        ptlrpc_fill_bulk_md(&md, desc);
 
-        ptlrpc_fill_md(&md, desc);
-        md.user_ptr = &desc->bd_cbid;
         LASSERT (desc->bd_cbid.cbid_fn == server_bulk_callback);
         LASSERT (desc->bd_cbid.cbid_arg == desc);
 
@@ -154,8 +138,8 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         remote_id.pid = 0;
 
         CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d on %s "
-               "nid "LPX64" pid %d xid "LPX64"\n", 
-               md.niov, md.length, desc->bd_portal, peer->peer_ni->pni_name,
+               "nid "LPX64" pid %d xid "LPX64"\n", desc->bd_iov_count,
+               desc->bd_nob, desc->bd_portal, peer->peer_ni->pni_name,
                remote_id.nid, remote_id.pid, xid);
 
         /* Network is about to get at the memory */
@@ -240,14 +224,14 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
 
         peer = &desc->bd_import->imp_connection->c_peer;
 
-        md.length = desc->bd_nob;
+        md.user_ptr = &desc->bd_cbid;
         md.eventq = peer->peer_ni->pni_eq_h;
         md.threshold = 1;                       /* PUT or GET */
         md.options = PTLRPC_MD_OPTIONS | 
                      ((desc->bd_type == BULK_GET_SOURCE) ? 
                       PTL_MD_OP_GET : PTL_MD_OP_PUT);
-        ptlrpc_fill_md(&md, desc);
-        md.user_ptr = &desc->bd_cbid;
+        ptlrpc_fill_bulk_md(&md, desc);
+
         LASSERT (desc->bd_cbid.cbid_fn == client_bulk_callback);
         LASSERT (desc->bd_cbid.cbid_arg == desc);
 
@@ -285,7 +269,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         CDEBUG(D_NET, "Setup bulk %s buffers: %u pages %u bytes, xid "LPX64", "
                "portal %u on %s\n",
                desc->bd_type == BULK_GET_SOURCE ? "get-source" : "put-sink",
-               md.niov, md.length,
+               desc->bd_iov_count, desc->bd_nob,
                req->rq_xid, desc->bd_portal, peer->peer_ni->pni_name);
         RETURN(0);
 }

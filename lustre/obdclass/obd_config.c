@@ -601,7 +601,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         pcfg->pcfg_nid = cfg->cfg_local_nid;
                 }
 
-                rc = kportal_nal_cmd(pcfg);
+                rc = libcfs_nal_cmd(pcfg);
         }
 out:
         RETURN(rc);

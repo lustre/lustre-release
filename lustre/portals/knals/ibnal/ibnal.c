@@ -235,11 +235,6 @@ kibnal_init(int             interface, // no use here
   kibnal_data_t *nal_data  = NULL;
   int            rc;
 
-  unsigned int nnids = 1; // number of nids 
-                          // do we know how many nodes are in this
-                          // system related to this kib_nid  
-                          //
-
   CDEBUG(D_NET, "kibnal_init:calling lib_init with nid 0x%u\n",
                   kibnal_data.kib_nid);
 
@@ -252,7 +247,6 @@ kibnal_init(int             interface, // no use here
   rc = lib_init(&kibnal_lib, 
                 kibnal_data.kib_nid, 
                 0, // process id is set as 0  
-                nnids,
                 ptl_size, 
                 ac_size);
 
@@ -2034,16 +2028,13 @@ kibnal_initialize(void)
    CDEBUG(D_PORTALS, "kibnal_initialize: Enter kibnal_initialize\n");
 
    // set api functional pointers 
+   kibnal_api.startup    = kibnal_startup;
    kibnal_api.forward    = kibnal_forward;
    kibnal_api.shutdown   = kibnal_shutdown;
    kibnal_api.yield      = kibnal_yield;
-   kibnal_api.validate   = NULL; /* our api validate is a NOOP */
    kibnal_api.lock       = kibnal_lock;
    kibnal_api.unlock     = kibnal_unlock;
    kibnal_api.nal_data   = &kibnal_data; // this is so called private data 
-   kibnal_api.refct      = 1;
-   kibnal_api.timeout    = NULL;
-   kibnal_lib.nal_data   = &kibnal_data;
   
    memset(&kibnal_data, 0, sizeof(kibnal_data));
 

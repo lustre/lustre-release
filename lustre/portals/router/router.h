@@ -93,15 +93,6 @@ extern void kpr_deregister_nal (void *arg);
 extern void kpr_proc_init (void);
 extern void kpr_proc_fini (void);
 
-extern int kpr_add_route (int gateway_nal, ptl_nid_t gateway_nid, 
-                          ptl_nid_t lo_nid, ptl_nid_t hi_nid);
-extern int kpr_del_route (int gw_nal, ptl_nid_t gw_nid,
-                          ptl_nid_t lo, ptl_nid_t hi);
-extern int kpr_get_route (int idx, int *gateway_nal, ptl_nid_t *gateway_nid, 
-                          ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive);
-extern int kpr_sys_notify (int gw_nalid, ptl_nid_t gw_nid,
-                           int alive, time_t when);
-
 extern unsigned long long kpr_fwd_bytes;
 extern unsigned long      kpr_fwd_packets;
 extern unsigned long      kpr_fwd_errors;

@@ -160,7 +160,7 @@ void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 
         desc->bd_nob += len;
 
-        pers_bulk_add_page(desc, page, pageoffset, len);
+        ptlrpc_add_bulk_page(desc, page, pageoffset, len);
 }
 
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)

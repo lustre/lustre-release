@@ -164,6 +164,45 @@ do {                                                                    \
 #define EXIT                            do { } while (0)
 #endif
 
+#define PORTALS_CFG_VERSION 0x00010001;
+
+struct portals_cfg {
+        __u32 pcfg_version;
+        __u32 pcfg_command;
+
+        __u32 pcfg_nal;
+        __u32 pcfg_flags;
+
+        __u32 pcfg_gw_nal;
+        __u64 pcfg_nid;
+        __u64 pcfg_nid2;
+        __u64 pcfg_nid3;
+        __u32 pcfg_id;
+        __u32 pcfg_misc;
+        __u32 pcfg_fd;
+        __u32 pcfg_count;
+        __u32 pcfg_size;
+        __u32 pcfg_wait;
+
+        __u32 pcfg_plen1; /* buffers in userspace */
+        char *pcfg_pbuf1;
+        __u32 pcfg_plen2; /* buffers in userspace */
+        char *pcfg_pbuf2;
+};
+
+#define PCFG_INIT(pcfg, cmd)                            \
+do {                                                    \
+        memset(&pcfg, 0, sizeof(pcfg));                 \
+        pcfg.pcfg_version = PORTALS_CFG_VERSION;        \
+        pcfg.pcfg_command = (cmd);                      \
+                                                        \
+} while (0)
+
+typedef int (nal_cmd_handler_fn)(struct portals_cfg *, void *);
+int libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *arg);
+int libcfs_nal_cmd(struct portals_cfg *pcfg);
+void libcfs_nal_cmd_unregister(int nal);
+
 struct portal_ioctl_data {
         __u32 ioc_len;
         __u32 ioc_version;
@@ -195,6 +234,7 @@ struct portal_ioctl_data {
 
         char ioc_bulk[0];
 };
+
 
 #ifdef __KERNEL__
 
