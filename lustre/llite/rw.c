@@ -323,6 +323,7 @@ struct ll_async_page *llap_from_page(struct page *page)
         struct ll_async_page *llap;
         struct obd_export *exp;
         struct inode *inode = page->mapping->host;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc;
         ENTRY;
 
@@ -352,6 +353,12 @@ struct ll_async_page *llap_from_page(struct page *page)
                page, llap->llap_cookie, (obd_off)page->index << PAGE_SHIFT);
         page->private = (unsigned long)llap;
         llap->llap_page = page;
+
+        spin_lock(&sbi->ll_pglist_lock);
+        sbi->ll_pglist_gen++;
+        list_add_tail(&llap->llap_proc_item, &sbi->ll_pglist);
+        spin_unlock(&sbi->ll_pglist_lock);
+
         RETURN(llap);
 }
 
@@ -449,6 +456,7 @@ void ll_removepage(struct page *page)
         struct inode *inode = page->mapping->host;
         struct obd_export *exp;
         struct ll_async_page *llap;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc;
         ENTRY;
 
@@ -488,6 +496,12 @@ void ll_removepage(struct page *page)
         /* this unconditional free is only safe because the page lock
          * is providing exclusivity to memory pressure/truncate/writeback..*/
         page->private = 0;
+
+        spin_lock(&sbi->ll_pglist_lock);
+        if (!list_empty(&llap->llap_proc_item))
+                list_del_init(&llap->llap_proc_item);
+        sbi->ll_pglist_gen++;
+        spin_unlock(&sbi->ll_pglist_lock);
         OBD_FREE(llap, sizeof(*llap));
         EXIT;
 }

@@ -24,11 +24,13 @@
 #include <linux/version.h>
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
+#include <linux/seq_file.h>
 
 #include "llite_internal.h"
 
 /* /proc/lustre/llite mount point registration */
 struct proc_dir_entry *proc_lustre_fs_root;
+struct file_operations llite_dump_pgcache_fops;
 
 #ifndef LPROCFS
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
@@ -271,6 +273,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         char name[MAX_STRING_SIZE + 1];
         int err, id;
         struct lprocfs_stats *svc_stats = NULL;
+        struct proc_dir_entry *entry;
         ENTRY;
 
         memset(lvars, 0, sizeof(lvars));
@@ -292,6 +295,12 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 sbi->ll_proc_root = NULL;
                 RETURN(err);
         }
+
+        entry = create_proc_entry("dump_page_cache", 0444, sbi->ll_proc_root);
+        if (entry == NULL)
+                GOTO(out, -ENOMEM);
+        entry->proc_fops = &llite_dump_pgcache_fops;
+        entry->data = sbi;
 
         svc_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES);
         if (svc_stats == NULL) {
@@ -388,4 +397,190 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi)
         }
 }
 #undef MAX_STRING_SIZE
+
+static struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
+                                                    struct list_head *list)
+{
+        struct ll_async_page *llap;
+        struct list_head *pos;
+
+        list_for_each(pos, list) {
+                if (pos == &sbi->ll_pglist)
+                        return NULL;
+                llap = list_entry(pos, struct ll_async_page, llap_proc_item);
+                if (llap->llap_page == NULL)
+                        continue;
+                return llap;
+        }
+        LBUG();
+        return NULL;
+}
+
+#define seq_page_flag(seq, page, flag, has_flags) do {                  \
+                if (test_bit(PG_##flag, &(page)->flags)) {              \
+                        if (!has_flags)                                 \
+                                has_flags = 1;                          \
+                        else                                            \
+                                seq_putc(seq, '|');                     \
+                        seq_puts(seq, #flag);                           \
+                }                                                       \
+        } while(0);
+
+static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
+{
+        struct ll_async_page *llap, *dummy_llap = seq->private;
+        struct ll_sb_info *sbi = dummy_llap->llap_cookie;
+
+        /* 2.4 doesn't seem to have SEQ_START_TOKEN, so we implement
+         * it in our own state */
+        if (dummy_llap->llap_magic == 0) {
+                seq_printf(seq, "generation | llap .cookie | page ");
+                seq_printf(seq, "inode .index [ page flags ]\n");
+                return 0;
+        }
+
+        spin_lock(&sbi->ll_pglist_lock);
+
+        llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
+        if (llap != NULL)  {
+                int has_flags = 0;
+                struct page *page = llap->llap_page;
+
+                seq_printf(seq, "%lu | %p %p | %p %p %lu [", 
+                                sbi->ll_pglist_gen, 
+                                llap, llap->llap_cookie,
+                                page, page->mapping->host, page->index);
+                seq_page_flag(seq, page, locked, has_flags);
+                seq_page_flag(seq, page, error, has_flags);
+                seq_page_flag(seq, page, referenced, has_flags);
+                seq_page_flag(seq, page, uptodate, has_flags);
+                seq_page_flag(seq, page, dirty, has_flags);
+                seq_page_flag(seq, page, highmem, has_flags);
+                if (!has_flags)
+                        seq_puts(seq, "-]\n");
+                else 
+                        seq_puts(seq, "]\n");
+        }
+
+        spin_unlock(&sbi->ll_pglist_lock);
+
+        return 0;
+}
+
+static void *llite_dump_pgcache_seq_start(struct seq_file *seq, loff_t *pos)
+{
+        struct ll_async_page *llap = seq->private;
+
+        if (llap->llap_magic == 2)
+                return NULL;
+
+        return (void *)1;
+}
+
+static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v, 
+                                         loff_t *pos)
+{
+        struct ll_async_page *llap, *dummy_llap = seq->private;
+        struct ll_sb_info *sbi = dummy_llap->llap_cookie;
+
+        /* bail if we just displayed the banner */
+        if (dummy_llap->llap_magic == 0) {
+                dummy_llap->llap_magic = 1;
+                return dummy_llap;
+        }
+
+        /* we've just displayed the llap that is after us in the list.
+         * we advance to a position beyond it, returning null if there
+         * isn't another llap in the list beyond that new position. */
+        spin_lock(&sbi->ll_pglist_lock);
+        llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
+        list_del_init(&dummy_llap->llap_proc_item);
+        if (llap) {
+                list_add(&dummy_llap->llap_proc_item, &llap->llap_proc_item);
+                llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
+        }
+        spin_unlock(&sbi->ll_pglist_lock);
+
+        ++*pos;
+        if (llap == NULL) {
+                dummy_llap->llap_magic = 2;
+                return NULL;
+        }
+        return dummy_llap;
+}
+
+static void llite_dump_pgcache_seq_stop(struct seq_file *seq, void *v)
+{
+}
+
+struct seq_operations llite_dump_pgcache_seq_sops = {
+        .start = llite_dump_pgcache_seq_start,
+        .stop = llite_dump_pgcache_seq_stop,
+        .next = llite_dump_pgcache_seq_next,
+        .show = llite_dump_pgcache_seq_show,
+};
+
+/* we're displaying llaps in a list_head list.  we don't want to hold a lock
+ * while we walk the entire list, and we don't want to have to seek into
+ * the right position in the list as an app advances with many syscalls.  we
+ * allocate a dummy llap and hang it off file->private.  its position in
+ * the list records where the app is currently displaying.  this way our
+ * seq .start and .stop don't actually do anything.  .next returns null
+ * when the dummy hits the end of the list which eventually leads to .release
+ * where we tear down.  this kind of displaying is super-racey, so we put
+ * a generation counter on the list so the output shows when the list
+ * changes between reads.
+ */
+static int llite_dump_pgcache_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct ll_async_page *llap;
+        struct seq_file *seq;
+        struct ll_sb_info *sbi = dp->data;
+        int rc;
+
+        llap = kmalloc(sizeof(*llap), GFP_KERNEL);
+        if (llap == NULL)
+                return -ENOMEM;
+        llap->llap_page = NULL;
+        llap->llap_cookie = sbi;
+        llap->llap_magic = 0;
+ 
+        rc = seq_open(file, &llite_dump_pgcache_seq_sops);
+        if (rc) {
+                kfree(llap);
+                return rc;
+        }
+        seq = file->private_data;
+        seq->private = llap;
+
+        spin_lock(&sbi->ll_pglist_lock);
+        list_add(&llap->llap_proc_item, &sbi->ll_pglist);
+        spin_unlock(&sbi->ll_pglist_lock);
+
+        return 0;
+}
+
+static int llite_dump_pgcache_seq_release(struct inode *inode, 
+                                          struct file *file)
+{
+        struct seq_file *seq = file->private_data;
+        struct ll_async_page *llap = seq->private;
+        struct ll_sb_info *sbi = llap->llap_cookie;
+
+        spin_lock(&sbi->ll_pglist_lock);
+        if (!list_empty(&llap->llap_proc_item))
+                list_del_init(&llap->llap_proc_item);
+        spin_unlock(&sbi->ll_pglist_lock);
+        kfree(llap);
+
+        return seq_release(inode, file);
+}
+
+struct file_operations llite_dump_pgcache_fops = {
+        .open    = llite_dump_pgcache_seq_open,
+        .read    = seq_read,
+        .release    = llite_dump_pgcache_seq_release,
+};
+
 #endif /* LPROCFS */

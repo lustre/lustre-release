@@ -37,6 +37,10 @@ struct ll_sb_info {
         struct ll_close_queue    *ll_lcq;
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
+
+        spinlock_t                ll_pglist_lock; 
+        unsigned long             ll_pglist_gen;
+        struct list_head          ll_pglist;
 };
 
 struct lustre_handle;
@@ -94,6 +98,7 @@ struct ll_async_page {
         int             llap_queued;
         struct page     *llap_page;
         struct list_head llap_pending_write;
+        struct list_head llap_proc_item;
 };
 
 #define LL_CDEBUG_PAGE(page, STR)                                       \
