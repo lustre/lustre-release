@@ -275,7 +275,6 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
         int err;
         ENTRY;
 
-        INIT_LIST_HEAD(&ldlm_namespaces);
         ldlm_spinlock = SPIN_LOCK_UNLOCKED;
 
         ldlm->ldlm_service =

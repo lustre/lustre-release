@@ -17,7 +17,7 @@
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
-struct list_head ldlm_namespaces;
+LIST_HEAD(ldlm_namespaces);
 spinlock_t ldlm_spinlock;
 
 struct ldlm_namespace *ldlm_namespace_find(__u32 id)
