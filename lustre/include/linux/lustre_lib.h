@@ -47,7 +47,7 @@ void pop_ctxt(struct obd_run_ctxt *saved);
 #ifdef OBD_CTXT_DEBUG
 #define OBD_SET_CTXT_MAGIC(ctxt) (ctxt)->magic = OBD_RUN_CTXT_MAGIC
 #else
-#define OBD_SET_CTXT_MAGIC(magic) do {} while(0)
+#define OBD_SET_CTXT_MAGIC(ctxt) do {} while(0)
 #endif
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, char *str, int len, loff_t *off);
