@@ -290,12 +290,21 @@ void print_human_access(struct stat *statbuf)
     printf (access);
 }
 
+/* trick gcc into being unable to recognize the %c format so it doesn't
+ * issue its inane warning about %c and two-digit year representations. */
+static size_t strftime_wrapper(char *s, size_t max, const char *fmt,
+				struct tm *tm) {
+	return strftime(s, max, fmt, tm);
+}
+
 void print_human_time(time_t *t)
 {
   char str[40];
   
-  if (strftime(str, 40, "%c", localtime(t)) > 0) printf(str);
-  else printf("Cannot calculate human readable time, sorry");
+  if (strftime_wrapper(str, 40, "%c", localtime(t)) > 0) 
+	  printf(str);
+  else 
+	  printf("Cannot calculate human readable time, sorry");
 }
 
 /* print statfs info */
