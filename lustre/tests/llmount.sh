@@ -15,7 +15,7 @@ add_uuid ost
 quit
 EOF
 
-new_fs ext2 /tmp/ost 80000
+new_fs ext2 /tmp/ost 10000
 OST=$LOOPDEV
 MDSFS=ext2
 new_fs ${MDSFS} /tmp/mds 10000

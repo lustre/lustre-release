@@ -279,6 +279,7 @@ int mds_close(struct ptlrpc_request *req)
 
         req->rq_rephdr->status = filp_close(file, 0);
         dput(de);
+        mntput(mnt);
         return 0;
 }
 
