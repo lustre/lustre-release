@@ -174,6 +174,7 @@ static int ost_connect(struct ptlrpc_request *req)
 {
         struct ost_body *body;
         struct obd_device *target;
+        struct obd_export *export;
         struct obd_conn conn;
         char *uuid;
         int rc, size = sizeof(*body), i;
@@ -209,6 +210,12 @@ static int ost_connect(struct ptlrpc_request *req)
         req->rq_repmsg->addr = conn.addr;
         req->rq_repmsg->cookie = conn.cookie;
 
+        export = gen_client(&conn); 
+        if (!export)
+                LBUG();
+
+        req->rq_export = export;
+        export->export_connection = req->rq_connection;
         CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repmsg, conn.oc_id);
         body = lustre_msg_buf(req->rq_repmsg, 0);
         body->connid = conn.oc_id;
@@ -486,14 +493,12 @@ static int ost_handle(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 
-        if (req->rq_reqmsg->opc != OST_CONNECT) {
-                struct obd_export *export;
-                export = gen_client((struct obd_conn *) req->rq_reqmsg); 
-                if (!export) 
-                        GOTO(out, rc = -ENOTCONN);
-                if (strcmp(req->rq_obd->obd_type->typ_name, "ost") != 0)
-                        GOTO(out, rc = -EINVAL);
-        }
+        if (req->rq_reqmsg->opc != OST_CONNECT &&
+            req->rq_export == NULL)
+                GOTO(out, rc = -ENOTCONN);
+
+        if (strcmp(req->rq_obd->obd_type->typ_name, "ost") != 0)
+                GOTO(out, rc = -EINVAL);
 
         switch (req->rq_reqmsg->opc) {
         case OST_CONNECT:

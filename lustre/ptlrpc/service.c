@@ -157,24 +157,18 @@ static int handle_incoming_request(struct obd_device *obddev,
         /* FIXME: this NI should be the incoming NI.
          * We don't know how to find that from here. */
         peer.peer_ni = svc->srv_self.peer_ni;
+        request.rq_export = gen_client((struct obd_conn *) request.rq_reqmsg); 
 
-        if (request.rq_reqmsg->conn2) {
-                request.rq_connection =
-                        (void *)(unsigned long)request.rq_reqmsg->conn2;
-                ptlrpc_connection_addref(request.rq_connection);
-        } else {
-                /*
-                  PHIL? should we perhaps only do this when 
-                   we get an incoming connmgr_connect request? 
-                */
+        if (request.rq_export) {
+                request.rq_connection = request.rq_export->export_connection;
+                ptlrpc_connection_addref(request.rq_connection); 
+        } else { 
                 request.rq_connection = ptlrpc_get_connection(&peer);
-                if (!request.rq_connection)
-                        LBUG();
         }
 
         spin_unlock(&svc->srv_lock);
         rc = svc->srv_handler(&request);
-        ptlrpc_put_connection(request.rq_connection);
+        ptlrpc_put_connection(request.rq_connection); 
         ptl_handled_rpc(svc, start);
         return rc;
 }

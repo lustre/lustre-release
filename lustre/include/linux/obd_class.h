@@ -73,6 +73,7 @@ struct obd_export {
         struct lustre_handle export_import; /* client handle */ 
         struct list_head export_chain;
         struct obd_device *export_obd;
+        struct ptlrpc_connection *export_connection;
         unsigned int export_id;
         void *export_data; /* device specific data */
 };

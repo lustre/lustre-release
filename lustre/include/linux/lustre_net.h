@@ -175,6 +175,8 @@ struct ptlrpc_request {
         ptl_md_t rq_req_md;
         ptl_handle_md_t rq_req_md_h;
 
+        struct lustre_peer rq_peer; /* XXX see service.c can this be factored away? */
+        struct obd_export *rq_export;
         struct ptlrpc_connection *rq_connection;
         struct ptlrpc_client *rq_client;
         struct ptlrpc_service *rq_svc;
