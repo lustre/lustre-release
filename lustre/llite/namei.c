@@ -235,14 +235,21 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         int rc;
         time_t time = CURRENT_TIME;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
+        int gid = current->fsgid;
         struct ll_inode_md md;
 
         ENTRY;
 
+        if (dir->i_mode & S_ISGID) {
+                gid = dir->i_gid;
+                if (S_ISDIR(mode))
+                        mode |= S_ISGID;
+        }
+
         if (!it->it_disposition) {
                 rc = mdc_create(&sbi->ll_mdc_conn, dir, name, namelen, tgt,
                                  tgtlen, mode, current->fsuid,
-                                 current->fsgid, time, extra, obdo, &request);
+                                 gid, time, extra, obdo, &request);
                 if (rc) {
                         inode = ERR_PTR(rc);
                         GOTO(out, rc);
@@ -255,22 +262,22 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                 md.obdo = NULL;
         }
 
-        body->valid = (__u32)OBD_MD_FLNOTOBD;
+        body->valid = OBD_MD_FLNOTOBD;
 
         body->nlink = 1;
         body->atime = body->ctime = body->mtime = time;
         body->uid = current->fsuid;
-        body->gid = current->fsgid;
+        body->gid = gid;
         body->mode = mode;
 
         md.body = body;
 
         inode = iget4(dir->i_sb, body->ino, ll_find_inode, &md);
         if (IS_ERR(inode)) {
-                CERROR("new_inode -fatal:  %ld\n", PTR_ERR(inode));
-                inode = ERR_PTR(-EIO);
+                rc = PTR_ERR(inode);
+                CERROR("new_inode -fatal: rc %d\n", rc);
                 LBUG();
-                GOTO(out, -EIO);
+                GOTO(out, rc);
         }
 
         if (!list_empty(&inode->i_dentry)) {
@@ -349,7 +356,7 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
 
 static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
 {
-        int rc = 0;
+        int err, rc = 0;
         struct obdo oa;
         struct inode *inode;
 
@@ -375,11 +382,6 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
                 GOTO(out_destroy, rc);
         }
 
-        // XXX clean up the object
-        inode->i_op = &ll_file_inode_operations;
-        inode->i_fop = &ll_file_operations;
-        inode->i_mapping->a_ops = &ll_aops;
-
         if (dentry->d_it->it_disposition) {
                 struct ll_inode_info *ii = ll_i2info(inode);
                 ii->lli_flags |= OBD_FL_CREATEONOPEN;
@@ -396,10 +398,10 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         RETURN(rc);
 
 out_destroy:
-        rc = obd_destroy(ll_i2obdconn(dir), &oa);
-        if (rc)
+        err = obd_destroy(ll_i2obdconn(dir), &oa);
+        if (err)
                 CERROR("error destroying object %Ld in error path: err = %d\n",
-                       (unsigned long long)oa.o_id, rc);
+                       (unsigned long long)oa.o_id, err);
         return rc;
 }
 
@@ -410,10 +412,8 @@ static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
                                               dentry->d_name.len, NULL, 0,
                                               mode, rdev, NULL, NULL);
         int err = PTR_ERR(inode);
-        if (!IS_ERR(inode)) {
-                init_special_inode(inode, mode, rdev);
+        if (!IS_ERR(inode))
                 err = ext2_add_nondir(dentry, inode);
-        }
         return err;
 }
 
@@ -437,7 +437,6 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
 
         oinfo = ll_i2info(inode);
 
-        inode->i_op = &ll_fast_symlink_inode_operations;
         memcpy(oinfo->lli_inline, symname, l);
         inode->i_size = l-1;
 
@@ -494,9 +493,6 @@ static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
         if (IS_ERR(inode))
                 goto out_dir;
 
-        inode->i_op = &ll_dir_inode_operations;
-        inode->i_fop = &ll_dir_operations;
-        inode->i_mapping->a_ops = &ll_aops;
         inode->i_nlink = 1;
         ext2_inc_count(inode);
 

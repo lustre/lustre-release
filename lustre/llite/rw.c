@@ -192,14 +192,20 @@ void ll_truncate(struct inode *inode)
         ENTRY;
 
         oa = ll_i2info(inode)->lli_obdo;
-        
+
         CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
                (long)oa->o_id, (unsigned long long)oa->o_size);
         err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
 
-        if (err) {
+        if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
-        }
+        else
+                /* This is done for us at the OST and MDS, but the
+                 * updated timestamps are not sent back to us.
+                 * Needed for POSIX.
+                 */
+                inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+
         EXIT;
         return;
 } /* ll_truncate */
@@ -241,9 +247,10 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         oa = ll_i2info(inode)->lli_obdo;
         if (!oa)
                 GOTO(out, rc = -ENOMEM);
-        rc = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
-                      iobuf->maplist, count, offset, flags, NULL);
-        if (rc == 0) 
+        rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
+                     ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
+                     iobuf->maplist, count, offset, flags, NULL);
+        if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;
 
  out:
