@@ -1,8 +1,8 @@
 Index: linux-2.4.24/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/fs/ext3/extents.c	2004-01-31 01:52:45.000000000 +0300
-@@ -0,0 +1,2335 @@
++++ linux-2.4.24/fs/ext3/extents.c	2004-02-05 20:31:18.000000000 +0300
+@@ -0,0 +1,2343 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -2338,6 +2338,14 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	return err;
 +}
 +
++EXPORT_SYMBOL(ext3_init_tree_desc);
++EXPORT_SYMBOL(ext3_mark_inode_dirty);
++EXPORT_SYMBOL(ext3_ext_invalidate_cache);
++EXPORT_SYMBOL(ext3_ext_insert_extent);
++EXPORT_SYMBOL(ext3_ext_walk_space);
++EXPORT_SYMBOL(ext3_ext_find_goal);
++EXPORT_SYMBOL(ext3_ext_calc_credits_for_insert);
++
 Index: linux-2.4.24/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-01-14 02:58:45.000000000 +0300
@@ -2446,13 +2454,15 @@ Index: linux-2.4.24/fs/ext3/inode.c
 Index: linux-2.4.24/fs/ext3/Makefile
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/Makefile	2004-01-14 02:58:45.000000000 +0300
-+++ linux-2.4.24/fs/ext3/Makefile	2004-01-26 23:17:19.000000000 +0300
-@@ -13,7 +13,7 @@
++++ linux-2.4.24/fs/ext3/Makefile	2004-02-05 18:44:25.000000000 +0300
+@@ -13,7 +13,9 @@
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
  		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o \
 -		xattr_trusted.o
 +		xattr_trusted.o extents.o
++export-objs += extents.o
++
  obj-m    := $(O_TARGET)
  
  export-objs += xattr.o
@@ -2560,7 +2570,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
 Index: linux-2.4.24/include/linux/ext3_extents.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_extents.h	2004-01-30 18:03:53.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_extents.h	2004-02-05 20:31:08.000000000 +0300
 @@ -0,0 +1,216 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
