@@ -13,7 +13,7 @@ endif
 
 # NOTE: keep extN before mds
 SUBDIRS = lov utils obdclass ldlm ptlrpc lib obdecho mdc osc ost llite 
-SUBDIRS+=   $(DIRS24) mds obdfilter tests doc scripts 
+SUBDIRS+=   $(DIRS24) obdfilter tests doc scripts 
 
 DIST_SUBDIRS = $(SUBDIRS)
 EXTRA_DIST = BUGS FDL Rules include patches archdep.m4
