@@ -33,6 +33,30 @@ static struct obdo OA;
 static obd_count GEN;
 static long echo_pages = 0;
 
+int echo_connect (struct obd_conn *conn)
+{
+        int rc;
+
+        MOD_INC_USE_COUNT;
+        rc = gen_connect(conn);
+
+        if (rc)
+                MOD_DEC_USE_COUNT;
+
+        return rc;
+}
+
+int echo_disconnect(struct obd_conn *conn)
+{
+        int rc;
+
+        rc = gen_disconnect(conn);
+        if (!rc)
+                MOD_DEC_USE_COUNT;
+
+        return rc;
+}
+
 static int echo_getattr(struct obd_conn *conn, struct obdo *oa)
 {
         memcpy(oa, &OA, sizeof(*oa));
@@ -45,26 +69,30 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
                 struct obd_ioobj *obj, int niocount, struct niobuf *nb,
                 struct niobuf *res)
 {
+        struct niobuf *r = res;
         int rc = 0;
         int i;
 
         ENTRY;
+
         memset(res, 0, sizeof(*res) * niocount);
 
-        CDEBUG(D_CACHE, "%s %d obdos with %d IOs\n",
+        CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
                cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
 
         for (i = 0; i < objcount; i++, obj++) {
                 int j;
 
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, res++) {
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
                         unsigned long address;
 
                         address = get_zeroed_page(GFP_KERNEL);
                         if (!address) {
-                                /* FIXME: cleanup old pages on error */
-                                EXIT;
+                                CERROR("can't get new page %d/%d for id %Ld\n",
+                                       j, obj->ioo_bufcnt, obj->ioo_id);
                                 rc = -ENOMEM;
+                                EXIT;
+                                goto preprw_cleanup;
                         }
                         echo_pages++;
 
@@ -79,13 +107,32 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
                         }
                         */
 
-                        res->addr = address;
-                        res->offset = nb->offset;
-                        res->page = virt_to_page(address);
-                        res->len = PAGE_SIZE;
+                        r->addr = address;
+                        r->offset = nb->offset;
+                        r->page = virt_to_page(address);
+                        r->len = nb->len;
                         // r->flags
                 }
         }
+        CDEBUG(D_PAGE, "%ld pages allocated after prep\n", echo_pages);
+
+        EXIT;
+        return 0;
+
+preprw_cleanup:
+        /* It is possible that we would rather handle errors by  allow
+         * any already-set-up pages to complete, rather than tearing them
+         * all down again.  I believe that this is what the in-kernel
+         * prep/commit operations do.
+         */
+        CERROR("cleaning up %d pages (%d obdos)\n", r - res, objcount);
+        while (r-- > res) {
+                unsigned long addr = r->addr;
+
+                free_pages(addr, 0);
+                echo_pages--;
+        }
+        memset(res, 0, sizeof(*res) * niocount);
 
         return rc;
 }
@@ -93,45 +140,59 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
 int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
                   struct obd_ioobj *obj, int niocount, struct niobuf *res)
 {
-        int i;
+        struct niobuf *r = res;
         int rc = 0;
+        int i;
+
         ENTRY;
 
-        CDEBUG(D_CACHE, "%s %d obdos with %d IOs\n",
+        CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
                cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
+
+        if (niocount && !r) {
+                CERROR("NULL res niobuf with niocount %d\n", niocount);
+                EXIT;
+                return -EINVAL;
+        }
 
         for (i = 0; i < objcount; i++, obj++) {
                 int j;
 
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, res++) {
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
                         unsigned long addr;
 
-                        if (!res) {
-                                /* FIXME: cleanup remaining pages */
-                                CERROR("NULL buf, obj %Ld (%d), buf %d/%d\n",
-                                        obj->ioo_id, i, j, obj->ioo_bufcnt);
-                                rc = -EINVAL;
-                        }
-
-                        addr = res->addr;
+                        addr = r->addr;
                         if (!addr || !kern_addr_valid(addr)) {
-                                /* FIXME: cleanup remaining pages */
                                 CERROR("bad addr %lx, id %Ld (%d), buf %d/%d\n",
                                        addr, obj->ioo_id, i, j,obj->ioo_bufcnt);
-                                rc = -EINVAL;
+                                rc = -EFAULT;
+                                EXIT;
+                                goto commitrw_cleanup;
                         }
 
                         free_pages(addr, 0);
                         echo_pages--;
                 }
         }
-        CDEBUG(D_MALLOC, "%ld pages remain after commit\n", echo_pages);
+        CDEBUG(D_PAGE, "%ld pages remain after commit\n", echo_pages);
+        EXIT;
+        return 0;
+
+commitrw_cleanup:
+        CERROR("cleaning up %d pages (%d obdos)\n", niocount - (r - res) - 1,
+               objcount);
+        while (++r < res + niocount) {
+                unsigned long addr = r->addr;
+
+                free_pages(addr, 0);
+                echo_pages--;
+        }
         return rc;
 }
 
 struct obd_ops echo_obd_ops = {
-        o_connect:     gen_connect,
-        o_disconnect:  gen_disconnect,
+        o_connect:     echo_connect,
+        o_disconnect:  echo_disconnect,
         o_getattr:     echo_getattr,
         o_preprw:      echo_preprw,
         o_commitrw:    echo_commitrw,
