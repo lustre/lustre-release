@@ -322,7 +322,7 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
 {
         char logname[24];
         struct llog_handle *handle;
-        struct obdo *oa;
+        struct obdo *oa = NULL;
         int rc, open_flags = O_RDWR | O_CREAT | O_LARGEFILE;
         ENTRY;
 
@@ -334,7 +334,7 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
         if (name) {
                 LASSERT(strlen(name) <= 18);
                 sprintf(logname, "LOGS/%s", name);
-                
+
                 handle->lgh_file = l_filp_open(logname, open_flags, 0644);
                 if (IS_ERR(handle->lgh_file)) {
                         rc = PTR_ERR(handle->lgh_file);
