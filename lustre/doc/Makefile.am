@@ -23,7 +23,7 @@ all: $(DOCS)
 
 # update date and version in document
 date := $(shell date +%x)
-tag := $(shell echo '$$Name:  $$' | sed 's/^\$$Na''me: \(.*\)\$$$$/\1/; s/^\$$Name\$$$$/HEAD/')
+tag := $(shell echo '$$Name:  $$' | sed s/^\$$Na''me:? *\$$$$/HEAD/; 's/^\$$Na''me: \(.*\) \$$$$/\1/')
 addversion = sed -e 's|@T''AG@|$(tag)|g; s|@VER''SION@|$(VERSION)|g; s|@DA''TE@|$(date)|g'
 
 # Regenerate when the $(VERSION) or $Name:  $ changes.
