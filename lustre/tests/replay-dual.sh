@@ -325,8 +325,7 @@ test_14() {
     df $MOUNT && return 1
     sleep 1
 
-    # first 25 files shouuld have been 
-    # replayed 
+    # first 25 files should have been replayed 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
     zconf_mount `hostname` $MOUNT2
