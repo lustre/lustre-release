@@ -386,6 +386,21 @@ void t14()
         t_rmdir(dir);
         LEAVE();
 }
+
+void t15()
+{
+        char *file = "/mnt/lustre/test_t15_file";
+        int fd;
+        ENTRY("open-stat-close");
+
+        t_touch(file);
+        fd = t_open(file);
+        t_check_stat(file, NULL);
+        t_close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
@@ -445,11 +460,10 @@ int main(int argc, char * const argv[])
         t9();
         t10();
         t11();
-/*
         t12();
         t13();
         t14();
-*/
+        t15();
 #endif
 
 	printf("liblustre is about shutdown\n");

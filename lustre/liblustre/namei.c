@@ -76,11 +76,11 @@ void unhook_stale_inode(struct pnode *pno)
         LASSERT(llu_i2info(inode)->lli_stale_flag);
 
         pno->p_base->pb_ino = NULL;
+        I_RELE(inode);
 
         if (!llu_i2info(inode)->lli_open_count) {
                 CDEBUG(D_INODE, "unhook inode %p (ino %lu) from pno %p\n",
                                 inode, llu_i2info(inode)->lli_st_ino, pno);
-                I_RELE(inode);
                 if (!inode->i_ref)
                         _sysio_i_gone(inode);
         }
