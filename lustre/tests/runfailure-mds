@@ -54,6 +54,7 @@ test_fail() {
 	echo 0 > /proc/sys/lustre/fail_loc
 
 	$OBDCTL <<- EOF
+	device 0
 	attach mds
 	setup ${MDS} ${MDSFS}
 	EOF
@@ -63,22 +64,27 @@ test_fail() {
 set -vx
 
 touch /mnt/obd/foo
+chmod a+x /mnt/obd/foo
 sync
 
 # OBD_FAIL_MDS_REINT_SETATTR_WRITE - MDS will discard data from setattr
 test_fail 0x10a chmod 000 /mnt/obd/foo
 ls -l /mnt/obd/foo
+[ ! -x /mnt/obd/foo ] && echo "/mnt/obd/foo is executable!" 1>&2 && exit -1
 
 # OBD_FAIL_MDS_REINT_CREATE_WRITE - MDS will not create the file
 test_fail 0x10c touch /mnt/obd/bar
-ls /mnt/obd
+ls /mnt/obd/bar
+[ $? -eq 0 ] && echo "/mnt/obd/bar was created!" 1>&2 && exit -1
 
 # OBD_FAIL_MDS_REINT_UNLINK_WRITE - MDS will discard data from unlink
 test_fail 0x10e rm /mnt/obd/foo
-ls /mnt/obd
+ls /mnt/obd/foo
+[ $? -eq 1 ] && echo "/mnt/obd/foo has been removed!" 1>&2 && exit -1
 
 # OBD_FAIL_MDS_REINT_RENAME_WRITE - MDS will discard data from rename
 test_fail 0x112 mv /mnt/obd/foo /mnt/obd/bar
-ls /mnt/obd
+ls /mnt/obd/bar
+[ $? -eq 0 ] && echo "/mnt/obd/foo has been renamed to bar!" 1>&2 && exit -1
 
 echo "Done."
