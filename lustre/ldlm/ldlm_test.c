@@ -177,6 +177,8 @@ static int ldlm_test_network(struct obd_device *obddev,
                                &ext, sizeof(ext), LCK_PR, &flags, NULL, NULL, 0,
                                &lockh1);
         CERROR("ldlm_cli_enqueue: %d\n", err);
+        if (err == ELDLM_OK)
+                ldlm_lock_decref(&lockh1, LCK_PR);
 
         RETURN(err);
 }
