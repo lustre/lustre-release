@@ -312,8 +312,8 @@ int do_PtlMDBind(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 
         state_lock(nal, &flags);
 
-        ret->rc = lib_md_build(nal, md, private,
-                               &args->md_in, &args->eq_in, PTL_UNLINK);
+        ret->rc = lib_md_build(nal, md, private, &args->md_in, 
+                               &args->eq_in, args->unlink_in);
 
         if (ret->rc == PTL_OK) {
                 ptl_md2handle(&ret->handle_out, md);

@@ -27,8 +27,10 @@
 
 int ptl_init;
 
-int PtlInit(void)
+int PtlInit(int *max_interfaces)
 {
+        if (max_interfaces != NULL)
+                *max_interfaces = NAL_ENUM_END_MARKER;
 
         if (ptl_init)
                 return PTL_OK;
