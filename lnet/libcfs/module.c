@@ -155,7 +155,7 @@ kportal_del_route(ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi)
 }
 
 static int
-kportal_set_route(ptl_nid_t gw, int alive)
+kportal_set_route(ptl_nid_t gw, int alive, struct timeval when)
 {
         int rc;
         kpr_control_interface_t *ci;
@@ -164,7 +164,7 @@ kportal_set_route(ptl_nid_t gw, int alive)
         if (ci == NULL)
                 return (-ENODEV);
 
-        rc = ci->kprci_set_route (gw, alive);
+        rc = ci->kprci_set_route (gw, alive, when);
 
         PORTAL_SYMBOL_PUT(kpr_control_interface);
         return (rc);
@@ -399,13 +399,17 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                                          data->ioc_nid2, data->ioc_nid3);
                 break;
 
-        case IOC_PORTAL_SET_ROUTE:
+        case IOC_PORTAL_SET_ROUTE: {
+                struct timeval now;
+                
                 CDEBUG (D_IOCTL, "%s routes via "LPU64"\n",
                         data->ioc_flags ? "Enabling" : "Disabling",
                         data->ioc_nid);
-                err = kportal_set_route (data->ioc_nid, data->ioc_flags);
+                do_gettimeofday (&now);
+                err = kportal_set_route (data->ioc_nid, data->ioc_flags, now);
                 break;
-
+        }
+                
         case IOC_PORTAL_GET_ROUTE:
                 CDEBUG (D_IOCTL, "Getting route [%d]\n", data->ioc_count);
                 err = kportal_get_route(data->ioc_count, &data->ioc_nal,
