@@ -290,10 +290,13 @@ do {                                                                      \
                 (ptr) = vmalloc(size);                                    \
         else                                                              \
                 (ptr) = kmalloc((size), (GFP_KERNEL | GFP_MEMALLOC));     \
-        if ((ptr) == NULL)                                                \
+        if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
-        else {                                                            \
+                CERROR("PORTALS: %d total bytes allocated by portals\n",  \
+                       atomic_read(&portal_kmemory));                     \
+                show_mem();                                               \
+        } else {                                                          \
                 portal_kmem_inc((ptr), (size));                           \
                 memset((ptr), 0, (size));                                 \
         }                                                                 \
@@ -330,6 +333,9 @@ do {                                                                      \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \
                        __LINE__);                                         \
+                CERROR("PORTALS: %d total bytes allocated by portals\n",  \
+                       atomic_read(&portal_kmemory));                     \
+                show_mem();                                               \
         } else {                                                          \
                 portal_kmem_inc((ptr), (size));                           \
                 memset((ptr), 0, (size));                                 \
