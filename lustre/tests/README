@@ -1,0 +1,30 @@
+A variety of tests can be run or environments set up. 
+
+1. runregression-net
+
+Usage on server:
+llsetup.sh  marcus-echo-server.cfg
+
+with marcus-echo-server.cfg:
+
+NETWORK=elan
+LOCALHOST=4
+SERVER=4
+SETUP_OST=y
+OSTTYPE=obdecho
+
+
+Usage on client: 
+runregression-net  marcus-echo-client.cfg
+
+with marcus-echo-client.cfg:
+
+NETWORK=elan
+LOCALHOST=5
+SERVER=4
+SETUP_OSC=y
+
+If things are allright it goes through all the tests single threaded,
+multithreaded, getattr and brw. 
+
+
