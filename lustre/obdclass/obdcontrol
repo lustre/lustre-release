@@ -103,16 +103,16 @@ my $arg;
 my %commands =
     ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
      'create' => {func => "Create", doc => "create: creates a new inode"},
-     'attach' => {func => "Attach", doc => "attach { ext2_obd | snap_obd snapdev snapidx tableno}"}, # | scsi_obd adapter bus tid lun |
+     'attach' => {func => "Attach", doc => "attach {ext2_obd | snap_obd snapdev snapidx tableno | scsi_obd adapter bus tid lun}"}, #
      'detach' => {func => "Detach", doc => "detach this device"},
      'testext2iterator' => {func => "TestExt2Iterator", doc => "test ext2 iterator function"},
-     'snapset' => {func => "SnapSetTable", doc => "snapset tableno file" },
-     'snapprint' => {func => "SnapPrint", doc => "snapprint tableno"},
-     'snapdelete' => {func => "SnapDelete", doc => "snapdelete: delete connected snap obd"},
-     'snaprestore' => {func => "SnapRestore", doc => "snaprestore: restore connected old snap to current"},
+     'snapset' => {func => "SnapSetTable", doc => "snapset <tableno> <file>: set the table (created with snaptable) as table #tableno" },
+     'snapprint' => {func => "SnapPrint", doc => "snapprint <tableno>: output the contents of table #tableno to the syslog"},
+     'snapdelete' => {func => "SnapDelete", doc => "snapdelete: delete connected snap obd objects from disk"},
+     'snaprestore' => {func => "SnapRestore", doc => "snaprestore : restore connected old snap objects to be current"},
      'snaptable' => {func => "SnapShotTable", doc => "snaptable: build a snapshot table (interactive)"},
-     'copy' => {func => "Copy", doc => "copy srcid tgtid"},
-     'migrate' => {func => "Migrate", doc => "migrate srcid tgtid"},
+     'copy' => {func => "Copy", doc => "copy <srcid> <tgtid>: copy objects"},
+     'migrate' => {func => "Migrate", doc => "migrate <srcid> <tgtid>: migrate data from one object to another"},
      'format' => {func => "Format", doc => "format type adapter bus tid lun size"},
      'partition' => {func => "Partition", doc => "partition type adapter bus tid lun partition size"},
      'setup' => {func => "Setup", doc => "setup [type]: link this OBD device to the underlying device (default type ext2_obd)"},
@@ -400,7 +400,7 @@ sub SnapRestore {
     my $type = "snap_obd";
     my $prevcurrent = shift;
  
-    $data = pack("i", $prevcurrent); # where the previous current snapshot now lives
+    $data = pack("i", $prevcurrent); # where previous current snapshot now lives
     $datalen = 4;
 
     my $len = length($type);
@@ -536,7 +536,7 @@ sub SnapShotTable  {
 
   done:
     my $ok = &readl("OK with new table? [Yn]: ");
-    unless ( $ok eq "no" )  {
+    unless ( $ok eq "n" )  {
 	WriteSnapShotTable($file, $table);
     }
 }
