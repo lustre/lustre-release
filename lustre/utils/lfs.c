@@ -41,7 +41,7 @@
 #include "obdctl.h"
 
 /* all functions */
-static int lfs_dsetstripe(int argc, char **argv);
+//static int lfs_dsetstripe(int argc, char **argv);
 static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
@@ -52,18 +52,18 @@ static int lfs_catinfo(int argc, char **argv);
 /* all avaialable commands */
 command_t cmdlist[] = {
         {"setstripe", lfs_setstripe, 0,
-         "To create a new file with a specific striping pattern.\n"
-         "usage: setstripe <filename> <stripe size> <stripe start> <stripe count>\n"
+         "To create a new file with a specific striping pattern, or to set default striping pattern on an existing directory\n"
+         "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default)"},
-        {"dsetstripe", lfs_dsetstripe, 0,
+/*        {"dsetstripe", lfs_dsetstripe, 0,
          "To set a specific striping pattern for an existing directory.\n"
          "usage: dsetstripe <dirname> <stripe size> <stripe start> <stripe count>\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default)"},
-        {"find", lfs_find, 0,
+*/        {"find", lfs_find, 0,
          "To list the extended attributes for a given filename or files in a directory "
          "or recursively for all files in a directory tree.\n"
          "usage: find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file> ..."},
@@ -93,6 +93,7 @@ static int lfs_setstripe(int argc, char **argv)
         long st_size;
         int  st_offset, st_count;
         char *end;
+        struct stat statbuf;
 
         if (argc != 5)
                 return CMD_HELP;
@@ -119,14 +120,21 @@ static int lfs_setstripe(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        result = op_create_file(argv[1], st_size, st_offset, st_count);
+        result = stat(argv[1], &statbuf);
+        if ((result == 0) && S_ISDIR(statbuf.st_mode)) {
+               result = op_setstripe_dir(argv[1], st_size, st_offset, 
+                                         st_count);
+        } else {
+                result = op_create_file(argv[1], st_size, st_offset, st_count);
+        }
+
         if (result)
                 fprintf(stderr, "error: %s: create stripe file failed\n",
                                 argv[0]);
 
         return result;
 }
-
+#if 0
 static int lfs_dsetstripe(int argc, char **argv)
 {
         int result;
@@ -167,7 +175,7 @@ static int lfs_dsetstripe(int argc, char **argv)
         return result;
 
 }
-
+#endif
 static int lfs_find(int argc, char **argv)
 {
         struct option long_opts[] = {
