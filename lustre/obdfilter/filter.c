@@ -442,12 +442,13 @@ static int filter_cleanup(struct obd_device * obddev)
         struct super_block *sb;
         ENTRY;
 
-        if (!(obddev->obd_flags & OBD_SET_UP))
-                RETURN(0);
-
         if (!list_empty(&obddev->obd_exports)) {
                 CERROR("still has clients!\n");
-                RETURN(-EBUSY);
+                class_disconnect_all(obddev);
+                if (!list_empty(&obddev->obd_exports)) {
+                        CERROR("still has exports after forced cleanup?\n");
+                        RETURN(-EBUSY);
+                }
         }
 
         ldlm_namespace_free(obddev->obd_namespace);
