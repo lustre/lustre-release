@@ -59,8 +59,8 @@ static struct nal_cmd_handler nal_cmd[NAL_MAX_NR + 1];
 struct semaphore nal_cmd_sem;
 
 #ifdef PORTAL_DEBUG
-void
-kportal_assertion_failed (char *expr, char *file, char *func, int line)
+void kportal_assertion_failed(char *expr, char *file, const char *func, 
+                              const int line)
 {
         unsigned long stack = CDEBUG_STACK(stack);
         portals_debug_msg(0, D_EMERG, file, func, line, stack,

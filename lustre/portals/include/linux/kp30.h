@@ -205,7 +205,8 @@ static inline void our_cond_resched(void)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */
 
 #ifdef PORTAL_DEBUG
-extern void kportal_assertion_failed(char *expr,char *file,char *func,int line);
+extern void kportal_assertion_failed(char *expr, char *file,
+                                     const char *func, const int line);
 #define LASSERT(e) ((e) ? 0 : kportal_assertion_failed( #e , __FILE__,  \
                                                         __FUNCTION__, __LINE__))
 #else
@@ -555,7 +556,7 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #endif /* PORTALS_PROFILING */
 
 /* debug.c */
-void portals_run_lbug_upcall(char * file, char *fn, int line);
+void portals_run_lbug_upcall(char * file, const char *fn, const int line);
 void portals_debug_dumplog(void);
 int portals_debug_init(unsigned long bufsize);
 int portals_debug_cleanup(void);
@@ -573,12 +574,13 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len);
 # warning printf has been defined as a macro...
 # undef printf
 #endif
-void portals_debug_msg (int subsys, int mask, char *file, char *fn, int line,
-                        unsigned long stack, const char *format, ...)
+void portals_debug_msg(int subsys, int mask, char *file, const char *fn, 
+                       const int line, unsigned long stack, const char *format,
+                        ...)
         __attribute__ ((format (printf, 7, 8)));
 #else
-void portals_debug_msg (int subsys, int mask, char *file, char *fn,
-                        int line, unsigned long stack,
+void portals_debug_msg (int subsys, int mask, char *file, const char *fn,
+                        const int line, unsigned long stack,
                         const char *format, ...);
 #endif /* __GNUC__ */
 void portals_debug_set_level(unsigned int debug_level);

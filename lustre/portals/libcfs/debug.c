@@ -781,7 +781,7 @@ void portals_debug_set_level(unsigned int debug_level)
         portal_debug = debug_level;
 }
 
-void portals_run_lbug_upcall(char * file, char *fn, int line)
+void portals_run_lbug_upcall(char * file, const char *fn, const int line)
 {
         char *argv[6];
         char *envp[3];
