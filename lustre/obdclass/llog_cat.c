@@ -148,6 +148,8 @@ out:
         RETURN(rc);
 }
 
+
+
 /* Assumes caller has already pushed us into the kernel context. */
 int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
 {

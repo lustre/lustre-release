@@ -1,7 +1,7 @@
 #ifndef __LVFS_H__
 #define __LVFS_H__
 
-#if defined __LINUX__ && defined __KERNEL__
+#if defined __KERNEL__
 #include <linux/lvfs_linux.h>
 #endif 
 

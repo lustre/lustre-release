@@ -60,6 +60,7 @@ struct llog_handle *llog_alloc_handle(void)
 }
 EXPORT_SYMBOL(llog_alloc_handle);
 
+
 void llog_free_handle(struct llog_handle *loghandle)
 {
         if (!loghandle)
@@ -71,46 +72,28 @@ void llog_free_handle(struct llog_handle *loghandle)
 }
 EXPORT_SYMBOL(llog_free_handle);
 
-int llog_buf2reclen(int len)
-{
-        int size;
 
-        size = sizeof(struct llog_rec_hdr) + size_round(len) + sizeof(__u32);
-        return size;
-}
-
-/* Remove a log entry from the catalog.
- * Assumes caller has already pushed us into the kernel context and is locking.
- */
-int llog_delete_log(struct llog_handle *cathandle,struct llog_handle *loghandle)
+int llog_cancel_rec(struct llog_handle *loghandle, int index)
 {
-        struct llog_cookie *lgc = &loghandle->lgh_log_cat_cookie;
-        int catindex = lgc->lgc_index;
-        struct llog_log_hdr *llh = cathandle->lgh_hdr;
-        loff_t offset = 0;
+        struct llog_log_hdr *llh = loghandle->lgh_hdr;
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_HA, "log "LPX64":%x empty, closing\n",
-               lgc->lgc_lgl.lgl_oid, lgc->lgc_lgl.lgl_ogen);
+        CDEBUG(D_HA, "canceling %d in log "LPX64"\n",
+               index, loghandle->lgh_id.lgl_oid);
 
-        if (!ext2_clear_bit(catindex, llh->llh_bitmap)) {
-                CERROR("catalog index %u already clear?\n", catindex);
+        if (!ext2_clear_bit(index, llh->llh_bitmap)) {
+                CERROR("catalog index %u already clear?\n", index);
                 LBUG();
         } else {
-                rc = lustre_fwrite(cathandle->lgh_file, llh, sizeof(*llh),
-                                   &offset);
-
-                if (rc != sizeof(*llh)) {
-                        CERROR("log %u cancel error: rc %d\n", catindex, rc);
-                        if (rc >= 0)
-                                rc = -EIO;
-                } else
-                        rc = 0;
+                rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
+                if (rc) 
+                        CERROR("failure re-writing header %d\n", rc);
+                LASSERT(rc == 0);
         }
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_delete_log);
+
 
 int llog_process_log(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 {
@@ -183,9 +166,8 @@ int llog_write_header(struct llog_handle *loghandle, int size)
         llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
 
         /* write the header record in the log */
-        rc = llog_write_record(loghandle, &llh, NULL, NULL, 0);
+        rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
         if (rc > 0)
                 rc = 0;
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_write_header);

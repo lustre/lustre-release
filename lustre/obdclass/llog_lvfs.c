@@ -36,12 +36,13 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <portals/list.h>
-
+#include <linux/lvfs.h>
 
 static int llog_lvfs_pad(struct l_file *file, int len, int index)
 {
         struct llog_rec_hdr rec;
         struct llog_rec_tail tail;
+        int rc;
         ENTRY;
         
         LASSERT(len >= LLOG_MIN_REC_SIZE && (len & 0xf) == 0);
@@ -147,7 +148,8 @@ int llog_lvfs_write_record(struct llog_handle *loghandle,
                         RETURN(-EINVAL);
 
                 rc = llog_lvfs_write_blob(file, llh, NULL, 0);
-                if (rc)
+                /* we are done if we only write the header or on error */
+                if (rc || idx == 0)
                         RETURN(rc);
 
                 saved_offset = sizeof(*llh) + idx * rec->lrh_len;
