@@ -1095,6 +1095,30 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct ldlm_reply *)0)->lock_policy_res2) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_reply *)0)->lock_policy_res2));
 
+        /* Checks for struct ost_lvb */
+        LASSERTF((int)sizeof(struct ost_lvb) == 40, " found %lld\n",
+                 (long long)(int)sizeof(struct ost_lvb));
+        LASSERTF(offsetof(struct ost_lvb, lvb_size) == 0, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_size));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_size) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_size));
+        LASSERTF(offsetof(struct ost_lvb, lvb_mtime) == 8, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_mtime));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_mtime) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_mtime));
+        LASSERTF(offsetof(struct ost_lvb, lvb_atime) == 16, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_atime));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_atime) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_atime));
+        LASSERTF(offsetof(struct ost_lvb, lvb_ctime) == 24, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_ctime));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_ctime) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_ctime));
+        LASSERTF(offsetof(struct ost_lvb, lvb_blocks) == 32, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_blocks));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_blocks) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_blocks));
+
         /* Checks for struct ptlbd_op */
         LASSERTF((int)sizeof(struct ptlbd_op) == 12, " found %lld\n",
                  (long long)(int)sizeof(struct ptlbd_op));

@@ -48,7 +48,7 @@ lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
 {
         char *ptr;
         int   i;
-        
+
         msg->magic = PTLRPC_MSG_MAGIC;
         msg->version = PTLRPC_MSG_VERSION;
         msg->bufcount = count;
@@ -65,11 +65,11 @@ lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
         }
 }
 
-int lustre_pack_request (struct ptlrpc_request *req, 
+int lustre_pack_request (struct ptlrpc_request *req,
                          int count, int *lens, char **bufs)
 {
         ENTRY;
-        
+
         req->rq_reqlen = lustre_msg_size (count, lens);
         OBD_ALLOC(req->rq_reqmsg, req->rq_reqlen);
         if (req->rq_reqmsg == NULL)
@@ -416,7 +416,10 @@ void lustre_swab_ost_last_id(obd_id *id)
 void lustre_swab_ost_lvb(struct ost_lvb *lvb)
 {
         __swab64s(&lvb->lvb_size);
-        __swab64s(&lvb->lvb_time);
+        __swab64s(&lvb->lvb_mtime);
+        __swab64s(&lvb->lvb_atime);
+        __swab64s(&lvb->lvb_ctime);
+        __swab64s(&lvb->lvb_blocks);
 }
 
 void lustre_swab_ll_fid (struct ll_fid *fid)
@@ -1735,6 +1738,30 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct ldlm_reply *)0)->lock_policy_res2) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_reply *)0)->lock_policy_res2));
 
+        /* Checks for struct ost_lvb */
+        LASSERTF((int)sizeof(struct ost_lvb) == 40, " found %lld\n",
+                 (long long)(int)sizeof(struct ost_lvb));
+        LASSERTF(offsetof(struct ost_lvb, lvb_size) == 0, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_size));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_size) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_size));
+        LASSERTF(offsetof(struct ost_lvb, lvb_mtime) == 8, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_mtime));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_mtime) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_mtime));
+        LASSERTF(offsetof(struct ost_lvb, lvb_atime) == 16, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_atime));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_atime) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_atime));
+        LASSERTF(offsetof(struct ost_lvb, lvb_ctime) == 24, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_ctime));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_ctime) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_ctime));
+        LASSERTF(offsetof(struct ost_lvb, lvb_blocks) == 32, " found %lld\n",
+                 (long long)offsetof(struct ost_lvb, lvb_blocks));
+        LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_blocks) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_blocks));
+
         /* Checks for struct ptlbd_op */
         LASSERTF((int)sizeof(struct ptlbd_op) == 12, " found %lld\n",
                  (long long)(int)sizeof(struct ptlbd_op));
@@ -2109,4 +2136,5 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx));
 }
+
 

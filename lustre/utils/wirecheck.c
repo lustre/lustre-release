@@ -472,6 +472,18 @@ check_ldlm_reply(void)
 }
 
 void
+check_ldlm_lvb(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ost_lvb);
+        CHECK_MEMBER(ost_lvb, lvb_size);
+        CHECK_MEMBER(ost_lvb, lvb_mtime);
+        CHECK_MEMBER(ost_lvb, lvb_atime);
+        CHECK_MEMBER(ost_lvb, lvb_ctime);
+        CHECK_MEMBER(ost_lvb, lvb_blocks);
+}
+
+void
 check_ptlbd_op(void)
 {
         BLANK_LINE();
@@ -882,6 +894,7 @@ main(int argc, char **argv)
         check_ldlm_lock_desc();
         check_ldlm_request();
         check_ldlm_reply();
+        check_ldlm_lvb();
         check_ptlbd_op();
         check_ptlbd_niob();
         check_ptlbd_rsp();
