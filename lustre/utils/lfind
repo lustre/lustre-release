@@ -1,2 +1,3 @@
 #!/bin/bash
-lfs find $@
+PATH=`dirname $0`:$PATH
+lfs find "$@"

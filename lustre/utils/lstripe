@@ -1,2 +1,3 @@
 #!/bin/bash
-lfs setstripe $@
+PATH=`dirname $0`:$PATH
+lfs setstripe "$@"
