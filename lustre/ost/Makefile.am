@@ -8,10 +8,8 @@ MODULE = ost
 modulefs_DATA = ost.o
 EXTRA_PROGRAMS = ost
 
-LINX=obd_pack.c ll_pack.c target.c
+LINX=obd_pack.c target.c
 
-ll_pack.c: 
-	test -e ll_pack.c || ln -sf $(top_srcdir)/lib/ll_pack.c
 obd_pack.c: 
 	test -e obd_pack.c || ln -sf $(top_srcdir)/lib/obd_pack.c
 target.c: 
