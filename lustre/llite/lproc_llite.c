@@ -28,6 +28,8 @@
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
 
+#include "llite_internal.h"
+
 /* /proc/lustre/llite mount point registration */
 
 #ifndef LPROCFS
@@ -97,6 +99,8 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { "filestotal",  rd_filestotal,  0, 0 },
         { "filesfree",   rd_filesfree,   0, 0 },
         { "filegroups",  rd_filegroups,  0, 0 },
+        { "dirty_pages", ll_rd_dirty_pages, 0, 0},
+        { "max_dirty_pages", ll_rd_max_dirty_pages, ll_wr_max_dirty_pages, 0},
         { 0 }
 };
 
@@ -108,8 +112,6 @@ struct llite_file_opcode {
         const char *opname;
 } llite_opcode_table[LPROC_LL_FILE_OPCODES] = {
         /* file operation */
-        { LPROC_LL_DIRTY_PAGES,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "dirty_pages" },
         { LPROC_LL_DIRTY_HITS,     LPROCFS_TYPE_REGS, "dirty_pages_hits" },
         { LPROC_LL_DIRTY_MISSES,   LPROCFS_TYPE_REGS, "dirty_pages_misses" },
         { LPROC_LL_WB_WRITEPAGE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
