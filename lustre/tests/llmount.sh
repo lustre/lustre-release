@@ -3,8 +3,8 @@
 LCONF=../utils/lconf
 
 if [ ! -f local.xml ]; then
-   ./local.sh
+   ./local.sh || exit 1
 fi
 
-${LCONF} --reformat --gdb local.xml
+${LCONF} --reformat --gdb local.xml || exit 2
 
