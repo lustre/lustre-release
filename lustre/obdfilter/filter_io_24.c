@@ -202,6 +202,27 @@ cleanup:
         return rc;
 }
 
+/* See if there are unallocated parts in given file region */
+static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
+{
+        int (*fs_bmap)(struct address_space *, long) =
+                inode->i_mapping->a_ops->bmap;
+        int j;
+
+        /* We can't know if the range is mapped already or not */
+        if (fs_bmap == NULL)
+                return 0;
+
+        offset >>= inode->i_blkbits;
+        len >>= inode->i_blkbits;
+
+        for (j = 0; j <= len; j++)
+                if (fs_bmap(inode->i_mapping, offset + j) == 0)
+                        return 0;
+
+        return 1;
+}
+
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
                           struct niobuf_local *res, struct obd_trans_info *oti)
@@ -213,7 +234,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         struct iattr iattr = { 0 };
         struct kiobuf *iobuf;
         struct inode *inode = NULL;
-        int rc = 0, i, cleanup_phase = 0, err;
+        int rc = 0, i, n, cleanup_phase = 0, err;
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
         void *wait_handle;
         ENTRY;
@@ -234,18 +255,29 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 GOTO(cleanup, rc);
 
         iobuf->offset = 0;
-        iobuf->length = PAGE_SIZE * obj->ioo_bufcnt;
-        iobuf->nr_pages = obj->ioo_bufcnt;
+        iobuf->length = 0;
+        iobuf->nr_pages = 0;
 
         cleanup_phase = 1;
         fso.fso_dentry = res->dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
         inode = res->dentry->d_inode;
 
-        iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
-        for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
+        for (i = 0, lnb = res, n = 0; i < obj->ioo_bufcnt; i++, lnb++) {
                 loff_t this_size;
-                iobuf->maplist[i] = lnb->page;
+
+                /* If overwriting an existing block, we don't need a grant */
+                if (!(lnb->flags & OBD_BRW_GRANTED) && lnb->rc == -ENOSPC &&
+                    filter_range_is_mapped(inode, lnb->offset, lnb->len))
+                        lnb->rc = 0;
+
+                if (lnb->rc) /* ENOSPC, network RPC error */
+                        continue;
+
+                iobuf->maplist[n++] = lnb->page;
+                iobuf->length += PAGE_SIZE;
+                iobuf->nr_pages++;
+
                 /* We expect these pages to be in offset order, but we'll
                  * be forgiving */
                 this_size = lnb->offset + lnb->len;
@@ -270,6 +302,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow brw_start %lus\n", (jiffies - now) / HZ);
 
+        iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
         if (rc == 0)
@@ -278,6 +311,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
 
+        filter_grant_commit(exp, niocount, res);
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err)
                 rc = err;
