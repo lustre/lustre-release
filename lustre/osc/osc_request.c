@@ -689,6 +689,7 @@ static int osc_brw_write(struct lustre_handle *conn,
                 bulk->b_buf = (void *)(unsigned long)local[j].addr;
                 bulk->b_buflen = local[j].len;
                 bulk->b_xid = remote->xid;
+                bulk->b_page = pagearray[j];
         }
 
         if (desc->b_page_count != page_count)
