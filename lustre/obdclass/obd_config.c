@@ -596,7 +596,13 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 
                 lustre_cfg_freedata(buf, cfg_len);
         } else if (rec->lrh_type == PTL_CFG_REC) {
-                rc = kportal_nal_cmd((struct portals_cfg *)cfg_buf);
+                struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
+                if (pcfg->pcfg_command ==NAL_CMD_REGISTER_MYNID &&
+                    cfg->cfg_local_nid != PTL_NID_ANY) {
+                        pcfg->pcfg_nid = cfg->cfg_local_nid;
+                }
+
+                rc = kportal_nal_cmd(pcfg);
         }
 out:
         RETURN(rc);

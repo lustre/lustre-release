@@ -68,10 +68,12 @@ zconf_mount() {
     [ -d $mnt ] || mkdir $mnt
     
     if [ -x /sbin/mount.lustre ] ; then
-	mount -t lustre `facet_host mds`:/mds_svc/client_facet $mnt
+	mount -t lustre -o nettype=$NETTYPE \
+	    `facet_host mds`:/mds_svc/client_facet $mnt
     else
        insmod $LUSTRE/llite/llite.o || :
-       $LUSTRE/utils/llmount `facet_host mds`:/mds_svc/client_facet $mnt
+       $LUSTRE/utils/llmount `facet_host mds`:/mds_svc/client_facet $mnt \
+            -o nettype=$NETTYPE 
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -219,28 +221,28 @@ add_facet() {
 add_mds() {
     facet=$1
     shift
-    add_facet $facet --timeout=${TIMEOUT}
+    add_facet $facet 
     do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
 }
 
 add_mdsfailover() {
     facet=$1
     shift
-    add_facet ${facet}failover --timeout=${TIMEOUT}
+    add_facet ${facet}failover
     do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc $*
 }
 
 add_ost() {
     facet=$1
     shift
-    add_facet $facet --timeout=${TIMEOUT}
+    add_facet $facet
     do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc $*
 }
 
 add_ostfailover() {
     facet=$1
     shift
-    add_facet ${facet}failover  --timeout=${TIMEOUT}
+    add_facet ${facet}failover
     do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc $*
 }
 
@@ -256,7 +258,7 @@ add_client() {
     facet=$1
     mds=$2
     shift; shift
-    add_facet $facet --lustre_upcall $UPCALL --timeout=${TIMEOUT}
+    add_facet $facet --lustre_upcall $UPCALL
     do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $*
 
 }
