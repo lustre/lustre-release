@@ -235,9 +235,7 @@ int ptlrpc_stop_pinger(void)
 
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
-        down(&pinger_sem);
         imp->imp_next_ping = jiffies + (obd_timeout * HZ);
-        up(&pinger_sem);
 }
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)

@@ -39,6 +39,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- allow readahead allocations to fail when low on memory (5383)
 	- mmap locking landed again, after considerable improvement (2828)
 	- fix lustre/lustrefs init scripts for SuSE (patch from Scali, 5702)
+	- don't hold the pinger_sem in ptlrpc_pinger_sending_on_import
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0
