@@ -1,11 +1,7 @@
-.old..........pc/linux-2.6.3-nfs-intent-suse/fs/nfs/dir.c
-.new.........fs/nfs/dir.c
-.old..........pc/linux-2.6.3-nfs-intent-suse/fs/nfs/dir.c
-.new.........fs/nfs/dir.c
-Index: linux-2.6.4-51.0/fs/nfs/dir.c
+Index: linux-2.6.5-7.108/fs/nfs/dir.c
 ===================================================================
---- linux-2.6.4-51.0.orig/fs/nfs/dir.c	2004-04-05 17:09:16.000000000 -0400
-+++ linux-2.6.4-51.0/fs/nfs/dir.c	2004-04-05 17:09:23.000000000 -0400
+--- linux-2.6.5-7.108.orig/fs/nfs/dir.c	2004-09-15 19:26:43.012732408 +0300
++++ linux-2.6.5-7.108/fs/nfs/dir.c	2004-09-15 20:03:32.882781096 +0300
 @@ -782,7 +782,7 @@
  	if (nd->flags & LOOKUP_DIRECTORY)
  		return 0;
@@ -51,10 +47,10 @@ Index: linux-2.6.4-51.0/fs/nfs/dir.c
  	if (openflags & O_CREAT) {
  		/* If this is a negative dentry, just drop it */
  		if (!inode)
-Index: linux-2.6.4-51.0/fs/nfs/nfs4proc.c
+Index: linux-2.6.5-7.108/fs/nfs/nfs4proc.c
 ===================================================================
---- linux-2.6.4-51.0.orig/fs/nfs/nfs4proc.c	2004-04-05 12:41:59.000000000 -0400
-+++ linux-2.6.4-51.0/fs/nfs/nfs4proc.c	2004-04-05 17:09:23.000000000 -0400
+--- linux-2.6.5-7.108.orig/fs/nfs/nfs4proc.c	2004-04-04 06:37:39.000000000 +0300
++++ linux-2.6.5-7.108/fs/nfs/nfs4proc.c	2004-09-15 20:03:32.885780640 +0300
 @@ -792,17 +792,17 @@
  	struct nfs4_state *state;
  
@@ -76,22 +72,23 @@ Index: linux-2.6.4-51.0/fs/nfs/nfs4proc.c
  	put_rpccred(cred);
  	if (IS_ERR(state))
  		return (struct inode *)state;
-Index: linux-2.6.4-51.0/fs/cifs/dir.c
+Index: linux-2.6.5-7.108/fs/cifs/dir.c
 ===================================================================
---- linux-2.6.4-51.0.orig/fs/cifs/dir.c	2004-04-05 12:41:59.000000000 -0400
-+++ linux-2.6.4-51.0/fs/cifs/dir.c	2004-04-05 17:13:47.000000000 -0400
-@@ -146,22 +146,22 @@
- 	if(nd) { 
- 		cFYI(1,("In create for inode %p dentry->inode %p nd flags = 0x%x for %s",inode, direntry->d_inode, nd->flags,full_path));
+--- linux-2.6.5-7.108.orig/fs/cifs/dir.c	2004-09-04 13:28:22.000000000 +0300
++++ linux-2.6.5-7.108/fs/cifs/dir.c	2004-09-15 20:03:40.065689128 +0300
+@@ -173,23 +173,23 @@
+ 	}
  
+ 	if(nd) {
 -		if ((nd->intent.open.flags & O_ACCMODE) == O_RDONLY)
 +		if ((nd->intent.it_flags & O_ACCMODE) == O_RDONLY)
  			desiredAccess = GENERIC_READ;
--		else if ((nd->intent.open.flags & O_ACCMODE) == O_WRONLY)
-+		else if ((nd->intent.it_flags & O_ACCMODE) == O_WRONLY)
+-		else if ((nd->intent.open.flags & O_ACCMODE) == O_WRONLY) {
++		else if ((nd->intent.it_flags & O_ACCMODE) == O_WRONLY) {
  			desiredAccess = GENERIC_WRITE;
--		else if ((nd->intent.open.flags & O_ACCMODE) == O_RDWR) {
-+		else if ((nd->intent.it_flags & O_ACCMODE) == O_RDWR) {
+ 			write_only = TRUE;
+-		} else if ((nd->intent.open.flags & O_ACCMODE) == O_RDWR) {
++		} else if ((nd->intent.it_flags & O_ACCMODE) == O_RDWR) {
  			/* GENERIC_ALL is too much permission to request */
  			/* can cause unnecessary access denied on create */
  			/* desiredAccess = GENERIC_ALL; */
@@ -109,7 +106,7 @@ Index: linux-2.6.4-51.0/fs/cifs/dir.c
  			disposition = FILE_OPEN_IF;
  		else {
  			cFYI(1,("Create flag not set in create function"));
-@@ -319,7 +319,7 @@
+@@ -359,7 +359,7 @@
  	      parent_dir_inode, direntry->d_name.name, direntry));
  
  	if(nd) {  /* BB removeme */
