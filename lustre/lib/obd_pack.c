@@ -30,54 +30,35 @@
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 
-void ost_pack_ioo(struct obd_ioobj **tmp, struct lov_stripe_md *lsm,int bufcnt)
+void ost_pack_ioo(struct obd_ioobj *ioo, struct lov_stripe_md *lsm, int bufcnt)
 {
-        struct obd_ioobj *ioo = *tmp;
-        void *p = *tmp;
-
         ioo->ioo_id = HTON__u64(lsm->lsm_object_id);
         ioo->ioo_gr = HTON__u64(0);
         ioo->ioo_type = HTON__u32(S_IFREG);
         ioo->ioo_bufcnt = HTON__u32(bufcnt);
-        *tmp = p + sizeof(*ioo);
 }
 
-void ost_unpack_ioo(struct obd_ioobj **tmp, struct obd_ioobj **ioop)
+void ost_unpack_ioo(struct obd_ioobj *dst, struct obd_ioobj *src)
 {
-        void *p = *tmp;
-        struct obd_ioobj *ioo = *tmp;
-        *ioop = *tmp;
-
-        ioo->ioo_id = NTOH__u64(ioo->ioo_id);
-        ioo->ioo_gr = NTOH__u64(ioo->ioo_gr);
-        ioo->ioo_type = NTOH__u32(ioo->ioo_type);
-        ioo->ioo_bufcnt = NTOH__u32(ioo->ioo_bufcnt);
-        *tmp = p + sizeof(*ioo);
+        dst->ioo_id = NTOH__u64(src->ioo_id);
+        dst->ioo_gr = NTOH__u64(src->ioo_gr);
+        dst->ioo_type = NTOH__u32(src->ioo_type);
+        dst->ioo_bufcnt = NTOH__u32(src->ioo_bufcnt);
 }
 
-void ost_pack_niobuf(void **tmp, __u64 offset, __u32 len, __u32 flags,
-                     __u32 xid)
+void ost_pack_niobuf(struct niobuf_remote *nb, __u64 offset, __u32 len,
+                     __u32 flags, __u32 xid)
 {
-        struct niobuf_remote *nb = *tmp;
-        char *c = *tmp;
-
         nb->offset = HTON__u64(offset);
         nb->len = HTON__u32(len);
-        nb->flags = HTON__u32(flags);
         nb->xid = HTON__u32(xid);
-        *tmp = c + sizeof(*nb);
+        nb->flags = HTON__u32(flags);
 }
 
-void ost_unpack_niobuf(void **tmp, struct niobuf_remote **nbp)
+void ost_unpack_niobuf(struct niobuf_remote *dst, struct niobuf_remote *src)
 {
-        char *c = *tmp;
-        struct niobuf_remote *nb = *tmp;
-
-        *nbp = *tmp;
-
-        nb->offset = NTOH__u64(nb->offset);
-        nb->len = NTOH__u32(nb->len);
-        nb->flags = NTOH__u32(nb->flags);
-
-        *tmp = c + sizeof(*nb);
+        dst->offset = NTOH__u64(src->offset);
+        dst->len = NTOH__u32(src->len);
+        dst->xid = NTOH__u32(src->xid);
+        dst->flags = NTOH__u32(src->flags);
 }
