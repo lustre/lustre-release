@@ -214,7 +214,7 @@ struct inode* llu_new_inode(struct filesys *fs, ino_t ino, mode_t mode)
 			     &llu_inode_ops, lli);
 
 	if (!inode)
-		free(lli);
+		OBD_FREE(lli, sizeof(*lli));
 
         return inode;
 }
@@ -306,6 +306,15 @@ static int llu_iop_getattr(struct pnode *pno,
         return 0;
 }
 
+void llu_iop_gone(struct inode *inode)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+
+        /* FIXME do proper cleanup here */
+
+        OBD_FREE(lli, sizeof(*lli));
+}
+
 struct filesys_ops llu_filesys_ops =
 {
         fsop_gone: llu_fsop_gone,
@@ -319,6 +328,7 @@ static struct inode_ops llu_inode_ops = {
         inop_ipreadv:   llu_iop_ipreadv,
         inop_ipwritev:  llu_iop_ipwritev,
         inop_iodone:    llu_iop_iodone,
+        inop_gone:      llu_iop_gone,
 };
 
 
