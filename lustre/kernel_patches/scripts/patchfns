@@ -69,7 +69,18 @@ is_applied()
 		return 1
 	fi
 }
-
+check_pc_match()
+{
+	tmpfile=$(mktemp /tmp/p_XXXXXX)
+	lsdiff --strip=1 $1 > $tmpfile 
+	diff $2 $tmpfile > /dev/null
+	if [ $? != 0 ]; then
+		echo " $1 do not match with $2 "
+		echo " $2 will be changed to match $2"
+		cat $tmpfile > $P/pc/$PATCH_NAME.pc
+	fi
+	rm -rf $tmpfile
+} 
 can_apply()
 {
 	if patch -p1 --dry-run -i "$1" -f
