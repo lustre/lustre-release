@@ -89,6 +89,12 @@ typedef long sector_t;
 #define ll_pgcache_lock(mapping)        spin_lock(&pagecache_lock)
 #define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
 
+static inline void __d_drop(struct dentry *dentry)
+{
+	list_del(&dentry->d_hash);
+	INIT_LIST_HEAD(&dentry->d_hash);
+}
+
 #endif /* end of 2.4 compat macros */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
