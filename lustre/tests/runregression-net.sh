@@ -1,7 +1,7 @@
 #!/bin/sh
 export PATH=/sbin:/usr/sbin:$PATH
 
-SRCDIR="`dirname $0`"
+SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
 setup_opts $@
@@ -20,6 +20,8 @@ for CMD in test_getattr test_brw_read test_brw_write; do
 
 	setup_server || exit -1
 	setup_client || exit -1
+
+	OSC_DEVNO=`$OBDCTL name2dev OSCDEV`
 
 	# We use '--threads 1 X' instead of '--device X' so that
 	# obdctl can modnitor the forked thread for progress (TODO).
