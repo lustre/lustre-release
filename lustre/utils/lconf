@@ -1379,7 +1379,8 @@ def main():
     debug("configuring for host: ", node_list)
 
     if len(host) > 0:
-        config._debug_path = '/tmp/lustre-log-' + host
+        config._debug_path = config._debug_path + '-' + host
+        config._gdb_script = config._gdb_script + '-' + host
 
     TCP_ACCEPTOR = find_prog('acceptor')
     if not TCP_ACCEPTOR:
