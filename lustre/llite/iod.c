@@ -141,7 +141,7 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
         LASSERT(pg->count >= 0);
 
         CDEBUG(D_CACHE, "brw_page %p: off "LPU64" cnt %d, page %p: ind %ld"
-                        " i_size: "LPU64"\n", pg, pg->off, pg->count, page, 
+                        " i_size: %llu\n", pg, pg->off, pg->count, page,
                         page->index, inode->i_size);
 
         if ( llwp->num_frags == 3 || llwp->num_pages == LLWP_MAX_PAGES )
@@ -313,14 +313,14 @@ int ll_check_dirty( struct super_block *sb)
                 list_for_each_prev(pos, &sb->s_dirty) {
                         inode = list_entry(pos, struct inode, i_list);
 
-                        if ( ! (inode->i_state & I_DIRTY_PAGES) ) {
+                        if (!(inode->i_state & I_DIRTY_PAGES)) {
                                 inode = NULL;
                                 continue;
                         }
                         break;
                 }
 
-                if ( inode == NULL )
+                if (inode == NULL)
                         break;
 
                 /* duplicate __sync_one, *sigh* */
@@ -331,19 +331,19 @@ int ll_check_dirty( struct super_block *sb)
 
                 spin_unlock(&inode_lock);
 
-                do { 
+                do {
                         memset(llwp, 0, sizeof(*llwp));
                         ll_get_dirty_pages(inode, llwp);
-                        if ( llwp->num_pages ) {
+                        if (llwp->num_pages) {
                                 ll_brw_pages_unlock(inode, llwp);
                                 rc += llwp->num_pages;
                                 making_progress = 1;
                         }
-                } while (llwp->num_pages && should_writeback() );
+                } while (llwp->num_pages && should_writeback());
 
                 spin_lock(&inode_lock);
 
-                if ( ! list_empty(&inode->i_mapping->dirty_pages) )
+                if (!list_empty(&inode->i_mapping->dirty_pages))
                         inode->i_state |= I_DIRTY_PAGES;
 
                 inode->i_state &= ~I_LOCK;
@@ -357,14 +357,14 @@ int ll_check_dirty( struct super_block *sb)
                 }
                 wake_up(&inode->i_wait);
 
-        } while ( making_progress && should_writeback() );
+        } while (making_progress && should_writeback());
 
         /*
          * and if that didn't work, we sleep on any data that might
          * be under writeback..
          */
-        while ( should_writeback() ) {
-                if ( list_empty(&sb->s_locked_inodes) )  
+        while (should_writeback()) {
+                if (list_empty(&sb->s_locked_inodes))
                         break;
 
                 inode = list_entry(sb->s_locked_inodes.next, struct inode, 
