@@ -62,8 +62,7 @@ setup() {
     start ost2 --reformat $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds $MDSLCONFARGS --reformat
-    zconf_mount `hostname` $MOUNT
-    echo 0x3f0410 > /proc/sys/portals/debug
+    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
 }
 
 $SETUP
@@ -79,6 +78,15 @@ test_0() {
     fail mds
 }
 run_test 0 "empty replay"
+
+test_0b() {
+    # this test attempts to trigger a race in the precreation code, 
+    # and must run before any other objects are created on the filesystem
+    fail ost
+    createmany -o $DIR/$tfile 20 || return 1
+    unlinkmany $DIR/$tfile 20 || return 2
+}
+run_test 0b "ensure object created after recover exists. (3284)"
 
 test_1() {
     replay_barrier mds
@@ -825,14 +833,14 @@ run_test 41 "read from a valid osc while other oscs are invalid"
 
 # test MDS recovery after ost failure
 test_42() {
-    blocks=`df $MOUNT | tail -1 | awk '{ print $1 }'`
+    blocks=`df $MOUNT | tail -n 1 | awk '{ print $1 }'`
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
     facet_failover ost
     
     # osc is evicted, fs is smaller
-    blocks_after=`df $MOUNT | tail -1 | awk '{ print $1 }'`
+    blocks_after=`df $MOUNT | tail -n 1 | awk '{ print $1 }'`
     [ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))

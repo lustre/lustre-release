@@ -116,6 +116,9 @@ static inline void *kmalloc(int size, int prot)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
+#define capable(foo) 1
+#define CAP_SYS_ADMIN 1
+
 typedef struct {
         void *cwd;
 }mm_segment_t;
@@ -575,23 +578,12 @@ struct task_struct {
         int pid;
         int fsuid;
         int fsgid;
-        int max_groups;
-        int ngroups;
-        gid_t *groups;
         __u32 cap_effective;
-
-        struct fs_struct __fs;
 };
 
 extern struct task_struct *current;
-int in_group_p(gid_t gid);
-static inline int capable(int cap)
-{
-        if (current->cap_effective & (1 << cap))
-                return 1;
-        else
-                return 0;
-}
+
+#define in_group_p(a) 0 /* FIXME */
 
 #define set_current_state(foo) do { current->state = foo; } while (0)
 

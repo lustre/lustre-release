@@ -537,7 +537,7 @@ struct obd_import *class_new_import(void)
 void class_destroy_import(struct obd_import *import)
 {
         LASSERT(import != NULL);
-        LASSERT((unsigned long)import != 0x5a5a5a5a);
+        LASSERT(import != LP_POISON);
 
         class_handle_unhash(&import->imp_handle);
 

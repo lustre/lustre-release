@@ -53,9 +53,10 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         if (!sbi)
                 RETURN(NULL);
 
-        spin_lock_init(&sbi->ll_pglist_lock);
+        spin_lock_init(&sbi->ll_lock);
         INIT_LIST_HEAD(&sbi->ll_pglist);
         sbi->ll_pglist_gen = 0;
+        sbi->ll_max_read_ahead_pages = SBI_DEFAULT_RA_MAX;
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
         ll_s2sbi(sb) = sbi;
@@ -905,7 +906,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
                 down(&inode->i_sem);
-                if (rc != ELDLM_OK)
+                if (rc != 0)
                         RETURN(rc);
 
                 rc = vmtruncate(inode, attr->ia_size);

@@ -1192,7 +1192,7 @@ test_36d() {
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	[ $RUNAS_ID -eq $UID ] && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 36e" && return
 	[ ! -d $DIR/d36 ] && mkdir $DIR/d36
 	touch $DIR/d36/f36e
 	$RUNAS utime $DIR/d36/f36e && error "utime worked, want failure" || true
@@ -1832,7 +1832,7 @@ run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 test_63() {
-	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -1`
+	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -n 1`
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
 		echo 0 > $i
 	done
@@ -1922,6 +1922,15 @@ test_66() {
 	[ $BLOCKS -ge $COUNT ] || error "$DIR/f66 blocks $BLOCKS < $COUNT"
 }
 run_test 66 "update inode blocks count on client ==============="
+
+test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
+	[ "$RUNAS_ID" = "$UID" ] && echo "skipping test 67" && return
+	mkdir $DIR/d67
+	chmod 771 $DIR/d67
+	chgrp $RUNAS_ID $DIR/d67
+	$RUNAS -g $((RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67 && error || true
+}
+run_test 67 "supplementary group failure (should return error) ="
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

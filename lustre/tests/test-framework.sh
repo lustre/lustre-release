@@ -27,7 +27,7 @@ usage() {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
-    export XMLCONFIG="${TESTSUITE}.xml"
+    export XMLCONFIG=${XMLCONFIG:-${TESTSUITE}.xml}
     export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=/r

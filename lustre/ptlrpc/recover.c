@@ -275,8 +275,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
         /* Wait for recovery to complete and resend. If evicted, then
            this request will be errored out later.*/
         spin_lock_irqsave(&failed_req->rq_lock, flags);
-        if (!failed_req->rq_no_resend)
-                failed_req->rq_resend = 1;
+        failed_req->rq_resend = 1;
         spin_unlock_irqrestore(&failed_req->rq_lock, flags);
         
         EXIT;

@@ -8,10 +8,10 @@
  include/linux/ext3_fs.h            |    2 
  8 files changed, 318 insertions(+), 2 deletions(-)
 
-Index: linux-2.4.19/Documentation/filesystems/ext2.txt
+Index: linux-2.4.21/Documentation/filesystems/ext2.txt
 ===================================================================
---- linux-2.4.19.orig/Documentation/filesystems/ext2.txt	2001-07-11 18:44:45.000000000 -0400
-+++ linux-2.4.19/Documentation/filesystems/ext2.txt	2004-04-23 22:37:48.000000000 -0400
+--- linux-2.4.21.orig/Documentation/filesystems/ext2.txt	2001-07-11 18:44:45.000000000 -0400
++++ linux-2.4.21/Documentation/filesystems/ext2.txt	2004-04-24 02:46:32.000000000 -0400
 @@ -35,6 +35,22 @@
  
  sb=n				Use alternate superblock at this location.
@@ -35,23 +35,23 @@ Index: linux-2.4.19/Documentation/filesystems/ext2.txt
  grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
  
  
-Index: linux-2.4.19/fs/ext3/Makefile
+Index: linux-2.4.21/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.19.orig/fs/ext3/Makefile	2004-04-23 18:26:27.000000000 -0400
-+++ linux-2.4.19/fs/ext3/Makefile	2004-04-23 22:38:38.000000000 -0400
+--- linux-2.4.21.orig/fs/ext3/Makefile	2004-04-24 02:46:18.000000000 -0400
++++ linux-2.4.21/fs/ext3/Makefile	2004-04-24 02:47:02.000000000 -0400
 @@ -11,7 +11,7 @@
  
- export-objs :=	super.o inode.o
+ export-objs := ext3-exports.o
  
 -obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
 +obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
- 		ioctl.o namei.o super.o symlink.o hash.o
+ 		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
  obj-m    := $(O_TARGET)
  
-Index: linux-2.4.19/fs/ext3/inode.c
+Index: linux-2.4.21/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.19.orig/fs/ext3/inode.c	2004-04-23 22:37:42.000000000 -0400
-+++ linux-2.4.19/fs/ext3/inode.c	2004-04-23 22:37:48.000000000 -0400
+--- linux-2.4.21.orig/fs/ext3/inode.c	2004-04-24 02:46:19.000000000 -0400
++++ linux-2.4.21/fs/ext3/inode.c	2004-04-24 02:46:32.000000000 -0400
 @@ -34,6 +34,7 @@
  #include <linux/highuid.h>
  #include <linux/quotaops.h>
@@ -60,7 +60,7 @@ Index: linux-2.4.19/fs/ext3/inode.c
  
  /*
   * SEARCH_FROM_ZERO forces each block allocation to search from the start
-@@ -2350,6 +2351,9 @@
+@@ -2252,6 +2253,9 @@
  	struct buffer_head *bh;
  	int block;
  	
@@ -70,10 +70,10 @@ Index: linux-2.4.19/fs/ext3/inode.c
  	if(ext3_get_inode_loc(inode, &iloc))
  		goto bad_inode;
  	bh = iloc.bh;
-Index: linux-2.4.19/fs/ext3/iopen.c
+Index: linux-2.4.21/fs/ext3/iopen.c
 ===================================================================
---- linux-2.4.19.orig/fs/ext3/iopen.c	2003-01-30 05:24:37.000000000 -0500
-+++ linux-2.4.19/fs/ext3/iopen.c	2004-04-23 22:37:48.000000000 -0400
+--- linux-2.4.21.orig/fs/ext3/iopen.c	2003-01-30 05:24:37.000000000 -0500
++++ linux-2.4.21/fs/ext3/iopen.c	2004-04-24 02:46:32.000000000 -0400
 @@ -0,0 +1,258 @@
 +/*
 + * linux/fs/ext3/iopen.c
@@ -333,10 +333,10 @@ Index: linux-2.4.19/fs/ext3/iopen.c
 +
 +	return 1;
 +}
-Index: linux-2.4.19/fs/ext3/iopen.h
+Index: linux-2.4.21/fs/ext3/iopen.h
 ===================================================================
---- linux-2.4.19.orig/fs/ext3/iopen.h	2003-01-30 05:24:37.000000000 -0500
-+++ linux-2.4.19/fs/ext3/iopen.h	2004-04-23 22:37:48.000000000 -0400
+--- linux-2.4.21.orig/fs/ext3/iopen.h	2003-01-30 05:24:37.000000000 -0500
++++ linux-2.4.21/fs/ext3/iopen.h	2004-04-24 02:46:32.000000000 -0400
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -353,10 +353,10 @@ Index: linux-2.4.19/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *de,
 +					   struct inode *inode);
-Index: linux-2.4.19/fs/ext3/namei.c
+Index: linux-2.4.21/fs/ext3/namei.c
 ===================================================================
---- linux-2.4.19.orig/fs/ext3/namei.c	2004-04-23 22:37:42.000000000 -0400
-+++ linux-2.4.19/fs/ext3/namei.c	2004-04-23 22:37:48.000000000 -0400
+--- linux-2.4.21.orig/fs/ext3/namei.c	2004-04-24 02:46:19.000000000 -0400
++++ linux-2.4.21/fs/ext3/namei.c	2004-04-24 02:46:32.000000000 -0400
 @@ -36,7 +36,7 @@
  #include <linux/string.h>
  #include <linux/locks.h>
@@ -411,11 +411,11 @@ Index: linux-2.4.19/fs/ext3/namei.c
  	return NULL;
  }
  
-Index: linux-2.4.19/fs/ext3/super.c
+Index: linux-2.4.21/fs/ext3/super.c
 ===================================================================
---- linux-2.4.19.orig/fs/ext3/super.c	2004-04-23 22:37:42.000000000 -0400
-+++ linux-2.4.19/fs/ext3/super.c	2004-04-23 22:37:48.000000000 -0400
-@@ -861,6 +861,18 @@
+--- linux-2.4.21.orig/fs/ext3/super.c	2004-04-24 02:46:19.000000000 -0400
++++ linux-2.4.21/fs/ext3/super.c	2004-04-24 02:46:32.000000000 -0400
+@@ -869,6 +869,18 @@
  		         || !strcmp (this_char, "quota")
  		         || !strcmp (this_char, "usrquota"))
  			/* Don't do anything ;-) */ ;
@@ -434,10 +434,10 @@ Index: linux-2.4.19/fs/ext3/super.c
  		else if (!strcmp (this_char, "journal")) {
  			/* @@@ FIXME */
  			/* Eventually we will want to be able to create
-Index: linux-2.4.19/include/linux/ext3_fs.h
+Index: linux-2.4.21/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.19.orig/include/linux/ext3_fs.h	2004-04-23 22:37:42.000000000 -0400
-+++ linux-2.4.19/include/linux/ext3_fs.h	2004-04-23 22:37:48.000000000 -0400
+--- linux-2.4.21.orig/include/linux/ext3_fs.h	2004-04-24 02:46:19.000000000 -0400
++++ linux-2.4.21/include/linux/ext3_fs.h	2004-04-24 02:46:32.000000000 -0400
 @@ -324,6 +324,8 @@
  #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
  #define EXT3_MOUNT_POSIX_ACL		0x8000	/* POSIX Access Control Lists */

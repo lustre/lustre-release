@@ -210,14 +210,6 @@ int main(int argc, char **argv)
                                 perror("write");
                                 exit(1);
                         }
-                        /* b=3043 write() on Suse x86-64 is returning -errno 
-                           instead of -1, and not setting errno. */
-                        if (rc < 0) {
-                                fprintf(stderr, "MULTIOP: broken write() "
-                                        "returned %d, errno %d\n",
-                                        rc, errno);
-                                exit(1);
-                        }
                         break;
                 }
                 case 'W':

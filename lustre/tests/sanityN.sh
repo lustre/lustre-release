@@ -103,8 +103,8 @@ pass() {
 	echo PASS
 }
 
-export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -1`
-export MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -1`
+export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -n 1`
+export MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -n 1`
 [ -z "$MOUNT1" ] && error "NAME=$NAME not mounted once"
 [ "$MOUNT1" = "$MOUNT2" ] && error "NAME=$NAME not mounted twice"
 [ `mount| awk '/ lustre/ { print $3 }'| wc -l` -ne 2 ] && \

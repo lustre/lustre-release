@@ -40,7 +40,7 @@ for NAME in $CONFIGS; do
 
 	if [ "$DBENCH" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
-		SPACE=`df $MOUNT | tail -1 | awk '{ print $4 }'`
+		SPACE=`df $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		DB_THREADS=`expr $SPACE / 50000`
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
 
@@ -82,7 +82,7 @@ for NAME in $CONFIGS; do
 	fi
 	if [ "$IOZONE_DIR" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
-		SPACE=`df $MOUNT | tail -1 | awk '{ print $4 }'`
+		SPACE=`df $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 512 \)`
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 

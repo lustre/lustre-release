@@ -38,3 +38,4 @@ procfs-ndynamic-2.4.patch
 ext3-truncate-buffer-head.patch
 inode-max-readahead-2.4.24.patch
 dcache_refcount_debug.patch
+mkdep-revert-rh-2.4.patch

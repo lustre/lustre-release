@@ -81,11 +81,6 @@ libcfs_nal_cmd(struct portals_cfg *pcfg)
         return 0;
 }
 
-int in_group_p(gid_t gid)
-{
-        return 0;
-}
-
 int init_current(int argc, char **argv)
 { 
         current = malloc(sizeof(*current));

@@ -366,7 +366,7 @@ void mdc_clear_open_replay_data(struct obd_client_handle *och)
          * we're sure we won't need to fix up the close request in the future),
          * but make sure that replay doesn't poke at the och, which is about to
          * be freed. */
-        LASSERT(mod != (void *)0x5a5a5a5a);
+        LASSERT(mod != LP_POISON);
         if (mod != NULL)
                 mod->mod_och = NULL;
         och->och_mod = NULL;
@@ -388,7 +388,8 @@ static void mdc_commit_close(struct ptlrpc_request *req)
 
         open_req = mod->mod_open_req;
         LASSERT(open_req != NULL);
-        LASSERT(open_req != (void *)0x5a5a5a5a);
+        LASSERT(open_req != LP_POISON);
+        LASSERT(open_req->rq_type != LI_POISON);
 
         DEBUG_REQ(D_HA, open_req, "open req balanced");
         LASSERT(open_req->rq_transno != 0);
@@ -465,6 +466,7 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         mod = och->och_mod;
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
+                LASSERT(mod->mod_open_req->rq_type != LI_POISON);
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open req %p",
                           mod->mod_open_req);
         } else {
@@ -499,7 +501,7 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         if (req->rq_repmsg == NULL) {
                 CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
                        req->rq_status);
-                rc = req->rq_status;
+                rc = req->rq_status ? req->rq_status : -EIO;
         } else if (rc == 0) {
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {

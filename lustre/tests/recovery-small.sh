@@ -39,7 +39,7 @@ setup() {
     start ost2 --reformat $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds $MDSLCONFARGS --reformat
-    zconf_mount `hostname`  $MOUNT
+    grep " $MOUNT " /proc/mounts || zconf_mount `hostname`  $MOUNT
 }
 
 cleanup() {
@@ -218,7 +218,7 @@ test_16() {
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
     sysctl -w lustre.fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
-    sleep 1 
+    sleep $TIMEOUT
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
 }
 run_test 16 "timeout bulk put, evict client (2732)"

@@ -81,7 +81,8 @@ static int ptlrpc_pinger_main(void *arg)
         SIGNAL_MASK_UNLOCK(current, flags);
 
         LASSERTF(strlen(data->name) < sizeof(current->comm),
-                 "name %d > len %d\n",strlen(data->name),sizeof(current->comm));
+                 "name %d > len %d\n",
+                 (int)strlen(data->name), (int)sizeof(current->comm));
         THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
         unlock_kernel();
 

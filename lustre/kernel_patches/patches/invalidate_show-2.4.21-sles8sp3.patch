@@ -1,0 +1,134 @@
+
+
+
+ fs/inode.c         |   21 ++++++++++++++-------
+ fs/smbfs/inode.c   |    2 +-
+ fs/super.c         |    4 ++--
+ include/linux/fs.h |    2 +-
+ 4 files changed, 18 insertions(+), 11 deletions(-)
+
+Index: linux-2.4.21/fs/inode.c
+===================================================================
+--- linux-2.4.21.orig/fs/inode.c	2004-04-24 02:38:51.000000000 -0400
++++ linux-2.4.21/fs/inode.c	2004-04-26 19:41:58.000000000 -0400
+@@ -651,7 +651,8 @@
+ /*
+  * Invalidate all inodes for a device.
+  */
+-static int invalidate_list(struct list_head *head, struct super_block * sb, struct list_head * dispose)
++static int invalidate_list(struct list_head *head, struct super_block * sb,
++			   struct list_head * dispose, int show)
+ {
+ 	struct list_head *next;
+ 	int busy = 0, count = 0;
+@@ -676,6 +677,11 @@
+ 			count++;
+ 			continue;
+ 		}
++		if (show)
++			printk(KERN_ERR
++			       "inode busy: dev %s:%lu (%p) mode %o count %u\n",
++			       kdevname(sb->s_dev), inode->i_ino, inode,
++			       inode->i_mode, atomic_read(&inode->i_count));
+ 		busy = 1;
+ 	}
+ 	/* only unused inodes may be cached with i_count zero */
+@@ -694,22 +700,23 @@
+ /**
+  *	invalidate_inodes	- discard the inodes on a device
+  *	@sb: superblock
++ *	@show: whether we should display any busy inodes found
+  *
+  *	Discard all of the inodes for a given superblock. If the discard
+  *	fails because there are busy inodes then a non zero value is returned.
+  *	If the discard is successful all the inodes have been discarded.
+  */
+  
+-int invalidate_inodes(struct super_block * sb)
++int invalidate_inodes(struct super_block * sb, int show)
+ {
+ 	int busy;
+ 	LIST_HEAD(throw_away);
+ 
+ 	spin_lock(&inode_lock);
+-	busy = invalidate_list(&inode_in_use, sb, &throw_away);
+-	busy |= invalidate_list(&inode_unused, sb, &throw_away);
+-	busy |= invalidate_list(&sb->s_dirty, sb, &throw_away);
+-	busy |= invalidate_list(&sb->s_locked_inodes, sb, &throw_away);
++	busy = invalidate_list(&inode_in_use, sb, &throw_away, show);
++	busy |= invalidate_list(&inode_unused, sb, &throw_away, show);
++	busy |= invalidate_list(&sb->s_dirty, sb, &throw_away, show);
++	busy |= invalidate_list(&sb->s_locked_inodes, sb, &throw_away, show);
+ 	spin_unlock(&inode_lock);
+ 
+ 	dispose_list(&throw_away);
+@@ -735,7 +742,7 @@
+ 		 * hold).
+ 		 */
+ 		shrink_dcache_sb(sb);
+-		res = invalidate_inodes(sb);
++		res = invalidate_inodes(sb, 0);
+ 		drop_super(sb);
+ 	}
+ 	invalidate_buffers(dev);
+Index: linux-2.4.21/fs/super.c
+===================================================================
+--- linux-2.4.21.orig/fs/super.c	2004-04-24 02:38:51.000000000 -0400
++++ linux-2.4.21/fs/super.c	2004-04-26 19:41:58.000000000 -0400
+@@ -932,7 +932,7 @@
+ 	lock_super(sb);
+ 	lock_kernel();
+ 	sb->s_flags &= ~MS_ACTIVE;
+-	invalidate_inodes(sb);	/* bad name - it should be evict_inodes() */
++	invalidate_inodes(sb, 0);  /* bad name - it should be evict_inodes() */
+ 	if (sop) {
+ 		if (sop->write_super && sb->s_dirt)
+ 			sop->write_super(sb);
+@@ -941,7 +941,7 @@
+ 	}
+ 
+ 	/* Forget any remaining inodes */
+-	if (invalidate_inodes(sb)) {
++	if (invalidate_inodes(sb, 1)) {
+ 		printk(KERN_ERR "VFS: Busy inodes after unmount. "
+ 			"Self-destruct in 5 seconds.  Have a nice day...\n");
+ 	}
+Index: linux-2.4.21/fs/smbfs/inode.c
+===================================================================
+--- linux-2.4.21.orig/fs/smbfs/inode.c	2004-04-24 02:38:44.000000000 -0400
++++ linux-2.4.21/fs/smbfs/inode.c	2004-04-26 19:41:58.000000000 -0400
+@@ -167,7 +167,7 @@
+ {
+ 	VERBOSE("\n");
+ 	shrink_dcache_sb(SB_of(server));
+-	invalidate_inodes(SB_of(server));
++	invalidate_inodes(SB_of(server), 0);
+ }
+ 
+ /*
+Index: linux-2.4.21/fs/ntfs/super.c
+===================================================================
+--- linux-2.4.21.orig/fs/ntfs/super.c	2004-04-24 02:38:38.000000000 -0400
++++ linux-2.4.21/fs/ntfs/super.c	2004-04-26 19:42:12.000000000 -0400
+@@ -1604,7 +1604,7 @@
+ 	 * method again... FIXME: Do we need to do this twice now because of
+ 	 * attribute inodes? I think not, so leave as is for now... (AIA)
+ 	 */
+-	if (invalidate_inodes(sb)) {
++	if (invalidate_inodes(sb, 0)) {
+ 		ntfs_error(sb, "Busy inodes left. This is most likely a NTFS "
+ 				"driver bug.");
+ 		/* Copied from fs/super.c. I just love this message. (-; */
+Index: linux-2.4.21/include/linux/fs.h
+===================================================================
+--- linux-2.4.21.orig/include/linux/fs.h	2004-04-26 19:06:32.000000000 -0400
++++ linux-2.4.21/include/linux/fs.h	2004-04-26 19:41:58.000000000 -0400
+@@ -1401,7 +1401,7 @@
+ extern void set_buffer_flushtime(struct buffer_head *);
+ extern void balance_dirty(void);
+ extern int check_disk_change(kdev_t);
+-extern int invalidate_inodes(struct super_block *);
++extern int invalidate_inodes(struct super_block *, int);
+ extern int invalidate_device(kdev_t, int);
+ extern void invalidate_inode_pages(struct inode *);
+ extern void invalidate_inode_pages2(struct address_space *);

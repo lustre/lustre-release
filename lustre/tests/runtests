@@ -35,16 +35,16 @@ while [ "$1" ]; do
 	shift
 done
 
-MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
+MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
 if [ -z "$MOUNT" ]; then
 	sh llmount.sh
-	MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
+	MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
 	[ -z "$MOUNT" ] && fail "no lustre filesystem mounted" 1
 	I_MOUNTED="yes"
 fi
 
 OSCTMP=`echo $MOUNT | tr "/" "."`
-USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
+USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
 USED=`expr $USED + 16`	# Some space for the status file
 
 # let's start slowly here...
@@ -77,7 +77,7 @@ mkdir $DST || fail "can't mkdir $DST" 10
 
 # ok, that hopefully worked, so let's do a little more, with files that
 # haven't changed in the last day (hopefully they don't change during test)
-FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -$COUNT`
+FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -n $COUNT`
 log "copying files from $SRC to $DST$SRC"
 tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
 
@@ -123,7 +123,7 @@ rmdir $MOUNT/base$$* || fail "mkdirmany cleanup failed"
 
 log "done"
 
-NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
+NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
 if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 	echo "Space not all freed: now ${NOWUSED}kB, was ${USED}kB." 1>&2
 fi

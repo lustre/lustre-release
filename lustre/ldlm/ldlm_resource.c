@@ -534,7 +534,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 {
         LASSERT(res != NULL);
-        LASSERT(res != (void *)0x5a5a5a5a);
+        LASSERT(res != LP_POISON);
         atomic_inc(&res->lr_refcount);
         CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount));
@@ -550,7 +550,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount) - 1);
         LASSERT(atomic_read(&res->lr_refcount) > 0);
-        LASSERT(atomic_read(&res->lr_refcount) < 0x5a5a5a5a);
+        LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);
 
         if (atomic_dec_and_test(&res->lr_refcount)) {
                 struct ldlm_namespace *ns = res->lr_namespace;

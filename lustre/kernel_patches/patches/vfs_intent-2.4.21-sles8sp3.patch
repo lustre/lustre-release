@@ -12,11 +12,11 @@
  kernel/ksyms.c            |    1 
  12 files changed, 558 insertions(+), 128 deletions(-)
 
-Index: linux-ia64/fs/dcache.c
+Index: linux-2.4.21/fs/dcache.c
 ===================================================================
---- linux-ia64.orig/fs/dcache.c	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/fs/dcache.c	2004-03-17 16:05:28.000000000 -0800
-@@ -186,6 +186,13 @@ int d_invalidate(struct dentry * dentry)
+--- linux-2.4.21.orig/fs/dcache.c	2004-04-24 02:38:00.000000000 -0400
++++ linux-2.4.21/fs/dcache.c	2004-04-26 19:06:31.000000000 -0400
+@@ -186,6 +186,13 @@
  		spin_unlock(&dcache_lock);
  		return 0;
  	}
@@ -30,7 +30,7 @@ Index: linux-ia64/fs/dcache.c
  	/*
  	 * Check whether to do a partial shrink_dcache
  	 * to get rid of unused child entries.
-@@ -850,13 +857,19 @@ void d_delete(struct dentry * dentry)
+@@ -838,13 +845,19 @@
   * Adds a dentry to the hash according to its name.
   */
   
@@ -53,11 +53,11 @@ Index: linux-ia64/fs/dcache.c
  }
  
  #define do_switch(x,y) do { \
-Index: linux-ia64/fs/exec.c
+Index: linux-2.4.21/fs/exec.c
 ===================================================================
---- linux-ia64.orig/fs/exec.c	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/fs/exec.c	2004-03-17 16:05:28.000000000 -0800
-@@ -119,8 +119,10 @@ asmlinkage long sys_uselib(const char * 
+--- linux-2.4.21.orig/fs/exec.c	2004-04-24 02:39:01.000000000 -0400
++++ linux-2.4.21/fs/exec.c	2004-04-26 19:06:31.000000000 -0400
+@@ -113,8 +113,10 @@
  	struct file * file;
  	struct nameidata nd;
  	int error;
@@ -69,7 +69,7 @@ Index: linux-ia64/fs/exec.c
  	if (error)
  		goto out;
  
-@@ -132,7 +134,8 @@ asmlinkage long sys_uselib(const char * 
+@@ -126,7 +128,8 @@
  	if (error)
  		goto exit;
  
@@ -79,7 +79,7 @@ Index: linux-ia64/fs/exec.c
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -400,8 +403,10 @@ struct file *open_exec(const char *name)
+@@ -383,8 +386,10 @@
  	struct inode *inode;
  	struct file *file;
  	int err = 0;
@@ -91,7 +91,7 @@ Index: linux-ia64/fs/exec.c
  	file = ERR_PTR(err);
  	if (!err) {
  		inode = nd.dentry->d_inode;
-@@ -413,7 +418,8 @@ struct file *open_exec(const char *name)
+@@ -396,7 +401,8 @@
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -101,7 +101,7 @@ Index: linux-ia64/fs/exec.c
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
-@@ -425,6 +431,7 @@ out:
+@@ -408,6 +414,7 @@
  				return file;
  			}
  		}
@@ -109,7 +109,7 @@ Index: linux-ia64/fs/exec.c
  		path_release(&nd);
  	}
  	goto out;
-@@ -1348,7 +1355,7 @@ int do_coredump(long signr, int exit_cod
+@@ -1147,7 +1154,7 @@
  		goto close_fail;
  	if (!file->f_op->write)
  		goto close_fail;
@@ -118,10 +118,10 @@ Index: linux-ia64/fs/exec.c
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
-Index: linux-ia64/fs/namei.c
+Index: linux-2.4.21/fs/namei.c
 ===================================================================
---- linux-ia64.orig/fs/namei.c	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/fs/namei.c	2004-03-17 16:06:13.000000000 -0800
+--- linux-2.4.21.orig/fs/namei.c	2004-04-24 02:39:02.000000000 -0400
++++ linux-2.4.21/fs/namei.c	2004-04-26 19:06:38.000000000 -0400
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -136,7 +136,7 @@ Index: linux-ia64/fs/namei.c
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
   * kernel data space before using them..
-@@ -260,10 +267,19 @@ void path_release(struct nameidata *nd)
+@@ -274,10 +281,19 @@
   * Internal lookup() using the new generic dcache.
   * SMP-safe
   */
@@ -157,7 +157,7 @@ Index: linux-ia64/fs/namei.c
  	if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  		if (!dentry->d_op->d_revalidate(dentry, flags) && !d_invalidate(dentry)) {
  			dput(dentry);
-@@ -281,11 +297,15 @@ static struct dentry * cached_lookup(str
+@@ -295,11 +311,15 @@
   * make sure that nobody added the entry to the dcache in the meantime..
   * SMP-safe
   */
@@ -174,7 +174,7 @@ Index: linux-ia64/fs/namei.c
  	down(&dir->i_sem);
  	/*
  	 * First re-do the cached lookup just in case it was created
-@@ -300,6 +320,9 @@ static struct dentry * real_lookup(struc
+@@ -314,6 +334,9 @@
  		result = ERR_PTR(-ENOMEM);
  		if (dentry) {
  			lock_kernel();
@@ -184,7 +184,7 @@ Index: linux-ia64/fs/namei.c
  			result = dir->i_op->lookup(dir, dentry);
  			unlock_kernel();
  			if (result)
-@@ -321,6 +344,15 @@ static struct dentry * real_lookup(struc
+@@ -335,6 +358,15 @@
  			dput(result);
  			result = ERR_PTR(-ENOENT);
  		}
@@ -200,7 +200,7 @@ Index: linux-ia64/fs/namei.c
  	}
  	return result;
  }
-@@ -332,7 +364,8 @@ static struct dentry * real_lookup(struc
+@@ -346,7 +378,8 @@
   * Without that kind of total limit, nasty chains of consecutive
   * symlinks can cause almost arbitrarily long lookups. 
   */
@@ -210,7 +210,7 @@ Index: linux-ia64/fs/namei.c
  {
  	int err;
  	if (current->link_count >= 8)
-@@ -346,10 +379,12 @@ static inline int do_follow_link(struct 
+@@ -360,10 +393,12 @@
  	current->link_count++;
  	current->total_link_count++;
  	UPDATE_ATIME(dentry->d_inode);
@@ -223,17 +223,17 @@ Index: linux-ia64/fs/namei.c
  	path_release(nd);
  	return -ELOOP;
  }
-@@ -447,7 +482,8 @@ static inline void follow_dotdot(struct 
-  *
+@@ -462,7 +497,8 @@
   * We expect 'base' to be positive and a directory.
   */
--int link_path_walk(const char * name, struct nameidata *nd)
-+int link_path_walk_it(const char *name, struct nameidata *nd,
-+		      struct lookup_intent *it)
+ static inline int __attribute__((always_inline))
+-__link_path_walk(const char * name, struct nameidata *nd)
++__link_path_walk_it(const char * name, struct nameidata *nd,
++		    struct lookup_intent *it)
  {
  	struct dentry *dentry;
  	struct inode *inode;
-@@ -524,12 +560,12 @@ int link_path_walk(const char * name, st
+@@ -539,12 +575,12 @@
  				break;
  		}
  		/* This does the actual lookups.. */
@@ -248,7 +248,7 @@ Index: linux-ia64/fs/namei.c
  			err = PTR_ERR(dentry);
  			if (IS_ERR(dentry))
  				break;
-@@ -547,7 +583,7 @@ int link_path_walk(const char * name, st
+@@ -562,7 +598,7 @@
  			goto out_dput;
  
  		if (inode->i_op->follow_link) {
@@ -257,7 +257,7 @@ Index: linux-ia64/fs/namei.c
  			dput(dentry);
  			if (err)
  				goto return_err;
-@@ -563,7 +599,7 @@ int link_path_walk(const char * name, st
+@@ -578,7 +614,7 @@
  			nd->dentry = dentry;
  		}
  		err = -ENOTDIR; 
@@ -266,7 +266,7 @@ Index: linux-ia64/fs/namei.c
  			break;
  		continue;
  		/* here ends the main loop */
-@@ -590,12 +626,12 @@ last_component:
+@@ -605,12 +641,12 @@
  			if (err < 0)
  				break;
  		}
@@ -281,7 +281,7 @@ Index: linux-ia64/fs/namei.c
  			err = PTR_ERR(dentry);
  			if (IS_ERR(dentry))
  				break;
-@@ -605,7 +641,7 @@ last_component:
+@@ -620,7 +656,7 @@
  		inode = dentry->d_inode;
  		if ((lookup_flags & LOOKUP_FOLLOW)
  		    && inode && inode->i_op && inode->i_op->follow_link) {
@@ -290,7 +290,7 @@ Index: linux-ia64/fs/namei.c
  			dput(dentry);
  			if (err)
  				goto return_err;
-@@ -619,7 +655,8 @@ last_component:
+@@ -634,7 +670,8 @@
  			goto no_inode;
  		if (lookup_flags & LOOKUP_DIRECTORY) {
  			err = -ENOTDIR; 
@@ -300,7 +300,7 @@ Index: linux-ia64/fs/namei.c
  				break;
  		}
  		goto return_base;
-@@ -643,6 +680,27 @@ return_reval:
+@@ -658,6 +695,27 @@
  		 * Check the cached dentry for staleness.
  		 */
  		dentry = nd->dentry;
@@ -327,8 +327,8 @@ Index: linux-ia64/fs/namei.c
 +		} else
  		if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  			err = -ESTALE;
- 			if (!dentry->d_op->d_revalidate(dentry, 0)) {
-@@ -656,15 +714,28 @@ out_dput:
+ 			if (!dentry->d_op->d_revalidate(dentry, lookup_flags & LOOKUP_PARENT)) {
+@@ -671,6 +729,8 @@
  		dput(dentry);
  		break;
  	}
@@ -337,28 +337,36 @@ Index: linux-ia64/fs/namei.c
  	path_release(nd);
  return_err:
  	return err;
+@@ -678,13 +738,13 @@
+ 
+ int link_path_walk(const char * name, struct nameidata *nd)
+ {
+-	return __link_path_walk(name,nd);
++	return __link_path_walk_it(name, nd, NULL);
  }
  
-+int link_path_walk(const char * name, struct nameidata *nd)
-+{
-+	return link_path_walk_it(name, nd, NULL);
-+}
-+
+ static inline int __path_walk(const char * name, struct nameidata *nd)
+ {
+ 	current->total_link_count = 0;
+-	return __link_path_walk(name, nd);
++	return __link_path_walk_it(name, nd, NULL);
+ }
+ 
+ int path_walk(const char * name, struct nameidata *nd)
+@@ -692,6 +752,12 @@
+ 	return __path_walk(name, nd);
+ }
+ 
 +int path_walk_it(const char * name, struct nameidata *nd, struct lookup_intent *it)
 +{
 +	current->total_link_count = 0;
-+	return link_path_walk_it(name, nd, it);
++	return __link_path_walk_it(name, nd, it);
 +}
 +
- int path_walk(const char * name, struct nameidata *nd)
- {
- 	current->total_link_count = 0;
--	return link_path_walk(name, nd);
-+	return link_path_walk_it(name, nd, NULL);
- }
- 
  /* SMP-safe */
-@@ -749,6 +820,17 @@ walk_init_root(const char *name, struct 
+ /* returns 1 if everything is done */
+ static int __emul_lookup_dentry(const char *name, struct nameidata *nd)
+@@ -774,6 +840,17 @@
  }
  
  /* SMP-safe */
@@ -376,7 +384,7 @@ Index: linux-ia64/fs/namei.c
  int path_lookup(const char *path, unsigned flags, struct nameidata *nd)
  {
  	int error = 0;
-@@ -763,6 +845,7 @@ int path_init(const char *name, unsigned
+@@ -788,6 +865,7 @@
  {
  	nd->last_type = LAST_ROOT; /* if there are only slashes... */
  	nd->flags = flags;
@@ -384,7 +392,7 @@ Index: linux-ia64/fs/namei.c
  	if (*name=='/')
  		return walk_init_root(name,nd);
  	read_lock(&current->fs->lock);
-@@ -777,7 +860,8 @@ int path_init(const char *name, unsigned
+@@ -802,7 +880,8 @@
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
   */
@@ -394,7 +402,7 @@ Index: linux-ia64/fs/namei.c
  {
  	struct dentry * dentry;
  	struct inode *inode;
-@@ -800,13 +884,16 @@ struct dentry * lookup_hash(struct qstr 
+@@ -825,13 +904,16 @@
  			goto out;
  	}
  
@@ -412,7 +420,7 @@ Index: linux-ia64/fs/namei.c
  		dentry = inode->i_op->lookup(inode, new);
  		unlock_kernel();
  		if (!dentry)
-@@ -818,6 +905,12 @@ out:
+@@ -843,6 +925,12 @@
  	return dentry;
  }
  
@@ -425,7 +433,7 @@ Index: linux-ia64/fs/namei.c
  /* SMP-safe */
  struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
  {
-@@ -839,7 +932,7 @@ struct dentry * lookup_one_len(const cha
+@@ -864,7 +952,7 @@
  	}
  	this.hash = end_name_hash(hash);
  
@@ -434,7 +442,7 @@ Index: linux-ia64/fs/namei.c
  access:
  	return ERR_PTR(-EACCES);
  }
-@@ -870,6 +963,23 @@ int __user_walk(const char *name, unsign
+@@ -895,6 +983,23 @@
  	return err;
  }
  
@@ -458,7 +466,7 @@ Index: linux-ia64/fs/namei.c
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -967,7 +1077,8 @@ static inline int lookup_flags(unsigned 
+@@ -992,7 +1097,8 @@
  	return retval;
  }
  
@@ -468,7 +476,7 @@ Index: linux-ia64/fs/namei.c
  {
  	int error;
  
-@@ -980,12 +1091,15 @@ int vfs_create(struct inode *dir, struct
+@@ -1005,12 +1111,15 @@
  		goto exit_lock;
  
  	error = -EACCES;	/* shouldn't it be ENOSYS? */
@@ -486,7 +494,7 @@ Index: linux-ia64/fs/namei.c
  	unlock_kernel();
  exit_lock:
  	up(&dir->i_zombie);
-@@ -994,6 +1108,11 @@ exit_lock:
+@@ -1019,6 +1128,11 @@
  	return error;
  }
  
@@ -498,7 +506,7 @@ Index: linux-ia64/fs/namei.c
  /*
   *	open_namei()
   *
-@@ -1008,7 +1127,8 @@ exit_lock:
+@@ -1033,7 +1147,8 @@
   * for symlinks (where the permissions are checked later).
   * SMP-safe
   */
@@ -508,7 +516,7 @@ Index: linux-ia64/fs/namei.c
  {
  	int acc_mode, error = 0;
  	struct inode *inode;
-@@ -1018,11 +1138,14 @@ int open_namei(const char * pathname, in
+@@ -1043,11 +1158,14 @@
  
  	acc_mode = ACC_MODE(flag);
  
@@ -524,7 +532,7 @@ Index: linux-ia64/fs/namei.c
  		if (error)
  			return error;
  		dentry = nd->dentry;
-@@ -1032,6 +1155,10 @@ int open_namei(const char * pathname, in
+@@ -1057,6 +1175,10 @@
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -535,7 +543,7 @@ Index: linux-ia64/fs/namei.c
  	error = path_lookup(pathname, LOOKUP_PARENT, nd);
  	if (error)
  		return error;
-@@ -1047,7 +1174,7 @@ int open_namei(const char * pathname, in
+@@ -1072,7 +1194,7 @@
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -544,7 +552,7 @@ Index: linux-ia64/fs/namei.c
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1056,11 +1183,12 @@ do_last:
+@@ -1081,11 +1203,12 @@
  		goto exit;
  	}
  
@@ -556,9 +564,9 @@ Index: linux-ia64/fs/namei.c
 -		error = vfs_create(dir->d_inode, dentry, mode);
 +		error = vfs_create_it(dir->d_inode, dentry, mode, it);
  		up(&dir->d_inode->i_sem);
- 		dput(nd->dentry);
- 		nd->dentry = dentry;
-@@ -1164,7 +1292,7 @@ ok:
+ #ifndef DENTRY_WASTE_RAM
+ 		if (error)
+@@ -1193,7 +1316,7 @@
  		if (!error) {
  			DQUOT_INIT(inode);
  			
@@ -567,7 +575,7 @@ Index: linux-ia64/fs/namei.c
  		}
  		put_write_access(inode);
  		if (error)
-@@ -1176,8 +1304,10 @@ ok:
+@@ -1205,8 +1328,10 @@
  	return 0;
  
  exit_dput:
@@ -578,7 +586,7 @@ Index: linux-ia64/fs/namei.c
  	path_release(nd);
  	return error;
  
-@@ -1196,7 +1326,10 @@ do_link:
+@@ -1225,7 +1350,10 @@
  	 * are done. Procfs-like symlinks just set LAST_BIND.
  	 */
  	UPDATE_ATIME(dentry->d_inode);
@@ -589,7 +597,7 @@ Index: linux-ia64/fs/namei.c
  	dput(dentry);
  	if (error)
  		return error;
-@@ -1218,13 +1351,20 @@ do_link:
+@@ -1247,13 +1375,20 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -606,13 +614,13 @@ Index: linux-ia64/fs/namei.c
 +
 +
  /* SMP-safe */
--static struct dentry *lookup_create(struct nameidata *nd, int is_dir)
-+static struct dentry *lookup_create(struct nameidata *nd, int is_dir,
+-struct dentry *lookup_create(struct nameidata *nd, int is_dir)
++struct dentry *lookup_create(struct nameidata *nd, int is_dir,
 +				    struct lookup_intent *it)
  {
  	struct dentry *dentry;
  
-@@ -1232,7 +1372,7 @@ static struct dentry *lookup_create(stru
+@@ -1261,7 +1396,7 @@
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -621,7 +629,7 @@ Index: linux-ia64/fs/namei.c
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1288,7 +1428,20 @@ asmlinkage long sys_mknod(const char * f
+@@ -1317,7 +1452,20 @@
  	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  	if (error)
  		goto out;
@@ -643,7 +651,7 @@ Index: linux-ia64/fs/namei.c
  	error = PTR_ERR(dentry);
  
  	if (!IS_POSIXACL(nd.dentry->d_inode))
-@@ -1310,6 +1463,7 @@ asmlinkage long sys_mknod(const char * f
+@@ -1339,6 +1487,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
@@ -651,7 +659,7 @@ Index: linux-ia64/fs/namei.c
  	path_release(&nd);
  out:
  	putname(tmp);
-@@ -1357,7 +1511,18 @@ asmlinkage long sys_mkdir(const char * p
+@@ -1386,7 +1535,18 @@
  		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
@@ -671,7 +679,7 @@ Index: linux-ia64/fs/namei.c
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
  			if (!IS_POSIXACL(nd.dentry->d_inode))
-@@ -1366,6 +1531,7 @@ asmlinkage long sys_mkdir(const char * p
+@@ -1395,6 +1555,7 @@
  			dput(dentry);
  		}
  		up(&nd.dentry->d_inode->i_sem);
@@ -679,7 +687,7 @@ Index: linux-ia64/fs/namei.c
  		path_release(&nd);
  out:
  		putname(tmp);
-@@ -1466,8 +1632,16 @@ asmlinkage long sys_rmdir(const char * p
+@@ -1495,8 +1656,16 @@
  			error = -EBUSY;
  			goto exit1;
  	}
@@ -697,7 +705,7 @@ Index: linux-ia64/fs/namei.c
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-@@ -1525,8 +1699,15 @@ asmlinkage long sys_unlink(const char * 
+@@ -1554,8 +1723,15 @@
  	error = -EISDIR;
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
@@ -714,7 +722,7 @@ Index: linux-ia64/fs/namei.c
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -1593,15 +1774,27 @@ asmlinkage long sys_symlink(const char *
+@@ -1622,15 +1798,27 @@
  		error = path_lookup(to, LOOKUP_PARENT, &nd);
  		if (error)
  			goto out;
@@ -744,7 +752,7 @@ Index: linux-ia64/fs/namei.c
  		putname(to);
  	}
  	putname(from);
-@@ -1677,7 +1870,18 @@ asmlinkage long sys_link(const char * ol
+@@ -1706,7 +1894,18 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -764,7 +772,7 @@ Index: linux-ia64/fs/namei.c
  		error = PTR_ERR(new_dentry);
  		if (!IS_ERR(new_dentry)) {
  			error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
-@@ -1721,7 +1925,7 @@ exit:
+@@ -1750,7 +1949,7 @@
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -773,7 +781,7 @@ Index: linux-ia64/fs/namei.c
  {
  	int error;
  	struct inode *target;
-@@ -1800,7 +2004,7 @@ out_unlock:
+@@ -1829,7 +2028,7 @@
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -782,7 +790,7 @@ Index: linux-ia64/fs/namei.c
  {
  	int error;
  
-@@ -1888,9 +2092,18 @@ static inline int do_rename(const char *
+@@ -1917,9 +2116,18 @@
  	if (newnd.last_type != LAST_NORM)
  		goto exit2;
  
@@ -802,7 +810,7 @@ Index: linux-ia64/fs/namei.c
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -1906,16 +2119,16 @@ static inline int do_rename(const char *
+@@ -1935,16 +2143,16 @@
  		if (newnd.last.name[newnd.last.len])
  			goto exit4;
  	}
@@ -821,10 +829,10 @@ Index: linux-ia64/fs/namei.c
  	dput(new_dentry);
  exit4:
  	dput(old_dentry);
-@@ -1966,20 +2179,26 @@ out:
+@@ -1995,20 +2203,26 @@
  }
  
- static inline int
+ static inline int __attribute__((always_inline))
 -__vfs_follow_link(struct nameidata *nd, const char *link)
 +__vfs_follow_link(struct nameidata *nd, const char *link,
 +		  struct lookup_intent *it)
@@ -845,12 +853,12 @@ Index: linux-ia64/fs/namei.c
  			/* weird __emul_prefix() stuff did it */
  			goto out;
  	}
--	res = link_path_walk(link, nd);
-+	res = link_path_walk_it(link, nd, it);
+-	res = __link_path_walk(link, nd);
++	res = __link_path_walk_it(link, nd, it);
  out:
  	if (current->link_count || res || nd->last_type!=LAST_NORM)
  		return res;
-@@ -2003,7 +2222,13 @@ fail:
+@@ -2032,7 +2246,13 @@
  
  int vfs_follow_link(struct nameidata *nd, const char *link)
  {
@@ -865,7 +873,7 @@ Index: linux-ia64/fs/namei.c
  }
  
  /* get the link contents into pagecache */
-@@ -2045,7 +2270,7 @@ int page_follow_link(struct dentry *dent
+@@ -2074,7 +2294,7 @@
  {
  	struct page *page = NULL;
  	char *s = page_getlink(dentry, &page);
@@ -874,11 +882,11 @@ Index: linux-ia64/fs/namei.c
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
-Index: linux-ia64/fs/namespace.c
+Index: linux-2.4.21/fs/namespace.c
 ===================================================================
---- linux-ia64.orig/fs/namespace.c	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/fs/namespace.c	2004-03-17 16:05:28.000000000 -0800
-@@ -98,6 +98,7 @@ static void detach_mnt(struct vfsmount *
+--- linux-2.4.21.orig/fs/namespace.c	2004-04-24 02:38:41.000000000 -0400
++++ linux-2.4.21/fs/namespace.c	2004-04-26 19:06:32.000000000 -0400
+@@ -98,6 +98,7 @@
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
@@ -886,7 +894,7 @@ Index: linux-ia64/fs/namespace.c
  	mnt->mnt_parent = mnt;
  	mnt->mnt_mountpoint = mnt->mnt_root;
  	list_del_init(&mnt->mnt_child);
-@@ -109,6 +110,7 @@ static void attach_mnt(struct vfsmount *
+@@ -109,6 +110,7 @@
  {
  	mnt->mnt_parent = mntget(nd->mnt);
  	mnt->mnt_mountpoint = dget(nd->dentry);
@@ -894,7 +902,7 @@ Index: linux-ia64/fs/namespace.c
  	list_add(&mnt->mnt_hash, mount_hashtable+hash(nd->mnt, nd->dentry));
  	list_add(&mnt->mnt_child, &nd->mnt->mnt_mounts);
  	nd->dentry->d_mounted++;
-@@ -488,14 +490,17 @@ static int do_loopback(struct nameidata 
+@@ -488,14 +490,17 @@
  {
  	struct nameidata old_nd;
  	struct vfsmount *mnt = NULL;
@@ -914,7 +922,7 @@ Index: linux-ia64/fs/namespace.c
  
  	down_write(&current->namespace->sem);
  	err = -EINVAL;
-@@ -518,6 +523,7 @@ static int do_loopback(struct nameidata 
+@@ -518,6 +523,7 @@
  	}
  
  	up_write(&current->namespace->sem);
@@ -922,7 +930,7 @@ Index: linux-ia64/fs/namespace.c
  	path_release(&old_nd);
  	return err;
  }
-@@ -701,6 +707,7 @@ long do_mount(char * dev_name, char * di
+@@ -701,6 +707,7 @@
  		  unsigned long flags, void *data_page)
  {
  	struct nameidata nd;
@@ -930,7 +938,7 @@ Index: linux-ia64/fs/namespace.c
  	int retval = 0;
  	int mnt_flags = 0;
  
-@@ -725,9 +732,11 @@ long do_mount(char * dev_name, char * di
+@@ -725,9 +732,11 @@
  	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
  
  	/* ... and get the mountpoint */
@@ -944,7 +952,7 @@ Index: linux-ia64/fs/namespace.c
  
  	if (flags & MS_REMOUNT)
  		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
-@@ -739,6 +747,8 @@ long do_mount(char * dev_name, char * di
+@@ -739,6 +748,8 @@
  	else
  		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
  				      dev_name, data_page);
@@ -953,7 +961,7 @@ Index: linux-ia64/fs/namespace.c
  	path_release(&nd);
  	return retval;
  }
-@@ -904,6 +914,8 @@ asmlinkage long sys_pivot_root(const cha
+@@ -904,6 +915,8 @@
  {
  	struct vfsmount *tmp;
  	struct nameidata new_nd, old_nd, parent_nd, root_parent, user_nd;
@@ -962,7 +970,7 @@ Index: linux-ia64/fs/namespace.c
  	int error;
  
  	if (!capable(CAP_SYS_ADMIN))
-@@ -911,14 +923,14 @@ asmlinkage long sys_pivot_root(const cha
+@@ -911,14 +924,14 @@
  
  	lock_kernel();
  
@@ -979,7 +987,7 @@ Index: linux-ia64/fs/namespace.c
  	if (error)
  		goto out1;
  
-@@ -973,8 +985,10 @@ out2:
+@@ -973,8 +986,10 @@
  	up(&old_nd.dentry->d_inode->i_zombie);
  	up_write(&current->namespace->sem);
  	path_release(&user_nd);
@@ -990,11 +998,11 @@ Index: linux-ia64/fs/namespace.c
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
-Index: linux-ia64/fs/open.c
+Index: linux-2.4.21/fs/open.c
 ===================================================================
---- linux-ia64.orig/fs/open.c	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/fs/open.c	2004-03-17 16:05:28.000000000 -0800
-@@ -19,6 +19,8 @@
+--- linux-2.4.21.orig/fs/open.c	2004-04-24 02:39:01.000000000 -0400
++++ linux-2.4.21/fs/open.c	2004-04-26 19:06:32.000000000 -0400
+@@ -20,6 +20,8 @@
  #include <asm/uaccess.h>
  
  #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
@@ -1003,7 +1011,7 @@ Index: linux-ia64/fs/open.c
  
  int vfs_statfs(struct super_block *sb, struct statfs *buf)
  {
-@@ -95,9 +97,10 @@ void fd_install(unsigned int fd, struct 
+@@ -96,9 +98,10 @@
  	write_unlock(&files->file_lock);
  }
  
@@ -1015,7 +1023,7 @@ Index: linux-ia64/fs/open.c
  	int error;
  	struct iattr newattrs;
  
-@@ -109,7 +112,13 @@ int do_truncate(struct dentry *dentry, l
+@@ -110,7 +113,13 @@
  	down(&inode->i_sem);
  	newattrs.ia_size = length;
  	newattrs.ia_valid = ATTR_SIZE | ATTR_CTIME;
@@ -1030,7 +1038,7 @@ Index: linux-ia64/fs/open.c
  	up(&inode->i_sem);
  	up_write(&inode->i_alloc_sem);
  	return error;
-@@ -120,12 +129,13 @@ static inline long do_sys_truncate(const
+@@ -121,12 +130,13 @@
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
@@ -1045,7 +1053,7 @@ Index: linux-ia64/fs/open.c
  	if (error)
  		goto out;
  	inode = nd.dentry->d_inode;
-@@ -165,11 +175,13 @@ static inline long do_sys_truncate(const
+@@ -166,11 +176,13 @@
  	error = locks_verify_truncate(inode, NULL, length);
  	if (!error) {
  		DQUOT_INIT(inode);
@@ -1060,7 +1068,7 @@ Index: linux-ia64/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -217,7 +229,7 @@ static inline long do_sys_ftruncate(unsi
+@@ -218,7 +230,7 @@
  
  	error = locks_verify_truncate(inode, file, length);
  	if (!error)
@@ -1069,7 +1077,7 @@ Index: linux-ia64/fs/open.c
  out_putf:
  	fput(file);
  out:
-@@ -262,11 +274,13 @@ asmlinkage long sys_utime(char * filenam
+@@ -263,11 +275,13 @@
  	struct inode * inode;
  	struct iattr newattrs;
  
@@ -1084,7 +1092,7 @@ Index: linux-ia64/fs/open.c
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
-@@ -281,11 +295,25 @@ asmlinkage long sys_utime(char * filenam
+@@ -282,11 +296,25 @@
  			goto dput_and_out;
  
  		newattrs.ia_valid |= ATTR_ATIME_SET | ATTR_MTIME_SET;
@@ -1111,7 +1119,7 @@ Index: linux-ia64/fs/open.c
  	error = notify_change(nd.dentry, &newattrs);
  dput_and_out:
  	path_release(&nd);
-@@ -306,12 +334,14 @@ asmlinkage long sys_utimes(char * filena
+@@ -307,12 +335,14 @@
  	struct inode * inode;
  	struct iattr newattrs;
  
@@ -1127,7 +1135,7 @@ Index: linux-ia64/fs/open.c
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
-@@ -326,7 +356,20 @@ asmlinkage long sys_utimes(char * filena
+@@ -327,7 +357,20 @@
  		newattrs.ia_atime = times[0].tv_sec;
  		newattrs.ia_mtime = times[1].tv_sec;
  		newattrs.ia_valid |= ATTR_ATIME_SET | ATTR_MTIME_SET;
@@ -1149,7 +1157,7 @@ Index: linux-ia64/fs/open.c
  		if (current->fsuid != inode->i_uid &&
  		    (error = permission(inode,MAY_WRITE)) != 0)
  			goto dput_and_out;
-@@ -349,6 +392,7 @@ asmlinkage long sys_access(const char * 
+@@ -350,6 +393,7 @@
  	int old_fsuid, old_fsgid;
  	kernel_cap_t old_cap;
  	int res;
@@ -1157,7 +1165,7 @@ Index: linux-ia64/fs/open.c
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -366,13 +410,14 @@ asmlinkage long sys_access(const char * 
+@@ -367,13 +411,14 @@
  	else
  		current->cap_effective = current->cap_permitted;
  
@@ -1173,7 +1181,7 @@ Index: linux-ia64/fs/open.c
  		path_release(&nd);
  	}
  
-@@ -387,8 +432,9 @@ asmlinkage long sys_chdir(const char * f
+@@ -388,8 +433,9 @@
  {
  	int error;
  	struct nameidata nd;
@@ -1184,7 +1192,7 @@ Index: linux-ia64/fs/open.c
  	if (error)
  		goto out;
  
-@@ -399,6 +445,7 @@ asmlinkage long sys_chdir(const char * f
+@@ -400,6 +446,7 @@
  	set_fs_pwd(current->fs, nd.mnt, nd.dentry);
  
  dput_and_out:
@@ -1192,7 +1200,7 @@ Index: linux-ia64/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -438,9 +485,10 @@ asmlinkage long sys_chroot(const char * 
+@@ -439,9 +486,10 @@
  {
  	int error;
  	struct nameidata nd;
@@ -1205,7 +1213,7 @@ Index: linux-ia64/fs/open.c
  	if (error)
  		goto out;
  
-@@ -456,39 +504,56 @@ asmlinkage long sys_chroot(const char * 
+@@ -457,39 +505,56 @@
  	set_fs_altroot();
  	error = 0;
  dput_and_out:
@@ -1276,7 +1284,7 @@ Index: linux-ia64/fs/open.c
  	fput(file);
  out:
  	return err;
-@@ -497,30 +562,14 @@ out:
+@@ -498,30 +563,14 @@
  asmlinkage long sys_chmod(const char * filename, mode_t mode)
  {
  	struct nameidata nd;
@@ -1308,7 +1316,7 @@ Index: linux-ia64/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -540,6 +589,20 @@ static int chown_common(struct dentry * 
+@@ -541,6 +590,20 @@
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto out;
@@ -1329,7 +1337,7 @@ Index: linux-ia64/fs/open.c
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
-@@ -644,6 +707,7 @@ struct file *filp_open(const char * file
+@@ -645,6 +708,7 @@
  {
  	int namei_flags, error;
  	struct nameidata nd;
@@ -1337,7 +1345,7 @@ Index: linux-ia64/fs/open.c
  
  	namei_flags = flags;
  	if ((namei_flags+1) & O_ACCMODE)
-@@ -651,14 +715,15 @@ struct file *filp_open(const char * file
+@@ -652,14 +716,15 @@
  	if (namei_flags & O_TRUNC)
  		namei_flags |= 2;
  
@@ -1358,8 +1366,8 @@ Index: linux-ia64/fs/open.c
  {
  	struct file * f;
  	struct inode *inode;
-@@ -695,7 +760,9 @@ struct file *dentry_open(struct dentry *
- 	}
+@@ -687,7 +752,9 @@
+ 	file_move(f, &inode->i_sb->s_files);
  
  	if (f->f_op && f->f_op->open) {
 +		f->f_it = it;
@@ -1368,15 +1376,15 @@ Index: linux-ia64/fs/open.c
  		if (error)
  			goto cleanup_all;
  	}
-@@ -708,6 +775,7 @@ struct file *dentry_open(struct dentry *
- 					inode->i_mapping->a_ops->direct_sector_IO)))
+@@ -699,6 +766,7 @@
+ 				      !inode->i_mapping->a_ops->direct_IO))
  		goto cleanup_all;
  
 +	intent_release(it);
  	return f;
  
  cleanup_all:
-@@ -722,11 +790,17 @@ cleanup_all:
+@@ -711,11 +779,17 @@
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -1394,10 +1402,10 @@ Index: linux-ia64/fs/open.c
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
-Index: linux-ia64/fs/stat.c
+Index: linux-2.4.21/fs/stat.c
 ===================================================================
---- linux-ia64.orig/fs/stat.c	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/fs/stat.c	2004-03-17 16:06:13.000000000 -0800
+--- linux-2.4.21.orig/fs/stat.c	2004-04-24 02:37:58.000000000 -0400
++++ linux-2.4.21/fs/stat.c	2004-04-26 19:06:32.000000000 -0400
 @@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1413,7 +1421,7 @@ Index: linux-ia64/fs/stat.c
  		return inode->i_op->revalidate(dentry);
  	return 0;
  }
-@@ -143,13 +145,15 @@ static int cp_new_stat(struct inode * in
+@@ -141,13 +143,15 @@
  asmlinkage long sys_stat(char * filename, struct __old_kernel_stat * statbuf)
  {
  	struct nameidata nd;
@@ -1431,7 +1439,7 @@ Index: linux-ia64/fs/stat.c
  		path_release(&nd);
  	}
  	return error;
-@@ -159,13 +163,15 @@ asmlinkage long sys_stat(char * filename
+@@ -157,13 +161,15 @@
  asmlinkage long sys_newstat(char * filename, struct stat * statbuf)
  {
  	struct nameidata nd;
@@ -1449,7 +1457,7 @@ Index: linux-ia64/fs/stat.c
  		path_release(&nd);
  	}
  	return error;
-@@ -180,13 +186,15 @@ asmlinkage long sys_newstat(char * filen
+@@ -178,13 +184,15 @@
  asmlinkage long sys_lstat(char * filename, struct __old_kernel_stat * statbuf)
  {
  	struct nameidata nd;
@@ -1467,7 +1475,7 @@ Index: linux-ia64/fs/stat.c
  		path_release(&nd);
  	}
  	return error;
-@@ -197,13 +205,15 @@ asmlinkage long sys_lstat(char * filenam
+@@ -195,13 +203,15 @@
  asmlinkage long sys_newlstat(char * filename, struct stat * statbuf)
  {
  	struct nameidata nd;
@@ -1485,7 +1493,7 @@ Index: linux-ia64/fs/stat.c
  		path_release(&nd);
  	}
  	return error;
-@@ -224,7 +234,7 @@ asmlinkage long sys_fstat(unsigned int f
+@@ -222,7 +232,7 @@
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1494,7 +1502,7 @@ Index: linux-ia64/fs/stat.c
  		if (!err)
  			err = cp_old_stat(dentry->d_inode, statbuf);
  		fput(f);
-@@ -243,7 +253,7 @@ asmlinkage long sys_newfstat(unsigned in
+@@ -241,7 +251,7 @@
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1503,7 +1511,7 @@ Index: linux-ia64/fs/stat.c
  		if (!err)
  			err = cp_new_stat(dentry->d_inode, statbuf);
  		fput(f);
-@@ -265,7 +275,7 @@ asmlinkage long sys_readlink(const char 
+@@ -263,7 +273,7 @@
  
  		error = -EINVAL;
  		if (inode->i_op && inode->i_op->readlink &&
@@ -1512,7 +1520,7 @@ Index: linux-ia64/fs/stat.c
  			UPDATE_ATIME(inode);
  			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
  		}
-@@ -341,12 +351,14 @@ asmlinkage long sys_stat64(char * filena
+@@ -339,12 +349,14 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1529,7 +1537,7 @@ Index: linux-ia64/fs/stat.c
  		path_release(&nd);
  	}
  	return error;
-@@ -356,12 +368,14 @@ asmlinkage long sys_lstat64(char * filen
+@@ -354,12 +366,14 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1546,7 +1554,7 @@ Index: linux-ia64/fs/stat.c
  		path_release(&nd);
  	}
  	return error;
-@@ -376,7 +390,7 @@ asmlinkage long sys_fstat64(unsigned lon
+@@ -374,7 +388,7 @@
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1555,12 +1563,12 @@ Index: linux-ia64/fs/stat.c
  		if (!err)
  			err = cp_new_stat64(dentry->d_inode, statbuf);
  		fput(f);
-Index: linux-ia64/include/linux/dcache.h
+Index: linux-2.4.21/include/linux/dcache.h
 ===================================================================
---- linux-ia64.orig/include/linux/dcache.h	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/include/linux/dcache.h	2004-03-17 16:05:28.000000000 -0800
-@@ -6,6 +6,51 @@
- #include <asm/atomic.h>
+--- linux-2.4.21.orig/include/linux/dcache.h	2004-04-24 02:37:59.000000000 -0400
++++ linux-2.4.21/include/linux/dcache.h	2004-04-26 19:06:32.000000000 -0400
+@@ -7,6 +7,51 @@
+ #include <linux/gdb.h>
  #include <linux/mount.h>
  #include <linux/kernel.h>
 +#include <linux/string.h>
@@ -1611,7 +1619,7 @@ Index: linux-ia64/include/linux/dcache.h
  
  /*
   * linux/include/linux/dcache.h
-@@ -96,8 +141,22 @@ struct dentry_operations {
+@@ -94,8 +139,22 @@
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
@@ -1634,7 +1642,7 @@ Index: linux-ia64/include/linux/dcache.h
  /* the dentry parameter passed to d_hash and d_compare is the parent
   * directory of the entries to be compared. It is used in case these
   * functions need any directory specific information for determining
-@@ -129,6 +188,7 @@ d_iput:		no		no		yes
+@@ -127,6 +186,7 @@
  					 * s_nfsd_free_path semaphore will be down
  					 */
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
@@ -1642,11 +1650,11 @@ Index: linux-ia64/include/linux/dcache.h
  
  extern spinlock_t dcache_lock;
  
-Index: linux-ia64/include/linux/fs.h
+Index: linux-2.4.21/include/linux/fs.h
 ===================================================================
---- linux-ia64.orig/include/linux/fs.h	2004-03-17 16:05:28.000000000 -0800
-+++ linux-ia64/include/linux/fs.h	2004-03-17 16:05:52.000000000 -0800
-@@ -73,6 +73,7 @@ extern int leases_enable, dir_notify_ena
+--- linux-2.4.21.orig/include/linux/fs.h	2004-04-26 18:56:44.000000000 -0400
++++ linux-2.4.21/include/linux/fs.h	2004-04-26 19:06:32.000000000 -0400
+@@ -74,6 +74,7 @@
  
  #define FMODE_READ 1
  #define FMODE_WRITE 2
@@ -1654,7 +1662,7 @@ Index: linux-ia64/include/linux/fs.h
  
  #define READ 0
  #define WRITE 1
-@@ -359,6 +360,9 @@ extern void set_bh_page(struct buffer_he
+@@ -360,6 +361,9 @@
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
  #define ATTR_ATTR_FLAG	1024
@@ -1664,7 +1672,7 @@ Index: linux-ia64/include/linux/fs.h
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -496,6 +500,7 @@ struct inode {
+@@ -504,6 +508,7 @@
  	struct pipe_inode_info	*i_pipe;
  	struct block_device	*i_bdev;
  	struct char_device	*i_cdev;
@@ -1672,15 +1680,15 @@ Index: linux-ia64/include/linux/fs.h
  
  	unsigned long		i_dnotify_mask; /* Directory notify events */
  	struct dnotify_struct	*i_dnotify; /* for directory notifications */
-@@ -598,6 +603,7 @@ struct file {
+@@ -666,6 +671,7 @@
  
  	/* needed for tty driver, and maybe others */
  	void			*private_data;
 +	struct lookup_intent    *f_it;
- 
- 	/* preallocated helper kiobuf to speedup O_DIRECT */
- 	struct kiobuf		*f_iobuf;
-@@ -726,6 +732,7 @@ struct nameidata {
+ 	struct list_head	f_ep_links;
+ 	spinlock_t		f_ep_lock;
+ };
+@@ -795,6 +801,7 @@
  	struct qstr last;
  	unsigned int flags;
  	int last_type;
@@ -1688,8 +1696,8 @@ Index: linux-ia64/include/linux/fs.h
  };
  
  /*
-@@ -846,7 +853,8 @@ extern int vfs_symlink(struct inode *, s
- extern int vfs_link(struct dentry *, struct inode *, struct dentry *);
+@@ -916,7 +923,8 @@
+ extern int __vfs_rmdir(struct inode *, struct dentry *);
  extern int vfs_rmdir(struct inode *, struct dentry *);
  extern int vfs_unlink(struct inode *, struct dentry *);
 -extern int vfs_rename(struct inode *, struct dentry *, struct inode *, struct dentry *);
@@ -1698,7 +1706,7 @@ Index: linux-ia64/include/linux/fs.h
  
  /*
   * File types
-@@ -920,21 +928,32 @@ struct file_operations {
+@@ -991,21 +999,32 @@
  
  struct inode_operations {
  	int (*create) (struct inode *,struct dentry *,int);
@@ -1731,7 +1739,7 @@ Index: linux-ia64/include/linux/fs.h
  	int (*getattr) (struct dentry *, struct iattr *);
  	int (*setxattr) (struct dentry *, const char *, const void *, size_t, int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-@@ -1131,10 +1150,14 @@ static inline int get_lease(struct inode
+@@ -1204,10 +1223,14 @@
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
@@ -1747,7 +1755,7 @@ Index: linux-ia64/include/linux/fs.h
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
-@@ -1425,6 +1448,7 @@ typedef int (*read_actor_t)(read_descrip
+@@ -1503,6 +1526,7 @@
  extern loff_t default_llseek(struct file *file, loff_t offset, int origin);
  
  extern int FASTCALL(__user_walk(const char *, unsigned, struct nameidata *));
@@ -1755,7 +1763,7 @@ Index: linux-ia64/include/linux/fs.h
  extern int FASTCALL(path_init(const char *, unsigned, struct nameidata *));
  extern int FASTCALL(path_walk(const char *, struct nameidata *));
  extern int FASTCALL(path_lookup(const char *, unsigned, struct nameidata *));
-@@ -1436,6 +1460,8 @@ extern struct dentry * lookup_one_len(co
+@@ -1515,6 +1539,8 @@
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
@@ -1763,8 +1771,8 @@ Index: linux-ia64/include/linux/fs.h
 +#define user_path_walk_link_it(name,nd,it) __user_walk_it(name, LOOKUP_POSITIVE, nd, it)
  
  extern void inode_init_once(struct inode *);
- extern void iput(struct inode *);
-@@ -1599,6 +1625,8 @@ extern struct file_operations generic_ro
+ extern void _inode_init_once(struct inode *);
+@@ -1666,6 +1692,8 @@
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
@@ -1773,11 +1781,11 @@ Index: linux-ia64/include/linux/fs.h
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
-Index: linux-ia64/include/linux/fs_struct.h
+Index: linux-2.4.21/include/linux/fs_struct.h
 ===================================================================
---- linux-ia64.orig/include/linux/fs_struct.h	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/include/linux/fs_struct.h	2004-03-17 16:05:28.000000000 -0800
-@@ -37,10 +37,12 @@ static inline void set_fs_root(struct fs
+--- linux-2.4.21.orig/include/linux/fs_struct.h	2001-07-13 18:10:44.000000000 -0400
++++ linux-2.4.21/include/linux/fs_struct.h	2004-04-26 19:06:32.000000000 -0400
+@@ -34,10 +34,12 @@
  	write_lock(&fs->lock);
  	old_root = fs->root;
  	old_rootmnt = fs->rootmnt;
@@ -1790,7 +1798,7 @@ Index: linux-ia64/include/linux/fs_struct.h
  		dput(old_root);
  		mntput(old_rootmnt);
  	}
-@@ -60,10 +62,12 @@ static inline void set_fs_pwd(struct fs_
+@@ -57,10 +59,12 @@
  	write_lock(&fs->lock);
  	old_pwd = fs->pwd;
  	old_pwdmnt = fs->pwdmnt;
@@ -1803,11 +1811,11 @@ Index: linux-ia64/include/linux/fs_struct.h
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
-Index: linux-ia64/kernel/exit.c
+Index: linux-2.4.21/kernel/exit.c
 ===================================================================
---- linux-ia64.orig/kernel/exit.c	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/kernel/exit.c	2004-03-17 16:05:28.000000000 -0800
-@@ -347,11 +347,14 @@ static inline void __put_fs_struct(struc
+--- linux-2.4.21.orig/kernel/exit.c	2004-04-24 02:39:01.000000000 -0400
++++ linux-2.4.21/kernel/exit.c	2004-04-26 19:06:32.000000000 -0400
+@@ -292,11 +292,14 @@
  {
  	/* No need to hold fs->lock if we are killing it */
  	if (atomic_dec_and_test(&fs->count)) {
@@ -1822,11 +1830,11 @@ Index: linux-ia64/kernel/exit.c
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
-Index: linux-ia64/kernel/fork.c
+Index: linux-2.4.21/kernel/fork.c
 ===================================================================
---- linux-ia64.orig/kernel/fork.c	2004-03-17 15:47:15.000000000 -0800
-+++ linux-ia64/kernel/fork.c	2004-03-17 16:05:28.000000000 -0800
-@@ -463,10 +463,13 @@ static inline struct fs_struct *__copy_f
+--- linux-2.4.21.orig/kernel/fork.c	2004-04-24 02:39:01.000000000 -0400
++++ linux-2.4.21/kernel/fork.c	2004-04-26 19:06:32.000000000 -0400
+@@ -466,10 +466,13 @@
  		fs->umask = old->umask;
  		read_lock(&old->lock);
  		fs->rootmnt = mntget(old->rootmnt);
@@ -1840,11 +1848,11 @@ Index: linux-ia64/kernel/fork.c
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
-Index: linux-ia64/kernel/ksyms.c
+Index: linux-2.4.21/kernel/ksyms.c
 ===================================================================
---- linux-ia64.orig/kernel/ksyms.c	2004-03-17 16:05:28.000000000 -0800
-+++ linux-ia64/kernel/ksyms.c	2004-03-17 16:05:51.000000000 -0800
-@@ -318,6 +318,7 @@ EXPORT_SYMBOL(read_cache_page);
+--- linux-2.4.21.orig/kernel/ksyms.c	2004-04-26 18:56:44.000000000 -0400
++++ linux-2.4.21/kernel/ksyms.c	2004-04-26 19:06:32.000000000 -0400
+@@ -329,6 +329,7 @@
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);

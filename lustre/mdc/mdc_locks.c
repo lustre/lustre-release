@@ -346,6 +346,9 @@ int mdc_enqueue(struct obd_export *exp,
                 spin_unlock(&req->rq_lock);
         }
 
+        DEBUG_REQ(D_RPCTRACE, req, "disposition: %x, status: %d",
+                  it->d.lustre.it_disposition, it->d.lustre.it_status);
+
         /* We know what to expect, so we do any byte flipping required here */
         LASSERT(reply_buffers == 4 || reply_buffers == 3 || reply_buffers == 1);
         if (reply_buffers >= 3) {

@@ -27,7 +27,6 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/queue.h>
-#include <sys/capability.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -99,112 +98,18 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         return str;
 }
 
-int in_group_p(gid_t gid)
-{
-        int i;
-
-        if (gid == current->fsgid)
-                return 1;
-
-        for (i = 0; i < current->ngroups; i++) {
-                if (gid == current->groups[i])
-                        return 1;
-        }
-
-        return 0;
-}
-
-static void init_capability(int *res)
-{
-        cap_value_t cap_types[] = {
-                CAP_CHOWN,
-                CAP_DAC_OVERRIDE,
-                CAP_DAC_READ_SEARCH,
-                CAP_FOWNER,
-                CAP_FSETID,
-                CAP_KILL,
-                CAP_SETGID,
-                CAP_SETUID,
-                /* following are linux specific, we could simply
-                 * remove them I think */
-                CAP_SETPCAP,
-                CAP_LINUX_IMMUTABLE,
-                CAP_NET_BIND_SERVICE,
-                CAP_NET_BROADCAST,
-                CAP_NET_ADMIN,
-                CAP_NET_RAW,
-                CAP_IPC_LOCK,
-                CAP_IPC_OWNER,
-                CAP_SYS_MODULE,
-                CAP_SYS_RAWIO,
-                CAP_SYS_CHROOT,
-                CAP_SYS_PTRACE,
-                CAP_SYS_PACCT,
-                CAP_SYS_ADMIN,
-                CAP_SYS_BOOT,
-                CAP_SYS_NICE,
-                CAP_SYS_RESOURCE,
-                CAP_SYS_TIME,
-                CAP_SYS_TTY_CONFIG,
-                CAP_MKNOD,
-                CAP_LEASE,
-        };
-        cap_t syscap;
-        cap_flag_value_t capval;
-        int i;
-
-        *res = 0;
-
-        syscap = cap_get_proc();
-        if (!syscap) {
-                printf("Liblustre: Warning: failed to get system capability, "
-                       "set to minimal\n");
-                return;
-        }
-
-        for (i = 0; i < sizeof(cap_types)/sizeof(cap_t); i++) {
-                LASSERT(cap_types[i] < 32);
-                if (!cap_get_flag(syscap, cap_types[i],
-                     CAP_EFFECTIVE, &capval)) {
-                        if (capval == CAP_SET) {
-                                *res |= 1 << cap_types[i];
-                        }
-                }
-        }
-}
-
-static int init_current(char *comm)
+void init_current(char *comm)
 {
         current = malloc(sizeof(*current));
-        if (!current) {
-                CERROR("Not enough memory\n");
-                return -ENOMEM;
-        }
-        current->fs = &current->__fs;
+        current->fs = malloc(sizeof(*current->fs));
         current->fs->umask = umask(0777);
         umask(current->fs->umask);
-
         strncpy(current->comm, comm, sizeof(current->comm));
         current->pid = getpid();
-        current->fsuid = geteuid();
-        current->fsgid = getegid();
+        current->fsuid = 0;
+        current->fsgid = 0;
+        current->cap_effective = -1;
         memset(&current->pending, 0, sizeof(current->pending));
-
-        current->max_groups = sysconf(_SC_NGROUPS_MAX);
-        current->groups = malloc(sizeof(gid_t) * current->max_groups);
-        if (!current->groups) {
-                CERROR("Not enough memory\n");
-                return -ENOMEM;
-        }
-        current->ngroups = getgroups(current->max_groups, current->groqps);
-        if (current->ngroups < 0) {
-                perror("Error getgroups");
-                return -EINVAL;
-        }
-
-        init_capability(&current->cap_effective);
-
-        return 0;
 }
 
 /* FIXME */
@@ -298,8 +203,8 @@ int lllib_init(char *dumpfile)
                 printf("LibLustre: TCPNAL NID: %016llx\n", tcpnal_mynid);
         }
 
-        if (init_current("dummy") ||
-            init_obdclass() ||
+        init_current("dummy");
+        if (init_obdclass() ||
             init_lib_portals() ||
             ptlrpc_init() ||
             mdc_init() ||
@@ -426,6 +331,11 @@ out:
         RETURN(rc);
 }
 
+static void sighandler_USR1(int signum)
+{
+        /* do nothing */
+}
+
 /* parse host:/mdsname/profile string */
 int ll_parse_mount_target(const char *target, char **mdsnid,
                           char **mdsname, char **profile)
@@ -487,6 +397,8 @@ void __liblustre_setup_(void)
          * at a same time on single node.
          */
         srand(time(NULL) + getpid());
+
+        signal(SIGUSR1, sighandler_USR1);
 
 	lustre_path = getenv(ENV_LUSTRE_MNTPNT);
 	if (!lustre_path) {

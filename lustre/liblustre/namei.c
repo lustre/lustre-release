@@ -319,11 +319,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return
-         */
-        /* FIXME: for CREAT, libsysio require the inode must be generated here
-         * currently here we don't know the whether the create is successful
-         * or failed on mds. thus blinded return -EPERM in llu_iget(). need
-         * a fix later.
+         * Note: libsysio require the inode must be generated here
          */
         if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
                 struct lustre_md md;
@@ -335,11 +331,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         RETURN(rc);
 
                 inode = llu_iget(parent->i_fs, &md);
-                if (!inode || IS_ERR(inode)) {
+                if (!inode) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
                                 obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
-                        RETURN(inode ? PTR_ERR(inode) : -ENOMEM);
+                        RETURN(-ENOMEM);
                 } else if (md.lsm != NULL &&
                            llu_i2info(inode)->lli_smd != md.lsm) {
                         obd_free_memmd(sbi->ll_osc_exp, &md.lsm);

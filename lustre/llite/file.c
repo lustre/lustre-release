@@ -699,7 +699,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;
-        ldlm_error_t err;
+        int rc;
         ssize_t retval;
         __u64 kms;
         ENTRY;
@@ -720,11 +720,11 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         policy.l_extent.start = *ppos;
         policy.l_extent.end = *ppos + count - 1;
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
-                             (filp->f_flags & O_NONBLOCK)?LDLM_FL_BLOCK_NOWAIT:
-                                                          0);
-        if (err != ELDLM_OK)
-                RETURN(err);
+        rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
+                                (filp->f_flags & O_NONBLOCK) ?
+                                        LDLM_FL_BLOCK_NOWAIT: 0);
+        if (rc != 0)
+                RETURN(rc);
 
         kms = lov_merge_size(lsm, 1);
         if (*ppos + count - 1 > kms) {
@@ -767,9 +767,8 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;
         loff_t maxbytes = ll_file_maxbytes(inode);
-        ldlm_error_t err;
         ssize_t retval;
-        int nonblock = 0;
+        int nonblock = 0, rc;
         ENTRY;
         if (file->f_flags & O_NONBLOCK)
                 nonblock = LDLM_FL_BLOCK_NOWAIT;
@@ -797,9 +796,9 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                 policy.l_extent.end = *ppos + count - 1;
         }
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, nonblock);
-        if (err != ELDLM_OK)
-                RETURN(err);
+        rc = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, nonblock);
+        if (rc != 0)
+                RETURN(rc);
 
         /* this is ok, g_f_w will overwrite this under i_sem if it races
          * with a local truncate, it just makes our maxbyte checking easier */
@@ -1018,8 +1017,7 @@ static int ll_get_grouplock(struct inode *inode, struct file *file,
         struct lustre_handle lockh = { 0 };
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        ldlm_error_t err;
-        int flags = 0;
+        int flags = 0, rc;
         ENTRY;
 
         if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
@@ -1030,9 +1028,9 @@ static int ll_get_grouplock(struct inode *inode, struct file *file,
         if (file->f_flags & O_NONBLOCK)
                 flags = LDLM_FL_BLOCK_NOWAIT;
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_GROUP, &policy, &lockh, flags);
-        if (err)
-                RETURN(err);
+        rc = ll_extent_lock(fd, inode, lsm, LCK_GROUP, &policy, &lockh, flags);
+        if (rc != 0)
+                RETURN(rc);
 
         fd->fd_flags |= LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK;
         fd->fd_gid = arg;
@@ -1047,7 +1045,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
         struct ll_file_data *fd = file->private_data;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        ldlm_error_t err;
+        int rc;
         ENTRY;
 
         if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
@@ -1057,18 +1055,18 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
 
         if (fd->fd_gid != arg) /* Ugh? Unlocking with different gid? */
                 RETURN(-EINVAL);
-        
+
         fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
 
-        err = ll_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
-        if (err)
-                RETURN(err);
+        rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
+        if (rc)
+                RETURN(rc);
 
         fd->fd_gid = 0;
         memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
 
         RETURN(0);
-}       
+}
 
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
@@ -1145,17 +1143,16 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */
-                ldlm_error_t err;
-                int nonblock = 0;
+                int nonblock = 0, rc;
                 ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF }};
 
                 if (file->f_flags & O_NONBLOCK)
                         nonblock = LDLM_FL_BLOCK_NOWAIT;
 
-                err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
+                rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
                                      nonblock);
-                if (err != ELDLM_OK)
-                        RETURN(err);
+                if (rc != 0)
+                        RETURN(rc);
 
                 offset += inode->i_size;
         } else if (origin == 1) { /* SEEK_CUR */

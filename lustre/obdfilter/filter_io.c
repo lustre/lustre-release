@@ -628,7 +628,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
              i++, lnb++, rnb++) {
                 /* We still set up for ungranted pages so that granted pages
                  * can be written to disk as they were promised, and portals
-                 * needs to keep the pages all aligned properly. */ 
+                 * needs to keep the pages all aligned properly. */
                 lnb->dentry = dentry;
                 lnb->offset = rnb->offset;
                 lnb->len    = rnb->len;

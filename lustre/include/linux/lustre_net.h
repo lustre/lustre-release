@@ -79,6 +79,9 @@
 # define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MAX_BRW_SIZE / PAGE_SIZE)
 #endif
 
+#if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
+#error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
+#endif
 
 /* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
  * buffers */

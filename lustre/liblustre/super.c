@@ -31,7 +31,6 @@
 #include <sys/stat.h>
 #include <sys/fcntl.h>
 #include <sys/queue.h>
-#include <sys/capability.h>
 #ifndef __CYGWIN__
 # include <sys/statvfs.h>
 #else
@@ -1291,11 +1290,8 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 
         if ((md->body->valid &
              (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) !=
-            (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) {
-                /* FIXME this is workaround for for open(O_CREAT),
-                 * see lookup_it_finish(). */
-                return ERR_PTR(-EPERM);
-        }
+            (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE))
+                CERROR("invalide fields!\n");
 
         /* try to find existing inode */
         fid.id = md->body->ino;
@@ -1494,7 +1490,7 @@ llu_fsswop_mount(const char *source,
         LASSERT(sbi->ll_rootino != 0);
 
         root = llu_iget(fs, &md);
-        if (!root || IS_ERR(root)) {
+        if (root == NULL) {
                 CERROR("fail to generate root inode\n");
                 GOTO(out_request, err = -EBADF);
         }
