@@ -108,9 +108,9 @@ static int ptlrpc_pinger_main(void *arg)
 
                         spin_lock_irqsave(&imp->imp_lock, flags);
                         level = imp->imp_state;
-                        force = imp->imp_force_ping;
+                        force = imp->imp_force_verify;
                         if (force)
-                                imp->imp_force_ping = 0;
+                                imp->imp_force_verify = 0;
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
                         if (imp->imp_next_ping <= this_ping || force) {
@@ -128,12 +128,12 @@ static int ptlrpc_pinger_main(void *arg)
                                                imp->imp_target_uuid.uuid,
                                                ptlrpc_import_state_name(level));
                                 } 
-                                else if (imp->imp_replayable || force) {
+                                else if (imp->imp_pingable || force) {
                                         ptlrpc_ping(imp);
                                 }
 
                         } else {
-                                if (imp->imp_replayable)
+                                if (imp->imp_pingable)
                                         CDEBUG(D_HA, "don't need to ping %s "
                                                "(%lu > %lu)\n", 
                                                imp->imp_target_uuid.uuid,
