@@ -1,6 +1,5 @@
 fs/inode.c
 fs/Makefile
-mm/filemap.c
 mm/vmscan.c
 mm/Makefile
 mm/page_alloc.c
