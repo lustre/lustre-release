@@ -1,5 +1,4 @@
 # This file is sourced by lustre/lustrecvs
-set -vx
 
 portalstag="HEAD"
 libsysiotag="LIBSYSIO_HEAD_20040809"
@@ -45,7 +44,7 @@ case "$lustretag" in
 	portalstag="b_port_step"
 	;;
 
-    v1_[0-3]*|v1_4_0*)
+    v1_[0-3]*|v1_4_0*|[A-Z]*)
 	portalstag="$lustretag"
 	;;
 

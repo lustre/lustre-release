@@ -1,5 +1,6 @@
 #!/bin/sh
 
+LC_COLLATE="C"
 progname="${0##*/}"
 
 warn ()
@@ -22,6 +23,12 @@ Usage: $progname lustretag
   where lustretag is a tag of the lustre-core module
 EOF
 }
+
+if [ -z "$LUSTRECVS_UPDATED" ] ; then
+    cvs up "$0" || fatal 1 "Error updating lustrecvs"
+    export LUSTRECVS_UPDATED=yes
+    exec "$0" "$@"
+fi
 
 buildtag="HEAD"
 lustretag="$1"
