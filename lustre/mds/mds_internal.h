@@ -15,7 +15,6 @@ void mds_put_catalog(struct llog_handle *cathandle);
 
 
 /* mds/mds_reint.c */
-int mds_osc_connect(struct obd_device *obd, struct mds_obd *mds);
 void mds_commit_cb(struct obd_device *, __u64 last_rcvd, void *data, int error);
 int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        struct ptlrpc_request *req, int rc, __u32 op_data);
