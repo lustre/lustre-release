@@ -449,7 +449,7 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
 static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
 {
         int err, rc = 0;
-        struct obdo oa;
+        struct obdo *oa = NULL;
         struct inode *inode;
         struct lov_stripe_md *lsm = NULL;
         struct ll_inode_info *lli = NULL;
@@ -458,14 +458,33 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         CHECK_MOUNT_EPOCH(dir);
 
         if (dentry->d_it->it_disposition == 0) {
-                memset(&oa, 0, sizeof(oa));
-                oa.o_mode = S_IFREG | 0600;
-                oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE;
-                rc = obd_create(ll_i2obdconn(dir), &oa, &lsm);
-                CDEBUG(D_DENTRY, "name %s mode %o o_id %lld: rc = %d\n",
-                       dentry->d_name.name, mode, (long long)oa.o_id, rc);
+                int gid = current->fsgid;
+
+                if (dir->i_mode & S_ISGID)
+                        gid = dir->i_gid;
+
+                oa = obdo_alloc();
+                if (!oa)
+                        RETURN(-ENOMEM);
+
+                oa->o_mode = S_IFREG | 0600;
+                /* FIXME: we set the UID/GID fields to 0 for now, because it
+                 *        fixes a bug on the BA OSTs.  We should really set
+                 *        them properly, and this needs to be revisited when
+                 *        we do proper credentials checking on the OST, and
+                 *        set the attributes on the OST in ll_inode_setattr().
+                oa->o_uid = current->fsuid;
+                oa->o_gid = gid;
+                 */
+                oa->o_uid = 0;
+                oa->o_gid = 0;
+                oa->o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLUID |
+                        OBD_MD_FLGID;
+                rc = obd_create(ll_i2obdconn(dir), oa, &lsm);
+                CDEBUG(D_DENTRY, "name %s mode %o o_id "LPX64": rc = %d\n",
+                       dentry->d_name.name, mode, oa->o_id, rc);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(out_free, rc);
         }
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
@@ -473,8 +492,8 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
 
         if (IS_ERR(inode)) {
                 rc = PTR_ERR(inode);
-                CERROR("error creating MDS object for id %Ld: rc = %d\n",
-                       (unsigned long long)oa.o_id, rc);
+                CERROR("error creating MDS object for id "LPX64": rc = %d\n",
+                       oa->o_id, rc);
                 GOTO(out_destroy, rc);
         }
 
@@ -489,19 +508,26 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
                 rc = ext2_add_nondir(dentry, inode);
         }
 
+out_free:
+        obdo_free(oa);
         RETURN(rc);
 
 out_destroy:
         if (lsm) {
-                oa.o_easize = ll_mds_easize(inode->i_sb);
-                oa.o_valid |= OBD_MD_FLEASIZE;
-                err = obd_destroy(ll_i2obdconn(dir), &oa, lsm);
+                if (!oa)
+                        oa = obdo_alloc();
+                if (!oa)
+                        RETURN(-ENOMEM);
+
+                oa->o_easize = ll_mds_easize(inode->i_sb);
+                oa->o_valid |= OBD_MD_FLEASIZE;
+                err = obd_destroy(ll_i2obdconn(dir), oa, lsm);
                 if (err)
-                        CERROR("error destroying objid %Ld on error: err %d\n",
-                       (unsigned long long)oa.o_id, err);
+                        CERROR("error uncreating objid "LPX64": err %d\n",
+                               oa->o_id, err);
         }
 
-        return rc;
+        goto out_free;
 }
 
 static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,

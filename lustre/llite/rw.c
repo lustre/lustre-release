@@ -217,7 +217,7 @@ static int ll_commit_write(struct file *file, struct page *page,
         if (!PageLocked(page))
                 LBUG();
 
-        CDEBUG(D_INODE, "commit_page writing (off "LPD64"), count %ld\n",
+        CDEBUG(D_INODE, "commit_page writing (off "LPD64"), count "LPD64"\n",
                pg.off, pg.count);
 
         err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md,
