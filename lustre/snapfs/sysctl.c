@@ -40,12 +40,13 @@ static struct ctl_table_header *snapfs_table_header = NULL;
 /* These are global control options */
 #define ENTRY_CNT 3
 
+int snap_print_entry = 1;
+int snap_debug_level = 0;
+
 /* XXX - doesn't seem to be working in 2.2.15 */
 static struct ctl_table snapfs_ctltable[] =
 {
-#ifdef SNAP_DEBUG
 	{PSDEV_DEBUG, "debug", &snap_debug_level, sizeof(int), 0644, NULL, &proc_dointvec},
-#endif
 	{PSDEV_TRACE, "trace", &snap_print_entry, sizeof(int), 0644, NULL, &proc_dointvec},
 	{0}
 };

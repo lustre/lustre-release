@@ -19,4 +19,5 @@ extern void init_snap_list(void);
 extern int snap_dev_open(int argc, char **argv);
 extern int snap_dev_list(int argc, char **argv);
 extern int snap_snap_add(int argc, char **argv);
+extern int snap_snap_del(int argc, char **argv);
 extern int snap_snap_list(int argc, char **argv);
