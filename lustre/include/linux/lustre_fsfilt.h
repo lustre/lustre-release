@@ -64,7 +64,7 @@ struct fsfilt_operations {
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         int     (* fs_send_bio)(struct inode *inode, struct bio *bio);
 #else
-        int     (* fs_send_bio)(struct inode *inode, struct kiobuf *bio);
+        int     (* fs_send_bio)(int rw, struct inode *inode, struct kiobuf *bio);
 #endif
 
         /* methods for getting page from backing fs and putting page there
@@ -326,11 +326,16 @@ fsfilt_send_bio(struct obd_device *obd, struct inode *inode,
                 struct bio *bio)
 #else
 static inline int
-fsfilt_send_bio(struct obd_device *obd, struct inode *inode,
+fsfilt_send_bio(int rw, struct obd_device *obd, struct inode *inode,
                 struct kiobuf *bio)
 #endif
 {
-        return obd->obd_fsops->fs_send_bio(inode, bio);
+        LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
+
+        if (rw == OBD_BRW_READ)
+                return obd->obd_fsops->fs_send_bio(READ, inode, bio);
+        else 
+                return obd->obd_fsops->fs_send_bio(WRITE, inode, bio); 
 }
 
 static inline int
