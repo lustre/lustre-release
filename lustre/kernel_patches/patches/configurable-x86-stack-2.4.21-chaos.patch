@@ -1,0 +1,323 @@
+Index: linux-p4smp/arch/i386/kernel/entry.S
+===================================================================
+--- linux-p4smp.orig/arch/i386/kernel/entry.S	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/arch/i386/kernel/entry.S	2004-06-14 13:14:19.000000000 -0700
+@@ -46,6 +46,7 @@
+ #include <asm/segment.h>
+ #include <asm/page.h>
+ #include <asm/smp.h>
++#include <asm/current.h>
+ #include <asm/unistd.h>
+ 	
+ EBX		= 0x00
+@@ -94,10 +95,6 @@ pt_sys_exit	= 8
+ 
+ ENOSYS = 38
+ 
+-#define GET_CURRENT(reg) \
+-	movl $-8192, reg; \
+-	andl %esp, reg
+-
+ #if CONFIG_X86_HIGH_ENTRY
+ 
+ #define call_SYMBOL_NAME_ABS(X) movl $X, %ebp; call *%ebp
+@@ -193,7 +190,7 @@ ENOSYS = 38
+ 	GET_CURRENT(%ebx);				\
+ 	movl real_stack(%ebx), %edx;			\
+ 	movl %esp, %ebx;				\
+-	andl $0x1fff, %ebx;				\
++	andl $(THREAD_SIZE-1), %ebx;			\
+ 	orl %ebx, %edx;					\
+ 	movl %edx, %esp;
+ 
+@@ -228,7 +225,7 @@ ENOSYS = 38
+ return_path_start_marker:				\
+ 	nop;						\
+ 	movl %esp, %ebx;				\
+-	andl $0x1fff, %ebx;				\
++	andl $(THREAD_SIZE-1), %ebx;			\
+ 	orl %ebx, %edx;					\
+ 	movl %esp, %eax;				\
+ 	movl %edx, %esp; 				\
+Index: linux-p4smp/arch/i386/kernel/smpboot.c
+===================================================================
+--- linux-p4smp.orig/arch/i386/kernel/smpboot.c	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/arch/i386/kernel/smpboot.c	2004-06-14 13:14:19.000000000 -0700
+@@ -814,7 +814,7 @@ static void __init do_boot_cpu (int apic
+ 
+ 	/* So we see what's up   */
+ 	printk("Booting processor %d/%d eip %lx\n", cpu, apicid, start_eip);
+-	stack_start.esp = (void *) (1024 + PAGE_SIZE + (char *)idle);
++	stack_start.esp = (void *)idle->thread.esp;
+ 
+ 	/*
+ 	 * This grunge runs the startup process for
+@@ -887,7 +887,7 @@ static void __init do_boot_cpu (int apic
+ 			Dprintk("CPU has booted.\n");
+ 		} else {
+ 			boot_error= 1;
+-			if (*((volatile unsigned char *)phys_to_virt(8192))
++			if (*((volatile unsigned char *)phys_to_virt(THREAD_SIZE))
+ 					== 0xA5)
+ 				/* trampoline started but...? */
+ 				printk("Stuck ??\n");
+@@ -910,7 +910,7 @@ static void __init do_boot_cpu (int apic
+ 	}
+ 
+ 	/* mark "stuck" area as not stuck */
+-	*((volatile unsigned long *)phys_to_virt(8192)) = 0;
++	*((volatile unsigned long *)phys_to_virt(THREAD_SIZE)) = 0;
+ 
+ 	if(clustered_apic_mode == CLUSTERED_APIC_NUMAQ) {
+ 		printk("Restoring NMI vector\n");
+Index: linux-p4smp/arch/i386/kernel/traps.c
+===================================================================
+--- linux-p4smp.orig/arch/i386/kernel/traps.c	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/arch/i386/kernel/traps.c	2004-06-14 13:14:19.000000000 -0700
+@@ -273,7 +273,7 @@ void show_trace_task(struct task_struct 
+ 	unsigned long esp = tsk->thread.esp;
+ 
+ 	/* User space on another CPU? */
+-	if ((esp ^ (unsigned long)tsk) & (PAGE_MASK<<1))
++	if ((esp ^ (unsigned long)tsk) & ~(THREAD_SIZE - 1))
+ 		return;
+ 	show_trace((unsigned long *)esp);
+ }
+Index: linux-p4smp/arch/i386/kernel/head.S
+===================================================================
+--- linux-p4smp.orig/arch/i386/kernel/head.S	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/arch/i386/kernel/head.S	2004-06-14 13:14:19.000000000 -0700
+@@ -15,6 +15,7 @@
+ #include <asm/page.h>
+ #include <asm/pgtable.h>
+ #include <asm/desc.h>
++#include <asm/current.h>
+ 
+ #define OLD_CL_MAGIC_ADDR	0x90020
+ #define OLD_CL_MAGIC		0xA33F
+@@ -328,7 +329,7 @@ rp_sidt:
+ 	ret
+ 
+ ENTRY(stack_start)
+-	.long SYMBOL_NAME(init_task_union)+8192
++	.long SYMBOL_NAME(init_task_union)+THREAD_SIZE
+ 	.long __KERNEL_DS
+ 
+ /* This is the default interrupt "handler" :-) */
+Index: linux-p4smp/arch/i386/kernel/irq.c
+===================================================================
+--- linux-p4smp.orig/arch/i386/kernel/irq.c	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/arch/i386/kernel/irq.c	2004-06-14 13:14:19.000000000 -0700
+@@ -45,6 +45,7 @@
+ #include <asm/delay.h>
+ #include <asm/desc.h>
+ #include <asm/irq.h>
++#include <asm/current.h>
+ 
+ 
+ 
+@@ -585,7 +586,7 @@ asmlinkage unsigned int do_IRQ(struct pt
+ 	long esp;
+ 
+ 	/* Debugging check for stack overflow: is there less than 1KB free? */
+-	__asm__ __volatile__("andl %%esp,%0" : "=r" (esp) : "0" (8191));
++	__asm__ __volatile__("andl %%esp,%0" : "=r" (esp) : "0" (THREAD_SIZE-1));
+ 	if (unlikely(esp < (sizeof(struct task_struct) + 1024))) {
+ 		extern void show_stack(unsigned long *);
+ 
+Index: linux-p4smp/arch/i386/lib/getuser.S
+===================================================================
+--- linux-p4smp.orig/arch/i386/lib/getuser.S	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/arch/i386/lib/getuser.S	2004-06-14 13:14:19.000000000 -0700
+@@ -21,6 +21,10 @@
+  * as they get called from within inline assembly.
+  */
+ 
++/* Duplicated from asm/processor.h */
++#include <asm/current.h>
++#include <linux/config.h>
++
+ addr_limit = 12
+ 
+ .text
+@@ -28,7 +32,7 @@ addr_limit = 12
+ .globl __get_user_1
+ __get_user_1:
+ 	movl %esp,%edx
+-	andl $0xffffe000,%edx
++	andl $~(THREAD_SIZE - 1),%edx
+ 	cmpl addr_limit(%edx),%eax
+ 	jae bad_get_user
+ 1:	movzbl (%eax),%edx
+@@ -41,7 +45,7 @@ __get_user_2:
+ 	addl $1,%eax
+ 	movl %esp,%edx
+ 	jc bad_get_user
+-	andl $0xffffe000,%edx
++	andl $~(THREAD_SIZE - 1),%edx
+ 	cmpl addr_limit(%edx),%eax
+ 	jae bad_get_user
+ 2:	movzwl -1(%eax),%edx
+@@ -54,7 +58,7 @@ __get_user_4:
+ 	addl $3,%eax
+ 	movl %esp,%edx
+ 	jc bad_get_user
+-	andl $0xffffe000,%edx
++	andl $~(THREAD_SIZE - 1),%edx
+ 	cmpl addr_limit(%edx),%eax
+ 	jae bad_get_user
+ 3:	movl -3(%eax),%edx
+Index: linux-p4smp/arch/i386/config.in
+===================================================================
+--- linux-p4smp.orig/arch/i386/config.in	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/arch/i386/config.in	2004-06-14 13:14:05.000000000 -0700
+@@ -310,6 +310,28 @@ if [ "$CONFIG_SMP" = "y" -a "$CONFIG_X86
+    define_bool CONFIG_HAVE_DEC_LOCK y
+ fi
+ 
++choice 'Bigger Stack Size Support' \
++     "off    CONFIG_NOBIGSTACK \
++      16KB   CONFIG_STACK_SIZE_16KB \
++      32KB   CONFIG_STACK_SIZE_32KB \
++      64KB   CONFIG_STACK_SIZE_64KB" off
++
++if [ "$CONFIG_NOBIGSTACK" = "y" ]; then
++   define_int CONFIG_STACK_SIZE_SHIFT 1
++else
++  if [ "$CONFIG_STACK_SIZE_16KB" = "y" ]; then
++     define_int CONFIG_STACK_SIZE_SHIFT 2
++  else
++    if [ "$CONFIG_STACK_SIZE_32KB" = "y" ]; then
++      define_int CONFIG_STACK_SIZE_SHIFT 3
++    else
++      if [ "$CONFIG_STACK_SIZE_64KB" = "y" ]; then
++        define_int CONFIG_STACK_SIZE_SHIFT 4
++      fi
++    fi
++  fi
++fi
++
+ if [ "$CONFIG_SMP" = "y" -a "$CONFIG_X86_CMPXCHG" = "y" ]; then
+    define_bool CONFIG_HAVE_DEC_LOCK y
+ fi
+Index: linux-p4smp/include/asm-i386/current.h
+===================================================================
+--- linux-p4smp.orig/include/asm-i386/current.h	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/include/asm-i386/current.h	2004-06-14 13:41:19.000000000 -0700
+@@ -1,15 +1,64 @@
+ #ifndef _I386_CURRENT_H
+ #define _I386_CURRENT_H
++#include <asm/page.h>
++
++/*
++ * Configurable page sizes on i386, mainly for debugging purposes.
++ * (c) Balbir Singh
++ */
++
++/* enumerate the values, include/asm-i386/hw_irq.h in particular needs this */
++#if (PAGE_SIZE != 4096)
++#error PAGE_SIZE != 4096 unsupported
++#endif
++
++#if (CONFIG_STACK_SIZE_SHIFT == 0)
++#define THREAD_SIZE	4096
++#elif (CONFIG_STACK_SIZE_SHIFT == 1)
++#define THREAD_SIZE	8192
++#elif (CONFIG_STACK_SIZE_SHIFT == 2)
++#define THREAD_SIZE	16384
++#elif (CONFIG_STACK_SIZE_SHIFT == 3)
++#define THREAD_SIZE	32768
++#elif (CONFIG_STACK_SIZE_SHIFT == 4)
++#define THREAD_SIZE	65536
++#else
++#error CONFIG_STACK_SIZE_SHIFT > 4 unsupported
++#endif
++
++#if (CONFIG_STACK_SIZE_SHIFT != 1) && defined(CONFIG_X86_4G)
++#error Large stacks with 4G/4G split unsupported
++#endif
++
++#ifdef __ASSEMBLY__
++
++#define GET_CURRENT(reg) \
++	movl $-THREAD_SIZE, reg; \
++	andl %esp, reg
++
++#else /* __ASSEMBLY__ */
++
++#define __alloc_task_struct() \
++  ((struct task_struct *) __get_free_pages(GFP_KERNEL, CONFIG_STACK_SIZE_SHIFT))
++
++#define __free_task_struct(p) do { \
++  BUG_ON((p)->state < TASK_ZOMBIE); \
++  free_pages((unsigned long) (p), CONFIG_STACK_SIZE_SHIFT); \
++} while(0)
++
++#define INIT_TASK_SIZE THREAD_SIZE
+ 
+ struct task_struct;
+ 
+ static inline struct task_struct * get_current(void)
+ {
+ 	struct task_struct *current;
+-	__asm__("andl %%esp,%0; ":"=r" (current) : "0" (~8191UL));
++	__asm__("andl %%esp,%0; ":"=r" (current) : "0" (~(THREAD_SIZE - 1)));
+ 	return current;
+  }
+  
+ #define current get_current()
+ 
++#endif /* __ASSEMBLY__ */
++
+ #endif /* !(_I386_CURRENT_H) */
+Index: linux-p4smp/include/asm-i386/hw_irq.h
+===================================================================
+--- linux-p4smp.orig/include/asm-i386/hw_irq.h	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/include/asm-i386/hw_irq.h	2004-06-14 13:14:19.000000000 -0700
+@@ -136,21 +136,17 @@ extern char _stext, _etext;
+ 	"								\
+ 	/* load the real stack - keep the offset */			\
+ 									\
+-	movl $-8192, %ebx; 						\
++	movl $- " STR(THREAD_SIZE) ", %ebx; 				\
+ 	andl %esp, %ebx;						\
+ 	movl 36(%ebx), %edx;						\
+ 	movl %esp, %ebx;						\
+-	andl $0x1fff, %ebx;						\
++	andl $( " STR(THREAD_SIZE) "-1), %ebx;				\
+ 	orl %ebx, %edx;							\
+ 	movl %edx, %esp;"
+ 
+ #define IRQ_NAME2(nr) nr##_interrupt(void)
+ #define IRQ_NAME(nr) IRQ_NAME2(IRQ##nr)
+ 
+-#define GET_CURRENT \
+-	"movl %esp, %ebx\n\t" \
+-	"andl $-8192, %ebx\n\t"
+-
+ /*
+  *	SMP has a few special interrupts for IPI messages
+  */
+Index: linux-p4smp/include/asm-i386/processor.h
+===================================================================
+--- linux-p4smp.orig/include/asm-i386/processor.h	2004-06-14 13:13:07.000000000 -0700
++++ linux-p4smp/include/asm-i386/processor.h	2004-06-14 13:14:19.000000000 -0700
+@@ -14,6 +14,7 @@
+ #include <asm/types.h>
+ #include <asm/sigcontext.h>
+ #include <asm/cpufeature.h>
++#include <asm/current.h>
+ #include <linux/cache.h>
+ #include <linux/config.h>
+ #include <linux/threads.h>
+@@ -498,10 +499,6 @@ unsigned long get_wchan(struct task_stru
+ #define KSTK_EIP(tsk)	(((unsigned long *)(4096+(unsigned long)(tsk)))[1019])
+ #define KSTK_ESP(tsk)	(((unsigned long *)(4096+(unsigned long)(tsk)))[1022])
+ 
+-#define THREAD_SIZE (2*PAGE_SIZE)
+-#define __alloc_task_struct() ((struct task_struct *) __get_free_pages(GFP_KERNEL,1))
+-#define __free_task_struct(p) do { BUG_ON((p)->state < TASK_ZOMBIE); free_pages((unsigned long) (p), 1); } while (0)
+-
+ #define init_task	(init_task_union.task)
+ #define init_stack	(init_task_union.stack)
+ 
