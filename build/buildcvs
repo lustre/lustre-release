@@ -45,8 +45,10 @@ case "$lustretag" in
 	portalstag="b_port_netid"
 	;;
 
+    # b_port_step is only for portals
     b_port_step)
 	portalstag="b_port_step"
+	lustretag="HEAD"
 	;;
 
     b_port_test)
