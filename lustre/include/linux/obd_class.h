@@ -68,6 +68,7 @@ typedef struct {
 #include <linux/obd_filter.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_dlm.h>
 #include <linux/obd_snap.h>
 #include <linux/obd_trace.h>
 /* #include <linux/obd_fc.h> */
@@ -100,6 +101,7 @@ struct obd_device {
 	        struct trace_obd trace;
                 struct ost_obd ost;
                 struct osc_obd osc;
+                struct ldlm_obd ldlm;
         } u;
 };
 
