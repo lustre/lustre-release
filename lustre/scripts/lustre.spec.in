@@ -86,7 +86,17 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/obd-%{version}
 %attr(-, root, root) /usr/src/obd-%{version}
 
 %post
+if [ ! -e /dev/obd ]; then
+   mknod /dev/obd c 10 241
+fi
 depmod -ae || exit 0
+
+#
+# Modify /etc/modules.conf to add lusre rules
+# lustre_lite depends on llite.o
+# /dev/obd obdclass.o
+# obdclass depends on portals
+#  the rest should be loaded by kerneld automatically
 
 %postun
 depmod -ae || exit 0
