@@ -3,7 +3,7 @@
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-$DBGCTL get_debug > /tmp/debug.1
+$DBGCTL debug_kernel /tmp/debug.1
 
 if mount | grep '/mnt/lustre'; then
 	umount /mnt/lustre || fail "cannot unmount"
@@ -49,7 +49,7 @@ rmmod ptlrpc
 rmmod obdclass
 rmmod extN
 
-$DBGCTL get_debug > /tmp/debug.2
+$DBGCTL debug_kernel /tmp/debug.2
 
 $PTLCTL <<EOF
 setup tcp
