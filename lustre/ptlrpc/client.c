@@ -446,7 +446,7 @@ static int expired_request(void *data)
         struct ptlrpc_request *req = data;
 
         ENTRY;
-        CDEBUG(D_HA, "req xid "LPD64" op %d: timeout on conn to %s:%d\n",
+        CERROR("req xid "LPD64" op %d: timeout on conn to %s:%d\n",
                (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
                req->rq_connection->c_remote_uuid,
                req->rq_import->imp_client->cli_request_portal);
@@ -526,7 +526,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 if (rc)
                         RETURN(rc);
                 
-                CDEBUG(D_HA, "process %d resumed\n", current->pid);
+                CERROR("process %d resumed\n", current->pid);
         }
  resend:
         req->rq_timeout = obd_timeout;

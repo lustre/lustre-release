@@ -73,7 +73,7 @@ int ll_reconnect(struct ptlrpc_connection *conn)
                 old_hdl = imp->imp_handle;
                 imp->imp_handle.addr = request->rq_repmsg->addr;
                 imp->imp_handle.cookie = request->rq_repmsg->cookie;
-                CDEBUG(D_HA, "reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
+                CERROR("reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
                        cli->cl_target_uuid, conn->c_remote_uuid,
                        imp->imp_handle.addr, imp->imp_handle.cookie,
                        old_hdl.addr, old_hdl.cookie);
@@ -112,7 +112,7 @@ static int ll_recover_upcall(struct ptlrpc_connection *conn)
                        obd_recovery_upcall, rc);
                 CERROR("Check /proc/sys/lustre/recovery_upcall?\n");
         } else {
-                CDEBUG(D_HA, "Invoked upcall %s for connection %s\n",
+                CERROR("Invoked upcall %s for connection %s\n",
                        argv[0], argv[1]);
         }
         RETURN(rc);
@@ -221,7 +221,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
 
 static int ll_retry_recovery(struct ptlrpc_connection *conn)
 {
-        CDEBUG(D_HA, "Recovery has failed on conn %p\n", conn);
+        CERROR("Recovery has failed on conn %p\n", conn);
 #if 0
         /* XXX use a timer, sideshow bob */
         recovd_conn_fail(conn);

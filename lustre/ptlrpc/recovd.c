@@ -62,7 +62,7 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
                 return;
         }
                 
-        CDEBUG(D_HA, "connection %p to %s failed\n", conn, conn->c_remote_uuid);
+        CERROR("connection %p to %s failed\n", conn, conn->c_remote_uuid);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
         rd->rd_phase = RD_TROUBLED;
@@ -140,9 +140,9 @@ static int recovd_handle_event(struct recovd_obd *recovd)
 
         spin_lock(&recovd->recovd_lock);
 
-        CDEBUG(D_HA, "managed: \n");
+        CERROR("managed: \n");
         dump_connection_list(&recovd->recovd_managed_items);
-        CDEBUG(D_HA, "troubled: \n");
+        CERROR("troubled: \n");
         dump_connection_list(&recovd->recovd_troubled_items);
 
         /*
@@ -175,7 +175,7 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                                 rc = -EINVAL;
                                 break;
                         }
-                        CDEBUG(D_HA, "starting recovery for rd %p (conn %p)\n",
+                        CERROR("starting recovery for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));
                         rd->rd_phase = RD_PREPARING;
                         
