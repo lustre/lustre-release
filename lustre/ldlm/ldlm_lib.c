@@ -954,7 +954,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 }
                 target_cancel_recovery_timer(obd);
         } else {
-                CERROR("%s: %d recoverable clients remain\n",
+                CWARN("%s: %d recoverable clients remain\n",
                        obd->obd_name, obd->obd_recoverable_clients);
                 wake_up(&obd->obd_next_transno_waitq);
         }

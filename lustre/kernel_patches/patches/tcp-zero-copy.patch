@@ -1,10 +1,11 @@
-diff -u -r1.1.1.1 linux/include/linux/skbuff.h
---- linux/include/linux/skbuff.h	2 Aug 2002 10:59:25 -0000	1.1.1.1
-+++ linux/include/linux/skbuff.h	2 Aug 2002 14:20:00 -0000
+Index: linux-2.4.20/include/linux/skbuff.h
+===================================================================
+--- linux-2.4.20.orig/include/linux/skbuff.h	2003-05-16 05:28:45.000000000 +0400
++++ linux-2.4.20/include/linux/skbuff.h	2003-12-04 20:56:32.000000000 +0300
 @@ -116,6 +116,30 @@
  	__u16 size;
  };
-
+ 
 +/* Support for callback when skb data has been released */
 +typedef struct zccd				/* Zero Copy Callback Descriptor */
 +{						/* (embed as first member of custom struct) */
@@ -44,44 +45,47 @@ diff -u -r1.1.1.1 linux/include/linux/skbuff.h
 +	 */
  	skb_frag_t	frags[MAX_SKB_FRAGS];
  };
-
-diff -u -r1.1.1.1 linux/include/net/tcp.h
---- linux/include/net/tcp.h	2 Aug 2002 10:59:29 -0000	1.1.1.1
-+++ linux/include/net/tcp.h	2 Aug 2002 14:03:49 -0000
-@@ -639,6 +639,8 @@
-
+ 
+Index: linux-2.4.20/include/net/tcp.h
+===================================================================
+--- linux-2.4.20.orig/include/net/tcp.h	2003-05-16 05:29:15.000000000 +0400
++++ linux-2.4.20/include/net/tcp.h	2003-12-04 20:56:32.000000000 +0300
+@@ -638,6 +638,8 @@
+ 
  extern int			tcp_sendmsg(struct sock *sk, struct msghdr *msg, int size);
  extern ssize_t			tcp_sendpage(struct socket *sock, struct page *page, int offset, size_t size, int flags);
 +extern ssize_t			tcp_sendpage_zccd(struct socket *sock, struct page *page, int offset, size_t size,
 +						  int flags, zccd_t *zccd);
-
- extern int			tcp_ioctl(struct sock *sk,
- 					  int cmd,
-@@ -732,6 +734,9 @@
+ 
+ extern int			tcp_ioctl(struct sock *sk, 
+ 					  int cmd, 
+@@ -731,6 +733,9 @@
  					    struct msghdr *msg,
- 					    int len, int nonblock,
+ 					    int len, int nonblock, 
  					    int flags, int *addr_len);
 +extern int			tcp_recvpackets(struct sock *sk,
 +						struct sk_buff_head *packets,
 +						int len, int nonblock);
-
+ 
  extern int			tcp_listen_start(struct sock *sk);
-
-diff -u -r1.1.1.1 linux/net/netsyms.c
---- linux/net/netsyms.c	2 Aug 2002 10:59:31 -0000	1.1.1.1
-+++ linux/net/netsyms.c	2 Aug 2002 14:21:31 -0000
-@@ -395,6 +395,8 @@
- EXPORT_SYMBOL(sysctl_tcp_ecn);
- EXPORT_SYMBOL(tcp_cwnd_application_limited);
- EXPORT_SYMBOL(tcp_sendpage);
+ 
+Index: linux-2.4.20/net/netsyms.c
+===================================================================
+--- linux-2.4.20.orig/net/netsyms.c	2003-05-16 05:29:15.000000000 +0400
++++ linux-2.4.20/net/netsyms.c	2003-12-04 20:56:44.000000000 +0300
+@@ -408,6 +408,8 @@
+ 
+ #endif
+ 
 +EXPORT_SYMBOL(tcp_sendpage_zccd);
 +EXPORT_SYMBOL(tcp_recvpackets);
-
- EXPORT_SYMBOL(tcp_write_xmit);
-
-diff -u -r1.1.1.1 linux/net/core/skbuff.c
---- linux/net/core/skbuff.c	2 Aug 2002 10:59:32 -0000	1.1.1.1
-+++ linux/net/core/skbuff.c	2 Aug 2002 14:07:13 -0000
+ EXPORT_SYMBOL(tcp_read_sock);
+ 
+ EXPORT_SYMBOL(netlink_set_err);
+Index: linux-2.4.20/net/core/skbuff.c
+===================================================================
+--- linux-2.4.20.orig/net/core/skbuff.c	2003-05-16 05:28:46.000000000 +0400
++++ linux-2.4.20/net/core/skbuff.c	2003-12-04 20:56:32.000000000 +0300
 @@ -208,6 +208,8 @@
  	atomic_set(&(skb_shinfo(skb)->dataref), 1);
  	skb_shinfo(skb)->nr_frags = 0;
@@ -89,7 +93,7 @@ diff -u -r1.1.1.1 linux/net/core/skbuff.c
 +	skb_shinfo(skb)->zccd = NULL;		/* skbuffs kick off with NO user zero copy descriptors */
 +	skb_shinfo(skb)->zccd2 = NULL;
  	return skb;
-
+ 
  nodata:
 @@ -276,6 +278,10 @@
  {
@@ -108,14 +112,13 @@ diff -u -r1.1.1.1 linux/net/core/skbuff.c
  	skb_shinfo(skb)->frag_list = NULL;
 +	skb_shinfo(skb)->zccd = NULL;		/* copied data => no user zero copy descriptor */
 +	skb_shinfo(skb)->zccd2 = NULL;
-
+ 
  	/* We are no longer a clone, even if we were. */
  	skb->cloned = 0;
-@@ -577,6 +585,14 @@
-
+@@ -578,6 +586,14 @@
  	n->data_len = skb->data_len;
  	n->len = skb->len;
-+
+ 
 +	if (skb_shinfo(skb)->zccd != NULL)	/* user zero copy descriptor? */
 +		zccd_get (skb_shinfo(skb)->zccd); /* 1 more ref (pages are shared) */
 +	skb_shinfo(n)->zccd = skb_shinfo(skb)->zccd;
@@ -123,29 +126,30 @@ diff -u -r1.1.1.1 linux/net/core/skbuff.c
 +	if (skb_shinfo(skb)->zccd2 != NULL)	/* 2nd user zero copy descriptor? */
 +		zccd_get (skb_shinfo(skb)->zccd2); /* 1 more ref (pages are shared) */
 +	skb_shinfo(n)->zccd2 = skb_shinfo(skb)->zccd2;
-
++
  	if (skb_shinfo(skb)->nr_frags) {
  		int i;
+ 
 @@ -620,6 +636,8 @@
  	u8 *data;
  	int size = nhead + (skb->end - skb->head) + ntail;
  	long off;
 +	zccd_t *zccd = skb_shinfo(skb)->zccd;	/* stash user zero copy descriptor */
 +	zccd_t *zccd2 = skb_shinfo(skb)->zccd2;	/* stash 2nd user zero copy descriptor */
-
+ 
  	if (skb_shared(skb))
  		BUG();
 @@ -641,6 +659,11 @@
  	if (skb_shinfo(skb)->frag_list)
  		skb_clone_fraglist(skb);
-
+ 
 +	if (zccd != NULL)			/* user zero copy descriptor? */
 +		zccd_get (zccd);		/* extra ref (pages are shared) */
 +	if (zccd2 != NULL)			/* 2nd user zero copy descriptor? */
 +		zccd_get (zccd2);		/* extra ref (pages are shared) */
 +
  	skb_release_data(skb);
-
+ 
  	off = (data+nhead) - skb->head;
 @@ -655,6 +678,8 @@
  	skb->nh.raw += off;
@@ -154,24 +158,25 @@ diff -u -r1.1.1.1 linux/net/core/skbuff.c
 +	skb_shinfo(skb)->zccd = zccd;
 +	skb_shinfo(skb)->zccd2 = zccd2;
  	return 0;
-
+ 
  nodata:
-diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
---- linux/net/ipv4/tcp.c	2 Aug 2002 10:59:34 -0000	1.1.1.1
-+++ linux/net/ipv4/tcp.c	2 Aug 2002 14:36:30 -0000
+Index: linux-2.4.20/net/ipv4/tcp.c
+===================================================================
+--- linux-2.4.20.orig/net/ipv4/tcp.c	2003-05-16 05:29:15.000000000 +0400
++++ linux-2.4.20/net/ipv4/tcp.c	2003-12-04 20:56:32.000000000 +0300
 @@ -745,7 +745,7 @@
  	goto out;
  }
-
+ 
 -ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset, size_t psize, int flags);
 +ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset, size_t psize, int flags, zccd_t *zccd);
-
+ 
  static inline int
  can_coalesce(struct sk_buff *skb, int i, struct page *page, int off)
 @@ -824,7 +824,8 @@
  	return err;
  }
-
+ 
 -ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset, size_t psize, int flags)
 +/* Extra parameter: user zero copy descriptor (or NULL if not doing that) */
 +ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset, size_t psize, int flags, zccd_t *zccd)
@@ -180,7 +185,7 @@ diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
  	int mss_now;
 @@ -872,6 +873,17 @@
  			copy = size;
-
+ 
  		i = skb_shinfo(skb)->nr_frags;
 +
 +		if (zccd != NULL &&		/* this is a zcc I/O */
@@ -196,11 +201,10 @@ diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
  		if (can_coalesce(skb, i, page, offset)) {
  			skb_shinfo(skb)->frags[i-1].size += copy;
  		} else if (i < MAX_SKB_FRAGS) {
-@@ -881,6 +893,20 @@
- 			tcp_mark_push(tp, skb);
+@@ -882,6 +894,20 @@
  			goto new_segment;
  		}
-+
+ 
 +		if (zccd != NULL &&	/* this is a zcc I/O */
 +		    skb_shinfo(skb)->zccd != zccd && /* not already referencing this zccd */
 +		    skb_shinfo(skb)->zccd2 != zccd)
@@ -214,11 +218,12 @@ diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
 +			else
 +				skb_shinfo(skb)->zccd2 = zccd;
 +		}
-
++
  		skb->len += copy;
  		skb->data_len += copy;
+ 		skb->ip_summed = CHECKSUM_HW;
 @@ -945,7 +971,31 @@
-
+ 
  	lock_sock(sk);
  	TCP_CHECK_TIMER(sk);
 -	res = do_tcp_sendpages(sk, &page, offset, size, flags);
@@ -250,12 +255,10 @@ diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
  	TCP_CHECK_TIMER(sk);
  	release_sock(sk);
  	return res;
-@@ -1767,6 +1817,202 @@
- recv_urg:
- 	err = tcp_recv_urg(sk, timeo, msg, len, flags, addr_len);
+@@ -1769,6 +1819,202 @@
  	goto out;
-+}
-+
+ }
+ 
 +int tcp_recvpackets (struct sock *sk, struct sk_buff_head *packets,
 +		     int len, int nonblock)
 +{
@@ -450,6 +453,8 @@ diff -u -r1.1.1.1 linux/net/ipv4/tcp.c
 +	TCP_CHECK_TIMER(sk);
 +	release_sock(sk);
 +	return copied;
- }
-
++}
++
  /*
+  *	State processing on a close. This implements the state shift for
+  *	sending our FIN frame. Note that we only send a FIN for some
