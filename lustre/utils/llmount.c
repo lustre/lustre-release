@@ -29,24 +29,63 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <mntent.h>
+#define _GNU_SOURCE
+#include <getopt.h>
 
 #include "obdctl.h"
 #include <portals/ptlctl.h>
 
-int debug = 0;
-int verbose = 0;
-int nomtab = 0;
+int debug;
+int verbose;
+int nomtab;
+int force;
 static char *progname = NULL;
 
+typedef struct {
+        ptl_nid_t gw;
+        ptl_nid_t lo;
+        ptl_nid_t hi;
+} llmount_route_t;
+
+#define MAX_ROUTES  1024
+int route_index;
+ptl_nid_t lmd_cluster_id = 0;
+llmount_route_t routes[MAX_ROUTES];
+
+static int check_mtab_entry(char *spec, char *mtpt, char *type)
+{
+        FILE *fp;
+        struct mntent *mnt;
+
+        if (!force) {
+                fp = setmntent(MOUNTED, "r");
+                if (fp == NULL)
+                        return(0);
+
+                while ((mnt = getmntent(fp)) != NULL) {
+                        if (strcmp(mnt->mnt_fsname, spec) == 0 &&
+                            strcmp(mnt->mnt_dir, mtpt) == 0 &&
+                            strcmp(mnt->mnt_type, type) == 0) {
+                                fprintf(stderr, "%s: according to %s %s is "
+                                        "already mounted on %s\n",
+                                        progname, MOUNTED, spec, mtpt);
+                                return(1); /* or should we return an error? */
+                        }
+                }
+                endmntent(fp);
+        }
+        return(0);
+}
+
 static void
-update_mtab_entry(char *spec, char *node, char *type, char *opts,
-		  int flags, int freq, int pass)
+update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
+                  int flags, int freq, int pass)
 {
         FILE *fp;
         struct mntent mnt;
 
         mnt.mnt_fsname = spec;
-        mnt.mnt_dir = node;
+        mnt.mnt_dir = mtpt;
         mnt.mnt_type = type;
         mnt.mnt_opts = opts ? opts : "";
         mnt.mnt_freq = freq;
@@ -55,7 +94,7 @@ update_mtab_entry(char *spec, char *node, char *type, char *opts,
         if (!nomtab) {
                 fp = setmntent(MOUNTED, "a+");
                 if (fp == NULL) {
-                        fprintf(stderr, "%s: setmntent(%s): %s:", 
+                        fprintf(stderr, "%s: setmntent(%s): %s:",
                                 progname, MOUNTED, strerror (errno));
                 } else {
                         if ((addmntent (fp, &mnt)) == 1) {
@@ -82,6 +121,8 @@ init_options(struct lustre_mount_data *lmd)
 int
 print_options(struct lustre_mount_data *lmd)
 {
+        int i;
+
         printf("mds:             %s\n", lmd->lmd_mds);
         printf("profile:         %s\n", lmd->lmd_profile);
         printf("server_nid:      "LPX64"\n", lmd->lmd_server_nid);
@@ -90,16 +131,77 @@ print_options(struct lustre_mount_data *lmd)
         printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
         printf("port:            %d\n", lmd->lmd_port);
 
+        for (i = 0; i < route_index; i++)
+                printf("route:           0x%llx : 0x%llx - 0x%llx\n",
+                       routes[i].gw, routes[i].lo, routes[i].hi);
+
         return 0;
 }
 
-int
-parse_options(char * options, struct lustre_mount_data *lmd)
+static int parse_route(char *opteq, char *opttgts)
 {
-        ptl_nid_t nid = 0;
+        char *gw_lo_ptr, *gw_hi_ptr, *tgt_lo_ptr, *tgt_hi_ptr;
+        ptl_nid_t gw_lo, gw_hi, tgt_lo, tgt_hi;
+
+        opttgts[0] = '\0';
+        gw_lo_ptr = opteq + 1;
+        if (!(gw_hi_ptr = strchr(gw_lo_ptr, '-'))) {
+                gw_hi_ptr = gw_lo_ptr;
+        } else {
+                gw_hi_ptr[0] = '\0';
+                gw_hi_ptr++;
+        }
+
+        if (ptl_parse_nid(&gw_lo, gw_lo_ptr) != 0) {
+                fprintf(stderr, "%s: can't parse NID %s\n", progname,gw_lo_ptr);
+                return(-1);
+        }
+
+        if (ptl_parse_nid(&gw_hi, gw_hi_ptr) != 0) {
+                fprintf(stderr, "%s: can't parse NID %s\n", progname,gw_hi_ptr);
+                return(-1);
+        }
+
+        tgt_lo_ptr = opttgts + 1;
+        if (!(tgt_hi_ptr = strchr(tgt_lo_ptr, '-'))) {
+                tgt_hi_ptr = tgt_lo_ptr;
+        } else {
+                tgt_hi_ptr[0] = '\0';
+                tgt_hi_ptr++;
+        }
+
+        if (ptl_parse_nid(&tgt_lo, tgt_lo_ptr) != 0) {
+                fprintf(stderr, "%s: can't parse NID %s\n",progname,tgt_lo_ptr);
+                return(-1);
+        }
+
+        if (ptl_parse_nid(&tgt_hi, tgt_hi_ptr) != 0) {
+                fprintf(stderr, "%s: can't parse NID %s\n",progname,tgt_hi_ptr);
+                return(-1);
+        }
+
+        while (gw_lo <= gw_hi) {
+                if (route_index >= MAX_ROUTES) {
+                        fprintf(stderr, "%s: to many routes %d\n",
+                                progname, MAX_ROUTES);
+                        return(-1);
+                }
+
+                routes[route_index].gw = gw_lo;
+                routes[route_index].lo = tgt_lo;
+                routes[route_index].hi = tgt_hi;
+                route_index++;
+                gw_lo++;
+        }
+
+        return(0);
+}
+
+int parse_options(char * options, struct lustre_mount_data *lmd)
+{
+        ptl_nid_t nid = 0, cluster_id = 0;
         int val;
-        char *opt;
-        char * opteq;
+        char *opt, *opteq, *opttgts;
 
         /* parsing ideas here taken from util-linux/mount/nfsmount.c */
         for (opt = strtok(options, ","); opt; opt = strtok(NULL, ",")) {
@@ -107,9 +209,25 @@ parse_options(char * options, struct lustre_mount_data *lmd)
                         val = atoi(opteq + 1);
                         *opteq = '\0';
                         if (!strcmp(opt, "nettype")) {
-                                lmd->lmd_nal = ptl_name2nal(opteq+1);
-                        } else if(!strcmp(opt, "local_nid")) {
-                                if (ptl_parse_nid(&nid, opteq+1) != 0) {
+                                lmd->lmd_nal = ptl_name2nal(opteq + 1);
+                        } else if(!strcmp(opt, "cluster_id")) {
+                                if (ptl_parse_nid(&cluster_id, opteq+1) != 0) {
+                                        fprintf (stderr, "%s: can't parse NID "
+                                                 "%s\n", progname, opteq+1);
+                                        return (-1);
+                                }
+                                lmd_cluster_id = cluster_id;
+                        } else if(!strcmp(opt, "route")) {
+                                if (!(opttgts = strchr(opteq + 1, ':'))) {
+                                        fprintf(stderr, "%s: Route must be "
+                                                "of the form: route="
+                                                "<gw>[-<gw>]:<low>[-<high>]\n",
+                                                progname);
+                                        return(-1);
+                                }
+                                parse_route(opteq, opttgts);
+                        } else if (!strcmp(opt, "local_nid")) {
+                                if (ptl_parse_nid(&nid, opteq + 1) != 0) {
                                         fprintf (stderr, "%s: "
                                                  "can't parse NID %s\n",
                                                  progname,
@@ -117,11 +235,11 @@ parse_options(char * options, struct lustre_mount_data *lmd)
                                         return (-1);
                                 }
                                 lmd->lmd_local_nid = nid;
-                        } else if(!strcmp(opt, "server_nid")) {
-                                if (ptl_parse_nid(&nid, opteq+1) != 0) {
+                        } else if (!strcmp(opt, "server_nid")) {
+                                if (ptl_parse_nid(&nid, opteq + 1) != 0) {
                                         fprintf (stderr, "%s: "
                                                  "can't parse NID %s\n",
-                                                 progname, opteq+1);
+                                                 progname, opteq + 1);
                                         return (-1);
                                 }
                                 lmd->lmd_server_nid = nid;
@@ -204,7 +322,7 @@ set_local(struct lustre_mount_data *lmd)
                 return (-1);
         }
 
-        lmd->lmd_local_nid = nid;
+        lmd->lmd_local_nid = nid + lmd_cluster_id;
         return 0;
 }
 
@@ -252,25 +370,21 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
 int
 build_data(char *source, char *options, struct lustre_mount_data *lmd)
 {
-        char target[1024];
-        char *hostname = NULL;
-        char *mds = NULL;
-        char *profile = NULL;
-        char *s;
+        char buf[1024];
+        char *hostname = NULL, *mds = NULL, *profile = NULL, *s;
         int rc;
 
         if (lmd_bad_magic(lmd))
                 return -EINVAL;
 
-        if (strlen(source) > sizeof(target) + 1) {
-                fprintf(stderr, "%s: "
-                        "exessively long host:/mds/profile argument\n",
+        if (strlen(source) > sizeof(buf) + 1) {
+                fprintf(stderr, "%s: host:/mds/profile argument too long\n",
                         progname);
                 return -EINVAL;
         }
-        strcpy(target, source);
-        if ((s = strchr(target, ':'))) {
-                hostname = target;
+        strcpy(buf, source);
+        if ((s = strchr(buf, ':'))) {
+                hostname = buf;
                 *s = '\0';
 
                 while (*++s == '/')
@@ -280,8 +394,7 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                         *s = '\0';
                         profile = s + 1;
                 } else {
-                        fprintf(stderr, "%s: "
-                                "directory to mount not in "
+                        fprintf(stderr, "%s: directory to mount not in "
                                 "host:/mds/profile format\n",
                                 progname);
                         return(-1);
@@ -292,9 +405,6 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                         progname);
                 return(-1);
         }
-        if (verbose)
-                printf("host: %s\nmds: %s\nprofile: %s\n", hostname, mds,
-                       profile);
 
         rc = parse_options(options, lmd);
         if (rc)
@@ -324,58 +434,151 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
         return 0;
 }
 
-int
-main(int argc, char * const argv[])
-{
-        char * source = argv[1];
-        char * target = argv[2];
-        char * options = "";
-        int opt;
-        int i = 3;
-        struct lustre_mount_data lmd;
+static int set_routes(struct lustre_mount_data *lmd) {
+       struct portals_cfg pcfg;
+       struct portal_ioctl_data data;
+       int i, j, route_exists, rc, err = 0;
 
-        int rc;
+       register_ioc_dev(PORTALS_DEV_ID, PORTALS_DEV_PATH);
+
+       for (i = 0; i < route_index; i++) {
+
+               /* Check for existing routes so as not to add duplicates */
+              for (j = 0; ; j++) {
+                      PCFG_INIT(pcfg, NAL_CMD_GET_ROUTE);
+                      pcfg.pcfg_nal = ROUTER;
+                      pcfg.pcfg_count = j;
+
+                      PORTAL_IOC_INIT(data);
+                      data.ioc_pbuf1 = (char*)&pcfg;
+                      data.ioc_plen1 = sizeof(pcfg);
+                      data.ioc_nid = pcfg.pcfg_nid;
+
+                      rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+                      if (rc != 0) {
+                              route_exists = 0;
+                              break;
+                      }
+
+                      if ((pcfg.pcfg_gw_nal == lmd->lmd_nal) &&
+                          (pcfg.pcfg_nid    == routes[i].gw) &&
+                          (pcfg.pcfg_nid2   == routes[i].lo) &&
+                          (pcfg.pcfg_nid3   == routes[i].hi)) {
+                              route_exists = 1;
+                              break;
+                      }
+              }
+
+              if (route_exists)
+                      continue;
+
+              PCFG_INIT(pcfg, NAL_CMD_ADD_ROUTE);
+              pcfg.pcfg_nid = routes[i].gw;
+              pcfg.pcfg_nal = ROUTER;
+              pcfg.pcfg_gw_nal = lmd->lmd_nal;
+              pcfg.pcfg_nid2 = MIN(routes[i].lo, routes[i].hi);
+              pcfg.pcfg_nid3 = MAX(routes[i].lo, routes[i].hi);
+
+              PORTAL_IOC_INIT(data);
+              data.ioc_pbuf1 = (char*)&pcfg;
+              data.ioc_plen1 = sizeof(pcfg);
+              data.ioc_nid = pcfg.pcfg_nid;
+
+              rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
+              if (rc != 0) {
+                      fprintf(stderr, "%s: Unable to add route "
+                              "0x%llx : 0x%llx - 0x%llx\n[%d] %s\n",
+                               progname, routes[i].gw, routes[i].lo,
+                               routes[i].hi, errno, strerror(errno));
+                      err = -1;
+                      break;
+              }
+       }
+
+       unregister_ioc_dev(PORTALS_DEV_ID);
+       return err;
+}
+
+void usage(FILE *out)
+{
+        fprintf(out, "usage: %s <source> <target> [-f] [-v] [-n] [-o mntopt]\n",
+                progname);
+        exit(out != stdout);
+}
+
+int main(int argc, char *const argv[])
+{
+        char *source, *target, *options = "";
+        int i, nargs = 3, opt, rc;
+        struct lustre_mount_data lmd;
+        static struct option long_opt[] = {
+                {"force", 0, 0, 'f'},
+                {"help", 0, 0, 'h'},
+                {"nomtab", 0, 0, 'n'},
+                {"options", 1, 0, 'o'},
+                {"verbose", 0, 0, 'v'},
+                {0, 0, 0, 0}
+        };
 
         progname = strrchr(argv[0], '/');
         progname = progname ? progname + 1 : argv[0];
 
-        while ((opt = getopt(argc, argv, "vno:")) != EOF) {
+        while ((opt = getopt_long(argc, argv, "fno:v", long_opt, NULL)) != EOF){
                 switch (opt) {
-                case 'v':
-                        verbose = 1;
-                        printf("verbose: %d\n", verbose);
-                        i++;
+                case 'f':
+                        ++force;
+                        printf("force: %d\n", force);
+                        nargs++;
+                        break;
+                case 'h':
+                        usage(stdout);
                         break;
                 case 'n':
-                        nomtab = 1;
+                        ++nomtab;
                         printf("nomtab: %d\n", nomtab);
-                        i++;
+                        nargs++;
                         break;
                 case 'o':
                         options = optarg;
-                        i++;
+                        nargs++;
+                        break;
+                case 'v':
+                        ++verbose;
+                        printf("verbose: %d\n", verbose);
+                        nargs++;
                         break;
                 default:
-                        i++;
+                        fprintf(stderr, "%s: unknown option '%c'\n",
+                                progname, opt);
+                        usage(stderr);
                         break;
                 }
         }
 
-        if (argc < i) {
-                fprintf(stderr, 
-                        "%s: too few arguments\n"
-                        "Usage: %s <source> <target> [-v] [-n] [-o ...]\n",
-                        progname, progname);
-                exit(1);
+        if (optind + 2 > argc) {
+                fprintf(stderr, "%s: too few arguments\n", progname);
+                usage(stderr);
         }
 
-        if (verbose)
-                for (i = 0; i < argc; i++) {
+        source = argv[optind];
+        target = argv[optind + 1];
+
+        if (verbose) {
+                for (i = 0; i < argc; i++)
                         printf("arg[%d] = %s\n", i, argv[i]);
-                }
+                printf("source = %s, target = %s\n", source, target);
+        }
+
+        if (check_mtab_entry(source, target, "lustre"))
+                exit(32);
 
         init_options(&lmd);
         rc = build_data(source, options, &lmd);
+        if (rc) {
+                exit(1);
+        }
+
+        rc = set_routes(&lmd);
         if (rc) {
                 exit(1);
         }

@@ -33,9 +33,11 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- update iopen-2.6 patch with fixes from 2399,2517,2904 (3301)
 	- don't leak open file on MDS after open resend (3325)
 	- serialize filter_precreate and filter_destroy_precreated (3329)
+	- loop device shouldn't call sync_dev() for nul device (3092)
 	- clear page cache after eviction (2766)
 	- resynchronize MDS->OST in background (2824)
-	- loop device shouldn't call sync_dev() for nul device (3092)
+	- refuse to mount the same filesystem twice on same mountpoint (3394)
+	- allow llmount to create routes for mounting behind routers (3320)
 	- push lock cancellation to blocking thread for glimpse ASTs (3409)
 	- don't call osc_set_data_with_check() for TEST_LOCK matches (3159)
        * miscellania
