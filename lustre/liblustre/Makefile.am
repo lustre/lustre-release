@@ -3,8 +3,8 @@ DEFS=
 
 SUBDIRS = . tests
 
-CFLAGS := -g -Wall -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include \
-          -I$(top_srcdir)/portals/unals -I$(SYSIO)/include
+LL_CFLAGS = -g -Wall -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include \
+          -I$(top_srcdir)/portals/unals -I$(SYSIO)/include -fPIC
 
 CPPFLAGS = $(HAVE_EFENCE) -D_LARGEFILE64_SOURCE=1
 LIBS = $(LIBEFENCE)
@@ -31,11 +31,11 @@ lib_LIBRARIES = liblustre.a
 noinst_LIBRARIES = libllite.a
 
 libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c
-libllite_a_CFLAGS = -fPIC
+libllite_a_CFLAGS = $(LL_CFLAGS)
 
 # for make rpms -- need cleanup
 liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c
-liblustre_a_CFLAGS = -fPIC
+liblustre_a_CFLAGS = $(LL_CFLAGS)
 
 liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
 	$(shell ./genlib.sh $(SYSIO) $(AR) $(LINK))

@@ -1,7 +1,7 @@
 ## Liblustre excecutables & libraries Makefile
 DEFS=
 
-CFLAGS := -g -Wall -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include \
+AM_CFLAGS := -g -Wall -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include \
           -I$(top_srcdir)/portals/unals -I$(SYSIO)/include \
           -I/opt/lam/include -L/opt/lam/lib
 
