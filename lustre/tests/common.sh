@@ -446,10 +446,11 @@ setup_osc() {
 			continue
 		fi
 
+		[ -z "$OBD_UUID" ] && OBD_UUID="OBDUUID"
 		$OBDCTL <<- EOF || return $rc
 		newdev
 		attach osc $THEOSC ${THEOSC}-`hostname`
-		setup OBDUUID $OSTNODE
+		setup $OBD_UUID $OSTNODE
 		quit
 		EOF
 	done
