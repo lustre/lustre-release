@@ -672,7 +672,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
         return 0;
 }
 
-static int llog_lvfs_create(struct llog_obd_ctxt *ctxt,struct llog_handle **res,
+static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
         LBUG();
