@@ -89,7 +89,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
 
         if (!ext2_clear_bit(index, llh->llh_bitmap)) {
                 CERROR("catalog index %u already clear?\n", index);
-                LBUG();
+                RETURN(-EINVAL);
         }
 
         llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) - 1);
@@ -129,11 +129,13 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         llh->llh_flags = cpu_to_le32(flags);
         rc = llog_read_header(handle);
         if (rc == 0) {
-                LASSERT((le32_to_cpu(llh->llh_flags) & flags)== flags);
+                flags = le32_to_cpu(llh->llh_flags);
                 if (uuid)
                         LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
                 GOTO(out, rc);
-        } else if (rc != LLOG_EEMPTY) {
+        } else if (rc != LLOG_EEMPTY || !flags) {
+                /* set a pesudo flag for initialization */
+                flags = LLOG_F_IS_CAT;
                 GOTO(out, rc);
         }
         rc = 0;
@@ -149,7 +151,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         llh->llh_bitmap_offset = cpu_to_le32(offsetof(typeof(*llh), llh_bitmap));
         ext2_set_bit(0, llh->llh_bitmap);
 
- out:
+out:
         if (flags & LLOG_F_IS_CAT) {
                 INIT_LIST_HEAD(&handle->u.chd.chd_head);
                 llh->llh_size = cpu_to_le32(sizeof(struct llog_logid_rec));
@@ -158,8 +160,11 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
         else
                 LBUG();
-        if (rc)
+        
+        if (rc) {
                 OBD_FREE(llh, sizeof(*llh));
+                handle->lgh_hdr = NULL;
+        }
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_init_handle);
