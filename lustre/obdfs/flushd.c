@@ -17,6 +17,11 @@
 #include <linux/obdfs.h>
 
 
+/* XXX temporary until the real function is available from kernel
+ * XXX set this to memory size in pages for max page cache size
+ */
+#define nr_free_buffer_pages() 32768
+
 struct {
 	int nfract;  /* Percentage of buffer cache dirty to 
 			activate bdflush */
@@ -366,10 +371,7 @@ static int pupdate(void *unused)
 		/* asynchronous setattr etc for the future ...
 		obdfs_flush_dirty_inodes(jiffies - pupd_prm.age_super);
 		 */
-		/* XXX for debugging
 		dirty_limit = nr_free_buffer_pages() * pupd_prm.nfract / 100;
-		 * XXX */
-		dirty_limit = 16384 * pupd_prm.nfract / 100;
 		CDEBUG(D_CACHE, "dirty_limit %ld, cache_count %ld, wrote %d\n",
 		       dirty_limit, obdfs_cache_count, wrote);
 

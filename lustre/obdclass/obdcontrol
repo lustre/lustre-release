@@ -1290,7 +1290,7 @@ sub Punch {
 	return;
     }
 
-    print("Punching $count bytes starting at byte $start in object $id...\n");
+    print("Punching $count bytes starting at byte $start from object $id...\n");
 
     my $obdo;
     $obdo->{id} = $id;

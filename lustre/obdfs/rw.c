@@ -121,6 +121,7 @@ inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq)
 	--obdfs_cache_count;
 	CDEBUG(D_INFO, "deleting page %p from list [count %ld]\n",
 	       pgrq->rq_page, obdfs_cache_count);
+	OBDClearCachePage(pgrq->rq_page);
 	list_del(&pgrq->rq_plist);
 	kmem_cache_free(obdfs_pgrq_cachep, pgrq);
 }
@@ -143,12 +144,13 @@ void obdfs_cleanup_pgrqcache(void)
 
 
 /*
- * Find a specific page in the page cache.  If it is found, we return
- * the write request struct associated with it, if not found return NULL.
+ * See whether a specific page in the page cache.
  * Called with the list lock held.
  */
-static struct obdfs_pgrq *
-obdfs_find_in_page_list(struct inode *inode, struct page *page)
+#ifdef PG_obdcache
+#define obdfs_find_in_page_list(inode, page) OBDAddCachePage(page)
+#else
+static int obdfs_find_in_page_list(struct inode *inode, struct page *page)
 {
 	struct list_head *page_list = obdfs_iplist(inode);
 	struct list_head *tmp;
@@ -161,7 +163,7 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 	if (list_empty(page_list)) {
 		CDEBUG(D_INFO, "empty list\n");
 		EXIT;
-		return NULL;
+		return 0;
 	}
 	tmp = page_list;
 	while ( (tmp = tmp->next) != page_list ) {
@@ -171,13 +173,14 @@ obdfs_find_in_page_list(struct inode *inode, struct page *page)
 		if (pgrq->rq_page == page) {
 			CDEBUG(D_INFO, "found page %p in list\n", page);
 			EXIT;
-			return pgrq;
+			return 1;
 		}
 	} 
 
 	EXIT;
-	return NULL;
+	return 0;
 } /* obdfs_find_in_page_list */
+#endif
 
 
 /* called with the list lock held */

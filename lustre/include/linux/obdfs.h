@@ -145,6 +145,14 @@ static inline struct list_head *obdfs_slist(struct inode *inode)
 	/* CDEBUG(D_INFO, "free lock\n"); */ \
 }
 
+/* We track if a page has been added to the OBD page cache by stting a
+ * flag on the page.  We have chosen a bit that will hopefully not be
+ * used for a while.
+ */
+#define PG_obdcache 29
+#define OBDAddCachePage(page)	test_and_set_bit(PG_obdcache, &(page)->flags)
+#define OBDClearCachePage(page)	clear_bit(PG_obdcache, &(page)->flags)
+
 static inline void obdfs_print_plist(struct inode *inode) 
 {
 	struct list_head *page_list = obdfs_iplist(inode);
@@ -194,6 +202,16 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 
 	CDEBUG(D_INFO, "src obdo %ld valid 0x%08x, dst inode %ld\n",
 	       (long)oa->o_id, oa->o_valid, inode->i_ino);
+	/* If the inode is dirty, we won't overwrite the data there, as it
+	 * is newer than the data on the disk.  The ext2obd side only will
+	 * change the block count, so we are guaranteed that is safe.
+	 */
+	if (inode->i_state & I_DIRTY) {
+		CDEBUG(D_INODE, "dirty inode %ld, only copying blocks\n",
+		       inode->i_ino);
+		oa->o_valid = OBD_MD_FLBLOCKS;
+	}
+
 	obdo_to_inode(inode, oa);
 
 	if (obdo_has_inline(oa)) {
