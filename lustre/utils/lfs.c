@@ -104,7 +104,7 @@ static int lfs_setstripe(int argc, char **argv)
         page_size = 65536;
         if (getpagesize() > page_size) {
                 fprintf(stderr, "WARNING: your page size (%d) is larger than "
-                        "expected.\n");
+                        "expected.\n", getpagesize());
                 page_size = getpagesize();
         }
         if (st_size % page_size) {
