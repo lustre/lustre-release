@@ -2,11 +2,15 @@
 #
 # lustre   This shell script takes care of starting and stopping Lustre
 #
-# chkconfig: 2345 99 1
-# description: Lustre Lite File System
+# chkconfig: 345 99 1
+# description: Lustre Lite network File System.                              \
+#              This starts both Lustre client and server functions.
 # processname: obdctl
 # config: /etc/lustre/lustre.cfg
 # pidfile: /var/run/lustre.pid
+
+SERVICE=lustre
+LOCK=/var/lock/subsys/$SERVICE
 
 # Source function library.
 if [ -f /etc/init.d/functions ] ; then
@@ -18,33 +22,24 @@ if [ -f /etc/sysconfig/network ] ; then
    . /etc/sysconfig/network
 fi
 
-# Source InterSync configureation.
-if [ -f /etc/sysconfig/intersync ] ; then
-	. /etc/sysconfig/intersync
-else
-	CLIENT_OPTS=
-        CACHE=/var/intermezzo/cache
-fi
-
 # Check that networking is up.
 [ "${NETWORKING}" = "no" ] && exit 0
 
 [ -f /usr/sbin/obdctl ] || exit 0
 
 start() {
-        echo -n $"Starting lustre: "
+        echo -n $"Starting $SERVICE: "
 	/usr/sbin/llrsetup.sh
-        echo -n lustre
+        echo $SERVICE
         RETVAL=$?
-        [ $RETVAL = 0 ] && touch /var/lock/subsys/lustre
+        [ $RETVAL = 0 ] && touch $LOCK
 }
 
 stop() {
-        echo -n $"Shutting down lustre: "
+        echo -n $"Shutting down $SERVICE: "
 	/usr/sbin/llcleanup.sh
-	echo -n lustre              
-	echo
-	rm -f /var/lock/subsys/intersync
+	echo $SERVICE              
+	rm -f $LOCK
 }
 
 restart() {
@@ -64,10 +59,10 @@ case "$1" in
 	restart
 	;;
   status)
-	status intersync
+	status $SERVICE
 	;;
   *)
-	echo $"Usage: lustre {start|stop|restart|status}"
+	echo $"Usage: $SERVICE {start|stop|restart|status}"
 	exit 1
 esac
 
