@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  *  linux/fs/ext2_obd/ext2_obd.c
  *
  * Copyright (C) 2001  Cluster File Systems, Inc.
@@ -29,6 +31,7 @@
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 static struct obdo OA;
 static obd_count GEN;
+static long echo_pages = 0;
 
 static int echo_getattr(struct obd_conn *conn, struct obdo *oa)
 {
@@ -39,7 +42,7 @@ static int echo_getattr(struct obd_conn *conn, struct obdo *oa)
 }
 
 int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
-                struct obd_ioobj *obj, int niocount, struct niobuf *nb, 
+                struct obd_ioobj *obj, int niocount, struct niobuf *nb,
                 struct niobuf *res)
 {
         int rc = 0;
@@ -48,19 +51,23 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
         ENTRY;
         memset(res, 0, sizeof(*res) * niocount);
 
-        for (i = 0; i < objcount; i++, obj++) { 
+        CDEBUG(D_CACHE, "%s %d obdos with %d IOs\n",
+               cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
+
+        for (i = 0; i < objcount; i++, obj++) {
                 int j;
 
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, res++) { 
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, res++) {
                         unsigned long address;
 
                         address = get_zeroed_page(GFP_KERNEL);
-                        if (!address) { 
-                                /* FIXME: cleanup old pages */
-                                EXIT; 
-                                rc = -ENOMEM; 
+                        if (!address) {
+                                /* FIXME: cleanup old pages on error */
+                                EXIT;
+                                rc = -ENOMEM;
                         }
-                        
+                        echo_pages++;
+
                         /*
                         if (cmd == OBD_BRW_READ) {
                                 __u64 *data = address;
@@ -71,7 +78,7 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
                                 data[3] = nb->len;
                         }
                         */
-                        
+
                         res->addr = address;
                         res->offset = nb->offset;
                         res->page = virt_to_page(address);
@@ -86,15 +93,18 @@ int echo_preprw(int cmd, struct obd_conn *conn, int objcount,
 int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
                   struct obd_ioobj *obj, int niocount, struct niobuf *res)
 {
-        int i; 
+        int i;
         int rc = 0;
         ENTRY;
 
-        for (i = 0; i < objcount; i++, obj++) { 
+        CDEBUG(D_CACHE, "%s %d obdos with %d IOs\n",
+               cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
+
+        for (i = 0; i < objcount; i++, obj++) {
                 int j;
 
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, res++) { 
-                        struct page *page;
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, res++) {
+                        unsigned long addr;
 
                         if (!res) {
                                 /* FIXME: cleanup remaining pages */
@@ -103,17 +113,19 @@ int echo_commitrw(int cmd, struct obd_conn *conn, int objcount,
                                 rc = -EINVAL;
                         }
 
-                        page = res->page;
-                        if (page || !VALID_PAGE(page)) {
+                        addr = res->addr;
+                        if (!addr || !kern_addr_valid(addr)) {
                                 /* FIXME: cleanup remaining pages */
-                                CERROR("bad page %p, obj %Ld (%d), buf %d/%d\n",
-                                        page, obj->ioo_id, i, j, obj->ioo_bufcnt);
+                                CERROR("bad addr %lx, id %Ld (%d), buf %d/%d\n",
+                                       addr, obj->ioo_id, i, j,obj->ioo_bufcnt);
                                 rc = -EINVAL;
                         }
 
-                        page_cache_release(page);
+                        free_pages(addr, 0);
+                        echo_pages--;
                 }
         }
+        CDEBUG(D_MALLOC, "%ld pages remain after commit\n", echo_pages);
         return rc;
 }
 
@@ -135,6 +147,7 @@ static int __init obdecho_init(void)
 
 static void __exit obdecho_exit(void)
 {
+        CERROR("%ld prep/commitrw pages leaked\n", echo_pages);
         obd_unregister_type(OBD_ECHO_DEVICENAME);
 }
 
