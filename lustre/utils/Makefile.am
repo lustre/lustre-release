@@ -12,7 +12,7 @@ sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck lfs llmount
 sbin_SCRIPTS = \
 	lconf lmc llanalyze llstat.pl llobdstat.pl lactive load_ldap.sh \
 	lwizard
-bin_PROGRAMS = lfind lstripe
+bin_SCRIPTS = lfind lstripe
 lib_LIBRARIES = liblustreapi.a
 liblustreapi_a_SOURCES = liblustreapi.c
 wirecheck_SOURCES = wirecheck.c
@@ -20,10 +20,7 @@ lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h
 lload_SOURCES = lload.c 
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
-lfind_SOURCES = lfind.c
-lstripe_SOURCES = lstripe.c
 lfs_SOURCES = lfs.c 
-lfind_CPPFLAGS = -D_XOPEN_SOURCE=500
 llmount_SOURCES = llmount.c
 
 EXTRA_DIST = $(sbin_SCRIPTS)
