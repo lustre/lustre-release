@@ -67,7 +67,7 @@ sub extractpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:*$/) {
+    if ($line =~ m/(\d+):(\d+):(\d+):(\d+\.\d+):(\d+):(\d+):.*$/) {
 	return $6;
     }
 }
@@ -76,8 +76,25 @@ sub extracthostpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:\d+:*$/) {
+    if ($line =~ m/(\d+):(\d+):(\d+):(\d+\.\d+):(\d+):(\d+):(\d+):.*$/) {
 	return $7;
+    }
+}
+sub extractsubsys
+{
+    $line = shift;
+#    print "$_\n";
+    if ($line =~ m/(\d+):(\d+):(\d+):(\d+\.\d+):(\d+):(\d+):(\d+):.*$/) {
+	return hex($1);
+    }
+}
+
+sub extractmask
+{
+    $line = shift;
+#    print "$_\n";
+    if ($line =~ m/(\d+):(\d+):(\d+):(\d+\.\d+):(\d+):(\d+):(\d+):.*$/) {
+	return hex($2);
     }
 }
 
@@ -284,11 +301,10 @@ while (<LOG>) {
     }
 
     $linepid = extractpid($_);
-    $linehpid = extracthostpid($_);
-    $linemask = getmask($_);
-    $linesubsys = getsubsys($_);
 
-#    printf "---> mask %x subsys %x\n", $linemask, $linesubsys;
+    $linehpid = extracthostpid($_);
+    $linesubsys = extractsubsys($_);
+    $linemask = extractmask($_);
 
     if (leaving($_)) {
         chop $prefix->{$linepid};
