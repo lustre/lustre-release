@@ -2216,13 +2216,14 @@ kibnal_check_passive_wait(kib_conn_t *conn)
 void
 kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
 {
+        static kib_msg_t        txmsg;
+        static kib_msg_t        rxmsg;
         static cm_reply_data_t  reply;
         static cm_reject_data_t reject;
 
-        kib_msg_t          *rxmsg = (kib_msg_t *)cmreq->priv_data;
-        kib_msg_t          *txmsg;
         kib_conn_t         *conn = NULL;
         int                 rc = 0;
+        int                 rxmsgnob;
         kib_connvars_t     *cv;
         kib_peer_t         *tmp_peer;
         cm_return_t         cmrc;
@@ -2239,62 +2240,66 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                 goto reject;
         }
 
-        rc = kibnal_unpack_msg(rxmsg, cm_REQ_priv_data_len);
+        /* copy into rxmsg to avoid alignment issues */
+        rxmsgnob = MIN(cm_REQ_priv_data_len, sizeof(rxmsg));
+        memcpy(&rxmsg, cmreq->priv_data, rxmsgnob);
+
+        rc = kibnal_unpack_msg(&rxmsg, rxmsgnob);
         if (rc != 0) {
                 CERROR("Can't parse connection request: %d\n", rc);
                 goto reject;
         }
 
-        if (rxmsg->ibm_type != IBNAL_MSG_CONNREQ) {
+        if (rxmsg.ibm_type != IBNAL_MSG_CONNREQ) {
                 CERROR("Unexpected connreq msg type: %x from "LPX64"\n",
-                       rxmsg->ibm_type, rxmsg->ibm_srcnid);
+                       rxmsg.ibm_type, rxmsg.ibm_srcnid);
                 goto reject;
         }
 
-        if (rxmsg->ibm_dstnid != kibnal_lib.libnal_ni.ni_pid.nid) {
+        if (rxmsg.ibm_dstnid != kibnal_lib.libnal_ni.ni_pid.nid) {
                 CERROR("Can't accept "LPX64": bad dst nid "LPX64"\n",
-                       rxmsg->ibm_srcnid, rxmsg->ibm_dstnid);
+                       rxmsg.ibm_srcnid, rxmsg.ibm_dstnid);
                 goto reject;
         }
 
-        if (rxmsg->ibm_u.connparams.ibcp_queue_depth != IBNAL_MSG_QUEUE_SIZE) {
+        if (rxmsg.ibm_u.connparams.ibcp_queue_depth != IBNAL_MSG_QUEUE_SIZE) {
                 CERROR("Can't accept "LPX64": incompatible queue depth %d (%d wanted)\n",
-                       rxmsg->ibm_srcnid, rxmsg->ibm_u.connparams.ibcp_queue_depth, 
+                       rxmsg.ibm_srcnid, rxmsg.ibm_u.connparams.ibcp_queue_depth, 
                        IBNAL_MSG_QUEUE_SIZE);
                 goto reject;
         }
 
-        if (rxmsg->ibm_u.connparams.ibcp_max_msg_size > IBNAL_MSG_SIZE) {
+        if (rxmsg.ibm_u.connparams.ibcp_max_msg_size > IBNAL_MSG_SIZE) {
                 CERROR("Can't accept "LPX64": message size %d too big (%d max)\n",
-                       rxmsg->ibm_srcnid, rxmsg->ibm_u.connparams.ibcp_max_msg_size, 
+                       rxmsg.ibm_srcnid, rxmsg.ibm_u.connparams.ibcp_max_msg_size, 
                        IBNAL_MSG_SIZE);
                 goto reject;
         }
                 
-        if (rxmsg->ibm_u.connparams.ibcp_max_frags > IBNAL_MAX_RDMA_FRAGS) {
+        if (rxmsg.ibm_u.connparams.ibcp_max_frags > IBNAL_MAX_RDMA_FRAGS) {
                 CERROR("Can't accept "LPX64": max frags %d too big (%d max)\n",
-                       rxmsg->ibm_srcnid, rxmsg->ibm_u.connparams.ibcp_max_frags, 
+                       rxmsg.ibm_srcnid, rxmsg.ibm_u.connparams.ibcp_max_frags, 
                        IBNAL_MAX_RDMA_FRAGS);
                 goto reject;
         }
                 
         conn = kibnal_create_conn(cep);
         if (conn == NULL) {
-                CERROR("Can't create conn for "LPX64"\n", rxmsg->ibm_srcnid);
+                CERROR("Can't create conn for "LPX64"\n", rxmsg.ibm_srcnid);
                 goto reject;
         }
         
-        /* assume 'rxmsg->ibm_srcnid' is a new peer */
-        tmp_peer = kibnal_create_peer (rxmsg->ibm_srcnid);
+        /* assume 'rxmsg.ibm_srcnid' is a new peer */
+        tmp_peer = kibnal_create_peer (rxmsg.ibm_srcnid);
         if (tmp_peer == NULL) {
-                CERROR("Can't create tmp peer for "LPX64"\n", rxmsg->ibm_srcnid);
+                CERROR("Can't create tmp peer for "LPX64"\n", rxmsg.ibm_srcnid);
                 kibnal_conn_decref(conn);
                 conn = NULL;
                 goto reject;
         }
 
         conn->ibc_peer = tmp_peer;              /* conn takes over my ref */
-        conn->ibc_incarnation = rxmsg->ibm_srcstamp;
+        conn->ibc_incarnation = rxmsg.ibm_srcstamp;
         conn->ibc_credits = IBNAL_MSG_QUEUE_SIZE;
 
         cv = conn->ibc_connvars;
@@ -2320,7 +2325,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
 
         rc = kibnal_post_receives(conn);
         if (rc != 0) {
-                CERROR("Can't post receives for "LPX64"\n", rxmsg->ibm_srcnid);
+                CERROR("Can't post receives for "LPX64"\n", rxmsg.ibm_srcnid);
                 goto reject;
         }
 
@@ -2338,15 +2343,19 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         reply.rnr_retry_count     = cv->cv_rnr_count;
         reply.targ_ack_delay      = kibnal_data.kib_hca_attrs.ack_delay;
         
-        txmsg = (kib_msg_t *)&reply.priv_data;
-        kibnal_init_msg(txmsg, IBNAL_MSG_CONNACK, 
-                        sizeof(txmsg->ibm_u.connparams));
-        LASSERT (txmsg->ibm_nob <= cm_REP_priv_data_len);
-        txmsg->ibm_u.connparams.ibcp_queue_depth = IBNAL_MSG_QUEUE_SIZE;
-        txmsg->ibm_u.connparams.ibcp_max_msg_size = IBNAL_MSG_SIZE;
-        txmsg->ibm_u.connparams.ibcp_max_frags = IBNAL_MAX_RDMA_FRAGS;
-        kibnal_pack_msg(txmsg, 0, rxmsg->ibm_srcnid, rxmsg->ibm_srcstamp, 0);
-        
+        /* setup txmsg... */
+        memset(&txmsg, 0, sizeof(txmsg));
+        kibnal_init_msg(&txmsg, IBNAL_MSG_CONNACK, 
+                        sizeof(txmsg.ibm_u.connparams));
+        LASSERT (txmsg.ibm_nob <= cm_REP_priv_data_len);
+        txmsg.ibm_u.connparams.ibcp_queue_depth = IBNAL_MSG_QUEUE_SIZE;
+        txmsg.ibm_u.connparams.ibcp_max_msg_size = IBNAL_MSG_SIZE;
+        txmsg.ibm_u.connparams.ibcp_max_frags = IBNAL_MAX_RDMA_FRAGS;
+        kibnal_pack_msg(&txmsg, 0, rxmsg.ibm_srcnid, rxmsg.ibm_srcstamp, 0);
+
+        /* ...and copy into reply to avoid alignment issues */
+        memcpy(&reply.priv_data, &txmsg, txmsg.ibm_nob);
+
         kibnal_set_conn_state(conn, IBNAL_CONN_PASSIVE_WAIT);
         
         cmrc = cm_accept(conn->ibc_cep, &reply, NULL,
@@ -2360,7 +2369,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         rc = -EIO;
                 
  reject:
-        CERROR("Rejected connreq from "LPX64"\n", rxmsg->ibm_srcnid);
+        CERROR("Rejected connreq from "LPX64"\n", rxmsg.ibm_srcnid);
 
         memset(&reject, 0, sizeof(reject));
         reject.reason = cm_rej_code_usr_rej;
@@ -2434,7 +2443,8 @@ void
 kibnal_connect_conn (kib_conn_t *conn)
 {
         static cm_request_data_t  cmreq;
-        kib_msg_t                *msg = (kib_msg_t *)&cmreq.priv_data;
+        static kib_msg_t          msg;
+        
         kib_connvars_t           *cv = conn->ibc_connvars;
         kib_peer_t               *peer = conn->ibc_peer;
         cm_return_t               cmrc;
@@ -2461,12 +2471,17 @@ kibnal_connect_conn (kib_conn_t *conn)
         cmreq.path_data.subn_local  = IBNAL_LOCAL_SUB;
         cmreq.path_data.path        = cv->cv_path;
         
-        kibnal_init_msg(msg, IBNAL_MSG_CONNREQ, sizeof(msg->ibm_u.connparams));
-        LASSERT(msg->ibm_nob <= cm_REQ_priv_data_len);
-        msg->ibm_u.connparams.ibcp_queue_depth = IBNAL_MSG_QUEUE_SIZE;
-        msg->ibm_u.connparams.ibcp_max_msg_size = IBNAL_MSG_SIZE;
-        msg->ibm_u.connparams.ibcp_max_frags = IBNAL_MAX_RDMA_FRAGS;
-        kibnal_pack_msg(msg, 0, peer->ibp_nid, 0, 0);
+        /* setup msg... */
+        memset(&msg, 0, sizeof(msg));
+        kibnal_init_msg(&msg, IBNAL_MSG_CONNREQ, sizeof(msg.ibm_u.connparams));
+        LASSERT(msg.ibm_nob <= cm_REQ_priv_data_len);
+        msg.ibm_u.connparams.ibcp_queue_depth = IBNAL_MSG_QUEUE_SIZE;
+        msg.ibm_u.connparams.ibcp_max_msg_size = IBNAL_MSG_SIZE;
+        msg.ibm_u.connparams.ibcp_max_frags = IBNAL_MAX_RDMA_FRAGS;
+        kibnal_pack_msg(&msg, 0, peer->ibp_nid, 0, 0);
+
+        /* ...and copy into cmreq to avoid alignment issues */
+        memcpy(&cmreq.priv_data, &msg, msg.ibm_nob);
         
         CDEBUG(D_NET, "Connecting %p to "LPX64"\n", conn, peer->ibp_nid);
 
@@ -2490,11 +2505,12 @@ void
 kibnal_check_connreply (kib_conn_t *conn)
 {
         static cm_rtu_data_t  rtu;
+        static kib_msg_t      msg;
 
         kib_connvars_t   *cv = conn->ibc_connvars;
         cm_reply_data_t  *reply = &cv->cv_conndata.data.reply;
-        kib_msg_t        *msg = (kib_msg_t *)&reply->priv_data;
         kib_peer_t       *peer = conn->ibc_peer;
+        int               msgnob;
         cm_return_t       cmrc;
         cm_cep_handle_t   cep;
         unsigned long     flags;
@@ -2513,7 +2529,11 @@ kibnal_check_connreply (kib_conn_t *conn)
 
                 kibnal_set_conn_state(conn, IBNAL_CONN_ACTIVE_CHECK_REPLY);
 
-                rc = kibnal_unpack_msg(msg, cm_REP_priv_data_len);
+                /* copy into msg to avoid alignment issues */
+                msgnob = MIN(cm_REP_priv_data_len, sizeof(msg));
+                memcpy(&msg, &reply->priv_data, msgnob);
+
+                rc = kibnal_unpack_msg(&msg, msgnob);
                 if (rc != 0) {
                         CERROR("Can't unpack reply from "LPX64"\n",
                                peer->ibp_nid);
@@ -2521,40 +2541,40 @@ kibnal_check_connreply (kib_conn_t *conn)
                         return;
                 }
 
-                if (msg->ibm_type != IBNAL_MSG_CONNACK ) {
+                if (msg.ibm_type != IBNAL_MSG_CONNACK ) {
                         CERROR("Unexpected message type %d from "LPX64"\n",
-                               msg->ibm_type, peer->ibp_nid);
+                               msg.ibm_type, peer->ibp_nid);
                         kibnal_connreq_done(conn, 1, -EPROTO);
                         return;
                 }
 
-                if (msg->ibm_u.connparams.ibcp_queue_depth != IBNAL_MSG_QUEUE_SIZE) {
+                if (msg.ibm_u.connparams.ibcp_queue_depth != IBNAL_MSG_QUEUE_SIZE) {
                         CERROR(LPX64" has incompatible queue depth %d(%d wanted)\n",
-                               peer->ibp_nid, msg->ibm_u.connparams.ibcp_queue_depth,
+                               peer->ibp_nid, msg.ibm_u.connparams.ibcp_queue_depth,
                                IBNAL_MSG_QUEUE_SIZE);
                         kibnal_connreq_done(conn, 1, -EPROTO);
                         return;
                 }
                 
-                if (msg->ibm_u.connparams.ibcp_max_msg_size > IBNAL_MSG_SIZE) {
+                if (msg.ibm_u.connparams.ibcp_max_msg_size > IBNAL_MSG_SIZE) {
                         CERROR(LPX64" max message size %d too big (%d max)\n",
-                               peer->ibp_nid, msg->ibm_u.connparams.ibcp_max_msg_size, 
+                               peer->ibp_nid, msg.ibm_u.connparams.ibcp_max_msg_size, 
                                IBNAL_MSG_SIZE);
                         kibnal_connreq_done(conn, 1, -EPROTO);
                         return;
                 }
 
-                if (msg->ibm_u.connparams.ibcp_max_frags > IBNAL_MAX_RDMA_FRAGS) {
+                if (msg.ibm_u.connparams.ibcp_max_frags > IBNAL_MAX_RDMA_FRAGS) {
                         CERROR(LPX64" max frags %d too big (%d max)\n",
-                               peer->ibp_nid, msg->ibm_u.connparams.ibcp_max_frags, 
+                               peer->ibp_nid, msg.ibm_u.connparams.ibcp_max_frags, 
                                IBNAL_MAX_RDMA_FRAGS);
                         kibnal_connreq_done(conn, 1, -EPROTO);
                         return;
                 }
                 
                 read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-                rc = (msg->ibm_dstnid != kibnal_lib.libnal_ni.ni_pid.nid ||
-                      msg->ibm_dststamp != kibnal_data.kib_incarnation) ?
+                rc = (msg.ibm_dstnid != kibnal_lib.libnal_ni.ni_pid.nid ||
+                      msg.ibm_dststamp != kibnal_data.kib_incarnation) ?
                      -ESTALE : 0;
                 read_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
                 if (rc != 0) {
@@ -2564,7 +2584,7 @@ kibnal_check_connreply (kib_conn_t *conn)
                         return;
                 }
 
-                conn->ibc_incarnation = msg->ibm_srcstamp;
+                conn->ibc_incarnation = msg.ibm_srcstamp;
                 conn->ibc_credits = IBNAL_MSG_QUEUE_SIZE;
                 
                 rc = kibnal_post_receives(conn);
