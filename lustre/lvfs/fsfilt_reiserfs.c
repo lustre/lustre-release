@@ -33,7 +33,6 @@
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/fs.h>
-#include <linux/jbd.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
@@ -49,15 +48,22 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
+/* XXX We cannot include linux/reiserfs_fs.h here, because of symbols clash,
+   but we need MAX_HEIGHT definition for proper reserve calculations
+#include <linux/reiserfs_fs.h>
+*/
+#define MAX_HEIGHT 5 /* maximal height of a tree. don't change this without
+                        changing JOURNAL_PER_BALANCE_CNT */
+
 static void *fsfilt_reiserfs_start(struct inode *inode, int op,
-                                   void *desc_private)
+                                   void *desc_private, int logs)
 {
         return (void *)0xf00f00be;
 }
 
 static void *fsfilt_reiserfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
                                        int niocount, struct niobuf_local *nb,
-                                       void *desc_private)
+                                       void *desc_private, int logs)
 {
         return (void *)0xf00f00be;
 }
@@ -177,6 +183,35 @@ static int fsfilt_reiserfs_sync(struct super_block *sb)
         return fsync_dev(sb->s_dev);
 }
 
+/* If fso is NULL, op is FSFILT operation, otherwise op is number of fso
+   objects. Logs is number of logfiles to update */
+static int fsfilt_reiserfs_get_op_len(int op, struct fsfilt_objinfo *fso,
+                                      int logs)
+{
+        if ( !fso ) {
+                switch(op) {
+                case FSFILT_OP_CREATE:
+                                 /* directory leaf, index & indirect & EA*/
+                        return MAX_HEIGHT + logs;
+                case FSFILT_OP_UNLINK:
+                        return MAX_HEIGHT + logs;
+                }
+
+        } else {
+                int i;
+                int needed = MAX_HEIGHT;
+                struct super_block *sb = fso->fso_dentry->d_inode->i_sb;
+                int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
+                for (i = 0; i < op; i++, fso++) {
+                        int nblocks = fso->fso_bufcnt * blockpp;
+
+                        needed += nblocks;
+                }
+                return needed + logs;
+        }
+
+        return 0;
+}
 static struct fsfilt_operations fsfilt_reiserfs_ops = {
         fs_type:                "reiserfs",
         fs_owner:               THIS_MODULE,
@@ -190,6 +225,7 @@ static struct fsfilt_operations fsfilt_reiserfs_ops = {
         fs_add_journal_cb:      fsfilt_reiserfs_add_journal_cb,
         fs_statfs:              fsfilt_reiserfs_statfs,
         fs_sync:                fsfilt_reiserfs_sync,
+        fs_get_op_len:          fsfilt_reiserfs_get_op_len,
 };
 
 static int __init fsfilt_reiserfs_init(void)
