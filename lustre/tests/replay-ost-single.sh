@@ -94,15 +94,16 @@ test_2() {
 run_test 2 "|x| 10 open(O_CREAT)s"
 
 test_3() {
-    # small blocksize, to slow things down
-    dd if=/dev/zero of=$DIR/$tfile bs=1024 count=$((5 * 1024)) &
+    verify=$ROOT/tmp/verify-$$
+    dd if=/dev/urandom bs=1024 count=5120 | tee $verify > $DIR/$tfile &
     ddpid=$!
     sync &
     fail ost
     wait $ddpid || return 1
-    $CHECKSTAT -s $((5 * 1024 * 1024)) $DIR/$tfile 
+    cmp $verify $DIR/$tfile || return 2
+    rm $verify
 }
-run_test 3 "Fail  OST during IO"
+run_test 3 "Fail OST during write, with verification"
 
 equals_msg test complete, cleaning up
 cleanup
