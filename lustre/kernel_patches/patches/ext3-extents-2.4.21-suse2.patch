@@ -1,8 +1,8 @@
 Index: linux-2.4.21-suse2/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.21-suse2.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/extents.c	2004-02-05 20:50:31.000000000 +0300
-@@ -0,0 +1,2344 @@
++++ linux-2.4.21-suse2/fs/ext3/extents.c	2004-02-06 10:19:27.000000000 +0300
+@@ -0,0 +1,2348 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -427,6 +427,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	EXT_ASSERT(tree->root);
 +
 +	eh = EXT_ROOT_HDR(tree);
++	EXT_ASSERT(eh);
 +	i = depth = EXT_DEPTH(tree);
 +	EXT_ASSERT(eh->e_max);
 +	EXT_ASSERT(eh->e_magic == EXT3_EXT_MAGIC);
@@ -1044,6 +1045,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +
 +	depth = EXT_DEPTH(tree);
 +	ex = path[depth].p_ext;
++	EXT_ASSERT(path[depth].p_hdr);
 +
 +	/* try to insert block into found extent and return */
 +	if (ex && ext3_can_extents_be_merged(tree, ex, newext)) {
@@ -1198,6 +1200,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		}
 +
 +		depth = EXT_DEPTH(tree);
++		EXT_ASSERT(path[depth].p_hdr);
 +		ex = path[depth].p_ext;
 +		next = ext3_ext_next_allocated_block(path);
 +
@@ -1241,6 +1244,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		} else
 +			cbex = *ex;
 +
++		EXT_ASSERT(path[depth].p_hdr);
 +		err = func(tree, path, &cbex, exists);
 +		ext3_ext_drop_refs(path);
 +
