@@ -133,7 +133,7 @@ Index: linux-2.4.20-rh/fs/namei.c
  	current->link_count++;
  	current->total_link_count++;
  	UPDATE_ATIME(dentry->d_inode);
-+	nd->it = it;
++	nd->intent = it;
  	err = dentry->d_inode->i_op->follow_link(dentry, nd);
 +	if (!err && it != NULL && !(it->it_int_flags & IT_FL_FOLLOWED)) {
 +		/* vfs_follow_link was never called */
@@ -358,7 +358,7 @@ Index: linux-2.4.20-rh/fs/namei.c
  {
  	nd->last_type = LAST_ROOT; /* if there are only slashes... */
  	nd->flags = flags;
-+	nd->it = NULL;
++	nd->intent = NULL;
  	if (*name=='/')
  		return walk_init_root(name,nd);
  	read_lock(&current->fs->lock);
@@ -562,7 +562,7 @@ Index: linux-2.4.20-rh/fs/namei.c
  	 * are done. Procfs-like symlinks just set LAST_BIND.
  	 */
  	UPDATE_ATIME(dentry->d_inode);
-+	nd->it = it;
++	nd->intent = it;
  	error = dentry->d_inode->i_op->follow_link(dentry, nd);
 +	if (error) {
 +		intent_release(it);
@@ -805,9 +805,9 @@ Index: linux-2.4.20-rh/fs/namei.c
  		goto fail;
  
 +	if (it == NULL)
-+		it = nd->it;
-+	else if (it != nd->it)
-+		printk("it != nd->it: tell phil@clusterfs.com\n");
++		it = nd->intent;
++	else if (it != nd->intent)
++		printk("it != nd->intent: tell phil@clusterfs.com\n");
 +	if (it != NULL)
 +		it->it_int_flags |= IT_FL_FOLLOWED;
 +
@@ -1546,8 +1546,8 @@ Index: linux-2.4.20-rh/fs/proc/base.c
  	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
  	nd->last_type = LAST_BIND;
 +
-+	if (nd->it != NULL)
-+		nd->it->it_int_flags |= IT_FL_FOLLOWED;
++	if (nd->intent != NULL)
++		nd->intent->it_int_flags |= IT_FL_FOLLOWED;
  out:
  	return error;
  }
