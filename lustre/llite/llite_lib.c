@@ -529,7 +529,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 struct config_llog_instance cfg;
                 int len;
 
-                if (!lmd->lmd_mds) {
+                if (lmd->lmd_mds[0] == '\0') {
                         CERROR("no mds name\n");
                         GOTO(out_free, err = -EINVAL);
                 }

@@ -80,13 +80,15 @@ int jt_dbg_panic(int argc, char **argv);
 int ptl_set_cfg_record_cb(cfg_record_cb_t cb);
 
 /* l_ioctl.c */
-typedef int (ioc_handler_t)(int dev_id, int opc, void *buf);
+typedef int (ioc_handler_t)(int dev_id, unsigned int opc, void *buf);
 void set_ioc_handler(ioc_handler_t *handler);
 int register_ioc_dev(int dev_id, const char * dev_name);
 void unregister_ioc_dev(int dev_id);
 int set_ioctl_dump(char * file);
-int l_ioctl(int dev_id, int opc, void *buf);
-int parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *));
+int l_ioctl(int dev_id, unsigned int opc, void *buf);
+int parse_dump(char * dump_file, ioc_handler_t ioc_func);
 int jt_ioc_dump(int argc, char **argv);
+extern char *dump_filename;
+int dump(int dev_id, unsigned int opc, void *buf);
 
 #endif

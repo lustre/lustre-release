@@ -12,3 +12,4 @@ autoMakefile
 .*.cmd
 .*.flags
 .tmp_versions
+.depend

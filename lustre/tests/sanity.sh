@@ -869,6 +869,11 @@ test_31d() {
 }
 run_test 31d "remove of open directory ========================="
 
+test_31e() {
+	openfilleddirunlink $DIR/d31e || error
+}
+run_test 31e "remove of open non-removable directory ========================="
+
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
 	[ -e $DIR/d32a ] && rm -fr $DIR/d32a

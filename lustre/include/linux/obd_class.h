@@ -608,6 +608,9 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 #define time_before(t1, t2) ((long)t2 - (long)t1 > 0)
 #endif
 
+/* @max_age is the oldest time in jiffies that we accept using a cached data.
+ * If the cache is older than @max_age we will get a new value from the
+ * target.  Use a value of "jiffies + HZ" to guarantee freshness. */
 static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                              unsigned long max_age)
 {
@@ -623,10 +626,12 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
         if (time_before(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs)(obd, osfs, max_age);
-                spin_lock(&obd->obd_osfs_lock);
-                memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
-                obd->obd_osfs_age = jiffies;
-                spin_unlock(&obd->obd_osfs_lock);
+                if (rc == 0) {
+                        spin_lock(&obd->obd_osfs_lock);
+                        memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
+                        obd->obd_osfs_age = jiffies;
+                        spin_unlock(&obd->obd_osfs_lock);
+                }
         } else {
                 CDEBUG(D_SUPER, "using cached obd_statfs data\n");
                 spin_lock(&obd->obd_osfs_lock);

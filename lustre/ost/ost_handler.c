@@ -1149,7 +1149,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         rc = ptlrpc_start_n_threads(obd, ost->ost_create_service, 1,
-                                    "ll_ost_create");
+                                    "ll_ost_creat");
         if (rc)
                 GOTO(out_create, rc = -EINVAL);
 

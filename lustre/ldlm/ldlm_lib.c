@@ -713,7 +713,6 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler)
         obd->obd_recovery_handler = handler;
         obd->obd_recovery_timer.function = target_recovery_expired;
         obd->obd_recovery_timer.data = (unsigned long)obd;
-        init_timer(&obd->obd_recovery_timer);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         reset_recovery_timer(obd);

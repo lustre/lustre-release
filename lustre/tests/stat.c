@@ -145,6 +145,9 @@ void print_human_fstype(struct statfs *statfsbuf)
 	case S_MAGIC_ROMFS:
 	  type = strdup("romfs");
 	  break;
+	case S_MAGIC_LUSTRE:
+	  type = strdup("lustre");
+	  break;
 #elif __GNU__
         case FSTYPE_UFS:
           type = strdup("ufs");
@@ -293,17 +296,17 @@ void print_human_access(struct stat *statbuf)
 /* trick gcc into being unable to recognize the %c format so it doesn't
  * issue its inane warning about %c and two-digit year representations. */
 static size_t strftime_wrapper(char *s, size_t max, const char *fmt,
-				struct tm *tm) {
+			       struct tm *tm) {
 	return strftime(s, max, fmt, tm);
 }
 
 void print_human_time(time_t *t)
 {
   char str[40];
-  
-  if (strftime_wrapper(str, 40, "%c", localtime(t)) > 0) 
+
+  if (strftime_wrapper(str, 40, "%c", localtime(t)) > 0)
 	  printf(str);
-  else 
+  else
 	  printf("Cannot calculate human readable time, sorry");
 }
 
@@ -316,7 +319,7 @@ void print_statfs(char *pformat, char m, char *filename, void *data, SECURITY_ID
     int rv;
     unsigned int sbuflen = sizeof(sbuf);
 #endif
-    
+
     switch(m) {
 	case 'n':
 	    strcat(pformat, "s");

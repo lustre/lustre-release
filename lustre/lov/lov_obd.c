@@ -1462,12 +1462,11 @@ static int lov_brw_check(struct lov_obd *lov, struct obdo *oa,
         for (i = 0; i < oa_bufs; i++) {
                 int stripe = lov_stripe_number(lsm, pga[i].off);
                 int ost = lsm->lsm_oinfo[stripe].loi_ost_idx;
-                struct ldlm_extent ext, subext;
-                ext.start = pga[i].off;
-                ext.end = pga[i].off + pga[i].count;
+                obd_off start, end;
 
-                if (!lov_stripe_intersects(lsm, i, ext.start, ext.end,
-                                           &subext.start, &subext.end))
+                if (!lov_stripe_intersects(lsm, i, pga[i].off, 
+                                           pga[i].off + pga[i].count, &start,
+                                           &end))
                         continue;
 
                 if (lov->tgts[ost].active == 0) {
@@ -2030,13 +2029,15 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
              i++, loi++, lov_lockhp++) {
                 ldlm_policy_data_t sub_ext;
+                obd_off start, end;
 
                 if (!lov_stripe_intersects(lsm, i, policy->l_extent.start,
-                                           policy->l_extent.end,
-                                           &sub_ext.l_extent.start,
-                                           &sub_ext.l_extent.end))
+                                           policy->l_extent.end, &start,
+                                           &end))
                         continue;
 
+                sub_ext.l_extent.start = start;
+                sub_ext.l_extent.end = end;
                 sub_ext.l_extent.gid = policy->l_extent.gid;
 
                 if (lov->tgts[loi->loi_ost_idx].active == 0) {
@@ -2173,13 +2174,15 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
              i++, loi++, lov_lockhp++) {
                 ldlm_policy_data_t sub_ext;
+                obd_off start, end;
                 int lov_flags;
 
                 if (!lov_stripe_intersects(lsm, i, policy->l_extent.start,
-                                           policy->l_extent.end,
-                                           &sub_ext.l_extent.start,
-                                           &sub_ext.l_extent.end))
+                                           policy->l_extent.end, &start, &end))
                         continue;
+
+                sub_ext.l_extent.start = start;
+                sub_ext.l_extent.end = end;
 
                 if (lov->tgts[loi->loi_ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);

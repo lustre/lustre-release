@@ -667,7 +667,9 @@ static int ptlrpc_main(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        THREAD_NAME(current->comm, "%s", data->name);
+        LASSERTF(strlen(data->name) < sizeof(current->comm),
+                 "name %d > len %d\n",strlen(data->name),sizeof(current->comm));
+        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
         unlock_kernel();
 
         /* Record that the thread is running */
@@ -747,7 +749,7 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
         spin_lock_irqsave(&svc->srv_lock, flags);
         list_del(&thread->t_link);
         spin_unlock_irqrestore(&svc->srv_lock, flags);
-        
+
         OBD_FREE(thread, sizeof(*thread));
 }
 
@@ -758,7 +760,7 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
 
         spin_lock_irqsave(&svc->srv_lock, flags);
         while (!list_empty(&svc->srv_threads)) {
-                thread = list_entry(svc->srv_threads.next, 
+                thread = list_entry(svc->srv_threads.next,
                                     struct ptlrpc_thread, t_link);
 
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
@@ -769,6 +771,7 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
         spin_unlock_irqrestore(&svc->srv_lock, flags);
 }
 
+/* @base_name should be 12 characters or less - 3 will be added on */
 int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
                            int num_threads, char *base_name)
 {

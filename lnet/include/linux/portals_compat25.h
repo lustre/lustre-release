@@ -60,14 +60,14 @@ extern int is_kernel_text_address(unsigned long addr);
 #endif
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-# define THREAD_NAME(comm, fmt, a...)                                   \
-        sprintf(comm, fmt "|%d", ## a, current->thread.extern_pid)
+# define THREAD_NAME(comm, len, fmt, a...)                              \
+        snprintf(comm, len, fmt "|%d", ## a, current->thread.extern_pid)
 #elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# define THREAD_NAME(comm, fmt, a...)                                   \
-        sprintf(comm, fmt "|%d", ## a, current->thread.mode.tt.extern_pid)
+# define THREAD_NAME(comm, len, fmt, a...)                              \
+        snprintf(comm, len,fmt"|%d", ## a,current->thread.mode.tt.extern_pid)
 #else
-# define THREAD_NAME(comm, fmt, a...)                                   \
-        sprintf(comm, fmt, ## a)
+# define THREAD_NAME(comm, len, fmt, a...)                              \
+        snprintf(comm, len, fmt, ## a)
 #endif
 
 #ifdef HAVE_PAGE_LIST

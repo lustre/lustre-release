@@ -309,15 +309,10 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,const char *ast_type)
         struct ptlrpc_connection *conn = lock->l_export->exp_connection;
         char str[PTL_NALFMT_SIZE];
 
-        CERROR("%s AST failed (%d) for res "LPU64"/"LPU64
-               ", mode %s: evicting client %s@%s NID %s\n",
-               ast_type, rc,
-               lock->l_resource->lr_name.name[0],
-               lock->l_resource->lr_name.name[1],
-               ldlm_lockname[lock->l_granted_mode],
-               lock->l_export->exp_client_uuid.uuid,
-               conn->c_remote_uuid.uuid,
-               ptlrpc_peernid2str(&conn->c_peer, str));
+        LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID "LPX64
+                   " (%s)", ast_type, rc, lock->l_export->exp_client_uuid.uuid,
+                   conn->c_remote_uuid.uuid, conn->c_peer.peer_nid,
+                   ptlrpc_peernid2str(&conn->c_peer, str));
         ptlrpc_fail_export(lock->l_export);
 }
 
@@ -325,6 +320,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                                  struct ptlrpc_request *req, int rc,
                                  const char *ast_type)
 {
+        struct ptlrpc_peer *peer = &req->rq_import->imp_connection->c_peer;
         char str[PTL_NALFMT_SIZE];
 
         if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
@@ -332,7 +328,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                 if (lock->l_export->exp_libclient) {
                         LDLM_DEBUG(lock, "%s AST to liblustre client (nid %s)"
                                    " timeout, just cancelling lock", ast_type,
-                                   ptlrpc_peernid2str(&req->rq_peer, str));
+                                   ptlrpc_peernid2str(peer, str));
                         ldlm_lock_cancel(lock);
                         rc = -ERESTART;
                 } else {
@@ -343,12 +339,11 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                 if (rc == -EINVAL)
                         LDLM_DEBUG(lock, "client (nid %s) returned %d"
                                    " from %s AST - normal race",
-                                   ptlrpc_peernid2str(&req->rq_peer, str),
+                                   ptlrpc_peernid2str(peer, str),
                                    req->rq_repmsg->status, ast_type);
                 else
                         LDLM_ERROR(lock, "client (nid %s) returned %d "
-                                   "from %s AST", 
-                                   ptlrpc_peernid2str(&req->rq_peer, str),
+                                   "from %s AST", ptlrpc_peernid2str(peer, str),
                                    (req->rq_repmsg != NULL) ?
                                    req->rq_repmsg->status : 0, ast_type);
                 ldlm_lock_cancel(lock);

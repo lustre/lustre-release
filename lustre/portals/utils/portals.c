@@ -373,7 +373,7 @@ __u64 ptl_nid2u64(ptl_nid_t nid)
         case 4:
                 return ((__u32)nid);
         default:
-                fprintf(stderr, "Unexpected sizeof(ptl_nid_t) == %d\n", sizeof(nid));
+                fprintf(stderr, "Unexpected sizeof(ptl_nid_t) == %u\n", sizeof(nid));
                 abort();
                 /* notreached */
                 return (-1);
@@ -1572,7 +1572,7 @@ lwt_print(FILE *f, cycles_t t0, cycles_t tlast, double mhz, int cpu, lwt_event_t
         if (where == NULL)
                 return (-1);
 
-        sprintf(whenstr, LPD64, e->lwte_when - t0);
+        sprintf(whenstr, LPU64, (__u64)(e->lwte_when - t0));
 
         fprintf(f, "%#010lx %#010lx %#010lx %#010lx: %#010lx %1d %10.6f %10.2f %s\n",
                 e->lwte_p1, e->lwte_p2, e->lwte_p3, e->lwte_p4,

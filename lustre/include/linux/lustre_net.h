@@ -109,7 +109,7 @@
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   MDT_MAX_THREADS), 2UL)
-#define MDS_NBUF_MAX    512UL
+#define MDS_NBUF_MAX    4096UL
 #define MDS_BUFSIZE     (8 * 1024)
 /* Assume file name length = FNAME_MAX = 256 (true for extN).
  *        path name length = PATH_MAX = 4096
@@ -284,7 +284,7 @@ struct ptlrpc_request {
         unsigned int rq_intr:1, rq_replied:1, rq_err:1,
                 rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
-                rq_no_delay:1;
+                rq_no_delay:1, rq_net_err:1;
         int rq_phase;
         /* client-side refcount for SENT race */
         atomic_t rq_refcount;
@@ -511,6 +511,7 @@ struct ptlrpc_service {
 
 static inline char *ptlrpc_peernid2str(struct ptlrpc_peer *p, char *str)
 {
+        LASSERT(p->peer_ni != NULL);
         return (portals_nid2str(p->peer_ni->pni_number, p->peer_nid, str));
 }
 

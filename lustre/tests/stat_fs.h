@@ -31,6 +31,7 @@
 #define S_MAGIC_REISERFS        0x52654973
 #define S_MAGIC_CRAMFS          0x28cd3d45
 #define S_MAGIC_ROMFS           0x7275
+#define S_MAGIC_LUSTRE          0x0BD00BD0
 #elif defined (__GNU__)
 #include <hurd/hurd_types.h>
 #endif

@@ -232,8 +232,8 @@ static int log_commit_thread(void *arg)
         SIGNAL_MASK_UNLOCK(current, flags);
 
         spin_lock(&lcm->lcm_thread_lock);
-        THREAD_NAME(current->comm, "ll_log_commit_%d",
-                    atomic_read(&lcm->lcm_thread_total));
+        THREAD_NAME(current->comm, sizeof(current->comm) - 1,
+                    "ll_log_comt_%02d", atomic_read(&lcm->lcm_thread_total));
         atomic_inc(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
         unlock_kernel();

@@ -81,23 +81,26 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
-                sprintf(str, "%u:%d.%d.%d.%d", (__u32)(nid >> 32),
-                        HIPQUAD(nid));
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
+                         (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
         case IBNAL:
         case SCIMACNAL:
-                sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
+                         (__u32)(nid >> 32), (__u32)nid);
                 break;
         default:
-                return NULL;
+                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
+                         nal, (long long)nid);
+                break;
         }
         return str;
 }
 
 void init_current(char *comm)
-{ 
+{
         current = malloc(sizeof(*current));
         current->fs = malloc(sizeof(*current->fs));
         current->fs->umask = umask(0777);
@@ -145,7 +148,7 @@ libcfs_nal_cmd(struct portals_cfg *pcfg)
 
 extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
-int lib_ioctl_nalcmd(int dev_id, int opc, void * ptr)
+int lib_ioctl_nalcmd(int dev_id, unsigned int opc, void * ptr)
 {
         struct portal_ioctl_data *ptldata;
 
@@ -165,7 +168,7 @@ int lib_ioctl_nalcmd(int dev_id, int opc, void * ptr)
 	return (0);
 }
 
-int lib_ioctl(int dev_id, int opc, void * ptr)
+int lib_ioctl(int dev_id, unsigned int opc, void * ptr)
 {
         int rc;
 

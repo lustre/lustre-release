@@ -217,6 +217,8 @@ test_16() {
     # will get evicted here
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
     sysctl -w lustre.fail_loc=0
+    # give recovery a chance to finish (shouldn't take long)
+    sleep 1 
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
 }
 run_test 16 "timeout bulk put, evict client (2732)"
@@ -321,12 +323,10 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	cancel_lru_locks OSC
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost sysctl -w lustre.fail_loc=0x80000308
-	set -vx
 	kill -USR1 $MULTI_PID
 	wait $MULTI_PID
 	rc=$?
 	[ $rc -eq 0 ] && error "multiop didn't fail enqueue: rc $rc" || true
-	set +vx
 }
 run_test 20a "ldlm_handle_enqueue error (should return error)" 
 

@@ -968,18 +968,21 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE-1,
-                         "%u:%d.%d.%d.%d", (__u32)(nid >> 32), HIPQUAD(nid));
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
+                         (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
         case IBNAL:
         case SCIMACNAL:
-                snprintf(str, PTL_NALFMT_SIZE-1, LPD64, nid);
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
+                         (__u32)(nid >> 32), (__u32)nid);
                 break;
 #endif
         default:
-                snprintf(str, PTL_NALFMT_SIZE-1, "(?%llx)", (long long)nid);
+                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
+                         nal, (long long)nid);
+                break;
         }
         return str;
 }

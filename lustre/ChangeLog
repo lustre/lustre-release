@@ -2,6 +2,8 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.x
        * bug fixes
 	- clear page cache after eviction (2766)
+	- deal with strange write() on x86-64 (3043)
+	- don't dereference NULL peer_ni in ldlm_handle_ast_error (3258)
 
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2
@@ -23,8 +25,12 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- zero nameidata in detach_mnt in 2.6 (3118)
 	- verify d_inode after revalidate_special is valid in 2.6 (3116)
 	- use lustre_put_super() to handle zconf unmounts in 2.6 (3064)
+	- initialize RPC timeout timer earlier for 2.6 (3219)
+	- don't dereference NULL reply buffer if mdc_close was never sent (2410)
+	- print nal/nid for unknown nid (3258)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
+	- increase maximum number of MDS request buffers for large systems
 
 2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1

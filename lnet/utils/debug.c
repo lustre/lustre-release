@@ -183,9 +183,6 @@ static int applymask(char* procpath, int value)
         return 0;
 }
 
-extern char *dump_filename;
-extern int dump(int dev_id, int opc, void *buf);
-
 static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 {
         if (!dump_filename) {

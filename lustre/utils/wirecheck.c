@@ -36,7 +36,7 @@ do {                                                            \
 
 #define CHECK_MEMBER_OFFSET(s,m)                                \
 do {                                                            \
-        CHECK_VALUE(offsetof(struct s, m));                     \
+        CHECK_VALUE((int)offsetof(struct s, m));                \
 } while(0)
 
 #define CHECK_MEMBER_SIZEOF(s,m)                                \

@@ -1857,7 +1857,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         rc = ptlrpc_start_n_threads(obd, mds->mds_setattr_service,
-                                 MDT_NUM_THREADS, "ll_mdt_attr");
+                                    MDT_NUM_THREADS, "ll_mdt_attr");
         if (rc)
                 GOTO(err_thread2, rc);
 
