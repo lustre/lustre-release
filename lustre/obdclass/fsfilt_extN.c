@@ -467,8 +467,10 @@ static int fsfilt_extN_statfs(struct super_block *sb, struct obd_statfs *osfs)
         struct statfs sfs;
         int rc = vfs_statfs(sb, &sfs);
 
-        if (!rc && sfs.f_bfree < sfs.f_ffree)
+        if (!rc && sfs.f_bfree < sfs.f_ffree) {
+                sfs.f_files = (sfs.f_files - sfs.f_ffree) + sfs.f_bfree;
                 sfs.f_ffree = sfs.f_bfree;
+        }
 
         statfs_pack(osfs, &sfs);
         return rc;
