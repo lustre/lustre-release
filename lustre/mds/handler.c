@@ -502,7 +502,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         mds->mds_ctxt.pwd = mnt->mnt_root;
         mds->mds_ctxt.fs = KERNEL_DS;
 
-        mds->mds_service = ptlrpc_init_svc(64 * 1024,
+        mds->mds_service = ptlrpc_init_svc(128 * 1024,
                                            MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                                            "self", mds_handle);
         if (!mds->mds_service) {

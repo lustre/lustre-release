@@ -678,7 +678,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
                 RETURN(-EINVAL);
         }
 
-        ost->ost_service = ptlrpc_init_svc(2 * 1024, 
+        ost->ost_service = ptlrpc_init_svc(128 * 1024,
                                            OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
                                            "self", ost_handle);
         if (!ost->ost_service) {
