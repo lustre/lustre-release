@@ -88,24 +88,27 @@ gen_config() {
 }
 
 setup() {
+    wait_for ost1
     start ost1 ${REFORMAT} $OSTLCONFARGS 
+    wait_for ost2
     start ost2 ${REFORMAT} $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    wait_for mds
     start mds $MDSLCONFARGS ${REFORMAT}
-    for node in $CLIENTS; do
-	do_node $node lconf --node client_facet --ptldebug $PTLDEBUG --select mds_service=$ACTIVEMDS $XMLCONFIG
-    done
+    while ! $PDSH $HOST "ls -ld $LUSTRE"; do sleep 5; done
+    do_node $CLIENTS lconf --node client_facet --ptldebug $PTLDEBUG \
+	--select mds_service=$ACTIVEMDS $XMLCONFIG
 }
 
 cleanup() {
     # make sure we are using the primary MDS, so the config log will
     # be able to clean up properly.
     activemds=`facet_active mds`
-    if [ $activemds != "mds" ]; then
-        fail mds
-    fi
+#    if [ $activemds != "mds" ]; then
+#        fail mds
+#    fi
     for node in $CLIENTS; do
-	do_node $node lconf ${FORCE} --cleanup --node client_facet $XMLCONFIG || true
+	do_node $node lconf ${FORCE} --select mds_svc=${activemds}_facet --cleanup --node client_facet $XMLCONFIG || true
     done
 
     stop mds ${FORCE} $MDSLCONFARGS
@@ -115,8 +118,9 @@ cleanup() {
 
 wait_for() {
    facet=$1
-   check_network `facet_active_host $facet` 900
-   while ! $PDSH $NODE "ls -ld $LUSTRE"; do sleep 5; done
+   HOST=`facet_active_host $facet`
+   check_network  $HOST 900
+   while ! $PDSH $HOST "ls -ld $LUSTRE"; do sleep 5; done
 }
 
 client_df() {
@@ -167,33 +171,17 @@ echo "Starting Test 17 at `date`"
 
 test_0() {
     echo "Failover MDS"
-    shutdown_facet mds
-    reboot_facet mds
-    # prepare for MDS failover
-    change_active mds
-    reboot_facet mds
-    wait_for mds
-    start mds
-    client_df
+    facet_failover mds
+    wait $DFPID || return 1
 
     echo "Failing OST1"
-    shutdown_facet ost1
-    reboot_facet ost1
-    wait_for ost1
-    start ost1
-    client_df
-    # should force the MDS to reconnect to the ost
-    echo "ost1 recover" >> $DIR/$tfile
+    facet_failover ost1
+    wait $DFPID || return 2
 
     echo "Failing OST2"
-    shutdown_facet ost2
-    reboot_facet ost2
-    wait_for ost2
-    start ost2
-    client_df
-    # should force the MDS to reconnect to the ost
-    echo "ost2 recover" >> $DIR/${tfile}2
-
+    facet_failover ost2
+    wait $DFPID || return 3
+    return 0
 }
 run_test 0 "Fail all nodes, independently"
 
