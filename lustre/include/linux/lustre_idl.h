@@ -209,6 +209,9 @@ struct mds_body {
         __u32          ino;
         __u32          nlink;
         __u32          generation;
+        __u32          last_xid;
+        __u64          last_committed;
+        __u64          last_rcvd;
 };
 
 /* MDS update records */
