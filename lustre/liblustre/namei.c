@@ -426,8 +426,8 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
         struct inode *inode;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
 
-        if (lock->l_data) {
-                inode = (struct inode *)lock->l_data;
+        if (lock->l_ast_data) {
+                inode = (struct inode *)lock->l_ast_data;
                 I_REF(inode);
         } else
                 inode = NULL;
