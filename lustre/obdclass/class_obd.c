@@ -53,8 +53,6 @@ unsigned long obd_fail_loc = 0;
 unsigned long obd_timeout = 100;
 char obd_recovery_upcall[128] = "/usr/lib/lustre/ha_assist";
 
-int  obdclass_highmem = 0;
-
 extern struct obd_type *class_nm_to_type(char *nm);
 
 /*  opening /dev/obd */
@@ -498,6 +496,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 struct brw_page *pga, *pgp;
                 int             j;
                 unsigned long off;
+                int   highmem;
+                int   verify;
                 __u64 id;
 
                 if (!cbd)
@@ -517,11 +517,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 memset(&smd, 0, sizeof(smd));
                 id = smd.lmd_object_id = data->ioc_obdo1.o_id;
-
+                highmem = (id & 1) != 0;
+                verify = (id != 0);
+                
                 off = data->ioc_offset;
 
                 for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
-                        pgp->pg = alloc_pages(obdclass_highmem ? GFP_HIGHUSER : GFP_KERNEL, 0);
+                        pgp->pg = alloc_pages(highmem ? GFP_HIGHUSER : GFP_KERNEL, 0);
                         if (!pgp->pg) {
                                 CERROR("no memory for brw pages\n");
                                 GOTO(brw_cleanup, err = -ENOMEM);
@@ -530,7 +532,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         pgp->off = off;
                         pgp->flag = 0;
 
-                        if (rw == OBD_BRW_WRITE) {
+                        if (verify && (rw == OBD_BRW_WRITE)) {
                                 page_debug_setup(kmap(pgp->pg), pgp->count,
                                                  pgp->off, id);
                                 kunmap(pgp->pg);
@@ -542,15 +544,17 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         brw_cleanup:
                 for (j = 0, pgp = pga; j < pages; j++, pgp++) {
                         if (pgp->pg != NULL) {
-                                int err2;
-                                void *addr = kmap(pgp->pg);
-
-                                err2 = page_debug_check("test_brw", addr,
-                                                        PAGE_SIZE, pgp->off,id);
+                                if (verify) 
+                                {
+                                        void *addr = kmap(pgp->pg);
+                                        int err2 = page_debug_check("test_brw", addr,
+                                                                    PAGE_SIZE, pgp->off,id);
+                                        
+                                        if (!err)
+                                                err = err2;
+                                }
                                 kunmap(pgp->pg);
                                 __free_pages(pgp->pg, 0);
-                                if (!err)
-                                        err = err2;
                         }
                 }
         brw_free:

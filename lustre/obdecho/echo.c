@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.25 2002/08/21 22:17:39 eeb Exp $";
-#define OBDECHO_VERSION "$Revision: 1.25 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.26 2002/08/22 13:34:20 eeb Exp $";
+#define OBDECHO_VERSION "$Revision: 1.26 $"
 
 #define EXPORT_SYMTAB
 
@@ -42,8 +42,6 @@ static long echo_pages = 0;
 
 static atomic_t echo_page_rws;
 static atomic_t echo_getattrs;
-
-int obdecho_highmem = 0;
 
 #define ECHO_PROC_STAT "sys/obdecho"
 
@@ -152,10 +150,12 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
         *desc_private = (void *)DESC_PRIV;
 
         for (i = 0; i < objcount; i++, obj++) {
+                int highmem = (obj->ioo_id & 1) != 0;
+                int verify  = obj->ioo_id != 0;
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
-                        r->page = alloc_pages(obdecho_highmem ? GFP_HIGHUSER : GFP_KERNEL, 0);
+                        r->page = alloc_pages(highmem ? GFP_HIGHUSER : GFP_KERNEL, 0);
                         if (!r->page) {
                                 CERROR("can't get page %d/%d for id "LPU64"\n",
                                        j, obj->ioo_bufcnt, obj->ioo_id);
@@ -169,7 +169,8 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
 
                         CDEBUG(D_PAGE, "$$$$ get page %p, addr %p@"LPU64"\n",
                                r->page, r->addr, r->offset);
-                        if (cmd & OBD_BRW_READ)
+
+                        if (verify && (cmd & OBD_BRW_READ) != 0)
                                 page_debug_setup(r->addr, r->len, r->offset,
                                                  obj->ioo_id);
                 }
@@ -215,6 +216,7 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
         LASSERT(desc_private == (void *)DESC_PRIV);
 
         for (i = 0; i < objcount; i++, obj++) {
+                int verify = obj->ioo_id != 0;
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, r++) {
@@ -233,7 +235,8 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
 
                         CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
                                r->page, addr, r->offset);
-                        if (cmd & OBD_BRW_WRITE)
+
+                        if (verify && (cmd & OBD_BRW_WRITE))
                                 page_debug_check("echo", addr, r->len,
                                                  r->offset, obj->ioo_id);
 
