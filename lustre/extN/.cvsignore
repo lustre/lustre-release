@@ -16,3 +16,4 @@ super.c
 symlink.c
 xattr.c
 patch-stamp
+sed-stamp
