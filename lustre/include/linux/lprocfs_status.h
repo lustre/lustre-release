@@ -24,8 +24,10 @@
 #ifndef _LPROCFS_SNMP_H
 #define _LPROCFS_SNMP_H
 
+#ifdef __KERNEL__
 #include <linux/autoconf.h>
 #include <linux/proc_fs.h>
+#endif
 
 #ifndef LPROCFS
 #ifdef  CONFIG_PROC_FS  /* Ensure that /proc is configured */

@@ -35,7 +35,6 @@ else:
     from fcntl import F_GETFL, F_SETFL
 
 # Global parameters
-TCP_ACCEPTOR = ''
 MAXTCPBUF = 1048576
 DEFAULT_TCPBUF = 1048576
 #
@@ -124,6 +123,7 @@ class Config:
         self._ldapurl = ''
         self._config_name = ''
         self._select = {}
+        self._lctl_dump = ''
 
     def verbose(self, flag = None):
         if flag: self._verbose = flag
@@ -220,6 +220,10 @@ class Config:
             return self._select[srv]
         return None
 
+    def lctl_dump(self, val = None):
+        if val: self._lctl_dump = val
+        return self._lctl_dump
+
 
 config = Config()
 
@@ -280,6 +284,103 @@ class LconfError (exceptions.Exception):
 
 
 # ============================================================
+# handle daemons, like the acceptor
+class DaemonHandler:
+    """ Manage starting and stopping a daemon. Assumes daemon manages
+    it's own pid file. """
+
+    def __init__(self, cmd):
+        self.command = cmd
+        self.path =""
+
+    def start(self):
+        if self.running():
+            log(self.command, "already running.")
+        if not self.path:
+            self.path = find_prog(self.command)
+            if not self.path:
+                panic(self.command, "not found.")
+        ret, out = runcmd(self.path +' '+ self.command_line())
+        if ret:
+            raise CommandError(self.path, out, ret)
+
+    def stop(self):
+        if self.running():
+            pid = self.read_pidfile()
+            try:
+                log ("killing process", pid)
+                os.kill(pid, 15)
+            except OSError, e:
+                log("unable to kill", self.command, e)
+            if self.running():
+                log("unable to kill", self.command)
+
+    def running(self):
+        pid = self.read_pidfile()
+        if pid:
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                self.clean_pidfile()
+            else:
+                return 1
+        return 0
+
+    def read_pidfile(self):
+        try:
+            fp = open(self.pidfile(), 'r')
+            pid = int(fp.read())
+            fp.close()
+            return pid
+        except IOError:
+            return 0
+        
+    def clean_pidfile(self):
+        """ Remove a stale pidfile """
+        log("removing stale pidfile:", self.pidfile())
+        try:
+            os.unlink(self.pidfile())
+        except OSError, e:
+            log(self.pidfile(), e)
+            
+class AcceptorHandler(DaemonHandler):
+    def __init__(self, port, net_type, send_mem, recv_mem, irq_aff, nid_xchg):
+        DaemonHandler.__init__(self, "acceptor")
+        self.port = port
+        self.flags = ''
+        self.send_mem = send_mem
+        self.recv_mem = recv_mem
+
+        if net_type == 'toe':
+            self.flags = self.flags + ' -N 4'
+        if irq_aff:
+            self.flags = self.flags + ' -i'
+        if nid_xchg:
+            self.flags = self.flags + ' -x'
+
+    def pidfile(self):
+        return "/var/run/%s-%d.pid" % (self.command, self.port)
+
+    def command_line(self):
+        return string.join(map(str,('-s', self.send_mem, '-r', self.recv_mem, self.flags, self.port)))
+    
+acceptors = {}
+
+# start the acceptors
+def run_acceptors():
+    for port in acceptors.keys():
+        daemon = acceptors[port]
+        if not daemon.running():
+            daemon.start()
+
+def stop_acceptor(port):
+    if acceptors.has_key(port):
+        daemon = acceptors[port]
+        if daemon.running():
+            daemon.stop()
+        
+
+# ============================================================
 # handle lctl interface
 class LCTLInterface:
     """
@@ -291,6 +392,7 @@ class LCTLInterface:
         Initialize close by finding the lctl binary.
         """
         self.lctl = find_prog(cmd)
+        self.save_file = ''
         if not self.lctl:
             if config.noexec():
                 debug('! lctl not found')
@@ -298,6 +400,9 @@ class LCTLInterface:
             else:
                 raise CommandError('lctl', "unable to find lctl binary.")
 
+    def use_save_file(self, file):
+        self.save_file = file
+        
     def set_nonblock(self, fd):
         fl = fcntl.fcntl(fd, F_GETFL)
         fcntl.fcntl(fd, F_SETFL, fl | os.O_NDELAY)
@@ -311,10 +416,14 @@ class LCTLInterface:
         should modify command line to accept multiple commands, or
         create complex command line options
         """
-        debug("+", self.lctl, cmds)
+        cmd_line = self.lctl
+        if self.save_file:
+            cmds = '\n  dump ' + self.save_file + cmds
+
+        debug("+", cmd_line, cmds)
         if config.noexec(): return (0, [])
 
-        child = popen2.Popen3(self.lctl, 1) # Capture stdout and stderr from command
+        child = popen2.Popen3(cmd_line, 1) # Capture stdout and stderr from command
         child.tochild.write(cmds + "\n")
         child.tochild.close()
 
@@ -503,8 +612,7 @@ class LCTLInterface:
 # Run a command and return the output and status.
 # stderr is sent to /dev/null, could use popen3 to
 # save it if necessary
-def run(*args):
-    cmd = string.join(map(str,args))
+def runcmd(cmd):
     debug ("+", cmd)
     if config.noexec(): return (0, [])
     f = os.popen(cmd + ' 2>&1')
@@ -515,6 +623,10 @@ def run(*args):
     else:
         ret = 0
     return (ret, out)
+
+def run(*args):
+    cmd = string.join(map(str,args))
+    return runcmd(cmd)
 
 # Run a command in the background.
 def run_daemon(*args):
@@ -536,7 +648,7 @@ def find_prog(cmd):
     cmdpath = os.path.dirname(sys.argv[0])
     syspath.insert(0, cmdpath);
     if config.portals_dir():
-        syspath.insert(0, os.path.join(cmdpath, config.portals_dir()+'/linux/utils/'))
+        syspath.insert(0, os.path.join(config.portals_dir()+'/linux/utils/'))
     for d in syspath:
         prog = os.path.join(d,cmd)
         if os.access(prog, os.X_OK):
@@ -736,6 +848,8 @@ def is_prepared(uuid):
     """Return true if a device exists for the uuid"""
     # expect this format:
     # 1 UP ldlm ldlm ldlm_UUID 2
+    if config.lctl_dump():
+        return 0
     try:
         out = lctl.device_list()
         for s in out:
@@ -845,17 +959,18 @@ class Module:
                 log('! unable to unload module:', mod)
                 logall(out)
         
-
 class Network(Module):
     def __init__(self,db):
+        global acceptors
         Module.__init__(self, 'NETWORK', db)
         self.net_type = self.db.get_val('nettype')
         self.nid = self.db.get_val('nid', '*')
         self.port = self.db.get_val_int('port', 0)
         self.send_mem = self.db.get_val_int('sendmem', DEFAULT_TCPBUF)
         self.recv_mem = self.db.get_val_int('recvmem', DEFAULT_TCPBUF)
-        self.irq_affinity = self.db.get_val_int('irqaffinity', 1)
+        self.irq_affinity = self.db.get_val_int('irqaffinity', 0)
         self.nid_exchange = self.db.get_val_int('nidexchange', 0)
+
         if '*' in self.nid:
             self.nid = get_local_nid(self.net_type, self.nid)
             if not self.nid:
@@ -885,17 +1000,6 @@ class Network(Module):
 
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
-        if self.net_type in ('tcp', 'toe'):
-            flags = ""
-            if self.net_type == 'toe':
-                flags = flags + ' -N 4'
-            if self.irq_affinity:
-                flags = flags + ' -i'
-            if self.nid_exchange:
-                flags = flags + ' -x'
-            ret, out = run(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, flags, self.port)
-            if ret:
-                raise CommandError(TCP_ACCEPTOR, out, ret)
         for net_type, gw, lo, hi in self.db.get_route_tbl():
             lctl.add_route(net_type, gw, lo, hi)
             if net_type in ('tcp', 'toe') and net_type == self.net_type and hi == '':
@@ -909,6 +1013,8 @@ class Network(Module):
 
     def cleanup(self):
         self.info(self.net_type, self.nid, self.port)
+        if self.net_type in ('tcp', 'toe'):
+            stop_acceptor(self.port)
         for net_type, gw, lo, hi in self.db.get_route_tbl():
             if self.net_type in ('tcp', 'toe') and hi == '':
                 srvdb = self.db.nid2server(lo, net_type)
@@ -928,23 +1034,12 @@ class Network(Module):
                 print "del_route failed: ", self.name
                 e.dump()
                 cleanup_error(e.rc)
-              
-        try:
-            if is_prepared("RPCDEV_UUID"):
-                lctl.cleanup("RPCDEV", "RPCDEV_UUID")
-        except CommandError, e:
-            print "cleanup failed: RPCDEV"
-            e.dump()
-            cleanup_error(e.rc)
         try:
             lctl.disconnectAll(self.net_type)
         except CommandError, e:
             print "disconnectAll failed: ", self.name
             e.dump()
             cleanup_error(e.rc)
-        if self.net_type in ('tcp', 'toe'):
-            # yikes, this ugly! need to save pid in /var/something
-            run("killall acceptor")
 
 class LDLM(Module):
     def __init__(self,db):
@@ -1066,6 +1161,7 @@ class MDSDEV(Module):
         if is_prepared(self.uuid):
             return
         self.info(self.devname, self.fstype, self.format)
+        run_acceptors()
         blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
         if not is_prepared('MDT_UUID'):
             lctl.newdev(attach="mdt %s %s" % ('MDT', 'MDT_UUID'),
@@ -1115,6 +1211,7 @@ class OSD(Module):
         if is_prepared(self.uuid):
             return
         self.info(self.osdtype, self.devname, self.size, self.fstype, self.format)
+        run_acceptors()
         if self.osdtype == 'obdecho':
             blkdev = ''
         else:
@@ -1158,8 +1255,10 @@ class Client(Module):
         self.module = module
         self.module_name = string.upper(module)
         self.name = '%s_%s_%s' % (self.module_name, owner, target_name)
-        self.uuid = '%05x_%s_%05x' % (int(random.random() * 1048576), self.name,
-                                      int(random.random() * 1048576))
+        self.uuid = '%05x%05x_%.14s_%05x%05x' % (int(random.random() * 1048576),
+                                              int(random.random() * 1048576),self.name,
+                                              int(random.random() * 1048576),
+                                              int(random.random() * 1048576))
         self.uuid = self.uuid[0:36]
         self.lookup_server(self.tgt_dev_uuid)
         self.add_lustre_module(module, module)
@@ -1795,8 +1894,16 @@ def add_local_interfaces(node_db):
     debug("add_local")
     for netuuid in node_db.get_networks():
         net = node_db.lookup(netuuid)
+        srv = Network(net)
         debug("add_local", netuuid)
-        local_node.append((net.get_val('nettype'), net.get_val('nid')))
+        local_node.append((srv.net_type, srv.nid))
+        if acceptors.has_key(srv.port):
+            panic("duplicate port:", self.port)
+        if srv.net_type in ('tcp', 'toe'):
+            acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type,
+                                                  srv.send_mem, srv.recv_mem,
+                                                  srv.irq_affinity,
+                                                  srv.nid_exchange)
 
 def node_needs_router():
     return router_flag
@@ -1900,22 +2007,30 @@ def for_each_profile(db, prof_list, operation):
         operation(services)
         
 def doSetup(services):
+    if config.nosetup():
+        return
     for s in services:
         n = newService(s[1])
         n.prepare()
     
 def doModules(services):
+    if config.nomod():
+        return
     for s in services:
         n = newService(s[1])
         n.load_module()
 
 def doCleanup(services):
+    if config.nosetup():
+        return
     services.reverse()
     for s in services:
         n = newService(s[1])
         n.cleanup()
 
 def doUnloadModules(services):
+    if config.nomod():
+        return
     services.reverse()
     for s in services:
         n = newService(s[1])
@@ -1951,6 +2066,11 @@ def doHost(lustreDB, hosts):
         if config.force():
             # the command line can override this value
             timeout = 5
+        # ugly hack, only need to run lctl commands for --dump
+        if config.lctl_dump():
+            for_each_profile(node_db, prof_list, doCleanup)
+            return
+
         sys_set_timeout(timeout)
         sys_set_recovery_upcall(recovery_upcall)
 
@@ -1958,6 +2078,11 @@ def doHost(lustreDB, hosts):
         for_each_profile(node_db, prof_list, doUnloadModules)
 
     else:
+        # ugly hack, only need to run lctl commands for --dump
+        if config.lctl_dump():
+            for_each_profile(node_db, prof_list, doSetup)
+            return
+
         for_each_profile(node_db, prof_list, doModules)
 
         sys_set_debug_path()
@@ -1983,7 +2108,7 @@ def parse_cmdline(argv):
                  "help", "node=", "nomod", "nosetup",
                  "dump=", "force", "minlevel=", "maxlevel=",
                  "timeout=", "recovery_upcall=",
-                 "ldapurl=", "config=", "select="]
+                 "ldapurl=", "config=", "select=", "lctl_dump="]
     opts = []
     args = []
 
@@ -2034,6 +2159,8 @@ def parse_cmdline(argv):
                 config.config_name(a)
         if o == "--select":
                 config.init_select(a)
+        if o == "--lctl_dump":
+                config.lctl_dump(a)
 
     return args
 
@@ -2143,7 +2270,7 @@ def sanitise_path():
 # Shutdown does steps in reverse
 #
 def main():
-    global TCP_ACCEPTOR, lctl, MAXTCPBUF
+    global  lctl, MAXTCPBUF
 
     host = socket.gethostname()
 
@@ -2193,19 +2320,13 @@ def main():
 
     setupModulePath(sys.argv[0])
 
-    TCP_ACCEPTOR = find_prog('acceptor')
-    if not TCP_ACCEPTOR:
-        if config.noexec():
-            TCP_ACCEPTOR = 'acceptor'
-            debug('! acceptor not found')
-        else:
-            panic('acceptor not found')
-
     lctl = LCTLInterface('lctl')
-
-    sys_make_devices()
-    sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
-    sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
+    if config.lctl_dump():
+        lctl.use_save_file(config.lctl_dump())
+    else:
+        sys_make_devices()
+        sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
+        sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
 
     doHost(db, node_list)
 

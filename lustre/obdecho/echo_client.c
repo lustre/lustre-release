@@ -19,13 +19,18 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_ECHO
+#ifdef __KERNEL__
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/fs.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
+#endif
 #include <asm/div64.h>
-
-#define DEBUG_SUBSYSTEM S_ECHO
+#else
+#include <liblustre.h>
+#endif
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
@@ -512,10 +517,11 @@ echo_client_kbrw (struct obd_device *obd, int rw,
         return (rc);
 }
 
-static int
-echo_client_ubrw (struct obd_device *obd, int rw,
-                  struct obdo *oa, struct lov_stripe_md *lsm,
-                  obd_off offset, obd_size count, char *buffer)
+#ifdef __KERNEL__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static int echo_client_ubrw(struct obd_device *obd, int rw,
+                            struct obdo *oa, struct lov_stripe_md *lsm,
+                            obd_off offset, obd_size count, char *buffer)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
         struct obd_brw_set     *set;
@@ -589,6 +595,16 @@ echo_client_ubrw (struct obd_device *obd, int rw,
         obd_brw_set_free(set);
         return (rc);
 }
+#else
+static int echo_client_ubrw(struct obd_device *obd, int rw,
+                            struct obdo *oa, struct lov_stripe_md *lsm,
+                            obd_off offset, obd_size count, char *buffer)
+{
+        LBUG();
+        return 0;
+}
+#endif
+#endif 
 
 static int
 echo_open (struct obd_export *exp, struct obdo *oa)
@@ -914,11 +930,13 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
                                                       data->ioc_offset,
                                                       data->ioc_count);
                         else
+#ifdef __KERNEL__
                                 rc = echo_client_ubrw(obd, rw, &data->ioc_obdo1,
                                                       eco->eco_lsm,
                                                       data->ioc_offset,
                                                       data->ioc_count,
                                                       data->ioc_pbuf2);
+#endif
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);

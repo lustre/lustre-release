@@ -55,6 +55,10 @@ struct filter_client_data {
         __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 64]; 
 };
 
+#ifndef OBD_FILTER_SAN_DEVICENAME
+#define OBD_FILTER_SAN_DEVICENAME "sanobdfilter"
+#endif
+
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
         struct list_head  fed_open_head; /* files to close on disconnect */
