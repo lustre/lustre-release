@@ -964,7 +964,7 @@ Index: lum/fs/namei.c
 Index: lum/fs/open.c
 ===================================================================
 --- lum.orig/fs/open.c	2003-08-07 05:11:15.000000000 -0600
-+++ lum/fs/open.c	2003-08-07 05:11:20.000000000 -0600
++++ lum/fs/open.c	2003-08-08 05:30:13.000000000 -0600
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1176,7 +1176,7 @@ Index: lum/fs/open.c
  	if (error)
  		goto out;
  
-@@ -454,6 +502,7 @@ asmlinkage long sys_chroot(const char * 
+@@ -454,39 +502,56 @@ asmlinkage long sys_chroot(const char * 
  	set_fs_altroot();
  	error = 0;
  dput_and_out:
@@ -1184,26 +1184,102 @@ Index: lum/fs/open.c
  	path_release(&nd);
  out:
  	return error;
-@@ -508,6 +557,18 @@ asmlinkage long sys_chmod(const char * f
- 	if (IS_RDONLY(inode))
- 		goto dput_and_out;
+ }
  
+-asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++int chmod_common(struct dentry *dentry, mode_t mode)
+ {
+-	struct inode * inode;
+-	struct dentry * dentry;
+-	struct file * file;
+-	int err = -EBADF;
++	struct inode *inode = dentry->d_inode;
+ 	struct iattr newattrs;
++	int err = -EROFS;
+ 
+-	file = fget(fd);
+-	if (!file)
++	if (IS_RDONLY(inode))
+ 		goto out;
+ 
+-	dentry = file->f_dentry;
+-	inode = dentry->d_inode;
 +	if (inode->i_op->setattr_raw) {
-+		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+
 +		newattrs.ia_mode = mode;
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
-+		error = op->setattr_raw(inode, &newattrs);
++		err = inode->i_op->setattr_raw(inode, &newattrs);
 +		/* the file system wants to use normal vfs path now */
-+		if (error != -EOPNOTSUPP)
-+			goto dput_and_out;
++		if (err != -EOPNOTSUPP)
++			goto out;
 +	}
-+
- 	error = -EPERM;
+ 
+-	err = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto out_putf;
+ 	err = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
- 		goto dput_and_out;
-@@ -538,6 +599,20 @@ static int chown_common(struct dentry * 
+-		goto out_putf;
++		goto out;
++
+ 	if (mode == (mode_t) -1)
+ 		mode = inode->i_mode;
+ 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+ 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+ 	err = notify_change(dentry, &newattrs);
+ 
+-out_putf:
++out:
++	return err;
++}
++
++asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++{
++	struct file * file;
++	int err = -EBADF;
++
++	file = fget(fd);
++	if (!file)
++		goto out;
++
++	err = chmod_common(file->f_dentry, mode);
++
+ 	fput(file);
+ out:
+ 	return err;
+@@ -495,30 +560,14 @@ out:
+ asmlinkage long sys_chmod(const char * filename, mode_t mode)
+ {
+ 	struct nameidata nd;
+-	struct inode * inode;
+ 	int error;
+-	struct iattr newattrs;
+ 
+ 	error = user_path_walk(filename, &nd);
+ 	if (error)
+ 		goto out;
+-	inode = nd.dentry->d_inode;
+-
+-	error = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto dput_and_out;
+-
+-	error = -EPERM;
+-	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+-		goto dput_and_out;
+ 
+-	if (mode == (mode_t) -1)
+-		mode = inode->i_mode;
+-	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+-	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+-	error = notify_change(nd.dentry, &newattrs);
++	error = chmod_common(nd.dentry, mode);
+ 
+-dput_and_out:
+ 	path_release(&nd);
+ out:
+ 	return error;
+@@ -538,6 +587,20 @@ static int chown_common(struct dentry * 
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto out;
@@ -1224,7 +1300,7 @@ Index: lum/fs/open.c
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
-@@ -638,10 +713,12 @@ asmlinkage long sys_fchown(unsigned int 
+@@ -638,10 +701,12 @@ asmlinkage long sys_fchown(unsigned int 
   * for the internal routines (ie open_namei()/follow_link() etc). 00 is
   * used by symlinks.
   */
@@ -1237,7 +1313,7 @@ Index: lum/fs/open.c
  
  	namei_flags = flags;
  	if ((namei_flags+1) & O_ACCMODE)
-@@ -649,14 +726,15 @@ struct file *filp_open(const char * file
+@@ -649,14 +714,15 @@ struct file *filp_open(const char * file
  	if (namei_flags & O_TRUNC)
  		namei_flags |= 2;
  
@@ -1258,7 +1334,7 @@ Index: lum/fs/open.c
  {
  	struct file * f;
  	struct inode *inode;
-@@ -693,12 +771,15 @@ struct file *dentry_open(struct dentry *
+@@ -693,12 +759,15 @@ struct file *dentry_open(struct dentry *
  	}
  
  	if (f->f_op && f->f_op->open) {
@@ -1274,7 +1350,7 @@ Index: lum/fs/open.c
  	return f;
  
  cleanup_all:
-@@ -713,11 +794,17 @@ cleanup_all:
+@@ -713,11 +782,17 @@ cleanup_all:
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -1456,7 +1532,7 @@ Index: lum/fs/stat.c
 Index: lum/include/linux/dcache.h
 ===================================================================
 --- lum.orig/include/linux/dcache.h	2003-08-07 05:11:15.000000000 -0600
-+++ lum/include/linux/dcache.h	2003-08-07 05:11:20.000000000 -0600
++++ lum/include/linux/dcache.h	2003-08-07 05:16:55.000000000 -0600
 @@ -7,6 +7,50 @@
  #include <linux/mount.h>
  #include <linux/kernel.h>
