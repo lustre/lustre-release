@@ -143,7 +143,7 @@ repeat:
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
-                mds = raw_name2idx(obj->objcount, (char *)name, len);
+                mds = raw_name2idx(obj->hashtype, obj->objcount, (char *)name, len);
                 CDEBUG(D_OTHER, "forward to MDS #%u (%lu/%lu/%lu)\n", mds,
                        (unsigned long) rpfid.mds, (unsigned long) rpfid.id,
                        (unsigned long) rpfid.generation);
@@ -280,7 +280,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct ll_uctxt *uctxt,
         obj = lmv_grab_obj(obd, pfid);
         if (obj && len) {
                 /* directory is already splitted. calculate mds */
-                mds = raw_name2idx(obj->objcount, (char *) name, len);
+                mds = raw_name2idx(obj->hashtype, obj->objcount, (char *) name, len);
                 rpfid = obj->objs[mds].fid;
                 mds = rpfid.mds;
                 lmv_put_obj(obj);
@@ -492,7 +492,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct ll_uctxt *uctxt,
                 rpfid = *pfid;
                 obj = lmv_grab_obj(obd, pfid);
                 if (obj) {
-                        mds = raw_name2idx(obj->objcount, (char *) name, len);
+                        mds = raw_name2idx(obj->hashtype, obj->objcount, (char *) name, len);
                         rpfid = obj->objs[mds].fid;
                         lmv_put_obj(obj);
                 }
@@ -518,7 +518,7 @@ repeat:
         if (obj) {
                 if (len) {
                         /* directory is already splitted. calculate mds */
-                        mds = raw_name2idx(obj->objcount, (char *)name, len);
+                        mds = raw_name2idx(obj->hashtype, obj->objcount, (char *)name, len);
                         rpfid = obj->objs[mds].fid;
                         mds = rpfid.mds;
                 }

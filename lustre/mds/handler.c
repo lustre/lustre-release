@@ -598,6 +598,8 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                 
                 if (S_ISREG(inode->i_mode))
                         rc = mds_convert_lov_ea(obd, inode, md, lmm_size);
+                if (S_ISDIR(inode->i_mode))
+                        rc = mds_convert_mea_ea(obd, inode, md, lmm_size);
 
                 if (rc == 0) {
                         *size = lmm_size;
@@ -1465,6 +1467,8 @@ repeat:
                 OBD_ALLOC(mea, mealen);
                 if (mea == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
+                mea->mea_magic = MEA_MAGIC_ALL_CHARS;
+                mea->mea_master = 0;
                 mea->mea_count = 0;
                 down(&new->d_inode->i_sem);
                 rc = fsfilt_set_md(obd, new->d_inode, handle, mea, mealen);

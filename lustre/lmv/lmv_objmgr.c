@@ -61,6 +61,9 @@ lmv_alloc_obj(struct obd_device *obd, struct ll_fid *fid,
         unsigned int obj_size;
         struct lmv_obd *lmv = &obd->u.lmv;
 
+        LASSERT(mea->mea_magic == MEA_MAGIC_LAST_CHAR
+                        || mea->mea_magic == MEA_MAGIC_ALL_CHARS);
+
         OBD_ALLOC(obj, sizeof(*obj));
         if (!obj)
                 return NULL;
@@ -68,6 +71,7 @@ lmv_alloc_obj(struct obd_device *obd, struct ll_fid *fid,
         obj->obd = obd;
         obj->state = 0;
         obj->fid = *fid;
+        obj->hashtype = mea->mea_magic;
           
         init_MUTEX(&obj->guard);
         atomic_set(&obj->count, 0);

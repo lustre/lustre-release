@@ -1506,6 +1506,6 @@ void class_exit_uuidlist(void);
 
 /* mea.c */
 int mea_name2idx(struct mea *mea, char *name, int namelen);
-int raw_name2idx(int count, const char *name, int namelen);
+int raw_name2idx(int hashtype, int count, const char *name, int namelen);
 
 #endif /* __LINUX_OBD_CLASS_H */

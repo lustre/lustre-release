@@ -161,6 +161,8 @@ int mds_get_lmv_attr(struct obd_device *obd, struct inode *inode,
 
 	if (!mds->mds_lmv_obd)
 		RETURN(0);
+        if (!S_ISDIR(inode->i_mode))
+                RETURN(0);
 
 	/* first calculate mea size */
         *mea_size = obd_alloc_diskmd(mds->mds_lmv_exp,
@@ -168,9 +170,7 @@ int mds_get_lmv_attr(struct obd_device *obd, struct inode *inode,
         if (*mea_size < 0 || *mea == NULL)
                 return *mea_size < 0 ? *mea_size : -EINVAL;
 
-	down(&inode->i_sem);
-	rc = fsfilt_get_md(obd, inode, *mea, *mea_size);
-	up(&inode->i_sem);
+        rc = mds_get_md(obd, inode, *mea, mea_size, 1);
 
 	if (rc <= 0) {
 		OBD_FREE(*mea, *mea_size);
@@ -801,7 +801,7 @@ int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int fla
                 i = mds->mds_num;
         } else if (mds->mds_lmv_exp) {
                 lmv = &mds->mds_lmv_exp->exp_obd->u.lmv;
-                i = raw_name2idx(lmv->desc.ld_tgt_count, name, len);
+                i = raw_name2idx(MEA_MAGIC_LAST_CHAR, lmv->desc.ld_tgt_count, name, len);
         }
         RETURN(i);
 }
@@ -1049,5 +1049,62 @@ cleanup:
                 break;
         }
         RETURN(rc);
+}
+
+int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
+                       struct lov_mds_md *lmm, int lmm_size)
+{
+        struct mea_old *old;
+        struct mea *mea;
+        struct mea *new;
+        int rc, err, i;
+        void *handle;
+        ENTRY;
+
+        mea = (struct mea *) lmm;
+        if (mea->mea_magic == MEA_MAGIC_LAST_CHAR ||
+                mea->mea_magic == MEA_MAGIC_ALL_CHARS)
+                RETURN(0);
+
+        old = (struct mea_old *) lmm;
+        rc = sizeof(struct ll_fid) * old->mea_count + sizeof(struct mea_old);
+        if (old->mea_count > 256 || old->mea_master > 256 || lmm_size < rc
+                        || old->mea_master > old->mea_count) {
+                CWARN("unknown MEA format, dont convert it\n");
+                CWARN("  count %u, master %u, size %u\n",
+                      old->mea_count, old->mea_master, rc);
+                RETURN(0);
+        }
+                
+        CWARN("converting MEA EA on %lu/%u from V0 to V1 (%u/%u)\n",
+              inode->i_ino, inode->i_generation, old->mea_count, old->mea_master);
+
+        lmm_size = sizeof(struct ll_fid) * old->mea_count + sizeof(struct mea);
+        OBD_ALLOC(new, lmm_size);
+        if (new == NULL)
+                RETURN(-ENOMEM);
+
+        new->mea_magic = MEA_MAGIC_LAST_CHAR;
+        new->mea_count = old->mea_count;
+        new->mea_master = old->mea_master;
+        for (i = 0; i < new->mea_count; i++)
+                new->mea_fids[i] = old->mea_fids[i];
+
+        handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
+        if (IS_ERR(handle)) {
+                rc = PTR_ERR(handle);
+                GOTO(conv_free, rc);
+        }
+
+        lmm = (struct lov_mds_md *) new;
+        rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size);
+
+        err = fsfilt_commit(obd, obd->u.mds.mds_sb, inode, handle, 0);
+        if (!rc)
+                rc = err ? err : lmm_size;
+        GOTO(conv_free, rc);
+conv_free:
+        OBD_FREE(new, lmm_size);
+        return rc;
 }
 

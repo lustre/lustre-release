@@ -23,6 +23,7 @@ struct lmv_obj {
         atomic_t           count;          /* ref counter. */
         struct ll_fid      fid;            /* master fid of dir */
         void               *update;        /* bitmap of status (uptodate) */
+	__u32		   hashtype;
         int                objcount;       /* number of slaves */
         struct lmv_inode   *objs;          /* array of dirobjs */
         struct obd_device  *obd;           /* pointer to LMV itself */

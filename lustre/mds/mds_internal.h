@@ -146,6 +146,7 @@ int mds_unlink_slave_objs(struct obd_device *, struct dentry *);
 void mds_unlock_slave_objs(struct obd_device *, struct dentry *,
                            struct lustre_handle *);
 int mds_lock_and_check_slave(int, struct ptlrpc_request *, struct lustre_handle *);
+int mds_convert_mea_ea(struct obd_device *, struct inode *, struct lov_mds_md *, int);
 
 
 #endif /* _MDS_INTERNAL_H */

@@ -659,7 +659,7 @@ static int lmv_change_cbdata_name(struct obd_export *exp, struct ll_fid *pfid,
         obj = lmv_grab_obj(obd, pfid);
         if (obj) {
                 /* directory is splitted. look for right mds for this name. */
-                mds = raw_name2idx(obj->objcount, name, len);
+                mds = raw_name2idx(obj->hashtype, obj->objcount, name, len);
                 mds = obj->objs[mds].fid.mds;
                 lmv_put_obj(obj);
         }
@@ -767,7 +767,7 @@ repeat:
         LASSERT(++loop <= 2);
         obj = lmv_grab_obj(obd, &op_data->fid1);
         if (obj) {
-                mds = raw_name2idx(obj->objcount, op_data->name,
+                mds = raw_name2idx(obj->hashtype, obj->objcount, op_data->name,
                                    op_data->namelen);
                 op_data->fid1 = obj->objs[mds].fid;
                 lmv_put_obj(obj);
@@ -904,8 +904,8 @@ int lmv_enqueue(struct obd_export *exp, int lock_type,
                 if (obj) {
                         /* directory is splitted. look for right mds for this
                          * name */
-                        mds = raw_name2idx(obj->objcount, (char *)data->name,
-                                           data->namelen);
+                        mds = raw_name2idx(obj->hashtype, obj->objcount,
+                                           (char *)data->name, data->namelen);
                         data->fid1 = obj->objs[mds].fid;
                         lmv_put_obj(obj);
                 }
@@ -939,7 +939,7 @@ repeat:
         obj = lmv_grab_obj(obd, fid);
         if (obj) {
                 /* directory is splitted. look for right mds for this name */
-                mds = raw_name2idx(obj->objcount, filename, namelen - 1);
+                mds = raw_name2idx(obj->hashtype, obj->objcount, filename, namelen - 1);
                 rfid = obj->objs[mds].fid;
                 lmv_put_obj(obj);
         }
@@ -1004,7 +1004,7 @@ int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
                 /* usual link request */
                 obj = lmv_grab_obj(obd, &data->fid1);
                 if (obj) {
-                        rc = raw_name2idx(obj->objcount, data->name,
+                        rc = raw_name2idx(obj->hashtype, obj->objcount, data->name,
                                           data->namelen);
                         data->fid1 = obj->objs[rc].fid;
                         lmv_put_obj(obj);
@@ -1082,7 +1082,7 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
         if (obj) {
                 /* directory is already splitted, so we have to forward request
                  * to the right MDS */
-                mds = raw_name2idx(obj->objcount, (char *)old, oldlen);
+                mds = raw_name2idx(obj->hashtype, obj->objcount, (char *)old, oldlen);
                 data->fid1 = obj->objs[mds].fid;
                 CDEBUG(D_OTHER, "forward to MDS #%u (%lu/%lu/%lu)\n", mds,
                        (unsigned long)obj->objs[mds].fid.mds,
@@ -1095,7 +1095,7 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
         if (obj) {
                 /* directory is already splitted, so we have to forward request
                  * to the right MDS */
-                mds = raw_name2idx(obj->objcount, (char *)new, newlen);
+                mds = raw_name2idx(obj->hashtype, obj->objcount, (char *)new, newlen);
                 data->fid2 = obj->objs[mds].fid;
                 CDEBUG(D_OTHER, "forward to MDS #%u (%lu/%lu/%lu)\n", mds,
                        (unsigned long)obj->objs[mds].fid.mds,
@@ -1358,7 +1358,7 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
                 
                 obj = lmv_grab_obj(obd, &data->fid1);
                 if (obj) {
-                        i = raw_name2idx(obj->objcount, data->name,
+                        i = raw_name2idx(obj->hashtype, obj->objcount, data->name,
                                          data->namelen);
                         data->fid1 = obj->objs[i].fid;
                         lmv_put_obj(obj);
@@ -1498,6 +1498,7 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
         mea = (struct mea *)*ea;
         if (!mea->mea_count || mea->mea_count > lmv->desc.ld_tgt_count)
                 mea->mea_count = lmv->desc.ld_tgt_count;
+        mea->mea_magic = MEA_MAGIC_ALL_CHARS;
 
         mea->mea_master = -1;
         lcount = lmv->desc.ld_tgt_count;

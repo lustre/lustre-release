@@ -518,7 +518,17 @@ struct ll_fid {
         __u32 padding;
 };
 
+struct mea_old {
+        __u32 mea_count;
+        __u32 mea_master;
+        struct ll_fid mea_fids[0];
+};
+
+#define MEA_MAGIC_LAST_CHAR      0xb2221ca1
+#define MEA_MAGIC_ALL_CHARS      0xb222a11c
+
 struct mea {
+        __u32 mea_magic;
         __u32 mea_count;
         __u32 mea_master;
         struct ll_fid mea_fids[0];
