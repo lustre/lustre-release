@@ -41,6 +41,9 @@
  #include <windef.h>
 #endif
 
+static ioc_handler_t  do_ioctl;                 /* forward ref */
+static ioc_handler_t *current_ioc_handler = &do_ioctl;
+
 struct ioc_dev {
 	const char * dev_name;
 	int dev_fd;
@@ -54,7 +57,16 @@ struct dump_hdr {
 	int opc;
 };
 
-char * dump_filename;
+char *dump_filename;
+
+void
+set_ioc_handler (ioc_handler_t *handler)
+{
+        if (handler == NULL)
+                current_ioc_handler = do_ioctl;
+        else
+                current_ioc_handler = handler;
+}
 
 static int
 open_ioc_dev(int dev_id) 
@@ -147,7 +159,7 @@ dump(int dev_id, int opc, void *buf)
                         strerror(errno));
                 return -EINVAL;
         }
-                                                                                                                        
+
         return 0;
 }
 
@@ -190,16 +202,17 @@ set_ioctl_dump(char * file)
 		free(dump_filename);
 	
 	dump_filename = strdup(file);
+        if (dump_filename == NULL)
+                abort();
+
+        set_ioc_handler(&dump);
 	return 0;
 }
 
 int
 l_ioctl(int dev_id, int opc, void *buf)
 {
-	if (dump_filename) 
-		return dump(dev_id, opc, buf);
-	else 
-		return do_ioctl(dev_id, opc, buf);
+        return current_ioc_handler(dev_id, opc, buf);
 }
 
 /* Read an ioctl dump file, and call the ioc_func for each ioctl buffer

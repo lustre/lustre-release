@@ -37,6 +37,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <portals/types.h>
 #include <portals/list.h>
 #include <portals/lib-types.h>
@@ -324,6 +325,7 @@ connection force_tcp_connection(manager m,
     conn = hash_table_find(m->connections, id);
     if (!conn) {
         int fd;
+        int option;
         ptl_nid_t peernid = PTL_NID_ANY;
 
         bzero((char *) &addr, sizeof(addr));
@@ -340,6 +342,16 @@ connection force_tcp_connection(manager m,
             perror("tcpnal connect");
             return(0);
         }
+
+#if 1
+        option = 1;
+        setsockopt(fd, SOL_TCP, TCP_NODELAY, &option, sizeof(option));
+        option = 1<<20;
+        setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &option, sizeof(option));
+        option = 1<<20;
+        setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &option, sizeof(option));
+#endif
+   
         /* say hello */
         if (tcpnal_hello(fd, &peernid, SOCKNAL_CONN_ANY, 0))
             exit(-1);
