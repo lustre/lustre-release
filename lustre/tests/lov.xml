@@ -11,18 +11,18 @@
   </node>
 
   <profile name="local-profile" uuid="local-profile-UUID">
-    <service_ref uuidref="ldlm-srv-UUID"></service_ref>
-    <service_ref uuidref="lov1-UUID"></service_ref>
-    <service_ref uuidref="mtpt1-UUID"></service_ref>
-    <service_ref uuidref="mdc1-UUID"></service_ref>
-    <service_ref uuidref="mds-UUID"></service_ref>
-    <service_ref uuidref="net-UUID"></service_ref>
-    <service_ref uuidref="obd1-UUID"></service_ref>
-    <service_ref uuidref="obd2-UUID"></service_ref>
-    <service_ref uuidref="ost1-UUID"></service_ref>
-    <service_ref uuidref="ost2-UUID"></service_ref>
-    <service_ref uuidref="osc1-UUID"></service_ref>
-    <service_ref uuidref="osc2-UUID"></service_ref>
+    <service_ref uuidref="net-UUID"/>
+    <service_ref uuidref="ldlm-srv-UUID"/>
+    <service_ref uuidref="lov1-UUID"/>
+    <service_ref uuidref="mtpt1-UUID"/>
+    <service_ref uuidref="mdc1-UUID"/>
+    <service_ref uuidref="mds-UUID"/>
+    <service_ref uuidref="obd1-UUID"/>
+    <service_ref uuidref="obd2-UUID"/>
+    <service_ref uuidref="ost1-UUID"/>
+    <service_ref uuidref="ost2-UUID"/>
+    <service_ref uuidref="osc1-UUID"/>
+    <service_ref uuidref="osc2-UUID"/>
   </profile>
 
   <ldlm name="ldlm-srv" uuid="ldlm-srv-UUID"/>
