@@ -49,10 +49,9 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(PTR_ERR(ptlbd->filp));
 
         ptlbd->ptlbd_service =
-                ptlrpc_init_svc(PTLBD_NEVENTS, PTLBD_NBUFS, PTLBD_BUFSIZE,
-                                PTLBD_MAXREQSIZE, PTLBD_REQUEST_PORTAL,
-                                PTLBD_REPLY_PORTAL,
-                                ptlbd_handle, "ptlbd_sv", 
+                ptlrpc_init_svc(PTLBD_NBUFS, PTLBD_BUFSIZE, PTLBD_MAXREQSIZE,
+                                PTLBD_REQUEST_PORTAL, PTLBD_REPLY_PORTAL,
+                                ptlbd_handle, "ptlbd_sv",
                                 obddev->obd_proc_entry);
 
         if (ptlbd->ptlbd_service == NULL) 
