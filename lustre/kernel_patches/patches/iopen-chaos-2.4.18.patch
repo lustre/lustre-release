@@ -3,13 +3,13 @@
  fs/ext3/inode.c                    |    4 
  fs/ext3/iopen.c                    |  236 +++++++++++++++++++++++++++++++++++++
  fs/ext3/iopen.h                    |   15 ++
- fs/ext3/namei.c                    |   11 +
+ fs/ext3/namei.c                    |   12 +
  fs/ext3/super.c                    |   11 +
  include/linux/ext3_fs.h            |    2 
- 8 files changed, 295 insertions(+), 2 deletions(-)
+ 8 files changed, 297 insertions(+), 1 deletion(-)
 
---- linux-2.4.20/Documentation/filesystems/ext2.txt~iopen	2001-07-11 16:44:45.000000000 -0600
-+++ linux-2.4.20-braam/Documentation/filesystems/ext2.txt	2003-05-11 11:06:22.000000000 -0600
+--- linux-2.4.18-p4smp/Documentation/filesystems/ext2.txt~iopen-chaos-2.4.18	2002-05-07 15:53:59.000000000 -0600
++++ linux-2.4.18-p4smp-braam/Documentation/filesystems/ext2.txt	2003-05-17 13:14:22.000000000 -0600
 @@ -35,6 +35,22 @@ resgid=n			The group ID which may use th
  
  sb=n				Use alternate superblock at this location.
@@ -33,19 +33,19 @@
  grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
  
  
---- linux-2.4.20/fs/ext3/Makefile~iopen	2003-05-11 11:05:55.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/Makefile	2003-05-11 11:07:31.000000000 -0600
+--- linux-2.4.18-p4smp/fs/ext3/Makefile~iopen-chaos-2.4.18	2003-05-17 13:12:44.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/Makefile	2003-05-17 13:15:06.000000000 -0600
 @@ -11,7 +11,7 @@ O_TARGET := ext3.o
  
- export-objs := ext3-exports.o
+ export-objs :=	super.o inode.o xattr.o
  
 -obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
-+obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
- 		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
++obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o\
+ 		ioctl.o namei.o super.o symlink.o xattr.o
  obj-m    := $(O_TARGET)
  
---- linux-2.4.20/fs/ext3/inode.c~iopen	2003-05-11 11:05:59.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/inode.c	2003-05-11 11:06:22.000000000 -0600
+--- linux-2.4.18-p4smp/fs/ext3/inode.c~iopen-chaos-2.4.18	2003-05-17 13:12:55.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/inode.c	2003-05-17 13:14:22.000000000 -0600
 @@ -31,6 +31,7 @@
  #include <linux/highuid.h>
  #include <linux/quotaops.h>
@@ -54,7 +54,7 @@
  
  /*
   * SEARCH_FROM_ZERO forces each block allocation to search from the start
-@@ -2137,6 +2138,9 @@ void ext3_read_inode(struct inode * inod
+@@ -2135,6 +2136,9 @@ void ext3_read_inode(struct inode * inod
  	struct buffer_head *bh;
  	int block;
  	
@@ -65,7 +65,7 @@
  		goto bad_inode;
  	bh = iloc.bh;
 --- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-braam/fs/ext3/iopen.c	2003-05-17 10:44:42.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/iopen.c	2003-05-17 13:14:22.000000000 -0600
 @@ -0,0 +1,236 @@
 +/*
 + * linux/fs/ext3/iopen.c
@@ -304,7 +304,7 @@
 +	return 1;
 +}
 --- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-braam/fs/ext3/iopen.h	2003-05-11 11:06:22.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/iopen.h	2003-05-17 13:14:22.000000000 -0600
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -321,42 +321,42 @@
 +extern int ext3_iopen_get_inode(struct inode * inode);
 +
 +
---- linux-2.4.20/fs/ext3/namei.c~iopen	2003-05-11 11:05:59.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/namei.c	2003-05-11 19:41:17.000000000 -0600
-@@ -35,7 +35,7 @@
- #include <linux/string.h>
+--- linux-2.4.18-p4smp/fs/ext3/namei.c~iopen-chaos-2.4.18	2003-05-17 13:12:54.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/namei.c	2003-05-17 13:17:13.000000000 -0600
+@@ -34,6 +34,7 @@
  #include <linux/locks.h>
  #include <linux/quotaops.h>
--
+ #include <linux/slab.h>
 +#include "iopen.h"
  
  /*
   * define how far ahead to read directories while searching them.
-@@ -921,16 +921,21 @@ errout:
- 	return NULL;
+@@ -704,15 +705,22 @@ cleanup_and_exit:
+ 	return ret;
  }
- #endif
-+struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode);
  
++struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode);
++
  static struct dentry *ext3_lookup(struct inode * dir, struct dentry *dentry)
  {
  	struct inode * inode;
  	struct ext3_dir_entry_2 * de;
  	struct buffer_head * bh;
 +        struct dentry *alternate = NULL;
++
  
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);
  
-+	if (ext3_check_for_iopen(dir, dentry))
-+		return NULL;
-+
++ 	if (ext3_check_for_iopen(dir, dentry))
++ 		return NULL;
++ 
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -942,6 +947,10 @@ static struct dentry *ext3_lookup(struct
+@@ -723,6 +731,10 @@ static struct dentry *ext3_lookup(struct
+ 		if (!inode)
  			return ERR_PTR(-EACCES);
- 		}
  	}
 +                
 +        if (inode && (alternate = iopen_connect_dentry(dentry, inode))) 
@@ -365,9 +365,9 @@
  	d_add(dentry, inode);
  	return NULL;
  }
---- linux-2.4.20/fs/ext3/super.c~iopen	2003-05-11 11:05:58.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/super.c	2003-05-11 11:06:22.000000000 -0600
-@@ -820,6 +820,17 @@ static int parse_options (char * options
+--- linux-2.4.18-p4smp/fs/ext3/super.c~iopen-chaos-2.4.18	2003-05-17 13:12:50.000000000 -0600
++++ linux-2.4.18-p4smp-braam/fs/ext3/super.c	2003-05-17 13:14:22.000000000 -0600
+@@ -605,6 +605,17 @@ static int parse_options (char * options
  		         || !strcmp (this_char, "quota")
  		         || !strcmp (this_char, "usrquota"))
  			/* Don't do anything ;-) */ ;
@@ -385,16 +385,16 @@
  		else if (!strcmp (this_char, "journal")) {
  			/* @@@ FIXME */
  			/* Eventually we will want to be able to create
---- linux-2.4.20/include/linux/ext3_fs.h~iopen	2003-05-11 11:05:59.000000000 -0600
-+++ linux-2.4.20-braam/include/linux/ext3_fs.h	2003-05-15 13:37:54.000000000 -0600
-@@ -322,6 +322,8 @@ struct ext3_inode {
+--- linux-2.4.18-p4smp/include/linux/ext3_fs.h~iopen-chaos-2.4.18	2003-05-17 13:12:56.000000000 -0600
++++ linux-2.4.18-p4smp-braam/include/linux/ext3_fs.h	2003-05-17 13:25:20.000000000 -0600
+@@ -320,6 +320,8 @@ struct ext3_inode {
  #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
- #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
+ #define EXT3_MOUNT_INDEX		0x4000  /* Enable directory index */
 +#define EXT3_MOUNT_IOPEN		0x8000  /* Allow access via iopen */
 +#define EXT3_MOUNT_IOPEN_NOPRIV		0x10000  /* Make iopen world-readable */
- #define EXT3_MOUNT_ASYNCDEL	       0x20000  /* Delayed deletion */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
+ #ifndef _LINUX_EXT2_FS_H
 
 _
