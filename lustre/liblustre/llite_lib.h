@@ -38,6 +38,8 @@
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         __u32 fd_flags;
+        struct lustre_handle fd_cwlockh;
+        unsigned long fd_gid;
 };
 
 struct llu_sb_info
@@ -86,6 +88,7 @@ struct llu_inode_info {
          * was opened several times without close, we track an
          * open_count here */
         struct ll_file_data    *lli_file_data;
+        int                     lli_open_flags;
         int                     lli_open_count;
 
         /* stat FIXME not 64 bit clean */
@@ -295,21 +298,15 @@ llu_file_write(struct inode *inode, const struct iovec *iovec,
         	       size_t iovlen, loff_t pos);
 struct llu_sysio_callback_args*
 llu_file_read(struct inode *inode, const struct iovec *iovec,
-                       size_t iovlen, loff_t pos);
-int llu_extent_lock_no_validate(struct ll_file_data *fd,
-                               struct inode *inode,
-                               struct lov_stripe_md *lsm,
-                               int mode,
-                               struct ldlm_extent *extent,
-                               struct lustre_handle *lockh,
-                               int ast_flags);
+              size_t iovlen, loff_t pos);
+int llu_glimpse_size(struct inode *inode, struct ost_lvb *lvb);
 int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
-                   struct lov_stripe_md *lsm,
-                   int mode, struct ldlm_extent *extent,
-                   struct lustre_handle *lockh);
+                    struct lov_stripe_md *lsm, int mode,
+                    ldlm_policy_data_t *policy, struct lustre_handle *lockh,
+                    int ast_flags);
 int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
-                struct lov_stripe_md *lsm, int mode,
-                struct lustre_handle *lockh);
+                      struct lov_stripe_md *lsm, int mode,
+                      struct lustre_handle *lockh);
 
 /* namei.c */
 int llu_iop_lookup(struct pnode *pnode,

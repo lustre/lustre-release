@@ -1,9 +1,41 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
+ *   Author: Phil Schwan <phil@clusterfs.com>
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
 /* ldlm_request.c */
-int ldlm_cancel_lru(struct ldlm_namespace *ns);
+typedef enum {
+        LDLM_ASYNC,
+        LDLM_SYNC,
+} ldlm_sync_t;
+
+int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync);
+
+/* ldlm_resource.c */
+void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
+                                     struct ldlm_lock *new);
 
 /* ldlm_lock.c */
 void ldlm_grant_lock(struct ldlm_lock *lock, void *data, int datalen,
-		     int run_ast);
+                     int run_ast);
 struct ldlm_lock *
 ldlm_lock_create(struct ldlm_namespace *ns,
                  struct lustre_handle *parent_lock_handle, struct ldlm_res_id,
@@ -19,6 +51,12 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue);
 int ldlm_run_ast_work(struct ldlm_namespace *, struct list_head *rpc_list);
 
+/* ldlm_lockd.c */
+int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
+                      struct ldlm_lock *lock);
+void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
+                             struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
+
 /* ldlm_plain.c */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
@@ -30,6 +68,10 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 /* ldlm_flock.c */
 int ldlm_process_flock_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
+
+/* ldlm_inodebits.c */
+int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
+				int first_enq, ldlm_error_t *err);
 
 /* l_lock.c */
 void l_check_no_ns_lock(struct ldlm_namespace *ns);

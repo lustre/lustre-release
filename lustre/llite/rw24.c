@@ -49,44 +49,6 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-/* called for each page in a completed rpc.*/
-void ll_ap_completion_24(void *data, int cmd, int rc)
-{
-        struct ll_async_page *llap;
-        struct page *page;
-
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap)) {
-                EXIT;
-                return;
-        }
-
-        page = llap->llap_page;
-        LASSERT(PageLocked(page));
-
-        if (rc == 0)  {
-                if (cmd == OBD_BRW_READ) {
-                        if (!llap->llap_defer_uptodate)
-                                SetPageUptodate(page);
-                } else {
-                        llap->llap_write_queued = 0;
-                }
-        } else { 
-                SetPageError(page);
-        }
-
-        LL_CDEBUG_PAGE(page, "io complete, unlocking\n");
-
-        unlock_page(page);
-
-        if (0 && cmd == OBD_BRW_WRITE) {
-                llap_write_complete(page->mapping->host, llap);
-                ll_try_done_writing(page->mapping->host);
-        }
-
-        page_cache_release(page);
-}
-
 static int ll_writepage_24(struct page *page)
 {
         struct inode *inode = page->mapping->host;
@@ -108,7 +70,7 @@ static int ll_writepage_24(struct page *page)
 
         page_cache_get(page);
         if (llap->llap_write_queued) {
-                LL_CDEBUG_PAGE(page, "marking urgent\n");
+                LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
                 rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
                                          llap->llap_cookie,
                                          ASYNC_READY | ASYNC_URGENT);
@@ -118,7 +80,7 @@ static int ll_writepage_24(struct page *page)
                                         llap->llap_cookie, OBD_BRW_WRITE, 0, 0,
                                         0, ASYNC_READY | ASYNC_URGENT);
                 if (rc == 0)
-                        LL_CDEBUG_PAGE(page, "mmap write queued\n");
+                        LL_CDEBUG_PAGE(D_PAGE, page, "mmap write queued\n");
                 else
                         llap->llap_write_queued = 0;
         }
@@ -215,12 +177,12 @@ static int ll_direct_IO_24(int rw,
 }
 
 struct address_space_operations ll_aops = {
-        readpage: ll_readpage,
-        direct_IO: ll_direct_IO_24,
-        writepage: ll_writepage_24,
-        prepare_write: ll_prepare_write,
-        commit_write: ll_commit_write,
-        removepage: ll_removepage,
-        sync_page: NULL,
-        bmap: NULL
+        .readpage       = ll_readpage,
+        .direct_IO      = ll_direct_IO_24,
+        .writepage      = ll_writepage_24,
+        .prepare_write  = ll_prepare_write,
+        .commit_write   = ll_commit_write,
+        .removepage     = ll_removepage,
+        .sync_page      = NULL,
+        .bmap           = NULL
 };
