@@ -1,6 +1,5 @@
-CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I/usr/lib/glib/include -I../include -Wall -D_LARGEFILE64_SOURCE
-KFLAGS:=
-CPPFLAGS :=
+DEFS:=
+CPPFLAGS := -g -I. -I$(PORTALS)/include -I$(top_srcdir)/include -Wall -D_LARGEFILE64_SOURCE
 # LDADD := -lreadline -ltermcap # -lefence
 bin_PROGRAMS = openunlink testreq truncate
 
