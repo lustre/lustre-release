@@ -6,11 +6,12 @@ CFLAGS := -g -Wall
 # LDADD := -lreadline -ltermcap # -lefence
 pkglibdir = @libdir@/$(PACKAGE)
 pkgcfgdir = @sysconfdir@/$(PACKAGE)
-EXTRA_DIST = $(sbin_SCRIPTS) $(noinst_SCRIPTS) common.sh lustre.cfg \
-client-echo.cfg    elan-server.cfg  net-client.cfg  obdecho.cfg \
-client-mount.cfg   ldlm.cfg         net-local.cfg   obdfilter.cfg \
-client-mount2.cfg  lustre.cfg       net-server.cfg \
-elan-client.cfg    mds.cfg 
+EXTRA_DIST = $(sbin_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
+	common.sh lustre.cfg \
+	client-echo.cfg    elan-server.cfg  net-client.cfg  obdecho.cfg \
+	client-mount.cfg   ldlm.cfg         net-local.cfg   obdfilter.cfg \
+	client-mount2.cfg  lustre.cfg       net-server.cfg \
+	elan-client.cfg    mds.cfg 
 sbin_SCRIPTS = llsetup.sh llrsetup.sh llcleanup.sh
 noinst_DATA = ext2_10000.gz ext2_25000.gz ext3_10000.gz lov.xml
 noinst_SCRIPTS = fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
