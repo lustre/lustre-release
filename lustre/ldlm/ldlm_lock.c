@@ -155,9 +155,10 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LDLM_LOCK_PUT(lock->l_parent);
 
         if (lock->l_refc == 0 && (lock->l_flags & LDLM_FL_DESTROYED)) {
+                l_unlock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
 
-                spin_lock(&ldlm_handle_lock);
+                //spin_lock(&ldlm_handle_lock);
                 spin_lock(&ns->ns_counter_lock);
                 ns->ns_locks--;
                 spin_unlock(&ns->ns_counter_lock);
@@ -166,11 +167,12 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 if (lock->l_export && lock->l_export->exp_connection)
                         ptlrpc_put_connection(lock->l_export->exp_connection);
                 kmem_cache_free(ldlm_lock_slab, lock);
-                spin_unlock(&ldlm_handle_lock);
+                //spin_unlock(&ldlm_handle_lock);
                 CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 0).\n",
                        sizeof(*lock), lock);
-        }
-        l_unlock(&ns->ns_lock);
+        } else
+                l_unlock(&ns->ns_lock);
+
         EXIT;
 }
 
@@ -226,7 +228,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         if (resource == NULL)
                 LBUG();
 
-        spin_lock(&ldlm_handle_lock);
         lock = kmem_cache_alloc(ldlm_lock_slab, SLAB_KERNEL);
         if (lock == NULL)
                 RETURN(NULL);
@@ -254,7 +255,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                 list_add(&lock->l_childof, &parent->l_children);
                 l_unlock(&parent->l_resource->lr_namespace->ns_lock);
         }
-        spin_unlock(&ldlm_handle_lock);
 
         CDEBUG(D_MALLOC, "kmalloced 'lock': %d at "
                "%p (tot %d).\n", sizeof(*lock), lock, 1);
@@ -323,7 +323,7 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
                 RETURN(NULL);
         }
 
-        spin_lock(&ldlm_handle_lock);
+        //spin_lock(&ldlm_handle_lock);
         lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
         if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock)) {
                 CERROR("bogus lock %p\n", lock);
@@ -340,13 +340,13 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
                 LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
                 GOTO(out2, retval);
         }
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (lock->l_random != handle->cookie) {
                 CERROR("bogus cookie: lock "LPX64", handle "LPX64"\n",
                        lock->l_random, handle->cookie);
                 GOTO(out, NULL);
         }
 
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (lock->l_flags & LDLM_FL_DESTROYED) {
                 CERROR("lock already destroyed: lock %p\n", lock);
                 LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
@@ -360,7 +360,7 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
  out2:
-        spin_unlock(&ldlm_handle_lock);
+        //spin_unlock(&ldlm_handle_lock);
         return retval;
 }
 
