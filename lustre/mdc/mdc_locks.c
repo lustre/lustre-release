@@ -164,6 +164,12 @@ int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
         res_id.name[0] = fid->id;
         res_id.name[1] = fid->generation;
 
+        res_id.name[3] = MDS_INODELOCK_LOOKUP;
+
+        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it, 
+                           data);
+
+        res_id.name[3] = MDS_INODELOCK_UPDATE;
         ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it, 
                            data);
         EXIT;
@@ -189,7 +195,8 @@ int mdc_enqueue(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_exp2obd(exp);
         struct ldlm_res_id res_id =
-                { .name = {data->fid1.id, data->fid1.generation} };
+                { .name = {data->fid1.id, data->fid1.generation, 0,
+                           MDS_INODELOCK_LOOKUP} };
         int size[6] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
         int rc, flags = LDLM_FL_HAS_INTENT;
         int repsize[4] = {sizeof(struct ldlm_reply),
@@ -255,6 +262,9 @@ int mdc_enqueue(struct obd_export *exp,
                 size[2] = sizeof(struct mds_body);
                 size[3] = data->namelen + 1;
 
+                if (it->it_op & IT_GETATTR)
+                        res_id.name[3] = MDS_INODELOCK_UPDATE;
+
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 4,
                                       size, NULL);
                 if (!req)
@@ -270,6 +280,7 @@ int mdc_enqueue(struct obd_export *exp,
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_READDIR) {
+                res_id.name[3] = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
                                       size, NULL);
                 if (!req)
@@ -282,7 +293,6 @@ int mdc_enqueue(struct obd_export *exp,
                 LBUG();
                 RETURN(-EINVAL);
         }
-
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         rc = ldlm_cli_enqueue(exp, req, obddev->obd_namespace, NULL, res_id,
                               lock_type, NULL, 0, lock_mode, &flags,
@@ -310,6 +320,7 @@ int mdc_enqueue(struct obd_export *exp,
         } else { /* rc = 0 */
                 struct ldlm_lock *lock = ldlm_handle2lock(lockh);
                 LASSERT(lock);
+                LASSERT(lock->l_resource->lr_name.name[3]);
 
                 /* If the server gave us back a different lock mode, we should
                  * fix up our variables. */
@@ -422,6 +433,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 struct lustre_handle lockh;
                 int mode, flags = LDLM_FL_BLOCK_GRANTED;
 
+                res_id.name[3] = (it->it_op == IT_GETATTR)?MDS_INODELOCK_UPDATE:
+                                                           MDS_INODELOCK_LOOKUP;
                 mode = LCK_PR;
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
                                      &res_id, LDLM_PLAIN, NULL, 0, LCK_PR,
