@@ -743,9 +743,12 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
 static void
 target_notified_reply_callback (struct ptlrpc_reply_state *rs)
 {
-        while (rs->rs_nlocks-- > 0)
-                ldlm_lock_decref (&rs->rs_locks[rs->rs_nlocks],
-                                  rs->rs_modes[rs->rs_nlocks]);
+        int n = rs->rs_nlocks;
+        
+        while (n-- > 0) 
+                ldlm_lock_decref (&rs->rs_locks[n], rs->rs_modes[n]);
+        rs->rs_nlocks = 0;
+        rs->rs_notified_callback = NULL;
 }
 
 int
@@ -823,11 +826,13 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         exp = class_export_get (req->rq_export);
         obd = exp->exp_obd;
 
-        /* Hack to get past circular module dependency */
-        rs->rs_notified_callback = target_notified_reply_callback;
-
         /* disably reply scheduling onto srv_reply_queue while I'm setting up */
         rs->rs_scheduled = 1;
+        rs->rs_xid       = req->rq_xid;
+        rs->rs_transno   = req->rq_transno;
+        rs->rs_export    = exp;
+        /* Hack to get past circular module dependency */
+        rs->rs_notified_callback = target_notified_reply_callback;
 
         local_irq_save (flags);
 
