@@ -286,7 +286,7 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
 /* Must be called with resource->lr_lock taken */
 void ldlm_resource_del_lock(struct ldlm_lock *lock)
 {
-        list_del(&lock->l_res_link);
+        list_del_init(&lock->l_res_link);
         lock->l_resource->lr_refcount--;
 }
 
