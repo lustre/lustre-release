@@ -482,11 +482,11 @@
 +						  &dentry->d_name, 0, NULL);
 +				d_invalidate(dentry);
 +				dput(dentry);
-+                                if (IS_ERR(new)) { 
-+                                        err = PTR_ERR(new);
-+                                        break;
-+                                }
-+                                nd->dentry = new;
++				if (IS_ERR(new)) { 
++					err = PTR_ERR(new);
++					break;
++				}
++				nd->dentry = new;
 +			}
 +		} else
  		if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
@@ -1450,8 +1450,8 @@
  {
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
-+        if (!inode)
-+                return -ENOENT;
++	if (!inode)
++		return -ENOENT;
 +	if (inode->i_op && inode->i_op->revalidate_it)
 +		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
@@ -1675,9 +1675,9 @@
 +	void (*d_unpin)(struct dentry *, struct vfsmount *, int);
  };
  
-+#define PIN(de,mnt,flag)  if (de->d_op && de->d_op->d_pin) \
++#define PIN(de,mnt,flag)  if (de && de->d_op && de->d_op->d_pin) \
 +				de->d_op->d_pin(de, mnt, flag);
-+#define UNPIN(de,mnt,flag)  if (de->d_op && de->d_op->d_unpin) \
++#define UNPIN(de,mnt,flag)  if (de && de->d_op && de->d_op->d_unpin) \
 +				de->d_op->d_unpin(de, mnt, flag);
 +
 +
