@@ -171,8 +171,6 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
         list_add(&mfd->mfd_list, &med->med_open_head);
         spin_unlock(&med->med_open_lock);
 
- out_ldput:
-        l_dput(dchild);
  out_unlock: 
         l_dput(parent);
         ldlm_lock_decref(&lockh, lock_mode);
@@ -188,4 +186,8 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
                 CDEBUG(D_INODE, "file "LPX64": addr %p, cookie "LPX64"\n",
                        mfd->mfd_clienthandle.addr, mfd, mfd->mfd_servercookie);
         RETURN(0);
+
+ out_ldput:
+        l_dput(dchild);
+        goto out_unlock;
 }
