@@ -26,7 +26,7 @@
 
 #define CHUNK_MAX_SIZE 123456
 
-int rprintf(int rank, int loop, const char *fmt, ...)
+void rprintf(int rank, int loop, const char *fmt, ...)
 {
         va_list       ap;
  
@@ -37,7 +37,6 @@ int rprintf(int rank, int loop, const char *fmt, ...)
         vprintf(fmt, ap);
  
         MPI_Abort(MPI_COMM_WORLD, 1);
-        exit(1);
 }
 
 int main (int argc, char *argv[]) {
