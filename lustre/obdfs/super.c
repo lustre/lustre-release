@@ -146,24 +146,28 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 	if ( !device ) {
 		printk("No device\n");
 		MOD_DEC_USE_COUNT;
+		EXIT;
 		return NULL;
 	}
 
 	if ( (err = obdfs_getdev(device, &devno)) ) {
 		printk("Cannot get devno of %s, error %d\n", device, err);
 		MOD_DEC_USE_COUNT;
+		EXIT;
 		return NULL;
 	}
 
 	if ( MAJOR(devno) != OBD_PSDEV_MAJOR ) {
 		printk("Wrong major number!\n");
 		MOD_DEC_USE_COUNT;
+		EXIT;
 		return NULL;
 	}
 		
 	if ( MINOR(devno) >= MAX_OBD_DEVICES ) {
 		printk("Minor of %s too high (%d)\n", device, MINOR(devno));
 		MOD_DEC_USE_COUNT;
+		EXIT;
 		return NULL;
 	} 
 
@@ -171,7 +175,10 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 
 	if ( ! (obddev->obd_flags & OBD_ATTACHED) || 
 	     ! (obddev->obd_flags & OBD_SET_UP) ){
+		printk("Device %s not attached or not set up (%d)\n", 
+		       device, MINOR(devno));
 		MOD_DEC_USE_COUNT;
+		EXIT;
 		return NULL;
 	} 
 
