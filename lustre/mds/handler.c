@@ -669,8 +669,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         if (IS_ERR(dchild)) {
                 CDEBUG(D_INODE, "child lookup error %ld\n", PTR_ERR(dchild));
                 up(&dir->i_sem);
-                LBUG();
-                GOTO(out_create_dchild, rc = -ESTALE);
+                GOTO(out_create_dchild, rc = PTR_ERR(dchild));
         }
 
         rc = mds_getattr_internal(mds, dchild, req, body, offset);
