@@ -60,7 +60,7 @@ static int incoming_callback(ptl_event_t *ev, void *data)
 	int rc;
 
 	if (ev->rlength != ev->mlength)
-		printk("Warning: Possibly truncated rpc (%d/%d)\n",
+		CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
 			ev->mlength, ev->rlength);
 
 	/* The ME is unlinked when there is less than 1024 bytes free
@@ -79,13 +79,13 @@ static int incoming_callback(ptl_event_t *ev, void *data)
 	service->srv_ref_count[service->srv_md_active]++;
 
 	if (ev->offset >= (service->srv_buf_size - 1024)) {
-		printk("Unlinking ME %d\n", service->srv_me_active);
+		CERROR("Unlinking ME %d\n", service->srv_me_active);
 
 		rc = PtlMEUnlink(service->srv_me_h[service->srv_me_active]);
 		service->srv_me_h[service->srv_me_active] = 0;
 
 		if (rc != PTL_OK) {
-			printk("PtlMEUnlink failed: %d\n", rc);	
+			CERROR("PtlMEUnlink failed: %d\n", rc);	
 			return rc;
 		}
 
@@ -93,7 +93,7 @@ static int incoming_callback(ptl_event_t *ev, void *data)
 			service->srv_ring_length);
 
 		if (service->srv_me_h[service->srv_me_active] == 0)
-			printk("All %d ring ME's are unlinked!\n",
+			CERROR("All %d ring ME's are unlinked!\n",
 				service->srv_ring_length);
 
 	}
@@ -101,7 +101,7 @@ static int incoming_callback(ptl_event_t *ev, void *data)
         if (ev->type == PTL_EVENT_PUT) {
                 wake_up(service->srv_wait_queue);
         } else {
-                printk("Unexpected event type: %d\n", ev->type);
+                CERROR("Unexpected event type: %d\n", ev->type);
         }
 
         return 0;
@@ -118,7 +118,7 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
         } else if (ev->type == PTL_EVENT_ACK) {
                 wake_up_interruptible(&rpc->rq_wait_for_bulk);
         } else {
-                printk("Unexpected event type in " __FUNCTION__ "!\n");
+                CERROR("Unexpected event type!\n");
         }
 
         EXIT;
@@ -133,10 +133,10 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
 
         if (ev->type == PTL_EVENT_PUT) {
                 if (rpc->rq_bulkbuf != ev->mem_desc.start + ev->offset)
-                        printk(__FUNCTION__ ": bulkbuf != mem_desc -- why?\n");
+                        CERROR("bulkbuf != mem_desc -- why?\n");
                 wake_up_interruptible(&rpc->rq_wait_for_bulk);
         } else {
-                printk("Unexpected event type in " __FUNCTION__ "!\n");
+                CERROR("Unexpected event type!\n");
         }
 
         EXIT;
@@ -170,7 +170,7 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
 
         rc = PtlMDBind(peer->peer_ni, request->rq_req_md, &md_h);
         if (rc != 0) {
-                printk(__FUNCTION__ ": PtlMDBind failed: %d\n", rc);
+                CERROR("PtlMDBind failed: %d\n", rc);
                 return rc;
         }
 
@@ -186,7 +186,7 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
                             request->rq_xid, 0, 0);
         }
         if (rc != PTL_OK) {
-                printk(__FUNCTION__ ": PtlPut failed: %d\n", rc);
+                CERROR("PtlPut failed: %d\n", rc);
                 /* FIXME: tear down md */
         }
 
@@ -202,7 +202,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         ENTRY;
 
         if (request->rq_replen == 0) {
-                printk(__FUNCTION__ ": request->rq_replen is 0!\n");
+                CERROR("request->rq_replen is 0!\n");
                 EXIT;
                 return -EINVAL;
         }
@@ -285,8 +285,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
 		CDEBUG(D_INFO, "Removing MD at index %d, rc %d\n", index, rc);
 
                 if (rc)
-                        printk(__FUNCTION__ 
-                               ": PtlMDUnlink failed: index %d rc %d\n", 
+                        CERROR(": PtlMDUnlink failed: index %d rc %d\n", 
                                index, rc);
 
                 /* Replace the unlinked ME and MD */
@@ -299,7 +298,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                 service->srv_ref_count[index] = 0;
                 
 		if (rc != PTL_OK) {
-                        printk("PtlMEInsert failed: %d\n", rc);
+                        CERROR("PtlMEInsert failed: %d\n", rc);
                         return rc;
                 }
 
@@ -316,7 +315,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
 		CDEBUG(D_INFO, "Attach MD in ring, rc %d\n", rc);
                 if (rc != PTL_OK) {
                         /* cleanup */
-                        printk("PtlMDAttach failed: %d\n", rc);
+                        CERROR("PtlMDAttach failed: %d\n", rc);
                         return rc;
                 }
 
@@ -334,7 +333,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
 
         rc = kportal_uuid_to_peer(uuid, &peer);
         if (rc != 0) {
-                printk("Invalid uuid \"%s\"\n", uuid);
+                CERROR("Invalid uuid \"%s\"\n", uuid);
                 return -EINVAL;
         }
 
@@ -350,7 +349,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
                 service, &(service->srv_eq_h));
 
         if (rc != PTL_OK) {
-                printk("PtlEQAlloc failed: %d\n", rc);
+                CERROR("PtlEQAlloc failed: %d\n", rc);
                 return rc;
         }
 
@@ -360,7 +359,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
                 &(service->srv_me_h[0]));
 
         if (rc != PTL_OK) {
-                printk("PtlMEAttach failed: %d\n", rc);
+                CERROR("PtlMEAttach failed: %d\n", rc);
                 return rc;
         }
 
@@ -368,7 +367,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
 		OBD_ALLOC(service->srv_buf[i], service->srv_buf_size);                
 
                 if (service->srv_buf[i] == NULL) {
-                        printk(__FUNCTION__ ": no memory\n");
+                        CERROR("no memory\n");
                         return -ENOMEM;
                 }
 
@@ -380,7 +379,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
 			service->srv_me_tail = i;
 
 	                if (rc != PTL_OK) {
-	                        printk("PtlMEInsert failed: %d\n", rc);
+	                        CERROR("PtlMEInsert failed: %d\n", rc);
 	                        return rc;
 	                }
 		}
@@ -398,7 +397,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
 
                 if (rc != PTL_OK) {
                         /* cleanup */
-                        printk("PtlMDAttach failed: %d\n", rc);
+                        CERROR("PtlMDAttach failed: %d\n", rc);
                         return rc;
                 }
 	}
@@ -413,18 +412,18 @@ int rpc_unregister_service(struct ptlrpc_service *service)
 	for (i = 0; i < service->srv_ring_length; i++) {
 	        rc = PtlMDUnlink(service->srv_md_h[i]);
 	        if (rc)
-	                printk(__FUNCTION__ ": PtlMDUnlink failed: %d\n", rc);
+	                CERROR("PtlMDUnlink failed: %d\n", rc);
 	
 		rc = PtlMEUnlink(service->srv_me_h[i]);
 	        if (rc)
-	                printk(__FUNCTION__ ": PtlMEUnlink failed: %d\n", rc);
+	                CERROR("PtlMEUnlink failed: %d\n", rc);
 	
 		OBD_FREE(service->srv_buf[i], service->srv_buf_size);		
 	}
 
         rc = PtlEQFree(service->srv_eq_h);
         if (rc)
-                printk(__FUNCTION__ ": PtlEQFree failed: %d\n", rc);
+                CERROR("PtlEQFree failed: %d\n", rc);
 
         return 0;
 }
@@ -437,22 +436,22 @@ static int req_init_portals(void)
 
         nip = inter_module_get_request(LUSTRE_NAL "_ni", LUSTRE_NAL);
         if (nip == NULL) {
-                printk("get_ni failed: is the NAL module loaded?\n");
+                CERROR("get_ni failed: is the NAL module loaded?\n");
                 return -EIO;
         }
         ni = *nip;
 
         rc = PtlEQAlloc(ni, 128, request_callback, NULL, &req_eq);
         if (rc != PTL_OK)
-                printk("PtlEQAlloc failed: %d\n", rc);
+                CERROR("PtlEQAlloc failed: %d\n", rc);
 
         rc = PtlEQAlloc(ni, 128, bulk_source_callback, NULL, &bulk_source_eq);
         if (rc != PTL_OK)
-                printk("PtlEQAlloc failed: %d\n", rc);
+                CERROR("PtlEQAlloc failed: %d\n", rc);
 
         rc = PtlEQAlloc(ni, 128, bulk_sink_callback, NULL, &bulk_sink_eq);
         if (rc != PTL_OK)
-                printk("PtlEQAlloc failed: %d\n", rc);
+                CERROR("PtlEQAlloc failed: %d\n", rc);
 
         return rc;
 }

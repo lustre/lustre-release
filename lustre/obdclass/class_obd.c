@@ -142,11 +142,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	memset(buf, 0, sizeof(buf));
 
 	if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS) {
-		printk("OBD ioctl: No device\n");
+		CERROR("OBD ioctl: No device\n");
 		return -EINVAL;
 	} 
 	if (obd_ioctl_getdata(buf, buf + 800, (void *)arg)) { 
-		printk("OBD ioctl: data error\n");
+		CERROR("OBD ioctl: data error\n");
 		return -EINVAL;
 	}
 	data = (struct obd_ioctl_data *)buf;
@@ -160,7 +160,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		CDEBUG(D_IOCTL, "\n");
 		if (data->ioc_dev >= MAX_OBD_DEVICES ||
 		    data->ioc_dev < 0) { 
-			printk("OBD ioctl: DEVICE insufficient devices\n");
+			CERROR("OBD ioctl: DEVICE insufficient devices\n");
 			return -EINVAL;
 		}
 		CDEBUG(D_IOCTL, "device %d\n", data->ioc_dev);
@@ -176,18 +176,18 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 ENTRY;
                 /* have we attached a type to this device */
                 if ( obd->obd_flags & OBD_ATTACHED ) {
-                        printk("OBD: Device %d already typed as  %s.\n",
+                        CERROR("OBD: Device %d already typed as  %s.\n",
                                obd->obd_minor, MKSTR(obd->obd_type->typ_name));
                         return -EBUSY;
                 }
 
-		printk("-----> attach %s %s\n",  MKSTR(data->ioc_inlbuf1), 
+		CDEBUG(D_IOCTL, "attach %s %s\n",  MKSTR(data->ioc_inlbuf1), 
 		       MKSTR(data->ioc_inlbuf2));
 
                 /* find the type */
                 type = obd_nm_to_type(data->ioc_inlbuf1);
                 if ( !type ) {
-                        printk("OBD: unknown type dev %d\n", obd->obd_minor);
+                        CERROR("OBD: unknown type dev %d\n", obd->obd_minor);
                         return -EINVAL;
                 }
 
@@ -206,7 +206,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 } else {
                         obd->obd_flags |=  OBD_ATTACHED;
                         type->typ_refcnt++;
-                        printk("OBD: dev %d attached type %s\n", 
+                        CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n", 
 			       obd->obd_minor, data->ioc_inlbuf1);
 			obd->obd_proc_entry = 
 				proc_lustre_register_obd_device(obd);
@@ -220,15 +220,16 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_DETACH: {
                 ENTRY;
                 if (obd->obd_flags & OBD_SET_UP) {
-                        printk("OBD device %d still set up\n", obd->obd_minor);
+                        CERROR("OBD device %d still set up\n", obd->obd_minor);
                         return -EBUSY;
                 }
                 if (! (obd->obd_flags & OBD_ATTACHED) ) {
-                        printk("OBD device %d not attached\n", obd->obd_minor);
+                        CERROR("OBD device %d not attached\n", obd->obd_minor);
                         return -ENODEV;
                 }
                 if ( !list_empty(&obd->obd_gen_clients) ) {
-                        printk("OBD device %d has connected clients\n", obd->obd_minor);
+                        CERROR("OBD device %d has connected clients\n",
+                               obd->obd_minor);
                         return -EBUSY;
                 }
 
@@ -247,13 +248,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 ENTRY;
                 /* have we attached a type to this device? */
                 if (!(obd->obd_flags & OBD_ATTACHED)) {
-                        printk("Device %d not attached\n", obd->obd_minor);
+                        CERROR("Device %d not attached\n", obd->obd_minor);
                         return -ENODEV;
                 }
 
                 /* has this been done already? */
                 if ( obd->obd_flags & OBD_SET_UP ) {
-                        printk("Device %d already setup (type %s)\n",
+                        CERROR("Device %d already setup (type %s)\n",
                                obd->obd_minor, obd->obd_type->typ_name);
                         return -EBUSY;
                 }
@@ -660,7 +661,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 #endif
                 OBD_FREE(input.att_type, input.att_typelen + 1);
                 if ( !type ) {
-                        printk(__FUNCTION__ ": unknown obd type dev %d\n", dev);
+                        CERROR("unknown obd type dev %d\n", dev);
                         EXIT;
                         return -EINVAL;
                 }
@@ -703,7 +704,7 @@ int obd_register_type(struct obd_ops *ops, char *nm)
         struct obd_type *type;
 
         if (obd_init_magic != 0x11223344) {
-                printk(__FUNCTION__ ": bad magic for type\n");
+                CERROR("bad magic for type\n");
                 EXIT;
                 return -EINVAL;
         }
@@ -735,15 +736,14 @@ int obd_unregister_type(char *nm)
 
         if ( !type ) {
                 MOD_DEC_USE_COUNT;
-                printk(KERN_INFO __FUNCTION__ ": unknown obd type\n");
+                CERROR("unknown obd type\n");
                 EXIT;
                 return -EINVAL;
         }
 
         if ( type->typ_refcnt ) {
                 MOD_DEC_USE_COUNT;
-                printk(KERN_ALERT __FUNCTION__ ":type %s has refcount "
-                       "(%d)\n", nm, type->typ_refcnt);
+                CERROR("type %s has refcount (%d)\n", nm, type->typ_refcnt);
                 EXIT;
                 return -EBUSY;
         }
@@ -779,8 +779,7 @@ int init_obd(void)
         INIT_LIST_HEAD(&obd_types);
         
 	if ( (err = misc_register(&obd_psdev)) ) { 
-                printk(KERN_ERR __FUNCTION__ ": cannot register %d err %d\n", 
-                       OBD_MINOR, err);
+                CERROR("cannot register %d err %d\n", OBD_MINOR, err);
                 return -EIO;
         }
 

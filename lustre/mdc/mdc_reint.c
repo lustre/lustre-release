@@ -63,7 +63,7 @@ int mdc_setattr(struct lustre_peer *peer,
 
 	request = mds_prep_req(MDS_REINT, 0, NULL, sizeof(*rec), NULL);
 	if (!request) { 
-		printk("mdc request: cannot pack\n");
+		CERROR("mdc request: cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -101,7 +101,7 @@ int mdc_create(struct lustre_peer *peer,
 			       sizeof(*rec) + size_round0(namelen) + 
 			       size_round0(tgtlen), NULL);
 	if (!request) { 
-		printk("mdc_create: cannot pack\n");
+		CERROR("mdc_create: cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -136,7 +136,7 @@ int mdc_unlink(struct lustre_peer *peer,
 	request = mds_prep_req(MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen), NULL);
 	if (!request) { 
-		printk("mdc_unlink: cannot pack\n");
+		CERROR("mdc_unlink: cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -170,7 +170,7 @@ int mdc_link(struct lustre_peer *peer, struct dentry *src,
 	request = mds_prep_req(MDS_REINT, 0, NULL, 
 			       sizeof(*rec) + size_round0(namelen), NULL);
 	if (!request) { 
-		printk("mdc_link: cannot pack\n");
+		CERROR("mdc_link: cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -206,7 +206,7 @@ int mdc_rename(struct lustre_peer *peer, struct inode *src,
 			       sizeof(*rec) + size_round0(oldlen)
 			       + size_round0(newlen), NULL);
 	if (!request) { 
-		printk("mdc_link: cannot pack\n");
+		CERROR("mdc_link: cannot pack\n");
 		return -ENOMEM;
 	}
 

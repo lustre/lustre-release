@@ -225,7 +225,7 @@ int obdfs_writepage(struct page *page)
 	int rc;
 	struct inode *inode = page->mapping->host;
         ENTRY;
-	printk("---> writepage called ino %ld!\n", inode->i_ino);
+	CERROR("---> writepage called ino %ld!\n", inode->i_ino);
 	BUG();
 	rc = obdfs_brw(OBD_BRW_WRITE, inode, page, 1);
 	if ( !rc ) {
@@ -361,11 +361,10 @@ void obdfs_cleanup_pgrqcache(void)
                 CDEBUG(D_CACHE, "destroying obdfs_pgrqcache at %p, count %ld\n",
                        obdfs_pgrq_cachep, obdfs_cache_count);
                 if (kmem_cache_destroy(obdfs_pgrq_cachep))
-                        printk(KERN_INFO __FUNCTION__
-                               ": unable to free all of cache\n");
+                        CERROR("unable to free all of cache\n");
                 obdfs_pgrq_cachep = NULL;
         } else
-                printk(KERN_INFO __FUNCTION__ ": called with NULL pointer\n");
+                CERROR("called with NULL pointer\n");
 
         EXIT;
 } /* obdfs_cleanup_wreqcache */
@@ -499,7 +498,7 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
                 obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
                 list_add(&pgrq->rq_plist, obdfs_iplist(inode));
                 obdfs_cache_count++;
-		//printk("-- count %d\n", obdfs_cache_count);
+		//CERROR("-- count %d\n", obdfs_cache_count);
 
                 /* If inode isn't already on superblock inodes list, add it.
                  *
@@ -532,9 +531,9 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 void rebalance(void)
 {
 	if (obdfs_cache_count > 60000) {
-		printk("-- count %ld\n", obdfs_cache_count);
+		CERROR("-- count %ld\n", obdfs_cache_count);
 		//obdfs_flush_dirty_pages(~0UL);
-		printk("-- count %ld\n", obdfs_cache_count);
+		CERROR("-- count %ld\n", obdfs_cache_count);
 	}
 }
 
@@ -659,7 +658,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
 
         /* Yuck, no page */
         if (! page) {
-            printk(KERN_WARNING " grab_cache_page says no dice ...\n");
+            CERROR("grab_cache_page says no dice ...\n");
             EXIT;
             return NULL;
         }
@@ -671,8 +670,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
                         if (PageLocked(page))
                                 obd_unlock_page(page);
                 } else {
-                        printk("file %s, line %d: expecting locked page\n",
-                               __FILE__, __LINE__); 
+                        CERROR("expecting locked page\n");
                 }
                 EXIT;
                 return page;
@@ -706,7 +704,7 @@ void obdfs_truncate(struct inode *inode)
         oa = obdo_alloc();
         if ( !oa ) {
 		err = -ENOMEM;
-                printk(__FUNCTION__ ": obdo_alloc failed!\n");
+                CERROR("obdo_alloc failed!\n");
         } else {
                 oa->o_valid = OBD_MD_FLNOTOBD;
                 obdfs_from_inode(oa, inode);
@@ -719,7 +717,7 @@ void obdfs_truncate(struct inode *inode)
         }
 
         if (err) {
-                printk(__FUNCTION__ ": obd_truncate fails (%d)\n", err);
+                CERROR("obd_truncate fails (%d)\n", err);
                 EXIT;
                 return;
         }

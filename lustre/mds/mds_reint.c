@@ -107,7 +107,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 	dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
 	rc = PTR_ERR(dchild);
 	if (IS_ERR(dchild)) { 
-		printk(__FUNCTION__ "child lookup error %d\n", rc);
+		CERROR("child lookup error %d\n", rc);
 		dput(de); 
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
@@ -115,7 +115,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 	}
 
 	if (dchild->d_inode) {
-		printk(__FUNCTION__ "child exists (dir %ld, name %s\n", 
+		CERROR("child exists (dir %ld, name %s\n", 
 		       de->d_inode->i_ino, rec->ur_name);
 		dput(de); 
 		req->rq_rephdr->status = -ESTALE;
@@ -188,7 +188,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 	dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
 	rc = PTR_ERR(dchild);
 	if (IS_ERR(dchild)) { 
-		printk(__FUNCTION__ ": child lookup error %d\n", rc);
+		CERROR("child lookup error %d\n", rc);
 		dput(de); 
 		req->rq_rephdr->status = -ESTALE;
 		EXIT;
@@ -196,7 +196,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 	}
 
 	if (!dchild->d_inode) {
-		printk(__FUNCTION__ ": child doesn't exist (dir %ld, name %s\n", 
+		CERROR("child doesn't exist (dir %ld, name %s\n", 
 		       de->d_inode->i_ino, rec->ur_name);
 		dput(de); 
 		req->rq_rephdr->status = -ESTALE;
@@ -248,13 +248,13 @@ static int mds_reint_link(struct mds_update_record *rec,
 
 	dchild = lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen - 1);
 	if (IS_ERR(dchild)) { 
-		printk(__FUNCTION__ ": child lookup error %d\n", rc);
+		CERROR("child lookup error %d\n", rc);
 		req->rq_rephdr->status = -ESTALE;
 		goto out_link;
 	}
 
 	if (dchild->d_inode) {
-		printk(__FUNCTION__ ": child exists (dir %ld, name %s\n", 
+		CERROR("child exists (dir %ld, name %s\n", 
 		       de_tgt_dir->d_inode->i_ino, rec->ur_name);
 		EXIT;
 		goto out_link;
@@ -298,13 +298,13 @@ static int mds_reint_rename(struct mds_update_record *rec,
 
 	de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
 	if (IS_ERR(de_old)) { 
-		printk(__FUNCTION__ "child lookup error %d\n", rc);
+		CERROR("child lookup error %d\n", rc);
 		goto out_rename;
 	}
 
 	de_new = lookup_one_len(rec->ur_tgt, de_tgtdir, rec->ur_tgtlen - 1);
 	if (IS_ERR(de_new)) { 
-		printk(__FUNCTION__ "child lookup error %d\n", rc);
+		CERROR("child lookup error %d\n", rc);
 		goto out_rename;
 	}
 
@@ -335,7 +335,7 @@ int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
 	int rc; 
 
 	if (rec->ur_opcode < 0 || rec->ur_opcode > REINT_MAX) { 
-		printk(__FUNCTION__ "opcode %d not valid\n", 
+		CERROR("opcode %d not valid\n", 
 		       rec->ur_opcode); 
 		rc = req->rq_status = -EINVAL;
 		return rc;
@@ -345,7 +345,7 @@ int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;
-		printk("mds: out of memory\n");
+		CERROR("mds: out of memory\n");
 		rc = req->rq_status = -ENOMEM;
 		return rc;
 	}

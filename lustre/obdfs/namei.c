@@ -102,7 +102,7 @@ static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
         oa = obdo_fromid(IID(dir), ino, type, 
 			 OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
         if ( IS_ERR(oa) ) {
-                printk(__FUNCTION__ ": obdo_fromid failed\n");
+                CERROR("obdo_fromid failed\n");
                 EXIT;
                 return ERR_PTR(-EACCES); 
         }
@@ -156,7 +156,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 	CDEBUG(D_INODE, "\n");
 
         if ( err ) {
-                printk("new_inode - fatal: err %d\n", err);
+                CERROR("new_inode - fatal: err %d\n", err);
                 obdo_free(oa);
                 EXIT;
                 return ERR_PTR(err);
@@ -167,7 +167,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 	CDEBUG(D_INODE, "\n");
 
         if (!inode) {
-                printk("new_inode -fatal:  %ld\n", (long)oa->o_id);
+                CERROR("new_inode -fatal:  %ld\n", (long)oa->o_id);
                 obd_destroy(IID(dir), oa);
 		obdo_free(oa);
                 EXIT;
@@ -176,7 +176,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
         obdo_free(oa);
 
         if (!list_empty(&inode->i_dentry)) {
-                printk("new_inode -fatal: aliases %ld, ct %d lnk %d\n", 
+                CERROR("new_inode -fatal: aliases %ld, ct %d lnk %d\n", 
 		       (long)oa->o_id,
 		       atomic_read(&inode->i_count), 
 		       inode->i_nlink);

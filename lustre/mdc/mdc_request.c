@@ -65,7 +65,7 @@ struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name,
 
 	OBD_ALLOC(request, sizeof(*request));
 	if (!request) { 
-		printk("mds_prep_req: request allocation out of memory\n");
+		CERROR("request allocation out of memory\n");
 		return NULL;
 	}
 
@@ -76,10 +76,10 @@ struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name,
 			  &request->rq_reqhdr, &(request->rq_req.mds),
 			  &request->rq_reqlen, &request->rq_reqbuf);
 	if (rc) { 
-		printk("llight request: cannot pack request %d\n", rc); 
+		CERROR("llight request: cannot pack request %d\n", rc); 
 		return NULL;
 	}
-        CDEBUG(0, "--> mds_prep_req: len %d, req %p, tgtlen %d\n", 
+        CDEBUG(0, "--> len %d, req %p, tgtlen %d\n", 
 	       request->rq_reqlen, request->rq_req.mds, 
 	       request->rq_req.mds->tgtlen);
 	request->rq_reqhdr->opc = opcode;
@@ -104,7 +104,7 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 		rc = ptl_send_rpc(req, peer);
 	}
 	if (rc) { 
-		printk(__FUNCTION__ ": error %d, opcode %d\n", rc, 
+		CERROR("error %d, opcode %d\n", rc, 
 		       req->rq_reqhdr->opc); 
 		return -rc;
 	}
@@ -117,7 +117,7 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 	rc = mds_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
 			    &req->rq_rep.mds);
 	if (rc) {
-		printk(__FUNCTION__ ": mds_unpack_rep failed: %d\n", rc);
+		CERROR("mds_unpack_rep failed: %d\n", rc);
 		return rc;
 	}
 
@@ -143,7 +143,7 @@ int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid,
 
 	request = mds_prep_req(MDS_GETATTR, 0, NULL, 0, NULL); 
 	if (!request) { 
-		printk("llight request: cannot pack\n");
+		CERROR("llight request: cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -155,7 +155,7 @@ int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid,
 
 	rc = mds_queue_wait(request, peer);
 	if (rc) { 
-		printk("llight request: error in handling %d\n", rc); 
+		CERROR("llight request: error in handling %d\n", rc); 
 		goto out;
 	}
 
@@ -187,7 +187,7 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 	request = mds_prep_req(MDS_READPAGE, 0, NULL,
 			       sizeof(struct niobuf), (char *)&niobuf);
 	if (!request) { 
-		printk("mdc request: cannot pack\n");
+		CERROR("mdc request: cannot pack\n");
 		return -ENOMEM;
 	}
 
@@ -202,7 +202,7 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 
 	rc = mds_queue_wait(request, peer);
 	if (rc) { 
-		printk("mdc request: error in handling %d\n", rc); 
+		CERROR("mdc request: error in handling %d\n", rc); 
 		goto out;
 	}
 
@@ -226,7 +226,7 @@ int mdc_reint(struct lustre_peer *peer, struct ptlrpc_request *request)
 
 	rc = mds_queue_wait(request, peer);
 	if (rc) { 
-		printk("mdc request: error in handling %d\n", rc); 
+		CERROR("mdc request: error in handling %d\n", rc); 
 	}
 
 	return rc;
@@ -262,14 +262,14 @@ static int request_ioctl(struct inode *inode, struct file *file,
 	switch (cmd) {
 	case IOC_REQUEST_GETATTR: { 
 		struct ptlrep_hdr *hdr = NULL;
-		printk("-- getting attr for ino 2\n"); 
+		CERROR("-- getting attr for ino 2\n"); 
 		err = mdc_getattr(peer_ptr, 2, S_IFDIR, ~0, NULL, &hdr);
 		if (hdr) {
                         /* FIXME: there must be a better way to get the size */
 			OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
                                  sizeof(struct mds_rep));
                 }
-		printk("-- done err %d\n", err);
+		CERROR("-- done err %d\n", err);
 		break;
 	}
 
@@ -281,11 +281,11 @@ static int request_ioctl(struct inode *inode, struct file *file,
 			err = -ENOMEM;
 			break;
 		}
-		printk("-- readpage 0 for ino 2\n"); 
+		CERROR("-- readpage 0 for ino 2\n"); 
 		err = mdc_readpage(peer_ptr, 2, S_IFDIR, 0, buf, NULL, &hdr);
-		printk("-- done err %d\n", err);
+		CERROR("-- done err %d\n", err);
 		if (!err) { 
-			printk("-- status: %d\n", hdr->status); 
+			CERROR("-- status: %d\n", hdr->status); 
 			err = hdr->status;
                         if (hdr)
                                 OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
@@ -306,9 +306,9 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
 		err = mdc_setattr(peer_ptr, &inode, &iattr, NULL, &hdr);
-		printk("-- done err %d\n", err);
+		CERROR("-- done err %d\n", err);
 		if (!err) { 
-			printk("-- status: %d\n", hdr->status); 
+			CERROR("-- status: %d\n", hdr->status); 
 			err = hdr->status;
 		} else {
                         OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +
@@ -331,9 +331,9 @@ static int request_ioctl(struct inode *inode, struct file *file,
 				 "foofile", strlen("foofile"), 
 				 NULL, 0, 0100707, 47114711, 
 				 11, 47, 0, NULL, &hdr);
-		printk("-- done err %d\n", err);
+		CERROR("-- done err %d\n", err);
 		if (!err) { 
-			printk("-- status: %d\n", hdr->status); 
+			CERROR("-- status: %d\n", hdr->status); 
 			err = hdr->status;
 		}
                 OBD_FREE(hdr, sizeof(struct ptlrep_hdr) +

@@ -198,8 +198,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 	    || (generation && inode->i_generation != generation)
 		) {
 		/* we didn't find the right inode.. */
-		printk(__FUNCTION__ 
-		       "bad inode %lu, link: %d ct: %d or version  %u/%u\n",
+		CERROR("bad inode %lu, link: %d ct: %d or version  %u/%u\n",
 			inode->i_ino,
 			inode->i_nlink, atomic_read(&inode->i_count),
 			inode->i_generation,
@@ -254,7 +253,7 @@ int mds_getattr(struct ptlrpc_request *req)
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;
-		printk("mds: out of memory\n");
+		CERROR("mds: out of memory\n");
 		req->rq_status = -ENOMEM;
 		return 0;
 	}
@@ -298,7 +297,7 @@ int mds_readpage(struct ptlrpc_request *req)
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
 		EXIT;
-		printk("mds: out of memory\n");
+		CERROR("mds: out of memory\n");
 		req->rq_status = -ENOMEM;
 		return 0;
 	}
@@ -345,7 +344,7 @@ int mds_reint(struct ptlrpc_request *req)
 	
 	rc = mds_update_unpack(buf, len, &rec);
 	if (rc) { 
-		printk(__FUNCTION__ ": invalid record\n");
+		CERROR("invalid record\n");
 		req->rq_status = -EINVAL;
 		return 0;
 	}
@@ -365,7 +364,7 @@ int mds_handle(struct ptlrpc_request *req)
 	hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
 
 	if (NTOH__u32(hdr->type) != MDS_TYPE_REQ) {
-		printk("lustre_mds: wrong packet type sent %d\n",
+		CERROR("lustre_mds: wrong packet type sent %d\n",
 		       NTOH__u32(hdr->type));
 		rc = -EINVAL;
 		goto out;
@@ -374,7 +373,7 @@ int mds_handle(struct ptlrpc_request *req)
 	rc = mds_unpack_req(req->rq_reqbuf, req->rq_reqlen, 
 			    &req->rq_reqhdr, &req->rq_req.mds);
 	if (rc) { 
-		printk("lustre_mds: Invalid request\n");
+		CERROR("lustre_mds: Invalid request\n");
 		EXIT; 
 		goto out;
 	}
@@ -402,7 +401,7 @@ int mds_handle(struct ptlrpc_request *req)
 
 out:
 	if (rc) { 
-		printk(__FUNCTION__ ": no header\n");
+		CERROR("no header\n");
 		return 0;
 	}
 
@@ -516,7 +515,7 @@ int mds_main(void *arg)
 
 	mds->mds_thread = NULL;
 	wake_up(&mds->mds_done_waitq);
-	printk("lustre_mds: exiting\n");
+	CERROR("lustre_mds: exiting\n");
 	return 0;
 }
 
@@ -615,7 +614,7 @@ static int mds_cleanup(struct obd_device * obddev)
         }
 
         if ( !list_empty(&obddev->obd_gen_clients) ) {
-                printk(KERN_WARNING __FUNCTION__ ": still has clients!\n");
+                CERROR("still has clients!\n");
                 EXIT;
                 return -EBUSY;
         }

@@ -145,7 +145,7 @@ static void filter_prep(struct obd_device *obddev)
 	rc = simple_mkdir(current->fs->pwd, "D", 0700);
 	file  = filp_open("O", O_RDONLY, 0); 
 	if (!file || IS_ERR(file)) { 
-		printk(__FUNCTION__ ": cannot open O\n"); 
+		CERROR("cannot open O\n"); 
 		goto out;
 	}
 	rc = simple_mkdir(file->f_dentry, "R", 0700);  /* regular */
@@ -160,7 +160,7 @@ static void filter_prep(struct obd_device *obddev)
 	filter_id(rootid, FILTER_ROOTINO, S_IFDIR);
 	file = filp_open(rootid, O_RDWR | O_CREAT, 00755);
 	if (IS_ERR(file)) {
-		printk("OBD filter: cannot make root directory"); 
+		CERROR("OBD filter: cannot make root directory"); 
 		goto out;
 	}
 	filp_close(file, 0);
@@ -168,7 +168,7 @@ static void filter_prep(struct obd_device *obddev)
 
 	file = filp_open("D/status", O_RDWR | O_CREAT, 0700);
 	if ( !file || IS_ERR(file) ) {
-		printk("OBD filter: cannot open/create status file\n");
+		CERROR("OBD filter: cannot open/create status file\n");
 		goto out;
 	}
 
@@ -183,14 +183,14 @@ static void filter_prep(struct obd_device *obddev)
 		rc = file->f_op->write(file, (char *)&lastino, 
 				       sizeof(lastino), &off);
 		if (rc != sizeof(lastino)) { 
-			printk("OBD filter: error writing lastino\n");
+			CERROR("OBD filter: error writing lastino\n");
 			goto out;
 		}
 	} else { 
 		rc = file->f_op->read(file, (char *)&lastino, sizeof(lastino), 
 				      &off);
 		if (rc != sizeof(lastino)) { 
-			printk("OBD filter: error reading lastino\n");
+			CERROR("OBD filter: error reading lastino\n");
 			goto out;
 		}
 	}
@@ -210,18 +210,18 @@ static void filter_post(struct obd_device *obddev)
 	push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
 	file = filp_open("D/status", O_RDWR | O_CREAT, 0700);
 	if ( !file || IS_ERR(file)) { 
-		printk("OBD filter: cannot create status file\n");
+		CERROR("OBD filter: cannot create status file\n");
 		goto out;
 	}
 	rc = file->f_op->write(file, (char *)&obddev->u.filter.fo_lastino, 
 		       sizeof(obddev->u.filter.fo_lastino), &off);
 	if (rc != sizeof(sizeof(obddev->u.filter.fo_lastino)) ) { 
-		printk("OBD filter: error writing lastino\n");
+		CERROR("OBD filter: error writing lastino\n");
 	}
 
 	rc = filp_close(file, NULL); 
 	if (rc) { 
-		printk("OBD filter: cannot close status file\n");
+		CERROR("OBD filter: cannot close status file\n");
 	}
  out:
 	pop_ctxt(&saved);
@@ -297,7 +297,7 @@ static int filter_cleanup(struct obd_device * obddev)
         }
 
         if ( !list_empty(&obddev->obd_gen_clients) ) {
-                printk(KERN_WARNING __FUNCTION__ ": still has clients!\n");
+                CERROR("still has clients!\n");
                 EXIT;
                 return -EBUSY;
         }
@@ -345,7 +345,7 @@ static struct file *filter_obj_open(struct obd_device *obddev,
         }
 
 	if ( ! (oa->o_mode & S_IFMT) ) { 
-		printk("OBD filter_obj_open, no type (%Ld), mode %o!\n", 
+		CERROR("OBD filter_obj_open, no type (%Ld), mode %o!\n", 
 		       oa->o_id, oa->o_mode);
 	}
 	filter_id(id, oa->o_id, oa->o_mode); 
@@ -370,7 +370,7 @@ static struct inode *filter_inode_from_obdo(struct obd_device *obddev,
 
 	file = filter_obj_open(obddev, oa);
 	if ( !file ) { 
-		printk("filter_inode_from_obdo failed\n"); 
+		CERROR("filter_inode_from_obdo failed\n"); 
 		return NULL;
 	}
 
@@ -495,7 +495,7 @@ static int filter_create (struct obd_conn* conn, struct obdo *oa)
 
 	oa->o_id = filter_next_id(conn->oc_dev);
 	if ( !(oa->o_mode && S_IFMT) ) { 
-		printk("filter obd: no type!\n");
+		CERROR("filter obd: no type!\n");
 		return -ENOENT;
 	}
 
@@ -507,7 +507,7 @@ static int filter_create (struct obd_conn* conn, struct obdo *oa)
 	file = filp_open(name, O_RDONLY | O_CREAT, mode);
 	pop_ctxt(&saved);
 	if (IS_ERR(file)) { 
-		printk("Error mknod obj %s, err %ld\n", name, PTR_ERR(file));
+		CERROR("Error mknod obj %s, err %ld\n", name, PTR_ERR(file));
 		return -ENOENT;
 	}
 	filp_close(file, 0);

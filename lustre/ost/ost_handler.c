@@ -145,7 +145,7 @@ static int ost_destroy(struct ost_obd *ost, struct ptlrpc_request *req)
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
-		printk("ost_destroy: cannot pack reply\n"); 
+		CERROR("cannot pack reply\n"); 
 		return rc;
 	}
 
@@ -169,7 +169,7 @@ static int ost_getattr(struct ost_obd *ost, struct ptlrpc_request *req)
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
-		printk("ost_getattr: cannot pack reply\n"); 
+		CERROR("cannot pack reply\n"); 
 		return rc;
 	}
 	req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
@@ -195,7 +195,7 @@ static int ost_create(struct ost_obd *ost, struct ptlrpc_request *req)
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
-		printk("ost_create: cannot pack reply\n"); 
+		CERROR("cannot pack reply\n"); 
 		return rc;
 	}
 
@@ -222,7 +222,7 @@ static int ost_setattr(struct ost_obd *ost, struct ptlrpc_request *req)
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
-		printk("ost_setattr: cannot pack reply\n"); 
+		CERROR("cannot pack reply\n"); 
 		return rc;
 	}
 
@@ -248,13 +248,13 @@ static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
-		printk("ost_setattr: cannot pack reply\n"); 
+		CERROR("cannot pack reply\n"); 
 		return rc;
 	}
 
 	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_connect(&conn);
 
-        CDEBUG(0, "ost_connect: rep buffer %p, id %d\n", req->rq_repbuf,
+        CDEBUG(0, "rep buffer %p, id %d\n", req->rq_repbuf,
 	       conn.oc_id);
 	req->rq_rep.ost->connid = conn.oc_id;
 	EXIT;
@@ -274,7 +274,7 @@ static int ost_disconnect(struct ost_obd *ost, struct ptlrpc_request *req)
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
-		printk("ost_setattr: cannot pack reply\n"); 
+		CERROR("cannot pack reply\n"); 
 		return rc;
 	}
 
@@ -301,10 +301,10 @@ static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
 	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_get_info
 		(&conn, req->rq_req.ost->buflen1, ptr, &vallen, &val); 
 
-	rc = ost_pack_rep(val, vallen, NULL, 0, &req->rq_rephdr, &req->rq_rep.ost,
-			  &req->rq_replen, &req->rq_repbuf); 
+	rc = ost_pack_rep(val, vallen, NULL, 0, &req->rq_rephdr,
+                          &req->rq_rep.ost, &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
-		printk("ost_setattr: cannot pack reply\n"); 
+		CERROR("cannot pack reply\n"); 
 		return rc;
 	}
 
@@ -341,7 +341,7 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 			  &req->rq_rephdr, &req->rq_rep.ost,
 			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
-		printk("ost_create: cannot pack reply\n"); 
+		CERROR("cannot pack reply\n"); 
 		return rc;
 	}
 	res = ost_rep_buf1(req->rq_rep.ost); 
@@ -403,7 +403,7 @@ int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 
 	hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
 	if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {
-		printk("lustre_ost: wrong packet type sent %d\n",
+		CERROR("lustre_ost: wrong packet type sent %d\n",
 		       NTOH__u32(hdr->type));
 		rc = -EINVAL;
 		goto out;
@@ -412,7 +412,7 @@ int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 	rc = ost_unpack_req(req->rq_reqbuf, req->rq_reqlen, 
 			    &req->rq_reqhdr, &req->rq_req.ost);
 	if (rc) { 
-		printk("lustre_ost: Invalid request\n");
+		CERROR("lustre_ost: Invalid request\n");
 		EXIT; 
 		goto out;
 	}
@@ -459,7 +459,7 @@ int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 out:
 	req->rq_status = rc;
 	if (rc) { 
-		printk("ost: processing error %d\n", rc);
+		CERROR("ost: processing error %d\n", rc);
 		ost_error(obddev, req);
 	} else { 
 		CDEBUG(D_INODE, "sending reply\n"); 
@@ -556,7 +556,7 @@ int ost_main(void *arg)
 
 	ost->ost_thread = NULL;
 	wake_up(&ost->ost_done_waitq);
-	printk("lustre_ost: exiting\n");
+	CERROR("lustre_ost: exiting\n");
 	return 0;
 }
 
@@ -605,7 +605,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 	ost->ost_tgt = tgt;
         if ( ! (tgt->obd_flags & OBD_ATTACHED) || 
              ! (tgt->obd_flags & OBD_SET_UP) ){
-                printk("device not attached or not set up (%d)\n", 
+                CERROR("device not attached or not set up (%d)\n", 
                        data->ioc_dev);
                 EXIT;
 		return -EINVAL;
@@ -614,7 +614,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 	ost->ost_conn.oc_dev = tgt;
 	err = tgt->obd_type->typ_ops->o_connect(&ost->ost_conn);
 	if (err) { 
-		printk("lustre ost: fail to connect to device %d\n", 
+		CERROR("lustre ost: fail to connect to device %d\n", 
 		       data->ioc_dev); 
 		return -EINVAL;
 	}
@@ -659,7 +659,7 @@ static int ost_cleanup(struct obd_device * obddev)
         }
 
         if ( !list_empty(&obddev->obd_gen_clients) ) {
-                printk(KERN_WARNING __FUNCTION__ ": still has clients!\n");
+                CERROR("still has clients!\n");
                 EXIT;
                 return -EBUSY;
         }
@@ -676,7 +676,7 @@ static int ost_cleanup(struct obd_device * obddev)
 	tgt = ost->ost_tgt;
 	err = tgt->obd_type->typ_ops->o_disconnect(&ost->ost_conn);
 	if (err) { 
-		printk("lustre ost: fail to disconnect device\n");
+		CERROR("lustre ost: fail to disconnect device\n");
 		return -EINVAL;
 	}
 	

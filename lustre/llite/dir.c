@@ -203,7 +203,7 @@ out:
 	/* Too bad, we had an error */
 
 Ebadsize:
-	printk("ext2_check_page"
+	CERROR("ext2_check_page"
 		"size of directory #%lu is not a multiple of chunk size",
 		dir->i_ino
 	);
@@ -223,7 +223,7 @@ Espan:
 	//Einumber:
 	// error = "inode out of bounds";
 bad_entry:
-	printk("ext2_check_page: bad entry in directory #%lu: %s - "
+	CERROR("ext2_check_page: bad entry in directory #%lu: %s - "
 		"offset=%lu, inode=%lu, rec_len=%d, name_len=%d",
 		dir->i_ino, error, (page->index<<PAGE_CACHE_SHIFT)+offs,
 		(unsigned long) le32_to_cpu(p->inode),
@@ -231,7 +231,7 @@ bad_entry:
 	goto fail;
 Eend:
 	p = (ext2_dirent *)(kaddr + offs);
-	printk("ext2_check_page"
+	CERROR("ext2_check_page"
 		"entry in directory #%lu spans the page boundary"
 		"offset=%lu, inode=%lu",
 		dir->i_ino, (page->index<<PAGE_CACHE_SHIFT)+offs,
@@ -528,7 +528,7 @@ int ll_add_link (struct dentry *dentry, struct inode *inode)
 			name_len = EXT2_DIR_REC_LEN(de->name_len);
 			rec_len = le16_to_cpu(de->rec_len);
 			if ( n==npages && rec_len == 0) {
-				printk("Fatal dir behaviour\n");
+				CERROR("Fatal dir behaviour\n");
 				goto out_page;
 			}
 			if (!de->inode && rec_len >= reclen)

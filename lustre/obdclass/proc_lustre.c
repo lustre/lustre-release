@@ -66,7 +66,7 @@ proc_lustre_mkdir(const char* dname, struct proc_dir_entry *parent)
 					    &proc_root);
 #endif
 	if (!child_dir_entry)
-		printk ("lustre: failed to create /proc  entry %s\n", dname);
+                CERROR("lustre: failed to create /proc entry %s\n", dname);
 	
 	return child_dir_entry;
 }

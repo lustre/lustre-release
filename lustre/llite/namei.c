@@ -101,7 +101,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	err = mdc_getattr(sbi->ll_peer_ptr, ino, type,
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &rep, &hdr);
         if ( err ) {
-                printk(__FUNCTION__ ": obdo_fromid failed\n");
+                CERROR("obdo_fromid failed\n");
                 EXIT;
                 return ERR_PTR(-EACCES); 
         }
@@ -171,14 +171,13 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         inode = iget4(dir->i_sb, rep->ino, NULL, rep);
         if (IS_ERR(inode)) {
-                printk(__FUNCTION__ ": new_inode -fatal:  %ld\n", 
-		       PTR_ERR(inode));
+                CERROR("new_inode -fatal:  %ld\n", PTR_ERR(inode));
                 EXIT;
                 return ERR_PTR(-EIO);
         }
 
         if (!list_empty(&inode->i_dentry)) {
-                printk("new_inode -fatal: aliases %d, ct %d lnk %d\n", 
+                CERROR("new_inode -fatal: aliases %d, ct %d lnk %d\n", 
 		       rep->ino, atomic_read(&inode->i_count), 
 		       inode->i_nlink);
                 iput(inode);

@@ -56,7 +56,7 @@ struct ptlrpc_request *ost_prep_req(int opcode, int buflen1, char *buf1,
 
 	OBD_ALLOC(request, sizeof(*request));
 	if (!request) { 
-		printk("osc_prep_req: request allocation out of memory\n");
+		CERROR("request allocation out of memory\n");
 		return NULL;
 	}
 
@@ -67,7 +67,7 @@ struct ptlrpc_request *ost_prep_req(int opcode, int buflen1, char *buf1,
 			  &request->rq_reqhdr, &request->rq_req.ost, 
 			  &request->rq_reqlen, &request->rq_reqbuf);
 	if (rc) { 
-		printk("llight request: cannot pack request %d\n", rc); 
+		CERROR("llight request: cannot pack request %d\n", rc); 
 		return NULL;
 	}
 	request->rq_reqhdr->opc = opcode;
@@ -100,8 +100,7 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ptlrpc_request *req)
 		rc = ptl_send_rpc(req, peer);
 	}
 	if (rc) { 
-		printk(__FUNCTION__ ": error %d, opcode %d\n", rc, 
-		       req->rq_reqhdr->opc); 
+		CERROR("error %d, opcode %d\n", rc, req->rq_reqhdr->opc); 
 		return -rc;
 	}
 
@@ -118,7 +117,7 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ptlrpc_request *req)
 	rc = ost_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
 			    &req->rq_rep.ost); 
 	if (rc) {
-		printk(__FUNCTION__ ": mds_unpack_rep failed: %d\n", rc);
+		CERROR("mds_unpack_rep failed: %d\n", rc);
 		return rc;
 	}
 
@@ -144,7 +143,7 @@ static int osc_connect(struct obd_conn *conn)
 	
 	request = ost_prep_req(OST_CONNECT, 0, NULL, 0, NULL);
 	if (!request) { 
-		printk(__FUNCTION__ ": cannot pack req!\n"); 
+		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 
@@ -174,7 +173,7 @@ static int osc_disconnect(struct obd_conn *conn)
 	
 	request = ost_prep_req(OST_DISCONNECT, 0, NULL, 0, NULL);
 	if (!request) { 
-		printk(__FUNCTION__ ": cannot pack req!\n"); 
+		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 
@@ -200,7 +199,7 @@ static int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 
 	request = ost_prep_req(OST_GETATTR, 0, NULL, 0, NULL);
 	if (!request) { 
-		printk(__FUNCTION__ ": cannot pack req!\n"); 
+		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 	
@@ -232,7 +231,7 @@ static int osc_setattr(struct obd_conn *conn, struct obdo *oa)
 
 	request = ost_prep_req(OST_SETATTR, 0, NULL, 0, NULL);
 	if (!request) { 
-		printk(__FUNCTION__ ": cannot pack req!\n"); 
+		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 	
@@ -257,11 +256,11 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
 	int rc; 
 
 	if (!oa) { 
-		printk(__FUNCTION__ ": oa NULL\n"); 
+		CERROR("oa NULL\n"); 
 	}
 	request = ost_prep_req(OST_CREATE, 0, NULL, 0, NULL);
 	if (!request) { 
-		printk("osc_connect: cannot pack req!\n"); 
+		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 	
@@ -288,11 +287,11 @@ static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
 	int rc; 
 
 	if (!oa) { 
-		printk(__FUNCTION__ ": oa NULL\n"); 
+		CERROR("oa NULL\n"); 
 	}
 	request = ost_prep_req(OST_DESTROY, 0, NULL, 0, NULL);
 	if (!request) { 
-		printk("osc_connect: cannot pack req!\n"); 
+		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 	
@@ -327,11 +326,11 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
 		/* This is a local connection */
 		osc->osc_tgt = &obd_dev[data->ioc_dev];
 
-		printk("OSC: tgt %d ost at %p\n", data->ioc_dev,
+		CERROR("OSC: tgt %d ost at %p\n", data->ioc_dev,
 		       &osc->osc_tgt->u.ost);
 		if ( ! (osc->osc_tgt->obd_flags & OBD_ATTACHED) || 
 		     ! (osc->osc_tgt->obd_flags & OBD_SET_UP) ){
-			printk("device not attached or not set up (%d)\n", 
+			CERROR("device not attached or not set up (%d)\n", 
 			       data->ioc_dev);
 			EXIT;
 			return -EINVAL;
@@ -343,7 +342,7 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
 		/* XXX: this should become something like ioc_inlbuf1 */
 		err = kportal_uuid_to_peer("ost", &osc->osc_peer);
 		if (err != 0) {
-			printk("Cannot find 'ost' peer.\n");
+			CERROR("Cannot find 'ost' peer.\n");
 			EXIT;
 			return -EINVAL;
 		}
@@ -382,7 +381,7 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 
 	request = ost_prep_req(OST_BRW, size1, NULL, size2, NULL);
 	if (!request) { 
-		printk("osc_connect: cannot pack req!\n"); 
+		CERROR("cannot pack req!\n"); 
 		return -ENOMEM;
 	}
 
@@ -411,7 +410,7 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
 #if 0
 	ptr2 = ost_rep_buf2(request->rq_rep.ost); 
 	if (request->rq_rep.ost->buflen2 != n * sizeof(struct niobuf)) { 
-		printk(__FUNCTION__ ": buffer length wrong\n"); 
+		CERROR("buffer length wrong\n"); 
 		goto out;
 	}
 

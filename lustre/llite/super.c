@@ -60,7 +60,7 @@ static char *ll_read_opt(const char *opt, char *data)
         value++;
         OBD_ALLOC(retval, strlen(value) + 1);
         if ( !retval ) {
-                printk(KERN_ALERT __FUNCTION__ ": out of memory!\n");
+                CERROR("out of memory!\n");
                 return NULL;
         }
         
@@ -111,16 +111,16 @@ static struct super_block * ll_read_super(struct super_block *sb,
         memset(sbi, 0, sizeof(*sbi));
 
         ll_options(data, &device, &version);
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
+
         if ( !device ) {
-                printk(__FUNCTION__ ": no device\n");
+                CERROR("no device\n");
 		sb = NULL; 
                 goto ERR;
         }
 
 	devno = simple_strtoul(device, NULL, 0);
         if ( devno >= MAX_OBD_DEVICES ) {
-                printk(__FUNCTION__ ": device of %s too high\n", device);
+                CERROR("device of %s too high\n", device);
 		sb = NULL; 
                 goto ERR;
         } 
@@ -128,7 +128,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sbi->ll_conn.oc_dev = &obd_dev[devno];
         err = obd_connect(&sbi->ll_conn);
         if ( err ) {
-                printk(__FUNCTION__ "cannot connect to %s\n", device);
+                CERROR("cannot connect to %s\n", device);
 		sb = NULL; 
                 goto ERR;
         }
@@ -146,14 +146,13 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_blocksize_bits = (unsigned char)PAGE_SHIFT;
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_op = &ll_super_operations;
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
 
         /* make root inode */
 	err = mdc_getattr(sbi->ll_peer_ptr, sbi->ll_rootino, S_IFDIR, 
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
 			  &rep, &hdr);
         if (err) {
-                printk(__FUNCTION__ ": mds_getattr failed for root %d\n", err);
+                CERROR("mds_getattr failed for root %d\n", err);
 		sb = NULL; 
                 goto ERR;
         }
@@ -162,7 +161,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         if (root) {
 		sb->s_root = d_alloc_root(root);
 	} else {
-            printk("lustre_light: bad iget4 for root\n");
+            CERROR("lustre_light: bad iget4 for root\n");
 	    sb = NULL; 
             goto ERR;
         } 
@@ -208,7 +207,7 @@ static void ll_delete_inode(struct inode *inode)
 		struct obdo *oa; 
 		oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
 		if (!oa) { 
-			printk(__FUNCTION__ ": no memory\n"); 
+			CERROR("no memory\n"); 
 		}
 
 		err = obd_destroy(IID(inode), oa); 
@@ -266,7 +265,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 
 	err = mdc_setattr(sbi->ll_peer_ptr, inode, attr, NULL, &hdr); 
         if ( err )
-                printk(__FUNCTION__ ": ll_setattr fails (%d)\n", err);
+                CERROR("ll_setattr fails (%d)\n", err);
 
         EXIT;
         return err;
@@ -286,7 +285,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
 
         err = obd_statfs(ID(sb), &tmp);
         if ( err ) { 
-                printk(__FUNCTION__ ": obd_statfs fails (%d)\n", err);
+                CERROR("obd_statfs fails (%d)\n", err);
                 return err;
         }
 	memcpy(buf, &tmp, sizeof(*buf));

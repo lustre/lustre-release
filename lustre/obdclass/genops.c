@@ -52,11 +52,9 @@ void obd_cleanup_obdo_cache(void)
         if (obdo_cachep != NULL) {
                 CDEBUG(D_CACHE, "destroying obdo_cache at %p\n", obdo_cachep);
                 if (kmem_cache_destroy(obdo_cachep))
-                        printk(KERN_WARNING __FUNCTION__
-                               ": unable to free cache\n");
+                        CERROR("unable to free cache\n");
         } else
-                printk(KERN_INFO __FUNCTION__
-                       ": called with NULL cache pointer\n");
+                CERROR("called with NULL cache pointer\n");
 
         obdo_cachep = NULL;
         EXIT;
@@ -89,8 +87,7 @@ int gen_connect (struct obd_conn *conn)
 
         OBD_ALLOC(cli, sizeof(struct obd_client));
         if ( !cli ) {
-                printk(__FUNCTION__ ": no memory! (minor %d)\n", 
-                       conn->oc_dev->obd_minor);
+                CERROR("no memory! (minor %d)\n", conn->oc_dev->obd_minor);
                 return -ENOMEM;
         }
 
@@ -192,8 +189,7 @@ int gen_multi_cleanup(struct obd_device *obddev)
                 rc  = OBP(ch_conn->oc_dev, disconnect)(ch_conn);
 
                 if ( rc != 0 ) {
-                        printk(KERN_WARNING __FUNCTION__
-                               ": disconnect failure %d\n",
+                        CERROR("disconnect failure %d\n",
                                ch_conn->oc_dev->obd_minor);
                 }
         }               

@@ -85,7 +85,7 @@ inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid)
         struct ll_inode_info *oinfo = ll_i2info(inode);
 	struct obdo *oa = obdo_alloc();
         if ( !oa ) {
-		printk(__FUNCTION__ ": no memory to allocate obdo!\n"); 
+		CERROR("no memory to allocate obdo!\n"); 
                 return NULL;
         }
 	oa->o_valid = valid;
@@ -261,7 +261,7 @@ int ll_writepage(struct page *page)
                 SetPageUptodate(page);
 		set_page_clean(page);
 	} else {
-		printk(__FUNCTION__ ": ll_brw failure %d\n", err);
+		CERROR("ll_brw failure %d\n", err);
 	}
         EXIT;
 	return err;
@@ -305,7 +305,7 @@ int ll_commit_write(struct file *file, struct page *page,
 		/* do NOT truncate */
 		err = ll_inode_setattr(inode, &iattr, 0);
 		if (err) {
-			printk(__FUNCTION__ ": failed - %d.\n", err);
+			CERROR("failed - %d.\n", err);
 			obdo_free(oa);
 			EXIT;
 			return -EIO;
@@ -325,7 +325,7 @@ void ll_truncate(struct inode *inode)
 
 	oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
         if ( !oa ) {
-                printk(__FUNCTION__ ": no memory to allocate obdo!\n");
+                CERROR("no memory to allocate obdo!\n");
 		return; 
         } 
 	
@@ -335,7 +335,7 @@ void ll_truncate(struct inode *inode)
 	obdo_free(oa);
 
         if (err) {
-                printk(__FUNCTION__ ": obd_truncate fails (%d)\n", err);
+                CERROR("obd_truncate fails (%d)\n", err);
         }
         EXIT;
 	return; 

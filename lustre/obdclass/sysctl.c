@@ -104,7 +104,7 @@ int obd_sctl_vars (ctl_table * table, int write,
                 return rc;
 
         if ( index < 0 || index > 1 ) {
-                printk(KERN_WARNING __FUNCTION__ "Illegal index %d!\n", index);
+                CERROR("Illegal index %d!\n", index);
                 index = 0;
         } else {
                 obd_table[OBD_VARS_SLOT].data = &vars[index];

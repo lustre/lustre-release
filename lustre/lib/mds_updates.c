@@ -130,7 +130,7 @@ static int mds_update_hdr_unpack(char *buf, int len, struct mds_update_record *r
 	
 	r->ur_reclen = NTOH__u32(hdr->ur_reclen);
 	if (len < sizeof(*hdr) || len != r->ur_reclen) { 
-		printk(__FUNCTION__ ": invalid buffer length\n"); 
+		CERROR("invalid buffer length\n"); 
 		return -EFAULT;
 	}
 	r->ur_opcode = NTOH__u32(hdr->ur_opcode); 
@@ -144,7 +144,7 @@ static int mds_setattr_unpack(char *buf, int len, struct mds_update_record *r)
 	struct mds_rec_setattr *rec = (struct mds_rec_setattr *)buf; 
 
 	if (len < sizeof(*rec)) { 
-		printk(__FUNCTION__ "invalid buffer length\n"); 
+		CERROR("invalid buffer length\n"); 
 		return -EFAULT;
 	}
 
@@ -167,7 +167,7 @@ static int mds_create_unpack(char *buf, int len, struct mds_update_record *r)
 	char *ptr, *end;
 
 	if (len < sizeof(*rec)) { 
-		printk(__FUNCTION__ "invalid buffer length\n"); 
+		CERROR("invalid buffer length\n"); 
 		return -EFAULT;
 	}
 	
@@ -194,7 +194,7 @@ static int mds_link_unpack(char *buf, int len, struct mds_update_record *r)
 	char *ptr, *end;
 
 	if (len < sizeof(*rec)) { 
-		printk(__FUNCTION__ "invalid buffer length\n"); 
+		CERROR("invalid buffer length\n"); 
 		return -EFAULT;
 	}
 	
@@ -216,7 +216,7 @@ static int mds_unlink_unpack(char *buf, int len, struct mds_update_record *r)
 	ENTRY;
 
 	if (len < sizeof(*rec)) { 
-		printk(__FUNCTION__ "invalid buffer length\n"); 
+		CERROR("invalid buffer length\n"); 
 		return -EFAULT;
 	}
 	
@@ -236,7 +236,7 @@ static int mds_rename_unpack(char *buf, int len, struct mds_update_record *r)
 	char *ptr, *end;
 
 	if (len < sizeof(*rec)) { 
-		printk(__FUNCTION__ "invalid buffer length\n"); 
+		CERROR("invalid buffer length\n"); 
 		return -EFAULT;
 	}
 	
