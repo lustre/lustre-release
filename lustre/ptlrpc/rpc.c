@@ -40,7 +40,7 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         OBD_ALLOC(recovd->recovd_client, sizeof(*recovd->recovd_client));
         if (!recovd)
-                GOTO(err_dev, err = -ENOMEM);
+                GOTO(err_dec, err = -ENOMEM);
 
         err = recovd_setup(recovd);
         if (err)
