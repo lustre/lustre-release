@@ -170,6 +170,33 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
+static int pnode_revalidate_finish(struct ptlrpc_request *req,
+                                   int offset,
+                                   struct lookup_intent *it,
+                                   struct pnode *pnode)
+{
+        struct inode *inode = pnode->p_base->pb_ino;
+        struct lustre_md md;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(inode);
+
+        if (!req)
+                RETURN(0);
+
+        if (it_disposition(it, DISP_LOOKUP_NEG))
+                RETURN(-ENOENT);
+
+        rc = mdc_req2lustre_md(req, offset, llu_i2sbi(inode)->ll_osc_exp, &md);
+        if (rc)
+                RETURN(rc);
+
+        llu_update_inode(inode, md.body, md.lsm);
+
+        RETURN(rc);
+}
+
 int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
@@ -241,6 +268,11 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
                 GOTO(out, rc);
+
+        if (rc < 0)
+                GOTO(out, rc = 0);
+
+        rc = pnode_revalidate_finish(req, 1, it, pnode);
 
         /* Note: ll_intent_lock may cause a callback, check this! */
 
