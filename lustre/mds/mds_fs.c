@@ -391,19 +391,19 @@ void mds_unregister_fs_type(const char *name)
         /* unlock mds_fs_types list */
 }
 
-int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt)
+struct mds_fs_operations *mds_fs_get_ops(char *fstype)
 {
         struct mds_fs_operations *fs_ops;
-        int rc;
 
-        if (!(fs_ops = mds_search_fs_type(mds->mds_fstype))) {
+        if (!(fs_ops = mds_search_fs_type(fstype))) {
                 char name[32];
+                int rc;
 
-                snprintf(name, sizeof(name) - 1, "mds_%s", mds->mds_fstype);
+                snprintf(name, sizeof(name) - 1, "mds_%s", fstype);
                 name[sizeof(name) - 1] = '\0';
 
                 if ((rc = request_module(name))) {
-                        fs_ops = mds_search_fs_type(mds->mds_fstype);
+                        fs_ops = mds_search_fs_type(fstype);
                         CDEBUG(D_INFO, "Loaded module '%s'\n", name);
                         if (!fs_ops)
                                 rc = -ENOENT;
@@ -411,11 +411,27 @@ int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt)
 
                 if (rc) {
                         CERROR("Can't find MDS fs interface '%s'\n", name);
-                        RETURN(rc);
+                        RETURN(ERR_PTR(rc));
                 }
         }
+        __MOD_INC_USE_COUNT(fs_ops->fs_owner);
 
-        mds->mds_fsops = fs_ops;
+        return fs_ops;
+}
+
+void mds_fs_put_ops(struct mds_fs_operations *fs_ops)
+{
+        __MOD_DEC_USE_COUNT(fs_ops->fs_owner);
+}
+
+int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt)
+{
+        int rc;
+
+        mds->mds_fsops = mds_fs_get_ops(mds->mds_fstype);
+        if (IS_ERR(mds->mds_fsops))
+                RETURN(PTR_ERR(mds->mds_fsops));
+
         mds->mds_vfsmnt = mnt;
 
         OBD_SET_CTXT_MAGIC(&mds->mds_ctxt);
@@ -438,7 +454,7 @@ int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt)
          */
         OBD_ALLOC(mds->mds_sop, sizeof(*mds->mds_sop));
         if (!mds->mds_sop)
-                RETURN(-ENOMEM);
+                GOTO(out_dec, rc = -ENOMEM);
 
         memcpy(mds->mds_sop, mds->mds_sb->s_op, sizeof(*mds->mds_sop));
         mds->mds_fsops->cl_delete_inode = mds->mds_sop->delete_inode;
@@ -448,8 +464,14 @@ int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt)
         rc = mds_fs_prep(mds);
 
         if (rc)
-                OBD_FREE(mds->mds_sop, sizeof(*mds->mds_sop));
+                GOTO(out_free, rc);
 
+        return 0;
+
+out_free:
+        OBD_FREE(mds->mds_sop, sizeof(*mds->mds_sop));
+out_dec:
+        mds_fs_put_ops(mds->mds_fsops);
         return rc;
 }
 
@@ -459,6 +481,7 @@ void mds_fs_cleanup(struct mds_obd *mds)
         mds_server_free_data(mds);
 
         OBD_FREE(mds->mds_sop, sizeof(*mds->mds_sop));
+        mds_fs_put_ops(mds->mds_fsops);
 }
 
 EXPORT_SYMBOL(mds_register_fs_type);

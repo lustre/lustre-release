@@ -289,6 +289,7 @@ static int mds_extN_statfs(struct super_block *sb, struct statfs *sfs)
 }
 
 static struct mds_fs_operations mds_extN_fs_ops = {
+        fs_owner:               THIS_MODULE,
         fs_start:               mds_extN_start,
         fs_commit:              mds_extN_commit,
         fs_setattr:             mds_extN_setattr,

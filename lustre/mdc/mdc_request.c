@@ -138,7 +138,7 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
 
         mdc_con2cl(mdc_connh, &cl, &connection, &rconn);
         req = ptlrpc_prep_req2(cl, connection, rconn,
-                               MDS_LOVINFO, 1, size, NULL);
+                               MDS_GETLOVINFO, 1, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -347,7 +347,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_GETATTR || it->it_op == IT_RENAME ||
                    it->it_op == IT_OPEN || it->it_op == IT_SETATTR ||
-                   it->it_op == IT_LOOKUP) {
+                   it->it_op == IT_LOOKUP || it->it_op == IT_READLINK) {
                 size[2] = sizeof(struct mds_body);
                 size[3] = de->d_name.len + 1;
 

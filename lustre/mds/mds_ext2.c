@@ -108,16 +108,17 @@ static int mds_ext2_journal_data(struct file *filp)
 }
 
 static struct mds_fs_operations mds_ext2_fs_ops = {
-        fs_start:       mds_ext2_start,
-        fs_commit:      mds_ext2_stop,
-        fs_setattr:     mds_ext2_setattr,
-        fs_set_objid:   mds_ext2_set_objid,
-        fs_get_objid:   mds_ext2_get_objid,
-        fs_readpage:    mds_ext2_readpage,
-        fs_delete_inode:mds_ext2_delete_inode,
-        cl_delete_inode:clear_inode,
-        fs_journal_data:mds_ext2_journal_data,
-        fs_set_last_rcvd:mds_ext2_set_last_rcvd,
+        fs_owner:               THIS_MODULE,
+        fs_start:               mds_ext2_start,
+        fs_commit:              mds_ext2_stop,
+        fs_setattr:             mds_ext2_setattr,
+        fs_set_objid:           mds_ext2_set_objid,
+        fs_get_objid:           mds_ext2_get_objid,
+        fs_readpage:            mds_ext2_readpage,
+        fs_delete_inode:        mds_ext2_delete_inode,
+        cl_delete_inode:        clear_inode,
+        fs_journal_data:        mds_ext2_journal_data,
+        fs_set_last_rcvd:       mds_ext2_set_last_rcvd,
 };
 
 static int __init mds_ext2_init(void)

@@ -189,6 +189,7 @@ extern int mds_client_add(struct mds_obd *mds, struct mds_client_data *mcd,
 
 /* mds/mds_fs.c */
 struct mds_fs_operations {
+        struct module *fs_owner;
         void   *(* fs_start)(struct inode *inode, int op);
         int     (* fs_commit)(struct inode *inode, void *handle);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,

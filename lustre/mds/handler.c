@@ -23,7 +23,8 @@
 #include <linux/module.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
-extern int mds_get_lovtgts(struct obd_device *obd, uuid_t *uuidarray);
+extern int mds_get_lovtgts(struct obd_device *obd, int tgt_count,
+                           uuid_t *uuidarray);
 extern int mds_get_lovdesc(struct obd_device *obd, struct lov_desc *desc);
 extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                                 struct ptlrpc_request *req);
@@ -304,11 +305,12 @@ static int mds_getstatus(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int mds_lovinfo(struct ptlrpc_request *req)
+static int mds_getlovinfo(struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_status_req *streq;
         struct lov_desc *desc; 
+        int tgt_count;
         int rc, size[2] = {sizeof(*desc)};
         ENTRY;
 
@@ -327,21 +329,22 @@ static int mds_lovinfo(struct ptlrpc_request *req)
         desc = lustre_msg_buf(req->rq_repmsg, 0); 
         rc = mds_get_lovdesc(req->rq_obd, desc);
         if (rc != 0 ) { 
-                CERROR("get_lovdesc error %d", rc);
+                CERROR("mds_get_lovdesc error %d", rc);
                 req->rq_status = rc;
                 RETURN(0);
         }
 
-        if (desc->ld_tgt_count * sizeof(uuid_t) > streq->repbuf) { 
+        tgt_count = NTOH__u32(desc->ld_tgt_count);
+        if (tgt_count * sizeof(uuid_t) > streq->repbuf) {
                 CERROR("too many targets, enlarge client buffers\n");
                 req->rq_status = -ENOSPC;
                 RETURN(0);
         }
 
-        mds->mds_max_mdsize = sizeof(desc) + 
-                desc->ld_tgt_count * sizeof(uuid_t);
-        rc = mds_get_lovtgts(req->rq_obd, lustre_msg_buf(req->rq_repmsg, 1));
-        if (rc) { 
+        mds->mds_max_mdsize = sizeof(desc) + tgt_count * sizeof(uuid_t);
+        rc = mds_get_lovtgts(req->rq_obd, tgt_count,
+                             lustre_msg_buf(req->rq_repmsg, 1));
+        if (rc) {
                 CERROR("get_lovtgts error %d", rc);
                 req->rq_status = rc;
                 RETURN(0);
@@ -820,9 +823,9 @@ int mds_handle(struct ptlrpc_request *req)
                 rc = mds_getstatus(req);
                 break;
 
-        case MDS_LOVINFO:
-                CDEBUG(D_INODE, "lovinfo\n");
-                rc = mds_lovinfo(req);
+        case MDS_GETLOVINFO:
+                CDEBUG(D_INODE, "getlovinfo\n");
+                rc = mds_getlovinfo(req);
                 break;
 
         case MDS_GETATTR:

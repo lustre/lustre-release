@@ -294,7 +294,7 @@ struct ost_body {
 #define MDS_DISCONNECT 8
 #define MDS_GETSTATUS  9
 #define MDS_STATFS     10
-#define MDS_LOVINFO    11
+#define MDS_GETLOVINFO 11
 
 #define REINT_SETATTR  1
 #define REINT_CREATE   2
