@@ -666,10 +666,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 spin_unlock(&conn->c_lock);
                 ptlrpc_req_finished(req); /* Must be called unlocked. */
                 spin_lock(&conn->c_lock);
-        }
-
-        /* Replay-enabled imports return commit-status information. */
-        if (req->rq_import->imp_flags & IMP_REPLAYABLE) {
+        } else /* if (req->rq_import->imp_flags & IMP_REPLAYABLE) */ {
+                /* Replay-enabled imports return commit-status information. */
                 /* XXX this needs to be per-import, or multiple MDS services on
                  * XXX the same system are going to interfere messily with each
                  * XXX others' transno spaces.
