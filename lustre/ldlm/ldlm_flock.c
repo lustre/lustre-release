@@ -312,7 +312,8 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                  * release the ns_lock, allocate the new lock,
                  * and restart processing this lock. */
                 new2 = ldlm_lock_create(ns, NULL, res->lr_name, LDLM_FLOCK,
-                                        lock->l_granted_mode, NULL, NULL, NULL);
+                                        lock->l_granted_mode, NULL, NULL, NULL,
+                                        NULL, 0);
                 if (!new2) {
                         ldlm_flock_destroy(req, lock->l_granted_mode, *flags);
                         *err = -ENOLCK;

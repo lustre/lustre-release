@@ -7,6 +7,7 @@
  */
 
 #include <table.h>
+#include <procbridge.h>
 
 typedef struct manager {
     table connections;
@@ -26,7 +27,8 @@ typedef struct connection {
     manager m;
 } *connection;
 
-connection force_tcp_connection(manager m, unsigned int ip, unsigned int short);
+connection force_tcp_connection(manager m, unsigned int ip, unsigned int short,
+                                procbridge pb);
 manager init_connections(unsigned short, int (*f)(void *, void *), void *);
 void remove_connection(void *arg);
 void shutdown_connections(manager m);

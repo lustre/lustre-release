@@ -126,7 +126,6 @@ int gmnal_cb_send(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 			       	niov, iov, len);
 	} else {
 		CDEBUG(D_ERROR, "Large message send it is not supported\n");
-		lib_finalize(nal_cb, private, cookie);
 		return(PTL_FAIL);
 		gmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, 
 				niov, iov, len);
@@ -197,18 +196,6 @@ int gmnal_cb_write(nal_cb_t *nal_cb, void *private, user_ptr dst,
 		    void *src, size_t len)
 {
 	gm_bcopy(src, dst, len);
-	return(PTL_OK);
-}
-
-int gmnal_cb_callback(nal_cb_t *nal_cb, void *private, lib_eq_t *eq, 
-		       ptl_event_t *ev)
-{
-
-	if (eq->event_callback != NULL) {
-		CDEBUG(D_INFO, "found callback\n");
-		eq->event_callback(ev);
-	}
-	
 	return(PTL_OK);
 }
 
