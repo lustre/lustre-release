@@ -28,6 +28,8 @@
 #include <linux/fs.h>
 #include <linux/jbd.h>
 #include <linux/slab.h>
+#include <linux/pagemap.h>
+#include <linux/quotaops.h>
 #include <linux/extN_fs.h>
 #include <linux/extN_jbd.h>
 #include <linux/extN_xattr.h>
@@ -67,18 +69,21 @@ static void *fsfilt_extN_start(struct inode *inode, int op)
                 nblocks += EXTN_DELETE_TRANS_BLOCKS;
                 break;
         case FSFILT_OP_RENAME:
-                /* We may be modifying two directories */
+                /* modify additional directory */
                 nblocks += EXTN_DATA_TRANS_BLOCKS;
+                /* no break */
         case FSFILT_OP_SYMLINK:
-                /* Possible new block + block bitmap + GDT for long symlink */
+                /* additional block + block bitmap + GDT for long symlink */
                 nblocks += 3;
+                /* no break */
         case FSFILT_OP_CREATE:
         case FSFILT_OP_MKDIR:
         case FSFILT_OP_MKNOD:
-                /* New inode + block bitmap + GDT for new file */
+                /* modify one inode + block bitmap + GDT */
                 nblocks += 3;
+                /* no break */
         case FSFILT_OP_LINK:
-                /* Change parent directory */
+                /* modify parent directory */
                 nblocks += EXTN_INDEX_EXTRA_TRANS_BLOCKS+EXTN_DATA_TRANS_BLOCKS;
                 break;
         case FSFILT_OP_SETATTR:
@@ -89,11 +94,126 @@ static void *fsfilt_extN_start(struct inode *inode, int op)
                  LBUG();
         }
 
+        LASSERT(!current->journal_info);
         lock_kernel();
         handle = journal_start(EXTN_JOURNAL(inode), nblocks);
         unlock_kernel();
 
         return handle;
+}
+
+/*
+ * Calculate the number of buffer credits needed to write multiple pages in
+ * a single extN transaction.  No, this shouldn't be here, but as yet extN
+ * doesn't have a nice API for calculating this sort of thing in advance.
+ *
+ * See comment above extN_writepage_trans_blocks for details.  We assume
+ * no data journaling is being done, but it does allow for all of the pages
+ * being non-contiguous.  If we are guaranteed contiguous pages we could
+ * reduce the number of (d)indirect blocks a lot.
+ *
+ * With N blocks per page and P pages, for each inode we have at most:
+ * N*P indirect
+ * min(N*P, blocksize/4 + 1) dindirect blocks
+ * niocount tindirect
+ *
+ * For the entire filesystem, we have at most:
+ * min(sum(nindir + P), ngroups) bitmap blocks (from the above)
+ * min(sum(nindir + P), gdblocks) group descriptor blocks (from the above)
+ * objcount inode blocks
+ * 1 superblock
+ * 2 * EXTN_SINGLEDATA_TRANS_BLOCKS for the quota files
+ */
+static int fsfilt_extN_credits_needed(int objcount, struct fsfilt_objinfo *fso)
+{
+        struct super_block *sb = fso->fso_dentry->d_inode->i_sb;
+        int blockpp = 1 << (PAGE_CACHE_SHIFT - sb->s_blocksize_bits);
+        int addrpp = EXTN_ADDR_PER_BLOCK(sb) * blockpp;
+        int nbitmaps = 0;
+        int ngdblocks = 0;
+        int needed = objcount + 1;
+        int i;
+
+        for (i = 0; i < objcount; i++, fso++) {
+                int nblocks = fso->fso_bufcnt * blockpp;
+                int ndindirect = min(nblocks, addrpp + 1);
+                int nindir = nblocks + ndindirect + 1;
+
+                nbitmaps += nindir + nblocks;
+                ngdblocks += nindir + nblocks;
+
+                needed += nindir;
+        }
+
+        /* Assumes extN and extN have same sb_info layout at the start. */
+        if (nbitmaps > EXTN_SB(sb)->s_groups_count)
+                nbitmaps = EXTN_SB(sb)->s_groups_count;
+        if (ngdblocks > EXTN_SB(sb)->s_gdb_count)
+                ngdblocks = EXTN_SB(sb)->s_gdb_count;
+
+        needed += nbitmaps + ngdblocks;
+
+#ifdef CONFIG_QUOTA
+        /* We assume that there will be 1 bit set in s_dquot.flags for each
+         * quota file that is active.  This is at least true for now.
+         */
+        needed += hweight32(sb_any_quota_enabled(sb)) *
+                EXTN_SINGLEDATA_TRANS_BLOCKS;
+#endif
+
+        return needed;
+}
+
+/* We have to start a huge journal transaction here to hold all of the
+ * metadata for the pages being written here.  This is necessitated by
+ * the fact that we do lots of prepare_write operations before we do
+ * any of the matching commit_write operations, so even if we split
+ * up to use "smaller" transactions none of them could complete until
+ * all of them were opened.  By having a single journal transaction,
+ * we eliminate duplicate reservations for common blocks like the
+ * superblock and group descriptors or bitmaps.
+ *
+ * We will start the transaction here, but each prepare_write will
+ * add a refcount to the transaction, and each commit_write will
+ * remove a refcount.  The transaction will be closed when all of
+ * the pages have been written.
+ */
+static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
+                                   int niocount, struct niobuf_remote *nb)
+{
+        journal_t *journal;
+        handle_t *handle;
+        int needed;
+        ENTRY;
+
+        LASSERT(!current->journal_info);
+        journal = EXTN_SB(fso->fso_dentry->d_inode->i_sb)->s_journal;
+        needed = fsfilt_extN_credits_needed(objcount, fso);
+
+        /* The number of blocks we could _possibly_ dirty can very large.
+         * We reduce our request if it is absurd (and we couldn't get that
+         * many credits for a single handle anyways).
+         *
+         * At some point we have to limit the size of I/Os sent at one time,
+         * increase the size of the journal, or we have to calculate the
+         * actual journal requirements more carefully by checking all of
+         * the blocks instead of being maximally pessimistic.  It remains to
+         * be seen if this is a real problem or not.
+         */
+        if (needed > journal->j_max_transaction_buffers) {
+                CERROR("want too many journal credits (%d) using %d instead\n",
+                       needed, journal->j_max_transaction_buffers);
+                needed = journal->j_max_transaction_buffers;
+        }
+
+        lock_kernel();
+        handle = journal_start(journal, needed);
+        unlock_kernel();
+        if (IS_ERR(handle))
+                CERROR("can't get handle for %d credits: rc = %ld\n", needed,
+                       PTR_ERR(handle));
+
+        RETURN(handle);
 }
 
 static int fsfilt_extN_commit(struct inode *inode, void *handle)
@@ -258,13 +378,15 @@ static int fsfilt_extN_journal_data(struct file *filp)
  *
  * This can be removed when the extN EA code is fixed.
  */
-static int fsfilt_extN_statfs(struct super_block *sb, struct statfs *sfs)
+static int fsfilt_extN_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
-        int rc = vfs_statfs(sb, sfs);
+        struct statfs sfs;
+        int rc = vfs_statfs(sb, &sfs);
 
-        if (!rc && sfs->f_bfree < sfs->f_ffree)
-                sfs->f_ffree = sfs->f_bfree;
+        if (!rc && sfs.f_bfree < sfs.f_ffree)
+                sfs.f_ffree = sfs.f_bfree;
 
+        statfs_pack(osfs, &sfs);
         return rc;
 }
 
@@ -272,6 +394,7 @@ static struct fsfilt_operations fsfilt_extN_ops = {
         fs_type:                "extN",
         fs_owner:               THIS_MODULE,
         fs_start:               fsfilt_extN_start,
+        fs_brw_start:           fsfilt_extN_brw_start,
         fs_commit:              fsfilt_extN_commit,
         fs_setattr:             fsfilt_extN_setattr,
         fs_set_md:              fsfilt_extN_set_md,

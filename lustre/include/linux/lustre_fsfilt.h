@@ -32,11 +32,18 @@
 
 typedef void (*fsfilt_cb_t)(struct obd_device *obd, __u64 last_rcvd, int error);
 
+struct fsfilt_objinfo {
+        struct dentry *fso_dentry;
+        int fso_bufcnt;
+};
+
 struct fsfilt_operations {
         struct list_head fs_list;
         struct module *fs_owner;
         char   *fs_type;
         void   *(* fs_start)(struct inode *inode, int op);
+        void   *(* fs_brw_start)(int objcount, struct fsfilt_objinfo *fso,
+                                 int niocount, struct niobuf_remote *nb);
         int     (* fs_commit)(struct inode *inode, void *handle);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr);
@@ -48,7 +55,7 @@ struct fsfilt_operations {
         int     (* fs_journal_data)(struct file *file);
         int     (* fs_set_last_rcvd)(struct obd_device *obd, __u64 last_rcvd,
                                      void *handle, fsfilt_cb_t cb_func);
-        int     (* fs_statfs)(struct super_block *sb, struct statfs *sfs);
+        int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
 };
 
 extern int fsfilt_register_ops(struct fsfilt_operations *fs_ops);
@@ -72,15 +79,21 @@ static inline void *fsfilt_start(struct obd_device *obd,
         return obd->obd_fsops->fs_start(inode, op);
 }
 
+static inline void *fsfilt_brw_start(struct obd_device *obd, int objcount,
+                                     struct fsfilt_objinfo *fso, int niocount,
+                                     struct niobuf_remote *nb)
+{
+        return obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb);
+}
+
 static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
-                                   void *handle)
+                                void *handle)
 {
         return obd->obd_fsops->fs_commit(inode, handle);
 }
 
-static inline int fsfilt_setattr(struct obd_device *obd,
-                                    struct dentry *dentry,
-                                    void *handle, struct iattr *iattr)
+static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
+                                 void *handle, struct iattr *iattr)
 {
         int rc;
         /*
@@ -98,7 +111,7 @@ static inline int fsfilt_setattr(struct obd_device *obd,
 }
 
 static inline int fsfilt_set_md(struct obd_device *obd, struct inode *inode,
-                                   void *handle, void *md, int size)
+                                void *handle, void *md, int size)
 {
         return obd->obd_fsops->fs_set_md(inode, handle, md, size);
 }
@@ -128,9 +141,9 @@ static inline int fsfilt_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
 }
 
 static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *fs,
-                                struct statfs *sfs)
+                                struct obd_statfs *osfs)
 {
-        return obd->obd_fsops->fs_statfs(fs, sfs);
+        return obd->obd_fsops->fs_statfs(fs, osfs);
 }
 
 #endif /* __KERNEL__ */
