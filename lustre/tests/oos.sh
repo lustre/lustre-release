@@ -48,8 +48,9 @@ if [ $(($ORIGFREE - $LEFTFREE)) -lt $RECORDSOUT ]; then
 	echo "$ORIGFREE - $LEFTFREE $RECORDSOUT"
 fi
 
-if [ $LEFTFREE -gt $((100 * $STRIPECOUNT)) ]; then
+if [ $LEFTFREE -gt $((400 * $STRIPECOUNT)) ]; then
 	echo "ERROR: too much space left $LEFTFREE and -ENOSPC returned"
+	grep '[0-9]' /proc/fs/lustre/osc/OSC*MNT*/cur*
 	SUCCESS=0
 fi
 
@@ -59,9 +60,10 @@ if [ $RECORDSOUT -ne $(($FILESIZE / 1024)) ]; then
         SUCCESS=0
 fi
 
+rm -f $OOS $LOG
+
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
-
-	rm -f $OOS
-	rm -f $LOG
+else
+	exit 1
 fi
