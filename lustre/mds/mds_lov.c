@@ -192,7 +192,7 @@ out:
 }
 
 int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
-                          int len, void *karg, void *uarg)
+                  int len, void *karg, void *uarg)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct obd_ioctl_data *data = karg;
@@ -236,16 +236,22 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
                         CERROR("UUID array size too small\n");
                         RETURN(-ENOSPC);
                 }
-                rc = mds_get_lovtgts(&obd->u.mds, desc->ld_tgt_count, uuidarray);
+                rc = mds_get_lovtgts(&obd->u.mds, desc->ld_tgt_count,
+                                     uuidarray);
 
                 RETURN(rc);
 
-            case OBD_IOC_SET_READONLY:
+        case OBD_IOC_SET_READONLY:
                 CERROR("setting device %s read-only\n",
                        ll_bdevname(obd->u.mds.mds_sb->s_dev));
 #ifdef CONFIG_DEV_RDONLY
                 dev_set_rdonly(obd->u.mds.mds_sb->s_dev, 2);
 #endif
+                RETURN(0);
+
+        case OBD_IOC_ABORT_RECOVERY:
+                CERROR("aborting recovery for device %s\n", obd->obd_name);
+                target_abort_recovery(obd);
                 RETURN(0);
 
         default:
