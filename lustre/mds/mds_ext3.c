@@ -1,15 +1,26 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mds/mds_ext3.c
- *
+ *  lustre/mds/mds_ext3.c
  *  Lustre Metadata Server (mds) journal abstraction routines
  *
  *  Copyright (C) 2002  Cluster File Systems, Inc.
- *  author: Andreas Dilger <adilger@clusterfs.com>
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *  This code is issued under the GNU General Public License.
- *  See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
 
@@ -23,8 +34,8 @@
 #include <linux/module.h>
 
 static struct mds_fs_operations mds_ext3_fs_ops;
-static kmem_cache_t *jcb_cache;
-static int jcb_cache_count;
+static kmem_cache_t *mcb_cache;
+static int mcb_cache_count;
 
 struct mds_cb_data {
         struct journal_callback cb_jcb;
@@ -42,6 +53,7 @@ static void *mds_ext3_start(struct inode *inode, int op)
 {
         /* For updates to the last recieved file */
         int nblocks = EXT3_DATA_TRANS_BLOCKS;
+        void *handle;
 
         switch(op) {
         case MDS_FSOP_RMDIR:
@@ -71,18 +83,31 @@ static void *mds_ext3_start(struct inode *inode, int op)
                  LBUG();
         }
 
-        return journal_start(EXT3_JOURNAL(inode), nblocks);
+        lock_kernel();
+        handle = journal_start(EXT3_JOURNAL(inode), nblocks);
+        unlock_kernel();
+
+        return handle;
 }
 
 static int mds_ext3_commit(struct inode *inode, void *handle)
 {
-        return journal_stop((handle_t *)handle);
+        int rc;
+
+        lock_kernel();
+        rc = journal_stop((handle_t *)handle);
+        unlock_kernel();
+
+        return rc;
 }
 
 static int mds_ext3_setattr(struct dentry *dentry, void *handle,
                             struct iattr *iattr)
 {
         struct inode *inode = dentry->d_inode;
+        int rc;
+
+        lock_kernel();
 
         /* a _really_ horrible hack to avoid removing the data stored
            in the block pointers; this data is the object id
@@ -109,9 +134,13 @@ static int mds_ext3_setattr(struct dentry *dentry, void *handle,
         }
 
         if (inode->i_op->setattr)
-                return inode->i_op->setattr(dentry, iattr);
+                rc =  inode->i_op->setattr(dentry, iattr);
         else
-                return inode_setattr(inode, iattr);
+                rc = inode_setattr(inode, iattr);
+
+        unlock_kernel();
+
+        return rc;
 }
 
 /*
@@ -121,7 +150,8 @@ static int mds_ext3_setattr(struct dentry *dentry, void *handle,
  *        dirty (it currently is used with other operations that
  *        subsequently also mark the inode dirty).
  */
-static int mds_ext3_set_objid(struct inode *inode, void *handle, obd_id id)
+static int mds_ext3_set_md(struct inode *inode, void *handle,
+                           void *obd_md, int len)
 {
         *((__u64 *)EXT3_I(inode)->i_data) = cpu_to_le64(id);
         return 0;
@@ -183,36 +213,39 @@ static void mds_ext3_delete_inode(struct inode *inode)
                 mds_ext3_fs_ops.cl_delete_inode(inode);
 }
 
-static void mds_ext3_callback_status(void *jcb, int error)
+static void mds_ext3_callback_status(struct journal_callback *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
 
-        CDEBUG(D_EXT2, "got callback for last_rcvd %Ld: rc = %d\n",
+        CDEBUG(D_EXT2, "got callback for last_rcvd "LPD64": rc = %d\n",
                mcb->cb_last_rcvd, error);
         if (!error && mcb->cb_last_rcvd > mcb->cb_mds->mds_last_committed)
                 mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;
 
-        kmem_cache_free(jcb_cache, mcb);
-        --jcb_cache_count;
+        kmem_cache_free(mcb_cache, mcb);
+        --mcb_cache_count;
 }
 
 static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
 {
         struct mds_cb_data *mcb;
 
-        mcb = kmem_cache_alloc(jcb_cache, GFP_NOFS);
+        mcb = kmem_cache_alloc(mcb_cache, GFP_NOFS);
         if (!mcb)
                 RETURN(-ENOMEM);
 
-        ++jcb_cache_count;
+        ++mcb_cache_count;
         mcb->cb_mds = mds;
         mcb->cb_last_rcvd = mds->mds_last_rcvd;
 
 #ifdef HAVE_JOURNAL_CALLBACK_STATUS
-        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
-               (unsigned long long)mcb->cb_last_rcvd);
+        CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n",
+               mcb->cb_last_rcvd);
+        lock_kernel();
+        /* Note that an "incompatible pointer warning here is OK for now */
         journal_callback_set(handle, mds_ext3_callback_status,
-                             (void *)mcb);
+                             (struct journal_callback *)mcb);
+        unlock_kernel();
 #else
 #warning "no journal callback kernel patch, faking it..."
         {
@@ -256,10 +289,10 @@ static int __init mds_ext3_init(void)
 {
         int rc;
 
-        jcb_cache = kmem_cache_create("mds_ext3_jcb",
+        mcb_cache = kmem_cache_create("mds_ext3_mcb",
                                       sizeof(struct mds_cb_data), 0,
                                       0, NULL, NULL);
-        if (!jcb_cache) {
+        if (!mcb_cache) {
                 CERROR("error allocating MDS journal callback cache\n");
                 GOTO(out, rc = -ENOMEM);
         }
@@ -267,21 +300,21 @@ static int __init mds_ext3_init(void)
         rc = mds_register_fs_type(&mds_ext3_fs_ops, "ext3");
 
         if (rc)
-                kmem_cache_destroy(jcb_cache);
+                kmem_cache_destroy(mcb_cache);
 out:
         return rc;
 }
 
 static void __exit mds_ext3_exit(void)
 {
-        int rc = 0;
+        int rc;
 
         mds_unregister_fs_type("ext3");
-        rc = kmem_cache_destroy(jcb_cache);
+        rc = kmem_cache_destroy(mcb_cache);
 
-        if (rc || jcb_cache_count) {
+        if (rc || mcb_cache_count) {
                 CERROR("can't free MDS callback cache: count %d, rc = %d\n",
-                       jcb_cache_count, rc);
+                       mcb_cache_count, rc);
         }
 }
 

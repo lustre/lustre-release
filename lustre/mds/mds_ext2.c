@@ -35,6 +35,8 @@ static int mds_ext2_setattr(struct dentry *dentry, void *handle,
 {
         struct inode *inode = dentry->d_inode;
 
+        lock_kernel();
+
         /* a _really_ horrible hack to avoid removing the data stored
            in the block pointers; this data is the object id
            this will go into an extended attribute at some point.
@@ -53,9 +55,13 @@ static int mds_ext2_setattr(struct dentry *dentry, void *handle,
         }
 
         if (inode->i_op->setattr)
-                return inode->i_op->setattr(dentry, iattr);
+                rc = inode->i_op->setattr(dentry, iattr);
         else
-                return inode_setattr(inode, iattr);
+                rc = inode_setattr(inode, iattr);
+
+        unlock_kernel();
+
+        return rc;
 }
 
 /*

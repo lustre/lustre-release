@@ -4,7 +4,7 @@
  *  lustre/mds/mds_extN.c
  *  Lustre Metadata Server (mds) journal abstraction routines
  *
- *  Copyright (c) 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2002 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -38,8 +38,8 @@
 #include <linux/obd_lov.h>
 
 static struct mds_fs_operations mds_extN_fs_ops;
-static kmem_cache_t *jcb_cache;
-static int jcb_cache_count;
+static kmem_cache_t *mcb_cache;
+static int mcb_cache_count;
 
 struct mds_cb_data {
         struct journal_callback cb_jcb;
@@ -92,33 +92,39 @@ static void *mds_extN_start(struct inode *inode, int op)
                  LBUG();
         }
 
-        //lock_kernel();
+        lock_kernel();
         handle = journal_start(EXTN_JOURNAL(inode), nblocks);
-        //if (IS_ERR(handle))
-        //        unlock_kernel();
+        unlock_kernel();
 
         return handle;
 }
 
 static int mds_extN_commit(struct inode *inode, void *handle)
 {
-        int rc = journal_stop((handle_t *)handle);
+        int rc;
 
-        //unlock_kernel();
+        lock_kernel();
+        rc = journal_stop((handle_t *)handle);
+        unlock_kernel();
 
         return rc;
 }
 
-/* Assumes BKL is held */
 static int mds_extN_setattr(struct dentry *dentry, void *handle,
                             struct iattr *iattr)
 {
         struct inode *inode = dentry->d_inode;
+        int rc;
 
+        lock_kernel();
         if (inode->i_op->setattr)
-                return inode->i_op->setattr(dentry, iattr);
+                rc = inode->i_op->setattr(dentry, iattr);
         else
-                return inode_setattr(inode, iattr);
+                rc = inode_setattr(inode, iattr);
+
+        unlock_kernel();
+
+        return rc;
 }
 
 static int mds_extN_set_md(struct inode *inode, void *handle,
@@ -210,7 +216,7 @@ static void mds_extN_delete_inode(struct inode *inode)
                         return;
                 }
                 if (mds_extN_set_md(inode, handle, NULL))
-                        CERROR("error clearing obdo on %ld\n", inode->i_ino);
+                        CERROR("error clearing objid on %ld\n", inode->i_ino);
 
                 if (mds_extN_fs_ops.cl_delete_inode)
                         mds_extN_fs_ops.cl_delete_inode(inode);
@@ -230,28 +236,30 @@ static void mds_extN_callback_status(struct journal_callback *jcb, int error)
         if (!error && mcb->cb_last_rcvd > mcb->cb_mds->mds_last_committed)
                 mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;
 
-        kmem_cache_free(jcb_cache, jcb);
-        --jcb_cache_count;
+        kmem_cache_free(mcb_cache, mcb);
+        --mcb_cache_count;
 }
 
 static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
 {
         struct mds_cb_data *mcb;
 
-        mcb = kmem_cache_alloc(jcb_cache, GFP_NOFS);
+        mcb = kmem_cache_alloc(mcb_cache, GFP_NOFS);
         if (!mcb)
                 RETURN(-ENOMEM);
 
-        ++jcb_cache_count;
+        ++mcb_cache_count;
         mcb->cb_mds = mds;
         mcb->cb_last_rcvd = mds->mds_last_rcvd;
 
 #ifdef HAVE_JOURNAL_CALLBACK_STATUS
-        CDEBUG(D_EXT2, "set callback for last_rcvd: %Ld\n",
-               (unsigned long long)mcb->cb_last_rcvd);
+        CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n",
+               mcb->cb_last_rcvd);
+        lock_kernel();
         /* Note that an "incompatible pointer warning here is OK for now */
         journal_callback_set(handle, mds_extN_callback_status,
                              (struct journal_callback *)mcb);
+        unlock_kernel();
 #else
 #warning "no journal callback kernel patch, faking it..."
         {
@@ -261,7 +269,7 @@ static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
                 CERROR("no journal callback kernel patch, faking it...\n");
                 next = jiffies + 300 * HZ;
         }
-        }
+
         mds_extN_callback_status((struct journal_callback *)mcb, 0);
 #endif
 
@@ -314,17 +322,18 @@ static int __init mds_extN_init(void)
         int rc;
 
         //rc = extN_xattr_register();
-        jcb_cache = kmem_cache_create("mds_extN_jcb",
+        mcb_cache = kmem_cache_create("mds_extN_mcb",
                                       sizeof(struct mds_cb_data), 0,
                                       0, NULL, NULL);
-        if (!jcb_cache) {
+        if (!mcb_cache) {
                 CERROR("error allocating MDS journal callback cache\n");
                 GOTO(out, rc = -ENOMEM);
         }
+
         rc = mds_register_fs_type(&mds_extN_fs_ops, "extN");
 
         if (rc)
-                kmem_cache_destroy(jcb_cache);
+                kmem_cache_destroy(mcb_cache);
 out:
         return rc;
 }
@@ -334,11 +343,11 @@ static void __exit mds_extN_exit(void)
         int rc;
 
         mds_unregister_fs_type("extN");
-        rc = kmem_cache_destroy(jcb_cache);
+        rc = kmem_cache_destroy(mcb_cache);
 
-        if (rc || jcb_cache_count) {
+        if (rc || mcb_cache_count) {
                 CERROR("can't free MDS callback cache: count %d, rc = %d\n",
-                       jcb_cache_count, rc);
+                       mcb_cache_count, rc);
         }
 
         //rc = extN_xattr_unregister();
