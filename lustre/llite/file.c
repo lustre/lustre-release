@@ -331,7 +331,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         struct lustre_handle lockh;
         ENTRY;
 
-        memcpy(&tmpex, &lock->l_policy_data.l_extent, sizeof(tmpex));
+        memcpy(&tmpex, &lock->l_policy_data, sizeof(tmpex));
         CDEBUG(D_INODE|D_PAGE, "inode %lu(%p) ["LPU64"->"LPU64"] size: %llu\n",
                inode->i_ino, inode, tmpex.l_extent.start, tmpex.l_extent.end,
                inode->i_size);
@@ -369,7 +369,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
          * more efficient by associating locks with pages and with
          * batching writeback under the lock explicitly. */
         for (i = start, j = start % count ; i <= end;
-             tmpex.l_extent.start += PAGE_CACHE_SIZE, j++, i++) {
+             j++, i++, tmpex.l_extent.start += PAGE_CACHE_SIZE) {
                 LASSERTF(tmpex.l_extent.start< lock->l_policy_data.l_extent.end,
                          LPU64" >= "LPU64" start %lu i %lu end %lu\n",
                          tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
@@ -379,7 +379,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 if (list_empty(&inode->i_mapping->dirty_pages) &&
                     list_empty(&inode->i_mapping->clean_pages) &&
                     list_empty(&inode->i_mapping->locked_pages)) {
-                        CDEBUG(D_INODE, "nothing left\n");
+                        CDEBUG(D_INODE|D_PAGE, "nothing left\n");
                         ll_pgcache_unlock(inode->i_mapping);
                         break;
                 }
@@ -425,12 +425,12 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 }
                 unlock_page(page);
                 page_cache_release(page);
+
         next_index:
                 if (j == count) {
                         i += skip;
                         j = 0;
                 }
-
         }
         EXIT;
 }

@@ -698,8 +698,13 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                            type == LDLM_PLAIN ? res_id->name[3] :
                                 policy->l_extent.end);
         else if (!(flags & LDLM_FL_TEST_LOCK)) /* less verbose for test-only */
-                LDLM_DEBUG_NOLOCK("not matched type %u mode %u res "LPU64"/"LPU64,
-                                  type, mode, res_id->name[0], res_id->name[1]);
+                LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
+                                  LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
+                                  type, mode, res_id->name[0], res_id->name[1],
+                                  type == LDLM_PLAIN ? res_id->name[2] :
+                                        policy->l_extent.start,
+                                  type == LDLM_PLAIN ? res_id->name[3] :
+                                        policy->l_extent.end);
 
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
@@ -1162,9 +1167,11 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                "write: %d\n", (int)lock->l_req_mode, (int)lock->l_granted_mode,
                atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
-                CDEBUG(level, "  Extent: "LPU64" -> "LPU64"\n",
+                CDEBUG(level, "  Extent: "LPU64" -> "LPU64
+                       " (req "LPU64"-"LPU64")\n",
                        lock->l_policy_data.l_extent.start,
-                       lock->l_policy_data.l_extent.end);
+                       lock->l_policy_data.l_extent.end,
+                       lock->l_req_extent.start, lock->l_req_extent.end);
         else if (lock->l_resource->lr_type == LDLM_FLOCK)
                 CDEBUG(level, "  Pid: %d Extent: "LPU64" -> "LPU64"\n",
                        lock->l_policy_data.l_flock.pid,
