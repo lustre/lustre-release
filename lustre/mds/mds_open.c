@@ -333,14 +333,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 RETURN(-ENOMEM);
         oti.oti_objid = *ids;
 
-        if (*handle == NULL)
-                *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
-        if (IS_ERR(*handle)) {
-                rc = PTR_ERR(*handle);
-                *handle = NULL;
-                GOTO(out_ids, rc);
-        }
-
         /* replay case */
         if(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 LASSERT (rec->ur_fid2->id);
@@ -348,6 +340,14 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 lmm_size = rec->ur_eadatalen;
                 lmm = rec->ur_eadata;
                 LASSERT(lmm);
+
+                if (*handle == NULL)
+                        *handle = fsfilt_start(obd,inode,FSFILT_OP_CREATE,NULL);
+                if (IS_ERR(*handle)) {
+                        rc = PTR_ERR(*handle);
+                        *handle = NULL;
+                        GOTO(out_ids, rc);
+                }
 
                 mds_objids_from_lmm(*ids, lmm, &mds->mds_lov_desc);
 
@@ -446,6 +446,15 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         LASSERT(rc >= 0);
         lmm_size = rc;
         body->eadatasize = rc;
+
+        if (*handle == NULL)
+                *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
+        if (IS_ERR(*handle)) {
+                rc = PTR_ERR(*handle);
+                *handle = NULL;
+                GOTO(out_ids, rc);
+        }
+
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
         lmm_bufsize = req->rq_repmsg->buflens[offset];
@@ -1054,6 +1063,12 @@ got_child:
                         CERROR("error on parent setattr: rc = %d\n", rc);
                 else
                         MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
+
+                if (!(rec->ur_flags & O_EXCL)) { /* bug 3313 */
+                        rc = fsfilt_commit(obd, dchild->d_inode->i_sb,
+                                           dchild->d_inode, handle, 0);
+                        handle = NULL;
+                }
 
                 acc_mode = 0;           /* Don't check for permissions */
         }

@@ -552,7 +552,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         child = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
         LASSERT(!IS_ERR(child));
         if ((child->d_flags & DCACHE_CROSS_REF)) {
-                LASSERTF(child->d_inode == NULL, "BUG 3869");
+                LASSERTF(child->d_inode == NULL, "BUG 3869\n");
                 body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
                 mds_pack_dentry2fid(&body->fid1, child);
                 mds_pack_dentry2body(body, child);
@@ -561,7 +561,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                 DEBUG_REQ(D_ERROR, req, "parent "LPU64"/%u name %s mode %o",
                           rec->ur_fid1->id, rec->ur_fid1->generation,
                           rec->ur_name, rec->ur_mode);
-                LASSERTF(child->d_inode != NULL, "BUG 3869");
+                LASSERTF(child->d_inode != NULL, "BUG 3869\n");
         } else {
                 body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
                 mds_pack_inode2fid(req2obd(req), &body->fid1, child->d_inode);
@@ -752,7 +752,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
                         rc = obd_create(mds->mds_lmv_exp, oa, NULL, NULL);
                         if (rc) {
-	                        obdo_free(oa);
+                                CERROR("can't create remote inode: %d\n", rc);
+                                DEBUG_REQ(D_ERROR, req, "parent "LPU64"/%u name %s mode %o",
+                                          rec->ur_fid1->id, rec->ur_fid1->generation,
+                                          rec->ur_name, rec->ur_mode);
+                                obdo_free(oa);
                                 GOTO(cleanup, rc);
                         }
                         

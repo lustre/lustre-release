@@ -1116,6 +1116,8 @@ static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
 #ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
         struct dentry *dentry;
         int err;
+        LASSERT(ino != 0);
+        LASSERT(namelen != 0);
         dentry = ll_lookup_one_len(name, parent, namelen);
         if (IS_ERR(dentry)) {
                 CERROR("can't lookup %*s in %lu/%lu: %d\n", dentry->d_name.len,

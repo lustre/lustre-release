@@ -1330,14 +1330,47 @@ static char *reint_names[] = {
 static void reconstruct_create(struct ptlrpc_request *req)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
+        struct mds_obd *mds = &req->rq_export->exp_obd->u.mds;
         struct mds_client_data *mcd = med->med_mcd;
+        struct dentry *dentry;
         struct ost_body *body;
-
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+        struct ll_fid fid;
+        ENTRY;
 
         /* copy rc, transno and disp; steal locks */
         mds_req_from_mcd(req, mcd);
-        CERROR("reconstruct reply for x"LPU64"\n", req->rq_xid);
+        if (req->rq_status) {
+                EXIT;
+                return;
+        }
+
+        fid.mds = 0;
+        fid.id = mcd->mcd_last_data;
+        fid.generation = 0;
+
+        LASSERT(fid.id != 0);
+
+        dentry = mds_fid2dentry(mds, &fid, NULL);
+        if (IS_ERR(dentry)) {
+                CERROR("can't find inode "LPU64"\n", fid.id);
+                req->rq_status = PTR_ERR(dentry);
+                EXIT;
+                return;
+        }
+
+        CWARN("reconstruct reply for x"LPU64" (remote ino) "LPU64" -> %lu/%u\n",
+              req->rq_xid, fid.id, dentry->d_inode->i_ino,
+              dentry->d_inode->i_generation);
+
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        obdo_from_inode(&body->oa, dentry->d_inode, FILTER_VALID_FLAGS);
+        body->oa.o_id = dentry->d_inode->i_ino;
+        body->oa.o_generation = dentry->d_inode->i_generation;
+        body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
+                
+        l_dput(dentry);
+        EXIT;
+        return;
 }
 
 static int mdt_obj_create(struct ptlrpc_request *req)
@@ -1354,6 +1387,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         struct lvfs_ucred uc;
         struct mea *mea;
         void *handle = NULL;
+        unsigned long cr_inum = 0;
         ENTRY;
        
         DEBUG_REQ(D_HA, req, "create remote object");
@@ -1396,6 +1430,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
                         repbody->oa.o_generation = new->d_inode->i_generation;
                         repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
                         cleanup_phase = 1;
+                        cr_inum = new->d_inode->i_ino;
                         GOTO(cleanup, rc = 0);
                 }
                 CWARN("hmm. for some reason dir %lu/%lu (or reply) got lost\n",
@@ -1469,10 +1504,10 @@ repeat:
                         
                 cleanup_phase = 2; /* created directory object */
 
-                CDEBUG(D_OTHER, "created dirobj: %lu/%lu mode %o\n",
-                                (unsigned long) new->d_inode->i_ino,
-                                (unsigned long) new->d_inode->i_generation,
-                                (unsigned) new->d_inode->i_mode);
+                cr_inum = new->d_inode->i_ino;
+                CDEBUG(D_OTHER, "created dirobj: %lu/%u mode %o\n",
+                       new->d_inode->i_ino, new->d_inode->i_generation,
+                       new->d_inode->i_mode);
         } else {
                 up(&parent_inode->i_sem);
                 CERROR("%s: can't create dirobj: %d\n", obd->obd_name, rc);
@@ -1509,7 +1544,7 @@ cleanup:
                 if (rc == 0)
                         ptlrpc_require_repack(req);
         case 1: /* transaction */
-                rc = mds_finish_transno(mds, parent_inode, handle, req, rc, 0);
+                rc = mds_finish_transno(mds, parent_inode, handle, req, rc, cr_inum);
         }
 
         l_dput(new);

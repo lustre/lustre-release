@@ -642,6 +642,8 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                         struct dentry_params dp;
                         struct inode *inode;
 
+                        CWARN("creating log with ID "LPU64"\n", oa->o_id);
+                        
                         dchild->d_fsdata = (void *) &dp;
                         dp.p_ptr = NULL;
                         dp.p_inum = oa->o_id;
@@ -683,6 +685,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         oa->o_id = filp->f_dentry->d_inode->i_ino;
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
+        CWARN("created log anonymous "LPU64"/%u\n", oa->o_id, oa->o_generation);
 
         dchild = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
 
