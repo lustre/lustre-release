@@ -606,6 +606,14 @@ class LCTLInterface:
   quit""" % (name, setup)
         self.run(cmds)
 
+    def abort_recovery(self, name):
+        cmds = """
+  ignore_errors
+  device %s
+  abort_recovery
+  quit""" % (name)
+        self.run(cmds)
+
     def add_conn(self, name, conn_uuid):
         cmds = """
   cfg_device %s
@@ -621,7 +629,9 @@ class LCTLInterface:
         except CommandError, e:
             self.cleanup(name, uuid, 0)
             raise e
-
+        if (config.abort_recovery):
+            if (type == 'obdfilter' or type == 'mdt'):
+                self.abort_recovery(name)
 
     # cleanup a device
     def cleanup(self, name, uuid, force, failover = 0):
@@ -887,7 +897,7 @@ def loop_base():
     if not os.access(loop + str(0), os.R_OK):
         loop = loop + '/'
         if not os.access(loop + str(0), os.R_OK):
-            panic("can't access loop devices")
+            loop='/dev/loop'
     return loop
 
 # find loop device assigned to thefile
@@ -2854,6 +2864,9 @@ lconf_options = [
                    another node for failover purposes. This will not
                    be a clean shutdown.""",
                FLAG, 0),
+    ('abort_recovery',"""Used to start a service when you know recovery
+                         will not succeed.  This will skip the recovery
+                         timeout period."""),
     ('gdb', """Prints message after creating gdb module script
                     and sleeps for 5 seconds."""),
     ('noexec,n', """Prints the commands and steps that will be run for a

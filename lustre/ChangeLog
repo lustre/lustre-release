@@ -22,6 +22,8 @@
 	  lustre and chkconfig --on lustrefs to use them
 	- upcalls are no longer needed for clients to recover to failover 
 	servers	(3262)
+	- add --abort-recovery option to lconf to abort recovery on device
+	startup (6017)
 
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
