@@ -141,7 +141,7 @@ out:
         return rc;
 }
 
-int ll_size_lock(struct inode *inode, struct lov_stripe_md *lsm, __u64 start,
+int ll_size_lock(struct inode *inode, struct lov_stripe_md *lsm, obd_off start,
                  int mode, struct lustre_handle **lockhs_p)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
