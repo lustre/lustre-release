@@ -62,6 +62,7 @@ static void __exit ptlbd_exit(void)
         ENTRY;
         ptlbd_cl_exit();
         ptlbd_sv_exit();
+        ptlbd_blk_exit();
         EXIT;
 }
 
