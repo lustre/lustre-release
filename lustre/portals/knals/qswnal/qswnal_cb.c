@@ -723,11 +723,6 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         int                sumnob;
 #endif
         
-        /* NB, the return code from this procedure is ignored.
-         * If we can't send, we must still complete with lib_finalize().
-         * We'll have to wait for 3.2 to return an error event.
-         */
-
         CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to nid: "LPX64
                " pid %u\n", payload_nob, payload_niov, nid, pid);
 
@@ -753,13 +748,13 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                         CERROR("Can't route to "LPX64": router error %d\n",
                                nid, rc);
                         lib_finalize (&kqswnal_lib, private, libmsg);
-                        return (-1);
+                        return (PTL_FAIL);
                 }
                 if (kqswnal_nid2elanid (targetnid) < 0) {
                         CERROR("Bad gateway "LPX64" for "LPX64"\n",
                                targetnid, nid);
                         lib_finalize (&kqswnal_lib, private, libmsg);
-                        return (-1);
+                        return (PTL_FAIL);
                 }
         }
 
@@ -771,7 +766,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         if (ktx == NULL) {
                 kqswnal_cerror_hdr (hdr);
                 lib_finalize (&kqswnal_lib, private, libmsg);
-                return (-1);
+                return (PTL_NOSPACE);
         }
 
         ktx->ktx_args[0] = private;
@@ -891,7 +886,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                         if (rc != 0) {
                                 kqswnal_put_idle_tx (ktx);
                                 lib_finalize (&kqswnal_lib, private, libmsg);
-                                return (-1);
+                                return (PTL_FAIL);
                         }
                 } 
         }
@@ -905,11 +900,11 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                 CERROR ("Failed to send packet to "LPX64": %d\n", targetnid, rc);
                 kqswnal_put_idle_tx (ktx);
                 lib_finalize (&kqswnal_lib, private, libmsg);
-                return (-1);
+                return (PTL_FAIL);
         }
 
         CDEBUG(D_NET, "send to "LPSZ" bytes to "LPX64"\n", payload_nob, targetnid);
-        return (0);
+        return (PTL_OK);
 }
 
 static int

@@ -67,6 +67,7 @@ int lib_finalize(nal_cb_t * nal, void *private, lib_msg_t *msg)
 
                 rc = lib_send (nal, private, NULL, &ack, PTL_MSG_ACK,
                                msg->nid, msg->pid, NULL, 0, 0);
+                /* If this send fails, there's nothing else to clean up */
         }
 
         md = msg->md;

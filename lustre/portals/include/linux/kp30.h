@@ -883,6 +883,10 @@ extern ptl_handle_ni_t  kscimacnal_ni;
 #define NAL_CMD_CLOSE_CONNECTION     101
 #define NAL_CMD_REGISTER_MYNID       102
 #define NAL_CMD_PUSH_CONNECTION      103
+#define NAL_CMD_GET_CONN             104
+#define NAL_CMD_DEL_AUTOCONN         105
+#define NAL_CMD_ADD_AUTOCONN         106
+#define NAL_CMD_GET_AUTOCONN         107
 
 enum {
         DEBUG_DAEMON_START       =  1,

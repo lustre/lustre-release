@@ -34,6 +34,10 @@ char * ptl_nid2str (char *buffer, ptl_nid_t nid);
 
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
+int jt_ptl_print_autoconnects (int argc, char **argv);
+int jt_ptl_add_autoconnect (int argc, char **argv);
+int jt_ptl_del_autoconnect (int argc, char **argv);
+int jt_ptl_print_connections (int argc, char **argv);
 int jt_ptl_connect(int argc, char **argv);
 int jt_ptl_disconnect(int argc, char **argv);
 int jt_ptl_push_connection(int argc, char **argv);
