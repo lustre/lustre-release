@@ -41,8 +41,12 @@ done
 
 [ "$ERROR" ] && exit $ERROR
 
-rm /mnt/lustre/hosts || exit 23
+sh llmountcleanup.sh
+echo | sh llrmount.sh || exit 24
 
-rm -r /mnt/lustre/etc || exit 24
+echo "removing files from /mnt/lustre/etc"
+rm /mnt/lustre/hosts || exit 25
+
+rm -r /mnt/lustre/etc || exit 26
 
 sh llmountcleanup.sh
