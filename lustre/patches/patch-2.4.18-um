@@ -1,24 +1,23 @@
 --- lum-pristine/arch/um/kernel/mem.c	Mon Aug 12 11:05:20 2002
 +++ lum/arch/um/kernel/mem.c	Thu Aug  1 18:07:35 2002
-@@ -527,6 +527,22 @@
+@@ -527,6 +527,21 @@
  	return(phys_mem_map(pte_val(pte)));
  }
  
 +struct page *check_get_page(unsigned long kaddr)
 +{
-+        struct page *page;
-+        struct mem_region *mr;
-+        unsigned long phys = __pa(kaddr);
++	struct page *page;
++	struct mem_region *mr;
++	unsigned long phys = __pa(kaddr);
 +	unsigned int n = phys_region_index(phys);
 +
-+	if(regions[n] == NULL) 
-+                return NULL; 
++	if (regions[n] == NULL)
++                return NULL;
 +
-+        mr = regions[n];
-+        page = (struct page *) mr->mem_map;
++	mr = regions[n];
++	page = (struct page *) mr->mem_map;
 +	return page + ((phys_addr(phys)) >> PAGE_SHIFT);
 +}
-+
 +
  struct mem_region *page_region(struct page *page, int *index_out)
  {
@@ -28,14 +27,14 @@
  		}
  	}
 -	panic("No region found for page");
-+//panic("No region found for page");
++	//panic("No region found for page");
  	return(NULL);
  }
  
  struct page *page_mem_map(struct page *page)
  {
-+        if (!page_region(page, NULL))
-+            return NULL; 
++	if (!page_region(page, NULL))
++		return NULL; 
  	return((struct page *) page_region(page, NULL)->mem_map);
  }
  

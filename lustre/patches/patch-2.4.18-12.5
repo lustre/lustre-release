@@ -120,39 +120,6 @@
  
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
---- linux-2.4.18-12-uml-pristine/fs/jbd/commit.c	Mon Sep  9 14:41:57 2002
-+++ linux-2.4.18-12-uml/fs/jbd/commit.c	Mon Sep  9 16:08:12 2002
-@@ -598,7 +598,6 @@
- 	descriptor = journal_get_descriptor_buffer(journal);
- 	if (!descriptor) {
- 		__journal_abort_hard(journal);
--		unlock_journal(journal);
- 		goto skip_commit;
- 	}
- 
---- linux-2.4.18-12-uml-pristine/fs/jbd/transaction.c	Mon Sep  9 14:41:57 2002
-+++ linux-2.4.18-12-uml/fs/jbd/transaction.c	Mon Sep  9 16:29:50 2002
-@@ -223,6 +223,20 @@
- 	return handle;
- }
- 
-+/* Allocate a new handle.  This should probably be in a slab... */
-+static handle_t *get_handle(int nblocks)
-+{
-+	handle_t *handle = jbd_kmalloc(sizeof (handle_t), GFP_NOFS);
-+	if (!handle)
-+		return NULL;
-+	memset(handle, 0, sizeof (handle_t));
-+	handle->h_buffer_credits = nblocks;
-+	handle->h_ref = 1;
-+	INIT_LIST_HEAD(&handle->h_jcb);
-+
-+	return handle;
-+}
-+
- /*
-  * Obtain a new handle.  
-  *
 --- linux-2.4.18-12-uml-pristine/include/linux/blkdev.h	Wed Sep 11 12:32:08 2002
 +++ linux-2.4.18-12-uml/include/linux/blkdev.h	Wed Sep 18 15:52:17 2002
 @@ -277,4 +277,10 @@
