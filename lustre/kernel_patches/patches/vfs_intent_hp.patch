@@ -190,7 +190,7 @@
  {
  	struct dentry *dentry;
  	struct inode *inode;
-@@ -520,18 +556,18 @@ int link_path_walk(const char * name, st
+@@ -520,15 +556,15 @@ int link_path_walk(const char * name, st
  				break;
  		}
  		/* This does the actual lookups.. */
@@ -229,7 +229,7 @@
  			break;
  		continue;
  		/* here ends the main loop */
-@@ -583,22 +619,24 @@ last_component:
+@@ -583,19 +619,20 @@ last_component:
  			if (err < 0)
  				break;
  		}
