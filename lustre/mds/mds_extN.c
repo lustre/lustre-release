@@ -96,6 +96,7 @@ static int mds_extN_commit(struct inode *inode, void *handle)
         return journal_stop((handle_t *)handle);
 }
 
+/* Assumes BKL is held */
 static int mds_extN_setattr(struct dentry *dentry, void *handle,
                             struct iattr *iattr)
 {
@@ -112,8 +113,8 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
 {
         int rc;
 
-        lock_kernel();
         down(&inode->i_sem);
+        lock_kernel();
         if (md == NULL)
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, NULL, 0, 0);
@@ -123,8 +124,8 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
                                     XATTR_LUSTRE_MDS_OBJID, md,
                                     md->lmd_easize, XATTR_CREATE);
         }
-        up(&inode->i_sem);
         unlock_kernel();
+        up(&inode->i_sem);
 
         if (rc) {
                 CERROR("error adding objectid %Ld to inode %ld: %d\n",
@@ -139,13 +140,12 @@ static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *md)
         int rc;
         int size = md->lmd_easize;
 
-        lock_kernel();
         down(&inode->i_sem);
+        lock_kernel();
         rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
                             XATTR_LUSTRE_MDS_OBJID, md, size);
-
-        up(&inode->i_sem);
         unlock_kernel();
+        up(&inode->i_sem);
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "

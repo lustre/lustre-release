@@ -123,6 +123,7 @@ struct mds_obd {
         struct mds_fs_operations *mds_fsops;
         int mds_max_mdsize;
         struct file *mds_rcvd_filp;
+        spinlock_t mds_last_lock;
         __u64 mds_last_committed;
         __u64 mds_last_rcvd;
         __u64 mds_mount_count;

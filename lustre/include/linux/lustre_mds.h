@@ -100,6 +100,8 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 
 /* lib/mds_updates.c */
 void mds_unpack_body(struct mds_body *b);
+void mds_unpack_fid(struct ll_fid *fid);
+void mds_pack_fid(struct ll_fid *fid);
 void mds_pack_req_body(struct ptlrpc_request *);
 void mds_pack_rep_body(struct ptlrpc_request *);
 int mds_update_unpack(struct ptlrpc_request *, int offset,
@@ -225,6 +227,7 @@ static inline int mds_fs_commit(struct mds_obd *mds, struct inode *inode,
 static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
                                  void *handle, struct iattr *iattr)
 {
+        int rc;
         /*
          * NOTE: we probably don't need to take i_sem here when changing
          *       ATTR_SIZE because the MDS never needs to truncate a file.
@@ -232,7 +235,11 @@ static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
          *       stored on the MDS are entirely sparse (no data blocks).
          *       If we do need to get it, we can do it here.
          */
-        return mds->mds_fsops->fs_setattr(dentry, handle, iattr);
+        lock_kernel();
+        rc = mds->mds_fsops->fs_setattr(dentry, handle, iattr);
+        unlock_kernel();
+
+        return rc;
 }
 
 static inline int mds_fs_set_md(struct mds_obd *mds, struct inode *inode,

@@ -340,7 +340,6 @@ static int mds_getstatus(struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_body *body;
-        struct mds_export_data *med = &req->rq_export->exp_mds_data;
         int rc, size = sizeof(*body);
         ENTRY;
 
@@ -351,19 +350,13 @@ static int mds_getstatus(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0);
-        mds_unpack_body(body);
-
         /* Anything we need to do here with the client's trans no or so? */
         body = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&body->fid1, &mds->mds_rootfid, sizeof(body->fid1));
 
-        LASSERT(med->med_mcd);
-
-        /* mcd_last_xid is is stored in little endian on the disk and
-           mds_pack_rep_body converts it to network order */
-        req->rq_repmsg->last_xid = le32_to_cpu(med->med_mcd->mcd_last_xid);
-        mds_pack_rep_body(req);
+        /* the last_committed and last_xid fields are filled in for all
+         * replies already - no need to do so here also.
+         */
         RETURN(0);
 }
 
@@ -978,21 +971,19 @@ int mds_handle(struct ptlrpc_request *req)
         EXIT;
 
         if (!rc) {
+                struct mds_export_data *med = &req->rq_export->exp_mds_data;
                 struct mds_obd *mds = mds_req2mds(req);
-                req->rq_repmsg->last_xid = HTON__u64(mds->mds_last_rcvd);
+
+                req->rq_repmsg->last_xid =
+                        HTON__u64(le64_to_cpu(med->med_mcd->mcd_last_xid));
                 req->rq_repmsg->last_committed =
                         HTON__u64(mds->mds_last_committed);
-                CDEBUG(D_INFO, "last_rcvd %Lu, last_committed %Lu, xid %d\n",
+                CDEBUG(D_INFO, "last_rcvd ~%Lu, last_committed %Lu, xid %d\n",
                        (unsigned long long)mds->mds_last_rcvd,
                        (unsigned long long)mds->mds_last_committed,
                        cpu_to_le32(req->rq_xid));
         }
  out:
-        /* Still not 100% sure whether we should reply with the server
-         * last_rcvd or that of this client.  I'm not sure it even makes
-         * a difference on a per-client basis, because last_rcvd is global
-         * and we are not supposed to allow transactions while in recovery.
-         */
         if (rc) {
                 CERROR("mds: processing error %d\n", rc);
                 ptlrpc_error(req->rq_svc, req);
@@ -1009,6 +1000,8 @@ int mds_handle(struct ptlrpc_request *req)
  * This will alert us that we may need to do client recovery.
  *
  * Assumes we are already in the server filesystem context.
+ *
+ * Also assumes for mds_last_rcvd that we are not modifying it (no locking).
  */
 static
 int mds_update_server_data(struct mds_obd *mds)
@@ -1085,6 +1078,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (!mds->mds_sb)
                 GOTO(err_put, rc = -ENODEV);
 
+        spin_lock_init(&mds->mds_last_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         rc = mds_fs_setup(obddev, mnt);
         if (rc) {

@@ -35,21 +35,24 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         struct mds_client_data *mcd = med->med_mcd;
+        __u64 last_rcvd;
         loff_t off;
         int rc;
 
         off = MDS_LR_CLIENT + med->med_off * MDS_LR_SIZE;
 
-        ++mds->mds_last_rcvd;   /* lock this, or make it an LDLM function? */
-        req->rq_repmsg->transno = HTON__u64(mds->mds_last_rcvd);
-        mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
+        spin_lock(&mds->mds_last_lock);
+        last_rcvd = ++mds->mds_last_rcvd;
+        spin_unlock(&mds->mds_last_lock);
+        req->rq_repmsg->transno = HTON__u64(last_rcvd);
+        mcd->mcd_last_rcvd = cpu_to_le64(last_rcvd);
         mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
         mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
 
         mds_fs_set_last_rcvd(mds, handle);
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd), &off);
         CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at #%d: rc = %d\n",
-               mds->mds_last_rcvd, mcd->mcd_uuid, med->med_off, rc);
+               last_rcvd, mcd->mcd_uuid, med->med_off, rc);
 
         if (rc == sizeof(*mcd))
                 rc = 0;
@@ -110,10 +113,10 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
                        de->d_inode->i_sb->s_dev);
 
-        lock_kernel();
         handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
         if (!handle)
-                GOTO(out_unlock, rc = PTR_ERR(handle));
+                GOTO(out_setattr_de, rc = PTR_ERR(handle));
+
         rc = mds_fs_setattr(mds, de, handle, &rec->ur_iattr);
 
         if (!rc)
@@ -127,8 +130,6 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         }
 
         EXIT;
-out_unlock:
-        unlock_kernel();
 out_setattr_de:
         l_dput(de);
 out_setattr:
@@ -340,7 +341,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
                 rc = mds_update_last_rcvd(mds, handle, req);
                 if (rc) {
-                        CERROR("error on update_last_rcvd: rc = %d\n", rc);
+                        CERROR("error on mds_update_last_rcvd: rc = %d\n", rc);
                         /* XXX should we abort here in case of error? */
                 }
 
@@ -382,6 +383,7 @@ out_create_unlink:
                 err = vfs_unlink(dir, dchild);
                 if (err)
                         CERROR("failed unlink in error path: rc = %d\n", err);
+                break;
         }
 
         goto out_create_commit;
