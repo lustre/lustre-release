@@ -7,7 +7,7 @@ LMC="save_cmd"
 
 TCPBUF=1048576
 OST=${OST:-ba-ost-1}
-CLIENT=${CLIENT:-`hostname`}
+CLIENT=`hostname`
 
 UUIDLIST=${UUIDLIST:-/usr/local/admin/ba-ost/UUID.txt}
 
