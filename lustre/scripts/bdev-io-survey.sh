@@ -421,7 +421,7 @@ echo_filter_config() {
 	fi
 
 	if [ $index = 0 ]; then
-		if ! lmc -m $config --add net  \
+		if ! lmc -m $config --add net \
 			--node localhost --nid localhost --nettype tcp; then
 			echo "error adding localhost net node"
 			return 1
@@ -450,6 +450,10 @@ echo_filter_prepare() {
 			return 1;
 		fi
 		running_config="$config"
+
+		echo 0 > /proc/sys/portals/debug
+		echo 0 > /proc/sys/portals/subsystem_debug
+
 		if ! grep -q '^obdecho\>' /proc/modules; then
 			local m
 			if ! modprobe obdecho; then
