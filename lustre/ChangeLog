@@ -1,3 +1,9 @@
+TBD
+	* version v0_5_21
+	* bug fixes
+	 - workaround for gcc 3.2, which has macro-argument issues (850)
+	 - lmc/lconf syntax change for OST UUIDs
+
 2003-02-11  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_20
 	* bug fixes
