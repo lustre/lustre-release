@@ -3,17 +3,36 @@
 # option variables
 DESTDIR=
 KERNELDIR=
-PHASE=
 TARGET=
+# Not sure what to put here
+# TARGET_ARCH=$(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ -e s/arm.*/arm/ -e s/sa110/arm/)
+TARGET_ARCH="i386"
+TARGET_CONFIG=
 JOBS=1
 CONFIGURE_FLAGS=
 
-# provide by target file
+# commands to run
+BUILD_LUSTRE=0
+BUILD_KERNEL=0
+DEPEND_KERNEL=0
+INSTALL_LUSTRE=0
+INSTALL_KERNEL=0
+SAVE_HEADERS=0
+UNPACK_KERNEL=0
+
+# provided by target file
 KERNEL=
 SERIES=
 CONFIG=
 VERSION=
 EXTRA_VERSION=
+
+BASE_ARCH=
+BIGMEM_ARCHS=
+BOOT_ARCHS=
+JENSEN_ARCHS=
+SMP_ARCHS=
+UP_ARCHS=
 
 # flat-out globals
 TOPDIR=
@@ -60,38 +79,69 @@ usage()
     cat <<EOF
 Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
 
-${0##*/} has two phases.  The build phase, and the install phase.  The
-phase is specified with the --phase option:
+Options:
 
-  --phase=build/install
+  --build
+    same as --build-kernel --build-lustre --unpack-kernel
 
-Options not requiring a phase:
+  --build-lustre
+    configure and compile lustre.  Requires that --build-kernel was
+    already run.
+
+  --build-kernel
+    configure and compile a kernel.  Implies --depend-kernel.
+    Requires that --unpack-kernel was already run.
+
+  --depend-kernel)
+    Prepares a kernel tree for building (similar to make mrproper
+    oldconfig dep).  Requires that --unpack-kernel was already run.
+
+  --destdir=DESTDIR
+    Root directory to install into (like DESTDIR with auto*).
+
+  --extraversion=EXTRAVERSION
+    Overrides the target kernel\'s EXTRAVERSION text.
 
   -h, --help
     Display this message.
 
-Options appropriate with both phases include:
+  --install
+    same as --install-kernel --install-lustre
+
+  --install-lustre
+    run make install in the Lustre tree.
+
+  --install-kernel
+    install the kernel image and modules.
 
   -j jobs
     This works just like the -j option to make, and is passed to make
     when building.
 
+  --kerneldir=KERNELDIR
+    Directory containing linux source tarballs.
+
   --target=TARGET
     Name of the configuration to use.  The available targets are
     listed below.
 
-Options appropriate with the build phase are:
+  --target-arch=ARCH
+    Specifies an architecture to use when choosing a kernel config
+    file.  Default is i386.
 
-  --kerneldir=KERNELDIR
-    Directory containing linux source tarballs.
+  --target-config=CONFIG
+    Specifies a special option (such as smp, bigmem, or BOOT) to use
+    when choosing a kernel config file.  This also modifies the kernel
+    version and modules directory.
 
-  --extraversion=EXTRAVERSION
-    Overrides the target kernel\'s EXTRAVERSION text.
+  --unpack-kernel
+    Untars and patches the kernel source.
 
-Options appropriate with the install phase are:
+  The order that commands (--build-lustre, --unpack-kernel) are
+  specified on the command line is ignored; ${0##*/} will always
+  execute them in the correct order (unpack, then build, then install
+  etc.).
 
-  --destdir=DESTDIR
-	Root directory to install into (like DESTDIR with auto*).
 EOF
     list_targets
 
@@ -100,26 +150,27 @@ EOF
 
 check_options()
 {
-    [ "$PHASE" ] || usage 1 "A phase must be specified with --phase"
-    case "$PHASE" in
-	build)
-	    [ "$KERNELDIR" ] || \
-		usage 1 "A kernel directory must be specified with --kerneldir."
-	    [ -d "$KERNELDIR" ] || \
-		usage 1 "$KERNELDIR is not a directory."
-	    ;;
-	install)
-	    [ -z "$DESTDIR" -o -d "$DESTDIR" ] || \
-		usage 1 "$DESTDIR is not a directory."
-	    ;;
-	*)
-	    usage 1 "Phase must be build or install."
-	    ;;
-    esac
+    (( $BUILD_LUSTRE || $BUILD_KERNEL || $DEPEND_KERNEL || \
+	    $INSTALL_LUSTRE || $INSTALL_KERNEL || $SAVE_HEADERS || \
+	    $UNPACK_KERNEL )) || \
+		fatal 1 "No commands specified."
+
+    if (( $UNPACK_KERNEL )) ; then
+	[ "$KERNELDIR" ] || \
+	    fatal 1 "A kernel directory must be specified with --kerneldir."
+	[ -d "$KERNELDIR" ] || \
+	    fatal 1 "$KERNELDIR is not a directory."
+    fi
+
+    if (( $INSTALL_LUSTRE || $INSTALL_KERNEL || $SAVE_HEADERS )) ; then
+	[ -z "$DESTDIR" -o -d "$DESTDIR" ] || \
+	    fatal 1 "$DESTDIR is not a directory."
+    fi
+
     [ "$TARGET" ] || usage 1 "A target must be specified with --target."
     TARGET_FILE="$TOPDIR/kernel_patches/targets/$TARGET.target"
     [ -r "$TARGET_FILE" ] || \
-	usage 1 "Target '$TARGET' was not found.  Try --list-targets."
+	fatal 1 "Target '$TARGET' was not found.  Try --list-targets."
 
     if [ -z "$JOBS" -o "$JOBS" -lt "1" ] ; then
 	JOBS=1
@@ -128,14 +179,12 @@ check_options()
 
 get_lustre_version()
 {
-    for patch in $(<"$SERIES_FILE") ; do
-	if [ "${patch#lustre_version}" = "${patch}" ] ; then
-	    continue
-	fi
-	awk '/^#define LUSTRE_VERSION_VERSION /{ print $3 }' \
-	    < "$TOPDIR/kernel_patches/patches/$patch" 2>/dev/null
-	break
-    done
+    lustre_patch=$(grep lustre_version "$SERIES_FILE" 2>/dev/null)
+    [ "$lustre_patch" ] || \
+	fatal 1 "Could not determine Lustre version from $SERIES series."
+
+    awk '/^\+#define LUSTRE_KERNEL_VERSION /{ print $3 }' \
+	"$TOPDIR/kernel_patches/patches/$lustre_patch" 2>/dev/null
 }
 
 load_target()
@@ -146,7 +195,7 @@ load_target()
 
     [ "$KERNEL" ] || fatal 1 "Target $TARGET did not specify a kernel."
     [ "$SERIES" ] || fatal 1 "Target $TARGET did not specify a patch series."
-    [ "$CONFIG" ] || fatal 1 "Target $TARGET did not specify a kernel config."
+#    [ "$CONFIG" ] || fatal 1 "Target $TARGET did not specify a kernel config."
     [ "$VERSION" ] || fatal 1 "Target $TARGET did not specify the kernel version."
     
     if [ "$KERNELDIR" ] ; then
@@ -159,16 +208,17 @@ load_target()
     [ -r "$SERIES_FILE" ] || \
 	fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/kernel_patches/series."
 
-    CONFIG_FILE="$TOPDIR/kernel_patches/kernel_configs/$CONFIG"
+    CONFIG_TARGET="$TARGET${TARGET_ARCH:+-$TARGET_ARCH}${TARGET_CONFIG:+-$TARGET_CONFIG}"
+    CONFIG_FILE="$TOPDIR/kernel_patches/kernel_configs/kernel-$VERSION-$CONFIG_TARGET.config"
     [ -r "$CONFIG_FILE" ] || \
 	fatal 1 "Target $TARGET's config file $CONFIG missing from $TOPDIR/kernel_patches/configs."
 
     if [ "$EXTRA_VERSION_save" ] ; then
 	EXTRA_VERSION="$EXTRA_VERSION_save"
     else
-	EXTRA_VERSION="${EXTRA_VERSION}_$(get_lustre_version)"
+	EXTRA_VERSION="${EXTRA_VERSION}_lustre.$(get_lustre_version)"
     fi
-    EXTRA_VERSION=$(echo $EXTRA_VERSION | sed -e s/-/_/g)
+    EXTRA_VERSION=${EXTRA_VERSION//-/_}
 }
 
 tarflags()
@@ -198,7 +248,12 @@ untar()
 
 extract_kernel()
 {
+    (( $UNPACK_KERNEL )) || return 0
     pushd "$TOPDIR" >/dev/null
+    if [ -d linux ] ; then
+	[ -L linux ] && rm -rf $(readlink linux)
+	rm -rf linux
+    fi
     untar "$KERNEL_FILE"
     [ -d linux ] || ln -sf linux* linux
     popd >/dev/null
@@ -206,42 +261,62 @@ extract_kernel()
 
 patch_kernel()
 {
+    (( $UNPACK_KERNEL )) || return 0
     pushd "$TOPDIR/linux" >/dev/null
-    echo "Overriding EXTRAVERSION in kernel..."
-    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -${EXTRA_VERSION}/" Makefile
     echo -n "Applying patch"
     for patch in $(<"$SERIES_FILE") ; do
 	PATCH_FILE="$TOPDIR/kernel_patches/patches/$patch"
 	[ -r "$PATCH_FILE" ] || \
 	    fatal 1 "Patch file not found: $patch"
 	echo -n " $patch"
-	patch -s -p1 < "$PATCH_FILE"
+	patch -s -p1 < "$PATCH_FILE" || fatal 1 "Error applying patch $patch."
     done
     echo
     popd >/dev/null
 }
 
-build_kernel()
+depend_kernel()
 {
+    (( $DEPEND_KERNEL )) || return 0
     # we need to override $CC at make time, since there is no
     # configure
     MAKE="make -s CC=$CC"
     pushd "$TOPDIR/linux" >/dev/null
+    echo "Overriding EXTRAVERSION in kernel..."
+    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -${EXTRA_VERSION}${TARGET_CONFIG}/" Makefile
     echo "Making depend in $PWD..."
-    make -s mrproper || fatal 1 "Error running make mrproper"
+    $MAKE mrproper || fatal 1 "Error running make mrproper"
     cp "$CONFIG_FILE" .config
-    $MAKE -s oldconfig_nonint || fatal 1 "Error running make oldconfig"
-    $MAKE -j $JOBS -s dep || fatal 1 "Error running make dep"
-    $MAKE -s include/linux/version.h || fatal 1 "Error making include/linux/version.h"
+    $MAKE oldconfig_nonint || fatal 1 "Error running make oldconfig"
+    $MAKE -j $JOBS dep || fatal 1 "Error running make dep"
+    $MAKE include/linux/version.h || fatal 1 "Error making include/linux/version.h"
+}
+
+build_kernel()
+{
+    (( $BUILD_KERNEL )) || return 0
+    # we need to override $CC at make time, since there is no
+    # configure
+    MAKE="make -s CC=$CC"
     echo "Building kernel in $PWD..."
-    $MAKE -j $JOBS -s bzImage || fatal 1 "Error making bzImage."
+    case "$TARGET_ARCH" in
+	i386 | i586 | i686 | athlon | x86_64)
+	    $MAKE -j $JOBS -s bzImage || fatal 1 "Error making bzImage."
+	    ;;
+	*)
+	    $MAKE -j $JOBS -s boot || fatal 1 "Error making boot."
+	    ;;
+    esac
     $MAKE -j $JOBS -s modules || fatal 1 "Error building modules."
+
     popd >/dev/null
 }
 
 configure_lustre()
 {
+    (( $BUILD_LUSTRE )) || return 0
     pushd "$TOPDIR" >/dev/null
+    [ -f Makefile ] && make -s clean
     [ -f configure ] || sh ./autogen.sh
     ./configure --with-linux=$PWD/linux $CONFIGURE_FLAGS || \
 	fatal 1 "Error configuring Lustre."
@@ -250,6 +325,7 @@ configure_lustre()
 
 build_lustre()
 {
+    (( $BUILD_LUSTRE )) || return 0
     pushd "$TOPDIR" >/dev/null
     make -j $JOBS -s
     popd >/dev/null
@@ -257,25 +333,104 @@ build_lustre()
 
 install_kernel()
 {
-    FULL_VERSION="${VERSION}-${EXTRA_VERSION}"
+    (( $INSTALL_KERNEL )) || return 0
+    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR/linux" >/dev/null
-    mkdir -p "$DESTDIR/boot" "$DESTDIR/lib/modules"
-    INSTALL_MOD_PATH="$DESTDIR" make CC=$CC -s modules_install || \
+    mkdir -p "$DESTDIR/boot"
+
+    install -m 644 System.map "$DESTDIR/boot/System.map-${FULL_VERSION}"
+    # install -m 644 module-info ...
+    install -m 644 "$CONFIG_FILE" "$DESTDIR/boot/config-${FULL_VERSION}"
+
+    mkdir -p "$DESTDIR/dev/shm"
+
+    case "$TARGET_ARCH" in
+	i386 | i586 | i686 | athlon)
+	    cp arch/i386/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ;;
+	x86_64)
+	    cp arch/x86_64/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ;;
+	ia64)
+	    gzip -cfv vmlinux > vmlinuz
+	    mkdir -p "$DESTDIR/boot/efi/redhat"
+	    install -m 755 vmlinux "$DESTDIR/boot/efi/redhat/vmlinux-${FULL_VERSION}"
+	    install -m 755 vmlinuz "$DESTDIR/boot/efi/redhat/vmlinuz-${FULL_VERSION}"
+	    ln -sf "efi/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ln -sf "efi/vmlinuz-${FULL_VERSION}" "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    ;;
+	*)
+	    cp vmlinuz "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ;;
+    esac
+
+    mkdir -p "$DESTDIR/lib/modules/${FULL_VERSION}"
+    make CC="$CC" INSTALL_MOD_PATH="$DESTDIR" KERNELRELEASE="$FULL_VERSION" \
+	-s modules_install || \
 	fatal 1 "Error installing modules."
-    cp arch/i386/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-    cp System.map "$DESTDIR/boot/System.map-${FULL_VERSION}"
-    cp .config "$DESTDIR/boot/config-${FULL_VERSION}"
+
     popd >/dev/null
 }
 
 install_lustre()
 {
+    (( $INSTALL_LUSTRE )) || return 0
+    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null
-    make -s install "DESTDIR=$DESTDIR" || fatal 1 "Error installing Lustre."
+    make -s install "DESTDIR=$DESTDIR" KERNELRELEASE="$FULL_VERSION" || fatal 1 "Error installing Lustre."
     popd >/dev/null
 }
 
-options=$(getopt -o hj: -l destdir:,extraversion:,help,kerneldir:,phase:,target: -- "$@")
+save_headers()
+{
+    echo "Saving headers for $1 $2..."
+    pushd linux >/dev/null
+
+    KVERREL="${VERSION}-${EXTRA_VERSION}"
+    # deal with the kernel headers that are version specific
+    
+    saveddir="$RPM_BUILD_ROOT/usr/src/linux-${KVERREL}/savedheaders/$2/$1"
+    mkdir -p "$saveddir"
+    install -m 644 include/linux/autoconf.h "$saveddir/autoconf.h"
+    install -m 644 include/linux/version.h  "$saveddir/version.h"
+    mv include/linux/modules "$saveddir/"
+    echo $2 $1 ../../savedheaders/$2/$1/ >>  $RPM_BUILD_ROOT/usr/src/linux-${KVERREL}/savedheaders/list
+    popd >/dev/null
+}
+
+save_all_headers()
+{
+    (( $SAVE_HEADERS )) || return 0
+
+    for arch in $BIGMEM_ARCHS ; do
+	save_headers bigmem $arch
+    done
+
+    for arch in $BOOT_ARCHS ; do
+	save_headers BOOT $arch
+    done
+
+    for arch in $JENSEN_ARCHS ; do
+	save_headers jensen $arch
+    done
+
+    for arch in $SMP_ARCHS ; do
+	save_headers smp $arch
+    done
+
+    for arch in $UP_ARCHS ; do
+	save_headers up $arch
+    done
+}
+
+longopts="build,build-lustre,build-kernel,depend-kernel,destdir:,extraversion:"
+longopts="$longopts,help,install,install-lustre,install-kernel,kerneldir:"
+longopts="$longopts,save-headers,target:,target-arch:,target-config:,unpack-kernel"
+
+options=$(getopt -o hj: -l "$longopts" -- "$@")
 
 eval set -- "$options"
     
@@ -283,6 +438,26 @@ while [ "$1" ] ; do
     case "$1" in
 	'')
 	    usage 1
+	    ;;
+	--build)
+	    BUILD_LUSTRE=1
+	    BUILD_KERNEL=1
+	    DEPEND_KERNEL=1
+	    UNPACK_KERNEL=1
+	    shift
+	    ;;
+	--build-lustre)
+	    BUILD_LUSTRE=1
+	    shift
+	    ;;
+	--build-kernel)
+	    BUILD_KERNEL=1
+	    DEPEND_KERNEL=1
+	    shift
+	    ;;
+	--depend-kernel)
+	    DEPEND_KERNEL=1
+	    shift
 	    ;;
 	--destdir)
 	    DESTDIR=$2
@@ -295,6 +470,19 @@ while [ "$1" ] ; do
 	--help | -h)
 	    usage 0
 	    ;;
+	--install)
+	    INSTALL_LUSTRE=1
+	    INSTALL_KERNEL=1
+	    shift
+	    ;;
+	--install-lustre)
+	    INSTALL_LUSTRE=1
+	    shift
+	    ;;
+	--install-kernel)
+	    INSTALL_KERNEL=1
+	    shift
+	    ;;
 	-j)
 	    JOBS=$2
 	    shift 2
@@ -303,13 +491,25 @@ while [ "$1" ] ; do
 	    KERNELDIR=$2
 	    shift 2
 	    ;;
-	--phase)
-	    PHASE=$2
-	    shift 2
+	--save-headers)
+	    SAVE_HEADERS=1
+	    shift
 	    ;;
 	--target)
 	    TARGET=$2
 	    shift 2
+	    ;;
+	--target-arch)
+	    TARGET_ARCH=$2
+	    shift 2
+	    ;;
+	--target-config)
+	    TARGET_CONFIG=$2
+	    shift 2
+	    ;;
+	--unpack-kernel)
+	    UNPACK_KERNEL=1
+	    shift
 	    ;;
 	--)
 	    shift
@@ -325,16 +525,18 @@ done
 check_options
 load_target
 
-case "$PHASE" in
-    build)
-	extract_kernel
-	patch_kernel
-	build_kernel
-	configure_lustre
-	build_lustre
-	;;
-    install)
-	install_kernel
-	install_lustre
-	;;
-esac
+extract_kernel
+patch_kernel
+
+depend_kernel
+build_kernel
+
+configure_lustre
+build_lustre
+
+install_kernel
+install_lustre
+
+save_all_headers
+
+exit 0
