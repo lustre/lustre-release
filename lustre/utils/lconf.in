@@ -588,7 +588,11 @@ def init_loop(file, size, fstype):
     if config.reformat()  or not os.access(file, os.R_OK | os.W_OK):
         if size < 8000:
             error(file, "size must be larger than 8MB")
-        run("dd if=/dev/zero bs=1k count=0 seek=%d of=%s" %(size,  file))
+        (ret, out) = run("dd if=/dev/zero bs=1k count=0 seek=%d of=%s" %(size,
+                                                                         file))
+        if ret:
+            panic("Unable to create backing store:", file)
+
     loop = loop_base()
     # find next free loop
     for n in xrange(0, MAX_LOOP_DEVICES):
