@@ -64,7 +64,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         res->lr_lvb_len = sizeof(*lvb);
 
         obd = res->lr_namespace->ns_lvbp;
-        LASSERT(obd); /* not supposed to fail */
+        LASSERT(obd);
 
         oa = obdo_alloc();
         if (!oa)
@@ -82,7 +82,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         f_dput(dentry);
 
         lvb->lvb_size = dentry->d_inode->i_size;
-        lvb->lvb_time = dentry->d_inode->i_mtime;
+        lvb->lvb_time = LTIME_S(dentry->d_inode->i_mtime);
 
  out:
         if (oa)
@@ -96,7 +96,13 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         return rc;
 }
 
-static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m)
+/* This will be called in two ways:
+ *
+ *   m != NULL : called by the DLM itself after a glimpse callback
+ *   m == NULL : called by the filter after a disk write
+ */
+static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
+                              int buf_idx)
 {
         int rc = 0;
         struct ost_lvb *lvb = res->lr_lvb_data;
@@ -104,7 +110,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m)
         struct obdo *oa = NULL;
         struct dentry *dentry;
         ENTRY;
-        
+
         LASSERT(res);
 
         /* we only want lvb's for object resources */
@@ -118,13 +124,40 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m)
                 GOTO(out, rc = 0);
         }
 
+        /* Update the LVB from the network message */
+        if (m != NULL) {
+                struct ost_lvb *new;
+
+                new = lustre_swab_buf(m, buf_idx, sizeof(*new),
+                                      lustre_swab_ost_lvb);
+                if (new == NULL) {
+                        CERROR("lustre_swab_buf failed\n");
+                        //GOTO(out, rc = -EPROTO);
+                        GOTO(out, rc = 0);
+                }
+                if (new->lvb_size > lvb->lvb_size) {
+                        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "
+                               LPU64" -> "LPU64, res->lr_name.name[0],
+                               lvb->lvb_size, new->lvb_size);
+                        lvb->lvb_size = new->lvb_size;
+                }
+                if (new->lvb_time > lvb->lvb_time) {
+                        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb time: "
+                               LPU64" -> "LPU64, res->lr_name.name[0],
+                               lvb->lvb_time, new->lvb_time);
+                        lvb->lvb_time = new->lvb_time;
+                }
+                GOTO(out, rc = 0);
+        }
+
+        /* Update the LVB from the disk inode */
         obd = res->lr_namespace->ns_lvbp;
-        LASSERT(obd); /* not supposed to fail */
+        LASSERT(obd);
 
         oa = obdo_alloc();
-        if (!oa)
+        if (oa == NULL)
                 GOTO(out, rc = -ENOMEM);
-        
+
         oa->o_id = res->lr_name.name[0];
         oa->o_gr = 0;
         dentry = filter_oa2dentry(obd, oa);
@@ -134,13 +167,18 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m)
         /* Limit the valid bits in the return data to what we actually use */
         oa->o_valid = OBD_MD_FLID;
         obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
-        f_dput(dentry); 
+        f_dput(dentry);
 
+        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "LPU64" -> "LPU64,
+               res->lr_name.name[0], lvb->lvb_size, dentry->d_inode->i_size);
         lvb->lvb_size = dentry->d_inode->i_size;
-        lvb->lvb_time = dentry->d_inode->i_mtime;
+        CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb time: "LPU64" -> "LPU64,
+               res->lr_name.name[0], lvb->lvb_size,
+               (__u64)LTIME_S(dentry->d_inode->i_mtime));
+        lvb->lvb_time = LTIME_S(dentry->d_inode->i_mtime);
 
  out:
-        if (oa)
+        if (oa != NULL)
                 obdo_free(oa);
         up(&res->lr_lvb_sem);
         return rc;
