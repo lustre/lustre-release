@@ -1,3 +1,5 @@
 EXTRA_CFLAGS := -Ifs/lustre/include -Ifs/lustre/portals/include
 HOSTCFLAGS := $(EXTRA_CFLAGS)
 LIBREADLINE := @LIBREADLINE@
+# 2.5's makefiles aren't nice to cross dir libraries in host programs
+PTLCTLOBJS := debug.o l_ioctl.o parser.o portals.o

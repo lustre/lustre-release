@@ -5,9 +5,11 @@ LINUX = @LINUX@
 
 obj-y += portals/
 obj-y += obdclass/
+obj-y += ldlm/
+#obj-y += lib/
+#obj-y += mds/
 obj-y += obdecho/
-obj-y += mds/
-obj-y += lib/
+obj-y += ptlrpc/
 
-# portals needs to be before utils/, which links against -lptlctl
+# portals needs to be before utils/, which pulls in ptlctl objects
 obj-m += utils/
