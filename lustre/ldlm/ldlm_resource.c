@@ -419,7 +419,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
 {
         struct ldlm_resource *res;
 
-        OBD_SLAB_ALLOC(res, ldlm_resource_slab, SLAB_KERNEL, sizeof *res);
+        OBD_SLAB_ALLOC(res, ldlm_resource_slab, SLAB_NOFS, sizeof *res);
         if (res == NULL) {
                 LBUG();
                 return NULL;

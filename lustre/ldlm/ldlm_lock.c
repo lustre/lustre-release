@@ -238,7 +238,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         if (resource == NULL)
                 LBUG();
 
-        OBD_SLAB_ALLOC(lock, ldlm_lock_slab, SLAB_KERNEL, sizeof(*lock));
+        OBD_SLAB_ALLOC(lock, ldlm_lock_slab, SLAB_NOFS, sizeof(*lock));
         if (lock == NULL)
                 RETURN(NULL);
 
