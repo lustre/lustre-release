@@ -529,7 +529,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LASSERT(obd->obd_proc_entry != NULL);
         LASSERT(obd->obd_cntr_base == 0);
 
-        num_stats = 1 + OBD_COUNTER_OFFSET(destroy_export) +
+        num_stats = 1 + OBD_COUNTER_OFFSET(unpin) +
                 num_private_stats;
         stats = lprocfs_alloc_stats(num_stats);
         if (stats == NULL)
@@ -572,15 +572,25 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, log_add);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, log_cancel);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, san_preprw);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, mark_page_dirty);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, clear_dirty_pages);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, last_dirty_offset);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pin); 
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
 
         for (i = num_private_stats; i < num_stats; i++) {
-                /* If this assertion failed, it is likely that an obd
+                /* If this LBUGs, it is likely that an obd
                  * operation was added to struct obd_ops in
                  * <linux/obd.h>, and that the corresponding line item
                  * LPROCFS_OBD_OP_INIT(.., .., opname)
                  * is missing from the list above. */
-                LASSERT(&(stats->ls_percpu[0])->lp_cntr[i].lc_name != NULL);
+                if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {
+                        CERROR("Missing obd_stat initializer obd_op "
+                               "operation at offset %d. Aborting.\n",
+                               i - num_private_stats);
+                        LBUG();
+                }
         }
         rc = lprocfs_register_stats(obd->obd_proc_entry, "stats", stats);
         if (rc < 0) {
