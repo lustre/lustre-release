@@ -1,0 +1,29 @@
+--- linux/include/linux/mm.h.truncexport	2003-03-21 20:03:18.000000000 -0500
++++ linux/include/linux/mm.h	2003-03-21 20:05:04.000000000 -0500
+@@ -650,6 +650,7 @@
+ /* filemap.c */
+ extern void remove_inode_page(struct page *);
+ extern unsigned long page_unuse(struct page *);
++extern void truncate_complete_page(struct page *);
+ extern void truncate_inode_pages(struct address_space *, loff_t);
+ 
+ /* generic vm_area_ops exported for stackable file systems */
+--- linux/mm/filemap.c.truncexport	2003-03-21 20:01:19.000000000 -0500
++++ linux/mm/filemap.c	2003-03-21 20:01:41.000000000 -0500
+@@ -245,7 +245,7 @@
+ 		do_flushpage(page, partial);
+ }
+ 
+-static void truncate_complete_page(struct page *page)
++void truncate_complete_page(struct page *page)
+ {
+ 	/*
+ 	 * Leave it on the LRU if it gets converted into anonymous buffers
+@@ -266,6 +266,7 @@
+ 	remove_inode_page(page);
+ 	page_cache_release(page);
+ }
++EXPORT_SYMBOL_GPL(truncate_complete_page);
+ 
+ static int FASTCALL(truncate_list_pages(struct list_head *, unsigned long, unsigned *));
+ static int truncate_list_pages(struct list_head *head, unsigned long start, unsigned *partial)
