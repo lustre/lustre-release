@@ -187,6 +187,7 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 break;
         case (IT_CREAT|IT_OPEN):
         case IT_CREAT:
+        case IT_MKNOD:
                 it->it_mode = (it->it_mode | S_IFREG) & ~current->fs->umask; 
                 break;
         case IT_SYMLINK:

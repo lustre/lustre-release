@@ -1,7 +1,7 @@
 #!/bin/bash -x
 
-OST=2
-MDS=3
+OST=`../utils/obdctl name2dev OSCDEV`
+MDS=`../utils/obdctl name2dev MDCDEV`
 
 mkdir /mnt/lustre/foo
 mkdir /mnt/lustre/foo2
@@ -75,9 +75,6 @@ touch /mnt/lustre/bar5
 umount /mnt/lustre
 mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
 
-echo "ready debugger"
-read
-
 echo foo >> /mnt/lustre/bar
 cat /mnt/lustre/bar
 
@@ -85,8 +82,6 @@ umount /mnt/lustre
 mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
 
 cat /mnt/lustre/bar
-
-exit;
 
 echo foo >> /mnt/lustre/iotest
 echo bar >> /mnt/lustre/iotest
@@ -119,4 +114,11 @@ ls /mnt/lustre
 umount /mnt/lustre
 mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
 
-cat /mnt/lustre/iotest
+echo "Testing truncation..."
+echo foo > /mnt/lustre/iotest
+echo bar >> /mnt/lustre/iotest
+cat  /mnt/lustre/iotest
+echo "trucating to 3 bytes now..."
+./truncate /mnt/lustre/iotest 4
+cat  /mnt/lustre/iotest
+

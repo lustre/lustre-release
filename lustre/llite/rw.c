@@ -192,11 +192,16 @@ void ll_truncate(struct inode *inode)
         ENTRY;
 
         oa = ll_i2info(inode)->lli_obdo;
-
+        if (!oa) { 
+                /* object not yet allocated */
+                inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+                return;
+        }
         CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
                (long)oa->o_id, (unsigned long long)oa->o_size);
-        err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
-
+        oa->o_size = inode->i_size;
+        oa->o_valid = OBD_MD_FLSIZE;
+        err = obd_punch(ll_i2obdconn(inode), oa, 0, oa->o_size);
         if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
         else

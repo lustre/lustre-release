@@ -510,13 +510,13 @@ static int mds_open(struct ptlrpc_request *req)
         if (req->rq_reqmsg->bufcount > 1) {
                 void *handle;
                 struct inode *inode = de->d_inode;
-                struct iattr iattr;
+                //struct iattr iattr;
                 struct obdo *obdo;
                 int rc;
 
                 obdo = lustre_msg_buf(req->rq_reqmsg, 1);
-                iattr.ia_valid = ATTR_MODE;
-                iattr.ia_mode = inode->i_mode;
+                //iattr.ia_valid = ATTR_MODE;
+                //iattr.ia_mode = inode->i_mode;
 
                 handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
                 if (!handle) {
@@ -526,7 +526,7 @@ static int mds_open(struct ptlrpc_request *req)
 
                 /* XXX error handling */
                 rc = mds_fs_set_obdo(mds, inode, handle, obdo);
-                rc = mds_fs_setattr(mds, de, handle, &iattr);
+                //                rc = mds_fs_setattr(mds, de, handle, &iattr);
                 if (!rc)
                         rc = mds_update_last_rcvd(mds, handle, req);
                 else {
