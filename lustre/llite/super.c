@@ -52,7 +52,18 @@ static char *ll_read_opt(const char *opt, char *data)
         RETURN(retval);
 }
 
-static void ll_options(char *options, char **ost, char **mds)
+static int ll_set_opt(const char *opt, char *data, int fl)
+{
+        ENTRY;
+
+        CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
+        if ( strncmp(opt, data, strlen(opt)) )
+                RETURN(0);
+        else
+                RETURN(fl);
+}
+
+static void ll_options(char *options, char **ost, char **mds, int *flags)
 {
         char *this_char;
         ENTRY;
@@ -67,7 +78,9 @@ static void ll_options(char *options, char **ost, char **mds)
              this_char = strtok (NULL, ",")) {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
                 if ( (!*ost && (*ost = ll_read_opt("osc", this_char)))||
-                     (!*mds && (*mds = ll_read_opt("mdc", this_char))) )
+                     (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
+                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) | 
+                      ll_set_opt("nolock", this_char, LL_SBI_NOLCK))) )
                         continue;
         }
         EXIT;
@@ -108,7 +121,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         sb->u.generic_sbp = sbi;
 
-        ll_options(data, &osc, &mdc);
+        ll_options(data, &osc, &mdc, &sbi->ll_flags);
 
         if (!osc) {
                 CERROR("no osc\n");
