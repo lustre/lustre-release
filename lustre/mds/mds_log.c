@@ -37,9 +37,9 @@
 
 #include "mds_internal.h"
 
-static int mds_llog_origin_add(struct llog_ctxt *ctxt,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
+static int mds_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                               void *buf, struct llog_cookie *logcookies,
+                               int numcookies, void *data)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -48,14 +48,13 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_add(lctxt, rec, lsm, logcookies, numcookies);
+        rc = llog_add(lctxt, rec, buf, logcookies, numcookies, data);
         RETURN(rc);
 }
 
 static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                                    struct llog_logid *logid,
-                                   struct llog_gen *gen,
-                                   struct obd_uuid *uuid)
+                                   struct llog_gen *gen, struct obd_uuid *uuid)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -68,8 +67,9 @@ static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         RETURN(rc);
 }
 
-static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
-                          int count, struct llog_cookie *cookies, int flags)
+static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, int count, 
+                                struct llog_cookie *cookies, int flags,
+                                void *data)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -78,7 +78,7 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_cancel(lctxt, lsm, count, cookies,flags);
+        rc = llog_cancel(lctxt, count, cookies, flags, data);
         RETURN(rc);
 }
 
@@ -101,8 +101,8 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
                 RETURN(rc);
 
         ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
-        rc = llog_add(ctxt, NULL, lsm, logcookies,
-                      cookies_size / sizeof(struct llog_cookie));
+        rc = llog_add(ctxt, NULL, NULL, logcookies,
+                      cookies_size / sizeof(struct llog_cookie), lsm);
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
 
@@ -115,7 +115,7 @@ static struct llog_operations mds_unlink_orig_logops = {
 };
 
 static struct llog_operations mds_size_repl_logops = {
-        lop_cancel:     mds_llog_repl_cancel
+        lop_cancel:     mds_llog_repl_cancel,
 };
 
 int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
@@ -125,13 +125,13 @@ int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
-                        &mds_unlink_orig_logops);
+        rc = obd_llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
+                            &mds_unlink_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
-                        &mds_size_repl_logops);
+        rc = obd_llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
+                            &mds_size_repl_logops);
         if (rc)
                 RETURN(rc);
 
@@ -148,11 +148,11 @@ int mds_llog_finish(struct obd_device *obd, int count)
         int rc;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
         if (rc)
                 RETURN(rc);
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_SIZE_REPL_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(obd, LLOG_SIZE_REPL_CTXT));
         if (rc)
                 RETURN(rc);
 
