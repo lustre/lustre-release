@@ -316,7 +316,7 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
         
         LASSERT (rc == PTL_OK);
         
-        if (desc->bd_req->rq_set != NULL)
+        if (req->rq_set != NULL)
                 wq = &req->rq_set->set_waitq;
         else
                 wq = &req->rq_reply_waitq;

@@ -1126,7 +1126,7 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         
         LASSERT (rc == PTL_OK);
 
-        if (request->rq_set == NULL)
+        if (request->rq_set != NULL)
                 wq = &request->rq_set->set_waitq;
         else
                 wq = &request->rq_reply_waitq;

@@ -503,17 +503,18 @@ test_13() {
         fi
         EXPECTEDMDS1UUID="e_longer_than_31characters_UUID"
         EXPECTEDMDS2UUID="longer_than_31characters_UUID_2"
-        FOUNDMDS1UUID=`awk -F"'" '/<mds uuid=/{print $2}' $XMLCONFIG | sed -n '1p'`
-        FOUNDMDS2UUID=`awk -F"'" '/<mds uuid=/{print $2}' $XMLCONFIG | sed -n '2p'`
-        if [ $EXPECTEDMDS1UUID != $FOUNDMDS1UUID ]; then
-                echo "Error:expected uuid for mds1: $EXPECTEDMDS1UUID; found: $FOUNDMDS1UUID"
+        FOUNDMDS1UUID=`awk -F"'" '/<mds .*uuid=/' $XMLCONFIG | sed -n '1p' \
+                       | sed "s/ /\n\r/g" | awk -F"'" '/uuid=/{print $2}'`
+        FOUNDMDS2UUID=`awk -F"'" '/<mds .*uuid=/' $XMLCONFIG | sed -n '2p' \
+                       | sed "s/ /\n\r/g" | awk -F"'" '/uuid=/{print $2}'`
+        if ([ $EXPECTEDMDS1UUID = $FOUNDMDS1UUID ] && [ $EXPECTEDMDS2UUID = $FOUNDMDS2UUID ]) || \
+           ([ $EXPECTEDMDS1UUID = $FOUNDMDS2UUID ] && [ $EXPECTEDMDS2UUID = $FOUNDMDS1UUID ]); then
+                echo "Success:long uuid truncated successfully and being unique."
+        else
+                echo "Error:expected uuid for mds1 and mds2: $EXPECTEDMDS1UUID; $EXPECTEDMDS2UUID"
+                echo "but:     found uuid for mds1 and mds2: $FOUNDMDS1UUID; $FOUNDMDS2UUID"
                 return 1
         fi
-        if [ $EXPECTEDMDS2UUID != $FOUNDMDS2UUID ]; then
-                echo "Error:expected uuid for mds2: $EXPECTEDMDS2UUID; found: $FOUNDMDS2UUID"
-                return 1
-        fi
-        echo "Success:long uuid truncated successfully and being unique."
 
         # check multiple invocations for lmc generate same XML configuration file
         rm -f $XMLCONFIG

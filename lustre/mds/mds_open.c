@@ -334,7 +334,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         oti.oti_objid = *ids;
 
         /* replay case */
-        if(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 LASSERT (rec->ur_fid2->id);
                 body->valid |= OBD_MD_FLBLKSZ | OBD_MD_FLEASIZE;
                 lmm_size = rec->ur_eadatalen;
@@ -648,16 +648,24 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 }
         }
         if (rec != NULL) {
-                /* no EA: create objects */
-                rc = mds_create_objects(req, 2, rec, mds, obd,
-                                        dchild, handle, &ids);
-                if (rc) {
-                        CERROR("mds_create_objects: rc = %d\n", rc);
+                if ((body->valid & OBD_MD_FLEASIZE) &&
+                    (rec->ur_flags & MDS_OPEN_HAS_EA)) {
                         up(&dchild->d_inode->i_sem);
-                        RETURN(rc);
+                        RETURN(-EEXIST);
+                }
+
+                if (!(body->valid & OBD_MD_FLEASIZE)) {
+                        /* no EA: create objects */
+                        rc = mds_create_objects(req, 2, rec, mds, obd,
+                                                dchild, handle, &ids);
+                        if (rc) {
+                                CERROR("mds_create_objects: rc = %d\n", rc);
+                                up(&dchild->d_inode->i_sem);
+                                RETURN(rc);
+                        }
                 }
         }
-        /* If the inode has EA data, then OSTs hold size, mtime */
+        /* If the inode has no EA data, then MDS holds size, mtime */
         if (S_ISREG(dchild->d_inode->i_mode) &&
             !(body->valid & OBD_MD_FLEASIZE)) {
                 body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
@@ -820,9 +828,6 @@ int mds_open(struct mds_update_record *rec, int offset,
          * opened this file and is only replaying the RPC, so we open the
          * inode by fid (at some large expense in security). */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                DEBUG_REQ(D_HA, req, "open replay, disp: "LPX64"\n",
-                          rep->lock_policy_res1);
-
                 LASSERT(rec->ur_fid2->id);
 
                 rc = mds_open_by_fid(req, rec->ur_fid2, body, rec->ur_flags,

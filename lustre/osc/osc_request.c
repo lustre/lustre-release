@@ -705,7 +705,6 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         struct ost_body         *body;
         struct obd_ioobj        *ioobj;
         struct niobuf_remote    *niobuf;
-        unsigned long            flags;
         int                      niocount;
         int                      size[3];
         int                      i;
@@ -778,8 +777,6 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         LASSERT((void *)(niobuf - niocount) ==
                 lustre_msg_buf(req->rq_reqmsg, 2, niocount * sizeof(*niobuf)));
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
-        spin_lock_irqsave(&req->rq_lock, flags);
-        spin_unlock_irqrestore(&req->rq_lock, flags);
 
         /* size[0] still sizeof (*body) */
         if (opc == OST_WRITE) {

@@ -252,7 +252,6 @@ int ll_lsm_getattr(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
-                CERROR ("ENOMEM allocing request set\n");
                 rc = -ENOMEM;
         } else {
                 rc = obd_getattr_async(exp, oa, lsm, set);

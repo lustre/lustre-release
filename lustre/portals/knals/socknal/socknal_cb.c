@@ -1665,12 +1665,10 @@ int ksocknal_scheduler (void *arg)
         kportal_blockallsigs ();
 
 #if (CONFIG_SMP && CPU_AFFINITY)
-        if ((cpu_online_map & (1 << id)) != 0) {
-#if 1
-                current->cpus_allowed = (1 << id);
-#else
-                set_cpus_allowed (current, 1<<id);
-#endif
+        if (cpu_online(id)) {
+                cpumask_t m;
+                cpu_set(id, m);
+                set_cpus_allowed(current, m);
         } else {
                 CERROR ("Can't set CPU affinity for %s\n", name);
         }

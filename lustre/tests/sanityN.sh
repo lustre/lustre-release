@@ -312,9 +312,9 @@ test_14b() {
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 }
-run_test 14b "truncate of executing file return -ETXTBSY ======"
+run_test 14b "truncate of executing file returns -ETXTBSY ======"
 
-test_14c() { # bug 3430
+test_14c() {
 	mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
 	$DIR1/d14/multiop $TMP/test14.junk O_c &

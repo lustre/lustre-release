@@ -1388,7 +1388,10 @@ class MDSDEV(Module):
             lov = LOV(self.db.lookup(lov_uuid), lov_uuid, 'FS_name', config_only = 1)
 
             # default stripe count controls default inode_size
-            stripe_count = lov.stripe_cnt
+            if (lov.stripe_cnt > 0):
+                stripe_count = lov.stripe_cnt
+            else:
+                stripe_count = len(lov.devlist)
             if stripe_count > 77:
                 self.inode_size = 4096
             elif stripe_count > 35:

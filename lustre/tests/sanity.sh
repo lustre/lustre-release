@@ -8,10 +8,10 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 2108
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a"}
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 case `uname -r` in
-2.6.*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT 54c 55" # bug 3117
+2.6.*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT 54c 55 68" # bug 3117
 esac
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -39,6 +39,7 @@ SOCKETSERVER=${SOCKETSERVER:-socketserver}
 SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
+MEMHOG=${MEMHOG:-memhog}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -1713,17 +1714,29 @@ test_54b() {
 }
 run_test 54b "char device works in lustre ======================"
 
+find_loop_dev() {
+	[ "$LOOPNUM" ] && return
+	[ -b /dev/loop/0 ] && LOOPBASE=/dev/loop/
+	[ -b /dev/loop0 ] && LOOPBASE=/dev/loop
+	[ -z "$LOOPBASE" ] && echo "/dev/loop/0 and /dev/loop0 gone?" && return
+
+	for i in `seq 3 7`; do
+		losetup $LOOPBASE$i > /dev/null 2>&1 && continue
+		LOOPDEV=$LOOPBASE$i
+		LOOPNUM=$i
+		break
+	done
+}
+
 test_54c() {
 	tfile="$DIR/f54c"
 	tdir="$DIR/d54c"
 	loopdev="$DIR/loop54c"
 	
-	for i in `seq 3 7`; do
-		rm -f $loopdev
-		mknod $loopdev b 7 $i
-		losetup $loopdev > /dev/null 2>&1 || break
-	done
-	echo "make a loop file system with $tfile on $loopdev ($i)..."	
+	find_loop_dev 
+	[ -z "$LOOPNUM" ] && echo "couldn't find empty loop device" && return
+	mknod $loopdev b 7 $LOOPNUM
+	echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."	
 	dd if=/dev/zero of=$tfile bs=`page_size` seek=1024 count=1 > /dev/null
 	losetup $loopdev $tfile || error "can't set up $loopdev for $tfile"
 	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
@@ -2016,9 +2029,53 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 	mkdir $DIR/d67
 	chmod 771 $DIR/d67
 	chgrp $RUNAS_ID $DIR/d67
-	$RUNAS -g $((RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67 && error || true
+	$RUNAS -g $(($RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67 && error ||true
 }
 run_test 67 "supplementary group failure (should return error) ="
+
+LOOPDEV=""
+cleanup_68() {
+	if [ "$LOOPDEV" ]; then
+		swapoff $LOOPDEV || error "swapoff failed"
+		losetup -d $LOOPDEV || error "losetup -d failed"
+	fi
+	rm -f $DIR/f68
+	LOOPDEV=""
+}
+
+meminfo() {
+	awk '($1 == "'$1':") { print $2 }' /proc/meminfo
+}
+
+swap_used() {
+	swapon -s | awk '($1 == "'$1'") { print $4 }'
+}
+
+# excercise swapping to lustre by adding a high priority swapfile entry
+# and then consuming memory until it is used.
+test_68() {
+	[ "$UID" != 0 ] && echo "skipping test 68 (must run as root)" && return
+
+	find_loop_dev
+	dd if=/dev/zero of=$DIR/f68 bs=64k count=1024
+
+	trap cleanup_68 EXIT
+
+	losetup $LOOPDEV $DIR/f68 || error "losetup $LOOPDEV failed"
+	mkswap $LOOPDEV
+	swapon -p 32767 $LOOPDEV || error "swapon $LOOPDEV failed"
+
+	echo "before: `swapon -s | grep $LOOPDEV`"
+	KBFREE=`meminfo MemTotal`
+	$MEMHOG $KBFREE || error "error allocating $KBFREE kB"
+	echo "after: `swapon -s | grep $LOOPDEV`"
+	SWAPUSED=`swap_used $LOOPDEV`
+
+	cleanup_68
+
+	[ $SWAPUSED -eq 0 ] && error "no swap used???" 
+}
+run_test 68 "support swapping to Lustre ========================"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

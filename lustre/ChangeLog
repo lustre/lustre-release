@@ -2,6 +2,10 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.4
        * bug fixes
 	- don't cleanup request in ll_file_open() on failed MDS open (3430)
+	- make sure to unset replay flag from failed open requests (3440)
+	- if default stripe count is 0, use OST count for inode size (3636)
+	- update parent mtime/ctime on client for create/unlink (2611)
+	- drop dentry ref in ext3_add_link from open_connect_dentry (3266)
        * miscellania
 
 2004-06-17  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -24,6 +28,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- remove extraneous obd dereference causing LASSERT failure (3334)
 	- don't use get_cycles() when creating temp. files on the mds (3156)
 	- hold i_sem when setting i_size in ll_extent_lock() (3564)
+	- handle EEXIST for set-stripe, set proper directory name (3336)
        * miscellania
 	- servers can dump a log evicting a client - lustre.dump_on_timeout=1
 	- fix ksocknal_fmb_callback() error messages (2918)

@@ -434,7 +434,7 @@ Index: lum/fs/ext3/namei.c
 +	if (!err) {
 +		err = ext3_mark_inode_dirty(handle, inode);
 +		if (err == 0) {
-+			(void)iopen_connect_dentry(dentry, inode, 0);
++			dput(iopen_connect_dentry(dentry, inode, 0));
 +			return 0;
 +		}
 +	}

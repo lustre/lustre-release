@@ -27,7 +27,7 @@ linux/ldiskfs%.h: linux-stage/include/linux/ext3%.h
 # FIXME: we need to grab the series in configure somehow
 # (see bug 1679)
 #
-series := @top_srcdir@/kernel_patches/series/ldiskfs-2.6-suse.series
+series := @top_srcdir@/kernel_patches/series/ldiskfs-$(LDISKFS_SERIES)
 patches := @top_srcdir@/kernel_patches/patches
 
 sources: $(ext3_sources) $(ext3_headers) $(linux_headers) $(series)
