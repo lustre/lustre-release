@@ -1136,12 +1136,12 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         LASSERT(l->l_glimpse_ast != NULL);
         rc = l->l_glimpse_ast(l, NULL); /* this will update the LVB */
+        if (rc != 0 && res->lr_namespace->ns_lvbo &&
+            res->lr_namespace->ns_lvbo->lvbo_update) {
+                res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
+        }
 
         down(&res->lr_lvb_sem);
-#if 0
-        if (res_lvb->lvb_size == reply_lvb->lvb_size)
-                LDLM_ERROR(l, "we lost the glimpse race!");
-#endif
         reply_lvb->lvb_size = res_lvb->lvb_size;
         up(&res->lr_lvb_sem);
 
@@ -1665,7 +1665,7 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
                         if (res->lr_namespace->ns_lvbo &&
                             res->lr_namespace->ns_lvbo->lvbo_update) {
                                 rc = res->lr_namespace->ns_lvbo->lvbo_update
-                                        (res, NULL, 0);
+                                        (res, NULL, 0, 0);
                         }
                         ldlm_resource_putref(res);
                 }

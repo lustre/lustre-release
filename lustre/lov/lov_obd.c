@@ -2057,6 +2057,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 /* XXX LOV STACKING: submd should be from the subobj */
                 submd->lsm_object_id = loi->loi_id;
                 submd->lsm_stripe_count = 0;
+                submd->lsm_oinfo->loi_kms_valid = loi->loi_kms_valid;
                 submd->lsm_oinfo->loi_rss = loi->loi_rss;
                 submd->lsm_oinfo->loi_kms = loi->loi_kms;
                 loi->loi_mtime = submd->lsm_oinfo->loi_mtime;
@@ -2087,6 +2088,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                                        LPU64", kms="LPU64"\n", loi->loi_rss,
                                        tmp);
                                 loi->loi_kms = tmp;
+                                loi->loi_kms_valid = 1;
                         } else {
                                 CDEBUG(D_INODE, "lock acquired, setting rss="
                                        LPU64"; leaving kms="LPU64", end="LPU64

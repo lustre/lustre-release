@@ -549,64 +549,50 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 }
 #endif
 
-/* This function is a disaster.  I hate the LOV. */
 static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 {
         struct ptlrpc_request *req = reqp;
         struct inode *inode = ll_inode_from_lock(lock);
-        struct obd_export *exp;
         struct ll_inode_info *lli;
         struct ost_lvb *lvb;
-        struct {
-                int stripe_number;
-                __u64 size;
-                struct lov_stripe_md *lsm;
-        } data;
-        __u32 vallen = sizeof(data);
-        int rc, size = sizeof(*lvb);
+        int rc, size = sizeof(*lvb), stripe = 0;
         ENTRY;
 
         if (inode == NULL)
-                RETURN(0);
+                GOTO(out, rc = -ELDLM_NO_LOCK_DATA);
         lli = ll_i2info(inode);
         if (lli == NULL)
-                goto iput;
+                GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
         if (lli->lli_smd == NULL)
-                goto iput;
-        exp = ll_i2obdexp(inode);
+                GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
 
         /* First, find out which stripe index this lock corresponds to. */
         if (lli->lli_smd->lsm_stripe_count > 1)
-                data.stripe_number = ll_lock_to_stripe_offset(inode, lock);
-        else
-                data.stripe_number = 0;
-
-        data.size = inode->i_size;
-        data.lsm = lli->lli_smd;
-
-        rc = obd_get_info(exp, strlen("size_to_stripe"), "size_to_stripe",
-                          &vallen, &data);
-        if (rc != 0) {
-                CERROR("obd_get_info: rc = %d\n", rc);
-                LBUG();
-        }
-
-        LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> size "LPU64,
-                   inode->i_size, data.stripe_number, data.size);
+                stripe = ll_lock_to_stripe_offset(inode, lock);
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc) {
                 CERROR("lustre_pack_reply: %d\n", rc);
-                goto iput;
+                GOTO(iput, rc);
         }
 
         lvb = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*lvb));
-        lvb->lvb_size = data.size;
-        ptlrpc_reply(req);
+        lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe].loi_kms;
 
+        LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,
+                   inode->i_size, stripe, lvb->lvb_size);
+        GOTO(iput, 0);
  iput:
         iput(inode);
-        RETURN(0);
+
+ out:
+        /* These errors are normal races, so we don't want to fill the console
+         * with messages by calling ptlrpc_error() */
+        if (rc == -ELDLM_NO_LOCK_DATA)
+                lustre_pack_reply(req, 0, NULL, NULL);
+
+        req->rq_status = rc;
+        return rc;
 }
 
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);

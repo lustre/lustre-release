@@ -2384,6 +2384,9 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
         policy->l_extent.end |= ~PAGE_MASK;
 
+        if (lsm->lsm_oinfo->loi_kms_valid == 0)
+                goto no_match;
+
         /* Next, search for already existing extent locks that will cover us */
         rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type, policy, mode,
                              lockh);
@@ -2424,6 +2427,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 }
         }
 
+ no_match:
         rc = ldlm_cli_enqueue(exp, NULL, obd->obd_namespace, res_id, type,
                               policy, mode, flags, bl_cb, cp_cb, gl_cb, data,
                               &lvb, sizeof(lvb), lustre_swab_ost_lvb, lockh);
