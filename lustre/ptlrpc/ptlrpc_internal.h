@@ -39,6 +39,7 @@ int ptlrpc_get_ldlm_hooks(void);
 void ptlrpc_daemonize(void);
 
 int ptlrpc_request_handle_eviction(struct ptlrpc_request *);
+void lustre_assert_wire_constants (void);
 
 void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                                      struct ptlrpc_service *svc);

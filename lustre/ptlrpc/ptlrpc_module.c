@@ -100,6 +100,8 @@ __init int ptlrpc_init(void)
         int rc;
         ENTRY;
 
+        lustre_assert_wire_constants ();
+        
         rc = ptlrpc_init_portals();
         if (rc)
                 RETURN(rc);
@@ -192,7 +194,7 @@ EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);
 EXPORT_SYMBOL(lustre_swab_mds_rec_link);
 EXPORT_SYMBOL(lustre_swab_mds_rec_unlink);
-EXPORT_SYMBOL(lustre_swab_mdx_rec_rename);
+EXPORT_SYMBOL(lustre_swab_mds_rec_rename);
 EXPORT_SYMBOL(lustre_swab_lov_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
 EXPORT_SYMBOL(lustre_swab_ldlm_extent);
