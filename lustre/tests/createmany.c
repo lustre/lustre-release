@@ -10,13 +10,13 @@
 
 int main(int argc, char ** argv)
 {
-        int i, rc = 0, count;
+        int i, rc = 0, do_open;
         char filename[4096];
-        int do_open;
-        long int start, last;
+        long int start, last, end, count;
 
         if (argc != 4) {
-                printf("Usage %s <-o|-m> filenamebase count\n", argv[0]);
+                printf("Usage %s <-o|-m> filenamebase <count|-time>\n",
+                       argv[0]);
                 return 1;
         }
 
@@ -25,7 +25,8 @@ int main(int argc, char ** argv)
         } else if (strcmp(argv[1], "-m") == 0) {
                 do_open = 0;
         } else {
-                printf("Usage %s {-o|-m} filenamebase count\n", argv[0]);
+                printf("Usage %s {-o|-m} filenamebase <count|-time>\n",
+                       argv[0]);
                 return 1;
         }
 
@@ -34,11 +35,19 @@ int main(int argc, char ** argv)
                 return 1;
         }
 
-        count = strtoul(argv[3], NULL, 0);
-
         start = last = time(0);
 
-        for (i = 0; i < count; i++) {
+        end = strtol(argv[3], NULL, 0);
+
+        if (end > 0) {
+                count = end;
+                end = -1UL >> 1;
+        } else {
+                end = start - end;
+                count = -1UL >> 1;
+        }
+
+        for (i = 0; i < count && time(0) < end; i++) {
                 sprintf(filename, "%s%d", argv[2], i);
                 if (do_open) {
                         int fd = open(filename, O_CREAT|O_RDWR, 0644);
