@@ -380,7 +380,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
         }
         ctxt = cbd->ctxt;
 
-        if (!(cat->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_CAT)))
+        if (!(cat->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
                 RETURN(-EINVAL);
 
         lir = (struct llog_logid_rec *)rec;
