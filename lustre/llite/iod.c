@@ -243,7 +243,30 @@ static int should_writeback(void)
         return 0;
 }
 
-int ll_check_dirty( struct super_block *sb)
+static int ll_alloc_brw(struct lustre_handle *conn,
+                        struct ll_writeback_pages *llwp)
+{
+        static char key[] = "brw_size";
+        __u32 brw_size;
+        __u32 vallen = sizeof(brw_size);
+        int rc;
+        ENTRY;
+
+        memset(llwp, 0, sizeof(struct ll_writeback_pages));
+
+        rc = obd_get_info(conn, sizeof(key) - 1, key, &vallen, &brw_size);
+        if (rc != 0)
+                RETURN(rc);
+        LASSERT(brw_size >= PAGE_SIZE);
+
+        llwp->max = brw_size >> PAGE_SHIFT;
+        llwp->pga = kmalloc(llwp->max * sizeof(struct brw_page), GFP_ATOMIC);
+        if (llwp->pga == NULL)
+                RETURN(-ENOMEM);
+        RETURN(0);
+}
+
+int ll_check_dirty(struct super_block *sb)
 {
         unsigned long old_flags; /* hack? */
         int making_progress;
@@ -353,28 +376,6 @@ cleanup:
 #endif /* linux 2.5 */
 
 
-static int ll_alloc_brw(struct lustre_handle *conn,
-                        struct ll_writeback_pages *llwp)
-{
-        static char key[] = "brw_size";
-        __u32 brw_size;
-        __u32 vallen = sizeof(brw_size);
-        int rc;
-        ENTRY;
-
-        memset(llwp, 0, sizeof(struct ll_writeback_pages));
-
-        rc = obd_get_info(conn, sizeof(key) - 1, key, &vallen, &brw_size);
-        if (rc != 0)
-                RETURN(rc);
-        LASSERT(brw_size >= PAGE_SIZE);
-
-        llwp->max = brw_size >> PAGE_SHIFT;
-        llwp->pga = kmalloc(llwp->max * sizeof(struct brw_page), GFP_ATOMIC);
-        if ( llwp->pga == NULL )
-                RETURN(-ENOMEM);
-        RETURN(0);
-}
 int ll_batch_writepage( struct inode *inode, struct page *page )
 {
         unsigned long old_flags; /* hack? */
