@@ -161,17 +161,6 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
 		RETURN(rc);
 	}
 
-	/* this is the special case where we recover and only increase the next_id */
-	if (oa->o_valid == (OBD_MD_FLID | OBD_MD_FLFLAGS) &&
-	    oa->o_flags == OBD_FL_IDONLY) {
-                spin_lock(&oscc->oscc_lock);
-                /* this is the recovery case: be firm for now */
-                LASSERT(lsm->lsm_object_id == oscc->oscc_next_id);
-                oscc->oscc_next_id++;
-                spin_unlock(&oscc->oscc_lock);
-		RETURN(0);
-	}
-
         while (try_again) {
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_last_id >= oscc->oscc_next_id) {
