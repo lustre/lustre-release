@@ -468,6 +468,8 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
                 rc = mds_fs_get_md(mds, inode, md);
 
                 if (rc < 0) {
+                        if (rc == -ENODATA)
+                                RETURN(0);
                         CERROR("mds_fs_get_md failed: %d\n", rc);
                         RETURN(rc);
                 }
