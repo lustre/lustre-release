@@ -489,6 +489,24 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         request = *reqp = it->d.lustre.it_data;
         LASSERT(request != NULL);
 
+        /* If we're doing an IT_OPEN which did not result in an actual
+         * successful open, then we need to remove the bit which saves
+         * this request for unconditional replay.
+         *
+         * It's important that we do this first!  Otherwise we might exit the
+         * function without doing so, and try to replay a failed create
+         * (bug 3440) */
+        if (it->it_op & IT_OPEN) {
+                if (!it_disposition(it, DISP_OPEN_OPEN) ||
+                    it->d.lustre.it_status != 0) {
+                        unsigned long irqflags;
+
+                        spin_lock_irqsave(&request->rq_lock, irqflags);
+                        request->rq_replay = 0;
+                        spin_unlock_irqrestore(&request->rq_lock, irqflags);
+                }
+        }
+
         if (!it_disposition(it, DISP_IT_EXECD)) {
                 /* The server failed before it even started executing the
                  * intent, i.e. because it couldn't unpack the request. */
@@ -510,20 +528,6 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 /* Also: did we find the same inode? */
                 if (memcmp(cfid, &mds_body->fid1, sizeof(*cfid)))
                         RETURN(-ESTALE);
-        }
-
-        /* If we're doing an IT_OPEN which did not result in an actual
-         * successful open, then we need to remove the bit which saves
-         * this request for unconditional replay. */
-        if (it->it_op & IT_OPEN) {
-                if (!it_disposition(it, DISP_OPEN_OPEN) ||
-                    it->d.lustre.it_status != 0) {
-                        unsigned long irqflags;
-
-                        spin_lock_irqsave(&request->rq_lock, irqflags);
-                        request->rq_replay = 0;
-                        spin_unlock_irqrestore(&request->rq_lock, irqflags);
-                }
         }
 
         rc = it_open_error(DISP_LOOKUP_EXECD, it);
