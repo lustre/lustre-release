@@ -864,8 +864,7 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
         spin_lock (&ksocknal_data.ksnd_reaper_lock);
 
         list_add_tail (&conn->ksnc_list, &ksocknal_data.ksnd_deathrow_conns);
-        if (waitqueue_active (&ksocknal_data.ksnd_reaper_waitq))
-                wake_up (&ksocknal_data.ksnd_reaper_waitq);
+        wake_up (&ksocknal_data.ksnd_reaper_waitq);
                 
         spin_unlock (&ksocknal_data.ksnd_reaper_lock);
 }
@@ -1007,8 +1006,7 @@ ksocknal_put_conn (ksock_conn_t *conn)
         spin_lock_irqsave (&ksocknal_data.ksnd_reaper_lock, flags);
 
         list_add (&conn->ksnc_list, &ksocknal_data.ksnd_zombie_conns);
-        if (waitqueue_active (&ksocknal_data.ksnd_reaper_waitq))
-                wake_up (&ksocknal_data.ksnd_reaper_waitq);
+        wake_up (&ksocknal_data.ksnd_reaper_waitq);
 
         spin_unlock_irqrestore (&ksocknal_data.ksnd_reaper_lock, flags);
 }
