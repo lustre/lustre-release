@@ -1,12 +1,13 @@
 #!/bin/bash
 
-config=${1:-mcr.xml}
+config=${1:-mcrlov.xml}
 
 LMC="../utils/lmc -m $config"
 
 # TCP/IP servers
 SERVERS="ba-ost-1  ba-ost-2"
 ROUTER=dev5
+MDS=dev7
 
 # Elan clients
 CLIENT_LO=dev2
@@ -33,6 +34,12 @@ ${LMC} --router --node $ROUTER --tcpbuf $TCPBUF --net `h2ip $ROUTER`  tcp $PORT 
 ${LMC} --node $ROUTER --net `h2elan $ROUTER` elan|| exit 1
 ${LMC} --node $ROUTER --route elan `h2elan $ROUTER` `h2elan $CLIENT_LO` `h2elan $CLIENT_HI` || exit 2
 
+${LMC} --node $MDS --net `h2elan $MDS` elan || exit 1
+${LMC} --node $MDS --mds mds1 /tmp/mds1 100000 || exit 1
+${LMC} --lov lov1 mds1 65536 0 0
+
+${LMC} --node client --mtpt /mnt/lustre mds1 lov1
+
 for s in $SERVERS
  do
    # server node
@@ -40,7 +47,5 @@ for s in $SERVERS
    # route to server
    ${LMC} --node $ROUTER --route tcp `h2ip $ROUTER` $s || exit 2
    # the device on the server
-   ${LMC} --node $s --obdtype=obdecho --ost || exit 3
-   # attach to the device on the client (this would normally be a moun)
-   ${LMC} --node client --osc  OSC_$s || exit 4
+   ${LMC} --format --lov lov1 --node $s --ost bluearc || exit 3
 done
