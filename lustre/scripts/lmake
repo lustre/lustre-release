@@ -280,6 +280,14 @@ set_make()
     MAKE="make -s CC=$CC"
     if [ "$ARCH" ] ; then
 	MAKE="$MAKE ARCH=$ARCH"
+    else
+	case $TARGET_ARCH in
+	    i?86)
+                ;;
+            *)
+	        MAKE="$MAKE ARCH=$TARGET_ARCH"
+		;;
+        esac
     fi
     MAKE_J="$MAKE -j $JOBS"
 }
@@ -302,6 +310,15 @@ depend_kernel()
 	OLDCONFIG='oldconfig'
     fi
     $MAKE $OLDCONFIG || fatal 1 "Error running make oldconfig"
+    case "$VERSION" in
+	2.6*)
+            SYMLINKS="include/asm"
+            ;;
+        2.4*)
+	    SYMLINKS="symlinks"
+	    ;;
+    esac
+    $MAKE $SYMLINKS
     $MAKE_J dep || fatal 1 "Error running make dep"
     $MAKE include/linux/version.h || fatal 1 "Error making include/linux/version.h"
 }
