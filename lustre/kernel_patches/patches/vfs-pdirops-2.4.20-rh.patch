@@ -44,14 +44,14 @@ Index: linux-2.4.20-rh/fs/namei.c
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
   * kernel data space before using them..
-@@ -302,10 +332,10 @@
- {
+@@ -303,10 +333,11 @@
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
+ 	int counter = 0;
 +	void *lock;
  
  again:
--
+ 	counter++;
 -	down(&dir->i_sem);
 +	lock = lock_dir(dir, name);
  	/*
@@ -146,9 +146,9 @@ Index: linux-2.4.20-rh/fs/namei.c
  		path_release(&nd);
  out:
 @@ -1642,14 +1672,14 @@
-  		if (error != -EOPNOTSUPP)
-  			goto exit1;
-  	}
+ 		if (error != -EOPNOTSUPP)
+ 			goto exit1;
+ 	}
 -	down(&nd.dentry->d_inode->i_sem);
 +	nd.lock = lock_dir(nd.dentry->d_inode, &nd.last);
  	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);
@@ -163,9 +163,9 @@ Index: linux-2.4.20-rh/fs/namei.c
  	path_release(&nd);
  exit:
 @@ -1708,7 +1738,7 @@
-  		if (error != -EOPNOTSUPP)
-  			goto exit1;
-  	}
+ 		if (error != -EOPNOTSUPP)
+ 			goto exit1;
+ 	}
 -	down(&nd.dentry->d_inode->i_sem);
 +	nd.lock = lock_dir(nd.dentry->d_inode, &nd.last);
  	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);

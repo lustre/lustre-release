@@ -144,9 +144,9 @@
  		path_release(&nd);
  out:
 @@ -1619,14 +1649,14 @@ asmlinkage long sys_rmdir(const char * p
-  		if (error != -EOPNOTSUPP)
-  			goto exit1;
-  	}
+ 		if (error != -EOPNOTSUPP)
+ 			goto exit1;
+ 	}
 -	down(&nd.dentry->d_inode->i_sem);
 +	nd.lock = lock_dir(nd.dentry->d_inode, &nd.last);
  	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);
@@ -161,9 +161,9 @@
  	path_release(&nd);
  exit:
 @@ -1685,7 +1715,7 @@ asmlinkage long sys_unlink(const char * 
-  		if (error != -EOPNOTSUPP)
-  			goto exit1;
-  	}
+ 		if (error != -EOPNOTSUPP)
+ 			goto exit1;
+ 	}
 -	down(&nd.dentry->d_inode->i_sem);
 +	nd.lock = lock_dir(nd.dentry->d_inode, &nd.last);
  	dentry = lookup_hash_it(&nd.last, nd.dentry, NULL);

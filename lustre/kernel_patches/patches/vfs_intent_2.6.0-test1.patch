@@ -16,9 +16,9 @@
  	struct file * file;
  	struct nameidata nd;
  	int error;
-+        intent_init(&nd.intent, IT_OPEN);
-+  
-+ 	error = user_path_walk_it(library, &nd);
++	intent_init(&nd.intent, IT_OPEN);
++
++	error = user_path_walk_it(library, &nd);
  
 -	nd.intent.open.flags = O_RDONLY;
 +	nd.intent.it_flags = O_RDONLY;
@@ -40,13 +40,13 @@
  	struct nameidata nd;
 -	int err = path_lookup(name, LOOKUP_FOLLOW, &nd);
 -	struct file *file = ERR_PTR(err);
-+ 	int err;
-+ 	struct file *file;
-+         
-+        intent_init(&nd.intent, IT_OPEN);
-+        nd.intent.it_flags = O_RDONLY;
-+        err = path_lookup(name, LOOKUP_FOLLOW, &nd);
-+        file = ERR_PTR(err);
++	int err;
++	struct file *file;
++
++	intent_init(&nd.intent, IT_OPEN);
++	nd.intent.it_flags = O_RDONLY;
++	err = path_lookup(name, LOOKUP_FOLLOW, &nd);
++	file = ERR_PTR(err);
  
  	if (!err) {
  		struct inode *inode = nd.dentry->d_inode;
@@ -67,48 +67,47 @@
  
 +void intent_release(struct lookup_intent *it)
 +{
-+        if (!it) 
-+                return;
-+        if (it->it_magic != INTENT_MAGIC)
-+                return;
-+        if (it->it_op_release)
-+                it->it_op_release(it);
++	if (!it)
++		return;
++	if (it->it_magic != INTENT_MAGIC)
++		return;
++	if (it->it_op_release)
++		it->it_op_release(it);
 +}
 +
  void path_release(struct nameidata *nd)
  {
-+        intent_release(&nd->intent);
++	intent_release(&nd->intent);
  	dput(nd->dentry);
  	mntput(nd->mnt);
  }
-@@ -554,6 +565,32 @@ fail:
+@@ -554,6 +565,31 @@ fail:
  	return PTR_ERR(dentry);
  }
  
-+
 +static int revalidate_special(struct nameidata *nd)
 +{
-+        struct dentry *dentry = nd->dentry;
-+        int err, counter = 0;
++	struct dentry *dentry = nd->dentry;
++	int err, counter = 0;
 +
-+        if (!dentry->d_op || !dentry->d_op->d_revalidate)
-+                return 0;
++	if (!dentry->d_op || !dentry->d_op->d_revalidate)
++		return 0;
 + revalidate_again:
-+        if (!dentry->d_op->d_revalidate(dentry, nd)) {
-+                struct dentry *new;
-+                if ((err = permission(dentry->d_parent->d_inode, MAY_EXEC,nd)))
-+                        return err;
-+                new = real_lookup(dentry->d_parent, &dentry->d_name, nd);
-+                d_invalidate(dentry);
-+                dput(dentry);
-+                dentry = new;
-+                counter++;
-+                if (counter < 10)
-+                        goto revalidate_again;
-+                printk("excessive revalidate_it loops\n");
-+                return -ESTALE;
-+        }
-+        return 0;
++	if (!dentry->d_op->d_revalidate(dentry, nd)) {
++		struct dentry *new;
++		if ((err = permission(dentry->d_parent->d_inode, MAY_EXEC,nd)))
++			return err;
++		new = real_lookup(dentry->d_parent, &dentry->d_name, nd);
++		d_invalidate(dentry);
++		dput(dentry);
++		dentry = new;
++		counter++;
++		if (counter < 10)
++			goto revalidate_again;
++		printk("excessive revalidate_it loops\n");
++		return -ESTALE;
++	}
++	return 0;
 +}
 +
  /*
@@ -118,9 +117,9 @@
  
  		if (inode->i_op->follow_link) {
  			mntget(next.mnt);
-+                        nd->flags |= LOOKUP_LINK_NOTLAST;
++			nd->flags |= LOOKUP_LINK_NOTLAST;
  			err = do_follow_link(next.dentry, nd);
-+                        nd->flags &= ~LOOKUP_LINK_NOTLAST;
++			nd->flags &= ~LOOKUP_LINK_NOTLAST;
  			dput(next.dentry);
  			mntput(next.mnt);
  			if (err)
@@ -128,11 +127,11 @@
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
-+                                nd->flags |= LOOKUP_LAST;
-+                                err = revalidate_special(nd);
-+                                nd->flags &= ~LOOKUP_LAST;
-+                                if (err)
-+                                        break;
++				nd->flags |= LOOKUP_LAST;
++				err = revalidate_special(nd);
++				nd->flags &= ~LOOKUP_LAST;
++				if (err)
++					break;
  				goto return_base;
  		}
  		if (nd->dentry->d_op && nd->dentry->d_op->d_hash) {
@@ -140,9 +139,9 @@
  			if (err < 0)
  				break;
  		}
-+                nd->flags |= LOOKUP_LAST;
++		nd->flags |= LOOKUP_LAST;
  		err = do_lookup(nd, &this, &next);
-+                nd->flags &= ~LOOKUP_LAST;
++		nd->flags &= ~LOOKUP_LAST;
  		if (err)
  			break;
  		follow_mount(&next.mnt, &next.dentry);
@@ -151,7 +150,7 @@
  		break;
  	}
 -	path_release(nd);
-+        path_release(nd);
++	path_release(nd);
  return_err:
  	return err;
  }
@@ -176,7 +175,7 @@
  
 +struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
 +{
-+        return lookup_one_len_it(name, base, len, NULL);
++	return lookup_one_len_it(name, base, len, NULL);
 +}
 +
  /*
@@ -191,7 +190,7 @@
  {
  	char *tmp = getname(name);
  	int err = PTR_ERR(tmp);
-+ 
++
  
  	if (!IS_ERR(tmp)) {
  		err = path_lookup(tmp, flags, nd);
@@ -201,8 +200,8 @@
  
 +int __user_walk(const char __user *name, unsigned flags, struct nameidata *nd)
 +{
-+        intent_init(&nd->intent, IT_LOOKUP);
-+        return __user_walk_it(name, flags, nd);
++	intent_init(&nd->intent, IT_LOOKUP);
++	return __user_walk_it(name, flags, nd);
 +}
 +
  /*
@@ -223,7 +222,7 @@
  	/*
  	 * Create - we need to know the parent.
  	 */
-+        nd->intent.it_op |= IT_CREAT;
++	nd->intent.it_op |= IT_CREAT;
  	error = path_lookup(pathname, LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE, nd);
  	if (error)
  		return error;
@@ -231,9 +230,9 @@
  	dir = nd->dentry;
  	nd->flags &= ~LOOKUP_PARENT;
  	down(&dir->d_inode->i_sem);
-+        nd->flags |= LOOKUP_LAST;
++	nd->flags |= LOOKUP_LAST;
  	dentry = __lookup_hash(&nd->last, nd->dentry, nd);
-+        nd->flags &= ~LOOKUP_LAST;
++	nd->flags &= ~LOOKUP_LAST;
  
  do_last:
  	error = PTR_ERR(dentry);
@@ -241,9 +240,9 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
-+        nd->flags |= LOOKUP_LAST;
++	nd->flags |= LOOKUP_LAST;
  	dentry = __lookup_hash(&nd->last, nd->dentry, nd);
-+        nd->flags &= ~LOOKUP_LAST;
++	nd->flags &= ~LOOKUP_LAST;
  	putname(nd->last.name);
  	goto do_last;
  }
@@ -251,7 +250,7 @@
  __vfs_follow_link(struct nameidata *nd, const char *link)
  {
  	int res = 0;
-+        struct lookup_intent it = nd->intent;
++	struct lookup_intent it = nd->intent;
  	char *name;
 +
  	if (IS_ERR(link))
@@ -262,9 +261,9 @@
  			goto out;
  	}
 +
-+        intent_init(&nd->intent, it.it_op);
-+        nd->intent.it_flags = it.it_flags;
-+        nd->intent.it_create_mode = it.it_create_mode;
++	intent_init(&nd->intent, it.it_op);
++	nd->intent.it_flags = it.it_flags;
++	nd->intent.it_create_mode = it.it_create_mode;
  	res = link_path_walk(link, nd);
  out:
  	if (current->link_count || res || nd->last_type!=LAST_NORM)
@@ -274,7 +273,7 @@
  	int retval = 0;
  	int mnt_flags = 0;
  
-+        intent_init(&nd.intent, IT_LOOKUP);
++	intent_init(&nd.intent, IT_LOOKUP);
  	/* Discard magic */
  	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
  		flags &= ~MS_MGC_MSK;
@@ -309,7 +308,7 @@
  		if(!res && (mode & S_IWOTH) && IS_RDONLY(nd.dentry->d_inode)
  		   && !special_file(nd.dentry->d_inode->i_mode))
  			res = -EROFS;
-+		                
++
  		path_release(&nd);
  	}
  
@@ -361,8 +360,8 @@
 -}
 -
 -struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags)
-+struct file *dentry_open_it(struct dentry *dentry, struct vfsmount *mnt, int flags, 
-+                            struct lookup_intent *it)
++struct file *dentry_open_it(struct dentry *dentry, struct vfsmount *mnt, int flags,
++			    struct lookup_intent *it)
  {
  	struct file * f;
  	struct inode *inode;
@@ -370,7 +369,7 @@
  		goto cleanup_dentry;
  	f->f_flags = flags;
  	f->f_mode = (flags+1) & O_ACCMODE;
-+        f->f_it = it;
++	f->f_it = it;
  	inode = dentry->d_inode;
  	if (f->f_mode & FMODE_WRITE) {
  		error = get_write_access(inode);
@@ -378,7 +377,7 @@
  		error = f->f_op->open(inode,f);
  		if (error)
  			goto cleanup_all;
-+                intent_release(it);
++		intent_release(it);
  	}
  	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
  
@@ -387,7 +386,7 @@
  		}
  	}
 -
-+        
++
  	return f;
  
  cleanup_all:
@@ -395,7 +394,7 @@
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
-+        intent_release(it);
++	intent_release(it);
  	dput(dentry);
  	mntput(mnt);
  	return ERR_PTR(error);
@@ -405,7 +404,7 @@
 +{
 +	int namei_flags, error;
 +	struct file * temp_filp;
-+        struct nameidata nd;
++	struct nameidata nd;
 +	intent_init(&nd.intent, IT_OPEN);
 +
 +	namei_flags = flags;
@@ -425,10 +424,10 @@
 +
 +struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags)
 +{
-+        struct lookup_intent it;
++	struct lookup_intent it;
 +	intent_init(&it, IT_LOOKUP);
 +
-+        return dentry_open_it(dentry, mnt, flags, &it);
++	return dentry_open_it(dentry, mnt, flags, &it);
 +}
 +
  /*
@@ -460,7 +459,7 @@
  
 +int vfs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 +{
-+        return vfs_getattr_it(mnt, dentry, NULL, stat);
++	return vfs_getattr_it(mnt, dentry, NULL, stat);
 +}
 +
  int vfs_stat(char __user *name, struct kstat *stat)
@@ -475,7 +474,7 @@
 -		error = vfs_getattr(nd.mnt, nd.dentry, stat);
 -		path_release(&nd);
 +		error = vfs_getattr_it(nd.mnt, nd.dentry, &nd.intent, stat);
-+                path_release(&nd);
++		path_release(&nd);
  	}
  	return error;
  }
@@ -491,7 +490,7 @@
 -		error = vfs_getattr(nd.mnt, nd.dentry, stat);
 -		path_release(&nd);
 +		error = vfs_getattr_it(nd.mnt, nd.dentry, &nd.intent, stat);
-+                path_release(&nd);
++		path_release(&nd);
  	}
  	return error;
  }
@@ -499,13 +498,13 @@
  {
  	struct file *f = fget(fd);
  	int error = -EBADF;
-+        struct nameidata nd;
++	struct nameidata nd;
 +	intent_init(&nd.intent, IT_GETATTR);
  
  	if (f) {
 -		error = vfs_getattr(f->f_vfsmnt, f->f_dentry, stat);
 +		error = vfs_getattr_it(f->f_vfsmnt, f->f_dentry, &nd.intent, stat);
-+                intent_release(&nd.intent);
++		intent_release(&nd.intent);
  		fput(f);
  	}
  	return error;
@@ -543,7 +542,7 @@
  	/* Used by fs/eventpoll.c to link all the hooks to this file */
  	struct list_head	f_ep_links;
  	spinlock_t		f_ep_lock;
-+        struct lookup_intent    *f_it;
++	struct lookup_intent    *f_it;
  };
  extern spinlock_t files_lock;
  #define file_list_lock() spin_lock(&files_lock);
@@ -551,9 +550,9 @@
  	void (*truncate) (struct inode *);
  	int (*permission) (struct inode *, int, struct nameidata *);
  	int (*setattr) (struct dentry *, struct iattr *);
-+ 	int (*setattr_raw) (struct inode *, struct iattr *);
++	int (*setattr_raw) (struct inode *, struct iattr *);
  	int (*getattr) (struct vfsmount *mnt, struct dentry *, struct kstat *);
-+ 	int (*getattr_it) (struct vfsmount *, struct dentry *, struct lookup_intent *, struct kstat *);
++	int (*getattr_it) (struct vfsmount *, struct dentry *, struct lookup_intent *, struct kstat *);
  	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
@@ -598,30 +597,30 @@
 +#define IT_GETXATTR (1<<7)
 +
 +struct lustre_intent_data {
-+        int       it_disposition;
-+        int       it_status;
-+        __u64     it_lock_handle;
-+        void     *it_data;
-+        int       it_lock_mode;
++	int       it_disposition;
++	int       it_status;
++	__u64     it_lock_handle;
++	void     *it_data;
++	int       it_lock_mode;
  };
  
 +#define INTENT_MAGIC 0x19620323
 +struct lookup_intent {
-+        int     it_magic;
-+        void    (*it_op_release)(struct lookup_intent *);
-+        int     it_op;
++	int     it_magic;
++	void    (*it_op_release)(struct lookup_intent *);
++	int     it_op;
 +	int	it_flags;
 +	int	it_create_mode;
-+        union {
-+                struct lustre_intent_data lustre;
-+        } d;
++	union {
++		struct lustre_intent_data lustre;
++	} d;
 +};
 +
 +static inline void intent_init(struct lookup_intent *it, int op)
 +{
-+        memset(it, 0, sizeof(*it));
-+        it->it_magic = INTENT_MAGIC;
-+        it->it_op = op;
++	memset(it, 0, sizeof(*it));
++	it->it_magic = INTENT_MAGIC;
++	it->it_op = op;
 +}
 +
  struct nameidata {
@@ -635,7 +634,7 @@
 -	union {
 -		struct open_intent open;
 -	} intent;
-+        struct lookup_intent intent;
++	struct lookup_intent intent;
  };
  
  /*
