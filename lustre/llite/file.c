@@ -431,6 +431,14 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         ENTRY;
 
+        /* If we don't refresh the file size, generic_file_read may not even
+         * call us */
+        retval = ll_file_size(inode, lsm);
+        if (retval < 0) {
+                CERROR("ll_file_size: %d\n", retval);
+                RETURN(retval);
+        }
+
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) &&
             !(sbi->ll_flags & LL_SBI_NOLCK)) {
                 struct ldlm_extent extent;
@@ -452,14 +460,6 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                         CERROR("lock enqueue: err: %d\n", err);
                         RETURN(err);
                 }
-        }
-
-        /* If we don't refresh the file size, generic_file_read may not even
-         * call us */
-        retval = ll_file_size(inode, lsm);
-        if (retval < 0) {
-                CERROR("ll_file_size: %d\n", retval);
-                RETURN(retval);
         }
 
         CDEBUG(D_INFO, "Reading inode %ld, %d bytes, offset %Ld\n",
