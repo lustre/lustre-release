@@ -733,8 +733,10 @@ static int filter_read_groups(struct obd_device *obd, int last_group,
                               int create)
 {
         struct filter_obd *filter = &obd->u.filter;
-        int old_count = filter->fo_group_count, group = old_count, rc = 0;
+        int old_count, group, rc = 0;
 
+        down(&filter->fo_init_lock);
+        old_count = filter->fo_group_count;
         for (group = old_count; group <= last_group; group++) {
                 if (group == 0)
                         continue; /* no group zero */
@@ -743,6 +745,7 @@ static int filter_read_groups(struct obd_device *obd, int last_group,
                 if (rc != 0)
                         break;
         }
+        up(&filter->fo_init_lock);
         return rc;
 }
 
@@ -1377,10 +1380,10 @@ int filter_common_setup(struct obd_device *obd, obd_count len,
         if (rc)
                 GOTO(err_mntput, rc);
 
+        sema_init(&filter->fo_init_lock, 1);
         rc = filter_prep(obd);
         if (rc)
                 GOTO(err_mntput, rc);
-
 
         filter->fo_destroy_in_progress = 0;
         sema_init(&filter->fo_create_lock, 1);

@@ -184,11 +184,12 @@ struct filter_obd {
         struct vfsmount     *fo_vfsmnt;
 
         int                    fo_group_count;
-        struct dentry         *fo_dentry_O; /* the "O"bject directory dentry */
-        struct dentry         **fo_groups;   /* dentries for each group dir */
-        struct filter_subdirs *fo_subdirs;  /* subdir array per group */
-        __u64                 *fo_last_objids; // per-group last created objid
+        struct dentry         *fo_dentry_O;     /* the "O"bject directory dentry */
+        struct dentry         **fo_groups;      /* dentries for each group dir */
+        struct filter_subdirs *fo_subdirs;      /* subdir array per group */
+        __u64                 *fo_last_objids;  /* per-group last created objid */
         struct file          **fo_last_objid_files;
+        struct semaphore     fo_init_lock;      /* group initialization lock */
 
         spinlock_t           fo_objidlock; /* protect fo_lastobjid increment */
         spinlock_t           fo_translock; /* protect fsd_last_rcvd increment */
