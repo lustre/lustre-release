@@ -14,21 +14,34 @@ LYXFILES= master.lyx evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
 	glossary.lyx   lustre-debugging.lyx  network.lyx\
 	intro.lyx      obdspec.lyx
 
-MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS)
+MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) lustre-HOWTO.lyx
+CLEANFILES = *.lyxT
 
 EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES)
 
 all: $(DOCS)
 
 # update date and version in document
+tag := $(shell cat $(srcdir)/CVS/Tag 2>/dev/null || echo HEAD)
+addstamp = sed "s|^Date:.*|Date: `date +%D`|g; s|^Version:.*|Version: $(tag)|g"
+
 .lyx.pdf:
+	rm -f $<T
+	$(addstamp) $< > $<T
 	@$(LYX2PDF) $< || printf "\n*** Warning: not creating PDF docs; install lyx to rectify this\n"
+	rm -f $<T
 
 .lyx.txt:
-	@$(LYX2TXT) $< || printf "\n*** Warning: not creating PDF docs; install lyx to rectify this\n"
+	rm -f $<T
+	$(addstamp) $< > $<T
+	@$(LYX2TXT) $< || printf "\n*** Warning: not creating text docs; install lyx to rectify this\n"
+	rm -f $<T
 
 .lyx.html:
-	@$(LYX2HTML) $< || printf "\n*** Warning: not creating PDF docs; install lyx to rectify this\n"
+	rm -f $<T
+	$(addstamp) $< > $<T
+	@$(LYX2HTML) $< || printf "\n*** Warning: not creating HTML docs; install lyx to rectify this\n"
+	rm -f $<T
 
 .fig.eps:
 	-fig2dev -L eps $< > $@
