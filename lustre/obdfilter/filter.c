@@ -1450,18 +1450,24 @@ static void filter_grant_sanity_check(struct obd_device *obd, char *func)
         spin_unlock(&obd->obd_osfs_lock);
 
         /* Do these assertions outside the spinlocks so we don't kill system */
-        CERROR("%s: tot_granted "LPU64" != fo_tot_granted "LPU64"\n",
-               func, tot_granted, fo_tot_granted);
-        CERROR("%s: tot_pending "LPU64" != fo_tot_pending "LPU64"\n",
-               func, tot_pending, fo_tot_pending);
-        CERROR("%s: tot_dirty "LPU64" != fo_tot_dirty "LPU64"\n",
-               func, tot_dirty, fo_tot_dirty);
-        CERROR("%s: tot_pending "LPU64" > tot_granted "LPU64"\n",
-               func, tot_pending, tot_granted);
-        CERROR("%s: tot_granted "LPU64" > maxsize "LPU64"\n",
-               func, tot_granted, maxsize);
-        CERROR("%s: tot_dirty "LPU64" > maxsize "LPU64"\n",
-               func, tot_dirty, maxsize);
+        if (tot_granted != fo_tot_granted)
+                CERROR("%s: tot_granted "LPU64" != fo_tot_granted "LPU64"\n",
+                       func, tot_granted, fo_tot_granted);
+        if (tot_pending != fo_tot_pending)
+                CERROR("%s: tot_pending "LPU64" != fo_tot_pending "LPU64"\n",
+                       func, tot_pending, fo_tot_pending);
+        if (tot_dirty != fo_tot_dirty)
+                CERROR("%s: tot_dirty "LPU64" != fo_tot_dirty "LPU64"\n",
+                       func, tot_dirty, fo_tot_dirty);
+        if (tot_pending > tot_granted)
+                CERROR("%s: tot_pending "LPU64" > tot_granted "LPU64"\n",
+                       func, tot_pending, tot_granted);
+        if (tot_granted > maxsize)
+                CERROR("%s: tot_granted "LPU64" > maxsize "LPU64"\n",
+                       func, tot_granted, maxsize);
+        if (tot_dirty > maxsize)
+                CERROR("%s: tot_dirty "LPU64" > maxsize "LPU64"\n",
+                       func, tot_dirty, maxsize);
 }
 
 /* Remove this client from the grant accounting totals.  We also remove
