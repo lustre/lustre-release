@@ -1,18 +1,3 @@
---- lum-pristine/arch/i386/mm/init.c	Fri Dec 21 10:41:53 2001
-+++ lum/arch/i386/mm/init.c	Sat Jun 15 00:31:15 2002
-@@ -43,6 +43,12 @@
- static unsigned long totalram_pages;
- static unsigned long totalhigh_pages;
- 
-+struct page *check_get_page(unsigned long kaddr)
-+{
-+#warning FIXME: Lustre team, is this solid?
-+        return virt_to_page(kaddr);
-+}
-+
- int do_check_pgt_cache(int low, int high)
- {
- 	int freed = 0;
 --- lum-pristine/arch/um/kernel/mem.c	Thu Jun 13 14:07:26 2002
 +++ lum/arch/um/kernel/mem.c	Fri Jun 14 17:00:21 2002
 @@ -489,6 +489,22 @@
@@ -54,6 +39,21 @@
  	return((struct page *) page_region(page, NULL)->mem_map);
  }
  
+--- lum-pristine/arch/i386/mm/init.c	Fri Dec 21 10:41:53 2001
++++ lum/arch/i386/mm/init.c	Sat Jun 15 00:31:15 2002
+@@ -43,6 +43,12 @@
+ static unsigned long totalram_pages;
+ static unsigned long totalhigh_pages;
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid?
++        return virt_to_page(kaddr);
++}
++
+ int do_check_pgt_cache(int low, int high)
+ {
+ 	int freed = 0;
 --- lum-pristine/mm/slab.c	Fri Dec 21 10:42:05 2001
 +++ lum/mm/slab.c	Fri Jun 14 23:57:09 2002
 @@ -1187,6 +1187,59 @@
@@ -384,17 +384,6 @@
  	/* 
  	 * If the handle is marked SYNC, we need to set another commit
  	 * going!  We also want to force a commit if the current
---- lum-pristine/include/asm-i386/page.h	Mon Feb 25 12:38:12 2002
-+++ lum/include/asm-i386/page.h	Sat Jun 15 00:29:05 2002
-@@ -132,6 +132,8 @@
- #define virt_to_page(kaddr)	(mem_map + (__pa(kaddr) >> PAGE_SHIFT))
- #define VALID_PAGE(page)	((page - mem_map) < max_mapnr)
- 
-+
-+
- #endif /* __KERNEL__ */
- 
- #endif /* _I386_PAGE_H */
 --- lum-pristine/include/linux/blkdev.h	Mon Nov 26 06:29:17 2001
 +++ lum/include/linux/blkdev.h	Thu Jun 20 10:18:40 2002
 @@ -228,4 +228,8 @@
@@ -590,6 +579,17 @@
  
  extern void iput(struct inode *);
  extern void force_delete(struct inode *);
+--- lum-pristine/fs/nfsd/vfs.c	Fri Dec 21 10:41:55 2001
++++ lum/fs/nfsd/vfs.c	Thu Jun 20 10:37:05 2002
+@@ -1285,7 +1285,7 @@
+ 			err = nfserr_perm;
+ 	} else
+ #endif
+-	err = vfs_rename(fdir, odentry, tdir, ndentry);
++	err = vfs_rename(fdir, odentry, tdir, ndentry, NULL);
+ 	if (!err && EX_ISSYNC(tfhp->fh_export)) {
+ 		nfsd_sync_dir(tdentry);
+ 		nfsd_sync_dir(fdentry);
 --- lum-pristine/fs/namei.c	Mon Feb 25 12:38:09 2002
 +++ lum/fs/namei.c	Thu Jun 20 10:16:35 2002
 @@ -94,6 +94,14 @@
@@ -1172,7 +1172,7 @@
  
  	dput(new_dentry);
 --- lum-pristine/fs/open.c	Fri Oct 12 14:48:42 2001
-+++ lum/fs/open.c	Thu Jun 20 10:14:37 2002
++++ lum/fs/open.c	Thu Jun 20 11:25:54 2002
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1443,15 +1443,7 @@
  {
  	struct file * f;
  	struct inode *inode;
-@@ -690,6 +741,7 @@
- 			goto cleanup_all;
- 	}
- 	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
-+	f->f_intent = it;
- 
- 	return f;
- 
-@@ -705,11 +757,19 @@
+@@ -705,11 +756,19 @@
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:

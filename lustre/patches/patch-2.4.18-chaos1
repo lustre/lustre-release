@@ -1,5 +1,5 @@
---- linux-2.4.18-chaos2-pristine/drivers/quadrics/elan3comms/epcomms.c	Fri Jun 14 09:32:47 2002
-+++ linux-2.4.18-chaos2/drivers/quadrics/elan3comms/epcomms.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/drivers/quadrics/elan3comms/epcomms.c	Thu Jun 13 12:26:50 2002
++++ kernel-rh-2.4.18/drivers/quadrics/elan3comms/epcomms.c	Thu Jun 20 11:24:56 2002
 @@ -2249,7 +2249,7 @@
  	if (EP_EVENT_FIRING (edev, txdElan + offsetof (EP_TXD_ELAN, DataEvent), txd->DataCookie, txdMain->DataEvent) &&	/* PCI read */
  	    EP_EVENT_FIRING (edev, txdElan + offsetof (EP_TXD_ELAN, EnveEvent), txd->EnveCookie, txdMain->EnveEvent))		/* PCI read */
@@ -18,8 +18,98 @@
  		printf ("LargeRxDataEvent: events set but block copy not completed\n");
  	    if (delay > EP_EVENT_FIRING_TLIMIT)
  		panic ("LargeRxDataEvent: events set but block copy not completed\n");
---- linux-2.4.18-chaos2-pristine/drivers/block/blkpg.c	Fri Jun 14 09:32:44 2002
-+++ linux-2.4.18-chaos2/drivers/block/blkpg.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/scripts/mkspec	Thu Jun 13 12:27:18 2002
++++ kernel-rh-2.4.18/scripts/mkspec	Thu Jun 20 11:24:56 2002
+@@ -41,6 +41,7 @@
+ echo 'mkdir -p $RPM_BUILD_ROOT/boot $RPM_BUILD_ROOT/lib $RPM_BUILD_ROOT/lib/modules'
+ echo 'INSTALL_MOD_PATH=$RPM_BUILD_ROOT make modules_install'
+ echo 'cp arch/i386/boot/bzImage $RPM_BUILD_ROOT'"/boot/vmlinuz-$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
++echo 'cp vmlinux $RPM_BUILD_ROOT'"/boot/vmlinux-$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
+ echo 'cp System.map $RPM_BUILD_ROOT'"/boot/System.map-$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
+ echo ""
+ echo "%clean"
+--- kernel-rh-2.4.18-pristine/arch/i386/mm/init.c	Thu Jun 13 12:26:28 2002
++++ kernel-rh-2.4.18/arch/i386/mm/init.c	Thu Jun 20 11:24:56 2002
+@@ -43,6 +43,14 @@
+ static unsigned long totalram_pages;
+ static unsigned long totalhigh_pages;
+ 
++
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid enough?
++        return virt_to_page(kaddr);
++}
++
++
+ int do_check_pgt_cache(int low, int high)
+ {
+ 	int freed = 0;
+--- kernel-rh-2.4.18-pristine/mm/slab.c	Thu Jun 13 12:27:15 2002
++++ kernel-rh-2.4.18/mm/slab.c	Thu Jun 20 11:24:56 2002
+@@ -1216,6 +1216,60 @@
+  * Called with the cache-lock held.
+  */
+ 
++extern struct page *check_get_page(unsigned long kaddr);
++struct page *page_mem_map(struct page *page);
++static int kmem_check_cache_obj (kmem_cache_t * cachep,
++                                 slab_t *slabp, void * objp)
++{
++	int i;
++	unsigned int objnr;
++#if DEBUG
++	if (cachep->flags & SLAB_RED_ZONE) {
++		objp -= BYTES_PER_WORD;
++		if ( *(unsigned long *)objp != RED_MAGIC2)
++			/* Either write before start, or a double free. */
++                        return 0;
++		if (*(unsigned long *)(objp+cachep->objsize -
++				BYTES_PER_WORD) != RED_MAGIC2)
++			/* Either write past end, or a double free. */
++                        return 0;
++	}
++#endif
++
++        objnr = (objp-slabp->s_mem)/cachep->objsize;
++	if (objnr >= cachep->num)
++                return 0;
++	if (objp != slabp->s_mem + objnr*cachep->objsize)
++                return 0;
++
++	/* Check slab's freelist to see if this obj is there. */
++	for (i = slabp->free; i != BUFCTL_END; i = slab_bufctl(slabp)[i]) {
++		if (i == objnr)
++                        return 0;
++	}
++	return 1;
++}
++
++
++int kmem_cache_validate(kmem_cache_t *cachep, void *objp)
++{
++        struct page *page = check_get_page((unsigned long)objp); 
++
++        if (!VALID_PAGE(page)) {
++                return 0;
++        }
++
++        if (!PageSlab(page)) {
++                return 0;
++        }
++
++        /* XXX check for freed slab objects ? */ 
++        if (!kmem_check_cache_obj(cachep, GET_PAGE_SLAB(page), objp)) 
++                return 0;
++
++        return (cachep == GET_PAGE_CACHE(page));
++}
++
+ #if DEBUG
+ static int kmem_extra_free_checks (kmem_cache_t * cachep,
+ 			slab_t *slabp, void * objp)
+--- kernel-rh-2.4.18-pristine/drivers/block/blkpg.c	Thu Jun 13 12:26:40 2002
++++ kernel-rh-2.4.18/drivers/block/blkpg.c	Thu Jun 20 11:24:56 2002
 @@ -295,3 +295,38 @@
  }
  
@@ -59,8 +149,8 @@
 +EXPORT_SYMBOL(dev_set_rdonly);
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
---- linux-2.4.18-chaos2-pristine/drivers/block/loop.c	Fri Jun 14 09:32:44 2002
-+++ linux-2.4.18-chaos2/drivers/block/loop.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/drivers/block/loop.c	Thu Jun 13 12:26:40 2002
++++ kernel-rh-2.4.18/drivers/block/loop.c	Thu Jun 20 11:24:56 2002
 @@ -503,6 +503,11 @@
  	spin_unlock_irq(&lo->lo_lock);
  
@@ -73,8 +163,8 @@
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
---- linux-2.4.18-chaos2-pristine/drivers/ide/ide-disk.c	Fri Jun 14 09:32:45 2002
-+++ linux-2.4.18-chaos2/drivers/ide/ide-disk.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/drivers/ide/ide-disk.c	Thu Jun 13 12:26:43 2002
++++ kernel-rh-2.4.18/drivers/ide/ide-disk.c	Thu Jun 20 11:24:56 2002
 @@ -557,6 +557,12 @@
   */
  static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
@@ -88,8 +178,8 @@
  	if (IDE_CONTROL_REG)
  		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
  
---- linux-2.4.18-chaos2-pristine/fs/ext3/Makefile	Fri Jun 14 09:32:56 2002
-+++ linux-2.4.18-chaos2/fs/ext3/Makefile	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/fs/ext3/Makefile	Thu Jun 13 12:27:00 2002
++++ kernel-rh-2.4.18/fs/ext3/Makefile	Thu Jun 20 11:24:56 2002
 @@ -9,6 +9,8 @@
  
  O_TARGET := ext3.o
@@ -99,8 +189,8 @@
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
---- linux-2.4.18-chaos2-pristine/fs/ext3/super.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/ext3/super.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/fs/ext3/super.c	Thu Jun 13 12:27:01 2002
++++ kernel-rh-2.4.18/fs/ext3/super.c	Thu Jun 20 11:24:56 2002
 @@ -1746,7 +1746,7 @@
  	unregister_filesystem(&ext3_fs_type);
  }
@@ -110,8 +200,8 @@
  
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
---- linux-2.4.18-chaos2-pristine/fs/jbd/commit.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/jbd/commit.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/fs/jbd/commit.c	Thu Jun 13 12:27:05 2002
++++ kernel-rh-2.4.18/fs/jbd/commit.c	Thu Jun 20 11:24:56 2002
 @@ -482,7 +482,7 @@
             transaction's t_log_list queue, and metadata buffers are on
             the t_iobuf_list queue.
@@ -179,8 +269,8 @@
  	jbd_debug(3, "JBD: commit phase 7\n");
  
  	J_ASSERT(commit_transaction->t_sync_datalist == NULL);
---- linux-2.4.18-chaos2-pristine/fs/jbd/journal.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/jbd/journal.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/fs/jbd/journal.c	Thu Jun 13 12:27:05 2002
++++ kernel-rh-2.4.18/fs/jbd/journal.c	Thu Jun 20 11:24:56 2002
 @@ -58,6 +58,7 @@
  #endif
  EXPORT_SYMBOL(journal_flush);
@@ -189,8 +279,8 @@
  
  EXPORT_SYMBOL(journal_init_dev);
  EXPORT_SYMBOL(journal_init_inode);
---- linux-2.4.18-chaos2-pristine/fs/jbd/transaction.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/jbd/transaction.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/fs/jbd/transaction.c	Thu Jun 13 12:27:05 2002
++++ kernel-rh-2.4.18/fs/jbd/transaction.c	Thu Jun 20 11:24:56 2002
 @@ -57,6 +57,7 @@
  	transaction->t_state = T_RUNNING;
  	transaction->t_tid = journal->j_transaction_sequence++;
@@ -296,8 +386,8 @@
  	 * If the handle is marked SYNC, we need to set another commit
  	 * going!  We also want to force a commit if the current
  	 * transaction is occupying too much of the log, or if the
---- linux-2.4.18-chaos2-pristine/include/linux/blkdev.h	Fri Jun 14 09:33:01 2002
-+++ linux-2.4.18-chaos2/include/linux/blkdev.h	Mon Jun 17 09:38:35 2002
+--- kernel-rh-2.4.18-pristine/include/linux/blkdev.h	Thu Jun 13 12:27:14 2002
++++ kernel-rh-2.4.18/include/linux/blkdev.h	Thu Jun 20 11:24:56 2002
 @@ -276,4 +276,9 @@
  	}
  	return retval;
@@ -308,8 +398,18 @@
 +int dev_check_rdonly(kdev_t);
 +void dev_clear_rdonly(int);
  #endif
---- linux-2.4.18-chaos2-pristine/include/linux/jbd.h	Fri Jun 14 09:33:01 2002
-+++ linux-2.4.18-chaos2/include/linux/jbd.h	Mon Jun 17 09:38:53 2002
+--- kernel-rh-2.4.18-pristine/include/linux/slab.h	Thu Jun 13 12:27:15 2002
++++ kernel-rh-2.4.18/include/linux/slab.h	Thu Jun 20 11:24:56 2002
+@@ -58,6 +58,7 @@
+ extern int kmem_cache_shrink_nr(kmem_cache_t *);
+ extern void *kmem_cache_alloc(kmem_cache_t *, int);
+ extern void kmem_cache_free(kmem_cache_t *, void *);
++extern int kmem_cache_validate(kmem_cache_t *cachep, void *objp);
+ 
+ extern void *kmalloc(size_t, int);
+ extern void kfree(const void *);
+--- kernel-rh-2.4.18-pristine/include/linux/jbd.h	Thu Jun 13 12:27:14 2002
++++ kernel-rh-2.4.18/include/linux/jbd.h	Thu Jun 20 11:24:56 2002
 @@ -257,6 +257,13 @@
  	return bh->b_private;
  }
@@ -357,8 +457,8 @@
  
  extern void	 journal_lock_updates (journal_t *);
  extern void	 journal_unlock_updates (journal_t *);
---- linux-2.4.18-chaos2-pristine/kernel/ksyms.c	Fri Jun 14 09:33:02 2002
-+++ linux-2.4.18-chaos2/kernel/ksyms.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/kernel/ksyms.c	Thu Jun 13 12:27:15 2002
++++ kernel-rh-2.4.18/kernel/ksyms.c	Thu Jun 20 11:24:56 2002
 @@ -305,6 +305,12 @@
  EXPORT_SYMBOL(lock_may_write);
  EXPORT_SYMBOL(dcache_readdir);
@@ -372,8 +472,8 @@
  /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
  EXPORT_SYMBOL(default_llseek);
  EXPORT_SYMBOL(dentry_open);
---- linux-2.4.18-chaos2-pristine/include/linux/dcache.h	Fri Jun 14 09:33:01 2002
-+++ linux-2.4.18-chaos2/include/linux/dcache.h	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/include/linux/dcache.h	Thu Jun 13 12:27:14 2002
++++ kernel-rh-2.4.18/include/linux/dcache.h	Thu Jun 20 11:24:56 2002
 @@ -6,6 +6,32 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -424,8 +524,8 @@
  };
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
---- linux-2.4.18-chaos2-pristine/include/linux/fs.h	Fri Jun 14 09:33:01 2002
-+++ linux-2.4.18-chaos2/include/linux/fs.h	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/include/linux/fs.h	Thu Jun 13 12:27:14 2002
++++ kernel-rh-2.4.18/include/linux/fs.h	Thu Jun 20 11:24:56 2002
 @@ -570,6 +570,7 @@
  
  	/* needed for tty driver, and maybe others */
@@ -478,8 +578,8 @@
  
  extern void iput(struct inode *);
  extern void force_delete(struct inode *);
---- linux-2.4.18-chaos2-pristine/fs/nfsd/vfs.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/nfsd/vfs.c	Sat Jun 15 22:26:04 2002
+--- kernel-rh-2.4.18-pristine/fs/nfsd/vfs.c	Thu Jun 13 12:27:05 2002
++++ kernel-rh-2.4.18/fs/nfsd/vfs.c	Thu Jun 20 11:24:56 2002
 @@ -1285,7 +1285,7 @@
  			err = nfserr_perm;
  	} else
@@ -489,8 +589,8 @@
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
---- linux-2.4.18-chaos2-pristine/fs/namei.c	Fri Jun 14 09:32:49 2002
-+++ linux-2.4.18-chaos2/fs/namei.c	Mon Jun 17 09:29:58 2002
+--- kernel-rh-2.4.18-pristine/fs/namei.c	Thu Jun 13 12:27:05 2002
++++ kernel-rh-2.4.18/fs/namei.c	Thu Jun 20 11:31:14 2002
 @@ -94,6 +94,14 @@
   * XEmacs seems to be relying on it...
   */
@@ -572,13 +672,13 @@
  		}
  		/* This does the actual lookups.. */
 -		dentry = cached_lookup(nd->dentry, &this, LOOKUP_CONTINUE);
-+		dentry = cached_lookup(nd->dentry, &this, LOOKUP_CONTINUE, NULL);
++		dentry = cached_lookup(nd->dentry, &this, LOOKUP_CONTINUE, it);
  		if (!dentry) {
  			err = -EWOULDBLOCKIO;
  			if (atomic)
  				break;
 -			dentry = real_lookup(nd->dentry, &this, LOOKUP_CONTINUE);
-+			dentry = real_lookup(nd->dentry, &this, LOOKUP_CONTINUE, NULL);
++			dentry = real_lookup(nd->dentry, &this, LOOKUP_CONTINUE, it);
  			err = PTR_ERR(dentry);
  			if (IS_ERR(dentry))
  				break;
@@ -616,7 +716,20 @@
  				break;
  		}
  		goto return_base;
-@@ -648,12 +674,24 @@
+@@ -638,6 +664,7 @@
+ 		else if (this.len == 2 && this.name[1] == '.')
+ 			nd->last_type = LAST_DOTDOT;
+ return_base:
++                nd->dentry->d_it = it;
+ 		return 0;
+ out_dput:
+ 		dput(dentry);
+@@ -645,15 +672,29 @@
+ 	}
+ 	path_release(nd);
+ return_err:
++        if (!err)
++                nd->dentry->d_it = it;
  	return err;
  }
  
@@ -642,7 +755,7 @@
  /* SMP-safe */
  /* returns 1 if everything is done */
  static int __emul_lookup_dentry(const char *name, struct nameidata *nd)
-@@ -754,7 +792,8 @@
+@@ -754,7 +795,8 @@
   * needs parent already locked. Doesn't follow mounts.
   * SMP-safe.
   */
@@ -652,7 +765,7 @@
  {
  	struct dentry * dentry;
  	struct inode *inode;
-@@ -777,13 +816,16 @@
+@@ -777,13 +819,16 @@
  			goto out;
  	}
  
@@ -670,7 +783,7 @@
  		dentry = inode->i_op->lookup(inode, new);
  		unlock_kernel();
  		if (!dentry)
-@@ -795,6 +837,12 @@
+@@ -795,6 +840,12 @@
  	return dentry;
  }
  
@@ -683,7 +796,7 @@
  /* SMP-safe */
  struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
  {
-@@ -816,7 +864,7 @@
+@@ -816,7 +867,7 @@
  	}
  	this.hash = end_name_hash(hash);
  
@@ -692,7 +805,7 @@
  access:
  	return ERR_PTR(-EACCES);
  }
-@@ -848,6 +896,22 @@
+@@ -848,6 +899,22 @@
  	return err;
  }
  
@@ -715,7 +828,7 @@
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -984,7 +1048,8 @@
+@@ -984,7 +1051,8 @@
   * for symlinks (where the permissions are checked later).
   * SMP-safe
   */
@@ -725,7 +838,7 @@
  {
  	int acc_mode, error = 0;
  	struct inode *inode;
-@@ -998,8 +1063,9 @@
+@@ -998,17 +1066,21 @@
  	 * The simplest case - just a plain lookup.
  	 */
  	if (!(flag & O_CREAT)) {
@@ -736,7 +849,10 @@
  		if (error)
  			return error;
  		dentry = nd->dentry;
-@@ -1009,6 +1075,8 @@
++                dentry->d_it = it;
+ 		goto ok;
+ 	}
+ 
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -745,7 +861,7 @@
  	if (path_init(pathname, LOOKUP_PARENT, nd))
  		error = path_walk(pathname, nd);
  	if (error)
-@@ -1025,7 +1093,7 @@
+@@ -1025,7 +1097,7 @@
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -754,15 +870,27 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1035,6 +1103,7 @@
+@@ -1034,6 +1106,7 @@
+ 		goto exit;
  	}
  
++        dentry->d_it = it;
  	/* Negative dentry, just create the file */
-+	dentry->d_it = it;
  	if (!dentry->d_inode) {
  		error = vfs_create(dir->d_inode, dentry,
- 				   mode & ~current->fs->umask);
-@@ -1195,13 +1264,20 @@
+@@ -1150,9 +1223,11 @@
+ 		if (flag & FMODE_WRITE)
+ 			DQUOT_INIT(inode);
+ 
++        intent_release(dentry);
+ 	return 0;
+ 
+ exit_dput:
++        intent_release(dentry);
+ 	dput(dentry);
+ exit:
+ 	path_release(nd);
+@@ -1195,13 +1270,20 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -785,7 +913,7 @@
  {
  	struct dentry *dentry;
  
-@@ -1209,7 +1285,7 @@
+@@ -1209,7 +1291,7 @@
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -794,15 +922,15 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1255,6 +1331,7 @@
+@@ -1255,6 +1337,7 @@
  	char * tmp;
  	struct dentry * dentry;
  	struct nameidata nd;
-+	struct lookup_intent it = { IT_CREAT , mode };
++	struct lookup_intent it = { IT_MKNOD , mode };
  
  	if (S_ISDIR(mode))
  		return -EPERM;
-@@ -1266,11 +1343,12 @@
+@@ -1266,11 +1349,12 @@
  		error = path_walk(tmp, &nd);
  	if (error)
  		goto out;
@@ -816,7 +944,7 @@
  		switch (mode & S_IFMT) {
  		case 0: case S_IFREG:
  			error = vfs_create(nd.dentry->d_inode,dentry,mode);
-@@ -1286,6 +1364,7 @@
+@@ -1286,6 +1370,7 @@
  		}
  		dput(dentry);
  	}
@@ -824,7 +952,7 @@
  	up(&nd.dentry->d_inode->i_sem);
  	path_release(&nd);
  out:
-@@ -1324,6 +1403,7 @@
+@@ -1324,6 +1409,7 @@
  {
  	int error = 0;
  	char * tmp;
@@ -832,7 +960,7 @@
  
  	tmp = getname(pathname);
  	error = PTR_ERR(tmp);
-@@ -1335,13 +1415,15 @@
+@@ -1335,13 +1421,15 @@
  			error = path_walk(tmp, &nd);
  		if (error)
  			goto out;
@@ -849,7 +977,7 @@
  		up(&nd.dentry->d_inode->i_sem);
  		path_release(&nd);
  out:
-@@ -1421,6 +1503,7 @@
+@@ -1421,6 +1509,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -857,7 +985,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1443,10 +1526,12 @@
+@@ -1443,10 +1532,12 @@
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -871,7 +999,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1490,6 +1575,7 @@
+@@ -1490,6 +1581,7 @@
  	char * name;
  	struct dentry *dentry;
  	struct nameidata nd;
@@ -879,7 +1007,7 @@
  
  	name = getname(pathname);
  	if(IS_ERR(name))
-@@ -1503,14 +1589,16 @@
+@@ -1503,14 +1595,16 @@
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
  	down(&nd.dentry->d_inode->i_sem);
@@ -897,7 +1025,7 @@
  		dput(dentry);
  	}
  	up(&nd.dentry->d_inode->i_sem);
-@@ -1557,6 +1645,7 @@
+@@ -1557,6 +1651,7 @@
  	int error = 0;
  	char * from;
  	char * to;
@@ -905,7 +1033,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1571,12 +1660,14 @@
+@@ -1571,12 +1666,14 @@
  			error = path_walk(to, &nd);
  		if (error)
  			goto out;
@@ -921,7 +1049,7 @@
  		up(&nd.dentry->d_inode->i_sem);
  		path_release(&nd);
  out:
-@@ -1640,6 +1731,7 @@
+@@ -1640,6 +1737,7 @@
  	int error;
  	char * from;
  	char * to;
@@ -929,7 +1057,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1662,12 +1754,14 @@
+@@ -1662,12 +1760,14 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -945,7 +1073,7 @@
  		up(&nd.dentry->d_inode->i_sem);
  out_release:
  		path_release(&nd);
-@@ -1708,7 +1802,8 @@
+@@ -1708,7 +1808,8 @@
   *	   locking].
   */
  int vfs_rename_dir(struct inode *old_dir, struct dentry *old_dentry,
@@ -955,7 +1083,7 @@
  {
  	int error;
  	struct inode *target;
-@@ -1762,12 +1857,14 @@
+@@ -1762,12 +1863,14 @@
  	} else
  		double_down(&old_dir->i_zombie,
  			    &new_dir->i_zombie);
@@ -970,7 +1098,7 @@
  	if (target) {
  		if (!error)
  			target->i_flags |= S_DEAD;
-@@ -1789,7 +1886,8 @@
+@@ -1789,7 +1892,8 @@
  }
  
  int vfs_rename_other(struct inode *old_dir, struct dentry *old_dentry,
@@ -980,7 +1108,7 @@
  {
  	int error;
  
-@@ -1816,10 +1914,12 @@
+@@ -1816,10 +1920,12 @@
  	DQUOT_INIT(old_dir);
  	DQUOT_INIT(new_dir);
  	double_down(&old_dir->i_zombie, &new_dir->i_zombie);
@@ -993,7 +1121,7 @@
  	double_up(&old_dir->i_zombie, &new_dir->i_zombie);
  	if (error)
  		return error;
-@@ -1831,13 +1931,14 @@
+@@ -1831,13 +1937,14 @@
  }
  
  int vfs_rename(struct inode *old_dir, struct dentry *old_dentry,
@@ -1011,7 +1139,7 @@
  	if (!error) {
  		if (old_dir == new_dir)
  			inode_dir_notify(old_dir, DN_RENAME);
-@@ -1855,6 +1956,7 @@
+@@ -1855,6 +1962,7 @@
  	struct dentry * old_dir, * new_dir;
  	struct dentry * old_dentry, *new_dentry;
  	struct nameidata oldnd, newnd;
@@ -1019,7 +1147,7 @@
  
  	if (path_init(oldname, LOOKUP_PARENT, &oldnd))
  		error = path_walk(oldname, &oldnd);
-@@ -1882,7 +1984,9 @@
+@@ -1882,7 +1990,9 @@
  
  	double_lock(new_dir, old_dir);
  
@@ -1030,7 +1158,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -1898,14 +2002,15 @@
+@@ -1898,14 +2008,15 @@
  		if (newnd.last.name[newnd.last.len])
  			goto exit4;
  	}
@@ -1048,8 +1176,8 @@
  	unlock_kernel();
  
  	dput(new_dentry);
---- linux-2.4.18-chaos2-pristine/fs/open.c	Fri Jun 14 09:32:49 2002
-+++ linux-2.4.18-chaos2/fs/open.c	Mon Jun 17 09:30:36 2002
+--- kernel-rh-2.4.18-pristine/fs/open.c	Thu Jun 13 12:27:08 2002
++++ kernel-rh-2.4.18/fs/open.c	Thu Jun 20 11:42:48 2002
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1159,7 +1287,7 @@
  		if(!res && (mode & S_IWOTH) && IS_RDONLY(nd.dentry->d_inode)
  		   && !special_file(nd.dentry->d_inode->i_mode))
  			res = -EROFS;
-+		intent_release(nd.dentry);
++                intent_release(nd.dentry);
  		path_release(&nd);
  	}
  
@@ -1320,15 +1448,13 @@
  {
  	struct file * f;
  	struct inode *inode;
-@@ -690,6 +741,7 @@
- 			goto cleanup_all;
- 	}
- 	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
-+	f->f_intent = it;
- 
- 	return f;
- 
-@@ -710,6 +762,13 @@
+@@ -705,11 +756,19 @@
+ cleanup_file:
+ 	put_filp(f);
+ cleanup_dentry:
++        intent_release(dentry);
+ 	dput(dentry);
+ 	mntput(mnt);
  	return ERR_PTR(error);
  }
  
@@ -1342,8 +1468,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.4.18-chaos2-pristine/fs/stat.c	Fri Jun 14 09:32:49 2002
-+++ linux-2.4.18-chaos2/fs/stat.c	Mon Jun 17 09:37:20 2002
+--- kernel-rh-2.4.18-pristine/fs/stat.c	Thu Jun 13 12:27:08 2002
++++ kernel-rh-2.4.18/fs/stat.c	Thu Jun 20 11:24:56 2002
 @@ -117,10 +117,14 @@
  {
  	struct nameidata nd;
@@ -1386,103 +1512,3 @@
  		path_release(&nd);
  	}
  	return error;
---- linux-2.4.18-chaos2-pristine/mm/slab.c	Fri Jun 14 09:33:02 2002
-+++ linux-2.4.18-chaos2/mm/slab.c	Sat Jun 15 22:26:04 2002
-@@ -1216,6 +1216,60 @@
-  * Called with the cache-lock held.
-  */
- 
-+extern struct page *check_get_page(unsigned long kaddr);
-+struct page *page_mem_map(struct page *page);
-+static int kmem_check_cache_obj (kmem_cache_t * cachep,
-+                                 slab_t *slabp, void * objp)
-+{
-+	int i;
-+	unsigned int objnr;
-+#if DEBUG
-+	if (cachep->flags & SLAB_RED_ZONE) {
-+		objp -= BYTES_PER_WORD;
-+		if ( *(unsigned long *)objp != RED_MAGIC2)
-+			/* Either write before start, or a double free. */
-+                        return 0;
-+		if (*(unsigned long *)(objp+cachep->objsize -
-+				BYTES_PER_WORD) != RED_MAGIC2)
-+			/* Either write past end, or a double free. */
-+                        return 0;
-+	}
-+#endif
-+
-+        objnr = (objp-slabp->s_mem)/cachep->objsize;
-+	if (objnr >= cachep->num)
-+                return 0;
-+	if (objp != slabp->s_mem + objnr*cachep->objsize)
-+                return 0;
-+
-+	/* Check slab's freelist to see if this obj is there. */
-+	for (i = slabp->free; i != BUFCTL_END; i = slab_bufctl(slabp)[i]) {
-+		if (i == objnr)
-+                        return 0;
-+	}
-+	return 1;
-+}
-+
-+
-+int kmem_cache_validate(kmem_cache_t *cachep, void *objp)
-+{
-+        struct page *page = check_get_page((unsigned long)objp); 
-+
-+        if (!VALID_PAGE(page)) {
-+                return 0;
-+        }
-+
-+        if (!PageSlab(page)) {
-+                return 0;
-+        }
-+
-+        /* XXX check for freed slab objects ? */ 
-+        if (!kmem_check_cache_obj(cachep, GET_PAGE_SLAB(page), objp)) 
-+                return 0;
-+
-+        return (cachep == GET_PAGE_CACHE(page));
-+}
-+
- #if DEBUG
- static int kmem_extra_free_checks (kmem_cache_t * cachep,
- 			slab_t *slabp, void * objp)
---- linux-2.4.18-chaos2-pristine/arch/i386/mm/init.c	Fri Jun 14 09:32:40 2002
-+++ linux-2.4.18-chaos2/arch/i386/mm/init.c	Sat Jun 15 22:26:04 2002
-@@ -43,6 +43,14 @@
- static unsigned long totalram_pages;
- static unsigned long totalhigh_pages;
- 
-+
-+struct page *check_get_page(unsigned long kaddr)
-+{
-+#warning FIXME: Lustre team, is this solid enough?
-+        return virt_to_page(kaddr);
-+}
-+
-+
- int do_check_pgt_cache(int low, int high)
- {
- 	int freed = 0;
---- linux-2.4.18-chaos2-pristine/include/linux/slab.h	Fri Jun 14 09:33:02 2002
-+++ linux-2.4.18-chaos2/include/linux/slab.h	Mon Jun 17 09:38:08 2002
-@@ -58,6 +58,7 @@
- extern int kmem_cache_shrink_nr(kmem_cache_t *);
- extern void *kmem_cache_alloc(kmem_cache_t *, int);
- extern void kmem_cache_free(kmem_cache_t *, void *);
-+extern int kmem_cache_validate(kmem_cache_t *cachep, void *objp);
- 
- extern void *kmalloc(size_t, int);
- extern void kfree(const void *);
---- linux-2.4.18-chaos2-pristine/scripts/mkspec	Fri Jun 14 09:33:04 2002
-+++ linux-2.4.18-chaos2/scripts/mkspec	Sat Jun 15 22:26:04 2002
-@@ -41,6 +41,7 @@
- echo 'mkdir -p $RPM_BUILD_ROOT/boot $RPM_BUILD_ROOT/lib $RPM_BUILD_ROOT/lib/modules'
- echo 'INSTALL_MOD_PATH=$RPM_BUILD_ROOT make modules_install'
- echo 'cp arch/i386/boot/bzImage $RPM_BUILD_ROOT'"/boot/vmlinuz-$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
-+echo 'cp vmlinux $RPM_BUILD_ROOT'"/boot/vmlinux-$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
- echo 'cp System.map $RPM_BUILD_ROOT'"/boot/System.map-$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
- echo ""
- echo "%clean"
