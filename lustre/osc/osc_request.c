@@ -480,9 +480,9 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 		}
 	}
 
-        ptr2 = ost_rep_buf2(request->rq_rep.ost);
 	req2 = ptlrpc_prep_req(cl, OST_BRW_COMPLETE, size1, ptr1,
                                request->rq_rep.ost->buflen2, ptr2);
+        ptr2 = ost_rep_buf2(request->rq_rep.ost);
 	if (!req2) { 
 		CERROR("cannot pack second request!\n"); 
 		return -ENOMEM;

@@ -226,15 +226,17 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsign
         struct inode *inode = page->mapping->host;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         int rc = 0;
+	char *addr;
         ENTRY; 
         
-	kmap(page);
+	addr = kmap(page);
         if (Page_Uptodate(page)) { 
                 EXIT;
 		goto prepare_done;
         }
 
-        if ( (from <= offset) && (to >= offset + PAGE_SIZE) ) {
+        if ( offset + from >= inode->i_size ) {
+		memset(addr, 0, PAGE_SIZE); 
                 EXIT;
                 return 0;
         }

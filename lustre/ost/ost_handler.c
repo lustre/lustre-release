@@ -494,6 +494,25 @@ int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
 	return 0;
 }
 
+int ost_commit_page(struct obd_conn *conn, struct page *page)
+{
+        struct obd_ioobj obj;
+        struct niobuf buf;
+        int rc;
+        ENTRY;
+
+        memset(&buf, 0, sizeof(buf));
+        memset(&obj, 0, sizeof(obj));
+
+        buf.page = page;
+        obj.ioo_bufcnt = 1;
+        
+        rc = obd_commitrw(OBD_BRW_WRITE, conn, 1, &obj, 1, &buf); 
+        EXIT;
+        return rc;
+}
+
+
 int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
 	struct ost_req *r = req->rq_req.ost;
