@@ -147,13 +147,13 @@ struct ll_readahead_state {
 };
 
 extern kmem_cache_t *ll_file_data_slab;
+struct lustre_handle;
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         struct ll_readahead_state fd_ras;
         __u32 fd_flags;
 };
 
-struct lustre_handle;
 struct lov_stripe_md;
 
 extern spinlock_t inode_lock;
@@ -205,7 +205,7 @@ struct it_cb_data {
 extern kmem_cache_t *ll_async_page_slab;
 extern size_t ll_async_page_slab_size;
 struct ll_async_page {
-        int             llap_magic;
+        int              llap_magic;
         void            *llap_cookie;
         struct page     *llap_page;
         struct list_head llap_pending_write;

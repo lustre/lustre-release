@@ -358,7 +358,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                        int *type)
 #else
 struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
-                       int type)
+                       int type /* unused */)
 #endif
 {
         struct file *filp = vma->vm_file;
@@ -398,17 +398,17 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         /* XXX change inode size without i_sem hold! there is a race condition
          *     with truncate path. (see ll_extent_lock) */
-        down(&lli->lli_size_sem);
+        //down(&lli->lli_size_sem);
         kms = lov_merge_size(lli->lli_smd, 1);
         pgoff = ((address - vma->vm_start) >> PAGE_CACHE_SHIFT) + vma->vm_pgoff;
         size = (kms + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 
         if (pgoff >= size) {
-                up(&lli->lli_size_sem);
+                //up(&lli->lli_size_sem);
                 ll_glimpse_size(inode);
         } else {
                 inode->i_size = kms;
-                up(&lli->lli_size_sem);
+                //up(&lli->lli_size_sem);
         }
 
         /* disable VM_SEQ_READ and use VM_RAND_READ to make sure that
@@ -421,6 +421,8 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         vma->vm_flags |= VM_RAND_READ;
 
         page = filemap_nopage(vma, address, type);
+        LL_CDEBUG_PAGE(D_PAGE, page, "got addr %lu type %lx\n", address,
+                       (long)type);
         vma->vm_flags &= ~VM_RAND_READ;
         vma->vm_flags |= (rand_read | seq_read);
 
@@ -501,11 +503,9 @@ static int ll_populate(struct vm_area_struct *area, unsigned long address,
 #endif
 
 /* return the user space pointer that maps to a file offset via a vma */
-static inline unsigned long file_to_user(struct vm_area_struct *vma,
-                                         __u64 byte)
+static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
 {
-        return vma->vm_start +
-               (byte - ((__u64)vma->vm_pgoff << PAGE_SHIFT));
+        return vma->vm_start + (byte - ((__u64)vma->vm_pgoff << PAGE_SHIFT));
 
 }
 

@@ -697,7 +697,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         /* don't drop the mmapped file to LRU */
         if (mapping_mapped(inode->i_mapping))
                 ast_flags |= LDLM_FL_NO_LRU;
-        
+
         /* XXX phil: can we do this?  won't it screw the file size up? */
         if ((fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK)) ||
             (sbi->ll_flags & LL_SBI_NOLCK))
@@ -1112,8 +1112,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.
-        case EXT2_IOC_SETVERSION_OLD:
-        case EXT2_IOC_SETVERSION_NEW:
+        case EXT3_IOC_SETVERSION_OLD:
+        case EXT3_IOC_SETVERSION:
         */
         default:
                 RETURN(obd_iocontrol(cmd, ll_i2obdexp(inode), 0, NULL,
@@ -1133,7 +1133,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
                inode->i_ino, inode->i_generation, inode,
                offset + ((origin == 2) ? inode->i_size :
                          (origin == 1) ? file->f_pos : 0),
-               origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR": "SEEK_SET");
+               origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR" : "SEEK_SET");
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */

@@ -110,8 +110,8 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
  * must be called with lli_size_sem held */
 void ll_truncate(struct inode *inode)
 {
-        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
         struct obdo oa;
         int rc;
         ENTRY;
@@ -153,8 +153,7 @@ void ll_truncate(struct inode *inode)
         rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
                        OBD_OBJECT_EOF, NULL);
         if (rc)
-                CERROR("obd_truncate fails (%d) ino %lu\n", rc,
-                       inode->i_ino);
+                CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else
                 obdo_to_inode(inode, &oa, OBD_MD_FLSIZE|OBD_MD_FLBLOCKS|
                               OBD_MD_FLATIME | OBD_MD_FLMTIME |
@@ -317,9 +316,9 @@ static int ll_ap_refresh_count(void *data, int cmd)
         lli = ll_i2info(page->mapping->host);
         lsm = lli->lli_smd;
 
-        down(&lli->lli_size_sem);
+        //down(&lli->lli_size_sem);
         kms = lov_merge_size(lsm, 1);
-        up(&lli->lli_size_sem);
+        //up(&lli->lli_size_sem);
 
         /* catch race with truncate */
         if (((__u64)page->index << PAGE_SHIFT) >= kms)
@@ -1130,6 +1129,7 @@ out_unlock:
         spin_unlock(&sbi->ll_lock);
         return;
 }
+
 int ll_writepage(struct page *page)
 {
         struct inode *inode = page->mapping->host;
@@ -1153,7 +1153,7 @@ int ll_writepage(struct page *page)
         page_cache_get(page);
         if (llap->llap_write_queued) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
-                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
+                rc = obd_set_async_flags(exp, lli->lli_smd, NULL,
                                          llap->llap_cookie,
                                          ASYNC_READY | ASYNC_URGENT);
         } else {

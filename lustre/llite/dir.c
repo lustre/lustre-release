@@ -559,7 +559,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 ll_inode2fid(&fid, inode);
                 rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, filename,
-                                      strlen(filename)+1, OBD_MD_FLEASIZE,
+                                      strlen(filename) + 1, OBD_MD_FLEASIZE,
                                       obd_size_diskmd(sbi->ll_osc_exp, NULL),
                                       &request);
                 if (rc < 0) {
