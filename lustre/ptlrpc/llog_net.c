@@ -32,12 +32,18 @@
 #define EXPORT_SYMTAB
 #endif
 
+#ifdef __KERNEL__
 #include <linux/fs.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <portals/list.h>
 #include <linux/lvfs.h>
 
+#ifdef __KERNEL__
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
                         struct llog_logid *logid,
                         struct llog_ctxt_gen *gen)
@@ -107,3 +113,18 @@ int llog_initiator_connect(struct llog_ctxt *ctxt)
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initiator_connect);
+
+#else /* !__KERNEL__ */
+
+int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+                        struct llog_logid *logid,
+                        struct llog_ctxt_gen *gen)
+{
+        return 0;
+}
+
+int llog_initiator_connect(struct llog_ctxt *ctxt)
+{
+        return 0;
+}
+#endif

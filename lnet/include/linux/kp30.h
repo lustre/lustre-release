@@ -611,7 +611,6 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 extern spinlock_t stack_backtrace_lock;
 
 char *portals_debug_dumpstack(void);
-char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 void portals_run_upcall(char **argv);
 void portals_run_lbug_upcall(char * file, const char *fn, const int line);
 void portals_debug_dumplog(void);
@@ -654,6 +653,8 @@ extern void kportal_blockallsigs (void);
 # include <stdlib.h>
 #ifndef __CYGWIN__
 # include <stdint.h>
+#else
+# include <cygwin-ioctl.h>
 #endif
 # include <unistd.h>
 # include <time.h>
@@ -678,6 +679,9 @@ extern void kportal_blockallsigs (void);
            (subsys), (mask), (long)time(0), file, fn, line,                   \
            getpid() , stack, ## a);
 #endif
+
+/* support decl needed both by kernel and liblustre */
+char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)

@@ -23,13 +23,19 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#ifndef __KERNEL__
+#include <liblustre.h>
+#else
 #include <linux/version.h>
 #include <asm/semaphore.h>
-
 #define DEBUG_SUBSYSTEM S_RPC
+#endif
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include "ptlrpc_internal.h"
+
+#ifdef __KERNEL__
 
 static struct ptlrpc_thread *pinger_thread = NULL;
 static DECLARE_MUTEX(pinger_sem);
@@ -300,3 +306,31 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         up(&pinger_sem);
         RETURN(0);
 }
+
+#else /* !__KERNEL__ */
+
+int ptlrpc_start_pinger(void)
+{
+        return 0;
+}
+
+int ptlrpc_stop_pinger(void)
+{
+        return 0;
+}
+
+int ptlrpc_pinger_add_import(struct obd_import *imp)
+{
+        return 0;
+}
+
+int ptlrpc_pinger_del_import(struct obd_import *imp)
+{
+        return 0;
+}
+
+void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
+{
+}
+
+#endif

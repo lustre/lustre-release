@@ -75,6 +75,8 @@ int jt_dbg_panic(int argc, char **argv);
 int ptl_set_cfg_record_cb(cfg_record_cb_t cb);
 
 /* l_ioctl.c */
+typedef int (ioc_handler_t)(int dev_id, int opc, void *buf);
+void set_ioc_handler(ioc_handler_t *handler);
 int register_ioc_dev(int dev_id, const char * dev_name);
 void unregister_ioc_dev(int dev_id);
 int set_ioctl_dump(char * file);

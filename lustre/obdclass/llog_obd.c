@@ -13,7 +13,12 @@
 #define EXPORT_SYMTAB
 #endif
 
+#ifdef __KERNEL__
 #include <linux/fs.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <portals/list.h>
@@ -312,7 +317,7 @@ int llog_cat_initialize(struct obd_device *obd, int count)
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);
- 
+
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
                   int count, struct llog_logid *logid)
 {

@@ -29,9 +29,13 @@
 # define EXPORT_SYMTAB
 #endif
 
+#ifndef __KERNEL__
+#include <liblustre.h>
+#else
 #include <linux/module.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_idl.h>
+#endif
 
 #ifdef __KERNEL__
 #include <linux/fs.h>

@@ -31,13 +31,16 @@
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
-#include <syscall.h>
+#ifndef __CYGWIN__
+# include <syscall.h>
+#endif
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+
 #define BUG()                            /* workaround for module.h includes */
 #include <linux/version.h>
 
@@ -412,12 +415,17 @@ int jt_dbg_debug_file(int argc, char **argv)
                         strerror(errno));
                 return -1;
         }
-#ifndef SYS_fstat64
-#define __SYS_fstat__ SYS_fstat
-#else
-#define __SYS_fstat__ SYS_fstat64
-#endif
+
+#ifndef __CYGWIN__
+# ifndef SYS_fstat64
+#  define __SYS_fstat__ SYS_fstat
+# else
+#  define __SYS_fstat__ SYS_fstat64
+# endif
         rc = syscall(__SYS_fstat__, fd, &statbuf);
+#else
+        rc = fstat(fd, &statbuf);
+#endif
         if (rc < 0) {
                 fprintf(stderr, "fstat failed: %s\n", strerror(errno));
                 goto out;
@@ -521,7 +529,6 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
         }
         return 0;
 }
-
 
 int jt_dbg_modules(int argc, char **argv)
 {

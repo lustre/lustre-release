@@ -30,7 +30,6 @@ static inline int ptl_is_wire_handle_none (ptl_handle_wire_t *wh)
                 wh->wh_object_cookie == PTL_WIRE_HANDLE_NONE.wh_object_cookie);
 }
 
-#ifdef __KERNEL__
 #define state_lock(nal,flagsp)                          \
 do {                                                    \
         CDEBUG(D_PORTALS, "taking state lock\n");       \
@@ -42,20 +41,6 @@ do {                                                    \
         CDEBUG(D_PORTALS, "releasing state lock\n");    \
         nal->cb_sti(nal, flagsp);                       \
 }
-#else
-/* not needed in user space until we thread there */
-#define state_lock(nal,flagsp)                          \
-do {                                                    \
-        CDEBUG(D_PORTALS, "taking state lock\n");       \
-        CDEBUG(D_PORTALS, "%p:%p\n", nal, flagsp);      \
-} while (0)
-
-#define state_unlock(nal,flagsp)                        \
-{                                                       \
-        CDEBUG(D_PORTALS, "releasing state lock\n");    \
-        CDEBUG(D_PORTALS, "%p:%p\n", nal, flagsp);      \
-}
-#endif /* __KERNEL__ */
 
 #ifndef PTL_USE_SLAB_CACHE
 

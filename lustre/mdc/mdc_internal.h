@@ -39,7 +39,6 @@ static inline void mdc_init_rpc_lock(struct mdc_rpc_lock *lck)
         lck->rpcl_it = NULL;
 }
 
-#ifdef __KERNEL__
 static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck, 
                                     struct lookup_intent *it)
 {
@@ -65,4 +64,3 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
                 up(&lck->rpcl_sem);
         }
 }
-#endif

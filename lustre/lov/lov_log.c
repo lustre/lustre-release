@@ -33,6 +33,7 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <asm/div64.h>
+#include <linux/seq_file.h>
 #else
 #include <liblustre.h>
 #endif
@@ -46,7 +47,6 @@
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
 #include <linux/obd_ost.h>
-#include <linux/seq_file.h>
 #include <linux/lprocfs_status.h>
 
 #include "lov_internal.h"
