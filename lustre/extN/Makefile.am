@@ -9,7 +9,7 @@ modulefs_DATA = extN.o
 EXTRA_PROGRAMS = extN
 
 # NOTE: If you are not using a RedHat 12.5 or later kernel, then you need to
-#       apply the following patch first, as it fixes a number of bugs in ext3.
+#       apply the "fixes" patch first, as it fixes a number of bugs in ext3.
 #       It will be applied automatically by the extN build process, or you
 #       can apply it to the source kernel tree and fix ext3 also.  For chaos22
 #       (or other RH < 12.5 kernels) use the "chaos22" patch instead.

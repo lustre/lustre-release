@@ -164,9 +164,9 @@ struct ptlrpc_request {
         struct ptlrpc_connection *rq_connection;
         struct obd_import *rq_import;
         struct ptlrpc_service *rq_svc;
-        
-        void (*rq_replay_cb)(struct ptlrpc_request *, void *);
-        void *rq_replay_cb_data;
+
+        void (*rq_replay_cb)(struct ptlrpc_request *, struct lustre_handle *);
+        struct lustre_handle rq_replay_cb_handle;
 };
 
 struct ptlrpc_bulk_page {

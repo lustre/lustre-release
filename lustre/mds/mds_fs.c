@@ -174,18 +174,29 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
 
                 last_rcvd = le64_to_cpu(mcd->mcd_last_rcvd);
 
-                /* Do client recovery here (open files, etc) */
+                /* The exports are cleaned up by mds_disconnect, so they
+                 * need to be set up like real exports also.
+                 */
                 if (last_rcvd && (last_mount - le64_to_cpu(mcd->mcd_mount_count)
                                   < MDS_MOUNT_RECOV)) {
-                        struct obd_export *export = class_new_export(obddev);
-                        if (!export) {
+                        struct obd_export *exp = class_new_export(obddev);
+                        struct mds_export_data *med;
+
+                        if (!exp) {
                                 rc = -ENOMEM;
                                 break;
                         }
-                        export->exp_mds_data.med_mcd = mcd;
-                        mds_client_add(&export->exp_mds_data, cl_off);
+
+                        med = &exp->exp_mds_data;
+                        med->med_mcd = mcd;
+                        mds_client_add(med, cl_off);
+                        /* XXX put this in a helper if it gets more complex */
+                        INIT_LIST_HEAD(&med->med_open_head);
+                        spin_lock_init(&med->med_open_lock);
+
                         mcd = NULL;
                         clients++;
+                        MOD_INC_USE_COUNT;
                 } else {
                         CDEBUG(D_INFO,
                                "ignored client %d, UUID '%s', last_mount %Ld\n",

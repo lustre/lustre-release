@@ -367,18 +367,17 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         RETURN(0);
 }
 
-static void mdc_replay_open(struct ptlrpc_request *req, void *data)
+static void mdc_replay_open(struct ptlrpc_request *req,
+                            struct lustre_handle *data)
 {
-        __u64 *fh = data;
-        struct mds_body *body;
-        
-        body = lustre_msg_buf(req->rq_repmsg, 0);
+        struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 0);
+
         mds_unpack_body(body);
-        *fh = body->extra;
+        memcpy(data, &body->handle, sizeof(*data));
 }
 
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
-             struct lov_stripe_md *lsm, __u64 cookie, __u64 *fh,
+             struct lov_stripe_md *lsm, struct lustre_handle *fh,
              struct ptlrpc_request **request)
 {
         struct mds_body *body;
@@ -402,7 +401,7 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
 
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->flags = HTON__u32(flags);
-        body->extra = cookie;
+        memcpy(&body->handle, fh, sizeof(body->handle));
 
         if (lsm)
                 lov_packmd(lustre_msg_buf(req->rq_reqmsg, 1), lsm);
@@ -414,12 +413,12 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         if (!rc) {
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 mds_unpack_body(body);
-                *fh = body->extra;
+                memcpy(fh, &body->handle, sizeof(*fh));
         }
 
         /* If open is replayed, we need to fix up the fh. */
         req->rq_replay_cb = mdc_replay_open;
-        req->rq_replay_cb_data = fh;
+        memcpy(&req->rq_replay_cb_handle, fh, sizeof(req->rq_replay_cb_handle));
 
         EXIT;
  out:
@@ -427,8 +426,8 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         return rc;
 }
 
-int mdc_close(struct lustre_handle *conn,
-              obd_id ino, int type, __u64 fh, struct ptlrpc_request **request)
+int mdc_close(struct lustre_handle *conn, obd_id ino, int type,
+              struct lustre_handle *fh, struct ptlrpc_request **request)
 {
         struct mds_body *body;
         int rc, size = sizeof(*body);
@@ -441,7 +440,7 @@ int mdc_close(struct lustre_handle *conn,
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ll_ino2fid(&body->fid1, ino, 0, type);
-        body->extra = fh;
+        memcpy(&body->handle, fh, sizeof(body->handle));
 
         req->rq_replen = lustre_msg_size(0, NULL);
 

@@ -369,8 +369,7 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         memset(export, 0, sizeof(*export));
         get_random_bytes(&export->exp_cookie, sizeof(export->exp_cookie));
         export->exp_obd = obddev;
-        /* XXX should these be in MDS and LDLM init functions? */
-        INIT_LIST_HEAD(&export->exp_mds_data.med_open_head);
+        /* XXX this should be in LDLM init */
         INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
         INIT_LIST_HEAD(&export->exp_conn_chain);
         spin_lock(&obddev->obd_dev_lock);

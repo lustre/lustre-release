@@ -315,17 +315,17 @@ struct ll_fid {
 #define MDS_STATUS_CONN 1
 #define MDS_STATUS_LOV 2
 
-struct mds_status_req { 
+struct mds_status_req {
         __u32  flags;
         __u32  repbuf;
 };
 
-struct mds_fileh_body { 
+struct mds_fileh_body {
         struct ll_fid f_fid;
         struct lustre_handle f_handle;
 };
 
-struct mds_conn_status { 
+struct mds_conn_status {
         struct ll_fid rootfid;
         __u64          xid;
         __u64          last_committed;
@@ -334,13 +334,14 @@ struct mds_conn_status {
 };
 
 struct mds_body {
-        __u32          fsuid;
-        __u32          fsgid;
         struct ll_fid  fid1;
         struct ll_fid  fid2;
+        struct lustre_handle handle;
         __u64          size;
-        __u64          extra; /* should become a lustre_handle */
+        __u32          ino;   /* make this a __u64 */
         __u32          valid;
+        __u32          fsuid;
+        __u32          fsgid;
         __u32          mode;
         __u32          uid;
         __u32          gid;
@@ -348,12 +349,9 @@ struct mds_body {
         __u32          ctime;
         __u32          atime;
         __u32          flags;
-        __u32          major;
-        __u32          minor;
-        __u32          ino;
+        __u32          rdev;
         __u32          nlink;
         __u32          generation;
-        __u32          last_xidnomore;
 };
 
 /* MDS update records */

@@ -27,6 +27,7 @@
 
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_lite.h>
+#include <linux/random.h>
 
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
@@ -42,8 +43,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         int rc;
         ENTRY;
 
-        if (file->private_data)
-                LBUG();
+        LASSERT(!file->private_data);
 
         CHECK_MOUNT_EPOCH(inode);
 
@@ -87,15 +87,18 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 GOTO(out, rc = -ENOMEM);
         memset(fd, 0, sizeof(*fd));
 
+        fd->fd_mdshandle.addr = (__u64)(unsigned long)file;
+        get_random_bytes(&fd->fd_mdshandle.cookie,
+                         sizeof(fd->fd_mdshandle.cookie));
         rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG | inode->i_mode,
-                      file->f_flags, lsm, (__u64)(unsigned long)file,
-                      &fd->fd_mdshandle, &req);
+                      file->f_flags, lsm, &fd->fd_mdshandle, &req);
         fd->fd_req = req;
         ptlrpc_req_finished(req);
         if (rc)
                 GOTO(out_req, -abs(rc));
-        if (!fd->fd_mdshandle) {
-                CERROR("mdc_open didn't assign fd_mdshandle\n");
+        if (!fd->fd_mdshandle.addr ||
+            fd->fd_mdshandle.addr == (__u64)(unsigned long)file) {
+                CERROR("hmm, mdc_open didn't assign fd_mdshandle?\n");
                 /* XXX handle this how, abort or is it non-fatal? */
         }
 
@@ -108,6 +111,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         oa->o_mode = S_IFREG;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
         rc = obd_open(ll_i2obdconn(inode), oa, lsm);
+        obd_oa2handle(&fd->fd_osthandle, oa);
 
         if (rc)
                 GOTO(out_mdc, rc = -abs(rc));
@@ -121,7 +125,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         return 0;
 out_mdc:
         mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
-                  S_IFREG, fd->fd_mdshandle, &req);
+                  S_IFREG, &fd->fd_mdshandle, &req);
 out_req:
         ptlrpc_free_req(req);
 //out_fd:
@@ -240,11 +244,11 @@ static int ll_file_release(struct inode *inode, struct file *file)
         struct ll_inode_info *lli = ll_i2info(inode);
 
         ENTRY;
-        
+
         CHECK_MOUNT_EPOCH(inode);
 
         fd = (struct ll_file_data *)file->private_data;
-        if (!fd || !fd->fd_mdshandle) {
+        if (!fd) {
                 LBUG();
                 GOTO(out, rc = -EINVAL);
         }
@@ -253,6 +257,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         oa.o_id = lli->lli_smd->lsm_object_id;
         oa.o_mode = S_IFREG;
         oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLID;
+        obd_handle2oa(&oa, &fd->fd_osthandle);
         rc = obd_close(ll_i2obdconn(inode), &oa, lli->lli_smd);
         if (rc)
                 GOTO(out_fd, abs(rc));
@@ -298,7 +303,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
 
         rc = mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
-                       S_IFREG, fd->fd_mdshandle, &req);
+                       S_IFREG, &fd->fd_mdshandle, &req);
         ptlrpc_req_finished(req);
         if (rc) {
                 if (rc > 0)
@@ -477,6 +482,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 oa->o_mode = inode->i_mode;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
                         OBD_MD_FLBLOCKS;
+                obd_handle2oa(oa, &fd->fd_osthandle);
                 retval = obd_getattr(&sbi->ll_osc_conn, oa, lsm);
                 if (retval) {
                         obdo_free(oa);

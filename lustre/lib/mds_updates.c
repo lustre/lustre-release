@@ -83,8 +83,8 @@ static void mds_pack_body(struct mds_body *b)
 
         mds_pack_fid(&b->fid1);
         mds_pack_fid(&b->fid2);
-        b->extra = HTON__u64(b->extra);
         b->size = HTON__u64(b->size);
+        b->ino = HTON__u32(b->ino);
         b->valid = HTON__u32(b->valid);
         b->mode = HTON__u32(b->mode);
         b->uid = HTON__u32(b->uid);
@@ -93,9 +93,7 @@ static void mds_pack_body(struct mds_body *b)
         b->ctime = HTON__u32(b->ctime);
         b->atime = HTON__u32(b->atime);
         b->flags = HTON__u32(b->flags);
-        b->major = HTON__u32(b->major);
-        b->minor = HTON__u32(b->minor);
-        b->ino = HTON__u32(b->ino);
+        b->rdev = HTON__u32(b->rdev);
         b->nlink = HTON__u32(b->nlink);
         b->generation = HTON__u32(b->generation);
 }
@@ -265,13 +263,13 @@ void mds_unpack_body(struct mds_body *b)
         if (b == NULL)
                 LBUG();
 
-        b->fsuid = NTOH__u32(b->fsuid);
-        b->fsgid = NTOH__u32(b->fsgid);
         mds_unpack_fid(&b->fid1);
         mds_unpack_fid(&b->fid2);
-        b->extra = NTOH__u64(b->extra);
         b->size = NTOH__u64(b->size);
         b->valid = NTOH__u32(b->valid);
+        b->fsuid = NTOH__u32(b->fsuid);
+        b->fsgid = NTOH__u32(b->fsgid);
+        b->ino = NTOH__u32(b->ino);
         b->mode = NTOH__u32(b->mode);
         b->uid = NTOH__u32(b->uid);
         b->gid = NTOH__u32(b->gid);
@@ -279,9 +277,7 @@ void mds_unpack_body(struct mds_body *b)
         b->ctime = NTOH__u32(b->ctime);
         b->atime = NTOH__u32(b->atime);
         b->flags = NTOH__u32(b->flags);
-        b->major = NTOH__u32(b->major);
-        b->minor = NTOH__u32(b->minor);
-        b->ino = NTOH__u32(b->ino);
+        b->rdev = NTOH__u32(b->rdev);
         b->nlink = NTOH__u32(b->nlink);
         b->generation = NTOH__u32(b->generation);
 }

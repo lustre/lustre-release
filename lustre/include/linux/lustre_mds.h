@@ -90,16 +90,17 @@ struct mds_client_data {
 /* In-memory access to client data from MDS struct */
 struct mds_export_data {
         struct list_head        med_open_head;
+        spinlock_t              med_open_lock;
         struct mds_client_data *med_mcd;
         int                     med_off;
 };
 
 /* file data for open files on MDS */
 struct mds_file_data {
-        struct list_head  mfd_list;
-        struct file      *mfd_file;
-        __u64             mfd_clientfd;
-        __u32             mfd_clientcookie;
+        struct list_head     mfd_list;
+        struct lustre_handle mfd_clienthandle;
+        __u64                mfd_servercookie;
+        struct file         *mfd_file;
 };
 
 /* mds/mds_reint.c  */
@@ -165,10 +166,10 @@ int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs,
 int mdc_setattr(struct lustre_handle *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
-             struct lov_stripe_md *, __u64 cookie,  __u64 *fh,
+             struct lov_stripe_md *, struct lustre_handle *fh,
              struct ptlrpc_request **);
-int mdc_close(struct lustre_handle *conn,
-              obd_id ino, int type, __u64 fh,  struct ptlrpc_request **req);
+int mdc_close(struct lustre_handle *conn, obd_id ino, int type,
+              struct lustre_handle *fh,  struct ptlrpc_request **req);
 int mdc_readpage(struct lustre_handle *conn, obd_id ino,
                  int type, __u64 offset, char *addr, struct ptlrpc_request **);
 int mdc_create(struct lustre_handle *conn,

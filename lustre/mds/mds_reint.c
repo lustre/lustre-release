@@ -440,7 +440,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
-#warning FIXME: if mds_name2locked_dentry decrefs this lock, we must not
+#warning "FIXME: if mds_name2locked_dentry decrefs this lock, we must not"
         memcpy(&child_lockh, &lockh, sizeof(child_lockh));
         dchild = mds_name2locked_dentry(obd, de, NULL, name, namelen,
                                         LCK_EX, &child_lockh, lock_mode);

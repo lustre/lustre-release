@@ -64,7 +64,7 @@ extern struct obd_type *class_nm_to_type(char *nm);
 #ifdef LPROCFS_EXISTS
 
 /*
- * Common SNMP namespace         
+ * Common SNMP namespace
  */
 
 char *snmp_dir_nm[] = {
@@ -725,8 +725,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                 }
                                 memcpy(obd->obd_uuid, data->ioc_inlbuf3, len);
                         }
+
                         /* Get the LprocFS namespace for this device class */
-                        
                         l_idx = lprocfs_get_nm(data->ioc_inlbuf1, obd_nm);
                         if (l_idx < 0) {
                                 CERROR("Non-existent device class"
@@ -735,7 +735,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                 lprocfs_reg_dev(obd, obd_nm[l_idx].obd_names,
                                                 obd_nm[l_idx].cntr_blk_sz);
                         }
-                        
+
                         CDEBUG(D_IOCTL, "MOD_INC_USE for attach: count = %d\n",
                                atomic_read(&(THIS_MODULE)->uc.usecount));
                         MOD_INC_USE_COUNT;
@@ -761,11 +761,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err=-EBUSY);
                 }
 
-                
                 if (lprocfs_dereg_dev(obd) != LPROCFS_SUCCESS) {
                         CERROR("Could not remove /proc entry\n");
                 }
-                
+
                 if (obd->obd_name) {
                         OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                         obd->obd_name = NULL;

@@ -443,7 +443,7 @@ void ptlrpc_restart_req(struct ptlrpc_request *req)
 static int expired_request(void *data)
 {
         struct ptlrpc_request *req = data;
-        
+
         ENTRY;
         CERROR("req xid "LPD64" op %d: timeout on conn to %s:%d\n",
                (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
@@ -666,7 +666,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         }
 
         if (req->rq_replay_cb)
-                req->rq_replay_cb(req, req->rq_replay_cb_data);
+                req->rq_replay_cb(req, &req->rq_replay_cb_handle);
 
  out:
         RETURN(rc);

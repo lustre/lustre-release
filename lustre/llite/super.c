@@ -452,7 +452,7 @@ void ll_update_inode(struct inode *inode, struct mds_body *body)
         if (body->valid & OBD_MD_FLGENER)
                 inode->i_generation = body->generation;
         if (body->valid & OBD_MD_FLRDEV)
-                inode->i_rdev = body->extra;
+                inode->i_rdev = body->rdev;
         if (body->valid & OBD_MD_FLSIZE)
                 inode->i_size = body->size;
 }
