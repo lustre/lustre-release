@@ -93,7 +93,7 @@ new_fs () {
 	fi
 
 	# Enable hash-indexed directories for extN filesystems
-	[ "$1" = "extN" ] && echo "feature FEATURE_C5" | debugfs -w $2
+#	[ "$1" = "extN" ] && echo "feature FEATURE_C5" | debugfs -w $2
 }
 
 # Set up to use an existing filesystem.  We take the same parameters as

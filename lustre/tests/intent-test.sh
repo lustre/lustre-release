@@ -114,15 +114,12 @@ ls /mnt/lustre
 umount /mnt/lustre
 mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre
 
-<<<<<<< intent-test.sh
 cat /mnt/lustre/iotest
-=======
 echo "Testing truncation..."
 echo foo > /mnt/lustre/iotest
 echo bar >> /mnt/lustre/iotest
 cat  /mnt/lustre/iotest
-echo "trucating to 3 bytes now..."
+echo "trucating to 4 bytes now..."
 ./truncate /mnt/lustre/iotest 4
 cat  /mnt/lustre/iotest
 
->>>>>>> 1.5
