@@ -220,7 +220,7 @@ static int ll_lock_callback(struct lustre_handle *lockh,
         invalidate_inode_pages(inode);
         up(&inode->i_sem);
 
-        if (ldlm_cli_cancel(lockh, NULL) < 0)
+        if (ldlm_cli_cancel(lockh) < 0)
                 LBUG();
         RETURN(0);
 }

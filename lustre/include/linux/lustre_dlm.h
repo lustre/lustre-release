@@ -305,11 +305,26 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl,
                      void *data,
                      __u32 data_len,
                      struct lustre_handle *lockh);
+int ldlm_match_or_enqueue(struct ptlrpc_client *cl,
+                          struct ptlrpc_connection *conn,
+                          struct lustre_handle *connh, 
+                          struct ptlrpc_request *req,
+                          struct ldlm_namespace *ns,
+                          struct lustre_handle *parent_lock_handle,
+                          __u64 *res_id,
+                          __u32 type,
+                          void *cookie, int cookielen,
+                          ldlm_mode_t mode,
+                          int *flags,
+                          ldlm_lock_callback callback,
+                          void *data,
+                          __u32 data_len,
+                          struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
-int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *, struct lustre_handle *connh, 
-                     int new_mode, int *flags);
-int ldlm_cli_cancel(struct lustre_handle *lockh, struct lustre_handle *connh);
+int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *,
+                     struct lustre_handle *connh, int new_mode, int *flags);
+int ldlm_cli_cancel(struct lustre_handle *lockh);
 
 #endif /* __KERNEL__ */
 

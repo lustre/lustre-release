@@ -94,28 +94,58 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
         return rc;
 }
 
+/* In the write-back case, the client holds a lock on a subtree.
+ * In the intent case, the client holds a lock on the child inode.
+ * In the pathname case, the client (may) hold a lock on the child inode. */
 static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                              struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct dentry *de;
         void *handle;
-        int rc = 0;
-        int err;
+        struct lustre_handle child_lockh;
+        int rc = 0, err;
 
-        de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_SETATTR)) {
-                GOTO(out_setattr, rc = -ESTALE);
+        if (req->rq_reqmsg->bufcount > offset + 1) {
+                struct dentry *dir;
+                struct lustre_handle dir_lockh;
+                char *name;
+                int namelen;
+                /* a name was supplied by the client; fid1 is the directory */
+
+                name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+                namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
+                dir = mds_fid2locked_dentry(mds, rec->ur_fid1, NULL, LCK_PR,
+                                            &dir_lockh);
+                if (!dir || IS_ERR(dir)) {
+                        l_dput(dir);
+                        LBUG();
+                        GOTO(out_setattr, rc = -ESTALE);
+                }
+
+                de = mds_name2locked_dentry(mds, dir, NULL, name, namelen,
+                                            0, &child_lockh);
+                l_dput(dir);
+                if (!de || IS_ERR(de)) {
+                        LBUG();
+                        GOTO(out_setattr_de, rc = -ESTALE);
+                }
+        } else {
+                de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
+                if (!de || IS_ERR(de)) {
+                        LBUG();
+                        GOTO(out_setattr_de, rc = -ESTALE);
+                }
         }
-
         CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
                        de->d_inode->i_sb->s_dev);
 
+        lock_kernel();
         handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
         if (!handle)
-                GOTO(out_setattr_de, rc = PTR_ERR(handle));
+                GOTO(out_unlock, rc = PTR_ERR(handle));
         rc = mds_fs_setattr(mds, de, handle, &rec->ur_iattr);
 
         if (!rc)
@@ -127,10 +157,13 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 if (!rc)
                         rc = err;
         }
+
         EXIT;
-out_setattr_de:
+ out_unlock:
+        unlock_kernel();
+ out_setattr_de:
         l_dput(de);
-out_setattr:
+ out_setattr:
         req->rq_status = rc;
         return(0);
 }
@@ -533,7 +566,7 @@ out_unlink_de:
 
         if (!rc) { 
                 ldlm_lock_decref(&lockh, LCK_EX);
-                rc = ldlm_cli_cancel(&lockh, NULL);
+                rc = ldlm_cli_cancel(&lockh);
                 if (rc < 0)
                         CERROR("failed to cancel child inode lock ino "
                                "%Ld: %d\n", res_id[0], rc);
@@ -737,7 +770,7 @@ out_rename_deold:
 
         if (!rc) { 
                 ldlm_lock_decref(&oldhandle, LCK_EX);
-                rc = ldlm_cli_cancel(&oldhandle, NULL);
+                rc = ldlm_cli_cancel(&oldhandle);
                 if (rc < 0)
                         CERROR("failed to cancel child inode lock ino "
                                "%Ld: %d\n", res_id[0], rc);

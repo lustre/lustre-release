@@ -29,10 +29,11 @@
 
 #ifndef __KERNEL__
 # include <string.h>
+#else
+# include <asm/semaphore.h>
 #endif
 
 #include <linux/portals_lib.h>
-#include <asm/semaphore.h>
 #include <linux/lustre_idl.h>
 
 #ifdef __KERNEL__

@@ -7,6 +7,16 @@ sub usage () {
     exit;
 }
 
+sub unused() {
+    my $tmp = `./mcreate $path`;
+    if ($tmp) {
+        $tmp =~ /.*error: (.*)\n/;
+        print "Created  $path: $1\n";
+    } else {
+        print "Created  $path: Success\n";
+    }
+}
+
 my $mtpt = shift || usage();
 my $mount_count = shift || usage();
 my $i = shift || usage();
@@ -16,13 +26,9 @@ while ($i--) {
     $which = int(rand() * $mount_count) + 1;
     $d = int(rand() * $files);
     $path = "$mtpt$which/$d";
-    my $tmp = `./mcreate $path`;
-    if ($tmp) {
-        $tmp =~ /.*error: (.*)\n/;
-        print "Created  $path: $1\n";
-    } else {
-        print "Created  $path: Success\n";
-    }
+    open(FH, ">$path") || die "open($PATH): $!";
+    print "Opened   $path: Success\n";
+    close(FH) || die;
 
     $which = int(rand() * $mount_count) + 1;
     $d = int(rand() * $files);

@@ -131,7 +131,15 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 
 /* mds/handler.c */
-struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
+struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
+                                      struct vfsmount **mnt, char *name,
+                                      int namelen, int lock_mode,
+                                      struct lustre_handle *lockh);
+struct dentry *mds_fid2locked_dentry(struct mds_obd *mds, struct ll_fid *fid,
+                                     struct vfsmount **mnt, int lock_mode,
+                                     struct lustre_handle *lockh);
+struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
+                              struct vfsmount **mnt);
 int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                       void *data, int data_len, struct ptlrpc_request **req);
 int mds_reint(int offset, struct ptlrpc_request *req);

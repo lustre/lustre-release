@@ -150,7 +150,7 @@ static int mdc_lock_callback(struct lustre_handle *lockh,
                 invalidate_inode_pages(inode);
         }
 
-        rc = ldlm_cli_cancel(lockh, NULL);
+        rc = ldlm_cli_cancel(lockh);
         if (rc < 0) {
                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 LBUG();
@@ -178,9 +178,6 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         switch (it->it_op) { 
         case IT_MKDIR:
                 it->it_mode = (it->it_mode | S_IFDIR) & ~current->fs->umask; 
-                break;
-        case IT_SETATTR:
-                it->it_op = IT_GETATTR;
                 break;
         case (IT_CREAT|IT_OPEN):
         case IT_CREAT:
@@ -275,7 +272,8 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 size[0] = sizeof(struct ldlm_reply);
                 req->rq_replen = lustre_msg_size(1, size);
         } else if (it->it_op == IT_GETATTR || it->it_op == IT_RENAME ||
-                   it->it_op == IT_OPEN) {
+                   it->it_op == IT_OPEN || it->it_op == IT_SETATTR ||
+                   it->it_op == IT_LOOKUP) {
                 size[2] = sizeof(struct mds_body);
                 size[3] = de->d_name.len + 1;
 
@@ -297,27 +295,6 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 size[1] = sizeof(struct mds_body);
                 size[2] = sizeof(struct obdo);
                 req->rq_replen = lustre_msg_size(3, size);
-        } else if (it->it_op == IT_SETATTR) {
-                size[2] = sizeof(struct mds_rec_setattr);
-                size[3] = de->d_name.len + 1;
-
-                req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                       &mdc->mdc_connh, LDLM_ENQUEUE, 4, size,
-                                       NULL);
-                if (!req)
-                        RETURN(-ENOMEM);
-
-                lit = lustre_msg_buf(req->rq_reqmsg, 1);
-                lit->opc = NTOH__u64((__u64)it->it_op);
-                
-                if (!it->it_iattr) 
-                        LBUG();
-
-                mds_setattr_pack(req, 2, dir, it->it_iattr,
-                                de->d_name.name, de->d_name.len);
-                size[0] = sizeof(struct ldlm_reply);
-                size[1] = sizeof(struct mds_body);
-                req->rq_replen = lustre_msg_size(2, size);
         } else if (it->it_op == IT_READDIR) {
                 req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
                                 &mdc->mdc_connh, LDLM_ENQUEUE, 1, size, NULL);

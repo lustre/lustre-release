@@ -98,22 +98,23 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
             struct lookup_intent *it, struct lustre_handle *lockh)
 {
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        int err;
+        int err, lock_mode;
 
         if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_SETATTR |
-                          IT_MKNOD)) )
-                err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
-                                  it, LCK_PW, dir, dentry, lockh, 0, NULL, 0,
-                                  dir, sizeof(*dir));
+                          IT_MKNOD)))
+                lock_mode = LCK_PW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
                               IT_RMDIR | IT_RENAME | IT_RENAME2))
-                err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
-                                  it, LCK_PR, dir, dentry, lockh, 0, NULL, 0,
-                                  dir, sizeof(*dir));
+                lock_mode = LCK_PR;
+        else if (it->it_op & IT_LOOKUP)
+                lock_mode = LCK_CR;
         else {
                 LBUG();
                 RETURN(-1);
         }
+
+        err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, it, lock_mode, dir,
+                          dentry, lockh, 0, NULL, 0, dir, sizeof(*dir));
 
         RETURN(err);
 }
@@ -136,13 +137,14 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         struct ll_inode_md md;
         struct lustre_handle lockh;
         int err, type, offset;
+        struct lookup_intent lookup_it = { IT_LOOKUP };
         obd_id ino;
 
         ENTRY;
 
         if (it == NULL) {
-                LBUG();
-                RETURN(NULL);
+                it = &lookup_it;
+                dentry->d_it = it;
         }
 
         CDEBUG(D_INFO, "name: %*s, intent op: %d\n", dentry->d_name.len,
@@ -160,23 +162,13 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
 
         if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) &&
-            it->it_disposition && !it->it_status) {
-#if 0
-                if (it->it_data)
-                        CERROR("leaking request %p\n", it->it_data);
-#endif
+            it->it_disposition && !it->it_status)
                 GOTO(negative, NULL);
-        }
 
-        if ((it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK | IT_RMDIR)) &&
-            it->it_disposition && it->it_status) {
-#if 0
-                if (it->it_data)
-                        CERROR("request: %p, status: %d\n", it->it_data,
-                               it->it_status);
-#endif
+        if ((it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK | IT_RMDIR |
+                          IT_SETATTR | IT_LOOKUP)) && it->it_disposition &&
+            it->it_status)
                 GOTO(negative, NULL);
-        }
 
         request = (struct ptlrpc_request *)it->it_data;
         if (!it->it_disposition) {
@@ -215,7 +207,9 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 inode->i_mode = S_IFDIR;
                 inode->i_nlink = 1;
                 GOTO(out_req, 0);
-        } else if (it->it_op != IT_RENAME2) {
+        } else if (it->it_op == IT_RENAME2) {
+                LBUG();
+        } else {
                 struct mds_body *body;
 
                 offset = 1;
@@ -251,6 +245,9 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
  negative:
         dentry->d_op = &ll_d_ops;
         d_add(dentry, inode);
+        if (it->it_op == IT_LOOKUP)
+                ll_intent_release(dentry);
+
         return NULL;
 }
 

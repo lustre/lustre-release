@@ -145,6 +145,37 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         return rc;
 }
 
+int ldlm_match_or_enqueue(struct ptlrpc_client *cl,
+                          struct ptlrpc_connection *conn,
+                          struct lustre_handle *connh, 
+                          struct ptlrpc_request *req,
+                          struct ldlm_namespace *ns,
+                          struct lustre_handle *parent_lock_handle,
+                          __u64 *res_id,
+                          __u32 type,
+                          void *cookie, int cookielen,
+                          ldlm_mode_t mode,
+                          int *flags,
+                          ldlm_lock_callback callback,
+                          void *data,
+                          __u32 data_len,
+                          struct lustre_handle *lockh)
+{
+        int rc;
+        ENTRY;
+        rc = ldlm_lock_match(ns, res_id, type, cookie, cookielen, mode, lockh);
+        if (rc == 0) {
+                rc = ldlm_cli_enqueue(cl, conn, connh, req, ns,
+                                      parent_lock_handle, res_id, type, cookie,
+                                      cookielen, mode, flags, callback, data,
+                                      data_len, lockh);
+                if (rc != ELDLM_OK)
+                        CERROR("ldlm_cli_enqueue: err: %d\n", rc);
+                RETURN(rc);
+        } else
+                RETURN(0);
+}
+
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                     void *data, __u32 data_len)
 {
@@ -254,8 +285,7 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
         return rc;
 }
 
-int ldlm_cli_cancel(struct lustre_handle *lockh, 
-                    struct lustre_handle *connh)
+int ldlm_cli_cancel(struct lustre_handle *lockh)
 {
         struct ptlrpc_request *req;
         struct ldlm_lock *lock;

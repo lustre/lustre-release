@@ -127,7 +127,8 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
             struct lookup_intent *it, struct lustre_handle *lockh);
 int ll_unlock(__u32 mode, struct lustre_handle *lockh);
 
-
+/* dcache.c */
+void ll_intent_release(struct dentry *de);
 
 /* dir.c */
 extern struct file_operations ll_dir_operations;

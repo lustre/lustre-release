@@ -91,6 +91,71 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         return rc;
 }
 
+/* 'dir' is a inode for which a lock has already been taken */
+struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
+                                      struct vfsmount **mnt, char *name,
+                                      int namelen, int lock_mode,
+                                      struct lustre_handle *lockh)
+{
+        struct dentry *dchild;
+        int flags, rc;
+        __u64 res_id[3] = {0};
+        ENTRY;
+
+        down(&dir->d_inode->i_sem);
+        dchild = lookup_one_len(name, dir, namelen);
+        if (IS_ERR(dchild)) {
+                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
+                up(&dir->d_inode->i_sem);
+                LBUG();
+        }
+        up(&dir->d_inode->i_sem);
+
+        if (lock_mode == 0)
+                RETURN(dchild);
+
+        res_id[0] = dchild->d_inode->i_ino;
+        rc = ldlm_match_or_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                   (struct lustre_handle *)&mds->mds_connh,
+                                   NULL, mds->mds_local_namespace, NULL,
+                                   res_id, LDLM_PLAIN, NULL, 0, lock_mode,
+                                   &flags, (void *)mds_lock_callback, NULL,
+                                   0, lockh);
+        if (rc != ELDLM_OK) {
+                l_dput(dchild);
+                RETURN(NULL);
+        }
+
+        RETURN(dchild);
+}
+
+struct dentry *mds_fid2locked_dentry(struct mds_obd *mds, struct ll_fid *fid,
+                                     struct vfsmount **mnt, int lock_mode,
+                                     struct lustre_handle *lockh)
+{
+        struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
+        int flags, rc;
+        __u64 res_id[3] = {0};
+        ENTRY;
+
+        if (IS_ERR(de))
+                RETURN(de);
+
+        res_id[0] = de->d_inode->i_ino;
+        rc = ldlm_match_or_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                   (struct lustre_handle *)&mds->mds_connh,
+                                   NULL, mds->mds_local_namespace, NULL,
+                                   res_id, LDLM_PLAIN, NULL, 0, lock_mode,
+                                   &flags, (void *)mds_lock_callback, NULL,
+                                   0, lockh);
+        if (rc != ELDLM_OK) {
+                l_dput(de);
+                retval = NULL;
+        }
+
+        RETURN(retval);
+}
+
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt)
 {
@@ -287,7 +352,7 @@ int mds_lock_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                 RETURN(0);
         }
 
-        if (ldlm_cli_cancel(lockh, NULL) < 0)
+        if (ldlm_cli_cancel(lockh) < 0)
                 LBUG();
         RETURN(0);
 }
@@ -375,9 +440,8 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                 }
                 /* now a normal case for intent locking */
                 rc = 0;
-        } else {
+        } else
                 rc = -ENOENT;
-        }
 
         EXIT;
 out_create_dchild:

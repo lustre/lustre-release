@@ -391,6 +391,20 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(out_dec, rc = -ENOMEM);
         }
 
+        if (mds_reint_p == NULL)
+                mds_reint_p = inter_module_get_request("mds_reint", "mds");
+        if (IS_ERR(mds_reint_p)) {
+                CERROR("MDSINTENT locks require the MDS module.\n");
+                GOTO(out_dec, rc = -EINVAL);
+        }
+        if (mds_getattr_name_p == NULL)
+                mds_getattr_name_p = inter_module_get_request
+                        ("mds_getattr_name", "mds");
+        if (IS_ERR(mds_getattr_name_p)) {
+                CERROR("MDSINTENT locks require the MDS module.\n");
+                GOTO(out_dec, rc = -EINVAL);
+        }
+
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 rc = ptlrpc_start_thread(obddev, ldlm->ldlm_service,
                                          "lustre_dlm");
@@ -407,6 +421,10 @@ out_thread:
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
         ptlrpc_unregister_service(ldlm->ldlm_service);
 out_dec:
+        if (mds_reint_p != NULL)
+                inter_module_put("mds_reint");
+        if (mds_getattr_name_p != NULL)
+                inter_module_put("mds_getattr_name");
         MOD_DEC_USE_COUNT;
         return rc;
 }
@@ -478,6 +496,7 @@ EXPORT_SYMBOL(ldlm_lock_decref);
 EXPORT_SYMBOL(ldlm_cli_convert);
 EXPORT_SYMBOL(ldlm_cli_enqueue);
 EXPORT_SYMBOL(ldlm_cli_cancel);
+EXPORT_SYMBOL(ldlm_match_or_enqueue);
 EXPORT_SYMBOL(ldlm_test);
 EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_namespace_new);

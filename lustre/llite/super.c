@@ -320,8 +320,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
         /* change incore inode */
         ll_attr2inode(inode, attr, do_trunc);
 
-        err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr,
-                          &request);
+        err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr, &request);
         if (err)
                 CERROR("mdc_setattr fails (%d)\n", err);
 

@@ -288,6 +288,8 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_LINK:
                 case IT_OPEN:
                 case IT_RENAME:
+                case IT_SETATTR:
+                case IT_LOOKUP:
                         bufcount = 3;
                         break;
                 case IT_UNLINK:
@@ -317,23 +319,12 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_CREAT:
                 case IT_CREAT|IT_OPEN:
                 case IT_MKDIR:
-                case IT_SETATTR:
                 case IT_SYMLINK:
                 case IT_MKNOD:
                 case IT_LINK:
                 case IT_UNLINK:
                 case IT_RMDIR:
                 case IT_RENAME2:
-                        if (mds_reint_p == NULL)
-                                mds_reint_p =
-                                        inter_module_get_request
-                                        ("mds_reint", "mds");
-                        if (IS_ERR(mds_reint_p)) {
-                                CERROR("MDSINTENT locks require the MDS "
-                                       "module.\n");
-                                LBUG();
-                                RETURN(-EINVAL);
-                        }
                         rc = mds_reint_p(2, req);
                         if (rc || req->rq_status != 0) {
                                 rep->lock_policy_res2 = req->rq_status;
@@ -344,16 +335,8 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_READDIR:
                 case IT_RENAME:
                 case IT_OPEN:
-                        if (mds_getattr_name_p == NULL)
-                                mds_getattr_name_p =
-                                        inter_module_get_request
-                                        ("mds_getattr_name", "mds");
-                        if (IS_ERR(mds_getattr_name_p)) {
-                                CERROR("MDSINTENT locks require the MDS "
-                                       "module.\n");
-                                LBUG();
-                                RETURN(-EINVAL);
-                        }
+                case IT_SETATTR:
+                case IT_LOOKUP:
                         rc = mds_getattr_name_p(2, req);
                         /* FIXME: we need to sit down and decide on who should
                          * set req->rq_status, who should return negative and

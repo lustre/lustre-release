@@ -28,10 +28,16 @@ void ll_intent_release(struct dentry *de)
                 EXIT;
                 return;
         }
-
         if (de->d_it->it_lock_mode) {
                 handle = (struct lustre_handle *)de->d_it->it_lock_handle;
-                ldlm_lock_decref(handle, de->d_it->it_lock_mode);
+                if (de->d_it->it_op == IT_SETATTR) {
+                        int rc;
+                        ldlm_lock_decref(handle, de->d_it->it_lock_mode);
+                        rc = ldlm_cli_cancel(handle);
+                        if (rc < 0)
+                                CERROR("ldlm_cli_cancel: %d\n", rc);
+                } else
+                        ldlm_lock_decref(handle, de->d_it->it_lock_mode);
         }
         de->d_it = NULL;
         EXIT;
