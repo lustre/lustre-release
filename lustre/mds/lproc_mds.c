@@ -22,6 +22,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/lustre_lite.h>
+#include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
 
 int rd_uuid(char* page, char **start, off_t off, int count, int *eof, 
@@ -103,15 +104,12 @@ int rd_kbfree(char* page, char **start, off_t off, int count, int *eof,
         
 }
 
-int rd_fstype(char* page, char **start, off_t off, int count, int *eof, 
+int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
               void *data)
-{               
-        struct obd_device* temp = (struct obd_device*)data;
-        struct mds_obd *mds = &temp->u.mds;
-        int len = 0;
-        len += snprintf(page, count, "%s\n", mds->mds_fstype); 
-        return len;  
- 
+{
+        struct obd_device *obd = (struct obd_device *)data;
+
+        return snprintf(page, count, "%s\n", obd->obd_fsops->fs_type);
 }
 
 int rd_filestotal(char* page, char **start, off_t off, int count, int *eof, 
