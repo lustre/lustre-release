@@ -31,7 +31,7 @@ pass() {
 
 mount | grep $MOUNT || sh llmount.sh
 
-log '== drop ldlm request  ================= test 1'
+log '== drop ldlm request  ======================== test 1'
 echo 0x302 > /proc/sys/lustre/fail_loc
 echo 3 > /proc/sys/lustre/timeout
 touch $DIR/f &
@@ -42,7 +42,7 @@ pass
 $CLEAN
 $START
 
-log '== drop ldlm reply    ================= test 2'
+log '== drop ldlm reply (bug 1139) ================ test 2'
 echo 0x213 > /proc/sys/lustre/fail_loc
 echo 3 > /proc/sys/lustre/timeout
 touch $DIR/f
@@ -50,11 +50,11 @@ pass
 $CLEAN
 $START
 
-log '== drop reply after completion ================= test 3'
+log '== drop reply after completion (bug 1068) ==== test 3'
 touch $DIR/f
 stat $DIR/f
 echo 0x213 > /proc/sys/lustre/fail_loc
-echo 0x5 > /proc/sys/lustre/timeout
+echo 3 > /proc/sys/lustre/timeout
 echo foo >> $DIR/f
 pass
 $CLEAN
