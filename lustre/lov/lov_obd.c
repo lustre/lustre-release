@@ -2079,7 +2079,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                         loi->loi_rss = tmp;
                         // Extend KMS up to the end of this lock, and no further
                         if (tmp > lock->l_policy_data.l_extent.end)
-                                tmp = lock->l_policy_data.l_extent.end;
+                                tmp = lock->l_policy_data.l_extent.end + 1;
                         if (tmp > loi->loi_kms) {
                                 CDEBUG(D_INODE, "lock acquired, setting rss="
                                        LPU64", kms="LPU64"\n", loi->loi_rss,
