@@ -227,36 +227,31 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct obd_uuid remote_uuid;
         struct list_head *p;
         char *str, *tmp;
-        int rc, i, abort_recovery;
+        int rc, abort_recovery;
         ENTRY;
 
         LASSERT_REQSWAB (req, 0);
-        str = lustre_msg_string (req->rq_reqmsg, 0, sizeof (tgtuuid.uuid) - 1);
+        str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
         if (str == NULL) {
                 CERROR("bad target UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
+
         obd_str2uuid (&tgtuuid, str);
-
-        LASSERT_REQSWAB (req, 1);
-        str = lustre_msg_string (req->rq_reqmsg, 1, sizeof (cluuid.uuid) - 1);
-        if (str == NULL) {
-                CERROR("bad client UUID for connect\n");
-                GOTO(out, rc = -EINVAL);
-        }
-        obd_str2uuid (&cluuid, str);
-
-        i = class_uuid2dev(&tgtuuid);
-        if (i == -1) {
-                CERROR("UUID '%s' not found for connect\n", tgtuuid.uuid);
-                GOTO(out, rc = -ENODEV);
-        }
-
-        target = &obd_dev[i];
+        target = class_uuid2obd(&tgtuuid);
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 CERROR("UUID '%s' is not available for connect\n", str);
                 GOTO(out, rc = -ENODEV);
         }
+
+        LASSERT_REQSWAB (req, 1);
+        str = lustre_msg_string(req->rq_reqmsg, 1, sizeof(cluuid) - 1);
+        if (str == NULL) {
+                CERROR("bad client UUID for connect\n");
+                GOTO(out, rc = -EINVAL);
+        }
+
+        obd_str2uuid (&cluuid, str);
 
         /* XXX extract a nettype and format accordingly */
         snprintf(remote_uuid.uuid, sizeof remote_uuid,
@@ -479,8 +474,7 @@ static void reset_recovery_timer(struct obd_device *obd)
 
         if (!recovering)
                 return;
-        CDEBUG(D_ERROR, "timer will expire in %ld seconds\n",
-               OBD_RECOVERY_TIMEOUT / HZ);
+        CERROR("timer will expire in %ld seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
 }
 
@@ -703,8 +697,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         if (recovery_done) {
                 struct list_head *tmp, *n;
                 ldlm_reprocess_all_ns(req->rq_export->exp_obd->obd_namespace);
-                CDEBUG(D_ERROR,
-                       "%s: all clients recovered, sending delayed replies\n",
+                CERROR("%s: all clients recovered, sending delayed replies\n",
                        obd->obd_name);
                 obd->obd_recovering = 0;
                 list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
