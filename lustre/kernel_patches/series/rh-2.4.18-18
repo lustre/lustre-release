@@ -7,5 +7,14 @@ uml_no_panic.patch
 vfs_intent-2.4.18-18.patch
 uml_compile_fixes.patch
 invalidate_show.patch
-iod-rmap-exports.patch
 export-truncate.patch
+iod-rmap-exports.patch
+htree-ext3-2.4.18.patch
+linux-2.4.18ea-0.8.26.patch
+ext3-2.4-ino_t.patch
+ext3-2.4.18-ino_sb_macro.patch
+extN-misc-fixup.patch
+extN-noread.patch
+extN-wantedi.patch
+extN-san.patch
+extN-2.4.18-ino_sb_fixup.patch

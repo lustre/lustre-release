@@ -1,14 +1,16 @@
- drivers/block/blkpg.c  |   38 ++++++++++++++++++++++++++++++++++++++
- drivers/block/loop.c   |    5 +++++
- drivers/ide/ide-disk.c |    6 ++++++
- 3 files changed, 49 insertions(+)
+ drivers/block/blkpg.c  |   39 +++++++++++++++++++++++++++++++++++++++
+ drivers/block/loop.c   |    3 +++
+ drivers/ide/ide-disk.c |    4 ++++
+ 3 files changed, 46 insertions(+)
 
---- linux-2.4.19-hp2_pnnl2/drivers/block/blkpg.c~dev_read_only_hp	Sun Jan 19 18:51:12 2003
-+++ linux-2.4.19-hp2_pnnl2-root/drivers/block/blkpg.c	Sun Jan 19 18:52:28 2003
-@@ -310,6 +310,42 @@ int blk_ioctl(kdev_t dev, unsigned int c
+--- linux-2.4.20/drivers/block/blkpg.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
++++ linux-2.4.20-braam/drivers/block/blkpg.c	2003-04-09 15:37:02.000000000 -0600
+@@ -296,3 +296,42 @@ int blk_ioctl(kdev_t dev, unsigned int c
+ }
  
  EXPORT_SYMBOL(blk_ioctl);
- 
++
++  
 +
 +#define NUM_DEV_NO_WRITE 16
 +static int dev_no_write[NUM_DEV_NO_WRITE];
@@ -45,11 +47,9 @@
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
 +
- /**
-  * get_last_sector()
-  *  
---- linux-2.4.19-hp2_pnnl2/drivers/block/loop.c~dev_read_only_hp	Sun Jan 19 18:51:12 2003
-+++ linux-2.4.19-hp2_pnnl2-root/drivers/block/loop.c	Sun Jan 19 18:51:12 2003
++
+--- linux-2.4.20/drivers/block/loop.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
++++ linux-2.4.20-braam/drivers/block/loop.c	2003-04-09 15:37:02.000000000 -0600
 @@ -474,6 +474,9 @@ static int loop_make_request(request_que
  	spin_unlock_irq(&lo->lo_lock);
  
@@ -60,9 +60,9 @@
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
---- linux-2.4.19-hp2_pnnl2/drivers/ide/ide-disk.c~dev_read_only_hp	Sun Jan 19 18:51:12 2003
-+++ linux-2.4.19-hp2_pnnl2-root/drivers/ide/ide-disk.c	Sun Jan 19 18:51:12 2003
-@@ -551,6 +551,10 @@ static ide_startstop_t lba_48_rw_disk (i
+--- linux-2.4.20/drivers/ide/ide-disk.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
++++ linux-2.4.20-braam/drivers/ide/ide-disk.c	2003-04-09 15:37:02.000000000 -0600
+@@ -558,6 +558,10 @@ static ide_startstop_t lba_48_rw_disk (i
   */
  static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
  {
