@@ -48,11 +48,11 @@ esac
 
 cvs_cmd ()
 {
-    local dir="$1"
-    local module="$2"
-    local tag="$3"
-    local cotag=""
-    local update=""
+    dir="$1"
+    module="$2"
+    tag="$3"
+    cotag=""
+    update=""
 
     if [ "$tag" = "HEAD" ] ; then
 	cotag=""
