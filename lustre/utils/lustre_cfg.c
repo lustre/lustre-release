@@ -146,6 +146,13 @@ int jt_lcfg_setup(int argc, char **argv)
         struct lustre_cfg lcfg;
         int rc;
 
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
+
         LCFG_INIT(lcfg, LCFG_SETUP, lcfg_devname);
 
         if (argc > 5)
@@ -181,6 +188,13 @@ int jt_obd_detach(int argc, char **argv)
         struct lustre_cfg lcfg;
         int rc;
 
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
+
         LCFG_INIT(lcfg, LCFG_DETACH, lcfg_devname);
 
         if (argc != 1)
@@ -202,6 +216,13 @@ int jt_obd_cleanup(int argc, char **argv)
         char flags[3];
         int flag_cnt = 0, n;
         int rc;
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
 
         LCFG_INIT(lcfg, LCFG_CLEANUP, lcfg_devname);
 
