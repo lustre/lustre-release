@@ -670,5 +670,34 @@ test_17() {
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
 
+test_18() {
+        [ -f $MDSDEV ] && echo "remove $MDSDEV" && rm -f $MDSDEV
+        echo "mount mds with large journal..."
+        OLDMDSSIZE=$MDSSIZE
+        MDSSIZE=2000000
+        gen_config
+                                                                                                                             
+        echo "mount lustre system..."
+        start_ost
+        start_mds
+        mount_client $MOUNT
+        check_mount || return 41
+                                                                                                                             
+        echo "check journal size..."
+        FOUNDJOURNALSIZE=`debugfs -R "stat <8>" $MDSDEV | awk '/Size: / { print $6; exit;}'`
+        if [ $FOUNDJOURNALSIZE = "79691776" ]; then
+                echo "Success:lconf creates large journals"
+        else
+                echo "Error:lconf not create large journals correctly"
+                echo "expected journal size: 79691776(76M), found journal size: $FOUNDJOURNALSIZE"
+                return 1
+        fi
+                                                                                                                             
+        cleanup || return $?
+                                                                                                                             
+        MDSSIZE=$OLDMDSSIZE
+        gen_config
+}
+run_test 18 "check lconf creates large journals"
 
 equals_msg "Done"
