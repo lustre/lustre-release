@@ -561,6 +561,7 @@ check_llogd_body(void)
         CHECK_MEMBER(llogd_body, lgd_llh_flags);
         CHECK_MEMBER(llogd_body, lgd_index);
         CHECK_MEMBER(llogd_body, lgd_saved_index);
+        CHECK_MEMBER(llogd_body, lgd_len);
         CHECK_MEMBER(llogd_body, lgd_cur_offset);
 
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_CREATE);

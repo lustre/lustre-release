@@ -675,6 +675,8 @@ void lustre_assert_wire_constants(void)
         LASSERT((int)sizeof(((struct llogd_body *)0)->lgd_index) == 4);
         LASSERT(offsetof(struct llogd_body, lgd_saved_index) == 32);
         LASSERT((int)sizeof(((struct llogd_body *)0)->lgd_saved_index) == 4);
+        LASSERT(offsetof(struct llogd_body, lgd_len) == 36);
+        LASSERT((int)sizeof(((struct llogd_body *)0)->lgd_len) == 4);
         LASSERT(offsetof(struct llogd_body, lgd_cur_offset) == 40);
         LASSERT((int)sizeof(((struct llogd_body *)0)->lgd_cur_offset) == 8);
         LASSERT(LLOG_ORIGIN_HANDLE_CREATE == 501);
