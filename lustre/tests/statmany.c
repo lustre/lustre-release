@@ -24,6 +24,8 @@ int main(int argc, char ** argv)
                 exit(1);
         }
 
+        srand(time(0));
+
         count = strtoul(argv[2], NULL, 0);
         iter = strtoul(argv[3], NULL, 0);
 
