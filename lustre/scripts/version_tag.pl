@@ -59,6 +59,9 @@ sub get_latest_mtime()
             $cur_dir =~ s/\/CVS\/Entries$//;
             my @statbuf = stat("$cur_dir/$file");
             my $mtime = $statbuf[9];
+            if (!defined($mtime)) {
+                next;
+            }
             my $local_date = gmtime($mtime);
             if ($local_date ne $date &&
                 $file ne "lustre.spec.in") {
