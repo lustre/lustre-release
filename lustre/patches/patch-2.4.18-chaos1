@@ -1,5 +1,5 @@
 --- linux-2.4.18-chaos2-pristine/drivers/quadrics/elan3comms/epcomms.c	Fri Jun 14 09:32:47 2002
-+++ linux-2.4.18-chaos2/drivers/quadrics/elan3comms/epcomms.c	Sat Jun 15 09:42:32 2002
++++ linux-2.4.18-chaos2/drivers/quadrics/elan3comms/epcomms.c	Sat Jun 15 22:26:04 2002
 @@ -2249,7 +2249,7 @@
  	if (EP_EVENT_FIRING (edev, txdElan + offsetof (EP_TXD_ELAN, DataEvent), txd->DataCookie, txdMain->DataEvent) &&	/* PCI read */
  	    EP_EVENT_FIRING (edev, txdElan + offsetof (EP_TXD_ELAN, EnveEvent), txd->EnveCookie, txdMain->EnveEvent))		/* PCI read */
@@ -19,7 +19,7 @@
  	    if (delay > EP_EVENT_FIRING_TLIMIT)
  		panic ("LargeRxDataEvent: events set but block copy not completed\n");
 --- linux-2.4.18-chaos2-pristine/drivers/block/blkpg.c	Fri Jun 14 09:32:44 2002
-+++ linux-2.4.18-chaos2/drivers/block/blkpg.c	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/drivers/block/blkpg.c	Sat Jun 15 22:26:04 2002
 @@ -295,3 +295,38 @@
  }
  
@@ -60,7 +60,7 @@
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
 --- linux-2.4.18-chaos2-pristine/drivers/block/loop.c	Fri Jun 14 09:32:44 2002
-+++ linux-2.4.18-chaos2/drivers/block/loop.c	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/drivers/block/loop.c	Sat Jun 15 22:26:04 2002
 @@ -503,6 +503,11 @@
  	spin_unlock_irq(&lo->lo_lock);
  
@@ -74,7 +74,7 @@
  			goto err;
  	} else if (rw == READA) {
 --- linux-2.4.18-chaos2-pristine/drivers/ide/ide-disk.c	Fri Jun 14 09:32:45 2002
-+++ linux-2.4.18-chaos2/drivers/ide/ide-disk.c	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/drivers/ide/ide-disk.c	Sat Jun 15 22:26:04 2002
 @@ -557,6 +557,12 @@
   */
  static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
@@ -89,7 +89,7 @@
  		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
  
 --- linux-2.4.18-chaos2-pristine/fs/ext3/Makefile	Fri Jun 14 09:32:56 2002
-+++ linux-2.4.18-chaos2/fs/ext3/Makefile	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/fs/ext3/Makefile	Sat Jun 15 22:26:04 2002
 @@ -9,6 +9,8 @@
  
  O_TARGET := ext3.o
@@ -100,7 +100,7 @@
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
 --- linux-2.4.18-chaos2-pristine/fs/ext3/super.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/ext3/super.c	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/fs/ext3/super.c	Sat Jun 15 22:26:04 2002
 @@ -1746,7 +1746,7 @@
  	unregister_filesystem(&ext3_fs_type);
  }
@@ -111,7 +111,7 @@
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
 --- linux-2.4.18-chaos2-pristine/fs/jbd/commit.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/jbd/commit.c	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/fs/jbd/commit.c	Sat Jun 15 22:26:04 2002
 @@ -482,7 +482,7 @@
             transaction's t_log_list queue, and metadata buffers are on
             the t_iobuf_list queue.
@@ -180,7 +180,7 @@
  
  	J_ASSERT(commit_transaction->t_sync_datalist == NULL);
 --- linux-2.4.18-chaos2-pristine/fs/jbd/journal.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/jbd/journal.c	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/fs/jbd/journal.c	Sat Jun 15 22:26:04 2002
 @@ -58,6 +58,7 @@
  #endif
  EXPORT_SYMBOL(journal_flush);
@@ -190,7 +190,7 @@
  EXPORT_SYMBOL(journal_init_dev);
  EXPORT_SYMBOL(journal_init_inode);
 --- linux-2.4.18-chaos2-pristine/fs/jbd/transaction.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/jbd/transaction.c	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/fs/jbd/transaction.c	Sat Jun 15 22:26:04 2002
 @@ -57,6 +57,7 @@
  	transaction->t_state = T_RUNNING;
  	transaction->t_tid = journal->j_transaction_sequence++;
@@ -297,7 +297,7 @@
  	 * going!  We also want to force a commit if the current
  	 * transaction is occupying too much of the log, or if the
 --- linux-2.4.18-chaos2-pristine/include/linux/blkdev.h	Fri Jun 14 09:33:01 2002
-+++ linux-2.4.18-chaos2/include/linux/blkdev.h	Sat Jun 15 09:55:50 2002
++++ linux-2.4.18-chaos2/include/linux/blkdev.h	Mon Jun 17 09:38:35 2002
 @@ -276,4 +276,9 @@
  	}
  	return retval;
@@ -309,7 +309,7 @@
 +void dev_clear_rdonly(int);
  #endif
 --- linux-2.4.18-chaos2-pristine/include/linux/jbd.h	Fri Jun 14 09:33:01 2002
-+++ linux-2.4.18-chaos2/include/linux/jbd.h	Sat Jun 15 09:55:47 2002
++++ linux-2.4.18-chaos2/include/linux/jbd.h	Mon Jun 17 09:38:53 2002
 @@ -257,6 +257,13 @@
  	return bh->b_private;
  }
@@ -358,7 +358,7 @@
  extern void	 journal_lock_updates (journal_t *);
  extern void	 journal_unlock_updates (journal_t *);
 --- linux-2.4.18-chaos2-pristine/kernel/ksyms.c	Fri Jun 14 09:33:02 2002
-+++ linux-2.4.18-chaos2/kernel/ksyms.c	Sat Jun 15 09:39:31 2002
++++ linux-2.4.18-chaos2/kernel/ksyms.c	Sat Jun 15 22:26:04 2002
 @@ -305,6 +305,12 @@
  EXPORT_SYMBOL(lock_may_write);
  EXPORT_SYMBOL(dcache_readdir);
@@ -373,7 +373,7 @@
  EXPORT_SYMBOL(default_llseek);
  EXPORT_SYMBOL(dentry_open);
 --- linux-2.4.18-chaos2-pristine/include/linux/dcache.h	Fri Jun 14 09:33:01 2002
-+++ linux-2.4.18-chaos2/include/linux/dcache.h	Sat Jun 15 13:06:39 2002
++++ linux-2.4.18-chaos2/include/linux/dcache.h	Sat Jun 15 22:26:04 2002
 @@ -6,6 +6,32 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -425,7 +425,7 @@
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
 --- linux-2.4.18-chaos2-pristine/include/linux/fs.h	Fri Jun 14 09:33:01 2002
-+++ linux-2.4.18-chaos2/include/linux/fs.h	Sat Jun 15 09:55:41 2002
++++ linux-2.4.18-chaos2/include/linux/fs.h	Sat Jun 15 22:26:04 2002
 @@ -570,6 +570,7 @@
  
  	/* needed for tty driver, and maybe others */
@@ -479,7 +479,7 @@
  extern void iput(struct inode *);
  extern void force_delete(struct inode *);
 --- linux-2.4.18-chaos2-pristine/fs/nfsd/vfs.c	Fri Jun 14 09:32:57 2002
-+++ linux-2.4.18-chaos2/fs/nfsd/vfs.c	Fri Jun 14 09:53:46 2002
++++ linux-2.4.18-chaos2/fs/nfsd/vfs.c	Sat Jun 15 22:26:04 2002
 @@ -1285,7 +1285,7 @@
  			err = nfserr_perm;
  	} else
@@ -490,7 +490,7 @@
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
 --- linux-2.4.18-chaos2-pristine/fs/namei.c	Fri Jun 14 09:32:49 2002
-+++ linux-2.4.18-chaos2/fs/namei.c	Sat Jun 15 09:52:38 2002
++++ linux-2.4.18-chaos2/fs/namei.c	Mon Jun 17 09:29:58 2002
 @@ -94,6 +94,14 @@
   * XEmacs seems to be relying on it...
   */
@@ -754,14 +754,14 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1036,6 +1104,7 @@
+@@ -1035,6 +1103,7 @@
+ 	}
  
  	/* Negative dentry, just create the file */
++	dentry->d_it = it;
  	if (!dentry->d_inode) {
-+		dentry->d_it = it;
  		error = vfs_create(dir->d_inode, dentry,
  				   mode & ~current->fs->umask);
- 		up(&dir->d_inode->i_sem);
 @@ -1195,13 +1264,20 @@
  	}
  	dir = nd->dentry;
@@ -1049,7 +1049,7 @@
  
  	dput(new_dentry);
 --- linux-2.4.18-chaos2-pristine/fs/open.c	Fri Jun 14 09:32:49 2002
-+++ linux-2.4.18-chaos2/fs/open.c	Sat Jun 15 09:52:38 2002
++++ linux-2.4.18-chaos2/fs/open.c	Mon Jun 17 09:30:36 2002
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1147,7 +1147,7 @@
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -339,7 +360,7 @@
+@@ -339,13 +360,14 @@
  	else
  		current->cap_effective = current->cap_permitted;
  
@@ -1156,7 +1156,14 @@
  	if (!res) {
  		res = permission(nd.dentry->d_inode, mode);
  		/* SuS v2 requires we report a read only fs too */
-@@ -361,6 +382,9 @@
+ 		if(!res && (mode & S_IWOTH) && IS_RDONLY(nd.dentry->d_inode)
+ 		   && !special_file(nd.dentry->d_inode->i_mode))
+ 			res = -EROFS;
++		intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 
+@@ -361,6 +383,9 @@
  	int error;
  	struct nameidata nd;
  	char *name;
@@ -1166,7 +1173,7 @@
  
  	name = getname(filename);
  	error = PTR_ERR(name);
-@@ -369,11 +393,12 @@
+@@ -369,11 +394,12 @@
  
  	error = 0;
  	if (path_init(name,LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY,&nd))
@@ -1180,7 +1187,7 @@
  	error = permission(nd.dentry->d_inode,MAY_EXEC);
  	if (error)
  		goto dput_and_out;
-@@ -381,6 +406,7 @@
+@@ -381,6 +407,7 @@
  	set_fs_pwd(current->fs, nd.mnt, nd.dentry);
  
  dput_and_out:
@@ -1188,7 +1195,7 @@
  	path_release(&nd);
  out:
  	return error;
-@@ -421,6 +447,9 @@
+@@ -421,6 +448,9 @@
  	int error;
  	struct nameidata nd;
  	char *name;
@@ -1198,7 +1205,7 @@
  
  	name = getname(filename);
  	error = PTR_ERR(name);
-@@ -429,11 +458,12 @@
+@@ -429,11 +459,12 @@
  
  	path_init(name, LOOKUP_POSITIVE | LOOKUP_FOLLOW |
  		      LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
@@ -1212,7 +1219,7 @@
  	error = permission(nd.dentry->d_inode,MAY_EXEC);
  	if (error)
  		goto dput_and_out;
-@@ -446,6 +476,7 @@
+@@ -446,6 +477,7 @@
  	set_fs_altroot();
  	error = 0;
  dput_and_out:
@@ -1220,7 +1227,7 @@
  	path_release(&nd);
  out:
  	return error;
-@@ -490,12 +521,15 @@
+@@ -490,12 +522,15 @@
  	struct inode * inode;
  	int error;
  	struct iattr newattrs;
@@ -1237,7 +1244,7 @@
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
-@@ -511,6 +545,7 @@
+@@ -511,6 +546,7 @@
  	error = notify_change(nd.dentry, &newattrs);
  
  dput_and_out:
@@ -1245,7 +1252,7 @@
  	path_release(&nd);
  out:
  	return error;
-@@ -580,10 +615,15 @@
+@@ -580,10 +616,15 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1262,7 +1269,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -593,10 +633,15 @@
+@@ -593,10 +634,15 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1279,7 +1286,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -630,10 +675,15 @@
+@@ -630,10 +676,15 @@
   * for the internal routines (ie open_namei()/follow_link() etc). 00 is
   * used by symlinks.
   */
@@ -1295,7 +1302,7 @@
  
  	namei_flags = flags;
  	if ((namei_flags+1) & O_ACCMODE)
-@@ -641,14 +691,14 @@
+@@ -641,14 +692,14 @@
  	if (namei_flags & O_TRUNC)
  		namei_flags |= 2;
  
@@ -1313,7 +1320,7 @@
  {
  	struct file * f;
  	struct inode *inode;
-@@ -690,6 +740,7 @@
+@@ -690,6 +741,7 @@
  			goto cleanup_all;
  	}
  	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
@@ -1321,7 +1328,7 @@
  
  	return f;
  
-@@ -710,6 +761,13 @@
+@@ -710,6 +762,13 @@
  	return ERR_PTR(error);
  }
  
@@ -1336,8 +1343,8 @@
   * Find an empty file descriptor entry, and mark it busy.
   */
 --- linux-2.4.18-chaos2-pristine/fs/stat.c	Fri Jun 14 09:32:49 2002
-+++ linux-2.4.18-chaos2/fs/stat.c	Sat Jun 15 09:52:38 2002
-@@ -117,8 +117,11 @@
++++ linux-2.4.18-chaos2/fs/stat.c	Mon Jun 17 09:37:20 2002
+@@ -117,10 +117,14 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1349,8 +1356,11 @@
 +	error = user_path_walk_link_it(name, &nd, &it);
  	if (!error) {
  		error = do_getattr(nd.mnt, nd.dentry, stat);
++		intent_release(nd.dentry);
  		path_release(&nd);
-@@ -269,14 +272,16 @@
+ 	}
+ 	return error;
+@@ -269,20 +273,23 @@
  {
  	struct nameidata nd;
  	int error;
@@ -1369,8 +1379,15 @@
  		error = -EINVAL;
  		if (inode->i_op && inode->i_op->readlink &&
  		    !(error = do_revalidate(nd.dentry))) {
+ 			UPDATE_ATIME(inode);
+ 			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
+ 		}
++		intent_release(nd.dentry);
+ 		path_release(&nd);
+ 	}
+ 	return error;
 --- linux-2.4.18-chaos2-pristine/mm/slab.c	Fri Jun 14 09:33:02 2002
-+++ linux-2.4.18-chaos2/mm/slab.c	Sat Jun 15 09:58:54 2002
++++ linux-2.4.18-chaos2/mm/slab.c	Sat Jun 15 22:26:04 2002
 @@ -1216,6 +1216,60 @@
   * Called with the cache-lock held.
   */
@@ -1433,7 +1450,7 @@
  static int kmem_extra_free_checks (kmem_cache_t * cachep,
  			slab_t *slabp, void * objp)
 --- linux-2.4.18-chaos2-pristine/arch/i386/mm/init.c	Fri Jun 14 09:32:40 2002
-+++ linux-2.4.18-chaos2/arch/i386/mm/init.c	Sat Jun 15 09:50:07 2002
++++ linux-2.4.18-chaos2/arch/i386/mm/init.c	Sat Jun 15 22:26:04 2002
 @@ -43,6 +43,14 @@
  static unsigned long totalram_pages;
  static unsigned long totalhigh_pages;
@@ -1450,7 +1467,7 @@
  {
  	int freed = 0;
 --- linux-2.4.18-chaos2-pristine/include/linux/slab.h	Fri Jun 14 09:33:02 2002
-+++ linux-2.4.18-chaos2/include/linux/slab.h	Sat Jun 15 09:55:43 2002
++++ linux-2.4.18-chaos2/include/linux/slab.h	Mon Jun 17 09:38:08 2002
 @@ -58,6 +58,7 @@
  extern int kmem_cache_shrink_nr(kmem_cache_t *);
  extern void *kmem_cache_alloc(kmem_cache_t *, int);
@@ -1460,7 +1477,7 @@
  extern void *kmalloc(size_t, int);
  extern void kfree(const void *);
 --- linux-2.4.18-chaos2-pristine/scripts/mkspec	Fri Jun 14 09:33:04 2002
-+++ linux-2.4.18-chaos2/scripts/mkspec	Sat Jun 15 10:32:39 2002
++++ linux-2.4.18-chaos2/scripts/mkspec	Sat Jun 15 22:26:04 2002
 @@ -41,6 +41,7 @@
  echo 'mkdir -p $RPM_BUILD_ROOT/boot $RPM_BUILD_ROOT/lib $RPM_BUILD_ROOT/lib/modules'
  echo 'INSTALL_MOD_PATH=$RPM_BUILD_ROOT make modules_install'
