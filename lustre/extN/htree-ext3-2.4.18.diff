@@ -197,7 +197,7 @@
 +
 +static inline unsigned dx_get_block (struct dx_entry *entry)
 +{
-+	return le32_to_cpu(entry->block.v) & 0x0fffffff;
++	return le32_to_cpu(entry->block.v) & 0x00ffffff;
 +}
 +
 +static inline void dx_set_block (struct dx_entry *entry, unsigned value)
