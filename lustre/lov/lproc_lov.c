@@ -154,7 +154,7 @@ int rd_target(char* page, char **start, off_t off, int count, int *eof,
         struct lov_obd* lov = &dev->u.lov;
         struct lov_tgt_desc* tgts = lov->tgts;
         while(i < lov->desc.ld_tgt_count){
-                len += snprintf(&page[len], count, "%d: %s\n", i, tgts->uuid);
+                len += snprintf(&page[len], count - len, "%d: %s\n", i, tgts->uuid);
                 i++;
                 tgts++;
         }

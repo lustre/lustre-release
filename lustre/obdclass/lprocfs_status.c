@@ -260,8 +260,7 @@ int lprocfs_reg_class(struct obd_type* type, struct lprocfs_vars* list,
 int lprocfs_dereg_class(struct obd_type* class)
 {
         if(class == NULL){
-                CDEBUG(D_OTHER, "Non-existent class",
-                       class->typ_name);
+                CDEBUG(D_OTHER, "Non-existent class");
                 return 0;
         }
         lprocfs_remove_all(class->typ_procroot);
