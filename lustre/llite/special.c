@@ -63,14 +63,16 @@ static inline void save_fops(struct file *filp, struct inode *inode,
         
         if (sfops != filp->f_op) {
                 struct file_operations** pfop = get_save_fops (filp, FILE_OPS);
-                
+                struct module   *save_module = NULL;
+
+                save_module = filp->f_op->owner;
                 *pfop = filp->f_op;
                 if (S_ISCHR(inode->i_mode)) {
                         filp->f_op = &ll_special_chr_file_fops;
                 }else if (S_ISFIFO(inode->i_mode)){
                         filp->f_op = &ll_special_fifo_file_fops;
                 }
-                filp->f_op->owner = lli->ll_save_ffop->owner; 
+                filp->f_op->owner = save_module;
         }
 }
 
