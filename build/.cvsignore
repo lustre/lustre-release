@@ -1,5 +1,6 @@
 .*.cmd
 .*.flags
+.*.d
 *.ko
 *.c
 .*.o.d
