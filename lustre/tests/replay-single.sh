@@ -64,13 +64,24 @@ test_1() {
 }
 run_test 1 "simple create"
 
-test_2() {
+test_2a() {
     replay_barrier mds
     touch $DIR/$tfile
     fail mds
     $CHECKSTAT -t file $DIR/$tfile || return 1
+    rm $DIR/$tfile
 }
-run_test 2 "touch"
+run_test 2a "touch"
+
+test_2b() {
+    ./mcreate $DIR/$tfile
+    replay_barrier mds
+    touch $DIR/$tfile
+    fail mds
+    $CHECKSTAT -t file $DIR/$tfile || return 1
+    rm $DIR/$tfile
+}
+run_test 2b "touch"
 
 # bug 1852
 test_3() {
