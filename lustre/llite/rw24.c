@@ -65,7 +65,7 @@ void ll_complete_readpage_24(struct obd_client_page *ocp, int rc)
 }
 
 int ll_start_readpage_24(struct ll_file_data *fd, struct obd_export *exp, 
-                          struct inode *inode, struct page *page)
+                         struct inode *inode, struct page *page)
 {
         struct obdo oa;
         struct obd_client_page *ocp;
@@ -84,7 +84,7 @@ int ll_start_readpage_24(struct ll_file_data *fd, struct obd_export *exp,
         oa.o_id = ll_i2info(inode)->lli_smd->lsm_object_id;
         memcpy(obdo_handle(&oa), &fd->fd_ost_och.och_fh,
                sizeof(fd->fd_ost_och.och_fh));
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLHANDLE;
+        oa.o_valid = OBD_MD_FLID;
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME);
 
         rc = obd_brw_async_ocp(OBD_BRW_READ, exp, &oa, 
