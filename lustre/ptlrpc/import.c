@@ -327,6 +327,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         ptlrpcd_add_req(request);
         rc = 0;
+        imp->imp_connect_start = jiffies;
 out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
@@ -443,13 +444,13 @@ finish:
                 if (aa->pcaa_initial_connect && !imp->imp_initial_recov) {
                         ptlrpc_deactivate_import(imp);
                 }
-                /*if (rc == -ETIMEDOUT) {
+                if (rc == -ETIMEDOUT && (jiffies - imp->imp_connect_start) > HZ) {
                         CDEBUG(D_ERROR, "recovery of %s on %s failed (timeout)\n",
                                imp->imp_target_uuid.uuid,
                                (char *)imp->imp_connection->c_remote_uuid.uuid);
                         ptlrpc_connect_import(imp, NULL);
                         RETURN(0);
-                }*/
+                }
                 CDEBUG(D_ERROR, "recovery of %s on %s failed (%d)\n",
                        imp->imp_target_uuid.uuid,
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);

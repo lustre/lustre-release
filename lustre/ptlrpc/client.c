@@ -203,10 +203,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                 RETURN(NULL);
         }
 
-        if (imp->imp_server_timeout)
-                request->rq_timeout = obd_timeout / 2;
-        else
-                request->rq_timeout = obd_timeout;
+        request->rq_timeout = obd_timeout;
         request->rq_send_state = LUSTRE_IMP_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = class_import_get(imp);

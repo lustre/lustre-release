@@ -75,6 +75,7 @@ struct obd_import {
         struct obd_uuid           imp_target_uuid; /* XXX -> lustre_name */
         struct lustre_handle      imp_remote_handle;
         unsigned long             imp_next_ping;
+        unsigned long             imp_connect_start;
         
         /* Protects flags, level, generation, conn_cnt, *_list */
         spinlock_t                imp_lock;

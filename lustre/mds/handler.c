@@ -948,12 +948,12 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
 
         cleanup_phase = 2; /* dchild, dparent, locks */
 
-fill_inode:
-
         /* let's make sure this name should leave on this mds node */
         rc = mds_check_mds_num(obd, dparent->d_inode, name, namesize);
         if (rc)
                 GOTO(cleanup, rc);
+
+fill_inode:
 
         if (!DENTRY_VALID(dchild)) {
                 intent_set_disposition(rep, DISP_LOOKUP_NEG);

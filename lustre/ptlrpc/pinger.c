@@ -65,6 +65,14 @@ int ptlrpc_ping(struct obd_import *imp)
 }
 
 #ifdef __KERNEL__
+int ptlrpc_next_ping(struct obd_import *imp)
+{
+        if (imp->imp_server_timeout)
+                return jiffies + (obd_timeout / 4 * HZ);
+        else
+                return jiffies + (obd_timeout / 2 * HZ);
+}
+
 static int ptlrpc_pinger_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
@@ -98,6 +106,7 @@ static int ptlrpc_pinger_main(void *arg)
                                                      NULL, NULL);
                 struct list_head *iter;
 
+                time_to_next_ping = this_ping + (obd_timeout * HZ) - jiffies;
                 down(&pinger_sem);
                 list_for_each(iter, &pinger_imports) {
                         struct obd_import *imp =
@@ -118,34 +127,37 @@ static int ptlrpc_pinger_main(void *arg)
                                 if (level == LUSTRE_IMP_DISCON) {
                                         /* wait at least a timeout before 
                                            trying recovery again. */
-                                        imp->imp_next_ping = jiffies + 
-                                                (obd_timeout * HZ);
+                                        imp->imp_next_ping =
+                                                ptlrpc_next_ping(imp);
                                         ptlrpc_initiate_recovery(imp);
-                                } 
-                                else if (level != LUSTRE_IMP_FULL ||
-                                         imp->imp_obd->obd_no_recov) {
+                                } else if (level != LUSTRE_IMP_FULL ||
+                                           imp->imp_obd->obd_no_recov) {
                                         CDEBUG(D_HA, 
                                                "not pinging %s (in recovery "
                                                " or recovery disabled: %s)\n",
                                                imp->imp_target_uuid.uuid,
                                                ptlrpc_import_state_name(level));
-                                } 
-                                else if (imp->imp_pingable || force) {
+                                } else if (imp->imp_pingable || force) {
                                         ptlrpc_ping(imp);
                                 }
 
-                        } else {
-                                if (imp->imp_pingable)
-                                        CDEBUG(D_HA, "don't need to ping %s "
-                                               "(%lu > %lu)\n", 
-                                               imp->imp_target_uuid.uuid,
-                                               imp->imp_next_ping, this_ping);
+                        } else if (imp->imp_pingable) {
+                                CDEBUG(D_HA, "don't need to ping %s "
+                                       "(%lu > %lu)\n",
+                                       imp->imp_target_uuid.uuid,
+                                       imp->imp_next_ping, this_ping);
                         }
+                        CDEBUG(D_OTHER, "%s: pingable %d, next_ping %lu(%lu)\n",
+                                imp->imp_target_uuid.uuid,
+                                imp->imp_pingable, imp->imp_next_ping, jiffies);
+                        if (imp->imp_pingable && imp->imp_next_ping &&
+                            imp->imp_next_ping - jiffies < time_to_next_ping &&
+                            imp->imp_next_ping > jiffies)
+                                time_to_next_ping = imp->imp_next_ping - jiffies;
                 }
                 up(&pinger_sem);
 
                 /* Wait until the next ping time, or until we're stopped. */
-                time_to_next_ping = this_ping + (obd_timeout * HZ) - jiffies;
                 CDEBUG(D_HA, "next ping in %lu (%lu)\n", time_to_next_ping,
                        this_ping + (obd_timeout * HZ));
                 if (time_to_next_ping > 0) {
