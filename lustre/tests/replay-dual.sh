@@ -5,48 +5,29 @@ set -e
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
-init_test_env
+init_test_env $@
 
-# XXX I wish all this stuff was in some default-config.sh somewhere
-mds_HOST=${mds_HOST:-`hostname`}
-mdsfailover_HOST=${mdsfailover_HOST}
-ost_HOST=${ost_HOST:-`hostname`}
-client_HOST=${client_HOST:-`hostname`}
-
-NETTYPE=${NETTYPE:-tcp}
-
-PDSH=${PDSH:-no_dsh}
-MOUNT=${MOUNT:-/mnt/lustre}
-MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
-MDSSIZE=${MDSSIZE:-100000}
-OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
-OSTSIZE=${OSTSIZE:-100000}
-MOUNT1=${MOUNT1:-${MOUNT}1}
-MOUNT2=${MOUNT2:-${MOUNT}2}
-UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
-FSTYPE=${FSTYPE:-ext3}
-TIMEOUT=${TIMEOUT:-5}
-
-STRIPE_BYTES=65536
-STRIPES_PER_OBJ=1
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 gen_config() {
-    rm -f replay-dual.xml
-    add_facet mds
-    add_facet ost
-    add_facet client --lustre_upcall $UPCALL
-    do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
-    do_lmc --add lov --mds mds1 --lov lov1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    do_lmc --add ost --lov lov1 --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
-    do_lmc --add ost --lov lov1 --node ost_facet --ost ost2 --dev ${OSTDEV}-2 --size $OSTSIZE
-    do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost lov1
+    rm -f $XMLCONFIG
+    add_mds mds --dev $MDSDEV --size $MDSSIZE
+    if [ ! -z "$mdsfailover_HOST" ]; then
+	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
+    fi
+    
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
+    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
+    add_client client mds --lov lov1 --path $MOUNT
 }
+
 
 
 build_test_filter
 
 cleanup() {
-    [ "$DAEMONFILE" ] && $LCTL debug_daemon stop
     # make sure we are using the primary MDS, so the config log will
     # be able to clean up properly.
     activemds=`facet_active mds`
@@ -54,12 +35,12 @@ cleanup() {
         fail mds
     fi
 
-    $LCONF  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
-       --local_nid $client_HOST --profile client_facet --mount $MOUNT
-    $LCONF  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
-       --local_nid $client_HOST --profile client_facet --mount $MOUNT2
-    stop mds ${FORCE} --dump cleanup-dual.log
-    stop ost ${FORCE}
+    umount $MOUNT2
+    umount $MOUNT
+    rmmod llite
+    stop mds ${FORCE}
+    stop ost2 ${FORCE}
+    stop ost ${FORCE}  --dump cleanup-dual.log
 }
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -69,9 +50,7 @@ if [ "$ONLY" == "cleanup" ]; then
 fi
 
 gen_config
-start mds --write_conf --reformat
-start ost --reformat
-start mds
+start ost --reformat $OSTLCONFARGS 
 PINGER=`cat /proc/fs/lustre/pinger`
 
 if [ "$PINGER" != "on" ]; then
@@ -80,11 +59,11 @@ if [ "$PINGER" != "on" ]; then
     exit 1
 fi
 
-# 0-conf client
-$LCONF --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
-    --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT
-$LCONF --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
-    --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT2
+start ost2 --reformat $OSTLCONFARGS 
+[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+start mds $MDSLCONFARGS --reformat
+zconf_mount $MOUNT
+zconf_mount $MOUNT2
 
 echo $TIMEOUT > /proc/sys/lustre/timeout
 echo $UPCALL > /proc/sys/lustre/upcall
@@ -198,3 +177,4 @@ run_test 6 "open1, open2, unlink |X| close1 [fail mds] close2"
 
 
 equals_msg test complete, cleaning up
+cleanup

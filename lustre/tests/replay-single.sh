@@ -9,55 +9,27 @@ set -e
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
-init_test_env
+init_test_env $@
+set -xv
+
+. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
 ALWAYS_EXCEPT=""
 
-# XXX I wish all this stuff was in some default-config.sh somewhere
-mds_HOST=${mds_HOST:-`hostname`}
-mdsfailover_HOST=${mdsfailover_HOST}
-ost_HOST=${ost_HOST:-`hostname`}
-client_HOST=${client_HOST:-`hostname`}
-
-NETTYPE=${NETTYPE:-tcp}
-
-PDSH=${PDSH:-no_dsh}
-
-MOUNT=${MOUNT:-/mnt/lustre}
-DIR=${DIR:-$MOUNT}
-MDSDEV=${MDSDEV:-$ROOT/tmp/mds-`hostname`}
-MDSFAILOVERDEV=${MDSFAILOVERDEV:-$MDSDEV}
-MDSSIZE=${MDSSIZE:-10000}
-OSTDEV=${OSTDEV:-$ROOT/tmp/ost-`hostname`}
-OSTSIZE=${OSTSIZE:-10000}
-UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
-FSTYPE=${FSTYPE:-ext3}
-TIMEOUT=${TIMEOUT:-10}
-
-STRIPE_BYTES=65536
-STRIPES_PER_OBJ=0
-
 
 gen_config() {
     rm -f $XMLCONFIG
-    add_facet mds --timeout=${TIMEOUT}
-    add_facet ost --timeout=${TIMEOUT}
-    add_facet client --lustre_upcall $UPCALL --timeout=${TIMEOUT}
-    do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
+    add_mds mds --dev $MDSDEV --size $MDSSIZE
     if [ ! -z "$mdsfailover_HOST" ]; then
-	 add_facet mdsfailover
-         do_lmc --add mds --failover --node mdsfailover_facet \
-		--mds mds1 --dev $MDSFAILOVERDEV --size $MDSSIZE
+	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
     fi
     
-    do_lmc --add lov --mds mds1 --lov lov1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-    do_lmc --add ost --lov lov1 --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
-    do_lmc --add ost --lov lov1 --node ost_facet --ost ost2 --dev ${OSTDEV}-2 --size $OSTSIZE
-    do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost lov1
-
-#    do_lmc --add ost --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
-#    do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost ost1
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
+    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
+    add_client client mds --lov lov1 --path $MOUNT
 }
 
 build_test_filter
@@ -71,6 +43,7 @@ cleanup() {
     fi
     zconf_umount $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
+    stop ost2 ${FORCE} --dump cleanup.log
     stop ost ${FORCE} --dump cleanup.log
 }
 
@@ -83,6 +56,7 @@ fi
 gen_config
 
 start ost --reformat $OSTLCONFARGS 
+start ost2 --reformat $OSTLCONFARGS 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 start mds $MDSLCONFARGS --reformat
 zconf_mount $MOUNT

@@ -3,160 +3,151 @@
 
 set -e
 
-# command line
-set - - `getopt -o r -l ostdev:,mdsdev:,stripecnt:,reformat -- $*`
-
-for i in $*; do
-    case $i in
-	--ostdev) OSTDEV=$2; shift;;
-	--mdsdev) MDSDEV=$2; shift;;
-	--stripecnt) STRIPECNT=$2; shift;;
-	-r|--reformat) REFORMAT=--reformat;;
-    esac
-    shift
-done
-
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
-init_test_env
+init_test_env $@
 
-# . ./config-uml.sh
+. ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
 
-ALWAYS_EXCEPT="3 4 5 6 7 8 9 10"
+ALWAYS_EXCEPT="7 8 9 10"
 
 build_test_filter
 
-assert_env OSTDEV MDSDEV STRIPECNT
+assert_env mds_HOST ost1_HOST ost2_HOST client_HOST LIVE_CLIENT 
 
-MDS1=${MDS1:-"mdev4"}
-MDS2=${MDS2:-"mdev5"}
-OST1=${OST1:-"mdev2"}
-OST2=${OST2:-"mdev3"}
-LIVE_CLIENT=${LIVE_CLIENT:-"mdev6"}
-CLIENT1=${CLIENT1:-"mdev7"}
-CLIENT2=${CLIENT2:-"mdev8"}
-CLIENT3=${CLIENT3:-"mdev9"}
-CLIENT4=${CLIENT4:-"mdev11"}
-CLIENTS=${CLIENTS:-"mdev[6-9,11]"}
+# This can be a regexp, to allow more clients
+CLIENTS=${CLIENTS:-"`comma_list $LIVE_CLIENT $FAIL_CLIENTS`"}
 
-SERVERS="$MDS1 $MDS2 $OST1 $OST2"
-CLIENTLIST="$LIVE_CLIENT $CLIENT1 $CLIENT2 $CLIENT3 $CLIENT4"
+CLIENTLIST="$LIVE_CLIENT $FAIL_CLIENTS"
 
-TIMEOUT=${TIMEOUT:-30}
-PTLDEBUG=${PTLDEBUG:-0}
-MOUNTPT=${MOUNTPT:-"/mnt/lustre"}
-CLIENT_UPCALL=${CLIENT_UPCALL:-`pwd`/client-upcall-mdev.sh}
+DIR=${DIR:-$MOUNT}
 
+#####
+# fail clients round robin
+
+# list of failable clients
+FAIL_LIST=($FAIL_CLIENTS)
+FAIL_NUM=${#FAIL_LIST[*]}
+FAIL_NEXT=0
+DOWN_NUM=0   # number of nodes currently down
+
+# return next client to fail
+fail_client() {
+    ret=${FAIL_LIST[$FAIL_NEXT]}
+    FAIL_NEXT=$(( (FAIL_NEXT+1) % FAIL_NUM ))
+    echo $ret
+}
+
+fail_clients() {
+    num=$1
+    if [ -z "$num" -o $num -gt $((FAIL_NUM - DOWN_NUM)) ]; then
+	num=$((FAIL_NUM - DOWN_NUM)) 
+    fi
+    
+    if [ -z "$num"  -o $num -le 0 ]; then
+        return
+    fi
+
+    for i in `seq $num`; do
+       client=`fail_client`
+       DOWN_CLIENTS="$DOWN_CLIENTS $client"
+       client_mkdirs
+       shutdown_client $client
+    done
+
+    for client in $DOWN_CLIENTS; do
+	restart_node $client
+    done
+    DOWN_NUM=`echo $DOWN_CLIENTS | wc -w`
+    $PDSH $LIVE_CLIENT "cd $MOUNT && rmdir $CLIENTLIST"
+}
+
+reintegrate_clients() {
+    for client in $DOWN_CLIENTS; do
+	wait_for $client
+	$PDSH $client "$LCONF --node client --select mds_svc=`facet_active mds` $CLIENTOPTS $XMLCONFIG"
+    done
+    DOWN_CLIENTS=""
+    DOWN_NUM=0
+}
 
 gen_config() {
     rm -f $XMLCONFIG
-    # Add all nodes
-    for node in $SERVERS; do
-	${LMC} -m $XMLCONFIG --add net --node $node  --timeout $TIMEOUT\
-            --nid `h2$NETTYPE $node` --nettype $NETTYPE
-    done
+    add_mds mds --dev $MDSDEV --size $MDSSIZE
 
-    ${LMC} -m $XMLCONFIG --add net --node client \
-            --timeout $TIMEOUT --upcall $CLIENT_UPCALL \
-	    --nid '*' --nettype $NETTYPE
+    if [ ! -z "$mdsfailover_HOST" ]; then
+	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
+    fi
 
-    # Configure MDS nodes
-    for node in $MDS1 $MDS2; do
-	$LMC -m $XMLCONFIG --node $node --add mds --mds mds_service  \
-	     --fstype ext3 --dev $MDSDEV --size ${MDSSIZE:=50000000}
-    done
-
-    $LMC -m $XMLCONFIG --add lov --lov lov1 --mds mds_service \
-        --stripe_sz 1048576 --stripe_cnt $STRIPECNT --stripe_pattern 0
-
-    # Configure ost
-    for node in $OST1 $OST2; do
-	$LMC -m $XMLCONFIG --add ost --node $node --lov lov1 \
-           --fstype ext3 --dev $OSTDEV --size ${OSTSIZE:=50000000}
-    done
-
-    $LMC -m $XMLCONFIG --node client --add mtpt --path $MOUNTPT \
-	--mds mds_service --lov lov1
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+    add_ost ost1 --lov lov1 --dev $OSTDEV --size $OSTSIZE
+    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
+    add_client client mds --lov lov1 --path $MOUNT
 }
 
 setup() {
-    echo "$MDS1" > CURRENT_MDS
-    ACTIVEMDS=$MDS1
-    set -xv
-    $DSH $OST1,$OST2 "$LCONF --ptldebug $PTLDEBUG $REFORMAT $XMLCONFIG"
-    $DSH $MDS1 "$LCONF --select mds_service=$ACTIVEMDS --ptldebug $PTLDEBUG $REFORMAT $XMLCONFIG"
-    $DSH $CLIENTS "$LCONF --node client --ptldebug $PTLDEBUG --select mds_service=$ACTIVEMDS $CLIENTOPTS $XMLCONFIG"
-    set -+v
+    start ost1 ${REFORMAT} $OSTLCONFARGS 
+    start ost2 ${REFORMAT} $OSTLCONFARGS 
+    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    start mds $MDSLCONFARGS ${REFORMAT}
+    for node in $CLIENTS; do
+	$PDSH $node lconf --node client_facet --ptldebug $PTLDEBUG --select mds_service=$ACTIVEMDS $XMLCONFIG
+    done
 }
 
 cleanup() {
-    ACTIVEMDS=`cat CURRENT_MDS`
-    $DSH $CLIENTS "$LCONF --cleanup --node client --select mds_service=$ACTIVEMDS  $XMLCONFIG"
-    $DSH $ACTIVEMDS "$LCONF --cleanup --select mds_service=$ACTIVE_MDS $XMLCONFIG"
-    $DSH $OST1,$OST2 "$LCONF --cleanup $XMLCONFIG"
+    # make sure we are using the primary MDS, so the config log will
+    # be able to clean up properly.
+    activemds=`facet_active mds`
+    if [ $activemds != "mds" ]; then
+        fail mds
+    fi
+    for node in $CLIENTS; do
+	$PDSH $node lconf ${FORCE} --cleanup --node client_facet $XMLCONFIG
+    done
+
+    stop mds ${FORCE} $MDSLCONFARGS
+    stop ost1 ${FORCE}
+    stop ost2 ${FORCE} --dump cleanup.log
 }
 
 wait_for() {
-   NODE=$1
-   set +x
-   check_network $NODE 900
-   while ! $DSH2 $NODE "ls -ld $LUSTRE"; do sleep 5; done
-   set -x
+   facet=$1
+   check_network `facet_active_host $facet` 900
+   while ! $PDSH $NODE "ls -ld $LUSTRE"; do sleep 5; done
 }
 
 client_df() {
-    $DSH2 $CLIENTS "df $MOUNTPT" | dshbak -c
+    $PDSH $CLIENTS "df $MOUNT" | dshbak -c
 }
 
 trap exit INT
 
 client_mkdirs() {
-   $DSH2 $CLIENTS "mkdir $MOUNTPT/\`hostname\`; ls $MOUNTPT/\`hostname\` > /dev/null"
+   $PDSH $CLIENTLIST "mkdir $MOUNT/\`hostname\`; ls $MOUNT/\`hostname\` > /dev/null"
 }
 
-fail_mds() {
-    FROM=$1
-    TO=$2
-    echo "Failing MDS $FROM"
-    rm CURRENT_MDS
-    shutdown_node $FROM
+facet_failover() {
+    facet=$1
+    echo "Failing $facet node `facet_active_host $facet`"
+    shutdown_facet $facet
     sleep 2
+    reboot_facet $facet
     client_df &
     DFPID=$!
-    echo "Failover MDS is $TO"
-    wait_for $TO
-    $DSH2 $TO "$LCONF --select mds_service=$TO $XMLCONFIG"
-
-    #pdsh -w $MDS1 nodeup
-    #cd /usr/local/admin/lustre-alc/cfg
-    #../bin/mount-lustre-shaver.sh -f alc-ga1-ddn-llp-2mds.cfg -s mds -m alc2 -c alc36
-    #cd /home/jodorizz
-
-    restart_node $FROM
-    echo "$TO" > CURRENT_MDS
+    change_active $facet
+    TO=`facet_active_host $facet`
+    echo "Failover MDS to $TO"
+    wait_for $facet
+    start $facet
 }
 
-fail_clients() {
-    client_mkdirs
-    shutdown_node $CLIENT1
-    shutdown_node $CLIENT2
-    restart_node $CLIENT1
-    restart_node $CLIENT2
-    $DSH2 $LIVE_CLIENT "cd $MOUNTPT && rmdir $CLIENTLIST"
-}
-
-reintegrate_clients() {
-    ACTIVEMDS=`cat CURRENT_MDS`
-    wait_for $CLIENT1
-    wait_for $CLIENT2
-    $DSH2 $CLIENT1 "$LCONF --node client --select mds_service=$ACTIVEMDS $CLIENTOPTS $XMLCONFIG"
-    $DSH2 $CLIENT2 "$LCONF --node client --select mds_service=$ACTIVEMDS $CLIENTOPTS $XMLCONFIG"
-}
 
 clients_recover_osts() {
-    OST=$1
-    $DSH2 $CLIENTS "$LCTL "'--device %OSC_`hostname`_OST_'"${OST}_MNT_client recover"
+    facet=$1
+    $PDSH $CLIENTS "$LCTL "'--device %OSC_`hostname`_OST_'"${facet}_svc_MNT_client recover"
 }
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -174,6 +165,37 @@ fi
 # 9 Different Failure Modes Combinations
 echo "Starting Test 17 at `date`"
 
+test_0() {
+    echo "Failover MDS"
+    shutdown_facet mds
+    reboot_facet mds
+    # prepare for MDS failover
+    change_active mds
+    reboot_facet mds
+    start mds
+    client_df
+
+    echo "Failing OST1"
+    shutdown_facet ost1
+    reboot_facet ost1
+    wait_for ost1
+    start ost1
+    client_df
+    # should force the MDS to reconnect to the ost
+    echo "ost1 recover" >> $DIR/$tfile
+
+    echo "Failing OST2"
+    shutdown_facet ost2
+    reboot_facet ost2
+    wait_for ost2
+    start ost2
+    client_df
+    # should force the MDS to reconnect to the ost
+    echo "ost2 recover" >> $DIR/${tfile}2
+
+}
+run_test 0 "Fail all nodes, independently"
+
 ############### First Failure Mode ###############
 test_1() {
 echo "Don't do a MDS - MDS Failure Case"
@@ -185,36 +207,36 @@ run_test 1 "MDS/MDS failure"
 
 ############### Second Failure Mode ###############
 test_2() {
-
     echo "Verify Lustre filesystem is up and running"
     client_df
 
     echo "Failing MDS"
-    rm CURRENT_MDS
-    shutdown_node $MDS1
-    restart_node $MDS2
+    shutdown_facet mds
+    reboot_facet mds
+
+    # prepare for MDS failover
+    change_active mds
+    reboot_facet mds
 
     client_df &
     DFPID=$!
     sleep 5
 
     echo "Failing OST"
-    shutdown_node $OST1
+    shutdown_facet ost1
 
     echo "Reintegrating OST"
-    restart_node $OST1
-    wait_for $OST1
-    $DSH2 $OST1 "$LCONF $XMLCONFIG"
+    reboot_facet ost1
+    wait_for ost1
+    start ost1
 
     echo "Failover MDS"
-    wait_for $MDS2
-    $DSH2 $MDS2 "$LCONF --select mds_service=$MDS2 $XMLCONFIG"
-    echo "$MDS2" > CURRENT_MDS
-    restart_node $MDS1
-    #Check FS
+    wait_for mds
+    start mds
 
+    #Check FS
     wait $DFPID
-    clients_recover_osts $OST1
+    clients_recover_osts ost1
     echo "Verify reintegration"
     client_df
 
@@ -225,16 +247,12 @@ run_test 2 "Second Failure Mode: MDS/OST `date`"
 
 ############### Third Failure Mode ###############
 test_3() {
-    echo "Third Failure Mode: MDS/CLIENT `date`"
-
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $DSH2 $CLIENTS "df -h $MOUNTPT" | dshbak -c
     
     #MDS Portion
-    fail_mds $MDS2 $MDS1
+    facet_failover mds
     wait $DFPID || echo df failed: $?
-    restart_node $MDS2
     #Check FS
 
     echo "Test Lustre stability after MDS failover"
@@ -242,7 +260,7 @@ test_3() {
 
     #CLIENT Portion
     echo "Failing 2 CLIENTS"
-    fail_clients
+    fail_clients 2
     
     #Check FS
     echo "Test Lustre stability after CLIENT failure"
@@ -250,11 +268,9 @@ test_3() {
     
     #Reintegration
     echo "Reintegrating CLIENTS"
-    reintegrate_clients $MDS1
+    reintegrate_clients
 
     client_df
-
-    #Sleep
 }
 run_test 3  "Thirdb Failure Mode: MDS/CLIENT `date`"
 ###################################################
@@ -264,8 +280,8 @@ test_4() {
     echo "Fourth Failure Mode: OST/MDS `date`"
 
     #OST Portion
-    echo "Failing OST $OST1"
-    shutdown_node $OST1
+    echo "Failing OST ost1"
+    shutdown_facet ost1
  
     #Check FS
     echo "Test Lustre stability after OST failure"
@@ -273,9 +289,12 @@ test_4() {
 
     #MDS Portion
     echo "Failing MDS"
-    rm CURRENT_MDS
-    shutdown_node $MDS1
-    restart_node $MDS2
+    shutdown_facet mds
+    reboot_facet mds
+
+    # prepare for MDS failover
+    change_active mds
+    reboot_facet mds
 
     client_df &
     DFPID=$!
@@ -283,18 +302,17 @@ test_4() {
 
     #Reintegration
     echo "Reintegrating OST"
-    restart_node $OST1
-	wait_for $OST1
-    $DSH2 $OST1 "$LCONF $XMLCONFIG"
+    reboot_node ost1
+    wait_for ost1
+    start ost1
     
     echo "Failover MDS"
-    wait_for $MDS2
-    $DSH2 $MDS2 "$LCONF--select mds_service=$MDS2 $XMLCONFIG"
-    echo "$MDS2" > CURRENT_MDS
+    wait_for mds
+    start mds
     #Check FS
     
     wait $DFPID
-    clients_recover_oscs
+    clients_recover_osts ost1
     echo "Test Lustre stability after MDS failover"
     client_df
 }
@@ -311,8 +329,8 @@ test_5() {
     
     #OST Portion
     echo "Failing OST"
-    shutdown_node $OST1
-    restart_node $OST1
+    shutdown_facet ost1
+    reboot_node ost1
     
     #Check FS
     echo "Test Lustre stability after OST failure"
@@ -320,8 +338,8 @@ test_5() {
     
     #OST Portion
     echo "Failing OST"
-    shutdown_node $OST2
-    restart_node $OST1
+    shutdown_node ost2
+    reboot_node ost2
 
     #Check FS
     echo "Test Lustre stability after OST failure"
@@ -329,13 +347,13 @@ test_5() {
 
     #Reintegration
     echo "Reintegrating OSTs"
-    wait_for $OST1
-    wait_for $OST2
-    $DSH2 $OST1 "$LCONF $XMLCONFIG"
-    $DSH2 $OST2 "$LCONF $XMLCONFIG"
+    wait_for ost1
+    wait_for ost1
+    start ost1
+    start ost2
     
-    clients_recover_osts $OST1
-    clients_recover_osts $OST2
+    clients_recover_osts ost1
+    clients_recover_osts ost2
     client_df
 }
 run_test 5 "Fifth Failure Mode: OST/OST `date`"
@@ -347,13 +365,13 @@ test_6() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $CLIENTS "/bin/touch $MOUNTPT/\`hostname\`_testfile"
+    client_df
+    $PDSH $CLIENTS "/bin/touch $MOUNT/\`hostname\`_testfile"
 	
     #OST Portion
     echo "Failing OST"
-    shutdown_node $OST1
-    restart_node $OST1
+    shutdown_node ost1
+    reboot_node ost1
 
     #Check FS
     echo "Test Lustre stability after OST failure"
@@ -369,8 +387,8 @@ test_6() {
     
     #Reintegration
     echo "Reintegrating OST/CLIENTs"
-    wait_for $OST1
-    $DSH2 $OST1 "$LCONF $XMLCONFIG"
+    wait_for ost1
+    start ost1
     reintegrate_clients
     
     echo "Verifying mount"
@@ -386,23 +404,18 @@ test_7() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $CLIENTS "/bin/touch $MOUNTPT/\`hostname\`_testfile"
+    client_df
+    $PDSH $CLIENTS "/bin/touch $MOUNT/\`hostname\`_testfile"
 
     #CLIENT Portion
     echo "Part 1: Failing CLIENT"
-    shutdown_node $CLIENT1
-    shutdown_node $CLIENT2
-    restart_node $CLIENT1
-    restart_node $CLIENT2
-    check_network $CLIENT1 900
-    check_network $CLIENT2 900
+    fail_clients 2
     
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "ls -l $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "rm -f $MOUNTPT/*_testfile"
+    client_df
+    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
+    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
     
     #Sleep
     echo "Wait 1 minutes"
@@ -410,42 +423,23 @@ test_7() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $CLIENTS "/bin/touch $MOUNTPT/\`hostname\`_testfile"
+    client_df
+    $PDSH $CLIENTS "/bin/touch $MOUNT/\`hostname\`_testfile"
 
     #MDS Portion
     echo "Failing MDS"
-    shutdown_node $MDS2
-    sleep 5
-    restart_node $MDS2
-    echo "Failover MDS"
-    check_port $MDS1 988
-    $DSH2 $MDS1 "hostname"
-    sleep 2
-    $DSH2 $MDS1 "$LCONF --select mds_service=$MDS1 $XMLCONFIG"
-    #pdsh -w $MDS1 nodeup
-    #cd /usr/local/admin/lustre-alc/cfg
-    #../bin/mount-lustre-shaver.sh -f alc-ga1-ddn-llp-2mds.cfg -s mds -m alc2 -c alc36
-    #cd /home/jodorizz
-    echo "$MDS1" > CURRENT_MDS
+    facet_failover mds
 
     #Check FS
     echo "Test Lustre stability after MDS failover"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "ls -l $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "rm -f $MOUNTPT/*_testfile"
+    client_df
+    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
+    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
 
     #Reintegration
     echo "Reintegrating CLIENTs"
-    $DSH2 $CLIENT1 "hostname"
-    sleep 2
-    $DSH2 $CLIENT1 "$LCONF $CLIENTOPTS $XMLCONFIG"
-    $DSH2 $CLIENT2 "hostname"
-    sleep 2
-    $DSH2 $CLIENT2 "$LCONF $CLIENTOPTS $XMLCONFIG"
-    $DSH2 $CLIENTS "hostname"
-    sleep 2
-    $DSH2 $CLIENTS "df $MOUNTPT"
+    reintegrate_clients
+    client_df
     
     #Sleep
     echo "wait 1 minutes"
@@ -461,23 +455,18 @@ test_8() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $CLIENTS "/bin/touch $MOUNTPT/\`hostname\`_testfile"
+    client_df
+    $PDSH $CLIENTS "/bin/touch $MOUNT/\`hostname\`_testfile"
 	
     #CLIENT Portion
     echo "Failing CLIENTs"
-    shutdown_node $CLIENT1
-    shutdown_node $CLIENT2
-    restart_node $CLIENT1
-    restart_node $CLIENT2
-    check_network $CLIENT1 900
-    check_network $CLIENT2 900
+    fail_clients 2
 
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "ls -l $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "rm -f $MOUNTPT/*_testfile"
+    client_df
+    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
+    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
 
     #Sleep
     echo "Wait 1 minutes"
@@ -485,35 +474,26 @@ test_8() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $CLIENTS "/bin/touch $MOUNTPT/\`hostname\`_testfile"
+    client_df
+    $PDSH $CLIENTS "/bin/touch $MOUNT/\`hostname\`_testfile"
 
     #OST Portion
     echo "Failing OST"
-    shutdown_node $OST1
-    restart_node $OST1
+    shutdown_node ost1
+    reboot_node ost1
 
     #Check FS
     echo "Test Lustre stability after OST failure"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "ls -l $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "rm -f $MOUNTPT/*_testfile"
+    client_df
+    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
+    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
     
     #Reintegration
     echo "Reintegrating CLIENTs/OST"
-    $DSH2 $CLIENT1 "hostname"
-    sleep 2
-    $DSH2 $CLIENT1 "$LCONF $CLIENTOPTS $XMLCONFIG"
-    $DSH2 $CLIENT2 "hostname"
-    sleep 2
-    $DSH2 $CLIENT2 "$LCONF $CLIENTOPTS $XMLCONFIG"
-    check_network $OST1 900
-    check_port $OST1 988
-    $DSH2 $OST1 "hostname"
-    sleep 2
-    $DSH2 $OST1 "$LCONF $XMLCONFIG"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $CLIENTS "/bin/touch $MOUNTPT/CLIENT_OST_2\`hostname\`_testfile"
+    reintegrate_clients
+    start ost1
+    client_df
+    $PDSH $CLIENTS "/bin/touch $MOUNT/CLIENT_OST_2\`hostname\`_testfile"
 
     #Sleep
     echo "Wait 1 minutes"
@@ -529,23 +509,18 @@ test_9() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $CLIENTS "/bin/touch $MOUNTPT/\`hostname\`_testfile"
+    client_df
+    $PDSH $CLIENTS "/bin/touch $MOUNT/\`hostname\`_testfile"
 	
     #CLIENT Portion
     echo "Failing CLIENTs"
-    shutdown_node $CLIENT1
-    shutdown_node $CLIENT2
-    restart_node $CLIENT1
-    restart_node $CLIENT2
-    check_network $CLIENT1 900
-    check_network $CLIENT2 900
+    fail_clients 2
 
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "ls -l $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "rm -f $MOUNTPT/*_testfile"
+    client_df
+    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
+    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
 
     #Sleep
     echo "Wait 1 minutes"
@@ -553,41 +528,23 @@ test_9() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $CLIENTS "/bin/touch $MOUNTPT/\`hostname\`_testfile"
+    client_df
+    $PDSH $CLIENTS "/bin/touch $MOUNT/\`hostname\`_testfile"
 
     #CLIENT Portion
     echo "Failing CLIENTs"
-    shutdown_node $CLIENT3
-    shutdown_node $CLIENT4
-    restart_node $CLIENT3
-    restart_node $CLIENT4
-    check_network $CLIENT3 900
-    check_network $CLIENT4 900
-
+    fail_clients 2
+    
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
-    $DSH2 $CLIENTS "df $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "ls -l $MOUNTPT"
-    $DSH2 $LIVE_CLIENT "rm -f $MOUNTPT/*_testfile"
+    client_df
+    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
+    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
 
     #Reintegration
     echo "Reintegrating  CLIENTs/CLIENTs"
-    $DSH2 $CLIENT1 "hostname"
-    sleep 2
-    $DSH2 $CLIENT1 "$LCONF $CLIENTOPTS $XMLCONFIG"
-    $DSH2 $CLIENT2 "hostname"
-    sleep 2
-    $DSH2 $CLIENT2 "$LCONF $CLIENTOPTS $XMLCONFIG"
-    $DSH2 $CLIENT3 "hostname"
-    sleep 2
-    $DSH2 $CLIENT3 "$LCONF $CLIENTOPTS $XMLCONFIG"
-    $DSH2 $CLIENT4 "hostname"
-    sleep 2
-    $DSH2 $CLIENT4 "$LCONF $CLIENTOPTS $XMLCONFIG"
-    sleep 5
-    $DSH2 $CLIENTS "hostname"
-    $DSH2 $CLIENTS "df $MOUNTPT"
+    reintegrate_clients
+    client_df
     
     #Sleep
     echo "Wait 1 minutes"
@@ -596,8 +553,11 @@ test_9() {
 run_test 9 "Ninth Failure Mode: CLIENT/CLIENT `date`"
 ###################################################
 
-test_10 {
+test_10() {
     #Run availability after all failures
     ./availability.sh  21600
 }
 run_test 10 "Running Availability for 6 hours..."
+
+equals_msg "Done, cleaning up"
+cleanup
