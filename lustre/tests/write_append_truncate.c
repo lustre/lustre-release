@@ -10,6 +10,11 @@
  * If the append happened first, we should have truncated the file down.
  *
  * We pick the CHUNK_SIZE_MAX and APPEND_SIZE_MAX so that we cross a stripe.
+ *
+ * compile: mpicc -g -Wall -o write_append_truncate write_append_truncate.c
+ * run:     mpirun -np 2 -machlist <hostlist file> write_append_truncate <file>
+ *  or:     pdsh -w <two hosts> write_append_truncate <file>
+ *  or:     prun -n 2 [-N 2] write_append_truncate <file>
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -22,6 +27,7 @@
 #include <unistd.h>
 #include "mpi.h"
 
+#define DEFAULT_ITER     50000
 
 #define CHUNK_SIZE_MAX   123456
 #define CHUNK_CHAR   'C'
@@ -36,8 +42,9 @@
 void usage(char *prog)
 {
         printf("usage: %s <filename> [nloops]\n", prog);
-        printf("%s must be run on 2 nodes\n", prog);
+        printf("%s must be run with 2 processes\n", prog);
 
+        MPI_Finalize();
         exit(1);
 }
 
@@ -52,13 +59,14 @@ int rprintf(int rank, int loop, const char *fmt, ...)
 
         printf(fmt, ap);
 
+        MPI_Finalize();
         exit(1);
 }
 
 int main(int argc, char *argv[])
 {
         int n, nloops = 0, fd;
-        int rank, ret;
+        int rank, size, ret;
         int chunk_size, append_size, trunc_offset;
         char append_buf[APPEND_SIZE_MAX];
         char chunk_buf[CHUNK_SIZE_MAX];
@@ -86,13 +94,13 @@ int main(int argc, char *argv[])
         if (error != MPI_SUCCESS)
                 rprintf(-1, -1, "MPI_Comm_rank failed: %d\n", error);
 
-        error = MPI_Comm_size(MPI_COMM_WORLD, &n);
+        error = MPI_Comm_size(MPI_COMM_WORLD, &size);
         if (error != MPI_SUCCESS)
                 rprintf(rank, -1, "MPI_Comm_size failed: %d\n", error);
 
-        if (n != 2)
-                rprintf(rank, -1, "%s: must run with 2 processes, not %d\n",
-                        prog, n);
+        if (size < 2)
+                rprintf(rank, -1, "%s: must run with at least 2 processes\n",
+                        prog);
 
         memset(append_buf, APPEND_CHAR, APPEND_SIZE_MAX);
         memset(chunk_buf, CHUNK_CHAR, CHUNK_SIZE_MAX);
@@ -106,7 +114,7 @@ int main(int argc, char *argv[])
         if (argc == 3)
                 nloops = strtoul(argv[2], NULL, 0);
         if (nloops == 0)
-                nloops = 100000;
+                nloops = DEFAULT_ITER;
 
         if (rank == 0) {
                 fd = open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0666);
@@ -130,8 +138,8 @@ int main(int argc, char *argv[])
                 trunc_offset = chunk_size + rand()%append_size;
                 if (rank == 0) {
                         if (n % 1000 == 0)
-                                printf("loop %5d: chunk %6d/%#06x, "
-                                       "append %6d/%#06x, trunc @ %6d/%#06x\n",
+                                printf("loop %5d: chunk %6d/%#07x, "
+                                       "append %6d/%#07x, trunc @ %6d/%#07x\n",
                                        n, chunk_size, chunk_size, append_size,
                                        append_size, trunc_offset, trunc_offset);
 
@@ -156,7 +164,7 @@ int main(int argc, char *argv[])
                         rprintf(rank, n, "start MPI_Barrier: %d\n",error);
 
                 /* Do the race */
-                if (rank == n % 2) {
+                if (rank == n % size) {
                         //
                         done = 0;
                         do {
@@ -170,7 +178,7 @@ int main(int argc, char *argv[])
                                 }
                                 done += ret;
                         } while (done != append_size);
-                } else if (rank == 1 - n % 2) {
+                } else if (rank == (n + 1) % size) {
                         ret = truncate(fname, (off_t)trunc_offset);
                         if (ret != 0)
                                 rprintf(rank, n, "truncate @ %u: %s\n",
@@ -227,15 +235,15 @@ int main(int argc, char *argv[])
                                 /* Check case 2: first truncate then append */
                                 if (memcmp(read_buf+chunk_size, trunc_buf,
                                            trunc_offset-chunk_size)) {
-                                        printf("loop %d: append-after-TRUNC"
-                                               " bad [%d-%d]/[%#x-%#x] != 0\n",
+                                        printf("loop %d: append-after-TRUNC bad"
+                                               " [%d-%d]/[%#x-%#x] != 0\n",
                                                n, chunk_size, trunc_offset - 1,
                                                chunk_size, trunc_offset - 1);
                                         error = 1;
                                 } else if (memcmp(read_buf+trunc_offset,
                                                   append_buf, append_size)) {
-                                        printf("loop %d: APPEND-after-trunc"
-                                               " bad [%d-%d]/[%#x-%#x] != %c\n",
+                                        printf("loop %d: APPEND-after-trunc bad"
+                                               " [%d-%d]/[%#x-%#x] != %c\n",
                                                n, trunc_offset, append_size - 1,
                                                trunc_offset, append_size - 1,
                                                APPEND_CHAR);
@@ -251,8 +259,8 @@ int main(int argc, char *argv[])
                         if (rank == 0) {
                                 char command[4096];
 
-                                printf("loop %5d: chunk %6d/%#06x, "
-                                       "append %6d/%#06x, trunc @ %6d/%#06x\n",
+                                printf("loop %5d: chunk %6d/%#07x, "
+                                       "append %6d/%#07x, trunc @ %6d/%#07x\n",
                                        n, chunk_size, chunk_size, append_size,
                                        append_size, trunc_offset, trunc_offset);
 
@@ -264,7 +272,14 @@ int main(int argc, char *argv[])
                 }
         }
 
-        printf("Finished after %d loops\n", n);
+        printf("rank %d, loop %d: finished\n", rank, n);
+        close(fd);
+
+        if (rank == 0) {
+                error = unlink(fname);
+                if (error < 0)
+                        rprintf("unlink %s failed: %s\n",fname,strerror(errno));
+        }
 
         MPI_Finalize();
         return 0;

@@ -1,0 +1,32 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+DEFS= 
+MODULE = lvfs
+
+
+if EXTN
+FSMOD = fsfilt_extN
+else
+FSMOD = fsfilt_ext3
+endif
+
+
+if LIBLUSTRE
+lib_LIBRARIES = liblvfs.a
+liblvfs_a_SOURCES = lvfs_user_fs.c
+
+#if MYSQL
+#liblvfs_a_SOURCES += lvfs_user_mysql.c
+#endif
+
+else
+modulefs_DATA = lvfs.o $(FSMOD).o fsfilt_reiserfs.o
+
+EXTRA_PROGRAMS = lvfs $(FSMOD) fsfilt_reiserfs
+lvfs_SOURCES = lvfs_common.c lvfs_linux.c fsfilt.c
+endif
+
+
+include $(top_srcdir)/Rules
