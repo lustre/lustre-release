@@ -40,23 +40,6 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 
-void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src)
-{
-        tgt->os_type = HTON__u64(src->os_type);
-        tgt->os_blocks = HTON__u64(src->os_blocks);
-        tgt->os_bfree = HTON__u64(src->os_bfree);
-        tgt->os_bavail = HTON__u64(src->os_bavail);
-        tgt->os_files = HTON__u64(src->os_files);
-        tgt->os_ffree = HTON__u64(src->os_ffree);
-        tgt->os_bsize = HTON__u32(src->os_bsize);
-        tgt->os_namelen = HTON__u32(src->os_namelen);
-}
-
-void obd_statfs_unpack(struct obd_statfs *tgt, struct obd_statfs *src)
-{
-        obd_statfs_pack(tgt, src);
-}
-
 void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
 {
         osfs->os_type = sfs->f_type;
@@ -108,8 +91,6 @@ int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
         RETURN(rc);
 }
 
-EXPORT_SYMBOL(obd_statfs_pack);
-EXPORT_SYMBOL(obd_statfs_unpack);
 EXPORT_SYMBOL(statfs_pack);
 EXPORT_SYMBOL(statfs_unpack);
 EXPORT_SYMBOL(obd_self_statfs);
