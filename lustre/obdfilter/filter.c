@@ -732,97 +732,73 @@ struct inode *ioobj_to_inode(struct obd_conn *conn, struct obd_ioobj *o)
         return inode;
 }
 
-int filter_preprw(int cmd, struct obd_conn *conn, 
-                   int objcount, struct obd_ioobj *obj, 
-                   int niocount, struct niobuf *nb, 
-                   struct niobuf *res)
+static int filter_preprw(int cmd, struct obd_conn *conn,
+                         int objcount, struct obd_ioobj *obj,
+                         int niocount, struct niobuf *nb,
+                         struct niobuf *res)
 {
-        int i, j; 
-        struct obd_ioobj *o;
-        struct niobuf *b;
-        struct niobuf *r;
-        struct inode *inode;
-        struct page *page;
-        int rc = 0;
+        struct obd_ioobj *o = obj;
+        struct niobuf *b = nb;
+        struct niobuf *r = res;
+        int i;
         ENTRY;
 
         memset(res, 0, sizeof(*res) * niocount);
 
-        for (i=0; i < objcount; i++) { 
-                o = obj;
-                obj++; 
-                for (j = 0 ; j < o->ioo_bufcnt ; j++) { 
-                        b = nb;
-                        r = res;
-                        nb++;
-                        res++;
-                        
-                        inode = ioobj_to_inode(conn, o); 
-                        if (!inode) { 
-                                EXIT;
-                                /* FIXME: we need to iput all of previous inodes */
-                                return -EINVAL;
-                        }
+        for (i = 0; i < objcount; i++, o++) {
+                int j;
+                for (j = 0; j < o->ioo_bufcnt; j++, b++, r++) {
+                        struct inode *inode = ioobj_to_inode(conn, o);
+                        struct page *page;
+
+                        /* FIXME: we need to iput all inodes on error */
+                        if (!inode)
+                                RETURN(-EINVAL);
 
                         page = lustre_get_page(inode, b->offset >> PAGE_SHIFT);
-                        if (IS_ERR(page)) { 
-                                EXIT; 
-                                return PTR_ERR(page); 
-                        }
+                        if (IS_ERR(page))
+                                RETURN(PTR_ERR(page));
+
                         if (cmd == OBD_BRW_WRITE) {
-                                rc = lustre_prepare_page(0, PAGE_SIZE, page);
+                                int rc = lustre_prepare_page(0, PAGE_SIZE,page);
+                                if (rc)
+                                        CERROR("i %d j %d objcount %d bufcnt %d , rc %d, offset %Ld\n", i, j, objcount, o->ioo_bufcnt, rc, b->offset);
                         }
-                        if (rc) { 
-                                CERROR("i %d j %d objcount %d bufcnt %d , rc %d, offset %Ld\n", i, j, objcount, o->ioo_bufcnt, rc, b->offset);  
-                        }
-                        
-                        r->addr = (__u64)(unsigned long)page_address(page); 
+
+                        r->addr = (__u64)(unsigned long)page_address(page);
                         r->offset = b->offset;
                         r->page = page;
                         r->len = PAGE_SIZE;
-                        /* r->flags */
                 }
         }
         return 0;
 }
 
-int filter_commitrw(int cmd, struct obd_conn *conn, 
-                     int objcount, struct obd_ioobj *obj, 
-                     int niocount, struct niobuf *res)
+static int filter_commitrw(int cmd, struct obd_conn *conn,
+                           int objcount, struct obd_ioobj *obj,
+                           int niocount, struct niobuf *res)
 {
-        int i, j; 
-        int rc;
-        struct inode *inode;
-        struct obd_ioobj *o;
-        struct niobuf *r = NULL;
+        struct obd_ioobj *o = obj;
+        struct niobuf *r = res;
+        int i;
         ENTRY;
 
-        for (i=0; i < objcount; i++) { 
-                o = obj;
-                obj++; 
+        for (i = 0; i < objcount; i++, obj++) {
+                int j;
+                for (j = 0 ; j < o->ioo_bufcnt ; j++, r++) {
+                        struct page *page = r->page;
 
-                for (j = 0 ; j < o->ioo_bufcnt ; j++) { 
-                        r = res;
-                        if (!r)
-                                LBUG();
-                        res++;
-
-                        if (!r) 
+                        if (!r->page)
                                 LBUG();
 
-                        if (cmd == OBD_BRW_WRITE)
-                                rc = lustre_commit_page(r->page, 0, PAGE_SIZE);
-                        else { 
-                                lustre_put_page(r->page);
-                                rc = 0;
-                        }
+                        if (cmd == OBD_BRW_WRITE) {
+                                int rc = lustre_commit_page(page, 0, PAGE_SIZE);
+                                if (rc)
+                                        RETURN(rc);
+                        } else
+                                lustre_put_page(page);
 
-                        if (rc) { 
-                                EXIT; 
-                                return rc;
-                        }
-                        inode = ((struct page *)r->page)->mapping->host;
-                        iput(inode); 
+                        iput(page->mapping->host);
                 }
         }
         return 0;
