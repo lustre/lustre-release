@@ -3,7 +3,6 @@ DEFS=
 SUBDIRS = Lustre
 
 CFLAGS:=-g -O2 -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include  -I$(srcdir)/../include -Wall -L../portals/utils
-CFLAGS += -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
 KFLAGS:=
 CPPFLAGS = $(HAVE_LIBREADLINE)
 lctl_LDADD := $(LIBREADLINE) -lptlctl
