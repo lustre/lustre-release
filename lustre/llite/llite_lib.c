@@ -192,6 +192,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err);
         }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+#warning "Please fix this"
+#else
+        /* bug 2805 - set VM readahead to zero */
+        vm_max_readahead = vm_min_readahead = 0;
+#endif
         sb->s_root = d_alloc_root(root);
         RETURN(err);
 
@@ -385,6 +391,9 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         int err;
         ENTRY;
 
+        if (lmd_bad_magic(lmd))
+                RETURN(-EINVAL);
+
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mdc_uuid);
 
@@ -457,7 +466,14 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         exp = class_conn2export(&mdc_conn);
 
         ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
+#if 1
         rc = class_config_parse_llog(ctxt, profile, cfg);
+#else
+        /*
+         * For debugging, it's useful to just dump the log
+         */
+        rc = class_config_dump_llog(ctxt, profile, cfg);
+#endif
         if (rc) {
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
         }
@@ -510,10 +526,9 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-        if (lmd == NULL) {
-                CERROR("lustre_mount_data is NULL: check that /sbin/mount.lustre exists?\n");
+        if (lmd_bad_magic(lmd))
                 RETURN(-EINVAL);
-        }
+
         sbi = lustre_init_sbi(sb);
         if (!sbi)
                 RETURN(-ENOMEM);
@@ -1051,6 +1066,9 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                                 LBUG();
                         }
                 }
+                /* bug 2844 - limit i_blksize for broken user-space apps */
+                LASSERTF(lsm->lsm_xfersize != 0, "%lu\n", lsm->lsm_xfersize);
+                inode->i_blksize = min(lsm->lsm_xfersize, LL_MAX_BLKSIZE);
                 if (lli->lli_smd != lsm)
                         obd_free_memmd(ll_i2obdexp(inode), &lsm);
         }
