@@ -571,7 +571,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
 {
         struct filter_obd *filter = &obd->u.filter;
         __u64 *new_objids = NULL;
-        struct filter_subdirs *new_subdirs = NULL, *tmp_subdirs;
+        struct filter_subdirs *new_subdirs = NULL, *tmp_subdirs = NULL;
         struct dentry **new_groups = NULL;
         struct file **new_files = NULL;
         struct dentry *dentry;
@@ -988,16 +988,33 @@ static int filter_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
-static int filter_lock_dentry(struct obd_device *obd, struct dentry *dparent)
+extern void *lock_dir(struct inode *dir, struct qstr *name);
+extern void unlock_dir(struct inode *dir, void *lock);
+
+static void * filter_lock_dentry(struct obd_device *obd,
+                                 struct dentry *dparent, obd_id id)
 {
+#ifdef S_PDIROPS
+        struct qstr qstr;
+        char name[32];
+        qstr.name = name;
+        qstr.len = sprintf(name, LPU64, id);
+        return lock_dir(dparent->d_inode, &qstr);
+#else
         down(&dparent->d_inode->i_sem);
+#endif
         return 0;
 }
 
 /* We never dget the object parent, so DON'T dput it either */
-static void filter_parent_unlock(struct dentry *dparent)
+static void filter_parent_unlock(struct dentry *dparent, void *lock)
 {
+#ifdef S_PDIROPS
+        LASSERT(lock != NULL);
+        unlock_dir(dparent->d_inode, lock);
+#else
         up(&dparent->d_inode->i_sem);
+#endif
 }
 
 /* We never dget the object parent, so DON'T dput it either */
@@ -1015,11 +1032,10 @@ struct dentry *filter_parent(struct obd_device *obd, obd_gr group, obd_id objid)
 
 /* We never dget the object parent, so DON'T dput it either */
 struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
-                                  obd_id objid)
+                                  obd_id objid, void **lock)
 {
         unsigned long now = jiffies;
         struct dentry *dparent = filter_parent(obd, group, objid);
-        int rc;
 
         if (IS_ERR(dparent))
                 return dparent;
@@ -1027,10 +1043,10 @@ struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
         LASSERT(dparent);
         LASSERT(dparent->d_inode);
 
-        rc = filter_lock_dentry(obd, dparent);
+        *lock = filter_lock_dentry(obd, dparent, objid);
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow parent lock %lus\n", (jiffies - now) / HZ);
-        return rc ? ERR_PTR(rc) : dparent;
+        return dparent;
 }
 
 /* How to get files, dentries, inodes from object id's.
@@ -1046,6 +1062,7 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
 {
         struct dentry *dparent = dir_dentry;
         struct dentry *dchild;
+        void *lock = NULL;
         char name[32];
         int len;
         ENTRY;
@@ -1057,7 +1074,7 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
 
         len = sprintf(name, LPU64, id);
         if (dir_dentry == NULL) {
-                dparent = filter_parent_lock(obd, group, id);
+                dparent = filter_parent_lock(obd, group, id, &lock);
                 if (IS_ERR(dparent))
                         RETURN(dparent);
         }
@@ -1065,7 +1082,7 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
                dparent->d_name.len, dparent->d_name.name, name);
         dchild = /*ll_*/lookup_one_len(name, dparent, len);
         if (dir_dentry == NULL)
-                filter_parent_unlock(dparent);
+                filter_parent_unlock(dparent, lock);
         if (IS_ERR(dchild)) {
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 RETURN(dchild);
@@ -2071,6 +2088,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         int err = 0, rc = 0, recreate_obj = 0, i;
         __u64 next_id;
         void *handle = NULL;
+        void *lock = NULL;
         ENTRY;
 
         filter = &obd->u.filter;
@@ -2109,7 +2127,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
                 CDEBUG(D_INFO, "precreate objid "LPU64"\n", next_id);
 
-                dparent = filter_parent_lock(obd, group, next_id);
+                dparent = filter_parent_lock(obd, group, next_id, &lock);
                 if (IS_ERR(dparent))
                         GOTO(cleanup, rc = PTR_ERR(dparent));
                 cleanup_phase = 1;
@@ -2176,7 +2194,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 case 2:
                         f_dput(dchild);
                 case 1:
-                        filter_parent_unlock(dparent);
+                        filter_parent_unlock(dparent, lock);
                 case 0:
                         break;
                 }
@@ -2306,6 +2324,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
         void *handle = NULL;
         struct llog_cookie *fcc = NULL;
         int rc, rc2, cleanup_phase = 0, have_prepared = 0;
+        void *lock = NULL;
         ENTRY;
 
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
@@ -2316,7 +2335,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
  acquire_locks:
-        dparent = filter_parent_lock(obd, oa->o_gr, oa->o_id);
+        dparent = filter_parent_lock(obd, oa->o_gr, oa->o_id, &lock);
         if (IS_ERR(dparent))
                 GOTO(cleanup, rc = PTR_ERR(dparent));
         cleanup_phase = 1;
@@ -2346,7 +2365,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
                  * complication of condition the above code to skip it on the
                  * second time through. */
                 f_dput(dchild);
-                filter_parent_unlock(dparent);
+                filter_parent_unlock(dparent, lock);
 
                 filter_prepare_destroy(obd, oa->o_id, oa->o_gr);
                 have_prepared = 1;
@@ -2394,7 +2413,7 @@ cleanup:
         case 2:
                 f_dput(dchild);
         case 1:
-                filter_parent_unlock(dparent);
+                filter_parent_unlock(dparent, lock);
         case 0:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 break;
