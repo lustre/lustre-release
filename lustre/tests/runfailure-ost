@@ -1,0 +1,46 @@
+#!/bin/sh
+
+SRCDIR="`dirname $0`"
+. $SRCDIR/common.sh
+
+export DEBUG_WAIT=yes
+. $SRCDIR/llsetup.sh $SRCDIR/net-local.cfg $SRCDIR/mds.cfg \
+  $SRCDIR/obdfilter.cfg $SRCDIR/client-mount.cfg $SRCDIR/ldlm.cfg || exit 2
+
+test_fail() {
+	echo $1 > /proc/sys/lustre/fail_loc
+	shift
+	echo "Running '$*'"
+	$* 
+
+	echo "Cleaning up and restarting MDS"
+	umount /mnt/lustre || fail "unable to unmount"
+	$OBDCTL <<- EOF
+	name2dev MDSDEV
+	cleanup
+	detach
+	quit
+	EOF
+
+	echo 0 > /proc/sys/lustre/fail_loc
+
+	$OBDCTL <<- EOF
+	newdev
+	attach mds MDSDEV
+	setup ${MDS} ${MDSFS}
+	quit
+	EOF
+	$MNT
+}
+
+#set -vx
+
+touch /mnt/lustre/foo
+chmod a+x /mnt/lustre/foo
+sync
+
+# OBD_FAIL_OST_OPEN_NET: OST will discard open request packet
+cp /etc/issue /mnt/lustre/foo
+test_fail 0x208 cat /mnt/lustre/foo
+
+echo "Done."

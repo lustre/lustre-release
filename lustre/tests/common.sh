@@ -3,8 +3,8 @@ export PATH=$PATH:/sbin:/usr/sbin
 
 [ -d /r ] && R=/r
 
-PORTALS=$SRCDIR../../portals
-LUSTRE=$SRCDIR..
+PORTALS=$SRCDIR/../../portals
+LUSTRE=$SRCDIR/..
 
 PTLCTL=$PORTALS/linux/utils/ptlctl
 DBGCTL=$PORTALS/linux/utils/debugctl
