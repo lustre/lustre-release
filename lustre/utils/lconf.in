@@ -1668,7 +1668,7 @@ def setupModulePath(cmd):
     base = os.path.dirname(cmd)
     if os.access(base+"/Makefile", os.R_OK):
         config.src_dir(base + "/../")  
-    if not PORTALS_DIR.find('/') == 0:
+    if PORTALS_DIR[0] != '/':
 	PORTALS_DIR= config.src_dir()+PORTALS_DIR
 
 def sys_set_debug_path():
