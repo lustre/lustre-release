@@ -1,0 +1,71 @@
+--- linux/fs/inode.c.b_io	2003-02-18 16:39:16.000000000 -0800
++++ linux/fs/inode.c	2003-02-18 16:39:45.000000000 -0800
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/config.h>
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/string.h>
+ #include <linux/mm.h>
+@@ -66,7 +67,8 @@
+  * NOTE! You also have to own the lock if you change
+  * the i_state of an inode while it is in use..
+  */
+-static spinlock_t inode_lock = SPIN_LOCK_UNLOCKED;
++spinlock_t inode_lock = SPIN_LOCK_UNLOCKED;
++EXPORT_SYMBOL(inode_lock);
+ 
+ /*
+  * Statistics gathering..
+--- linux/fs/Makefile.b_io	2003-02-18 16:39:16.000000000 -0800
++++ linux/fs/Makefile	2003-02-18 16:39:37.000000000 -0800
+@@ -7,7 +7,7 @@
+ 
+ O_TARGET := fs.o
+ 
+-export-objs :=	filesystems.o open.o dcache.o buffer.o
++export-objs :=	filesystems.o open.o dcache.o buffer.o inode.o
+ mod-subdirs :=	nls
+ 
+ obj-y :=	open.o read_write.o devices.o file_table.o buffer.o \
+--- linux/mm/vmscan.c.b_io	2003-02-18 16:39:16.000000000 -0800
++++ linux/mm/vmscan.c	2003-02-18 16:40:01.000000000 -0800
+@@ -14,6 +14,8 @@
+  *  Multiqueue VM started 5.8.00, Rik van Riel.
+  */
+ 
++#include <linux/config.h>
++#include <linux/module.h>
+ #include <linux/slab.h>
+ #include <linux/kernel_stat.h>
+ #include <linux/swap.h>
+@@ -837,6 +839,7 @@
+ 	set_current_state(TASK_RUNNING);
+ 	remove_wait_queue(&kswapd_done, &wait);
+ }
++EXPORT_SYMBOL(wakeup_kswapd);
+ 
+ static void wakeup_memwaiters(void)
+ {
+--- linux/mm/Makefile.b_io	2003-02-18 16:39:16.000000000 -0800
++++ linux/mm/Makefile	2003-02-18 16:39:37.000000000 -0800
+@@ -9,7 +9,7 @@
+ 
+ O_TARGET := mm.o
+ 
+-export-objs := shmem.o filemap.o memory.o page_alloc.o mempool.o
++export-objs := shmem.o filemap.o memory.o page_alloc.o mempool.o vmscan.o
+ 
+ obj-y	 := memory.o mmap.o filemap.o mprotect.o mlock.o mremap.o \
+ 	    vmalloc.o slab.o bootmem.o swap.o vmscan.o page_io.o \
+--- linux-chaos/mm/page_alloc.c.b_io_export	Wed Jan 29 17:00:32 2003
++++ linux-chaos/mm/page_alloc.c	Wed Jan 29 17:01:31 2003
+@@ -31,6 +31,7 @@
+ int nr_inactive_dirty_pages;
+ int nr_inactive_clean_pages;
+ pg_data_t *pgdat_list;
++EXPORT_SYMBOL(pgdat_list);
+ 
+ /*
+  * The zone_table array is used to look up the address of the
