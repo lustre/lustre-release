@@ -286,6 +286,9 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_RENAME:
                         bufcount = 3;
                         break;
+                case IT_RENAME2:
+                        bufcount = 5;
+                        break;
                 case IT_UNLINK:
                         bufcount = 2;
                         size[1] = sizeof(struct obdo);
@@ -365,7 +368,8 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         LBUG();
                 }
 
-                if (it->opc == IT_UNLINK || it->opc == IT_RMDIR)
+                if (it->opc == IT_UNLINK || it->opc == IT_RMDIR || 
+                    it->opc == IT_RENAME || it->opc == IT_RENAME2)
                         RETURN(ELDLM_LOCK_ABORTED);
 
                 mds_rep = lustre_msg_buf(req->rq_repmsg, 1);

@@ -437,8 +437,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         GOTO(out_unlink_de, rc = -EIO);
                 }
         } else
-
-        ldlm_lock_dump((void *)(unsigned long)lockh.addr);
+                ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
         down(&dir->i_sem);
         dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
@@ -472,7 +471,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
 
-        switch (dchild->d_inode->i_mode & S_IFMT) {
+        switch (inode->i_mode & S_IFMT) {
         case S_IFDIR:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_RMDIR);
                 if (!handle)
@@ -511,8 +510,7 @@ out_unlink_dchild:
         l_dput(dchild);
 out_unlink_de:
         up(&dir->i_sem);
-        ldlm_lock_decref(&lockh
-, lock_mode);
+        ldlm_lock_decref(&lockh, lock_mode);
         if (!rc) { 
                 /* Take an exclusive lock on the resource that we're
                  * about to free, to force everyone to drop their
@@ -621,7 +619,11 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
         struct mds_obd *mds = mds_req2mds(req);
+        __u64 res_id[3] = {0};
+        struct lustre_handle tgtlockh, srclockh, oldhandle;
+        int lock_mode;
         void *handle;
+        int flags;
         int rc = 0;
         int err;
         ENTRY;
@@ -631,12 +633,53 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 GOTO(out_rename, rc = -ESTALE);
         }
 
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+        res_id[0] = de_srcdir->d_inode->i_ino;
+
+        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+                                   NULL, 0, lock_mode, &srclockh);
+        if (rc == 0) {
+                LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
+                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                      (struct lustre_handle *)&mds->mds_connh,
+                                      NULL, mds->mds_local_namespace, NULL,
+                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
+                                      &flags, (void *)mds_lock_callback, NULL,
+                                      0, &srclockh);
+                if (rc != ELDLM_OK) {
+                        CERROR("lock enqueue: err: %d\n", rc);
+                        GOTO(out_rename_srcput, rc = -EIO);
+                }
+        } else
+                ldlm_lock_dump((void *)(unsigned long)srclockh.addr);
+
+
         de_tgtdir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
         if (IS_ERR(de_tgtdir)) {
                 GOTO(out_rename_srcdir, rc = -ESTALE);
         }
 
-#warning FIXME: This needs locking attention
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+        res_id[0] = de_tgtdir->d_inode->i_ino;
+
+        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
+                                   NULL, 0, lock_mode, &tgtlockh);
+        if (rc == 0) {
+                LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
+                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                      (struct lustre_handle *)&mds->mds_connh,
+                                      NULL, mds->mds_local_namespace, NULL,
+                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
+                                      &flags, (void *)mds_lock_callback, NULL,
+                                      0, &tgtlockh);
+                if (rc != ELDLM_OK) {
+                        CERROR("lock enqueue: err: %d\n", rc);
+                        GOTO(out_rename_tgtput, rc = -EIO);
+                }
+        } else
+                ldlm_lock_dump((void *)(unsigned long)tgtlockh.addr);
+
+	double_lock(de_tgtdir, de_srcdir);
 
         de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
         if (IS_ERR(de_old)) {
@@ -656,8 +699,10 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         handle = mds_fs_start(mds, de_tgtdir->d_inode, MDS_FSOP_RENAME);
         if (!handle)
                 GOTO(out_rename_denew, rc = PTR_ERR(handle));
+        lock_kernel();
         rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new,
                         NULL);
+        unlock_kernel();
 
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
@@ -673,12 +718,44 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 out_rename_denew:
         l_dput(de_new);
 out_rename_deold:
+        if (!rc) { 
+                res_id[0] = de_old->d_inode->i_ino;
+                /* Take an exclusive lock on the resource that we're
+                 * about to free, to force everyone to drop their
+                 * locks. */
+                LDLM_DEBUG_NOLOCK("getting EX lock res %Lu", res_id[0]);
+                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
+                                      (struct lustre_handle *)&mds->mds_connh,
+                                      NULL, mds->mds_local_namespace, NULL, 
+                                      res_id,
+                                      LDLM_PLAIN, NULL, 0, LCK_EX, &flags,
+                                      (void *)mds_lock_callback, NULL, 0, 
+                                      &oldhandle);
+                if (rc) 
+                        CERROR("failed to get child inode lock (child ino %Ld, "
+                               "dir ino %ld)\n",
+                               res_id[0], de_old->d_inode->i_ino);
+        }
+
         l_dput(de_old);
-out_rename_tgtdir:
+
+        if (!rc) { 
+                ldlm_lock_decref(&oldhandle, LCK_EX);
+                rc = ldlm_cli_cancel(&oldhandle, NULL);
+                if (rc < 0)
+                        CERROR("failed to cancel child inode lock ino "
+                               "%Ld: %d\n", res_id[0], rc);
+        }
+ out_rename_tgtdir:
+        double_up(&de_srcdir->d_inode->i_sem, &de_tgtdir->d_inode->i_sem);
+        ldlm_lock_decref(&tgtlockh, lock_mode);
+ out_rename_tgtput:
         l_dput(de_tgtdir);
-out_rename_srcdir:
+ out_rename_srcdir:
+        ldlm_lock_decref(&srclockh, lock_mode);
+ out_rename_srcput:
         l_dput(de_srcdir);
-out_rename:
+ out_rename:
         req->rq_status = rc;
         return 0;
 }
