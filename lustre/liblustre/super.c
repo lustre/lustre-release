@@ -415,6 +415,109 @@ void llu_iop_gone(struct inode *inode)
         OBD_FREE(lli, sizeof(*lli));
 }
 
+static int llu_setattr_raw(struct inode *inode, struct iattr *attr)
+{
+        struct ptlrpc_request *request = NULL;
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct mdc_op_data op_data;
+        int err = 0;
+        ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", lli->lli_st_ino);
+
+        /* if need truncate, do it at first */
+        if (attr->ia_valid & ATTR_SIZE) {
+                printf("************* don't support truncate now !!!!!!!!\n");
+                LBUG();
+        }
+
+        /* Don't send size changes to MDS to avoid "fast EA" problems, and
+         * also avoid a pointless RPC (we get file size from OST anyways).
+         */
+        attr->ia_valid &= ~ATTR_SIZE;
+        if (!attr->ia_valid)
+                RETURN(0);
+
+        llu_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
+
+        err = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
+                          attr, NULL, 0, &request);
+        if (err)
+                CERROR("mdc_setattr fails: err = %d\n", err);
+
+        ptlrpc_req_finished(request);
+
+        if (S_ISREG(inode->i_mode) && attr->ia_valid & ATTR_MTIME_SET) {
+                struct lov_stripe_md *lsm = lli->lli_smd;
+                struct obdo oa;
+                int err2;
+
+                CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
+                       lli->lli_st_ino, attr->ia_mtime);
+                oa.o_id = lsm->lsm_object_id;
+                oa.o_mode = S_IFREG;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMTIME;
+                oa.o_mtime = attr->ia_mtime;
+                err2 = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                if (err2) {
+                        CERROR("obd_setattr fails: rc=%d\n", err);
+                        if (!err)
+                                err = err2;
+                }
+        }
+        RETURN(err);
+}
+
+/* FIXME here we simply act as a thin layer to glue it with
+ * llu_setattr_raw(), which is copy from kernel
+ */
+static int llu_iop_setattr(struct pnode *pno,
+                           struct inode *ino,
+                           unsigned mask,
+                           struct intnl_stat *stbuf)
+{
+        struct iattr iattr;
+
+        memset(&iattr, 0, sizeof(iattr));
+
+        if (mask & SETATTR_MODE) {
+                iattr.ia_mode = stbuf->st_mode;
+                iattr.ia_valid |= ATTR_MODE;
+        }
+        if (mask & SETATTR_MTIME) {
+                iattr.ia_mtime = stbuf->st_mtime;
+                iattr.ia_valid |= ATTR_MTIME;
+        }
+        if (mask & SETATTR_ATIME) {
+                iattr.ia_atime = stbuf->st_atime;
+                iattr.ia_valid |= ATTR_ATIME;
+        }
+        if (mask & SETATTR_UID) {
+                iattr.ia_uid = stbuf->st_uid;
+                iattr.ia_valid |= ATTR_UID;
+        }
+        if (mask & SETATTR_GID) {
+                iattr.ia_gid = stbuf->st_gid;
+                iattr.ia_valid |= ATTR_GID;
+        }
+        if (mask & SETATTR_LEN) {
+                iattr.ia_size = stbuf->st_size; /* FIXME signed expansion problem */
+                iattr.ia_valid |= ATTR_SIZE;
+        }
+
+        iattr.ia_valid |= ATTR_RAW;
+        /* FIXME FIXME FIXME FIXME FIXME FIXME FIXME
+         * without ATTR_FROM_OPEN, mds_reint_setattr will call
+         * mds_fid2locked_dentry() and deadlocked at completion_ast call.
+         * Here we workaround it and avoid any locking.
+         * FIXME FIXME FIXME FIXME FIXME FIXME FIXME
+         */
+        iattr.ia_valid |= ATTR_FROM_OPEN;
+
+        return llu_setattr_raw(ino, &iattr);
+}
+
+
 struct filesys_ops llu_filesys_ops =
 {
         fsop_gone: llu_fsop_gone,
@@ -424,11 +527,24 @@ struct filesys_ops llu_filesys_ops =
 static struct inode_ops llu_inode_ops = {
         inop_lookup:    llu_iop_lookup,
         inop_getattr:   llu_iop_getattr,
+        inop_setattr:   llu_iop_setattr,
+        inop_getdirentries:     NULL,
+        inop_mkdir:     NULL,
+        inop_rmdir:     NULL,
+        inop_symlink:   NULL,
+        inop_readlink:  NULL,
         inop_open:      llu_iop_open,
         inop_close:     llu_iop_close,
+        inop_unlink:    NULL,
         inop_ipreadv:   llu_iop_ipreadv,
         inop_ipwritev:  llu_iop_ipwritev,
         inop_iodone:    llu_iop_iodone,
+        inop_fcntl:     NULL,
+        inop_sync:      NULL,
+        inop_datasync:  NULL,
+        inop_ioctl:     NULL,
+        inop_mknod:     NULL,
+        inop_statvfs:   NULL,
         inop_gone:      llu_iop_gone,
 };
 

@@ -1,44 +1,24 @@
-/*
- *    This Cplant(TM) source code is the property of Sandia National
- *    Laboratories.
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *    This Cplant(TM) source code is copyrighted by Sandia National
- *    Laboratories.
+ * Lustre Light user test program
  *
- *    The redistribution of this Cplant(TM) source code is subject to the
- *    terms of the GNU Lesser General Public License
- *    (see cit/LGPL or http://www.gnu.org/licenses/lgpl.html)
+ *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
- *    Cplant(TM) Copyright 1998-2003 Sandia Corporation. 
- *    Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
- *    license for use of this work by or on behalf of the US Government.
- *    Export of this program may require a license from the United States
- *    Government.
- */
-
-/*
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * 
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- * 
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * Questions or comments about this library should be sent to:
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
- * Lee Ward
- * Sandia National Laboratories, New Mexico
- * P.O. Box 5800
- * Albuquerque, NM 87185-1110
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
  *
- * lee@sandia.gov
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define _BSD_SOURCE
@@ -59,6 +39,29 @@
 #include <mount.h>
 
 
+int do_stat(const char *name)
+{
+	struct stat stat;
+
+	if (lstat(name, &stat)) {
+		perror("failed to stat: ");
+		return -1;
+	}
+	printf("******* stat '%s' ********\n", name);
+	printf("ino:\t\t%lu\n",stat.st_ino);
+	printf("mode:\t\t%o\n",stat.st_mode);
+	printf("nlink:\t\t%d\n",stat.st_nlink);
+        printf("uid/gid:\t%d/%d\n", stat.st_uid, stat.st_gid);
+        printf("size:\t\t%ld\n", stat.st_size);
+        printf("blksize:\t%ld\n", stat.st_blksize);
+        printf("block count:\t%ld\n", stat.st_blocks);
+	printf("atime:\t\t%lu\n",stat.st_atime);
+	printf("mtime:\t\t%lu\n",stat.st_mtime);
+	printf("ctime:\t\t%lu\n",stat.st_ctime);
+	printf("******* end stat ********\n");
+
+	return 0;
+}
 /*
  * Get stats of file and file system.
  *
@@ -81,7 +84,7 @@ int
 main(int argc, char * const argv[])
 {
 	struct stat statbuf;
-	int	err, i, fd, written, readed;
+	int rc, err, i, fd, written, readed;
 	char pgbuf[4096], readbuf[4096];
 	int npages;
 
@@ -111,10 +114,10 @@ main(int argc, char * const argv[])
 		printf("******** end stat %s: %d*********\n", files[i], err);
 	}
 #endif
-#if 1
+#if 0
 	portal_debug = 0;
 	portal_subsystem_debug = 0;
-	npages = 100;
+	npages = 10;
 
 	fd = open("/newfile01", O_RDWR|O_CREAT|O_TRUNC, 00664);
 	printf("***************** open return %d ****************\n", fd);
@@ -135,7 +138,16 @@ main(int argc, char * const argv[])
 		readbuf[10] = 0;
 		printf("<<< page %d: %d bytes (%s)\n", i, readed, readbuf);
 	}
+        close(fd);
 #endif
+
+#if 1
+        //rc = chown("/newfile01", 10, 20);
+        rc = chmod("/newfile01", 0777);
+        printf("-------------- chmod return %d -----------\n", rc);
+        do_stat("/newfile01");
+#endif
+
 	printf("sysio is about shutdown\n");
 	/*
 	 * Clean up.
