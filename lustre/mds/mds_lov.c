@@ -68,7 +68,8 @@ int mds_configure_lov(struct obd_device *obd, struct lov_desc *desc,
                         if (rc >= 0)
                                 rc = -EIO;
                         break;
-                }
+                } else
+                        rc = 0;
         }
         if (filp_close(f, 0))
                 CERROR("Error closing LOVTGTS file\n");
