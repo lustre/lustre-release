@@ -1,0 +1,12 @@
+fs/nfsd/vfs.c
+fs/sysfs/inode.c
+fs/namei.c
+fs/dcache.c
+fs/namespace.c
+fs/open.c
+fs/stat.c
+include/linux/dcache.h
+include/linux/fs.h
+include/linux/namei.h
+kernel/ksyms.c
+net/unix/af_unix.c

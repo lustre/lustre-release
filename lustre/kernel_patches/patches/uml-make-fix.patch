@@ -1,0 +1,42 @@
+
+
+
+ Makefile    |    2 ++
+ fs/Makefile |    1 +
+ init/main.c |    2 +-
+ 3 files changed, 4 insertions(+), 1 deletion(-)
+
+--- uml-2.5/Makefile~uml-make-fix	2003-05-25 21:25:55.000000000 -0600
++++ uml-2.5-braam/Makefile	2003-05-25 21:51:40.000000000 -0600
+@@ -404,6 +404,8 @@ $(SUBDIRS): prepare
+ 
+ .PHONY: prepare
+ prepare: include/linux/version.h include/asm include/config/MARKER
++	-ln -s arch/um/kernel/tt/include/ptrace-tt.h arch/um/include/sysdep/ptrace-tt.h
++	-ln -s /usr/src/lustre fs/lustre
+ ifdef KBUILD_MODULES
+ ifeq ($(origin SUBDIRS),file)
+ 	$(Q)rm -rf $(MODVERDIR)
+--- uml-2.5/init/main.c~uml-make-fix	2003-05-25 21:43:27.000000000 -0600
++++ uml-2.5-braam/init/main.c	2003-05-25 21:44:16.000000000 -0600
+@@ -47,7 +47,7 @@
+  */
+ #if __GNUC__ == 2 && __GNUC_MINOR__ == 96
+ #ifdef CONFIG_FRAME_POINTER
+-#error This compiler cannot compile correctly with frame pointers enabled
++#warning This compiler cannot compile correctly with frame pointers enabled
+ #endif
+ #endif
+ 
+--- uml-2.5/fs/Makefile~uml-make-fix	2003-05-25 21:48:05.000000000 -0600
++++ uml-2.5-braam/fs/Makefile	2003-05-25 21:48:57.000000000 -0600
+@@ -50,6 +50,7 @@ obj-$(CONFIG_PROFILING)		+= dcookies.o
+ obj-$(CONFIG_EXT3_FS)		+= ext3/ # Before ext2 so root fs can be ext3
+ obj-$(CONFIG_JBD)		+= jbd/
+ obj-$(CONFIG_EXT2_FS)		+= ext2/
++obj-y				+= lustre/
+ obj-$(CONFIG_CRAMFS)		+= cramfs/
+ obj-$(CONFIG_RAMFS)		+= ramfs/
+ obj-$(CONFIG_HUGETLBFS)		+= hugetlbfs/
+
+_

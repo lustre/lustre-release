@@ -1,37 +1,3 @@
---- ./arch/um/kernel/mem.c.lustre	2003-05-21 16:45:46.000000000 -0700
-+++ ./arch/um/kernel/mem.c	2003-05-21 16:52:09.000000000 -0700
-@@ -657,6 +657,22 @@
- 	return(phys_mem_map(pte_val(pte)));
- }
- 
-+struct page *check_get_page(unsigned long kaddr)
-+{
-+        struct page *page;
-+        struct mem_region *mr;
-+        unsigned long phys = __pa(kaddr);
-+	unsigned int n = phys_region_index(phys);
-+
-+	if(regions[n] == NULL) 
-+                return NULL; 
-+
-+        mr = regions[n];
-+        page = (struct page *) mr->mem_map;
-+	return page + ((phys_addr(phys)) >> PAGE_SHIFT);
-+}
-+
-+
- struct mem_region *page_region(struct page *page, int *index_out)
- {
- 	int i;
-@@ -744,7 +760,7 @@
- 		   (addr <= region->start + region->len))
- 			return(mk_phys(addr - region->start, i));
- 	}
--	panic("region_pa : no region for virtual address");
-+	//panic("region_pa : no region for virtual address");
- 	return(0);
- }
- 
 --- ./fs/nfsd/vfs.c.lustre	2003-05-21 16:46:55.000000000 -0700
 +++ ./fs/nfsd/vfs.c	2003-05-21 16:52:09.000000000 -0700
 @@ -1348,7 +1348,7 @@
@@ -797,16 +763,6 @@
  
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
---- ./include/linux/slab.h.lustre	2003-05-21 16:47:32.000000000 -0700
-+++ ./include/linux/slab.h	2003-05-21 16:52:09.000000000 -0700
-@@ -59,6 +59,7 @@
- extern int kmem_cache_shrink(kmem_cache_t *);
- extern void *kmem_cache_alloc(kmem_cache_t *, int);
- extern void kmem_cache_free(kmem_cache_t *, void *);
-+extern int kmem_cache_validate(kmem_cache_t *cachep, void *objp);
- extern unsigned int kmem_cache_size(kmem_cache_t *);
- 
- extern void *kmalloc(size_t, int);
 --- ./kernel/ksyms.c.lustre	2003-05-21 16:47:40.000000000 -0700
 +++ ./kernel/ksyms.c	2003-05-21 16:52:09.000000000 -0700
 @@ -374,6 +374,7 @@
@@ -824,26 +780,12 @@
 +/* lustre */
 +EXPORT_SYMBOL(do_kern_mount);
 +EXPORT_SYMBOL(exit_files);
-+EXPORT_SYMBOL(kmem_cache_validate);
++//EXPORT_SYMBOL(kmem_cache_validate);
 +
 +
  /* waitqueue handling */
  EXPORT_SYMBOL(add_wait_queue);
  EXPORT_SYMBOL(add_wait_queue_exclusive);
---- ./mm/slab.c.lustre	2003-05-21 16:47:41.000000000 -0700
-+++ ./mm/slab.c	2003-05-21 16:52:09.000000000 -0700
-@@ -1848,6 +1848,11 @@
- 	}
- }
- 
-+int kmem_cache_validate(kmem_cache_t *cachep, void *objp)
-+{
-+	return 1;
-+}
-+
- /**
-  * kmem_cache_alloc - Allocate an object
-  * @cachep: The cache to allocate from.
 --- ./net/unix/af_unix.c.lustre	2003-05-21 16:47:50.000000000 -0700
 +++ ./net/unix/af_unix.c	2003-05-21 16:52:09.000000000 -0700
 @@ -721,7 +721,7 @@
