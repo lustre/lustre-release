@@ -329,8 +329,8 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                         GOTO(out, 0);
 
                 OBD_FREE(bulk, sizeof(*bulk));
-                bulk = NULL;
         }
+        bulk = NULL;
 
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
@@ -387,11 +387,11 @@ static int ost_brw_write_cb(struct ptlrpc_bulk_desc *bulk, void *data)
 static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
         struct obd_conn conn;
-        struct niobuf *nb, *dst;
+        struct niobuf *nb, *res;
         struct obd_ioobj *ioo;
         struct ost_body *body;
         int cmd, rc, i, j, objcount, niocount, size[2] = {sizeof(*body)};
-        void *tmp1, *tmp2, *end2, *res;
+        void *tmp1, *tmp2, *end2;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -431,7 +431,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         if (req->rq_status)
                 GOTO(out, 0);
 
-        for (i = 0; i < niocount; i++) {
+        for (i = 0; i < niocount; i++, res++) {
                 struct ptlrpc_bulk_desc *bulk;
                 struct ptlrpc_service *srv = req->rq_obd->u.ost.ost_service;
 
@@ -443,12 +443,11 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 bulk->b_xid = srv->srv_xid++;
                 spin_unlock(&srv->srv_lock);
 
-                dst = &(((struct niobuf *)res)[i]);
-                dst->xid = HTON__u32(bulk->b_xid);
+                res->xid = HTON__u32(bulk->b_xid);
 
-                bulk->b_buf = (void *)(unsigned long)dst->addr;
+                bulk->b_buf = (void *)(unsigned long)res->addr;
                 bulk->b_cb = ost_brw_write_cb;
-                bulk->b_page = dst->page;
+                bulk->b_page = res->page;
                 memcpy(&(bulk->b_conn), &conn, sizeof(conn));
                 bulk->b_buflen = PAGE_SIZE;
                 bulk->b_portal = OSC_BULK_PORTAL;
