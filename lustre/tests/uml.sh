@@ -15,10 +15,11 @@ OSTDEVBASE=$TMP/ost
 #etc
 OSTSIZE=${OSTSIZE:-100000}
 STRIPECNT=${STRIPECNT:-1}
-STRIPESZ=${STRIPESZ:-$((1024 * 1024))}
+STRIPE_BYTES=${STRIPE_BYTES:-$((1024 * 1024))}
 OSDTYPE=${OSDTYPE:-obdfilter}
 OSTFAILOVER=${OSTFAILOVER:-}
 
+MOUNT=${MOUNT:-/mnt/lustre}
 FSTYPE=${FSTYPE:-ext3}
 
 NETTYPE=${NETTYPE:-tcp}
@@ -88,7 +89,7 @@ echo; echo "adding MDS on: $MDSNODE"
 ${LMC} -m $config --add mds --format --node $MDSNODE --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE ||exit 10
 
 # configure ost
-${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPESZ --stripe_cnt $STRIPECNT --stripe_pattern 0 || exit 20
+${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPECNT --stripe_pattern 0 || exit 20
 COUNT=1
 echo -n "adding OST on:"
 for NODE in $OSTNODES; do
@@ -111,6 +112,6 @@ done
 echo; echo -n "adding CLIENT on:"
 for NODE in $CLIENTS; do
 	echo -n " $NODE"
-	${LMC} -m $config --add mtpt --node $NODE --path /mnt/lustre --mds mds1 --lov lov1 || exit 30
+	${LMC} -m $config --add mtpt --node $NODE --path $MOUNT --mds mds1 --lov lov1 || exit 30
 done
 echo

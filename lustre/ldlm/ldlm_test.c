@@ -218,8 +218,7 @@ int ldlm_test_extents(struct obd_device *obddev)
                 LBUG();
 
         flags = 0;
-        lock1 = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR, NULL,
-                                 0);
+        lock1 = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR, NULL,0);
         if (lock1 == NULL)
                 LBUG();
         err = ldlm_lock_enqueue(ns, lock1, &ext1, sizeof(ext1), &flags, NULL,
@@ -230,8 +229,7 @@ int ldlm_test_extents(struct obd_device *obddev)
                 LBUG();
 
         flags = 0;
-        lock2 = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
-                                NULL, 0);
+        lock2 = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR, NULL,0);
         err = ldlm_lock_enqueue(ns, lock2, &ext2, sizeof(ext2), &flags, NULL,
                                 NULL);
         if (err != ELDLM_OK)

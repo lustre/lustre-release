@@ -1044,9 +1044,16 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                 GOTO(cleanup, rc);
         }
 
+        cleanup_phase = 2; /* child dentry */
         inode = (*dchildp)->d_inode;
-        if (inode != NULL)
+        if (inode != NULL) {
+                if (is_bad_inode(inode)) {
+                        CERROR("bad inode returned %lu/%u\n",
+                               inode->i_ino, inode->i_generation);
+                        GOTO(cleanup, rc = -ENOENT);
+                }
                 inode = igrab(inode);
+        }
         if (inode == NULL)
                 goto retry_locks;
 
@@ -1784,7 +1791,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 } else if (S_ISREG(new_inode->i_mode)) {
                         mds_pack_inode2fid(&body->fid1, new_inode);
                         mds_pack_inode2body(body, new_inode);
-                        mds_pack_md(obd, req->rq_repmsg, 1, body, new_inode, MDS_PACK_MD_LOCK);
+                        mds_pack_md(obd, req->rq_repmsg, 1, body, new_inode,
+                                    MDS_PACK_MD_LOCK);
                 }
         }
 

@@ -431,8 +431,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
-                struct ldlm_res_id res_id ={.name = {cfid->id,
-                                                     cfid->generation}};
+                struct ldlm_res_id res_id = { .name = { cfid->id,
+                                                        cfid->generation}};
                 struct lustre_handle lockh;
                 int mode = LCK_PR;
 

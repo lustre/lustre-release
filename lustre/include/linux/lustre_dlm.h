@@ -171,6 +171,7 @@ struct ldlm_namespace {
         struct list_head       ns_unused_list; /* all root resources in ns */
         int                    ns_nr_unused;
         unsigned int           ns_max_unused;
+        unsigned long          ns_next_dump;   /* next dump time */
 
         spinlock_t             ns_counter_lock;
         __u64                  ns_locks;
@@ -508,9 +509,9 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock);
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
-void ldlm_dump_all_namespaces(void);
-void ldlm_namespace_dump(struct ldlm_namespace *);
-void ldlm_resource_dump(struct ldlm_resource *);
+void ldlm_dump_all_namespaces(int level);
+void ldlm_namespace_dump(int level, struct ldlm_namespace *);
+void ldlm_resource_dump(int level, struct ldlm_resource *);
 int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
                               struct ldlm_res_id);
 

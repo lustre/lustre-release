@@ -726,6 +726,7 @@ run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
 
 test_25a() {
 	echo '== symlink sanity ============================================='
+
 	mkdir $DIR/d25
 	ln -s d25 $DIR/s25
 	touch $DIR/s25/foo || error
@@ -1695,24 +1696,25 @@ test_51() {
 }
 run_test 51 "special situations: split htree with empty entry =="
 
+export NUMTEST=70000
 test_51b() {
-	NUMTEST=70000
-	check_kernel_version 40 || NUMTEST=31000
 	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
-	[ $NUMFREE -lt $NUMTEST ] && \
-		echo "skipping test 51b, not enough free inodes($NUMFREE)" && \
+	[ $NUMFREE -lt 21000 ] && \
+		echo "skipping test 51b, not enough free inodes ($NUMFREE)" && \
 		return
+
+	check_kernel_version 40 || NUMTEST=31000
+	[ $NUMFREE -lt $NUMTEST ] && NUMTEST=$(($NUMFREE - 50))
+
 	mkdir -p $DIR/d51b
 	(cd $DIR/d51b; mkdirmany t $NUMTEST)
 }
 run_test 51b "mkdir .../t-0 --- .../t-70000 ===================="
 
 test_51c() {
-	NUMTEST=70000
-	check_kernel_version 40 || NUMTEST=31000
-	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
-	[ $NUMFREE -lt $NUMTEST ] && echo "skipping test 51c" && return
-	mkdir -p $DIR/d51b
+	[ ! -d $DIR/d51b ] && echo "skipping test 51c: $DIR/51b missing" && \
+		return
+
 	(cd $DIR/d51b; rmdirmany t $NUMTEST)
 }
 run_test 51c "rmdir .../t-0 --- .../t-70000 ===================="

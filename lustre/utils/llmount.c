@@ -212,8 +212,8 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                 lmd->lmd_nal = ptl_name2nal(opteq + 1);
                         } else if(!strcmp(opt, "cluster_id")) {
                                 if (ptl_parse_nid(&cluster_id, opteq+1) != 0) {
-                                        fprintf (stderr, "%s: can't parse NID "
-                                                 "%s\n", progname, opteq+1);
+                                        fprintf(stderr, "%s: can't parse NID "
+                                                "%s\n", progname, opteq+1);
                                         return (-1);
                                 }
                                 lmd_cluster_id = cluster_id;
@@ -228,23 +228,27 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                 parse_route(opteq, opttgts);
                         } else if (!strcmp(opt, "local_nid")) {
                                 if (ptl_parse_nid(&nid, opteq + 1) != 0) {
-                                        fprintf (stderr, "%s: "
-                                                 "can't parse NID %s\n",
-                                                 progname,
-                                                 opteq+1);
+                                        fprintf(stderr, "%s: "
+                                                "can't parse NID %s\n",
+                                                progname,
+                                                opteq+1);
                                         return (-1);
                                 }
                                 lmd->lmd_local_nid = nid;
                         } else if (!strcmp(opt, "server_nid")) {
                                 if (ptl_parse_nid(&nid, opteq + 1) != 0) {
-                                        fprintf (stderr, "%s: "
-                                                 "can't parse NID %s\n",
-                                                 progname, opteq + 1);
+                                        fprintf(stderr, "%s: "
+                                                "can't parse NID %s\n",
+                                                progname, opteq + 1);
                                         return (-1);
                                 }
                                 lmd->lmd_server_nid = nid;
                         } else if (!strcmp(opt, "port")) {
                                 lmd->lmd_port = val;
+                        } else {
+                                fprintf(stderr, "%s: unknown option '%s'\n",
+                                        progname, opt);
+                                return (-1);
                         }
                 } else {
                         val = 1;
@@ -282,7 +286,7 @@ set_local(struct lustre_mount_data *lmd)
         /* XXX ClusterID?
          * XXX PtlGetId() will be safer if portals is loaded and
          * initialised correctly at this time... */
-        char buf[256];
+        char buf[256], *ptr = buf;
         ptl_nid_t nid;
         int rc;
 
@@ -310,14 +314,23 @@ set_local(struct lustre_mount_data *lmd)
                 } while (rc != 0 && pfiles[++i] != NULL);
 
                 if (rc != 0) {
-                        fprintf(stderr, "%s: can't read Elan ID from /proc\n",
-                                progname);
-
-                        return -1;
+                        rc = gethostname(buf, sizeof(buf) - 1);
+                        if (rc == 0) {
+                                char *tmp = ptr;
+                                while ((*tmp >= 'a' && *tmp <= 'z') ||
+                                       (*tmp >= 'A' && *tmp <= 'Z'))
+                                        tmp++;
+                                ptr = strsep(&tmp, ".");
+                        } else {
+                                fprintf(stderr,
+                                        "%s: can't read Elan ID from /proc\n",
+                                        progname);
+                                return -1;
+                        }
                 }
         }
 
-        if (ptl_parse_nid (&nid, buf) != 0) {
+        if (ptl_parse_nid (&nid, ptr) != 0) {
                 fprintf (stderr, "%s: can't parse NID %s\n", progname, buf);
                 return (-1);
         }
@@ -347,7 +360,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                                  progname, hostname);
                         return (-1);
                 }
-        } else if (lmd->lmd_nal == QSWNAL) {
+        } else if (lmd->lmd_nal == QSWNAL &&lmd->lmd_server_nid == PTL_NID_ANY){
                 char buf[64];
                 rc = sscanf(hostname, "%*[^0-9]%63[0-9]", buf);
                 if (rc != 1) {

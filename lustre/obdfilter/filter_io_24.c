@@ -152,8 +152,17 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
                 rc = fsync_inode_data_buffers(inode);
         if (rc == 0)
                 rc = filemap_fdatawait(inode->i_mapping);
-        if (rc < 0)
-                GOTO(cleanup, rc);
+        if (rc < 0) {
+                /* We can race with truncate_complete_page() in the call to
+                 * filter_clear_page_cache().  This is OK, because it also
+                 * waits on IO completion already, but the truncate confuses
+                 * the buffer_uptodate() in fsync_inode_data_buffers().
+                 * The only dirty pages in the page cache on an inode should
+                 * be from partial page truncates.
+                 * If there is a real IO error here we'll hit it below. */
+                CDEBUG(D_WARNING, "error flushing page cache: rc %d\n", rc);
+                //GOTO(cleanup, rc);
+        }
 
         rc = brw_kiovec(WRITE, 1, &iobuf, inode->i_dev, iobuf->blocks,
                         1 << inode->i_blkbits);
@@ -316,8 +325,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 GOTO(cleanup, rc);
         }
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow brw_start %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "brw_start");
 
         iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         /* filter_direct_io drops i_sem */
@@ -326,16 +334,14 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc == 0)
                 obdo_from_inode(oa, inode, FILTER_VALID_FLAGS);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err)
                 rc = err;
         if (obd_sync_filter)
                 LASSERT(oti->oti_transno <= obd->obd_last_committed);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow commitrw commit %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "commitrw commit");
 
 cleanup:
         filter_grant_commit(exp, niocount, res);

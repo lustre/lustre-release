@@ -148,6 +148,7 @@ struct oig_callback_context {
          * callees of this method are encouraged to abort their state 
          * in the oig.  This may be called multiple times. */
         void (*occ_interrupted)(struct oig_callback_context *occ);
+        int interrupted;
 };
 
 /* if we find more consumers this could be generalized */
@@ -214,7 +215,7 @@ struct mds_server_data;
 
 #define OSC_MAX_RIF_DEFAULT       8
 #define OSC_MAX_RIF_MAX          64
-#define OSC_MAX_DIRTY_DEFAULT     8
+#define OSC_MAX_DIRTY_DEFAULT    32
 #define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
 
 struct mdc_rpc_lock;

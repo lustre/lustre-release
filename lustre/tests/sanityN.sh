@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768 3192
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b"}
+# bug number for skipped test: 1768 3192 3192
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b  14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -51,11 +51,20 @@ log() {
 	lctl mark "$*" 2> /dev/null || true
 }
 
+trace() {
+	log "STARTING: $*"
+	strace -o $TMP/$1.strace -ttt $*
+	RC=$?
+	log "FINISHED: $*: rc $RC"
+	return 1
+}
+TRACE=${TRACE:-""}
+
 run_one() {
 	if ! mount | grep -q $DIR1; then
 		$START
 	fi
-	log "== test $1: $2"
+	log "== test $1: $2 `date +%H:%M:%S`"
 	export TESTNAME=test_$1
 	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME

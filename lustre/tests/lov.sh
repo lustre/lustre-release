@@ -14,7 +14,7 @@ MDSSIZE=${MDSSIZE:-400000}
 FSTYPE=${FSTYPE:-ext3}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
-NETWORKTYPE=${NETWORKTYPE:-tcp}
+NETTYPE=${NETTYPE:-tcp}
 
 OSTCOUNT=${OSTCOUNT:-5}
 # OSTDEVN will still override the device for OST N
@@ -35,8 +35,8 @@ rm -f $config
 
 # create nodes
 ${LMC} --add node --node localhost || exit 10
-${LMC} --add net --node  localhost --nid `hostname` --nettype $NETWORKTYPE || exit 11
-${LMC} --add net --node client --nid '*' --nettype $NETWORKTYPE || exit 12
+${LMC} --add net --node  localhost --nid `hostname` --nettype $NETTYPE || exit 11
+${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
 # configure mds server
 ${LMC} --format --add mds --node localhost --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE || exit 20

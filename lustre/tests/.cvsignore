@@ -65,3 +65,5 @@ ll_dirstripe_verify
 openfilleddirunlink
 copy_attr
 rename_many
+memhog
+rmdirmany

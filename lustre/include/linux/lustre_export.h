@@ -29,9 +29,7 @@ struct osc_creator {
         struct obd_device       *oscc_obd;
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
-        int                     oscc_initial_create_count;
         int                     oscc_grow_count;
-        int                     oscc_kick_barrier;
         struct osc_created     *oscc_osccd;
         struct obdo             oscc_oa;
         int                     oscc_flags;
@@ -53,9 +51,9 @@ struct filter_export_data {
         struct filter_client_data *fed_fcd;
         loff_t                     fed_lr_off;
         int                        fed_lr_idx;
-        unsigned long              fed_dirty;    /* in bytes */
-        unsigned long              fed_grant;    /* in bytes */
-        unsigned long              fed_pending;  /* bytes just being written */
+        long                       fed_dirty;    /* in bytes */
+        long                       fed_grant;    /* in bytes */
+        long                       fed_pending;  /* bytes just being written */
 };
 
 struct obd_export {

@@ -83,7 +83,8 @@ struct obd_import {
         int                       imp_invalid:1, imp_replayable:1,
                                   imp_dlm_fake:1, imp_server_timeout:1,
                                   imp_initial_recov:1, imp_force_verify:1,
-                                  imp_pingable:1, imp_resend_replay:1;
+                                  imp_pingable:1, imp_resend_replay:1,
+                                  imp_deactive:1;
         __u32                     imp_connect_op;
 };
 

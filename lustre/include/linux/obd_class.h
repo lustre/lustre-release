@@ -156,102 +156,23 @@ void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
 int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare);
 void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);
 
-static inline int obd_check_conn(struct lustre_handle *conn)
-{
-        struct obd_device *obd;
-        if (!conn) {
-                CERROR("NULL conn\n");
-                RETURN(-ENOTCONN);
-        }
-
-        obd = class_conn2obd(conn);
-        if (!obd) {
-                CERROR("NULL obd\n");
-                RETURN(-ENODEV);
-        }
-
-        if (!obd->obd_attached) {
-                CERROR("obd %d not attached\n", obd->obd_minor);
-                RETURN(-ENODEV);
-        }
-
-        if (!obd->obd_set_up) {
-                CERROR("obd %d not setup\n", obd->obd_minor);
-                RETURN(-ENODEV);
-        }
-
-        if (!obd->obd_type) {
-                CERROR("obd %d not typed\n", obd->obd_minor);
-                RETURN(-ENODEV);
-        }
-
-        if (!obd->obd_type->typ_ops) {
-                CERROR("obd_check_conn: obd %d no operations\n",
-                       obd->obd_minor);
-                RETURN(-EOPNOTSUPP);
-        }
-        return 0;
-}
-
-
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev, op)    (dev)->obd_type->typ_ops->o_ ## op
 #define CTXTP(ctxt, op) (ctxt)->loc_logops->lop_##op
 
-/* Ensure obd_setup: used for disconnect which might be called while
-   an obd is stopping. */
-#define OBD_CHECK_SETUP(conn, exp)                                      \
-do {                                                                    \
-        if (!(conn)) {                                                  \
-                CERROR("NULL connection\n");                            \
-                RETURN(-EINVAL);                                        \
-        }                                                               \
-                                                                        \
-        exp = class_conn2export(conn);                                  \
-        if (!(exp)) {                                                   \
-                CERROR("No export for conn "LPX64"\n", (conn)->cookie); \
-                RETURN(-EINVAL);                                        \
-        }                                                               \
-                                                                        \
-        if (!(exp)->exp_obd->obd_set_up) {                              \
-                CERROR("Device %d not setup\n",                         \
-                       (exp)->exp_obd->obd_minor);                      \
-                class_export_put(exp);                                  \
-                RETURN(-EINVAL);                                        \
-        }                                                               \
-} while (0)
-
-/* Ensure obd_setup and !obd_stopping. */
-#define OBD_CHECK_ACTIVE(conn, exp)                                     \
-do {                                                                    \
-        if (!(conn)) {                                                  \
-                CERROR("NULL connection\n");                            \
-                RETURN(-EINVAL);                                        \
-        }                                                               \
-                                                                        \
-        exp = class_conn2export(conn);                                  \
-        if (!(exp)) {                                                   \
-                CERROR("No export for conn "LPX64"\n", (conn)->cookie); \
-                RETURN(-EINVAL);                                        \
-        }                                                               \
-                                                                        \
-        if (!(exp)->exp_obd->obd_set_up || (exp)->exp_obd->obd_stopping) { \
-                CERROR("Device %d not setup\n",                         \
-                       (exp)->exp_obd->obd_minor);                      \
-                class_export_put(exp);                                  \
-                RETURN(-EINVAL);                                        \
-        }                                                               \
-} while (0)
-
 /* Ensure obd_setup: used for cleanup which must be called
    while obd is stopping */
-#define OBD_CHECK_DEV_STOPPING(obd)                             \
+#define OBD_CHECK_DEV(obd)                                      \
 do {                                                            \
         if (!(obd)) {                                           \
                 CERROR("NULL device\n");                        \
                 RETURN(-ENODEV);                                \
         }                                                       \
-                                                                \
+} while (0)
+
+#define OBD_CHECK_DEV_STOPPING(obd)                             \
+do {                                                            \
+        OBD_CHECK_DEV(obd);                                     \
         if (!(obd)->obd_set_up) {                               \
                 CERROR("Device %d not setup\n",                 \
                        (obd)->obd_minor);                       \
@@ -268,11 +189,7 @@ do {                                                            \
 /* ensure obd_setup and !obd_stopping */
 #define OBD_CHECK_DEV_ACTIVE(obd)                               \
 do {                                                            \
-        if (!(obd)) {                                           \
-                CERROR("NULL device\n");                        \
-                RETURN(-ENODEV);                                \
-        }                                                       \
-                                                                \
+        OBD_CHECK_DEV(obd);                                     \
         if (!(obd)->obd_set_up || (obd)->obd_stopping) {        \
                 CERROR("Device %d not setup\n",                 \
                        (obd)->obd_minor);                       \
@@ -982,6 +899,11 @@ static inline void obd_import_event(struct obd_device *obd,
                                     struct obd_import *imp,
                                     enum obd_import_event event)
 {
+        if (!obd) {
+                CERROR("NULL device\n");
+                EXIT;
+                return;
+        }
         if (obd->obd_set_up && OBP(obd, import_event)) {
                 OBD_COUNTER_INCREMENT(obd, import_event);
                 OBP(obd, import_event)(obd, imp, event);
@@ -992,6 +914,7 @@ static inline int obd_notify(struct obd_device *obd,
                              struct obd_device *watched,
                              int active)
 {
+        OBD_CHECK_DEV(obd);
         if (!obd->obd_set_up) {
                 CERROR("obd %s not set up\n", obd->obd_name);
                 return -EINVAL;
@@ -1010,6 +933,7 @@ static inline int obd_register_observer(struct obd_device *obd,
                                         struct obd_device *observer)
 {
         ENTRY;
+        OBD_CHECK_DEV(obd);
         if (obd->obd_observer && observer)
                 RETURN(-EALREADY);
         obd->obd_observer = observer;

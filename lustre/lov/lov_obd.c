@@ -217,6 +217,7 @@ static int lov_disconnect(struct obd_export *exp, int flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
+        struct obd_export *osc_exp;
         int rc, i;
         ENTRY;
 
@@ -228,9 +229,13 @@ static int lov_disconnect(struct obd_export *exp, int flags)
         if (lov->refcount != 0)
                 goto out_local;
 
+        spin_lock(&lov->lov_lock);
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 if (lov->tgts[i].ltd_exp == NULL)
                         continue;
+
+                osc_exp = lov->tgts[i].ltd_exp;
+                lov->tgts[i].ltd_exp = NULL;
 
                 if (obd->obd_no_recov) {
                         /* Pass it on to our clients.
@@ -238,14 +243,16 @@ static int lov_disconnect(struct obd_export *exp, int flags)
                          * XXX not a back-door flag on the OBD.  Ah well.
                          */
                         struct obd_device *osc_obd;
-                        osc_obd = class_exp2obd(lov->tgts[i].ltd_exp);
+                        osc_obd = class_exp2obd(osc_exp);
                         if (osc_obd)
                                 osc_obd->obd_no_recov = 1;
                 }
 
-                obd_register_observer(lov->tgts[i].ltd_exp->exp_obd, NULL);
+                obd_register_observer(osc_exp->exp_obd, NULL);
 
-                rc = obd_disconnect(lov->tgts[i].ltd_exp, flags);
+                spin_unlock(&lov->lov_lock);
+                rc = obd_disconnect(osc_exp, flags);
+                spin_lock(&lov->lov_lock);
                 if (rc) {
                         if (lov->tgts[i].active) {
                                 CERROR("Target %s disconnect error %d\n",
@@ -257,8 +264,8 @@ static int lov_disconnect(struct obd_export *exp, int flags)
                         lov->desc.ld_active_tgt_count--;
                         lov->tgts[i].active = 0;
                 }
-                lov->tgts[i].ltd_exp = NULL;
         }
+        spin_unlock(&lov->lov_lock);
 
  out_local:
         rc = class_disconnect(exp, 0);
@@ -283,6 +290,9 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 
         spin_lock(&lov->lov_lock);
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
+                if (tgt->ltd_exp == NULL)
+                        continue;
+
                 CDEBUG(D_INFO, "lov idx %d is %s conn "LPX64"\n",
                        i, tgt->uuid.uuid, tgt->ltd_exp->exp_handle.h_cookie);
                 if (strncmp(uuid->uuid, tgt->uuid.uuid, sizeof uuid->uuid) == 0)
@@ -1988,7 +1998,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         char submd_buf[sizeof(struct lov_stripe_md) + sizeof(struct lov_oinfo)];
         struct lov_stripe_md *submd = (void *)submd_buf;
         ldlm_error_t rc;
-        int i, save_flags = *flags;
+        int i, save_flags = *flags, all_skipped = 1;
         ENTRY;
 
         if (lsm_bad_magic(lsm))
@@ -2026,6 +2036,8 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }
+
+                all_skipped = 0;
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 submd->lsm_object_id = loi->loi_id;
@@ -2092,6 +2104,9 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                         }
                 }
         }
+        if (all_skipped)
+                GOTO(out_lockh, rc = -EIO);
+
         if (lsm->lsm_stripe_count > 1)
                 lov_llh_put(lov_lockh);
         RETURN(ELDLM_OK);
@@ -2116,6 +2131,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 }
         }
 
+out_lockh:
         if (lsm->lsm_stripe_count > 1) {
                 lov_llh_destroy(lov_lockh);
                 lov_llh_put(lov_lockh);
@@ -2493,9 +2509,10 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                             len, karg, uarg);
                         if (err) {
                                 if (lov->tgts[i].active) {
-                                        CERROR("error: iocontrol OSC %s on OST"
-                                               "idx %d: err = %d\n",
-                                               lov->tgts[i].uuid.uuid, i, err);
+                                        CERROR("error: iocontrol OSC %s on OST "
+                                               "idx %d cmd %x: err = %d\n",
+                                               lov->tgts[i].uuid.uuid, i,
+                                               cmd, err);
                                         if (!rc)
                                                 rc = err;
                                 }

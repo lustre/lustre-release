@@ -18,7 +18,7 @@
 #endif
 
 static const char usage[] =
-"Usage: %s -u user_id [-g grp_id ] [ -G ] command\n"
+"Usage: %s -u user_id [-g grp_id ] [ -G[gid0,gid1,...] ] command\n"
 "  -u user_id           switch to UID user_id\n"
 "  -g grp_id            switch to GID grp_id\n"
 "  -G[gid0,gid1,...]    set supplementary groups\n";

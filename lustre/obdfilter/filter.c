@@ -677,16 +677,16 @@ static int filter_prep_groups(struct obd_device *obd)
                 if (filp->f_dentry->d_inode->i_size == 0) {
                         if (i == 0 && filter->fo_fsd->fsd_unused != 0) {
                                 /* OST conversion, remove sometime post 1.0 */
-                                filter->fo_last_objids[i] =
+                                filter->fo_last_objids[0] =
                                         le64_to_cpu(filter->fo_fsd->fsd_unused);
                                 CWARN("saving old objid "LPU64" to LAST_ID\n",
-                                      filter->fo_last_objids[i]);
-                                rc = filter_update_last_objid(obd, 0, 1);
-                                if (rc)
-                                        GOTO(cleanup, rc);
+                                      filter->fo_last_objids[0]);
                         } else {
                                 filter->fo_last_objids[i] = FILTER_INIT_OBJID;
                         }
+                        rc = filter_update_last_objid(obd, i, 1);
+                        if (rc)
+                                GOTO(cleanup, rc);
                         continue;
                 }
 
@@ -939,8 +939,7 @@ struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
                 return dparent;
 
         rc = filter_lock_dentry(obd, dparent);
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow parent lock %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "parent lock");
         return rc ? ERR_PTR(rc) : dparent;
 }
 
@@ -1437,6 +1436,7 @@ static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
         obd_size maxsize = obd->obd_osfs.os_blocks * obd->obd_osfs.os_bsize;
         obd_size tot_dirty = 0, tot_pending = 0, tot_granted = 0;
         obd_size fo_tot_dirty, fo_tot_pending, fo_tot_granted;
+        int level = D_CACHE;
 
         if (list_empty(&obd->obd_exports))
                 return;
@@ -1445,13 +1445,20 @@ static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
                 fed = &exp->exp_filter_data;
-                LASSERTF(fed->fed_grant + fed->fed_pending <= maxsize,
-                         "cli %s/%p %lu+%lu > "LPU64"\n",
-                         exp->exp_client_uuid.uuid, exp,
-                         fed->fed_grant, fed->fed_pending, maxsize);
-                LASSERTF(fed->fed_dirty <= maxsize, "cli %s/%p %lu > "LPU64"\n",
-                         exp->exp_client_uuid.uuid, exp,fed->fed_dirty,maxsize);
-                CDEBUG(D_CACHE,"%s: cli %s/%p dirty %lu pend %lu grant %lu\n",
+                if (fed->fed_grant < 0 || fed->fed_pending < 0 ||
+                    fed->fed_dirty < 0)
+                        level = D_ERROR;
+                if (maxsize > 0) { /* we may not have done a statfs yet */
+                        LASSERTF(fed->fed_grant + fed->fed_pending <= maxsize,
+                                 "cli %s/%p %ld+%ld > "LPU64"\n",
+                                 exp->exp_client_uuid.uuid, exp,
+                                 fed->fed_grant, fed->fed_pending, maxsize);
+                        LASSERTF(fed->fed_dirty <= maxsize,
+                                 "cli %s/%p %ld > "LPU64"\n",
+                                 exp->exp_client_uuid.uuid, exp,
+                                 fed->fed_dirty, maxsize);
+                }
+                CDEBUG(level, "%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        fed->fed_dirty, fed->fed_pending, fed->fed_grant);
                 tot_granted += fed->fed_grant + fed->fed_pending;
@@ -1494,27 +1501,30 @@ static void filter_grant_discard(struct obd_export *exp)
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
+        int level = D_CACHE;
 
         spin_lock(&obd->obd_osfs_lock);
         spin_lock(&exp->exp_obd->obd_dev_lock);
         list_del_init(&exp->exp_obd_chain);
         spin_unlock(&exp->exp_obd->obd_dev_lock);
 
-        CDEBUG(D_CACHE, "%s: cli %s/%p dirty %lu pend %lu grant %lu\n",
+        if (fed->fed_dirty < 0 || fed->fed_grant < 0 || fed->fed_pending < 0)
+                level = D_ERROR;
+        CDEBUG(level, "%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
                obd->obd_name, exp->exp_client_uuid.uuid, exp,
                fed->fed_dirty, fed->fed_pending, fed->fed_grant);
 
         LASSERTF(filter->fo_tot_granted >= fed->fed_grant,
-                 "%s: tot_granted "LPU64" cli %s/%p fed_grant %lu\n",
+                 "%s: tot_granted "LPU64" cli %s/%p fed_grant %ld\n",
                  obd->obd_name, filter->fo_tot_granted,
                  exp->exp_client_uuid.uuid, exp, fed->fed_grant);
         filter->fo_tot_granted -= fed->fed_grant;
         LASSERTF(exp->exp_obd->u.filter.fo_tot_pending >= fed->fed_pending,
-                 "%s: tot_pending "LPU64" cli %s/%p fed_pending %lu\n",
+                 "%s: tot_pending "LPU64" cli %s/%p fed_pending %ld\n",
                  obd->obd_name, filter->fo_tot_pending,
                  exp->exp_client_uuid.uuid, exp, fed->fed_pending);
         LASSERTF(filter->fo_tot_dirty >= fed->fed_dirty,
-                 "%s: tot_dirty "LPU64" cli %s/%p fed_dirty %lu\n",
+                 "%s: tot_dirty "LPU64" cli %s/%p fed_dirty %ld\n",
                  obd->obd_name, filter->fo_tot_dirty,
                  exp->exp_client_uuid.uuid, exp, fed->fed_dirty);
         filter->fo_tot_dirty -= fed->fed_dirty;
@@ -1551,7 +1561,7 @@ static int filter_disconnect(struct obd_export *exp, int flags)
         struct obd_device *obd = exp->exp_obd;
         unsigned long irqflags;
         struct llog_ctxt *ctxt;
-        int rc;
+        int rc, err;
         ENTRY;
 
         LASSERT(exp);
@@ -1574,7 +1584,9 @@ static int filter_disconnect(struct obd_export *exp, int flags)
 
         /* flush any remaining cancel messages out to the target */
         ctxt = llog_get_context(obd, LLOG_UNLINK_REPL_CTXT);
-        llog_sync(ctxt, exp);
+        err = llog_sync(ctxt, exp);
+        if (err)
+                CERROR("error flushing logs to MDS: rc %d\n", err);
 
         class_export_put(exp);
         RETURN(rc);
@@ -1827,7 +1839,7 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
             (oa->o_flags & OBD_FL_DELORPHAN)) {
                 if (diff >= 0)
                         RETURN(diff);
-                if (-diff > 10000) { /* XXX make this smarter */
+                if (-diff > OST_MAX_PRECREATE) {
                         CERROR("ignoring bogus orphan destroy request: obdid "
                                LPU64" last_id "LPU64"\n",
                                oa->o_id, filter_last_id(filter, oa));
@@ -1845,7 +1857,8 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
                     (group != 0 || oa->o_id == 0))
                         RETURN(1);
 
-                LASSERT(diff >= 0);
+                LASSERTF(diff >= 0, LPU64" - "LPU64" = %d\n", oa->o_id,
+                         filter_last_id(filter, oa), diff);
                 RETURN(diff);
         }
 }
@@ -1920,11 +1933,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                          * already exists
                          */
                         if (recreate_obj) {
-                                CERROR("%s: Serious error: recreating obj %*s "
-                                       "but obj already exists \n",
+                                CERROR("%s: recreating existing object %*s?\n",
                                        obd->obd_name, dchild->d_name.len,
                                        dchild->d_name.name);
-                                LBUG();
                         } else {
                                 CERROR("%s: Serious error: objid %*s already "
                                        "exists; is this filesystem corrupt?\n",
@@ -2078,7 +2089,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
 
         dchild = filter_fid2dentry(obd, dparent, group, oa->o_id);
         if (IS_ERR(dchild))
-                GOTO(cleanup, rc = -ENOENT);
+                GOTO(cleanup, rc = PTR_ERR(dchild));
         cleanup_phase = 2;
 
         if (dchild->d_inode == NULL) {

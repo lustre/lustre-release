@@ -540,6 +540,27 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         RETURN(rc);
 }
 
+static struct ldlm_lock *
+find_existing_lock(struct obd_export *exp, struct lustre_handle *remote_hdl)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct list_head *iter;
+
+        l_lock(&obd->obd_namespace->ns_lock);
+        list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
+                struct ldlm_lock *lock;
+                lock = list_entry(iter, struct ldlm_lock, l_export_chain);
+                if (lock->l_remote_handle.cookie == remote_hdl->cookie) {
+                        LDLM_LOCK_GET(lock);
+                        l_unlock(&obd->obd_namespace->ns_lock);
+                        return lock;
+                }
+        }
+        l_unlock(&obd->obd_namespace->ns_lock);
+        return NULL;
+}
+
+
 int ldlm_handle_enqueue(struct ptlrpc_request *req,
                         ldlm_completion_callback completion_callback,
                         ldlm_blocking_callback blocking_callback,
@@ -566,6 +587,19 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         flags = dlm_req->lock_flags;
 
+        LASSERT(req->rq_export);
+
+        if (flags & LDLM_FL_REPLAY) {
+                lock = find_existing_lock(req->rq_export, 
+                                          &dlm_req->lock_handle1);
+                if (lock != NULL) {
+                        DEBUG_REQ(D_HA, req, "found existing lock cookie "LPX64,
+                                  lock->l_handle.h_cookie);
+                        GOTO(existing_lock, rc = 0);
+                }
+                
+        }
+            
         /* The lock's callback data might be set in the policy function */
         lock = ldlm_lock_create(obddev->obd_namespace, &dlm_req->lock_handle2,
                                 dlm_req->lock_desc.l_resource.lr_name,
@@ -581,8 +615,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                sizeof(lock->l_remote_handle));
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
-        LASSERT(req->rq_export);
-
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (req->rq_export->exp_failed) {
@@ -594,6 +626,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         list_add(&lock->l_export_chain,
                  &lock->l_export->exp_ldlm_data.led_held_locks);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
+existing_lock:
 
         if (flags & LDLM_FL_HAS_INTENT) {
                 /* In this case, the reply buffer is allocated deep in
@@ -1377,7 +1411,7 @@ static int ldlm_cleanup(int force)
 
         if (!list_empty(&ldlm_namespace_list)) {
                 CERROR("ldlm still has namespaces; clean these up first.\n");
-                ldlm_dump_all_namespaces();
+                ldlm_dump_all_namespaces(D_DLMTRACE);
                 RETURN(-EBUSY);
         }
 

@@ -92,7 +92,8 @@ enum {
         LPROC_FILTER_LAST,
 };
 
-#define FILTER_MAX_CACHE_SIZE (32 * 1024 * 1024) /* was OBD_OBJECT_EOF */
+//#define FILTER_MAX_CACHE_SIZE (32 * 1024 * 1024) /* was OBD_OBJECT_EOF */
+#define FILTER_MAX_CACHE_SIZE OBD_OBJECT_EOF
 
 /* filter.c */
 void f_dput(struct dentry *);

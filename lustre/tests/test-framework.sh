@@ -188,6 +188,7 @@ fail_abort() {
     start $facet
     do_facet $facet lctl --device %${facet}_svc abort_recovery
     df $MOUNT || echo "first df failed: $?"
+    sleep 1
     df $MOUNT || error "post-failover df: $?"
 }
 
@@ -558,7 +559,7 @@ run_one() {
     # Pretty tests run faster.
     equals_msg $testnum: $message
 
-    log "== test $1: $2"
+    log "== test $testnum: $message =========== `date +%H:%M:%S`"
     test_${testnum} || error "test_$testnum failed with $?"
 }
 

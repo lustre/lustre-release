@@ -98,13 +98,17 @@ command_t cmdlist[] = {
          "add an entry to the portals routing table\n"
          "usage: add_route <gateway> <target> [<target>]"},
         {"del_route", jt_ptl_del_route, 0,
-         "delete the route via the given gateway to the given targets from the portals routing table\n"
+         "delete route via gateway to targets from the portals routing table\n"
          "usage: del_route <gateway> [<target>] [<target>]"},
         {"set_route", jt_ptl_notify_router, 0,
-         "enable/disable routes via the given gateway in the portals routing table\n"
+         "enable/disable routes via gateway in the portals routing table\n"
          "usage: set_route <gateway> <up/down> [<time>]"},
-        {"route_list", jt_ptl_print_routes, 0, "print the portals routing table\n"
+        {"route_list", jt_ptl_print_routes, 0,
+         "print the portals routing table, same as show_route\n"
          "usage: route_list"},
+        {"show_route", jt_ptl_print_routes, 0,
+         "print the portals routing table, same as route_list\n"
+         "usage: show_route"},
         {"recv_mem", jt_ptl_rxmem, 0, "set socket receive buffer size, "
          "if size is omited the current size is reported.\n"
          "usage: recv_mem [size]"},
@@ -152,7 +156,7 @@ command_t cmdlist[] = {
          "usage: detach"},
         {"lov_setup", jt_lcfg_lov_setup, 0,
          "write setup an lov device\n"
-         "usage: lov_setconfig lov-uuid stripe-count stripe-size offset pattern UUID1 [UUID2 ...]"},
+         "usage: lov_setup lov-uuid stripe-count stripe-size offset pattern UUID1 [UUID2 ...]"},
         {"lov_getconfig", jt_obd_lov_getconfig, 0,
          "read lov configuration from an mds device\n"
          "usage: lov_getconfig lov-uuid"},
@@ -265,14 +269,17 @@ command_t cmdlist[] = {
          "debug daemon control and dump to a file\n"
          "usage: debug_daemon [start file <#MB>|stop|pause|continue]"},
         {"debug_kernel", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file\n"
+         "get debug buffer and dump to a file, same as dk\n"
          "usage: debug_kernel [file] [raw]"},
         {"dk", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file\n"
+         "get debug buffer and dump to a file, same as debug_kernel\n"
          "usage: dk [file] [raw]"},
         {"debug_file", jt_dbg_debug_file, 0,
-         "read debug buffer from input and dump to output\n"
+         "read debug buffer from input and dump to output, same as dk\n"
          "usage: debug_file <input> [output] [raw]"},
+        {"df", jt_dbg_debug_file, 0,
+         "read debug buffer from input and dump to output, same as debug_file\n"
+         "usage: df <input> [output] [raw]"},
         {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
          "usage: clear"},
         {"mark", jt_dbg_mark_debug_buf, 0,"insert marker text in kernel debug buffer\n"

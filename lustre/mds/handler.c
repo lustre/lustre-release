@@ -219,13 +219,6 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         if (!inode)
                 RETURN(ERR_PTR(-ENOENT));
 
-        if (is_bad_inode(inode)) {
-                CERROR("bad inode returned %lu/%u\n",
-                       inode->i_ino, inode->i_generation);
-                dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
         if (generation && inode->i_generation != generation) {
                 /* we didn't find the right inode.. */
                 CERROR("bad inode %lu, link: %lu ct: %d or generation %u/%u\n",
@@ -349,7 +342,7 @@ static int mds_destroy_export(struct obd_export *export)
 
                 /* If you change this message, be sure to update
                  * replay_single:test_46 */
-                CERROR("force closing client file handle for %*s (%s:%lu)\n",
+                CDEBUG(D_INODE, "force closing file handle for %*s (%s:%lu)\n",
                        dentry->d_name.len, dentry->d_name.name,
                        ll_bdevname(dentry->d_inode->i_sb, btmp),
                        dentry->d_inode->i_ino);
@@ -483,8 +476,6 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
         if (lock)
                 down(&inode->i_sem);
         rc = fsfilt_get_md(obd, inode, md, *size);
-        if (lock)
-                up(&inode->i_sem);
 
         if (rc < 0) {
                 CERROR("Error %d reading eadata for ino %lu\n",
@@ -500,6 +491,8 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                         *size = rc;
                 }
         }
+        if (lock)
+                up(&inode->i_sem);
 
         RETURN (rc);
 }
@@ -757,7 +750,10 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 struct ldlm_resource *res;
                 DEBUG_REQ(D_DLMTRACE, req, "resent, not enqueuing new locks");
                 granted_lock = ldlm_handle2lock(child_lockh);
-                LASSERT(granted_lock);
+                LASSERTF(granted_lock != NULL, LPU64"/%u lockh "LPX64"\n",
+                         body->fid1.id, body->fid1.generation,
+                         child_lockh->cookie);
+
 
                 res = granted_lock->l_resource;
                 child_fid.id = res->lr_name.name[0];
@@ -1683,6 +1679,7 @@ static int mds_cleanup(struct obd_device *obd, int flags)
 
 static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
                                         struct ldlm_lock *new_lock,
+                                        struct ldlm_lock **old_lock,
                                         struct lustre_handle *lockh)
 {
         struct obd_export *exp = req->rq_export;
@@ -1703,8 +1700,11 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
                         continue;
                 if (lock->l_remote_handle.cookie == remote_hdl.cookie) {
                         lockh->cookie = lock->l_handle.h_cookie;
+                        LDLM_DEBUG(lock, "restoring lock cookie");
                         DEBUG_REQ(D_HA, req, "restoring lock cookie "LPX64,
                                   lockh->cookie);
+                        if (old_lock)
+                                *old_lock = LDLM_LOCK_GET(lock);
                         l_unlock(&obd->obd_namespace->ns_lock);
                         return;
                 }
@@ -1751,7 +1751,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         struct mds_obd *mds = &req->rq_export->exp_obd->u.mds;
         struct ldlm_reply *rep;
         struct lustre_handle lockh = { 0 };
-        struct ldlm_lock *new_lock;
+        struct ldlm_lock *new_lock = NULL;
         int rc, offset = 2, repsize[4] = {sizeof(struct ldlm_reply),
                                           sizeof(struct mds_body),
                                           mds->mds_max_mdsize,
@@ -1784,12 +1784,12 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
         intent_set_disposition(rep, DISP_IT_EXECD);
 
-        fixup_handle_for_resent_req(req, lock, &lockh);
 
         /* execute policy */
         switch ((long)it->opc) {
         case IT_OPEN:
         case IT_CREAT|IT_OPEN:
+                fixup_handle_for_resent_req(req, lock, NULL, &lockh);
                 /* XXX swab here to assert that an mds_open reint
                  * packet is following */
                 rep->lock_policy_res2 = mds_reint(req, offset, &lockh);
@@ -1806,6 +1806,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         case IT_GETATTR:
         case IT_LOOKUP:
         case IT_READDIR:
+                fixup_handle_for_resent_req(req, lock, &new_lock, &lockh);
                 rep->lock_policy_res2 = mds_getattr_name(offset, req, &lockh);
                 /* FIXME: LDLM can set req->rq_status. MDS sets
                    policy_res{1,2} with disposition and status.
@@ -1833,11 +1834,13 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
          * drop it below anyways because lock replay is done separately by the
          * client afterwards.  For regular RPCs we want to give the new lock to
          * the client instead of whatever lock it was about to get. */
-        new_lock = ldlm_handle2lock(&lockh);
+        if (new_lock == NULL)
+                new_lock = ldlm_handle2lock(&lockh);
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
                 RETURN(0);
 
-        LASSERT(new_lock != NULL);
+        LASSERTF(new_lock != NULL, "op "LPX64" lockh "LPX64"\n",
+                 it->opc, lockh.cookie);
 
         /* If we've already given this lock to a client once, then we should
          * have no readers or writers.  Otherwise, we should have one reader

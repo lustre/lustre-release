@@ -115,7 +115,8 @@ static int ptlrpc_pinger_main(void *arg)
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
                         if (imp->imp_next_ping <= this_ping || force) {
-                                if (level == LUSTRE_IMP_DISCON) {
+                                if (level == LUSTRE_IMP_DISCON && 
+                                    !imp->imp_deactive) {
                                         /* wait at least a timeout before 
                                            trying recovery again. */
                                         imp->imp_next_ping = jiffies + 

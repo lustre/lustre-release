@@ -415,12 +415,13 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
                 GOTO(err_pop, rc);
         }
-        if (!dentry->d_inode) {
+
+        mds->mds_fid_de = dentry;
+        if (!dentry->d_inode || is_bad_inode(dentry->d_inode)) {
                 rc = -ENOENT;
                 CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
                 GOTO(err_fid, rc);
         }
-        mds->mds_fid_de = dentry;
 
         dentry = simple_mkdir(current->fs->pwd, "PENDING", 0777, 1);
         if (IS_ERR(dentry)) {

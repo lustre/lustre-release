@@ -27,14 +27,14 @@ struct osc_async_page {
         enum async_flags        oap_async_flags;
 
         unsigned long           oap_interrupted:1;
-        struct obd_io_group      *oap_oig;
+        struct obd_io_group     *oap_oig;
         struct oig_callback_context oap_occ;
         struct ptlrpc_request   *oap_request;
         struct client_obd       *oap_cli;
         struct lov_oinfo        *oap_loi;
 
 	struct obd_async_page_ops *oap_caller_ops;
-        void                   *oap_caller_data;
+        void                    *oap_caller_data;
 };
 
 struct osc_cache_waiter {
@@ -44,10 +44,11 @@ struct osc_cache_waiter {
         int                     ocw_rc;
 };
 
-#define OSCC_FLAG_RECOVERING 1
-#define OSCC_FLAG_CREATING   2
-#define OSCC_FLAG_NOSPC      4 /* can't create more objects on this OST */
-#define OSCC_FLAG_SYNC_IN_PROGRESS  8 /* only allow one thread to sync */
+#define OSCC_FLAG_RECOVERING         0x01
+#define OSCC_FLAG_CREATING           0x02
+#define OSCC_FLAG_NOSPC              0x04 /* can't create more objects on OST */
+#define OSCC_FLAG_SYNC_IN_PROGRESS   0x08 /* only allow one thread to sync */
+#define OSCC_FLAG_LOW                0x10
 
 int osc_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);

@@ -24,7 +24,7 @@ gen_config() {
 	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
     fi
     
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
@@ -659,7 +659,7 @@ test_32() {
     # give multiop a chance to open
     sleep 1
     mds_evict_client
-    df $MOUNT || df $MOUNT || return 1
+    df $MOUNT || sleep 1 && df $MOUNT || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
     sleep 1
@@ -834,14 +834,14 @@ run_test 41 "read from a valid osc while other oscs are invalid"
 
 # test MDS recovery after ost failure
 test_42() {
-    blocks=`df $MOUNT | tail -n 1 | awk '{ print $1 }'`
+    blocks=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
     facet_failover ost
     
     # osc is evicted, fs is smaller
-    blocks_after=`df $MOUNT | tail -n 1 | awk '{ print $1 }'`
+    blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
     [ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
@@ -851,7 +851,7 @@ test_42() {
 run_test 42 "recovery after ost failure"
 
 # b=2530
-# directory orphans can't be unlinked from PENDING directory
+# timeout in MDS/OST recovery RPC will LBUG MDS
 test_43() {
     replay_barrier mds
 
@@ -953,14 +953,14 @@ test_48() {
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
-test_49() {
+test_50() {
     local osc_dev=`$LCTL device_list | \
 		awk '(/ost_svc_mds_svc/){print $4}' `
     $LCTL --device %$osc_dev recover &&  $LCTL --device %$osc_dev recover
     # give the mds_lov_sync threads a chance to run
     sleep 5
 }
-run_test 49 "Double OSC recovery, don't LASSERT"
+run_test 50 "Double OSC recovery, don't LASSERT (3812)"
 
 # b3764 timed out lock replay
 test_52() {

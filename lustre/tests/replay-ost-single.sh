@@ -120,7 +120,7 @@ test_4() {
 run_test 4 "Fail OST during read, with verification"
 
 test_5() {
-    FREE=`df -h $DIR | tail -n 1 | awk '{ print $3 }'`
+    FREE=`df -P -h $DIR | tail -n 1 | awk '{ print $3 }'`
     case $FREE in
     *T|*G) FREE=1G;;
     esac

@@ -707,8 +707,7 @@ int lprocfs_write_helper(const char *buffer, unsigned long count,
         return 0;
 }
 
-int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
-                             __u64 *val)
+int lprocfs_write_u64_helper(const char *buffer, unsigned long count,__u64 *val)
 {
         char kernbuf[22], *end;
 
@@ -720,7 +719,10 @@ int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
 
         kernbuf[count] = '\0';
 
-        *val = simple_strtoull(kernbuf, &end, 0);
+        if (kernbuf[0] == '-')
+                *val = -simple_strtoull(kernbuf + 1, &end, 0);
+        else
+                *val = simple_strtoull(kernbuf, &end, 0);
         if (kernbuf == end)
                 return -EINVAL;
 

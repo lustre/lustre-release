@@ -352,9 +352,7 @@ out:
 
 char *portals_debug_dumpstack(void)
 {
-        char *buf = stack_backtrace;
-        buf[0] = '\0';
-        return buf;
+        return "dump_stack\n";
 }
 
 #endif /* __arch_um__ */

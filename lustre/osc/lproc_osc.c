@@ -128,7 +128,7 @@ int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX)
+        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX || val > num_physpages / 4)
                 return -ERANGE;
 
         spin_lock(&cli->cl_loi_list_lock);
@@ -165,41 +165,6 @@ int osc_rd_cur_grant_bytes(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int osc_rd_create_low_wm(char *page, char **start, off_t off, int count,
-                         int *eof, void *data)
-{
-        struct obd_device *obd = data;
-
-        if (obd == NULL)
-                return 0;
-
-        return snprintf(page, count, "%d\n",
-                        obd->u.cli.cl_oscc.oscc_kick_barrier);
-}
-
-int osc_wr_create_low_wm(struct file *file, const char *buffer,
-                         unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        int val, rc;
-
-        if (obd == NULL)
-                return 0;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val < 0)
-                return -ERANGE;
-
-        spin_lock(&obd->obd_dev_lock);
-        obd->u.cli.cl_oscc.oscc_kick_barrier = val;
-        spin_unlock(&obd->obd_dev_lock);
-
-        return count;
-}
-
 int osc_rd_create_count(char *page, char **start, off_t off, int count,
                         int *eof, void *data)
 {
@@ -226,6 +191,8 @@ int osc_wr_create_count(struct file *file, const char *buffer,
                 return rc;
 
         if (val < 0)
+                return -ERANGE;
+        if (val > OST_MAX_PRECREATE)
                 return -ERANGE;
 
         obd->u.cli.cl_oscc.oscc_grow_count = val;
@@ -275,7 +242,6 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "max_dirty_mb", osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         { "cur_grant_bytes", osc_rd_cur_grant_bytes, 0, 0 },
-        {"create_low_watermark", osc_rd_create_low_wm, osc_wr_create_low_wm, 0},
         { "create_count", osc_rd_create_count, osc_wr_create_count, 0 },
         { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
         { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },

@@ -689,25 +689,21 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                            struct mds_update_record *rec,struct ldlm_reply *rep)
 {
         struct mds_obd *mds = mds_req2mds(req);
-        struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         struct dentry *dchild;
         char fidname[LL_FID_NAMELEN];
         int fidlen = 0, rc;
         void *handle = NULL;
         ENTRY;
 
-        down(&pending_dir->i_sem);
         fidlen = ll_fid2str(fidname, fid->id, fid->generation);
-        dchild = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
+        dchild = ll_lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(dchild)) {
-                up(&pending_dir->i_sem);
                 rc = PTR_ERR(dchild);
                 CERROR("error looking up %s in PENDING: rc = %d\n",fidname, rc);
                 RETURN(rc);
         }
 
         if (dchild->d_inode != NULL) {
-                up(&pending_dir->i_sem);
                 mds_inode_set_orphan(dchild->d_inode);
                 mds_pack_inode2fid(&body->fid1, dchild->d_inode);
                 mds_pack_inode2body(body, dchild->d_inode);
@@ -717,8 +713,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                        fidname);
                 goto open;
         }
-        dput(dchild);
-        up(&pending_dir->i_sem);
+        l_dput(dchild);
 
         /* We didn't find it in PENDING so it isn't an orphan.  See
          * if it was a regular inode that was previously created. */

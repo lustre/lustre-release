@@ -259,9 +259,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                 initial_connect = 1;
         } else {
                 committed_before_reconnect = imp->imp_peer_committed_transno;;
-
         }
-
 
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 

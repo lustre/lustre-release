@@ -1,3 +1,17 @@
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.6
+       * bug fixes
+	- avoid crash during MDS cleanup with OST shut down (2775)
+	- fix loi_list_lock/oig_lock inversion on interrupted IO (4136)
+	- don't use bad inodes on the MDS (3744)
+	- dynamic object preallocation to improve recovery speed (4236)
+	- don't hold spinlock over lock dumping or change debug flags (4401)
+	- don't zero obd_dev when it is force cleaned (3651)
+	- print grants to console if they go negative (4431)
+	- "lctl deactivate" will stop automatic recovery attempts (3406)
+	- look for existing locks in ldlm_handle_enqueue() (3764)
+	- don't resolve lock handle twice in recovery avoiding race (4401)
+	
 2004-08-24  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.5
        * bug fixes
@@ -19,6 +33,7 @@
 	- replace some LBUG about llog ops with error handling (3841)
 	- don't match INVALID dentries from d_lookup and spin (3784)
 	- hold dcache_lock while marking dentries INVALID and hashing (4255)
+	- fix invalid assertion in ptlrpc_set_wait (3880)
        * miscellania
 	- add libwrap support for the TCP acceptor (3996)
 	- add /proc/sys/portals/routes for non-root route listing (3994)

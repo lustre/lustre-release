@@ -7,7 +7,7 @@ STATMANY=${STATMANY:-statmany}
 UNLINKMANY=${UNLINKMANY:-unlinkmany}
 LCTL=${LCTL:-lctl}
 
-MOUNT1=${MOUNT1:-/mnt/lustre}
+MOUNT1=${MOUNT1:-/mnt/lustre1}
 MOUNT2=${MOUNT2:-/mnt/lustre2}
 DIR=${DIR:-$MOUNT1}
 DIR2=${DIR2:-$MOUNT2}

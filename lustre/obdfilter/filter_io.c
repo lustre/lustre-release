@@ -339,11 +339,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 fso[i].fso_bufcnt = o->ioo_bufcnt;
         }
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow preprw_read setup %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "preprw_read setup: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 
         for (i = 0, o = obj, rnb = nb, lnb = res; i < objcount; i++, o++) {
                 dentry = fso[i].fso_dentry;
@@ -382,11 +378,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 }
         }
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow start_page_read %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "start_page_read: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "start_page_read");
 
         lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_READ_BYTES, tot_bytes);
         while (lnb-- > res) {
@@ -399,11 +391,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 }
         }
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow finish_page_read %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "finish_page_read: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "finish_page_read");
 
         filter_tally_read(&exp->exp_obd->u.filter, res, niocount);
 
@@ -599,11 +587,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fso.fso_dentry = dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow preprw_write setup %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "preprw_write setup: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "preprw_write setup");
 
         spin_lock(&exp->exp_obd->obd_osfs_lock);
         if (oa)
@@ -648,11 +632,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                         tot_bytes += lnb->len;
         }
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow start_page_write %lus\n", (jiffies - now) / HZ);
-        else
-                CDEBUG(D_INFO, "start_page_write: %lu jiffies\n",
-                       (jiffies - now));
+        fsfilt_check_slow(now, obd_timeout, "start_page_write");
 
         lprocfs_counter_add(exp->exp_obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                             tot_bytes);

@@ -249,8 +249,8 @@ static int lfs_check(int argc, char **argv)
         if (argc != 2)
                 return CMD_HELP;
 
-        obd_types[1] = obd_type1;
-        obd_types[2] = obd_type2;
+        obd_types[0] = obd_type1;
+        obd_types[1] = obd_type2;
 
         if (strcmp(argv[1], "osts") == 0) {
                 strcpy(obd_types[0], "osc");

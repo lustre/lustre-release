@@ -201,7 +201,8 @@ void class_release_dev(struct obd_device *obd)
         int minor = obd->obd_minor;
 
         spin_lock(&obd_dev_lock);
-        memset(obd, 0, sizeof(*obd));
+        obd->obd_type = NULL;
+        //memset(obd, 0, sizeof(*obd));
         obd->obd_minor = minor;
         spin_unlock(&obd_dev_lock);
 }
@@ -805,15 +806,24 @@ static int oig_done(struct obd_io_group *oig)
 static void interrupted_oig(void *data)
 {
         struct obd_io_group *oig = data;
-        struct list_head *pos;
         struct oig_callback_context *occ;
         unsigned long flags;
 
         spin_lock_irqsave(&oig->oig_lock, flags);
-        list_for_each(pos, &oig->oig_occ_list) {
-                occ = list_entry(pos, struct oig_callback_context,
-                                 occ_oig_item);
+        /* We need to restart the processing each time we drop the lock, as
+         * it is possible other threads called oig_complete_one() to remove
+         * an entry elsewhere in the list while we dropped lock.  We need to
+         * drop the lock because osc_ap_completion() calls oig_complete_one()
+         * which re-gets this lock ;-) as well as a lock ordering issue. */
+restart:
+        list_for_each_entry(occ, &oig->oig_occ_list, occ_oig_item) {
+                if (occ->interrupted)
+                        continue;
+                occ->interrupted = 1;
+                spin_unlock_irqrestore(&oig->oig_lock, flags);
                 occ->occ_interrupted(occ);
+                spin_lock_irqsave(&oig->oig_lock, flags);
+                goto restart;
         }
         spin_unlock_irqrestore(&oig->oig_lock, flags);
 }

@@ -281,7 +281,7 @@ struct obdo {
         obd_count               o_nlink;        /* brw: checksum */
         obd_count               o_generation;
         obd_flag                o_valid;        /* hot fields in this obdo */
-        obd_count               o_misc;
+        obd_count               o_misc;         /* brw: o_dropped */
         __u32                   o_easize;       /* epoch in ost writes */
         char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
 };
@@ -409,6 +409,9 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_GRANTED    0x40 /* the ost manages this */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
+
+#define OST_MIN_PRECREATE 32
+#define OST_MAX_PRECREATE 20000
 
 struct obd_ioobj {
         obd_id               ioo_id;

@@ -81,12 +81,14 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data,
                 spin_unlock(&oscc->oscc_lock);
         } else if (rc != 0 && rc != -EIO) {
                 DEBUG_REQ(D_ERROR, req,
-                          "unknown rc %d from async create: failing oscc",
-                          rc);
+                          "unknown rc %d from async create: failing oscc", rc);
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
+                oscc->oscc_grow_count = OST_MIN_PRECREATE;
                 spin_unlock(&oscc->oscc_lock);
                 ptlrpc_fail_import(req->rq_import, req->rq_import_generation);
         } else {
+                if (rc == 0)
+                        oscc->oscc_flags &= ~OSCC_FLAG_LOW;
                 spin_unlock(&oscc->oscc_lock);
         }
 
@@ -106,6 +108,17 @@ static int oscc_internal_create(struct osc_creator *oscc)
         ENTRY;
 
         spin_lock(&oscc->oscc_lock);
+        if (oscc->oscc_grow_count < OST_MAX_PRECREATE &&
+            !(oscc->oscc_flags & (OSCC_FLAG_LOW | OSCC_FLAG_RECOVERING)) &&
+            (__s64)(oscc->oscc_last_id - oscc->oscc_next_id) <=
+                   (oscc->oscc_grow_count / 4 + 1)) {
+                oscc->oscc_flags |= OSCC_FLAG_LOW;
+                oscc->oscc_grow_count *= 2;
+        }
+
+        if (oscc->oscc_grow_count > OST_MAX_PRECREATE)
+                oscc->oscc_grow_count = OST_MAX_PRECREATE;
+
         if (oscc->oscc_flags & OSCC_FLAG_CREATING ||
             oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
                 spin_unlock(&oscc->oscc_lock);
@@ -178,7 +191,7 @@ static int oscc_precreate(struct osc_creator *oscc, int wait)
         int rc = 0;
         ENTRY;
 
-        if (oscc_has_objects(oscc, oscc->oscc_kick_barrier))
+        if (oscc_has_objects(oscc, oscc->oscc_grow_count / 2))
                 RETURN(0);
 
         if (!wait)
@@ -225,9 +238,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 RETURN(osc_real_create(exp, oa, ea, oti));
         }
 
-	/* this is the special case where create removes orphans */
-	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
-	    oa->o_flags == OBD_FL_DELORPHAN) {
+        /* this is the special case where create removes orphans */
+        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+            oa->o_flags == OBD_FL_DELORPHAN) {
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
                         spin_unlock(&oscc->oscc_lock);
@@ -342,9 +355,7 @@ void oscc_init(struct obd_device *obd)
         init_waitqueue_head(&oscc->oscc_waitq);
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_obd = obd;
-        oscc->oscc_kick_barrier = 100;
-        oscc->oscc_grow_count = 2000;
-        oscc->oscc_initial_create_count = 2000;
+        oscc->oscc_grow_count = OST_MIN_PRECREATE;
 
         oscc->oscc_next_id = 2;
         oscc->oscc_last_id = 1;

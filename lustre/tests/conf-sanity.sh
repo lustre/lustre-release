@@ -623,7 +623,7 @@ test_16() {
             mount_client $MOUNT
             check_mount || return 41
             cleanup || return $?
-         fi
+        fi
                                                                                                                              
         echo "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
         [ -d $TMPMTPT ] || mkdir -p $TMPMTPT

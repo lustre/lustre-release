@@ -573,8 +573,7 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                 char rawbuf[OBD_MAX_IOCTL_BUFFER];
                 char *bufl = rawbuf;
                 char *bufp = buf;
-                int max = sizeof(rawbuf);
-                struct obd_ioctl_data datal;
+                struct obd_ioctl_data datal = { 0, };
                 struct obd_statfs osfs_buffer;
 
                 while(bufp[0] == ' ')
@@ -596,7 +595,11 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
                                 datal.ioc_inlbuf1 = obd_name;
                                 datal.ioc_inllen1 = strlen(obd_name) + 1;
 
-                                obd_ioctl_pack(&datal,&bufl,max);
+                                rc = obd_ioctl_pack(&datal, &bufl, OBD_MAX_IOCTL_BUFFER);
+                                if (rc) {
+                                        fprintf(stderr, "internal buffer error packing\n");
+                                        break;
+                                }
 
                                 rc = ioctl(dirfd(opendir(dir)), OBD_IOC_PING,
                                            bufl);

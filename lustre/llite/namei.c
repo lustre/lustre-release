@@ -303,7 +303,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         struct dentry **de = icbd->icbd_childp;
         struct inode *parent = icbd->icbd_parent;
         struct ll_sb_info *sbi = ll_i2sbi(parent);
-        struct dentry *dentry = *de;
         struct inode *inode = NULL;
         int rc;
 
@@ -313,7 +312,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 ENTRY;
 
                 rc = ll_prep_inode(sbi->ll_osc_exp, &inode, request, offset,
-                                   dentry->d_sb);
+                                   (*de)->d_sb);
                 if (rc)
                         RETURN(rc);
 
@@ -339,16 +338,16 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         }
                 }
 
-                dentry = *de = ll_find_alias(inode, dentry);
+                *de = ll_find_alias(inode, *de);
         } else {
                 ENTRY;
                 spin_lock(&dcache_lock);
-                ll_d_add(dentry, inode);
+                ll_d_add(*de, inode);
                 spin_unlock(&dcache_lock);
         }
 
-        ll_set_dd(dentry);
-        dentry->d_op = &ll_d_ops;
+        ll_set_dd(*de);
+        (*de)->d_op = &ll_d_ops;
 
         RETURN(0);
 }
@@ -369,9 +368,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (dentry->d_name.len > EXT3_NAME_LEN)
                 RETURN(ERR_PTR(-ENAMETOOLONG));
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.name, parent->i_ino, parent->i_generation,
-               parent, LL_IT2STR(it));
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.len, dentry->d_name.name, parent->i_ino,
+               parent->i_generation, parent, LL_IT2STR(it));
 
         if (d_mountpoint(dentry))
                 CERROR("Tell Peter, lookup on mtpt, it %s\n", LL_IT2STR(it));
@@ -478,9 +477,9 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
-               LL_IT2STR(it));
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.len, dentry->d_name.name, dir->i_ino,
+               dir->i_generation, dir, LL_IT2STR(it));
 
         rc = it_open_error(DISP_OPEN_CREATE, it);
         if (rc)
@@ -526,15 +525,13 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
 {
         struct ptlrpc_request *request = NULL;
         struct inode *dir = nd->dentry->d_inode;
-        const char *name = nd->last.name;
-        int len = nd->last.len;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               name, dir->i_ino, dir->i_generation, dir);
+               nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
                 RETURN(err);
@@ -549,7 +546,8 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+                ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
+                                       nd->last.len, 0);
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
                                  rdev, &request);
@@ -566,20 +564,19 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         RETURN(err);
 }
 
-static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
+static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
                     ll_dev_t rdev)
 {
         struct ptlrpc_request *request = NULL;
         struct inode *inode = NULL;
-        const char *name = child->d_name.name;
-        int len = child->d_name.len;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               name, dir->i_ino, dir->i_generation, dir);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%*s,dir=%lu/%u(%p)\n",
+               dchild->d_name.len, dchild->d_name.name,
+               dir->i_ino, dir->i_generation, dir);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
                 RETURN(err);
@@ -594,7 +591,8 @@ static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+                ll_prepare_mdc_op_data(&op_data, dir, NULL, dchild->d_name.name,
+                                       dchild->d_name.len, 0);
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
                                  rdev, &request);
@@ -604,7 +602,7 @@ static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
                 ll_update_times(request, 0, dir);
 
                 err = ll_prep_inode(sbi->ll_osc_exp, &inode, request, 0,
-                                    child->d_sb);
+                                    dchild->d_sb);
                 if (err)
                         GOTO(out_err, err);
                 break;
@@ -615,7 +613,7 @@ static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
                 RETURN(-EINVAL);
         }
 
-        d_instantiate(child, inode);
+        d_instantiate(dchild, inode);
  out_err:
         ptlrpc_req_finished(request);
         RETURN(err);
@@ -624,8 +622,6 @@ static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
 static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
 {
         struct inode *dir = nd->dentry->d_inode;
-        const char *name = nd->last.name;
-        int len = nd->last.len;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data op_data;
@@ -633,12 +629,13 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),target=%s\n",
-               name, dir->i_ino, dir->i_generation, dir, tgt);
+               nd->last.name, dir->i_ino, dir->i_generation, dir, tgt);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
                 RETURN(err);
 
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
+                               nd->last.len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                          current->fsuid, current->fsgid, 0, &request);
@@ -653,19 +650,18 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 {
         struct inode *src = srcnd->dentry->d_inode;
         struct inode *dir = tgtnd->dentry->d_inode;
-        const char *name = tgtnd->last.name;
-        int len = tgtnd->last.len;
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),dir=%lu/%u(%p),target=%s\n",
-               src->i_ino, src->i_generation, src,
-               dir->i_ino, dir->i_generation, dir, name);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s inode=%lu/%u(%p), dir=%lu/%u(%p), "
+               "target=%s\n", srcnd->last.name, src->i_ino, src->i_generation,
+               src, dir->i_ino, dir->i_generation, dir, tgtnd->last.name);
 
-        ll_prepare_mdc_op_data(&op_data, src, dir, name, len, 0);
+        ll_prepare_mdc_op_data(&op_data, src, dir, tgtnd->last.name,
+                               tgtnd->last.len, 0);
         err = mdc_link(sbi->ll_mdc_exp, &op_data, &request);
         if (err == 0)
                 ll_update_times(request, 0, dir);
@@ -679,21 +675,20 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 static int ll_mkdir_raw(struct nameidata *nd, int mode)
 {
         struct inode *dir = nd->dentry->d_inode;
-        const char *name = nd->last.name;
-        int len = nd->last.len;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               name, dir->i_ino, dir->i_generation, dir);
+               nd->last.name, dir->i_ino, dir->i_generation, dir);
 
         if (dir->i_nlink >= EXT3_LINK_MAX)
                 RETURN(err);
 
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
+                               nd->last.len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                          current->fsuid, current->fsgid, 0, &request);
         if (err == 0)
@@ -706,16 +701,15 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
 static int ll_rmdir_raw(struct nameidata *nd)
 {
         struct inode *dir = nd->dentry->d_inode;
-        const char *name = nd->last.name;
-        int len = nd->last.len;
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               name, dir->i_ino, dir->i_generation, dir);
+               nd->last.name, dir->i_ino, dir->i_generation, dir);
 
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, S_IFDIR);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
+                               nd->last.len, S_IFDIR);
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc == 0)
                 ll_update_times(request, 0, dir);
@@ -796,16 +790,15 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 static int ll_unlink_raw(struct nameidata *nd)
 {
         struct inode *dir = nd->dentry->d_inode;
-        const char *name = nd->last.name;
-        int len = nd->last.len;
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
-               name, dir->i_ino, dir->i_generation, dir);
+               nd->last.name, dir->i_ino, dir->i_generation, dir);
 
-        ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
+                               nd->last.len, 0);
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc)
                 GOTO(out, rc);
@@ -818,26 +811,24 @@ static int ll_unlink_raw(struct nameidata *nd)
         RETURN(rc);
 }
 
-static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
+static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 {
-        struct inode *src = oldnd->dentry->d_inode;
-        struct inode *tgt = newnd->dentry->d_inode;
-        const char *oldname = oldnd->last.name;
-        int oldlen  = oldnd->last.len;
-        const char *newname = newnd->last.name;
-        int newlen  = newnd->last.len;
+        struct inode *src = srcnd->dentry->d_inode;
+        struct inode *tgt = tgtnd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(src);
         struct mdc_op_data op_data;
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:oldname=%s,src_dir=%lu/%u(%p),newname=%s,"
-               "tgt_dir=%lu/%u(%p)\n", oldname, src->i_ino, src->i_generation,
-               src, newname, tgt->i_ino, tgt->i_generation, tgt);
+               "tgt_dir=%lu/%u(%p)\n",
+               srcnd->last.name, src->i_ino, src->i_generation, src,
+               tgtnd->last.name, tgt->i_ino, tgt->i_generation, tgt);
 
         ll_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
         err = mdc_rename(sbi->ll_mdc_exp, &op_data,
-                         oldname, oldlen, newname, newlen, &request);
+                         srcnd->last.name, srcnd->last.len,
+                         tgtnd->last.name, tgtnd->last.len, &request);
         if (!err) {
                 ll_update_times(request, 0, src);
                 ll_update_times(request, 0, tgt);

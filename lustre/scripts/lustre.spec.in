@@ -144,7 +144,6 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/bin/lstripe
 %attr(-, root, root) /usr/bin/mcreate
 %attr(-, root, root) /usr/bin/munlink
-%attr(-, root, root) /usr/bin/mkdirmany
 %attr(-, root, root) /usr/lib/lustre/python
 %attr(-, root, root) /usr/lib/lustre/examples
 

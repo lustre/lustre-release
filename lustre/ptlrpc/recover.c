@@ -317,10 +317,12 @@ int  ptlrpc_set_import_active(struct obd_import *imp, int active)
          * requests. */
         if (!active) {
                 ptlrpc_invalidate_import(imp, 0);
+                imp->imp_deactive = 1;
         } 
 
         /* When activating, mark import valid, and attempt recovery */
         if (active) {
+                imp->imp_deactive = 0;
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        imp->imp_target_uuid.uuid);
                 rc = ptlrpc_recover_import(imp, NULL);

@@ -26,7 +26,7 @@ CLEANUP=${CLEANUP:-"cleanup"}
 make_config() {
     rm -f $XMLCONFIG
     add_mds mds --dev $MDSDEV --size $MDSSIZE
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
@@ -248,9 +248,10 @@ test_17() {
     # client will get evicted here
     sysctl -w lustre.fail_loc=0x80000503
     do_facet client cp /etc/termcap $DIR/$tfile
-    sysctl -w lustre.fail_loc=0
 
     sleep $TIMEOUT
+    sysctl -w lustre.fail_loc=0
+    do_facet client "df $DIR"
     # expect cmp to fail
     do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 1
     do_facet client "rm $DIR/$tfile" || return 2

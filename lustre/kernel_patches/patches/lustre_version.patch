@@ -1,4 +1,6 @@
+Version 40: >32000 subdirectories support for ext3 (b=3244)
 Version 39: add EXPORT_SYMBOL(smp_num_siblings) to vanilla-2.4.24 (b=3966)
+            eebperf (unfragmented 1MB write/read support)
 Version 38: drop dentry ref in ext3_add_link from open_connect_dentry (b=3266)
 Version 37: fix htree rename-within-same-dir (b=3417), endianness (b=2447)
 Version 36: don't dput dentry after error (b=2350), zero page->private (3119)

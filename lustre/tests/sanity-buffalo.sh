@@ -31,7 +31,7 @@ export TESTDESC=${TESTDESC:-"Local test in $TARGET for correctness"}
 export TESTGROUP=${TESTGROUP:-"correctness"}
 export LUSTRE_TAG=${LUSTRE_TAG:-`cat $PWD/CVS/Tag | cut -c 2-`}
 export TESTARCH=${TESTARCH:-`uname -r`}
-export NETWORKTYPE=${NETWORKTYPE:-"tcp"}
+export NETTYPE=${NETTYPE:-"tcp"}
 export MACHINENAME=${MACHINENAME:-`hostname`}
 
 usage() {

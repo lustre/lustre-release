@@ -155,8 +155,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc);
         }
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow brw_start %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "brw_start");
 
         iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
@@ -236,8 +235,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         }
         up(&inode->i_sem);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "direct_io");
 
         rc = filter_finish_transno(exp, oti, rc);
 
@@ -248,8 +246,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (obd_sync_filter)
                 LASSERT(oti->oti_transno <= obd->obd_last_committed);
 
-        if (time_after(jiffies, now + 15 * HZ))
-                CERROR("slow commitrw commit %lus\n", (jiffies - now) / HZ);
+        fsfilt_check_slow(now, obd_timeout, "commitrw commit");
 
 cleanup:
         filter_grant_commit(exp, niocount, res);

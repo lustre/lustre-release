@@ -1,9 +1,32 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * lustre VFS/process permission interface
+ */
+
 #ifndef __LVFS_H__
 #define __LVFS_H__
 
 #include <linux/kp30.h>
 
-#define LL_FID_NAMELEN	(16 + 1 + 8 + 1)
+#define LL_FID_NAMELEN (16 + 1 + 8 + 1)
 
 #if defined __KERNEL__
 #include <linux/lvfs_linux.h>
@@ -88,6 +111,15 @@ static inline struct dentry *ll_lookup_one_len(const char *fid_name,
         dchild = lookup_one_len(fid_name, dparent, fid_namelen);
         up(&dparent->d_inode->i_sem);
 
+        if (IS_ERR(dchild) || dchild->d_inode == NULL)
+                return dchild;
+
+        if (is_bad_inode(dchild->d_inode)) {
+                CERROR("bad inode returned %lu/%u\n",
+                       dchild->d_inode->i_ino, dchild->d_inode->i_generation);
+                dput(dchild);
+                dchild = ERR_PTR(-ENOENT);
+        }
         return dchild;
 }
 

@@ -48,15 +48,17 @@ int ldlm_expired_completion_wait(void *data)
         struct obd_device *obd;
 
         if (lock->l_conn_export == NULL) {
-                static unsigned long next_dump = 0;
+                static unsigned long next_dump = 0, last_dump = 0;
 
                 LDLM_ERROR(lock, "lock timed out; not entering recovery in "
                            "server code, just going back to sleep");
                 if (time_after(jiffies, next_dump)) {
-                        ldlm_namespace_dump(lock->l_resource->lr_namespace);
-                        if (next_dump == 0)
-                                portals_debug_dumplog();
+                        last_dump = next_dump;
                         next_dump = jiffies + 300 * HZ;
+                        ldlm_namespace_dump(D_DLMTRACE,
+                                            lock->l_resource->lr_namespace);
+                        if (last_dump == 0)
+                                portals_debug_dumplog();
                 }
                 RETURN(0);
         }

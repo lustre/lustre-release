@@ -1,7 +1,7 @@
 #!/bin/sh
 set -evx
 
-MOUNT=${MNT:-/mnt/lustre}
+MOUNT=${MOUNT:-/mnt/lustre}
 DIR=${DIR:-$MOUNT}
 SRC=${SRC:-`dirname $0`/../..}
 export CC=${CC:-gcc}
