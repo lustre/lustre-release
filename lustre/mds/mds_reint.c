@@ -257,8 +257,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         lmm = lustre_msg_buf(req->rq_repmsg, offset + 1);
                         lmm->lmm_easize = mds->mds_max_mdsize;
 
-                        if (mds_fs_get_md(mds, inode, lmm) < 0)
+                        if (mds_fs_get_md(mds, inode, lmm) < 0) {
+                                CDEBUG(D_INFO,"No md for %ld: rc %d\n",
+                                       inode->i_ino, rc);
                                 memset(lmm, 0, lmm->lmm_easize);
+                        } else
+                                body->valid |= OBD_MD_FLEASIZE;
                 }
                 /* now a normal case for intent locking */
                 GOTO(out_create_dchild, rc = -EEXIST);
@@ -408,6 +412,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct dentry *dchild = NULL;
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_body *body;
         char *name;
         struct inode *dir, *inode;
         struct lustre_handle lockh, child_lockh;
@@ -445,8 +450,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                        dir->i_ino, rec->ur_name);
                 /* going to out_unlink_cancel causes an LBUG, don't know why */
                 GOTO(out_unlink_dchild, rc = -ENOENT);
-        } else if (offset) {
-                struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
+        }
+
+        if (offset) {
+                body = lustre_msg_buf(req->rq_repmsg, 1);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
         }
@@ -471,7 +478,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                 CDEBUG(D_INFO, "No md for ino %ld: rc = %d\n",
                                        inode->i_ino, rc);
                                 memset(lmm, 0, lmm->lmm_easize);
-                        }
+                        } else
+                                body->valid |= OBD_MD_FLEASIZE;
                 }
                 /* no break */
         case S_IFLNK:
@@ -592,23 +600,23 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         if (dchild->d_inode) {
                 struct inode *inode = dchild->d_inode;
                 /* in intent case ship back attributes to client */
-                if (offset) { 
-                        struct mds_body *body = 
+                if (offset) {
+                        struct mds_body *body =
                                 lustre_msg_buf(req->rq_repmsg, 1);
-                        
+
                         mds_pack_inode2fid(&body->fid1, inode);
                         mds_pack_inode2body(body, inode);
                         if (S_ISREG(inode->i_mode)) {
                                 struct lov_mds_md *lmm;
-                                
+
                                 lmm = lustre_msg_buf(req->rq_repmsg, 2);
-                                        lmm->lmm_easize = mds->mds_max_mdsize;
-                                        if ((rc = 
-                                             mds_fs_get_md(mds, inode, lmm)) < 0) {
-                                                CDEBUG(D_INFO,"No md for %ld: rc %d\n",
-                                                       inode->i_ino, rc);
-                                                memset(lmm, 0, lmm->lmm_easize);
-                                        }
+                                lmm->lmm_easize = mds->mds_max_mdsize;
+                                if ((rc = mds_fs_get_md(mds, inode, lmm)) < 0) {
+                                        CDEBUG(D_INFO,"No md for %ld: rc %d\n",
+                                               inode->i_ino, rc);
+                                        memset(lmm, 0, lmm->lmm_easize);
+                                } else
+                                        body->valid |= OBD_MD_FLEASIZE;
                         }
                 }
                 CERROR("child exists (dir %ld, name %s\n",
@@ -624,7 +632,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 GOTO(out_link_dchild, rc = PTR_ERR(handle));
 
         rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
-        if (rc) 
+        if (rc)
                 CERROR("link error %d\n", rc);
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
@@ -729,14 +737,14 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                        rec->ur_tgtlen - 1, rec->ur_tgt, PTR_ERR(de_new));
                 GOTO(out_rename_deold, rc = -ENOENT);
         }
-        
+
         /* in intent case ship back attributes to client */
-        if (offset) { 
+        if (offset) {
                 struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
                 struct inode *inode = de_new->d_inode;
 
                 if (!inode) {
-                        body->valid = 0; 
+                        body->valid = 0;
                 } else {
                         mds_pack_inode2fid(&body->fid1, inode);
                         mds_pack_inode2body(body, inode);
@@ -749,7 +757,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                                         CDEBUG(D_INFO,"No md for %ld: rc %d\n",
                                                inode->i_ino, rc);
                                         memset(lmm, 0, lmm->lmm_easize);
-                                }
+                                } else
+                                        body->valid |= OBD_MD_FLEASIZE;
                         }
                 }
         }
