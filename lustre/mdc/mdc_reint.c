@@ -49,15 +49,11 @@ int mdc_setattr(struct lustre_handle *conn,
                 struct inode *inode, struct iattr *iattr,
                 struct ptlrpc_request **request)
 {
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
-        struct mds_rec_setattr *rec;
         struct ptlrpc_request *req;
+        struct mds_rec_setattr *rec;
         int rc, size = sizeof(*rec);
         ENTRY;
 
-        mdc_con2cl(conn, &cl, &connection, &rconn);
         req = ptlrpc_prep_req2(conn, MDS_REINT, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
@@ -126,12 +122,11 @@ int mdc_create(struct lustre_handle *conn,
  resend:
         rc = mdc_reint(req, level);
         if (rc == -ERESTARTSYS) {
-                struct mds_update_record_hdr *hdr =
-                        lustre_msg_buf(req->rq_reqmsg, 0);
+                __u32 *opcode = lustre_msg_buf(req->rq_reqmsg, 0);
                 level = LUSTRE_CONN_RECOVD;
                 CERROR("Lost reply: re-create rep.\n");
                 req->rq_flags = 0;
-                hdr->ur_opcode = NTOH__u32(REINT_RECREATE);
+                *opcode = NTOH__u32(REINT_RECREATE);
                 goto resend;
         }
 

@@ -342,10 +342,7 @@ static inline int obd_punch(struct lustre_handle *conn, struct obdo *tgt,
 static inline int obd_brw(int cmd, struct lustre_handle *conn, 
                           struct lov_stripe_md *md, 
                           obd_count oa_bufs,
-                          struct page **buf, 
-                          obd_size *count, 
-                          obd_off *offset,
-                          obd_flag *flags, 
+                          struct brw_page *pg, 
                           brw_callback_t callback, void *data)
 {
         int rc;
@@ -358,8 +355,7 @@ static inline int obd_brw(int cmd, struct lustre_handle *conn,
                 LBUG();
         }
 
-        rc = OBP(export->exp_obd, brw)(cmd, conn, md, oa_bufs, buf,
-                                       count, offset, flags, callback, data);
+        rc = OBP(export->exp_obd, brw)(cmd, conn, md, oa_bufs, pg, callback, data);
         RETURN(rc);
 }
 
@@ -406,7 +402,8 @@ static inline int obd_iocontrol(int cmd, struct lustre_handle *conn,
 }
 
 static inline int obd_enqueue(struct lustre_handle *conn,
-                              struct lustre_handle *parent_lock, __u64 *res_id,
+                              struct lov_stripe_md *md,
+                              struct lustre_handle *parent_lock, 
                               __u32 type, void *cookie, int cookielen,
                               __u32 mode, int *flags, void *cb, void *data,
                               int datalen, struct lustre_handle *lockh)
@@ -416,13 +413,13 @@ static inline int obd_enqueue(struct lustre_handle *conn,
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->exp_obd,enqueue);
 
-        rc = OBP(export->exp_obd, enqueue)(conn, parent_lock, res_id, type,
+        rc = OBP(export->exp_obd, enqueue)(conn, md, parent_lock, type,
                                         cookie, cookielen, mode, flags, cb,
                                         data, datalen, lockh);
         RETURN(rc);
 }
 
-static inline int obd_cancel(struct lustre_handle *conn, __u32 mode,
+static inline int obd_cancel(struct lustre_handle *conn, struct lov_stripe_md *md, __u32 mode,
                              struct lustre_handle *lockh)
 {
         int rc;
@@ -430,7 +427,7 @@ static inline int obd_cancel(struct lustre_handle *conn, __u32 mode,
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->exp_obd,cancel);
 
-        rc = OBP(export->exp_obd, cancel)(conn, mode, lockh);
+        rc = OBP(export->exp_obd, cancel)(conn, md, mode, lockh);
         RETURN(rc);
 }
 

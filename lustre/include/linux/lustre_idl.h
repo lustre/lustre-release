@@ -117,7 +117,7 @@ struct lustre_msg {
         __u32 type;
         __u32 version;
         __u32 opc;
-        __u64 last_rcvd;
+        __u64 last_xid;
         __u64 last_committed;
         __u64 transno;
         __u32 status;
@@ -321,6 +321,11 @@ struct mds_status_req {
         __u32  repbuf;
 };
 
+struct mds_fileh_body { 
+        struct ll_fid f_fid;
+        struct lustre_handle f_handle;
+};
+
 struct mds_conn_status { 
         struct ll_fid rootfid;
         __u64          xid;
@@ -347,13 +352,15 @@ struct mds_body {
         __u32          ino;
         __u32          nlink;
         __u32          generation;
-        __u32          last_xid;
+        __u32          last_xidnomore;
 };
 
 /* MDS update records */
-struct mds_update_record_hdr {
-        __u32 ur_opcode;
-};
+
+
+//struct mds_update_record_hdr {
+//        __u32 ur_opcode;
+//};
 
 struct mds_rec_setattr {
         __u32           sa_opcode;

@@ -56,8 +56,8 @@ int mdc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
 }
 
 int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
-                  __u64 *last_committed, __u64 *last_rcvd,
-                  __u32 *last_xid, struct ptlrpc_request **request)
+                  __u64 *last_committed, __u32 *last_xid, 
+                  struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
@@ -81,15 +81,11 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
                 mds_unpack_body(body);
                 memcpy(rootfid, &body->fid1, sizeof(*rootfid));
                 *last_committed = req->rq_repmsg->last_committed;
-                *last_rcvd = req->rq_repmsg->last_rcvd;
-                *last_xid = body->last_xid;
+                *last_xid = req->rq_repmsg->last_xid;
 
-                CDEBUG(D_NET, "root ino=%ld, last_committed=%Lu, last_rcvd=%Lu,"
-                       " last_xid=%d\n",
+                CDEBUG(D_NET, "root ino=%ld, last_committed=%Lu, last_xid=%d\n",
                        (unsigned long)rootfid->id,
-                       (unsigned long long)*last_committed,
-                       (unsigned long long)*last_rcvd,
-                       body->last_xid);
+                       (unsigned long long)*last_committed, last_xid);
         }
 
         EXIT;
@@ -145,15 +141,11 @@ int mdc_getattr(struct lustre_handle *conn,
                 obd_id ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request)
 {
-        struct ptlrpc_client *cl;
-        struct ptlrpc_connection *connection;
-        struct lustre_handle *rconn;
         struct ptlrpc_request *req;
         struct mds_body *body;
         int rc, size[2] = {sizeof(*body), 0}, bufcount = 1;
         ENTRY;
 
-        mdc_con2cl(conn, &cl, &connection, &rconn);
         req = ptlrpc_prep_req2(conn, MDS_GETATTR, 1, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);

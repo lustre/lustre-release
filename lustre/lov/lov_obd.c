@@ -220,6 +220,11 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_st
                 md->lmd_stripe_count = lov->desc.ld_default_stripe_count;
         }
 
+        if (!md->lmd_stripe_size)
+                md->lmd_stripe_size = lov->desc.ld_default_stripe_size;
+
+                
+
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 struct lov_stripe_md obj_md; 
                 struct lov_stripe_md *obj_mdp = &obj_md; 
@@ -269,7 +274,7 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0; i < md->lmd_stripe_count; i++) {
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
-                oa->o_id = md->lmd_objects[i].l_object_id; 
+                tmp.o_id = md->lmd_objects[i].l_object_id; 
                 rc = obd_destroy(&lov->tgts[i].conn, &tmp, NULL);
                 if (!rc) { 
                         CERROR("Error destroying object %Ld on %d\n",
@@ -359,7 +364,7 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
 
         if (!md) { 
-                CERROR("LOV requires striping ea for desctruction\n"); 
+                CERROR("LOV requires striping ea for opening\n"); 
                 RETURN(-EINVAL); 
         }
 
@@ -373,7 +378,7 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
                 oa->o_id = md->lmd_objects[i].l_object_id; 
 
                 rc = obd_open(&lov->tgts[i].conn, &tmp, NULL);
-                if (!rc) { 
+                if (rc) { 
                         CERROR("Error getattr object %Ld on %d\n",
                                oa->o_id, i); 
                 }
@@ -414,6 +419,10 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
         RETURN(rc);
 }
 
+#ifndef log2
+#define log2(n) ffz(~(n))
+#endif
+
 /* compute offset in stripe i corresponds to offset "in" */
 __u64 lov_offset(struct lov_stripe_md *md, __u64 in, int i)
 {
@@ -436,33 +445,26 @@ __u64 lov_offset(struct lov_stripe_md *md, __u64 in, int i)
         return (__u64) out;
 }
 
-
-struct lov_callback_data {
-        atomic_t count;
-        wait_queue_head_t waitq;
-};
-
-static void lov_read_callback(struct ptlrpc_bulk_desc *desc, void *data)
+/* compute offset in stripe i corresponds to offset "in" */
+__u64 lov_stripe(struct lov_stripe_md *md, __u64 in, int *j)
 {
-        struct lov_callback_data *cb_data = data;
+        __u32 ssz = md->lmd_stripe_size;
+        __u32 off, out;
+        /* full stripes across all * stripe size */
+        *j = (((__u32) in)/ssz) % md->lmd_stripe_count;
+        off =  (__u32)in % (md->lmd_stripe_count * ssz);
+        out = ( ((__u32)in) / (md->lmd_stripe_count * ssz)) * ssz + 
+                (off - ((*j) * ssz)) % ssz;;
 
-        if (atomic_dec_and_test(&cb_data->count))
-                wake_up(&cb_data->waitq);
+        return (__u64) out;
 }
 
-static int lov_read_check_status(struct lov_callback_data *cb_data)
+int lov_stripe_which(struct lov_stripe_md *md, __u64 in)
 {
-        ENTRY;
-        if (sigismember(&(current->pending.signal), SIGKILL) ||
-            sigismember(&(current->pending.signal), SIGTERM) ||
-            sigismember(&(current->pending.signal), SIGINT)) {
-                // FIXME XXX what here 
-                // cb_data->flags |= PTL_RPC_FL_INTR;
-                RETURN(1);
-        }
-        if (atomic_read(&cb_data->count) == 0)
-                RETURN(1);
-        RETURN(0);
+        __u32 ssz = md->lmd_stripe_size;
+        int j; 
+        j = (((__u32) in)/ssz) % md->lmd_stripe_count;
+        return j;
 }
 
 
@@ -492,6 +494,8 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                 __u64 starti = lov_offset(md, start, i); 
                 __u64 endi = lov_offset(md, end, i); 
                         
+                if (starti == endi)
+                        continue;
                 /* create data objects with "parent" OA */ 
                 memcpy(&tmp, oa, sizeof(tmp));
                 oa->o_id = md->lmd_objects[i].l_object_id; 
@@ -506,160 +510,189 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
         RETURN(rc);
 }
 
+struct lov_callback_data {
+        atomic_t count;
+        struct io_cb_data *cbd;
+        brw_callback_t cb;
+        int err;
+};
 
-#if 0
-static int lov_brw(int cmd, struct lustre_handle *conn, obd_count num_oa,
-                   struct obdo **oa,
-                   obd_count *oa_bufs, struct page **buf,
-                   obd_size *count, obd_off *offset, obd_flag *flags,
-                   bulk_callback_t callback, void *data)
+int lov_osc_brw_callback(void *data, int err, int phase)
 {
-        int rc, i, page_array_offset = 0;
-        obd_off off = offset;
-        obd_size retval = 0;
-        struct lov_callback_data *cb_data;
+        struct lov_callback_data *d = data;
+        int ret = 0;
+        ENTRY; 
+
+        if (phase == CB_PHASE_START) { 
+                RETURN(0);
+        } else if (phase == CB_PHASE_FINISH) { 
+                if (err) 
+                        d->err = err;
+                if (atomic_dec_and_test(&d->count)) { 
+                        ret = d->cb(d->cbd, 0, d->err); 
+                }
+                RETURN(ret);
+        } else 
+                LBUG();
+        EXIT;
+        return 0;
+}
+
+static inline int lov_brw(int cmd, struct lustre_handle *conn, 
+                          struct lov_stripe_md *md, 
+                          obd_count oa_bufs,
+                          struct brw_page *pga,
+                          brw_callback_t callback, void *data)
+{
+        int stripe_count = md->lmd_stripe_count;
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
+        struct { 
+                int bufct;
+                int index;
+                int subcount;
+                struct lov_stripe_md md;
+        } *stripeinfo;
+        struct brw_page *ioarr;
+        int rc, i;
+        struct lov_callback_data *lov_cb_data;
         ENTRY;
 
-        if (num_oa != 1)
-                LBUG();
+        lov = &export->exp_obd->u.lov;
 
-        if (!class_conn2export(conn))
-                RETURN(-EINVAL);
+        OBD_ALLOC(lov_cb_data, sizeof(*lov_cb_data));
+        if (!lov_cb_data)
+                RETURN(-ENOMEM);
 
-        OBD_ALLOC(cb_data, sizeof(*cb_data));
-        if (cb_data == NULL) {
-                LBUG();
+        OBD_ALLOC(stripeinfo,  stripe_count * sizeof(*stripeinfo));
+        if (!stripeinfo) 
+                RETURN(-ENOMEM); 
+
+        OBD_ALLOC(ioarr, sizeof(*ioarr) * oa_bufs);
+        if (!ioarr) { 
+                OBD_FREE(stripeinfo, stripe_count * sizeof(*stripeinfo));
                 RETURN(-ENOMEM);
         }
-        INIT_WAITQUEUE_HEAD(&cb_data->waitq);
-        atomic_set(&cb_data->count, 0);
 
-        for (i = 0; i < oa_bufs[0]; i++) {
-                struct page *current_page = buf[i];
-
-                struct lov_md *md = (struct lov_md *)oa[i]->inline;
-                int bufcount = oa_bufs[i];
-                // md->lmd_stripe_count
-
-                for (k = page_array_offset; k < bufcount + page_array_offset;
-                     k++) {
-                        
-                }
-                page_array_offset += bufcount;
-
-
-        while (off < offset + count) {
-                int stripe, conn;
-                obd_size size, tmp;
-
-                stripe = off / conn->oc_dev->u.lov.lov_stripe_size;
-                size = (stripe + 1) * conn->oc_dev->u.lov.lov_strip_size - off;
-                if (size > *count)
-                        size = *count;
-
-                conn = stripe % conn->oc_dev->obd_multi_count;
-
-                tmp = size;
-                atomic_inc(&cb_data->count);
-                rc = obd_brw(cmd, &conn->oc_dev->obd_multi_conn[conn],
-                             num_oa, oa, buf,
-                              &size, off, lov_read_callback, cb_data);
-                if (rc == 0)
-                        retval += size;
-                else {
-                        CERROR("read(off=%Lu, count=%Lu): %d\n",
-                               (unsigned long long)off,
-                               (unsigned long long)size, rc);
-                        break;
-                }
-
-                buf += size;
+        for (i=0 ; i < oa_bufs ; i++ ) { 
+                int which;
+                which = lov_stripe_which(md, pga[i].pg->index * PAGE_SIZE);
+                stripeinfo[which].bufct++;
         }
 
-        wait_event(&cb_data->waitq, lov_read_check_status(cb_data));
-        if (cb_data->flags & PTL_RPC_FL_INTR)
-                rc = -EINTR;
+        for (i=0 ; i < stripe_count ; i++) { 
+                if (i>0)
+                        stripeinfo[i].index = 
+                                stripeinfo[i-1].index + stripeinfo[i-1].bufct;
+                stripeinfo[i].md.lmd_object_id = 
+                        md->lmd_objects[i].l_object_id;
+        }
 
-        /* FIXME: The error handling here sucks */
-        *count = retval;
-        OBD_FREE(cb_data, sizeof(*cb_data));
-        RETURN(rc);
-}
+        for (i=0 ; i < oa_bufs ; i++ ) { 
+                int which, shift;
+                which = lov_stripe_which(md, pga[i].pg->index * PAGE_SIZE);
 
-static void lov_write_finished(struct ptlrpc_bulk_desc *desc, void *data)
-{
+                shift = stripeinfo[which].index;
+                ioarr[shift + stripeinfo[which].subcount] = pga[i];
+                pga[i].off = lov_offset(md, pga[i].pg->index * PAGE_SIZE, which);
+                stripeinfo[which].subcount++;
+        }
         
-}
+        lov_cb_data->cb = callback;
+        lov_cb_data->cbd = data;
+        atomic_set(&lov_cb_data->count, oa_bufs);
+        for (i=0 ; i < stripe_count ; i++) { 
+                int shift = stripeinfo[i].index;
 
-/* buffer must lie in user memory here */
-static int filter_write(struct lustre_handle *conn, struct obdo *oa, char *buf,
-                         obd_size *count, obd_off offset)
-{
-        int err;
-        struct file *file;
-        unsigned long retval;
-
-        ENTRY;
-        if (!class_conn2export(conn)) {
-                CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
-                EXIT;
-                return -EINVAL;
+                obd_brw(cmd, &lov->tgts[i].conn, &stripeinfo[i].md, 
+                        stripeinfo[i].bufct, &ioarr[shift], 
+                        lov_osc_brw_callback,  &lov_cb_data);
         }
 
-        file = filter_obj_open(conn->oc_dev, oa->o_id, oa->o_mode);
-        if (!file || IS_ERR(file)) {
-                EXIT;
-                return -PTR_ERR(file);
-        }
+        rc = callback(lov_cb_data, 0, CB_PHASE_START);
 
-        /* count doubles as retval */
-        retval = file->f_op->write(file, buf, *count, (loff_t *)&offset);
-        filp_close(file, 0);
-
-        if ( retval >= 0 ) {
-                err = 0;
-                *count = retval;
-                EXIT;
-        } else {
-                err = retval;
-                *count = 0;
-                EXIT;
-        }
-
-        return err;
-}
-
-static int lov_enqueue(struct lustre_handle *conn, struct ldlm_namespace *ns,
-                       struct ldlm_handle *parent_lock, __u64 *res_id,
-                       __u32 type, struct ldlm_extent *extent, __u32 mode,
-                       int *flags, void *data, int datalen,
-                       struct ldlm_handle *lockh)
-{
-        int rc;
-        ENTRY;
-
-        if (!class_conn2export(conn))
-                RETURN(-EINVAL);
-
-        rc = obd_enqueue(&conn->oc_dev->obd_multi_conn[0], ns, parent_lock,
-                         res_id, type, extent, mode, flags, data, datalen,
-                         lockh);
         RETURN(rc);
 }
 
-static int lov_cancel(struct lustre_handle *conn, __u32 mode,
-                      struct ldlm_handle *lockh)
+static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *md,
+                       struct lustre_handle *parent_lock, 
+                       __u32 type, void *cookie, int cookielen, __u32 mode,
+                       int *flags, void *cb, void *data, int datalen,
+                       struct lustre_handle *lockhs)
 {
-        int rc;
+        int rc = 0, i;
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
         ENTRY;
 
-        if (!class_conn2export(conn))
-                RETURN(-EINVAL);
+        if (!md) { 
+                CERROR("LOV requires striping ea for desctruction\n"); 
+                RETURN(-EINVAL); 
+        }
 
-        rc = obd_cancel(&conn->oc_dev->obd_multi_conn[0], oa);
+        if (!export || !export->exp_obd) 
+                RETURN(-ENODEV); 
+
+        lov = &export->exp_obd->u.lov;
+        for (i = 0; i < md->lmd_stripe_count; i++) {
+                struct ldlm_extent *extent = (struct ldlm_extent *)cookie;
+                struct ldlm_extent sub_ext;
+                struct lov_stripe_md submd;
+
+                sub_ext.start = lov_offset(md, extent->start, i); 
+                sub_ext.end = lov_offset(md, extent->end, i); 
+                if ( sub_ext.start == sub_ext.end ) 
+                        continue;
+
+                submd.lmd_object_id = md->lmd_objects[i].l_object_id;
+                submd.lmd_easize = sizeof(submd);
+                rc = obd_enqueue(&(lov->tgts[i].conn), &submd, parent_lock,  type, 
+                                 &sub_ext, sizeof(sub_ext), mode, flags, cb, data, datalen, &(lockhs[i]));
+                // XXX add a lock debug statement here
+                if (!rc) { 
+                        CERROR("Error punch object %Ld subobj %Ld\n", md->lmd_object_id,
+                               md->lmd_objects[i].l_object_id); 
+                }
+        }
         RETURN(rc);
 }
-#endif
+
+static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *md, __u32 mode,
+                      struct lustre_handle *lockhs)
+{
+        int rc = 0, i;
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
+        ENTRY;
+
+        if (!md) { 
+                CERROR("LOV requires striping ea for lock cancellation\n"); 
+                RETURN(-EINVAL); 
+        }
+
+        if (!export || !export->exp_obd) 
+                RETURN(-ENODEV); 
+
+        lov = &export->exp_obd->u.lov;
+        for (i = 0; i < md->lmd_stripe_count; i++) {
+                struct lov_stripe_md submd;
+
+                if ( lockhs[i].addr == 0 )
+                        continue;
+
+                submd.lmd_object_id = md->lmd_objects[i].l_object_id;
+                submd.lmd_easize = sizeof(submd);
+                rc = obd_cancel(&lov->tgts[i].conn, &submd, mode, &lockhs[i]);
+                if (!rc) { 
+                        CERROR("Error punch object %Ld subobj %Ld\n", md->lmd_object_id,
+                               md->lmd_objects[i].l_object_id); 
+                }
+        }
+        RETURN(rc);
+}
+
+
+
 
 struct obd_ops lov_obd_ops = {
         o_setup:       lov_setup,
@@ -671,12 +704,10 @@ struct obd_ops lov_obd_ops = {
         o_setattr:     lov_setattr,
         o_open:        lov_open,
         o_close:       lov_close,
-#if 0
-        o_brw:         lov_pgcache_brw,
+        o_brw:         lov_brw,
         o_punch:       lov_punch,
         o_enqueue:     lov_enqueue,
         o_cancel:      lov_cancel
-#endif
 };
 
 

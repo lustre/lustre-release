@@ -256,28 +256,34 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         struct inode *inode = filp->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
-        struct lustre_handle lockh;
-        __u64 res_id[RES_NAME_SIZE] = {inode->i_ino};
+        struct lustre_handle *lockhs = NULL;
+        struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
         int flags = 0;
         ldlm_error_t err;
         ssize_t retval;
         ENTRY;
 
+
+
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                if (!lockhs)
+                        RETURN(-ENOMEM); 
+
                 extent.start = *ppos;
                 extent.end = *ppos + count;
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
                        inode->i_ino, extent.start, extent.end);
 
-                err = obd_enqueue(&sbi->ll_osc_conn, NULL, res_id, LDLM_EXTENT,
+                err = obd_enqueue(&sbi->ll_osc_conn, md, NULL, LDLM_EXTENT,
                                   &extent, sizeof(extent), LCK_PR, &flags,
                                   ll_lock_callback, inode, sizeof(*inode),
-                                  &lockh);
+                                  lockhs);
                 if (err != ELDLM_OK) {
+                        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                         CERROR("lock enqueue: err: %d\n", err);
                         RETURN(err);
                 }
-                ldlm_lock_dump((void *)(unsigned long)lockh.addr);
         }
 
         CDEBUG(D_INFO, "Reading inode %ld, %d bytes, offset %Ld\n",
@@ -288,13 +294,16 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 ll_update_atime(inode);
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
-                err = obd_cancel(&sbi->ll_osc_conn, LCK_PR, &lockh);
+                err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PR, lockhs);
                 if (err != ELDLM_OK) {
+                        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                         CERROR("lock cancel: err: %d\n", err);
                         RETURN(err);
                 }
         }
 
+        if (lockhs)
+                OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
         RETURN(retval);
 }
 
@@ -308,14 +317,17 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
-        struct lustre_handle lockh;
-        __u64 res_id[RES_NAME_SIZE] = {inode->i_ino};
+        struct lustre_handle *lockhs = NULL;
+        struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
         int flags = 0;
         ldlm_error_t err;
         ssize_t retval;
         ENTRY;
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                if (!lockhs)
+                        RETURN(-ENOMEM); 
                 /* FIXME: this should check whether O_APPEND is set and adjust
                  * extent.start accordingly */
                 extent.start = *ppos;
@@ -323,15 +335,15 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
                        inode->i_ino, extent.start, extent.end);
 
-                err = obd_enqueue(&sbi->ll_osc_conn, NULL, res_id, LDLM_EXTENT,
+                err = obd_enqueue(&sbi->ll_osc_conn, md, NULL, LDLM_EXTENT,
                                   &extent, sizeof(extent), LCK_PW, &flags,
                                   ll_lock_callback, inode, sizeof(*inode),
-                                  &lockh);
+                                  lockhs);
                 if (err != ELDLM_OK) {
+                        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                         CERROR("lock enqueue: err: %d\n", err);
                         RETURN(err);
                 }
-                ldlm_lock_dump((void *)(unsigned long)lockh.addr);
         }
 
         CDEBUG(D_INFO, "Writing inode %ld, %ld bytes, offset %Ld\n",
@@ -340,13 +352,16 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         retval = generic_file_write(file, buf, count, ppos);
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
-                err = obd_cancel(&sbi->ll_osc_conn, LCK_PW, &lockh);
+                err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PW, lockhs);
                 if (err != ELDLM_OK) {
+                        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                         CERROR("lock cancel: err: %d\n", err);
                         RETURN(err);
                 }
         }
 
+        if (lockhs)
+                OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
         RETURN(retval);
 }
 

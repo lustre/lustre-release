@@ -49,6 +49,45 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_lib.h>
 
+
+int ll_sync_io_cb(void *data, int err, int phase)
+{
+        struct io_cb_data *d = data;
+        int ret;
+        ENTRY; 
+
+        if (phase == CB_PHASE_START) { 
+                ret = l_wait_event_killable(d->waitq, d->complete);
+                if (atomic_dec_and_test(&d->refcount))
+                        OBD_FREE(d, sizeof(*d));
+                if (ret == -ERESTARTSYS)
+                        return ret;
+        } else if (phase == CB_PHASE_FINISH) { 
+                d->err = err;
+                d->complete = 1;
+                wake_up(&d->waitq); 
+                if (atomic_dec_and_test(&d->refcount))
+                        OBD_FREE(d, sizeof(*d));
+                return err;
+        } else 
+                LBUG();
+        EXIT;
+        return 0;
+}
+
+struct  io_cb_data *ll_init_cb(void)
+{
+        struct io_cb_data *d;
+
+
+        OBD_ALLOC(d, sizeof(*d));
+        if (d) { 
+                init_waitqueue_head(&d->waitq);
+                atomic_set(&d->refcount, 2);
+        }
+        RETURN(d); 
+}
+
 /*
  * Remove page from dirty list
  */

@@ -23,6 +23,13 @@ struct obd_type {
         int  typ_refcnt;
 };
 
+typedef int (*brw_callback_t)(void *, int err, int phase);
+struct brw_page { 
+        struct page *pg;
+        obd_size count;
+        obd_off  off;
+        obd_flag flag;
+};
 
 /* Individual type definitions */
 
@@ -68,15 +75,6 @@ struct client_obd {
         __u8 cl_target_uuid[37];
         int cl_max_mdsize;
 };
-
-#if 0
-struct osc_obd {
-        struct ptlrpc_client *osc_client;
-        struct ptlrpc_client *osc_ldlm_client;
-        struct ptlrpc_connection *osc_conn;
-        __u8 osc_target_uuid[37];
-};
-#endif
 
 struct mds_obd {
         struct ptlrpc_service *mds_service;
@@ -208,7 +206,6 @@ struct obd_device {
         } u;
 };
 
-typedef void (*brw_callback_t)(void *);
 
 struct obd_ops {
         int (*o_iocontrol)(long cmd, struct lustre_handle *, int len,
@@ -243,8 +240,8 @@ struct obd_ops {
                        struct lov_stripe_md *);
         int (*o_brw)(int rw, struct lustre_handle *conn,
                      struct lov_stripe_md *md, obd_count oa_bufs,
-                     struct page **buf, obd_size *count, obd_off *offset,
-                     obd_flag *flags, brw_callback_t callback, void * data);
+                     struct brw_page *pgarr, brw_callback_t callback, 
+                     void * data);
         int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt,
                        struct lov_stripe_md *md, obd_size count,
                        obd_off offset);
@@ -266,13 +263,12 @@ struct obd_ops {
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
                           void *desc_private);
-        int (*o_enqueue)(struct lustre_handle *conn,
-                         struct lustre_handle *parent_lock, __u64 *res_id,
+        int (*o_enqueue)(struct lustre_handle *conn, struct lov_stripe_md *md,
+                         struct lustre_handle *parent_lock, 
                          __u32 type, void *cookie, int cookielen, __u32 mode,
                          int *flags, void *cb, void *data, int datalen,
                          struct lustre_handle *lockh);
-        int (*o_cancel)(struct lustre_handle *, __u32 mode,
-                        struct lustre_handle *);
+        int (*o_cancel)(struct lustre_handle *, struct lov_stripe_md *md, __u32 mode, struct lustre_handle *);
 };
 
 #endif

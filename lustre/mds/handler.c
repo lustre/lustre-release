@@ -342,7 +342,7 @@ static int mds_getstatus(struct ptlrpc_request *req)
 
         /* mcd_last_xid is is stored in little endian on the disk and
            mds_pack_rep_body converts it to network order */
-        body->last_xid = le32_to_cpu(med->med_mcd->mcd_last_xid);
+        req->rq_repmsg->last_xid = le32_to_cpu(med->med_mcd->mcd_last_xid);
         mds_pack_rep_body(req);
         RETURN(0);
 }
@@ -951,7 +951,7 @@ int mds_handle(struct ptlrpc_request *req)
 
         if (!rc) { 
                 struct mds_obd *mds = mds_req2mds(req);
-                req->rq_repmsg->last_rcvd = HTON__u64(mds->mds_last_rcvd);
+                req->rq_repmsg->last_xid = HTON__u64(mds->mds_last_rcvd);
                 req->rq_repmsg->last_committed =
                         HTON__u64(mds->mds_last_committed);
                 CDEBUG(D_INFO, "last_rcvd %Lu, last_committed %Lu, xid %d\n",

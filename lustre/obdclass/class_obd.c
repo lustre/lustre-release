@@ -473,14 +473,15 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 rw = OBD_BRW_WRITE;
         case OBD_IOC_BRW_READ: {
                 struct lov_stripe_md smd;
+                struct io_cb_data *cbd = ll_init_cb();
                 obd_count       pages = 0;
-                struct page     **bufs = NULL;
-                obd_size        *counts = NULL;
-                obd_off         *offsets = NULL;
-                obd_flag        *flags = NULL;
+                struct brw_page *pga;
                 int             j;
                 unsigned long off;
                 void *from;
+                
+                if (!cbd)
+                        GOTO(out, -ENOMEM); 
 
                 obd_data2conn(&conn, data);
 
@@ -488,11 +489,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 CDEBUG(D_INODE, "BRW %s with %d pages\n",
                        rw == OBD_BRW_READ ? "read" : "write", pages);
-                OBD_ALLOC(bufs, pages * sizeof(*bufs));
-                OBD_ALLOC(counts, pages * sizeof(*counts));
-                OBD_ALLOC(offsets, pages * sizeof(*offsets));
-                OBD_ALLOC(flags, pages * sizeof(*flags));
-                if (!bufs || !counts || !offsets || !flags) {
+                OBD_ALLOC(pga, pages * sizeof(*pga));
+                if (!pga) {
                         CERROR("no memory for %d BRW per-page data\n", pages);
                         GOTO(brw_free, err = -ENOMEM);
                 }
@@ -517,25 +515,20 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                 CERROR("no memory for brw pages\n");
                                 GOTO(brw_cleanup, err = -ENOMEM);
                         }
-                        bufs[j] = virt_to_page(to);
-                        counts[j] = PAGE_SIZE;
-                        offsets[j] = off;
-                        flags[j] = 0;
+                        pga[j].pg = virt_to_page(to);
+                        pga[j].count = PAGE_SIZE;
+                        pga[j].off = off;
+                        pga[j].flag = 0;
                 }
 
-                err = obd_brw(rw, &conn, &smd, j, bufs, counts, offsets, flags,
-                              NULL, NULL);
-
+                err = obd_brw(rw, &conn, &smd, j, pga, ll_sync_io_cb, cbd);
                 EXIT;
         brw_cleanup:
                 for (j = 0; j < pages; j++)
-                        if (bufs[j] != NULL)
-                                __free_pages(bufs[j], 0);
+                        if (pga[j].pg != NULL)
+                                __free_pages(pga[j].pg, 0);
         brw_free:
-                OBD_FREE(bufs, pages * sizeof(*bufs));
-                OBD_FREE(counts, pages * sizeof(*counts));
-                OBD_FREE(offsets, pages * sizeof(*offsets));
-                OBD_FREE(flags, pages * sizeof(*flags));
+                OBD_FREE(pga, pages * sizeof(*pga));
                 GOTO(out, err);
         }
         default:

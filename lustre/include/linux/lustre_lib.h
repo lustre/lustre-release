@@ -60,6 +60,16 @@ void l_unlock(struct lustre_lock *);
 
 
 /* page.c */
+#define CB_PHASE_START   12
+#define CB_PHASE_FINISH  13
+struct io_cb_data {
+        wait_queue_head_t waitq;
+        atomic_t refcount;
+        int complete;
+        int err;
+};
+int ll_sync_io_cb(void *data, int err, int phase);
+struct  io_cb_data *ll_init_cb(void);
 inline void lustre_put_page(struct page *page);
 struct page *lustre_get_page_read(struct inode *dir, unsigned long index);
 struct page *lustre_get_page_write(struct inode *dir, unsigned long index);
@@ -408,8 +418,8 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
  sigismember(&(task->pending.signal), SIGTERM))
 
 /*
- * Like wait_event_interruptible, but we're only interruptible by KILL, INT, or
- * TERM.
+ * Like wait_event_interruptible, but we're only interruptible by
+ * KILL, INT, or TERM.
  *
  * XXXshaver These are going away soon, I hope.
  */

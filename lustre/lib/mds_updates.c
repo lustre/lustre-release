@@ -94,7 +94,6 @@ static void mds_pack_body(struct mds_body *b)
         b->ino = HTON__u32(b->ino);
         b->nlink = HTON__u32(b->nlink);
         b->generation = HTON__u32(b->generation);
-        b->last_xid = HTON__u32(b->last_xid);
 }
 
 void mds_getattr_pack(struct ptlrpc_request *req, int offset,
@@ -268,7 +267,6 @@ void mds_unpack_body(struct mds_body *b)
         b->ino = NTOH__u32(b->ino);
         b->nlink = NTOH__u32(b->nlink);
         b->generation = NTOH__u32(b->generation);
-        b->last_xid = NTOH__u32(b->last_xid);
 }
 
 static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
@@ -399,15 +397,14 @@ static update_unpacker mds_unpackers[REINT_MAX + 1] = {
 int mds_update_unpack(struct ptlrpc_request *req, int offset,
                       struct mds_update_record *rec)
 {
-        struct mds_update_record_hdr *hdr =
-                lustre_msg_buf(req->rq_reqmsg, offset);
+        __u32 *opcode = lustre_msg_buf(req->rq_reqmsg, offset);
         int rc;
         ENTRY;
 
-        if (!hdr || req->rq_reqmsg->buflens[offset] < sizeof(*hdr))
+        if (!opcode || req->rq_reqmsg->buflens[offset] < sizeof(*opcode))
                 RETURN(-EFAULT);
 
-        rec->ur_opcode = NTOH__u32(hdr->ur_opcode);
+        rec->ur_opcode = NTOH__u32(*opcode);
 
         if (rec->ur_opcode < 0 || rec->ur_opcode > REINT_MAX)
                 RETURN(-EFAULT);

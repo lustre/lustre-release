@@ -86,7 +86,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         int err;
         struct ll_fid rootfid;
         struct statfs sfs;
-        __u64 last_committed, last_rcvd;
+        __u64 last_committed;
         __u32 last_xid;
         struct ptlrpc_request *request = NULL;
         struct ll_inode_md md;
@@ -150,7 +150,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
-                            &last_rcvd, &last_xid, &request);
+                            &last_xid, &request);
         ptlrpc_req_finished(request);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);

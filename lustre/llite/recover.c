@@ -26,7 +26,7 @@
 static int ll_reconnect(struct ll_sb_info *sbi)
 {
         struct ll_fid rootfid;
-        __u64 last_committed, last_rcvd;
+        __u64 last_committed;
         __u32 last_xid;
         int err;
         struct ptlrpc_request *request; 
@@ -44,14 +44,13 @@ static int ll_reconnect(struct ll_sb_info *sbi)
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn,
                           &rootfid, &last_committed, 
-                          &last_rcvd,
                           &last_xid,
                           &request);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_disc, err = -ENOTCONN);
         }
-        sbi2mdc(sbi)->cl_client->cli_last_rcvd = last_xid;
+        sbi2mdc(sbi)->cl_client->cli_last_xid = last_xid;
         sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_RECOVD;
 
  out_disc:
@@ -78,7 +77,7 @@ int ll_recover(struct ptlrpc_client *cli)
                 /* replay what needs to be replayed */
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
                         CDEBUG(D_INODE, "req %Ld needs replay [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_rcvd);
+                               req->rq_xid, cli->cli_last_xid);
                         rc = ptlrpc_replay_req(req); 
                         if (rc) { 
                                 CERROR("recovery replay error %d for request %Ld\n", 
@@ -89,17 +88,17 @@ int ll_recover(struct ptlrpc_client *cli)
 
                 /* server has seen req, we have reply: skip */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                    req->rq_xid <= cli->cli_last_rcvd) { 
+                    req->rq_xid <= cli->cli_last_xid) { 
                         CDEBUG(D_INODE, "req %Ld was complete: skip [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_rcvd);
+                               req->rq_xid, cli->cli_last_xid);
                         continue;
                 }
 
                 /* server has lost req, we have reply: resend, ign reply */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                    req->rq_xid > cli->cli_last_rcvd) { 
+                    req->rq_xid > cli->cli_last_xid) { 
                         CDEBUG(D_INODE, "lost req %Ld have rep: replay [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_rcvd);
+                               req->rq_xid, cli->cli_last_xid);
                         rc = ptlrpc_replay_req(req); 
                         if (rc) {
                                 CERROR("request resend error %d for request %Ld\n", 
@@ -110,17 +109,17 @@ int ll_recover(struct ptlrpc_client *cli)
 
                 /* server has seen req, we have lost reply: -ERESTARTSYS */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                     req->rq_xid <= cli->cli_last_rcvd) { 
+                     req->rq_xid <= cli->cli_last_xid) { 
                         CDEBUG(D_INODE, "lost rep %Ld srv did req: restart [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_rcvd);
+                               req->rq_xid, cli->cli_last_xid);
                         ptlrpc_restart_req(req);
                 }
 
                 /* service has not seen req, no reply: resend */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                     req->rq_xid > cli->cli_last_rcvd) {
+                     req->rq_xid > cli->cli_last_xid) {
                         CDEBUG(D_INODE, "lost rep/req %Ld: resend [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_rcvd);
+                               req->rq_xid, cli->cli_last_xid);
                         ptlrpc_resend_req(req);
                 }
 

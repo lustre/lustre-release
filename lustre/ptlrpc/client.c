@@ -554,7 +554,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                        req->rq_replen, req->rq_repmsg->status);
 
         spin_lock(&cli->cli_lock);
-        cli->cli_last_rcvd = req->rq_repmsg->last_rcvd;
+        cli->cli_last_xid = req->rq_repmsg->last_xid;
         cli->cli_last_committed = req->rq_repmsg->last_committed;
         ptlrpc_free_committed(cli); 
         spin_unlock(&cli->cli_lock);

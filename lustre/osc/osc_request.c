@@ -316,13 +316,16 @@ static void unmap_and_decref_bulk_desc(void *data)
 static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
 {
         struct osc_brw_cb_data *cb_data = data;
+        int err = 0;
         ENTRY;
 
-        if (desc->b_flags & PTL_RPC_FL_INTR)
+        if (desc->b_flags & PTL_RPC_FL_INTR) {
+                err = -ERESTARTSYS;
                 CERROR("got signal\n");
+        }
 
         if (cb_data->callback)
-                cb_data->callback(cb_data->cb_data);
+                cb_data->callback(cb_data->cb_data, err, CB_PHASE_FINISH);
 
         OBD_FREE(cb_data->obd_data, cb_data->obd_size);
         OBD_FREE(cb_data, sizeof(*cb_data));
@@ -336,10 +339,7 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
         EXIT;
 }
 
-static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
-                        obd_count page_count, struct page **page_array,
-                        obd_size *count, obd_off *offset, obd_flag *flags,
-                        brw_callback_t callback, void *data)
+static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md, obd_count page_count, struct brw_page *pga, brw_callback_t callback, void *data)
 {
         struct ptlrpc_connection *connection = client_conn2cli(conn)->cl_conn;
         struct ptlrpc_request *request = NULL;
@@ -390,11 +390,11 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
 
                 bulk->b_xid = xid;           /* single xid for all pages */
 
-                bulk->b_buf = kmap(page_array[mapped]);
-                bulk->b_page = page_array[mapped];
+                bulk->b_buf = kmap(pga[mapped].pg);
+                bulk->b_page = pga[mapped].pg;
                 bulk->b_buflen = PAGE_SIZE;
-                ost_pack_niobuf(&nioptr, offset[mapped], count[mapped],
-                                flags[mapped], bulk->b_xid);
+                ost_pack_niobuf(&nioptr, pga[mapped].off, pga[mapped].count,
+                                pga[mapped].flag, bulk->b_xid);
         }
 
         /*
@@ -409,11 +409,9 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
          *
          * On error, we never do the brw_finish, so we handle all decrefs.
          */
-        if (!callback)
-                ptlrpc_bulk_addref(desc);
         rc = ptlrpc_register_bulk(desc);
         if (rc)
-                GOTO(out_desc2, rc);
+                GOTO(out_unmap, rc);
 
         request->rq_replen = lustre_msg_size(1, size);
         rc = ptlrpc_queue_wait(request);
@@ -432,16 +430,10 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
          *      restart them" and osc_brw callers can know this.
          */
         if (rc)
-                GOTO(out_desc2, rc);
+                GOTO(out_unmap, rc);
 
         /* Callbacks cause asynchronous handling. */
-        if (callback)
-                GOTO(out_req, rc = 0);
-
-        /* If there's no callback function, sleep here until complete. */
-        l_wait_event_killable(desc->b_waitq, ptlrpc_check_bulk_received(desc));
-        if (desc->b_flags & PTL_RPC_FL_INTR)
-                GOTO(out_desc, rc = -EINTR);
+        rc = callback(data, 0, CB_PHASE_START); 
 
         EXIT;
 out_desc:
@@ -451,9 +443,6 @@ out_req:
         RETURN(rc);
 
         /* Clean up on error. */
-out_desc2:
-        if (!callback)
-                ptlrpc_bulk_decref(desc);
 out_unmap:
         while (mapped-- > 0)
                 kunmap(page_array[mapped]);
@@ -463,8 +452,7 @@ out_unmap:
 
 static int osc_brw_write(struct lustre_handle *conn,
                          struct lov_stripe_md *md, obd_count page_count,
-                         struct page **pagearray, obd_size *count,
-                         obd_off *offset, obd_flag *flags,
+                         struct brw_page *pga,
                          brw_callback_t callback, void *data)
 {
         struct ptlrpc_connection *connection = client_conn2cli(conn)->cl_conn;
@@ -514,11 +502,11 @@ static int osc_brw_write(struct lustre_handle *conn,
         cb_data->obd_size = page_count * sizeof(*local);
 
         for (mapped = 0; mapped < page_count; mapped++) {
-                local[mapped].addr = kmap(pagearray[mapped]);
-                local[mapped].offset = offset[mapped];
-                local[mapped].len = count[mapped];
-                ost_pack_niobuf(&nioptr, offset[mapped], count[mapped],
-                                flags[mapped], 0);
+                local[mapped].addr = kmap(pga[mapped].pg);
+                local[mapped].offset = pga[mapped].off;
+                local[mapped].len = pga[mapped].count;
+                ost_pack_niobuf(&nioptr, pga[mapped].off, pga[mapped].count,
+                                pga[mapped].flag, 0);
         }
 
         size[1] = page_count * sizeof(*remote);
@@ -550,7 +538,7 @@ static int osc_brw_write(struct lustre_handle *conn,
                 bulk->b_buf = (void *)(unsigned long)local[j].addr;
                 bulk->b_buflen = local[j].len;
                 bulk->b_xid = remote->xid;
-                bulk->b_page = pagearray[j];
+                bulk->b_page = pga[j].pg;
         }
 
         if (desc->b_page_count != page_count)
@@ -559,12 +547,7 @@ static int osc_brw_write(struct lustre_handle *conn,
         /*
          * One reference is released when brw_finish is complete, the
          * other here when we finish waiting on it if we don't have a callback.
-         *
-         * We don't reference the bulk descriptor again here if there is a
-         * callback, so we don't need an additional refcount on it.
          */
-        if (!callback)
-                ptlrpc_bulk_addref(desc);
         rc = ptlrpc_send_bulk(desc);
 
         /* XXX: Mike, same question as in osc_brw_read. */
@@ -572,13 +555,7 @@ static int osc_brw_write(struct lustre_handle *conn,
                 GOTO(out_desc2, rc);
 
         /* Callbacks cause asynchronous handling. */
-        if (callback)
-                GOTO(out_req, rc = 0);
-
-        /* If there's no callback function, sleep here until complete. */
-        l_wait_event_killable(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
-        if (desc->b_flags & PTL_RPC_FL_INTR)
-                GOTO(out_desc, rc = -EINTR);
+        rc = callback(data, 0, CB_PHASE_START);
 
         EXIT;
 out_desc:
@@ -603,23 +580,22 @@ out_cb:
 
 static int osc_brw(int cmd, struct lustre_handle *conn,
                    struct lov_stripe_md *md, obd_count page_count,
-                   struct page **page_array, obd_size *count, obd_off *offset,
-                   obd_flag *flags, brw_callback_t callback, void *data)
+                   struct brw_page *pagear, brw_callback_t callback, 
+                   void *data) 
 {
         if (cmd & OBD_BRW_WRITE)
-                return osc_brw_write(conn, md, page_count, page_array, count,
-                                     offset, flags, callback, data);
+                return osc_brw_write(conn, md, page_count, pagear, callback, data);
         else
-                return osc_brw_read(conn, md, page_count, page_array, count,
-                                    offset, flags, callback, data);
+                return osc_brw_read(conn, md, page_count, pagear, callback, data);
 }
 
-static int osc_enqueue(struct lustre_handle *connh,
-                       struct lustre_handle *parent_lock, __u64 *res_id,
+static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md, 
+                       struct lustre_handle *parent_lock, 
                        __u32 type, void *extentp, int extent_len, __u32 mode,
                        int *flags, void *callback, void *data, int datalen,
                        struct lustre_handle *lockh)
 {
+        __u64 res_id = { md->lmd_object_id };
         struct obd_device *obddev = class_conn2obd(connh);
         struct ldlm_extent *extent = extentp;
         int rc;
@@ -632,7 +608,7 @@ static int osc_enqueue(struct lustre_handle *connh,
 
         /* Next, search for already existing extent locks that will cover us */
         //osc_con2dlmcl(conn, &cl, &connection, &rconn);
-        rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
+        rc = ldlm_lock_match(obddev->obd_namespace, &res_id, type, extent,
                              sizeof(extent), mode, lockh);
         if (rc == 1) {
                 /* We already have a lock, and it's referenced */
@@ -648,7 +624,7 @@ static int osc_enqueue(struct lustre_handle *connh,
         else
                 mode2 = LCK_PW;
 
-        rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
+        rc = ldlm_lock_match(obddev->obd_namespace, &res_id, type, extent,
                              sizeof(extent), mode2, lockh);
         if (rc == 1) {
                 int flags;
@@ -669,12 +645,12 @@ static int osc_enqueue(struct lustre_handle *connh,
         }
 
         rc = ldlm_cli_enqueue(connh, NULL,obddev->obd_namespace,
-                              parent_lock, res_id, type, extent, sizeof(extent),
+                              parent_lock, &res_id, type, extent, sizeof(extent),
                               mode, flags, ldlm_completion_ast, callback, data, datalen, lockh);
         return rc;
 }
 
-static int osc_cancel(struct lustre_handle *oconn, __u32 mode,
+static int osc_cancel(struct lustre_handle *oconn, struct lov_stripe_md *md, __u32 mode,
                       struct lustre_handle *lockh)
 {
         ENTRY;
