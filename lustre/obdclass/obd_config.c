@@ -225,7 +225,6 @@ err_cleanup:
         obd_cleanup(obd, 0);
         obd->obd_set_up = obd->obd_stopping = 0;
         obd->obd_type->typ_refcnt--;
-        atomic_dec(&obd->obd_refcount);
         RETURN(err);
 }
 
