@@ -20,7 +20,8 @@ lload_SOURCES = lload.c
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c 
-llmount_SOURCES = llmount.c
+llmount_SOURCES = llmount.c 
+llmount_LDADD = -lptlctl -luuid
 
 EXTRA_DIST = $(bin_SCRIPTS) $(sbin_SCRIPTS)
 
