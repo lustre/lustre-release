@@ -123,7 +123,7 @@ int tcpnal_recv(nal_cb_t *n,
     int i;
 
     if (!niov)
-            goto check_len;
+            goto finalize;
 
     LASSERT(mlen);
     LASSERT(rlen);
@@ -136,9 +136,10 @@ int tcpnal_recv(nal_cb_t *n,
      */
     for (i = 0; i < niov; i++)
         read_connection(private, iov[i].iov_base, iov[i].iov_len);
+
+finalize:
     lib_finalize(n, private, cookie);
 
-check_len:
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
         
