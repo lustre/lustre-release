@@ -105,7 +105,8 @@ static int reply_in_callback(ptl_event_t *ev)
 
 int request_in_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_service *service = ev->mem_desc.user_ptr;
+        struct ptlrpc_request_buffer_desc *rqbd = ev->mem_desc.user_ptr;
+        struct ptlrpc_service *service = rqbd->rqbd_service;
 
         LASSERT ((ev->mem_desc.options & PTL_MD_IOV) == 0); /* requests always contiguous */
 

@@ -1081,7 +1081,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_put, rc);
         }
 
-        mds->mds_service = ptlrpc_init_svc(64 * 1024, MDS_REQUEST_PORTAL,
+        mds->mds_service = ptlrpc_init_svc(1024, 640, MDS_REQUEST_PORTAL,
                                            MDC_REPLY_PORTAL, "self",mds_handle, 
                                            "mds");
         if (!mds->mds_service) {

@@ -1044,7 +1044,10 @@ int jt_obd_test_brw(int argc, char **argv)
                 }
         }
         if (argc >= 6) {
-                objid = strtoull(argv[5], &end, 0);
+                if (argv[5][0] == 't')
+                        objid = strtoul(argv[5] + 1, &end, 0) + thread;
+                else
+                        objid = strtoull(argv[5], &end, 0);
                 if (*end) {
                         fprintf(stderr, "error: %s: bad objid '%s'\n",
                                 cmdname(argv[0]), argv[5]);
@@ -1069,7 +1072,7 @@ int jt_obd_test_brw(int argc, char **argv)
                        count, pages, ctime(&start.tv_sec));
 
         rw = write ? OBD_IOC_BRW_WRITE : OBD_IOC_BRW_READ;
-        for (i = 1, next_count = verbose, offset = 0; i <= count; i++) {
+        for (i = 1, next_count = verbose; i <= count; i++) {
                 rc = ioctl(fd, rw, &data);
                 SHMEM_BUMP();
                 if (rc) {

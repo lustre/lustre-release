@@ -32,7 +32,8 @@
 #include <linux/lustre_import.h>
 
 /* default rpc ring length */
-#define RPC_RING_LENGTH    10
+//#define RPC_RING_LENGTH    10
+#define RPC_REQUEST_QUEUE_DEPTH	1024
 
 struct ptlrpc_connection {
         struct list_head        c_link;
@@ -178,17 +179,23 @@ struct ptlrpc_thread {
         wait_queue_head_t t_ctl_waitq;
 };
 
+struct ptlrpc_request_buffer_desc {
+        struct ptlrpc_service *rqbd_service;
+        ptl_handle_me_t        rqbd_me_h;
+        char                  *rqbd_buffer;
+};
+
 struct ptlrpc_service {
         time_t srv_time;
         time_t srv_timeout;
 
         /* incoming request buffers */
         /* FIXME: perhaps a list of EQs, if multiple NIs are used? */
-        char *srv_buf[RPC_RING_LENGTH];
-        __u32 srv_ref_count[RPC_RING_LENGTH];
-        ptl_handle_me_t srv_me_h[RPC_RING_LENGTH];
-        __u32 srv_buf_size;
-        __u32 srv_ring_length;
+
+        struct ptlrpc_request_buffer_desc *srv_rqbds; /* all the request buffer descriptors */
+
+        __u32 srv_buf_size;                     /* # bytes in a request buffer */
+        __u32 srv_nbuffs;                       /* # request buffers */
         __u32 srv_req_portal;
         __u32 srv_rep_portal;
 
@@ -237,7 +244,7 @@ int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req);
 int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptl_send_rpc(struct ptlrpc_request *request);
-void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
+void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd);
 
 /* rpc/client.c */
 void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
@@ -263,8 +270,8 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 
 /* rpc/service.c */
 struct ptlrpc_service *
-ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
-                svc_handler_t, char *name);
+ptlrpc_init_svc(__u32 bufsize, int nbuffs, int req_portal, int rep_portal, 
+                char *uuid, svc_handler_t, char *name);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);
