@@ -1,8 +1,8 @@
 Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/extents-in-ea.c	2003-01-30 18:24:37.000000000 +0800
-+++ linux-2.4.24/fs/ext3/extents-in-ea.c	2004-06-24 21:53:00.000000000 +0800
-@@ -0,0 +1,219 @@
+--- linux-2.4.24.orig/fs/ext3/extents-in-ea.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.24/fs/ext3/extents-in-ea.c	2004-08-06 03:54:47.000000000 +0400
+@@ -0,0 +1,223 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -48,6 +48,15 @@ Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 +	return 0;
 +}
 +
++static struct ext3_extents_helpers ext3_ea_helpers = {
++	.get_write_access	= ext3_get_ea_write_access,
++	.mark_buffer_dirty	= ext3_mark_ea_buffer_dirty,
++	.mergable		= NULL,
++	.new_block		= NULL,
++	.remove_extent		= NULL,
++	.remove_extent_credits	= NULL,
++};
++
 +int ext3_init_tree_in_ea_desc(struct ext3_extents_tree *tree,
 +				struct inode *inode, int name_index,
 +				const char *eaname)
@@ -67,12 +76,7 @@ Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 +	tree->root = (void *) bh->b_data + offset;
 +	tree->buffer_len = size;
 +	tree->buffer = (void *) bh;
-+	tree->get_write_access = ext3_get_ea_write_access;
-+	tree->mark_buffer_dirty = ext3_mark_ea_buffer_dirty;
-+	tree->mergable = NULL;
-+	tree->remove_extent = NULL;
-+	tree->remove_extent_credits = NULL;
-+	tree->new_block = NULL;
++	tree->ops = &ext3_ea_helpers;
 +	tree->cex = NULL; 	/* FIXME: add cache store later */
 +	return 0;
 +}
@@ -224,8 +228,8 @@ Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 +
 Index: linux-2.4.24/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/Makefile	2004-06-09 11:31:06.000000000 +0800
-+++ linux-2.4.24/fs/ext3/Makefile	2004-06-24 21:36:29.000000000 +0800
+--- linux-2.4.24.orig/fs/ext3/Makefile	2004-08-06 02:43:24.000000000 +0400
++++ linux-2.4.24/fs/ext3/Makefile	2004-08-06 03:52:43.000000000 +0400
 @@ -19,7 +19,7 @@
  obj-m    := $(O_TARGET)
  
@@ -237,8 +241,8 @@ Index: linux-2.4.24/fs/ext3/Makefile
  include $(TOPDIR)/Rules.make
 Index: linux-2.4.24/fs/ext3/xattr.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/xattr.c	2004-06-09 11:31:06.000000000 +0800
-+++ linux-2.4.24/fs/ext3/xattr.c	2004-06-24 21:36:29.000000000 +0800
+--- linux-2.4.24.orig/fs/ext3/xattr.c	2004-08-06 00:47:18.000000000 +0400
++++ linux-2.4.24/fs/ext3/xattr.c	2004-08-06 03:52:43.000000000 +0400
 @@ -771,7 +771,8 @@
   */
  int
@@ -348,8 +352,8 @@ Index: linux-2.4.24/fs/ext3/xattr.c
   *
 Index: linux-2.4.24/include/linux/ext3_xattr.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_xattr.h	2004-06-09 11:31:06.000000000 +0800
-+++ linux-2.4.24/include/linux/ext3_xattr.h	2004-06-24 21:36:29.000000000 +0800
+--- linux-2.4.24.orig/include/linux/ext3_xattr.h	2004-08-06 00:47:18.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_xattr.h	2004-08-06 03:52:43.000000000 +0400
 @@ -80,6 +80,7 @@
  extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
  extern int ext3_xattr_list(struct inode *, char *, size_t);

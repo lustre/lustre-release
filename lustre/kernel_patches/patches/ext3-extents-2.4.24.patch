@@ -1,10 +1,11 @@
-Index: linux-2.4.24-mb34/fs/ext3/extents.c
+Index: linux-2.4.24/fs/ext3/extents.c
 ===================================================================
---- linux-2.4.24-mb34.orig/fs/ext3/extents.c	1969-12-31 16:00:00.000000000 -0800
-+++ linux-2.4.24-mb34/fs/ext3/extents.c	2004-05-05 14:27:07.000000000 -0700
-@@ -0,0 +1,2346 @@
+--- linux-2.4.24.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.24/fs/ext3/extents.c	2004-08-06 03:59:01.000000000 +0400
+@@ -0,0 +1,2257 @@
 +/*
-+ * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
++ * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
++ * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
 + * it under the terms of the GNU General Public License version 2 as
@@ -38,13 +39,13 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +#include <linux/time.h>
 +#include <linux/ext3_jbd.h>
 +#include <linux/jbd.h>
++#include <linux/locks.h>
 +#include <linux/smp_lock.h>
 +#include <linux/highuid.h>
 +#include <linux/pagemap.h>
 +#include <linux/quotaops.h>
 +#include <linux/string.h>
 +#include <linux/slab.h>
-+#include <linux/locks.h>
 +#include <linux/ext3_extents.h>
 +#include <asm/uaccess.h>
 +
@@ -64,8 +65,8 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +static int inline
 +ext3_ext_get_access_for_root(handle_t *h, struct ext3_extents_tree *tree)
 +{
-+	if (tree->get_write_access)
-+		return tree->get_write_access(h,tree->buffer);
++	if (tree->ops->get_write_access)
++		return tree->ops->get_write_access(h,tree->buffer);
 +	else
 +		return 0;
 +}
@@ -73,8 +74,8 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +static int inline
 +ext3_ext_mark_root_dirty(handle_t *h, struct ext3_extents_tree *tree)
 +{
-+	if (tree->mark_buffer_dirty)
-+		return tree->mark_buffer_dirty(h,tree->buffer);
++	if (tree->ops->mark_buffer_dirty)
++		return tree->ops->mark_buffer_dirty(h,tree->buffer);
 +	else
 +		return 0;
 +}
@@ -129,8 +130,8 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +	struct inode *inode;
 +
 +	EXT_ASSERT(tree);
-+	if (tree->new_block)
-+		return tree->new_block(handle, tree, path, ex, err);
++	if (tree->ops->new_block)
++		return tree->ops->new_block(handle, tree, path, ex, err);
 +
 +	inode = tree->inode;
 +	depth = EXT_DEPTH(tree);
@@ -411,6 +412,7 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +	eh->e_magic = EXT3_EXT_MAGIC;
 +	eh->e_max = ext3_ext_space_root(tree);
 +	ext3_ext_mark_root_dirty(handle, tree);
++	ext3_ext_invalidate_cache(tree);
 +	return 0;
 +}
 +
@@ -741,10 +743,11 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +
 +	if (err) {
 +		/* free all allocated blocks in error case */
-+		for (i = 0; i < depth; i++)
++		for (i = 0; i < depth; i++) {
 +			if (!ablocks[i])
 +				continue;
 +			ext3_free_blocks(handle, tree->inode, ablocks[i], 1);
++		}
 +	}
 +	kfree(ablocks);
 +
@@ -1022,10 +1025,10 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +		return 0;
 +#endif
 +
-+	if (!tree->mergable)
++	if (!tree->ops->mergable)
 +		return 1;
 +
-+	return tree->mergable(ex1, ex2);
++	return tree->ops->mergable(ex1, ex2);
 +}
 +
 +/*
@@ -1172,6 +1175,7 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +		kfree(npath);
 +	}
 +	ext3_ext_tree_changed(tree);
++	ext3_ext_invalidate_cache(tree);
 +	return err;
 +}
 +
@@ -1272,12 +1276,6 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +	}
 +
 +	return err;
-+}
-+
-+void ext3_ext_invalidate_cache(struct ext3_extents_tree *tree)
-+{
-+	if (tree->cex)
-+		tree->cex->e_num = 0;
 +}
 +
 +static inline void
@@ -1559,8 +1557,8 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +		credits = 1;
 +		if (correct_index)
 +			credits += (EXT_DEPTH(tree) * EXT3_ALLOC_NEEDED) + 1;
-+		if (tree->remove_extent_credits)
-+			credits += tree->remove_extent_credits(tree, ex, a, b);
++		if (tree->ops->remove_extent_credits)
++			credits+=tree->ops->remove_extent_credits(tree,ex,a,b);
 +		
 +		handle = ext3_ext_journal_restart(handle, credits);
 +		if (IS_ERR(handle)) {
@@ -1572,8 +1570,8 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +		if (err)
 +			goto out;
 +
-+		if (tree->remove_extent)
-+			err = tree->remove_extent(tree, ex, a, b);
++		if (tree->ops->remove_extent)
++			err = tree->ops->remove_extent(tree, ex, a, b);
 +		if (err)
 +			goto out;
 +
@@ -1761,6 +1759,7 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +		err = ext3_ext_get_access(handle, tree, path);
 +		if (err == 0) {
 +			EXT_ROOT_HDR(tree)->e_depth = 0;
++			EXT_ROOT_HDR(tree)->e_max = ext3_ext_space_root(tree);
 +			err = ext3_ext_dirty(handle, tree, path);
 +		}
 +	}
@@ -1832,7 +1831,7 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +	int needed;
 +	
 +	/* at present, extent can't cross block group */;
-+	needed = 3; /* bitmap + group desc + sb */
++	needed = 4; /* bitmap + group desc + sb + inode */
 +
 +#ifdef CONFIG_QUOTA
 +	needed += 2 * EXT3_SINGLEDATA_TRANS_BLOCKS;
@@ -1934,117 +1933,25 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +	return newblock;
 +}
 +
++static struct ext3_extents_helpers ext3_blockmap_helpers = {
++	.get_write_access	= ext3_get_inode_write_access,
++	.mark_buffer_dirty	= ext3_mark_buffer_dirty,
++	.mergable		= ext3_ext_mergable,
++	.new_block		= ext3_new_block_cb,
++	.remove_extent		= ext3_remove_blocks,
++	.remove_extent_credits	= ext3_remove_blocks_credits,
++};
++
 +void ext3_init_tree_desc(struct ext3_extents_tree *tree,
 +				struct inode *inode)
 +{
 +	tree->inode = inode;
 +	tree->root = (void *) EXT3_I(inode)->i_data;
-+	tree->get_write_access = ext3_get_inode_write_access;
-+	tree->mark_buffer_dirty = ext3_mark_buffer_dirty;
-+	tree->mergable = ext3_ext_mergable;
-+	tree->new_block = ext3_new_block_cb;
-+	tree->remove_extent = ext3_remove_blocks;
-+	tree->remove_extent_credits = ext3_remove_blocks_credits;
 +	tree->buffer = (void *) inode;
 +	tree->buffer_len = sizeof(EXT3_I(inode)->i_data);
 +	tree->cex = (struct ext3_extent *) &EXT3_I(inode)->i_cached_extent;
++	tree->ops = &ext3_blockmap_helpers;
 +}
-+
-+#if EXT3_MULTIBLOCK_ALLOCATOR
-+static int
-+ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
-+			struct ext3_ext_path *path,
-+			struct ext3_extent *newex, int exist)
-+{
-+	struct inode *inode = tree->inode;
-+	struct buffer_head *bh;
-+	int count, err, goal;
-+	unsigned long pblock;
-+	unsigned long tgen;
-+	loff_t new_i_size;
-+	handle_t *handle;
-+	int i;
-+
-+	if (exist)
-+		return EXT_CONTINUE;
-+
-+	tgen = EXT_GENERATION(tree);
-+	count = ext3_ext_calc_credits_for_insert(tree, path);
-+	up_write(&EXT3_I(inode)->truncate_sem);
-+
-+	handle = ext3_journal_start(inode, count + EXT3_ALLOC_NEEDED + 1);
-+	if (IS_ERR(handle)) {
-+		down_write(&EXT3_I(inode)->truncate_sem);
-+		return PTR_ERR(handle);
-+	}
-+
-+	if (tgen != EXT_GENERATION(tree)) {
-+		/* the tree has changed. so path can be invalid at moment */
-+		ext3_journal_stop(handle, inode);
-+		down_write(&EXT3_I(inode)->truncate_sem);
-+		return EXT_REPEAT;
-+	}
-+
-+	down_write(&EXT3_I(inode)->truncate_sem);
-+	goal = ext3_ext_find_goal(inode, path, newex->e_block);
-+	count = newex->e_num;
-+	pblock = ext3_new_blocks(handle, inode, &count, goal, &err);
-+	if (!pblock)
-+		goto out;
-+	EXT_ASSERT(count <= newex->e_num);
-+
-+	/* insert new extent */
-+	newex->e_start = pblock;
-+	newex->e_num = count;
-+	err = ext3_ext_insert_extent(handle, tree, path, newex);
-+	if (err)
-+		goto out;
-+
-+	/* block have been allocated for data, so time to drop dirty
-+	 * in correspondend buffer_heads to prevent corruptions */
-+	for (i = 0; i < newex->e_num; i++) {
-+		bh = sb_get_hash_table(inode->i_sb, newex->e_start + i);
-+		if (bh) {
-+			mark_buffer_clean(bh);
-+			wait_on_buffer(bh);
-+			clear_bit(BH_Req, &bh->b_state);
-+			__brelse(bh);
-+		}
-+	}
-+
-+	/* correct on-disk inode size */
-+	if (newex->e_num > 0) {
-+		new_i_size = (loff_t) newex->e_block + newex->e_num;
-+		new_i_size = new_i_size << inode->i_blkbits;
-+		if (new_i_size > EXT3_I(inode)->i_disksize) {
-+			EXT3_I(inode)->i_disksize = new_i_size;
-+			err = ext3_mark_inode_dirty(handle, inode);
-+		}
-+	}
-+
-+out:
-+	ext3_journal_stop(handle, inode);
-+	return err;
-+}
-+
-+
-+int ext3_ext_allocate_nblocks(struct inode *inode, unsigned long block,
-+				unsigned long num)
-+{
-+	struct ext3_extents_tree tree;
-+	int err;
-+
-+	ext3_init_tree_desc(&tree, inode);
-+	ext_debug(&tree, "blocks %lu-%lu requested for inode %u\n",
-+			block, block + num,(unsigned) inode->i_ino);
-+	down_write(&EXT3_I(inode)->truncate_sem);
-+	err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
-+	ext3_ext_invalidate_cache(&tree);
-+	up_write(&EXT3_I(inode)->truncate_sem);
-+
-+	return err;
-+}
-+#endif
 +
 +int ext3_ext_get_block(handle_t *handle, struct inode *inode,
 +			long iblock, struct buffer_head *bh_result, int create)
@@ -2063,10 +1970,14 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +
 +	/* check in cache */
 +	if (ext3_ext_in_cache(&tree, iblock, &newex)) {
-+		if (newex.e_start == 0xffffffff && !create) {
-+			/* block isn't allocated yet and
-+			 * user don't want to allocate it */
-+			goto out2;
++		if (newex.e_start == 0xffffffff) {
++			/* this is cached gap */
++			if (!create) {
++				/* block isn't allocated yet and
++				 * user don't want to allocate it */
++				goto out2;
++			}
++			/* we should allocate requested block */
 +		} else if (newex.e_start) {
 +			/* block is already allocated */
 +			newblock = iblock - newex.e_block + newex.e_start;
@@ -2349,11 +2260,11 @@ Index: linux-2.4.24-mb34/fs/ext3/extents.c
 +EXPORT_SYMBOL(ext3_ext_find_goal);
 +EXPORT_SYMBOL(ext3_ext_calc_credits_for_insert);
 +
-Index: linux-2.4.24-mb34/fs/ext3/ialloc.c
+Index: linux-2.4.24/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.4.24-mb34.orig/fs/ext3/ialloc.c	2004-05-05 13:47:40.000000000 -0700
-+++ linux-2.4.24-mb34/fs/ext3/ialloc.c	2004-05-05 13:51:27.000000000 -0700
-@@ -592,10 +592,14 @@
+--- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-08-06 00:47:18.000000000 +0400
++++ linux-2.4.24/fs/ext3/ialloc.c	2004-08-06 02:43:24.000000000 +0400
+@@ -593,10 +593,14 @@
  		iloc.bh = NULL;
  		goto fail;
  	}
@@ -2370,10 +2281,10 @@ Index: linux-2.4.24-mb34/fs/ext3/ialloc.c
  	
  	unlock_super (sb);
  	if(DQUOT_ALLOC_INODE(inode)) {
-Index: linux-2.4.24-mb34/fs/ext3/inode.c
+Index: linux-2.4.24/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.24-mb34.orig/fs/ext3/inode.c	2004-05-05 13:47:41.000000000 -0700
-+++ linux-2.4.24-mb34/fs/ext3/inode.c	2004-05-05 13:49:40.000000000 -0700
+--- linux-2.4.24.orig/fs/ext3/inode.c	2004-08-06 00:47:18.000000000 +0400
++++ linux-2.4.24/fs/ext3/inode.c	2004-08-06 02:43:24.000000000 +0400
 @@ -848,6 +848,15 @@
  	goto reread;
  }
@@ -2417,7 +2328,7 @@ Index: linux-2.4.24-mb34/fs/ext3/inode.c
  		struct address_space *mapping, loff_t from)
  {
  	unsigned long index = from >> PAGE_CACHE_SHIFT;
-@@ -1889,6 +1898,9 @@
+@@ -1888,6 +1897,9 @@
  
  	ext3_discard_prealloc(inode);
  
@@ -2427,7 +2338,7 @@ Index: linux-2.4.24-mb34/fs/ext3/inode.c
  	handle = start_transaction(inode);
  	if (IS_ERR(handle))
  		return;		/* AKPM: return what? */
-@@ -2537,6 +2549,9 @@
+@@ -2547,6 +2559,9 @@
  	int indirects = (EXT3_NDIR_BLOCKS % bpp) ? 5 : 3;
  	int ret;
  	
@@ -2437,7 +2348,7 @@ Index: linux-2.4.24-mb34/fs/ext3/inode.c
  	if (ext3_should_journal_data(inode))
  		ret = 3 * (bpp + indirects) + 2;
  	else
-@@ -2973,7 +2988,7 @@
+@@ -2983,7 +2998,7 @@
  
  	/* alloc blocks one by one */
  	for (i = 0; i < nblocks; i++) {
@@ -2446,7 +2357,7 @@ Index: linux-2.4.24-mb34/fs/ext3/inode.c
  						&bh_tmp, 1);
  		if (ret)
  			break;
-@@ -3049,7 +3064,7 @@
+@@ -3059,7 +3074,7 @@
                  if (blocks[i] != 0)
                          continue;
  
@@ -2455,10 +2366,10 @@ Index: linux-2.4.24-mb34/fs/ext3/inode.c
                  if (rc) {
                          printk(KERN_INFO "ext3_map_inode_page: error %d "
                                 "allocating block %ld\n", rc, iblock);
-Index: linux-2.4.24-mb34/fs/ext3/Makefile
+Index: linux-2.4.24/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.24-mb34.orig/fs/ext3/Makefile	2004-05-05 13:47:40.000000000 -0700
-+++ linux-2.4.24-mb34/fs/ext3/Makefile	2004-05-05 13:49:40.000000000 -0700
+--- linux-2.4.24.orig/fs/ext3/Makefile	2004-08-06 00:47:18.000000000 +0400
++++ linux-2.4.24/fs/ext3/Makefile	2004-08-06 02:43:24.000000000 +0400
 @@ -13,7 +13,9 @@
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -2470,10 +2381,10 @@ Index: linux-2.4.24-mb34/fs/ext3/Makefile
  obj-m    := $(O_TARGET)
  
  export-objs += xattr.o
-Index: linux-2.4.24-mb34/fs/ext3/super.c
+Index: linux-2.4.24/fs/ext3/super.c
 ===================================================================
---- linux-2.4.24-mb34.orig/fs/ext3/super.c	2004-05-05 13:47:40.000000000 -0700
-+++ linux-2.4.24-mb34/fs/ext3/super.c	2004-05-05 13:49:40.000000000 -0700
+--- linux-2.4.24.orig/fs/ext3/super.c	2004-08-06 00:47:18.000000000 +0400
++++ linux-2.4.24/fs/ext3/super.c	2004-08-06 02:43:24.000000000 +0400
 @@ -530,6 +530,7 @@
  	int i;
  
@@ -2502,10 +2413,10 @@ Index: linux-2.4.24-mb34/fs/ext3/super.c
  	return sb;
  
  failed_mount3:
-Index: linux-2.4.24-mb34/fs/ext3/ioctl.c
+Index: linux-2.4.24/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.4.24-mb34.orig/fs/ext3/ioctl.c	2004-05-05 13:47:38.000000000 -0700
-+++ linux-2.4.24-mb34/fs/ext3/ioctl.c	2004-05-05 13:49:40.000000000 -0700
+--- linux-2.4.24.orig/fs/ext3/ioctl.c	2004-08-06 00:47:17.000000000 +0400
++++ linux-2.4.24/fs/ext3/ioctl.c	2004-08-06 02:43:24.000000000 +0400
 @@ -174,6 +174,10 @@
  			return ret;
  		}
@@ -2517,19 +2428,19 @@ Index: linux-2.4.24-mb34/fs/ext3/ioctl.c
  	default:
  		return -ENOTTY;
  	}
-Index: linux-2.4.24-mb34/include/linux/ext3_fs.h
+Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.24-mb34.orig/include/linux/ext3_fs.h	2004-05-05 13:47:40.000000000 -0700
-+++ linux-2.4.24-mb34/include/linux/ext3_fs.h	2004-05-05 13:49:40.000000000 -0700
-@@ -184,6 +184,7 @@
- #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-08-06 00:47:18.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-08-06 02:44:11.000000000 +0400
+@@ -185,6 +185,7 @@
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
+ #define EXT3_EXTRA_ISIZE		0x00008000 /* inode has initialized i_extra_isize */
  #define EXT3_RESERVED_FL		0x80000000 /* reserved for ext3 lib */
 +#define EXT3_EXTENTS_FL			0x00080000 /* Inode uses extents */
  
  #define EXT3_FL_USER_VISIBLE		0x00005FFF /* User visible flags */
  #define EXT3_FL_USER_MODIFIABLE		0x000000FF /* User modifiable flags */
-@@ -208,6 +209,9 @@
+@@ -209,6 +210,9 @@
  #ifdef CONFIG_JBD_DEBUG
  #define EXT3_IOC_WAIT_FOR_READONLY	_IOR('f', 99, long)
  #endif
@@ -2539,16 +2450,16 @@ Index: linux-2.4.24-mb34/include/linux/ext3_fs.h
  
  /*
   * Structure of an inode on the disk
-@@ -327,6 +331,8 @@
+@@ -328,6 +332,8 @@
  #define EXT3_MOUNT_IOPEN		0x8000	/* Allow access via iopen */
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x10000	/* Make iopen world-readable */
  #define EXT3_MOUNT_ASYNCDEL		0x20000 /* Delayed deletion */
-+#define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
-+#define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
++#define EXT3_MOUNT_EXTENTS		0x40000 /* Extents support */
++#define EXT3_MOUNT_EXTDEBUG		0x80000 /* Extents debug */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -688,6 +694,7 @@
+@@ -689,6 +695,7 @@
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
  /* inode.c */
@@ -2556,7 +2467,7 @@ Index: linux-2.4.24-mb34/include/linux/ext3_fs.h
  extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
-@@ -769,6 +776,14 @@
+@@ -770,6 +777,14 @@
  extern struct inode_operations ext3_symlink_inode_operations;
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
@@ -2571,11 +2482,11 @@ Index: linux-2.4.24-mb34/include/linux/ext3_fs.h
  
  #endif	/* __KERNEL__ */
  
-Index: linux-2.4.24-mb34/include/linux/ext3_extents.h
+Index: linux-2.4.24/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.4.24-mb34.orig/include/linux/ext3_extents.h	1969-12-31 16:00:00.000000000 -0800
-+++ linux-2.4.24-mb34/include/linux/ext3_extents.h	2004-05-05 14:27:50.000000000 -0700
-@@ -0,0 +1,219 @@
+--- linux-2.4.24.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_extents.h	2004-08-06 03:52:38.000000000 +0400
+@@ -0,0 +1,236 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -2692,11 +2603,11 @@ Index: linux-2.4.24-mb34/include/linux/ext3_extents.h
 + * structure for external API
 + */
 +
-+
 +/*
 + * ext3_extents_tree is used to pass initial information
 + * to top-level extents API
 + */
++struct ext3_extents_helpers;
 +struct ext3_extents_tree {
 +	struct inode *inode;	/* inode which tree belongs to */
 +	void *root;		/* ptr to data top of tree resides at */
@@ -2704,6 +2615,10 @@ Index: linux-2.4.24-mb34/include/linux/ext3_extents.h
 +	int buffer_len;
 +	void *private;
 +	struct ext3_extent *cex;/* last found extent */
++	struct ext3_extents_helpers *ops;
++};
++
++struct ext3_extents_helpers {
 +	int (*get_write_access)(handle_t *h, void *buffer);
 +	int (*mark_buffer_dirty)(handle_t *h, void *buffer);
 +	int (*mergable)(struct ext3_extent *ex1, struct ext3_extent *ex2);
@@ -2783,22 +2698,35 @@ Index: linux-2.4.24-mb34/include/linux/ext3_extents.h
 +	int leaf_num;
 +};
 +
++void ext3_init_tree_desc(struct ext3_extents_tree *, struct inode *);
 +extern int ext3_extent_tree_init(handle_t *, struct ext3_extents_tree *);
 +extern int ext3_ext_calc_credits_for_insert(struct ext3_extents_tree *, struct ext3_ext_path *);
 +extern int ext3_ext_insert_extent(handle_t *, struct ext3_extents_tree *, struct ext3_ext_path *, struct ext3_extent *);
 +extern int ext3_ext_walk_space(struct ext3_extents_tree *, unsigned long, unsigned long, ext_prepare_callback);
 +extern int ext3_ext_remove_space(struct ext3_extents_tree *, unsigned long, unsigned long);
 +extern struct ext3_ext_path * ext3_ext_find_extent(struct ext3_extents_tree *, int, struct ext3_ext_path *);
-+int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
-+			unsigned long block);
-+void ext3_init_tree_desc(struct ext3_extents_tree *tree, struct inode *inode);
-+void ext3_ext_invalidate_cache(struct ext3_extents_tree *tree);
++extern int ext3_ext_in_ea_alloc_space(struct inode *inode, int name_index, const char *eaname, unsigned long from,
++                                      unsigned long num);
++extern int ext3_ext_in_ea_remove_space(struct inode *inode, int name_index, const char *eaname, unsigned long from,
++				       unsigned long num);
++extern int ext3_ext_in_ea_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg);
++extern int ext3_ext_in_ea_get_extents(struct inode *inode, int name_index, const char *eaname, char **buf, int *size);
++extern int ext3_ext_in_ea_get_extents_num(struct inode *inode, int name_index, const char *eaname, int *size);
++
++static inline void
++ext3_ext_invalidate_cache(struct ext3_extents_tree *tree)
++{
++	if (tree->cex)
++		tree->cex->e_num = 0;
++}
++
 +
 +#endif /* _LINUX_EXT3_EXTENTS */
-Index: linux-2.4.24-mb34/include/linux/ext3_fs_i.h
++
+Index: linux-2.4.24/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.4.24-mb34.orig/include/linux/ext3_fs_i.h	2004-05-05 13:47:40.000000000 -0700
-+++ linux-2.4.24-mb34/include/linux/ext3_fs_i.h	2004-05-05 13:53:43.000000000 -0700
+--- linux-2.4.24.orig/include/linux/ext3_fs_i.h	2004-08-06 00:47:18.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-08-06 02:43:24.000000000 +0400
 @@ -76,6 +76,8 @@
  	 * by other means, so we have truncate_sem.
  	 */
