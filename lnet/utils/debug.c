@@ -467,7 +467,7 @@ int jt_dbg_debug_file(int argc, char **argv)
                 return 1;
         }
         if (argc > 2) {
-                fdout = open(argv[2], O_CREAT | O_WRONLY | O_LARGEFILE);
+                fdout = open(argv[2], O_CREAT | O_WRONLY | O_LARGEFILE, 0600);
                 if (fdout == -1) {
                         fprintf(stderr, "open(%s) failed: %s\n", argv[2],
                                 strerror(errno));

@@ -549,50 +549,48 @@ wrq_signals_completion (vv_wr_t *wrq)
         return wrq->completion_notification != 0;
 }
 
-static inline void
-kibnal_conn_addref (kib_conn_t *conn)
-{
-        CDEBUG(D_NET, "++conn[%p] (%d)\n",
-               conn, atomic_read(&conn->ibc_refcount));
-        LASSERT(atomic_read(&conn->ibc_refcount) > 0);
-        atomic_inc(&conn->ibc_refcount);
-}
+#define kibnal_conn_addref(conn)                                \
+do {                                                            \
+        CDEBUG(D_NET, "conn[%p] (%d)++\n",                      \
+               (conn), atomic_read(&(conn)->ibc_refcount));     \
+        LASSERT(atomic_read(&(conn)->ibc_refcount) > 0);        \
+        atomic_inc(&(conn)->ibc_refcount);                      \
+} while (0)
 
-static inline void
-kibnal_conn_decref (kib_conn_t *conn)
-{
-        unsigned long   flags;
+#define kibnal_conn_decref(conn)                                              \
+do {                                                                          \
+        unsigned long   flags;                                                \
+                                                                              \
+        CDEBUG(D_NET, "conn[%p] (%d)--\n",                                    \
+               (conn), atomic_read(&(conn)->ibc_refcount));                   \
+        LASSERT(atomic_read(&(conn)->ibc_refcount) > 0);                      \
+        if (atomic_dec_and_test(&(conn)->ibc_refcount)) {                     \
+                spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);        \
+                list_add_tail(&(conn)->ibc_list,                              \
+                              &kibnal_data.kib_connd_zombies);                \
+                wake_up(&kibnal_data.kib_connd_waitq);                        \
+                spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);   \
+        }                                                                     \
+} while (0)
 
-        CDEBUG(D_NET, "--conn[%p] (%d)\n",
-               conn, atomic_read(&conn->ibc_refcount));
-        LASSERT(atomic_read(&conn->ibc_refcount) > 0);
-        if (atomic_dec_and_test(&conn->ibc_refcount)) {
-                spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
-                list_add_tail(&conn->ibc_list, &kibnal_data.kib_connd_zombies);
-                wake_up(&kibnal_data.kib_connd_waitq);
-                spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);
-        }
-}
+#define kibnal_peer_addref(peer)                                \
+do {                                                            \
+        CDEBUG(D_NET, "peer[%p] -> "LPX64" (%d)++\n",           \
+               (peer), (peer)->ibp_nid,                         \
+               atomic_read (&(peer)->ibp_refcount));            \
+        LASSERT(atomic_read(&(peer)->ibp_refcount) > 0);        \
+        atomic_inc(&(peer)->ibp_refcount);                      \
+} while (0)
 
-static inline void
-kibnal_peer_addref (kib_peer_t *peer)
-{
-        CDEBUG(D_NET, "++peer[%p] -> "LPX64" (%d)\n",
-               peer, peer->ibp_nid, atomic_read (&peer->ibp_refcount));
-        LASSERT(atomic_read(&peer->ibp_refcount) > 0);
-        atomic_inc(&peer->ibp_refcount);
-}
-
-static inline void
-kibnal_peer_decref (kib_peer_t *peer)
-{
-        CDEBUG(D_NET, "--peer[%p] -> "LPX64" (%d)\n",
-               peer, peer->ibp_nid, atomic_read (&peer->ibp_refcount));
-
-        LASSERT(atomic_read(&peer->ibp_refcount) > 0);
-        if (atomic_dec_and_test (&peer->ibp_refcount))
-                kibnal_destroy_peer (peer);
-}
+#define kibnal_peer_decref(peer)                                \
+do {                                                            \
+        CDEBUG(D_NET, "peer[%p] -> "LPX64" (%d)--\n",           \
+               (peer), (peer)->ibp_nid,                         \
+               atomic_read (&(peer)->ibp_refcount));            \
+        LASSERT(atomic_read(&(peer)->ibp_refcount) > 0);        \
+        if (atomic_dec_and_test(&(peer)->ibp_refcount))         \
+                kibnal_destroy_peer(peer);                      \
+} while (0)
 
 static inline struct list_head *
 kibnal_nid2peerlist (ptl_nid_t nid)

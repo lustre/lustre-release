@@ -2057,6 +2057,7 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         }
         
         for (i = 0; i < kranal_data.kra_ndevs; i++) {
+                dev = &kranal_data.kra_devices[i];
                 rc = kranal_thread_start(kranal_scheduler, dev);
                 if (rc != 0) {
                         CERROR("Can't spawn ranal scheduler[%d]: %d\n",

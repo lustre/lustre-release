@@ -950,7 +950,7 @@ kibnal_check_sends (kib_conn_t *conn)
                  * stashed on ibc_active_txs, matched by an incoming PUT_ACK,
                  * and then re-queued here.  It's (just) possible that
                  * tx_sending is non-zero if we've not done the tx_complete() from
-                 * the first send; hence the += rather than = below. */
+                 * the first send; hence the ++ rather than = below. */
                 tx->tx_sending++;
 
                 list_add (&tx->tx_list, &conn->ibc_active_txs);
@@ -965,61 +965,12 @@ kibnal_check_sends (kib_conn_t *conn)
                 vvrc = vv_return_ok;
                 if (conn->ibc_state == IBNAL_CONN_ESTABLISHED) {
                         tx->tx_status = 0;
-#if 1
                         vvrc = vv_post_send_list(kibnal_data.kib_hca,
                                                  conn->ibc_qp,
                                                  tx->tx_nwrq,
                                                  tx->tx_wrq,
                                                  vv_operation_type_send_rc);
                         rc = (vvrc == vv_return_ok) ? 0 : -EIO;
-#else
-                        /* Only post 1 item at a time for now (so we know
-                         * exactly how many got posted successfully) */
-                        for (i = 0; i < tx->tx_nwrq; i++) {
-                                switch (tx->tx_wrq[i].wr_type) {
-                                case vv_wr_send:
-                                        CDEBUG(D_NET, "[%d]posting send [%d %x %p]%s: %x\n", 
-                                               i,
-                                               tx->tx_wrq[i].scatgat_list->length,
-                                               tx->tx_wrq[i].scatgat_list->l_key,
-                                               tx->tx_wrq[i].scatgat_list->v_address,
-                                               tx->tx_wrq[i].type.send.send_qp_type.rc_type.fance_indicator ?
-                                               "(fence)":"",
-                                               tx->tx_msg->ibm_type);
-                                        break;
-                                case vv_wr_rdma_write:
-                                        CDEBUG(D_NET, "[%d]posting PUT  [%d %x %p]->[%x "LPX64"]\n", 
-                                               i,
-                                               tx->tx_wrq[i].scatgat_list->length,
-                                               tx->tx_wrq[i].scatgat_list->l_key,
-                                               tx->tx_wrq[i].scatgat_list->v_address,
-                                               tx->tx_wrq[i].type.send.send_qp_type.rc_type.r_r_key,
-                                               tx->tx_wrq[i].type.send.send_qp_type.rc_type.r_addr);
-                                        break;
-                                case vv_wr_rdma_read:
-                                        CDEBUG(D_NET, "[%d]posting GET  [%d %x %p]->[%x "LPX64"]\n", 
-                                               i,
-                                               tx->tx_wrq[i].scatgat_list->length,
-                                               tx->tx_wrq[i].scatgat_list->l_key,
-                                               tx->tx_wrq[i].scatgat_list->v_address,
-                                               tx->tx_wrq[i].type.send.send_qp_type.rc_type.r_r_key,
-                                               tx->tx_wrq[i].type.send.send_qp_type.rc_type.r_addr);
-                                        break;
-                                default:
-                                        LBUG();
-                                }
-                                vvrc = vv_post_send(kibnal_data.kib_hca,
-                                                    conn->ibc_qp, 
-                                                    &tx->tx_wrq[i], 
-                                                    vv_operation_type_send_rc);
-                                CDEBUG(D_NET, LPX64": post %d/%d\n",
-                                       conn->ibc_peer->ibp_nid, i, tx->tx_nwrq);
-                                if (vvrc != vv_return_ok) {
-                                        rc = -EIO;
-                                        break;
-                                }
-                        }
-#endif
                 }
 
                 if (rc != 0) {
@@ -1081,6 +1032,7 @@ kibnal_tx_complete (kib_tx_t *tx, vv_comp_status_t vvrc)
          * gets to free it, which also drops its ref on 'conn'. */
 
         tx->tx_sending--;
+        conn->ibc_nsends_posted--;
 
         if (failed) {
                 tx->tx_waiting = 0;
@@ -1093,9 +1045,6 @@ kibnal_tx_complete (kib_tx_t *tx, vv_comp_status_t vvrc)
                 list_del(&tx->tx_list);
 
         kibnal_conn_addref(conn);               /* 1 ref for me.... */
-
-        if (tx->tx_sending == 0)
-                conn->ibc_nsends_posted--;
 
         spin_unlock(&conn->ibc_lock);
 
