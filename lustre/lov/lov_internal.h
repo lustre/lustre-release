@@ -10,7 +10,7 @@
 #ifndef LOV_INTERNAL_H
 #define LOV_INTERNAL_H
 
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 
 #define LAP_MAGIC 8200
 
