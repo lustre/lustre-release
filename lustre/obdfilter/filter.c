@@ -384,7 +384,6 @@ static struct file *filter_obj_open(struct obd_export *export,
                 atomic_inc(&fdd->fdd_open_count);
         } else {
                 atomic_set(&fdd->fdd_open_count, 1);
-                spin_lock_init(&filter->fo_fddlock);
                 fdd->fdd_flags = 0;
                 /* If this is racy, then we can use {cmp}xchg and atomic_add */
                 file->f_dentry->d_fsdata = fdd;
