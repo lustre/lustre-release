@@ -889,6 +889,13 @@ void ll_umount_begin(struct super_block *sb)
                       &ioc_data, NULL);
 
         obd = class_conn2obd(&sbi->ll_osc_conn);
+        if (obd == NULL) {
+                CERROR("Invalid LOV connection handle "LPX64"\n",
+                       sbi->ll_osc_conn.cookie);
+                EXIT;
+                return;
+        }
+
         obd->obd_no_recov = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, &sbi->ll_osc_conn, sizeof ioc_data,
                       &ioc_data, NULL);
