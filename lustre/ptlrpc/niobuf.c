@@ -26,7 +26,7 @@
 
 extern ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq,
         bulk_source_eq, bulk_sink_eq;
-static ptl_process_id_t local_id = {PTL_ID_ANY, PTL_ID_ANY};
+static ptl_process_id_t local_id = {PTL_NID_ANY, PTL_PID_ANY};
 
 int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
 {
