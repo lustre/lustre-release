@@ -95,7 +95,7 @@ static int obd_class_release(struct inode * inode, struct file * file)
 		return -ENODEV;
 	fsync_dev(inode->i_rdev);
 	if (obd_dev[dev].obd_refcnt <= 0)
-		printk(KERN_ALERT "presto_psdev_release: refcount(%d) <= 0\n",
+		printk(KERN_ALERT __FUNCTION__ ": refcount(%d) <= 0\n",
 		       obd_dev[dev].obd_refcnt);
 	obd_dev[dev].obd_refcnt--;
 
@@ -206,7 +206,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		type = obd_nm_to_type(input->att_type);
 		OBD_FREE(input->att_type, input->att_typelen + 1);
 		if ( !type ) {
-			printk("Unknown obd type dev %d\n", dev);
+			printk(__FUNCTION__ ": unknown obd type dev %d\n",
+			       dev);
 			EXIT;
 			return -EINVAL;
 		}
@@ -358,7 +359,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
 		if ( !obddev->obd_type->typ_refcnt ) {
-			printk("OBD_CLEANUP: Dev %d has refcount (%d)!\n",
+			CDEBUG(D_IOCTL, "dev %d has refcount (%d)!\n",
 			       dev, obddev->obd_type->typ_refcnt);
 			EXIT;
 			return -EBUSY;
@@ -366,7 +367,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 		if ( (!(obddev->obd_flags & OBD_SET_UP)) ||
 		     (!(obddev->obd_flags & OBD_ATTACHED))) {
-			CDEBUG(D_IOCTL, "Device not attached or set up\n");
+			CDEBUG(D_IOCTL, "device not attached or set up\n");
 			EXIT;
 			return -ENODEV;
 		}
@@ -755,7 +756,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		type = obd_nm_to_type(input.att_type);
 		OBD_FREE(input.att_type, input.att_typelen + 1);
 		if ( !type ) {
-			printk("Unknown obd type dev %d\n", dev);
+			printk(__FUNCTION__ ": unknown obd type dev %d\n", dev);
 			EXIT;
 			return -EINVAL;
 		}
@@ -785,7 +786,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		return err;
 	}
 	}
-}
+} /* obd_class_ioctl */
 
 /* Driver interface done, utility functions follow */
 
@@ -826,15 +827,15 @@ int obd_unregister_type(char *nm)
 
 	if ( !type ) {
 		MOD_DEC_USE_COUNT;
-		printk("Unknown obd type\n");
+		printk(KERN_INFO __FUNCTION__ ": unknown obd type\n");
 		EXIT;
 		return -EINVAL;
 	}
 
 	if ( type->typ_refcnt ) {
 		MOD_DEC_USE_COUNT;
-		printk("OBD: Type %s has refcount (%d)\n", nm,
-		       type->typ_refcnt);
+		printk(KERN_ALERT __FUNCTION__ ":type %s has refcount "
+		       "(%d)\n", nm, type->typ_refcnt);
 		EXIT;
 		return -EBUSY;
 	}
@@ -843,7 +844,7 @@ int obd_unregister_type(char *nm)
 	OBD_FREE(type, sizeof(*type));
 	MOD_DEC_USE_COUNT;
 	return 0;
-}
+} /* obd_unregister_type */
 
 /* declare character device */
 static struct file_operations obd_psdev_fops = {
@@ -878,7 +879,7 @@ int init_obd(void)
 	
 	if (register_chrdev(OBD_PSDEV_MAJOR,"obd_psdev", 
 			    &obd_psdev_fops)) {
-		printk(KERN_ERR "obd_psdev: unable to get major %d\n", 
+		printk(KERN_ERR __FUNCTION__ ": unable to get major %d\n", 
 		       OBD_PSDEV_MAJOR);
 		return -EIO;
 	}

@@ -48,18 +48,20 @@ inline long ext2_block_map (struct inode * inode, long block);
 
 
 /* super.c */
-#define ext2_warning obd_warning
-#undef ext2_error
-#define ext2_error obd_warning
-#define ext2_panic obd_warning
-#ifdef EXT2FS_DEBUG
+#ifdef EXT2_OBD_DEBUG
 #  undef ext2_debug
 #  define ext2_debug(format, a...) CDEBUG(D_EXT2, format, ## a)
+#  define ext2_error ext2_warning
+#  define ext2_panic ext2_warning
+#  define ext2_warning(sb, func, format, a...) CDEBUG(D_WARNING, format, ## a)
+#else
+#  undef ext2_debug
+#  define ext2_debug(format, a...) {}
+#  define ext2_error(sb, func, format, a...) printk(KERN_ERR "%s: " format, func, ## a);
+#  define ext2_panic(sb, func, format, a...) printk(KERN_CRIT "%s: " format, func, ## a);
+#  define ext2_warning(sb, func, format, a...) printk(KERN_WARNING "%s: " format, func, ## a);
 #endif
 
-#define obd_error obd_warning
-#define obd_panic obd_warning
-#define obd_warning(sb, func, format, a...) CDEBUG(D_WARNING, format, ## a)
 
 int obd_remount (struct super_block * sb, int * flags, char * data);
 struct super_block * ext2_read_super (struct super_block * sb, void * data,

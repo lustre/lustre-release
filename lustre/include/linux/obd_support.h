@@ -17,6 +17,9 @@
 extern int obd_debug_level;
 extern int obd_print_entry;
 
+#define CMD(cmd) (( cmd == READ ) ? "read" : "write")
+
+#ifdef EXT2_OBD_DEBUG
 /* debugging masks */
 #define D_PSDEV       1 /* debug information from psdev.c */
 #define D_INODE       2
@@ -30,9 +33,8 @@ extern int obd_print_entry;
 #define D_INFO      512 /* general information, especially from interface.c */
 #define D_IOCTL    1024 /* ioctl related information */
 #define D_BLOCKS   2048 /* ext2 block allocation */
-#define D_RPC      4096 /* ext2 block allocation */
+#define D_RPC      4096 /* rpc communications */
  
-#ifdef EXT2_OBD_DEBUG
 #define CDEBUG(mask, format, a...)					\
         do {								\
 	if (obd_debug_level & mask) {					\
@@ -47,17 +49,6 @@ extern int obd_print_entry;
 #define EXIT								      \
         if (obd_print_entry)						      \
                 printk("Process %d leaving %s [%d]\n", current->pid, __FUNCTION__, __LINE__)
-
-#else /* EXT2_OBD_DEBUG */
-
-#       define CDEBUG ;
-#       define ENTRY ;
-#       define EXIT ;
-
-#endif /* EXT2_OBD_DEBUG */
-
-
-#define CMD(cmd) (( cmd == READ ) ? "read" : "write")
 
 /* Inode common information printed out (used by obdfs and ext2obd inodes) */
 #define ICDEBUG(inode) { \
@@ -113,6 +104,19 @@ extern int obd_print_entry;
 	} else \
 		CDEBUG(D_IOCTL, "** %s, no page\n", __FUNCTION__);\
 }
+
+#else /* EXT2_OBD_DEBUG */
+
+#define CDEBUG(mask, format, a...) {}
+#define ENTRY {}
+#define EXIT {}
+#define ODEBUG(obdo) {}
+#define EXDEBUG(inode) {}
+#define OIDEBUG(inode) {}
+#define PDEBUG(page, cmd) {}
+
+#endif /* EXT2_OBD_DEBUG */
+
 
 
 #define OBD_ALLOC(ptr, cast, size)					\

@@ -129,9 +129,11 @@ void obdfs_cleanup_pgrqcache(void)
 		CDEBUG(D_INODE, "destroying obdfs_pgrqcache at %p, count %d\n",
 		       obdfs_pgrq_cachep, obdfs_cache_count);
 		if (kmem_cache_destroy(obdfs_pgrq_cachep))
-			printk(KERN_INFO "obd_cleanup_pgrqcache: unable to free all of cache\n");
+			printk(KERN_INFO __FUNCTION__
+			       ": unable to free all of cache\n");
+		obdfs_pgrq_cachep = NULL;
 	} else
-		printk(KERN_INFO "obd_cleanup_pgrqcache: called with NULL cache pointer\n");
+		printk(KERN_INFO __FUNCTION__ ": called with NULL pointer\n");
 
 	EXIT;
 } /* obdfs_cleanup_wreqcache */
@@ -403,7 +405,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
 
 	/* Yuck, no page */
 	if (! page) {
-	    printk("grab_cache_page says no dice ...\n");
+	    printk(KERN_WARNING " grab_cache_page says no dice ...\n");
 	    EXIT;
 	    return 0;
 	}

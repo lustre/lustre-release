@@ -141,7 +141,6 @@ void obdfs_dequeue_reqs(struct inode *inode)
 		/* now put the page away */
 		put_page(page);
 	}
-	iput(inode);
 	obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 } /* obdfs_dequeue_reqs */
 
@@ -376,7 +375,7 @@ int obdfs_flushd_init(void)
 	kernel_thread(bdflush, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND);
 	 */
 	kernel_thread(pupdate, NULL, 0);
-	printk("flushd inited\n");
+	CDEBUG(D_PSDEV, __FUNCTION__ ": flushd inited\n");
 	return 0;
 }
 
