@@ -294,10 +294,10 @@ main (int argc, char **argv)
         if (conn == NULL)
                 return (1);
 
-        rc = obdio_test_fixed_extent (conn, myhid, mypid, reps, locked,
-                                      oid, base_offset, size);
+        rc = obdio_test_fixed_extent(conn, myhid, mypid, reps, locked,
+                                     oid, base_offset, size);
 
-        obdio_disconnect (conn);
+        obdio_disconnect(conn, 0);
 
         return (rc == 0 ? 0 : 1);
 }
