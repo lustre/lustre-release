@@ -13,20 +13,19 @@ fail() {
 
 export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
-REFORMAT="--reformat"
 ERROR=
 SRC=/etc
 [ "$COUNT" ] || COUNT=1000
 
 [ "$LCONF" ] || LCONF=$SRCDIR/../utils/lconf
 
-OSCMT="`mount | awk '/ lustre_lite / { print $3 }'`"
+OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 if [ -z "$OSCMT" ]; then
-	$LCONF $REFORMAT $@ || exit 1
+	[ -z "$*" ] && fail "usage: $0 [--reformat] <conf>.xml" 1
+	$LCONF $@ || exit 1
         trap "$LCONF --cleanup $@" 0
 	OSCMT="`mount | awk '/ lustre_lite / { print $3 }'`"
-	[ -z "$OSCMT" ] && echo "no lustre filesystem mounted" 2>&1 && exit 1
-	exit $RC
+	[ -z "$OSCMT" ] && fail "no lustre filesystem mounted" 1
 fi
 
 # let's start slowly here...

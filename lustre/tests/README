@@ -52,12 +52,13 @@ You can create a simple echo client by running the "llecho.sh" to
 run the tests locally (over TCP loopback), or edit llecho.sh to
 specify the SERVER and CLIENT names.  You would then set up as normal:
 
-    # for a single system, or for a remote server
+    # if you are using a remote server, first run:
     server# ../utils/lconf echo.xml
 
-Launch the test script via:
+Configure the client (or if you are running a single system only):
 
-    client# sh runregression-net.sh echo.xml
+    client# ../utils/lconf echo.xml
+    client# sh runregression-net.sh
 
 3. runtests
 

@@ -949,9 +949,11 @@ int jt_obd_test_getattr(int argc, char **argv)
         }
 
         if (argc >= 4) {
-                if (argv[3][0] == 't' && thread)
-                        objid = strtoull(argv[3] + 1, &end, 0) + thread - 1;
-                else
+                if (argv[3][0] == 't') {
+                        objid = strtoull(argv[3] + 1, &end, 0);
+                        if (thread)
+                                objid += thread - 1;
+                } else
                         objid = strtoull(argv[3], &end, 0);
                 if (*end) {
                         fprintf(stderr, "error: %s: invalid objid '%s'\n",
@@ -969,6 +971,7 @@ int jt_obd_test_getattr(int argc, char **argv)
 
         for (i = 1, next_count = verbose; i <= count; i++) {
                 data.ioc_obdo1.o_id = objid;
+                data.ioc_obdo1.o_mode = S_IFREG;
                 data.ioc_obdo1.o_valid = 0xffffffff;
                 rc = ioctl(fd, OBD_IOC_GETATTR, &data);
                 SHMEM_BUMP();
@@ -1022,9 +1025,10 @@ int jt_obd_test_brw(int argc, char **argv)
         }
 
         /* make each thread write to a different offset */
-        if (argv[1][0] == 't' && thread) {
-                thr_offset = thread - 1;
+        if (argv[1][0] == 't') {
                 count = strtoull(argv[1] + 1, &end, 0);
+                if (thread)
+                        thr_offset = thread - 1;
         } else
                 count = strtoull(argv[1], &end, 0);
 
@@ -1056,9 +1060,11 @@ int jt_obd_test_brw(int argc, char **argv)
                 }
         }
         if (argc >= 6) {
-                if (argv[5][0] == 't' && thread)
-                        objid = strtoull(argv[5] + 1, &end, 0) + thread - 1;
-                else
+                if (argv[5][0] == 't') {
+                        objid = strtoull(argv[5] + 1, &end, 0);
+                        if (thread)
+                                objid += thread - 1;
+                } else
                         objid = strtoull(argv[5], &end, 0);
                 if (*end) {
                         fprintf(stderr, "error: %s: bad objid '%s'\n",
