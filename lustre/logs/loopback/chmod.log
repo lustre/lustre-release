@@ -1,0 +1,12 @@
+0a:000001:2:1041902087.369587 (module.c:454:kportal_ioctl() 1448+1300): Process leaving (rc=0 : 0 : 0)
+0a:000001:2:1041902089.676745 (module.c:212:kportal_psdev_release() 1448+324): Process entered
+0a:000001:2:1041902089.676751 (module.c:218:kportal_psdev_release() 1448+340): Process leaving (rc=0 : 0 : 0)
+0a:000001:2:1041902089.676756 (module.c:212:kportal_psdev_release() 1448+324): Process entered
+0a:000001:2:1041902089.676759 (module.c:218:kportal_psdev_release() 1448+340): Process leaving (rc=0 : 0 : 0)
+0a:000001:2:1041902115.965014 (module.c:200:kportal_psdev_open() 1456+420): Process entered
+0a:000001:2:1041902115.965021 (module.c:206:kportal_psdev_open() 1456+436): Process leaving (rc=0 : 0 : 0)
+0a:000001:2:1041902128.990223 (module.c:200:kportal_psdev_open() 1456+420): Process entered
+0a:000001:2:1041902128.990228 (module.c:206:kportal_psdev_open() 1456+436): Process leaving (rc=0 : 0 : 0)
+0a:000001:2:1041902128.990338 (module.c:423:kportal_ioctl() 1456+1284): Process entered
+0a:000001:2:1041902128.990343 (../../include/linux/kp30.h:740:portal_ioctl_getdata() 1456+1332): Process entered
+0a:000001:2:1041902128.990347 (../../include/linux/kp30.h:787:portal_ioctl_getdata() 1456+1332): Process leaving

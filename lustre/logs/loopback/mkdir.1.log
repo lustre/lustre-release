@@ -1,0 +1,496 @@
+0a:000001:1:1041895938.110540 (module.c:454:kportal_ioctl() 1292+1300): Process leaving (rc=0 : 0 : 0)
+0a:000001:1:1041895938.972333 (module.c:212:kportal_psdev_release() 1292+324): Process entered
+0a:000001:1:1041895938.972340 (module.c:218:kportal_psdev_release() 1292+340): Process leaving (rc=0 : 0 : 0)
+0a:000001:1:1041895938.972345 (module.c:212:kportal_psdev_release() 1292+324): Process entered
+0a:000001:1:1041895938.972348 (module.c:218:kportal_psdev_release() 1292+340): Process leaving (rc=0 : 0 : 0)
+07:000001:1:1041895949.360878 (namei.c:180:ll_intent_lock() 1294+500): Process entered
+07:000040:1:1041895949.360887 (namei.c:186:ll_intent_lock() 1294+516): name: hello, intent: mkdir
+05:000001:1:1041895949.360892 (genops.c:268:class_conn2export() 1294+820): Process entered
+05:000080:1:1041895949.360897 (genops.c:287:class_conn2export() 1294+836): looking for export addr 0xf5a3dee4 cookie 0x1e07b5ad1250ca49
+05:000001:1:1041895949.360904 (genops.c:294:class_conn2export() 1294+836): Process leaving (rc=4121157348 : -173809948 : f5a3dee4)
+01:000001:1:1041895949.360910 (mdc_request.c:249:mdc_enqueue() 1294+740): Process entered
+01:010000:1:1041895949.360914 (mdc_request.c:252:mdc_enqueue() 1294+740): ### mdsintent mkdir parent dir 12
+05:000001:1:1041895949.360918 (genops.c:268:class_conn2export() 1294+868): Process entered
+05:000080:1:1041895949.360922 (genops.c:287:class_conn2export() 1294+884): looking for export addr 0xf5a3dee4 cookie 0x1e07b5ad1250ca49
+05:000001:1:1041895949.360927 (genops.c:294:class_conn2export() 1294+884): Process leaving (rc=4121157348 : -173809948 : f5a3dee4)
+08:000001:1:1041895949.360932 (client.c:263:ptlrpc_prep_req() 1294+804): Process entered
+08:000010:1:1041895949.360938 (client.c:268:ptlrpc_prep_req() 1294+820): kmalloced 'request': 204 at f34a7ad4 (tot 19152743)
+08:000010:1:1041895949.360944 (pack_generic.c:42:lustre_pack_msg() 1294+884): kmalloced '*msg': 312 at f507b800 (tot 19153055)
+08:000001:1:1041895949.360950 (connection.c:135:ptlrpc_connection_addref() 1294+836): Process entered
+08:000040:1:1041895949.360954 (connection.c:137:ptlrpc_connection_addref() 1294+836): connection=f53c6dec refcount 5
+08:000001:1:1041895949.360958 (connection.c:139:ptlrpc_connection_addref() 1294+852): Process leaving (rc=4114378220 : -180589076 : f53c6dec)
+08:000001:1:1041895949.360963 (client.c:305:ptlrpc_prep_req() 1294+820): Process leaving (rc=4081744596 : -213222700 : f34a7ad4)
+11:000001:1:1041895949.360971 (ldlm_request.c:177:ldlm_cli_enqueue() 1294+852): Process entered
+11:000001:1:1041895949.360975 (ldlm_resource.c:330:ldlm_resource_get() 1294+980): Process entered
+11:000001:1:1041895949.360981 (ldlm_resource.c:282:ldlm_resource_add() 1294+1028): Process entered
+11:000001:1:1041895949.361003 (ldlm_resource.c:318:ldlm_resource_add() 1294+1044): Process leaving (rc=4081594128 : -213373168 : f3482f10)
+11:000001:1:1041895949.361009 (ldlm_resource.c:355:ldlm_resource_get() 1294+996): Process leaving (rc=4081594128 : -213373168 : f3482f10)
+11:000001:1:1041895949.361014 (ldlm_lock.c:251:ldlm_lock_new() 1294+964): Process entered
+11:000010:1:1041895949.361034 (ldlm_lock.c:256:ldlm_lock_new() 1294+980): kmalloced 'lock': 184 at f3481ec4 (tot 2554995).
+11:000040:1:1041895949.361046 (ldlm_resource.c:362:ldlm_resource_getref() 1294+996): getref res: f3482f10 count: 2
+11:000001:1:1041895949.361051 (ldlm_lock.c:282:ldlm_lock_new() 1294+980): Process leaving (rc=4081589956 : -213377340 : f3481ec4)
+11:000001:1:1041895949.361056 (ldlm_resource.c:370:ldlm_resource_putref() 1294+964): Process entered
+11:000040:1:1041895949.361060 (ldlm_resource.c:373:ldlm_resource_putref() 1294+964): putref res: f3482f10 count: 1
+11:000001:1:1041895949.361064 (ldlm_resource.c:425:ldlm_resource_putref() 1294+980): Process leaving (rc=0 : 0 : 0)
+11:010000:1:1041895949.361069 (ldlm_request.c:199:ldlm_cli_enqueue() 1294+916): ### client-side enqueue START ns: MDC_mds1 lock: f3481ec4 lrc: 2/0,0 mode: --/PW res: 12/2045011249 rrc: 1 type: PLN remote: 0x0
+11:000001:1:1041895949.361077 (ldlm_lock.c:178:ldlm_lock_remove_from_lru() 1294+916): Process entered
+11:000001:1:1041895949.361080 (ldlm_lock.c:186:ldlm_lock_remove_from_lru() 1294+916): Process leaving
+11:010000:1:1041895949.361084 (ldlm_lock.c:450:ldlm_lock_addref_internal() 1294+948): ### ldlm_lock_addref(PW) ns: MDC_mds1 lock: f3481ec4 lrc: 3/0,1 mode: --/PW res: 12/2045011249 rrc: 1 type: PLN remote: 0x0
+11:010000:1:1041895949.361093 (ldlm_request.c:235:ldlm_cli_enqueue() 1294+916): ### sending request ns: MDC_mds1 lock: f3481ec4 lrc: 3/0,1 mode: --/PW res: 12/2045011249 rrc: 1 type: PLN remote: 0x0
+08:000001:1:1041895949.361100 (client.c:613:ptlrpc_queue_wait() 1294+1060): Process entered
+08:100000:1:1041895949.361104 (client.c:621:ptlrpc_queue_wait() 1294+1076): Sending RPC pid:xid:nid:opc 1294:5:7f000001:101
+08:000001:1:1041895949.361110 (niobuf.c:372:ptl_send_rpc() 1294+1140): Process entered
+08:000010:1:1041895949.361114 (niobuf.c:399:ptl_send_rpc() 1294+1156): kmalloced 'repbuf': 320 at f5087c00 (tot 19153375)
+0a:000200:1:1041895949.361122 (lib-dispatch.c:54:lib_dispatch() 1294+1492): 2130706433: API call PtlMEAttach (5)
+0a:004000:1:1041895949.361128 (lib-me.c:42:do_PtlMEAttach() 1294+1524): taking state lock
+0a:004000:1:1041895949.361132 (lib-me.c:58:do_PtlMEAttach() 1294+1524): releasing state lock
+0a:000200:1:1041895949.361138 (lib-dispatch.c:54:lib_dispatch() 1294+1492): 2130706433: API call PtlMDAttach (11)
+0a:004000:1:1041895949.361143 (lib-md.c:210:do_PtlMDAttach() 1294+1524): taking state lock
+0a:004000:1:1041895949.361149 (lib-md.c:229:do_PtlMDAttach() 1294+1524): releasing state lock
+08:000200:1:1041895949.361152 (niobuf.c:433:ptl_send_rpc() 1294+1156): Setup reply buffer: 320 bytes, xid 5, portal 10
+0a:000200:1:1041895949.361157 (lib-dispatch.c:54:lib_dispatch() 1294+1556): 2130706433: API call PtlMDBind (13)
+0a:004000:1:1041895949.361162 (lib-md.c:261:do_PtlMDBind() 1294+1588): taking state lock
+0a:004000:1:1041895949.361166 (lib-md.c:269:do_PtlMDBind() 1294+1588): releasing state lock
+08:000200:1:1041895949.361169 (niobuf.c:77:ptl_send_buf() 1294+1236): Sending 312 bytes to portal 12, xid 5
+0a:000200:1:1041895949.361175 (lib-dispatch.c:54:lib_dispatch() 1294+1556): 2130706433: API call PtlPut (19)
+0a:004000:1:1041895949.361181 (lib-move.c:737:do_PtlPut() 1294+1876): taking state lock
+0a:000200:1:1041895949.361186 (lib-move.c:745:do_PtlPut() 1294+1892): PtlPut -> 2130706433: 0
+0a:004000:1:1041895949.361192 (lib-move.c:800:do_PtlPut() 1294+1876): releasing state lock
+0b:000200:1:1041895949.361196 (socknal_cb.c:631:ksocknal_send() 1294+2004): sending %zd bytes from [312](00000001,-184043520)... to nid: 0x0x7f00000100000138 pid 0
+0b:000200:1:1041895949.361204 (socknal.c:484:ksocknal_get_conn() 1294+2036): got conn [f5060200] -> 0x0x7f000001 (2)
+0b:000200:1:1041895949.361210 (socknal_cb.c:580:ksocknal_launch_packet() 1294+2036): type 1, nob 384 niov 2
+08:000001:1:1041895949.361216 (niobuf.c:441:ptl_send_rpc() 1294+1156): Process leaving (rc=0 : 0 : 0)
+08:000200:1:1041895949.361221 (client.c:662:ptlrpc_queue_wait() 1294+1108): @@@ -- sleeping req x5/t0 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 2 fl 0
+08:000001:1:1041895949.361227 (client.c:379:ptlrpc_check_reply() 1294+1092): Process entered
+08:000001:1:1041895949.361231 (client.c:402:ptlrpc_check_reply() 1294+1092): Process leaving
+08:000200:1:1041895949.361234 (client.c:404:ptlrpc_check_reply() 1294+1140): @@@ rc = 0 for req x5/t0 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 2 fl 0
+08:000001:1:1041895949.361240 (client.c:379:ptlrpc_check_reply() 1294+1092): Process entered
+08:000001:1:1041895949.361243 (client.c:402:ptlrpc_check_reply() 1294+1092): Process leaving
+08:000200:1:1041895949.361247 (client.c:404:ptlrpc_check_reply() 1294+1140): @@@ rc = 0 for req x5/t0 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 2 fl 0
+0b:000001:1:1041895949.361256 (socknal_cb.c:234:ksocknal_sendmsg() 1114+352): Process entered
+0b:000001:1:1041895949.361312 (socknal_cb.c:1300:ksocknal_data_ready() 1114+1404): Process entered
+0b:000001:1:1041895949.361316 (socknal_cb.c:1338:ksocknal_data_ready() 1114+1404): Process leaving
+0b:000001:1:1041895949.361331 (socknal_cb.c:305:ksocknal_sendmsg() 1114+368): Process leaving (rc=384 : 384 : 180)
+0b:000200:1:1041895949.361336 (socknal_cb.c:503:ksocknal_process_transmit() 1114+240): send(384) 384
+0b:001000:1:1041895949.361340 (socknal.h:241:ksocknal_put_conn() 1114+256): putting conn[f5060200] -> 0x0x7f000001 (3)
+0b:000001:1:1041895949.361345 (socknal_cb.c:438:ksocknal_tx_done() 1114+288): Process entered
+0a:004000:1:1041895949.361348 (lib-msg.c:54:lib_finalize() 1114+448): taking state lock
+0b:000200:1:1041895949.361352 (socknal_cb.c:58:ksocknal_write() 1114+528): 0x0x7f000001: writing 92 bytes from f43e3ddc -> f8fd0240
+0b:000200:1:1041895949.361358 (socknal_cb.c:58:ksocknal_write() 1114+528): 0x0x7f000001: writing 4 bytes from f43e3e38 -> f8fd029c
+0b:000200:1:1041895949.361363 (socknal_cb.c:69:ksocknal_callback() 1114+496): 0x0x7f000001: callback eq f618ff6c ev f43e3ddc
+08:000001:1:1041895949.361368 (events.c:40:request_out_callback() 1114+512): Process entered
+08:000001:1:1041895949.361372 (client.c:355:__ptlrpc_req_finished() 1114+576): Process entered
+08:000040:1:1041895949.361375 (client.c:360:__ptlrpc_req_finished() 1114+624): @@@ refcount now 1 req x5/t0 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 2 fl 0
+08:000001:1:1041895949.361381 (client.c:367:__ptlrpc_req_finished() 1114+592): Process leaving (rc=0 : 0 : 0)
+08:000001:1:1041895949.361385 (events.c:53:request_out_callback() 1114+528): Process leaving (rc=1 : 1 : 1)
+0a:000200:1:1041895949.361389 (lib-md.c:34:lib_md_unlink() 1114+496): Unlinking md f34cabdc
+0b:000200:1:1041895949.361393 (socknal_cb.c:100:ksocknal_invalidate() 1114+544): 0x0x7f000001: invalidating f507b800 : %zd
+0a:004000:1:1041895949.361398 (lib-msg.c:134:lib_finalize() 1114+448): releasing state lock
+0b:000001:1:1041895949.361402 (socknal_cb.c:465:ksocknal_tx_done() 1114+288): Process leaving
+0b:001000:1:1041895949.361405 (socknal.h:241:ksocknal_put_conn() 1114+256): putting conn[f5060200] -> 0x0x7f000001 (2)
+0b:000200:1:1041895949.361410 (socknal_cb.c:1054:ksocknal_process_receive() 1114+288): sched f4fd5d10 conn f507ba00
+0b:000200:1:1041895949.361420 (socknal_cb.c:1094:ksocknal_process_receive() 1114+304): f507ba00 read(72) 72
+0a:004000:1:1041895949.361425 (lib-move.c:217:parse_put() 1114+608): taking state lock
+0a:000001:1:1041895949.361428 (lib-move.c:42:lib_find_me() 1114+720): Process entered
+0a:000200:1:1041895949.361432 (lib-move.c:45:lib_find_me() 1114+752): Request from 2130706433.0 of length 312 into portal 12 MB=0x5
+0a:000001:1:1041895949.361438 (lib-move.c:110:lib_find_me() 1114+736): Process leaving (rc=4106405628 : -188561668 : f4c2c6fc)
+0a:000200:1:1041895949.361443 (lib-move.c:246:parse_put() 1114+656): Incoming put index c from 2130706433/0 of length 312/312 into md f60e14a4 [1](f47a8000,32768)... + 616
+0a:004000:1:1041895949.361451 (lib-move.c:301:parse_put() 1114+608): releasing state lock
+0b:000200:1:1041895949.361458 (socknal_cb.c:1094:ksocknal_process_receive() 1114+304): f507ba00 read(312) 312
+0a:004000:1:1041895949.361463 (lib-msg.c:54:lib_finalize() 1114+448): taking state lock
+0b:000200:1:1041895949.361467 (socknal_cb.c:58:ksocknal_write() 1114+528): 0x0x7f000001: writing 92 bytes from f43e3ddc -> f912d1e0
+0b:000200:1:1041895949.361472 (socknal_cb.c:58:ksocknal_write() 1114+528): 0x0x7f000001: writing 4 bytes from f43e3e38 -> f912d23c
+0b:000200:1:1041895949.361477 (socknal_cb.c:69:ksocknal_callback() 1114+496): 0x0x7f000001: callback eq f4c2df1c ev f43e3ddc
+0a:004000:1:1041895949.361489 (lib-msg.c:134:lib_finalize() 1114+448): releasing state lock
+08:000001:3:1041895949.361494 (service.c:35:ptlrpc_check_event() 1266+224): Process entered
+0b:000200:1:1041895949.361499 (socknal_cb.c:1054:ksocknal_process_receive() 1114+288): sched f4fd5d10 conn f507ba00
+0a:000001:3:1041895949.361505 (api-eq.c:43:PtlEQGet() 1266+288): Process entered
+0b:000200:1:1041895949.361508 (socknal_cb.c:1094:ksocknal_process_receive() 1114+304): f507ba00 read(72) -11
+0a:000040:3:1041895949.361515 (api-eq.c:58:PtlEQGet() 1266+304): new_event: f912d1e0, sequence: 5, eq->size: 1024
+0b:001000:1:1041895949.361519 (socknal.h:241:ksocknal_put_conn() 1114+304): putting conn[f507ba00] -> 0x0x7f000001 (2)
+0a:000001:3:1041895949.361525 (api-eq.c:79:PtlEQGet() 1266+304): Process leaving (rc=0 : 0 : 0)
+08:000001:1:1041895949.361528 (service.c:35:ptlrpc_check_event() 1265+224): Process entered
+08:000001:3:1041895949.361534 (service.c:50:ptlrpc_check_event() 1266+240): Process leaving via out (rc=1 : 1 : 1)
+0a:000001:1:1041895949.361539 (api-eq.c:43:PtlEQGet() 1265+288): Process entered
+0a:000040:1:1041895949.361543 (api-eq.c:58:PtlEQGet() 1265+304): new_event: f912d240, sequence: 6, eq->size: 1024
+0a:000001:1:1041895949.361548 (api-eq.c:61:PtlEQGet() 1265+304): Process leaving (rc=25 : 25 : 19)
+08:000001:1:1041895949.361552 (service.c:53:ptlrpc_check_event() 1265+240): Process leaving via out (rc=0 : 0 : 0)
+08:000001:1:1041895949.361558 (service.c:35:ptlrpc_check_event() 1264+224): Process entered
+08:100000:3:1041895949.361564 (service.c:179:handle_incoming_request() 1266+240): Handling RPC pid:xid:nid:opc 1294:0x5:7f000001:0
+0a:000001:1:1041895949.361569 (api-eq.c:43:PtlEQGet() 1264+288): Process entered
+08:000200:3:1041895949.361574 (service.c:204:handle_incoming_request() 1266+240): got req 5 (md: f47a8000 + 616)
+0a:000040:1:1041895949.361578 (api-eq.c:58:PtlEQGet() 1264+304): new_event: f912d240, sequence: 6, eq->size: 1024
+05:000001:3:1041895949.361584 (genops.c:268:class_conn2export() 1266+272): Process entered
+0a:000001:1:1041895949.361587 (api-eq.c:61:PtlEQGet() 1264+304): Process leaving (rc=25 : 25 : 19)
+05:000080:3:1041895949.361593 (genops.c:287:class_conn2export() 1266+288): looking for export addr 0xf34aaee4 cookie 0xec27dcafdc3e7003
+08:000001:1:1041895949.361597 (service.c:53:ptlrpc_check_event() 1264+240): Process leaving via out (rc=0 : 0 : 0)
+05:000001:3:1041895949.361603 (genops.c:294:class_conn2export() 1266+288): Process leaving (rc=4081757924 : -213209372 : f34aaee4)
+08:000001:1:1041895949.361608 (service.c:35:ptlrpc_check_event() 1263+224): Process entered
+08:000001:3:1041895949.361613 (connection.c:135:ptlrpc_connection_addref() 1266+256): Process entered
+08:000040:3:1041895949.361618 (connection.c:137:ptlrpc_connection_addref() 1266+256): connection=f52db9cc refcount 2
+0a:000001:1:1041895949.361621 (api-eq.c:43:PtlEQGet() 1263+288): Process entered
+08:000001:3:1041895949.361626 (connection.c:139:ptlrpc_connection_addref() 1266+272): Process leaving (rc=4113414604 : -181552692 : f52db9cc)
+0a:000040:1:1041895949.361630 (api-eq.c:58:PtlEQGet() 1263+304): new_event: f912d240, sequence: 6, eq->size: 1024
+02:000001:3:1041895949.361636 (handler.c:1254:mds_handle() 1266+272): Process entered
+0a:000001:1:1041895949.361639 (api-eq.c:61:PtlEQGet() 1263+304): Process leaving (rc=25 : 25 : 19)
+08:000001:3:1041895949.361645 (pack_generic.c:79:lustre_unpack_msg() 1266+320): Process entered
+08:000001:1:1041895949.361648 (service.c:53:ptlrpc_check_event() 1263+240): Process leaving via out (rc=0 : 0 : 0)
+08:000001:3:1041895949.361653 (pack_generic.c:106:lustre_unpack_msg() 1266+336): Process leaving (rc=0 : 0 : 0)
+08:000001:1:1041895949.361657 (service.c:35:ptlrpc_check_event() 1262+224): Process entered
+02:000002:3:1041895949.361663 (handler.c:1367:mds_handle() 1266+320): @@@ enqueue req x5/t0 o101->MDC_mds1_22c2c_4c29d:-1 lens 312/0 ref 0 fl 0
+0a:000001:1:1041895949.361667 (api-eq.c:43:PtlEQGet() 1262+288): Process entered
+11:000001:3:1041895949.361672 (ldlm_lockd.c:222:ldlm_handle_enqueue() 1266+336): Process entered
+11:010000:3:1041895949.361677 (ldlm_lockd.c:224:ldlm_handle_enqueue() 1266+336): ### server-side enqueue handler START
+0a:000040:1:1041895949.361680 (api-eq.c:58:PtlEQGet() 1262+304): new_event: f912d240, sequence: 6, eq->size: 1024
+11:000001:3:1041895949.361686 (ldlm_lock.c:337:__ldlm_handle2lock() 1266+448): Process entered
+0a:000001:1:1041895949.361690 (api-eq.c:61:PtlEQGet() 1262+304): Process leaving (rc=25 : 25 : 19)
+11:000001:3:1041895949.361695 (ldlm_lock.c:342:__ldlm_handle2lock() 1266+464): Process leaving (rc=0 : 0 : 0)
+08:000001:1:1041895949.361698 (service.c:53:ptlrpc_check_event() 1262+240): Process leaving via out (rc=0 : 0 : 0)
+11:000001:3:1041895949.361704 (ldlm_resource.c:330:ldlm_resource_get() 1266+464): Process entered
+08:000001:1:1041895949.361707 (service.c:35:ptlrpc_check_event() 1261+224): Process entered
+11:000001:3:1041895949.361712 (ldlm_resource.c:282:ldlm_resource_add() 1266+512): Process entered
+0a:000001:1:1041895949.361715 (api-eq.c:43:PtlEQGet() 1261+288): Process entered
+0a:000040:1:1041895949.361718 (api-eq.c:58:PtlEQGet() 1261+304): new_event: f912d240, sequence: 6, eq->size: 1024
+0a:000001:1:1041895949.361722 (api-eq.c:61:PtlEQGet() 1261+304): Process leaving (rc=25 : 25 : 19)
+08:000001:1:1041895949.361726 (service.c:53:ptlrpc_check_event() 1261+240): Process leaving via out (rc=0 : 0 : 0)
+08:000001:1:1041895949.361731 (service.c:35:ptlrpc_check_event() 1260+224): Process entered
+11:000001:3:1041895949.361736 (ldlm_resource.c:318:ldlm_resource_add() 1266+528): Process leaving (rc=4097367824 : -197599472 : f438df10)
+0a:000001:1:1041895949.361741 (api-eq.c:43:PtlEQGet() 1260+288): Process entered
+11:000001:3:1041895949.361745 (ldlm_resource.c:355:ldlm_resource_get() 1266+480): Process leaving (rc=4097367824 : -197599472 : f438df10)
+0a:000040:1:1041895949.361750 (api-eq.c:58:PtlEQGet() 1260+304): new_event: f912d240, sequence: 6, eq->size: 1024
+11:000001:3:1041895949.361756 (ldlm_lock.c:251:ldlm_lock_new() 1266+448): Process entered
+0a:000001:1:1041895949.361758 (api-eq.c:61:PtlEQGet() 1260+304): Process leaving (rc=25 : 25 : 19)
+08:000001:1:1041895949.361763 (service.c:53:ptlrpc_check_event() 1260+240): Process leaving via out (rc=0 : 0 : 0)
+08:000001:1:1041895949.361767 (service.c:35:ptlrpc_check_event() 1259+224): Process entered
+0a:000001:1:1041895949.361771 (api-eq.c:43:PtlEQGet() 1259+288): Process entered
+11:000010:3:1041895949.361776 (ldlm_lock.c:256:ldlm_lock_new() 1266+464): kmalloced 'lock': 184 at f438cec4 (tot 2555179).
+0a:000040:1:1041895949.361780 (api-eq.c:58:PtlEQGet() 1259+304): new_event: f912d240, sequence: 6, eq->size: 1024
+0a:000001:1:1041895949.361785 (api-eq.c:61:PtlEQGet() 1259+304): Process leaving (rc=25 : 25 : 19)
+11:000040:3:1041895949.361791 (ldlm_resource.c:362:ldlm_resource_getref() 1266+480): getref res: f438df10 count: 2
+08:000001:1:1041895949.361794 (service.c:53:ptlrpc_check_event() 1259+240): Process leaving via out (rc=0 : 0 : 0)
+11:000001:3:1041895949.361799 (ldlm_lock.c:282:ldlm_lock_new() 1266+464): Process leaving (rc=4097363652 : -197603644 : f438cec4)
+11:000001:3:1041895949.361804 (ldlm_resource.c:370:ldlm_resource_putref() 1266+448): Process entered
+11:000040:3:1041895949.361808 (ldlm_resource.c:373:ldlm_resource_putref() 1266+448): putref res: f438df10 count: 1
+11:000001:3:1041895949.361812 (ldlm_resource.c:425:ldlm_resource_putref() 1266+464): Process leaving (rc=0 : 0 : 0)
+11:010000:3:1041895949.361817 (ldlm_lockd.c:259:ldlm_handle_enqueue() 1266+400): ### server-side enqueue handler, new lock created ns: mds_server lock: f438cec4 lrc: 2/0,0 mode: --/PW res: 12/2045011249 rrc: 1 type: PLN remote: 0xf3481ec4
+11:000001:3:1041895949.361825 (ldlm_lock.c:724:ldlm_lock_enqueue() 1266+400): Process entered
+02:000001:3:1041895949.361830 (handler.c:1598:ldlm_intent_policy() 1266+592): Process entered
+02:010000:3:1041895949.361834 (handler.c:1617:ldlm_intent_policy() 1266+656): ### intent policy, opc: mkdir ns: mds_server lock: f438cec4 lrc: 2/0,0 mode: --/PW res: 12/2045011249 rrc: 1 type: PLN remote: 0xf3481ec4
+08:000010:3:1041895949.361843 (pack_generic.c:42:lustre_pack_msg() 1266+672): kmalloced '*msg': 320 at f4bcdc00 (tot 19153695)
+02:000001:3:1041895949.361849 (mds_updates.c:465:mds_update_unpack() 1266+800): Process entered
+02:000001:3:1041895949.361854 (mds_updates.c:352:mds_create_unpack() 1266+848): Process entered
+02:000001:3:1041895949.361857 (mds_updates.c:379:mds_create_unpack() 1266+864): Process leaving (rc=0 : 0 : 0)
+02:000001:3:1041895949.361861 (mds_updates.c:477:mds_update_unpack() 1266+816): Process leaving (rc=0 : 0 : 0)
+02:000001:3:1041895949.361868 (mds_reint.c:199:mds_reint_create() 1266+1008): Process entered
+02:002000:3:1041895949.361873 (handler.c:239:mds_fid2dentry() 1266+1168): --> mds_fid2dentry: sb f511c800
+02:000001:3:1041895949.361880 (handler.c:197:mds_fid2locked_dentry() 1266+1120): Process entered
+11:000001:3:1041895949.361884 (ldlm_request.c:329:ldlm_match_or_enqueue() 1266+1216): Process entered
+11:000001:3:1041895949.361888 (ldlm_lock.c:632:ldlm_lock_match() 1266+1280): Process entered
+11:000001:3:1041895949.361892 (ldlm_resource.c:330:ldlm_resource_get() 1266+1344): Process entered
+11:000040:3:1041895949.361895 (ldlm_resource.c:362:ldlm_resource_getref() 1266+1376): getref res: f438df10 count: 2
+11:000001:3:1041895949.361900 (ldlm_resource.c:344:ldlm_resource_get() 1266+1360): Process leaving (rc=4097367824 : -197599472 : f438df10)
+11:000001:3:1041895949.361905 (ldlm_lock.c:659:ldlm_lock_match() 1266+1280): Process leaving
+11:000001:3:1041895949.361909 (ldlm_resource.c:370:ldlm_resource_putref() 1266+1328): Process entered
+11:000040:3:1041895949.361912 (ldlm_resource.c:373:ldlm_resource_putref() 1266+1328): putref res: f438df10 count: 1
+11:000001:3:1041895949.361916 (ldlm_resource.c:425:ldlm_resource_putref() 1266+1344): Process leaving (rc=0 : 0 : 0)
+11:010000:3:1041895949.361920 (ldlm_lock.c:672:ldlm_lock_match() 1266+1280): ### not matched
+11:000001:3:1041895949.361924 (ldlm_request.c:177:ldlm_cli_enqueue() 1266+1328): Process entered
+11:000001:3:1041895949.361927 (ldlm_request.c:117:ldlm_cli_enqueue_local() 1266+1424): Process entered
+11:000001:3:1041895949.361931 (ldlm_resource.c:330:ldlm_resource_get() 1266+1552): Process entered
+11:000040:3:1041895949.361934 (ldlm_resource.c:362:ldlm_resource_getref() 1266+1584): getref res: f438df10 count: 2
+11:000001:3:1041895949.361938 (ldlm_resource.c:344:ldlm_resource_get() 1266+1568): Process leaving (rc=4097367824 : -197599472 : f438df10)
+11:000001:3:1041895949.361943 (ldlm_lock.c:251:ldlm_lock_new() 1266+1536): Process entered
+11:000010:3:1041895949.361947 (ldlm_lock.c:256:ldlm_lock_new() 1266+1552): kmalloced 'lock': 184 at f438ce04 (tot 2555363).
+11:000040:3:1041895949.361955 (ldlm_resource.c:362:ldlm_resource_getref() 1266+1568): getref res: f438df10 count: 3
+11:000001:3:1041895949.361959 (ldlm_lock.c:282:ldlm_lock_new() 1266+1552): Process leaving (rc=4097363460 : -197603836 : f438ce04)
+11:000001:3:1041895949.361964 (ldlm_resource.c:370:ldlm_resource_putref() 1266+1536): Process entered
+11:000040:3:1041895949.361967 (ldlm_resource.c:373:ldlm_resource_putref() 1266+1536): putref res: f438df10 count: 2
+11:000001:3:1041895949.361971 (ldlm_resource.c:425:ldlm_resource_putref() 1266+1552): Process leaving (rc=0 : 0 : 0)
+11:010000:3:1041895949.361975 (ldlm_request.c:128:ldlm_cli_enqueue_local() 1266+1488): ### client-side local enqueue handler, new lock created ns: mds_server lock: f438ce04 lrc: 2/0,0 mode: --/PW res: 12/2045011249 rrc: 2 type: PLN remote: 0x0
+11:000001:3:1041895949.361983 (ldlm_lock.c:178:ldlm_lock_remove_from_lru() 1266+1488): Process entered
+11:000001:3:1041895949.361986 (ldlm_lock.c:186:ldlm_lock_remove_from_lru() 1266+1488): Process leaving
+11:010000:3:1041895949.361990 (ldlm_lock.c:450:ldlm_lock_addref_internal() 1266+1520): ### ldlm_lock_addref(PW) ns: mds_server lock: f438ce04 lrc: 3/0,1 mode: --/PW res: 12/2045011249 rrc: 2 type: PLN remote: 0x0
+11:000001:3:1041895949.361997 (ldlm_lock.c:724:ldlm_lock_enqueue() 1266+1488): Process entered
+11:000001:3:1041895949.362001 (ldlm_lock.c:544:ldlm_lock_compat() 1266+1536): Process entered
+11:000001:3:1041895949.362005 (ldlm_lock.c:555:ldlm_lock_compat() 1266+1552): Process leaving (rc=1 : 1 : 1)
+11:000001:3:1041895949.362009 (ldlm_lock.c:564:ldlm_grant_lock() 1266+1520): Process entered
+11:001000:3:1041895949.362014 (ldlm_resource.c:504:ldlm_resource_dump() 1266+1888): --- Resource: f438df10 (c 79e46531 0) (rc: 2)
+11:001000:3:1041895949.362018 (ldlm_resource.c:506:ldlm_resource_dump() 1266+1872): Namespace: f61af4bc (mds_server)
+11:001000:3:1041895949.362023 (ldlm_resource.c:507:ldlm_resource_dump() 1266+1872): Parent: 00000000, root: 00000000
+11:001000:3:1041895949.362027 (ldlm_resource.c:509:ldlm_resource_dump() 1266+1872): Granted locks:
+11:001000:3:1041895949.362030 (ldlm_resource.c:516:ldlm_resource_dump() 1266+1872): Converting locks:
+11:001000:3:1041895949.362033 (ldlm_resource.c:523:ldlm_resource_dump() 1266+1872): Waiting locks:
+11:001000:3:1041895949.362038 (ldlm_lock.c:1023:ldlm_lock_dump() 1266+1728):   -- Lock dump: f438ce04 (0 0 0 0)
+11:001000:3:1041895949.362042 (ldlm_lock.c:1029:ldlm_lock_dump() 1266+1728):   Node: local
+11:001000:3:1041895949.362046 (ldlm_lock.c:1030:ldlm_lock_dump() 1266+1728):   Parent: 00000000
+11:001000:3:1041895949.362049 (ldlm_lock.c:1032:ldlm_lock_dump() 1266+1744):   Resource: f438df10 (12)
+11:001000:3:1041895949.362053 (ldlm_lock.c:1034:ldlm_lock_dump() 1266+1728):   Requested mode: 2, granted mode: 0
+11:001000:3:1041895949.362057 (ldlm_lock.c:1036:ldlm_lock_dump() 1266+1728):   Readers: 0 ; Writers; 1
+11:000001:3:1041895949.362061 (ldlm_lock.c:577:ldlm_grant_lock() 1266+1520): Process leaving
+11:000001:3:1041895949.362065 (ldlm_lock.c:799:ldlm_lock_enqueue() 1266+1488): Process leaving
+11:010000:3:1041895949.362068 (ldlm_request.c:145:ldlm_cli_enqueue_local() 1266+1424): ### client-side local enqueue handler END (lock f438ce04)
+11:000001:3:1041895949.362073 (ldlm_request.c:62:ldlm_completion_ast() 1266+1568): Process entered
+11:000001:3:1041895949.362076 (ldlm_request.c:69:ldlm_completion_ast() 1266+1584): Process leaving (rc=0 : 0 : 0)
+11:010000:3:1041895949.362081 (ldlm_request.c:150:ldlm_cli_enqueue_local() 1266+1488): ### client-side local enqueue END ns: mds_server lock: f438ce04 lrc: 3/0,1 mode: PW/PW res: 12/2045011249 rrc: 2 type: PLN remote: 0x0
+11:000001:3:1041895949.362087 (ldlm_request.c:151:ldlm_cli_enqueue_local() 1266+1424): Process leaving
+11:000001:3:1041895949.362091 (ldlm_lock.c:151:ldlm_lock_put() 1266+1472): Process entered
+11:000001:3:1041895949.362094 (ldlm_lock.c:173:ldlm_lock_put() 1266+1472): Process leaving
+11:000001:3:1041895949.362098 (ldlm_request.c:338:ldlm_match_or_enqueue() 1266+1232): Process leaving (rc=0 : 0 : 0)
+02:000001:3:1041895949.362102 (handler.c:213:mds_fid2locked_dentry() 1266+1136): Process leaving (rc=4129418200 : -165549096 : f621ebd8)
+02:000002:3:1041895949.362107 (mds_reint.c:221:mds_reint_create() 1266+1024): parent ino 12 name hello mode 40755
+11:000001:3:1041895949.362111 (ldlm_lock.c:337:__ldlm_handle2lock() 1266+1088): Process entered
+11:000001:3:1041895949.362115 (ldlm_lock.c:380:__ldlm_handle2lock() 1266+1088): Process leaving
+11:001000:3:1041895949.362119 (ldlm_lock.c:1023:ldlm_lock_dump() 1266+1200):   -- Lock dump: f438ce04 (0 0 0 0)
+11:001000:3:1041895949.362123 (ldlm_lock.c:1029:ldlm_lock_dump() 1266+1200):   Node: local
+11:001000:3:1041895949.362127 (ldlm_lock.c:1030:ldlm_lock_dump() 1266+1200):   Parent: 00000000
+11:001000:3:1041895949.362130 (ldlm_lock.c:1032:ldlm_lock_dump() 1266+1216):   Resource: f438df10 (12)
+11:001000:3:1041895949.362135 (ldlm_lock.c:1034:ldlm_lock_dump() 1266+1200):   Requested mode: 2, granted mode: 2
+11:001000:3:1041895949.362138 (ldlm_lock.c:1036:ldlm_lock_dump() 1266+1200):   Readers: 0 ; Writers; 1
+11:000001:3:1041895949.362142 (ldlm_lock.c:151:ldlm_lock_put() 1266+1056): Process entered
+11:000001:3:1041895949.362145 (ldlm_lock.c:173:ldlm_lock_put() 1266+1056): Process leaving
+02:000001:3:1041895949.362157 (mds_reint.c:54:mds_start_transno() 1266+1040): Process entered
+02:000001:3:1041895949.362232 (mds_reint.c:288:mds_reint_create() 1266+1008): Process leaving
+02:000002:3:1041895949.362237 (mds_reint.c:340:mds_reint_create() 1266+1008): created ino 15
+02:000001:3:1041895949.362244 (mds_reint.c:353:mds_reint_create() 1266+1008): Process leaving
+0e:000008:3:1041895949.362276 (fsfilt_extN.c:344:fsfilt_extN_set_last_rcvd() 1266+1152): set callback for last_rcvd: 1
+02:000002:3:1041895949.362296 (mds_reint.c:89:mds_finish_transno() 1266+1104): wrote trans #1 for client MDC_mds1_22c2c_4c29d at #0: written = 128
+02:000001:3:1041895949.362301 (mds_reint.c:92:mds_finish_transno() 1266+1104): Process leaving via out (rc=0 : 0 : 0)
+11:000001:3:1041895949.362307 (ldlm_lock.c:337:__ldlm_handle2lock() 1266+1104): Process entered
+11:000001:3:1041895949.362311 (ldlm_lock.c:380:__ldlm_handle2lock() 1266+1104): Process leaving
+11:000001:3:1041895949.362315 (ldlm_lock.c:461:ldlm_lock_decref() 1266+1056): Process entered
+11:010000:3:1041895949.362319 (ldlm_lock.c:466:ldlm_lock_decref() 1266+1120): ### ldlm_lock_decref(PW) ns: mds_server lock: f438ce04 lrc: 3/0,1 mode: PW/PW res: 12/2045011249 rrc: 2 type: PLN remote: 0x0
+11:000001:3:1041895949.362326 (ldlm_lock.c:151:ldlm_lock_put() 1266+1104): Process entered
+11:000001:3:1041895949.362329 (ldlm_lock.c:173:ldlm_lock_put() 1266+1104): Process leaving
+11:000001:3:1041895949.362332 (ldlm_lock.c:151:ldlm_lock_put() 1266+1104): Process entered
+11:000001:3:1041895949.362336 (ldlm_lock.c:173:ldlm_lock_put() 1266+1104): Process leaving
+11:000001:3:1041895949.362339 (ldlm_lock.c:502:ldlm_lock_decref() 1266+1056): Process leaving
+11:000001:3:1041895949.362346 (ldlm_lock.c:289:ldlm_lock_change_resource() 1266+640): Process entered
+11:000001:3:1041895949.362350 (ldlm_resource.c:330:ldlm_resource_get() 1266+704): Process entered
+11:000001:3:1041895949.362354 (ldlm_resource.c:282:ldlm_resource_add() 1266+752): Process entered
+11:000001:3:1041895949.362358 (ldlm_resource.c:318:ldlm_resource_add() 1266+768): Process leaving (rc=4097367700 : -197599596 : f438de94)
+11:000001:3:1041895949.362363 (ldlm_resource.c:355:ldlm_resource_get() 1266+720): Process leaving (rc=4097367700 : -197599596 : f438de94)
+11:000001:3:1041895949.362368 (ldlm_resource.c:370:ldlm_resource_putref() 1266+688): Process entered
+11:000040:3:1041895949.362372 (ldlm_resource.c:373:ldlm_resource_putref() 1266+688): putref res: f438df10 count: 1
+11:000001:3:1041895949.362376 (ldlm_resource.c:425:ldlm_resource_putref() 1266+704): Process leaving (rc=0 : 0 : 0)
+11:000001:3:1041895949.362380 (ldlm_lock.c:315:ldlm_lock_change_resource() 1266+656): Process leaving (rc=0 : 0 : 0)
+02:010000:3:1041895949.362384 (handler.c:1720:ldlm_intent_policy() 1266+656): ### intent policy, old res 12 ns: mds_server lock: f438cec4 lrc: 2/0,0 mode: --/PW res: 15/2045011252 rrc: 1 type: PLN remote: 0xf3481ec4
+02:000001:3:1041895949.362392 (handler.c:1721:ldlm_intent_policy() 1266+608): Process leaving (rc=300 : 300 : 12c)
+11:000001:3:1041895949.362396 (ldlm_lock.c:544:ldlm_lock_compat() 1266+448): Process entered
+11:000001:3:1041895949.362400 (ldlm_lock.c:555:ldlm_lock_compat() 1266+464): Process leaving (rc=1 : 1 : 1)
+11:000001:3:1041895949.362404 (ldlm_lock.c:564:ldlm_grant_lock() 1266+432): Process entered
+11:001000:3:1041895949.362408 (ldlm_resource.c:504:ldlm_resource_dump() 1266+800): --- Resource: f438de94 (f 79e46534 0) (rc: 1)
+11:001000:3:1041895949.362412 (ldlm_resource.c:506:ldlm_resource_dump() 1266+784): Namespace: f61af4bc (mds_server)
+11:001000:3:1041895949.362416 (ldlm_resource.c:507:ldlm_resource_dump() 1266+784): Parent: 00000000, root: 00000000
+11:001000:3:1041895949.362420 (ldlm_resource.c:509:ldlm_resource_dump() 1266+784): Granted locks:
+11:001000:3:1041895949.362424 (ldlm_resource.c:516:ldlm_resource_dump() 1266+784): Converting locks:
+11:001000:3:1041895949.362427 (ldlm_resource.c:523:ldlm_resource_dump() 1266+784): Waiting locks:
+11:001000:3:1041895949.362431 (ldlm_lock.c:1023:ldlm_lock_dump() 1266+640):   -- Lock dump: f438cec4 (0 0 0 0)
+11:001000:3:1041895949.362435 (ldlm_lock.c:1027:ldlm_lock_dump() 1266+656):   Node: NID 7f000001 (rhandle: 0xf3481ec4)
+11:001000:3:1041895949.362440 (ldlm_lock.c:1030:ldlm_lock_dump() 1266+640):   Parent: 00000000
+11:001000:3:1041895949.362443 (ldlm_lock.c:1032:ldlm_lock_dump() 1266+656):   Resource: f438de94 (15)
+11:001000:3:1041895949.362447 (ldlm_lock.c:1034:ldlm_lock_dump() 1266+640):   Requested mode: 2, granted mode: 0
+11:001000:3:1041895949.362451 (ldlm_lock.c:1036:ldlm_lock_dump() 1266+640):   Readers: 0 ; Writers; 0
+11:000001:3:1041895949.362455 (ldlm_lock.c:577:ldlm_grant_lock() 1266+432): Process leaving
+11:000001:3:1041895949.362458 (ldlm_lock.c:799:ldlm_lock_enqueue() 1266+400): Process leaving
+11:000001:3:1041895949.362462 (ldlm_lockd.c:287:ldlm_handle_enqueue() 1266+336): Process leaving
+11:010000:3:1041895949.362466 (ldlm_lockd.c:291:ldlm_handle_enqueue() 1266+400): ### server-side enqueue handler, sending reply(err=0) ns: mds_server lock: f438cec4 lrc: 2/0,0 mode: PW/PW res: 15/2045011252 rrc: 1 type: PLN remote: 0xf3481ec4
+11:000001:3:1041895949.362474 (ldlm_lock.c:861:ldlm_reprocess_all() 1266+384): Process entered
+11:000001:3:1041895949.362477 (ldlm_lock.c:813:ldlm_reprocess_queue() 1266+432): Process entered
+11:000001:3:1041895949.362480 (ldlm_lock.c:828:ldlm_reprocess_queue() 1266+448): Process leaving (rc=0 : 0 : 0)
+11:000001:3:1041895949.362484 (ldlm_lock.c:813:ldlm_reprocess_queue() 1266+432): Process entered
+11:000001:3:1041895949.362488 (ldlm_lock.c:828:ldlm_reprocess_queue() 1266+448): Process leaving (rc=0 : 0 : 0)
+11:000001:3:1041895949.362492 (ldlm_lock.c:835:ldlm_run_ast_work() 1266+432): Process entered
+11:000001:3:1041895949.362495 (ldlm_lock.c:854:ldlm_run_ast_work() 1266+432): Process leaving
+11:000001:3:1041895949.362498 (ldlm_lock.c:880:ldlm_reprocess_all() 1266+384): Process leaving
+11:000001:3:1041895949.362502 (ldlm_lock.c:151:ldlm_lock_put() 1266+384): Process entered
+11:000001:3:1041895949.362505 (ldlm_lock.c:173:ldlm_lock_put() 1266+384): Process leaving
+11:010000:3:1041895949.362508 (ldlm_lockd.c:299:ldlm_handle_enqueue() 1266+336): ### server-side enqueue handler END (lock f438cec4)
+02:000001:3:1041895949.362513 (handler.c:1388:mds_handle() 1266+272): Process leaving
+02:000040:3:1041895949.362516 (handler.c:1400:mds_handle() 1266+288): last_rcvd ~1, last_committed 0, xid 5
+02:000200:3:1041895949.362520 (handler.c:1418:mds_handle() 1266+272): sending reply
+0a:000200:3:1041895949.362527 (lib-dispatch.c:54:lib_dispatch() 1266+720): 2130706433: API call PtlMDBind (13)
+0a:004000:3:1041895949.362532 (lib-md.c:261:do_PtlMDBind() 1266+752): taking state lock
+0a:004000:3:1041895949.362538 (lib-md.c:269:do_PtlMDBind() 1266+752): releasing state lock
+08:000200:3:1041895949.362541 (niobuf.c:77:ptl_send_buf() 1266+400): Sending 320 bytes to portal 10, xid 5
+0a:000200:3:1041895949.362547 (lib-dispatch.c:54:lib_dispatch() 1266+720): 2130706433: API call PtlPut (19)
+0a:004000:3:1041895949.362551 (lib-move.c:737:do_PtlPut() 1266+1040): taking state lock
+0a:000200:3:1041895949.362556 (lib-move.c:745:do_PtlPut() 1266+1056): PtlPut -> 2130706433: 0
+0a:004000:3:1041895949.362561 (lib-move.c:800:do_PtlPut() 1266+1040): releasing state lock
+0b:000200:3:1041895949.362565 (socknal_cb.c:631:ksocknal_send() 1266+1168): sending %zd bytes from [320](00000001,-188949504)... to nid: 0x0x7f00000100000140 pid 0
+0b:000200:3:1041895949.362573 (socknal.c:484:ksocknal_get_conn() 1266+1200): got conn [f5060200] -> 0x0x7f000001 (2)
+0b:000200:3:1041895949.362579 (socknal_cb.c:580:ksocknal_launch_packet() 1266+1200): type 1, nob 392 niov 2
+08:000001:3:1041895949.362586 (connection.c:109:ptlrpc_put_connection() 1266+272): Process entered
+08:000040:3:1041895949.362590 (connection.c:117:ptlrpc_put_connection() 1266+272): connection=f52db9cc refcount 1
+0b:000001:1:1041895949.362594 (socknal_cb.c:234:ksocknal_sendmsg() 1114+352): Process entered
+08:000001:3:1041895949.362599 (connection.c:130:ptlrpc_put_connection() 1266+288): Process leaving (rc=0 : 0 : 0)
+08:000001:3:1041895949.362603 (service.c:35:ptlrpc_check_event() 1266+224): Process entered
+0a:000001:3:1041895949.362607 (api-eq.c:43:PtlEQGet() 1266+288): Process entered
+0a:000040:3:1041895949.362610 (api-eq.c:58:PtlEQGet() 1266+304): new_event: f912d240, sequence: 6, eq->size: 1024
+0a:000001:3:1041895949.362615 (api-eq.c:61:PtlEQGet() 1266+304): Process leaving (rc=25 : 25 : 19)
+08:000001:3:1041895949.362619 (service.c:53:ptlrpc_check_event() 1266+240): Process leaving via out (rc=0 : 0 : 0)
+0b:000001:1:1041895949.362622 (socknal_cb.c:1300:ksocknal_data_ready() 1114+1344): Process entered
+08:000001:3:1041895949.362627 (service.c:35:ptlrpc_check_event() 1266+224): Process entered
+0b:000001:1:1041895949.362630 (socknal_cb.c:1338:ksocknal_data_ready() 1114+1344): Process leaving
+0a:000001:3:1041895949.362635 (api-eq.c:43:PtlEQGet() 1266+288): Process entered
+0b:000001:1:1041895949.362637 (socknal_cb.c:305:ksocknal_sendmsg() 1114+368): Process leaving (rc=392 : 392 : 188)
+0b:000200:1:1041895949.362642 (socknal_cb.c:503:ksocknal_process_transmit() 1114+240): send(392) 392
+0a:000040:3:1041895949.362647 (api-eq.c:58:PtlEQGet() 1266+304): new_event: f912d240, sequence: 6, eq->size: 1024
+0b:001000:1:1041895949.362651 (socknal.h:241:ksocknal_put_conn() 1114+256): putting conn[f5060200] -> 0x0x7f000001 (3)
+0a:000001:3:1041895949.362658 (api-eq.c:61:PtlEQGet() 1266+304): Process leaving (rc=25 : 25 : 19)
+0b:000001:1:1041895949.362661 (socknal_cb.c:438:ksocknal_tx_done() 1114+288): Process entered
+08:000001:3:1041895949.362666 (service.c:53:ptlrpc_check_event() 1266+240): Process leaving via out (rc=0 : 0 : 0)
+0a:004000:1:1041895949.362670 (lib-msg.c:54:lib_finalize() 1114+448): taking state lock
+0b:000200:1:1041895949.362674 (socknal_cb.c:58:ksocknal_write() 1114+528): 0x0x7f000001: writing 92 bytes from f43e3d54 -> f8fe9240
+0b:000200:1:1041895949.362679 (socknal_cb.c:58:ksocknal_write() 1114+528): 0x0x7f000001: writing 4 bytes from f43e3db0 -> f8fe929c
+0b:000200:1:1041895949.362684 (socknal_cb.c:69:ksocknal_callback() 1114+496): 0x0x7f000001: callback eq f618ff44 ev f43e3d54
+08:000001:1:1041895949.362689 (events.c:62:reply_out_callback() 1114+528): Process entered
+08:000010:1:1041895949.362693 (events.c:68:reply_out_callback() 1114+544): kfreed 'ev->mem_desc.start': 320 at f4bcdc00 (tot 19153375).
+08:000001:1:1041895949.362698 (events.c:75:reply_out_callback() 1114+544): Process leaving (rc=1 : 1 : 1)
+0a:000200:1:1041895949.362702 (lib-md.c:34:lib_md_unlink() 1114+496): Unlinking md f34caad4
+0b:000200:1:1041895949.362706 (socknal_cb.c:100:ksocknal_invalidate() 1114+544): 0x0x7f000001: invalidating f4bcdc00 : %zd
+0a:004000:1:1041895949.362711 (lib-msg.c:134:lib_finalize() 1114+448): releasing state lock
+0b:000001:1:1041895949.362714 (socknal_cb.c:465:ksocknal_tx_done() 1114+288): Process leaving
+0b:001000:1:1041895949.362717 (socknal.h:241:ksocknal_put_conn() 1114+256): putting conn[f5060200] -> 0x0x7f000001 (2)
+0b:000200:1:1041895949.362722 (socknal_cb.c:1054:ksocknal_process_receive() 1114+288): sched f4fd5d10 conn f507ba00
+0b:000200:1:1041895949.362727 (socknal_cb.c:1094:ksocknal_process_receive() 1114+304): f507ba00 read(72) 72
+0a:004000:1:1041895949.362732 (lib-move.c:217:parse_put() 1114+608): taking state lock
+0a:000001:1:1041895949.362736 (lib-move.c:42:lib_find_me() 1114+720): Process entered
+0a:000200:1:1041895949.362739 (lib-move.c:45:lib_find_me() 1114+752): Request from 2130706433.0 of length 320 into portal 10 MB=0x5
+0a:000001:1:1041895949.362744 (lib-move.c:110:lib_find_me() 1114+736): Process leaving (rc=4121136860 : -173830436 : f5a38edc)
+0a:000200:1:1041895949.362749 (lib-move.c:246:parse_put() 1114+656): Incoming put index a from 2130706433/0 of length 320/320 into md f5a116b4 [1](f5087c00,320)... + 0
+0a:004000:1:1041895949.362756 (lib-move.c:301:parse_put() 1114+608): releasing state lock
+0b:000200:1:1041895949.362761 (socknal_cb.c:1094:ksocknal_process_receive() 1114+304): f507ba00 read(320) 320
+0a:004000:1:1041895949.362766 (lib-msg.c:54:lib_finalize() 1114+448): taking state lock
+0b:000200:1:1041895949.362769 (socknal_cb.c:58:ksocknal_write() 1114+528): 0x0x7f000001: writing 92 bytes from f43e3d54 -> f9002240
+0b:000200:1:1041895949.362774 (socknal_cb.c:58:ksocknal_write() 1114+528): 0x0x7f000001: writing 4 bytes from f43e3db0 -> f900229c
+0b:000200:1:1041895949.362779 (socknal_cb.c:69:ksocknal_callback() 1114+496): 0x0x7f000001: callback eq f618ff1c ev f43e3d54
+08:000001:1:1041895949.362784 (events.c:84:reply_in_callback() 1114+528): Process entered
+08:000001:1:1041895949.362788 (events.c:110:reply_in_callback() 1114+544): Process leaving (rc=1 : 1 : 1)
+0a:000200:1:1041895949.362792 (lib-md.c:34:lib_md_unlink() 1114+496): Unlinking md f5a116b4
+0b:000200:1:1041895949.362796 (socknal_cb.c:100:ksocknal_invalidate() 1114+544): 0x0x7f000001: invalidating f5087c00 : %zd
+0b:000200:1:1041895949.362801 (socknal_cb.c:124:ksocknal_printf() 1114+848): 2130706433: Unlinking ME 0
+0a:004000:1:1041895949.362806 (lib-msg.c:134:lib_finalize() 1114+448): releasing state lock
+0b:000200:1:1041895949.362809 (socknal_cb.c:1054:ksocknal_process_receive() 1114+288): sched f4fd5d10 conn f507ba00
+0b:000200:1:1041895949.362814 (socknal_cb.c:1094:ksocknal_process_receive() 1114+304): f507ba00 read(72) -11
+0b:001000:1:1041895949.362818 (socknal.h:241:ksocknal_put_conn() 1114+304): putting conn[f507ba00] -> 0x0x7f000001 (2)
+08:000001:1:1041895949.362824 (client.c:379:ptlrpc_check_reply() 1294+1092): Process entered
+08:000001:1:1041895949.362827 (client.c:383:ptlrpc_check_reply() 1294+1108): Process leaving via out (rc=1 : 1 : 1)
+08:000200:1:1041895949.362831 (client.c:404:ptlrpc_check_reply() 1294+1140): @@@ rc = 1 for req x5/t1 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 1 fl 2
+08:000200:1:1041895949.362837 (client.c:667:ptlrpc_queue_wait() 1294+1108): @@@ -- done sleeping req x5/t1 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 1 fl 2
+08:000001:1:1041895949.362843 (pack_generic.c:79:lustre_unpack_msg() 1294+1108): Process entered
+08:000001:1:1041895949.362846 (pack_generic.c:106:lustre_unpack_msg() 1294+1124): Process leaving (rc=0 : 0 : 0)
+08:000200:1:1041895949.362850 (client.c:716:ptlrpc_queue_wait() 1294+1108): @@@ status 0
+ req x5/t1 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 1 fl 2
+08:000001:1:1041895949.362856 (client.c:453:ptlrpc_free_committed() 1294+1124): Process entered
+08:080000:1:1041895949.362860 (client.c:460:ptlrpc_free_committed() 1294+1140): committing for xid 5, last_committed 0
+08:080000:1:1041895949.362864 (client.c:472:ptlrpc_free_committed() 1294+1172): @@@ stopping search req x5/t1 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 2 fl 2
+08:000001:1:1041895949.362869 (client.c:481:ptlrpc_free_committed() 1294+1124): Process leaving
+08:000001:1:1041895949.362873 (client.c:411:ptlrpc_check_status() 1294+1092): Process entered
+08:000001:1:1041895949.362876 (client.c:426:ptlrpc_check_status() 1294+1108): Process leaving (rc=0 : 0 : 0)
+08:000001:1:1041895949.362880 (client.c:766:ptlrpc_queue_wait() 1294+1060): Process leaving
+11:000040:1:1041895949.362883 (ldlm_request.c:255:ldlm_cli_enqueue() 1294+868): local: f3481ec4, remote: f438cec4, flags: 4097
+11:000040:1:1041895949.362889 (ldlm_request.c:283:ldlm_cli_enqueue() 1294+852): remote intent success, locking 15 instead of 12
+11:000001:1:1041895949.362893 (ldlm_lock.c:289:ldlm_lock_change_resource() 1294+900): Process entered
+11:000001:1:1041895949.362897 (ldlm_resource.c:330:ldlm_resource_get() 1294+964): Process entered
+11:000001:1:1041895949.362901 (ldlm_resource.c:282:ldlm_resource_add() 1294+1012): Process entered
+11:000001:1:1041895949.362905 (ldlm_resource.c:318:ldlm_resource_add() 1294+1028): Process leaving (rc=4081594004 : -213373292 : f3482e94)
+11:000001:1:1041895949.362910 (ldlm_resource.c:355:ldlm_resource_get() 1294+980): Process leaving (rc=4081594004 : -213373292 : f3482e94)
+11:000001:1:1041895949.362915 (ldlm_resource.c:370:ldlm_resource_putref() 1294+948): Process entered
+11:000040:1:1041895949.362918 (ldlm_resource.c:373:ldlm_resource_putref() 1294+948): putref res: f3482f10 count: 0
+11:000001:1:1041895949.362922 (ldlm_resource.c:379:ldlm_resource_putref() 1294+948): Process entered
+11:000001:1:1041895949.362926 (ldlm_resource.c:422:ldlm_resource_putref() 1294+948): Process leaving
+11:000001:1:1041895949.362929 (ldlm_resource.c:425:ldlm_resource_putref() 1294+964): Process leaving (rc=1 : 1 : 1)
+11:000001:1:1041895949.362933 (ldlm_lock.c:315:ldlm_lock_change_resource() 1294+916): Process leaving (rc=0 : 0 : 0)
+11:010000:1:1041895949.362937 (ldlm_request.c:291:ldlm_cli_enqueue() 1294+916): ### client-side enqueue, new resource ns: MDC_mds1 lock: f3481ec4 lrc: 3/0,1 mode: --/PW res: 15/2045011252 rrc: 1 type: PLN remote: 0xf438cec4
+11:000001:1:1041895949.362944 (ldlm_lock.c:724:ldlm_lock_enqueue() 1294+916): Process entered
+11:000001:1:1041895949.362949 (ldlm_lock.c:564:ldlm_grant_lock() 1294+948): Process entered
+11:001000:1:1041895949.362953 (ldlm_resource.c:504:ldlm_resource_dump() 1294+1316): --- Resource: f3482e94 (f 79e46534 0) (rc: 1)
+11:001000:1:1041895949.362958 (ldlm_resource.c:506:ldlm_resource_dump() 1294+1300): Namespace: f6058434 (MDC_mds1)
+11:001000:1:1041895949.362962 (ldlm_resource.c:507:ldlm_resource_dump() 1294+1300): Parent: 00000000, root: 00000000
+11:001000:1:1041895949.362966 (ldlm_resource.c:509:ldlm_resource_dump() 1294+1300): Granted locks:
+11:001000:1:1041895949.362969 (ldlm_resource.c:516:ldlm_resource_dump() 1294+1300): Converting locks:
+11:001000:1:1041895949.362973 (ldlm_resource.c:523:ldlm_resource_dump() 1294+1300): Waiting locks:
+11:001000:1:1041895949.362977 (ldlm_lock.c:1023:ldlm_lock_dump() 1294+1156):   -- Lock dump: f3481ec4 (0 0 0 0)
+11:001000:1:1041895949.362981 (ldlm_lock.c:1029:ldlm_lock_dump() 1294+1156):   Node: local
+11:001000:1:1041895949.362984 (ldlm_lock.c:1030:ldlm_lock_dump() 1294+1156):   Parent: 00000000
+11:001000:1:1041895949.362988 (ldlm_lock.c:1032:ldlm_lock_dump() 1294+1172):   Resource: f3482e94 (15)
+11:001000:1:1041895949.362992 (ldlm_lock.c:1034:ldlm_lock_dump() 1294+1156):   Requested mode: 2, granted mode: 0
+11:001000:1:1041895949.362996 (ldlm_lock.c:1036:ldlm_lock_dump() 1294+1156):   Readers: 0 ; Writers; 1
+11:000001:1:1041895949.362999 (ldlm_lock.c:577:ldlm_grant_lock() 1294+948): Process leaving
+11:000001:1:1041895949.363003 (ldlm_lock.c:778:ldlm_lock_enqueue() 1294+932): Process leaving via out (rc=0 : 0 : 0)
+11:000001:1:1041895949.363008 (ldlm_request.c:62:ldlm_completion_ast() 1294+996): Process entered
+11:000001:1:1041895949.363011 (ldlm_request.c:74:ldlm_completion_ast() 1294+1012): Process leaving (rc=0 : 0 : 0)
+11:010000:1:1041895949.363015 (ldlm_request.c:305:ldlm_cli_enqueue() 1294+916): ### client-side enqueue END ns: MDC_mds1 lock: f3481ec4 lrc: 3/0,1 mode: PW/PW res: 15/2045011252 rrc: 1 type: PLN remote: 0xf438cec4
+11:000001:1:1041895949.363022 (ldlm_request.c:306:ldlm_cli_enqueue() 1294+852): Process leaving
+11:000001:1:1041895949.363025 (ldlm_lock.c:151:ldlm_lock_put() 1294+900): Process entered
+11:000001:1:1041895949.363029 (ldlm_lock.c:173:ldlm_lock_put() 1294+900): Process leaving
+11:000001:1:1041895949.363033 (ldlm_lock.c:337:__ldlm_handle2lock() 1294+788): Process entered
+11:000001:1:1041895949.363037 (ldlm_lock.c:380:__ldlm_handle2lock() 1294+788): Process leaving
+01:010000:1:1041895949.363040 (mdc_request.c:404:mdc_enqueue() 1294+804): ### matching against this ns: MDC_mds1 lock: f3481ec4 lrc: 3/0,1 mode: PW/PW res: 15/2045011252 rrc: 1 type: PLN remote: 0xf438cec4
+11:000001:1:1041895949.363047 (ldlm_lock.c:632:ldlm_lock_match() 1294+804): Process entered
+11:000001:1:1041895949.363051 (ldlm_lock.c:337:__ldlm_handle2lock() 1294+852): Process entered
+11:000001:1:1041895949.363054 (ldlm_lock.c:380:__ldlm_handle2lock() 1294+852): Process leaving
+11:000001:1:1041895949.363057 (ldlm_resource.c:330:ldlm_resource_get() 1294+868): Process entered
+11:000040:1:1041895949.363061 (ldlm_resource.c:362:ldlm_resource_getref() 1294+900): getref res: f3482e94 count: 2
+11:000001:1:1041895949.363065 (ldlm_resource.c:344:ldlm_resource_get() 1294+884): Process leaving (rc=4081594004 : -213373292 : f3482e94)
+11:000001:1:1041895949.363071 (ldlm_lock.c:659:ldlm_lock_match() 1294+804): Process leaving
+11:000001:1:1041895949.363074 (ldlm_resource.c:370:ldlm_resource_putref() 1294+852): Process entered
+11:000040:1:1041895949.363077 (ldlm_resource.c:373:ldlm_resource_putref() 1294+852): putref res: f3482e94 count: 1
+11:000001:1:1041895949.363081 (ldlm_resource.c:425:ldlm_resource_putref() 1294+868): Process leaving (rc=0 : 0 : 0)
+11:010000:1:1041895949.363085 (ldlm_lock.c:672:ldlm_lock_match() 1294+804): ### not matched
+11:000001:1:1041895949.363088 (ldlm_lock.c:151:ldlm_lock_put() 1294+852): Process entered
+11:000001:1:1041895949.363091 (ldlm_lock.c:173:ldlm_lock_put() 1294+852): Process leaving
+11:000001:1:1041895949.363094 (ldlm_lock.c:151:ldlm_lock_put() 1294+788): Process entered
+11:000001:1:1041895949.363098 (ldlm_lock.c:173:ldlm_lock_put() 1294+788): Process leaving
+01:000001:1:1041895949.363101 (mdc_request.c:427:mdc_enqueue() 1294+756): Process leaving (rc=0 : 0 : 0)
+01:080000:1:1041895949.363106 (mdc_request.c:229:mdc_store_inode_generation() 1294+596): @@@ storing generation 79e46534 for ino 15 req x5/t1 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 2 fl 2
+07:000001:1:1041895949.363113 (namei.c:248:ll_intent_lock() 1294+516): Process leaving via out (rc=2 : 2 : 2)
+07:000001:1:1041895949.363117 (namei.c:467:lookup2_finish() 1294+580): Process entered
+08:000001:1:1041895949.363120 (client.c:355:__ptlrpc_req_finished() 1294+644): Process entered
+08:000040:1:1041895949.363124 (client.c:360:__ptlrpc_req_finished() 1294+692): @@@ refcount now 2 req x5/t1 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 3 fl 2
+08:000001:1:1041895949.363129 (client.c:367:__ptlrpc_req_finished() 1294+660): Process leaving (rc=0 : 0 : 0)
+07:000001:1:1041895949.363133 (dcache.c:153:ll_set_dd() 1294+628): Process entered
+07:000010:1:1041895949.363137 (dcache.c:161:ll_set_dd() 1294+644): kmalloced 'de->d_fsdata': 24 at f34af7c4 (tot 19153399)
+07:000001:1:1041895949.363142 (dcache.c:167:ll_set_dd() 1294+644): Process leaving (rc=0 : 0 : 0)
+07:000001:1:1041895949.363147 (namei.c:480:lookup2_finish() 1294+596): Process leaving (rc=0 : 0 : 0)
+07:002000:1:1041895949.363151 (namei.c:366:ll_intent_lock() 1294+516): D_IT DOWN dentry f348762c fsdata f34af7c4 intent: mkdir sem 0
+07:000001:1:1041895949.363156 (namei.c:377:ll_intent_lock() 1294+516): Process leaving (rc=0 : 0 : 0)
+07:000001:1:1041895949.363161 (namei.c:770:ll_mkdir() 1294+316): Process entered
+07:002000:1:1041895949.363165 (namei.c:772:ll_mkdir() 1294+332): D_IT UP dentry f348762c fsdata f34af7c4 intent: mkdir
+07:000001:1:1041895949.363169 (namei.c:512:ll_create_node() 1294+428): Process entered
+07:000001:1:1041895949.363178 (super.c:498:ll_read_inode2() 1294+604): Process entered
+07:000001:1:1041895949.363183 (super.c:535:ll_read_inode2() 1294+604): Process leaving
+11:000001:1:1041895949.363187 (ldlm_lock.c:337:__ldlm_handle2lock() 1294+508): Process entered
+11:000001:1:1041895949.363192 (ldlm_lock.c:380:__ldlm_handle2lock() 1294+508): Process leaving
+11:000001:1:1041895949.363196 (ldlm_lock.c:926:ldlm_lock_set_data() 1294+460): Process entered
+11:000001:1:1041895949.363199 (ldlm_lock.c:151:ldlm_lock_put() 1294+508): Process entered
+11:000001:1:1041895949.363202 (ldlm_lock.c:173:ldlm_lock_put() 1294+508): Process leaving
+11:000001:1:1041895949.363205 (ldlm_lock.c:936:ldlm_lock_set_data() 1294+476): Process leaving (rc=0 : 0 : 0)
+07:000001:1:1041895949.363209 (namei.c:572:ll_create_node() 1294+428): Process leaving
+08:000001:1:1041895949.363213 (client.c:355:__ptlrpc_req_finished() 1294+492): Process entered
+08:000040:1:1041895949.363216 (client.c:360:__ptlrpc_req_finished() 1294+540): @@@ refcount now 1 req x5/t1 o101->NET_localhost_tcp_UUID:12 lens 312/320 ref 2 fl 2
+08:000001:1:1041895949.363221 (client.c:367:__ptlrpc_req_finished() 1294+508): Process leaving (rc=0 : 0 : 0)
+07:000001:1:1041895949.363228 (dir.c:668:ext2_make_empty() 1294+364): Process entered
+07:000001:1:1041895949.363235 (dir.c:699:ext2_make_empty() 1294+364): Process entered
+07:000001:1:1041895949.363238 (namei.c:799:ll_mkdir() 1294+316): Process leaving
+07:000001:1:1041895949.363242 (dcache.c:48:ll_intent_release() 1294+288): Process entered
+11:000001:1:1041895949.363245 (ldlm_lock.c:337:__ldlm_handle2lock() 1294+384): Process entered
+11:000001:1:1041895949.363248 (ldlm_lock.c:380:__ldlm_handle2lock() 1294+384): Process leaving
+11:000001:1:1041895949.363252 (ldlm_lock.c:461:ldlm_lock_decref() 1294+336): Process entered
+11:010000:1:1041895949.363255 (ldlm_lock.c:466:ldlm_lock_decref() 1294+400): ### ldlm_lock_decref(PW) ns: MDC_mds1 lock: f3481ec4 lrc: 3/0,1 mode: PW/PW res: 15/2045011252 rrc: 1 type: PLN remote: 0xf438cec4
+11:000001:1:1041895949.363263 (ldlm_request.c:497:ldlm_cancel_lru() 1294+432): Process entered
+11:000001:1:1041895949.363267 (ldlm_request.c:504:ldlm_cancel_lru() 1294+448): Process leaving (rc=0 : 0 : 0)
+11:000001:1:1041895949.363271 (ldlm_lock.c:151:ldlm_lock_put() 1294+384): Process entered
+11:000001:1:1041895949.363274 (ldlm_lock.c:173:ldlm_lock_put() 1294+384): Process leaving
+11:000001:1:1041895949.363277 (ldlm_lock.c:151:ldlm_lock_put() 1294+384): Process entered
+11:000001:1:1041895949.363281 (ldlm_lock.c:173:ldlm_lock_put() 1294+384): Process leaving
+11:000001:1:1041895949.363284 (ldlm_lock.c:502:ldlm_lock_decref() 1294+336): Process leaving
+07:000001:1:1041895949.363287 (dcache.c:69:ll_intent_release() 1294+288): Process leaving
+02:080000:1:1041895951.200022 (mds_reint.c:47:mds_last_rcvd_cb() 1268+608): got callback for last_rcvd 1: rc = 0
+0a:000001:2:1041895984.651338 (module.c:200:kportal_psdev_open() 1299+420): Process entered
+0a:000001:2:1041895984.651347 (module.c:206:kportal_psdev_open() 1299+436): Process leaving (rc=0 : 0 : 0)
+0a:000001:2:1041896000.985462 (module.c:200:kportal_psdev_open() 1299+420): Process entered
+0a:000001:2:1041896000.985468 (module.c:206:kportal_psdev_open() 1299+436): Process leaving (rc=0 : 0 : 0)
+0a:000001:2:1041896001.007186 (module.c:423:kportal_ioctl() 1299+1284): Process entered
+0a:000001:2:1041896001.007191 (../../include/linux/kp30.h:740:portal_ioctl_getdata() 1299+1332): Process entered
+0a:000001:2:1041896001.007196 (../../include/linux/kp30.h:787:portal_ioctl_getdata() 1299+1332): Process leaving
