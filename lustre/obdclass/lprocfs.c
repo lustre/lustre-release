@@ -527,7 +527,7 @@ int lprocfs_getclass_idx(struct groupspace_index* group, const char* classname)
 {
         unsigned int idx = 0;
 
-        while (group[idx].name != "") {
+        while (group[idx].name != NULL) {
                 if (!strcmp(group[idx].name, classname))
                         return idx;
                 idx++;
