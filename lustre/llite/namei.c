@@ -211,7 +211,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                         /* For link2 also */
                         if (body->valid == 0)
                                 GOTO(neg_req, NULL);
-                        goto iget; /* XXX not sure about this */
+                        goto iget;
                 }
 
                 /* Do a getattr now that we have the lock */
@@ -229,28 +229,28 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                                   valid, symlen, &request);
                 if (err) {
                         CERROR("failure %d inode %Ld\n", err, (long long)ino);
-                        ptlrpc_free_req(request);
-#warning FIXME: must release lock here
-                        RETURN(ERR_PTR(-abs(err)));
+                        GOTO(drop_req, err = -abs(err));
                 }
                 offset = 0;
         } else {
                 struct ll_inode_info *lli = ll_i2info(dir);
-                int type;
+                int mode;
 
                 memcpy(&lli->lli_intent_lock_handle, &lockh, sizeof(lockh));
                 offset = 0;
 
-                ino = ll_inode_by_name(dir, dentry, &type);
-#warning FIXME: handle negative inode case (see old ll_lookup)
+                ino = ll_inode_by_name(dir, dentry, &mode);
+                if (!ino) {
+                        CERROR("inode %*s not found by name\n",
+                               dentry->d_name.len, dentry->d_name.name);
+                        GOTO(drop_lock, err = -ENOENT);
+                }
 
-                err = mdc_getattr(&sbi->ll_mdc_conn, ino, type,
+                err = mdc_getattr(&sbi->ll_mdc_conn, ino, mode,
                                   OBD_MD_FLNOTOBD|OBD_MD_FLEASIZE, 0, &request);
                 if (err) {
                         CERROR("failure %d inode %Ld\n", err, (long long)ino);
-                        ptlrpc_free_req(request);
-#warning FIXME: must release lock here
-                        RETURN(ERR_PTR(-abs(err)));
+                        GOTO(drop_req, err = -abs(err));
                 }
         }
 
@@ -264,9 +264,10 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 lic.lic_lmm = NULL;
 
         /* No rpc's happen during iget4, -ENOMEM's are possible */
+        ino = lic.lic_body->fid1.id;
+        LASSERT(ino != 0);
         inode = iget4(dir->i_sb, ino, ll_find_inode, &lic);
 
-        LASSERT(!IS_ERR(inode));
         if (!inode) {
                 ptlrpc_free_req(request);
                 ll_intent_release(dentry);
@@ -283,6 +284,12 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 ll_intent_release(dentry);
 
         return NULL;
+
+ drop_req:
+        ptlrpc_free_req(request);
+ drop_lock:
+#warning FIXME: must release lock here
+        return ERR_PTR(err);
 }
 
 static struct inode *ll_create_node(struct inode *dir, const char *name,
