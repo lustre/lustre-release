@@ -153,7 +153,7 @@ obd_size filter_grant_space_left(struct obd_export *exp)
         struct obd_device *obd = exp->exp_obd;
         int blockbits = obd->u.filter.fo_sb->s_blocksize_bits;
         unsigned long max_age = jiffies /*- HZ */+1;
-        obd_size left = 0;
+        obd_size tot_granted = obd->u.filter.fo_tot_granted, left = 0;
         int rc;
 
 restat:
@@ -163,17 +163,17 @@ restat:
 
         left = obd->obd_osfs.os_bavail -
                 (obd->obd_osfs.os_bavail >> (blockbits - 3)); /* (d)indirect */
-        if (left > 16)              /* space for llog */
-                left -= 16;
-        else
-                left = 0;
-        left <<= blockbits;
+        if (left > 16) {                                   /* space for llog */
+                left = (left - 16) << blockbits;
+        } else {
+                left = 0 /* << blockbits */;
+        }
 
-        if (left >= obd->u.filter.fo_tot_granted) {
-                left -= obd->u.filter.fo_tot_granted;
+        if (left >= tot_granted) {
+                left -= tot_granted;
         } else {
                 CERROR("granted space "LPU64" more than available "LPU64"\n",
-                       obd->u.filter.fo_tot_granted, left);
+                       tot_granted, left);
                 left = 0;
         }
 
@@ -183,9 +183,10 @@ restat:
                 goto restat;
         }
 
-        CDEBUG(D_SUPER,"free: "LPU64" avail: "LPU64" tot grant left: "LPU64"\n",
+        CDEBUG(D_SUPER,
+               "free: "LPU64" avail: "LPU64" granted "LPU64" left: "LPU64"\n",
                obd->obd_osfs.os_bfree << blockbits,
-               obd->obd_osfs.os_bavail << blockbits, left);
+               obd->obd_osfs.os_bavail << blockbits, tot_granted, left);
 
         return left;
 }
@@ -211,7 +212,7 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
          * might grant "too much" but that's OK because it means we are
          * dirtying a lot on the client and will likely use it up quickly. */
         if (current_grant < want) {
-                grant = min((want >> blockbits) / 4,
+                grant = min((want >> blockbits) / 2,
                             (fs_space_left >> blockbits) / 8);
                 grant <<= blockbits;
 
@@ -254,6 +255,9 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         /* We are currently not supporting multi-obj BRW_READ RPCS at all.
          * When we do this function's dentry cleanup will need to be fixed */
         LASSERT(objcount == 1);
+        LASSERT(obj->ioo_bufcnt > 0);
+
+        filter_grant_incoming(exp, oa);
 
         OBD_ALLOC(fso, objcount * sizeof(*fso));
         if (fso == NULL)
@@ -389,7 +393,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
  * right on through.
  *
  * Caller must hold obd_osfs_lock. */
-static int filter_check_grant(struct obd_export *exp, int objcount,
+static int filter_grant_check(struct obd_export *exp, int objcount,
                               struct fsfilt_objinfo *fso, int niocount,
                               struct niobuf_remote *rnb,
                               struct niobuf_local *lnb, obd_size *left,
@@ -448,10 +452,14 @@ static int filter_check_grant(struct obd_export *exp, int objcount,
                 }
         }
 
+        if (ungranted && fed->fed_grant > 0)
+                CERROR("wrote %lu ungranted with %lu grant\n",
+                       ungranted, fed->fed_grant);
+
         /* Now substract what client have used already.  We don't subtract
          * this from the tot_granted yet, so that other client's can't grab
          * that space before we have actually allocated our blocks.  That
-         * happens in filter_commit_grant() after the writes are done. */
+         * happens in filter_grant_commit() after the writes are done. */
         *left -= ungranted;
         fed->fed_grant -= used;
         fed->fed_pending += used;
@@ -534,7 +542,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         spin_lock(&exp->exp_obd->obd_osfs_lock);
         left = filter_grant_space_left(exp);
 
-        rc = filter_check_grant(exp, objcount, &fso, niocount, nb, res,
+        rc = filter_grant_check(exp, objcount, &fso, niocount, nb, res,
                                 &left, dentry->d_inode);
         if (oa) {
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
@@ -668,7 +676,7 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
         } while (rc != 0);
 }
 
-void filter_commit_grant(struct obd_export *exp, int niocount,
+void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res)
 {
         struct niobuf_local *lnb = res;
