@@ -273,8 +273,8 @@ void ll_truncate(struct inode *inode)
         return;
 } /* ll_truncate */
 
-int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
-                 unsigned long blocknr, int blocksize)
+static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
+                        unsigned long blocknr, int blocksize)
 {
         obd_count bufs_per_obdo = iobuf->nr_pages;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -324,7 +324,6 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         RETURN(rc);
 }
 
-
 int ll_flush_inode_pages(struct inode * inode)
 {
         obd_count        bufs_per_obdo = 0;
@@ -365,8 +364,6 @@ int ll_flush_inode_pages(struct inode * inode)
         OBD_FREE(offset, sizeof(*offset) * bufs_per_obdo);
         RETURN(err);
 }
-
-
 
 struct address_space_operations ll_aops = {
         readpage: ll_readpage,

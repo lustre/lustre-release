@@ -304,7 +304,7 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
 
         if (!md) {
-                CERROR("LOV requires striping ea for destruction\n");
+                CERROR("LOV requires striping ea\n");
                 RETURN(-EINVAL);
         }
 
@@ -361,7 +361,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
 
         if (!md) {
-                CERROR("LOV requires striping ea for desctruction\n");
+                CERROR("LOV requires striping ea\n");
                 RETURN(-EINVAL);
         }
 
@@ -425,7 +425,7 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
 
         if (!md) {
-                CERROR("LOV requires striping ea for desctruction\n");
+                CERROR("LOV requires striping ea\n");
                 RETURN(-EINVAL);
         }
 
@@ -582,7 +582,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
         if (!our_cb)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC(stripeinfo,  stripe_count * sizeof(*stripeinfo));
+        OBD_ALLOC(stripeinfo, stripe_count * sizeof(*stripeinfo));
         if (!stripeinfo)
                 GOTO(out_cbdata, rc = -ENOMEM);
 

@@ -171,6 +171,7 @@ void proc_lustre_remove_obd_entry(const char *name, struct obd_device *obd)
 
                 remove_proc_entry(obd_entry->name, obd_dir);
         }
+        obd->obd_proc_entry = NULL;
 }
 
 void proc_lustre_release_obd_device(struct obd_device *obd)

@@ -134,32 +134,19 @@ static int bulk_source_callback(ptl_event_t *ev)
                (ev->type == PTL_EVENT_SENT) ? "SENT" :
                (ev->type == PTL_EVENT_ACK)  ? "ACK"  : "UNEXPECTED", ev->type);
 
-        LASSERT (ev->type == PTL_EVENT_SENT ||
-                 ev->type == PTL_EVENT_ACK);
+        LASSERT (ev->type == PTL_EVENT_SENT || ev->type == PTL_EVENT_ACK);
 
         LASSERT (atomic_read (&desc->bd_source_callback_count) > 0 &&
                  atomic_read (&desc->bd_source_callback_count) <= 2);
-        
-        if (ev->mem_desc.niov != desc->bd_page_count)
-        {
-                int mdniov = ev->mem_desc.niov;
-                struct ptlrpc_bulk_desc desc_snapshot;
 
-                desc_snapshot = *desc;
-                
-                printk ("ev(%p)->mem_desc.niov %d != desc(%p)->bd_page_count %d, snapshot %p\n", 
-                        ev, mdniov, desc, desc_snapshot.bd_page_count, &desc_snapshot);
-                LBUG();
-        }
         /* 1 fragment for each page always */
         LASSERT (ev->mem_desc.niov == desc->bd_page_count);
 
-        if (atomic_dec_and_test (&desc->bd_source_callback_count))
-        {
+        if (atomic_dec_and_test (&desc->bd_source_callback_count)) {
                 list_for_each_safe(tmp, next, &desc->bd_page_list) {
                         bulk = list_entry(tmp, struct ptlrpc_bulk_page,
                                           bp_link);
-                        
+
                         if (bulk->bp_cb != NULL)
                                 bulk->bp_cb(bulk);
                 }
