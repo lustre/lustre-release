@@ -87,12 +87,14 @@ chbar: lustre-chbar.pdf
 %-chbar.tex: chbar.sh postbar doc.old/%-full.tex %-full.tex
 	$(SHELL) $(srcdir)/chbar.sh doc.old/$*-full.tex $*-full.tex | $(srcdir)/postbar > $@
 
-%-full.tex: %.tex
-	$(TEXEXPAND) -texinputs=. -texinputs=$(srcdir) -output=$@ $<
-
+# This rule needs to come before the next %-full.tex rule.
 doc.old/lustre.tex: doc.old/lustre-HOWTO.lyx
 doc.old/%-full.tex: doc.old/%.tex
 	cd doc.old && $(TEXEXPAND) -texinputs=. -output=$*-full.tex $*.tex
+
+# This rule needs to come after the more specific doc.old rule.
+%-full.tex: %.tex
+	$(TEXEXPAND) -texinputs=. -texinputs=$(srcdir) -output=$@ $<
 
 # Check out the old directory if it doesn't exist.
 doc.old/lustre.lin doc.old/lustre-HOWTO.lin:
