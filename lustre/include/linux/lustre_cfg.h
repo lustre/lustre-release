@@ -152,7 +152,6 @@ static inline int lustre_cfg_unpack(struct lustre_cfg *data, char *pbuf,
 
 #include <linux/obd_support.h>
 
-/* buffer MUST be at least the size of obd_ioctl_hdr */
 static inline int lustre_cfg_getdata(char **buf, int len, void *arg)
 {
         struct lustre_cfg *lcfg;
