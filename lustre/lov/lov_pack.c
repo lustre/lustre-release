@@ -368,7 +368,7 @@ int lov_unpackmd_v1(struct lov_obd *lov, struct lov_stripe_md *lsm,
                 loi->loi_gr = le64_to_cpu(lmm->lmm_objects[i].l_object_gr);
                 loi->loi_ost_idx = le32_to_cpu(lmm->lmm_objects[i].l_ost_idx);
                 loi->loi_ost_gen = le32_to_cpu(lmm->lmm_objects[i].l_ost_gen);
-                if (loi->loi_ost_idx > lov->desc.ld_tgt_count) {
+                if (loi->loi_ost_idx >= lov->desc.ld_tgt_count) {
                         CERROR("OST index %d more than OST count %d\n",
                                loi->loi_ost_idx, lov->desc.ld_tgt_count);
                         lov_dump_lmm_v1(D_WARNING, lmm);

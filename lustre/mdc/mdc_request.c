@@ -672,7 +672,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_PARSE: {
                 ctxt = llog_get_context(&exp->exp_obd->obd_llogs,
                                         LLOG_CONFIG_REPL_CTXT);
-                rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
+                rc = class_config_process_llog(ctxt, data->ioc_inlbuf1, NULL);
                 GOTO(out, rc);
         }
 #ifdef __KERNEL__
@@ -985,7 +985,7 @@ err_rpc_lock:
         RETURN(rc);
 }
 
-int mdc_init_ea_size(struct obd_export *exp, int easize, int cookiesize)
+static int mdc_init_ea_size(struct obd_export *exp, int easize, int cookiesize)
 {
         struct obd_device *obd = exp->exp_obd;
         struct client_obd *cli = &obd->u.cli;

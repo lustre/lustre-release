@@ -28,6 +28,7 @@
 #include <linux/obd.h>
 #include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
+#include "mds_internal.h"
 
 #ifndef LPROCFS
 struct lprocfs_vars lprocfs_mds_obd_vars[]  = { {0} };
@@ -153,6 +154,15 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_mds_wr_config_update(struct file *file, const char *buffer,
+                                        unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        ENTRY;
+
+        RETURN(mds_lov_update_config(obd, 0));
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { "blocksize",    lprocfs_rd_blksize,     0, 0 },
@@ -166,6 +176,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_mds_rd_recovery_status, 0, 0 },
         { "evict_client", 0, lprocfs_mds_wr_evict_client, 0 },
+        { "config_update", 0, lprocfs_mds_wr_config_update, 0 },
         { "num_exports",  lprocfs_rd_num_exports, 0, 0 },
         { 0 }
 };

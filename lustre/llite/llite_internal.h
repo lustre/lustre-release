@@ -41,6 +41,8 @@ struct ll_sb_info {
         unsigned long             ll_read_ahead_pages;
         unsigned long             ll_max_read_ahead_pages;
 
+        int                       ll_config_version; /* last-applied update */
+
         /* list of GNS mounts; protected by the dcache_lock */
         struct list_head          ll_mnt_list;
 
@@ -154,6 +156,7 @@ void ll_truncate(struct inode *inode);
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
+int ll_refresh_lsm(struct inode *inode, struct lov_stripe_md *lsm);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
                    struct lustre_handle *, int ast_flags);
@@ -222,6 +225,7 @@ struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
                                int fhtype, int parent);
 int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 int null_if_equal(struct ldlm_lock *lock, void *data);
+int ll_process_config_update(struct ll_sb_info *sbi, int clean);
 
 /* llite/special.c */
 extern struct inode_operations ll_special_inode_operations;

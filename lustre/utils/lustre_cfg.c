@@ -108,7 +108,7 @@ int jt_lcfg_attach(int argc, char **argv)
                 lcfg.lcfg_dev_name = argv[2];
         } else {
                 fprintf(stderr, "error: %s: LCFG_ATTACH requires a name\n",
-                        jt_cmdname(argv[0])); 
+                        jt_cmdname(argv[0]));
 		return -EINVAL;
 	}
 
@@ -148,8 +148,8 @@ int jt_lcfg_setup(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'cfg_device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
 		return -EINVAL;
         }
 
@@ -197,8 +197,8 @@ int jt_obd_detach(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'cfg_device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
 		return -EINVAL;
         }
 
@@ -226,8 +226,8 @@ int jt_obd_cleanup(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'cfg_device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
 		return -EINVAL;
         }
 
@@ -236,7 +236,7 @@ int jt_obd_cleanup(int argc, char **argv)
         if (argc < 1 || argc > 3)
                 return CMD_HELP;
 
-        for (n = 1; n < argc; n++) 
+        for (n = 1; n < argc; n++)
                 if (strcmp(argv[n], "force") == 0) {
                         flags[flag_cnt++] = force;
                 } else if (strcmp(argv[n], "failover") == 0) {
@@ -258,8 +258,8 @@ int jt_obd_cleanup(int argc, char **argv)
         return rc;
 }
 
-static 
-int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal) 
+static
+int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal)
 {
         char tmp[64];
         int rc;
@@ -286,8 +286,8 @@ int jt_lcfg_add_uuid(int argc, char **argv)
 {
         ptl_nid_t nid = 0;
         int nal;
-        
-        if (argc != 4) {                
+
+        if (argc != 4) {
                 return CMD_HELP;
         }
 
@@ -328,7 +328,7 @@ int jt_lcfg_del_uuid(int argc, char **argv)
                 lcfg.lcfg_inllen1 = strlen(argv[1]) + 1;
                 lcfg.lcfg_inlbuf1 = argv[1];
         }
-        
+
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
         if (rc) {
                 fprintf(stderr, "IOC_PORTAL_DEL_UUID failed: %s\n",
@@ -342,13 +342,13 @@ int jt_lcfg_lov_setup(int argc, char **argv)
 {
         struct lustre_cfg lcfg;
         struct lov_desc desc;
-        struct obd_uuid *uuidarray, *ptr;
-        int rc, i;
+        int rc;
         char *end;
 
-        LCFG_INIT(lcfg, LCFG_SETUP, lcfg_devname);
-
-        if (argc <= 6)
+        /* argv: lov_setup <LOV uuid> <stripe count> <stripe size>
+         *                 <stripe offset> <pattern> [ <max tgt index> ]
+         */
+        if (argc < 6 || argc > 7)
                 return CMD_HELP;
 
         if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
@@ -360,19 +360,11 @@ int jt_lcfg_lov_setup(int argc, char **argv)
 
         memset(&desc, 0, sizeof(desc));
         obd_str2uuid(&desc.ld_uuid, argv[1]);
-        desc.ld_tgt_count = argc - 6;
         desc.ld_default_stripe_count = strtoul(argv[2], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad default stripe count '%s'\n",
                         jt_cmdname(argv[0]), argv[2]);
                 return CMD_HELP;
-        }
-        if (desc.ld_default_stripe_count > desc.ld_tgt_count) {
-                fprintf(stderr,
-                        "error: %s: default stripe count %u > OST count %u\n",
-                        jt_cmdname(argv[0]), desc.ld_default_stripe_count,
-                        desc.ld_tgt_count);
-                return -EINVAL;
         }
 
         desc.ld_default_stripe_size = strtoull(argv[3], &end, 0);
@@ -406,40 +398,32 @@ int jt_lcfg_lov_setup(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        /* NOTE: it is possible to overwrite the default striping parameters,
-         *       but EXTREME care must be taken when saving the OST UUID list.
-         *       It must be EXACTLY the same, or have only additions at the
-         *       end of the list, or only overwrite individual OST entries
-         *       that are restored from backups of the previous OST.
-         */
-        uuidarray = calloc(desc.ld_tgt_count, sizeof(*uuidarray));
-        if (!uuidarray) {
-                fprintf(stderr, "error: %s: no memory for %d UUIDs\n",
-                        jt_cmdname(argv[0]), desc.ld_tgt_count);
-                rc = -ENOMEM;
-                goto out;
-        }
-        for (i = 6, ptr = uuidarray; i < argc; i++, ptr++) {
-                if (strlen(argv[i]) >= sizeof(*ptr)) {
-                        fprintf(stderr, "error: %s: arg %d (%s) too long\n",
-                                jt_cmdname(argv[0]), i, argv[i]);
-                        rc = -EINVAL;
-                        goto out;
+        if (argc == 7) {
+                desc.ld_tgt_count = strtoul(argv[6], &end, 0);
+                if (*end) {
+                        fprintf(stderr, "error: %s: bad target count '%s'\n",
+                                jt_cmdname(argv[0]), argv[6]);
+                        return CMD_HELP;
                 }
-                strcpy((char *)ptr, argv[i]);
+                if (desc.ld_default_stripe_count > desc.ld_tgt_count) {
+                        fprintf(stderr,
+                                "error: %s: default stripe count %u > "
+                                "OST count %u\n", jt_cmdname(argv[0]),
+                                desc.ld_default_stripe_count,
+                                desc.ld_tgt_count);
+                        return -EINVAL;
+                }
         }
+
+        LCFG_INIT(lcfg, LCFG_SETUP, lcfg_devname);
 
         lcfg.lcfg_inllen1 = sizeof(desc);
         lcfg.lcfg_inlbuf1 = (char *)&desc;
-        lcfg.lcfg_inllen2 = desc.ld_tgt_count * sizeof(*uuidarray);
-        lcfg.lcfg_inlbuf2 = (char *)uuidarray;
 
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
         if (rc)
                 fprintf(stderr, "error: %s: ioctl error: %s\n",
                         jt_cmdname(argv[0]), strerror(rc = errno));
-out:
-        free(uuidarray);
         return rc;
 }
 
@@ -502,6 +486,64 @@ int jt_lcfg_lmv_setup(int argc, char **argv)
                         jt_cmdname(argv[0]), strerror(rc = errno));
 out:
         free(uuidarray);
+        return rc;
+}
+
+int jt_lcfg_lov_modify_tgts(int argc, char **argv)
+{
+        struct lustre_cfg lcfg;
+        char *end;
+        int index;
+        int gen;
+        int rc;
+
+        /* argv: lov_modify_tgts <op> <LOV name> <OBD uuid> <index> <gen> */
+        if (argc != 6)
+                return CMD_HELP;
+
+        if (!strncmp(argv[1], "add", 4)) {
+                LCFG_INIT(lcfg, LCFG_LOV_ADD_OBD, argv[2]);
+        } else if (!strncmp(argv[1], "del", 4)) {
+                LCFG_INIT(lcfg, LCFG_LOV_DEL_OBD, argv[2]);
+        } else {
+                fprintf(stderr, "error: %s: bad operation '%s'\n",
+                        jt_cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
+
+        lcfg.lcfg_inlbuf1 = argv[3];
+        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
+        if (lcfg.lcfg_inllen1 > sizeof(struct obd_uuid)) {
+                fprintf(stderr,
+                        "error: %s: OBD uuid '%s' longer than "LPSZ" chars\n",
+                        jt_cmdname(argv[0]), argv[3],
+                        sizeof(struct obd_uuid) - 1);
+                return -EINVAL;
+        }
+
+        index = strtoul(argv[4], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: bad OBD index '%s'\n",
+                        jt_cmdname(argv[0]), argv[4]);
+                return CMD_HELP;
+        }
+        lcfg.lcfg_inlbuf2 = argv[4];
+        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2);
+
+        gen = strtoul(argv[5], &end, 0);
+        if (*end) {
+                fprintf(stderr, "error: %s: bad OBD generation '%s'\n",
+                        jt_cmdname(argv[0]), argv[5]);
+                return CMD_HELP;
+        }
+        lcfg.lcfg_inlbuf3 = argv[5];
+        lcfg.lcfg_inllen3 = strlen(lcfg.lcfg_inlbuf3);
+
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
+        if (rc)
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        jt_cmdname(argv[0]), strerror(rc = errno));
+
         return rc;
 }
 
@@ -569,7 +611,7 @@ int jt_lcfg_set_timeout(int argc, char **argv)
                 return CMD_HELP;
 
         lcfg.lcfg_num = atoi(argv[1]);
-        
+
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),

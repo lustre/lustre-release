@@ -43,7 +43,7 @@
 
 #ifdef __KERNEL__
 
-int llog_origin_handle_create(struct ptlrpc_request *req)
+int llog_origin_handle_open(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
@@ -52,13 +52,12 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct llog_logid *logid = NULL;
         struct llog_ctxt *ctxt;
-        char * name = NULL;
-        int size = sizeof (*body);
-        int rc, rc2;
+        char *name = NULL;
+        int rc, rc2, size = sizeof (*body);
         ENTRY;
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body),
-                                 lustre_swab_llogd_body);
+                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
                 GOTO(out, rc =-EFAULT);
@@ -79,7 +78,7 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         LASSERT(ctxt != NULL);
         push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, logid, name);
+        rc = llog_open(ctxt, &loghandle, logid, name, body->lgd_llh_flags);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -87,7 +86,7 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
         body->lgd_logid = loghandle->lgh_id;
 
 out_close:
@@ -129,7 +128,7 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
         LASSERT(ctxt != NULL);
         push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+        rc = llog_open(ctxt, &loghandle, &body->lgd_logid, NULL, 0);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -197,7 +196,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
         LASSERT(ctxt != NULL);
         push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+        rc = llog_open(ctxt, &loghandle, &body->lgd_logid, NULL, 0);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -261,7 +260,7 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         LASSERT(ctxt != NULL);
         push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+        rc = llog_open(ctxt, &loghandle, &body->lgd_logid, NULL, 0);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -382,7 +381,7 @@ static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
 
         for (i = 0; i < 4; i++) {
                 int index, uncanceled = 0;
-                rc = llog_create(ctxt, &handle, NULL, name[i]);
+                rc = llog_open(ctxt, &handle, NULL, name[i], 0);
                 if (rc)
                         GOTO(out_pop, rc);
                 rc = llog_init_handle(handle, 0, NULL);
@@ -444,7 +443,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
 
         lir = (struct llog_logid_rec *)rec;
         logid = &lir->lid_id;
-        rc = llog_create(ctxt, &handle, logid, NULL);
+        rc = llog_open(ctxt, &handle, logid, NULL, 0);
         if (rc)
                 RETURN(-EINVAL);
         rc = llog_init_handle(handle, 0, NULL);
@@ -515,7 +514,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
                 int l, index, uncanceled = 0;
 
                 id = &idarray[i].lci_logid;
-                rc = llog_create(ctxt, &handle, id, NULL);
+                rc = llog_open(ctxt, &handle, id, NULL, 0);
                 if (rc)
                         GOTO(out_pop, rc);
                 rc = llog_init_handle(handle, 0, NULL);
@@ -589,7 +588,7 @@ out_free:
 }
 
 #else /* !__KERNEL__ */
-int llog_origin_handle_create(struct ptlrpc_request *req)
+int llog_origin_handle_open(struct ptlrpc_request *req)
 {
         LBUG();
         return 0;

@@ -2522,13 +2522,15 @@ static int osc_cancel_unused(struct obd_export *exp,
                              struct lov_stripe_md *lsm, int flags, void *opaque)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id = { .name = {0} };
+        struct ldlm_res_id res_id = { .name = {0} }, *resp = NULL;
 
-        res_id.name[0] = lsm->lsm_object_id;
-        res_id.name[2] = lsm->lsm_object_gr;
+        if (lsm != NULL) {
+                res_id.name[0] = lsm->lsm_object_id;
+                res_id.name[2] = lsm->lsm_object_gr;
+                resp = &res_id;
+        }
 
-        return ldlm_cli_cancel_unused(obd->obd_namespace, &res_id, flags,
-                                      opaque);
+        return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, opaque);
 }
 
 static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
@@ -2658,6 +2660,11 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         GOTO(out, err = -EINVAL);
                 }
 
+                if (data->ioc_inllen3 < sizeof(__u32)) {
+                        OBD_FREE(buf, len);
+                        GOTO(out, err = -EINVAL);
+                }
+
                 desc = (struct lov_desc *)data->ioc_inlbuf1;
                 desc->ld_tgt_count = 1;
                 desc->ld_active_tgt_count = 1;
@@ -2666,8 +2673,8 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 desc->ld_default_stripe_offset = 0;
                 desc->ld_pattern = 0;
                 memcpy(&desc->ld_uuid, &obd->obd_uuid, sizeof(uuid));
-
                 memcpy(data->ioc_inlbuf2, &obd->obd_uuid, sizeof(uuid));
+                *((__u32 *)data->ioc_inlbuf3) = 1;
 
                 err = copy_to_user((void *)uarg, buf, len);
                 if (err)
@@ -2983,7 +2990,7 @@ static int osc_detach(struct obd_device *dev)
         return lprocfs_obd_detach(dev);
 }
 
-int osc_setup(struct obd_device *obd, obd_count len, void *buf)
+static int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         int rc;
         ENTRY;
@@ -3000,9 +3007,14 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(rc);
 }
 
-int osc_cleanup(struct obd_device *obd, int flags)
+static int osc_cleanup(struct obd_device *obd, int flags)
 {
         int rc;
+
+        rc = ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
+                                    LDLM_FL_CONFIG_CHANGE, NULL);
+        if (rc)
+                RETURN(rc);
 
         rc = client_obd_cleanup(obd, flags);
         ptlrpcd_decref();

@@ -434,10 +434,9 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         exp = class_conn2export(&mdc_conn);
         
         ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
-        rc = class_config_parse_llog(ctxt, g_zconf_profile, cfg);
-        if (rc) {
-                CERROR("class_config_parse_llog failed: rc = %d\n", rc);
-        }
+        rc = class_config_process_llog(ctxt, g_zconf_profile, NULL, lcfg);
+        if (rc)
+                CERROR("class_config_process_llog failed: rc = %d\n", rc);
 
         err = obd_disconnect(exp, 0);
 

@@ -142,7 +142,7 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, 
+                       src->o_valid,
                        LTIME_S(lli->lli_st_mtime), LTIME_S(lli->lli_st_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
 
@@ -182,7 +182,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, LTIME_S(lli->lli_st_mtime), 
+                       valid, LTIME_S(lli->lli_st_mtime),
                        LTIME_S(lli->lli_st_ctime));
 
         if (valid & OBD_MD_FLATIME) {
@@ -273,7 +273,7 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         if (rc)
                 RETURN(rc);
 
-        refresh_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME | 
+        refresh_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                         OBD_MD_FLCTIME | OBD_MD_FLSIZE;
 
         /* We set this flag in commit write as we extend the file size.  When
@@ -289,7 +289,7 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         if (test_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags)) {
                 if (oa.o_size < lli->lli_st_size)
                         refresh_valid &= ~OBD_MD_FLSIZE;
-                else 
+                else
                         clear_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags);
         }
 
@@ -840,7 +840,7 @@ static int llu_readlink_internal(struct inode *inode,
                 CERROR ("OBD_MD_LINKNAME not set on reply\n");
                 GOTO (failed, rc = -EPROTO);
         }
-        
+
         LASSERT (symlen != 0);
         if (body->eadatasize != symlen) {
                 CERROR ("inode %lu: symlink length %d not expected %d\n",
@@ -1246,7 +1246,7 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
         memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
 
         RETURN(0);
-}       
+}
 
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
@@ -1308,9 +1308,9 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
                 struct llu_inode_info *lli = llu_i2info(inode);
 
                 if (lli->lli_stale_flag ||
-                    lli->lli_st_generation != md->body->generation)
+                    lli->lli_st_generation != md->body->generation) {
                         I_RELE(inode);
-                else {
+                } else {
                         llu_update_inode(inode, md->body, md->lsm);
                         return inode;
                 }
@@ -1319,7 +1319,7 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         inode = llu_new_inode(fs, &fid);
         if (inode)
                 llu_update_inode(inode, md->body, md->lsm);
-        
+
         return inode;
 }
 
@@ -1372,9 +1372,9 @@ llu_fsswop_mount(const char *source,
 
                 /* generate a string unique to this super, let's try
                  the address of the super itself.*/
-                len = (sizeof(sbi) * 2) + 1; 
+                len = (sizeof(sbi) * 2) + 1;
                 OBD_ALLOC(sbi->ll_instance, len);
-                if (sbi->ll_instance == NULL) 
+                if (sbi->ll_instance == NULL)
                         GOTO(out_free, err = -ENOMEM);
                 sprintf(sbi->ll_instance, "%p", sbi);
 
@@ -1385,6 +1385,7 @@ llu_fsswop_mount(const char *source,
                         CERROR("Unable to process log: %s\n", g_zconf_profile);
 
                         GOTO(out_free, err);
+
                 }
 
                 lprof = class_get_profile(g_zconf_profile);
@@ -1394,13 +1395,13 @@ llu_fsswop_mount(const char *source,
                 }
                 if (osc)
                         OBD_FREE(osc, strlen(osc) + 1);
-                OBD_ALLOC(osc, strlen(lprof->lp_osc) + 
+                OBD_ALLOC(osc, strlen(lprof->lp_osc) +
                           strlen(sbi->ll_instance) + 2);
                 sprintf(osc, "%s-%s", lprof->lp_osc, sbi->ll_instance);
 
                 if (mdc)
                         OBD_FREE(mdc, strlen(mdc) + 1);
-                OBD_ALLOC(mdc, strlen(lprof->lp_mdc) + 
+                OBD_ALLOC(mdc, strlen(lprof->lp_mdc) +
                           strlen(sbi->ll_instance) + 2);
                 sprintf(mdc, "%s-%s", lprof->lp_mdc, sbi->ll_instance);
         } else {

@@ -252,12 +252,12 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                 err = str2logid(&logid, data->ioc_inlbuf1, data->ioc_inllen1);
                 if (err)
                         GOTO(out, err);
-                err = llog_create(ctxt, &handle, &logid, NULL);
+                err = llog_open(ctxt, &handle, &logid, NULL, 0);
                 if (err)
                         GOTO(out, err);
         } else if (*data->ioc_inlbuf1 == '$') {
                 char *name = data->ioc_inlbuf1 + 1;
-                err = llog_create(ctxt, &handle, NULL, name);
+                err = llog_open(ctxt, &handle, NULL, name, 0);
                 if (err)
                         GOTO(out, err);
         } else {

@@ -76,7 +76,8 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 llh->llh_tail.lrt_index = cpu_to_le32(index);
         }
 
-        rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
+        rc = llog_open(cathandle->lgh_ctxt, &loghandle, NULL, NULL,
+                       OBD_LLOG_FL_CREATE);
         if (rc) {
                 CERROR("cannot create new log, error = %d\n", rc);
                 RETURN(ERR_PTR(rc));
@@ -148,7 +149,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                 }
         }
 
-        rc = llog_create(cathandle->lgh_ctxt, &loghandle, logid, NULL);
+        rc = llog_open(cathandle->lgh_ctxt, &loghandle, logid, NULL, 0);
         if (rc) {
                 CERROR("error opening log id "LPX64":%x: rc %d\n",
                        logid->lgl_oid, logid->lgl_ogen, rc);
@@ -549,9 +550,10 @@ int llog_catalog_setup(struct llog_ctxt **res, char *name,
                 RETURN(rc);
         }
         if (catid.lci_logid.lgl_oid)
-                rc = llog_create(ctxt, &handle, &catid.lci_logid, 0);
+                rc = llog_open(ctxt, &handle, &catid.lci_logid, NULL,
+                               OBD_LLOG_FL_CREATE);
         else {
-                rc = llog_create(ctxt, &handle, NULL, NULL);
+                rc = llog_open(ctxt, &handle, NULL, NULL, OBD_LLOG_FL_CREATE);
                 if (!rc)
                         catid.lci_logid = handle->lgh_id;
         }
@@ -579,7 +581,7 @@ int llog_catalog_cleanup(struct llog_ctxt *ctxt)
         struct llog_log_hdr *llh;
         int rc, index;
         ENTRY;
-                                                                                                                             
+
         if (!ctxt)
                 return 0;
 
@@ -599,7 +601,7 @@ int llog_catalog_cleanup(struct llog_ctxt *ctxt)
                                 LASSERT(rc == 0);
                                 index = loghandle->u.phd.phd_cookie.lgc_index;
                                 llog_free_handle(loghandle);
-                                                                                                                             
+
                                 LASSERT(index);
                                 llog_cat_set_first_idx(cathandle, index);
                                 rc = llog_cancel_rec(cathandle, index);
@@ -620,7 +622,7 @@ int llog_cat_half_bottom(struct llog_cookie *cookie, struct llog_handle *handle)
         struct llog_handle *loghandle;
         struct llog_logid *lgl = &cookie->lgc_lgl;
         int rc;
-                                                                                                                             
+
         down_read(&handle->lgh_lock);
         rc = llog_cat_id2handle(handle, &loghandle, lgl);
         if (rc)

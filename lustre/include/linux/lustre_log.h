@@ -201,8 +201,8 @@ struct llog_operations {
                          struct obd_device *, int, struct llog_logid *);
 
         int (*lop_cleanup)(struct llog_ctxt *ctxt);
-        int (*lop_create)(struct llog_ctxt *ctxt, struct llog_handle **,
-                          struct llog_logid *logid, char *name);
+        int (*lop_open)(struct llog_ctxt *ctxt, struct llog_handle **,
+                        struct llog_logid *logid, char *name, int flags);
         int (*lop_destroy)(struct llog_handle *handle);
         int (*lop_close)(struct llog_handle *handle);
 
@@ -311,8 +311,8 @@ static inline struct llog_ctxt *llog_get_context(struct obd_llogs *llogs,
         return llogs->llog_ctxt[index];
 }
 
-static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                              struct llog_logid *logid, char *name)
+static inline int llog_open(struct llog_ctxt *ctxt, struct llog_handle **res,
+                            struct llog_logid *logid, char *name, int flags)
 {
         struct llog_operations *lop;
         int rc;
@@ -321,10 +321,10 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         rc = llog_ctxt2ops(ctxt, &lop);
         if (rc)
                 RETURN(rc);
-        if (lop->lop_create == NULL)
+        if (lop->lop_open == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        rc = lop->lop_create(ctxt, res, logid, name);
+        rc = lop->lop_open(ctxt, res, logid, name, flags);
         RETURN(rc);
 }
 

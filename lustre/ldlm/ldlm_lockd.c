@@ -1000,9 +1000,9 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 rc = llog_origin_handle_cancel(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
-        case LLOG_ORIGIN_HANDLE_CREATE:
+        case LLOG_ORIGIN_HANDLE_OPEN:
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
-                rc = llog_origin_handle_create(req);
+                rc = llog_origin_handle_open(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:

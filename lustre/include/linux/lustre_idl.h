@@ -1019,7 +1019,7 @@ struct llog_log_hdr {
         __u32                   llh_cat_idx;
         /* for a catalog the first plain slot is next to it */
         struct obd_uuid         llh_tgtuuid;
-        __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 23];
+        __u32                 llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 23];
         __u32                   llh_bitmap[LLOG_BITMAP_BYTES/sizeof(__u32)];
         struct llog_rec_tail    llh_tail;
 } __attribute__((packed));
@@ -1034,7 +1034,7 @@ struct llog_cookie {
 
 /* llog protocol */
 enum llogd_rpc_ops {
-        LLOG_ORIGIN_HANDLE_CREATE       = 501,
+        LLOG_ORIGIN_HANDLE_OPEN         = 501,
         LLOG_ORIGIN_HANDLE_NEXT_BLOCK   = 502,
         LLOG_ORIGIN_HANDLE_READ_HEADER  = 503,
         LLOG_ORIGIN_HANDLE_WRITE_REC    = 504,

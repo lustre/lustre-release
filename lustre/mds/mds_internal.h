@@ -80,8 +80,11 @@ int mds_lov_set_nextid(struct obd_device *obd);
 int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 int mds_post_mds_lovconf(struct obd_device *obd);
 int mds_notify(struct obd_device *obd, struct obd_device *watched, int active);
+int mds_lov_update_config(struct obd_device *obd, int transno);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
+int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
+                          struct lustre_msg *msg, int offset);
 
 /* mds/mds_open.c */
 int mds_query_write_access(struct inode *inode);

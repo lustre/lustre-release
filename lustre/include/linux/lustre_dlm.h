@@ -67,6 +67,7 @@ typedef enum {
 #define LDLM_FL_LOCAL          0x004000 /* local lock (ie, no srv/cli split) */
 #define LDLM_FL_WARN           0x008000 /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
+#define LDLM_FL_CONFIG_CHANGE  0x020000 /* see ldlm_cli_cancel_unused */
 
 #define LDLM_FL_NO_TIMEOUT     0x020000 /* Blocked by group lock - wait
                                          * indefinitely */
@@ -182,7 +183,8 @@ struct ldlm_namespace {
         __u64                  ns_resources;
         ldlm_res_policy        ns_policy;
         struct ldlm_valblock_ops *ns_lvbo;
-        void                    *ns_lvbp;
+        void                  *ns_lvbp;
+        wait_queue_head_t      ns_waitq;
 };
 
 /*

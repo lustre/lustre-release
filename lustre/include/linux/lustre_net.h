@@ -729,7 +729,7 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obddev);
 #endif
 
 /* ptlrpc/llog_server.c */
-int llog_origin_handle_create(struct ptlrpc_request *req);
+int llog_origin_handle_open(struct ptlrpc_request *req);
 int llog_origin_handle_prev_block(struct ptlrpc_request *req);
 int llog_origin_handle_next_block(struct ptlrpc_request *req);
 int llog_origin_handle_read_header(struct ptlrpc_request *req);

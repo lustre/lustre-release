@@ -35,7 +35,9 @@ enum lcfg_command_type {
         LCFG_MOUNTOPT       = 0x00cf007,
         LCFG_DEL_MOUNTOPT   = 0x00cf008,
         LCFG_SET_TIMEOUT    = 0x00cf009,
-        LCFG_SET_UPCALL     = 0x00cf010,
+        LCFG_SET_UPCALL     = 0x00cf00a,
+        LCFG_LOV_ADD_OBD    = 0x00cf00b,
+        LCFG_LOV_DEL_OBD    = 0x00cf00c,
 };
 
 struct lustre_cfg {

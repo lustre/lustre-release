@@ -433,12 +433,8 @@ EXPORT_SYMBOL(class_handle2object);
 EXPORT_SYMBOL(class_get_profile);
 EXPORT_SYMBOL(class_del_profile);
 EXPORT_SYMBOL(class_process_config);
-EXPORT_SYMBOL(class_config_parse_llog);
+EXPORT_SYMBOL(class_config_process_llog);
 EXPORT_SYMBOL(class_config_dump_llog);
-EXPORT_SYMBOL(class_attach);
-EXPORT_SYMBOL(class_setup);
-EXPORT_SYMBOL(class_cleanup);
-EXPORT_SYMBOL(class_detach);
 
 /* mea.c */
 EXPORT_SYMBOL(mea_name2idx);

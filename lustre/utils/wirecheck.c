@@ -648,7 +648,6 @@ check_llog_log_hdr(void)
         CHECK_MEMBER(llog_log_hdr, llh_flags);
         CHECK_MEMBER(llog_log_hdr, llh_cat_idx);
         CHECK_MEMBER(llog_log_hdr, llh_tgtuuid);
-        CHECK_MEMBER(llog_log_hdr, llh_reserved);
         CHECK_MEMBER(llog_log_hdr, llh_bitmap);
         CHECK_MEMBER(llog_log_hdr, llh_tail);
 }
@@ -676,7 +675,7 @@ check_llogd_body(void)
         CHECK_MEMBER(llogd_body, lgd_len);
         CHECK_MEMBER(llogd_body, lgd_cur_offset);
 
-        CHECK_VALUE(LLOG_ORIGIN_HANDLE_CREATE);
+        CHECK_VALUE(LLOG_ORIGIN_HANDLE_OPEN);
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_READ_HEADER);
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_WRITE_REC);

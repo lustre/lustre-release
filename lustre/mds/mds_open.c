@@ -652,8 +652,20 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         up(&dchild->d_inode->i_sem);
                         RETURN(rc);
                 }
+                if (S_ISREG(dchild->d_inode->i_mode) &&
+                    (body->valid & OBD_MD_FLEASIZE)) {
+                        rc = mds_revalidate_lov_ea(obd, dchild->d_inode,
+                                                   req->rq_repmsg, 2);
+                        if (!rc)
+                                rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
+                                                 dchild->d_inode, 0);
+                        if (rc) {
+                                up(&dchild->d_inode->i_sem);
+                                RETURN(rc);
+                        }
+                }
         }
-        /* If the inode has EA data, then OSTs hold size, mtime */
+        /* If the inode has no EA data, then MDSs hold size, mtime */
         if (S_ISREG(dchild->d_inode->i_mode) &&
             !(body->valid & OBD_MD_FLEASIZE)) {
                 body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |

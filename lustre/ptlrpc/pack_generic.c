@@ -2229,10 +2229,6 @@ void lustre_assert_wire_constants(void)
                  (long long)offsetof(struct llog_log_hdr, llh_tgtuuid));
         LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_tgtuuid) == 40, " found %lld\n",
                  (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_tgtuuid));
-        LASSERTF(offsetof(struct llog_log_hdr, llh_reserved) == 84, " found %lld\n",
-                 (long long)offsetof(struct llog_log_hdr, llh_reserved));
-        LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_reserved) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_reserved));
         LASSERTF(offsetof(struct llog_log_hdr, llh_bitmap) == 88, " found %lld\n",
                  (long long)offsetof(struct llog_log_hdr, llh_bitmap));
         LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_bitmap) == 8096, " found %lld\n",
@@ -2289,8 +2285,8 @@ void lustre_assert_wire_constants(void)
                  (long long)offsetof(struct llogd_body, lgd_cur_offset));
         LASSERTF((int)sizeof(((struct llogd_body *)0)->lgd_cur_offset) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct llogd_body *)0)->lgd_cur_offset));
-        LASSERTF(LLOG_ORIGIN_HANDLE_CREATE == 501, " found %lld\n",
-                 (long long)LLOG_ORIGIN_HANDLE_CREATE);
+        LASSERTF(LLOG_ORIGIN_HANDLE_OPEN == 501, " found %lld\n",
+                 (long long)LLOG_ORIGIN_HANDLE_OPEN);
         LASSERTF(LLOG_ORIGIN_HANDLE_NEXT_BLOCK == 502, " found %lld\n",
                  (long long)LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
         LASSERTF(LLOG_ORIGIN_HANDLE_READ_HEADER == 503, " found %lld\n",

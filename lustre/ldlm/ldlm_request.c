@@ -671,15 +671,14 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 if (opaque != NULL && lock->l_ast_data != opaque) {
                         LDLM_ERROR(lock, "data %p doesn't match opaque %p",
                                    lock->l_ast_data, opaque);
-                        //LBUG();
                         continue;
                 }
 
                 if (lock->l_readers || lock->l_writers) {
-                        if (flags & LDLM_FL_WARN) {
+                        if (flags & LDLM_FL_CONFIG_CHANGE)
+                                lock->l_flags |= LDLM_FL_CBPENDING;
+                        else if (flags & LDLM_FL_WARN)
                                 LDLM_ERROR(lock, "lock in use");
-                                //LBUG();
-                        }
                         continue;
                 }
 
@@ -718,16 +717,32 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
         RETURN(0);
 }
 
+static inline int have_no_nsresource(struct ldlm_namespace *ns)
+{
+        int no_resource = 0;
+
+        spin_lock(&ns->ns_counter_lock);
+        if (ns->ns_resources == 0)
+                no_resource = 1;
+        spin_unlock(&ns->ns_counter_lock);
+
+        RETURN(no_resource);
+}
+
 /* Cancel all locks on a namespace (or a specific resource, if given)
  * that have 0 readers/writers.
  *
  * If flags & LDLM_FL_LOCAL_ONLY, throw the locks away without trying
  * to notify the server.
- * If flags & LDLM_FL_WARN, print a warning if some locks are still in use. */
+ * If flags & LDLM_FL_NO_CALLBACK, don't run the cancel callback.
+ * If flags & LDLM_FL_WARN, print a warning if some locks are still in use. 
+ * If flags & LDLM_FL_CONFIG_CHANGE, mark all locks as having a pending callback
+ */
 int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                            struct ldlm_res_id *res_id, int flags, void *opaque)
 {
         int i;
+        struct l_wait_info lwi = { 0 };
         ENTRY;
 
         if (ns == NULL)
@@ -739,23 +754,28 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
 
         l_lock(&ns->ns_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
-                struct list_head *tmp, *pos;
-                list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
+                struct list_head *tmp, *next;
+                list_for_each_safe(tmp, next, &(ns->ns_hash[i])) {
                         int rc;
                         struct ldlm_resource *res;
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
+                        l_unlock(&ns->ns_lock);
 
                         rc = ldlm_cli_cancel_unused_resource(ns, res->lr_name,
                                                              flags, opaque);
-
                         if (rc)
                                 CERROR("cancel_unused_res ("LPU64"): %d\n",
                                        res->lr_name.name[0], rc);
+
+                        l_lock(&ns->ns_lock);
+                        next = tmp->next;
                         ldlm_resource_putref(res);
                 }
         }
         l_unlock(&ns->ns_lock);
+        if (flags & LDLM_FL_CONFIG_CHANGE)
+                l_wait_event(ns->ns_waitq, have_no_nsresource(ns), &lwi);
 
         RETURN(ELDLM_OK);
 }

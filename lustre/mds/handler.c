@@ -1494,9 +1494,11 @@ static int mds_set_info(struct obd_export *exp, __u32 keylen,
                 RETURN(-EINVAL);
         }
 
+#define KEY_IS(str) \
+        (keylen == strlen(str) && memcmp(key, str, keylen) == 0)
+
         mds = &obd->u.mds;
-        if (keylen == strlen("mds_num") &&
-            memcmp(key, "mds_num", keylen) == 0) {
+        if (KEY_IS("mds_num")) {
                 int valsize;
                 __u32 group;
                 CDEBUG(D_IOCTL, "set mds num %d\n", *(int*)val);
@@ -1508,8 +1510,7 @@ static int mds_set_info(struct obd_export *exp, __u32 keylen,
                 rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
                           valsize, &group);
                 RETURN(rc);
-        } else if (keylen == strlen("client") &&
-                   memcmp(key, "client", keylen) == 0) {
+        } else if (KEY_IS("client")) {
                 if (!(exp->exp_flags & OBD_OPT_REAL_CLIENT)) {
                         atomic_inc(&mds->mds_real_clients);
                         CDEBUG(D_OTHER,"%s: peer from %s is real client (%d)\n",
@@ -1784,10 +1785,10 @@ int mds_handle(struct ptlrpc_request *req)
                 LBUG();
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
                 break;
-        case LLOG_ORIGIN_HANDLE_CREATE:
+        case LLOG_ORIGIN_HANDLE_OPEN:
                 DEBUG_REQ(D_INODE, req, "llog_init");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
-                rc = llog_origin_handle_create(req);
+                rc = llog_origin_handle_open(req);
                 break;
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
                 DEBUG_REQ(D_INODE, req, "llog next block");
@@ -2085,7 +2086,7 @@ static int mds_postsetup(struct obd_device *obd)
                 cfg.cfg_instance = NULL;
                 cfg.cfg_uuid = mds->mds_lov_uuid;
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = class_config_parse_llog(llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT),
+                rc = class_config_process_llog(llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT),
                                              mds->mds_profile, &cfg);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 if (rc)
@@ -2182,8 +2183,8 @@ int mds_lov_clean(struct obd_device *obd)
                 cfg.cfg_uuid = mds->mds_lov_uuid;
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                class_config_parse_llog(llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT),
-                                        cln_prof, &cfg);
+                class_config_process_llog(llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT),
+                                          cln_prof, &cfg);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 OBD_FREE(cln_prof, len);

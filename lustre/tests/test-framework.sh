@@ -326,6 +326,18 @@ add_ost() {
     do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc --fstype $FSTYPE $*
 }
 
+del_ost() {
+    facet=$1
+    shift
+    do_lmc --delete ost --node ${facet}_facet --ost ${facet}_svc $*
+}
+
+deactivate_ost() {
+    facet=$1
+    shift
+    do_lmc --deactivate ost --node ${facet}_facet --ost ${facet}_svc $*
+}
+
 add_ostfailover() {
     facet=$1
     shift
@@ -360,6 +372,9 @@ add_client() {
     do_lmc --add mtpt --node ${facet}_facet $*
 }
 
+config_commit() {
+    do_lmc --commit
+}
 
 ####### 
 # General functions

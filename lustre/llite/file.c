@@ -31,6 +31,7 @@
 #include <linux/lustre_compat25.h>
 #endif
 #include "llite_internal.h"
+#include <linux/obd_lov.h>
 
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                  struct file *file)
@@ -853,7 +854,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         if (!capable (CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
-        rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg, 
+        rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
                             sizeof(struct ll_recreate_obj));
         if (rc) {
                 RETURN(-EFAULT);
@@ -880,7 +881,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                 RETURN(-ENOMEM);
         }
 
-        oa->o_id = ucreatp.lrc_id; 
+        oa->o_id = ucreatp.lrc_id;
         oa->o_nlink = ucreatp.lrc_ost_idx;
         oa->o_gr = ucreatp.lrc_group;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLFLAGS;

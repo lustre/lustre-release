@@ -105,6 +105,7 @@ int jt_lcfg_add_uuid(int argc, char **argv);
 int jt_lcfg_del_uuid(int argc, char **argv);
 int jt_lcfg_lov_setup(int argc, char **argv);
 int jt_lcfg_lmv_setup(int argc, char **argv);
+int jt_lcfg_lov_modify_tgts(int argc, char **argv);
 int jt_lcfg_mount_option(int argc, char **argv);
 int jt_lcfg_del_mount_option(int argc, char **argv);
 int jt_lcfg_set_timeout(int argc, char **argv);

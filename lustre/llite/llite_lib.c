@@ -407,8 +407,8 @@ out:
         RETURN(err);
 } /* ll_read_super */
 
-int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
-                       struct config_llog_instance *cfg, int allow_recov)
+static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
+                              struct config_llog_instance *cfg, int allow_recov)
 {
         struct lustre_cfg lcfg;
         struct portals_cfg pcfg;
@@ -498,18 +498,10 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
 
         exp = class_conn2export(&mdc_conn);
 
-        ctxt = llog_get_context(&exp->exp_obd->obd_llogs, LLOG_CONFIG_REPL_CTXT);
-#if 1
-        rc = class_config_parse_llog(ctxt, profile, cfg);
-#else
-        /*
-         * For debugging, it's useful to just dump the log
-         */
-        rc = class_config_dump_llog(ctxt, profile, cfg);
-#endif
-        if (rc) {
-                CERROR("class_config_parse_llog failed: rc = %d\n", rc);
-        }
+        ctxt = llog_get_context(&exp->exp_obd->obd_llogs,LLOG_CONFIG_REPL_CTXT);
+        rc = class_config_process_llog(ctxt, profile, cfg);
+        if (rc)
+                CERROR("class_config_process_llog failed: rc = %d\n", rc);
 
         err = obd_disconnect(exp, 0);
 
@@ -597,7 +589,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 err = lustre_process_log(lmd, lmd->lmd_profile, &cfg, 0);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", lmd->lmd_profile);
-
                         GOTO(out_free, err);
                 }
 
@@ -648,6 +639,7 @@ out_free:
                 int err;
 
                 if (sbi->ll_instance != NULL) {
+                        struct lustre_mount_data *lmd = sbi->ll_lmd;
                         char * cln_prof;
                         struct config_llog_instance cfg;
 
@@ -655,10 +647,9 @@ out_free:
                         cfg.cfg_uuid = sbi->ll_sb_uuid;
 
                         OBD_ALLOC(cln_prof, len);
-                        sprintf(cln_prof, "%s-clean", sbi->ll_lmd->lmd_profile);
+                        sprintf(cln_prof, "%s-clean", lmd->lmd_profile);
 
-                        err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg,
-                                                 0);
+                        err = lustre_process_log(lmd, cln_prof, &cfg, 0);
                         if (err < 0)
                                 CERROR("Unable to process log: %s\n", cln_prof);
                         OBD_FREE(cln_prof, len);
@@ -751,6 +742,75 @@ void lustre_put_super(struct super_block *sb)
         EXIT;
 } /* lustre_put_super */
 
+int ll_process_config_update(struct ll_sb_info *sbi, int clean)
+{
+        struct obd_export *mdc_exp = sbi->ll_mdc_exp;
+        struct lustre_mount_data *lmd = sbi->ll_lmd;
+        struct llog_ctxt *ctxt;
+        struct config_llog_instance cfg;
+        char *profile = lmd->lmd_profile, *name = NULL;
+        int rc, namelen =  0, version;
+        ENTRY;
+
+        if (profile == NULL)
+                RETURN(0);
+        if (lmd == NULL) {
+                CERROR("Client not mounted with zero-conf; cannot process "
+                       "update log.\n");
+                RETURN(0);
+        }
+
+        rc = ldlm_cli_cancel_unused(mdc_exp->exp_obd->obd_namespace, NULL,
+                                    LDLM_FL_CONFIG_CHANGE, NULL);
+        if (rc != 0)
+                CWARN("ldlm_cli_cancel_unused(mdc): %d\n", rc);
+
+        rc = obd_cancel_unused(sbi->ll_osc_exp, NULL, LDLM_FL_CONFIG_CHANGE,
+                               NULL);
+        if (rc != 0)
+                CWARN("obd_cancel_unused(lov): %d\n", rc);
+
+        cfg.cfg_instance = sbi->ll_instance;
+        cfg.cfg_uuid = sbi->ll_sb_uuid;
+        cfg.cfg_local_nid = lmd->lmd_local_nid;
+
+        namelen = strlen(profile) + 20; /* -clean-######### */
+        OBD_ALLOC(name, namelen);
+        if (name == NULL)
+                RETURN(-ENOMEM);
+
+        if (clean) {
+                version = sbi->ll_config_version - 1;
+                sprintf(name, "%s-clean-%d", profile, version);
+        } else {
+                version = sbi->ll_config_version + 1;
+                sprintf(name, "%s-%d", profile, version);
+        }
+
+        CWARN("Applying configuration log %s\n", name);
+
+        ctxt = llog_get_context(&mdc_exp->exp_obd->obd_llogs,
+                                LLOG_CONFIG_REPL_CTXT);
+        rc = class_config_process_llog(ctxt, name, &cfg);
+        if (rc == 0)
+                sbi->ll_config_version = version;
+        CWARN("Finished applying configuration log %s: %d\n", name, rc);
+
+        if (rc == 0 && clean == 0) {
+                struct lov_desc desc;
+                int rc, valsize;
+                valsize = sizeof(desc);
+                rc = obd_get_info(sbi->ll_osc_exp, strlen("lovdesc") + 1,
+                                  "lovdesc", &valsize, &desc);
+
+                rc = obd_init_ea_size(mdc_exp,
+                                      obd_size_diskmd(sbi->ll_osc_exp, NULL),
+                                      (desc.ld_tgt_count *
+                                       sizeof(struct llog_cookie)));
+        }
+        OBD_FREE(name, namelen);
+        RETURN(rc);
+}
 
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
@@ -1102,6 +1162,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
+                        int i;
                         if (memcmp(lli->lli_smd, lsm, sizeof(*lsm))) {
                                 CERROR("lsm mismatch for inode %ld\n",
                                        inode->i_ino);
@@ -1110,6 +1171,18 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                 CERROR("lsm:\n");
                                 dump_lsm(D_ERROR, lsm);
                                 LBUG();
+                        }
+                        /* XXX FIXME -- We should decide on a safer (atomic) and
+                         * more elegant way to update the lsm */
+                        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                                lli->lli_smd->lsm_oinfo[i].loi_id =
+                                        lsm->lsm_oinfo[i].loi_id;
+                                lli->lli_smd->lsm_oinfo[i].loi_gr =
+                                        lsm->lsm_oinfo[i].loi_gr;
+                                lli->lli_smd->lsm_oinfo[i].loi_ost_idx =
+                                        lsm->lsm_oinfo[i].loi_ost_idx;
+                                lli->lli_smd->lsm_oinfo[i].loi_ost_gen =
+                                        lsm->lsm_oinfo[i].loi_ost_gen;
                         }
                 }
                 /* bug 2844 - limit i_blksize for broken user-space apps */

@@ -42,7 +42,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lprocfs_status.h>
-#include <linux/lustre_mds.h>
+#include <linux/lustre_log.h>
 
 /* OBD Device Declarations */
 #define MAX_OBD_DEVICES 256
@@ -78,21 +78,18 @@ void oig_complete_one(struct obd_io_group *oig,
 void oig_release(struct obd_io_group *oig);
 int oig_wait(struct obd_io_group *oig);
 
-/* config.c */
+/* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
-int class_attach(struct lustre_cfg *lcfg);
-int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
-int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);
-int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);
 
-/* Passed as data param to class_config_parse_llog */
+/* Passed as data param to class_config_parse_handler() */
 struct config_llog_instance {
         char * cfg_instance;
         struct obd_uuid cfg_uuid;
-        ptl_nid_t  cfg_local_nid;
+        ptl_nid_t cfg_local_nid;
 };
-int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
-                            struct config_llog_instance *cfg);
+
+int class_config_process_llog(struct llog_ctxt *ctxt, char *name,
+                              struct config_llog_instance *cfg);
 int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
                            struct config_llog_instance *cfg);
 
@@ -430,6 +427,19 @@ static inline int obd_cleanup(struct obd_device *obd, int flags)
         RETURN(rc);
 }
 
+static inline int
+obd_process_config(struct obd_device *obd, int datalen, void *data)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(obd, process_config, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, process_config);
+
+        rc = OBP(obd, process_config)(obd, datalen, data);
+        RETURN(rc);
+}
+
 /* Pack an in-memory MD struct for storage on disk.
  * Returns +ve size of packed MD (0 for free), or -ve error.
  *
@@ -511,6 +521,20 @@ static inline int obd_free_memmd(struct obd_export *exp,
         LASSERT(mem_tgt);
         LASSERT(*mem_tgt);
         return obd_unpackmd(exp, mem_tgt, NULL, 0);
+}
+
+static inline int obd_revalidate_md(struct obd_export *exp, struct obdo *obdo,
+                                    struct lov_stripe_md *ea,
+                                    struct obd_trans_info *oti)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, revalidate_md);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, revalidate_md);
+
+        rc = OBP(exp->exp_obd, revalidate_md)(exp, obdo, ea, oti);
+        RETURN(rc);
 }
 
 static inline int obd_create(struct obd_export *exp, struct obdo *obdo,

@@ -180,7 +180,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 }
 
-static void ptlrpc_activate_import(struct obd_import *imp)
+void ptlrpc_activate_import(struct obd_import *imp)
 {
         struct obd_device *obd = imp->imp_obd;
         unsigned long flags;

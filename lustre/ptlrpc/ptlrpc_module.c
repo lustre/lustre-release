@@ -125,6 +125,13 @@ EXPORT_SYMBOL(ptlrpc_expired_set);
 EXPORT_SYMBOL(ptlrpc_interrupted_set);
 EXPORT_SYMBOL(ptlrpc_mark_interrupted);
 
+/* import.c */
+EXPORT_SYMBOL(ptlrpc_deactivate_import);
+EXPORT_SYMBOL(ptlrpc_invalidate_import);
+EXPORT_SYMBOL(ptlrpc_activate_import);
+EXPORT_SYMBOL(ptlrpc_fail_import);
+EXPORT_SYMBOL(ptlrpc_disconnect_import);
+
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_save_lock);
 EXPORT_SYMBOL(ptlrpc_schedule_difficult_reply);
@@ -184,13 +191,9 @@ EXPORT_SYMBOL(mdc_rename_pack);
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);
 EXPORT_SYMBOL(ptlrpc_run_failed_import_upcall);
-EXPORT_SYMBOL(ptlrpc_disconnect_import);
 EXPORT_SYMBOL(ptlrpc_resend);
 EXPORT_SYMBOL(ptlrpc_wake_delayed);
 EXPORT_SYMBOL(ptlrpc_set_import_active);
-EXPORT_SYMBOL(ptlrpc_deactivate_import);
-EXPORT_SYMBOL(ptlrpc_invalidate_import);
-EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_fail_export);
 EXPORT_SYMBOL(ptlrpc_recover_import);
 
@@ -210,7 +213,7 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 
 /* llogd.c */
-EXPORT_SYMBOL(llog_origin_handle_create);
+EXPORT_SYMBOL(llog_origin_handle_open);
 EXPORT_SYMBOL(llog_origin_handle_prev_block);
 EXPORT_SYMBOL(llog_origin_handle_next_block);
 EXPORT_SYMBOL(llog_origin_handle_read_header);

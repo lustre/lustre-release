@@ -243,7 +243,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                 /* process records in buffer, starting where we found one */
                 while ((void *)rec < buf + LLOG_CHUNK_SIZE) {
                         if (rec->lrh_index == 0)
-                                GOTO(out, 0); /* no more records */
+                                GOTO(out, rc = 0); /* no more records */
 
                         /* if set, process the callback on this record */
                         if (ext2_test_bit(index, llh->llh_bitmap)) {

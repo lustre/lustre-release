@@ -35,7 +35,7 @@ def printDoc(doc, stream=sys.stdout):
     except ImportError:
         stream.write(doc.toxml())
         stream.write("\n")
-    
+
 
 PYMOD_DIR = "/usr/lib/lustre/python"
 
@@ -50,7 +50,7 @@ if not development_mode():
 
 import Lustre
 
-DEFAULT_PORT = 988 
+DEFAULT_PORT = 988
 DEFAULT_STRIPE_SZ = 1048576
 DEFAULT_STRIPE_CNT = 1
 DEFAULT_STRIPE_PATTERN = 0
@@ -73,7 +73,7 @@ Object creation command summary:
 --add net
   --node node_name
   --nid nid
-  --cluster_id 
+  --cluster_id
   --nettype tcp|elan|gm
   --hostaddr addr
   --port port
@@ -110,6 +110,7 @@ Object creation command summary:
   --ost ost_name 
   --failover
   --lov lov_name 
+  --index index
   --dev path
   --backdev path
   --size size
@@ -123,6 +124,13 @@ Object creation command summary:
   --mountfsoptions options
   --nspath
  
+--delete ost
+  --node node_name
+  --ost ost_name
+--deactivate ost
+  --node node_name
+  --ost ost_name
+
 --add mtpt  - Mountpoint
   --node node_name
   --path /mnt/point
@@ -153,12 +161,14 @@ Object creation command summary:
   --node node_name
   --real_obd obd_name
   --cache_obd obd_name
+
+--commit - Close a configuration version, and start a new one
 """
 
 PARAM = Lustre.Options.PARAM
 lmc_options = [
     # lmc input/output options
-    ('reference', "Print short reference for commands."), 
+    ('reference', "Print short reference for commands."),
     ('verbose,v', "Print system commands as they are run."),
     ('merge,m', "Append to the specified config file.", PARAM),
     ('output,o', "Write XML configuration into given output file. Overwrite existing content.", PARAM),
@@ -167,7 +177,10 @@ lmc_options = [
 
     # commands
     ('add', "", PARAM),
-    
+    ('delete', "", PARAM),
+    ('deactivate', "", PARAM),
+    ('commit', "Commit all config changes and start a new version"),
+
     # node options
     ('node', "Add a new node in the cluster configuration.", PARAM),
     ('timeout', "Set timeout to initiate recovery.", PARAM),
@@ -177,7 +190,7 @@ lmc_options = [
     ('ptldebug', "Set the portals debug level",  PARAM),
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
-    # network 
+    # network
     ('nettype', "Specify the network type. This can be tcp/elan/gm.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
     ('tcpbuf', "Optional argument to specify the TCP buffer size.", PARAM, "0"),
@@ -221,6 +234,7 @@ lmc_options = [
 
     # lov
     ('lov', "Specify LOV name.", PARAM,""),
+    ('index', "Specify index for OBD in LOV target table.", PARAM),
     ('stripe_sz', "Specify the stripe size in bytes.", PARAM),
     ('stripe_cnt', "Specify the number of OSTs each file should be striped on.", PARAM, 0),
     ('stripe_pattern', "Specify the stripe pattern. RAID 0 is the only one currently supported.", PARAM, 0),
@@ -246,11 +260,11 @@ def panic(cmd, msg):
     print msg
     sys.exit(1)
 
-    
+
 def warning(*args):
     msg = string.join(map(str,args))
     print "Warning: ", msg
-    
+
 #
 # manage names and uuids
 # need to initialize this by walking tree to ensure
@@ -325,14 +339,14 @@ class GenConfig:
         ref = self.doc.createElement(tag)
         ref.setAttribute("uuidref", uuid)
         return ref
-    
+
     def newService(self, tag, name, uuid):
         """ create a new  service elmement, which requires name and uuid attributes """
         new = self.doc.createElement(tag)
         new.setAttribute("uuid", uuid);
         new.setAttribute("name", name);
         return new
-    
+
     def addText(self, node, str):
         txt = self.doc.createTextNode(str)
         node.appendChild(txt)
@@ -362,14 +376,14 @@ class GenConfig:
             self.addElement(network, "recvmem", "%d" %(tcpbuf))
         if irq_aff:
             self.addElement(network, "irqaffinity", "%d" %(irq_aff))
-            
+
         return network
 
     def routetbl(self, name, uuid):
         """create <routetbl> node"""
         rtbl = self.newService("routetbl", name, uuid)
         return rtbl
-        
+
     def route(self, gw_net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi):
         """ create one entry for the route table """
         ref = self.doc.createElement('route')
@@ -381,7 +395,7 @@ class GenConfig:
         if hi:
             ref.setAttribute("hi", hi)
         return ref
-    
+
     def profile(self, name, uuid):
         """ create a host """
         profile = self.newService("profile", name, uuid)
@@ -453,6 +467,14 @@ class GenConfig:
         lov.setAttribute("stripepattern", str(pattern))
         return lov
 
+    def lov_tgt(self, obd_uuid, index, generation):
+        tgt = self.doc.createElement('lov_tgt')
+        tgt.setAttribute("uuidref", obd_uuid)
+        tgt.setAttribute("index", index)
+        tgt.setAttribute("generation", generation)
+        tgt.setAttribute("active", '1')
+        return tgt
+
     def lovconfig(self, name, uuid, lov_uuid):
         lovconfig = self.newService("lovconfig", name, uuid)
         lovconfig.appendChild(self.ref("lov", lov_uuid))
@@ -522,11 +544,35 @@ class GenConfig:
         if mgmt_uuid:
             fs.appendChild(self.ref("mgmt", mgmt_uuid))
         return fs
-        
+
     def echo_client(self, name, uuid, osc_uuid):
         ec = self.newService("echoclient", name, uuid)
         ec.appendChild(self.ref("obd", osc_uuid))
         return ec
+
+    def update(self, version):
+        new = self.doc.createElement("update")
+        new.setAttribute("version", version)
+        return new
+
+    def add(self, lov, ost, index, gen):
+        new = self.doc.createElement("add")
+        new.setAttribute("lov_uuidref", lov)
+        new.setAttribute("ost_uuidref", ost)
+        new.setAttribute("index", index)
+        new.setAttribute("generation", gen)
+        return new
+
+    def delete(self, lov, ost, index, gen, options):
+        if options.delete:
+            new = self.doc.createElement("delete")
+        else:
+            new = self.doc.createElement("deactivate")
+        new.setAttribute("lov_uuidref", lov)
+        new.setAttribute("ost_uuidref", ost)
+        new.setAttribute("index", index)
+        new.setAttribute("generation", gen)
+        return new
 
 ############################################################
 # Utilities to query a DOM tree
@@ -538,6 +584,40 @@ def getName(n):
 def getUUID(node):
     return node.getAttribute('uuid')
 
+def findLastUpdate(lustre):
+    node = None
+    version = 0
+    for n in lustre.childNodes:
+        if n.nodeType == n.ELEMENT_NODE:
+            if n.nodeName != 'update':
+                continue
+            tmp = int(n.getAttribute('version'))
+            if not tmp:
+                error('malformed XML: update tag without a version attribute')
+            if tmp != version + 1:
+                error('malformed XML: expecting update record '+str(version + 1)+', found '+str(tmp)+'.')
+            version = tmp
+            node = n
+    return node
+
+def addUpdate(gen, lustre, node):
+    update = findLastUpdate(lustre)
+    if not update:
+        return
+    #add_record = update.getElementsByTagName('add')
+    #if not add_record:
+    #    add_record = gen.add()
+    #    update.appendChild(add_record)
+    #else:
+    #    add_record = add_record[0]
+    #add_record.appendChild(node)
+    update.appendChild(node)
+
+def delUpdate(gen, lustre, node):
+    update = findLastUpdate(lustre)
+    if not update:
+        return
+    update.appendChild(node)
 
 def findByName(lustre, name, tag = ""):
     for n in lustre.childNodes:
@@ -571,7 +651,7 @@ def name2uuid(lustre, name, tag="",  fatal=1):
         else:
             return ""
     return getUUID(ret)
-    
+
 def lookup_filesystem(lustre, mds_uuid, ost_uuid):
     for n in lustre.childNodes:
         if n.nodeType == n.ELEMENT_NODE and n.nodeName == 'filesystem':
@@ -591,10 +671,76 @@ def get_net_uuid(lustre, node_name):
         return getUUID(net[0])
     return None
 
+def lov_add_obd(gen, lustre, lov, osc_uuid, options):
+    lov_name = getName(lov)
+    if options.index:
+        lov_index = get_option_int(options, 'index')
+        for tgt in lustre.getElementsByTagName('lov_tgt'):
+            if str(lov_index) == tgt.getAttribute('index'):
+                uuidref = tgt.getAttribute('uuidref')
+                if uuidref != '':
+                    raise OptionError("%s --index %d is still in use: %s" %
+                                      (lov_name, lov_index, uuidref))
+                tgt.setAttribute('uuidref', osc_uuid)
+                gener = int(tgt.getAttribute('generation')) + 1
+                tgt.setAttribute('generation', str(gener))
+                addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid,
+                                               str(lov_index), str(gener)))
+                return
+        lov.appendChild(gen.lov_tgt(osc_uuid, str(lov_index), '1'))
+        addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(lov_index),
+                                       str(gener)))
+        return
 
-def lov_add_obd(gen, lov, osc_uuid):
-    lov.appendChild(gen.ref("obd", osc_uuid))
-                            
+    index = -1
+    for tgt in lustre.getElementsByTagName('lov_tgt'):
+        uuidref = tgt.getAttribute('uuidref')
+        tmp = int(tgt.getAttribute('index'))
+        if tmp != index + 1:
+            error('malformed xml: LOV targets are not ordered; found index '+str(tmp)+', expected '+str(index + 1)+'.')
+        index = tmp
+
+    lov.appendChild(gen.lov_tgt(osc_uuid, str(index + 1), '1'))
+    addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(index + 1), '1'))
+
+def lov_del_obd(gen, lustre, lov, osc_uuid, options):
+    lov_name = getName(lov)
+    if options.index:
+        lov_index = get_option_int(options, 'index')
+        for tgt in lustre.getElementsByTagName('lov_tgt'):
+            index = tgt.getAttribute('index')
+            if index == lov_index:
+                uuidref = tgt.getAttribute('uuidref')
+                if uuidref != osc_uuid:
+                    raise OptionError("%s --index %d contains %s, not %s" %
+                                      (lov_name, lov_index, osc_uuid, uuidref))
+                if options.delete:
+                    tgt.setAttribute('uuidref', '')
+                else:
+                    tgt.setAttribute('active', '0')
+                # bump the generation just in case...
+                gen = int(tgt.getAttribute('generation')) + 1
+                tgt.setAttribute('generation', str(gen))
+                return
+        raise OptionError("%s --index %d not in use by %s." %
+                          (lov_name, lov_index, osc_uuid))
+
+    for tgt in lustre.getElementsByTagName('lov_tgt'):
+        uuidref = tgt.getAttribute('uuidref')
+        if uuidref == osc_uuid:
+            genera = int(tgt.getAttribute('generation'))
+            delete_rec = gen.delete(getUUID(lov),
+                                    osc_uuid,tgt.getAttribute('index'),
+                                    str(genera), options)
+            delUpdate(gen, lustre, delete_rec)
+
+            if options.delete:
+                tgt.setAttribute('uuidref', '')
+            else:
+                tgt.setAttribute('active', '0')
+            genera = genera + 1
+            tgt.setAttribute('generation', str(genera))
+
 def lmv_add_obd(gen, lmv, mdc_uuid):
     lmv.appendChild(gen.ref("mds", mdc_uuid))
                             
@@ -606,7 +752,7 @@ def ref_exists(profile, uuid):
             if ref == uuid:
                 return 1
     return 0
-        
+
 # ensure that uuid is not already in the profile
 # return true if uuid is added
 def node_add_profile(gen, node, ref, uuid):
@@ -622,7 +768,7 @@ def node_add_profile(gen, node, ref, uuid):
         return 0
     profile.appendChild(gen.ref(ref, uuid))
     return 1
-    
+
 def get_attr(dom_node, attr, default=""):
     v = dom_node.getAttribute(attr)
     if v:
@@ -644,7 +790,7 @@ def set_node_options(gen, node, options):
     if default_upcall or options.lustre_upcall:
         if options.lustre_upcall:
             gen.addElement(node, 'lustreUpcall', options.lustre_upcall)
-        else: 
+        else:
             gen.addElement(node, 'lustreUpcall', default_upcall)
     if default_upcall or options.portals_upcall:
         if options.portals_upcall:
@@ -668,9 +814,10 @@ def do_add_node(gen, lustre,  options, node_name):
 
     node_add_profile(gen, node, 'ldlm', ldlm_uuid)
     set_node_options(gen, node, options)
+
     return node
 
-    
+
 def add_node(gen, lustre, options):
     """ create a node with a network config """
 
@@ -733,7 +880,7 @@ def add_route(gen, lustre, options):
     node = findByName(lustre, node_name, "node")
     if not node:
         error (node_name, " not found.")
-    
+
     rlist = node.getElementsByTagName('routetbl')
     if len(rlist) > 0:
         rtbl = rlist[0]
@@ -801,7 +948,7 @@ def add_mds(gen, lustre, options):
                      size, journal_size, inode_size, nspath, mkfsoptions, 
                      mountfsoptions, backfstype, backdevname, lmv_uuid)
     lustre.appendChild(mdd)
-                   
+
 
 def add_mgmt(gen, lustre, options):
     node_name = get_option(options, 'node')
@@ -847,7 +994,7 @@ def add_ost(gen, lustre, options):
         inode_size = get_option(options, 'inode_size')
         mkfsoptions = get_option(options, 'mkfsoptions')
         mountfsoptions = get_option(options, 'mountfsoptions')
-        
+
     nspath = get_option(options, 'nspath')
 
     ostname = get_option(options, 'ost')
@@ -868,17 +1015,18 @@ def add_ost(gen, lustre, options):
 
         ost = gen.ost(ostname, ost_uuid, osd_uuid, options.group)
         lustre.appendChild(ost)
+
         if lovname:
             lov = findByName(lustre, lovname, "lov")
             if not lov:
                 error('add_ost:', '"'+lovname+'"', "lov element not found.")
-            lov_add_obd(gen, lov, ost_uuid)
+            lov_add_obd(gen, lustre, lov, ost_uuid, options)
     else:
         ost = lookup(lustre, ost_uuid)
 
     if options.failover:
         ost.setAttribute('failover', "1")
-    
+
 
     osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname,
                   get_format_flag(options), ost_uuid, node_uuid, size,
@@ -896,7 +1044,43 @@ def add_ost(gen, lustre, options):
     node_add_profile(gen, node, 'osd', osd_uuid)
     lustre.appendChild(osd)
 
-                   
+def del_ost(gen, lustre, options):
+    ostname = get_option(options, 'ost')
+    if not ostname:
+        raise OptionError("del_ost: --ost requires a <ost name>")
+    ost = findByName(lustre, ostname, "ost")
+    if not ost:
+        error('del_ost: ', 'Unable to find ', ostname)
+    ost_uuid = name2uuid(lustre, ostname, fatal=0)
+    if not ost_uuid:
+        error('del_ost: ', 'Unable to find uuid for ', ostname)
+    lovname = get_option(options, 'lov')
+    if lovname:
+        lov = findByName(lustre, lovname, "lov")
+        if not lov:
+            error('del_ost:', '"'+lovname+'"', "lov element not found.")
+        lov_del_obd(gen, lustre, lov, ost_uuid, options)
+        # if the user specified a speficic LOV don't delete the OST itself
+        return
+
+    # remove OSD references from all LOVs
+    for n in lustre.getElementsByTagName('lov'):
+        lov_del_obd(gen, lustre, n, ost_uuid, options)
+    return
+    # delete the OSDs
+    for osd in lustre.getElementsByTagName('osd'):
+        if ref_exists(osd, ost_uuid):
+            osd_uuid = osd.getAttribute('uuid')
+            # delete all profile references to this OSD
+            for profile in lustre.getElementsByTagName('profile'):
+                for osd_ref in profile.getElementsByTagName('osd_ref'):
+                    if osd_uuid == osd_ref.getAttribute('uuidref'):
+                        profile.removeChild(osd_ref)
+            lustre.removeChild(osd)
+
+    # delete the OST
+    lustre.removeChild(ost)
+
 def add_cobd(gen, lustre, options):
     node_name = get_option(options, 'node')
     name = get_option(options, 'cobd')
@@ -904,7 +1088,7 @@ def add_cobd(gen, lustre, options):
 
     real_name = get_option(options, 'real_obd')
     cache_name = get_option(options, 'cache_obd')
-    
+
     real_uuid = name2uuid(lustre, real_name, tag='lov', fatal=0)
     cache_uuid = name2uuid(lustre, cache_name, tag='lov', fatal=0)
 
@@ -1004,7 +1188,7 @@ def add_lov(gen, lustre, options):
 
     lov = gen.lov(name, uuid, mds_uuid, stripe_sz, stripe_cnt, pattern)
     lustre.appendChild(lov)
-    
+
     # add an lovconfig entry to the active mdsdev profile
     lovconfig_name = new_name('LVCFG_' + name)
     lovconfig_uuid = new_uuid(lovconfig_name)
@@ -1019,20 +1203,20 @@ def add_lov(gen, lustre, options):
 
 def add_default_lov(gen, lustre, mds_name, lov_name):
     """ create a default lov """
-                                                                                                                                               
+
     stripe_sz = DEFAULT_STRIPE_SZ
     stripe_cnt = DEFAULT_STRIPE_CNT
     pattern = DEFAULT_STRIPE_PATTERN
     uuid = new_uuid(lov_name)
-                                                                                                                                               
+
     ret = findByName(lustre, lov_name, "lov")
     if ret:
         error("LOV: ", lov_name, " already exists.")
-                                                                                                                                               
+
     mds_uuid = name2uuid(lustre, mds_name, 'mds')
     lov = gen.lov(lov_name, uuid, mds_uuid, stripe_sz, stripe_cnt, pattern)
     lustre.appendChild(lov)
-                                                                                                                                               
+
     # add an lovconfig entry to the active mdsdev profile
     lovconfig_name = new_name('LVCFG_' + lov_name)
     lovconfig_uuid = new_uuid(lovconfig_name)
@@ -1095,7 +1279,7 @@ def get_fs_uuid(gen, lustre, mds_name, obd_name, mgmt_name):
     if not fs_uuid:
         fs_uuid = new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid)
     return fs_uuid
-    
+
 def add_mtpt(gen, lustre, options):
     """ create mtpt on a node """
     node_name = get_option(options, 'node')
@@ -1121,7 +1305,7 @@ def add_mtpt(gen, lustre, options):
             if not ost_uuid:
                 error('add_mtpt:', '"'+ost_name+'"', "ost element not found.")
             lov = findByName(lustre, lov_name, "lov")
-            lov_add_obd(gen, lov, ost_uuid)
+            lov_add_obd(gen, lustre, lov, ost_uuid, options)
 
     if fs_name == '':
         mgmt_name = get_option(options, 'mgmt')
@@ -1144,6 +1328,17 @@ def add_mtpt(gen, lustre, options):
     node_add_profile(gen, node, "mountpoint", uuid)
     lustre.appendChild(mtpt)
 
+def commit_version(gen, lustre):
+    update = findLastUpdate(lustre)
+    if update:
+        version = int(update.getAttribute("version")) + 1
+    else:
+        version = 1
+
+    new = gen.update(str(version))
+    lustre.appendChild(new)
+    
+
 ############################################################
 # Command line processing
 #
@@ -1165,7 +1360,7 @@ def get_option_int(options, tag):
     try:
         n = int(val)
     except ValueError:
-        raise OptionError("--%s <num> (value must be integer)" % (tag))        
+        raise OptionError("--%s <num> (value must be integer)" % (tag))
     return n
 
 # simple class for profiling
@@ -1191,13 +1386,13 @@ class chrono:
 # function cmdlinesplit used to split cmd line from batch file
 #
 def cmdlinesplit(cmdline):
-                                                                                                                                               
+
     double_quote  = re.compile(r'"(([^"\\]|\\.)*)"')
     single_quote  = re.compile(r"'(.*?)'")
     escaped = re.compile(r'\\(.)')
     esc_quote = re.compile(r'\\([\\"])')
-    outside = re.compile(r"""([^\s\\'"]+)""")
-                                                                                                                                               
+    outside = re.compile(r"""([^\s\\'"]+)""") #" fucking emacs.
+
     arg_list = []
     i = 0; arg = None
     while i < len(cmdline):
@@ -1210,7 +1405,7 @@ def cmdlinesplit(cmdline):
             i = match.end()
             if arg is None: arg = esc_quote.sub(r'\1', match.group(1))
             else:           arg = arg + esc_quote.sub(r'\1', match.group(1))
-                                                                                                                                               
+
         elif c == "'":
             match = single_quote.match(cmdline, i)
             if not match:
@@ -1219,7 +1414,7 @@ def cmdlinesplit(cmdline):
             i = match.end()
             if arg is None: arg = match.group(1)
             else:           arg = arg + match.group(1)
-                                                                                                                                               
+
         elif c == "\\":
             match = escaped.match(cmdline, i)
             if not match:
@@ -1228,7 +1423,7 @@ def cmdlinesplit(cmdline):
             i = match.end()
             if arg is None: arg = match.group(1)
             else:           arg = arg + match.group(1)
-                                                                                                                                               
+
         elif c in string.whitespace:
             if arg != None:
                 arg_list.append(str(arg))
@@ -1241,9 +1436,9 @@ def cmdlinesplit(cmdline):
             i = match.end()
             if arg is None: arg = match.group()
             else:           arg = arg + match.group()
-                                                                                                                                               
+
     if arg != None: arg_list.append(str(arg))
-                                                                                                                                               
+
     return arg_list
 
 ############################################################
@@ -1275,10 +1470,29 @@ def add(devtype, gen, lustre, options):
         add_lmv(gen, lustre, options)
     else:
         error("unknown device type:", devtype)
-    
+
+def delete(devtype, gen, lustre, options):
+    if devtype == 'ost':
+        del_ost(gen, lustre, options)
+    elif options.delete:
+        error("delete not supported for device type:", devtype)
+    elif options.deactivate:
+        error("deactivate not supported for device type:", devtype)
+    else:
+        error("in delete(), but neither .delete nor .deactivate are set.  Tell CFS.")
+
+def commit(gen, lustre):
+    commit_version(gen, lustre)
+
 def do_command(gen, lustre, options, args):
     if options.add:
         add(options.add, gen, lustre, options)
+    elif options.delete:
+        delete(options.delete, gen, lustre, options)
+    elif options.deactivate:
+        delete(options.deactivate, gen, lustre, options)
+    elif options.commit:
+        commit(gen, lustre)
     else:
         error("Missing command")
 

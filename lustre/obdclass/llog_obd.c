@@ -21,6 +21,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
+#include <linux/lustre_mds.h>
 #include <portals/list.h>
 
 /* helper functions for calling the llog obd methods */
@@ -78,7 +79,8 @@ int obd_llog_cleanup(struct llog_ctxt *ctxt)
         int rc = 0;
         ENTRY;
 
-        LASSERT(ctxt);
+        if (ctxt == NULL)
+                RETURN(0);
 
         if (CTXTP(ctxt, cleanup))  
                 rc = CTXTP(ctxt, cleanup)(ctxt);
@@ -162,10 +164,10 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llogs *llogs,
         LASSERT(ctxt);
         llog_gen_init(ctxt);
 
-        if (logid->lgl_oid)
-                rc = llog_create(ctxt, &handle, logid, NULL);
-        else {
-                rc = llog_create(ctxt, &handle, NULL, NULL);
+        if (logid->lgl_oid) {
+                rc = llog_open(ctxt, &handle, logid, NULL, 0);
+        } else {
+                rc = llog_open(ctxt, &handle, NULL, NULL, 0);
                 if (!rc)
                         *logid = handle->lgh_id;
         }

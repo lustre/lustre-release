@@ -237,6 +237,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         spin_lock_init(&ns->ns_counter_lock);
         ns->ns_locks = 0;
         ns->ns_resources = 0;
+        init_waitqueue_head(&ns->ns_waitq);
 
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
@@ -597,6 +598,8 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 
                 spin_lock(&ns->ns_counter_lock);
                 ns->ns_resources--;
+                if (ns->ns_resources == 0)
+                        wake_up(&ns->ns_waitq);
                 spin_unlock(&ns->ns_counter_lock);
 
                 rc = 1;

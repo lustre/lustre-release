@@ -43,7 +43,7 @@
 /* Create a new device and set the type, name and uuid.  If
  * successful, the new device can be accessed by either name or uuid.
  */
-int class_attach(struct lustre_cfg *lcfg)
+static int class_attach(struct lustre_cfg *lcfg)
 {
         struct obd_type *type;
         struct obd_device *obd;
@@ -103,7 +103,11 @@ int class_attach(struct lustre_cfg *lcfg)
                 GOTO(out, rc = -EINVAL);
 
         /* have we attached a type to this device */
-        if (obd->obd_attached || obd->obd_type) {
+        if (obd->obd_attached) {
+                CERROR("OBD: Device %d already attached.\n", obd->obd_minor);
+                GOTO(out, rc = -EBUSY);
+        }
+        if (obd->obd_type != NULL) {
                 CERROR("OBD: Device %d already typed as %s.\n",
                        obd->obd_minor, MKSTR(obd->obd_type->typ_name));
                 GOTO(out, rc = -EBUSY);
@@ -165,13 +169,13 @@ int class_attach(struct lustre_cfg *lcfg)
         case 2:
                 OBD_FREE(obd->obd_name, strlen(obd->obd_name) + 1);
         case 1:
-                class_put_type(obd->obd_type);
+                class_put_type(type);
                 obd->obd_type = NULL;
         }
         return rc;
 }
 
-int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int err = 0;
         struct obd_export *exp;
@@ -217,7 +221,7 @@ err_exp:
         RETURN(err);
 }
 
-int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int minor;
         int err = 0;
@@ -275,7 +279,7 @@ static void dump_exports(struct obd_device *obd)
         }
 }
 
-int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int flags = 0;
         int err = 0;
@@ -356,10 +360,12 @@ out:
                 obd->obd_set_up = obd->obd_stopping = 0;
                 obd->obd_type->typ_refcnt--;
                 /* XXX this should be an LASSERT */
-                if (atomic_read(&obd->obd_refcount) > 0)
-                        CERROR("%s still has refcount %d after "
-                               "cleanup.\n", obd->obd_name,
+                if (atomic_read(&obd->obd_refcount) > 0) {
+                        CERROR("%s (%p) still has refcount %d after "
+                               "cleanup.\n", obd->obd_name, obd,
                                atomic_read(&obd->obd_refcount));
+                        dump_exports(obd);
+                }
         }
 
         RETURN(err);
@@ -437,6 +443,7 @@ int class_process_config(struct lustre_cfg *lcfg)
         struct obd_device *obd;
         char str[PTL_NALFMT_SIZE];
         int err;
+        ENTRY;
 
         LASSERT(lcfg && !IS_ERR(lcfg));
 
@@ -527,8 +534,8 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         default: {
-                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
-                GOTO(out, err = -EINVAL);
+                err = obd_process_config(obd, sizeof(*lcfg), lcfg);
+                GOTO(out, err);
 
         }
         }
@@ -536,14 +543,15 @@ out:
         RETURN(err);
 }
 
-static int class_config_llog_handler(struct llog_handle * handle,
-                                     struct llog_rec_hdr *rec, void *data)
+static int class_config_parse_handler(struct llog_handle * handle,
+                                      struct llog_rec_hdr *rec, void *data)
 {
         struct config_llog_instance *cfg = data;
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         int rc = 0;
         ENTRY;
+
         if (rec->lrh_type == OBD_CFG_REC) {
                 char *buf;
                 struct lustre_cfg *lcfg;
@@ -597,40 +605,39 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 lustre_cfg_freedata(buf, cfg_len);
         } else if (rec->lrh_type == PTL_CFG_REC) {
                 struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
-                if (pcfg->pcfg_command ==NAL_CMD_REGISTER_MYNID &&
+                if (pcfg->pcfg_command == NAL_CMD_REGISTER_MYNID &&
                     cfg->cfg_local_nid != PTL_NID_ANY) {
                         pcfg->pcfg_nid = cfg->cfg_local_nid;
                 }
 
                 rc = libcfs_nal_cmd(pcfg);
+        } else {
+                CERROR("unrecognized record type: 0x%x\n", rec->lrh_type);
         }
 out:
         RETURN(rc);
 }
 
-int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
-                            struct config_llog_instance *cfg)
+int class_config_process_llog(struct llog_ctxt *ctxt, char *name,
+                              struct config_llog_instance *cfg)
 {
         struct llog_handle *llh;
         int rc, rc2;
         ENTRY;
 
-        rc = llog_create(ctxt, &llh, NULL, name);
+        rc = llog_open(ctxt, &llh, NULL, name, 0);
         if (rc)
                 RETURN(rc);
 
         rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
-        if (rc)
-                GOTO(parse_out, rc);
+        if (rc == 0)
+                rc = llog_process(llh, class_config_parse_handler, cfg, NULL);
 
-        rc = llog_process(llh, class_config_llog_handler, cfg, NULL);
-parse_out:
         rc2 = llog_close(llh);
         if (rc == 0)
                 rc = rc2;
 
         RETURN(rc);
-
 }
 
 static int class_config_dump_handler(struct llog_handle * handle,
@@ -640,6 +647,7 @@ static int class_config_dump_handler(struct llog_handle * handle,
         char *cfg_buf = (char*) (rec + 1);
         int rc = 0;
         ENTRY;
+
         if (rec->lrh_type == OBD_CFG_REC) {
                 char *buf;
                 struct lustre_cfg *lcfg;
@@ -649,12 +657,12 @@ static int class_config_dump_handler(struct llog_handle * handle,
                         GOTO(out, rc);
                 lcfg = (struct lustre_cfg* ) buf;
 
-                CDEBUG(D_INFO, "lcfg command: %x\n", lcfg->lcfg_command);
+                CDEBUG(D_INFO, "lcfg command: 0x%x\n", lcfg->lcfg_command);
                 if (lcfg->lcfg_dev_name)
                         CDEBUG(D_INFO, "     devname: %s\n",
                                lcfg->lcfg_dev_name);
                 if (lcfg->lcfg_flags)
-                        CDEBUG(D_INFO, "       flags: %x\n", lcfg->lcfg_flags);
+                        CDEBUG(D_INFO, "       flags: 0x%x\n", lcfg->lcfg_flags);
                 if (lcfg->lcfg_nid)
                         CDEBUG(D_INFO, "         nid: "LPX64"\n",
                                lcfg->lcfg_nid);
@@ -665,7 +673,7 @@ static int class_config_dump_handler(struct llog_handle * handle,
                 if (lcfg->lcfg_inlbuf1)
                         CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf1);
                 if (lcfg->lcfg_inlbuf2)
-                        CDEBUG(D_INFO, "     inlbuf3: %s\n",lcfg->lcfg_inlbuf2);
+                        CDEBUG(D_INFO, "     inlbuf2: %s\n",lcfg->lcfg_inlbuf2);
                 if (lcfg->lcfg_inlbuf3)
                         CDEBUG(D_INFO, "     inlbuf3: %s\n",lcfg->lcfg_inlbuf3);
                 if (lcfg->lcfg_inlbuf4)
@@ -679,7 +687,7 @@ static int class_config_dump_handler(struct llog_handle * handle,
         } else if (rec->lrh_type == PTL_CFG_REC) {
                 struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
 
-                CDEBUG(D_INFO, "pcfg command: %d\n", pcfg->pcfg_command);
+                CDEBUG(D_INFO, "pcfg command: 0x%x\n", pcfg->pcfg_command);
                 if (pcfg->pcfg_nal)
                         CDEBUG(D_INFO, "         nal: %d\n",
                                pcfg->pcfg_nal);
@@ -690,19 +698,19 @@ static int class_config_dump_handler(struct llog_handle * handle,
                         CDEBUG(D_INFO, "         nid: "LPX64"\n",
                                pcfg->pcfg_nid);
                 if (pcfg->pcfg_nid2)
-                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
+                        CDEBUG(D_INFO, "        nid2: "LPX64"\n",
                                pcfg->pcfg_nid2);
                 if (pcfg->pcfg_nid3)
-                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
+                        CDEBUG(D_INFO, "        nid3: "LPX64"\n",
                                pcfg->pcfg_nid3);
                 if (pcfg->pcfg_misc)
-                        CDEBUG(D_INFO, "         nid: %d\n",
+                        CDEBUG(D_INFO, "        misc: %d\n",
                                pcfg->pcfg_misc);
                 if (pcfg->pcfg_id)
-                        CDEBUG(D_INFO, "          id: %x\n",
+                        CDEBUG(D_INFO, "          id: 0x%x\n",
                                pcfg->pcfg_id);
                 if (pcfg->pcfg_flags)
-                        CDEBUG(D_INFO, "       flags: %x\n",
+                        CDEBUG(D_INFO, "       flags: 0x%x\n",
                                pcfg->pcfg_flags);
         } else {
                 CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);
@@ -719,20 +727,17 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
         int rc, rc2;
         ENTRY;
 
-        rc = llog_create(ctxt, &llh, NULL, name);
+        rc = llog_open(ctxt, &llh, NULL, name, 0);
         if (rc)
                 RETURN(rc);
 
         rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
-        if (rc)
-                GOTO(parse_out, rc);
+        if (rc == 0)
+                rc = llog_process(llh, class_config_dump_handler, cfg, NULL);
 
-        rc = llog_process(llh, class_config_dump_handler, cfg, NULL);
-parse_out:
         rc2 = llog_close(llh);
         if (rc == 0)
                 rc = rc2;
 
         RETURN(rc);
-
 }

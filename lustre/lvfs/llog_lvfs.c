@@ -204,7 +204,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 loff_t saved_offset;
 
                 /* no header: only allowed to insert record 1 */
-                if (idx != 1 && !file->f_dentry->d_inode->i_size) {
+                if (idx > 1 && !file->f_dentry->d_inode->i_size) {
                         CERROR("idx != -1 in empty log\n");
                         LBUG();
                 }
@@ -268,12 +268,14 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc)
                 RETURN(rc);
 
+        CDEBUG(D_HA, "adding record "LPX64": idx: %u, %u bytes off: %lld\n",
+               loghandle->lgh_id.lgl_oid, index, le32_to_cpu(rec->lrh_len),
+               file->f_pos);
+
         rc = llog_lvfs_write_blob(ctxt, file, rec, buf, file->f_pos);
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_HA, "added record "LPX64": idx: %u, %u bytes\n",
-               loghandle->lgh_id.lgl_oid, index, le32_to_cpu(rec->lrh_len));
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
@@ -318,7 +320,6 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *curr_idx,
                                 int len)
 {
         struct llog_ctxt *ctxt = loghandle->lgh_ctxt;
-        int rc;
         ENTRY;
 
         if (len == 0 || len & (LLOG_CHUNK_SIZE - 1))
@@ -331,6 +332,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *curr_idx,
                 struct llog_rec_hdr *rec;
                 struct llog_rec_tail *tail;
                 loff_t ppos;
+                int nbytes, rc;
 
                 llog_skip_over(curr_offset, *curr_idx, next_idx);
 
@@ -347,21 +349,20 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *curr_idx,
                         RETURN(rc);
                 }
 
-                /* put number of bytes read into rc to make code simpler */
-                rc = ppos - *curr_offset;
+                nbytes = ppos - *curr_offset;
                 *curr_offset = ppos;
 
-                if (rc == 0) /* end of file, nothing to do */
+                if (nbytes == 0) /* end of file, nothing to do */
                         RETURN(0);
 
-                if (rc < sizeof(*tail)) {
+                if (nbytes < sizeof(*tail)) {
                         CERROR("Invalid llog block at log id "LPU64"/%u offset "
                                LPU64"\n", loghandle->lgh_id.lgl_oid,
                                loghandle->lgh_id.lgl_ogen, *curr_offset);
                         RETURN(-EINVAL);
                 }
 
-                tail = buf + rc - sizeof(struct llog_rec_tail);
+                tail = buf + nbytes - sizeof(struct llog_rec_tail);
                 *curr_idx = le32_to_cpu(tail->lrt_index);
 
                 /* this shouldn't happen */
@@ -476,7 +477,8 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
         } else {
                 filp = l_filp_open(logname, flags, mode);
                 if (IS_ERR(filp)) {
-                        CERROR("logfile creation %s: %ld\n", logname,
+                        CERROR("logfile %s(%s): %ld\n",
+                               flags & O_CREAT ? "create" : "open", logname,
                                PTR_ERR(filp));
                 }
         }
@@ -664,15 +666,18 @@ out:
         RETURN(rc);
 }
 
-static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
+static int llog_lvfs_open(struct llog_ctxt *ctxt, struct llog_handle **res,
+                          struct llog_logid *logid, char *name, int flags)
 {
         struct llog_handle *handle;
         struct lvfs_run_ctxt saved;
         int rc = 0;
-        int open_flags = O_RDWR | O_CREAT | O_LARGEFILE;
+        int open_flags = O_RDWR | O_LARGEFILE;
         ENTRY;
-        
+
+        if (flags & OBD_LLOG_FL_CREATE)
+                open_flags |= O_CREAT;
+
         handle = llog_alloc_handle();
         if (handle == NULL)
                 RETURN(-ENOMEM);
@@ -937,7 +942,7 @@ int llog_put_cat_list(struct lvfs_run_ctxt *ctxt,
 EXPORT_SYMBOL(llog_put_cat_list);
 
 struct llog_operations llog_lvfs_ops = {
-        lop_create:      llog_lvfs_create,
+        lop_open:        llog_lvfs_open,
         lop_destroy:     llog_lvfs_destroy,
         lop_close:       llog_lvfs_close,
         lop_read_header: llog_lvfs_read_header,
@@ -964,8 +969,8 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         return 0;
 }
 
-static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
+static int llog_lvfs_open(struct llog_ctxt *ctxt, struct llog_handle **res,
+                          struct llog_logid *logid, char *name, int flags)
 {
         LBUG();
         return 0;
@@ -1014,7 +1019,7 @@ int llog_lvfs_next_block(struct llog_handle *loghandle, int *curr_idx,
 }
 
 struct llog_operations llog_lvfs_ops = {
-        lop_create:      llog_lvfs_create,
+        lop_open:        llog_lvfs_open,
         lop_destroy:     llog_lvfs_destroy,
         lop_close:       llog_lvfs_close,
         lop_read_header: llog_lvfs_read_header,

@@ -57,6 +57,11 @@ class LustreDB:
         uuids = self._get_all_refs()
         return uuids
 
+    def get_lov_tgts(self, tag):
+        """ Returns list of lovtgts. """
+        tgts = self._get_lov_tgts(tag)
+        return tgts
+
     def nid2server(self, nid, net_type, cluster_id):
         netlist = self.lookup_class('network')
         for net_db in netlist:
@@ -182,6 +187,18 @@ class LustreDB_XML(LustreDB):
         for r in reflist:
             uuids.append(self.xml_get_ref(r))
         return uuids
+
+    def _get_lov_tgts(self, tag):
+        """ Get all the refs of type TAG.  Returns list of lov_tgts. """
+        tgts = []
+        tgtlist = self.dom_node.getElementsByTagName(tag)
+        for tgt in tgtlist:
+            uuidref = tgt.getAttribute('uuidref')
+            index = tgt.getAttribute('index')
+            generation = tgt.getAttribute('generation')
+            active = int(tgt.getAttribute('active'))
+            tgts.append((uuidref, index, generation, active))
+        return tgts
 
     def xmllookup_by_uuid(self, dom_node, uuid):
         for n in dom_node.childNodes:

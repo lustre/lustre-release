@@ -42,8 +42,8 @@
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
+static int llog_client_open(struct llog_ctxt *ctxt, struct llog_handle **res,
+                            struct llog_logid *logid, char *name, int flags)
 {
         struct obd_import *imp;
         struct llogd_body req_body;
@@ -52,9 +52,7 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         struct ptlrpc_request *req = NULL;
         int size[2] = {sizeof(req_body)};
         char *tmp[2] = {(char*) &req_body};
-        int bufcount = 1;
-        int repsize[] = {sizeof (req_body)};
-        int rc;
+        int bufcount = 1, repsize[] = {sizeof (req_body)}, rc;
         ENTRY;
 
         LASSERT(ctxt->loc_imp);
@@ -69,6 +67,7 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (logid)
                 req_body.lgd_logid = *logid;
         req_body.lgd_ctxt_idx = ctxt->loc_idx - 1;
+        req_body.lgd_llh_flags = flags;
 
         if (name) {
                 size[bufcount] = strlen(name) + 1;
@@ -76,7 +75,7 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 bufcount++;
         }
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_CREATE,bufcount,size,tmp);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_OPEN, bufcount, size,tmp);
         if (!req)
                 GOTO(err_free, rc = -ENOMEM);
 
@@ -279,6 +278,6 @@ struct llog_operations llog_client_ops = {
         lop_prev_block:  llog_client_prev_block,
         lop_next_block:  llog_client_next_block,
         lop_read_header: llog_client_read_header,
-        lop_create:      llog_client_create,
+        lop_open:        llog_client_open,
         lop_close:       llog_client_close,
 };

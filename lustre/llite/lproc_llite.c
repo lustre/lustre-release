@@ -204,7 +204,7 @@ static int ll_wr_read_ahead(struct file *file, const char *buffer,
         ENTRY;
 
         if (1 != sscanf(buffer, "%d", &readahead))
-                RETURN(-EINVAL);        
+                RETURN(-EINVAL);
 
         if (readahead)
                 sbi->ll_flags |= LL_SBI_READAHEAD;
@@ -214,7 +214,17 @@ static int ll_wr_read_ahead(struct file *file, const char *buffer,
         RETURN(count);
 }
 
-static int ll_rd_max_read_ahead_mb(char *page, char **start, off_t off, 
+static int ll_wr_config_update(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
+{
+        struct super_block *sb = (struct super_block*)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        ENTRY;
+
+        RETURN(ll_process_config_update(sbi, 0));
+}
+
+static int ll_rd_max_read_ahead_mb(char *page, char **start, off_t off,
                                    int count, int *eof, void *data)
 {
         struct super_block *sb = data;
@@ -261,8 +271,9 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "filesfree",    ll_rd_filesfree,        0, 0 },
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "read_ahead",   ll_rd_read_ahead, ll_wr_read_ahead, 0 },
-        { "max_read_ahead_mb",   ll_rd_max_read_ahead_mb, 
-                                 ll_wr_max_read_ahead_mb, 0 },
+        { "config_update", 0, ll_wr_config_update, 0 },
+        { "max_read_ahead_mb", ll_rd_max_read_ahead_mb,
+                               ll_wr_max_read_ahead_mb, 0 },
         { 0 }
 };
 
@@ -499,8 +510,8 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                 int has_flags = 0;
                 struct page *page = llap->llap_page;
 
-                seq_printf(seq, "%lu | %p %p | %p %p %lu [", 
-                                sbi->ll_pglist_gen, 
+                seq_printf(seq, "%lu | %p %p | %p %p %lu [",
+                                sbi->ll_pglist_gen,
                                 llap, llap->llap_cookie,
                                 page, page->mapping->host, page->index);
                 seq_page_flag(seq, page, locked, has_flags);
@@ -511,7 +522,7 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                 seq_page_flag(seq, page, highmem, has_flags);
                 if (!has_flags)
                         seq_puts(seq, "-]\n");
-                else 
+                else
                         seq_puts(seq, "]\n");
         }
 
@@ -530,7 +541,7 @@ static void *llite_dump_pgcache_seq_start(struct seq_file *seq, loff_t *pos)
         return (void *)1;
 }
 
-static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v, 
+static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v,
                                          loff_t *pos)
 {
         struct ll_async_page *llap, *dummy_llap = seq->private;

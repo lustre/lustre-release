@@ -333,6 +333,7 @@ struct mds_obd {
           FIXME later will be totally fixed by b_cmd*/
         int                              mds_num;
         atomic_t                         mds_open_count;
+        int                              mds_config_version;
 
         char                            *mds_lmv_name;
         struct obd_device               *mds_lmv_obd; /* XXX lmv_obd */
@@ -406,6 +407,7 @@ struct cache_obd {
 
 struct lov_tgt_desc {
         struct obd_uuid          uuid;
+        __u32                    ltd_gen;
         struct obd_export       *ltd_exp;
         int                      active; /* is this target up for requests */
 };
@@ -602,6 +604,7 @@ struct obd_device {
 #define OBD_OPT_REAL_CLIENT     0x0004
 
 #define OBD_LLOG_FL_SENDNOW     0x0001
+#define OBD_LLOG_FL_CREATE      0x0002
 
 struct mdc_op_data;
 
@@ -618,6 +621,8 @@ struct obd_ops {
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
         int (*o_precleanup)(struct obd_device *dev, int flags);
         int (*o_cleanup)(struct obd_device *dev, int flags);
+        int (*o_process_config)(struct obd_device *dev, obd_count len,
+                                void *data);
         int (*o_postrecov)(struct obd_device *dev);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid);
@@ -629,6 +634,9 @@ struct obd_ops {
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
                           struct lov_mds_md *disk_src, int disk_len);
+        int (*o_revalidate_md)(struct obd_export *exp,  struct obdo *oa,
+                               struct lov_stripe_md *ea,
+                               struct obd_trans_info *oti);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,

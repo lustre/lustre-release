@@ -149,12 +149,14 @@ command_t cmdlist[] = {
         {"detach", jt_obd_detach, 0,
          "remove driver (and name and uuid) from current device\n"
          "usage: detach"},
-        {"lov_setup", jt_lcfg_lov_setup, 0,
-         "write setup an lov device\n"
-         "usage: lov_setconfig lov-uuid stripe-count stripe-size offset pattern UUID1 [UUID2 ...]"},
+        {"lov_setup", jt_lcfg_lov_setup, 0, "create a LOV device\n"
+         "usage: lov_setup lov-uuid stripe-count stripe-size offset pattern"},
         {"lmv_setup", jt_lcfg_lmv_setup, 0,
-         "write setup an lmv device\n"
-         "usage: lmv_setconfig lmv-uuid UUID1 [UUID2 ...]"},
+         "create an LMV device\n"
+         "usage: lmv_setup lmv-uuid UUID1 [UUID2 ...]"},
+        {"lov_modify_tgts", jt_lcfg_lov_modify_tgts, 0,
+         "add or delete an obd to/from a LOV device\n"
+         "usage: lov_modify_tgts add|del <lov-name> <uuid> <index> <gen>"},
         {"lov_getconfig", jt_obd_lov_getconfig, 0,
          "read lov configuration from an mds device\n"
          "usage: lov_getconfig lov-uuid"},

@@ -438,6 +438,11 @@ void __class_export_put(struct obd_export *exp)
                 if (obd->obd_set_up) {
                         atomic_dec(&obd->obd_refcount);
                         wake_up(&obd->obd_refcount_waitq);
+                } else {
+                        CERROR("removing export %p from obd %s (%p) -- OBD "
+                               "not set up (refcount = %d)\n", exp,
+                               obd->obd_name, obd,
+                               atomic_read(&obd->obd_refcount));
                 }
         }
 }

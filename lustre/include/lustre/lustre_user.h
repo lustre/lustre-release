@@ -105,6 +105,11 @@ static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
         return strcmp(u1->uuid, u2->uuid) == 0;
 }
 
+static inline int obd_uuid_empty(struct obd_uuid *uuid)
+{
+        return uuid->uuid[0] == '\0';
+}
+
 static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 {
         strncpy(uuid->uuid, tmp, sizeof(*uuid));
