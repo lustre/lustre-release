@@ -1167,6 +1167,11 @@ int jt_obd_lov_config(int argc, char **argv)
                         desc.ld_tgt_count);
                 return -EINVAL;
         }
+        if (desc.ld_default_stripe_count == 0) {
+                fprintf(stderr, "error: %s: stripe count is zero\n",
+                        cmdname(argv[0]));
+                return -EINVAL;
+        }
         desc.ld_default_stripe_size = strtoul(argv[3], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad default stripe size '%s'\n",

@@ -34,30 +34,21 @@ struct brw_page {
 };
 
 struct lov_oinfo { /* per-child structure */
-        __u64 loi_id;
-        __u64 loi_size;
+        __u64 loi_id;              /* object ID on the target OST */
+        __u64 loi_size;            /* size of this object on the target OST */
+        int loi_ost_idx;           /* OST stripe index in lmd_objects array */
 };
 
 struct lov_stripe_md {
-        __u32 lmd_magic;
-        __u32 lmd_mds_easize;      /* packed size for MDS of ea */
-        __u64 lmd_object_id;       /* lov object id */
-        __u64 lmd_stripe_offset;   /* offset of the stripe */ 
-        __u64 lmd_stripe_size;     /* size of the stripe */
-        __u32 lmd_stripe_count;    /* how many objects are being striped */
-        __u32 lmd_stripe_pattern;  /* per-lov object stripe pattern */
-        struct lov_oinfo lmd_oinfo[0];
-};
-
-struct lov_stripe_md_one {
-        __u32 lmd_magic;
-        __u32 lmd_easize;          /* packed size for MDS of ea */
-        __u64 lmd_object_id;       /* lov object id */
-        __u64 lmd_stripe_offset;   /* offset of the stripe */ 
-        __u64 lmd_stripe_size;     /* size of the stripe */
-        __u32 lmd_stripe_count;    /* how many objects are being striped */
-        __u32 lmd_stripe_pattern;  /* per-lov object stripe pattern */
-        struct lov_oinfo lmd_oinfo[1];
+        __u32 lsm_magic;
+        __u32 lsm_mds_easize;      /* packed size for MDS of ea */
+        __u64 lsm_object_id;       /* lov object id */
+        __u64 lsm_stripe_size;     /* size of the stripe */
+        __u32 lsm_stripe_pattern;  /* per-lov object stripe pattern */
+        int   lsm_stripe_offset;   /* offset of first stripe in lmd_objects */
+        int   lsm_stripe_count;    /* how many objects are being striped on */
+        int   lsm_ost_count;       /* how many OSTs are in this LOV */
+        struct lov_oinfo lsm_oinfo[0];
 };
 
 /* Individual type definitions */
@@ -106,6 +97,7 @@ struct client_obd {
         int                  cl_conn_count;
         __u8                 cl_target_uuid[37]; /* XXX -> lustre_name */
         int                  cl_max_mds_easize;
+        int                  cl_max_ost_easize;
 };
 
 struct mds_obd {

@@ -112,65 +112,68 @@ static int mds_extN_setattr(struct dentry *dentry, void *handle,
 }
 
 static int mds_extN_set_md(struct inode *inode, void *handle,
-                           struct lov_mds_md *md)
+                           struct lov_mds_md *lmm)
 {
         int rc;
 
         down(&inode->i_sem);
         lock_kernel();
-        if (md == NULL)
+        if (lmm == NULL)
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, NULL, 0, 0);
         else {
-                md->lmd_magic = cpu_to_le32(XATTR_MDS_MO_MAGIC);
+                lmm->lmm_magic = cpu_to_le32(XATTR_MDS_MO_MAGIC);
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, md,
-                                    md->lmd_easize, XATTR_CREATE);
+                                    XATTR_LUSTRE_MDS_OBJID, lmm,
+                                    lmm->lmm_easize, XATTR_CREATE);
                 if (rc == -EEXIST)
                         rc = extN_xattr_set(handle, inode,
                                             EXTN_XATTR_INDEX_LUSTRE,
-                                            XATTR_LUSTRE_MDS_OBJID, md,
-                                            md->lmd_easize, 0);
+                                            XATTR_LUSTRE_MDS_OBJID, lmm,
+                                            lmm->lmm_easize, 0);
         }
         unlock_kernel();
         up(&inode->i_sem);
 
         if (rc) {
-                CERROR("error adding objectid %Ld to inode %ld: %d\n",
-                       (unsigned long long)md->lmd_object_id, inode->i_ino, rc);
+                CERROR("error adding objectid "LPX64" to inode %ld: %d\n",
+                       lmm->lmm_object_id, inode->i_ino, rc);
                 LBUG();
         }
         return rc;
 }
 
-static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *md)
+static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *lmm)
 {
         int rc;
-        int size = md->lmd_easize;
+        int size = lmm->lmm_easize;
 
         down(&inode->i_sem);
         lock_kernel();
         rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, md, size);
+                            XATTR_LUSTRE_MDS_OBJID, lmm, size);
         unlock_kernel();
         up(&inode->i_sem);
+
+        /* This gives us the MD size */
+        if (lmm == NULL)
+                return rc;
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "
                        "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
-                memset(md, 0, size);
+                memset(lmm, 0, size);
                 return rc;
-        } else if (md == NULL)
-                return rc;
+        }
 
-        if (md->lmd_magic != cpu_to_le32(XATTR_MDS_MO_MAGIC)) {
+        if (lmm->lmm_magic != cpu_to_le32(XATTR_MDS_MO_MAGIC)) {
                 CERROR("MDS striping md for ino %ld has bad magic\n",
                        inode->i_ino);
                 rc = -EINVAL;
         } else {
                 /* This field is byteswapped because it appears in the
                  * catalogue.  All others are opaque to the MDS */
-                md->lmd_object_id = le64_to_cpu(md->lmd_object_id);
+                lmm->lmm_object_id = le64_to_cpu(lmm->lmm_object_id);
         }
 
         return rc;

@@ -30,9 +30,9 @@ struct ll_file_data {
 };
 
 
-struct ll_inode_md {
-        struct mds_body *body;
-        struct lov_mds_md *md;
+struct ll_read_inode2_cookie {
+        struct mds_body *lic_body;
+        struct lov_mds_md *lic_lmm;
 };
 
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
@@ -119,6 +119,16 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
         ll_ino2fid(fid, inode->i_ino, inode->i_generation,
                    inode->i_mode & S_IFMT);
+}
+
+static inline int ll_mds_easize(struct super_block *sb)
+{
+        return sbi2mdc(ll_s2sbi(sb))->cl_max_mds_easize;
+}
+
+static inline int ll_ost_easize(struct super_block *sb)
+{
+        return sbi2mdc(ll_s2sbi(sb))->cl_max_ost_easize;
 }
 
 /* namei.c */

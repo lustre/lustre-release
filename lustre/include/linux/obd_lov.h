@@ -14,5 +14,15 @@ void lov_packdesc(struct lov_desc *ld);
 void lov_packmd(struct lov_mds_md *mdsmd, struct lov_stripe_md *md);
 void lov_unpackmd(struct lov_stripe_md *md, struct lov_mds_md *mdsmd);
 
+static inline int lov_stripe_md_size(int stripes)
+{
+        return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo);
+}
+
+static inline int lov_mds_md_size(int stripes)
+{
+        return sizeof(struct lov_mds_md) + stripes*sizeof(struct lov_object_id);
+}
+
 #endif
 #endif

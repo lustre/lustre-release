@@ -245,7 +245,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (dchild->d_inode) {
                 struct mds_body *body;
                 struct inode *inode = dchild->d_inode;
-                struct lov_mds_md *md;
+                struct lov_mds_md *lmm;
+
                 CDEBUG(D_INODE, "child exists (dir %ld, name %s, ino %ld)\n",
                        dir->i_ino, rec->ur_name, dchild->d_inode->i_ino);
 
@@ -253,11 +254,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
                 if (S_ISREG(inode->i_mode)) {
-                        md = lustre_msg_buf(req->rq_repmsg, offset + 1);
-                        md->lmd_easize = mds->mds_max_mdsize;
+                        lmm = lustre_msg_buf(req->rq_repmsg, offset + 1);
+                        lmm->lmm_easize = mds->mds_max_mdsize;
 
-                        if (mds_fs_get_md(mds, inode, md) < 0)
-                                memset(md, 0, md->lmd_easize);
+                        if (mds_fs_get_md(mds, inode, lmm) < 0)
+                                memset(lmm, 0, lmm->lmm_easize);
                 }
                 /* now a normal case for intent locking */
                 GOTO(out_create_dchild, rc = -EEXIST);
@@ -325,9 +326,10 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
                 CDEBUG(D_INODE, "created ino %ld\n", dchild->d_inode->i_ino);
                 if (!offset && type == S_IFREG) {
-                        struct lov_mds_md *md;
-                        md = lustre_msg_buf(req->rq_reqmsg, 2);
-                        rc = mds_fs_set_md(mds, inode, handle, md);
+                        struct lov_mds_md *lmm;
+
+                        lmm = lustre_msg_buf(req->rq_reqmsg, 2);
+                        rc = mds_fs_set_md(mds, inode, handle, lmm);
                         if (rc) {
                                 CERROR("error %d setting LOV MD for %ld\n",
                                        rc, inode->i_ino);
@@ -461,14 +463,14 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         case S_IFREG:
                 /* get OBD EA data first so client can also destroy object */
                 if ((inode->i_mode & S_IFMT) == S_IFREG && offset) {
-                        struct lov_mds_md *md;
+                        struct lov_mds_md *lmm;
 
-                        md = lustre_msg_buf(req->rq_repmsg, 2);
-                        md->lmd_easize = mds->mds_max_mdsize;
-                        if ((rc = mds_fs_get_md(mds, inode, md)) < 0) {
+                        lmm = lustre_msg_buf(req->rq_repmsg, 2);
+                        lmm->lmm_easize = mds->mds_max_mdsize;
+                        if ((rc = mds_fs_get_md(mds, inode, lmm)) < 0) {
                                 CDEBUG(D_INFO, "No md for ino %ld: rc = %d\n",
                                        inode->i_ino, rc);
-                                memset(md, 0, md->lmd_easize);
+                                memset(lmm, 0, lmm->lmm_easize);
                         }
                 }
                 /* no break */
@@ -670,15 +672,15 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 } else {
                         mds_pack_inode2fid(&body->fid1, inode);
                         mds_pack_inode2body(body, inode);
-                        if (S_ISREG(inode->i_mode)) { 
-                                struct lov_mds_md *md;
-                                
-                                md = lustre_msg_buf(req->rq_repmsg, 2);
-                                md->lmd_easize = mds->mds_max_mdsize;
-                                if ((rc = mds_fs_get_md(mds, inode, md)) < 0) {
+                        if (S_ISREG(inode->i_mode)) {
+                                struct lov_mds_md *lmm;
+
+                                lmm = lustre_msg_buf(req->rq_repmsg, 2);
+                                lmm->lmm_easize = mds->mds_max_mdsize;
+                                if ((rc = mds_fs_get_md(mds, inode, lmm)) < 0) {
                                         CDEBUG(D_INFO,"No md for %ld: rc %d\n",
                                                inode->i_ino, rc);
-                                        memset(md, 0, md->lmd_easize);
+                                        memset(lmm, 0, lmm->lmm_easize);
                                 }
                         }
                 }

@@ -37,7 +37,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
         struct obdo *oa = NULL;
-        struct lov_stripe_md *md = NULL;
+        struct lov_stripe_md *lsm = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
@@ -45,12 +45,13 @@ static int ll_file_open(struct inode *inode, struct file *file)
         if (file->private_data)
                 LBUG();
 
+        lsm = lli->lli_smd;
+
         /*  delayed create of object (intent created inode) */
         /*  XXX object needs to be cleaned up if mdc_open fails */
         /*  XXX error handling appropriate here? */
-        if (lli->lli_smd == NULL) {
-                struct client_obd *mdc = sbi2mdc(ll_s2sbi(inode->i_sb));
-                struct inode * inode = file->f_dentry->d_inode;
+        if (lsm == NULL) {
+                struct inode *inode = file->f_dentry->d_inode;
 
                 down(&lli->lli_open_sem);
                 /* Check to see if we lost the race */
@@ -61,7 +62,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
                                 RETURN(-ENOMEM);
                         }
                         oa->o_mode = S_IFREG | 0600;
-                        oa->o_easize = mdc->cl_max_mds_easize;
+                        oa->o_easize = ll_mds_easize(inode->i_sb);
                         oa->o_id = inode->i_ino;
                         oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLEASIZE |
                                         OBD_MD_FLID;
@@ -72,11 +73,11 @@ static int ll_file_open(struct inode *inode, struct file *file)
                                 up(&lli->lli_open_sem);
                                 RETURN(rc);
                         }
-                        md = lli->lli_smd;
                 }
-                if (lli->lli_smd->lmd_object_id == 0)
+                if (lli->lli_smd->lsm_object_id == 0)
                         LBUG();
                 up(&lli->lli_open_sem);
+                lsm = lli->lli_smd;
         }
 
         fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL);
@@ -85,7 +86,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         memset(fd, 0, sizeof(*fd));
 
         rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG | inode->i_mode,
-                      file->f_flags, md, (__u64)(unsigned long)file,
+                      file->f_flags, lsm, (__u64)(unsigned long)file,
                       &fd->fd_mdshandle, &req);
         fd->fd_req = req;
         ptlrpc_req_finished(req);
@@ -99,10 +100,10 @@ static int ll_file_open(struct inode *inode, struct file *file)
         if (oa == NULL && (oa = obdo_alloc()) == NULL)
                 GOTO(out_mdc, rc = -EINVAL);
 
-        oa->o_id = lli->lli_smd->lmd_object_id;
+        oa->o_id = lsm->lsm_object_id;
         oa->o_mode = S_IFREG | inode->i_mode;
         oa->o_valid = OBD_MD_FLMODE | OBD_MD_FLID | OBD_MD_FLSIZE;
-        rc = obd_open(ll_i2obdconn(inode), oa, lli->lli_smd);
+        rc = obd_open(ll_i2obdconn(inode), oa, lsm);
         obdo_free(oa);
         oa = NULL;
 
@@ -127,7 +128,7 @@ out:
         return rc;
 }
 
-int ll_size_lock(struct inode *inode, struct lov_stripe_md *md, __u64 start,
+int ll_size_lock(struct inode *inode, struct lov_stripe_md *lsm, __u64 start,
                  int mode, struct lustre_handle **lockhs_p)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -140,25 +141,25 @@ int ll_size_lock(struct inode *inode, struct lov_stripe_md *md, __u64 start,
                 RETURN(0);
         }
 
-        OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+        OBD_ALLOC(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
         if (lockhs == NULL)
                 RETURN(-ENOMEM);
 
         extent.start = start;
         extent.end = ~0;
 
-        rc = obd_enqueue(&sbi->ll_osc_conn, md, NULL, LDLM_EXTENT, &extent,
+        rc = obd_enqueue(&sbi->ll_osc_conn, lsm, NULL, LDLM_EXTENT, &extent,
                          sizeof(extent), mode, &flags, ll_lock_callback,
                          inode, sizeof(*inode), lockhs);
         if (rc != ELDLM_OK) {
                 CERROR("lock enqueue: %d\n", rc);
-                OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                OBD_FREE(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
         } else
                 *lockhs_p = lockhs;
         RETURN(rc);
 }
 
-int ll_size_unlock(struct inode *inode, struct lov_stripe_md *md, int mode,
+int ll_size_unlock(struct inode *inode, struct lov_stripe_md *lsm, int mode,
                    struct lustre_handle *lockhs)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -172,37 +173,37 @@ int ll_size_unlock(struct inode *inode, struct lov_stripe_md *md, int mode,
                 RETURN(-EINVAL);
         }
 
-        rc = obd_cancel(&sbi->ll_osc_conn, md, mode, lockhs);
+        rc = obd_cancel(&sbi->ll_osc_conn, lsm, mode, lockhs);
         if (rc != ELDLM_OK) {
                 CERROR("lock cancel: %d\n", rc);
                 LBUG();
         }
 
-        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+        OBD_FREE(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
         RETURN(rc);
 }
 
-int ll_file_size(struct inode *inode, struct lov_stripe_md *md)
+int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct lustre_handle *lockhs;
         struct obdo oa;
         int err, rc;
 
-        rc = ll_size_lock(inode, md, 0, LCK_PR, &lockhs);
+        rc = ll_size_lock(inode, lsm, 0, LCK_PR, &lockhs);
         if (rc != ELDLM_OK) {
                 CERROR("lock enqueue: %d\n", rc);
                 RETURN(rc);
         }
 
-        oa.o_id = md->lmd_object_id;
+        oa.o_id = lsm->lsm_object_id;
         oa.o_mode = S_IFREG;
         oa.o_valid = OBD_MD_FLID|OBD_MD_FLMODE|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
-        rc = obd_getattr(&sbi->ll_osc_conn, &oa, md);
+        rc = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
         if (!rc)
                 obdo_to_inode(inode, &oa, oa.o_valid);
 
-        err = ll_size_unlock(inode, md, LCK_PR, lockhs);
+        err = ll_size_unlock(inode, lsm, LCK_PR, lockhs);
         if (err != ELDLM_OK) {
                 CERROR("lock cancel: %d\n", err);
                 LBUG();
@@ -228,7 +229,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
 
         memset(&oa, 0, sizeof(oa));
-        oa.o_id = lli->lli_smd->lmd_object_id;
+        oa.o_id = lli->lli_smd->lsm_object_id;
         oa.o_mode = S_IFREG;
         oa.o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
         rc = obd_close(ll_i2obdconn(inode), &oa, lli->lli_smd);
@@ -244,7 +245,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 if (rc)
                         GOTO(out_fd, abs(rc));
 
-                oa.o_id = lli->lli_smd->lmd_object_id;
+                oa.o_id = lli->lli_smd->lsm_object_id;
                 oa.o_mode = S_IFREG;
                 oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE |
                         OBD_MD_FLBLOCKS;
@@ -361,7 +362,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
         struct lustre_handle *lockhs = NULL;
-        struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
+        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         int flags = 0;
         ldlm_error_t err;
         ssize_t retval;
@@ -369,7 +370,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
             sbi->ll_flags & LL_SBI_NOLCK) {
-                OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                OBD_ALLOC(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
                         RETURN(-ENOMEM);
 
@@ -378,12 +379,12 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 CDEBUG(D_INFO, "Locking inode %ld, start "LPU64" end "LPU64"\n",
                        inode->i_ino, extent.start, extent.end);
 
-                err = obd_enqueue(&sbi->ll_osc_conn, md, NULL, LDLM_EXTENT,
+                err = obd_enqueue(&sbi->ll_osc_conn, lsm, NULL, LDLM_EXTENT,
                                   &extent, sizeof(extent), LCK_PR, &flags,
                                   ll_lock_callback, inode, sizeof(*inode),
                                   lockhs);
                 if (err != ELDLM_OK) {
-                        OBD_FREE(lockhs, md->lmd_stripe_count *sizeof(*lockhs));
+                        OBD_FREE(lockhs, lsm->lsm_stripe_count*sizeof(*lockhs));
                         CERROR("lock enqueue: err: %d\n", err);
                         RETURN(err);
                 }
@@ -398,7 +399,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
             sbi->ll_flags & LL_SBI_NOLCK) {
-                err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PR, lockhs);
+                err = obd_cancel(&sbi->ll_osc_conn, lsm, LCK_PR, lockhs);
                 if (err != ELDLM_OK) {
                         CERROR("lock cancel: err: %d\n", err);
                         retval = err;
@@ -406,7 +407,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         }
 
         if (lockhs)
-                OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                OBD_FREE(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
         RETURN(retval);
 }
 
@@ -421,7 +422,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
         struct lustre_handle *lockhs = NULL, *eof_lockhs = NULL;
-        struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
+        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         int flags = 0;
         ldlm_error_t err;
         ssize_t retval;
@@ -429,15 +430,15 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         if (!S_ISBLK(inode->i_mode) && file->f_flags & O_APPEND) {
                 struct obdo oa;
-                err = ll_size_lock(inode, md, 0, LCK_PW, &eof_lockhs);
+                err = ll_size_lock(inode, lsm, 0, LCK_PW, &eof_lockhs);
                 if (err)
                         RETURN(err);
 
-                oa.o_id = md->lmd_object_id;
+                oa.o_id = lsm->lsm_object_id;
                 oa.o_mode = inode->i_mode;
                 oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE |
                         OBD_MD_FLBLOCKS;
-                retval = obd_getattr(&sbi->ll_osc_conn, &oa, md);
+                retval = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
                 if (retval)
                         GOTO(out_eof, retval);
 
@@ -447,7 +448,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
             sbi->ll_flags & LL_SBI_NOLCK) {
-                OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                OBD_ALLOC(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
                         GOTO(out_eof, retval = -ENOMEM);
                 extent.start = *ppos;
@@ -455,7 +456,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 CDEBUG(D_INFO, "Locking inode %ld, start "LPU64" end "LPU64"\n",
                        inode->i_ino, extent.start, extent.end);
 
-                err = obd_enqueue(&sbi->ll_osc_conn, md, NULL, LDLM_EXTENT,
+                err = obd_enqueue(&sbi->ll_osc_conn, lsm, NULL, LDLM_EXTENT,
                                   &extent, sizeof(extent), LCK_PW, &flags,
                                   ll_lock_callback, inode, sizeof(*inode),
                                   lockhs);
@@ -465,14 +466,14 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 }
         }
 
-        CDEBUG(D_INFO, "Writing inode %ld, %ld bytes, offset %Ld\n",
-               inode->i_ino, (long)count, *ppos);
+        CDEBUG(D_INFO, "Writing inode %ld, "LPD64" bytes, offset "LPD64"\n",
+               inode->i_ino, count, *ppos);
 
         retval = generic_file_write(file, buf, count, ppos);
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
             sbi->ll_flags & LL_SBI_NOLCK) {
-                err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PW, lockhs);
+                err = obd_cancel(&sbi->ll_osc_conn, lsm, LCK_PW, lockhs);
                 if (err != ELDLM_OK) {
                         CERROR("lock cancel: err: %d\n", err);
                         GOTO(out_free, retval = err);
@@ -482,11 +483,11 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         EXIT;
  out_free:
         if (lockhs)
-                OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+                OBD_FREE(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
 
  out_eof:
         if (!S_ISBLK(inode->i_mode) && file->f_flags & O_APPEND) {
-                err = ll_size_unlock(inode, md, LCK_PW, eof_lockhs);
+                err = ll_size_unlock(inode, lsm, LCK_PW, eof_lockhs);
                 if (err && !retval)
                         retval = err;
         }

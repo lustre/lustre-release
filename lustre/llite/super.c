@@ -89,17 +89,6 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
 #ifndef log2
 #define log2(n) ffz(~(n))
 #endif
-inline int ll_mds_easize(struct super_block *sb)
-{
-        struct client_obd *mdc = sbi2mdc(ll_s2sbi(sb));
-        return mdc->cl_max_mds_easize;
-}
-
-inline int ll_lov_easize(struct lov_stripe_md *md) 
-{
-        return sizeof(*md) + md->lmd_stripe_count * 
-                sizeof(struct lov_oinfo);
-}
 
 static struct super_block * ll_read_super(struct super_block *sb,
                                           void *data, int silent)
@@ -115,7 +104,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         __u64 last_committed;
         __u64 last_xid;
         struct ptlrpc_request *request = NULL;
-        struct ll_inode_md md;
+        struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
 
         ENTRY;
@@ -212,9 +201,9 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_request, sb = NULL);
         }
 
-        md.body = lustre_msg_buf(request->rq_repmsg, 0);
-        md.md = NULL;
-        root = iget4(sb, sbi->ll_rootino, NULL, &md);
+        lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0);
+        lic.lic_lmm = NULL;
+        root = iget4(sb, sbi->ll_rootino, NULL, &lic);
 
         if (root) {
                 sb->s_root = d_alloc_root(root);
@@ -264,12 +253,11 @@ static void ll_clear_inode(struct inode *inode)
 {
         if (atomic_read(&inode->i_count) == 0) {
                 struct ll_inode_info *lli = ll_i2info(inode);
-                struct lov_stripe_md *md = lli->lli_smd;
+                struct lov_stripe_md *lsm = lli->lli_smd;
                 char *symlink_name = lli->lli_symlink_name;
 
-                if (md) {
-                        int size = ll_lov_easize(md);
-                        OBD_FREE(md, size);
+                if (lsm) {
+                        OBD_FREE(lsm, ll_ost_easize(inode->i_sb));
                         lli->lli_smd = NULL;
                 }
                 if (symlink_name) {
@@ -284,12 +272,12 @@ static void ll_delete_inode(struct inode *inode)
         if (S_ISREG(inode->i_mode)) {
                 int err;
                 struct obdo *oa;
-                struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
 
-                if (!md)
+                if (!lsm)
                         GOTO(out, -EINVAL);
 
-                if (md->lmd_object_id == 0) {
+                if (lsm->lsm_object_id == 0) {
                         CERROR("This really happens\n");
                         /* No obdo was ever created */
                         GOTO(out, 0);
@@ -299,15 +287,15 @@ static void ll_delete_inode(struct inode *inode)
                 if (oa == NULL)
                         GOTO(out, -ENOMEM);
 
-                oa->o_id = md->lmd_object_id;
-                oa->o_easize = md->lmd_mds_easize;
+                oa->o_id = lsm->lsm_object_id;
+                oa->o_easize = ll_mds_easize(inode->i_sb);
                 oa->o_mode = inode->i_mode;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLMODE;
 
-                err = obd_destroy(ll_i2obdconn(inode), oa, md);
+                err = obd_destroy(ll_i2obdconn(inode), oa, lsm);
                 obdo_free(oa);
-                CDEBUG(D_SUPER, "obd destroy of "LPD64" error %d\n",
-                       md->lmd_object_id, err);
+                CDEBUG(D_SUPER, "obd destroy of objid "LPX64" error %d\n",
+                       lsm->lsm_object_id, err);
         }
 out:
         clear_inode(inode);
@@ -423,8 +411,8 @@ out:
 
 static void ll_read_inode2(struct inode *inode, void *opaque)
 {
-        struct ll_inode_md *md = opaque;
-        struct mds_body *body = md->body;
+        struct ll_read_inode2_cookie *lic = opaque;
+        struct mds_body *body = lic->lic_body;
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
 
@@ -457,21 +445,22 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_size = body->size;
 
         //if (body->valid & OBD_MD_FLEASIZE)
-        if (md && md->md) {
-                struct lov_mds_md *smd = md->md;
+        if (lic && lic->lic_lmm) {
+                struct lov_mds_md *lmm = lic->lic_lmm;
                 int size;
-                if (md->md->lmd_easize != ll_mds_easize(inode->i_sb)) {
+
+                if (lmm->lmm_easize != ll_mds_easize(inode->i_sb)) {
                         CERROR("Striping metadata size error %ld\n",
                                inode->i_ino);
                         LBUG();
                 }
-                size = ll_lov_easize(lli->lli_smd);
+                size = ll_ost_easize(inode->i_sb);
                 OBD_ALLOC(lli->lli_smd, size);
                 if (!lli->lli_smd) {
                         CERROR("No memory for %d\n", size);
                         LBUG();
                 }
-                lov_unpackmd(lli->lli_smd, smd);
+                lov_unpackmd(lli->lli_smd, lmm);
         } else {
                 lli->lli_smd = NULL;
         }

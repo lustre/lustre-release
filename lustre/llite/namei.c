@@ -86,9 +86,9 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 /* methods */
 static int ll_find_inode(struct inode *inode, unsigned long ino, void *opaque)
 {
-        struct ll_inode_md *md = opaque;
+        struct ll_read_inode2_cookie *lic = opaque;
 
-        if (inode->i_generation != md->body->generation)
+        if (inode->i_generation != lic->lic_body->generation)
                 return 0;
 
         return 1;
@@ -142,7 +142,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
         struct ptlrpc_request *request = NULL;
         struct inode * inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct ll_inode_md md;
+        struct ll_read_inode2_cookie lic;
         struct lustre_handle lockh;
         struct lookup_intent lookup_it = { IT_LOOKUP };
         int err, offset;
@@ -168,7 +168,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
         request = (struct ptlrpc_request *)it->it_data;
         if (it->it_disposition) {
-                int mode, easize = 0;
+                int mode, symlen = 0;
                 obd_flag valid;
 
                 offset = 1;
@@ -209,18 +209,18 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 }
 
                 /* Do a getattr now that we have the lock */
-                md.body = lustre_msg_buf(request->rq_repmsg, offset);
-                ino = md.body->fid1.id;
-                mode = md.body->mode;
+                lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset);
+                ino = lic.lic_body->fid1.id;
+                mode = lic.lic_body->mode;
                 valid = OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
                 if (it->it_op == IT_READLINK) {
                         valid |= OBD_MD_LINKNAME;
-                        easize = md.body->size;
+                        symlen = lic.lic_body->size;
                 }
                 ptlrpc_free_req(request);
                 request = NULL;
                 err = mdc_getattr(&sbi->ll_mdc_conn, ino, mode,
-                                  valid, easize, &request);
+                                  valid, symlen, &request);
                 if (err) {
                         CERROR("failure %d inode %Ld\n", err, (long long)ino);
                         ptlrpc_free_req(request);
@@ -249,18 +249,17 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
         }
 
  iget:
-        md.body = lustre_msg_buf(request->rq_repmsg, offset);
-        if (S_ISREG(md.body->mode)) {
-                if (request->rq_repmsg->bufcount < offset + 1)
-                        LBUG();
-                md.md = lustre_msg_buf(request->rq_repmsg, offset + 1);
-                if (md.md->lmd_magic != LOV_MAGIC)
-                        md.md = NULL;
+        lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset);
+        if (S_ISREG(lic.lic_body->mode)) {
+                LASSERT(request->rq_repmsg->bufcount < offset + 1);
+                lic.lic_lmm = lustre_msg_buf(request->rq_repmsg, offset + 1);
+                if (lic.lic_lmm->lmm_magic != LOV_MAGIC)
+                        lic.lic_lmm = NULL;
         } else
-                md.md = NULL;
+                lic.lic_lmm = NULL;
 
         /* No rpc's happen during iget4, -ENOMEM's are possible */
-        inode = iget4(dir->i_sb, ino, ll_find_inode, &md);
+        inode = iget4(dir->i_sb, ino, ll_find_inode, &lic);
 
         LASSERT(!IS_ERR(inode));
         if (!inode) {
@@ -285,7 +284,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                                     int namelen, const char *tgt, int tgtlen,
                                     int mode, __u64 extra,
                                     struct lookup_intent *it,
-                                    struct lov_stripe_md *smd)
+                                    struct lov_stripe_md *lsm)
 {
         struct inode *inode;
         struct ptlrpc_request *request = NULL;
@@ -294,8 +293,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         time_t time = CURRENT_TIME;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         int gid = current->fsgid;
-        struct ll_inode_md md;
-        struct lov_mds_md *mds_md = NULL;
+        struct ll_read_inode2_cookie lic;
+        struct lov_mds_md *lmm = NULL;
         int mds_md_size = 0;
 
         ENTRY;
@@ -309,25 +308,24 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         if (!it || !it->it_disposition) {
                 rc = mdc_create(&sbi->ll_mdc_conn, dir, name, namelen, tgt,
                                  tgtlen, mode, current->fsuid,
-                                 gid, time, extra, smd, &request);
+                                 gid, time, extra, lsm, &request);
                 if (rc) {
                         inode = ERR_PTR(rc);
                         GOTO(out, rc);
                 }
                 body = lustre_msg_buf(request->rq_repmsg, 0);
-                if (smd != NULL) {
-                        mds_md_size = sizeof (struct lov_mds_md) + 
-                                smd->lmd_stripe_count * sizeof(struct lov_object_id);
-                        OBD_ALLOC(mds_md, mds_md_size);
-                        lov_packmd(mds_md, smd);
-                        md.md = mds_md;
+                if (lsm != NULL) {
+                        mds_md_size = ll_mds_easize(inode->i_sb);
+                        OBD_ALLOC(lmm, mds_md_size);
+                        lov_packmd(lmm, lsm);
+                        lic.lic_lmm = lmm;
                 } else
-                        md.md = NULL;
+                        lic.lic_lmm = NULL;
 
         } else {
                 request = it->it_data;
                 body = lustre_msg_buf(request->rq_repmsg, 1);
-                md.md = NULL;
+                lic.lic_lmm = NULL;
         }
 
         body->valid = OBD_MD_FLNOTOBD;
@@ -338,9 +336,9 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         body->gid = gid;
         body->mode = mode;
 
-        md.body = body;
+        lic.lic_body = body;
 
-        inode = iget4(dir->i_sb, body->ino, ll_find_inode, &md);
+        inode = iget4(dir->i_sb, body->ino, ll_find_inode, &lic);
         if (IS_ERR(inode)) {
                 rc = PTR_ERR(inode);
                 CERROR("new_inode -fatal: rc %d\n", rc);
@@ -360,8 +358,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         EXIT;
  out:
-        if (mds_md != NULL) 
-                OBD_FREE(mds_md, mds_md_size);
+        if (lmm != NULL)
+                OBD_FREE(lmm, mds_md_size);
         ptlrpc_free_req(request);
         return inode;
 }
@@ -429,7 +427,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         int err, rc = 0;
         struct obdo oa;
         struct inode *inode;
-        struct lov_stripe_md *smd = NULL;
+        struct lov_stripe_md *lsm = NULL;
         struct ll_inode_info *lli = NULL;
         ENTRY;
 
@@ -437,7 +435,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
                 memset(&oa, 0, sizeof(oa));
                 oa.o_valid = OBD_MD_FLMODE;
                 oa.o_mode = S_IFREG | 0600;
-                rc = obd_create(ll_i2obdconn(dir), &oa, &smd);
+                rc = obd_create(ll_i2obdconn(dir), &oa, &lsm);
                 CDEBUG(D_DENTRY, "name %s mode %o o_id %lld: rc = %d\n",
                        dentry->d_name.name, mode, (long long)oa.o_id, rc);
                 if (rc)
@@ -445,7 +443,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         }
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, mode, 0, dentry->d_it, smd);
+                               NULL, 0, mode, 0, dentry->d_it, lsm);
 
         if (IS_ERR(inode)) {
                 rc = PTR_ERR(inode);
@@ -468,10 +466,10 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         RETURN(rc);
 
 out_destroy:
-        if (smd) {
-                oa.o_easize = smd->lmd_mds_easize;
+        if (lsm) {
+                oa.o_easize = ll_mds_easize(inode->i_sb);
                 oa.o_valid |= OBD_MD_FLEASIZE;
-                err = obd_destroy(ll_i2obdconn(dir), &oa, smd);
+                err = obd_destroy(ll_i2obdconn(dir), &oa, lsm);
                 if (err)
                         CERROR("error destroying objid %Ld on error: err %d\n",
                        (unsigned long long)oa.o_id, err);

@@ -20,8 +20,8 @@
 #include <linux/module.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_idl.h>
-#include <linux/obd_lov.h>
 #include <linux/obd_class.h>
+#include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
 
 int mds_configure_lov(struct obd_device *obd, struct lov_desc *desc,

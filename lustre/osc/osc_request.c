@@ -180,10 +180,11 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
         }
 
         if (!*ea) {
+                // XXX check oa->o_valid & OBD_MD_FLEASIZE first...
                 OBD_ALLOC(*ea, oa->o_easize);
                 if (!*ea)
                         RETURN(-ENOMEM);
-                (*ea)->lmd_mds_easize = oa->o_easize;
+                (*ea)->lsm_mds_easize = oa->o_easize;
         }
 
         request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_CREATE, 1, &size,
@@ -204,8 +205,8 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
         body = lustre_msg_buf(request->rq_repmsg, 0);
         memcpy(oa, &body->oa, sizeof(*oa));
 
-        (*ea)->lmd_object_id = oa->o_id;
-        (*ea)->lmd_stripe_count = 0;
+        (*ea)->lsm_object_id = oa->o_id;
+        (*ea)->lsm_stripe_count = 0;
         EXIT;
  out:
         ptlrpc_free_req(request);
@@ -607,13 +608,13 @@ static int osc_brw(int cmd, struct lustre_handle *conn,
                 return osc_brw_read(conn, md, page_count, pga, callback, data);
 }
 
-static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
+static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
                        struct lustre_handle *parent_lock,
                        __u32 type, void *extentp, int extent_len, __u32 mode,
                        int *flags, void *callback, void *data, int datalen,
                        struct lustre_handle *lockh)
 {
-        __u64 res_id[RES_NAME_SIZE] = { md->lmd_object_id };
+        __u64 res_id[RES_NAME_SIZE] = { lsm->lsm_object_id };
         struct obd_device *obddev = class_conn2obd(connh);
         struct ldlm_extent *extent = extentp;
         int rc;

@@ -711,7 +711,7 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
 }
 
 static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
-                              struct lov_stripe_md *md, obd_count oa_bufs,
+                              struct lov_stripe_md *lsm, obd_count oa_bufs,
                               struct brw_page *pga, brw_callback_t callback,
                               struct io_cb_data *data)
 {
@@ -734,7 +734,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
         push_ctxt(&saved, &obd->u.filter.fo_ctxt);
         pnum = 0; /* pnum indexes buf 0..num_pages */
 
-        file = filter_obj_open(obd, md->lmd_object_id, S_IFREG);
+        file = filter_obj_open(obd, lsm->lsm_object_id, S_IFREG);
         if (IS_ERR(file))
                 GOTO(out, retval = PTR_ERR(file));
 
@@ -1421,8 +1421,8 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
 
         memset(&srcmd, 0, sizeof(srcmd));
         memset(&dstmd, 0, sizeof(dstmd));
-        srcmd.lmd_object_id = src->o_id;
-        dstmd.lmd_object_id = dst->o_id;
+        srcmd.lsm_object_id = src->o_id;
+        dstmd.lsm_object_id = dst->o_id;
 
         ENTRY;
         CDEBUG(D_INFO, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n",

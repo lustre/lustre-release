@@ -792,26 +792,27 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_OPEN: {
-                struct lov_stripe_md *md; // XXX fill in md from create
+                struct lov_stripe_md *lsm = NULL; // XXX fill in from create
 
                 obd_data2conn(&conn, data);
-                err = obd_open(&conn, &data->ioc_obdo1, NULL);
+                err = obd_open(&conn, &data->ioc_obdo1, lsm);
                 GOTO(out, err);
         }
 
         case OBD_IOC_CLOSE: {
-                struct lov_stripe_md *md; // XXX fill in md from create
+                struct lov_stripe_md *lsm = NULL; // XXX fill in from create
 
                 obd_data2conn(&conn, data);
                 obd_data2conn(&conn, data);
-                err = obd_close(&conn, &data->ioc_obdo1, NULL);
+                err = obd_close(&conn, &data->ioc_obdo1, lsm);
                 GOTO(out, err);
         }
 
         case OBD_IOC_BRW_WRITE:
                 rw = OBD_BRW_WRITE;
         case OBD_IOC_BRW_READ: {
-                struct lov_stripe_md smd;
+                struct lov_stripe_md tmp_lsm; // XXX fill in from create
+                struct lov_stripe_md *lsm = &tmp_lsm; // XXX fill in from create
                 struct io_cb_data *cbd = ll_init_cb();
                 obd_count       pages = 0;
                 struct brw_page *pga, *pgp;
@@ -837,8 +838,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(brw_free, err = -ENOMEM);
                 }
 
-                memset(&smd, 0, sizeof(smd));
-                smd.lmd_object_id = id;
+                memset(lsm, 0, sizeof(*lsm)); // XXX don't do this later
+                lsm->lsm_object_id = id; // ensure id == lsm->lsm_object_id
 
                 for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
                         pgp->pg = alloc_pages(gfp_mask, 0);
@@ -864,7 +865,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         }
                 }
 
-                err = obd_brw(rw, &conn, &smd, j, pga, ll_sync_io_cb, cbd);
+                err = obd_brw(rw, &conn, lsm, j, pga, ll_sync_io_cb, cbd);
                 if (err)
                         CERROR("test_brw: error from obd_brw: err = %d\n", err);
                 EXIT;

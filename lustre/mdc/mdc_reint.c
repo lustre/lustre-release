@@ -76,7 +76,7 @@ int mdc_setattr(struct lustre_handle *conn,
 int mdc_create(struct lustre_handle *conn,
                struct inode *dir, const char *name, int namelen,
                const char *tgt, int tgtlen, int mode, __u32 uid,
-               __u32 gid, __u64 time, __u64 rdev, struct lov_stripe_md *smd,
+               __u32 gid, __u64 time, __u64 rdev, struct lov_stripe_md *lsm,
                struct ptlrpc_request **request)
 {
         struct mds_rec_create *rec;
@@ -87,12 +87,13 @@ int mdc_create(struct lustre_handle *conn,
         ENTRY;
 
         if (S_ISREG(mode)) {
-                if (!smd) {
-                        CERROR("File create, but no md (%ld, %*s)\n",
-                               dir->i_ino, namelen, name); 
+                if (!lsm) {
+                        CERROR("File create, but no stripe md (%ld, %*s)\n",
+                               dir->i_ino, namelen, name);
                         LBUG();
                 }
-                size[2] = smd->lmd_mds_easize;
+                // size[2] = mdc->cl_max_mds_easize; soon...
+                size[2] = lsm->lsm_mds_easize;
                 bufcount = 3;
         } else if (S_ISLNK(mode)) {
                 size[2] = tgtlen + 1;
@@ -110,7 +111,7 @@ int mdc_create(struct lustre_handle *conn,
                         name, namelen, NULL, 0);
 
         if (S_ISREG(mode)) {
-                lov_packmd(lustre_msg_buf(req->rq_reqmsg, 2), smd);
+                lov_packmd(lustre_msg_buf(req->rq_reqmsg, 2), lsm);
         } else if (S_ISLNK(mode)) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, 2);
                 LOGL0(tgt, tgtlen, tmp);

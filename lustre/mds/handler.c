@@ -457,11 +457,11 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
         mds_pack_inode2body(body, inode);
 
         if (S_ISREG(inode->i_mode)) {
-                struct lov_mds_md *md;
+                struct lov_mds_md *lmm;
 
-                md = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
-                md->lmd_easize = mds->mds_max_mdsize;
-                rc = mds_fs_get_md(mds, inode, md);
+                lmm = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
+                lmm->lmm_easize = mds->mds_max_mdsize;
+                rc = mds_fs_get_md(mds, inode, lmm);
 
                 if (rc < 0) {
                         if (rc == -ENODATA)
@@ -1279,9 +1279,9 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 /* If the client is about to open a file that doesn't have an MD
                  * stripe record, it's going to need a write lock. */
                 if (it->opc & IT_OPEN) {
-                        struct lov_mds_md *md =
+                        struct lov_mds_md *lmm =
                                 lustre_msg_buf(req->rq_repmsg, 2);
-                        if (md->lmd_easize == 0) {
+                        if (lmm->lmm_easize == 0) {
                                 LDLM_DEBUG(lock, "open with no EA; returning PW"
                                            " lock");
                                 lock->l_req_mode = LCK_PW;

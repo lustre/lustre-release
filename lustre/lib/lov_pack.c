@@ -44,38 +44,58 @@ void lov_unpackdesc(struct lov_desc *ld)
         ld->ld_pattern = HTON__u32(ld->ld_pattern);
 }
 
-void lov_packmd(struct lov_mds_md *mdsmd, struct lov_stripe_md *md)
+void lov_packmd(struct lov_mds_md *lmm, struct lov_stripe_md *lsm)
 {
+        struct lov_oinfo *loi;
         int i;
-        mdsmd->lmd_magic = md->lmd_magic;
-        mdsmd->lmd_easize = md->lmd_mds_easize;
-        mdsmd->lmd_object_id = md->lmd_object_id;
-        mdsmd->lmd_stripe_offset = md->lmd_stripe_offset;
-        mdsmd->lmd_stripe_count = md->lmd_stripe_count;
-        mdsmd->lmd_stripe_size = md->lmd_stripe_size;
-        mdsmd->lmd_stripe_pattern = md->lmd_stripe_pattern;
 
-        for (i = 0; i < md->lmd_stripe_count; i++)
-                mdsmd->lmd_objects[i].l_object_id = md->lmd_oinfo[i].loi_id;
-}
+        /* XXX endianness */
+        lmm->lmm_magic = (lsm->lsm_magic);
+        lmm->lmm_easize = (lsm->lsm_mds_easize);
+        lmm->lmm_object_id = (lsm->lsm_object_id);
+        lmm->lmm_stripe_size = (lsm->lsm_stripe_size);
+        lmm->lmm_stripe_pattern = (lsm->lsm_stripe_pattern);
+        lmm->lmm_ost_count = (lsm->lsm_ost_count);
+        lmm->lmm_stripe_count = (lsm->lsm_stripe_count);
+        lmm->lmm_stripe_offset = (lsm->lsm_stripe_offset);
 
-void lov_unpackmd(struct lov_stripe_md *md, struct lov_mds_md *mdsmd)
-{
-        int i;
-        md->lmd_magic = mdsmd->lmd_magic;
-        md->lmd_mds_easize = mdsmd->lmd_easize;
-        md->lmd_object_id = mdsmd->lmd_object_id;
-        md->lmd_stripe_offset = mdsmd->lmd_stripe_offset;
-        md->lmd_stripe_count = mdsmd->lmd_stripe_count;
-        md->lmd_stripe_size = mdsmd->lmd_stripe_size;
-        md->lmd_stripe_pattern = mdsmd->lmd_stripe_pattern;
-
-        for (i = 0; i < md->lmd_stripe_count; i++) {
-                md->lmd_oinfo[i].loi_id = mdsmd->lmd_objects[i].l_object_id;
-                md->lmd_oinfo[i].loi_size = 0;
+        /* Only fill in the object ids which we are actually using.
+         * Assumes lmd_objects is otherwise zero-filled. */
+        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+                lmm->lmm_objects[loi->loi_ost_idx].l_object_id =
+                        (loi->loi_id);
         }
 }
 
+void lov_unpackmd(struct lov_stripe_md *lsm, struct lov_mds_md *lmm)
+{
+        struct lov_oinfo *loi;
+        int ost_count, ost_offset;
+        int i;
 
+        /* XXX endianness */
+        lsm->lsm_magic = (lmm->lmm_magic);
+        lsm->lsm_mds_easize = (lmm->lmm_easize);
+        lsm->lsm_object_id = (lmm->lmm_object_id);
+        lsm->lsm_stripe_size = (lmm->lmm_stripe_size);
+        lsm->lsm_stripe_pattern = (lmm->lmm_stripe_pattern);
+        lsm->lsm_ost_count = (lmm->lmm_ost_count);
+        lsm->lsm_stripe_count = (lmm->lmm_stripe_count);
+        lsm->lsm_stripe_offset = (lmm->lmm_stripe_offset);
 
+        ost_count = lsm->lsm_ost_count;
+        ost_offset = lsm->lsm_stripe_offset;
 
+        for (i = 0, loi = lsm->lsm_oinfo; i < ost_count; i++, ost_offset++) {
+                ost_offset %= ost_count;
+
+                if (!lmm->lmm_objects[ost_offset].l_object_id)
+                        continue;
+
+                LASSERT(loi - lsm->lsm_oinfo < lsm->lsm_stripe_count);
+                loi->loi_id = (lmm->lmm_objects[ost_offset].l_object_id);
+                loi->loi_ost_idx = ost_offset;
+                loi->loi_size = 0;         /* set by LOV later */
+                loi++;
+        }
+}

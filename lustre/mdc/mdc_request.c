@@ -348,7 +348,7 @@ static void mdc_replay_open(struct ptlrpc_request *req, void *data)
 }
 
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
-             struct lov_stripe_md *smd, __u64 cookie, __u64 *fh,
+             struct lov_stripe_md *lsm, __u64 cookie, __u64 *fh,
              struct ptlrpc_request **request)
 {
         struct mds_body *body;
@@ -356,9 +356,10 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         struct ptlrpc_request *req;
         ENTRY;
 
-        if (smd != NULL) {
+        if (lsm) {
                 bufcount = 2;
-                size[1] = smd->lmd_mds_easize;
+                // size[1] = mdc->cl_max_mds_easize; soon...
+                size[1] = lsm->lsm_mds_easize;
         }
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_OPEN, bufcount, size,
@@ -373,8 +374,8 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         body->flags = HTON__u32(flags);
         body->extra = cookie;
 
-        if (smd != NULL)
-                lov_packmd(lustre_msg_buf(req->rq_reqmsg, 1), smd);
+        if (lsm)
+                lov_packmd(lustre_msg_buf(req->rq_reqmsg, 1), lsm);
 
         req->rq_replen = lustre_msg_size(1, size);
 

@@ -231,24 +231,24 @@ static int ll_commit_write(struct file *file, struct page *page,
 void ll_truncate(struct inode *inode)
 {
         struct obdo oa = {0};
-        struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
+        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct lustre_handle *lockhs = NULL;
         int err;
         ENTRY;
 
-        if (!md) {
+        if (!lsm) {
                 /* object not yet allocated */
                 inode->i_mtime = inode->i_ctime = CURRENT_TIME;
                 return;
         }
 
-        oa.o_id = md->lmd_object_id;
+        oa.o_id = lsm->lsm_object_id;
         oa.o_size = inode->i_size;
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after "LPD64")\n",
                oa.o_id, oa.o_size);
 
-        err = ll_size_lock(inode, md, oa.o_size, LCK_PW, &lockhs);
+        err = ll_size_lock(inode, lsm, oa.o_size, LCK_PW, &lockhs);
         if (err) {
                 CERROR("ll_size_lock failed: %d\n", err);
                 /* FIXME: What to do here?  It's too late to back out... */
@@ -258,14 +258,14 @@ void ll_truncate(struct inode *inode)
         oa.o_valid = OBD_MD_FLID;
         /* truncate == punch to/from start from/to end:
            set end to -1 for that. */
-        err = obd_punch(ll_i2obdconn(inode), &oa, md, inode->i_size,
+        err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
                         OBD_PUNCH_EOF);
         if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
         else
                 obdo_to_inode(inode, &oa, oa.o_valid);
 
-        err = ll_size_unlock(inode, md, LCK_PW, lockhs);
+        err = ll_size_unlock(inode, lsm, LCK_PW, lockhs);
         if (err)
                 CERROR("ll_size_unlock failed: %d\n", err);
 
@@ -278,13 +278,13 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
 {
         obd_count bufs_per_obdo = iobuf->nr_pages;
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *md = lli->lli_smd;
+        struct lov_stripe_md *lsm = lli->lli_smd;
         struct brw_page *pga;
         int i, rc = 0;
         struct io_cb_data *cbd;
 
         ENTRY;
-        if (!md || !md->lmd_object_id)
+        if (!lsm || !lsm->lsm_object_id)
                 RETURN(-ENOMEM);
 
         if (blocksize != PAGE_SIZE) {
@@ -313,7 +313,7 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         }
 
         rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                     ll_i2obdconn(inode), md, bufs_per_obdo, pga,
+                     ll_i2obdconn(inode), lsm, bufs_per_obdo, pga,
                      ll_sync_io_cb, cbd);
         if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;
