@@ -1001,7 +1001,8 @@ int jt_obd_test_brw(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct timeval start, next_time;
-        int pages = 1, objid = 3, count, next_count;
+        int pages = 1, count, next_count;
+        __u64 objid = 3;
         int verbose = 1, write = 0, rw;
         char *end;
         int i;
