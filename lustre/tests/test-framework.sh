@@ -42,7 +42,7 @@ fail() {
     local facet=$1
     stop $facet --force --failover --nomod
     start $facet --nomod
-    df $MOUNT
+    df $MOUNT || error "post-failover df: $?"
 }
 
 do_lmc() {

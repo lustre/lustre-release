@@ -78,7 +78,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data,
         if (rc == -ENOSPC) {
                 DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
-        } else if (rc) {
+        } else if (rc != 0 && rc != -EIO) {
                 DEBUG_REQ(D_ERROR, req,
                           "unknown rc %d from async create: failing oscc\n",
                           rc);
@@ -206,7 +206,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         }
 
 	/* this is the special case where create removes orphans */
-	if (oa->o_valid == OBD_MD_FLFLAGS &&
+	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
 	    oa->o_flags == OBD_FL_DELORPHAN) {
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
