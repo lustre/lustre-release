@@ -46,8 +46,7 @@ static inline const char *obd_mode_to_type(int mode)
 /* write the pathname into the string */
 static int filter_id(char *buf, obd_id id, obd_mode mode)
 {
-        return sprintf(buf, "O/%s/%Ld", obd_mode_to_type(mode),
-                       (unsigned long long)id);
+        return sprintf(buf, "O/%s/"LPU64, obd_mode_to_type(mode), id);
 }
 
 static inline void f_dput(struct dentry *dentry)
@@ -268,12 +267,12 @@ static struct dentry *filter_fid2dentry(struct obd_device *obddev,
         }
 
         if (!(type & S_IFMT)) {
-                CERROR("OBD %s, object %Lu has bad type: %o\n", __FUNCTION__,
-                       (unsigned long long)id, type);
+                CERROR("OBD %s, object "LPU64" has bad type: %o\n",
+                       __FUNCTION__, id, type);
                 RETURN(ERR_PTR(-EINVAL));
         }
 
-        len = sprintf(name, "%Ld", id);
+        len = sprintf(name, LPU64, id);
         CDEBUG(D_INODE, "opening object O/%s/%s\n", obd_mode_to_type(type),
                name);
         dchild = lookup_one_len(name, dparent, len);
@@ -306,13 +305,13 @@ static struct file *filter_obj_open(struct obd_device *obddev,
         }
 
         if (!id) {
-                CERROR("fatal: invalid obdo %Lu\n", (unsigned long long)id);
+                CERROR("fatal: invalid obdo "LPU64"\n", id);
                 RETURN(ERR_PTR(-ESTALE));
         }
 
         if (!(type & S_IFMT)) {
-                CERROR("OBD %s, no type (%Ld), mode %o!\n", __FUNCTION__,
-                       (unsigned long long)id, type);
+                CERROR("OBD %s, object "LPU64" has bad type: %o\n",
+                       __FUNCTION__, id, type);
                 RETURN(ERR_PTR(-EINVAL));
         }
 
@@ -602,8 +601,6 @@ static int filter_close(struct lustre_handle *conn, struct obdo *oa,
         return 0;
 } /* filter_close */
 
-extern struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
-
 static int filter_create(struct lustre_handle* conn, struct obdo *oa,
                          struct lov_stripe_md **ea)
 {
@@ -622,14 +619,15 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
         }
 
         if (!(oa->o_mode && S_IFMT)) {
-                CERROR("filter obd: no type!\n");
+                CERROR("OBD %s, object "LPU64" has bad type: %o\n",
+                       __FUNCTION__, oa->o_id, oa->o_mode);
                 return -ENOENT;
         }
 
         oa->o_id = filter_next_id(obd);
 
         //filter_id(name, oa->o_id, oa->o_mode);
-        sprintf(name, "%Ld", oa->o_id);
+        sprintf(name, LPU64, oa->o_id);
         mode = (oa->o_mode & ~S_IFMT) | S_IFREG;
         push_ctxt(&saved, &obd->u.filter.fo_ctxt);
         new = simple_mknod(filter->fo_dentry_O_mode[S_IFREG >> S_SHIFT], name, oa->o_mode);
@@ -648,7 +646,7 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
         return 0;
 }
 
-static int filter_destroy(struct lustre_handle *conn, struct obdo *oa, 
+static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
                           struct lov_stripe_md *ea)
 {
         struct obd_device *obd;
@@ -1205,8 +1203,8 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
                         GOTO(out_clean, rc = PTR_ERR(dentry));
                 inode = dentry->d_inode;
                 if (!inode) {
-                        CERROR("trying to BRW to non-existent file %Ld\n",
-                               (unsigned long long)o->ioo_id);
+                        CERROR("trying to BRW to non-existent file "LPU64"\n",
+                               o->ioo_id);
                         f_dput(dentry);
                         GOTO(out_clean, rc = -ENOENT);
                 }
@@ -1424,7 +1422,7 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                   obd_size count, obd_off offset)
 {
         struct page *page;
-        struct lov_stripe_md srcmd, dstmd; 
+        struct lov_stripe_md srcmd, dstmd;
         unsigned long index = 0;
         int err = 0;
 
@@ -1434,9 +1432,9 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
         dstmd.lsm_object_id = dst->o_id;
 
         ENTRY;
-        CDEBUG(D_INFO, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n",
-               (unsigned long long)src->o_id, (unsigned long long)src->o_blocks,
-               (unsigned long long)src->o_size, (unsigned long long)dst->o_id);
+        CDEBUG(D_INFO, "src: ino "LPU64" blocks "LPU64", size "LPU64
+               ", dst: ino "LPU64"\n",
+               src->o_id, src->o_blocks, src->o_size, dst->o_id);
         page = alloc_page(GFP_USER);
         if (page == NULL)
                 RETURN(-ENOMEM);
@@ -1449,10 +1447,10 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
          *     and arrays to handle the request parameters.
          */
         while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
-                struct brw_page pg; 
+                struct brw_page pg;
                 struct io_cb_data *cbd = ll_init_cb();
 
-                if (!cbd) { 
+                if (!cbd) {
                         err = -ENOMEM;
                         EXIT;
                         break;
@@ -1464,7 +1462,7 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 pg.flag = 0;
 
                 page->index = index;
-                err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1, &pg, 
+                err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1, &pg,
                               ll_sync_io_cb, cbd);
 
                 if ( err ) {
@@ -1473,7 +1471,7 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 }
 
                 cbd = ll_init_cb();
-                if (!cbd) { 
+                if (!cbd) {
                         err = -ENOMEM;
                         EXIT;
                         break;
