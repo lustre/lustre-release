@@ -213,14 +213,14 @@ logdump(void)
 
 		opnum = i+1 + (logcount/LOGSIZE)*LOGSIZE;
 		lp = &oplog[i];
-		prt("%d(%d mod 256): %lu.%lu ", opnum, opnum%256,
+		prt("%d(%d mod 256): %lu.%06lu ", opnum, opnum%256,
 		    lp->tv.tv_sec, lp->tv.tv_usec);
 		if ((closeopen = lp->operation < 0))
 			lp->operation = ~ lp->operation;
 
 		switch (lp->operation) {
 		case OP_MAPREAD:
-			prt("MAPREAD\t0x%x thru 0x%x\t(0x%x bytes)",
+			prt("MAPREAD\t0x%x thru 0x%x (0x%x bytes)",
 			    lp->args[0], lp->args[0] + lp->args[1] - 1,
 			    lp->args[1]);
 			if (badoff >= lp->args[0] && badoff <
@@ -228,7 +228,7 @@ logdump(void)
 				prt("\t***RRRR***");
 			break;
 		case OP_MAPWRITE:
-			prt("MAPWRITE 0x%x thru 0x%x\t(0x%x bytes)",
+			prt("MAPWRITE 0x%x thru 0x%x (0x%x bytes)",
 			    lp->args[0], lp->args[0] + lp->args[1] - 1,
 			    lp->args[1]);
 			if (badoff >= lp->args[0] && badoff <
@@ -236,7 +236,7 @@ logdump(void)
 				prt("\t******WWWW");
 			break;
 		case OP_READ:
-			prt("READ\t0x%x thru 0x%x\t(0x%x bytes)",
+			prt("READ\t0x%x thru 0x%x (0x%x bytes)",
 			    lp->args[0], lp->args[0] + lp->args[1] - 1,
 			    lp->args[1]);
 			if (badoff >= lp->args[0] &&
@@ -244,7 +244,7 @@ logdump(void)
 				prt("\t***RRRR***");
 			break;
 		case OP_WRITE:
-			prt("WRITE\t0x%x thru 0x%x\t(0x%x bytes)",
+			prt("WRITE\t0x%x thru 0x%x (0x%x bytes)",
 			    lp->args[0], lp->args[0] + lp->args[1] - 1,
 			    lp->args[1]);
 			if (lp->args[0] > lp->args[2])
@@ -458,7 +458,7 @@ doread(unsigned offset, unsigned size)
 		        (monitorstart == -1 ||
 			 (offset + size > monitorstart &&
 			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%lu %lu.%lu read\t0x%x thru\t0x%x\t(0x%x bytes)\n",
+		prt("%06lu %lu.%06lu read       %#08x thru %#08x\t(0x%x bytes)\n",
 		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
 		    size);
 	ret = lseek(fd, (off_t)offset, SEEK_SET);
@@ -467,6 +467,13 @@ doread(unsigned offset, unsigned size)
 		report_failure(140);
 	}
 	iret = read(fd, temp_buf, size);
+	if (!quiet && (debug > 1 &&
+		        (monitorstart == -1 ||
+			 (offset + size > monitorstart &&
+			  (monitorend == -1 || offset <= monitorend))))) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu read done\n", t.tv_sec, t.tv_usec);
+	}
 	if (iret != size) {
 		if (iret == -1)
 			prterr("doread: read");
@@ -513,7 +520,7 @@ domapread(unsigned offset, unsigned size)
 		        (monitorstart == -1 ||
 			 (offset + size > monitorstart &&
 			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%lu %lu.%lu mapread\t0x%x thru\t0x%x\t(0x%x bytes)\n",
+		prt("%06lu %lu.%06lu mapread    %#08x thru %#08x\t(0x%x bytes)\n",
 		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
 		    size);
 
@@ -526,9 +533,23 @@ domapread(unsigned offset, unsigned size)
 		report_failure(190);
 	}
 	memcpy(temp_buf, p + pg_offset, size);
+	if (!quiet && (debug > 1 &&
+		        (monitorstart == -1 ||
+			 (offset + size > monitorstart &&
+			  (monitorend == -1 || offset <= monitorend))))) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu memcpy done\n", t.tv_sec, t.tv_usec);
+	}
 	if (munmap(p, map_size) != 0) {
 		prterr("domapread: munmap");
 		report_failure(191);
+	}
+	if (!quiet && (debug > 1 &&
+		        (monitorstart == -1 ||
+			 (offset + size > monitorstart &&
+			  (monitorend == -1 || offset <= monitorend))))) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu munmap done\n", t.tv_sec, t.tv_usec);
 	}
 
 	check_buffers(offset, size);
@@ -585,7 +606,7 @@ dowrite(unsigned offset, unsigned size)
 		        (monitorstart == -1 ||
 			 (offset + size > monitorstart &&
 			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%lu %lu.%lu write\t0x%x thru\t0x%x\t(0x%x bytes)\n",
+		prt("%06lu %lu.%06lu write      %#08x thru %#08x\t(0x%x bytes)\n",
 		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
 		    size);
 	ret = lseek(fd, (off_t)offset, SEEK_SET);
@@ -594,6 +615,13 @@ dowrite(unsigned offset, unsigned size)
 		report_failure(150);
 	}
 	iret = write(fd, good_buf + offset, size);
+	if (!quiet && (debug > 1 &&
+		        (monitorstart == -1 ||
+			 (offset + size > monitorstart &&
+			  (monitorend == -1 || offset <= monitorend))))) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu write done\n", t.tv_sec, t.tv_usec);
+	}
 	if (iret != size) {
 		if (iret == -1)
 			prterr("dowrite: write");
@@ -646,7 +674,7 @@ domapwrite(unsigned offset, unsigned size)
 		        (monitorstart == -1 ||
 			 (offset + size > monitorstart &&
 			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%lu %lu.%lu mapwrite\t0x%x thru\t0x%x\t(0x%x bytes)\n",
+		prt("%06lu %lu.%06lu mapwrite   %#08x thru %#08x\t(0x%x bytes)\n",
 		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
 		    size);
 
@@ -666,13 +694,34 @@ domapwrite(unsigned offset, unsigned size)
 		report_failure(202);
 	}
 	memcpy(p + pg_offset, good_buf + offset, size);
+	if (!quiet && (debug > 1 &&
+		        (monitorstart == -1 ||
+			 (offset + size > monitorstart &&
+			  (monitorend == -1 || offset <= monitorend))))) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu memcpy done\n", t.tv_sec, t.tv_usec);
+	}
 	if (msync(p, map_size, 0) != 0) {
 		prterr("domapwrite: msync");
 		report_failure(203);
 	}
+	if (!quiet && (debug > 1 &&
+		        (monitorstart == -1 ||
+			 (offset + size > monitorstart &&
+			  (monitorend == -1 || offset <= monitorend))))) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu msync done\n", t.tv_sec, t.tv_usec);
+	}
 	if (munmap(p, map_size) != 0) {
 		prterr("domapwrite: munmap");
 		report_failure(204);
+	}
+	if (!quiet && (debug > 1 &&
+		        (monitorstart == -1 ||
+			 (offset + size > monitorstart &&
+			  (monitorend == -1 || offset <= monitorend))))) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu munmap done\n", t.tv_sec, t.tv_usec);
 	}
 }
 
@@ -703,12 +752,16 @@ dotruncate(unsigned size)
 	if ((progressinterval && testcalls % progressinterval == 0) ||
 	    (debug && (monitorstart == -1 || monitorend == -1 ||
 		       size <= monitorend)))
-		prt("%lu %lu.%lu trunc\tfrom 0x%x to 0x%x\n",
+		prt("%06lu %lu.%06lu trunc from %#08x  to  %#08x\n",
 		    testcalls, t.tv_sec, t.tv_usec, oldsize, size);
 	if (ftruncate(fd, (off_t)size) == -1) {
 	        prt("ftruncate1: %x\n", size);
 		prterr("dotruncate: ftruncate");
 		report_failure(160);
+	}
+	if (!quiet && debug > 1) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu trunc done\n", t.tv_sec, t.tv_usec);
 	}
 }
 
@@ -751,15 +804,24 @@ docloseopen(void)
 
 	gettimeofday(&t, NULL);
 	if (debug)
-		prt("%lu %lu.%lu close/open\n", testcalls, t.tv_sec, t.tv_usec);
+		prt("%06lu %lu.%06lu close/open\n", testcalls, t.tv_sec,
+		    t.tv_usec);
 	if (close(fd)) {
 		prterr("docloseopen: close");
 		report_failure(180);
+	}
+	if (!quiet && debug > 1) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu close done\n", t.tv_sec, t.tv_usec);
 	}
 	fd = open(fname, O_RDWR, 0);
 	if (fd < 0) {
 		prterr("docloseopen: open");
 		report_failure(181);
+	}
+	if (!quiet && debug > 1) {
+		gettimeofday(&t, NULL);
+		prt("       %lu.%06lu opendone\n", t.tv_sec, t.tv_usec);
 	}
 }
 
@@ -857,7 +919,7 @@ truncbdy] [-w writebdy] [-D startingop] [-N numops] [-P dirpath] [-S seed]
 fname\n\
 	-b opnum: beginning operation number (default 1)\n\
 	-c P: 1 in P chance of file close+open at each op (default infinity)\n\
-	-d: debug output for all operations\n\
+	-d: debug output for all operations [-d -d = more debugging]\n\
 	-l flen: the upper bound on file size (default 262144)\n\
 	-m startop:endop: monitor (print debug output) specified byte range
 (default 0:infinity)\n\
@@ -961,7 +1023,7 @@ main(int argc, char **argv)
 				usage();
 			break;
 		case 'd':
-			debug = 1;
+			debug++;
 			break;
 		case 'l':
 			maxfilelen = getnum(optarg, &endp);
