@@ -41,7 +41,6 @@
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 #define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
-#define FILTER_MOUNT_RECOV 2
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
 #define FILTER_ROCOMPAT_SUPP   (0)
@@ -73,9 +72,8 @@ struct filter_server_data {
 struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
-        __u64 fcd_mount_count;     /* FILTER incarnation number */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 64];
+        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 56];
 };
 
 #define FILTER_DENTRY_MAGIC 0x9efba101
@@ -148,6 +146,23 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf);
 int filter_san_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                       struct obd_ioobj *, int niocount, struct niobuf_remote *);
+
+#ifdef __KERNEL__
+void filter_tally_write(struct filter_obd *filter, struct page **pages,
+                        int nr_pages, unsigned long *blocks, 
+                        int blocks_per_page);
+void filter_tally_read(struct filter_obd *filter, struct niobuf_local *lnb, 
+                       int niocount);
+int lproc_filter_attach_seqstat(struct obd_device *dev);
+#else
+static inline filter_tally_write(struct filter_obd *filter, 
+                                 struct page **pages, int nr_pages, 
+                                 unsigned long *blocks, int blocks_per_page) {}
+static inline void  filter_tally_read(struct filter_obd *filter, 
+                                      struct niobuf_local *lnb, int niocount)
+                                      {}
+static inline lproc_filter_attach_seqstat(struct obd_device *dev) {}
+#endif
 
 
 #endif

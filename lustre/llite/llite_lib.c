@@ -53,6 +53,9 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         if (!sbi)
                 RETURN(NULL);
 
+        spin_lock_init(&sbi->ll_pglist_lock);
+        INIT_LIST_HEAD(&sbi->ll_pglist);
+        sbi->ll_pglist_gen = 0;
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
         ll_s2sbi(sb) = sbi;
@@ -103,7 +106,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         mdc_init_ea_size(obd, osc);
 
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid);
-        if (err) {
+        if (err == -EBUSY) {
+                CERROR("An MDS (mdc %s) is performing recovery, of which this"
+                       " client is not a part.  Please wait for recovery to "
+                       "complete, abort, or time out.\n", mdc);
+                GOTO(out, err);
+        } else if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out, err);
         }
@@ -130,7 +138,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
 
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid);
-        if (err) {
+        if (err == -EBUSY) {
+                CERROR("An OST (osc %s) is performing recovery, of which this"
+                       " client is not a part.  Please wait for recovery to "
+                       "complete, abort, or time out.\n", osc);
+                GOTO(out, err);
+        } else if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);
         }
@@ -1066,29 +1079,17 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         } else {
                 inode->i_op = &ll_special_inode_operations;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                init_special_inode(inode, inode->i_mode, 
+                init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
-                
-                lli->ll_save_ifop = inode->i_fop;
-                if (S_ISCHR(inode->i_mode)) {
-                        inode->i_fop = &ll_special_chr_inode_fops;                                                         
-                }else if (S_ISBLK(inode->i_mode)) {
-                        inode->i_fop = &ll_special_blk_inode_fops; 
-                }else if (S_ISFIFO(inode->i_mode)){
-                        inode->i_fop = &ll_special_fifo_inode_fops;
-                }else if (S_ISSOCK(inode->i_mode)){ 
-                        inode->i_fop = &ll_special_sock_inode_fops;
-                }                                               
-                inode->i_fop->owner = lli->ll_save_ifop->owner;
 #endif
                 EXIT;
         }
 }
 
 int ll_iocontrol(struct inode *inode, struct file *file,
-                        unsigned int cmd, unsigned long arg)
+                 unsigned int cmd, unsigned long arg)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req = NULL;

@@ -213,6 +213,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_INFO, "finish_page_read: %lu jiffies\n",
                        (jiffies - now));
 
+        filter_tally_read(&exp->exp_obd->u.filter, res, niocount);
+
         EXIT;
 
  cleanup:

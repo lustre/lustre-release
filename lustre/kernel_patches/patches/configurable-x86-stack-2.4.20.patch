@@ -1,7 +1,7 @@
-Index: linux-2.4.20/arch/i386/kernel/entry.S
+Index: kernel-2.4.21/arch/i386/kernel/entry.S
 ===================================================================
---- linux-2.4.20.orig/arch/i386/kernel/entry.S	2003-05-16 05:28:59.000000000 +0400
-+++ linux-2.4.20/arch/i386/kernel/entry.S	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/arch/i386/kernel/entry.S	2003-06-13 07:51:29.000000000 -0700
++++ kernel-2.4.21/arch/i386/kernel/entry.S	2003-12-04 11:57:01.000000000 -0800
 @@ -45,6 +45,7 @@
  #include <linux/linkage.h>
  #include <asm/segment.h>
@@ -39,10 +39,10 @@ Index: linux-2.4.20/arch/i386/kernel/entry.S
  	movl exec_domain(%ebx),%edx	# Get the execution domain
  	movl 4(%edx),%edx	# Get the lcall7 handler for the domain
  	pushl $0x27
-Index: linux-2.4.20/arch/i386/kernel/smpboot.c
+Index: kernel-2.4.21/arch/i386/kernel/smpboot.c
 ===================================================================
---- linux-2.4.20.orig/arch/i386/kernel/smpboot.c	2003-05-16 05:28:59.000000000 +0400
-+++ linux-2.4.20/arch/i386/kernel/smpboot.c	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/arch/i386/kernel/smpboot.c	2003-06-13 07:51:29.000000000 -0700
++++ kernel-2.4.21/arch/i386/kernel/smpboot.c	2003-12-04 11:57:01.000000000 -0800
 @@ -819,7 +819,7 @@
  
  	/* So we see what's up   */
@@ -70,10 +70,10 @@ Index: linux-2.4.20/arch/i386/kernel/smpboot.c
  
  	if(clustered_apic_mode == CLUSTERED_APIC_NUMAQ) {
  		printk("Restoring NMI vector\n");
-Index: linux-2.4.20/arch/i386/kernel/traps.c
+Index: kernel-2.4.21/arch/i386/kernel/traps.c
 ===================================================================
---- linux-2.4.20.orig/arch/i386/kernel/traps.c	2003-12-01 16:53:23.000000000 +0300
-+++ linux-2.4.20/arch/i386/kernel/traps.c	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/arch/i386/kernel/traps.c	2002-11-28 15:53:09.000000000 -0800
++++ kernel-2.4.21/arch/i386/kernel/traps.c	2003-12-04 11:57:01.000000000 -0800
 @@ -158,7 +158,7 @@
  	unsigned long esp = tsk->thread.esp;
  
@@ -83,10 +83,10 @@ Index: linux-2.4.20/arch/i386/kernel/traps.c
  		return;
  	show_trace((unsigned long *)esp);
  }
-Index: linux-2.4.20/arch/i386/kernel/head.S
+Index: kernel-2.4.21/arch/i386/kernel/head.S
 ===================================================================
---- linux-2.4.20.orig/arch/i386/kernel/head.S	2003-05-16 05:28:28.000000000 +0400
-+++ linux-2.4.20/arch/i386/kernel/head.S	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/arch/i386/kernel/head.S	2003-06-13 07:51:29.000000000 -0700
++++ kernel-2.4.21/arch/i386/kernel/head.S	2003-12-04 11:57:01.000000000 -0800
 @@ -15,6 +15,7 @@
  #include <asm/page.h>
  #include <asm/pgtable.h>
@@ -104,10 +104,10 @@ Index: linux-2.4.20/arch/i386/kernel/head.S
  	.long __KERNEL_DS
  
  /* This is the default interrupt "handler" :-) */
-Index: linux-2.4.20/arch/i386/kernel/irq.c
+Index: kernel-2.4.21/arch/i386/kernel/irq.c
 ===================================================================
---- linux-2.4.20.orig/arch/i386/kernel/irq.c	2003-05-16 05:28:59.000000000 +0400
-+++ linux-2.4.20/arch/i386/kernel/irq.c	2003-12-01 16:57:05.000000000 +0300
+--- kernel-2.4.21.orig/arch/i386/kernel/irq.c	2002-11-28 15:53:09.000000000 -0800
++++ kernel-2.4.21/arch/i386/kernel/irq.c	2003-12-04 11:57:01.000000000 -0800
 @@ -581,7 +581,10 @@
  	long esp;
  
@@ -120,10 +120,10 @@ Index: linux-2.4.20/arch/i386/kernel/irq.c
  	if (unlikely(esp < (sizeof(struct task_struct) + 1024))) {
  		extern void show_stack(unsigned long *);
  
-Index: linux-2.4.20/arch/i386/lib/getuser.S
+Index: kernel-2.4.21/arch/i386/lib/getuser.S
 ===================================================================
---- linux-2.4.20.orig/arch/i386/lib/getuser.S	1998-01-13 00:42:52.000000000 +0300
-+++ linux-2.4.20/arch/i386/lib/getuser.S	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/arch/i386/lib/getuser.S	1998-01-12 13:42:52.000000000 -0800
++++ kernel-2.4.21/arch/i386/lib/getuser.S	2003-12-04 11:57:01.000000000 -0800
 @@ -21,6 +21,10 @@
   * as they get called from within inline assembly.
   */
@@ -162,11 +162,11 @@ Index: linux-2.4.20/arch/i386/lib/getuser.S
  	cmpl addr_limit(%edx),%eax
  	jae bad_get_user
  3:	movl -3(%eax),%edx
-Index: linux-2.4.20/arch/i386/config.in
+Index: kernel-2.4.21/arch/i386/config.in
 ===================================================================
---- linux-2.4.20.orig/arch/i386/config.in	2003-05-16 05:28:59.000000000 +0400
-+++ linux-2.4.20/arch/i386/config.in	2003-12-01 17:01:56.000000000 +0300
-@@ -227,6 +227,29 @@
+--- kernel-2.4.21.orig/arch/i386/config.in	2003-06-13 07:51:29.000000000 -0700
++++ kernel-2.4.21/arch/i386/config.in	2003-12-04 11:57:01.000000000 -0800
+@@ -256,6 +256,29 @@
  if [ "$CONFIG_SMP" = "y" -a "$CONFIG_X86_CMPXCHG" = "y" ]; then
     define_bool CONFIG_HAVE_DEC_LOCK y
  fi
@@ -196,10 +196,10 @@ Index: linux-2.4.20/arch/i386/config.in
  endmenu
  
  mainmenu_option next_comment
-Index: linux-2.4.20/arch/i386/vmlinux.lds
+Index: kernel-2.4.21/arch/i386/vmlinux.lds
 ===================================================================
---- linux-2.4.20.orig/arch/i386/vmlinux.lds	2003-05-16 05:28:09.000000000 +0400
-+++ linux-2.4.20/arch/i386/vmlinux.lds	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/arch/i386/vmlinux.lds	2002-02-25 11:37:53.000000000 -0800
++++ kernel-2.4.21/arch/i386/vmlinux.lds	2003-12-04 11:57:01.000000000 -0800
 @@ -35,7 +35,8 @@
  
    _edata = .;			/* End of data section */
@@ -210,10 +210,10 @@ Index: linux-2.4.20/arch/i386/vmlinux.lds
    .data.init_task : { *(.data.init_task) }
  
    . = ALIGN(4096);		/* Init code and data */
-Index: linux-2.4.20/include/asm-i386/current.h
+Index: kernel-2.4.21/include/asm-i386/current.h
 ===================================================================
---- linux-2.4.20.orig/include/asm-i386/current.h	1998-08-15 03:35:22.000000000 +0400
-+++ linux-2.4.20/include/asm-i386/current.h	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/include/asm-i386/current.h	1998-08-14 16:35:22.000000000 -0700
++++ kernel-2.4.21/include/asm-i386/current.h	2003-12-04 11:57:01.000000000 -0800
 @@ -1,15 +1,43 @@
  #ifndef _I386_CURRENT_H
  #define _I386_CURRENT_H
@@ -259,10 +259,10 @@ Index: linux-2.4.20/include/asm-i386/current.h
 +#endif /* __ASSEMBLY__ */
 +
  #endif /* !(_I386_CURRENT_H) */
-Index: linux-2.4.20/include/asm-i386/hw_irq.h
+Index: kernel-2.4.21/include/asm-i386/hw_irq.h
 ===================================================================
---- linux-2.4.20.orig/include/asm-i386/hw_irq.h	2003-11-13 17:17:28.000000000 +0300
-+++ linux-2.4.20/include/asm-i386/hw_irq.h	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/include/asm-i386/hw_irq.h	2001-11-22 11:46:18.000000000 -0800
++++ kernel-2.4.21/include/asm-i386/hw_irq.h	2003-12-04 11:57:01.000000000 -0800
 @@ -15,6 +15,7 @@
  #include <linux/config.h>
  #include <asm/atomic.h>
@@ -282,10 +282,10 @@ Index: linux-2.4.20/include/asm-i386/hw_irq.h
  /*
   *	SMP has a few special interrupts for IPI messages
   */
-Index: linux-2.4.20/include/asm-i386/processor.h
+Index: kernel-2.4.21/include/asm-i386/processor.h
 ===================================================================
---- linux-2.4.20.orig/include/asm-i386/processor.h	2003-11-21 17:39:47.000000000 +0300
-+++ linux-2.4.20/include/asm-i386/processor.h	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/include/asm-i386/processor.h	2003-06-13 07:51:38.000000000 -0700
++++ kernel-2.4.21/include/asm-i386/processor.h	2003-12-04 11:57:01.000000000 -0800
 @@ -14,6 +14,7 @@
  #include <asm/types.h>
  #include <asm/sigcontext.h>
@@ -294,7 +294,7 @@ Index: linux-2.4.20/include/asm-i386/processor.h
  #include <linux/cache.h>
  #include <linux/config.h>
  #include <linux/threads.h>
-@@ -451,9 +452,6 @@
+@@ -453,9 +454,6 @@
  #define KSTK_EIP(tsk)	(((unsigned long *)(4096+(unsigned long)(tsk)))[1019])
  #define KSTK_ESP(tsk)	(((unsigned long *)(4096+(unsigned long)(tsk)))[1022])
  
@@ -304,10 +304,10 @@ Index: linux-2.4.20/include/asm-i386/processor.h
  #define get_task_struct(tsk)      atomic_inc(&virt_to_page(tsk)->count)
  
  #define init_task	(init_task_union.task)
-Index: linux-2.4.20/include/linux/sched.h
+Index: kernel-2.4.21/include/linux/sched.h
 ===================================================================
---- linux-2.4.20.orig/include/linux/sched.h	2003-11-21 17:39:47.000000000 +0300
-+++ linux-2.4.20/include/linux/sched.h	2003-12-01 16:54:50.000000000 +0300
+--- kernel-2.4.21.orig/include/linux/sched.h	2003-06-13 15:26:52.000000000 -0700
++++ kernel-2.4.21/include/linux/sched.h	2003-12-04 12:00:14.000000000 -0800
 @@ -2,6 +2,7 @@
  #define _LINUX_SCHED_H
  
@@ -316,3 +316,15 @@ Index: linux-2.4.20/include/linux/sched.h
  
  extern unsigned long event;
  
+Index: kernel-2.4.21/include/asm-x86_64/current.h
+===================================================================
+--- kernel-2.4.21.orig/include/asm-x86_64/current.h	2003-06-13 15:26:52.000000000 -0700
++++ kernel-2.4.21/include/asm-x86_64/current.h	2003-12-04 12:00:13.000000000 -0800
+@@ -5,6 +5,7 @@
+ struct task_struct;
+ 
+ #include <asm/pda.h>
++#include <asm/page.h>
+ 
+ static inline struct task_struct *get_current(void) 
+ { 
