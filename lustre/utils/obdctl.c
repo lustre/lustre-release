@@ -122,18 +122,6 @@ char * obdo_print(struct obdo *obd)
         return strdup(buf);
 }
 
-int getfd()
-{
-        if (fd == -1)                                           
-                fd = open("/dev/obd", O_RDWR);                     
-        if (fd == -1) {                                            
-                fprintf(stderr, "error: opening /dev/obd: %s\n",
-                        strerror(errno));         
-                return -1;
-        }
-        return 0;
-}
-
 static char *cmdname(char *func)
 {
         static char buf[512];
@@ -144,6 +132,18 @@ static char *cmdname(char *func)
         }
 
         return func;
+}
+
+int getfd(char *func)
+{
+        if (fd == -1)
+                fd = open("/dev/obd", O_RDWR);
+        if (fd == -1) {
+                fprintf(stderr, "error: %s: opening /dev/obd: %s\n",
+                        cmdname(func), strerror(errno));
+                return -1;
+        }
+        return 0;
 }
 
 #define difftime(a, b)                                          \
@@ -224,38 +224,41 @@ static int do_disconnect(char *func, int verbose)
 
 extern command_t cmdlist[];
 
-static int jt_device(int argc, char **argv)
+static int do_device(char *func, int dev)
 {
         struct obd_ioctl_data data;
+
+        memset(&data, 0, sizeof(data));
+
+        data.ioc_dev = dev;
+
+        if (getfd(func))
+                return -1;
+
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(func));
+                return -2;
+        }
+
+        return ioctl(fd, OBD_IOC_DEVICE , buf);
+}
+
+static int jt_device(int argc, char **argv)
+{
         int rc;
 
         do_disconnect(argv[0], 1);
 
-        memset(&data, 0, sizeof(data));
-        if ( argc != 2 ) {
+        if (argc != 2) {
                 fprintf(stderr, "usage: %s devno\n", cmdname(argv[0]));
                 return -1;
         }
 
-        data.ioc_dev = strtoul(argv[1], NULL, 0);
+        rc = do_device(argv[0], strtoul(argv[1], NULL, 0));
 
-        if (obd_ioctl_pack(&data, &buf, max)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
-                return -2;
-        }
-
-        if (fd == -1)
-                fd = open("/dev/obd", O_RDWR);
-        if (fd == -1) {
-                fprintf(stderr, "error: %s: opening /dev/obd: %s\n",
-                        cmdname(argv[0]), strerror(errno));
-                return errno;
-        }
-
-        rc = ioctl(fd, OBD_IOC_DEVICE , buf);
         if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
-                        OBD_IOC_DEVICE, strerror(rc = errno));
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc = errno));
 
         return rc;
 }
@@ -305,10 +308,7 @@ static int jt__device(int argc, char **argv)
                 return -1;
         }
 
-        arg2[0] = "device";
-        arg2[1] = argv[1];
-        arg2[2] = NULL;
-        rc = jt_device(2, arg2);
+        rc = do_device("device", strtoul(argv[1], NULL, 0));
 
         if (!rc) {
                 arg2[0] = "connect";
@@ -449,7 +449,7 @@ static int jt_newdev(int argc, char **argv)
         struct obd_ioctl_data data;
         int rc;
 
-        if (getfd())
+        if (getfd(argv[0]))
                 return -1;
 
         IOCINIT(data);
@@ -463,8 +463,8 @@ static int jt_newdev(int argc, char **argv)
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc=errno));
-        else { 
-                printf("Current device set to %d\n", data.ioc_dev); 
+        else {
+                printf("Current device set to %d\n", data.ioc_dev);
         }
 
         return rc;
@@ -478,7 +478,8 @@ static int jt_attach(int argc, char **argv)
         IOCINIT(data);
 
         if (argc != 2 && argc != 3) {
-                fprintf(stderr, "usage: %s type [name [uuid]]\n", cmdname(argv[0]));
+                fprintf(stderr, "usage: %s type [name [uuid]]\n",
+                        cmdname(argv[0]));
                 return -1;
         }
 
@@ -514,35 +515,53 @@ static int jt_attach(int argc, char **argv)
         return rc;
 }
 
-static int jt_name2dev(int argc, char **argv)
+#define N2D_OFF 0x100    /* So we can tell between error codes and devices */
+
+static int do_name2dev(char *func, char *name)
 {
         struct obd_ioctl_data data;
         int rc;
 
-        if (getfd())
+        if (getfd(func))
                 return -1;
 
         IOCINIT(data);
 
-        if (argc != 2) { 
+        data.ioc_inllen1 = strlen(name) + 1;
+        data.ioc_inlbuf1 = name;
+
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(func));
+                return -2;
+        }
+        rc = ioctl(fd, OBD_IOC_NAME2DEV , buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s - %s\n", cmdname(func),
+                        name, strerror(rc = errno));
+                return rc;
+        }
+
+        memcpy((char *)(&data), buf, sizeof(data));
+
+        return data.ioc_dev + N2D_OFF;
+}
+
+static int jt_name2dev(int argc, char **argv)
+{
+        int rc;
+
+        if (argc != 2) {
                 fprintf(stderr, "usage: %s name\n", cmdname(argv[0]));
                 return -1;
         }
 
-        data.ioc_inllen1 =  strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-
-
-        if (obd_ioctl_pack(&data, &buf, max)) {
-                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
-                return -2;
+        rc = do_name2dev(argv[0], argv[1]);
+        if (rc >= N2D_OFF) {
+                int dev = rc - N2D_OFF;
+                rc = do_device(argv[0], dev);
+                if (rc == 0)
+                        printf("%d\n", dev);
         }
-        rc = ioctl(fd, OBD_IOC_NAME2DEV , buf);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %x %s\n", cmdname(argv[0]),
-                        OBD_IOC_NAME2DEV, strerror(rc = errno));
-        memcpy((char *)(&data), buf, sizeof(data));
-        printf("%d\n", data.ioc_dev);
         return rc;
 }
 
@@ -559,12 +578,19 @@ static int jt_setup(int argc, char **argv)
                 return -1;
         }
 
+        data.ioc_dev = -1;
         if (argc > 1) {
-                data.ioc_inllen1 =  strlen(argv[1]) + 1;
+                if (argv[1][0] == '$') {
+                        rc = do_name2dev(argv[0], argv[1] + 1);
+                        if (rc >= N2D_OFF) {
+                                printf("%s is device %d\n", argv[1],
+                                       rc - N2D_OFF);
+                                data.ioc_dev = rc - N2D_OFF;
+                        }
+                } else
+                        data.ioc_dev = strtoul(argv[1], NULL, 0);
+                data.ioc_inllen1 = strlen(argv[1]) + 1;
                 data.ioc_inlbuf1 = argv[1];
-                data.ioc_dev = strtoul(argv[1], NULL, 0);
-        } else {
-                data.ioc_dev = -1;
         }
         if ( argc == 3 ) {
                 data.ioc_inllen2 = strlen(argv[2]) + 1;

@@ -28,7 +28,7 @@ attach obdext2 OBDDEV
 setup ${OST}
 device 2
 attach ost OSTDEV
-setup 1
+setup \$OBDDEV
 device 3
 attach ptlrpc RPCDEV
 setup

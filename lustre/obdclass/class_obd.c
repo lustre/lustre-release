@@ -184,9 +184,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_NAME2DEV: {
+                /* Resolve a device name.  This does not change the
+                 * currently selected device.
+                 */
                 int dev;
-
-                filp->private_data = NULL;
 
                 if (!data->ioc_inlbuf1) {
                         CERROR("No name passed!\n");
@@ -202,7 +203,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
-                filp->private_data = &obd_dev[data->ioc_dev];
                 err = copy_to_user((int *)arg, data, sizeof(*data));
                 RETURN(err);
         }
