@@ -5,14 +5,14 @@ SRCDIR="`dirname $0`/"
 
 setup_opts "$@"
 
-$DBGCTL get_debug > /tmp/debug.1
+$DBGCTL debug_kernel /tmp/debug.1
 cleanup_client
-$DBGCTL get_debug > /tmp/debug.2
+$DBGCTL debug_kernel /tmp/debug.2
 cleanup_server
 
-$DBGCTL get_debug > /tmp/debug.3
+$DBGCTL debug_kernel /tmp/debug.3
 cleanup_ldlm
-$DBGCTL get_debug > /tmp/debug.4
+$DBGCTL debug_kernel /tmp/debug.4
 cleanup_lustre
-$DBGCTL get_debug > /tmp/debug.5
+$DBGCTL debug_kernel /tmp/debug.5
 cleanup_portals
