@@ -234,12 +234,13 @@ int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm)
 
 static int ll_file_release(struct inode *inode, struct file *file)
 {
-        int rc;
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
         struct obdo oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        int rc, rc2;
 
         ENTRY;
 
@@ -252,28 +253,28 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
 
         memset(&oa, 0, sizeof(oa));
-        oa.o_id = lli->lli_smd->lsm_object_id;
+        oa.o_id = lsm->lsm_object_id;
         oa.o_mode = S_IFREG;
         oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLID;
         obd_handle2oa(&oa, &fd->fd_osthandle);
-        rc = obd_close(ll_i2obdconn(inode), &oa, lli->lli_smd);
+        rc = obd_close(ll_i2obdconn(inode), &oa, lsm);
         if (rc)
-                GOTO(out_fd, abs(rc));
+                GOTO(out_mdc, rc = -abs(rc));
 
         /* If this fails and we goto out_fd, the file size on the MDS is out of
          * date.  Is that a big deal? */
         if (file->f_mode & FMODE_WRITE) {
                 struct lustre_handle *lockhs;
 
-                rc = ll_size_lock(inode, lli->lli_smd, 0, LCK_PR, &lockhs);
+                rc = ll_size_lock(inode, lsm, 0, LCK_PR, &lockhs);
                 if (rc)
-                        GOTO(out_fd, abs(rc));
+                        GOTO(out_mdc, -abs(rc));
 
-                oa.o_id = lli->lli_smd->lsm_object_id;
+                oa.o_id = lsm->lsm_object_id;
                 oa.o_mode = S_IFREG;
                 oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
                         OBD_MD_FLBLOCKS;
-                rc = obd_getattr(&sbi->ll_osc_conn, &oa, lli->lli_smd);
+                rc = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
                 if (!rc) {
                         struct iattr attr;
                         attr.ia_valid = (ATTR_MTIME | ATTR_CTIME | ATTR_ATIME |
@@ -288,29 +289,29 @@ static int ll_file_release(struct inode *inode, struct file *file)
                         /* XXX: this introduces a small race that we should
                          * evaluate */
                         rc = ll_inode_setattr(inode, &attr, 0);
-                        if (rc) {
-                                CERROR("failed - %d.\n", rc);
-                                rc = -EIO; /* XXX - GOTO(out)? -phil */
-                        }
                 }
-                rc = ll_size_unlock(inode, lli->lli_smd, LCK_PR, lockhs);
-                if (rc) {
+                rc2 = ll_size_unlock(inode, lli->lli_smd, LCK_PR, lockhs);
+                if (rc2) {
                         CERROR("lock cancel: %d\n", rc);
                         LBUG();
+                        if (!rc)
+                                rc = rc2;
                 }
         }
 
-        rc = mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
-                       S_IFREG, &fd->fd_mdshandle, &req);
+out_mdc:
+        rc2 = mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
+                        S_IFREG, &fd->fd_mdshandle, &req);
         ptlrpc_req_finished(req);
-        if (rc) {
-                if (rc > 0)
-                        rc = -rc;
-                GOTO(out, rc);
+        if (rc2) {
+                if (!rc)
+                        rc = -abs(rc2);
+                GOTO(out_fd, rc);
         }
+        /* XXX Mike, we have also done this in ll_file_open? */
         ptlrpc_req_finished(fd->fd_req);
 
-        rc = obd_cancel_unused(ll_i2obdconn(inode), lli->lli_smd, 0);
+        rc = obd_cancel_unused(ll_i2obdconn(inode), lsm, 0);
         if (rc)
                 CERROR("obd_cancel_unused: %d\n", rc);
 
@@ -625,12 +626,17 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 static int ll_inode_revalidate(struct dentry *dentry)
 {
         struct inode *inode = dentry->d_inode;
+        struct lov_stripe_md *lsm;
         ENTRY;
 
         if (!inode)
                 RETURN(0);
 
-        RETURN(ll_file_size(inode, ll_i2info(inode)->lli_smd));
+        lsm = ll_i2info(inode)->lli_smd;
+        if (!lsm)       /* object not yet allocated, don't validate size */
+                RETURN(0);
+
+        RETURN(ll_file_size(inode, lsm));
 }
 
 struct file_operations ll_file_operations = {
