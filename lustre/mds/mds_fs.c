@@ -421,7 +421,7 @@ int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt)
         OBD_SET_CTXT_MAGIC(&mds->mds_ctxt);
         mds->mds_ctxt.pwdmnt = mnt;
         mds->mds_ctxt.pwd = mnt->mnt_root;
-        mds->mds_ctxt.fs = KERNEL_DS;
+        mds->mds_ctxt.fs = get_ds();
 
         /*
          * Replace the client filesystem delete_inode method with our own,
