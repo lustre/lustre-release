@@ -109,7 +109,13 @@ struct client_obd {
         obd_uuid_t           cl_target_uuid; /* XXX -> lustre_name */
         int                  cl_max_mds_easize;
         int                  cl_max_ost_easize;
+        struct obd_device   *cl_containing_lov;
 };
+
+#define IOC_OSC_TYPE         'h'
+#define IOC_OSC_MIN_NR       20
+#define IOC_OSC_REGISTER_LOV _IOWR('h', 20, struct obd_device *)
+#define IOC_OSC_MAX_NR       50
 
 struct mds_obd {
         struct ptlrpc_service *mds_service;
@@ -192,7 +198,7 @@ struct lov_tgt_desc {
 struct lov_obd {
         spinlock_t lov_lock;
         struct obd_device *mdcobd;
-        struct lov_desc desc;
+ struct lov_desc desc;
         int bufsize;
         int refcount;
         struct lov_tgt_desc *tgts;

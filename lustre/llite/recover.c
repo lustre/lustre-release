@@ -12,6 +12,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_idl.h>
+#include <linux/obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
 
 static int ll_retry_recovery(struct ptlrpc_connection *conn)
 {
@@ -25,8 +26,8 @@ static void abort_inflight_for_import(struct obd_import *imp)
         struct list_head *tmp, *n;
 
         /* Make sure that no new requests get processed for this import.
-         * ptlrpc_queue_wait must (and does) hold c_lock while testing this flags and
-         * then putting requests on sending_head or delayed_head.
+         * ptlrpc_queue_wait must (and does) hold c_lock while testing this
+         * flags and then putting requests on sending_head or delayed_head.
          */
         spin_lock(&imp->imp_connection->c_lock);
         imp->imp_flags |= IMP_INVALID;
@@ -68,10 +69,12 @@ static void abort_inflight_for_import(struct obd_import *imp)
         }
 }
 
-static void reconnect_ost(struct obd_import *imp)
+static void prepare_ost(struct obd_import *imp)
 {
+        int rc;
         struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
-        
+        struct obd_device *notify_obd = imp->imp_obd->u.cli.cl_containing_lov;
+
         CDEBUG(D_HA, "invalidating all locks for OST imp %p (to %s):\n",
                imp, imp->imp_connection->c_remote_uuid);
         ldlm_namespace_dump(ns);
@@ -79,6 +82,46 @@ static void reconnect_ost(struct obd_import *imp)
 
         abort_inflight_for_import(imp);
 
+        /* How gross is _this_? */
+        if (!list_empty(&notify_obd->obd_exports)) {
+                struct lustre_handle fakeconn;
+                struct obd_ioctl_data ioc_data;
+                struct obd_export *exp = 
+                        list_entry(&notify_obd->obd_exports.next, 
+                                   struct obd_export, exp_obd_chain);
+                fakeconn.addr = (__u64)(unsigned long)exp;
+                fakeconn.cookie = exp->exp_cookie;
+                ioc_data.ioc_inlbuf1 = imp->imp_obd->obd_uuid;
+                ioc_data.ioc_offset = 0; /* inactive */
+                rc = obd_iocontrol(IOC_LOV_SET_OSC_ACTIVE, &fakeconn,
+                                   sizeof ioc_data, &ioc_data, NULL);
+                if (rc) 
+                        CERROR("disabling %s on LOV %p/%s: %d\n", 
+                               imp->imp_obd->obd_uuid, notify_obd,
+                               notify_obd->obd_uuid, rc);
+        } else {
+                CDEBUG(D_HA, "No exports for obd %p/%s, can't notify about %p\n",
+                       notify_obd, notify_obd->obd_uuid, imp->imp_obd->obd_uuid);
+        }
+}
+
+static int ll_prepare_recovery(struct ptlrpc_connection *conn)
+{
+        struct list_head *tmp;
+
+        list_for_each(tmp, &conn->c_imports) {
+                struct obd_import *imp = list_entry(tmp, struct obd_import,
+                                                    imp_chain);
+
+                if (imp->imp_obd->obd_type->typ_ops->o_brw)
+                        prepare_ost(imp);
+        }
+
+        return ptlrpc_run_recovery_upcall(conn);
+}
+
+static void reconnect_ost(struct obd_import *imp)
+{
         (void)ptlrpc_reconnect_import(imp, OST_CONNECT);
 }
 
@@ -136,7 +179,7 @@ int ll_recover(struct recovd_data *rd, int phase)
 
         switch (phase) {
             case PTLRPC_RECOVD_PHASE_PREPARE:
-                RETURN(ptlrpc_run_recovery_upcall(conn));
+                RETURN(ll_prepare_recovery(conn));
             case PTLRPC_RECOVD_PHASE_RECOVER:
                 RETURN(ll_reconnect(conn));
             case PTLRPC_RECOVD_PHASE_FAILURE:

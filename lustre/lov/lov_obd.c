@@ -143,6 +143,13 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                                uuidarray[i], rc);
                         GOTO(out_disc, rc);
                 }
+                rc = obd_iocontrol(IOC_OSC_REGISTER_LOV, &lov->tgts[i].conn,
+                                   sizeof(struct obd_device *), obd, NULL); 
+                if (rc) {
+                        CERROR("Target %s REGISTER_LOV error %d\n",
+                               uuidarray[i], rc);
+                        GOTO(out_disc, rc);
+                }
                 desc->ld_active_tgt_count++;
                 lov->tgts[i].active = 1;
         }
@@ -1150,7 +1157,9 @@ static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 rc = lov_set_osc_active(lov,data->ioc_inlbuf1,data->ioc_offset);
                 break;
         default:
-                rc = -ENOTTY;
+                if (lov->desc.ld_tgt_count == 0)
+                        RETURN(-ENOTTY);
+                rc = 0;
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         int err = obd_iocontrol(cmd, &lov->tgts[i].conn,
                                                 len, data, NULL);

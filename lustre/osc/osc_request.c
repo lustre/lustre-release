@@ -729,13 +729,6 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
         int err = 0;
         ENTRY;
 
-        if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE ||
-            _IOC_NR(cmd) < IOC_LDLM_MIN_NR || _IOC_NR(cmd) > IOC_LDLM_MAX_NR) {
-                CDEBUG(D_IOCTL, "invalid ioctl (type %ld, nr %ld, size %ld)\n",
-                       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
-                RETURN(-EINVAL);
-        }
-
         switch (cmd) {
         case IOC_LDLM_TEST: {
                 err = ldlm_test(obddev, conn);
@@ -784,8 +777,15 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 CERROR("-- done err %d\n", err);
                 GOTO(out, err);
         }
+        case IOC_OSC_REGISTER_LOV: {
+                if (obddev->u.cli.cl_containing_lov)
+                        GOTO(out, err = -EALREADY);
+                obddev->u.cli.cl_containing_lov = (struct obd_device *)karg;
+                GOTO(out, err);
+        }
+            
         default:
-                GOTO(out, err = -EINVAL);
+                GOTO(out, err = -ENOTTY);
         }
 out:
         return err;
