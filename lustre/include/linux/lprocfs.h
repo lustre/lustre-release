@@ -7,8 +7,8 @@
 
 /*
  * Author: Hariharan Thantry
- * File Name: lprocfs.h 
- * 
+ * File Name: lprocfs.h
+ *
  * Header file for the LProcFS file system
  */
 
@@ -16,7 +16,7 @@
 #define _LPROCFS_H
 
 #ifndef LPROCFS_EXISTS
-#define LPROCFS_EXISTS  
+#define LPROCFS_EXISTS
 #endif
 
 #define LPROCFS_SUCCESS 1
@@ -31,26 +31,25 @@
 typedef enum lprofilers {
         e_generic=0,
         e_specific
-}lprofilers_e;
-        
+} lprofilers_e;
 
 typedef struct lprocfs_vars{
         char* name;
         read_proc_t* read_fptr;
         write_proc_t* write_fptr;
-}lprocfs_vars_t; 
+} lprocfs_vars_t;
 
- typedef struct lprocfs_group {
+typedef struct lprocfs_group {
         char** dir_namespace;
         lprocfs_vars_t* count_func_namespace;
         lprofilers_e prof_type;
-}lprocfs_group_t;
+} lprocfs_group_t;
 
 typedef struct lprocfs_obd_nm {
         char* obd_clname;
         lprocfs_group_t* obd_names;
         unsigned int cntr_blk_sz;
-}lprocfs_obd_nm_t;
+} lprocfs_obd_nm_t;
 
 
 
@@ -62,22 +61,17 @@ typedef struct lprocfs_obd_nm {
  * that on a per-device class basis, there would exist only
  * one signature.
  */
- 
+
 struct lprofiler_gen {
         __u64 min_time;
-        __u64 max_time; 
+        __u64 max_time;
         __u64 sum_time;
         __u64 num_ops;
-        /*
-         * Default, used for storing intermediate
-         * value
-         */
+        /* Default, used for storing intermediate value */
         unsigned long long start_time;
-        
 };
 
 struct lprofiler_ldlm {
-
         __u64 min_time;
         __u64 max_time;
         __u64 sum_time;
@@ -95,38 +89,32 @@ struct lprofiler_ldlm {
 
 struct lprofiler_ptlrpc {
         __u64 min_time;
-        __u64 max_time; 
+        __u64 max_time;
         __u64 sum_time;
         __u64 num_ops;
-        /*
-         * Default, used for storing intermediate
-         * value
-         */
+        /* Default, used for storing intermediate value */
         __u64 start_time;
         __u64 msgs_alloc;
 
         __u64 msgs_max;
         __u64 recv_count;
-        
+
         __u64 recv_length;
         __u64 send_count;
         __u64 send_length;
         __u64 portal_kmemory;
-
-
 };
 
- 
 
-struct namespace_index{
+
+struct namespace_index {
         char* name;
 };
 
-struct groupspace_index{
+struct groupspace_index {
         char* name;
         struct namespace_index* directory;
         struct namespace_index* counters;
-
 };
 
 /*
@@ -135,7 +123,6 @@ struct groupspace_index{
 
 
 typedef enum te_leafType {
-
         e_String=0,
         e_longlong
 
@@ -143,24 +130,19 @@ typedef enum te_leafType {
 
 
 
-struct lprocfs_conn_namespace{
+struct lprocfs_conn_namespace {
         char* leaf_name;
         e_varType type;
-        union{
+        union {
                 char* string_val;
                 __u64 cntr_val;
-        }x;
-
+        } x;
 };
 
-
-
-
 #ifdef LPROCFS_EXISTS
-
 /*
  * Utility functions to return the timeofday
- * 
+ *
  */
 static inline unsigned long lprocfs_util_gettime(void)
 {
@@ -175,7 +157,7 @@ static inline unsigned long lprocfs_util_gettime(void)
         */
 
 }
-static inline unsigned long lprocfs_util_getdiff(unsigned long x, 
+static inline unsigned long lprocfs_util_getdiff(unsigned long x,
                                                  unsigned long y)
 {
         return ((x>y)?(x-y):(y-x));
@@ -252,14 +234,12 @@ do{                                                                           \
 
 
 /*
- * This enum is used as an array index into the counts 
+ * This enum is used as an array index into the counts
  * that are maintained for the MDS device. The number of
  * entries here determine the amount of memory allocated
  * for counters for every instance of this class of
  * device
  */
-
-
 enum {
         LPROCFS_NAMESPACE_ENUM(mdc, mgmt_setup),
         LPROCFS_NAMESPACE_ENUM(mdc, mgmt_cleanup),
@@ -304,6 +284,7 @@ enum {
         LPROCFS_MAX_ENUM_DIR_MDS
 
 };
+
 enum {
         LPROCFS_NAMESPACE_ENUM(osc, mgmt_setup),
         LPROCFS_NAMESPACE_ENUM(osc, mgmt_cleanup),
@@ -320,7 +301,6 @@ enum {
         LPROCFS_NAMESPACE_ENUM(osc, summary),
         LPROCFS_NAMESPACE_ENUM(osc, cancel),
         LPROCFS_MAX_ENUM_DIR_OSC
-
 };
 
 enum {
@@ -340,9 +320,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(ost, cancel),
         LPROCFS_NAMESPACE_ENUM(ost, getinfo),
         LPROCFS_MAX_ENUM_DIR_OST
-
 };
-
 
 enum {
         LPROCFS_NAMESPACE_ENUM(lov, mgmt_setup),
@@ -361,8 +339,6 @@ enum {
         LPROCFS_NAMESPACE_ENUM(lov, cancel),
         LPROCFS_NAMESPACE_ENUM(lov, getinfo),
         LPROCFS_MAX_ENUM_DIR_LOV
-
-
 };
 
 enum {
@@ -382,11 +358,9 @@ enum {
         LPROCFS_NAMESPACE_ENUM(obdfilter, cancel),
         LPROCFS_NAMESPACE_ENUM(obdfilter, getinfo),
         LPROCFS_MAX_ENUM_DIR_OBDFILTER
-
 };
 
 enum {
-  
         LPROCFS_NAMESPACE_ENUM(ldlm, mgmt_setup),
         LPROCFS_NAMESPACE_ENUM(ldlm, mgmt_cleanup),
         LPROCFS_NAMESPACE_ENUM(ldlm, mgmt_connect),
@@ -399,7 +373,6 @@ enum {
 };
 
 enum {
-
         LPROCFS_NAMESPACE_ENUM(ptlrpc, mgmt_setup),
         LPROCFS_NAMESPACE_ENUM(ptlrpc, mgmt_cleanup),
         LPROCFS_NAMESPACE_ENUM(ptlrpc, mgmt_connect),
@@ -407,7 +380,6 @@ enum {
         LPROCFS_NAMESPACE_ENUM(ptlrpc, counters),
         LPROCFS_NAMESPACE_ENUM(ptlrpc, network),
         LPROCFS_MAX_ENUM_DIR_PTLRPC
-       
 };
 
 #define LPROCFS_DIR_INDEX(CLASS, DIR) \
@@ -424,26 +396,22 @@ enum {
         LPROCFS_NAMESPACE_ENUM(mdc, sum_time),
         LPROCFS_NAMESPACE_ENUM(mdc, num_ops),
         LPROF_MDC_MAX
-
-
 };
+
 enum {
         LPROCFS_NAMESPACE_ENUM(mds, min_time),
         LPROCFS_NAMESPACE_ENUM(mds, max_time),
         LPROCFS_NAMESPACE_ENUM(mds, sum_time),
         LPROCFS_NAMESPACE_ENUM(mds, num_ops),
         LPROF_MDS_MAX
-
-
 };
+
 enum {
         LPROCFS_NAMESPACE_ENUM(osc, min_time),
         LPROCFS_NAMESPACE_ENUM(osc, max_time),
         LPROCFS_NAMESPACE_ENUM(osc, sum_time),
         LPROCFS_NAMESPACE_ENUM(osc, num_ops),
         LPROF_OSC_MAX
-
-
 };
 
 enum {
@@ -452,26 +420,22 @@ enum {
         LPROCFS_NAMESPACE_ENUM(ost, sum_time),
         LPROCFS_NAMESPACE_ENUM(ost, num_ops),
         LPROF_OST_MAX
-
-
 };
+
 enum {
         LPROCFS_NAMESPACE_ENUM(lov, min_time),
         LPROCFS_NAMESPACE_ENUM(lov, max_time),
         LPROCFS_NAMESPACE_ENUM(lov, sum_time),
         LPROCFS_NAMESPACE_ENUM(lov, num_ops),
         LPROF_LOV_MAX
-
-
 };
+
 enum {
         LPROCFS_NAMESPACE_ENUM(obdfilter, min_time),
         LPROCFS_NAMESPACE_ENUM(obdfilter, max_time),
         LPROCFS_NAMESPACE_ENUM(obdfilter, sum_time),
         LPROCFS_NAMESPACE_ENUM(obdfilter, num_ops),
         LPROF_OBDFILTER_MAX
-
-
 };
 
 
@@ -491,7 +455,6 @@ enum {
 };
 
 enum {
-
         LPROCFS_NAMESPACE_ENUM(ptlrpc, min_time),
         LPROCFS_NAMESPACE_ENUM(ptlrpc, max_time),
         LPROCFS_NAMESPACE_ENUM(ptlrpc, sum_time),
@@ -508,9 +471,6 @@ enum {
 
 };
 
-
-
-
 /*
  * and for groups
  */
@@ -526,9 +486,8 @@ enum {
         LPROCFS_ENUM(ldlm),
         LPROCFS_ENUM(ptlrpc),
         LPROCFS_GROUP_MAX
-
 };
- 
+
 #define LPROCFS_CNTR_INDEX(CLASS, NAME) \
                    [LPROCFS_NAMESPACE_ENUM(CLASS, NAME)]={#NAME}
 
@@ -538,8 +497,7 @@ enum {
 /*
  * OBD Namespace API: Obtain the namespace group index, given a name
  */
-int lprocfs_get_nm(char* name, 
-                   lprocfs_obd_nm_t* collection);
+int lprocfs_get_nm(char* name, lprocfs_obd_nm_t* collection);
 
 
 
@@ -547,71 +505,70 @@ int lprocfs_get_nm(char* name,
  * OBD device APIs
  */
 
-int lprocfs_reg_dev(struct obd_device* device, 
-                         lprocfs_group_t* namespace, 
-                         unsigned int cnt_struct_size);
+int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
+                    unsigned int cnt_struct_size);
 
 int lprocfs_dereg_dev(struct obd_device* device);
 
 /*
  * Connections API
  */
-int lprocfs_reg_conn(unsigned int conn_number, 
-			  struct lprocfs_conn_namespace* namespace);
+int lprocfs_reg_conn(unsigned int conn_number,
+                     struct lprocfs_conn_namespace* namespace);
 int lprocfs_dereg_conn(unsigned int conn_number);
 
 /*
  * Import/Export APIs
  */
-int lprocfs_add_export(unsigned int conn_number, 
+int lprocfs_add_export(unsigned int conn_number,
                        struct obd_device* device);
-int lprocfs_add_import(unsigned int conn_number, 
+int lprocfs_add_import(unsigned int conn_number,
                        struct obd_device* device);
-int lprocfs_remove_export(unsigned int conn_number, 
+int lprocfs_remove_export(unsigned int conn_number,
                           struct obd_device* device);
-int lprocfs_remove_import(unsigned int conn_number, 
+int lprocfs_remove_import(unsigned int conn_number,
                           struct obd_device* device);
 
 /*
  * Utility functions
  */
 
-struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry* root, 
-                                       const char* name,            
-                                       const char* tok,             
+struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry* root,
+                                       const char* name,
+                                       const char* tok,
                                        unsigned int* escape);
 
 
-struct proc_dir_entry* lprocfs_mkdir(const char* dname, 
+struct proc_dir_entry* lprocfs_mkdir(const char* dname,
                                      struct proc_dir_entry *parent);
 
 
-struct proc_dir_entry* lprocfs_bfs_srch(struct proc_dir_entry* root, 
-                                          const char* name);
- 
-struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry* head, 
+struct proc_dir_entry* lprocfs_bfs_srch(struct proc_dir_entry* root,
+                                        const char* name);
+
+struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry* head,
                                     const char* name);
 
-int lprocfs_link_dir_counters(struct obd_device* device, 
-                              struct proc_dir_entry* this_dev_root, 
-                              lprocfs_group_t* namespace, 
-                              unsigned int cnt_struct_size, 
+int lprocfs_link_dir_counters(struct obd_device* device,
+                              struct proc_dir_entry* this_dev_root,
+                              lprocfs_group_t* namespace,
+                              unsigned int cnt_struct_size,
                               unsigned int class_array_index);
 
-int lprocfs_create_dir_namespace(struct proc_dir_entry* this_dev_root, 
-                                 lprocfs_group_t* namespace, 
+int lprocfs_create_dir_namespace(struct proc_dir_entry* this_dev_root,
+                                 lprocfs_group_t* namespace,
                                  unsigned int *num_dirs);
 
-int lprocfs_getclass_idx(struct groupspace_index* group, 
+int lprocfs_getclass_idx(struct groupspace_index* group,
                          const char* classname);
 struct proc_dir_entry* lprocfs_mkinitdir(struct obd_device* device);
 int lprocfs_get_idx(struct namespace_index* class, const char* dir_name);
-unsigned int lprocfs_add_var(struct obd_device* device, 
-                             struct proc_dir_entry* root, 
-                             lprocfs_vars_t* variable, 
-                             int dir_arr_index, 
-                             int cnt_arr_index, 
-                             unsigned int cnt_arr_size, 
+unsigned int lprocfs_add_var(struct obd_device* device,
+                             struct proc_dir_entry* root,
+                             lprocfs_vars_t* variable,
+                             int dir_arr_index,
+                             int cnt_arr_index,
+                             unsigned int cnt_arr_size,
                              lprofilers_e type);
 
 
@@ -626,7 +583,7 @@ void lprocfs_remove_all(struct proc_dir_entry* root);
  * to have a different function only when the variable types are
  * different, for e.g counter types will have one read/write
  * function, while strings will have another.
- * 
+ *
  */
 
 int lprocfs_ll_rd(char* page, char **start, off_t off,
@@ -653,51 +610,57 @@ int wr_string(struct file* file, const char *buffer,
 #define DEV_PROF_END(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE) 0
 #define DEV_PRINT_CNTR(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE) 0
 
-static inline int lprocfs_get_nm(char* name,
-                                 lprocfs_obd_nm_t* collection)
- { 
-         return -1; 
- }
-static inline int lprocfs_reg_dev(struct obd_device* device, 
-                                  lprocfs_group_t* namespace, 
-                                  unsigned int cnt_struct_size) 
-{ 
-        return 0; 
-}
-static inline int lprocfs_dereg_dev(struct obd_device* device) 
-{ 
-        return LPROCFS_SUCCESS; 
-}
-static inline int lprocfs_reg_conn(unsigned int conn_number, 
-                                   struct lprocfs_conn_namespace* nm) 
-{ 
-        return 0; 
-}
-static inline int lprocfs_dereg_conn(unsigned int conn_number) 
-{ 
-        return 0; 
-}
-static inline int lprocfs_add_export(unsigned int conn_number, 
-                                     struct obd_device* device)
-{ 
-        return 0; 
-}
-static inline int lprocfs_add_import(unsigned int conn_number, 
-                                     struct obd_device* device)
-{ 
-        return 0; 
-}
-static inline int lprocfs_remove_export(unsigned int conn_number, 
-                                        struct obd_device* device)
-{ 
-        return 0; 
-}
-static inline int lprocfs_remove_import(unsigned int conn_number, 
-                                        struct obd_device* device)
-{ 
-        return 0; 
+static inline int lprocfs_get_nm(char* name, lprocfs_obd_nm_t* collection)
+{
+        return -1;
 }
 
+static inline int lprocfs_reg_dev(struct obd_device* device,
+                                  lprocfs_group_t* namespace,
+                                  unsigned int cnt_struct_size)
+{
+        return 0;
+}
+
+static inline int lprocfs_dereg_dev(struct obd_device* device)
+{
+        return LPROCFS_SUCCESS;
+}
+
+static inline int lprocfs_reg_conn(unsigned int conn_number,
+                                   struct lprocfs_conn_namespace* nm)
+{
+        return 0;
+}
+
+static inline int lprocfs_dereg_conn(unsigned int conn_number)
+{
+        return 0;
+}
+
+static inline int lprocfs_add_export(unsigned int conn_number,
+                                     struct obd_device* device)
+{
+        return 0;
+}
+
+static inline int lprocfs_add_import(unsigned int conn_number,
+                                     struct obd_device* device)
+{
+        return 0;
+}
+
+static inline int lprocfs_remove_export(unsigned int conn_number,
+                                        struct obd_device* device)
+{
+        return 0;
+}
+
+static inline int lprocfs_remove_import(unsigned int conn_number,
+                                        struct obd_device* device)
+{
+        return 0;
+}
 
 #endif /* LPROCFS_EXISTS */
 
