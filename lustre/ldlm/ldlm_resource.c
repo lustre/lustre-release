@@ -119,7 +119,9 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                                 ldlm_lock_cancel(lock);
                         }
                 } else {
-                        CERROR("Freeing a lock still held by a client node.\n");
+                        CERROR("Freeing lock %p still held by client node.\n",
+                               lock);
+                        ldlm_lock_dump(lock);
 
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy(lock);
