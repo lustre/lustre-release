@@ -228,6 +228,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 	while ( num_obdos > 0) {
 		--num_obdos;
 		CDEBUG(D_INFO, "free obdo %ld\n",(long)obdos[num_obdos]->o_id);
+		/* copy o_blocks to i_blocks */
 		obdfs_to_inode(inodes[num_obdos], obdos[num_obdos]);
 		obdo_free(obdos[num_obdos]);
 	}
@@ -480,4 +481,4 @@ void obdfs_truncate(struct inode *inode)
 		return;
 	}
 	EXIT;
-}
+} /* obdfs_truncate */

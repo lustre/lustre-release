@@ -304,7 +304,9 @@ static void obdfs_read_inode(struct inode *inode)
 		inode->i_op = &obdfs_dir_inode_operations;
 		EXIT;
 	} else if (S_ISLNK(inode->i_mode)) {
-		inode->i_op = &obdfs_symlink_inode_operations;
+		inode->i_op = inode->i_blocks
+				?&obdfs_symlink_inode_operations
+				:&obdfs_fast_symlink_inode_operations;
 		EXIT;
 	} else {
 		init_special_inode(inode, inode->i_mode,
@@ -328,6 +330,7 @@ static void obdfs_write_inode(struct inode *inode)
 	oa = obdo_alloc();
 	if ( !oa ) {
 		printk(__FUNCTION__ ": obdo_alloc failed\n");
+		EXIT;
 		return;
 	}
 
@@ -335,18 +338,10 @@ static void obdfs_write_inode(struct inode *inode)
 	obdfs_from_inode(oa, inode);
 	err = IOPS(inode, setattr)(IID(inode), oa);
 
-	if ( err ) {
+	if ( err )
 		printk(__FUNCTION__ ": obd_setattr fails (%d)\n", err);
-		EXIT;
-	} else {
-		/* Copy back attributes from oa, as there may have been
-		 * changes at the target (e.g. obdo becomes a redirector
-		 * in the snapshot layer).
-		 */
-		obdfs_to_inode(inode, oa);
-		EXIT;
-	}
 
+	EXIT;
 	obdo_free(oa);
 } /* obdfs_write_inode */
 
@@ -426,18 +421,10 @@ static int obdfs_notify_change(struct dentry *de, struct iattr *attr)
 	obdo_from_iattr(oa, attr);
         err = IOPS(inode, setattr)(IID(inode), oa);
 
-	if ( err ) {
+	if ( err )
 		printk(__FUNCTION__ ": obd_setattr fails (%d)\n", err);
-		EXIT;
-	} else {
-		/* Copy back attributes from oa, as there may have been
-		 * changes at the target (e.g. obdo becomes a redirector
-		 * in the snapshot layer).
-		 */
-		obdfs_to_inode(inode, oa);
-		EXIT;
-	}
 
+	EXIT;
 	obdo_free(oa);
         return err;
 } /* obdfs_notify_change */

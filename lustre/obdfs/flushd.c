@@ -148,7 +148,7 @@ void obdfs_dequeue_pages(struct inode *inode)
 int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 {
 	struct list_head *tmp;
-	int		  total_io = 0;
+	unsigned long	  max_io, total_io = 0;
 	obd_count	  num_io;
 	obd_count         num_obdos;
 	struct inode	 *inodes[MAX_IOVEC];	/* write data back to these */
@@ -179,6 +179,10 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 		return 0;
 	}
 
+	/* If we are forcing a write, write out all dirty pages */
+	max_io = check_time == ~0UL ? 1<<31 : pupd_prm.ndirty;
+	CDEBUG(D_INFO, "max_io = %lu\n", max_io);
+
 	/* Add each inode's dirty pages to a write vector, and write it.
 	 * Traverse list in reverse order, so we do FIFO, not LIFO order
 	 */
@@ -186,7 +190,7 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 	tmp = inode_list;
 	num_io = 0;
 	num_obdos = 0;
-	while ( (tmp = tmp->prev) != inode_list && total_io < pupd_prm.ndirty) {
+	while ( (tmp = tmp->prev) != inode_list && total_io < max_io) {
 		struct obdfs_inode_info *ii;
 		struct inode *inode;
 		int res;
@@ -213,10 +217,11 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time)
 			if ( res < 0 ) {
 				CDEBUG(D_INODE,
 				       "fatal: unable to enqueue inode %ld (err %d)\n",
-				       inode->i_ino, err);
+				       inode->i_ino, res);
 				/* XXX Move bad inode to end of list so we can
 				 * continue with flushing list.  This is a
 				 * temporary measure to avoid machine lockups.
+				 * Maybe if we have -ENOENT, simply discard.
 				 */
 				list_del(tmp);
 				list_add(tmp, inode_list);
