@@ -1182,7 +1182,7 @@
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
 +	if (inode->i_op && inode->i_op->revalidate_it)
-+		return inode->i_op->revalidate_it(dentry);
++		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
  		return inode->i_op->revalidate(dentry);
  	return 0;
