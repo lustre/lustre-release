@@ -1,7 +1,10 @@
 2003-08-12  Brian Behlendorf  <behlendorf1@llnl.gov>
+       * version llnl_4devel tagged
        * bug fixes:
          - #1751 fixes an LBUG/bad LOV EA if lov_create fails because
            of inactive OSCs
+         - Adjusted version_tag.pl to use portals version string if no
+           /CVSr/Tag exists.  This resolves rpms using only the HEAD tag.
 
 2003-08-08  Brian Behlendorf  <behlendorf1@llnl.gov>
        * version llnl_3devel tagged
