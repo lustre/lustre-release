@@ -282,15 +282,15 @@ void t_grep_v(const char *path, char *str)
 
 void t_ls(int fd, char *buf, int size)
 {
-	struct dirent *ent;
+	struct dirent64 *ent;
 	int rc, pos;
-	off_t base = 0;
+	loff_t base = 0;
 
 	printf("dir entries listing...\n");
-	while ((rc = getdirentries(fd, buf, size, &base)) > 0) {
+	while ((rc = getdirentries64(fd, buf, size, &base)) > 0) {
 		pos = 0;
 		while (pos < rc) {
-			ent = (struct dirent *) ((char*) buf + pos);
+			ent = (struct dirent64 *) ((char*) buf + pos);
 			printf("%s\n", ent->d_name);
 			pos += ent->d_reclen;
 		}

@@ -23,7 +23,7 @@ echo_test_DEPENDENCIES=$(top_srcdir)/liblustre/liblsupport.a
 
 sanity_SOURCES = sanity.c
 sanity_LDADD := ./libtestcommon.a $(LLIB_EXEC)
-sanity_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a
+sanity_DEPENDENCIES = $(top_srcdir)/liblustre/liblustre.a ./libtestcommon.a
 
 recovery_small_SOURCES = recovery_small.c
 recovery_small_LDADD := ./libtestcommon.a $(LLIB_EXEC) 
