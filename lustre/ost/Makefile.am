@@ -10,9 +10,10 @@ EXTRA_PROGRAMS = ost
 
 LINX=page.c obd_pack.c
 obd_pack.c: 
-	ln -s ../lib/obd_pack.c .
+	test -e obd_pack.c || ln -sf $(top_srcdir)/lib/obd_pack.c
+
 page.c:
-	ln -s ../lib/page.c
+	test -e page.c || ln -sf $(top_srcdir)/lib/page.c
 
 ost_SOURCES = $(LINX) ost_handler.c
 dist-hook:

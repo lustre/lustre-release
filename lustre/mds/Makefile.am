@@ -11,9 +11,10 @@ EXTRA_PROGRAMS = mds
 
 LINX=mds_updates.c simple.c
 mds_updates.c: 
-	ln -s ../lib/mds_updates.c .
+	test -e mds_updates.c || ln -sf $(top_srcdir)/lib/mds_updates.c
+
 simple.c: 
-	ln -s ../lib/simple.c .
+	test -e simple.c || ln -sf $(top_srcdir)/lib/simple.c
 
 mds_SOURCES = handler.c mds_reint.c mds_ext2.c mds_ext3.c $(LINX)
 

@@ -10,7 +10,7 @@ modulefs_DATA = llite.o
 EXTRA_PROGRAMS = llite
 
 page.c: 
-	-ln -s ../lib/page.c
+	test -e page.c || ln -sf $(top_srcdir)/lib/page.c
 
 
 LINX=page.c

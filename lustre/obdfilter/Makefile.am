@@ -10,7 +10,7 @@ EXTRA_PROGRAMS = obdfilter
 
 LINX=simple.c
 simple.c: 
-	ln -s ../lib/simple.c .
+	test -e simple.c || ln -sf $(top_srcdir)/lib/simple.c
 
 EXT2C = filter.c
 obdfilter_SOURCES = filter.c $(LINX)
