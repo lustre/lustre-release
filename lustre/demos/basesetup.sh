@@ -5,13 +5,21 @@ OBDDIR="`dirname $0`/.."
 # source config info
 . $OBDDIR/demos/config.sh
 
+# module configuration
+if [ "$MODCONF" -a -f $MODCONF ]; then
+    if [ -z "`grep -i "alias  *char-major-$OBDMAJ  *obdclass" $MODCONF`" ]; then
+         echo "alias char-major-${OBDMAJ} obdclass" >>$MODCONF
+    fi
+fi
+
+
 # temp file
 if [ "$TMPFILE" -a -f $TMPFILE ]; then 
     echo "$TMPFILE exists; I'm unwilling to overwrite it.  Remove [N/y]?" 1>&2
     rm -i $TMPFILE
     [ -f $TMPFILE ] && exit 1
 fi
-[ "$TMPFILE" ] && dd if=/dev/zero of=$TMPFILE bs=1k count=10k
+[ "$TMPFILE" ] && dd if=/dev/zero of=$TMPFILE bs=1k count=$TMPSIZE
 
 
 # loop device

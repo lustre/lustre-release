@@ -21,7 +21,7 @@ q
 y
 snapset 0 $SNAPTABLE
 device /dev/obd3
-attach snap_obd 0 3 0
+attach obdsnap 0 3 0
 setup
 quit
 EOF

@@ -11,13 +11,13 @@ if [ x$? != x0 ]; then
     exit 4;
 fi
 
-insmod $OBDDIR/class/obdclass.o
-insmod $OBDDIR/ext2obd/obdext2.o
-insmod $OBDDIR/obdfs/obdfs.o
+#insmod $OBDDIR/class/obdclass.o
+#insmod $OBDDIR/ext2obd/obdext2.o
+#insmod $OBDDIR/obdfs/obdfs.o
 
 plog log "ATTACHING /dev/obd0, SETUP $BASEDEV"
 $OBDDIR/class/obdcontrol -f << EOF
-attach ext2_obd 
+attach obdext2
 setup $BASEDEV
 quit
 EOF

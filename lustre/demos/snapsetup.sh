@@ -25,7 +25,7 @@ fi
 
 plog umount $MNTOBD
 
-plog insmod $OBDDIR/snap/obdsnap.o
+#plog insmod $OBDDIR/snap/obdsnap.o
 
 rm -f $SNAPTABLE
 
@@ -49,10 +49,10 @@ q
 y
 snapset 0 $SNAPTABLE
 device /dev/obd1
-attach snap_obd 0 1 0
+attach obdsnap 0 1 0
 setup
 device /dev/obd2
-attach snap_obd 0 2 0
+attach obdsnap 0 2 0
 setup
 quit
 EOF

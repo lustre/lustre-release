@@ -7,9 +7,14 @@
 # Major number for OBD devices
 OBDMAJ=186
 
+# Module configuration file
+[ -f /etc/conf.modules ] && MODCONF=/etc/conf.modules
+[ -z "$MODCONF" -a -f /etc/modules.conf ] && MODCONF=/etc/modules.conf
+
 # If LOOPDEV is empty (""), then no loopback device will be configured.
 # If TMPFILE is empty (""), then no temporary file will be created for loop.
-TMPFILE="/tmp/obdfs.tmpfile"
+[ "$TMPFILE" ] || TMPFILE="/tmp/obdfs.tmpfile"
+[ "$TMPSIZE" ] || TMPSIZE=10240
 LOOPDEV="/dev/loop0"
 
 # If LOOPDEV is empty, then it is assumed that BASEDEV is a real block device
