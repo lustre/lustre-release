@@ -74,7 +74,7 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 ===================================================================
 --- kernel-2.4.212l35.orig/fs/ext3/iopen.c	2003-03-27 11:16:05.000000000 -0800
 +++ kernel-2.4.212l35/fs/ext3/iopen.c	2004-05-06 19:48:41.000000000 -0700
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,285 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -228,6 +228,9 @@ Index: kernel-2.4.212l35/fs/ext3/iopen.c
 +	spin_lock(&dcache_lock);
 +	if (!inode)
 +		goto do_rehash;
++
++	if (!test_opt(inode->i_sb, IOPEN))
++		goto do_instantiate;
 +
 +	/* preferrably return a connected dentry */
 +	list_for_each(lp, &inode->i_dentry) {

@@ -74,7 +74,7 @@ Index: lum/fs/ext3/iopen.c
 ===================================================================
 --- lum.orig/fs/ext3/iopen.c	2004-03-09 16:46:37.000000000 -0700
 +++ lum/fs/ext3/iopen.c	2004-03-09 16:48:03.000000000 -0700
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,285 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -242,6 +242,9 @@ Index: lum/fs/ext3/iopen.c
 +	}
 +
 +	if (!goal)
++		goto do_instantiate;
++
++	if (!test_opt(inode->i_sb, IOPEN))
 +		goto do_instantiate;
 +
 +	/* Move the goal to the de hash queue - like d_move() */

@@ -202,6 +202,9 @@ Index: linux-2.6.5-sles9/fs/ext3/iopen.c
 +	if (!inode)
 +		goto do_rehash;
 +
++	if (!test_opt(inode->i_sb, IOPEN))
++		goto do_instantiate;
++
 +	/* preferrably return a connected dentry */
 +	list_for_each(lp, &inode->i_dentry) {
 +		tmp = list_entry(lp, struct dentry, d_alias);
