@@ -12,6 +12,19 @@ AM_INIT_AUTOMAKE(obd, builtin([esyscmd], [sed -ne '/^%define version /{ s/.*vers
 AC_PROG_CC
 AC_PROG_RANLIB
 
+# 
+# Check for required packages
+*
+
+AC_PATH_PROG([XML2_CONFIG], [xml2-config], [],)
+if test -z "$XML2_CONFIG"; then
+	AC_MSG_ERROR([xml2-config not found; libxml2-dev libraries must be installed.])
+fi
+XML2_CFLAGS=$($XML2_CONFIG --cflags)
+XML2_LIBS=$($XML2_CONFIG --libs)
+AC_SUBST(XML2_CFLAGS)
+AC_SUBST(XML2_LIBS)
+
 # Kernel build environment.
 ac_default_prefix=
 bindir='${exec_prefix}/usr/bin'
