@@ -139,7 +139,7 @@ struct dentry *mds_name2locked_dentry(struct obd_device *obd,
                                       int dir_lock_mode)
 {
         struct dentry *dchild;
-        int flags, rc;
+        int flags = 0, rc;
         __u64 res_id[3] = {0};
         ENTRY;
 
@@ -179,7 +179,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
-        int flags, rc;
+        int flags = 0, rc;
         __u64 res_id[3] = {0};
         ENTRY;
 
