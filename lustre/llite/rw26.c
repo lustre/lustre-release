@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Lite I/O page cache routines for the 2.5/2.6 kernel generation
+ * Lustre Lite I/O page cache routines for the 2.5/2.6 kernel version
  *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *
