@@ -299,7 +299,6 @@ int lmv_check_connect(struct obd_device *obd) {
         }
 
         lmv_set_timeouts(obd);
-
         class_export_put(exp);
         return 0;
 
@@ -334,8 +333,6 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
         lmv->refcount--;
         if (lmv->refcount != 0)
                 goto out_local;
-
-        lmv->connected = 0;
 
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
                 if (lmv->tgts[i].ltd_exp == NULL)
@@ -379,6 +376,8 @@ out_local:
         if (!lmv->connected)
                 class_export_put(exp);
         rc = class_disconnect(exp, 0);
+        if (lmv->refcount == 0)
+                lmv->connected = 0;
         RETURN(rc);
 }
 
