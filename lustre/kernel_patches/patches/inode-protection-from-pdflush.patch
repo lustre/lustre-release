@@ -1,0 +1,23 @@
+
+we need some inode to be skipped by pdflush because we use
+unusual lock order (first, open transaction, then lock page)
+
+
+
+diff -puN fs/fs-writeback.c~inode-protection-from-pdflush fs/fs-writeback.c
+--- linux-2.5.73-cfs/fs/fs-writeback.c~inode-protection-from-pdflush	Fri Jul  4 01:44:22 2003
++++ linux-2.5.73-cfs-alexey/fs/fs-writeback.c	Fri Jul  4 03:00:37 2003
+@@ -198,6 +198,11 @@ static void
+ __writeback_single_inode(struct inode *inode,
+ 			struct writeback_control *wbc)
+ {
++	if (inode->i_flags & I_SKIP_PDFLUSH) {
++		list_move(&inode->i_list, &inode->i_sb->s_dirty);
++		return;
++	}
++
+ 	if ((wbc->sync_mode != WB_SYNC_ALL) && (inode->i_state & I_LOCK)) {
+ 		list_move(&inode->i_list, &inode->i_sb->s_dirty);
+ 		return;
+
+_
