@@ -210,7 +210,7 @@ setup_portals() {
   	#do_insmod $PORTALS/linux/router/kptlrouter.o || exit -1
 
 	case $NETWORK in
-	elan)  do_insmod $PORTALS/linux/qswnal/kqswnal.o || exit -1
+	elan)  do_insmod $PORTALS/linux/rqswnal/kqswnal.o || exit -1
 		    ;;
 	tcp)   do_insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
 		   ;;
