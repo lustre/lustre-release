@@ -1,5 +1,12 @@
-series/rh-8.0: 
+series/rh-8.0 
    redhat 2.4.18-14
    redhat 2.4.18-17
 series/rh-2.4.18-18
    redhat 2.4.18-18
+series/hp-pnnl              ** NOTE: equivalent to vanilla-2.4.18
+   linux-2.4.18-hp1_pnnl18
+   linux-2.4.18-hp1_pnnl19
+series/vanilla-2.4.18       ** Not officially supported
+   linux-2.4.18
+series/vanilla-2.4.19       ** Not officially supported
+   linux-2.4.19
