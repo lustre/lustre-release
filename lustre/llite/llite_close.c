@@ -109,6 +109,7 @@ void ll_queue_done_writing(struct inode *inode)
         EXIT;
 }
 
+#if 0
 /* If we know the file size and have the cookies:
  *  - send a DONE_WRITING rpc
  *
@@ -120,7 +121,7 @@ void ll_queue_done_writing(struct inode *inode)
 static void ll_close_done_writing(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct ldlm_extent extent = { .start = 0, .end = OBD_OBJECT_EOF };
+        ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
         struct obdo obdo;
         obd_flag valid;
@@ -131,8 +132,8 @@ static void ll_close_done_writing(struct inode *inode)
         if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
                 goto rpc;
 
-        rc = ll_extent_lock_no_validate(NULL, inode, lli->lli_smd, LCK_PW,
-                                        &extent, &lockh, ast_flags);
+        rc = ll_extent_lock(NULL, inode, lli->lli_smd, LCK_PW, &policy, &lockh,
+                            ast_flags);
         if (rc != ELDLM_OK) {
                 CERROR("lock acquisition failed (%d): unable to send "
                        "DONE_WRITING for inode %lu/%u\n", rc, inode->i_ino,
@@ -169,8 +170,8 @@ static void ll_close_done_writing(struct inode *inode)
 
         rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &obdo);
  out:
-        iput(inode);
 }
+#endif
 
 static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
 {
@@ -212,7 +213,7 @@ static int ll_close_thread(void *arg)
         while (1) {
                 struct l_wait_info lwi = { 0 };
                 struct ll_inode_info *lli;
-                struct inode *inode;
+                //struct inode *inode;
 
                 l_wait_event_exclusive(lcq->lcq_waitq,
                                        (lli = ll_close_next_lli(lcq)) != NULL,
@@ -220,8 +221,9 @@ static int ll_close_thread(void *arg)
                 if (IS_ERR(lli))
                         break;
 
-                inode = ll_info2i(lli);
-                ll_close_done_writing(inode);
+                //inode = ll_info2i(lli);
+                //ll_close_done_writing(inode);
+                //iput(inode);
         }
 
         complete(&lcq->lcq_comp);
