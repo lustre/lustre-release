@@ -183,7 +183,7 @@ extern struct obd_ops ldlm_obd_ops;
 do {                                                            \
         CDEBUG(D_DLMTRACE, "### " format                        \
                " (%s: lock %p mode %d/%d on res %Lu (rc %d) "   \
-               " type %d remote %Lx)\n", ## a,                  \
+               " type %d remote %Lx)\n" , ## a,                  \
                lock->l_resource->lr_namespace->ns_name, lock,   \
                lock->l_granted_mode, lock->l_req_mode,          \
                lock->l_resource->lr_name[0],                    \
@@ -193,7 +193,7 @@ do {                                                            \
 } while (0)
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
-        CDEBUG(D_DLMTRACE, "### " format "\n", ## a);
+        CDEBUG(D_DLMTRACE, "### " format "\n" , ## a);
 
 
 /* ldlm_extent.c */
