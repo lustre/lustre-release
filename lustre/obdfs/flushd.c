@@ -50,33 +50,107 @@ struct {
 	int age_super;  /* Time for superblock to age before we flush it */
 } pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ }; 
 
-/* static void obdfs_flush_reqs(struct obdfs_super_info *sbi, int wait, 
-			     
-*/
-static void obdfs_flush_reqs(struct obdfs_super_info *sbi, int check_time) 
+
+/* Remove writeback requests from an inode */
+int obdfs_flush_reqs(struct list_head *page_list, 
+			    int flush_inode, int check_time)
 {
-	struct list_head *wr;
-	struct obdfs_pgrq *req;
-	
-	wr = &sbi->s_wr_head;
-	while ( (wr = wr->next) != &sbi->s_wr_head ) {
-		req = list_entry(wr, struct obdfs_pgrq, rq_list);
+	struct list_head *tmp = page_list;
+	obd_count	  num_io = 0;
+	struct obdo	 *oa = NULL;
+	struct obdo	 *obdos[MAX_IOVEC];
+	struct page	 *pages[MAX_IOVEC];
+	char		 *bufs[MAX_IOVEC];
+	obd_size	  counts[MAX_IOVEC];
+	obd_off		  offsets[MAX_IOVEC];
+	obd_flag	  flags[MAX_IOVEC];
+	int		  err = 0;
+	int i;
+	struct inode *inode = NULL;
 
-		if (!check_time || 
-		    req->rq_jiffies <= (jiffies - pupd_prm.age_buffer)) {
-			/* write request out to disk */
-			obdfs_do_writepage(req->rq_inode, req->rq_page, 1);
-		}
+	ENTRY;
 
+	if ( list_empty(page_list)) {
+		CDEBUG(D_INODE, "list empty\n");
+		EXIT;
+		return 0;
 	}
 
-}
+
+	/* add all of the outstanding pages to a write vector, and write it */
+	while ( (tmp = tmp->next) != page_list ) {
+		struct obdfs_pgrq *pgrq;
+		struct page	  *page;
+
+		if ( flush_inode ) 
+			pgrq = list_entry(tmp, struct obdfs_pgrq, rq_ilist);
+		else 
+			pgrq = list_entry(tmp, struct obdfs_pgrq, rq_slist);
+		page = pgrq->rq_page;
+		inode = pgrq->rq_inode;
+
+		if (check_time && 
+		    pgrq->rq_jiffies > (jiffies - pupd_prm.age_buffer))
+			continue;
+		
+		oa = obdo_fromid(IID(inode), inode->i_ino, OBD_MD_FLNOTOBD);
+		if ( IS_ERR(oa) ) {
+			EXIT;
+			return PTR_ERR(oa);
+		}
+		obdfs_from_inode(oa, inode);
+
+		CDEBUG(D_INODE, "adding page %p to vector\n", page);
+		obdos[num_io] = oa;
+		bufs[num_io] = (char *)page_address(page);
+		pages[num_io] = page;
+		counts[num_io] = PAGE_SIZE;
+		offsets[num_io] = ((obd_off)page->index) << PAGE_SHIFT;
+		flags[num_io] = OBD_BRW_CREATE;
+		num_io++;
+
+		/* remove request from list before write to avoid conflict */
+		obdfs_pgrq_del(pgrq);
+
+		if ( num_io == MAX_IOVEC ) {
+			err = obdfs_do_vec_wr(inode->i_sb, &num_io, obdos, 
+					      pages,
+					      bufs, counts, offsets, flags);
+			for (i=0 ; i<MAX_IOVEC ; i++) {
+				obdo_free(obdos[i]);
+			if ( err ) {
+				/* XXX Probably should handle error here -
+				 *     discard other writes, or put
+				 *     (MAX_IOVEC - num_io) I/Os back to list?
+				 */
+				EXIT;
+				goto ERR;
+			}
+			}
+			num_io = 0;
+		}
+	} 
+
+	/* flush any remaining I/Os */
+	if ( num_io ) {
+		i = num_io - 1;
+		err = obdfs_do_vec_wr(inode->i_sb, &num_io, obdos, pages, bufs,
+				      counts, offsets, flags);
+		for (  ; i>=0 ; i-- ) {
+			obdo_free(obdos[i]);
+		}
+	}
+	EXIT;
+ERR:
+
+	return err;
+} /* obdfs_remove_pages_from_cache */
 
 
 static void obdfs_flush_dirty_pages(int check_time)
 {
 	struct list_head *sl;
-	struct obdfs_super_info *sbi;
+	struct obdfs_sb_info *sbi;
 
 	sl = &obdfs_super_list;
 	while ( (sl = sl->next) != &obdfs_super_list ) {
@@ -84,8 +158,8 @@ static void obdfs_flush_dirty_pages(int check_time)
 			list_entry(sl, struct obdfs_super_entry, sl_chain);
 		sbi = entry->sl_sbi;
 
-		/* walk write requests here */
-		obdfs_flush_reqs(sbi, jiffies);
+		/* walk write requests here, use the sb, check the time */
+		obdfs_flush_reqs(&sbi->osi_pages, 0, 1);
 	}
 
 	/* again, but now we wait for completion */
@@ -96,10 +170,10 @@ static void obdfs_flush_dirty_pages(int check_time)
 		sbi = entry->sl_sbi;
 
 		/* walk write requests here */
-		/* XXX should jiffies be 0 here? */
-		obdfs_flush_reqs(sbi, jiffies);
+		obdfs_flush_reqs(&sbi->osi_pages, 0, check_time);
 	}
 }
+
 
 static struct task_struct *pupdated;
 
@@ -158,8 +232,13 @@ static int pupdate(void *unused)
 			if (stopped)
 				goto stop_pupdate;
 		}
+		/* asynchronous setattr etc for the future ... */
 		/* flush_inodes(); */
+		CDEBUG(D_INODE, "about to flush pages...\n");
+		/*
 		obdfs_flush_dirty_pages(1);
+		*/
+		CDEBUG(D_INODE, "done flushing pages...\n");
 	}
 }
 

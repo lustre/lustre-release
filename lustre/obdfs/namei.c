@@ -202,8 +202,8 @@ struct dentry *obdfs_lookup(struct inode *dir, struct dentry *dentry)
  * returns a locked and held page upon success 
  */
 
-/* XXX I believe these pages should in fact NOT be locked */
 
+/* We do this with a locked page: that's not necessary, since the semaphore on the inode protects this page as well. */
 static struct page *obdfs_add_entry (struct inode * dir,
 				     const char * name, int namelen,
 				     struct ext2_dir_entry_2 ** res_dir,
@@ -345,6 +345,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
 			*res_dir = de;
 			*err = 0;
 			PDEBUG(page, "add_entry");
+			/* XXX unlock page here */
 			EXIT;
 			return page;
 		}
@@ -494,7 +495,6 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 		return ERR_PTR(-EIO);
 	}
 	obdo_free(oa);
-	INIT_LIST_HEAD(&OBDFS_LIST(inode));
 
 	EXIT;
 	return inode;
@@ -658,7 +658,6 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	dir->u.ext2_i.i_flags &= ~EXT2_BTREE_FL;
 	mark_inode_dirty(dir);
 	err = obdfs_do_writepage(dir, page, IS_SYNC(dir));
-	/* XXX handle err? */
 
 	UnlockPage(page);
 

@@ -195,7 +195,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 		goto ERR;
 	}
 
-	INIT_LIST_HEAD(&sbi->osi_list);
+	INIT_LIST_HEAD(&sbi->osi_pages);
 
 	sbi->osi_super = sb;
 
@@ -301,7 +301,7 @@ void obdfs_read_inode(struct inode *inode)
 
 	ODEBUG(oa);
 	obdfs_to_inode(inode, oa);
-	INIT_LIST_HEAD(&OBDFS_LIST(inode));
+	INIT_LIST_HEAD(obdfs_ilist(inode));
 
 	obdo_free(oa);
 	OIDEBUG(inode);

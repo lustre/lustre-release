@@ -152,7 +152,7 @@ struct obd_ops {
 	int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
 		       obd_size *count, obd_off offset);
 	int (*o_brw)(int rw, struct obd_conn *conn, obd_count *num_io,
-		     struct obdo **oa, char **buf, obd_size **count,
+		     struct obdo **oa, char **buf, obd_size *count,
 		     obd_off *offset, obd_flag *flags);
 	int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
 		       obd_off offset);
@@ -169,6 +169,8 @@ struct obd_ops {
 
 #define OBT(dev)	dev->obd_type->typ_ops
 #define OBP(dev,op)	dev->obd_type->typ_ops->o_ ## op
+
+#define MAX_IOVEC	16
 
 
 /*

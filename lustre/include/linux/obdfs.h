@@ -50,24 +50,26 @@ int obdfs_readlink (struct dentry *, char *, int);
 struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int); 
 
 
-struct obdfs_super_info {
-	struct list_head s_wr_head;
-};
-
-
 /* list of all OBDFS super blocks  */
 struct list_head obdfs_super_list;
 struct obdfs_super_entry {
 	struct list_head	 sl_chain;
-	struct obdfs_super_info	*sl_sbi;
+	struct obdfs_sb_info	*sl_sbi;
 };
 
 struct obdfs_pgrq {
-	struct list_head	 rq_list;	/* linked list of req's */
+	struct list_head	 rq_ilist;	/* linked list of req's */
+	struct list_head	 rq_slist;	/* linked list of req's */
 	unsigned long          rq_jiffies;
 	struct inode 		*rq_inode;	/* dentry referenced */
 	struct page 		*rq_page;	/* page to be written */
 };
+inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
+int obdfs_do_vec_wr(struct super_block *sb, obd_count *num_io, 
+			   struct obdo **obdos,
+			   struct page **pages, char **bufs, obd_size *counts,
+			   obd_off *offsets, obd_flag *flags);
+
 
 struct obdfs_sb_info {
 	struct obd_conn		 osi_conn;
@@ -76,7 +78,7 @@ struct obdfs_sb_info {
 	struct obd_ops		*osi_ops;     
 	ino_t			 osi_rootino; /* which root inode */
 	int			 osi_minor;   /* minor of /dev/obdX */
-	struct list_head	 osi_list;  /* linked list of inodes to write */
+	struct list_head	 osi_pages;  /* linked list of inodes to write */
 };
 
 struct obdfs_inode_info {
@@ -86,8 +88,18 @@ struct obdfs_inode_info {
 };
 
 
-#define OBDFS_LIST(inode) (((struct obdfs_inode_info *)(&(inode)->u.generic_ip))->oi_pages)
-#define WREQ(entry)       (list_entry(entry, struct obdfs_pgrq, rq_list))
+static inline struct list_head *obdfs_ilist(struct inode *inode) 
+{
+	struct obdfs_inode_info *info = (struct obdfs_inode_info *)&inode->u.generic_ip;
+
+	return &info->oi_pages;
+}
+
+static inline struct list_head *obdfs_slist(struct inode *inode) {
+	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)(&inode->i_sb->u.generic_sbp);
+	return &sbi->osi_pages;
+}
+
 #define OBDFS_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
 
 void obdfs_sysctl_init(void);

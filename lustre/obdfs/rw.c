@@ -33,7 +33,10 @@
 #include <linux/obd_ext2.h>
 #include <linux/obdfs.h>
 
-int console_loglevel;
+
+int obdfs_flush_reqs(struct list_head *page_list, 
+		     int flush_inode, int check_time);
+
 
 /* SYNCHRONOUS I/O for an inode */
 static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
@@ -41,8 +44,7 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 	obd_count	 num_io = 1;
 	struct obdo	*oa;
 	char		*buf = (char *)page_address(page);
-	obd_size	 size = PAGE_SIZE;
-	obd_size	*count = &size;
+	obd_size	 count = PAGE_SIZE;
 	obd_off		 offset = ((obd_off)page->index) << PAGE_SHIFT;
 	obd_flag	 flags = create ? OBD_BRW_CREATE : 0;
 	int		 err;
@@ -111,6 +113,13 @@ int obdfs_init_pgrqcache(void)
 	return 0;
 } /* obdfs_init_wreqcache */
 
+inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq)
+{
+		list_del(&pgrq->rq_ilist);
+		list_del(&pgrq->rq_slist);
+		kmem_cache_free(obdfs_pgrq_cachep, pgrq);
+}
+
 void obdfs_cleanup_pgrqcache(void)
 {
 	ENTRY;
@@ -130,6 +139,7 @@ void obdfs_cleanup_pgrqcache(void)
  * Find a specific page in the page cache.  If it is found, we return
  * the write request struct associated with it, if not found return NULL.
  */
+#if 0
 static struct obdfs_pgrq *
 obdfs_find_in_page_cache(struct inode *inode, struct page *page)
 {
@@ -158,43 +168,39 @@ obdfs_find_in_page_cache(struct inode *inode, struct page *page)
 	EXIT;
 	return NULL;
 } /* obdfs_find_in_page_cache */
+#endif
 
 
-/*
- * Remove a writeback request from a list
- */
-static inline int
-obdfs_remove_from_page_cache(struct obdfs_pgrq *pgrq)
+int obdfs_do_vec_wr(struct super_block *sb, obd_count *num_io, 
+			   struct obdo **obdos,
+			   struct page **pages, char **bufs, obd_size *counts,
+			   obd_off *offsets, obd_flag *flags)
 {
-	struct inode *inode = pgrq->rq_inode;
-	struct page *page = pgrq->rq_page;
+	int last_io = *num_io;
 	int err;
-
+	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)&sb->u.generic_sbp;
 	ENTRY;
-	CDEBUG(D_INODE, "writing inode %ld page %p, pgrq: %p\n",
-	       inode->i_ino, page, pgrq);
-	OIDEBUG(inode);
-	PDEBUG(page, "REM_CACHE");
-	err = obdfs_brw(WRITE, inode, page, 1);
-	/* XXX probably should handle error here somehow.  I think that
-	 *     ext2 also does the same thing - discard write even if error?
-	 */
-	put_page(page);
-        list_del(&pgrq->rq_list);
-	kmem_cache_free(obdfs_pgrq_cachep, pgrq);
-	OIDEBUG(inode);
+	CDEBUG(D_INODE, "writing %d pages in vector\n", last_io);
+	err = OPS(sb, brw)(WRITE, &sbi->osi_conn, num_io, obdos,
+				bufs, counts, offsets, flags);
+
+	do {
+		put_page(pages[--last_io]);
+	} while ( last_io > 0 );
 
 	EXIT;
 	return err;
-} /* obdfs_remove_from_page_cache */
+}
+
 
 /*
  * Add a page to the write request cache list for later writing
  * ASYNCHRONOUS write method.
  */
-static int obdfs_add_to_page_cache(struct inode *inode, struct page *page)
+static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 {
 	struct obdfs_pgrq *pgrq;
+	int rc = 0; 
 
 	ENTRY;
 	pgrq = kmem_cache_alloc(obdfs_pgrq_cachep, SLAB_KERNEL);
@@ -210,21 +216,17 @@ static int obdfs_add_to_page_cache(struct inode *inode, struct page *page)
 	pgrq->rq_inode = inode;
 
 	get_page(pgrq->rq_page);
-	list_add(&pgrq->rq_list, &OBDFS_LIST(inode));
+	list_add(&pgrq->rq_ilist, obdfs_ilist(inode));
+	list_add(&pgrq->rq_slist, obdfs_slist(inode));
 
-	/* For testing purposes, we write out the page here.
-	 * In the future, a flush daemon will write out the page.
+	/* XXX For testing purposes, we write out the page here.
+	 *     In the future, a flush daemon will write out the page.
 	return 0;
 	 */
-	pgrq = obdfs_find_in_page_cache(inode, page);
-	if (!pgrq) {
-		CDEBUG(D_INODE, "XXXX Can't find page after adding it!!!\n");
-		EXIT;
-		return -EINVAL;
-	} 
-		
-	return obdfs_remove_from_page_cache(pgrq);
-} /* obdfs_add_to_page_cache */
+	rc = obdfs_flush_reqs(obdfs_slist(inode), 0, 0);
+	EXIT;
+	return rc;
+} /* obdfs_add_page_to_cache */
 
 
 /* select between SYNC and ASYNC I/O methods */
@@ -237,11 +239,12 @@ int obdfs_do_writepage(struct inode *inode, struct page *page, int sync)
 	if ( sync )
 		err = obdfs_brw(WRITE, inode, page, 1);
 	else
-		err = obdfs_add_to_page_cache(inode, page);
+		err = obdfs_add_page_to_cache(inode, page);
 		
 	if ( !err )
 		SetPageUptodate(page);
 	PDEBUG(page,"WRITEPAGE");
+	EXIT;
 	return err;
 } /* obdfs_do_writepage */
 

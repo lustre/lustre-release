@@ -271,8 +271,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 	while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
 		obd_count	 num = 1;
 		char		*buf;
-		obd_size	 brw_size = PAGE_SIZE;
-		obd_size	*brw_count = &brw_size;
+		obd_size	 brw_count = PAGE_SIZE;
 		obd_off		 brw_offset = (page->index) << PAGE_SHIFT;
 		obd_flag	 flagr = 0;
 		obd_flag	 flagw = OBD_BRW_CREATE;
