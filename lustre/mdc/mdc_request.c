@@ -50,6 +50,7 @@ struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name, int tgt
 		return NULL;
 	}
 
+	memset(request, 0, sizeof(*request));
 	request->rq_xid = mdc_xid++;
 
 	rc = mds_pack_req(name, namelen, tgt, tgtlen,
@@ -178,6 +179,7 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 	request->rq_req.mds->size = offset;
 	request->rq_req.mds->tgtlen = sizeof(niobuf); 
 
+	request->rq_bulk_portal = MDS_BULK_PORTAL;
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
 

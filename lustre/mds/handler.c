@@ -77,14 +77,40 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 {
 	int rc; 
 	mm_segment_t oldfs = get_fs();
-	/* dst->addr is a user address, but in a different task! */
-	set_fs(KERNEL_DS); 
-	rc = generic_file_read(file, (char *)(long)dst->addr, 
-			      PAGE_SIZE, &offset); 
-	set_fs(oldfs);
 
-	if (rc != PAGE_SIZE) 
-		return -EIO;
+	if (req->rq_peer.peer_nid == 0) {
+		/* dst->addr is a user address, but in a different task! */
+		set_fs(KERNEL_DS); 
+		rc = generic_file_read(file, (char *)(long)dst->addr, 
+				       PAGE_SIZE, &offset); 
+		set_fs(oldfs);
+
+		if (rc != PAGE_SIZE) 
+			return -EIO;
+	} else {
+		char *buf;
+
+		buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+		if (!buf) {
+			return -ENOMEM;
+		}
+
+		set_fs(KERNEL_DS); 
+		rc = generic_file_read(file, buf, PAGE_SIZE, &offset); 
+		set_fs(oldfs);
+
+		if (rc != PAGE_SIZE) 
+			return -EIO;
+
+		req->rq_bulkbuf = buf;
+		req->rq_bulklen = PAGE_SIZE;
+		rc = ptl_send_buf(req, &req->rq_peer, MDS_BULK_PORTAL, 0);
+		init_waitqueue_head(&req->rq_wait_for_bulk);
+		sleep_on(&req->rq_wait_for_bulk);
+		kfree(buf);
+		req->rq_bulklen = 0; /* FIXME: eek. */
+	}
+
 	return 0;
 }
 

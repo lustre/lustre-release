@@ -33,6 +33,10 @@
 #define MDS_REPLY_PORTAL   4
 #define OST_REQUEST_PORTAL 5
 #define OST_REPLY_PORTAL   6
+#define MDC_BULK_PORTAL    7
+#define MDS_BULK_PORTAL    8
+#define OSC_BULK_PORTAL    9
+#define OST_BULK_PORTAL    10
 
 struct ptlrpc_service {
         char *srv_buf;
@@ -70,14 +74,22 @@ struct ptlrpc_request {
 	struct ptlrep_hdr *rq_rephdr;
 	union ptl_rep rq_rep;
 
+        char *rq_bulkbuf;
+        int rq_bulklen;
+        int (*rq_bulk_cb)(struct ptlrpc_request *, void *);
+
         void * rq_reply_handle;
 	wait_queue_head_t rq_wait_for_rep;
+	wait_queue_head_t rq_wait_for_bulk;
 
         ptl_md_t rq_reply_md;
         ptl_handle_md_t rq_reply_md_h;
         ptl_md_t rq_req_md;
+        ptl_md_t rq_bulk_md;
+        ptl_handle_md_t rq_bulk_md_h;
         __u32 rq_reply_portal;
         __u32 rq_req_portal;
+        __u32 rq_bulk_portal;
 
         struct lustre_peer rq_peer;
 };
