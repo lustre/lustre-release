@@ -218,8 +218,8 @@ int mdc_enqueue(struct obd_export *exp,
                 size[2] = sizeof(struct mds_rec_create);
                 size[3] = data->namelen + 1;
                 size[4] = obddev->u.cli.cl_max_mds_easize;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 5,
-                                      size, NULL);
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 
+                                      5, size, NULL);
                 if (!req)
                         RETURN(-ENOMEM);
 
