@@ -255,8 +255,6 @@ cleanup:
         RETURN(rc);
 }
 
-
-
 /* See if there are unallocated parts in given file region */
 static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
 {

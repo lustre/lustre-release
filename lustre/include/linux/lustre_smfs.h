@@ -451,32 +451,6 @@ static inline void post_smfs_dentry(struct dentry *cache_dentry)
         d_unalloc(cache_dentry);
 }
 
-static inline int lookup_by_path(char *path, int flags, struct nameidata *nd)
-{
-        struct dentry *dentry = NULL;
-        int rc = 0;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        if (path_init(path, flags, nd)) {
-#else
-        if (path_lookup(path, flags, nd)) {
-#endif
-                rc = path_walk(path, nd);
-                if (rc)
-                        RETURN(rc);
-        } else {
-                RETURN(-EINVAL);
-        }
-
-        dentry = nd->dentry;
-
-        if (!dentry->d_inode || is_bad_inode(dentry->d_inode)) {
-                path_release(nd);
-                RETURN(-ENODEV);
-        }
-        RETURN(rc);
-}
-
 /*FIXME there should be more conditions in this check*/
 static inline int smfs_do_rec(struct inode *inode)
 {

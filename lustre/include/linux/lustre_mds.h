@@ -219,8 +219,8 @@ int mdc_enqueue(struct obd_export *exp,
 /* mdc/mdc_request.c */
 int mdc_get_secdesc_size(void);
 void mdc_pack_secdesc(struct ptlrpc_request *req, int size);
-int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req, 
-                      unsigned int offset, struct obd_export *exp_osc, 
+int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
+                      unsigned int offset, struct obd_export *exp_lov, 
                       struct lustre_md *md);
 int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid);
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,

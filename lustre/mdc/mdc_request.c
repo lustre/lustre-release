@@ -300,8 +300,8 @@ int mdc_store_inode_generation(struct obd_export *exp,
         return 0;
 }
 
-int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req, 
-                      unsigned int offset, struct obd_export *exp_osc, 
+int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
+                      unsigned int offset, struct obd_export *exp_lov, 
                       struct lustre_md *md)
 {
         int rc = 0;
@@ -332,7 +332,7 @@ int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req,
                 LASSERT (lmm != NULL);
                 LASSERT_REPSWABBED (req, offset + 1);
 
-                rc = obd_unpackmd(exp_osc, &md->lsm, lmm, lmmsize);
+                rc = obd_unpackmd(exp_lov, &md->lsm, lmm, lmmsize);
                 if (rc >= 0) {
                         LASSERT (rc >= sizeof (*md->lsm));
                         rc = 0;
@@ -340,7 +340,7 @@ int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req,
         } else if (S_ISDIR(md->body->mode)) {
                 struct mea *mea;
                 int mdsize;
-                LASSERT(exp_mdc != NULL);
+                LASSERT(exp_lmv != NULL);
                 
                 /* dir can be non-splitted */
                 if (md->body->eadatasize == 0)
@@ -365,7 +365,7 @@ int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req,
                         
                 LASSERT(id_fid(&mea->mea_ids[0]));
 
-                rc = obd_unpackmd(exp_mdc, (void *)&md->mea,
+                rc = obd_unpackmd(exp_lmv, (void *)&md->mea,
                                   (void *)mea, mdsize);
                 if (rc >= 0) {
                         LASSERT (rc >= sizeof (*md->mea));

@@ -210,7 +210,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
 }
 
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, unsigned long connect_flags)
+                       struct obd_uuid *cluuid, unsigned long flags)
 {
 #ifdef __KERNEL__
         struct proc_dir_entry *lov_proc_dir;
@@ -246,11 +246,11 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 #endif
 
         /* connect_flags is the MDS number, save for use in lov_add_obd */
-        lov->lov_connect_flags = connect_flags;
+        lov->lov_connect_flags = flags;
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (obd_uuid_empty(&tgt->uuid))
                         continue;
-                rc = lov_connect_obd(obd, tgt, 0, connect_flags);
+                rc = lov_connect_obd(obd, tgt, 0, flags);
                 if (rc)
                         GOTO(out_disc, rc);
         }

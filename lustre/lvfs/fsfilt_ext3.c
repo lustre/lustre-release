@@ -550,33 +550,29 @@ static int fsfilt_ext3_get_sid(struct inode *inode, void *sid, int sid_size)
         return rc;
 }
 
+static int fsfilt_ext3_send_bio(int rw, struct inode *inode, void *bio)
+{
+	int rc = 0;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-static int fsfilt_ext3_send_bio(int rw, struct inode *inode, struct bio *bio)
-{
-        submit_bio(rw, bio);
-        return 0;
-}
+        submit_bio(rw, (struct bio *)bio);
 #else
-static int fsfilt_ext3_send_bio(int rw, struct inode *inode, struct kiobuf *bio)
-{
-        int rc, blocks_per_page;
-
-        rc = brw_kiovec(rw, 1, &bio, inode->i_dev,
-                        bio->blocks, 1 << inode->i_blkbits);
+	struct bio *b = (struct kiobuf *)bio;
+        int blocks_per_page;
+	
+        rc = brw_kiovec(rw, 1, &b, inode->i_dev,
+                        b->blocks, 1 << inode->i_blkbits);
 
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 
-        if (rc != (1 << inode->i_blkbits) * bio->nr_pages * blocks_per_page) {
+        if (rc != (1 << inode->i_blkbits) * b->nr_pages * blocks_per_page) {
                 CERROR("short write?  expected %d, wrote %d\n",
-                       (1 << inode->i_blkbits) * bio->nr_pages *
+                       (1 << inode->i_blkbits) * b->nr_pages *
                        blocks_per_page, rc);
         }
-
+#endif
         return rc;
 }
-#endif
 
-/* FIXME-UMKA: This should be used in 2.6.x io code later. */
 static struct page *fsfilt_ext3_getpage(struct inode *inode, long int index)
 {
         int rc;

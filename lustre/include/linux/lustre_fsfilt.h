@@ -75,8 +75,7 @@ struct fsfilt_operations {
                                int size);
         int     (* fs_get_sid)(struct inode *inode, void *sid, int size);
 
-        /* this method is needed to make IO operation fsfilt nature depend. */
-        int     (* fs_send_bio)(int rw, struct inode *inode,struct kiobuf *bio);
+        int     (* fs_send_bio)(int rw, struct inode *inode, void *bio);
 
         /* methods for getting page from backing fs and putting page there
          * during IO. Used on OST. */

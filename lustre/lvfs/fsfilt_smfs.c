@@ -358,7 +358,7 @@ static int fsfilt_smfs_get_sid(struct inode *inode, void *sid,
                                   cache_fsfilt->fs_get_sid);
 }
 
-static int fsfilt_smfs_send_bio(int rw, struct inode *inode, struct kiobuf *bio)
+static int fsfilt_smfs_send_bio(int rw, struct inode *inode, void *bio)
 {
         struct inode *cache_inode;
         struct fsfilt_operations *cache_fsfilt;

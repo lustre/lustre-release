@@ -264,7 +264,7 @@ static int __init mgmtcli_init(void)
                               mgmtcli_register_for_events);
         inter_module_register("mgmtcli_deregister_for_events", THIS_MODULE,
                               mgmtcli_deregister_for_events);
-        return class_register_type(&mgmtcli_obd_ops, 0, LUSTRE_MGMTCLI_NAME);
+        return class_register_type(&mgmtcli_obd_ops, NULL, 0, LUSTRE_MGMTCLI_NAME);
 }
 
 static void __exit mgmtcli_exit(void)

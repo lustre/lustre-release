@@ -151,7 +151,8 @@ static struct obd_ops mgmt_obd_ops = {
 
 static int __init mgmt_init(void)
 {
-        int rc = class_register_type(&mgmt_obd_ops, 0, MGMT_DEVICE_NAME);
+        int rc = class_register_type(&mgmt_obd_ops, NULL, 
+				     0, MGMT_DEVICE_NAME);
 
         return rc;
 }
