@@ -60,6 +60,10 @@ This program configures a node following directives in the <XML-config-file>.
 <uuid> The failed client (required for recovery).
 \layout Description
 
+--clientoptions\SpecialChar ~
+<options> Additional options for Lustre.
+\layout Description
+
 --config\SpecialChar ~
 <arg> Cluster configuration name used for LDAP query
 \layout Description
