@@ -25,11 +25,11 @@ init_test_env $@
 gen_config() {
 	rm -f $XMLCONFIG
 
-	add_mds mds --dev $MDSDEV --size $MDSSIZE
-	add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+	add_mds mds1 --dev $MDSDEV --size $MDSSIZE
+	add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES\
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 	add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-	add_client client mds --lov lov1 --path $MOUNT
+	add_client client --mds mds1_svc --lov lov1 --path $MOUNT
 }
 
 gen_second_config() {
@@ -39,16 +39,16 @@ gen_second_config() {
 	add_lov lov2 mds2 --stripe_sz $STRIPE_BYTES\
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 	add_ost ost2 --lov lov2 --dev $OSTDEV --size $OSTSIZE
-	add_client client mds2 --lov lov2 --path $MOUNT2
+	add_client client --mds mds2 --lov lov2 --path $MOUNT2
 }
 
 start_mds() {
 	echo "start mds service on `facet_active_host mds`"
-	start mds --reformat $MDSLCONFARGS  || return 94
+	start mds1 --reformat $MDSLCONFARGS  || return 94
 }
 stop_mds() {
 	echo "stop mds service on `facet_active_host mds`"
-	stop mds $@  || return 97
+	stop mds1 $@  || return 97
 }
 
 start_ost() {
@@ -141,7 +141,7 @@ test_2() {
 	start_ost
 	start_mds	
 	echo "start mds second time.."
-	start mds --reformat $MDSLCONFARGS
+	start mds1 --reformat $MDSLCONFARGS
 	
 	mount_client $MOUNT
 	check_mount || return 43
@@ -209,7 +209,7 @@ test_5b() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
+	llmount $mds1_HOST://mds1_svc/client_facet $MOUNT  && exit 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -230,7 +230,7 @@ test_5c() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && exit 1
+	llmount $mds1_HOST://wrong_mds1_svc/client_facet $MOUNT  && exit 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -314,14 +314,14 @@ test_9() {
         # check lconf --ptldebug/subsystem overriding lmc --ptldebug/subsystem
         start_ost
         start_mds
-        CHECK_PTLDEBUG="`do_facet mds cat /proc/sys/portals/debug`"
+        CHECK_PTLDEBUG="`do_facet mds1 cat /proc/sys/portals/debug`"
         if [ $CHECK_PTLDEBUG = "3" ]; then
            echo "lconf --debug success"
         else
            echo "lconf --debug: want 3, have $CHECK_PTLDEBUG"
            return 1
         fi
-        CHECK_SUBSYSTEM="`do_facet mds cat /proc/sys/portals/subsystem_debug`"
+        CHECK_SUBSYSTEM="`do_facet mds1 cat /proc/sys/portals/subsystem_debug`"
         if [ $CHECK_SUBSYSTEM = "20" ]; then
            echo "lconf --subsystem success"
         else
@@ -345,7 +345,7 @@ test_10() {
         OLDXMLCONFIG=$XMLCONFIG
         XMLCONFIG="broken.xml"
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
-        facet="mds"
+        facet="mds1"
         rm -f ${facet}active
         add_facet $facet
         echo "the name for node and mds is the same"
@@ -357,7 +357,7 @@ test_10() {
         add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
         facet="client"
         add_facet $facet --lustre_upcall $UPCALL
-        do_lmc --add mtpt --node ${facet}_facet --mds mds_facet \
+        do_lmc --add mtpt --node ${facet}_facet --mds mds1_facet \
             --lov lov1 --path $MOUNT
 
         echo "mount lustre"
@@ -377,15 +377,15 @@ test_11() {
         XMLCONFIG="conf11.xml"
 
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
-        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_mds mds1 --dev $MDSDEV --size $MDSSIZE
         add_ost ost --dev $OSTDEV --size $OSTSIZE
-        add_client client mds --path $MOUNT --ost ost_svc || return $?
+        add_client client --mds mds1_svc --path $MOUNT --ost ost_svc || return $?
         echo "Default lov config success!"
 
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
-        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_mds mds1 --dev $MDSDEV --size $MDSSIZE
         add_ost ost --dev $OSTDEV --size $OSTSIZE
-        add_client client mds --path $MOUNT && return $?
+        add_client client --mds mds1_svc --path $MOUNT && return $?
         echo "--add mtpt with neither --lov nor --ost will return error"
 
         echo ""
@@ -522,12 +522,12 @@ test_14() {
 
         # create xml file with --mkfsoptions for ost
         echo "create xml file with --mkfsoptions for ost"
-        add_mds mds --dev $MDSDEV --size $MDSSIZE
-        add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+        add_mds mds1 --dev $MDSDEV --size $MDSSIZE
+        add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES\
             --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
         add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE \
             --mkfsoptions "-Llabel_conf_14"
-        add_client client mds --lov lov1 --path $MOUNT
+        add_client client --mds mds1_svc --lov lov1 --path $MOUNT
 
         FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
         EXPECTEDSTRING="mkfsoptions>-Llabel_conf_14"
@@ -577,7 +577,7 @@ test_15() {
 	# load llite module on the client if it isn't in /lib/modules
 	do_node `hostname` lconf --nosetup --node client_facet $XMLCONFIG
 	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
-		`facet_active_host mds`:/mds_svc/client_facet $MOUNT ||return $?
+		`facet_active_host mds1`:/mds1_svc/client_facet $MOUNT ||return $?
 	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
 	[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
 	check_mount || return 41
@@ -586,7 +586,7 @@ test_15() {
 	[ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
 	echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
 	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
-		`facet_active_host mds`:/mds_svc/client_facet $MOUNT &&return $?
+		`facet_active_host mds1`:/mds1_svc/client_facet $MOUNT &&return $?
 	echo "mount lustre on $MOUNT without $MOUNTLUSTRE failed as expected"
 	cleanup || return $?
 	cleanup_15
@@ -663,11 +663,11 @@ test_17() {
         echo "Remove mds config log"
         [ -d $TMPMTPT ] || mkdir -p $TMPMTPT
         mount -o loop -t ext3 $MDSDEV $TMPMTPT || return $?
-        rm -f $TMPMTPT/LOGS/mds_svc || return $?
+        rm -f $TMPMTPT/LOGS/mds1_svc || return $?
         umount $TMPMTPT || return $?
 
         start_ost
-	start mds $MDSLCONFARGS && return 42
+	start mds1 $MDSLCONFARGS && return 42
         cleanup || return $?
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
