@@ -198,16 +198,26 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         struct lov_desc desc = { 0, };
         char *buf = NULL;
         int max_ost_count, rc;
+        __u32 *obdgens;
 
         max_ost_count = (OBD_MAX_IOCTL_BUFFER - size_round(sizeof(data)) -
-                         size_round(sizeof(desc))) / sizeof(*uuidp);
+                         size_round(sizeof(desc))) / 
+                        (sizeof(*uuidp) + sizeof(*obdgens));
         if (max_ost_count > *ost_count)
                 max_ost_count = *ost_count;
+
+        obdgens = malloc(size_round(max_ost_count * sizeof(*obdgens)));
+        if (!obdgens) {
+                err_msg("no memory for %d generation #'s", max_ost_count);
+                return(-ENOMEM);
+        }
 
         data.ioc_inllen1 = sizeof(desc);
         data.ioc_inlbuf1 = (char *)&desc;
         data.ioc_inllen2 = size_round(max_ost_count * sizeof(*uuidp));
         data.ioc_inlbuf2 = (char *)uuidp;
+        data.ioc_inllen3 = size_round(max_ost_count * sizeof(*obdgens));
+        data.ioc_inlbuf3 = (char *)obdgens;
 
         desc.ld_tgt_count = max_ost_count;
 
@@ -233,6 +243,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         *ost_count = desc.ld_tgt_count;
 out:
         free(buf);
+        free(obdgens);
 
         return 0;
 }
