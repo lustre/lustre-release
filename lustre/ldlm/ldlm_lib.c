@@ -356,6 +356,8 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                 if (!memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
                         CERROR("%s reconnecting\n", cluuid->uuid);
                         conn->cookie = exp->exp_handle.h_cookie;
+                        /* target_handle_connect() treats EALREADY and
+                         * -EALREADY differently */
                         RETURN(EALREADY);
                 } else {
                         CERROR("%s reconnecting from %s, "
@@ -364,6 +366,8 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                                exp->exp_connection->c_remote_uuid.uuid,
                                hdl->cookie, conn->cookie);
                         memset(conn, 0, sizeof *conn);
+                        /* target_handle_connect() treats EALREADY and
+                         * -EALREADY differently */
                         RETURN(-EALREADY);
                 }
         }
@@ -503,6 +507,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;
 
+        /* we want to handle EALREADY but *not* -EALREADY from
+         * target_handle_reconnect() */
         if (rc && rc != EALREADY)
                 GOTO(out, rc);
 
