@@ -103,9 +103,11 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                                 cur_root = (proc ? proc :
                                             proc_mkdir(cur, cur_root));
                         } else if (proc == NULL) {
-                                mode_t mode = 0444;
+                                mode_t mode = 0;
+                                if (list->read_fptr)
+                                        mode = 0444;
                                 if (list->write_fptr)
-                                        mode = 0644;
+                                        mode |= 0200;
                                 proc = create_proc_entry(cur, mode, cur_root);
                         }
                 }
