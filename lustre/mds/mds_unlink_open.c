@@ -100,25 +100,14 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
 
         LASSERT(mds->mds_osc_obd != NULL);
 
-        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+        lmm_size = mds->mds_max_mdsize;
+        OBD_ALLOC(lmm, lmm_size);
         if (lmm == NULL)
                 RETURN(-ENOMEM);
 
-        down(&inode->i_sem);
-        rc = fsfilt_get_md(obd, inode, lmm, mds->mds_max_mdsize);
-        up(&inode->i_sem);
-
-        if (rc < 0) {
-                CERROR("Error %d reading eadata for ino %lu\n",
-                       rc, inode->i_ino);
+        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1);
+        if (rc < 0)
                 GOTO(out_free_lmm, rc);
-        } else if (rc > 0) {
-                lmm_size = rc;
-                rc = mds_convert_lov_ea(obd, inode, lmm, lmm_size);
-                if (rc > 0)
-                        lmm_size = rc;
-                rc = 0;
-        }
 
         handle = fsfilt_start_log(obd, pending_dir, FSFILT_OP_UNLINK, NULL,
                                   le32_to_cpu(lmm->lmm_stripe_count));
@@ -175,8 +164,8 @@ int mds_cleanup_orphans(struct obd_device *obd)
         struct l_linux_dirent *dirent, *n;
         struct list_head dentry_list;
         char d_name[LL_FID_NAMELEN];
-        __u64 i = 0;
-        int rc = 0, item = 0, namlen;
+        unsigned long inum;
+        int i = 0, rc = 0, item = 0, namlen;
         ENTRY;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -199,21 +188,20 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 GOTO(err_out, rc);
 
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                i ++;
+                i++;
                 list_del(&dirent->lld_list);
 
                 namlen = strlen(dirent->lld_name);
                 LASSERT(sizeof(d_name) >= namlen + 1);
                 strcpy(d_name, dirent->lld_name);
+                inum = dirent->lld_ino;
                 OBD_FREE(dirent, sizeof(*dirent));
 
-                CDEBUG(D_INODE, "entry "LPU64" of PENDING DIR: %s\n",
-                       i, d_name);
+                CDEBUG(D_INODE, "entry %d of PENDING DIR: %s\n", i, d_name);
 
                 if (((namlen == 1) && !strcmp(d_name, ".")) ||
-                    ((namlen == 2) && !strcmp(d_name, ".."))) {
+                    ((namlen == 2) && !strcmp(d_name, "..")) || inum == 0)
                         continue;
-                }
 
                 down(&pending_dir->i_sem);
                 dchild = lookup_one_len(d_name, mds->mds_pending_dir, namlen);
@@ -224,6 +212,13 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 if (!dchild->d_inode) {
                         CERROR("orphan %s has been removed\n", d_name);
                         GOTO(next, rc = 0);
+                }
+
+                if (is_bad_inode(dchild->d_inode)) {
+                        CERROR("bad orphan inode found %lu/%u\n",
+                               dchild->d_inode->i_ino,
+                               dchild->d_inode->i_generation);
+                        GOTO(next, rc = -ENOENT);
                 }
 
                 child_inode = dchild->d_inode;
