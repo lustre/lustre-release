@@ -16,5 +16,6 @@ lload
 wirecheck
 lfs
 llmount
+wiretest
 .*.cmd
 .*.d
