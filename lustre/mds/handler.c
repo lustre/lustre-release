@@ -2425,37 +2425,36 @@ int mds_update_last_fid(struct obd_device *obd, void *handle,
         struct file *filp = mds->mds_fid_filp;
         struct lvfs_run_ctxt saved;
         loff_t off = 0;
+        __u64 last_fid;
         int rc = 0;
         ENTRY;
 
-        down(&mds->mds_last_fid_sem);
-        if (mds->mds_last_fid_changed) {
-                CDEBUG(D_SUPER, "MDS last_fid is #"LPU64"\n",
-                       mds->mds_last_fid);
+        spin_lock(&mds->mds_last_fid_lock);
+        last_fid = mds->mds_last_fid;
+        spin_unlock(&mds->mds_last_fid_lock);
 
-                if (handle) {
-                        fsfilt_add_journal_cb(obd, mds->mds_sb,
-                                              mds->mds_last_fid, handle,
-                                              mds_commit_last_fid_cb, NULL);
-                }
-                
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = fsfilt_write_record(obd, filp, &mds->mds_last_fid,
-                                         sizeof(mds->mds_last_fid),
-                                         &off, force_sync);
-                if (rc) {
-                        CERROR("error writing MDS last_fid #"LPU64
-                               ", err = %d\n", mds->mds_last_fid, rc);
-                } else {
-                        mds->mds_last_fid_changed = 0;
-                }
-                
-                CDEBUG(D_SUPER, "wrote fid #"LPU64" at idx "
-                       "%llu: err = %d\n", mds->mds_last_fid,
-                       off, rc);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        CDEBUG(D_SUPER, "MDS last_fid is #"LPU64"\n",
+               last_fid);
+
+        if (handle) {
+                fsfilt_add_journal_cb(obd, mds->mds_sb, last_fid,
+                                      handle, mds_commit_last_fid_cb,
+                                      NULL);
         }
-        up(&mds->mds_last_fid_sem);
+                
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = fsfilt_write_record(obd, filp, &last_fid, sizeof(last_fid),
+                                 &off, force_sync);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        if (rc) {
+                CERROR("error writing MDS last_fid #"LPU64
+                       ", err = %d\n", last_fid, rc);
+                RETURN(rc);
+        }
+                
+        CDEBUG(D_SUPER, "wrote fid #"LPU64" at idx "
+               "%llu: err = %d\n", last_fid, off, rc);
 
         RETURN(rc);
 }
@@ -2464,12 +2463,10 @@ void mds_set_last_fid(struct obd_device *obd, __u64 fid)
 {
         struct mds_obd *mds = &obd->u.mds;
 
-        down(&mds->mds_last_fid_sem);
-        if (fid > mds->mds_last_fid) {
+        spin_lock(&mds->mds_last_fid_lock);
+        if (fid > mds->mds_last_fid)
                 mds->mds_last_fid = fid;
-                mds->mds_last_fid_changed = 1;
-        }
-        up(&mds->mds_last_fid_sem);
+        spin_unlock(&mds->mds_last_fid_lock);
 }
 
 void mds_commit_last_transno_cb(struct obd_device *obd,
@@ -2493,6 +2490,18 @@ void mds_commit_last_fid_cb(struct obd_device *obd,
                obd->obd_name, fid);
 }
 
+__u64 mds_alloc_fid(struct obd_device *obd)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        __u64 fid;
+        
+        spin_lock(&mds->mds_last_fid_lock);
+        fid = ++mds->mds_last_fid;
+        spin_unlock(&mds->mds_last_fid_lock);
+
+        return fid;
+}
+
 /*
  * allocates new lustre_id on passed @inode and saves it to inode EA.
  */
@@ -2514,12 +2523,7 @@ int mds_alloc_inode_sid(struct obd_device *obd, struct inode *inode,
         }
 
         id_group(id) = mds->mds_num;
-        
-        down(&mds->mds_last_fid_sem);
-        mds->mds_last_fid_changed = 1;
-        id_fid(id) = ++mds->mds_last_fid;
-        up(&mds->mds_last_fid_sem);
-
+        id_fid(id) = mds_alloc_fid(obd);
         id_ino(id) = inode->i_ino;
         id_gen(id) = inode->i_generation;
         id_type(id) = (S_IFMT & inode->i_mode);
@@ -2732,11 +2736,10 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lcfg->lcfg_inlbuf1, mnt);
 
-        mds->mds_last_fid_changed = 0;
         sema_init(&mds->mds_epoch_sem, 1);
-        sema_init(&mds->mds_last_fid_sem, 1);
         atomic_set(&mds->mds_real_clients, 0);
         spin_lock_init(&mds->mds_transno_lock);
+        spin_lock_init(&mds->mds_last_fid_lock);
         sema_init(&mds->mds_orphan_recovery_sem, 1);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
 

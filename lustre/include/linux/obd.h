@@ -337,14 +337,15 @@ struct mds_obd {
         int                              mds_max_cookiesize;
         struct file                     *mds_rcvd_filp;
         struct file                     *mds_fid_filp;
+        struct file                     *mds_virtid_filp;
         spinlock_t                       mds_transno_lock;
         __u64                            mds_last_transno;
         __u64                            mds_mount_count;
         __u64                            mds_io_epoch;
         
         __u64                            mds_last_fid;
-        struct semaphore                 mds_last_fid_sem;
-	int                              mds_last_fid_changed;
+        __u64                            mds_virtid_fid;
+        spinlock_t                       mds_last_fid_lock;
         
         struct semaphore                 mds_epoch_sem;
         struct lustre_id                 mds_rootid;

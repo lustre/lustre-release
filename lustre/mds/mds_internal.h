@@ -174,6 +174,8 @@ extern int mds_lock_mode_for_dir(struct obd_device *,
 int mds_fs_setup_rootid(struct obd_device *obd);
 int mds_fs_setup_virtid(struct obd_device *obd);
 
+__u64 mds_alloc_fid(struct obd_device *obd);
+
 int mds_alloc_inode_sid(struct obd_device *, struct inode *,
                         void *, struct lustre_id *);
 

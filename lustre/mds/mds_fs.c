@@ -51,6 +51,7 @@
 #define LAST_RCVD "last_rcvd"
 #define LOV_OBJID "lov_objid"
 #define LAST_FID  "last_fid"
+#define VIRT_FID  "virt_fid"
 
 /* Add client data to the MDS.  We use a bitmap to locate a free space
  * in the last_rcvd file if cl_off is -1 (i.e. a new client).
@@ -523,6 +524,58 @@ out_dentry:
         return rc;
 }
 
+static int mds_update_virtid_fid(struct obd_device *obd,
+                                 void *handle, int force_sync)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct file *filp = mds->mds_virtid_filp;
+        struct lvfs_run_ctxt saved;
+        loff_t off = 0;
+        int rc = 0;
+        ENTRY;
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = fsfilt_write_record(obd, filp, &mds->mds_virtid_fid,
+                                 sizeof(mds->mds_virtid_fid),
+                                 &off, force_sync);
+        if (rc) {
+                CERROR("error writing MDS virtid_fid #"LPU64
+                       ", err = %d\n", mds->mds_virtid_fid, rc);
+        }
+                
+        CDEBUG(D_SUPER, "wrote virtid fid #"LPU64" at idx "
+               "%llu: err = %d\n", mds->mds_virtid_fid,
+               off, rc);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        RETURN(rc);
+}
+
+static int mds_read_virtid_fid(struct obd_device *obd,
+                               struct file *file)
+{
+        int rc = 0;
+        loff_t off = 0;
+        struct mds_obd *mds = &obd->u.mds;
+        unsigned long virtid_fid_size = file->f_dentry->d_inode->i_size;
+        ENTRY;
+
+        if (virtid_fid_size == 0) {
+                mds->mds_virtid_fid = mds_alloc_fid(obd);
+        } else {
+                rc = fsfilt_read_record(obd, file, &mds->mds_virtid_fid,
+                                        sizeof(mds->mds_virtid_fid), &off);
+                if (rc) {
+                        CERROR("error reading MDS %s: rc = %d\n",
+                               file->f_dentry->d_name.name, rc);
+                        RETURN(rc);
+                }
+        }
+        rc = mds_update_virtid_fid(obd, NULL, 1);
+
+        RETURN(rc);
+}
+
 /*
  * initializes lustre_id for virtual id directory, it is needed sometimes, as it
  * is possible that it will be the parent for object an operations is going to
@@ -532,6 +585,7 @@ int mds_fs_setup_virtid(struct obd_device *obd)
 {
         int rc = 0;
         void *handle;
+        struct lustre_id sid;
         struct mds_obd *mds = &obd->u.mds;
         struct inode *inode = mds->mds_id_dir->d_inode;
         ENTRY;
@@ -544,13 +598,20 @@ int mds_fs_setup_virtid(struct obd_device *obd)
                 CERROR("fsfilt_start() failed, rc = %d\n", rc);
                 RETURN(rc);
         }
-        
+
+        id_group(&sid) = mds->mds_num;
+        id_fid(&sid) = mds->mds_virtid_fid;
+
+        id_ino(&sid) = inode->i_ino;
+        id_gen(&sid) = inode->i_generation;
+        id_type(&sid) = (S_IFMT & inode->i_mode);
+
         down(&inode->i_sem);
-        rc = mds_alloc_inode_sid(obd, inode, handle, NULL);
+        rc = mds_update_inode_sid(obd, inode, handle, &sid);
         up(&inode->i_sem);
-        
+
         if (rc) {
-                CERROR("mds_alloc_inode_sid() failed, rc = %d\n",
+                CERROR("mds_update_inode_sid() failed, rc = %d\n",
                        rc);
                 RETURN(rc);
         }
@@ -678,7 +739,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_last_rcvd, rc);
         }
 
-        /* open and test the last fid file */
+        /* open and test last fid file */
         file = filp_open(LAST_FID, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
@@ -699,6 +760,27 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_last_fid, rc);
         }
 
+        /* open and test virtid fid file */
+        file = filp_open(VIRT_FID, O_RDWR | O_CREAT, 0644);
+        if (IS_ERR(file)) {
+                rc = PTR_ERR(file);
+                CERROR("cannot open/create %s file: rc = %d\n",
+                       VIRT_FID, rc);
+                GOTO(err_last_fid, rc = PTR_ERR(file));
+        }
+        mds->mds_virtid_filp = file;
+        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n",
+                       VIRT_FID, file->f_dentry->d_inode->i_mode);
+                GOTO(err_virtid_fid, rc = -ENOENT);
+        }
+
+        rc = mds_read_virtid_fid(obd, file);
+        if (rc) {
+                CERROR("cannot read %s: rc = %d\n", VIRT_FID, rc);
+                GOTO(err_virtid_fid, rc);
+        }
+        
         /* open and test the lov objid file */
         file = filp_open(LOV_OBJID, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(file)) {
@@ -724,6 +806,9 @@ err_pop:
 err_lov_objid:
         if (mds->mds_lov_objid_filp && filp_close(mds->mds_lov_objid_filp, 0))
                 CERROR("can't close %s after error\n", LOV_OBJID);
+err_virtid_fid:
+        if (mds->mds_virtid_filp && filp_close(mds->mds_virtid_filp, 0))
+                CERROR("can't close %s after error\n", VIRT_FID);
 err_last_fid:
         if (mds->mds_fid_filp && filp_close(mds->mds_fid_filp, 0))
                 CERROR("can't close %s after error\n", LAST_FID);
@@ -769,6 +854,12 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
         mds_server_free_data(mds);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        if (mds->mds_virtid_filp) {
+                rc = filp_close(mds->mds_virtid_filp, 0);
+                mds->mds_virtid_filp = NULL;
+                if (rc)
+                        CERROR("%s file won't close, rc = %d\n", VIRT_FID, rc);
+        }
         if (mds->mds_fid_filp) {
                 rc = filp_close(mds->mds_fid_filp, 0);
                 mds->mds_fid_filp = NULL;

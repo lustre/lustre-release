@@ -103,9 +103,9 @@ static int lprocfs_rd_last_fid(char *page, char **start, off_t off,
         struct mds_obd *mds = &obd->u.mds;
         __u64 last_fid;
 
-        down(&mds->mds_last_fid_sem);
+        spin_lock(&mds->mds_last_fid_lock);
         last_fid = mds->mds_last_fid;
-        up(&mds->mds_last_fid_sem);
+        spin_unlock(&mds->mds_last_fid_lock);
 
         *eof = 1;
         return snprintf(page, count, LPD64"\n", last_fid);
