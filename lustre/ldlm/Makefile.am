@@ -5,8 +5,6 @@
 
 DEFS= 
 
-CFLAGS = -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
-
 LDLMSOURCES= l_lock.c ldlm_lock.c ldlm_resource.c ldlm_lib.c \
 ldlm_extent.c ldlm_request.c ldlm_lockd.c
 
