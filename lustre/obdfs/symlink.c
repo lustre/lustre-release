@@ -30,8 +30,8 @@
 #include <linux/obd_support.h> /* for ENTRY and EXIT only */
 #include <linux/obdfs.h>
 
-/* static */
-struct dentry * obdfs_follow_link(struct dentry * dentry, struct dentry *base,
+static struct dentry * obdfs_follow_link(struct dentry * dentry,
+					 struct dentry *base,
 					 unsigned int follow)
 {
 	struct inode *inode = dentry->d_inode;
@@ -60,8 +60,7 @@ struct dentry * obdfs_follow_link(struct dentry * dentry, struct dentry *base,
 	return base;
 }
 
-/* static */
-int obdfs_readlink (struct dentry * dentry, char * buffer, int buflen)
+static int obdfs_readlink (struct dentry * dentry, char * buffer, int buflen)
 {
 	struct inode *inode = dentry->d_inode;
 	struct page *page = NULL;

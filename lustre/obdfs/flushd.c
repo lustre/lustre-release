@@ -111,39 +111,6 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 	return num;  
 } /* obdfs_enqueue_pages */
 
-/* dequeue requests for a dying inode */
-void obdfs_dequeue_reqs(struct inode *inode)
-{
-
-	struct list_head *tmp;
-
-	obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
-	tmp = obdfs_islist(inode);
-	if ( list_empty(tmp) ) {
-		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
-		EXIT;
-		return;
-	}
-
-	/* take it out of the super list */
-	list_del(tmp);
-	INIT_LIST_HEAD(obdfs_islist(inode));
-
-	tmp = obdfs_iplist(inode);
-	while ( (tmp = tmp->next) != obdfs_iplist(inode) ) {
-		struct obdfs_pgrq *req;
-		struct page *page;
-		
-		req = list_entry(tmp, struct obdfs_pgrq, rq_plist);
-		page = req->rq_page;
-		/* take it out of the list and free */
-		obdfs_pgrq_del(req);
-		/* now put the page away */
-		put_page(page);
-	}
-	obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
-} /* obdfs_dequeue_reqs */
-
 /* Remove writeback requests for the superblock */
 int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 {
@@ -162,9 +129,7 @@ int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 	int		  err = 0;
 	struct obdfs_sb_info *sbi;
 
-
 	ENTRY;
-
 	if (!inode_list) {
 		CDEBUG(D_INODE, "no list\n");
 		EXIT;
@@ -270,7 +235,8 @@ int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 			       inode->i_ino);
 			tmp = tmp->prev;
 			list_del(obdfs_islist(inode));
-			iput(inode);
+			/* decrement inode reference for page cache */
+			inode->i_count--;
 			INIT_LIST_HEAD(obdfs_islist(inode));
 		}
 	}
@@ -280,7 +246,7 @@ int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 	EXIT;
 ERR:
 	return err;
-} /* obdfs_remove_pages_from_cache */
+} /* obdfs_flush_reqs */
 
 
 void obdfs_flush_dirty_pages(int check_time)
@@ -297,7 +263,7 @@ void obdfs_flush_dirty_pages(int check_time)
 		obdfs_flush_reqs(&sbi->osi_inodes, check_time);
 	}
 	EXIT;
-}
+} /* obdfs_flush_dirty_pages */
 
 
 static struct task_struct *pupdated;

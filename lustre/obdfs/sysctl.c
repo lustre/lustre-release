@@ -14,7 +14,7 @@
 
 struct ctl_table_header *obdfs_table_header = NULL;
 
-int obdfs_debug_level = 4095;
+int obdfs_debug_level = 0;
 int obdfs_print_entry = 1;
 
 

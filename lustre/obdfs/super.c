@@ -32,30 +32,8 @@
 #include <linux/obd_class.h>
 #include <linux/obdfs.h>
 
-/* VFS super_block ops */
-static struct super_block *obdfs_read_super(struct super_block *, void *, int);
-static int  obdfs_notify_change(struct dentry *dentry, struct iattr *attr);
-static void obdfs_write_inode(struct inode *);
-static void obdfs_delete_inode(struct inode *);
-static void obdfs_put_super(struct super_block *);
-static int obdfs_statfs(struct super_block *sb, struct statfs *buf, 
-		       int bufsiz);
-
-/* exported operations */
-struct super_operations obdfs_super_operations =
-{
-	obdfs_read_inode,       /* read_inode */
-	obdfs_write_inode,      /* write_inode */
-	NULL,	                /* put_inode */
-	obdfs_delete_inode,     /* delete_inode */
-	obdfs_notify_change,	/* notify_change */
-	obdfs_put_super,	/* put_super */
-	NULL,			/* write_super */
-	obdfs_statfs,           /* statfs */
-	NULL			/* remount_fs */
-};
-
 struct list_head obdfs_super_list;
+struct super_operations obdfs_super_operations;
 
 static char *obdfs_read_opt(const char *opt, char *data)
 {
@@ -81,7 +59,7 @@ static char *obdfs_read_opt(const char *opt, char *data)
 	return retval;
 }
 
-void obdfs_options(char *options, char **dev, char **vers)
+static void obdfs_options(char *options, char **dev, char **vers)
 {
 	char *this_char;
 
@@ -123,7 +101,6 @@ static int obdfs_getdev(char *devpath, int *dev)
 }
 
 
-/* XXX allocate a super_entry, and add the super to the obdfs_super_list */
 static struct super_block * obdfs_read_super(struct super_block *sb, 
 					    void *data, int silent)
 {
@@ -265,7 +242,7 @@ ERR:
         }
         sb->s_dev = 0;
         return NULL;
-}
+} /* obdfs_read_super */
 
 
 static void obdfs_put_super(struct super_block *sb)
@@ -290,7 +267,7 @@ static void obdfs_put_super(struct super_block *sb)
 
 
 /* all filling in of inodes postponed until lookup */
-void obdfs_read_inode(struct inode *inode)
+static void obdfs_read_inode(struct inode *inode)
 {
 	struct obdo *oa;
 
@@ -361,6 +338,58 @@ static void obdfs_write_inode(struct inode *inode)
 } /* obdfs_write_inode */
 
 
+/* Dequeue cached pages for a dying inode without writing them to disk.
+ *
+ * This routine is called from iput() (for each unlink on the inode).
+ * We can't put this code into delete_inode() since that is called only
+ * when i_count == 0, and we need to keep a reference on the inode while
+ * it is in the page cache, which means i_count > 0.  Catch 22.
+ */
+static void obdfs_put_inode(struct inode *inode)
+{
+	struct list_head *tmp;
+
+	ENTRY;
+	if (inode->i_nlink) {
+		EXIT;
+		return;
+	}
+
+	obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
+	tmp = obdfs_islist(inode);
+	if ( list_empty(tmp) ) {
+		CDEBUG(D_INODE, __FUNCTION__ ": no dirty pages for inode %ld\n",
+		       inode->i_ino);
+		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
+		EXIT;
+		return;
+	}
+
+	/* take it out of the super list */
+	list_del(tmp);
+	INIT_LIST_HEAD(obdfs_islist(inode));
+
+	tmp = obdfs_iplist(inode);
+	while ( (tmp = tmp->next) != obdfs_iplist(inode) ) {
+		struct obdfs_pgrq *req;
+		struct page *page;
+		
+		req = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+		page = req->rq_page;
+		/* take it out of the list and free */
+		obdfs_pgrq_del(req);
+		/* now put the page away */
+		put_page(page);
+	}
+
+	/* decrement inode reference for page cache */
+	inode->i_count--;
+
+	EXIT;
+	obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
+} /* obdfs_put_inode */
+
+
 static void obdfs_delete_inode(struct inode *inode)
 {
 	struct obdo *oa;
@@ -374,9 +403,6 @@ static void obdfs_delete_inode(struct inode *inode)
 	}
 	oa->o_valid = OBD_MD_FLNOTOBD;
 	obdfs_from_inode(oa, inode);
-
-	/* free the cache pages that might be hangning around */
-	obdfs_dequeue_reqs(inode);
 
 	err = IOPS(inode, destroy)(IID(inode), oa);
 	obdo_free(oa);
@@ -444,6 +470,20 @@ static int obdfs_statfs(struct super_block *sb, struct statfs *buf,
 
 	return err; 
 }
+
+/* exported operations */
+struct super_operations obdfs_super_operations =
+{
+	obdfs_read_inode,	/* read_inode */
+	obdfs_write_inode,	/* write_inode */
+	obdfs_put_inode,	/* put_inode */
+	obdfs_delete_inode,	/* delete_inode */
+	obdfs_notify_change,	/* notify_change */
+	obdfs_put_super,	/* put_super */
+	NULL,			/* write_super */
+	obdfs_statfs,		/* statfs */
+	NULL			/* remount_fs */
+};
 
 struct file_system_type obdfs_fs_type = {
    "obdfs", 0, obdfs_read_super, NULL

@@ -283,9 +283,16 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 
 	/* If inode isn't already on the superblock inodes list, add it,
 	 * and increase ref count on inode so it doesn't disappear on us.
+	 *
+	 * We increment the reference count on the inode to keep it from
+	 * being freed from memory.  This _should_ be an iget() with an
+	 * iput() in both flush_reqs() and put_inode(), but since ut_inode()
+	 * is called from iput() we can't call iput() again there.  Instead
+	 * we just increment/decrement i_count, which is essentially what
+	 * iget/iput do for an inode already in memory.
 	 */
 	if ( list_empty(obdfs_islist(inode)) ) {
-		iget(inode->i_sb, inode->i_ino);
+		inode->i_count++;
 		CDEBUG(D_INODE, "adding inode %ld to superblock list %p\n",
 		       inode->i_ino, obdfs_slist(inode));
 		list_add(obdfs_islist(inode), obdfs_slist(inode));
@@ -314,7 +321,7 @@ int obdfs_do_writepage(struct inode *inode, struct page *page, int sync)
 		err = obdfs_brw(WRITE, inode, page, 1);
 	else {
 		err = obdfs_add_page_to_cache(inode, page);
-		CDEBUG(D_IOCTL, "DO_WR ino: %ld, page %p, err %d, uptodata %d\n", inode->i_ino, page, err, Page_Uptodate(page));
+		CDEBUG(D_IOCTL, "DO_WR ino: %ld, page %p, err %d, uptodate %d\n", inode->i_ino, page, err, Page_Uptodate(page));
 	}
 		
 	if ( !err )

@@ -85,8 +85,7 @@ struct file_operations obdfs_file_operations = {
 	NULL,			/* no special release code */
 	NULL,			/* fsync */
 	NULL,			/* fasync */
-	NULL,			/* check_media_change */
-	NULL			/* revalidate */
+	NULL			/* lock */
 };
 
 struct inode_operations obdfs_file_inode_operations = {
