@@ -41,10 +41,11 @@ init_test_env() {
 
     # command line
     
-    while getopts "rf:" opt $*; do 
+    while getopts "rvf:" opt $*; do 
 	case $opt in
 	    f) CONFIG=$OPTARG;;
 	    r) REFORMAT=--reformat;;
+	    v) VERBOSE=true;;
 	    \?) usage;;
 	esac
     done
@@ -244,6 +245,10 @@ change_active() {
 do_node() {
     HOST=$1
     shift
+
+    if $VERBOSE; then
+	echo "CMD $HOST $@"
+    fi
     $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
 do_facet() {
@@ -351,6 +356,46 @@ comma_list() {
 
 absolute_path() {
    (cd `dirname $1`; echo $PWD/`basename $1`)
+}
+
+##################################
+# OBD_FAIL funcs
+
+drop_request() {
+# OBD_FAIL_MDS_ALL_REQUEST_NET
+    RC=0
+    do_facet mds "echo 0x123 > /proc/sys/lustre/fail_loc"
+    do_facet client "$1" || RC=$?
+    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
+    return $RC
+}
+
+drop_reply() {
+# OBD_FAIL_MDS_ALL_REPLY_NET
+    RC=0
+    do_facet mds "echo 0x122 > /proc/sys/lustre/fail_loc"
+    do_facet client "$@" || RC=$?
+    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
+    return $RC
+}
+
+pause_bulk() {
+#define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
+    RC=0
+    do_facet ost "echo 0x214 > /proc/sys/lustre/fail_loc"
+    do_facet client "$1" || RC=$?
+    do_facet client "sync"
+    do_facet ost "echo 0 > /proc/sys/lustre/fail_loc"
+    return $RC
+}
+
+drop_bl_callback() {
+#define OBD_FAIL_LDLM_BL_CALLBACK        0x305
+    RC=0
+    do_facet client "echo 0x305 > /proc/sys/lustre/fail_loc"
+    do_facet client "$@" || RC=$?
+    do_facet client "echo 0 > /proc/sys/lustre/fail_loc"
+    return $RC
 }
 
 ##################################
