@@ -844,6 +844,11 @@ out:
         return 0;
 }
 
+/* mds_readpage does not take a DLM lock on the inode, because the client must
+ * already have a PR lock.
+ *
+ * If we were to take another one here, a deadlock will result, if another
+ * thread is already waiting for a PW lock. */
 static int mds_readpage(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
@@ -851,7 +856,6 @@ static int mds_readpage(struct ptlrpc_request *req)
         struct dentry *de;
         struct file *file;
         struct mds_body *body, *repbody;
-        struct lustre_handle lockh;
         struct obd_run_ctxt saved;
         int rc, size = sizeof(*repbody);
         struct obd_ucred uc;
@@ -863,8 +867,7 @@ static int mds_readpage(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
         }
 
-        body = lustre_swab_reqbuf (req, 0, sizeof (*body),
-                                   lustre_swab_mds_body);
+        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
         if (body == NULL)
                 GOTO (out, rc = -EFAULT);
 
@@ -872,8 +875,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         uc.ouc_fsgid = body->fsgid;
         uc.ouc_cap = body->capability;
         push_ctxt(&saved, &obd->obd_ctxt, &uc);
-        de = mds_fid2locked_dentry(obd, &body->fid1, &mnt, LCK_PR,
-                                   &lockh, NULL, 0);
+        de = mds_fid2dentry(&obd->u.mds, &body->fid1, &mnt);
         if (IS_ERR(de))
                 GOTO(out_pop, rc = PTR_ERR(de));
 
@@ -882,7 +884,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE);
         /* note: in case of an error, dentry_open puts dentry */
         if (IS_ERR(file))
-                GOTO(out_lock, rc = PTR_ERR(file));
+                GOTO(out_pop, rc = PTR_ERR(file));
 
         /* body->size is actually the offset -eeb */
         if ((body->size & (de->d_inode->i_blksize - 1)) != 0) {
@@ -910,8 +912,6 @@ static int mds_readpage(struct ptlrpc_request *req)
 
 out_file:
         filp_close(file, 0);
-out_lock:
-        ldlm_lock_decref(&lockh, LCK_PR);
 out_pop:
         pop_ctxt(&saved, &obd->obd_ctxt, &uc);
 out:
