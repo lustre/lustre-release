@@ -109,6 +109,7 @@ int llog_obd_origin_add(struct obd_export *exp,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies);
 int llog_initialize(struct obd_device *obd);
+int llog_disconnect(struct obd_device *obd);
 int llog_cat_initialize(struct obd_device *obd, int count);
 
 

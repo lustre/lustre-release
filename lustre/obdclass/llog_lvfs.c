@@ -408,6 +408,10 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                                logid->lgl_oid, logid->lgl_ogen, rc);
                         GOTO(cleanup, rc);
                 }
+
+                /* assign the value of lgh_id for handle directly */
+                handle->lgh_id = *logid;
+
         } else if (name) {
                 LASSERT(strlen(name) <= 18);
                 sprintf(logname, "LOGS/%s", name);
@@ -418,6 +422,10 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                         CERROR("logfile creation %s: %d\n", logname, rc);
                         GOTO(cleanup, rc);
                 }
+
+                handle->lgh_id.lgl_ogr = 1;
+                handle->lgh_id.lgl_oid = handle->lgh_file->f_dentry->d_inode->i_ino;
+                handle->lgh_id.lgl_ogen = handle->lgh_file->f_dentry->d_inode->i_generation;
         } else {
                 oa = obdo_alloc();
                 if (oa == NULL) 
@@ -439,12 +447,13 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                                                  open_flags);
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
+
+                handle->lgh_id.lgl_ogr = oa->o_gr;
+                handle->lgh_id.lgl_oid = oa->o_id;
+                handle->lgh_id.lgl_ogen = oa->o_generation;
         }
 
         handle->lgh_obd = obd;
-        handle->lgh_id.lgl_ogr = 1;
-        handle->lgh_id.lgl_oid = handle->lgh_file->f_dentry->d_inode->i_ino;
-        handle->lgh_id.lgl_ogen = handle->lgh_file->f_dentry->d_inode->i_generation;
  finish:
         if (oa)
                 obdo_free(oa);
