@@ -241,7 +241,6 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, ptl_kiov_t *kiov,
         tx->tx_buffer = (void *)((unsigned long)(kiov->kiov_offset + offset));
         
         phys->Address = kranal_page2phys(kiov->kiov_page);
-        phys->Length  = PAGE_SIZE;
         phys++;
 
         resid = nob - (kiov->kiov_len - offset);
@@ -267,7 +266,6 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, ptl_kiov_t *kiov,
                 }
 
                 phys->Address = kranal_page2phys(kiov->kiov_page);
-                phys->Length  = PAGE_SIZE;
                 phys++;
 
                 resid -= PAGE_SIZE;
@@ -312,7 +310,7 @@ kranal_map_buffer (kra_tx_t *tx)
         case RANAL_BUF_PHYS_UNMAPPED:
                 rrc = RapkRegisterPhys(dev->rad_handle,
                                        tx->tx_phys, tx->tx_phys_npages,
-                                       dev->rad_ptag, &tx->tx_map_key);
+                                       &tx->tx_map_key);
                 LASSERT (rrc == RAP_SUCCESS);
                 tx->tx_buftype = RANAL_BUF_PHYS_MAPPED;
                 break;
@@ -320,7 +318,7 @@ kranal_map_buffer (kra_tx_t *tx)
         case RANAL_BUF_VIRT_UNMAPPED:
                 rrc = RapkRegisterMemory(dev->rad_handle,
                                          tx->tx_buffer, tx->tx_nob,
-                                         dev->rad_ptag, &tx->tx_map_key);
+                                         &tx->tx_map_key);
                 LASSERT (rrc == RAP_SUCCESS);
                 tx->tx_buftype = RANAL_BUF_VIRT_MAPPED;
                 break;
@@ -348,7 +346,7 @@ kranal_unmap_buffer (kra_tx_t *tx)
                 dev = tx->tx_conn->rac_device;
                 LASSERT (current == dev->rad_scheduler);
                 rrc = RapkDeregisterMemory(dev->rad_handle, NULL,
-                                           dev->rad_ptag, &tx->tx_map_key);
+                                           &tx->tx_map_key);
                 LASSERT (rrc == RAP_SUCCESS);
                 tx->tx_buftype = RANAL_BUF_PHYS_UNMAPPED;
                 break;
@@ -358,7 +356,7 @@ kranal_unmap_buffer (kra_tx_t *tx)
                 dev = tx->tx_conn->rac_device;
                 LASSERT (current == dev->rad_scheduler);
                 rrc = RapkDeregisterMemory(dev->rad_handle, tx->tx_buffer,
-                                           dev->rad_ptag, &tx->tx_map_key);
+                                           &tx->tx_map_key);
                 LASSERT (rrc == RAP_SUCCESS);
                 tx->tx_buftype = RANAL_BUF_VIRT_UNMAPPED;
                 break;
@@ -559,8 +557,8 @@ kranal_consume_rxmsg (kra_conn_t *conn, void *buffer, int nob)
 
         LASSERT (conn->rac_rxmsg != NULL);
 
-        rrc = RapkFmaCopyToUser(conn->rac_rihandle, buffer,
-                                &nob_received, sizeof(kra_msg_t));
+        rrc = RapkFmaCopyOut(conn->rac_rihandle, buffer,
+                             &nob_received, sizeof(kra_msg_t));
         LASSERT (rrc == RAP_SUCCESS);
 
         conn->rac_rxmsg = NULL;
@@ -1031,6 +1029,8 @@ kranal_connd (void *arg)
         wait_queue_t       wait;
         unsigned long      flags;
         kra_peer_t        *peer;
+        kra_acceptsock_t  *ras;
+        int                did_something;
 
         snprintf(name, sizeof(name), "kranal_connd_%02ld", (long)arg);
         kportal_daemonize(name);
@@ -1041,8 +1041,22 @@ kranal_connd (void *arg)
         spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
 
         while (!kranal_data.kra_shutdown) {
-                /* Safe: kra_shutdown only set when quiescent */
+                did_something = 0;
+                
+                if (!list_empty(&kranal_data.kra_connd_acceptq)) {
+                        ras = list_entry(kranal_data.kra_connd_acceptq.next,
+                                         kra_acceptsock_t, ras_list);
+                        list_del(&ras->ras_list);
+                        spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
+                        kranal_conn_handshake(ras->ras_sock, NULL);
+                        sock_release(ras->ras_sock);
+                        PORTAL_FREE(ras, sizeof(*ras));
+
+                        spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+                        did_something = 1;
+                }
+                
                 if (!list_empty(&kranal_data.kra_connd_peers)) {
                         peer = list_entry(kranal_data.kra_connd_peers.next,
                                           kra_peer_t, rap_connd_list);
@@ -1054,8 +1068,11 @@ kranal_connd (void *arg)
                         kranal_peer_decref(peer);
 
                         spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
-                        continue;
+                        did_something = 1;
                 }
+
+                if (did_something)
+                        continue;
 
                 set_current_state(TASK_INTERRUPTIBLE);
                 add_wait_queue(&kranal_data.kra_connd_waitq, &wait);
@@ -1220,7 +1237,7 @@ kranal_check_rdma_cq (kra_device_t *dev)
         __u32                event_type;
 
         for (;;) {
-                rrc = RapkCQDone(dev->rad_rdma_cq, &cqid, &event_type);
+                rrc = RapkCQDone(dev->rad_rdma_cqh, &cqid, &event_type);
                 if (rrc == RAP_NOT_DONE)
                         return;
 
@@ -1275,7 +1292,7 @@ kranal_check_fma_cq (kra_device_t *dev)
         int                 i;
 
         for (;;) {
-                rrc = RapkCQDone(dev->rad_fma_cq, &cqid, &event_type);
+                rrc = RapkCQDone(dev->rad_fma_cqh, &cqid, &event_type);
                 if (rrc != RAP_NOT_DONE)
                         return;
                 
@@ -1366,8 +1383,8 @@ kranal_process_fmaq (kra_conn_t *conn)
         int           expect_reply;
 
         /* NB 1. kranal_sendmsg() may fail if I'm out of credits right now.
-         *       However I will be rescheduled some by a rad_fma_cq event when
-         *       I eventually get some.
+         *       However I will be rescheduled some by an FMA completion event
+         *       when I eventually get some.
          * NB 2. Sampling rac_state here, races with setting it elsewhere
          *       kranal_close_conn_locked.  But it doesn't matter if I try to
          *       send a "real" message just as I start closing because I'll get

@@ -102,9 +102,8 @@ typedef struct
 typedef struct
 {
         RAP_PVOID               rad_handle;     /* device handle */
-        RAP_PROTECTION_HANDLE   rad_ptag;       /* protection tag */
-        RAP_CQ_HANDLE           rad_fma_cq;     /* FMA (small message) completion queue */
-        RAP_CQ_HANDLE           rad_rdma_cq;    /* rdma completion queue */
+        RAP_PVOID               rad_fma_cqh;    /* FMA completion queue handle */
+        RAP_PVOID               rad_rdma_cqh;   /* rdma completion queue handle */
         int                     rad_id;         /* device id */
         int                     rad_idx;        /* index in kra_devices */
         int                     rad_ready;      /* set by device callback */
@@ -147,6 +146,7 @@ typedef struct
         spinlock_t        kra_reaper_lock;      /* serialise */
         
         struct list_head  kra_connd_peers;      /* peers waiting for a connection */
+        struct list_head  kra_connd_acceptq;    /* accepted sockets to handshake */
         wait_queue_head_t kra_connd_waitq;      /* connection daemons sleep here */
         spinlock_t        kra_connd_lock;       /* serialise */
 
@@ -162,6 +162,12 @@ typedef struct
 #define RANAL_INIT_LIB             2
 #define RANAL_INIT_ALL             3
 
+typedef struct kra_acceptsock                   /* accepted socket queued for connd */
+{
+        struct list_head     ras_list;          /* queue for attention */
+        struct socket       *ras_sock;          /* the accepted socket */
+} kra_acceptsock_t;
+
 /************************************************************************
  * Wire message structs.  These are sent in sender's byte order
  * (i.e. receiver checks magic and flips if required).
@@ -172,7 +178,8 @@ typedef struct kra_connreq                      /* connection request/response *
         __u32             racr_magic;           /* I'm an ranal connreq */
         __u16             racr_version;         /* this is my version number */
         __u16             racr_devid;           /* sender's device ID */
-        __u64             racr_nid;             /* sender's NID */
+        __u64             racr_srcnid;          /* sender's NID */
+        __u64             racr_dstnid;          /* who sender expects to listen */
         __u64             racr_peerstamp;       /* sender's instance stamp */
         __u64             racr_connstamp;       /* sender's connection stamp */
         __u32             racr_timeout;         /* sender's timeout */
@@ -477,3 +484,4 @@ extern int kranal_scheduler (void *arg);
 extern void kranal_close_conn_locked (kra_conn_t *conn, int error);
 extern void kranal_terminate_conn_locked (kra_conn_t *conn);
 extern void kranal_connect (kra_peer_t *peer);
+extern int kranal_conn_handshake (struct socket *sock, kra_peer_t *peer);
